@@ -8,7 +8,6 @@ import (
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
-	notificationapplication "github.com/domainry/domainry-runtime/runtime/application/notification"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -34,7 +33,6 @@ type runtimeConstructionInput struct {
 	manifest            manifestmodel.ManifestSchema
 	recordRepository    recordrepository.RecordRepository
 	rateLimiter         ratelimit.Limiter
-	notifications       *notificationapplication.NotificationApplicationService
 	notificationHTTP    notificationhttp.NotificationApplication
 	notificationBinding notificationsdk.Binding
 	notificationWorkers notificationsdk.LocalWorkers
@@ -50,10 +48,6 @@ type runtimeConstructionInput struct {
 }
 
 func constructRuntime(input runtimeConstructionInput) *Runtime {
-	notificationHTTP := input.notificationHTTP
-	if notificationHTTP == nil {
-		notificationHTTP = input.notifications
-	}
 	return &Runtime{
 		lifecycleContext:    input.lifecycleContext,
 		cfg:                 input.config,
@@ -66,8 +60,7 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		manifest:            input.manifest,
 		recordRepo:          input.recordRepository,
 		rateLimiter:         input.rateLimiter,
-		notifications:       input.notifications,
-		notificationHTTP:    notificationHTTP,
+		notificationHTTP:    input.notificationHTTP,
 		notificationBinding: input.notificationBinding,
 		notificationWorkers: input.notificationWorkers,
 		notificationRelay:   input.notificationRelay,

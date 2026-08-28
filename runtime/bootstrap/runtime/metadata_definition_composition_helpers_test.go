@@ -138,7 +138,7 @@ func newMetadataCompositionAppWithManifest(t *testing.T, name string, objects []
 	handlers.Freeze()
 	connectors := connector.NewRegistry()
 	connectors.Freeze()
-	application := NewProjectWithIdentity(t.Context(), config.Config{AppLocale: "en-US", DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), name+".db"), ManifestPath: manifestPath, UploadDir: filepath.Join(t.TempDir(), "uploads")}, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{})
+	application := NewProjectWithIdentity(t.Context(), config.Config{AppLocale: "en-US", DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), name+".db"), ManifestPath: manifestPath, UploadDir: filepath.Join(t.TempDir(), "uploads")}, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
 	adminRole := roles[0]
 	for _, role := range roles {
 		if role.Key == "admin" {

@@ -63,7 +63,7 @@ func TestRuntimeWorkerOwnerGuardsAndAgentStartCallback(t *testing.T) {
 	missing.StartWorkflowWorker(t.Context())
 	missing.startConnectorProviderBackgroundWorker(t.Context())
 
-	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{})
+	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
 	t.Cleanup(func() { _ = runtime.store.Close() })
 	original := runtimeWorkerApplications
 	t.Cleanup(func() { runtimeWorkerApplications = original })

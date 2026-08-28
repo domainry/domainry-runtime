@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode"
 
+	notificationmodule "github.com/domainry/domainry-notification/module"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	bootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -235,7 +236,7 @@ func newIntegrationRuntime(t *testing.T, cfg config.Config) *bootstrap.Runtime {
 		}
 	}
 	if !hasBusinessHandlers {
-		return bootstrap.New(t.Context(), cfg, identityBinding)
+		return bootstrap.New(t.Context(), cfg, identityBinding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()))
 	}
 	if strings.TrimSpace(cfg.RuntimeVersion) == "" {
 		cfg.RuntimeVersion = "integrationtest-runtime-v1"
@@ -249,7 +250,7 @@ func newIntegrationRuntime(t *testing.T, cfg config.Config) *bootstrap.Runtime {
 	if err := os.WriteFile(cfg.ManifestPath, normalized, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	return bootstrap.NewWithBusinessHandlers(t.Context(), cfg, registry, identityBinding)
+	return bootstrap.NewWithBusinessHandlers(t.Context(), cfg, registry, identityBinding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()))
 }
 
 func sourceOwnedFixturePrecondition(actionKey string) (string, any) {

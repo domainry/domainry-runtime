@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	notificationmodule "github.com/domainry/domainry-notification/module"
 	. "github.com/domainry/domainry-runtime/runtime/bootstrap"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -27,7 +28,7 @@ func TestRuntimeBusinessEventStreamConnectsReplaysAndRejectsCrossTenant(t *testi
 		BusinessEventGlobalConnections: 8, BusinessEventWorkspaceConnections: 4, BusinessEventPrincipalConnections: 2,
 		BusinessEventHeartbeatInterval: time.Second, BusinessEventRetryInterval: 250 * time.Millisecond,
 	}
-	application := New(t.Context(), cfg, newIntegrationIdentityBinding(t, cfg))
+	application := New(t.Context(), cfg, newIntegrationIdentityBinding(t, cfg), notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()))
 	defer application.Close()
 	server := httptest.NewServer(application.Routes())
 	defer server.Close()

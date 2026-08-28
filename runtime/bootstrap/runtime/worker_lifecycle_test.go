@@ -139,7 +139,7 @@ func TestRuntimeNotificationWorkerSkipsMissingManagementService(t *testing.T) {
 }
 
 func TestRuntimeStartSchedulerWorkerRegistersControlledOwner(t *testing.T) {
-	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{})
+	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
 	doneBefore, cancelsBefore := len(runtime.workerDone), len(runtime.workerCancels)
 	runtime.startSchedulerWorker(t.Context())
 	if len(runtime.workerDone) != doneBefore+1 || len(runtime.workerCancels) != cancelsBefore+1 {

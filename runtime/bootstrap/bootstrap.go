@@ -27,24 +27,24 @@ func PrepareProjectDatabase(ctx context.Context, cfg config.Config) (*ProjectDat
 	return runtimebootstrap.PrepareProjectDatabase(ctx, cfg)
 }
 
-func New(ctx context.Context, cfg config.Config, identity identitysdk.Binding) *Runtime {
-	return runtimebootstrap.New(ctx, cfg, identity)
+func New(ctx context.Context, cfg config.Config, identity identitysdk.Binding, notification notificationsdk.Factory) *Runtime {
+	return runtimebootstrap.New(ctx, cfg, identity, notification)
 }
 
-func NewWithBusinessHandlers(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, identity identitysdk.Binding) *Runtime {
-	return runtimebootstrap.NewWithBusinessHandlers(ctx, cfg, handlers, identity)
+func NewWithBusinessHandlers(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, identity identitysdk.Binding, notification notificationsdk.Factory) *Runtime {
+	return runtimebootstrap.NewWithBusinessHandlers(ctx, cfg, handlers, identity, notification)
 }
 
-func NewWithExtensions(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity identitysdk.Binding) *Runtime {
-	return runtimebootstrap.NewWithExtensions(ctx, cfg, handlers, connectors, identity)
+func NewWithExtensions(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity identitysdk.Binding, notification notificationsdk.Factory) *Runtime {
+	return runtimebootstrap.NewWithExtensions(ctx, cfg, handlers, connectors, identity, notification)
 }
 
-func NewVerifiedProjectWithIdentity(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, binding identitysdk.Binding) *Runtime {
-	return runtimebootstrap.NewProjectWithIdentity(ctx, cfg, handlers, connectors, releaseIdentity, evidence, binding)
+func NewVerifiedProjectWithIdentity(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notification notificationsdk.Factory) *Runtime {
+	return runtimebootstrap.NewProjectWithIdentity(ctx, cfg, handlers, connectors, releaseIdentity, evidence, binding, notification)
 }
 
-func NewVerifiedProjectWithIdentityAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, database *ProjectDatabase) *Runtime {
-	return runtimebootstrap.NewProjectWithIdentityAndStore(ctx, cfg, handlers, connectors, releaseIdentity, evidence, binding, database)
+func NewVerifiedProjectWithIdentityAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notification notificationsdk.Factory, database *ProjectDatabase) *Runtime {
+	return runtimebootstrap.NewProjectWithIdentityAndStore(ctx, cfg, handlers, connectors, releaseIdentity, evidence, binding, notification, database)
 }
 
 func NewVerifiedProjectWithFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, database *ProjectDatabase) *Runtime {

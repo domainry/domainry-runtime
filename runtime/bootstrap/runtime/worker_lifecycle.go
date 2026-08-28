@@ -6,7 +6,6 @@ import (
 
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
-	notificationapplication "github.com/domainry/domainry-runtime/runtime/application/notification"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
@@ -99,27 +98,7 @@ func (a *Runtime) startSchedulerWorker(ctx context.Context) {
 }
 
 func (a *Runtime) startNotificationChannelWorker(ctx context.Context) {
-	if a == nil || (a.notifications == nil && a.notificationWorkers == nil) {
-		return
-	}
-	if a.notificationWorkers != nil {
-		a.startControlledWorker(ctx, "notification_channel", func(workerCtx context.Context) <-chan struct{} {
-			batch := a.cfg.SchedulerBatchSize
-			if batch <= 0 || batch > 100 {
-				batch = 25
-			}
-			wakeups := a.store.WorkerWakeups().Subscribe("notification_channel", 64)
-			return workerplatform.StartWakeableRecoveryLoop(workerCtx, "notification_channel", notificationChannelRecoveryInterval(a.cfg.SchedulerPollInterval), wakeups, func() {
-				runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "notification channel worker failed", func() (bool, error) {
-					processed, err := a.notificationWorkers.ProcessDueChannelPlans(workerCtx, batch)
-					return processed > 0, err
-				})
-			}, func(locator workerplatform.DurableTaskLocator) {
-				runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "notification channel execution failed", func() (bool, error) {
-					return a.notificationWorkers.ProcessChannelPlan(workerCtx, notificationSDKWorkLocator(locator))
-				})
-			})
-		})
+	if a == nil || a.notificationWorkers == nil {
 		return
 	}
 	a.startControlledWorker(ctx, "notification_channel", func(workerCtx context.Context) <-chan struct{} {
@@ -127,15 +106,15 @@ func (a *Runtime) startNotificationChannelWorker(ctx context.Context) {
 		if batch <= 0 || batch > 100 {
 			batch = 25
 		}
-		scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "plan notification external channels")
-		return workerplatform.StartWakeableRecoveryLoop(workerCtx, "notification_channel", notificationChannelRecoveryInterval(a.cfg.SchedulerPollInterval), a.notifications.ChannelWakeups(workerCtx), func() {
+		wakeups := a.store.WorkerWakeups().Subscribe("notification_channel", 64)
+		return workerplatform.StartWakeableRecoveryLoop(workerCtx, "notification_channel", notificationChannelRecoveryInterval(a.cfg.SchedulerPollInterval), wakeups, func() {
 			runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "notification channel worker failed", func() (bool, error) {
-				processed, err := a.notifications.ProcessDueNotificationChannels(workerCtx, batch, scope)
+				processed, err := a.notificationWorkers.ProcessDueChannelPlans(workerCtx, batch)
 				return processed > 0, err
 			})
 		}, func(locator workerplatform.DurableTaskLocator) {
 			runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "notification channel execution failed", func() (bool, error) {
-				return a.notifications.ProcessNotificationChannelPlan(workerCtx, locator, scope)
+				return a.notificationWorkers.ProcessChannelPlan(workerCtx, notificationSDKWorkLocator(locator))
 			})
 		})
 	})
@@ -276,7 +255,7 @@ func (a *Runtime) startIntegrationCredentialExpiryWorker(ctx context.Context) {
 }
 
 func (a *Runtime) StartNotificationPublicationWorker(ctx context.Context) {
-	if a.notifications == nil && a.notificationWorkers == nil && a.notificationRelay == nil {
+	if a.notificationWorkers == nil && a.notificationRelay == nil {
 		return
 	}
 	if a.notificationRelay != nil {
@@ -321,38 +300,7 @@ func (a *Runtime) StartNotificationPublicationWorker(ctx context.Context) {
 			})
 			return workerplatform.Join(publicationDone, refreshDone)
 		})
-		return
 	}
-	a.startControlledWorker(ctx, "notification_publication", func(workerCtx context.Context) <-chan struct{} {
-		batch := a.cfg.SchedulerBatchSize
-		if batch <= 0 {
-			batch = 25
-		}
-		scope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "process notification publications")
-		publicationDone := workerplatform.StartWakeableRecoveryLoop(
-			workerCtx,
-			"notification_publication",
-			notificationPublicationRecoveryInterval(a.cfg.SchedulerPollInterval),
-			a.notifications.PublicationWakeups(workerCtx),
-			func() {
-				runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "notification publication recovery failed", func() (bool, error) {
-					processed, err := a.notifications.ProcessDuePublications(workerCtx, batch, scope)
-					return processed > 0, err
-				})
-			},
-			func(locator notificationapplication.NotificationPublicationLocator) {
-				runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "notification publication execution failed", func() (bool, error) {
-					return a.notifications.ProcessPublication(workerCtx, locator, scope)
-				})
-			},
-		)
-		refreshDone := workerplatform.StartNamedLoop(workerCtx, "notification_renderer_refresh", 5*time.Second, func() {
-			runLoggedRuntimeWorkerTick(workerCtx, a.worker.Control, "notification renderer refresh failed", func() error {
-				return a.notifications.RefreshPublished(workerCtx, scope)
-			})
-		})
-		return workerplatform.Join(publicationDone, refreshDone)
-	})
 }
 
 func notificationPublicationRecoveryInterval(interval time.Duration) time.Duration {
@@ -363,27 +311,7 @@ func notificationPublicationRecoveryInterval(interval time.Duration) time.Durati
 }
 
 func (a *Runtime) startNotificationInboxWorker(ctx context.Context) {
-	if a.notifications == nil && a.notificationWorkers == nil {
-		return
-	}
-	if a.notificationWorkers != nil {
-		a.startControlledWorker(ctx, "notification_inbox", func(workerCtx context.Context) <-chan struct{} {
-			batch := a.cfg.SchedulerBatchSize
-			if batch <= 0 || batch > 100 {
-				batch = 25
-			}
-			wakeups := a.store.WorkerWakeups().Subscribe("notification_inbox", 64)
-			return workerplatform.StartWakeableRecoveryLoop(workerCtx, "notification_inbox", notificationInboxRecoveryInterval(a.cfg.SchedulerPollInterval), wakeups, func() {
-				runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "notification inbox recovery failed", func() (bool, error) {
-					processed, err := a.notificationWorkers.ProcessDueInboxEvents(workerCtx, batch)
-					return processed > 0, err
-				})
-			}, func(locator workerplatform.DurableTaskLocator) {
-				runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "notification inbox execution failed", func() (bool, error) {
-					return a.notificationWorkers.ProcessInboxEvent(workerCtx, notificationSDKWorkLocator(locator))
-				})
-			})
-		})
+	if a.notificationWorkers == nil {
 		return
 	}
 	a.startControlledWorker(ctx, "notification_inbox", func(workerCtx context.Context) <-chan struct{} {
@@ -391,15 +319,15 @@ func (a *Runtime) startNotificationInboxWorker(ctx context.Context) {
 		if batch <= 0 || batch > 100 {
 			batch = 25
 		}
-		scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "materialize notification inbox events")
-		return workerplatform.StartWakeableRecoveryLoop(workerCtx, "notification_inbox", notificationInboxRecoveryInterval(a.cfg.SchedulerPollInterval), a.notifications.InboxWakeups(workerCtx), func() {
+		wakeups := a.store.WorkerWakeups().Subscribe("notification_inbox", 64)
+		return workerplatform.StartWakeableRecoveryLoop(workerCtx, "notification_inbox", notificationInboxRecoveryInterval(a.cfg.SchedulerPollInterval), wakeups, func() {
 			runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "notification inbox recovery failed", func() (bool, error) {
-				processed, err := a.notifications.ProcessDueInboxEvents(workerCtx, batch, scope)
+				processed, err := a.notificationWorkers.ProcessDueInboxEvents(workerCtx, batch)
 				return processed > 0, err
 			})
 		}, func(locator workerplatform.DurableTaskLocator) {
 			runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "notification inbox execution failed", func() (bool, error) {
-				return a.notifications.ProcessInboxEvent(workerCtx, locator, scope)
+				return a.notificationWorkers.ProcessInboxEvent(workerCtx, notificationSDKWorkLocator(locator))
 			})
 		})
 	})

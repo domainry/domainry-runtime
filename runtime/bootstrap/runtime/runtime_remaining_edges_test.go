@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	identitysdk "github.com/domainry/domainry-identity-sdk"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
@@ -54,10 +53,6 @@ func TestRuntimeConfigurationHTTPAndBindingRemainingEdges(t *testing.T) {
 	}
 	assertBootstrapPanic(t, func() { BindHTTP(nil, &Runtime{}) })
 
-	directory := runtimeNotificationRecipientDirectory{}
-	if user, found, err := directory.FindUser(t.Context(), "user"); err != nil || found || user.ID != "" {
-		t.Fatalf("nil directory user=%#v found=%v error=%v", user, found, err)
-	}
 	if dependencies, err := newRuntimeWorkerDependencies("runtime-test"); err != nil || !dependencies.Valid() {
 		t.Fatalf("worker dependencies=%#v error=%v", dependencies, err)
 	}
@@ -198,7 +193,7 @@ func TestRuntimeStartsConfiguredWorkerOwners(t *testing.T) {
 	cfg := bootstrapTestConfig(t)
 	cfg.SchedulerPollInterval = 0
 	cfg.SchedulerBatchSize = 0
-	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{})
+	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
 	if RoutesForSurfaceGroup(runtime, runtimehttp.SurfaceRouteGroupAll) == nil || ActionConnectorGateway(runtime) == nil {
 		t.Fatal("assembled Runtime helpers were unavailable")
 	}
@@ -211,7 +206,7 @@ func TestRuntimeStartsConfiguredWorkerOwners(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	highBatch := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{})
+	highBatch := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
 	highBatch.cfg.SchedulerPollInterval = time.Millisecond
 	highBatch.cfg.SchedulerBatchSize = 26
 	highBatch.startRecordBatchWorker(t.Context())
@@ -224,7 +219,7 @@ func TestRuntimeStartsConfiguredWorkerOwners(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mediumBatch := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{})
+	mediumBatch := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
 	mediumBatch.cfg.SchedulerPollInterval = time.Millisecond
 	mediumBatch.cfg.SchedulerBatchSize = 10
 	mediumBatch.startRecordBatchWorker(t.Context())
@@ -255,7 +250,7 @@ func TestRuntimeStartupNamedCallbacks(t *testing.T) {
 
 func TestRuntimeNotificationWorkerBoundsAndLiveErrors(t *testing.T) {
 	for _, batch := range []int{10, 101} {
-		runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{})
+		runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
 		runtime.cfg.SchedulerPollInterval = time.Millisecond
 		runtime.cfg.SchedulerBatchSize = batch
 		runtime.startNotificationChannelWorker(t.Context())
@@ -269,7 +264,7 @@ func TestRuntimeNotificationWorkerBoundsAndLiveErrors(t *testing.T) {
 		}
 	}
 
-	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{})
+	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
 	runtime.cfg.SchedulerPollInterval = time.Millisecond
 	runtime.cfg.SchedulerBatchSize = 10
 	if err := runtime.store.Close(); err != nil {
@@ -395,7 +390,7 @@ func TestRuntimeWorkerTickErrorAndCancellationOutcomes(t *testing.T) {
 }
 
 func TestControlledWorkerObservesChildCompletion(t *testing.T) {
-	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{})
+	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
 	started := make(chan int, 2)
@@ -466,18 +461,4 @@ func (c *advancingRuntimeClock) Now() time.Time {
 	c.steps = c.steps[1:]
 	c.now = c.now.Add(step)
 	return c.now
-}
-
-func TestRuntimeNotificationBindingsCanDelegate(t *testing.T) {
-	directory := runtimeNotificationRecipientDirectory{directory: notificationDirectoryStub{}}
-	user, found, err := directory.FindUser(t.Context(), "user")
-	if err != nil || !found || user.ID != "user" {
-		t.Fatalf("delegated directory user=%#v found=%v error=%v", user, found, err)
-	}
-}
-
-type notificationDirectoryStub struct{ runtimeIdentityDirectoryStub }
-
-func (notificationDirectoryStub) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
-	return identitysdk.User{ID: "user"}, true, nil
 }

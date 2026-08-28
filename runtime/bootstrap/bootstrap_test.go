@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-connector-sdk"
+	notificationmodule "github.com/domainry/domainry-notification/module"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -27,7 +28,7 @@ func TestBootstrapEntrypointsAssembleRunnableGraphs(t *testing.T) {
 		SchedulerLeaseTTL:          time.Minute,
 		SchedulerMaxCatchupWindows: 1,
 	}
-	runtime := New(t.Context(), cfg, bootstrapIdentityBindingStub{})
+	runtime := New(t.Context(), cfg, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()))
 	if runtime == nil || BindHTTP(t.Context(), runtime) != runtime {
 		t.Fatal("bootstrap runtime entrypoints did not preserve the assembled owner")
 	}
@@ -56,13 +57,13 @@ func TestBootstrapExtensionAndProjectFacadeEntrypoints(t *testing.T) {
 	connectors.Freeze()
 	constructors := []func(config.Config) *Runtime{
 		func(cfg config.Config) *Runtime {
-			return NewWithBusinessHandlers(t.Context(), cfg, handlers, bootstrapIdentityBindingStub{})
+			return NewWithBusinessHandlers(t.Context(), cfg, handlers, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()))
 		},
 		func(cfg config.Config) *Runtime {
-			return NewWithExtensions(t.Context(), cfg, handlers, connectors, bootstrapIdentityBindingStub{})
+			return NewWithExtensions(t.Context(), cfg, handlers, connectors, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()))
 		},
 		func(cfg config.Config) *Runtime {
-			return NewVerifiedProjectWithIdentity(t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, RuntimeReleaseArtifactEvidence{}, bootstrapIdentityBindingStub{})
+			return NewVerifiedProjectWithIdentity(t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, RuntimeReleaseArtifactEvidence{}, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()))
 		},
 	}
 	for index, constructor := range constructors {

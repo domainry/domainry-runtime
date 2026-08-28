@@ -11,7 +11,6 @@ import (
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
-	notificationapplication "github.com/domainry/domainry-runtime/runtime/application/notification"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -40,7 +39,6 @@ type Runtime struct {
 	manifest            manifestmodel.ManifestSchema
 	recordRepo          recordrepository.RecordRepository
 	rateLimiter         ratelimit.Limiter
-	notifications       *notificationapplication.NotificationApplicationService
 	notificationHTTP    notificationhttp.NotificationApplication
 	notificationBinding notificationsdk.Binding
 	notificationWorkers notificationsdk.LocalWorkers
