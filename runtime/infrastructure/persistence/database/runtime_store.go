@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/domainry/domainry-notification-sdk/modulehost"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
@@ -44,9 +45,37 @@ type RuntimeStore struct {
 	workerScopeCursor    *runtimeWorkerScopeCursor
 	workerWakeupsMu      sync.Mutex
 	workerWakeups        *workerplatform.WakeupBroker
+	notificationMu       sync.RWMutex
+	notificationTx       modulehost.TransactionalPublisher
 	schemaAssembler      runtimeSchemaAssembler
 	backupChecksum       func(string) (string, error)
 	migrationReadDir     func(string) ([]os.DirEntry, error)
+}
+
+// BindNotificationTransactions installs the embedded Notification transaction
+// capability after the Module Binding is opened. The store owns neither the
+// capability nor its lifecycle; it only makes the exact publisher available
+// to producer-owned persistence adapters that already share this database.
+func (s *RuntimeStore) BindNotificationTransactions(publisher modulehost.TransactionalPublisher) error {
+	if s == nil || publisher == nil {
+		return fmt.Errorf("Notification transaction publisher is required")
+	}
+	s.notificationMu.Lock()
+	defer s.notificationMu.Unlock()
+	if s.notificationTx != nil {
+		return fmt.Errorf("Notification transaction publisher is already bound")
+	}
+	s.notificationTx = publisher
+	return nil
+}
+
+func (s *RuntimeStore) NotificationTransactions() modulehost.TransactionalPublisher {
+	if s == nil {
+		return nil
+	}
+	s.notificationMu.RLock()
+	defer s.notificationMu.RUnlock()
+	return s.notificationTx
 }
 
 func (s *RuntimeStore) WorkerWakeups() *workerplatform.WakeupBroker {

@@ -2,10 +2,12 @@ package notification
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
+	sdkcontract "github.com/domainry/domainry-notification-sdk/contract"
 	notificationsql "github.com/domainry/domainry-notification/sqlstore"
 	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
 	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
@@ -25,6 +27,23 @@ func NewInboxEventWriter(store *database.RuntimeStore) InboxEventWriter {
 }
 
 func (w InboxEventWriter) InsertEventTx(ctx context.Context, executor notificationsql.Executor, value notificationmodel.NotificationEvent) error {
+	if transactions := w.runtimeStore.NotificationTransactions(); transactions != nil {
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			return fmt.Errorf("encode notification event transaction boundary: %w", err)
+		}
+		var event sdkcontract.NotificationEvent
+		if err := json.Unmarshal(encoded, &event); err != nil {
+			return fmt.Errorf("decode notification event transaction boundary: %w", err)
+		}
+		if err := transactions.InsertEvent(ctx, executor, event); err != nil {
+			return fmt.Errorf("insert notification inbox event: %w", database.MutationConstraintError(err, "notification_event", value.Source+"/"+value.SourceEventID, mutation.MutationConflictUnique))
+		}
+		if transactioncontract.ActiveTransaction(ctx) {
+			return w.registerAfterCommit(ctx, value)
+		}
+		return nil
+	}
 	moduleStore, err := NewSQLStoreAdapter(w.runtimeStore, inboxEventWriterClock{})
 	if err != nil {
 		return err
