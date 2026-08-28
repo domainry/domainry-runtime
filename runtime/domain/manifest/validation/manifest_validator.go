@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 
+	notificationsdkcontract "github.com/domainry/domainry-notification-sdk/contract"
 	notificationvalidation "github.com/domainry/domainry-runtime/runtime/domain/notification/validation"
 )
 
@@ -142,7 +143,7 @@ func (state *validationState) validateNotificationTemplates() {
 	if err := notificationvalidation.NotificationValidateTemplates(state.manifest.NotificationTemplates); err != nil {
 		state.add("notification_templates", "%v", err)
 	}
-	if err := notificationvalidation.NotificationValidateEventTypes(state.manifest.NotificationEventTypes, state.manifest.NotificationRules); err != nil {
+	if err := notificationsdkcontract.ValidateEventTypes(state.manifest.NotificationEventTypes, state.manifest.NotificationRules); err != nil {
 		state.add("notification_event_types", "%v", err)
 	}
 }

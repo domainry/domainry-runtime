@@ -42,7 +42,9 @@ func TestNotificationEventTypeRemainingInvalidFields(t *testing.T) {
 			}
 		})
 	}
-	if !notificationInboxSensitiveVariableKey("safe_token_value") {
+	sensitive := validEventTypeBoundary()
+	sensitive.Variables = []notificationmodel.NotificationTemplateVariable{{Key: "safe_token_value", Type: "string"}}
+	if _, err := NotificationValidateEventType(sensitive); err == nil {
 		t.Fatal("embedded sensitive variable accepted")
 	}
 }
