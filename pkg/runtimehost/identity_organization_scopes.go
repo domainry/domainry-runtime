@@ -2,6 +2,7 @@ package runtimehost
 
 import (
 	"context"
+	"sync"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	principalapplication "github.com/domainry/domainry-runtime/runtime/application/principal"
@@ -10,45 +11,64 @@ import (
 	partymodel "github.com/domainry/domainry-runtime/runtime/domain/party/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
-	metadatapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata"
 	partypersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/party"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 )
 
-func projectIdentityDatabaseHandle(database *bootstrap.ProjectDatabase, filePath string) identitysdk.DatabaseHandle {
+func projectIdentityDatabaseHandle(database *bootstrap.ProjectDatabase, filePath string, profiles ...*runtimeBusinessProfileProjection) identitysdk.DatabaseHandle {
 	partyStore := partypersistence.NewSQLPartyStore(database.DB(), database.Driver(), database.DatabaseSchema())
+	var profileResolver identitysdk.BusinessProfileResolver
+	if len(profiles) > 0 && profiles[0] != nil {
+		profileResolver = profiles[0].Resolve
+	}
 	return identitysdk.DatabaseHandle{
 		Pool: database.DB(), Driver: database.Driver(), Schema: database.DatabaseSchema(), FilePath: filePath,
 		OrganizationScopeResolver: runtimeOrganizationScopeResolver(partyStore.ResolveIdentityOrganizationScopes),
-		BusinessProfileResolver:   runtimeBusinessProfileResolver(database),
+		BusinessProfileResolver:   profileResolver,
 	}
 }
 
-func runtimeBusinessProfileResolver(database *bootstrap.ProjectDatabase) identitysdk.BusinessProfileResolver {
-	metadata := metadatapersistence.NewMetadataStore(database)
-	records := recordpersistence.NewRecordStore(database)
-	return func(ctx context.Context, workspaceID, userID string) ([]identitysdk.BusinessProfileBinding, error) {
-		manifest, err := metadata.LoadManifest(ctx, principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "resolve Identity business profile roles"))
-		if err != nil {
-			return nil, err
-		}
-		service := principalapplication.NewBusinessPrincipalApplicationService(principalapplication.BusinessPrincipalDependencies{
-			Records:    records,
-			Objects:    func() []definitionmodel.ObjectSchema { return manifest.Objects },
-			Extensions: func() []profilebindingmodel.Binding { return manifest.IdentityProfileExtensions },
-		})
-		resolved, err := service.ResolveBusinessPrincipal(ctx, principalmodel.Principal{Principal: identitysdk.Principal{
-			Known: true, WorkspaceID: workspaceID, UserID: userID,
-		}}, "", "", "")
-		if err != nil {
-			return nil, err
-		}
-		out := make([]identitysdk.BusinessProfileBinding, 0, len(resolved.BusinessProfiles))
-		for _, profile := range resolved.BusinessProfiles {
-			out = append(out, identitysdk.BusinessProfileBinding{BindingKey: profile.BindingKey, ProfileID: profile.RecordID})
-		}
-		return out, nil
+type runtimeBusinessProfileProjection struct {
+	mu         sync.RWMutex
+	records    recordpersistence.RecordStore
+	objects    []definitionmodel.ObjectSchema
+	extensions []profilebindingmodel.Binding
+}
+
+func newRuntimeBusinessProfileProjection(database *bootstrap.ProjectDatabase) *runtimeBusinessProfileProjection {
+	return &runtimeBusinessProfileProjection{records: recordpersistence.NewRecordStore(database)}
+}
+
+func (p *runtimeBusinessProfileProjection) Publish(objects []definitionmodel.ObjectSchema, extensions []profilebindingmodel.Binding) {
+	if p == nil {
+		return
 	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.objects = append([]definitionmodel.ObjectSchema(nil), objects...)
+	p.extensions = append([]profilebindingmodel.Binding(nil), extensions...)
+}
+
+func (p *runtimeBusinessProfileProjection) Resolve(ctx context.Context, workspaceID, userID string) ([]identitysdk.BusinessProfileBinding, error) {
+	if p == nil {
+		return nil, nil
+	}
+	p.mu.RLock()
+	objects := append([]definitionmodel.ObjectSchema(nil), p.objects...)
+	extensions := append([]profilebindingmodel.Binding(nil), p.extensions...)
+	p.mu.RUnlock()
+	service := principalapplication.NewBusinessPrincipalApplicationService(principalapplication.BusinessPrincipalDependencies{
+		Records: p.records, Objects: func() []definitionmodel.ObjectSchema { return objects }, Extensions: func() []profilebindingmodel.Binding { return extensions },
+	})
+	resolved, err := service.ResolveBusinessPrincipal(ctx, principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: workspaceID, UserID: userID}}, "", "", "")
+	if err != nil {
+		return nil, err
+	}
+	out := make([]identitysdk.BusinessProfileBinding, 0, len(resolved.BusinessProfiles))
+	for _, profile := range resolved.BusinessProfiles {
+		out = append(out, identitysdk.BusinessProfileBinding{BindingKey: profile.BindingKey, ProfileID: profile.RecordID})
+	}
+	return out, nil
 }
 
 func runtimeOrganizationScopeResolver(resolve func(context.Context, string, []string) (partymodel.OrganizationScopeFacts, error)) identitysdk.OrganizationScopeResolver {

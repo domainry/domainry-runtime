@@ -47,15 +47,11 @@ type runtimeProcess interface {
 	StartWorkers(context.Context)
 	Routes() http.Handler
 	connectorGateway() runtimeConnectorGateway
-	Close() error
+	CloseContext(context.Context) error
 }
 
 type runtimeSurfaceProcess interface {
 	RoutesForSurfaceGroup(runtimehttp.SurfaceRouteGroup) http.Handler
-}
-
-type runtimeProcessContextCloser interface {
-	CloseContext(context.Context) error
 }
 
 type bootstrapRuntimeProcess struct{ *bootstrap.Runtime }
@@ -212,7 +208,7 @@ func (a *runtimeActivator) closeRuntime(runtime runtimeProcess) error {
 	if a.close != nil {
 		return a.close(runtime)
 	}
-	return runtime.Close()
+	return fmt.Errorf("Runtime activator close requires its lifecycle callback")
 }
 
 func prepareBusinessHandlers(options Options) (*runtimeext.BusinessHandlerRegistry, *bindableConnectorGateway, error) {
@@ -354,7 +350,8 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	defer func() {
 		_ = projectDatabase.CloseContext(context.WithoutCancel(lifecycleCtx))
 	}()
-	identityBinding, identityHTTPSurfaces, err := openProjectIdentity(lifecycleCtx, cfg, identityFactory, projectIdentityDatabaseHandle(projectDatabase, cfg.DBPath))
+	businessProfileProjection := newRuntimeBusinessProfileProjection(projectDatabase)
+	identityBinding, identityHTTPSurfaces, err := openProjectIdentity(lifecycleCtx, cfg, identityFactory, projectIdentityDatabaseHandle(projectDatabase, cfg.DBPath, businessProfileProjection))
 	if err != nil {
 		return err
 	}
@@ -384,10 +381,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	closeRuntime := func(runtime runtimeProcess) error {
 		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(lifecycleCtx), cfg.HTTPShutdownTimeout)
 		defer cancel()
-		if contextual, ok := runtime.(runtimeProcessContextCloser); ok {
-			return contextual.CloseContext(closeCtx)
-		}
-		return runtime.Close()
+		return runtime.CloseContext(closeCtx)
 	}
 	activator := &runtimeActivator{
 		handlers: handlers, connectorGateway: connectorGateway,
@@ -419,6 +413,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 			}
 			bound = true
 			runtime.StartWorkers(lifecycleCtx)
+			businessProfileProjection.Publish(manifest.Objects, manifest.IdentityProfileExtensions)
 			started = true
 			return runtime, nil
 		},
