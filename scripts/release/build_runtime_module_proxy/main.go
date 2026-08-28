@@ -495,8 +495,21 @@ func distributionGoModWithVersions(content []byte, versions map[string]string) (
 			return nil, err
 		}
 	}
+	// The Runtime production closure depends only on the deployment-neutral
+	// Notification SDK. The implementation module is published beside Runtime
+	// for Module compositions, but must be selected by the generated project;
+	// keeping this test-only source requirement would force SaaS consumers to
+	// download and trust an implementation they never link.
+	if parsed.Module != nil && parsed.Module.Mod.Path == runtimeModulePath {
+		if err := parsed.DropRequire("github.com/domainry/domainry-notification"); err != nil {
+			return nil, err
+		}
+	}
 	for path, version := range versions {
 		if strings.TrimSpace(version) == "" {
+			continue
+		}
+		if parsed.Module != nil && parsed.Module.Mod.Path == runtimeModulePath && path == "github.com/domainry/domainry-notification" {
 			continue
 		}
 		if err := parsed.AddRequire(path, version); err != nil {

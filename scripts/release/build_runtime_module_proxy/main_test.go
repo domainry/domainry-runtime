@@ -113,9 +113,12 @@ import (
 		t.Fatal(err)
 	}
 	for path, version := range dependencyVersions {
-		if (path == "github.com/domainry/domainry-notification" || path == "github.com/domainry/domainry-notification-sdk") && !strings.Contains(string(runtimeMod), path+" "+version) {
+		if path == "github.com/domainry/domainry-notification-sdk" && !strings.Contains(string(runtimeMod), path+" "+version) {
 			t.Fatalf("Runtime distribution go.mod does not reference %s@%s", path, version)
 		}
+	}
+	if strings.Contains(string(runtimeMod), "github.com/domainry/domainry-notification ") {
+		t.Fatal("Runtime distribution go.mod retained the optional Notification implementation module")
 	}
 	moduleFiles, err := filepath.Glob(filepath.Join(proxy, "github.com", "domainry", "*", "@v", "*.mod"))
 	if err != nil {
