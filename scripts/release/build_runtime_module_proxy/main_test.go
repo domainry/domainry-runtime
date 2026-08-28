@@ -108,9 +108,12 @@ import (
 	for _, dependency := range result.DependencyModules {
 		dependencyVersions[dependency.Path] = dependency.Version
 	}
-	for _, path := range []string{"github.com/domainry/domainry-notification-sdk", "github.com/domainry/domainry-notification"} {
-		if !strings.HasPrefix(dependencyVersions[path], "v0.0.0-domainry.") {
-			t.Fatalf("local dependency %s did not receive a content-addressed version: %q", path, dependencyVersions[path])
+	for path, wantVersion := range map[string]string{
+		"github.com/domainry/domainry-notification-sdk": "v0.1.0-dev.1",
+		"github.com/domainry/domainry-notification":     "v0.1.0-dev.3",
+	} {
+		if dependencyVersions[path] != wantVersion {
+			t.Fatalf("released dependency %s version=%q, want %q", path, dependencyVersions[path], wantVersion)
 		}
 	}
 	runtimeMod, err := os.ReadFile(filepath.Join(proxy, filepath.FromSlash(runtimeModulePath), "@v", result.Version+".mod"))
