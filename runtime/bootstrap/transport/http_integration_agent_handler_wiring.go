@@ -33,7 +33,8 @@ func (a *httpServerAssembly) wireIntegrationAndAgentHandlers(agentConfig runtime
 		WriteError: a.callbacks.WriteError, WriteServiceError: a.callbacks.WriteServiceError,
 		DecodeJSON: a.callbacks.DecodeJSON, Admin: a.identityHTTP.PermissionFunc("workspace.admin"),
 		Authenticated: a.identityHTTP.AuthenticatedFunc, Entrypoint: a.identityHTTP.PermissionFunc("integration.entrypoint.invoke"),
-		Locale: a.callbacks.Locale,
+		Locale: a.callbacks.Locale, Identity: a.dependencies.IdentityBinding,
+		IdentityAudience: a.dependencies.Config.IdentityAudience, ProductName: a.dependencies.Config.EffectiveProductBrandName(),
 	})
 	state, proposals := assembleAgentApplicationPorts(a.dependencies, a.principals)
 	// assembleAgentApplicationPorts owns the pair invariant: both ports are

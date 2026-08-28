@@ -2,6 +2,7 @@ package integrations
 
 import (
 	"context"
+	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	"net/http"
@@ -29,6 +30,9 @@ type IntegrationsHandler struct {
 	authenticated     func(http.HandlerFunc) http.HandlerFunc
 	entrypoint        func(http.HandlerFunc) http.HandlerFunc
 	locale            func(*http.Request) string
+	identity          identitysdk.Binding
+	identityAudience  string
+	productName       string
 }
 
 func (h *IntegrationsHandler) readQueryLimit(w http.ResponseWriter, r *http.Request, maximum int) (int, bool) {
@@ -63,6 +67,9 @@ type IntegrationsDependencies struct {
 	Authenticated     func(http.HandlerFunc) http.HandlerFunc
 	Entrypoint        func(http.HandlerFunc) http.HandlerFunc
 	Locale            func(*http.Request) string
+	Identity          identitysdk.Binding
+	IdentityAudience  string
+	ProductName       string
 }
 
 func NewIntegrationsHandler(deps IntegrationsDependencies) *IntegrationsHandler {
@@ -73,6 +80,7 @@ func NewIntegrationsHandler(deps IntegrationsDependencies) *IntegrationsHandler 
 		writeJSON: deps.WriteJSON, writeError: deps.WriteError, writeServiceError: deps.WriteServiceError,
 		decodeJSON: deps.DecodeJSON, admin: deps.Admin, authenticated: deps.Authenticated,
 		entrypoint: deps.Entrypoint, locale: deps.Locale,
+		identity: deps.Identity, identityAudience: strings.TrimSpace(deps.IdentityAudience), productName: strings.TrimSpace(deps.ProductName),
 	}
 }
 

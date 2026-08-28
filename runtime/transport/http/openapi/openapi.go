@@ -29,6 +29,11 @@ func BuildWithProductBrand(snapshot metadatamodel.MetadataSchemaSnapshot, produc
 				"in":   "header",
 				"name": "X-API-Key",
 			},
+			"ServiceCredential": map[string]any{
+				"type": "apiKey",
+				"in":   "header",
+				"name": "X-Domainry-Service-Credential",
+			},
 		},
 		"schemas": openAPISchemas(snapshot),
 	}
@@ -200,6 +205,10 @@ func openAPIPublicSecurity() openAPISecurity {
 
 func openAPIIntegrationSecurity() openAPISecurity {
 	return openAPISecurity{Items: []map[string]any{{"IntegrationAPIKey": []string{}}, {"BearerAuth": []string{}}}}
+}
+
+func openAPIServiceCredentialSecurity() openAPISecurity {
+	return openAPISecurity{Items: []map[string]any{{"ServiceCredential": []string{}}}}
 }
 
 func openAPIPathParameter(name string, description string) openAPIParameter {

@@ -361,7 +361,7 @@ func anonymousAuthPath(path string) bool {
 	if path == "" {
 		return false
 	}
-	if path == "/" || path == "/live" || path == "/ready" || path == "/startup" || path == "/integrations/webhooks/{workspaceID}/{connectionKey}" || path == "/integrations/google/oauth/callback" || strings.HasPrefix(path, "/i18n/") {
+	if path == "/" || path == "/live" || path == "/ready" || path == "/startup" || path == "/integrations/webhooks/{workspaceID}/{connectionKey}" || path == "/integrations/google/oauth/callback" || path == "/v1/notification-deliveries:accept" || strings.HasPrefix(path, "/i18n/") {
 		return true
 	}
 	if path == "/agent-dialog/task-tools/invoke" {

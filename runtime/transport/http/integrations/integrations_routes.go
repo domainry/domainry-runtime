@@ -58,5 +58,6 @@ func (h *IntegrationsHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /business/notifications/web-push/subscriptions/{subscriptionID}/revoke", h.authenticated(h.revokeWebPushSubscription))
 	mux.HandleFunc("POST /integrations/web-push/subscriptions/cleanup-expired", h.admin(h.cleanupWebPushSubscriptions))
 	mux.HandleFunc("POST /integrations/webhooks/{workspaceID}/{connectionKey}", h.receiveIntegrationWebhook)
+	mux.HandleFunc("POST /v1/notification-deliveries:accept", h.acceptNotificationDelivery)
 	mux.HandleFunc("GET /integrations/google/oauth/callback", h.completeGoogleOAuth)
 }
