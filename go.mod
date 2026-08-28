@@ -6,7 +6,7 @@ toolchain go1.26.6
 
 require (
 	github.com/domainry/domainry-connector-sdk v0.1.0-dev.12
-	github.com/domainry/domainry-identity-sdk v0.1.0-dev6
+	github.com/domainry/domainry-identity-sdk v0.1.0-dev7
 	github.com/domainry/domainry-notification v0.1.0-dev.2
 	github.com/domainry/domainry-notification-sdk v0.0.0
 	github.com/go-sql-driver/mysql v1.10.0
