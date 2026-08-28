@@ -131,8 +131,19 @@ func compileSDKPredicate(object definitionmodel.ObjectSchema, objects map[string
 		return recordmodel.RecordScopeExpression{Operator: "not", Children: []recordmodel.RecordScopeExpression{{Operator: "eq", FieldKey: fieldKey, Path: path, Values: []string{fmt.Sprint(value)}}}}, nil
 	case identitysdk.OperatorIn, identitysdk.OperatorNotIn:
 		values, ok := sdkPolicyStrings(value)
-		if !ok || len(values) == 0 {
-			return recordmodel.RecordScopeExpression{}, fmt.Errorf("SDK policy %s value is not a non-empty list", predicate.Operator)
+		if !ok {
+			return recordmodel.RecordScopeExpression{}, fmt.Errorf("SDK policy %s value is not a list", predicate.Operator)
+		}
+		// An Identity-issued collection claim may legitimately be empty when the
+		// subject has no assignment in that organization scope. This is a normal
+		// authorization miss, not a malformed policy. Compile it to a bounded
+		// fail-closed expression so list endpoints return an empty page instead
+		// of surfacing an internal error.
+		if len(values) == 0 {
+			if predicate.Operator == identitysdk.OperatorNotIn {
+				return recordmodel.RecordScopeExpression{Operator: "not", Children: []recordmodel.RecordScopeExpression{*denyAllRecordScopeExpression()}}, nil
+			}
+			return *denyAllRecordScopeExpression(), nil
 		}
 		expression := recordmodel.RecordScopeExpression{Operator: "in", FieldKey: fieldKey, Path: path, Values: values}
 		if predicate.Operator == identitysdk.OperatorNotIn {

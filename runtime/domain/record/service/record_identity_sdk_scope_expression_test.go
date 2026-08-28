@@ -71,6 +71,38 @@ func TestSDKDataScopeCompilerTranslatesRelationsAndBusinessClaims(t *testing.T) 
 	}
 }
 
+func TestSDKDataScopeCompilerTreatsEmptyOrganizationScopeAsAuthorizationMiss(t *testing.T) {
+	store := definitionmodel.ObjectSchema{Key: "store", Fields: []definitionmodel.FieldSchema{{Key: "id", Type: "text"}}}
+	booking := definitionmodel.ObjectSchema{Key: "booking", Fields: []definitionmodel.FieldSchema{{Key: "scope_store_id", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "store"}}}}
+	predicate := &accessfixture.PredicateFixture{
+		Operator: "in",
+		Path:     []accessfixture.RelationSegmentFixture{{Direction: "forward", RelationFieldKey: "scope_store_id", TargetObjectKey: "store"}},
+		FieldKey: "id", ValueSource: "actor_claim", ClaimKey: "store_ids",
+	}
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "manager-1"}}, accessfixture.Bundle{
+		Permissions:  []string{"booking.read"},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "booking", Read: true, Scope: "custom", Predicate: predicate}},
+	})
+
+	expression, err, handled := RecordCompileSDKDataScopeExpression(booking, []definitionmodel.ObjectSchema{booking, store}, principal, "read")
+	if err != nil || !handled || expression == nil {
+		t.Fatalf("empty store scope expression=%#v handled=%v err=%v", expression, handled, err)
+	}
+	if expression.Operator != "in" || expression.FieldKey != "id" || len(expression.Values) != 0 || len(expression.Path) != 0 {
+		t.Fatalf("empty store scope must compile to direct deny-all, got %#v", expression)
+	}
+
+	principal.OrganizationScopes.StoreIDs = []string{"store-1", "store-2"}
+	principal = accessfixture.Attach(principal, accessfixture.Bundle{
+		Permissions:  []string{"booking.read"},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "booking", Read: true, Scope: "custom", Predicate: predicate}},
+	})
+	expression, err, handled = RecordCompileSDKDataScopeExpression(booking, []definitionmodel.ObjectSchema{booking, store}, principal, "read")
+	if err != nil || !handled || expression == nil || expression.Operator != "in" || len(expression.Path) != 1 || len(expression.Values) != 2 {
+		t.Fatalf("assigned store scope expression=%#v handled=%v err=%v", expression, handled, err)
+	}
+}
+
 func TestSDKDataScopeCompilerFailsClosed(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "case", Fields: []definitionmodel.FieldSchema{{Key: "owner", Type: "user", Config: map[string]any{"scope_owner": true}}}}
 	if expression, err, handled := RecordCompileSDKDataScopeExpression(object, []definitionmodel.ObjectSchema{object}, principalmodel.Principal{}, "read"); err != nil || handled || expression != nil {
