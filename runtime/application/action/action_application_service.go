@@ -1,0 +1,329 @@
+package action
+
+import (
+	"context"
+	"errors"
+	"strings"
+
+	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
+	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
+	actionpolicy "github.com/domainry/domainry-runtime/runtime/domain/action/policy"
+	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
+	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	"github.com/domainry/domainry-runtime/runtime/platform/telemetry"
+	"go.opentelemetry.io/otel/attribute"
+)
+
+type ActionAuthorization struct {
+	ObjectForAction func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error)
+}
+
+func (a ActionAuthorization) Validate(principal principalmodel.Principal, action definitionmodel.ActionSchema) error {
+	if !ActionAllowed(principal, action) {
+		return apperror.New(apperror.KindForbidden, "backend.action.permission_denied", nil, nil)
+	}
+	if a.ObjectForAction != nil {
+		_, err := a.ObjectForAction(principal, action.ObjectKey, actionpolicy.ActionName(action))
+		return err
+	}
+	return nil
+}
+
+type ActionAssurance struct {
+	Validate func(context.Context, actionmodel.ActionInvocation) (map[string]string, error)
+}
+
+type ActionAudit struct {
+	BuildSuccess func(context.Context, definitionmodel.ActionSchema, actionmodel.ActionInvocation, actionmodel.ActionInvocationResult) auditmodel.AuditEvent
+	BuildFailure func(context.Context, definitionmodel.ActionSchema, actionmodel.ActionInvocation, actionmodel.ActionInvocationResult, error) []auditmodel.AuditEvent
+	Bulk         func(context.Context, actionmodel.ActionBulkResult, []string, principalmodel.Principal)
+}
+
+type ActionApplicationDependencies struct {
+	Catalog          *ActionCatalog
+	SystemOperations *SystemOperationExecutor
+	BusinessHandlers *BusinessHandlerExecutor
+	Authorization    ActionAuthorization
+	Assurance        ActionAssurance
+	UnitOfWork       *ActionUnitOfWorkManager
+	Audit            ActionAudit
+	ProjectRecord    func(context.Context, principalmodel.Principal, string, recordmodel.Record) (recordmodel.Record, error)
+	ProjectOutput    func(context.Context, principalmodel.Principal, definitionmodel.ActionSchema, map[string]any) (map[string]any, error)
+	NewInvocationID  func(context.Context) string
+}
+
+// ActionApplicationService is the single governed invocation boundary used by
+// HTTP, Workflow, Automation, Scheduler, Integration, Agent and Bulk callers.
+type ActionApplicationService struct {
+	dependencies ActionApplicationDependencies
+	bulk         *ActionBulkApplicationService
+}
+
+// governedActionExecution is created only after the Action Application has
+// completed authorization, payload normalization, assurance and idempotency
+// claim. Keeping this type private prevents other Runtime packages from
+// calling a Business Handler with an ungoverned invocation.
+type governedActionExecution struct {
+	invocation  actionmodel.ActionInvocation
+	entry       ActionCatalogEntry
+	payload     map[string]any
+	executionID string
+	unitOfWork  *actionUnitOfWork
+}
+
+func NewActionApplication(dependencies ActionApplicationDependencies) *ActionApplicationService {
+	if dependencies.NewInvocationID == nil {
+		dependencies.NewInvocationID = NewActionInvocationID
+	}
+	if dependencies.UnitOfWork == nil {
+		dependencies.UnitOfWork = NewActionUnitOfWorkManager(nil)
+	}
+	if dependencies.Audit.BuildSuccess == nil {
+		dependencies.Audit.BuildSuccess = buildActionSuccessAudit
+	}
+	if dependencies.Audit.BuildFailure == nil {
+		dependencies.Audit.BuildFailure = buildActionFailureAudits
+	}
+	service := &ActionApplicationService{dependencies: dependencies}
+	service.bulk = NewActionBulkApplicationService(ActionBulkDependencies{
+		Allowed: ActionAllowed,
+		Actions: func(context.Context) []definitionmodel.ActionSchema { return dependencies.Catalog.Definitions() },
+		ValidateObject: func(_ context.Context, principal principalmodel.Principal, objectKey string) error {
+			if dependencies.Authorization.ObjectForAction == nil {
+				return nil
+			}
+			_, err := dependencies.Authorization.ObjectForAction(principal, objectKey, "read")
+			return err
+		},
+		Invoke: func(ctx context.Context, invocation actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error) {
+			return service.Invoke(ctx, actionmodel.ActionSourceBulk, invocation)
+		},
+		AuditBulk: dependencies.Audit.Bulk,
+		Execution: dependencies.UnitOfWork.executionRuntime(),
+	})
+	return service
+}
+
+func (s *ActionApplicationService) ReplaceDefinitions(actions []definitionmodel.ActionSchema) {
+	if s != nil && s.dependencies.Catalog != nil {
+		s.dependencies.Catalog.Replace(actions)
+	}
+}
+
+// Definitions returns the effective published Action contracts after execution
+// owner resolution. In particular, source-owned handlers contribute their
+// backend-verified read/write effect set through the frozen Handler registry.
+func (s *ActionApplicationService) Definitions() []definitionmodel.ActionSchema {
+	if s == nil || s.dependencies.Catalog == nil {
+		return nil
+	}
+	return s.dependencies.Catalog.Definitions()
+}
+
+func (s *ActionApplicationService) CatalogValidationErrors() []error {
+	if s == nil {
+		return nil
+	}
+	errors := s.dependencies.Catalog.ValidationErrors()
+	errors = append(errors, s.dependencies.SystemOperations.ValidationErrors()...)
+	errors = append(errors, s.dependencies.UnitOfWork.ValidationErrors()...)
+	if s.dependencies.Catalog.HasBusinessHandlerOwner() {
+		errors = append(errors, s.dependencies.BusinessHandlers.ValidationErrors()...)
+	}
+	return errors
+}
+
+func (s *ActionApplicationService) ActionsForObject(ctx context.Context, objectKey string, principal principalmodel.Principal) ([]definitionmodel.ActionSchema, error) {
+	if err := actionAuthorizeQuery(principal); err != nil {
+		return nil, err
+	}
+	return s.bulk.ActionsForObject(ctx, objectKey, principal)
+}
+
+func (s *ActionApplicationService) ExecuteBulkAction(ctx context.Context, objectKey, actionKey string, request actionmodel.ActionBulkRequest, principal principalmodel.Principal) (actionmodel.ActionBulkResult, error) {
+	return s.bulk.ExecuteBulkAction(ctx, objectKey, actionKey, request, principal)
+}
+
+func (s *ActionApplicationService) Invoke(ctx context.Context, source actionmodel.ActionSource, invocation actionmodel.ActionInvocation) (result actionmodel.ActionInvocationResult, err error) {
+	if !actionSourceValid(source) {
+		return actionmodel.ActionInvocationResult{}, apperror.New(apperror.KindBadRequest, "backend.action.source_invalid", nil, nil)
+	}
+	// The entrypoint owns provenance. Never trust a Source value carried by an
+	// upstream DTO, because that would allow one ingress to impersonate another.
+	invocation.Source = source
+	invocation = ActionNormalizeInvocation(invocation)
+	ctx, span := telemetry.StartUseCase(ctx, "action.invoke", attribute.String("action.key", invocation.ActionKey), attribute.String("object.key", invocation.ObjectKey))
+	defer func() { telemetry.EndUseCase(span, err, "") }()
+	var unitOfWork *actionUnitOfWork
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			if unitOfWork != nil {
+				unitOfWork.rollBack(context.WithoutCancel(ctx))
+			}
+			result, err = s.failOwnedInvocation(
+				context.WithoutCancel(ctx),
+				unitOfWork,
+				result,
+				apperror.New(apperror.KindInternal, "backend.action.handler_panicked", errors.New("Action execution panicked"), nil),
+				nil,
+			)
+		}
+	}()
+	if err := actionAuthorizeCommand(invocation.Principal); err != nil {
+		return actionmodel.ActionInvocationResult{}, err
+	}
+	if invocation.ActionKey == "" {
+		return actionmodel.ActionInvocationResult{}, apperror.New(apperror.KindBadRequest, "backend.action.key_required", nil, nil)
+	}
+	entry, ok := s.dependencies.Catalog.Entry(invocation.ActionKey)
+	if !ok {
+		return actionmodel.ActionInvocationResult{}, apperror.New(apperror.KindNotFound, "backend.action.not_found", nil, nil)
+	}
+	if entry.ResolutionError != nil {
+		return actionmodel.ActionInvocationResult{}, actionOwnerResolutionError(entry)
+	}
+	action := entry.Definition
+	if strings.TrimSpace(invocation.ObjectKey) == "" {
+		invocation.ObjectKey = action.ObjectKey
+	}
+	if action.ObjectKey != invocation.ObjectKey {
+		return actionmodel.ActionInvocationResult{}, apperror.New(apperror.KindBadRequest, "backend.action.object_mismatch", nil, nil)
+	}
+	if invocation.RecordID == "" && !actionpolicy.ActionIsObjectKind(action.Kind) {
+		return actionmodel.ActionInvocationResult{}, apperror.New(apperror.KindBadRequest, "backend.action.object_action_required", nil, map[string]string{"action": action.Key})
+	}
+	if invocation.RecordID != "" && !actionpolicy.ActionIsRecordKind(action.Kind) {
+		return actionmodel.ActionInvocationResult{}, apperror.New(apperror.KindBadRequest, "backend.action.record_action_required", nil, map[string]string{"action": action.Key})
+	}
+	if err := s.dependencies.Authorization.Validate(invocation.Principal, action); err != nil {
+		return actionmodel.ActionInvocationResult{}, err
+	}
+	invocation.Input = actionBindInvocationIdempotency(action, invocation.Input, invocation.IdempotencyKey)
+	payload, err := ActionNormalizePayload(action, invocation.Input)
+	if err != nil {
+		return actionmodel.ActionInvocationResult{}, err
+	}
+	invocation.Input = payload
+	if invocation.IdempotencyKey == "" {
+		if value, ok := payload["idempotency_key"].(string); ok {
+			invocation.IdempotencyKey = strings.TrimSpace(value)
+		}
+	}
+	if assured, err := actionValidateInvocationAssurance(ctx, s.dependencies.Assurance.Validate, invocation); err != nil {
+		return actionmodel.ActionInvocationResult{}, err
+	} else {
+		invocation = assured
+	}
+	invocationID := s.invocationID(ctx, invocation)
+	if invocation.IdempotencyKey == "" {
+		invocation.IdempotencyKey = invocationID
+	}
+	result = actionmodel.ActionInvocationResult{
+		InvocationID: invocationID, Status: "running", Source: invocation.Source, AuditEvent: action.AuditEvent,
+		AuditEvidence: map[string]string{"action_key": action.Key, "object_key": action.ObjectKey, "record_id": invocation.RecordID, "request_id": invocation.RequestID, "process_id": invocation.ProcessID, "node_id": invocation.NodeID},
+	}
+	var cached actionmodel.ActionInvocationResult
+	var replay bool
+	cached, unitOfWork, replay, err = s.dependencies.UnitOfWork.begin(ctx, invocation, action)
+	if err != nil {
+		return failInvocation(result, err)
+	}
+	if replay {
+		return cached, nil
+	}
+	executed, err := s.execute(ctx, governedActionExecution{
+		invocation: invocation, entry: entry, payload: payload, executionID: unitOfWork.executionID(), unitOfWork: unitOfWork,
+	})
+	if err != nil {
+		unitOfWork.rollBack(ctx)
+		return s.failOwnedInvocation(
+			context.WithoutCancel(ctx),
+			unitOfWork,
+			result,
+			err,
+			s.dependencies.Audit.BuildFailure(ctx, action, invocation, result, err),
+		)
+	}
+	executed.Commits, err = enforceActionOptimisticConcurrency(action, invocation, executed.Commits)
+	if err != nil {
+		unitOfWork.rollBack(ctx)
+		return s.failOwnedInvocation(
+			context.WithoutCancel(ctx),
+			unitOfWork,
+			result,
+			err,
+			s.dependencies.Audit.BuildFailure(ctx, action, invocation, result, err),
+		)
+	}
+	executed, err = s.projectExecutionResult(ctx, action, invocation.Principal, executed)
+	if err != nil {
+		unitOfWork.rollBack(ctx)
+		return s.failOwnedInvocation(context.WithoutCancel(ctx), unitOfWork, result, err, nil)
+	}
+	result.Record, result.Object = executed.Record, executed.Object
+	result.Status = "success"
+	if executed.Record != nil {
+		result.Output = ActionRecordInvocationOutput(*executed.Record)
+		if executed.Record.Record.ID != "" {
+			result.RecordVersions = map[string]string{executed.Record.Record.ID: executed.Record.Record.UpdatedAt}
+		}
+	} else if executed.Object != nil {
+		result.Status, result.Output = executed.Object.Status, ActionObjectInvocationOutput(*executed.Object)
+	}
+	// actionReceiptResult returns backend.action.result_invalid before any
+	// malformed owner result can be committed.
+	receiptResult, err := actionReceiptResult(result)
+	if err != nil {
+		unitOfWork.rollBack(ctx)
+		return s.failOwnedInvocation(context.WithoutCancel(ctx), unitOfWork, result, err, nil)
+	}
+	auditEvent := s.dependencies.Audit.BuildSuccess(ctx, action, invocation, result)
+	err = unitOfWork.commit(ctx, receiptResult, executed.Commits, []auditmodel.AuditEvent{auditEvent})
+	if err != nil {
+		return s.failOwnedInvocation(context.WithoutCancel(ctx), unitOfWork, result, err, nil)
+	}
+	return result, nil
+}
+
+func (s *ActionApplicationService) execute(ctx context.Context, governed governedActionExecution) (ActionExecutionResult, error) {
+	ctx = recordmutation.WithMutationInvocation(ctx, recordmutation.MutationInvocation{
+		Source: transactionmodel.MutationSourceAction, ActionKey: governed.entry.Definition.Key, IdempotencyKey: governed.invocation.IdempotencyKey,
+		EffectAuthority: actionEffectAuthority(governed.entry.Definition.EffectSet), AssuranceEvidence: governed.invocation.AssuranceEvidence,
+		WorkflowTriggers: []string{"action_executed:" + governed.entry.Definition.Key},
+	})
+	switch governed.entry.Owner {
+	case ActionOwnerSystemOperation:
+		var err error
+		ctx, err = governed.unitOfWork.beginWriting(ctx)
+		if err != nil {
+			return ActionExecutionResult{}, err
+		}
+		return s.dependencies.SystemOperations.execute(ctx, governed)
+	case ActionOwnerBusinessHandler:
+		return s.dependencies.BusinessHandlers.execute(ctx, governed)
+	default:
+		return ActionExecutionResult{}, actionOwnerResolutionError(governed.entry)
+	}
+}
+
+func (s *ActionApplicationService) invocationID(ctx context.Context, invocation actionmodel.ActionInvocation) string {
+	if invocation.IdempotencyKey != "" {
+		return invocation.IdempotencyKey
+	}
+	if invocation.RequestID != "" {
+		return invocation.RequestID
+	}
+	return s.dependencies.NewInvocationID(ctx)
+}
+
+func invocationResultFromRecord(invocation actionmodel.ActionInvocation, action definitionmodel.ActionSchema, record actionmodel.ActionResult) actionmodel.ActionInvocationResult {
+	return actionmodel.ActionInvocationResult{InvocationID: invocation.IdempotencyKey, Status: "success", Source: invocation.Source, AuditEvent: action.AuditEvent, Output: ActionRecordInvocationOutput(record), Record: &record}
+}
+
+func invocationResultFromObject(invocation actionmodel.ActionInvocation, action definitionmodel.ActionSchema, object actionmodel.ActionObjectResult) actionmodel.ActionInvocationResult {
+	return actionmodel.ActionInvocationResult{InvocationID: invocation.IdempotencyKey, Status: object.Status, Source: invocation.Source, AuditEvent: action.AuditEvent, Output: ActionObjectInvocationOutput(object), Object: &object}
+}

@@ -1,0 +1,63 @@
+package validation
+
+import (
+	"strconv"
+
+	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
+	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
+)
+
+func (v *reportDefinitionValidator) validateExecutionDefinition() {
+	if v.report.ObjectSQLV1 == nil {
+		v.validateDatasetReferences()
+		return
+	}
+	if v.report.Materialization != nil || v.report.ExportScope != nil {
+		v.issue("backend.report.object_sql_p0_feature_forbidden", "object_sql_v1", nil)
+	}
+	plan, err := reportcontract.CompileReportObjectSQL(*v.report.ObjectSQLV1, v.objects)
+	if err != nil {
+		if planErr, ok := err.(*reportmodel.ReportObjectSQLPlanError); ok {
+			v.issue(planErr.Code, planErr.Path, planErr.Params)
+		} else {
+			v.issue("backend.report.object_sql_invalid", "object_sql_v1.sql", nil)
+		}
+		return
+	}
+	v.validateObjectSQLExplicitBounds(plan)
+	for _, source := range plan.Sources {
+		for _, fieldKey := range source.Fields {
+			v.validateAudienceFieldPermission("object_sql_v1.sql", source.ObjectKey, fieldKey, "read")
+		}
+	}
+}
+
+// validateObjectSQLExplicitBounds shifts the empirical IF-3 pit into the
+// authoring contract: object_sql SQL without an authored ORDER BY and literal
+// LIMIT compiles, but the Runtime then applies the implicit default limit
+// (1000 rows) - exactly the sync/async export threshold - so a growing report
+// silently truncates and pagination order is an unauthored implementation
+// detail. The requirement is skipped for single-row aggregate plans and only
+// enforced on the definition-contract path (model validate / Blueprint
+// authoring); already-published definitions keep executing unchanged.
+func (v *reportDefinitionValidator) validateObjectSQLExplicitBounds(plan reportmodel.ReportObjectSQLPlan) {
+	if !v.requireObjectSQLExplicitBounds || reportcontract.ReportObjectSQLPlanSingleRow(plan) {
+		return
+	}
+	// GROUP BY plans inherit a deterministic order from their grouping terms;
+	// every other multi-row plan must author its own ORDER BY.
+	if !plan.ExplicitOrderBy && len(plan.GroupBy) == 0 {
+		v.issue("backend.report.object_sql_order_by_required", "object_sql_v1.sql.order_by", map[string]string{
+			"missing_clause": "ORDER BY",
+			"reason":         "declare a deterministic ORDER BY in the object_sql statement; multi-row reports must not rely on implicit ordering",
+		})
+	}
+	if !plan.ExplicitLimit {
+		v.issue("backend.report.object_sql_limit_required", "object_sql_v1.sql.limit", map[string]string{
+			"missing_clause": "LIMIT",
+			"default_limit":  strconv.Itoa(reportcontract.ReportObjectSQLDefaultLimitRows),
+			"maximum":        strconv.Itoa(reportcontract.ReportObjectSQLMaximumLimitRows),
+			"reason":         "declare a literal LIMIT sized to the business bound; the implicit default of 1000 rows equals the sync/async export threshold and silently truncates larger reports",
+		})
+	}
+}

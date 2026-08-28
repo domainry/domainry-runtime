@@ -1,0 +1,121 @@
+package service
+
+import (
+	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
+	"testing"
+
+	identitysdk "github.com/domainry/domainry-identity-sdk"
+
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
+)
+
+func TestSDKDataScopeCompilerUnionsIdentityIssuedPolicies(t *testing.T) {
+	object := definitionmodel.ObjectSchema{Key: "case", Fields: []definitionmodel.FieldSchema{
+		{Key: "owner", Type: "user", Config: map[string]any{"scope_owner": true}},
+		{Key: "owner_department_id", Type: "text"},
+	}}
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{
+		Known: true, UserID: "user-1", DepartmentID: "sales",
+	}}, accessfixture.Bundle{
+		Permissions: []string{"case.read"},
+		DataPolicies: []accessfixture.DataPolicyFixture{
+			{ObjectKey: "case", Scope: "owned_records", Read: true},
+			{ObjectKey: "case", Scope: "department", Read: true},
+		},
+	})
+
+	expression, err, handled := RecordCompileSDKDataScopeExpression(object, []definitionmodel.ObjectSchema{object}, principal, "read")
+	if err != nil || !handled || expression == nil || expression.Operator != "or" || len(expression.Children) != 2 {
+		t.Fatalf("expression=%#v handled=%v err=%v", expression, handled, err)
+	}
+	if !directSDKScopeExpressionMatches(*expression, recordmodel.Record{Data: map[string]any{"owner": "user-1", "owner_department_id": "support"}}) {
+		t.Fatal("owner policy did not match")
+	}
+	if !directSDKScopeExpressionMatches(*expression, recordmodel.Record{Data: map[string]any{"owner": "other", "owner_department_id": "sales"}}) {
+		t.Fatal("department policy did not match")
+	}
+	if directSDKScopeExpressionMatches(*expression, recordmodel.Record{Data: map[string]any{"owner": "other", "owner_department_id": "support"}}) {
+		t.Fatal("record outside every SDK policy matched")
+	}
+}
+
+func TestSDKDataScopeCompilerTranslatesRelationsAndBusinessClaims(t *testing.T) {
+	member := definitionmodel.ObjectSchema{Key: "member", Fields: []definitionmodel.FieldSchema{{Key: "coach_id", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "coach"}}}}
+	booking := definitionmodel.ObjectSchema{Key: "booking", Fields: []definitionmodel.FieldSchema{{Key: "member_id", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "member"}}}}
+	coach := definitionmodel.ObjectSchema{Key: "coach", Fields: []definitionmodel.FieldSchema{{Key: "id", Type: "text"}}}
+	predicate := &accessfixture.PredicateFixture{
+		Operator: "eq",
+		Path: []accessfixture.RelationSegmentFixture{
+			{Direction: "forward", RelationFieldKey: "member_id", TargetObjectKey: "member"},
+			{Direction: "forward", RelationFieldKey: "coach_id", TargetObjectKey: "coach"},
+		},
+		FieldKey: "id", ValueSource: "actor_claim", ClaimKey: "coach_id",
+	}
+	principal := accessfixture.Attach(principalmodel.Principal{
+		Principal:      identitysdk.Principal{Known: true, UserID: "user-1"},
+		BusinessClaims: map[string]profilebindingmodel.ClaimValue{"coach_id": {Type: "relation", Value: "coach-1"}},
+	}, accessfixture.Bundle{
+		Permissions:  []string{"booking.read"},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "booking", Read: true, Scope: "custom", Predicate: predicate}},
+	})
+
+	expression, err, handled := RecordCompileSDKDataScopeExpression(booking, []definitionmodel.ObjectSchema{booking, member, coach}, principal, "read")
+	if err != nil || !handled || expression == nil || len(expression.Path) != 2 || expression.Values[0] != "coach-1" {
+		t.Fatalf("expression=%#v handled=%v err=%v", expression, handled, err)
+	}
+	if !sdkScopeExpressionHasRelation(*expression) {
+		t.Fatal("relation path was lost")
+	}
+}
+
+func TestSDKDataScopeCompilerFailsClosed(t *testing.T) {
+	object := definitionmodel.ObjectSchema{Key: "case", Fields: []definitionmodel.FieldSchema{{Key: "owner", Type: "user", Config: map[string]any{"scope_owner": true}}}}
+	if expression, err, handled := RecordCompileSDKDataScopeExpression(object, []definitionmodel.ObjectSchema{object}, principalmodel.Principal{}, "read"); err != nil || handled || expression != nil {
+		t.Fatalf("principal without AccessBundle expression=%#v handled=%v err=%v", expression, handled, err)
+	}
+
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"case.read"}})
+	principal.AccessBundle.DataPolicies = nil
+	expression, err, handled := RecordCompileSDKDataScopeExpression(object, []definitionmodel.ObjectSchema{object}, principal, "read")
+	if err != nil || !handled || expression == nil || expression.Operator != "in" || len(expression.Values) != 0 {
+		t.Fatalf("missing data allow did not compile to deny-all: %#v handled=%v err=%v", expression, handled, err)
+	}
+
+	bad := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{
+		Permissions: []string{"case.read"},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "case", Read: true, Scope: "custom", Predicate: &accessfixture.PredicateFixture{
+			Operator: "eq", FieldKey: "missing", ValueSource: "literal", Values: []string{"one"},
+		}}},
+	})
+	if _, err, handled := RecordCompileSDKDataScopeExpression(object, []definitionmodel.ObjectSchema{object}, bad, "read"); err == nil || !handled {
+		t.Fatalf("invalid fact accepted handled=%v err=%v", handled, err)
+	}
+}
+
+func TestSDKScopeExpressionDirectMatcherSupportsPortableOperators(t *testing.T) {
+	record := recordmodel.Record{ID: "case-1", Data: map[string]any{"status": "active", "note": "present"}}
+	tests := []struct {
+		expression recordmodel.RecordScopeExpression
+		want       bool
+	}{
+		{recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "id", Values: []string{"case-1"}}, true},
+		{recordmodel.RecordScopeExpression{Operator: "starts_with", FieldKey: "status", Values: []string{"act"}}, true},
+		{recordmodel.RecordScopeExpression{Operator: "exists", FieldKey: "note"}, true},
+		{recordmodel.RecordScopeExpression{Operator: "not_exists", FieldKey: "missing"}, true},
+		{recordmodel.RecordScopeExpression{Operator: "not", Children: []recordmodel.RecordScopeExpression{{Operator: "eq", FieldKey: "status", Values: []string{"closed"}}}}, true},
+		{recordmodel.RecordScopeExpression{Operator: "or", Children: []recordmodel.RecordScopeExpression{{Operator: "eq", FieldKey: "status", Values: []string{"closed"}}, {Operator: "eq", FieldKey: "status", Values: []string{"active"}}}}, true},
+		{recordmodel.RecordScopeExpression{Operator: "unknown"}, false},
+	}
+	for _, test := range tests {
+		if got := directSDKScopeExpressionMatches(test.expression, record); got != test.want {
+			t.Fatalf("expression=%#v got=%v want=%v", test.expression, got, test.want)
+		}
+	}
+
+	if normalizeSDKScopeAction("view") != "read" || normalizeSDKScopeAction("edit") != "update" {
+		t.Fatal("SDK action aliases were not normalized")
+	}
+}

@@ -1,0 +1,15 @@
+{
+  "template_id": "gym_empty_foundation",
+  "version": "1.0.0",
+  "name": "Gym Empty Foundation",
+  "source_blueprint_id": "runtime-direct-authoring-v4",
+  "objects": [],
+  "roles": [
+    {
+      "key": "admin",
+      "name": "Administrator",
+      "permissions": ["workspace.admin"],
+      "record_scope": "all_records"
+    }
+  ]
+}

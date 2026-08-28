@@ -1,0 +1,286 @@
+{
+  "schema_version": "runtime-source-owned-business-extension-inventory-v1",
+  "generated_at": "2026-07-22",
+  "target_adr": "docs/adr/0003-source-owned-business-extension-boundary.md",
+  "allowed_dispositions": ["keep", "move-owner", "replace", "delete"],
+  "entries": [
+    {
+      "id": "controlplane.action-step-authoring",
+      "category": "action_step",
+      "disposition": "delete",
+      "current_owner": "controlplane",
+      "replacement_owner": "none",
+      "replacement": "Typed System Operation or Business Handler authoring; Action Step JSON has no target owner.",
+      "evidence": [{"path": "internal/controlplane/blueprint/model/contract.go", "token": "type DomainBlueprintActionStep struct", "presence": "absent"}]
+    },
+    {
+      "id": "runtime.action-step-dispatcher",
+      "category": "action_step",
+      "disposition": "replace",
+      "current_owner": "runtime.action",
+      "replacement_owner": "runtime.action-application",
+      "replacement": "Fixed System Operation executor and Business Handler executor selected by the internal Action Catalog.",
+      "evidence": [{"path": "runtime/application/action/action_application_service.go", "token": "type ActionPortStepHandler func", "presence": "absent"}]
+    },
+    {
+      "id": "runtime.action-step-service-bag",
+      "category": "action_step",
+      "disposition": "replace",
+      "current_owner": "runtime.action-application",
+      "replacement_owner": "runtime.action-application",
+      "replacement": "Small ActionApplication governance dependencies plus separate closed executors.",
+      "evidence": [{"path": "runtime/application/action/action_application_service.go", "token": "type ActionStepDependencies struct", "presence": "absent"}]
+    },
+    {
+      "id": "runtime.configured-create-config",
+      "category": "config_dsl",
+      "disposition": "replace",
+      "current_owner": "runtime.action-application",
+      "replacement_owner": "project.business-handler",
+      "replacement": "Typed project Handler mutations through generated Action capabilities.",
+      "evidence": [{"path": "runtime/application/action/action_application_service.go", "token": "ActionApplyConfiguredCreates", "presence": "absent"}]
+    },
+    {
+      "id": "runtime.aggregate-config",
+      "category": "config_dsl",
+      "disposition": "replace",
+      "current_owner": "runtime.action-application",
+      "replacement_owner": "project.business-handler",
+      "replacement": "Typed data queries and project-owned result construction.",
+      "evidence": [{"path": "runtime/application/action/action_application_service.go", "token": "ActionAggregateApplicationService", "presence": "absent"}]
+    },
+    {
+      "id": "runtime.side-effect-orchestration-config",
+      "category": "config_dsl",
+      "disposition": "replace",
+      "current_owner": "runtime.action-application",
+      "replacement_owner": "project.business-handler+runtime.outbox",
+      "replacement": "Project Handler owns decisions; Runtime persists one typed DurableIntent/Outbox channel for all asynchronous work.",
+      "evidence": [{"path": "runtime/application/action/action_application_service.go", "token": "actionApplySideEffects", "presence": "absent"}]
+    },
+    {
+      "id": "runtime.invoice-settlement",
+      "category": "industry_specialization",
+      "disposition": "move-owner",
+      "current_owner": "runtime.action-application",
+      "replacement_owner": "examples.project-handler",
+      "replacement": "Invoice settlement example Handler using generated project capabilities.",
+      "evidence": [
+        {"path": "runtime/application/action/action_application_service.go", "token": "ActionInvoiceSettlementApplicationService", "presence": "absent"},
+		{"path": "examples/actions/invoice_settlement.go", "token": "func SettleInvoice"}
+      ]
+    },
+    {
+      "id": "runtime.stock-replenishment",
+      "category": "industry_specialization",
+      "disposition": "move-owner",
+      "current_owner": "runtime.action-application",
+      "replacement_owner": "examples.project-handler",
+      "replacement": "Replenishment example Handler using generated project capabilities.",
+      "evidence": [
+        {"path": "runtime/application/action/action_application_service.go", "token": "ActionApplyStockReplenishment", "presence": "absent"},
+		{"path": "examples/actions/create_replenishment.go", "token": "func CreateReplenishment"}
+      ]
+    },
+    {
+      "id": "runtime.contact-primary",
+      "category": "industry_specialization",
+      "disposition": "move-owner",
+      "current_owner": "runtime.action-application",
+      "replacement_owner": "examples.project-handler",
+      "replacement": "Contact primary exclusivity example Handler using generated project capabilities.",
+      "evidence": [
+        {"path": "runtime/application/action/action_application_service.go", "token": "ActionApplyContactPrimaryExclusivity", "presence": "absent"},
+		{"path": "examples/actions/mark_primary_contact.go", "token": "func MarkPrimaryContact"}
+      ]
+    },
+    {
+      "id": "connector.single-key-registration",
+      "category": "connector_legacy",
+      "disposition": "replace",
+      "current_owner": "runtime.integration-application",
+      "replacement_owner": "connector.registry",
+      "replacement": "Connector and Provider keyed registration through generated ProviderSet.",
+      "evidence": [{"path": "runtime/application/integration/integration_registry.go", "token": "func (r *ConnectorRegistry) RegisterAdapter(key string", "presence": "absent"}]
+    },
+    {
+      "id": "connector.application-single-key-registration",
+      "category": "connector_legacy",
+      "disposition": "replace",
+      "current_owner": "runtime.integration-application",
+      "replacement_owner": "connector.registry",
+      "replacement": "Connector and Provider keyed registration through generated ProviderSet.",
+      "evidence": [{"path": "runtime/application/integration/integration_application_registry.go", "token": "func (s *IntegrationApplicationService) RegisterIntegrationAdapter", "presence": "absent"}]
+    },
+    {
+      "id": "connector.adapter-key-fallback",
+      "category": "connector_legacy",
+      "disposition": "delete",
+      "current_owner": "runtime.integration-model",
+      "replacement_owner": "none",
+      "replacement": "Provider identity is exactly connector_key plus provider_key; no alias fallback remains.",
+      "evidence": [{"path": "runtime/domain/integration/model/integration_provider.go", "token": "AdapterKey", "presence": "absent"}]
+    },
+    {
+      "id": "connector.manual-builtin-registration",
+      "category": "connector_legacy",
+      "disposition": "replace",
+      "current_owner": "runtimehost.generated-composition",
+      "replacement_owner": "generated.composition",
+      "replacement": "Project-generated ProviderSet is the only production Provider registration source.",
+      "evidence": [{"path": "pkg/runtimehost/host.go", "token": "projects, err = options.Connectors(newConnectorTransportWithProcessPolicy(options.ConnectorProcesses))"}]
+    },
+    {
+      "id": "runtime.record-query-ast",
+      "category": "runtime_kernel",
+      "disposition": "keep",
+      "current_owner": "runtime.record",
+      "replacement_owner": "runtime.record",
+      "replacement": "Generated data capabilities adapt to the existing Runtime query contract.",
+      "evidence": [{"path": "runtime/domain/action/contract/action_record_reader.go", "token": "type ActionRecordReader interface"}]
+    },
+    {
+      "id": "runtime.record-store-sql-dialect",
+      "category": "runtime_kernel",
+      "disposition": "keep",
+      "current_owner": "runtime.record+persistence",
+      "replacement_owner": "runtime.record+persistence",
+      "replacement": "Record persistence and SQL compilation remain Runtime-owned behind storage-neutral repository contracts.",
+      "evidence": [
+        {"path": "runtime/domain/record/repository/record_repository.go", "token": "type RecordRepository interface"},
+        {"path": "runtime/infrastructure/persistence/driver/dialect.go", "token": "type Dialect interface"}
+      ]
+    },
+    {
+      "id": "runtime.mutation-kernel",
+      "category": "runtime_kernel",
+      "disposition": "keep",
+      "current_owner": "runtime.recordmutation",
+      "replacement_owner": "runtime.recordmutation",
+      "replacement": "System Operations and Business Handlers share the existing mutation owner.",
+      "evidence": [{"path": "runtime/application/recordmutation/mutation_kernel_application_service.go", "token": "type MutationKernelApplicationService struct"}]
+    },
+    {
+      "id": "runtime.unit-of-work",
+      "category": "runtime_kernel",
+      "disposition": "keep",
+      "current_owner": "runtime.transaction",
+      "replacement_owner": "runtime.transaction",
+      "replacement": "Runtime remains the sole transaction and commit owner.",
+      "evidence": [{"path": "runtime/domain/transaction/contract/transaction_unit_of_work.go", "token": "type UnitOfWork"}]
+    },
+    {
+      "id": "runtime.conditional-update-cas",
+      "category": "runtime_kernel",
+      "disposition": "keep",
+      "current_owner": "runtime.transaction+record",
+      "replacement_owner": "runtime.transaction+record",
+      "replacement": "Conditional mutation predicates and optimistic compare-and-swap remain in the canonical mutation path.",
+      "evidence": [
+        {"path": "runtime/domain/transaction/model/transaction_commit.go", "token": "type ConditionalUpdateInput struct"},
+        {"path": "runtime/domain/transaction/model/transaction_commit.go", "token": "type OptimisticPrecondition struct"},
+        {"path": "runtime/domain/record/repository/record_repository.go", "token": "UpdateRecordWhere(ctx context.Context"}
+      ]
+    },
+    {
+      "id": "runtime.database-unique-constraint",
+      "category": "runtime_kernel",
+      "disposition": "keep",
+      "current_owner": "runtime.persistence",
+      "replacement_owner": "runtime.persistence",
+      "replacement": "Database uniqueness and constraint conflict mapping remain authoritative concurrency and invariant enforcement.",
+      "evidence": [
+        {"path": "runtime/infrastructure/persistence/database/schema/index.go", "token": "func CreateIndexIfMissing"},
+        {"path": "runtime/infrastructure/persistence/database/record/record_store.go", "token": "mutation.MutationConflictUnique"}
+      ]
+    },
+    {
+      "id": "runtime.workflow",
+      "category": "runtime_kernel",
+      "disposition": "keep",
+      "current_owner": "runtime.workflow",
+      "replacement_owner": "runtime.workflow",
+      "replacement": "Workflow definitions, decisions and execution continue to call the unified Action boundary.",
+      "evidence": [{"path": "runtime/application/workflow/workflow_application_service.go", "token": "type WorkflowApplicationService struct"}]
+    },
+    {
+      "id": "runtime.automation",
+      "category": "runtime_kernel",
+      "disposition": "keep",
+      "current_owner": "runtime.automation",
+      "replacement_owner": "runtime.automation",
+      "replacement": "Automation trigger and execution orchestration remain Runtime-owned consumers of unified Action invocation.",
+      "evidence": [{"path": "runtime/application/automation/automation_application_service.go", "token": "type AutomationApplicationService struct"}]
+    },
+    {
+      "id": "runtime.state-machine",
+      "category": "runtime_kernel",
+      "disposition": "keep",
+      "current_owner": "runtime.record-validation",
+      "replacement_owner": "runtime.record-validation",
+      "replacement": "State-machine validation and transition effects remain generic Runtime record capabilities.",
+      "evidence": [
+        {"path": "runtime/domain/record/validation/record_validation.go", "token": "case \"state_machine\":"},
+        {"path": "runtime/application/record/record_state_machine_effect_application_service.go", "token": "type RecordStateMachineEffectApplicationService struct"}
+      ]
+    },
+    {
+      "id": "runtime.scheduler",
+      "category": "runtime_kernel",
+      "disposition": "keep",
+      "current_owner": "runtime.scheduler",
+      "replacement_owner": "runtime.scheduler",
+      "replacement": "Scheduler definition, claim and job execution lifecycle remain Runtime-owned.",
+      "evidence": [{"path": "runtime/application/scheduler/scheduler_application_service.go", "token": "type SchedulerApplicationService struct"}]
+    },
+    {
+      "id": "runtime.durable-intent-outbox",
+      "category": "runtime_kernel",
+      "disposition": "keep",
+      "current_owner": "runtime.integration+persistence",
+      "replacement_owner": "runtime.integration+persistence",
+      "replacement": "Durable intent and Outbox persistence, leases, retry and delivery workers remain the single asynchronous transaction channel.",
+      "evidence": [
+        {"path": "runtime/domain/integration/model/integration_runtime.go", "token": "type IntegrationOutboxMessage struct"},
+        {"path": "runtime/application/integration/integration_application_workers.go", "token": "func (s *IntegrationApplicationService) StartOutboxWorker"},
+        {"path": "runtime/infrastructure/persistence/database/integration/integration_worker_store.go", "token": "func (r IntegrationWorkerStore) ClaimOutbox"}
+      ]
+    },
+    {
+      "id": "runtime.connector-lifecycle",
+      "category": "runtime_kernel",
+      "disposition": "keep",
+      "current_owner": "runtime.integration",
+      "replacement_owner": "runtime.integration",
+      "replacement": "Connection, Secret, Retry, Outbox, Webhook and reconciliation remain Runtime-owned.",
+      "evidence": [{"path": "runtime/domain/integration/model/integration_runtime.go", "token": "type IntegrationOutboxMessage struct"}]
+    },
+    {
+      "id": "runtime.generic-action-http-routes",
+      "category": "runtime_kernel",
+      "disposition": "keep",
+      "current_owner": "runtime.http-records",
+      "replacement_owner": "runtime.http-records",
+      "replacement": "Generic object and record Action routes remain the only public Action transport boundary.",
+      "evidence": [
+        {"path": "runtime/transport/http/records/records_routes.go", "token": "POST /objects/{objectKey}/actions/{actionKey}/run"},
+        {"path": "runtime/transport/http/records/records_routes.go", "token": "POST /objects/{objectKey}/records/{recordID}/actions/{actionKey}"}
+      ]
+    },
+    {
+      "id": "runtime.action-governance-chain",
+      "category": "runtime_kernel",
+      "disposition": "keep",
+      "current_owner": "runtime.action-application",
+      "replacement_owner": "runtime.action-application",
+      "replacement": "Permission, assurance, idempotency, audit and receipt projection remain one governed Action invocation chain.",
+      "evidence": [
+        {"path": "runtime/application/action/action_application_service.go", "token": "type ActionAuthorization struct"},
+        {"path": "runtime/application/action/action_application_service.go", "token": "type ActionAssurance struct"},
+        {"path": "runtime/application/action/action_application_service.go", "token": "UnitOfWork       *ActionUnitOfWorkManager"},
+        {"path": "runtime/application/action/action_application_service.go", "token": "type ActionAudit struct"},
+        {"path": "runtime/domain/action/model/action_invocation.go", "token": "type ActionInvocationResult struct"}
+      ]
+    }
+  ]
+}

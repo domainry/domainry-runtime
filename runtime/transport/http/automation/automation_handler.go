@@ -1,0 +1,121 @@
+package automation
+
+import (
+	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+
+	"net/http"
+	"strconv"
+	"strings"
+
+	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
+	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
+)
+
+type AutomationHandler struct {
+	commands          *automationapplication.AutomationApplicationService
+	principal         func(*http.Request) principalmodel.Principal
+	writeJSON         func(http.ResponseWriter, int, any)
+	writeServiceError func(http.ResponseWriter, *http.Request, error)
+	decodeJSON        func(http.ResponseWriter, *http.Request, any) bool
+	legacyHeaders     func(http.ResponseWriter)
+}
+
+type AutomationDependencies struct {
+	Commands          *automationapplication.AutomationApplicationService
+	Principal         func(*http.Request) principalmodel.Principal
+	WriteJSON         func(http.ResponseWriter, int, any)
+	WriteServiceError func(http.ResponseWriter, *http.Request, error)
+	DecodeJSON        func(http.ResponseWriter, *http.Request, any) bool
+	LegacyHeaders     func(http.ResponseWriter)
+}
+
+func NewAutomationHandler(deps AutomationDependencies) *AutomationHandler {
+	return &AutomationHandler{
+		commands: deps.Commands, principal: deps.Principal, writeJSON: deps.WriteJSON,
+		writeServiceError: deps.WriteServiceError, decodeJSON: deps.DecodeJSON,
+		legacyHeaders: deps.LegacyHeaders,
+	}
+}
+
+func (h *AutomationHandler) listAutomationExecutions(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	limit, _ := strconv.Atoi(strings.TrimSpace(query.Get("limit")))
+	history, err := h.commands.AutomationExecutions(r.Context(), automationmodel.AutomationExecutionFilter{
+		RuleKey: query.Get("rule_key"), ObjectKey: query.Get("object_key"), RecordID: query.Get("record_id"),
+		Phase: query.Get("phase"), Status: query.Get("status"), ConnectorKey: query.Get("connector_key"),
+		From: query.Get("from"), To: query.Get("to"), Limit: limit,
+	}, h.principal(r))
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	h.writeJSON(w, http.StatusOK, history)
+}
+
+func (h *AutomationHandler) listAutomationRules(w http.ResponseWriter, r *http.Request) {
+	rules, err := h.commands.AutomationRules(r.Context(), h.principal(r))
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	h.writeJSON(w, http.StatusOK, map[string]any{"items": rules, "count": len(rules)})
+}
+
+func (h *AutomationHandler) automationCapabilities(w http.ResponseWriter, r *http.Request) {
+	catalog, err := h.commands.AutomationCapabilities(r.Context(), h.principal(r))
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	h.legacyHeaders(w)
+	h.writeJSON(w, http.StatusOK, catalog)
+}
+
+func (h *AutomationHandler) getAutomationRule(w http.ResponseWriter, r *http.Request) {
+	rule, err := h.commands.AutomationRule(r.Context(), strings.TrimSpace(r.PathValue("ruleKey")), h.principal(r))
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	h.writeJSON(w, http.StatusOK, rule)
+}
+
+func (h *AutomationHandler) listAutomationRuleVersions(w http.ResponseWriter, r *http.Request) {
+	versions, err := h.commands.AutomationRuleVersions(r.Context(), strings.TrimSpace(r.PathValue("ruleKey")), h.principal(r))
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	h.writeJSON(w, http.StatusOK, map[string]any{"items": versions, "count": len(versions)})
+}
+
+func (h *AutomationHandler) validateAutomationRule(w http.ResponseWriter, r *http.Request) {
+	var rule automationmodel.AutomationRuleSchema
+	if !h.decodeJSON(w, r, &rule) {
+		return
+	}
+	result, err := h.commands.ValidateAutomationRule(r.Context(), rule, h.principal(r))
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	h.writeJSON(w, http.StatusOK, result)
+}
+
+func (h *AutomationHandler) simulateAutomationRule(w http.ResponseWriter, r *http.Request) {
+	var req automationcontract.AutomationSimulationRequest
+	if !h.decodeJSON(w, r, &req) {
+		return
+	}
+	result, err := h.commands.SimulateAutomationRule(r.Context(), strings.TrimSpace(r.PathValue("ruleKey")), req, h.principal(r))
+	if err != nil {
+		if strings.TrimSpace(result.RuleKey) != "" {
+			h.writeJSON(w, http.StatusOK, result)
+			return
+		}
+		h.writeServiceError(w, r, err)
+		return
+	}
+	h.writeJSON(w, http.StatusOK, result)
+}

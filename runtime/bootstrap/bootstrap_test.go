@@ -1,0 +1,97 @@
+package bootstrap
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/domainry/domainry-connector-sdk"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
+	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
+	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
+)
+
+func TestBootstrapEntrypointsAssembleRunnableGraphs(t *testing.T) {
+	cfg := config.Config{
+		AppLocale:                  "en-US",
+		DatabaseDriver:             "sqlite",
+		DBPath:                     filepath.Join(t.TempDir(), "runtime.db"),
+		ManifestPath:               filepath.Join("..", "domain", "manifest", "testdata", "manifests", "domain-only-minimal.json"),
+		UploadDir:                  filepath.Join(t.TempDir(), "uploads"),
+		SchedulerPollInterval:      5 * time.Millisecond,
+		SchedulerBatchSize:         5,
+		HTTPShutdownTimeout:        10 * time.Second,
+		SchedulerLeaseTTL:          time.Minute,
+		SchedulerMaxCatchupWindows: 1,
+	}
+	runtime := New(t.Context(), cfg, bootstrapIdentityBindingStub{})
+	if runtime == nil || BindHTTP(t.Context(), runtime) != runtime {
+		t.Fatal("bootstrap runtime entrypoints did not preserve the assembled owner")
+	}
+	StartWorkers(t.Context(), runtime)
+	StartWorkers(t.Context(), runtime)
+	assertBootstrapLiveness(t, runtime.Routes())
+	if err := runtime.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.Close(); err != nil {
+		t.Fatalf("repeated close: %v", err)
+	}
+
+	server := AssembleHTTPServer(t.Context(), composition.NewRuntimeServices(t.Context(), composition.RuntimeServicesConfig{}), bootstrapIdentityBindingStub{}, t.TempDir(), nil, true, runtimehttp.AgentHTTPConfig{})
+	if server == nil {
+		t.Fatal("HTTP composition entrypoint returned nil")
+	}
+	assertBootstrapLiveness(t, server.Routes())
+}
+
+func TestBootstrapExtensionAndProjectFacadeEntrypoints(t *testing.T) {
+	base := config.Config{AppLocale: "en-US", DatabaseDriver: "sqlite", ManifestPath: filepath.Join("..", "domain", "manifest", "testdata", "manifests", "domain-only-minimal.json"), UploadDir: t.TempDir(), HTTPShutdownTimeout: time.Second}
+	handlers := runtimeext.NewBusinessHandlerRegistry()
+	handlers.Freeze()
+	connectors := connector.NewRegistry()
+	connectors.Freeze()
+	constructors := []func(config.Config) *Runtime{
+		func(cfg config.Config) *Runtime {
+			return NewWithBusinessHandlers(t.Context(), cfg, handlers, bootstrapIdentityBindingStub{})
+		},
+		func(cfg config.Config) *Runtime {
+			return NewWithExtensions(t.Context(), cfg, handlers, connectors, bootstrapIdentityBindingStub{})
+		},
+		func(cfg config.Config) *Runtime {
+			return NewVerifiedProjectWithIdentity(t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, RuntimeReleaseArtifactEvidence{}, bootstrapIdentityBindingStub{})
+		},
+	}
+	for index, constructor := range constructors {
+		cfg := base
+		cfg.DBPath = filepath.Join(t.TempDir(), "runtime.db")
+		runtime := constructor(cfg)
+		if runtime == nil {
+			t.Fatalf("constructor %d returned nil", index)
+		}
+		if ActionConnectorGateway(runtime) == nil {
+			t.Fatalf("constructor %d gateway nil", index)
+		}
+		if RoutesForSurfaceGroup(runtime, runtimehttp.SurfaceRouteGroupPublic) == nil {
+			t.Fatalf("constructor %d routes nil", index)
+		}
+		if err := runtime.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if ActionConnectorGateway(nil) == nil || RoutesForSurfaceGroup(nil, runtimehttp.SurfaceRouteGroupPublic) == nil {
+		t.Fatal("nil facade fallback missing")
+	}
+}
+
+func assertBootstrapLiveness(t *testing.T, handler http.Handler) {
+	t.Helper()
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/live", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("liveness status=%d body=%s", response.Code, response.Body.String())
+	}
+}

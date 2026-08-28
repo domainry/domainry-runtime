@@ -1,0 +1,290 @@
+package validation
+
+import (
+	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
+	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
+
+	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
+
+	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
+
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
+
+	connectorcatalog "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
+)
+
+func TestValidateManifestAcceptsRuntimeFixtures(t *testing.T) {
+	fixtures := []string{
+		"domain-only-minimal.json",
+		"scheduler-ops-minimal.json",
+		"crm-customer-360.json",
+		"restaurant-kitchen.json",
+		"erp-inventory.json",
+	}
+	for _, fixture := range fixtures {
+		t.Run(fixture, func(t *testing.T) {
+			manifest := loadFixtureManifest(t, fixture)
+			if err := ValidateManifest(manifest); err != nil {
+				t.Fatalf("ValidateManifest() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateManifestAcceptsRuntimeIdentityFoundationRelationTargets(t *testing.T) {
+	manifest := loadFixtureManifest(t, "domain-only-minimal.json")
+	for _, target := range []string{
+		"party", "person", "organization", "identity_user", "identity_department",
+		"identity_organization_unit", "identity_workforce_profile",
+	} {
+		manifest.Objects[0].Fields = append(manifest.Objects[0].Fields, definitionmodel.FieldSchema{Key: target, Type: "relation", Validation: definitionmodel.FieldValidation{Target: target}})
+	}
+	if err := ValidateManifest(manifest); err != nil {
+		t.Fatalf("published Runtime Foundation relation target rejected: %v", err)
+	}
+}
+
+func TestValidateManifestAcceptsCompleteMaterializedSeedEvidenceWithoutCopyingPayloads(t *testing.T) {
+	manifest := loadFixtureManifest(t, "domain-only-minimal.json")
+	manifest.SeedRecords = nil
+	seeds := make([]businessseedmodel.BusinessSeedProvenance, 0, len(manifest.Objects))
+	for _, object := range manifest.Objects {
+		seeds = append(seeds, businessseedmodel.BusinessSeedProvenance{SeedKey: object.Key + ".primary", ObjectKey: object.Key, RecordID: object.Key + "-1", ContentHash: "hash"})
+	}
+	if err := ValidateManifestWithMaterializedSeeds(manifest, nil, seeds); err != nil {
+		t.Fatalf("complete materialized seed evidence rejected: %v", err)
+	}
+	if err := ValidateManifestWithMaterializedSeeds(manifest, nil, nil); err == nil || !strings.Contains(err.Error(), "domain schema must declare seed data") {
+		t.Fatalf("missing materialized seed evidence accepted: %v", err)
+	}
+}
+
+func TestValidateManifestRejectsAmbiguousSubjectLifecycleFieldPolicy(t *testing.T) {
+	manifest := loadFixtureManifest(t, "domain-only-minimal.json")
+	manifest.Objects[0].Fields[0].Config = map[string]any{"lifecycle_subject_identity": "yes", "lifecycle_subject_file": true, "lifecycle_erase": "anonymize"}
+	err := ValidateManifest(manifest)
+	if err == nil || !strings.Contains(err.Error(), "lifecycle_subject_identity") || !strings.Contains(err.Error(), "file lifecycle erase") {
+		t.Fatalf("expected lifecycle governance diagnostics, got %v", err)
+	}
+	manifest.Objects[0].Fields[0].Config = map[string]any{"lifecycle_subject_identity": true, "lifecycle_subject_file": true, "lifecycle_erase": "delete"}
+	if err := ValidateManifest(manifest); err != nil {
+		t.Fatalf("valid lifecycle field policy rejected: %v", err)
+	}
+}
+
+func TestValidateManifestEnforcesReportFieldAndSeedEvidenceContract(t *testing.T) {
+	manifest := loadFixtureManifest(t, "domain-only-minimal.json")
+	manifest.Reports = []reportmodel.ReportSchema{{
+		Key: "customer.summary", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "customer", Alias: "customer"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "name", Field: reportmodel.ReportDatasetField{SourceAlias: "customer", FieldKey: "name"}}}},
+		EvidenceRequirements: []reportmodel.ReportEvidenceRequirement{{ObjectKey: "customer", MinimumRecords: 2, RequiredNonEmptyFields: []string{"name"}}},
+	}}
+	err := ValidateManifest(manifest)
+	if err == nil || !strings.Contains(err.Error(), "requires at least 2 qualifying seed records") {
+		t.Fatalf("expected Report seed evidence error, got %v", err)
+	}
+	manifest.Reports[0].EvidenceRequirements[0].MinimumRecords = 1
+	if err := ValidateManifest(manifest); err != nil {
+		t.Fatalf("valid Report evidence contract: %v", err)
+	}
+}
+
+func TestValidateManifestRequiresConcreteProviderForRuntimeConnection(t *testing.T) {
+	manifest := loadFixtureManifest(t, "domain-only-minimal.json")
+	manifest.Integrations.Connections = []integrationmodel.ConnectionSchema{{Key: "files", ConnectorKey: "file_storage"}}
+	if err := ValidateManifest(manifest); err == nil || !strings.Contains(err.Error(), "concrete Provider is required") {
+		t.Fatalf("missing Provider error=%v", err)
+	}
+	manifest.Integrations.Connections[0].ProviderKey = "multi"
+	if err := ValidateManifest(manifest); err == nil || !strings.Contains(err.Error(), "non-executable Provider") {
+		t.Fatalf("multi Provider error=%v", err)
+	}
+	manifest.Integrations.Connections[0].ProviderKey = "local"
+	if err := ValidateManifest(manifest); err != nil {
+		t.Fatalf("concrete Provider rejected: %v", err)
+	}
+	manifest.Integrations.Connections[0].Config = map[string]any{"provider": "local"}
+	if err := ValidateManifest(manifest); err == nil || !strings.Contains(err.Error(), "must use provider_key") {
+		t.Fatalf("config Provider error=%v", err)
+	}
+}
+
+func TestValidateManifestRejectsWorkflowNodeWithMissingBusinessAction(t *testing.T) {
+	manifest := loadFixtureManifest(t, "hr-personnel.json")
+	actions := make([]definitionmodel.ActionSchema, 0, len(manifest.Actions))
+	for _, action := range manifest.Actions {
+		if action.Key != "leave_request.approve" {
+			actions = append(actions, action)
+		}
+	}
+	manifest.Actions = actions
+	err := ValidateManifest(manifest)
+	if err == nil || !strings.Contains(err.Error(), "unknown Business Action") {
+		t.Fatalf("expected missing Business Action validation error, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsRuntimeWorkflowContractViolations(t *testing.T) {
+	t.Run("approval outcomes", func(t *testing.T) {
+		manifest := loadFixtureManifest(t, "hr-personnel.json")
+		workflow := &manifest.Workflows[0]
+		edges := make([]definitionmodel.WorkflowGraphEdge, 0, len(workflow.Graph.Edges))
+		for _, edge := range workflow.Graph.Edges {
+			if edge.Source != "manager" || edge.Branch != "rejected" {
+				edges = append(edges, edge)
+			}
+		}
+		workflow.Graph.Edges = edges
+		err := ValidateManifest(manifest)
+		if err == nil || !strings.Contains(err.Error(), "backend.workflow.approval_outcomes_required") {
+			t.Fatalf("expected approval outcomes validation error, got %v", err)
+		}
+	})
+
+	t.Run("trigger type", func(t *testing.T) {
+		manifest := loadFixtureManifest(t, "hr-personnel.json")
+		manifest.Workflows[0].TriggerContract.Type = "record_event"
+		err := ValidateManifest(manifest)
+		if err == nil || !strings.Contains(err.Error(), "backend.workflow.trigger_type_invalid") {
+			t.Fatalf("expected trigger type validation error, got %v", err)
+		}
+	})
+
+	t.Run("run as role is resolved dynamically by Identity", func(t *testing.T) {
+		manifest := loadFixtureManifest(t, "hr-personnel.json")
+		manifest.Workflows[0].RunAs = "restricted"
+		err := ValidateManifest(manifest)
+		if err != nil {
+			t.Fatalf("dynamic Identity role was rejected by static Runtime validation: %v", err)
+		}
+	})
+}
+
+func TestValidateManifestRejectsWorkflowNodeWithMissingRequiredActionInput(t *testing.T) {
+	manifest := loadFixtureManifest(t, "hr-personnel.json")
+	for actionIndex := range manifest.Actions {
+		if manifest.Actions[actionIndex].Key == "leave_request.reject" {
+			manifest.Actions[actionIndex].PayloadFields = []definitionmodel.ActionPayloadField{{Key: "reason", Type: "text", Required: true}}
+		}
+	}
+	for workflowIndex := range manifest.Workflows {
+		workflow := &manifest.Workflows[workflowIndex]
+		if workflow.Key != "leave_request_approval" || workflow.Graph == nil {
+			continue
+		}
+		for nodeIndex := range workflow.Graph.Nodes {
+			node := &workflow.Graph.Nodes[nodeIndex]
+			if node.ID == "reject" && node.Contract != nil && node.Contract.Action != nil {
+				node.Contract.Action.Input = nil
+			}
+		}
+	}
+	err := ValidateManifest(manifest)
+	if err == nil || !strings.Contains(err.Error(), "required input for Business Action") || !strings.Contains(err.Error(), ".input.reason") {
+		t.Fatalf("expected required Workflow Action input validation error, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsInvalidArtifacts(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(*manifestmodel.ManifestSchema)
+		wantErr string
+	}{
+		{
+			name: "localized option storage value",
+			mutate: func(manifest *manifestmodel.ManifestSchema) {
+				manifest.Objects[0].Fields[1].Validation.Options = []string{"潜在客户"}
+			},
+			wantErr: "stable English storage value",
+		},
+		{
+			name: "missing seed data",
+			mutate: func(manifest *manifestmodel.ManifestSchema) {
+				manifest.SeedRecords = nil
+			},
+			wantErr: "domain schema must declare seed data",
+		},
+		{
+			name: "missing required seed field",
+			mutate: func(manifest *manifestmodel.ManifestSchema) {
+				delete(manifest.SeedRecords[0].Data, "name")
+			},
+			wantErr: "required seed field is missing",
+		},
+		{
+			name: "unknown seed reference",
+			mutate: func(manifest *manifestmodel.ManifestSchema) {
+				for index := range manifest.SeedRecords {
+					if manifest.SeedRecords[index].ObjectKey == "contact" {
+						manifest.SeedRecords[index].Data["customer"] = "$record:missing_customer"
+						return
+					}
+				}
+				t.Fatalf("fixture should include contact seed")
+			},
+			wantErr: "references unknown seed key",
+		},
+		{
+			name: "lifecycle insertion point encoded as workflow",
+			mutate: func(manifest *manifestmodel.ManifestSchema) {
+				manifest.Workflows[0].Trigger["phase"] = "before"
+			},
+			wantErr: "belong in automation_rules",
+		},
+		{
+			name: "workflow approval encoded as automation instruction",
+			mutate: func(manifest *manifestmodel.ManifestSchema) {
+				manifest.AutomationRules[0].Instructions = append(manifest.AutomationRules[0].Instructions, automationmodel.AutomationInstructionSchema{Key: "approval", Type: "approval"})
+			},
+			wantErr: "unsupported Automation instruction type",
+		},
+		{
+			name: "inline connector secret",
+			mutate: func(manifest *manifestmodel.ManifestSchema) {
+				manifest.Integrations.Connectors = append(manifest.Integrations.Connectors, integrationmodel.ConnectorSchema{Key: "private_api", Type: "http", Provider: "generic"})
+				manifest.Integrations.Connections = append(manifest.Integrations.Connections, integrationmodel.ConnectionSchema{Key: "private_api_default", ConnectorKey: "private_api", ProviderKey: "generic", Config: map[string]any{"api_token": "plaintext-secret"}})
+			},
+			wantErr: "inline Connector secrets are not allowed",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := loadFixtureManifest(t, "crm-customer-360.json")
+			tt.mutate(&manifest)
+			err := ValidateManifest(manifest)
+			if err == nil {
+				t.Fatalf("ValidateManifest() expected error containing %q", tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("ValidateManifest() error = %v, want contains %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func loadFixtureManifest(t *testing.T, name string) manifestmodel.ManifestSchema {
+	t.Helper()
+	path := filepath.Join("..", "testdata", "manifests", name)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read fixture %s: %v", name, err)
+	}
+	var manifest manifestmodel.ManifestSchema
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("decode fixture %s: %v", name, err)
+	}
+	builtins, err := connectorcatalog.Builtin()
+	if err != nil {
+		t.Fatalf("load Runtime Connector validation catalog: %v", err)
+	}
+	manifest.Integrations.Connectors = append(builtins, manifest.Integrations.Connectors...)
+	return manifest
+}

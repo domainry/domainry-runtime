@@ -1,0 +1,147 @@
+package validation
+
+import (
+	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
+	"strings"
+	"testing"
+
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
+)
+
+func TestManifestBusinessIdentityBindingHasOneStrictTypedContract(t *testing.T) {
+	profile := definitionmodel.ObjectSchema{Key: "member_profile", UX: map[string]any{"kind": "identity_profile_extension"}, Fields: []definitionmodel.FieldSchema{
+		{Key: "identity_user", Type: "relation", Unique: true, Config: map[string]any{"object_key": "identity_user"}},
+		{Key: "status", Type: "text", Required: true}, {Key: "blacklisted", Type: "boolean", Required: true}, {Key: "member_no", Type: "text"}, {Key: "email", Type: "email"},
+	}}
+	identityUser := definitionmodel.ObjectSchema{Key: "identity_user"}
+	valid := profilebindingmodel.Binding{
+		ContractVersion: profilebindingmodel.ContractVersion, MinReaderVersion: profilebindingmodel.MinimumReaderVersion,
+		ObjectKey: "member_profile", IdentityRelationField: "identity_user", Cardinality: "one_to_one", DefaultVisibility: "when_readable",
+		BusinessIdentity: profilebindingmodel.BusinessIdentityBinding{Key: "member", SurfaceKeys: []string{"portal"}, StatusField: "status", ActiveStatusValues: []string{"active"}, BlacklistField: "blacklisted", Claims: []profilebindingmodel.ClaimBinding{{ClaimKey: "member_no", FieldKey: "member_no"}}},
+		BindingLifecycle: profilebindingmodel.Lifecycle{AllowUnbound: true, InvitationChannels: []string{"email"}, ClaimProofs: []profilebindingmodel.ClaimProof{{Type: "email", FieldKey: "email"}}},
+		Directory:        profilebindingmodel.DirectoryProjection{Enabled: true, Label: "Member", PluralLabel: "Members", SummaryFields: []string{"member_no", "email"}, FilterFields: []string{"status"}, StatusField: "status"},
+	}
+	state := newValidationState(manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{identityUser, profile}, IdentityProfileExtensions: []profilebindingmodel.Binding{valid}}, nil)
+	state.validateIdentityProfileExtensions()
+	if len(state.errs) != 0 {
+		t.Fatalf("valid business identity binding diagnostics=%v", state.errs)
+	}
+	workforceDuplicate := profile
+	workforceDuplicate.Fields = append(append([]definitionmodel.FieldSchema(nil), profile.Fields...), definitionmodel.FieldSchema{Key: "employee_no", Type: "text"})
+	state = newValidationState(manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{identityUser, workforceDuplicate}, IdentityProfileExtensions: []profilebindingmodel.Binding{valid}}, nil)
+	state.validateIdentityProfileExtensions()
+	if len(state.errs) != 1 || !strings.Contains(state.errs[0].Error(), `Runtime workforce-owned field "employee_no"`) {
+		t.Fatalf("workforce ownership diagnostics=%v", state.errs)
+	}
+
+	invalid := valid
+	invalid.ContractVersion = "identity-profile-extension-v1"
+	invalid.BusinessIdentity = profilebindingmodel.BusinessIdentityBinding{Key: "", SurfaceKeys: []string{"portal", "portal"}, ActiveStatusValues: []string{"active"}, BlacklistField: "member_no", Claims: []profilebindingmodel.ClaimBinding{{ClaimKey: "same", FieldKey: "missing"}, {ClaimKey: "same", FieldKey: "member_no"}}}
+	invalid.BindingLifecycle = profilebindingmodel.Lifecycle{InvitationChannels: []string{"email", "email", "carrier_pigeon"}, ClaimProofs: []profilebindingmodel.ClaimProof{{Type: "email", FieldKey: "missing"}, {Type: "email", FieldKey: "email"}, {Type: "unknown"}}}
+	invalid.Directory = profilebindingmodel.DirectoryProjection{Label: "Member", SummaryFields: []string{"missing"}, FilterFields: []string{"missing"}, StatusField: "missing", ActionKeys: []string{"missing"}}
+	state = newValidationState(manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{identityUser, profile}, IdentityProfileExtensions: []profilebindingmodel.Binding{invalid}}, nil)
+	state.validateIdentityProfileExtensions()
+	joined := ""
+	for _, err := range state.errs {
+		joined += err.Error() + "\n"
+	}
+	for _, expected := range []string{"contract_version", "business_identity.key", "duplicate surface key", "requires status_field", "must have type boolean", "duplicate claim_key", "unknown field", "duplicate channel", "unsupported channel", "duplicate claim proof", "must be email, phone or external_idp_subject", "allow_unbound", "directory.enabled"} {
+		if !strings.Contains(joined, expected) {
+			t.Fatalf("missing %q in diagnostics:\n%s", expected, joined)
+		}
+	}
+}
+
+func TestManifestIdentityProfileDirectoryAndLifecycleRemainingOutcomes(t *testing.T) {
+	if err := ValidateIdentityProfileBindings(nil, nil); err != nil {
+		t.Fatalf("empty profile binding graph error=%v", err)
+	}
+	if err := ValidateIdentityProfileBindings(nil, []profilebindingmodel.Binding{{}}); err == nil {
+		t.Fatal("invalid profile binding graph accepted")
+	}
+
+	profile := definitionmodel.ObjectSchema{
+		Key: "member_profile",
+		UX:  map[string]any{"kind": "identity_profile_extension"},
+		Fields: []definitionmodel.FieldSchema{
+			{Key: "identity_user", Type: "relation", Unique: true, Required: true, Config: map[string]any{"object_key": "identity_user"}},
+			{Key: "status", Type: "text"},
+			{Key: "email", Type: "email"},
+		},
+	}
+	other := definitionmodel.ObjectSchema{Key: "other_profile"}
+	base := profilebindingmodel.Binding{
+		ContractVersion:  profilebindingmodel.ContractVersion,
+		MinReaderVersion: profilebindingmodel.MinimumReaderVersion,
+		ObjectKey:        "member_profile", IdentityRelationField: "identity_user",
+		Cardinality: "one_to_one", DefaultVisibility: "when_readable",
+		BusinessIdentity: profilebindingmodel.BusinessIdentityBinding{Key: "member"},
+		BindingLifecycle: profilebindingmodel.Lifecycle{
+			AllowUnbound: true,
+			ClaimProofs:  []profilebindingmodel.ClaimProof{{Type: "email", FieldKey: "email"}},
+		},
+	}
+	state := newValidationState(manifestmodel.ManifestSchema{
+		Objects:                   []definitionmodel.ObjectSchema{{Key: "identity_user"}, profile, other},
+		IdentityProfileExtensions: []profilebindingmodel.Binding{base, base},
+		Actions: []definitionmodel.ActionSchema{
+			{Key: "right-object", ObjectKey: "member_profile"},
+			{Key: "wrong-object", ObjectKey: "other_profile"},
+		},
+	}, nil)
+	state.validateIdentityProfileExtensions()
+	joined := state.errs.Error()
+	for _, expected := range []string{"must be nullable", "duplicate business identity binding"} {
+		if !strings.Contains(joined, expected) {
+			t.Fatalf("missing %q in diagnostics: %s", expected, joined)
+		}
+	}
+
+	disabledDirectories := []profilebindingmodel.DirectoryProjection{
+		{PluralLabel: "Members"},
+		{SummaryFields: []string{"email"}},
+		{FilterFields: []string{"status"}},
+		{StatusField: "status"},
+		{ActionKeys: []string{"right-object"}},
+	}
+	for _, directory := range disabledDirectories {
+		before := len(state.errs)
+		extension := base
+		extension.Directory = directory
+		state.validateIdentityProfileDirectory("directory", extension)
+		if len(state.errs) == before {
+			t.Fatalf("disabled directory metadata accepted: %#v", directory)
+		}
+	}
+
+	extension := base
+	extension.Directory = profilebindingmodel.DirectoryProjection{Enabled: true}
+	state.validateIdentityProfileDirectory("directory.enabled", extension)
+
+	extension.Directory = profilebindingmodel.DirectoryProjection{
+		Enabled: true, Label: "Member", PluralLabel: "Members",
+		SummaryFields: []string{"email"},
+	}
+	state.validateIdentityProfileDirectory("directory.empty-status", extension)
+
+	extension.Directory.StatusField = "missing"
+	extension.Directory.ActionKeys = []string{"missing-action", "wrong-object", "right-object"}
+	state.validateIdentityProfileDirectory("directory.actions", extension)
+
+	extension.BindingLifecycle = profilebindingmodel.Lifecycle{
+		ClaimProofs: []profilebindingmodel.ClaimProof{
+			{Type: "", FieldKey: "email"},
+			{Type: "", FieldKey: "email"},
+		},
+	}
+	state.validateIdentityProfileBindingLifecycle("lifecycle.blank-proof", extension)
+
+	extension.BindingLifecycle = profilebindingmodel.Lifecycle{AllowUnbound: true}
+	state.validateIdentityProfileBindingLifecycle("lifecycle.missing-proof", extension)
+
+	extension.BindingLifecycle = profilebindingmodel.Lifecycle{
+		ClaimProofs: []profilebindingmodel.ClaimProof{{Type: "email", FieldKey: "email"}},
+	}
+	state.validateIdentityProfileBindingLifecycle("lifecycle.proof-requires-unbound", extension)
+}

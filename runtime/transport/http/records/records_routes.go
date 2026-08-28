@@ -1,0 +1,36 @@
+package records
+
+import "net/http"
+
+func (h *RecordsHandler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /objects/{objectKey}/records", h.listRecords)
+	mux.HandleFunc("GET /objects/{objectKey}/records/export", h.exportRecords)
+	mux.HandleFunc("POST /objects/{objectKey}/records/export/jobs", h.enqueueExportJob)
+	mux.HandleFunc("POST /objects/{objectKey}/records/import/preview", h.previewImport)
+	mux.HandleFunc("POST /objects/{objectKey}/records/import/apply", h.applyImport)
+	mux.HandleFunc("POST /objects/{objectKey}/records/import/jobs", h.enqueueImportJob)
+	mux.HandleFunc("GET /record-batch-jobs/{jobID}", h.getBatchJob)
+	mux.HandleFunc("POST /record-batch-jobs/{jobID}/cancel", h.cancelBatchJob)
+	mux.HandleFunc("GET /record-batch-jobs/{jobID}/download", h.downloadBatchJob)
+	mux.HandleFunc("POST /objects/{objectKey}/records", h.createRecord)
+	mux.HandleFunc("GET /objects/{objectKey}/records/{recordID}", h.getRecord)
+	mux.HandleFunc("GET /objects/{objectKey}/records/{recordID}/references", h.recordReferences)
+	mux.HandleFunc("GET /objects/{objectKey}/records/{recordID}/related/{relatedObjectKey}", h.relatedRecords)
+	mux.HandleFunc("PATCH /objects/{objectKey}/records/{recordID}", h.updateRecord)
+	mux.HandleFunc("POST /objects/{objectKey}/records/{recordID}/deactivate-profile", h.deactivateBusinessProfile)
+	mux.HandleFunc("POST /objects/{objectKey}/records/{recordID}/reactivate-profile", h.reactivateBusinessProfile)
+	mux.HandleFunc("DELETE /objects/{objectKey}/records/{recordID}", h.deleteRecord)
+	mux.HandleFunc("GET /objects/{objectKey}/actions", h.listActions)
+	mux.HandleFunc("POST /objects/{objectKey}/actions/{actionKey}/run", h.executeObjectAction)
+	mux.HandleFunc("POST /objects/{objectKey}/actions/{actionKey}/bulk", h.executeBulkAction)
+	mux.HandleFunc("POST /objects/{objectKey}/records/{recordID}/actions/{actionKey}", h.executeAction)
+	mux.HandleFunc("GET /permissions/effective", h.effectivePermissions)
+	mux.HandleFunc("GET /business/audit-events", h.listBusinessAuditEvents)
+	mux.HandleFunc("POST /business/audit-event-exports", h.prepareBusinessAuditEventExport)
+	mux.HandleFunc("GET /business/audit-event-exports/downloads/{token}", h.downloadBusinessAuditEventExport)
+	mux.HandleFunc("GET /business/records/stream", h.streamBusinessRecords)
+	mux.HandleFunc("GET /tenant-admin/audit-events", h.listTenantGovernanceAuditEvents)
+	mux.HandleFunc("GET /tenant-admin/audit-events/export", h.exportTenantGovernanceAuditEvents)
+	mux.HandleFunc("GET /operations/audit-events", h.listOperationsAuditEvents)
+	mux.HandleFunc("GET /operations/audit-events/export", h.exportOperationsAuditEvents)
+}

@@ -1,0 +1,34 @@
+{
+  "schema_version": "runtime-salesforce-case-contract-v1",
+  "case_id": "salesforce_proposal_bulk_fulfillment",
+  "source": {
+    "title": "3 weeks' work in 1 day: How Schneider Electric serves customers faster",
+    "url": "https://www.salesforce.com/resources/customer-stories/schneider-electric-boosts-customer-satisfaction/",
+    "accessed_on": "2026-07-19",
+    "source_facts": [
+      {"id": "proposal_completed", "fact": "A sales representative completes a proposal before project matching and downstream processing."},
+      {"id": "project_match", "fact": "The proposal is matched to an existing project."},
+      {"id": "external_processing", "fact": "Proposal data is transferred to an external database for processing and returned."},
+      {"id": "batch_scale", "fact": "The external processing step handles up to 5,000 records at once."},
+      {"id": "fulfillment", "fact": "Order fulfillment is automated after quoting completes."},
+      {"id": "case_aggregation", "fact": "Multiple customer cases describing the same product issue can be grouped into one issue."}
+    ]
+  },
+  "validation_extensions": [
+    {"id": "bulk_5000", "scenario": "Submit 5,000 synthetic proposal lines and verify bounded chunking and one final aggregate."},
+    {"id": "uncertain_pricing", "scenario": "Reconcile remote pricing success after a local timeout without creating another quote version."},
+    {"id": "partial_validation", "scenario": "Prevent fulfillment from a partially invalid batch and resume from corrected failed lines."},
+    {"id": "concurrent_conversion", "scenario": "Concurrent conversion commands create one synthetic order and fulfillment set."},
+    {"id": "worker_restart", "scenario": "A worker restart resumes its lease without duplicate pricing or missing lines."},
+    {"id": "issue_dedup", "scenario": "Concurrent synthetic support cases aggregate into one product issue with every source relation."}
+  ],
+  "runtime_mapping": {
+    "objects": ["account", "distributor", "proposal", "proposal_line", "project", "quote", "sales_order", "fulfillment", "customer_case", "product_issue"],
+    "actions": ["proposal.submit", "proposal.match_project", "proposal.price_batch", "proposal.convert_order", "fulfillment.retry", "customer_case.aggregate_issue"],
+    "roles": ["sales_rep", "project_manager", "pricing_operator", "fulfillment_operator", "support_agent", "quality_engineer"],
+    "capabilities": ["object_metadata", "business_action", "workflow", "transactional_outbox", "idempotency", "worker_lease", "audit", "workspace_isolation"]
+  },
+  "synthetic_data_policy": "Use fictional organizations, products, people, identifiers, prices, and provider payloads; never copy customer data or branding into generated records.",
+  "acceptance_axes": ["permission", "idempotency", "transaction", "workspace", "async_execution", "external_side_effect", "failure_recovery", "audit"],
+  "forbidden_production_tokens": ["schneider", "proposal_bulk_fulfillment_case"]
+}

@@ -1,0 +1,36 @@
+{
+  "schema_version": "runtime-salesforce-case-contract-v1",
+  "case_id": "salesforce_insurance_application_claim",
+  "source": {
+    "title": "John Hancock begins a new legacy with digital experiences",
+    "url": "https://www.salesforce.com/eu/customer-stories/john-hancock/",
+    "accessed_on": "2026-07-19",
+    "source_facts": [
+      {"id": "digital_application", "fact": "Prospective life-insurance customers can obtain a quote, submit an application, and sign through a portal."},
+      {"id": "automation", "fact": "Most previously manual application processing steps were automated."},
+      {"id": "digital_claim", "fact": "Long-term-care customers can submit service claims online and upload receipt images."},
+      {"id": "unified_view", "fact": "Customer information formerly spread across multiple systems was brought into a unified view."},
+      {"id": "legacy_connection", "fact": "A legacy data store is connected while minimizing unnecessary data replication."},
+      {"id": "pii_encryption", "fact": "Personally identifiable information is encrypted."}
+    ]
+  },
+  "validation_extensions": [
+    {"id": "quote_version", "scenario": "An expired or changed synthetic quote requires explicit application reconfirmation."},
+    {"id": "concurrent_submit", "scenario": "Two browser tabs submit the same synthetic application and receive one application number."},
+    {"id": "signature_order", "scenario": "Duplicate, late, and out-of-order signature callbacks advance state once and retain raw evidence."},
+    {"id": "underwriting_paths", "scenario": "Decline, additional-information, and approval paths enforce state, permission, and notification boundaries."},
+    {"id": "receipt_dedup", "scenario": "A repeated synthetic receipt business key cannot create two payable claim items."},
+    {"id": "attachment_compensation", "scenario": "Binary and metadata transaction failure is compensated or detected by orphan scanning."},
+    {"id": "legacy_unavailable", "scenario": "Legacy provider unavailability exposes recovery state without overwriting known customer facts."},
+    {"id": "retention_hold", "scenario": "Retention expiry, legal hold, and audited export cover synthetic application and claim data."}
+  ],
+  "runtime_mapping": {
+    "objects": ["applicant", "quote", "application", "signature_request", "underwriting_task", "policy", "service_claim", "receipt_metadata", "claim_decision"],
+    "actions": ["quote.confirm", "application.submit", "signature_request.apply_callback", "underwriting_task.decide", "policy.issue", "service_claim.submit", "service_claim.decide"],
+    "roles": ["applicant_user", "agent", "underwriter", "claimant_user", "claims_reviewer", "service_agent", "compliance_auditor"],
+    "capabilities": ["object_metadata", "business_action", "workflow", "portal_identity", "encryption", "field_permission", "upload", "inbox", "outbox", "retention", "legal_hold", "audit"]
+  },
+  "synthetic_data_policy": "Use fictional applicants, claimants, quotes, applications, signatures, policies, receipt metadata, and provider responses; never copy real PII, claims, or receipt images.",
+  "acceptance_axes": ["permission", "idempotency", "transaction", "workspace", "async_execution", "external_side_effect", "failure_recovery", "audit"],
+  "forbidden_production_tokens": ["john_hancock", "john hancock", "insurance_application_claim_case"]
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": "runtime-salesforce-case-contract-v1",
+  "case_id": "salesforce_mobile_lending_collection",
+  "source": {
+    "title": "Janalakshmi scales with Salesforce to reach more of the urban poor",
+    "url": "https://www.salesforce.com/in/customer-success-stories/janalakshmi/",
+    "accessed_on": "2026-07-19",
+    "source_facts": [
+      {"id": "mobile_lead", "fact": "Field representatives use a custom mobile application to capture leads and service customers."},
+      {"id": "loan_chain", "fact": "Onboarding connects loan application to disbursement."},
+      {"id": "biometric_verification", "fact": "Mobile biometrics support customer verification and transaction authentication."},
+      {"id": "core_banking", "fact": "The customer platform integrates with a core banking system."},
+      {"id": "doorstep_transaction", "fact": "Loan disbursement and collection can occur at the customer's location."},
+      {"id": "regional_reporting", "fact": "Management reporting can drill into approval and transaction data by geography."}
+    ]
+  },
+  "validation_extensions": [
+    {"id": "offline_replay", "scenario": "Repeated offline replay of synthetic Lead, verification, and collection requests creates each fact once."},
+    {"id": "identity_dedup", "scenario": "Duplicate synthetic identity enrollment enters merge review and cannot produce two disbursable customers."},
+    {"id": "biometric_uncertain", "scenario": "A late biometric success reconciles without contradictory decisions."},
+    {"id": "four_eyes", "scenario": "The loan initiator cannot approve the same application and denial is audited."},
+    {"id": "disbursement_uncertain", "scenario": "Remote core-banking disbursement success remains pending reconciliation and cannot be sent twice."},
+    {"id": "collection_schedule", "scenario": "Partial, late, and duplicate collection events update one repayment schedule without duplicate ledger entries."},
+    {"id": "dual_worker", "scenario": "Two workers compete for a due collection and only one owns execution."}
+  ],
+  "runtime_mapping": {
+    "objects": ["lead", "borrower_profile", "borrower_identity_check", "loan_application", "credit_decision", "loan_account", "disbursement", "repayment_schedule", "collection"],
+    "actions": ["lead.capture", "borrower_profile.verify", "loan_application.submit", "loan_application.approve", "disbursement.send", "disbursement.reconcile", "collection.post"],
+    "roles": ["field_rep", "kyc_reviewer", "credit_approver", "collection_officer", "regional_manager", "auditor"],
+    "capabilities": ["object_metadata", "business_action", "workflow", "field_permission", "encryption", "idempotency", "inbox", "outbox", "worker_lease", "audit"]
+  },
+  "synthetic_data_policy": "Use fictional borrowers, identity tokens, biometric decisions, loan amounts, account numbers, and locations; never store real PII or financial records.",
+  "acceptance_axes": ["permission", "idempotency", "transaction", "workspace", "async_execution", "external_side_effect", "failure_recovery", "audit"],
+  "forbidden_production_tokens": ["janalakshmi", "mobile_lending_collection_case"]
+}

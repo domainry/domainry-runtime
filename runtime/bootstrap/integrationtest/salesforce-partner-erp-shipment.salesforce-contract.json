@@ -1,0 +1,33 @@
+{
+  "schema_version": "runtime-salesforce-case-contract-v1",
+  "case_id": "salesforce_partner_erp_shipment",
+  "source": {
+    "title": "How Swissbit Upleveled Its Operational Efficiency with Salesforce",
+    "url": "https://www.salesforce.com/customer-stories/swissbit/",
+    "accessed_on": "2026-07-19",
+    "source_facts": [
+      {"id": "bespoke_agreement", "fact": "Quoting and fulfillment use customer-specific agreements, including projects that last for years."},
+      {"id": "partner_registration", "fact": "Reseller partners register projects and track them as opportunities until conversion."},
+      {"id": "erp_integration", "fact": "The customer platform integrates sales and transactional data with an ERP system."},
+      {"id": "shipment_visibility", "fact": "Sales users track orders through shipping details and tracking number."},
+      {"id": "forecasting", "fact": "Combined operational and sales data supports forecasting and capacity planning."}
+    ]
+  },
+  "validation_extensions": [
+    {"id": "partner_conflict", "scenario": "Conflicting synthetic partner registrations enter review without leaking the other partner's commercial data."},
+    {"id": "agreement_version", "scenario": "Historical orders retain their agreement version while new quotes use the effective version."},
+    {"id": "erp_idempotency", "scenario": "Concurrent ERP retries converge on one logical order in each system."},
+    {"id": "callback_loss", "scenario": "Reconciliation recovers a remotely created ERP order after callback loss."},
+    {"id": "shipment_monotonicity", "scenario": "Duplicate and out-of-order shipment events never regress delivered status."},
+    {"id": "forecast_rebuild", "scenario": "A forecast snapshot can be rebuilt without mutating transaction facts."}
+  ],
+  "runtime_mapping": {
+    "objects": ["partner", "deal_registration", "opportunity", "customer_agreement", "agreement_version", "quote", "erp_order", "shipment", "forecast_snapshot"],
+    "actions": ["deal_registration.submit", "deal_registration.resolve_conflict", "opportunity.convert", "quote.apply_agreement", "erp_order.sync", "shipment.apply_event", "forecast_snapshot.rebuild"],
+    "roles": ["partner_user", "channel_manager", "sales_rep", "pricing_approver", "supply_planner"],
+    "capabilities": ["object_metadata", "business_action", "workflow", "portal_identity", "data_scope", "inbox", "outbox", "scheduler", "report"]
+  },
+  "synthetic_data_policy": "Use fictional partners, agreements, products, orders, tracking numbers, and ERP payloads; do not reproduce customer or reseller records.",
+  "acceptance_axes": ["permission", "idempotency", "transaction", "workspace", "async_execution", "external_side_effect", "failure_recovery", "audit"],
+  "forbidden_production_tokens": ["swissbit", "partner_erp_shipment_case"]
+}

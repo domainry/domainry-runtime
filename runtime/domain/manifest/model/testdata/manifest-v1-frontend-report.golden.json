@@ -1,0 +1,17 @@
+{
+  "migrated": true,
+  "from_version": "1",
+  "to_version": "2",
+  "warnings": [
+    {"code": "manifest.v1.frontend_payload_removed", "path": "/frontend", "message": "legacy frontend payload was removed; use Builder design, route and deployment evidence"},
+    {"code": "manifest.v1.frontend_payload_removed", "path": "/surfaces", "message": "legacy frontend payload was removed; use Builder design, route and deployment evidence"},
+    {"code": "manifest.v1.frontend_payload_removed", "path": "/components", "message": "legacy frontend payload was removed; use Builder design, route and deployment evidence"},
+    {"code": "manifest.v1.entrypoint_frontend_field_removed", "path": "/entrypoints/0/route", "message": "entrypoint frontend routing belongs to the source-owned Route Registry"},
+    {"code": "manifest.v1.entrypoint_frontend_field_removed", "path": "/entrypoints/0/surface_key", "message": "entrypoint frontend routing belongs to the source-owned Route Registry"},
+    {"code": "manifest.v1.entrypoint_frontend_field_removed", "path": "/entrypoints/0/layout", "message": "entrypoint frontend routing belongs to the source-owned Route Registry"}
+  ],
+  "legacy_frontend_references": [
+    {"kind": "component", "key": "customer_table", "objects": ["customer"], "views": ["customer.active"], "actions": ["customer.update"], "reports": ["customer.pipeline"], "fields": ["status"], "permission": "customer.read"},
+    {"kind": "surface", "key": "customers", "roles": ["sales"]}
+  ]
+}

@@ -1,0 +1,145 @@
+package action
+
+import (
+	"encoding/json"
+	"errors"
+	"testing"
+
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
+)
+
+type emptyActionCodedError struct{}
+
+func (emptyActionCodedError) Error() string                  { return "empty coded error" }
+func (emptyActionCodedError) ErrorCode() string              { return "" }
+func (emptyActionCodedError) ErrorParams() map[string]string { return nil }
+
+func TestActionNormalizePayloadWithoutContractClonesAndAppliesDefaults(t *testing.T) {
+	action := definitionmodel.ActionSchema{
+		Defaults: map[string]any{"status": "draft", "priority": "normal", "ignored_blank": "value", "": "ignored"},
+	}
+	input := map[string]any{"status": "provided", "custom": map[string]any{"ok": true}}
+	got, err := ActionNormalizePayload(action, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["status"] != "provided" || got["priority"] != "normal" || got["ignored_blank"] != "value" || got["custom"] == nil {
+		t.Fatalf("normalized payload=%v", got)
+	}
+	got["status"] = "changed"
+	if input["status"] != "provided" {
+		t.Fatalf("normalization mutated input=%v", input)
+	}
+	empty, err := ActionNormalizePayload(definitionmodel.ActionSchema{}, nil)
+	if err != nil || empty == nil || len(empty) != 0 {
+		t.Fatalf("nil payload=%v error=%v", empty, err)
+	}
+}
+
+func TestActionNormalizePayloadContractDefaultsExtrasAndValidation(t *testing.T) {
+	action := definitionmodel.ActionSchema{
+		Key: "order.submit",
+		PayloadFields: []definitionmodel.ActionPayloadField{
+			{Key: "amount", Type: "number", Required: true},
+			{Key: "note", Type: "text", DefaultValue: "field-default"},
+			{Key: "mode", Type: "select", Options: []string{"fast", "safe"}},
+		},
+		IdempotencyKeys: []string{" tenant_request ", "", "tenant_request", "external_request"},
+		Defaults:        map[string]any{"note": "action-default", "mode": "safe", "request_ref": "generated", "undeclared": "ignored", "also_undeclared": true},
+	}
+	input := map[string]any{
+		"amount":           "12.5",
+		"note":             "",
+		"idempotency_key":  "idem-1",
+		"tenant_request":   "tenant-1",
+		"external_request": "external-1",
+		"approved":         true,
+	}
+	got, err := ActionNormalizePayload(action, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["amount"] != 12.5 || got["note"] != "action-default" || got["mode"] != "safe" || got["request_ref"] != "generated" {
+		t.Fatalf("normalized declared/default payload=%#v", got)
+	}
+	for _, key := range []string{"idempotency_key", "tenant_request", "external_request", "approved"} {
+		if got[key] != input[key] {
+			t.Fatalf("extra key %q lost: %#v", key, got)
+		}
+	}
+	if _, exists := got["undeclared"]; exists {
+		t.Fatalf("undeclared default leaked into contract payload=%#v", got)
+	}
+
+	if _, err := ActionNormalizePayload(action, map[string]any{"amount": 1, "unknown": true}); apperror.CodeOf(err) != "backend.validation.unknown_field" || apperror.ParamsOf(err)["field"] != "unknown" {
+		t.Fatalf("unknown field error=%v params=%v", err, apperror.ParamsOf(err))
+	}
+	if _, err := ActionNormalizePayload(action, map[string]any{"mode": "invalid"}); apperror.KindOf(err) != apperror.KindBadRequest {
+		t.Fatalf("invalid payload error=%v kind=%s", err, apperror.KindOf(err))
+	}
+	if _, err := ActionNormalizePayload(action, map[string]any{"amount": map[string]any{"invalid": true}}); apperror.KindOf(err) != apperror.KindBadRequest {
+		t.Fatalf("normalization error=%v kind=%s", err, apperror.KindOf(err))
+	}
+}
+
+func TestActionNormalizePayloadPreservesExactAndInexactNumericSemantics(t *testing.T) {
+	action := definitionmodel.ActionSchema{
+		Key: "settings.publish",
+		PayloadFields: []definitionmodel.ActionPayloadField{
+			{Key: "required_rate", Type: "percent", Required: true},
+			{Key: "optional_amount", Type: "currency"},
+			{Key: "inexact_score", Type: "number", Required: true},
+		},
+	}
+	normalized, err := ActionNormalizePayload(action, map[string]any{
+		"required_rate":   json.Number("7.5"),
+		"optional_amount": "12.3",
+		"inexact_score":   "1.25",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if normalized["required_rate"] != "7.50" || normalized["optional_amount"] != "12.30" {
+		t.Fatalf("exact values were not canonical strings: %#v", normalized)
+	}
+	if score, ok := normalized["inexact_score"].(float64); !ok || score != 1.25 {
+		t.Fatalf("number did not remain inexact float64: %#v", normalized["inexact_score"])
+	}
+}
+
+func TestActionPayloadErrorMappingAndHelpers(t *testing.T) {
+	actionWithIdempotency := definitionmodel.ActionSchema{PayloadFields: []definitionmodel.ActionPayloadField{{Key: "idempotency_key"}}}
+	if got := actionBindInvocationIdempotency(actionWithIdempotency, nil, " bound "); got["idempotency_key"] != "bound" {
+		t.Fatalf("nil payload binding=%#v", got)
+	}
+	existingKey := map[string]any{"idempotency_key": "payload"}
+	if got := actionBindInvocationIdempotency(actionWithIdempotency, existingKey, "header"); got["idempotency_key"] != "payload" {
+		t.Fatalf("existing payload binding=%#v", got)
+	}
+	existing := &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.test.conflict"}
+	if got := actionPayloadBadRequestFromError(existing); got != existing {
+		t.Fatalf("existing AppError changed: %v", got)
+	}
+	coded := &apperror.CodedError{Code: "backend.test.invalid", Params: map[string]string{"field": "amount"}}
+	got := actionPayloadBadRequestFromError(coded)
+	if apperror.KindOf(got) != apperror.KindBadRequest || apperror.CodeOf(got) != coded.Code || apperror.ParamsOf(got)["field"] != "amount" || !errors.Is(got, coded) {
+		t.Fatalf("coded mapping=%v params=%v", got, apperror.ParamsOf(got))
+	}
+	plain := errors.New("plain failure")
+	got = actionPayloadBadRequestFromError(plain)
+	if apperror.CodeOf(got) != "backend.bad_request" || !errors.Is(got, plain) {
+		t.Fatalf("plain mapping=%v", got)
+	}
+	got = actionPayloadBadRequestFromError(emptyActionCodedError{})
+	if apperror.CodeOf(got) != "backend.bad_request" {
+		t.Fatalf("empty coded mapping=%v", got)
+	}
+	got = actionPayloadBadRequest("backend.test.invalid", nil, " ", "ignored", "field", " amount ", "odd")
+	if apperror.ParamsOf(got)["field"] != " amount " || len(apperror.ParamsOf(got)) != 1 {
+		t.Fatalf("bad request params=%v", apperror.ParamsOf(got))
+	}
+	if actionCloneMap(nil) != nil {
+		t.Fatal("nil clone must remain nil")
+	}
+}

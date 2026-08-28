@@ -1,0 +1,195 @@
+{
+  "template_id": "scheduler_ops_minimal",
+  "version": "0.1.0",
+  "name": "Scheduler Operations Minimal",
+  "objects": [
+    {
+      "key": "job_definition",
+      "name": "Job Definition",
+      "description": "Published scheduler definition used by the Runtime Operations acceptance fixture.",
+      "fields": [
+        {"key": "key", "name": "Job Key", "type": "text", "required": true},
+        {"key": "name", "name": "Name", "type": "text", "required": true},
+        {"key": "status", "name": "Status", "type": "select", "required": true, "validation": {"options": ["draft", "enabled", "paused", "disabled", "archived"]}},
+        {"key": "trigger_type", "name": "Trigger Type", "type": "select", "required": true, "validation": {"options": ["scheduled", "manual", "workflow", "object_scan", "external_event"]}},
+        {"key": "schedule_type", "name": "Schedule Type", "type": "select", "required": false, "validation": {"options": ["interval", "daily_at", "weekly_at", "monthly_at", "cron"]}},
+        {"key": "interval_seconds", "name": "Interval Seconds", "type": "number", "required": false},
+        {"key": "timezone", "name": "Timezone", "type": "text", "required": false},
+        {"key": "target_type", "name": "Target Type", "type": "select", "required": true, "validation": {"options": ["workflow", "report_export"]}},
+        {"key": "target_key", "name": "Target Key", "type": "text", "required": true},
+        {"key": "max_attempts", "name": "Max Attempts", "type": "number", "required": true},
+        {"key": "timeout_seconds", "name": "Timeout Seconds", "type": "number", "required": true},
+        {"key": "retry_backoff", "name": "Retry Backoff", "type": "text", "required": false},
+        {"key": "retry_delay_seconds", "name": "Retry Delay Seconds", "type": "number", "required": false},
+        {"key": "retry_max_delay_seconds", "name": "Retry Max Delay Seconds", "type": "number", "required": false},
+        {"key": "next_run_at", "name": "Next Run At", "type": "datetime", "required": false}
+      ],
+      "config": {"system_object": true, "scheduler_runtime": true, "state_field": "status"}
+    },
+    {
+      "key": "job_run",
+      "name": "Job Run",
+      "fields": [
+        {"key": "scheduler_definition_key", "name": "Scheduler Definition Key", "type": "text", "required": true},
+        {"key": "status", "name": "Status", "type": "select", "required": true, "validation": {"options": ["queued", "leased", "running", "succeeded", "failed", "retrying", "cancelled", "dead_letter"]}},
+        {"key": "triggered_by", "name": "Triggered By", "type": "select", "required": true, "validation": {"options": ["scheduler", "manual", "api", "workflow", "retry"]}},
+        {"key": "scheduled_for", "name": "Scheduled For", "type": "datetime", "required": true},
+        {"key": "started_at", "name": "Started At", "type": "datetime", "required": false},
+        {"key": "finished_at", "name": "Finished At", "type": "datetime", "required": false},
+        {"key": "attempt", "name": "Attempt", "type": "number", "required": true},
+        {"key": "max_attempts", "name": "Max Attempts", "type": "number", "required": true},
+        {"key": "timeout_seconds", "name": "Timeout Seconds", "type": "number", "required": false},
+        {"key": "fencing_token", "name": "Fencing Token", "type": "number", "required": false},
+        {"key": "error_message", "name": "Error Message", "type": "long_text", "required": false},
+        {"key": "error_category", "name": "Error Category", "type": "text", "required": false},
+        {"key": "recoverability", "name": "Recoverability", "type": "text", "required": false}
+      ],
+      "config": {"system_object": true, "scheduler_runtime": true, "state_field": "status"}
+    },
+    {
+      "key": "job_run_event",
+      "name": "Job Run Event",
+      "fields": [
+        {"key": "job_run_id", "name": "Job Run", "type": "relation", "required": true, "validation": {"target": "job_run"}},
+        {"key": "event_type", "name": "Event Type", "type": "select", "required": true, "validation": {"options": ["created", "lease_acquired", "definition_cursor_advanced", "state_changed", "simulated", "workflow_triggered", "action_triggered", "report_query_run_created", "report_export_audit_created", "download_task_created", "retry_scheduled", "dead_lettered", "dead_letter_resolved", "cancelled"]}},
+        {"key": "message", "name": "Message", "type": "long_text", "required": false},
+        {"key": "metadata_json", "name": "Metadata JSON", "type": "long_text", "required": false},
+        {"key": "created_at", "name": "Created At", "type": "datetime", "required": true}
+      ],
+      "config": {"system_object": true, "scheduler_runtime": true}
+    },
+    {
+      "key": "job_dead_letter",
+      "name": "Job Dead Letter",
+      "fields": [
+        {"key": "job_run_id", "name": "Job Run", "type": "relation", "required": true, "validation": {"target": "job_run"}},
+        {"key": "scheduler_definition_key", "name": "Scheduler Definition Key", "type": "text", "required": true},
+        {"key": "status", "name": "Status", "type": "select", "required": true, "validation": {"options": ["open", "retrying", "resolved", "ignored"]}},
+        {"key": "reason", "name": "Reason", "type": "long_text", "required": true},
+        {"key": "last_error", "name": "Last Error", "type": "long_text", "required": false},
+        {"key": "failed_at", "name": "Failed At", "type": "datetime", "required": true}
+      ],
+      "config": {"system_object": true, "scheduler_runtime": true, "state_field": "status"}
+    }
+  ],
+  "scheduler_definitions": [
+    {
+      "key": "scheduler_ops_probe",
+      "name": "Scheduler Operations Probe",
+      "status": "disabled",
+      "trigger_type": "manual",
+      "schedule_type": "interval",
+      "interval_seconds": 3600,
+      "timezone": "UTC",
+      "target_type": "workflow",
+      "target_key": "scheduled:*",
+      "max_attempts": 3,
+      "timeout_seconds": 300,
+      "retry_backoff": "fixed",
+      "retry_delay_seconds": 60,
+      "retry_max_delay_seconds": 3600
+    }
+  ],
+  "roles": [
+    {
+      "key": "admin",
+      "name": "Admin",
+      "permissions": ["admin_console.access", "workspace.admin"],
+      "record_scope": "all_records",
+      "data_permissions": [
+        {"object_key": "job_definition", "scope": "all_records", "read": true, "write": true}
+      ]
+    },
+    {
+      "key": "platform_admin",
+      "name": "Runtime Operator",
+      "permissions": [
+        "admin_console.access",
+        "runtime_ops.capability_status.read",
+        "operations.read",
+        "integration.audit.view",
+        "integration.retry",
+        "workflow.process.read",
+        "workflow.process.operate",
+        "scheduler.command",
+        "scheduler.definition.read",
+        "scheduler.definition.run",
+        "job_run.read",
+        "job_run.update",
+        "workspace.admin"
+      ],
+      "record_scope": "all_records",
+      "data_permissions": [
+        {"object_key": "job_definition", "scope": "all_records", "read": true, "write": false},
+        {"object_key": "job_run", "scope": "all_records", "read": true, "write": true},
+        {"object_key": "job_run_event", "scope": "all_records", "read": true, "write": true},
+        {"object_key": "job_dead_letter", "scope": "all_records", "read": true, "write": true}
+      ]
+    }
+  ],
+  "menus": [],
+  "seed_records": [
+    {
+      "object_key": "job_definition",
+      "data": {
+        "__seed_key": "scheduler_ops_probe",
+        "key": "scheduler_ops_probe",
+        "name": "Scheduler Operations Probe",
+        "status": "disabled",
+        "trigger_type": "manual",
+        "schedule_type": "interval",
+        "interval_seconds": 3600,
+        "timezone": "UTC",
+        "target_type": "workflow",
+        "target_key": "scheduled:*",
+        "max_attempts": 3,
+        "timeout_seconds": 300,
+        "retry_backoff": "fixed",
+        "retry_delay_seconds": 60,
+        "retry_max_delay_seconds": 3600
+      }
+    },
+    {
+      "object_key": "job_run",
+      "data": {
+        "__seed_key": "scheduler_ops_failed_run",
+        "scheduler_definition_key": "scheduler_ops_probe",
+        "status": "failed",
+        "triggered_by": "manual",
+        "scheduled_for": "2026-07-25T17:00:00Z",
+        "started_at": "2026-07-25T17:00:01Z",
+        "finished_at": "2026-07-25T17:00:02Z",
+        "attempt": 1,
+        "max_attempts": 3,
+        "timeout_seconds": 300,
+        "fencing_token": 1,
+        "error_message": "Controlled acceptance failure",
+        "error_category": "acceptance_probe",
+        "recoverability": "retryable"
+      }
+    },
+    {
+      "object_key": "job_run_event",
+      "data": {
+        "__seed_key": "scheduler_ops_failed_event",
+        "job_run_id": "$record:scheduler_ops_failed_run",
+        "event_type": "state_changed",
+        "message": "Controlled acceptance run failed.",
+        "metadata_json": "{\"status\":\"failed\"}",
+        "created_at": "2026-07-25T17:00:02Z"
+      }
+    },
+    {
+      "object_key": "job_dead_letter",
+      "data": {
+        "__seed_key": "scheduler_ops_open_dead_letter",
+        "job_run_id": "$record:scheduler_ops_failed_run",
+        "scheduler_definition_key": "scheduler_ops_probe",
+        "status": "open",
+        "reason": "Controlled acceptance dead letter",
+        "last_error": "Controlled acceptance failure",
+        "failed_at": "2026-07-25T17:00:03Z"
+      }
+    }
+  ]
+}

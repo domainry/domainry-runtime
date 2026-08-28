@@ -1,0 +1,157 @@
+package projection
+
+import (
+	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+)
+
+// ActionDefinitionAuthoringCapability publishes Action metadata only. Business
+// behavior is implemented by generated, source-owned handlers and is never
+// described as Runtime JSON steps.
+func ActionDefinitionAuthoringCapability() capabilitycontract.CapabilityAuthoringDefinition {
+	return capabilitycontract.CapabilityAuthoringDefinition{
+		Key: "action.definition", Status: "supported", Lifecycle: "versioned_metadata",
+		Parameters: []capabilitycontract.CapabilityAuthoringParameter{
+			{Key: "key", Type: "string", Required: true},
+			{Key: "object_key", Type: "object_key", Required: true},
+			{Key: "kind", Type: "string", Required: true, Enum: actionAuthoringKinds()},
+			{Key: "risk_level", Type: "string", Enum: []string{"low", "medium", "high", "critical"}},
+			{Key: "requires_permission", Type: "permission_key", Required: true},
+			{Key: "audit_event", Type: "audit_event_key", Required: true},
+			{Key: "idempotency_keys", Type: "array", ItemSchema: "string"},
+			{Key: "assurance_policy", Type: "object"},
+			{Key: "expected_schema_hash", Type: "string", Required: true},
+		},
+		Permissions: []string{"workspace.admin"}, AuditEvents: []string{"business_change_plan.item_applied"},
+		ValidationEndpoint: "POST /metadata/definitions/action/{resourceKey}/validate",
+		ConfigurationRoutes: []string{
+			"GET /metadata/definitions/action/{resourceKey}",
+			"GET /metadata/definitions/action/{resourceKey}/versions",
+			"POST /metadata/definitions/action/{resourceKey}/validate",
+			"GET /domain-system-snapshot",
+			"GET /domain-reference-graph",
+			"GET /tenant-admin/change-plans/{planID}",
+			"PUT /tenant-admin/change-plans/{planID}",
+			"POST /tenant-admin/change-plans/{planID}/simulate",
+			"POST /tenant-admin/change-plans/{planID}/review",
+			"POST /tenant-admin/change-plans/{planID}/approve",
+			"POST /tenant-admin/change-plans/apply",
+		},
+		ResourceKeyPathParameter: "resourceKey", SystemDraftResourceType: "action",
+		InputSchema: actionAuthoringRequestSchema(), OutputSchema: actionAuthoringOutputSchema(),
+		OutputVariables: []capabilitycontract.CapabilityAuthoringOutput{
+			{Name: "action_key", JSONPointer: "/definition/resource_key", Type: "action_key", VisibleTo: "subsequent_capability_calls"},
+			{Name: "schema_hash", JSONPointer: "/snapshot_hash", Type: "schema_hash", VisibleTo: "subsequent_capability_calls"},
+		},
+		ReferenceContracts: []capabilitycontract.CapabilityAuthoringReference{
+			{Kind: "object_key", InputJSONPointer: "/payload/object_key", ResolverEndpoint: "GET /tenant-admin/platform-capabilities/references/object_key"},
+			{Kind: "permission_key", InputJSONPointer: "/payload/requires_permission", ResolverEndpoint: "GET /tenant-admin/platform-capabilities/references/permission_key"},
+			{Kind: "field_key", InputJSONPointer: "/payload/assurance_policy/approval_version_field", ScopeFrom: "/payload/object_key", ResolverEndpoint: "GET /tenant-admin/platform-capabilities/references/field_key"},
+			{Kind: "field_key", InputJSONPointer: "/payload/assurance_policy/approval_hash_field", ScopeFrom: "/payload/object_key", ResolverEndpoint: "GET /tenant-admin/platform-capabilities/references/field_key"},
+			{Kind: "field_key", InputJSONPointer: "/payload/assurance_policy/maker_field", ScopeFrom: "/payload/object_key", ResolverEndpoint: "GET /tenant-admin/platform-capabilities/references/field_key"},
+		},
+		Execution: &capabilitycontract.CapabilityAuthoringExecution{
+			ReadSet: []string{"schema.object", "identity.role_permission"}, WriteSet: []string{"action.definition", "metadata.definition_version"},
+			Transaction: "reviewed_change_plan_transaction", Idempotency: "idempotency_key_and_plan_revision",
+			SideEffects: []string{"audit:business_change_plan.item_applied", "schema_snapshot_rebuild"}, SideEffectLevel: "internal",
+			Compensation: "restore_as_new_system_draft", PermissionModel: "workspace.admin", ChangeControl: "reviewed_system_draft_change_plan",
+		},
+		Errors: []capabilitycontract.CapabilityAuthoringError{
+			{Code: "backend.action.definition_invalid", FieldPath: "payload", MessageKey: "backend.action.definition_invalid"},
+			{Code: "backend.action.kind_invalid", FieldPath: "payload.kind", ParameterKeys: []string{"allowed", "actual"}, MessageKey: "backend.action.kind_invalid"},
+		},
+		Examples: actionAuthoringExamples(),
+		Sources: []capabilitycontract.CapabilityAuthoringSource{
+			{Kind: "projection", Path: "runtime/domain/action/projection/action_authoring_projection.go", Symbol: "ActionDefinitionAuthoringCapability"},
+			{Kind: "validation", Path: "runtime/domain/action/validation/action_definition_validation.go", Symbol: "ActionValidateDefinitionIssues"},
+		},
+	}
+}
+
+func actionAuthoringRequestSchema() *capabilitycontract.CapabilityAuthoringSchema {
+	closed := false
+	assurancePolicy := capabilitycontract.CapabilityAuthoringSchema{
+		Type: "object", AdditionalProperties: &closed, Required: []string{"required_methods"},
+		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+			"required_methods":              {Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Type: "string", Enum: actionStringEnums([]string{"normal_login", "recent_reauth", "otp", "maker_checker", "workflow_approval"})}},
+			"recent_reauth_max_age_seconds": {Type: "integer"}, "approval_version_field": {Type: "string"},
+			"approval_hash_field": {Type: "string"}, "maker_field": {Type: "string"},
+		},
+	}
+	payloadField := capabilitycontract.CapabilityAuthoringSchema{
+		Type: "object", AdditionalProperties: &closed, Required: []string{"key", "type"},
+		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+			"key": {Type: "string"}, "name": {Type: "string"}, "type": {Type: "string"}, "required": {Type: "boolean"},
+			"options": {Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Type: "string"}}, "default": {},
+		},
+	}
+	payload := capabilitycontract.CapabilityAuthoringSchema{
+		Type: "object", AdditionalProperties: &closed,
+		Required: []string{"audit_event", "key", "kind", "label", "object_key", "requires_permission"},
+		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+			"key": {Type: "string"}, "object_key": {Type: "string"}, "label": {Type: "string"},
+			"kind": {Type: "string", Enum: actionStringEnums(actionAuthoringKinds())}, "risk_level": {Type: "string", Enum: actionStringEnums([]string{"low", "medium", "high", "critical"})},
+			"requires_permission": {Type: "string"}, "audit_event": {Type: "string"},
+			"preconditions":  {Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Type: "string"}},
+			"payload_fields": {Type: "array", Items: &payloadField}, "defaults": {Type: "object"},
+			"idempotency_keys":       {Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Type: "string"}},
+			"optimistic_concurrency": {Type: "boolean", Default: false}, "concurrency_field": {Type: "string"}, "assurance_policy": assurancePolicy,
+		},
+	}
+	return &capabilitycontract.CapabilityAuthoringSchema{
+		Schema: "https://json-schema.org/draft/2020-12/schema", Type: "object", AdditionalProperties: &closed,
+		Required: []string{"expected_schema_hash", "payload"},
+		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+			"object_key": {Type: "string"}, "name": {Type: "string"}, "source_kind": {Type: "string"}, "source_id": {Type: "string"},
+			"expected_schema_hash": {Type: "string"}, "payload": payload,
+		},
+	}
+}
+
+func actionAuthoringOutputSchema() *capabilitycontract.CapabilityAuthoringSchema {
+	closed := false
+	open := true
+	return &capabilitycontract.CapabilityAuthoringSchema{
+		Schema: "https://json-schema.org/draft/2020-12/schema", Type: "object", AdditionalProperties: &closed,
+		Required: []string{"definition", "resource_hash", "schema", "snapshot_hash"},
+		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+			"definition": {Type: "object", AdditionalProperties: &open}, "schema": {Type: "object", AdditionalProperties: &open},
+			"resource_hash": {Type: "string"}, "snapshot_hash": {Type: "string"},
+		},
+	}
+}
+
+func actionAuthoringExamples() []capabilitycontract.CapabilityAuthoringExample {
+	base := map[string]any{"key": "order.complete", "object_key": "order", "label": "Complete order", "kind": "record_update", "requires_permission": "order.complete", "audit_event": "order_completed"}
+	representative := actionExampleCopy(base)
+	representative["preconditions"] = []any{"status == paid"}
+	representative["payload_fields"] = []any{map[string]any{"key": "request_id", "type": "text", "required": true}}
+	representative["idempotency_keys"] = []any{"request_id"}
+	invalid := actionExampleCopy(base)
+	invalid["kind"] = "script"
+	return []capabilitycontract.CapabilityAuthoringExample{
+		{Name: "minimal_valid", Value: map[string]any{"expected_schema_hash": "$instance.schema_hash", "payload": base}},
+		{Name: "representative", Value: map[string]any{"expected_schema_hash": "$instance.schema_hash", "payload": representative}},
+		{Name: "invalid_with_repair", Value: map[string]any{"expected_schema_hash": "$instance.schema_hash", "payload": invalid}, ExpectedErrorCodes: []string{"backend.action.kind_invalid"}},
+	}
+}
+
+func actionExampleCopy(value map[string]any) map[string]any {
+	result := make(map[string]any, len(value)+2)
+	for key, item := range value {
+		result[key] = item
+	}
+	return result
+}
+
+func actionAuthoringKinds() []string {
+	return definitionmodel.ActionKindValues()
+}
+
+func actionStringEnums(values []string) []any {
+	result := make([]any, len(values))
+	for index, value := range values {
+		result[index] = value
+	}
+	return result
+}

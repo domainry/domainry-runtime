@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "product-brand-v1",
+  "name": "Domainry",
+  "localizedName": "域铸",
+  "tagline": "From business truth to governed software.",
+  "localizedTagline": "从业务事实，到可治理的软件系统。",
+  "description": "Governed business application platform",
+  "copyrightYear": "2026",
+  "copyrightHolder": "Domainry",
+  "logoUrl": "/images/favicon_light.svg",
+  "faviconUrl": "/images/favicon.svg"
+}

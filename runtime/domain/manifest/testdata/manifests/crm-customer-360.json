@@ -1,0 +1,2896 @@
+{
+  "template_id": "runtime_crm_customer_360",
+  "version": "0.2.0",
+  "name": "Runtime CRM Customer 360",
+  "objects": [
+    {
+      "key": "customer",
+      "name": "Customer",
+      "description": "Accounts and relationship context for CRM follow-up.",
+      "fields": [
+        {
+          "key": "name",
+          "name": "Name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "status",
+          "name": "Status",
+          "type": "select",
+          "required": true,
+          "validation": {
+            "options": [
+              "prospect",
+              "active",
+              "risk",
+              "churned"
+            ]
+          },
+          "config": {
+            "dictionary_key": "customer_status"
+          }
+        },
+        {
+          "key": "owner",
+          "name": "Owner",
+          "type": "user",
+          "required": true
+        },
+        {
+          "key": "health_score",
+          "name": "Health Score",
+          "type": "number",
+          "required": false
+        },
+        {
+          "key": "next_follow_up_at",
+          "name": "Next Follow Up",
+          "type": "datetime",
+          "required": false
+        },
+        {
+          "key": "business_license_image",
+          "name": "Business License",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "business_license_no",
+          "name": "Business License Number",
+          "type": "text",
+          "required": false,
+          "unique": true
+        },
+        {
+          "key": "normalized_business_license_no",
+          "name": "Normalized Business License Number",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "normalized_company_name",
+          "name": "Normalized Company Name",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "verification_status",
+          "name": "Verification Status",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "verified_at",
+          "name": "Verified At",
+          "type": "datetime",
+          "required": false
+        }
+      ]
+    },
+    {
+      "key": "contact",
+      "name": "Contact",
+      "description": "People tied to customer buying committees.",
+      "fields": [
+        {
+          "key": "customer",
+          "name": "Customer",
+          "type": "relation",
+          "required": true,
+          "validation": {
+            "target": "customer"
+          }
+        },
+        {
+          "key": "owner",
+          "name": "Owner",
+          "type": "user",
+          "required": false,
+          "config": {
+            "auto_assign_current_user": true
+          }
+        },
+        {
+          "key": "name",
+          "name": "Name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "role",
+          "name": "Role",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "email",
+          "name": "Email",
+          "type": "email",
+          "required": false
+        },
+        {
+          "key": "influence",
+          "name": "Influence",
+          "type": "select",
+          "required": true,
+          "validation": {
+            "options": [
+              "decision_maker",
+              "champion",
+              "influencer",
+              "blocker"
+            ]
+          },
+          "config": {
+            "dictionary_key": "contact_influence"
+          }
+        }
+      ]
+    },
+    {
+      "key": "lead",
+      "name": "Lead",
+      "description": "Inbound and outbound demand before qualification.",
+      "fields": [
+        {
+          "key": "company_name",
+          "name": "Company",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "contact_name",
+          "name": "Contact Name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "source",
+          "name": "Source",
+          "type": "select",
+          "required": true,
+          "validation": {
+            "options": [
+              "web",
+              "referral",
+              "event",
+              "outbound"
+            ]
+          },
+          "config": {
+            "dictionary_key": "lead_source"
+          }
+        },
+        {
+          "key": "status",
+          "name": "Status",
+          "type": "select",
+          "required": true,
+          "validation": {
+            "options": [
+              "new",
+              "working",
+              "qualified",
+              "converted",
+              "disqualified"
+            ]
+          },
+          "config": {
+            "dictionary_key": "lead_status"
+          }
+        },
+        {
+          "key": "owner",
+          "name": "Owner",
+          "type": "user",
+          "required": true
+        }
+      ]
+    },
+    {
+      "key": "opportunity",
+      "name": "Opportunity",
+      "description": "Pipeline opportunity tied to a customer.",
+      "fields": [
+        {
+          "key": "customer",
+          "name": "Customer",
+          "type": "relation",
+          "required": true,
+          "validation": {
+            "target": "customer"
+          }
+        },
+        {
+          "key": "stage",
+          "name": "Stage",
+          "type": "select",
+          "required": true,
+          "validation": {
+            "options": [
+              "qualify",
+              "proposal",
+              "negotiation",
+              "won",
+              "lost"
+            ]
+          },
+          "config": {
+            "dictionary_key": "opportunity_stage"
+          }
+        },
+        {
+          "key": "amount",
+          "name": "Amount",
+          "type": "currency",
+          "required": false
+        },
+        {
+          "key": "expected_close_at",
+          "name": "Expected Close",
+          "type": "date",
+          "required": false
+        },
+        {
+          "key": "owner",
+          "name": "Owner",
+          "type": "user",
+          "required": true
+        }
+      ]
+    },
+    {
+      "key": "activity",
+      "name": "Activity",
+      "description": "Follow-up task and timeline evidence across customer and opportunity work.",
+      "fields": [
+        {
+          "key": "customer",
+          "name": "Customer",
+          "type": "relation",
+          "required": true,
+          "validation": {
+            "target": "customer"
+          }
+        },
+        {
+          "key": "opportunity",
+          "name": "Opportunity",
+          "type": "relation",
+          "required": false,
+          "validation": {
+            "target": "opportunity"
+          }
+        },
+        {
+          "key": "type",
+          "name": "Type",
+          "type": "select",
+          "required": true,
+          "validation": {
+            "options": [
+              "call",
+              "email",
+              "meeting",
+              "task"
+            ]
+          },
+          "config": {
+            "dictionary_key": "activity_type"
+          }
+        },
+        {
+          "key": "status",
+          "name": "Status",
+          "type": "select",
+          "required": true,
+          "validation": {
+            "options": [
+              "open",
+              "in_progress",
+              "completed",
+              "overdue"
+            ]
+          },
+          "config": {
+            "dictionary_key": "activity_status"
+          }
+        },
+        {
+          "key": "due_at",
+          "name": "Due At",
+          "type": "datetime",
+          "required": true
+        },
+        {
+          "key": "owner",
+          "name": "Owner",
+          "type": "user",
+          "required": true
+        },
+        {
+          "key": "summary",
+          "name": "Summary",
+          "type": "text",
+          "required": true
+        }
+      ]
+    },
+    {
+      "key": "contract",
+      "name": "Contract",
+      "description": "Commercial agreement after an opportunity is won.",
+      "fields": [
+        {
+          "key": "customer",
+          "name": "Customer",
+          "type": "relation",
+          "required": true,
+          "validation": {
+            "target": "customer"
+          }
+        },
+        {
+          "key": "opportunity",
+          "name": "Opportunity",
+          "type": "relation",
+          "required": true,
+          "validation": {
+            "target": "opportunity"
+          }
+        },
+        {
+          "key": "status",
+          "name": "Status",
+          "type": "select",
+          "required": true,
+          "validation": {
+            "options": [
+              "draft",
+              "approved",
+              "signed",
+              "cancelled"
+            ]
+          },
+          "config": {
+            "dictionary_key": "contract_status"
+          }
+        },
+        {
+          "key": "value",
+          "name": "Value",
+          "type": "currency",
+          "required": true
+        },
+        {
+          "key": "signed_at",
+          "name": "Signed At",
+          "type": "date",
+          "required": false
+        },
+        {
+          "key": "owner",
+          "name": "Owner",
+          "type": "user",
+          "required": true
+        }
+      ]
+    },
+    {
+      "key": "payment",
+      "name": "Payment",
+      "description": "Receivable and collection follow-up tied to signed contracts.",
+      "fields": [
+        {
+          "key": "contract",
+          "name": "Contract",
+          "type": "relation",
+          "required": true,
+          "validation": {
+            "target": "contract"
+          }
+        },
+        {
+          "key": "status",
+          "name": "Status",
+          "type": "select",
+          "required": true,
+          "validation": {
+            "options": [
+              "scheduled",
+              "due",
+              "collected",
+              "overdue"
+            ]
+          },
+          "config": {
+            "dictionary_key": "payment_status"
+          }
+        },
+        {
+          "key": "amount",
+          "name": "Amount",
+          "type": "currency",
+          "required": true
+        },
+        {
+          "key": "due_at",
+          "name": "Due At",
+          "type": "date",
+          "required": true
+        },
+        {
+          "key": "owner",
+          "name": "Owner",
+          "type": "user",
+          "required": true
+        }
+      ]
+    },
+    {
+      "key": "job_definition",
+      "name": "Job Definition",
+      "description": "System scheduler definitions used by shared workflow operations.",
+      "fields": [
+        {
+          "key": "key",
+          "name": "Job Key",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "name",
+          "name": "Name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "status",
+          "name": "Status",
+          "type": "select",
+          "required": true,
+          "validation": {
+            "options": [
+              "draft",
+              "enabled",
+              "paused",
+              "disabled",
+              "archived"
+            ]
+          }
+        },
+        {
+          "key": "trigger_type",
+          "name": "Trigger Type",
+          "type": "select",
+          "required": true,
+          "validation": {
+            "options": [
+              "scheduled",
+              "manual",
+              "workflow",
+              "object_scan",
+              "external_event"
+            ]
+          }
+        },
+        {
+          "key": "schedule_type",
+          "name": "Schedule Type",
+          "type": "select",
+          "required": false,
+          "validation": {
+            "options": [
+              "interval",
+              "daily_at",
+              "weekly_at",
+              "monthly_at",
+              "cron"
+            ]
+          }
+        },
+        {
+          "key": "schedule_expression",
+          "name": "Schedule Expression",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "time_of_day",
+          "name": "Time Of Day",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "day_of_week",
+          "name": "Day Of Week",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "day_of_month",
+          "name": "Day Of Month",
+          "type": "number",
+          "required": false
+        },
+        {
+          "key": "interval_seconds",
+          "name": "Interval Seconds",
+          "type": "number",
+          "required": false
+        },
+        {
+          "key": "interval_minutes",
+          "name": "Interval Minutes",
+          "type": "number",
+          "required": false
+        },
+        {
+          "key": "interval_hours",
+          "name": "Interval Hours",
+          "type": "number",
+          "required": false
+        },
+        {
+          "key": "missed_window_policy",
+          "name": "Missed Window Policy",
+          "type": "select",
+          "required": false,
+          "validation": {
+            "options": [
+              "skip",
+              "catch_up_one",
+              "catch_up_bounded"
+            ]
+          }
+        },
+        {
+          "key": "max_catchup_windows",
+          "name": "Max Catch-Up Windows",
+          "type": "number",
+          "required": false
+        },
+        {
+          "key": "timezone",
+          "name": "Timezone",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "target_type",
+          "name": "Target Type",
+          "type": "select",
+          "required": true,
+          "validation": {
+            "options": [
+              "workflow",
+              "report_export"
+            ]
+          }
+        },
+        {
+          "key": "target_key",
+          "name": "Target Key",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "target_object",
+          "name": "Target Object",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "condition_json",
+          "name": "Condition JSON",
+          "type": "long_text",
+          "required": false
+        },
+        {
+          "key": "payload_json",
+          "name": "Payload JSON",
+          "type": "long_text",
+          "required": false
+        },
+        {
+          "key": "run_as_role",
+          "name": "Run As Role",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "max_attempts",
+          "name": "Max Attempts",
+          "type": "number",
+          "required": true
+        },
+        {
+          "key": "retry_backoff",
+          "name": "Retry Backoff",
+          "type": "select",
+          "required": false,
+          "validation": {
+            "options": [
+              "fixed",
+              "exponential",
+              "capped_exponential"
+            ]
+          }
+        },
+        {
+          "key": "retry_delay_seconds",
+          "name": "Retry Delay Seconds",
+          "type": "number",
+          "required": false
+        },
+        {
+          "key": "retry_max_delay_seconds",
+          "name": "Max Retry Delay Seconds",
+          "type": "number",
+          "required": false
+        },
+        {
+          "key": "timeout_seconds",
+          "name": "Timeout Seconds",
+          "type": "number",
+          "required": true
+        },
+        {
+          "key": "idempotency_keys",
+          "name": "Idempotency Keys",
+          "type": "long_text",
+          "required": false
+        },
+        {
+          "key": "next_run_at",
+          "name": "Next Run At",
+          "type": "datetime",
+          "required": false
+        },
+        {
+          "key": "last_run_at",
+          "name": "Last Run At",
+          "type": "datetime",
+          "required": false
+        },
+        {
+          "key": "last_run_status",
+          "name": "Last Run Status",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "description",
+          "name": "Description",
+          "type": "long_text",
+          "required": false
+        }
+      ],
+      "config": {
+        "system_object": true,
+        "scheduler_runtime": true,
+        "state_field": "status"
+      }
+    },
+    {
+      "key": "job_run",
+      "name": "Job Run",
+      "description": "System scheduler run evidence.",
+      "fields": [
+        {
+          "key": "job_definition_id",
+          "name": "Job Definition",
+          "type": "relation",
+          "required": true,
+          "validation": {
+            "target": "job_definition"
+          }
+        },
+        {
+          "key": "status",
+          "name": "Status",
+          "type": "select",
+          "required": true,
+          "validation": {
+            "options": [
+              "queued",
+              "leased",
+              "running",
+              "succeeded",
+              "failed",
+              "retrying",
+              "cancelled",
+              "dead_letter"
+            ]
+          }
+        },
+        {
+          "key": "triggered_by",
+          "name": "Triggered By",
+          "type": "select",
+          "required": true,
+          "validation": {
+            "options": [
+              "scheduler",
+              "manual",
+              "api",
+              "workflow",
+              "retry"
+            ]
+          }
+        },
+        {
+          "key": "scheduled_for",
+          "name": "Scheduled For",
+          "type": "datetime",
+          "required": true
+        },
+        {
+          "key": "started_at",
+          "name": "Started At",
+          "type": "datetime",
+          "required": false
+        },
+        {
+          "key": "finished_at",
+          "name": "Finished At",
+          "type": "datetime",
+          "required": false
+        },
+        {
+          "key": "lease_owner",
+          "name": "Lease Owner",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "lease_expires_at",
+          "name": "Lease Expires At",
+          "type": "datetime",
+          "required": false
+        },
+        {
+          "key": "fencing_token",
+          "name": "Fencing Token",
+          "type": "number",
+          "required": false
+        },
+        {
+          "key": "attempt",
+          "name": "Attempt",
+          "type": "number",
+          "required": true
+        },
+        {
+          "key": "max_attempts",
+          "name": "Max Attempts",
+          "type": "number",
+          "required": true
+        },
+        {
+          "key": "timeout_seconds",
+          "name": "Timeout Seconds",
+          "type": "number",
+          "required": false
+        },
+        {
+          "key": "next_retry_at",
+          "name": "Next Retry At",
+          "type": "datetime",
+          "required": false
+        },
+        {
+          "key": "retry_backoff",
+          "name": "Retry Backoff",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "retry_delay_seconds",
+          "name": "Retry Delay Seconds",
+          "type": "number",
+          "required": false
+        },
+        {
+          "key": "retry_max_delay_seconds",
+          "name": "Max Retry Delay Seconds",
+          "type": "number",
+          "required": false
+        },
+        {
+          "key": "retry_backoff_seconds",
+          "name": "Retry Backoff Seconds",
+          "type": "number",
+          "required": false
+        },
+        {
+          "key": "idempotency_scope",
+          "name": "Idempotency Scope",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "idempotency_key",
+          "name": "Idempotency Key",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "last_command_scope",
+          "name": "Last Command Scope",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "last_command_key",
+          "name": "Last Command Key",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "workflow_key",
+          "name": "Workflow Key",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "workflow_execution_id",
+          "name": "Workflow Execution",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "target_object",
+          "name": "Target Object",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "target_record_id",
+          "name": "Target Record",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "payload_json",
+          "name": "Payload JSON",
+          "type": "long_text",
+          "required": false
+        },
+        {
+          "key": "result_json",
+          "name": "Result JSON",
+          "type": "long_text",
+          "required": false
+        },
+        {
+          "key": "error_message",
+          "name": "Error Message",
+          "type": "long_text",
+          "required": false
+        },
+        {
+          "key": "error_category",
+          "name": "Error Category",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "recoverability",
+          "name": "Recoverability",
+          "type": "text",
+          "required": false
+        }
+      ],
+      "config": {
+        "system_object": true,
+        "scheduler_runtime": true,
+        "state_field": "status"
+      }
+    },
+    {
+      "key": "job_run_event",
+      "name": "Job Run Event",
+      "description": "System scheduler run event evidence.",
+      "fields": [
+        {
+          "key": "job_run_id",
+          "name": "Job Run",
+          "type": "relation",
+          "required": true,
+          "validation": {
+            "target": "job_run"
+          }
+        },
+        {
+          "key": "event_type",
+          "name": "Event Type",
+          "type": "select",
+          "required": true,
+          "validation": {
+            "options": [
+              "created",
+              "lease_acquired",
+              "definition_cursor_advanced",
+              "state_changed",
+              "simulated",
+              "workflow_triggered",
+              "action_triggered",
+              "report_query_run_created",
+              "report_export_audit_created",
+              "download_task_created",
+              "retry_scheduled",
+              "dead_lettered",
+              "dead_letter_resolved",
+              "cancelled"
+            ]
+          }
+        },
+        {
+          "key": "message",
+          "name": "Message",
+          "type": "long_text",
+          "required": false
+        },
+        {
+          "key": "metadata_json",
+          "name": "Metadata JSON",
+          "type": "long_text",
+          "required": false
+        },
+        {
+          "key": "created_at",
+          "name": "Created At",
+          "type": "datetime",
+          "required": true
+        }
+      ],
+      "config": {
+        "system_object": true,
+        "scheduler_runtime": true
+      }
+    },
+    {
+      "key": "job_dead_letter",
+      "name": "Job Dead Letter",
+      "description": "System scheduler dead-letter evidence.",
+      "fields": [
+        {
+          "key": "job_run_id",
+          "name": "Job Run",
+          "type": "relation",
+          "required": true,
+          "validation": {
+            "target": "job_run"
+          }
+        },
+        {
+          "key": "job_definition_id",
+          "name": "Job Definition",
+          "type": "relation",
+          "required": true,
+          "validation": {
+            "target": "job_definition"
+          }
+        },
+        {
+          "key": "status",
+          "name": "Status",
+          "type": "select",
+          "required": true,
+          "validation": {
+            "options": [
+              "open",
+              "retrying",
+              "resolved",
+              "ignored"
+            ]
+          }
+        },
+        {
+          "key": "reason",
+          "name": "Reason",
+          "type": "long_text",
+          "required": true
+        },
+        {
+          "key": "last_error",
+          "name": "Last Error",
+          "type": "long_text",
+          "required": false
+        },
+        {
+          "key": "failed_at",
+          "name": "Failed At",
+          "type": "datetime",
+          "required": true
+        },
+        {
+          "key": "resolved_at",
+          "name": "Resolved At",
+          "type": "datetime",
+          "required": false
+        },
+        {
+          "key": "resolved_by",
+          "name": "Resolved By",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "resolution_note",
+          "name": "Resolution Note",
+          "type": "long_text",
+          "required": false
+        },
+        {
+          "key": "resolution_idempotency_key",
+          "name": "Resolution Idempotency Key",
+          "type": "text",
+          "required": false
+        }
+      ],
+      "config": {
+        "system_object": true,
+        "scheduler_runtime": true,
+        "state_field": "status"
+      }
+    }
+  ],
+  "views": [
+    {
+      "key": "customer_list",
+      "name": "Customer List",
+      "object_key": "customer",
+      "type": "table",
+      "config": {
+        "columns": [
+          "name",
+          "status",
+          "owner",
+          "health_score",
+          "next_follow_up_at"
+        ]
+      }
+    },
+    {
+      "key": "lead_queue",
+      "name": "Lead Queue",
+      "object_key": "lead",
+      "type": "table",
+      "config": {
+        "columns": [
+          "company_name",
+          "contact_name",
+          "source",
+          "status",
+          "owner"
+        ]
+      }
+    },
+    {
+      "key": "opportunity_pipeline",
+      "name": "Opportunity Pipeline",
+      "object_key": "opportunity",
+      "type": "kanban",
+      "config": {
+        "group_by": "stage",
+        "title_field": "customer"
+      }
+    },
+    {
+      "key": "activity_queue",
+      "name": "Activity Queue",
+      "object_key": "activity",
+      "type": "table",
+      "config": {
+        "columns": [
+          "summary",
+          "status",
+          "due_at",
+          "owner"
+        ]
+      }
+    },
+    {
+      "key": "contract_follow_up",
+      "name": "Contract Follow Up",
+      "object_key": "contract",
+      "type": "table",
+      "config": {
+        "columns": [
+          "customer",
+          "status",
+          "value",
+          "signed_at"
+        ]
+      }
+    },
+    {
+      "key": "payment_follow_up",
+      "name": "Payment Follow Up",
+      "object_key": "payment",
+      "type": "table",
+      "config": {
+        "columns": [
+          "contract",
+          "status",
+          "amount",
+          "due_at"
+        ]
+      }
+    }
+  ],
+  "actions": [
+    {
+      "key": "customer.mark_risk",
+      "object_key": "customer",
+      "label": "Mark At Risk",
+      "kind": "record_update",
+      "requires_permission": "customer.update",
+      "preconditions": [],
+      "audit_event": "customer_marked_risk",
+      "ui_placement": "record_header"
+    },
+    {
+      "key": "lead.qualify",
+      "object_key": "lead",
+      "label": "Qualify Lead",
+      "kind": "record_operation",
+      "requires_permission": "lead.update",
+      "preconditions": [],
+      "audit_event": "lead_qualified",
+      "ui_placement": "row_action"
+    },
+    {
+      "key": "lead.convert",
+      "object_key": "lead",
+      "label": "Convert Lead",
+      "kind": "record_operation",
+      "requires_permission": "lead.update",
+      "preconditions": [
+        "status == qualified"
+      ],
+      "audit_event": "lead_converted",
+      "ui_placement": "record_header"
+    },
+    {
+      "key": "opportunity.advance_stage",
+      "object_key": "opportunity",
+      "label": "Advance Stage",
+      "kind": "record_operation",
+      "requires_permission": "opportunity.update",
+      "preconditions": [],
+      "audit_event": "opportunity_stage_advanced",
+      "ui_placement": "record_header",
+      "payload_fields": [
+        {
+          "key": "stage",
+          "name": "Next Stage",
+          "type": "select",
+          "required": true
+        }
+      ]
+    },
+    {
+      "key": "opportunity.mark_won",
+      "object_key": "opportunity",
+      "label": "Mark Won",
+      "kind": "record_operation",
+      "requires_permission": "opportunity.update",
+      "preconditions": [
+        "stage == negotiation"
+      ],
+      "audit_event": "opportunity_won",
+      "ui_placement": "record_header"
+    },
+    {
+      "key": "opportunity.mark_lost",
+      "object_key": "opportunity",
+      "label": "Mark Lost",
+      "kind": "record_operation",
+      "requires_permission": "opportunity.update",
+      "preconditions": [
+        "stage == negotiation"
+      ],
+      "audit_event": "opportunity_lost",
+      "ui_placement": "record_header"
+    },
+    {
+      "key": "activity.assign_to_me",
+      "object_key": "activity",
+      "label": "Assign To Me",
+      "kind": "record_update",
+      "requires_permission": "activity.update",
+      "preconditions": [],
+      "audit_event": "activity_assigned",
+      "ui_placement": "record_header"
+    },
+    {
+      "key": "activity.start",
+      "object_key": "activity",
+      "label": "Start Activity",
+      "kind": "record_operation",
+      "requires_permission": "activity.update",
+      "preconditions": [
+        "status == open"
+      ],
+      "audit_event": "activity_started",
+      "ui_placement": "record_header"
+    },
+    {
+      "key": "activity.complete",
+      "object_key": "activity",
+      "label": "Complete Activity",
+      "kind": "record_operation",
+      "requires_permission": "activity.update",
+      "preconditions": [],
+      "audit_event": "activity_completed",
+      "ui_placement": "row_action"
+    },
+    {
+      "key": "activity.escalate_overdue",
+      "object_key": "activity",
+      "label": "Escalate Overdue",
+      "kind": "record_operation",
+      "requires_permission": "activity.update",
+      "preconditions": [
+        "status == in_progress"
+      ],
+      "audit_event": "activity_overdue_escalated",
+      "ui_placement": "record_header"
+    },
+    {
+      "key": "contract.approve",
+      "object_key": "contract",
+      "label": "Approve Contract",
+      "kind": "record_operation",
+      "requires_permission": "contract.update",
+      "preconditions": [
+        "status == draft"
+      ],
+      "audit_event": "contract_approved",
+      "ui_placement": "record_header"
+    },
+    {
+      "key": "contract.sign",
+      "object_key": "contract",
+      "label": "Sign Contract",
+      "kind": "record_operation",
+      "requires_permission": "contract.update",
+      "preconditions": [
+        "status == approved"
+      ],
+      "audit_event": "contract_signed",
+      "ui_placement": "record_header"
+    },
+    {
+      "key": "payment.mark_collected",
+      "object_key": "payment",
+      "label": "Mark Collected",
+      "kind": "record_operation",
+      "requires_permission": "payment.update",
+      "preconditions": [],
+      "audit_event": "payment_collected",
+      "ui_placement": "row_action"
+    },
+    {
+      "key": "customer.verify_business_license",
+      "object_key": "customer",
+      "label": "Verify Business License",
+      "kind": "record_operation",
+      "requires_permission": "customer.create",
+      "audit_event": "customer_business_license_verified",
+      "idempotency_keys": [
+        "business_license_no"
+      ],
+      "ui_placement": "automation_only"
+    },
+    {
+      "key": "customer.record_risk_follow_up",
+      "object_key": "customer",
+      "label": "Record Risk Follow Up",
+      "kind": "record_operation",
+      "requires_permission": "customer.read",
+      "audit_event": "risk_follow_up_requested",
+      "ui_placement": "workflow_only"
+    },
+    {
+      "key": "customer.apply_automation_verification",
+      "object_key": "customer",
+      "label": "Apply Automation Verification",
+      "kind": "record_operation",
+      "requires_permission": "customer.apply_automation_verification",
+      "audit_event": "customer_automation_verification_applied",
+      "payload_fields": [
+        {
+          "key": "verification_status",
+          "name": "Verification Status",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "source",
+          "name": "Evidence Source",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "idempotency_keys": [
+        "source"
+      ],
+      "ui_placement": "automation_only"
+    },
+    {
+      "key": "lead.record_ready_for_conversion",
+      "object_key": "lead",
+      "label": "Record Lead Ready for Conversion",
+      "kind": "record_operation",
+      "requires_permission": "lead.read",
+      "audit_event": "lead_ready_for_conversion",
+      "ui_placement": "workflow_only"
+    },
+    {
+      "key": "payment.record_overdue_escalation",
+      "object_key": "payment",
+      "label": "Record Payment Overdue Escalation",
+      "kind": "record_operation",
+      "requires_permission": "payment.read",
+      "audit_event": "payment_overdue_escalated",
+      "ui_placement": "workflow_only"
+    }
+  ],
+  "workflows": [
+    {
+      "key": "customer.risk_follow_up",
+      "name": "Risk Follow Up",
+      "trigger": {
+        "type": "manual",
+        "object_key": "customer"
+      },
+      "trigger_contract": {
+        "type": "manual",
+        "object_key": "customer"
+      },
+      "condition": {
+        "field": "status",
+        "equals": "risk"
+      },
+      "condition_contract": {
+        "type": "field_equals",
+        "field": "status",
+        "value": "risk"
+      },
+      "action": {
+        "type": "workflow_graph"
+      },
+      "graph": {
+        "version": 2,
+        "nodes": [
+          {
+            "id": "manual",
+            "type": "trigger",
+            "name": "Manual Risk Follow Up"
+          },
+          {
+            "id": "record_event",
+            "type": "action",
+            "name": "Record Risk Follow Up",
+            "contract": {
+              "action": {
+                "action_key": "customer.record_risk_follow_up",
+                "object_key": "customer",
+                "on_error": "fail"
+              }
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "manual-event",
+            "source": "manual",
+            "target": "record_event"
+          }
+        ]
+      },
+      "enabled": true,
+      "run_as": "sales_manager"
+    },
+    {
+      "key": "lead.auto_route",
+      "name": "Auto Route Qualified Lead",
+      "trigger": {
+        "type": "record_updated",
+        "object_key": "lead"
+      },
+      "trigger_contract": {
+        "type": "record_updated",
+        "object_key": "lead"
+      },
+      "condition": {
+        "field": "status",
+        "equals": "qualified"
+      },
+      "condition_contract": {
+        "type": "field_equals",
+        "field": "status",
+        "value": "qualified"
+      },
+      "action": {
+        "type": "workflow_graph"
+      },
+      "graph": {
+        "version": 2,
+        "nodes": [
+          {
+            "id": "updated",
+            "type": "trigger",
+            "name": "Lead Updated"
+          },
+          {
+            "id": "record_event",
+            "type": "action",
+            "name": "Record Ready for Conversion",
+            "contract": {
+              "action": {
+                "action_key": "lead.record_ready_for_conversion",
+                "object_key": "lead",
+                "on_error": "fail"
+              }
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "updated-event",
+            "source": "updated",
+            "target": "record_event"
+          }
+        ]
+      },
+      "enabled": true,
+      "run_as": "sales_manager"
+    },
+    {
+      "key": "payment.overdue_escalation",
+      "name": "Payment Overdue Escalation",
+      "trigger": {
+        "type": "scheduled:daily",
+        "object_key": "payment"
+      },
+      "trigger_contract": {
+        "type": "scheduled",
+        "object_key": "payment",
+        "event": "daily"
+      },
+      "condition": {
+        "field": "status",
+        "equals": "overdue"
+      },
+      "condition_contract": {
+        "type": "field_equals",
+        "field": "status",
+        "value": "overdue"
+      },
+      "action": {
+        "type": "workflow_graph"
+      },
+      "graph": {
+        "version": 2,
+        "nodes": [
+          {
+            "id": "scheduled",
+            "type": "trigger",
+            "name": "Daily Schedule"
+          },
+          {
+            "id": "record_event",
+            "type": "action",
+            "name": "Record Overdue Escalation",
+            "contract": {
+              "action": {
+                "action_key": "payment.record_overdue_escalation",
+                "object_key": "payment",
+                "on_error": "fail"
+              }
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "scheduled-event",
+            "source": "scheduled",
+            "target": "record_event"
+          }
+        ]
+      },
+      "enabled": true,
+      "run_as": "finance_reviewer",
+      "idempotency_keys": [
+        "record_id",
+        "scheduled_at",
+        "due_at"
+      ]
+    }
+  ],
+  "dictionaries": [
+    {
+      "key": "customer_status",
+      "name": "Customer Status",
+      "items": [
+        {
+          "key": "prospect",
+          "value": "prospect",
+          "label": "Prospect",
+          "status": "active"
+        },
+        {
+          "key": "active",
+          "value": "active",
+          "label": "Active",
+          "status": "active"
+        },
+        {
+          "key": "risk",
+          "value": "risk",
+          "label": "At Risk",
+          "status": "active"
+        },
+        {
+          "key": "churned",
+          "value": "churned",
+          "label": "Churned",
+          "status": "active"
+        }
+      ]
+    },
+    {
+      "key": "contact_influence",
+      "name": "Contact Influence",
+      "items": [
+        {
+          "key": "decision_maker",
+          "value": "decision_maker",
+          "label": "Decision Maker",
+          "status": "active"
+        },
+        {
+          "key": "champion",
+          "value": "champion",
+          "label": "Champion",
+          "status": "active"
+        },
+        {
+          "key": "influencer",
+          "value": "influencer",
+          "label": "Influencer",
+          "status": "active"
+        },
+        {
+          "key": "blocker",
+          "value": "blocker",
+          "label": "Blocker",
+          "status": "active"
+        }
+      ]
+    },
+    {
+      "key": "lead_source",
+      "name": "Lead Source",
+      "items": [
+        {
+          "key": "web",
+          "value": "web",
+          "label": "Web",
+          "status": "active"
+        },
+        {
+          "key": "referral",
+          "value": "referral",
+          "label": "Referral",
+          "status": "active"
+        },
+        {
+          "key": "event",
+          "value": "event",
+          "label": "Event",
+          "status": "active"
+        },
+        {
+          "key": "outbound",
+          "value": "outbound",
+          "label": "Outbound",
+          "status": "active"
+        }
+      ]
+    },
+    {
+      "key": "lead_status",
+      "name": "Lead Status",
+      "items": [
+        {
+          "key": "new",
+          "value": "new",
+          "label": "New",
+          "status": "active"
+        },
+        {
+          "key": "working",
+          "value": "working",
+          "label": "Working",
+          "status": "active"
+        },
+        {
+          "key": "qualified",
+          "value": "qualified",
+          "label": "Qualified",
+          "status": "active"
+        },
+        {
+          "key": "converted",
+          "value": "converted",
+          "label": "Converted",
+          "status": "active"
+        },
+        {
+          "key": "disqualified",
+          "value": "disqualified",
+          "label": "Disqualified",
+          "status": "active"
+        }
+      ]
+    },
+    {
+      "key": "opportunity_stage",
+      "name": "Opportunity Stage",
+      "items": [
+        {
+          "key": "qualify",
+          "value": "qualify",
+          "label": "Qualify",
+          "status": "active"
+        },
+        {
+          "key": "proposal",
+          "value": "proposal",
+          "label": "Proposal",
+          "status": "active"
+        },
+        {
+          "key": "negotiation",
+          "value": "negotiation",
+          "label": "Negotiation",
+          "status": "active"
+        },
+        {
+          "key": "won",
+          "value": "won",
+          "label": "Won",
+          "status": "active"
+        },
+        {
+          "key": "lost",
+          "value": "lost",
+          "label": "Lost",
+          "status": "active"
+        }
+      ]
+    },
+    {
+      "key": "activity_type",
+      "name": "Activity Type",
+      "items": [
+        {
+          "key": "call",
+          "value": "call",
+          "label": "Call",
+          "status": "active"
+        },
+        {
+          "key": "email",
+          "value": "email",
+          "label": "Email",
+          "status": "active"
+        },
+        {
+          "key": "meeting",
+          "value": "meeting",
+          "label": "Meeting",
+          "status": "active"
+        },
+        {
+          "key": "task",
+          "value": "task",
+          "label": "Task",
+          "status": "active"
+        }
+      ]
+    },
+    {
+      "key": "activity_status",
+      "name": "Activity Status",
+      "items": [
+        {
+          "key": "open",
+          "value": "open",
+          "label": "Open",
+          "status": "active"
+        },
+        {
+          "key": "in_progress",
+          "value": "in_progress",
+          "label": "In Progress",
+          "status": "active"
+        },
+        {
+          "key": "completed",
+          "value": "completed",
+          "label": "Completed",
+          "status": "active"
+        },
+        {
+          "key": "overdue",
+          "value": "overdue",
+          "label": "Overdue",
+          "status": "active"
+        }
+      ]
+    },
+    {
+      "key": "contract_status",
+      "name": "Contract Status",
+      "items": [
+        {
+          "key": "draft",
+          "value": "draft",
+          "label": "Draft",
+          "status": "active"
+        },
+        {
+          "key": "approved",
+          "value": "approved",
+          "label": "Approved",
+          "status": "active"
+        },
+        {
+          "key": "signed",
+          "value": "signed",
+          "label": "Signed",
+          "status": "active"
+        },
+        {
+          "key": "cancelled",
+          "value": "cancelled",
+          "label": "Cancelled",
+          "status": "active"
+        }
+      ]
+    },
+    {
+      "key": "payment_status",
+      "name": "Payment Status",
+      "items": [
+        {
+          "key": "scheduled",
+          "value": "scheduled",
+          "label": "Scheduled",
+          "status": "active"
+        },
+        {
+          "key": "due",
+          "value": "due",
+          "label": "Due",
+          "status": "active"
+        },
+        {
+          "key": "collected",
+          "value": "collected",
+          "label": "Collected",
+          "status": "active"
+        },
+        {
+          "key": "overdue",
+          "value": "overdue",
+          "label": "Overdue",
+          "status": "active"
+        }
+      ]
+    }
+  ],
+  "integrations": {
+    "connectors": [
+      {
+        "key": "mock",
+        "type": "mock",
+        "provider": "fixture",
+        "providers": [
+          {
+            "key": "fixture"
+          }
+        ],
+        "name": "Mock Connector",
+        "capabilities": [
+          "sync_call"
+        ],
+        "operations": [
+          {
+            "key": "business_license.recognize",
+            "name": "Recognize business license",
+            "method": "POST",
+            "execution_mode": "sync",
+            "side_effect": "read",
+            "timeout_default_seconds": 5,
+            "timeout_max_seconds": 15,
+            "idempotency_supported": true,
+            "test_supported": true,
+            "dry_run_supported": true,
+            "input": [
+              {
+                "key": "image",
+                "name": "License image",
+                "type": "text",
+                "required": true
+              }
+            ],
+            "output": [
+              {
+                "key": "recognized",
+                "name": "Recognized",
+                "type": "boolean"
+              },
+              {
+                "key": "license_number",
+                "name": "License number",
+                "type": "text"
+              },
+              {
+                "key": "company_name",
+                "name": "Company name",
+                "type": "text"
+              }
+            ]
+          },
+          {
+            "key": "business_license.verify",
+            "name": "Verify business license",
+            "method": "POST",
+            "execution_mode": "sync",
+            "side_effect": "read",
+            "timeout_default_seconds": 5,
+            "timeout_max_seconds": 15,
+            "idempotency_supported": true,
+            "test_supported": true,
+            "dry_run_supported": true,
+            "input": [
+              {
+                "key": "license_number",
+                "name": "License number",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "company_name",
+                "name": "Company name",
+                "type": "text",
+                "required": true
+              }
+            ],
+            "output": [
+              {
+                "key": "valid",
+                "name": "Valid",
+                "type": "boolean"
+              },
+              {
+                "key": "normalized_company_name",
+                "name": "Normalized company name",
+                "type": "text"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "key": "business_license_ocr_mock",
+        "connector_key": "mock",
+        "provider_key": "fixture",
+        "name": "Business License OCR Mock",
+        "status": "active",
+        "config": {
+          "responses": {
+            "business_license.recognize": {
+              "recognized": true,
+              "license_number": "91310000TEST001",
+              "company_name": "Domainry Technology Co., Ltd."
+            }
+          },
+          "scenarios": {
+            "business_license.recognize": [
+              {
+                "when": {
+                  "image": "mock://ocr-timeout"
+                },
+                "error": "timeout"
+              },
+              {
+                "when": {
+                  "image": "mock://invalid-schema"
+                },
+                "response": {
+                  "recognized": "yes",
+                  "license_number": "91310000TEST001",
+                  "company_name": "Domainry Technology Co., Ltd."
+                }
+              },
+              {
+                "when": {
+                  "image": "mock://invalid-license"
+                },
+                "response": {
+                  "recognized": true,
+                  "license_number": "91310000INVALID",
+                  "company_name": "Invalid Company"
+                }
+              },
+              {
+                "when": {
+                  "image": "mock://registry-timeout"
+                },
+                "response": {
+                  "recognized": true,
+                  "license_number": "91310000TIMEOUT",
+                  "company_name": "Timeout Company"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "key": "business_registry_mock",
+        "connector_key": "mock",
+        "provider_key": "fixture",
+        "name": "Business Registry Mock",
+        "status": "active",
+        "config": {
+          "responses": {
+            "business_license.verify": {
+              "valid": true,
+              "normalized_company_name": "Domainry Technology Co., Ltd."
+            }
+          },
+          "scenarios": {
+            "business_license.verify": [
+              {
+                "when": {
+                  "license_number": "91310000INVALID"
+                },
+                "response": {
+                  "valid": false,
+                  "normalized_company_name": "Invalid Company"
+                }
+              },
+              {
+                "when": {
+                  "license_number": "91310000TIMEOUT"
+                },
+                "error": "timeout"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "automation_rules": [
+    {
+      "key": "customer.business_workspace_create_guard",
+      "name": "Customer Business Workspace Create Guard",
+      "object_key": "customer",
+      "enabled": true,
+      "trigger": {
+        "phase": "before",
+        "operation": "create"
+      },
+      "conditions": {
+        "mode": "all",
+        "clauses": [
+          {
+            "reference": "$actor.role",
+            "operator": "eq",
+            "value": "automation_business_tester"
+          }
+        ]
+      },
+      "execution": {
+        "mode": "sync",
+        "timeout_seconds": 5,
+        "max_depth": 3
+      },
+      "audit_event": "customer_business_workspace_create_guarded",
+      "layout": {
+        "version": 1,
+        "nodes": {},
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "instructions": [
+        {
+          "key": "owner_must_match_actor",
+          "type": "assert",
+          "config": {
+            "source": "$payload.owner",
+            "operator": "eq",
+            "value": "$actor.user_id",
+            "error_code": "customer.owner_must_match_actor"
+          }
+        },
+        {
+          "key": "initialize_verification_status",
+          "type": "derive_fields",
+          "config": {
+            "fields": {
+              "verification_status": "pending"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "key": "customer.verify_business_license",
+      "name": "Customer Business License Verification",
+      "object_key": "customer",
+      "enabled": true,
+      "trigger": {
+        "phase": "after",
+        "operation": "create"
+      },
+      "conditions": {
+        "mode": "all",
+        "clauses": []
+      },
+      "execution": {
+        "mode": "async",
+        "timeout_seconds": 10,
+        "max_depth": 3,
+        "idempotency_keys": [
+          "business_license_no"
+        ]
+      },
+      "audit_event": "customer_business_license_verified",
+      "layout": {
+        "version": 1,
+        "nodes": {},
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "instructions": [
+        {
+          "key": "verify_license",
+          "type": "invoke_business_action",
+          "config": {
+            "action_key": "customer.verify_business_license",
+            "object_key": "customer"
+          }
+        }
+      ]
+    }
+  ],
+  "automation_execution_seeds": [
+    {
+      "id": "automation_execution_seed_customer_verify_business_license",
+      "workspace_id": "default",
+      "rule_key": "customer.verify_business_license",
+      "object_key": "customer",
+      "record_id": "customer_customer_acme",
+      "phase": "before",
+      "operation": "create",
+      "status": "succeeded",
+      "actor_id": "sales_manager",
+      "role_key": "sales_manager",
+      "request_id": "seed_business_license_verification",
+      "correlation_id": "seed_business_license_verification",
+      "duration_ms": 84,
+      "candidate": {
+        "name": "Domainry Technology Co., Ltd.",
+        "business_license_image": "mock://seed-license",
+        "business_license_no": "91310000TEST001",
+        "normalized_business_license_no": "91310000TEST001",
+        "normalized_company_name": "Domainry Technology Co., Ltd.",
+        "verification_status": "verified",
+        "verified_at": "2026-07-01T08:30:00Z"
+      },
+      "trace": {
+        "actions": [
+          {
+            "key": "license_image_required",
+            "type": "assert",
+            "status": "succeeded"
+          },
+          {
+            "key": "license_number_required",
+            "type": "assert",
+            "status": "succeeded"
+          },
+          {
+            "key": "ocr",
+            "type": "integration_call",
+            "status": "succeeded",
+            "connector_key": "mock",
+            "connection_key": "business_license_ocr_mock",
+            "operation": "business_license.recognize",
+            "invocation_id": "seed_invocation_business_license_ocr"
+          },
+          {
+            "key": "ocr_recognized",
+            "type": "assert",
+            "status": "succeeded"
+          },
+          {
+            "key": "license_matches",
+            "type": "assert",
+            "status": "succeeded"
+          },
+          {
+            "key": "registry",
+            "type": "integration_call",
+            "status": "succeeded",
+            "connector_key": "mock",
+            "connection_key": "business_registry_mock",
+            "operation": "business_license.verify",
+            "invocation_id": "seed_invocation_business_registry"
+          },
+          {
+            "key": "registry_valid",
+            "type": "assert",
+            "status": "succeeded"
+          },
+          {
+            "key": "apply_verified_fields",
+            "type": "set_fields",
+            "status": "succeeded"
+          }
+        ]
+      },
+      "created_at": "2026-07-01T08:30:00Z",
+      "updated_at": "2026-07-01T08:30:00Z"
+    }
+  ],
+  "reports": [
+    {
+      "key": "crm_pipeline_health",
+      "name": "Pipeline Health",
+      "dataset": {
+        "source": {"object_key": "customer", "alias": "customer"},
+        "joins": [{"alias": "opportunity", "object_key": "opportunity", "type": "left", "left_alias": "customer", "left_field": "id", "right_field": "customer", "cardinality": "one_to_many"}],
+        "measures": [
+          {"key": "customer_count", "operation": "distinct_count", "field": {"source_alias": "customer", "field_key": "id"}},
+          {"key": "opportunity_count", "operation": "distinct_count", "field": {"source_alias": "opportunity", "field_key": "id"}}
+        ]
+      },
+      "required_permissions": [
+        "opportunity.read"
+      ]
+    },
+    {
+      "key": "crm_activity_coverage",
+      "name": "Activity Coverage",
+      "dataset": {
+        "source": {"object_key": "activity", "alias": "activity"},
+        "measures": [
+          {"key": "activity_count", "operation": "distinct_count", "field": {"source_alias": "activity", "field_key": "id"}}
+        ]
+      },
+      "required_permissions": [
+        "activity.read"
+      ]
+    },
+    {
+      "key": "crm_revenue_collection",
+      "name": "Revenue Collection",
+      "dataset": {
+        "source": {"object_key": "contract", "alias": "contract"},
+        "joins": [{"alias": "payment", "object_key": "payment", "type": "left", "left_alias": "contract", "left_field": "id", "right_field": "contract", "cardinality": "one_to_many"}],
+        "measures": [
+          {"key": "contract_count", "operation": "distinct_count", "field": {"source_alias": "contract", "field_key": "id"}},
+          {"key": "payment_count", "operation": "distinct_count", "field": {"source_alias": "payment", "field_key": "id"}}
+        ]
+      },
+      "required_permissions": [
+        "payment.read"
+      ]
+    }
+  ],
+  "menus": [
+    {
+      "key": "crm_sales",
+      "label": "Sales",
+      "route": "/crm/sales",
+      "roles": [
+        "sales_manager",
+        "sales_rep"
+      ]
+    },
+    {
+      "key": "crm_customer_360",
+      "label": "Customer 360",
+      "parent_key": "crm_sales",
+      "route": "/objects/customer",
+      "roles": [
+        "sales_manager",
+        "sales_rep"
+      ]
+    },
+    {
+      "key": "crm_lead_queue",
+      "label": "Lead Queue",
+      "parent_key": "crm_sales",
+      "route": "/crm/leads",
+      "roles": [
+        "sales_manager",
+        "sales_rep"
+      ]
+    },
+    {
+      "key": "crm_pipeline",
+      "label": "Pipeline",
+      "parent_key": "crm_sales",
+      "route": "/crm/pipeline",
+      "roles": [
+        "sales_manager",
+        "sales_rep"
+      ]
+    },
+    {
+      "key": "crm_activities",
+      "label": "Activities",
+      "parent_key": "crm_sales",
+      "route": "/crm/activities",
+      "roles": [
+        "sales_manager",
+        "sales_rep"
+      ]
+    },
+    {
+      "key": "crm_revenue",
+      "label": "Revenue",
+      "route": "/crm/revenue",
+      "roles": [
+        "sales_manager",
+        "finance_reviewer"
+      ]
+    },
+    {
+      "key": "crm_contracts",
+      "label": "Contracts",
+      "parent_key": "crm_revenue",
+      "route": "/crm/contracts",
+      "roles": [
+        "sales_manager",
+        "finance_reviewer"
+      ]
+    },
+    {
+      "key": "crm_payments",
+      "label": "Payments",
+      "parent_key": "crm_revenue",
+      "route": "/crm/payments",
+      "roles": [
+        "finance_reviewer"
+      ]
+    },
+    {
+      "key": "crm_analytics",
+      "label": "Analytics",
+      "route": "/crm/analytics",
+      "roles": [
+        "sales_manager"
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "key": "crm_assistant",
+      "name": "CRM Assistant",
+      "description": "Assists with governed CRM record operations.",
+      "tools": [
+        "createRecord",
+        "updateRecord",
+        "deleteRecord",
+        "callConnector"
+      ]
+    }
+  ],
+  "roles": [
+    {
+      "key": "sales_manager",
+      "name": "Sales Manager",
+      "permissions": [
+        "business.access",
+        "admin_console.access",
+        "workspace.admin",
+        "customer.read",
+        "customer.create",
+        "customer.update",
+        "customer.export",
+        "contact.read",
+        "contact.create",
+        "contact.update",
+        "lead.read",
+        "lead.create",
+        "lead.update",
+        "opportunity.read",
+        "opportunity.create",
+        "opportunity.update",
+        "opportunity.export",
+        "activity.read",
+        "activity.create",
+        "activity.update",
+        "activity.export",
+        "contract.read",
+        "contract.create",
+        "contract.update",
+        "payment.read"
+      ],
+      "record_scope": "all_records",
+      "data_permissions": [
+        {
+          "object_key": "customer",
+          "scope": "all_records",
+          "read": true,
+          "write": true
+        },
+        {
+          "object_key": "contact",
+          "scope": "all_records",
+          "read": true,
+          "write": true
+        },
+        {
+          "object_key": "lead",
+          "scope": "all_records",
+          "read": true,
+          "write": true
+        },
+        {
+          "object_key": "opportunity",
+          "scope": "all_records",
+          "read": true,
+          "write": true
+        },
+        {
+          "object_key": "activity",
+          "scope": "all_records",
+          "read": true,
+          "write": true
+        },
+        {
+          "object_key": "contract",
+          "scope": "all_records",
+          "read": true,
+          "write": true
+        },
+        {
+          "object_key": "payment",
+          "scope": "all_records",
+          "read": true,
+          "write": false
+        }
+      ],
+      "export_rules": [
+        {
+          "object_key": "customer",
+          "mode": "selected_fields",
+          "fields": [
+            "name",
+            "status",
+            "owner",
+            "health_score"
+          ]
+        },
+        {
+          "object_key": "opportunity",
+          "mode": "selected_fields",
+          "fields": [
+            "customer",
+            "stage",
+            "amount",
+            "owner"
+          ]
+        },
+        {
+          "object_key": "activity",
+          "mode": "selected_fields",
+          "fields": [
+            "customer",
+            "type",
+            "status",
+            "due_at",
+            "owner"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "sales_rep",
+      "name": "Sales Rep",
+      "permissions": [
+        "business.access",
+        "customer.read",
+        "customer.update",
+        "contact.read",
+        "contact.create",
+        "lead.read",
+        "lead.update",
+        "opportunity.read",
+        "opportunity.update",
+        "activity.read",
+        "activity.create",
+        "activity.update"
+      ],
+      "record_scope": "owned_records",
+      "data_permissions": [
+        {
+          "object_key": "customer",
+          "scope": "owned_records",
+          "read": true,
+          "write": true
+        },
+        {
+          "object_key": "contact",
+          "scope": "owned_records",
+          "read": true,
+          "write": true
+        },
+        {
+          "object_key": "lead",
+          "scope": "owned_records",
+          "read": true,
+          "write": true
+        },
+        {
+          "object_key": "opportunity",
+          "scope": "owned_records",
+          "read": true,
+          "write": true
+        },
+        {
+          "object_key": "activity",
+          "scope": "owned_records",
+          "read": true,
+          "write": true
+        },
+        {
+          "object_key": "contract",
+          "scope": "owned_records",
+          "read": true,
+          "write": false
+        },
+        {
+          "object_key": "payment",
+          "scope": "owned_records",
+          "read": false,
+          "write": false
+        }
+      ],
+      "field_permissions": [
+        {
+          "object_key": "customer",
+          "field_key": "health_score",
+          "read": true,
+          "write": false,
+          "export": false
+        },
+        {
+          "object_key": "contract",
+          "field_key": "value",
+          "read": true,
+          "write": false,
+          "export": false,
+          "masked": true
+        }
+      ]
+    },
+    {
+      "key": "finance_reviewer",
+      "name": "Finance Reviewer",
+      "permissions": [
+        "business.access",
+        "customer.read",
+        "opportunity.read",
+        "contract.read",
+        "payment.read",
+        "payment.update",
+        "payment.export"
+      ],
+      "record_scope": "all_records",
+      "data_permissions": [
+        {
+          "object_key": "customer",
+          "scope": "all_records",
+          "read": true,
+          "write": false
+        },
+        {
+          "object_key": "opportunity",
+          "scope": "all_records",
+          "read": true,
+          "write": false
+        },
+        {
+          "object_key": "contract",
+          "scope": "all_records",
+          "read": true,
+          "write": false
+        },
+        {
+          "object_key": "payment",
+          "scope": "all_records",
+          "read": true,
+          "write": true
+        }
+      ],
+      "export_rules": [
+        {
+          "object_key": "payment",
+          "mode": "selected_fields",
+          "fields": [
+            "contract",
+            "status",
+            "amount",
+            "due_at"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "automation_business_tester",
+      "name": "Automation Business Tester",
+      "permissions": [
+        "business.access",
+        "customer.read",
+        "customer.create",
+        "customer.update",
+        "customer.apply_automation_verification",
+        "ops.workflow.run"
+      ],
+      "record_scope": "owned_records",
+      "data_permissions": [
+        {
+          "object_key": "customer",
+          "scope": "owned_records",
+          "read": true,
+          "write": true
+        }
+      ]
+    },
+    {
+      "key": "automation_history_reviewer",
+      "name": "Automation History Reviewer",
+      "permissions": [
+        "admin_console.access",
+        "automation.rule.read",
+        "automation.rule.history.read"
+      ],
+      "record_scope": "all_records",
+      "data_permissions": [
+        {
+          "object_key": "customer",
+          "scope": "all_records",
+          "read": false,
+          "write": false
+        }
+      ]
+    },
+    {
+      "key": "platform_admin",
+      "name": "Runtime Operator",
+      "permissions": [
+        "admin_console.access",
+        "workspace.admin",
+        "scheduler.command",
+        "scheduler.definition.run",
+        "job_run.update",
+        "integration.catalog.view",
+        "integration.audit.view",
+        "integration.retry",
+        "ops.workflow.read",
+        "ops.workflow.process",
+        "customer.read"
+      ],
+      "record_scope": "all_records",
+      "data_permissions": [
+        {
+          "object_key": "customer",
+          "scope": "all_records",
+          "read": true,
+          "write": false
+        },
+        {
+          "object_key": "job_run",
+          "scope": "all_records",
+          "read": true,
+          "write": true
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "automation_business_tester_user",
+      "name": "Automation Business Tester",
+      "email": "automation-business-tester@example.com",
+      "role_keys": [
+        "automation_business_tester"
+      ]
+    },
+    {
+      "id": "automation_history_reviewer_user",
+      "name": "Automation History Reviewer",
+      "email": "automation-history-reviewer@example.com",
+      "role_keys": [
+        "automation_history_reviewer"
+      ]
+    }
+  ],
+  "seed_records": [
+    {
+      "object_key": "customer",
+      "data": {
+        "__seed_key": "customer_acme",
+        "name": "Acme Manufacturing",
+        "status": "active",
+        "owner": "sales_rep_1",
+        "health_score": 82,
+        "next_follow_up_at": "2026-07-10T09:00:00Z"
+      }
+    },
+    {
+      "object_key": "customer",
+      "data": {
+        "__seed_key": "customer_northwind",
+        "name": "Northwind Clinics",
+        "status": "prospect",
+        "owner": "sales_rep_1",
+        "health_score": 66,
+        "next_follow_up_at": "2026-07-11T10:00:00Z"
+      }
+    },
+    {
+      "object_key": "contact",
+      "data": {
+        "__seed_key": "contact_acme_cfo",
+        "customer": "$record:customer_acme",
+        "name": "Jamie Chen",
+        "role": "CFO",
+        "email": "jamie.chen@example.com",
+        "influence": "decision_maker"
+      }
+    },
+    {
+      "object_key": "lead",
+      "data": {
+        "__seed_key": "lead_enterprise_board",
+        "company_name": "Enterprise Board",
+        "contact_name": "Riley Park",
+        "source": "event",
+        "status": "new",
+        "owner": "sales_manager"
+      }
+    },
+    {
+      "object_key": "lead",
+      "data": {
+        "__seed_key": "lead_northwind",
+        "company_name": "Northwind Clinics",
+        "contact_name": "Pat Morgan",
+        "source": "referral",
+        "status": "working",
+        "owner": "sales_rep_1"
+      }
+    },
+    {
+      "object_key": "opportunity",
+      "data": {
+        "__seed_key": "opportunity_acme_expansion",
+        "customer": "$record:customer_acme",
+        "stage": "proposal",
+        "amount": 42000,
+        "expected_close_at": "2026-08-15",
+        "owner": "sales_rep_1"
+      }
+    },
+    {
+      "object_key": "opportunity",
+      "data": {
+        "__seed_key": "opportunity_northwind_recovery",
+        "customer": "$record:customer_northwind",
+        "stage": "negotiation",
+        "amount": 16000,
+        "expected_close_at": "2026-08-20",
+        "owner": "sales_rep_1"
+      }
+    },
+    {
+      "object_key": "activity",
+      "data": {
+        "__seed_key": "activity_acme_followup",
+        "customer": "$record:customer_acme",
+        "opportunity": "$record:opportunity_acme_expansion",
+        "type": "meeting",
+        "status": "open",
+        "due_at": "2026-07-10T09:00:00Z",
+        "owner": "sales_rep_1",
+        "summary": "Review expansion proposal with CFO"
+      }
+    },
+    {
+      "object_key": "activity",
+      "data": {
+        "__seed_key": "activity_northwind_recovery",
+        "customer": "$record:customer_northwind",
+        "opportunity": "$record:opportunity_northwind_recovery",
+        "type": "call",
+        "status": "open",
+        "due_at": "2026-07-09T08:00:00Z",
+        "owner": "sales_rep_1",
+        "summary": "Recover stalled Northwind negotiation"
+      }
+    },
+    {
+      "object_key": "contract",
+      "data": {
+        "__seed_key": "contract_acme_expansion",
+        "customer": "$record:customer_acme",
+        "opportunity": "$record:opportunity_acme_expansion",
+        "status": "signed",
+        "value": 42000,
+        "signed_at": "2026-07-02",
+        "owner": "sales_manager"
+      }
+    },
+    {
+      "object_key": "contract",
+      "data": {
+        "__seed_key": "contract_acme_renewal_draft",
+        "customer": "$record:customer_acme",
+        "opportunity": "$record:opportunity_acme_expansion",
+        "status": "draft",
+        "value": 18000,
+        "owner": "sales_manager"
+      }
+    },
+    {
+      "object_key": "payment",
+      "data": {
+        "__seed_key": "payment_acme_first",
+        "contract": "$record:contract_acme_expansion",
+        "status": "due",
+        "amount": 21000,
+        "due_at": "2026-07-20",
+        "owner": "finance_reviewer"
+      }
+    },
+    {
+      "object_key": "payment",
+      "data": {
+        "__seed_key": "payment_acme_overdue",
+        "contract": "$record:contract_acme_expansion",
+        "status": "overdue",
+        "amount": 8000,
+        "due_at": "2026-07-01",
+        "owner": "finance_reviewer"
+      }
+    },
+    {
+      "object_key": "job_definition",
+      "data": {
+        "__seed_key": "scheduler_daily_workflow_scan_seed",
+        "key": "scheduler_daily_workflow_scan_seed",
+        "name": "Daily Workflow Scan Seed",
+        "status": "enabled",
+        "trigger_type": "scheduled",
+        "schedule_expression": "daily",
+        "timezone": "UTC",
+        "target_type": "workflow",
+        "target_key": "scheduled:*",
+        "condition_json": "{}",
+        "payload_json": "{}",
+        "run_as_role": "system",
+        "max_attempts": 3,
+        "retry_backoff": "fixed",
+        "retry_delay_seconds": 60,
+        "retry_max_delay_seconds": 3600,
+        "missed_window_policy": "skip",
+        "max_catchup_windows": 0,
+        "timeout_seconds": 300,
+        "idempotency_keys": "workflow_key,record_id,scheduled_at,due_at",
+        "next_run_at": "2026-01-01T00:00:00Z",
+        "last_run_status": "seeded"
+      }
+    },
+    {
+      "object_key": "job_run",
+      "data": {
+        "__seed_key": "scheduler_seed_run_succeeded",
+        "job_definition_id": "$record:scheduler_daily_workflow_scan_seed",
+        "status": "succeeded",
+        "triggered_by": "scheduler",
+        "scheduled_for": "2026-07-01T00:00:00Z",
+        "started_at": "2026-07-01T00:00:01Z",
+        "finished_at": "2026-07-01T00:00:02Z",
+        "attempt": 1,
+        "max_attempts": 3,
+        "timeout_seconds": 300,
+        "next_retry_at": "",
+        "retry_backoff": "fixed",
+        "retry_delay_seconds": 60,
+        "retry_max_delay_seconds": 3600,
+        "retry_backoff_seconds": 0,
+        "idempotency_key": "seed:scheduler_seed_run_succeeded",
+        "workflow_key": "scheduled:*",
+        "target_object": "payment",
+        "payload_json": "{}",
+        "result_json": "{\"seeded\":true}",
+        "error_message": "",
+        "error_category": "",
+        "recoverability": ""
+      }
+    },
+    {
+      "object_key": "job_run_event",
+      "data": {
+        "__seed_key": "scheduler_seed_event_workflow_triggered",
+        "job_run_id": "$record:scheduler_seed_run_succeeded",
+        "event_type": "workflow_triggered",
+        "message": "Seed scheduler workflow evidence",
+        "metadata_json": "{\"workflow_key\":\"payment.overdue_escalation\"}",
+        "created_at": "2026-07-01T00:00:02Z"
+      }
+    },
+    {
+      "object_key": "job_dead_letter",
+      "data": {
+        "__seed_key": "scheduler_seed_dead_letter_resolved",
+        "job_run_id": "$record:scheduler_seed_run_succeeded",
+        "job_definition_id": "$record:scheduler_daily_workflow_scan_seed",
+        "status": "resolved",
+        "reason": "Seed resolved scheduler exception",
+        "last_error": "seeded example",
+        "failed_at": "2026-07-01T00:00:03Z",
+        "resolved_at": "2026-07-01T00:10:00Z",
+        "resolved_by": "sales_manager",
+        "resolution_note": "Seed evidence only."
+      }
+    }
+  ]
+}

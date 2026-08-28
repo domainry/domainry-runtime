@@ -1,0 +1,450 @@
+{
+  "template_id": "hr-personnel",
+  "version": "1.0.0",
+  "default_locale": "zh-CN",
+  "name": "Personnel Leave Management",
+  "i18n": {
+    "zh-CN": {"name": "人事请假管理", "description": "人员汇报线、请假审批与余额台账"},
+    "en": {"name": "Personnel Leave Management", "description": "Reporting lines, leave approvals, and balance ledger"}
+  },
+  "objects": [
+    {
+      "key": "leave_request",
+      "name": "Leave Request",
+      "i18n": {"zh-CN": {"name": "请假申请"}, "en": {"name": "Leave Request"}},
+      "fields": [
+        {"key": "employee_user", "name": "Employee", "type": "user", "required": true, "config": {"indexed": true}, "i18n": {"zh-CN": {"name": "员工"}, "en": {"name": "Employee"}}},
+        {"key": "leave_type", "name": "Leave Type", "type": "select", "required": true, "validation": {"options": ["annual", "sick", "personal"]}, "i18n": {"zh-CN": {"name": "假期类型"}, "en": {"name": "Leave Type"}}},
+        {"key": "start_date", "name": "Start Date", "type": "date", "required": true, "i18n": {"zh-CN": {"name": "开始日期"}, "en": {"name": "Start Date"}}},
+        {"key": "end_date", "name": "End Date", "type": "date", "required": true, "i18n": {"zh-CN": {"name": "结束日期"}, "en": {"name": "End Date"}}},
+        {"key": "days", "name": "Days", "type": "number", "required": true, "validation": {"min": 0.5, "max": 30}, "i18n": {"zh-CN": {"name": "天数"}, "en": {"name": "Days"}}},
+        {"key": "reason", "name": "Reason", "type": "long_text", "required": true, "i18n": {"zh-CN": {"name": "请假原因"}, "en": {"name": "Reason"}}},
+        {"key": "status", "name": "Status", "type": "select", "required": true, "default_value": "draft", "validation": {"options": ["draft", "submitted", "returned", "approved", "rejected", "withdrawn", "cancelled"]}, "i18n": {"zh-CN": {"name": "状态"}, "en": {"name": "Status"}}},
+        {"key": "owner", "name": "Owner", "type": "user", "required": true, "i18n": {"zh-CN": {"name": "数据负责人"}, "en": {"name": "Owner"}}}
+      ],
+      "validations": [
+        {"key": "leave_request_days_positive", "object_key": "leave_request", "type": "field", "field_key": "days", "severity": "error", "message": "hr.leave.days_invalid", "config": {"operator": "gt", "value": 0}},
+        {"key": "leave_request_no_overlap", "object_key": "leave_request", "type": "temporal_exclusion", "severity": "error", "message": "hr.leave.period_overlap", "config": {"start_field": "start_date", "end_field": "end_date", "scope_fields": ["employee_user"], "status_field": "status", "excluded_statuses": ["draft", "returned", "rejected", "withdrawn", "cancelled"], "operations": ["action", "update", "create"]}}
+      ]
+    },
+    {
+      "key": "leave_balance",
+      "name": "Leave Balance",
+      "i18n": {"zh-CN": {"name": "假期余额"}, "en": {"name": "Leave Balance"}},
+      "fields": [
+        {"key": "employee_user", "name": "Employee", "type": "user", "required": true, "config": {"indexed": true}, "i18n": {"zh-CN": {"name": "员工"}, "en": {"name": "Employee"}}},
+        {"key": "leave_type", "name": "Leave Type", "type": "select", "required": true, "validation": {"options": ["annual", "sick", "personal"]}, "i18n": {"zh-CN": {"name": "假期类型"}, "en": {"name": "Leave Type"}}},
+        {"key": "year", "name": "Year", "type": "number", "required": true, "i18n": {"zh-CN": {"name": "年度"}, "en": {"name": "Year"}}},
+        {"key": "granted_days", "name": "Granted Days", "type": "number", "required": true, "i18n": {"zh-CN": {"name": "授予天数"}, "en": {"name": "Granted Days"}}},
+        {"key": "remaining_days", "name": "Remaining Days", "type": "number", "required": true, "i18n": {"zh-CN": {"name": "剩余天数"}, "en": {"name": "Remaining Days"}}},
+        {"key": "used_days", "name": "Used Days", "type": "number", "required": true, "i18n": {"zh-CN": {"name": "已用天数"}, "en": {"name": "Used Days"}}},
+        {"key": "owner", "name": "Owner", "type": "user", "required": true, "i18n": {"zh-CN": {"name": "数据负责人"}, "en": {"name": "Owner"}}}
+      ],
+      "validations": [
+        {"key": "leave_balance_unique", "object_key": "leave_balance", "type": "unique_together", "fields": ["employee_user", "leave_type", "year"], "severity": "error", "message": "hr.leave.balance_unique"}
+      ]
+    },
+    {
+      "key": "leave_balance_ledger",
+      "name": "Leave Balance Ledger",
+      "i18n": {"zh-CN": {"name": "假期余额台账"}, "en": {"name": "Leave Balance Ledger"}},
+      "fields": [
+        {"key": "leave_request", "name": "Leave Request", "type": "relation", "required": true, "validation": {"target": "leave_request"}, "i18n": {"zh-CN": {"name": "关联申请"}, "en": {"name": "Leave Request"}}},
+        {"key": "employee_user", "name": "Employee", "type": "user", "required": true, "i18n": {"zh-CN": {"name": "员工"}, "en": {"name": "Employee"}}},
+        {"key": "leave_type", "name": "Leave Type", "type": "select", "required": true, "validation": {"options": ["annual", "sick", "personal"]}, "i18n": {"zh-CN": {"name": "假期类型"}, "en": {"name": "Leave Type"}}},
+        {"key": "change_days", "name": "Change Days", "type": "number", "required": true, "i18n": {"zh-CN": {"name": "变更天数"}, "en": {"name": "Change Days"}}},
+        {"key": "balance_after", "name": "Balance After", "type": "number", "required": true, "i18n": {"zh-CN": {"name": "变更后余额"}, "en": {"name": "Balance After"}}},
+        {"key": "reason", "name": "Reason", "type": "text", "required": true, "i18n": {"zh-CN": {"name": "变更原因"}, "en": {"name": "Reason"}}},
+        {"key": "owner", "name": "Owner", "type": "user", "required": true, "i18n": {"zh-CN": {"name": "数据负责人"}, "en": {"name": "Owner"}}}
+      ]
+    },
+    {
+      "key": "hr_position",
+      "name": "HR Position",
+      "i18n": {"zh-CN": {"name": "职位"}, "en": {"name": "Position"}},
+      "config": {"title_field": "name"},
+      "fields": [
+        {"key": "name", "name": "Name", "type": "text", "required": true, "i18n": {"zh-CN": {"name": "职位名称"}, "en": {"name": "Position name"}}},
+        {"key": "code", "name": "Code", "type": "text", "required": true, "unique": true, "i18n": {"zh-CN": {"name": "职位编码"}, "en": {"name": "Position code"}}}
+      ]
+    },
+    {
+      "key": "employee_profile",
+      "name": "Employee Profile",
+      "i18n": {"zh-CN": {"name": "员工档案"}, "en": {"name": "Employee Profile"}},
+      "config": {"title_field": "profile_no"},
+      "ux": {"kind": "identity_profile_extension", "config": {"identity_relation_field": "identity_user"}},
+      "fields": [
+        {"key": "identity_user", "name": "Identity User", "type": "relation", "required": true, "unique": true, "config": {"object_key": "identity_user"}, "i18n": {"zh-CN": {"name": "平台人员"}, "en": {"name": "Identity User"}}},
+        {"key": "profile_no", "name": "Profile Number", "type": "text", "unique": true, "i18n": {"zh-CN": {"name": "档案编号"}, "en": {"name": "Profile number"}}},
+        {"key": "legal_entity", "name": "Legal Entity", "type": "text", "i18n": {"zh-CN": {"name": "用工主体（较长中文字段用于窄屏布局验证）"}, "en": {"name": "Legal entity"}}},
+        {"key": "position", "name": "Position", "type": "relation", "config": {"object_key": "hr_position"}, "i18n": {"zh-CN": {"name": "当前职位"}, "en": {"name": "Position"}}},
+        {"key": "contract_type", "name": "Contract Type", "type": "text", "i18n": {"zh-CN": {"name": "合同类型"}, "en": {"name": "Contract type"}}},
+        {"key": "contract_status", "name": "Contract Status", "type": "text", "i18n": {"zh-CN": {"name": "合同状态"}, "en": {"name": "Contract status"}}}
+      ]
+    },
+    {
+      "key": "qualification_profile",
+      "name": "Qualification Profile",
+      "i18n": {"zh-CN": {"name": "资质档案"}, "en": {"name": "Qualification Profile"}},
+      "ux": {"kind": "identity_profile_extension", "config": {"identity_relation_field": "identity_user"}},
+      "fields": [
+        {"key": "identity_user", "name": "Identity User", "type": "relation", "required": true, "unique": true, "config": {"object_key": "identity_user"}, "i18n": {"zh-CN": {"name": "平台人员"}, "en": {"name": "Identity User"}}},
+        {"key": "certificate_name", "name": "Certificate Name", "type": "text", "required": true, "i18n": {"zh-CN": {"name": "资质名称"}, "en": {"name": "Certificate name"}}},
+        {"key": "expires_on", "name": "Expires On", "type": "date", "i18n": {"zh-CN": {"name": "到期日期"}, "en": {"name": "Expires on"}}}
+      ]
+    }
+  ],
+  "identity_profile_extensions": [
+    {
+      "contract_version": "identity-profile-extension",
+      "min_reader_version": "identity-profile-extension-reader",
+      "object_key": "employee_profile",
+      "identity_relation_field": "identity_user",
+      "cardinality": "one_to_one",
+      "business_identity": {"key": "employee", "surface_keys": ["admin"], "claims": [{"claim_key": "profile_no", "field_key": "profile_no"}, {"claim_key": "position_id", "field_key": "position"}]},
+      "summary_fields": ["profile_no", "legal_entity", "contract_status"],
+      "profile_tabs": ["employment", "contract"],
+      "profile_tab_labels": {"employment": "任职档案", "contract": "合同资料"},
+      "profile_tab_fields": {"employment": ["profile_no", "legal_entity", "position"], "contract": ["contract_type", "contract_status"]},
+      "default_visibility": "when_readable",
+      "required_permissions": ["employee_profile.read"],
+      "standalone_workspace": false
+    },
+    {
+      "contract_version": "identity-profile-extension",
+      "min_reader_version": "identity-profile-extension-reader",
+      "object_key": "qualification_profile",
+      "identity_relation_field": "identity_user",
+      "cardinality": "one_to_one",
+      "business_identity": {"key": "qualification", "surface_keys": ["admin"], "claims": [{"claim_key": "certificate_name", "field_key": "certificate_name"}]},
+      "summary_fields": ["certificate_name", "expires_on"],
+      "profile_tabs": ["qualification"],
+      "profile_tab_labels": {"qualification": "资质信息"},
+      "profile_tab_fields": {"qualification": ["certificate_name", "expires_on"]},
+      "default_visibility": "when_readable",
+      "required_permissions": ["qualification_profile.read"],
+      "standalone_workspace": false
+    }
+  ],
+  "views": [
+    {"key": "my_leave_workbench", "name": "My Leave", "object_key": "leave_request", "type": "workbench", "i18n": {"zh-CN": {"name": "我的请假"}, "en": {"name": "My Leave"}}, "config": {"route": "/hr/leave", "columns": ["leave_type", "start_date", "end_date", "days", "status"]}},
+    {"key": "team_leave_schedule", "name": "Team Leave", "object_key": "leave_request", "type": "schedule", "i18n": {"zh-CN": {"name": "团队请假"}, "en": {"name": "Team Leave"}}, "config": {"route": "/hr/team-leave", "start_field": "start_date", "end_field": "end_date", "group_by": "employee_user"}},
+    {"key": "leave_ledger", "name": "Leave Ledger", "object_key": "leave_balance_ledger", "type": "ledger", "i18n": {"zh-CN": {"name": "余额台账"}, "en": {"name": "Leave Ledger"}}, "config": {"route": "/hr/leave-ledger", "columns": ["employee_user", "leave_type", "change_days", "balance_after", "reason"]}}
+  ],
+  "surfaces": [
+    {
+      "key": "position_detail",
+      "name": "职位详情",
+      "components": ["position_profile_tabs"],
+      "config": {"workspace_query_contract": [{"key": "selected_bundle", "selected_context": "hr_position", "objects": ["hr_position", "employee_profile"], "strategy": "surface_context"}]}
+    }
+  ],
+  "components": [
+    {
+      "key": "position_profile_tabs",
+      "name": "职位档案关联",
+      "i18n": {"zh-CN": {"name": "职位档案关联"}, "en": {"name": "Position profiles"}},
+      "surface_key": "position_detail",
+      "primitive": "detail_tabs",
+      "object_keys": ["employee_profile"],
+      "permission": "employee_profile.read"
+    }
+  ],
+  "actions": [
+    {
+      "key": "leave_request.submit",
+      "object_key": "leave_request",
+      "label": "Submit Leave",
+      "i18n": {"zh-CN": {"label": "提交请假"}, "en": {"label": "Submit Leave"}},
+      "kind": "record_operation",
+      "requires_permission": "leave_request.update",
+      "preconditions": [],
+      "audit_event": "leave_request_submitted",
+      "ui_placement": "record_header",
+      "idempotency_keys": ["request_id"]
+    },
+    {
+      "key": "leave_request.withdraw",
+      "object_key": "leave_request",
+      "label": "Withdraw Leave",
+      "i18n": {"zh-CN": {"label": "撤回请假"}, "en": {"label": "Withdraw Leave"}},
+      "kind": "record_operation",
+      "requires_permission": "leave_request.update",
+      "audit_event": "leave_request_withdrawn",
+      "ui_placement": "record_header",
+      "idempotency_keys": ["request_id"]
+    },
+    {
+      "key": "leave_request.cancel",
+      "object_key": "leave_request",
+      "label": "Cancel Approved Leave",
+      "i18n": {"zh-CN": {"label": "取消已批准请假"}, "en": {"label": "Cancel Approved Leave"}},
+      "kind": "record_operation",
+      "requires_permission": "leave_request.update",
+      "audit_event": "leave_request_cancelled",
+      "ui_placement": "record_header",
+      "idempotency_keys": ["request_id"]
+    },
+    {
+      "key": "leave_request.return_for_revision",
+      "object_key": "leave_request",
+      "label": "Return Leave for Revision",
+      "i18n": {"zh-CN": {"label": "退回修改"}, "en": {"label": "Return for Revision"}},
+      "kind": "record_operation",
+      "requires_permission": "leave_request.update",
+      "audit_event": "leave_request_returned",
+      "ui_placement": "workflow_only"
+    },
+    {
+      "key": "leave_request.approve",
+      "object_key": "leave_request",
+      "label": "Approve Leave",
+      "i18n": {"zh-CN": {"label": "批准请假"}, "en": {"label": "Approve Leave"}},
+      "kind": "record_operation",
+      "requires_permission": "leave_request.update",
+      "preconditions": [],
+      "audit_event": "leave_request_approved",
+      "ui_placement": "workflow_only"
+    },
+    {
+      "key": "leave_request.reject",
+      "object_key": "leave_request",
+      "label": "Reject Leave",
+      "i18n": {"zh-CN": {"label": "拒绝请假"}, "en": {"label": "Reject Leave"}},
+      "kind": "record_operation",
+      "requires_permission": "leave_request.update",
+      "preconditions": [],
+      "audit_event": "leave_request_rejected",
+      "ui_placement": "workflow_only"
+    },
+    {
+      "key": "leave_request.notify_approval_reminder",
+      "object_key": "leave_request",
+      "label": "Notify Approval Reminder",
+      "i18n": {"zh-CN": {"label": "发送审批提醒"}, "en": {"label": "Send Approval Reminder"}},
+      "kind": "record_operation",
+      "requires_permission": "leave_request.update",
+      "audit_event": "leave_request_approval_reminder_queued",
+      "ui_placement": "workflow_only"
+    },
+    {
+      "key": "leave_request.notify_result",
+      "object_key": "leave_request",
+      "label": "Notify Leave Result",
+      "i18n": {"zh-CN": {"label": "通知请假结果"}, "en": {"label": "Notify Leave Result"}},
+      "kind": "record_operation",
+      "requires_permission": "leave_request.update",
+      "audit_event": "leave_request_result_notified",
+      "ui_placement": "workflow_only"
+    }
+  ],
+  "notification_templates": [
+    {
+      "key": "hr.leave.approval_reminder",
+      "name": "Leave approval reminder",
+      "channel": "email",
+      "status": "published",
+      "version": 1,
+      "default_locale": "zh-CN",
+      "variables": [
+        {"key": "leave_request_id", "type": "text", "required": true},
+        {"key": "workflow_task_id", "type": "text", "required": true}
+      ],
+      "locales": {
+        "zh-CN": {"subject": "请假审批提醒：{{leave_request_id}}", "text": "请处理请假申请 {{leave_request_id}}，审批任务：{{workflow_task_id}}。", "html": "<p>请处理请假申请 <strong>{{leave_request_id}}</strong>。</p><p>审批任务：{{workflow_task_id}}</p>"},
+        "en": {"subject": "Leave approval reminder: {{leave_request_id}}", "text": "Please review leave request {{leave_request_id}}. Approval task: {{workflow_task_id}}.", "html": "<p>Please review leave request <strong>{{leave_request_id}}</strong>.</p><p>Approval task: {{workflow_task_id}}</p>"}
+      }
+    },
+    {
+      "key": "hr.leave.result",
+      "name": "Leave request result",
+      "channel": "email",
+      "status": "published",
+      "version": 1,
+      "default_locale": "zh-CN",
+      "variables": [
+        {"key": "leave_request_id", "type": "text", "required": true},
+        {"key": "decision", "type": "text", "required": true}
+      ],
+      "locales": {
+        "zh-CN": {"subject": "请假申请处理结果：{{leave_request_id}}", "text": "您的请假申请 {{leave_request_id}} 的处理结果为：{{decision}}。", "html": "<p>您的请假申请 <strong>{{leave_request_id}}</strong> 的处理结果为：<strong>{{decision}}</strong>。</p>"},
+        "en": {"subject": "Leave request result: {{leave_request_id}}", "text": "The result for leave request {{leave_request_id}} is {{decision}}.", "html": "<p>The result for leave request <strong>{{leave_request_id}}</strong> is <strong>{{decision}}</strong>.</p>"}
+      }
+    }
+  ],
+  "workflows": [
+    {
+      "key": "leave_request_approval",
+      "name": "Leave Request Approval",
+      "i18n": {"zh-CN": {"name": "请假审批"}, "en": {"name": "Leave Request Approval"}},
+      "trigger": {"type": "field_changed", "object_key": "leave_request", "field": "status"},
+      "condition": {"type": "field_equals", "field": "status", "value": "submitted"},
+      "trigger_contract": {"type": "field_changed", "object_key": "leave_request", "field_key": "status"},
+      "condition_contract": {"type": "field_equals", "field": "status", "value": "submitted"},
+      "action": {"type": "workflow_graph"},
+      "enabled": true,
+      "idempotency_keys": ["request_id"],
+      "graph": {
+        "version": 2,
+        "nodes": [
+          {"id": "submitted", "type": "trigger", "name": "Leave Submitted"},
+          {"id": "manager", "type": "approval", "name": "Manager Approval", "contract": {"approval": {"mode": "any", "resolver_mode": "first_match", "empty_assignee_policy": "fail", "due_seconds": 86400, "reminder_action_key": "leave_request.notify_approval_reminder", "reminder_input": {"template_key": "hr.leave.approval_reminder"}, "escalation_seconds": 3600, "escalation_resolvers": [{"type": "role", "role_key": "hr_admin"}], "resolvers": [{"type": "manager_of", "user_field": "employee_user"}]}}},
+          {"id": "extended_leave", "type": "condition", "name": "Extended Leave Review Required", "contract": {"condition": {"type": "expression", "expression": "days >= 3"}}},
+          {"id": "hr_review", "type": "approval", "name": "HR Extended Leave Review", "contract": {"approval": {"mode": "any", "resolver_mode": "first_match", "empty_assignee_policy": "fail", "due_seconds": 86400, "reminder_action_key": "leave_request.notify_approval_reminder", "escalation_seconds": 3600, "escalation_resolvers": [{"type": "role", "role_key": "admin"}], "resolvers": [{"type": "role", "role_key": "hr_admin"}]}}},
+          {"id": "approve", "type": "action", "name": "Approve and Debit Balance", "contract": {"action": {"action_key": "leave_request.approve", "on_error": "fail", "output_variable": "approval_action"}}},
+          {"id": "reject", "type": "action", "name": "Reject Leave", "contract": {"action": {"action_key": "leave_request.reject", "input": {"reason": "$workflow.approval_comment"}, "on_error": "fail", "output_variable": "rejection_action"}}},
+          {"id": "return", "type": "action", "name": "Return for Revision", "contract": {"action": {"action_key": "leave_request.return_for_revision", "on_error": "fail", "output_variable": "return_action"}}},
+          {"id": "approved_notice", "type": "cc", "name": "Notify Approval Result", "contract": {"cc": {"notification_action_key": "leave_request.notify_result", "resolvers": [{"type": "record_field", "field": "employee_user"}], "input": {"decision": "approved"}}}},
+          {"id": "rejected_notice", "type": "cc", "name": "Notify Rejection Result", "contract": {"cc": {"notification_action_key": "leave_request.notify_result", "resolvers": [{"type": "record_field", "field": "employee_user"}], "input": {"decision": "rejected"}}}}
+        ],
+        "edges": [
+          {"id": "submit-manager", "source": "submitted", "target": "manager"},
+          {"id": "manager-approved", "source": "manager", "target": "extended_leave", "branch": "approved"},
+          {"id": "manager-rejected", "source": "manager", "target": "reject", "branch": "rejected"},
+          {"id": "manager-returned", "source": "manager", "target": "return", "branch": "returned"},
+          {"id": "extended-review-required", "source": "extended_leave", "target": "hr_review", "branch": "true"},
+          {"id": "extended-review-not-required", "source": "extended_leave", "target": "approve", "branch": "false"},
+          {"id": "hr-review-approved", "source": "hr_review", "target": "approve", "branch": "approved"},
+          {"id": "hr-review-rejected", "source": "hr_review", "target": "reject", "branch": "rejected"},
+          {"id": "hr-review-returned", "source": "hr_review", "target": "return", "branch": "returned"},
+          {"id": "approve-notice", "source": "approve", "target": "approved_notice"},
+          {"id": "reject-notice", "source": "reject", "target": "rejected_notice"}
+        ]
+      }
+    }
+  ],
+  "dictionaries": [
+    {"key": "leave_type", "name": "Leave Type", "i18n": {"zh-CN": {"name": "假期类型"}, "en": {"name": "Leave Type"}}, "items": [
+      {"key": "annual", "value": "annual", "label": "Annual Leave", "status": "active", "i18n": {"zh-CN": {"label": "年假"}, "en": {"label": "Annual Leave"}}},
+      {"key": "sick", "value": "sick", "label": "Sick Leave", "status": "active", "i18n": {"zh-CN": {"label": "病假"}, "en": {"label": "Sick Leave"}}},
+      {"key": "personal", "value": "personal", "label": "Personal Leave", "status": "active", "i18n": {"zh-CN": {"label": "事假"}, "en": {"label": "Personal Leave"}}}
+    ]}
+  ],
+  "integrations": {
+    "connections": [
+      {"key": "email_primary", "connector_key": "email", "provider_key": "smtp", "name": "Primary email", "status": "configured"}
+    ]
+  },
+  "reports": [
+    {"key": "hr_team_leave_exposure", "name": "Team Leave Exposure", "i18n": {"zh-CN": {"name": "团队休假分布"}, "en": {"name": "Team Leave Exposure"}}, "dataset": {"source": {"object_key": "leave_request", "alias": "request", "source_type": "snapshot"}, "joins": [{"alias": "balance", "object_key": "leave_balance", "type": "left", "left_alias": "request", "left_field": "employee_user", "right_field": "employee_user", "cardinality": "one_to_many"}]}, "required_permissions": ["leave_request.read"]}
+  ],
+  "menus": [
+    {"key": "hr", "label": "Human Resources", "i18n": {"zh-CN": {"label": "人事"}, "en": {"label": "Human Resources"}}, "icon": "calendar-days", "sort_order": 100, "roles": ["admin", "employee", "line_manager", "hr_admin"]},
+    {"key": "hr_my_leave", "label": "My Leave", "i18n": {"zh-CN": {"label": "我的请假"}, "en": {"label": "My Leave"}}, "parent_key": "hr", "route": "/hr/leave", "icon": "calendar-plus", "sort_order": 110, "roles": ["admin", "employee", "line_manager", "hr_admin"]},
+    {"key": "hr_approvals", "label": "Approval Inbox", "i18n": {"zh-CN": {"label": "审批待办"}, "en": {"label": "Approval Inbox"}}, "parent_key": "hr", "route": "/hr/approvals", "icon": "list-checks", "sort_order": 120, "roles": ["admin", "line_manager", "hr_admin"]},
+    {"key": "hr_team_leave", "label": "Team Leave", "i18n": {"zh-CN": {"label": "团队请假"}, "en": {"label": "Team Leave"}}, "parent_key": "hr", "route": "/hr/team-leave", "icon": "calendar-range", "sort_order": 130, "roles": ["admin", "line_manager", "hr_admin"]},
+    {"key": "hr_leave_ledger", "label": "Leave Ledger", "i18n": {"zh-CN": {"label": "余额台账"}, "en": {"label": "Leave Ledger"}}, "parent_key": "hr", "route": "/hr/leave-ledger", "icon": "book-open-check", "sort_order": 140, "roles": ["admin", "employee", "line_manager", "hr_admin"]}
+  ],
+  "roles": [
+    {
+      "key": "admin",
+      "name": "Admin",
+      "i18n": {"zh-CN": {"name": "管理员"}, "en": {"name": "Admin"}},
+      "permissions": ["business.access", "workspace.admin", "hr_position.read", "employee_profile.read", "employee_profile.create", "employee_profile.update", "qualification_profile.read"],
+      "record_scope": "all_records",
+      "data_permissions": [
+        {"object_key": "leave_request", "scope": "all_records", "read": true, "write": true},
+        {"object_key": "leave_balance", "scope": "all_records", "read": true, "write": true},
+        {"object_key": "leave_balance_ledger", "scope": "all_records", "read": true, "write": true},
+        {"object_key": "hr_position", "scope": "all_records", "read": true, "write": true},
+        {"object_key": "employee_profile", "scope": "all_records", "read": true, "write": true},
+        {"object_key": "qualification_profile", "scope": "all_records", "read": true, "write": false}
+      ]
+    },
+    {
+      "key": "employee",
+      "name": "Employee",
+      "i18n": {"zh-CN": {"name": "员工"}, "en": {"name": "Employee"}},
+      "permissions": ["business.access", "identity.users.read", "workflow.run", "ops.workflow.read", "leave_request.read", "leave_request.create", "leave_request.update", "leave_balance.read", "leave_balance_ledger.read", "hr_position.read", "employee_profile.read", "employee_profile.update"],
+      "record_scope": "owned_records",
+      "data_permissions": [
+        {"object_key": "leave_request", "scope": "owned_records", "read": true, "write": true},
+        {"object_key": "leave_balance", "scope": "owned_records", "read": true, "write": false},
+        {"object_key": "leave_balance_ledger", "scope": "owned_records", "read": true, "write": false},
+        {"object_key": "hr_position", "scope": "all_records", "read": true, "write": false},
+        {"object_key": "employee_profile", "scope": "owned_records", "read": true, "write": true}
+      ],
+      "field_permissions": [
+        {"object_key": "leave_request", "field_key": "reason", "read": true, "write": true, "export": false},
+        {"object_key": "employee_profile", "field_key": "legal_entity", "read": true, "write": false, "export": false, "masked": true}
+      ]
+    },
+    {
+      "key": "line_manager",
+      "name": "Line Manager",
+      "i18n": {"zh-CN": {"name": "直属主管"}, "en": {"name": "Line Manager"}},
+      "permissions": ["business.access", "identity.users.read", "identity.departments.read", "workflow.run", "ops.workflow.read", "workflow.task.act", "leave_request.read", "leave_request.update", "leave_balance.read", "leave_balance_ledger.read", "hr_position.read", "employee_profile.read"],
+      "record_scope": "subordinates",
+      "data_permissions": [
+        {"object_key": "leave_request", "scope": "subordinates", "read": true, "write": true},
+        {"object_key": "leave_balance", "scope": "subordinates", "read": true, "write": false},
+        {"object_key": "leave_balance_ledger", "scope": "subordinates", "read": true, "write": false},
+        {"object_key": "hr_position", "scope": "all_records", "read": true, "write": false},
+        {"object_key": "employee_profile", "scope": "subordinates", "read": true, "write": false}
+      ],
+      "field_permissions": [{"object_key": "leave_request", "field_key": "reason", "read": true, "write": false, "export": false}]
+    },
+    {
+      "key": "hr_admin",
+      "name": "HR Administrator",
+      "i18n": {"zh-CN": {"name": "人事管理员"}, "en": {"name": "HR Administrator"}},
+      "permissions": ["business.access", "identity.users.read", "identity.departments.read", "identity.roles.read", "workflow.definition.read", "workflow.draft.write", "workflow.task.act", "ops.workflow.read", "leave_request.read", "leave_request.create", "leave_request.update", "leave_balance.read", "leave_balance.update", "leave_balance_ledger.read", "leave_balance_ledger.create", "hr_position.read", "employee_profile.read", "employee_profile.create", "employee_profile.update"],
+      "record_scope": "all_records",
+      "data_permissions": [
+        {"object_key": "leave_request", "scope": "all_records", "read": true, "write": true},
+        {"object_key": "leave_balance", "scope": "all_records", "read": true, "write": true},
+        {"object_key": "leave_balance_ledger", "scope": "all_records", "read": true, "write": true},
+        {"object_key": "hr_position", "scope": "all_records", "read": true, "write": false},
+        {"object_key": "employee_profile", "scope": "all_records", "read": true, "write": true}
+      ]
+    },
+    {
+      "key": "restricted",
+      "name": "Restricted Viewer",
+      "i18n": {"zh-CN": {"name": "受限访客"}, "en": {"name": "Restricted Viewer"}},
+      "permissions": ["business.access", "identity.users.read", "leave_request.read"],
+      "record_scope": "all_records",
+      "data_permissions": [
+        {"object_key": "leave_request", "scope": "all_records", "read": true, "write": false}
+      ]
+    }
+  ],
+  "identity_bootstrap": {
+    "version": "1",
+    "departments": [{"id": "default", "name": "Default"}],
+    "users": [
+      {"id": "employee_user", "name": "Employee", "email": "employee@example.com"},
+      {"id": "line_manager_user", "name": "Line Manager", "email": "line-manager@example.com"},
+      {"id": "hr_admin_user", "name": "HR Administrator", "email": "hr-admin@example.com"},
+      {"id": "restricted_user", "name": "Restricted Viewer", "email": "restricted@example.com"}
+    ],
+    "workforce_profiles": [
+      {"id": "employee_user_workforce", "organization_id": "default", "identity_user_id": "employee_user", "worker_no": "EMP-001", "worker_type": "employee", "work_status": "active", "primary_assignment_id": "employee_user_primary_assignment"},
+      {"id": "line_manager_user_workforce", "organization_id": "default", "identity_user_id": "line_manager_user", "worker_no": "MGR-001", "worker_type": "employee", "work_status": "active", "primary_assignment_id": "line_manager_user_primary_assignment"},
+      {"id": "hr_admin_user_workforce", "organization_id": "default", "identity_user_id": "hr_admin_user", "worker_no": "HR-001", "worker_type": "employee", "work_status": "active", "primary_assignment_id": "hr_admin_user_primary_assignment"},
+      {"id": "restricted_user_workforce", "organization_id": "default", "identity_user_id": "restricted_user", "worker_no": "RST-001", "worker_type": "employee", "work_status": "active", "primary_assignment_id": "restricted_user_primary_assignment"}
+    ],
+    "workforce_assignments": [
+      {"id": "employee_user_primary_assignment", "workforce_profile_id": "employee_user_workforce", "organization_unit_id": "default", "position_id": "Employee", "manager_workforce_profile_id": "line_manager_user_workforce", "assignment_type": "primary", "status": "active"},
+      {"id": "line_manager_user_primary_assignment", "workforce_profile_id": "line_manager_user_workforce", "organization_unit_id": "default", "position_id": "Line Manager", "assignment_type": "primary", "status": "active"},
+      {"id": "hr_admin_user_primary_assignment", "workforce_profile_id": "hr_admin_user_workforce", "organization_unit_id": "default", "position_id": "HR Administrator", "assignment_type": "primary", "status": "active"},
+      {"id": "restricted_user_primary_assignment", "workforce_profile_id": "restricted_user_workforce", "organization_unit_id": "default", "position_id": "Visitor", "assignment_type": "primary", "status": "active"}
+    ]
+  },
+  "users": [
+    {"id": "employee_user", "name": "Employee", "email": "employee@example.com", "role_keys": ["employee"]},
+    {"id": "line_manager_user", "name": "Line Manager", "email": "line-manager@example.com", "role_keys": ["line_manager"]},
+    {"id": "hr_admin_user", "name": "HR Administrator", "email": "hr-admin@example.com", "role_keys": ["hr_admin"]},
+    {"id": "restricted_user", "name": "Restricted Viewer", "email": "restricted@example.com", "role_keys": ["restricted"]}
+  ],
+  "seed_records": [
+    {"object_key": "leave_request", "data": {"__seed_key": "bob_leave_draft", "employee_user": "employee_user", "leave_type": "annual", "start_date": "2026-07-20", "end_date": "2026-07-21", "days": 2, "reason": "Family trip", "status": "draft", "owner": "employee_user"}},
+    {"object_key": "leave_request", "data": {"__seed_key": "bob_leave_approved", "employee_user": "employee_user", "leave_type": "annual", "start_date": "2026-06-10", "end_date": "2026-06-10", "days": 1, "reason": "Personal appointment", "status": "approved", "owner": "employee_user"}},
+    {"object_key": "leave_balance", "data": {"__seed_key": "bob_annual_balance", "employee_user": "employee_user", "leave_type": "annual", "year": 2026, "granted_days": 11, "remaining_days": 10, "used_days": 1, "owner": "employee_user"}},
+    {"object_key": "leave_balance_ledger", "data": {"__seed_key": "bob_annual_opening", "leave_request": "$record:bob_leave_approved", "employee_user": "employee_user", "leave_type": "annual", "change_days": -1, "balance_after": 10, "reason": "leave_approved", "owner": "employee_user"}},
+    {"object_key": "hr_position", "data": {"__seed_key": "position_engineer", "name": "高级工程师", "code": "ENG-SENIOR"}},
+    {"object_key": "employee_profile", "data": {"__seed_key": "employee_profile", "identity_user": "employee_user", "profile_no": "PROFILE-001", "legal_entity": "示例科技（中国）有限公司上海研发中心", "position": "$record:position_engineer", "contract_type": "固定期限", "contract_status": "有效"}},
+    {"object_key": "qualification_profile", "data": {"__seed_key": "restricted_qualification", "identity_user": "restricted_user", "certificate_name": "企业人力资源管理师", "expires_on": "2028-12-31"}}
+  ]
+}

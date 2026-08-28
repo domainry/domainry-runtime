@@ -1,0 +1,182 @@
+package database
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	migrationcontract "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/migration"
+	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	"github.com/domainry/domainry-runtime/runtime/platform/logging"
+	"go.uber.org/zap"
+)
+
+func (s *RuntimeStore) ensureMigrationBackupForExistingData(ctx context.Context, cfg config.Config) error {
+	if s.migrationBackupReady {
+		return nil
+	}
+	hasData, err := s.hasExistingApplicationData(ctx)
+	if err != nil {
+		return fmt.Errorf("check existing data before migration backup: %w", err)
+	}
+	if !hasData {
+		s.migrationBackupReady = true
+		s.migrationBackupID = "bootstrap-empty"
+		return nil
+	}
+	if s.dialect.Name() == "sqlite" {
+		backupPath, err := s.createSQLiteMigrationBackup(ctx, cfg)
+		if err != nil {
+			return err
+		}
+		s.migrationBackupReady = true
+		checksum, checksumErr := s.migrationBackupChecksum(backupPath)
+		if checksumErr != nil {
+			return checksumErr
+		}
+		s.migrationBackupID = "sqlite-" + checksum[:16]
+		logging.FromContext(ctx).Info(
+			"database migration backup created",
+			zap.String("backup_id", s.migrationBackupID),
+			zap.String("database_engine", "sqlite"),
+		)
+		if s.operationalMetrics != nil {
+			s.operationalMetrics.ObserveBackupSuccess(time.Now().UTC())
+		}
+		return nil
+	}
+	evidence, err := validateExternalMigrationBackup(s.dialect.Name(), cfg.MigrationBackupEvidencePath)
+	if err != nil {
+		return err
+	}
+	if s.operationalMetrics != nil {
+		s.operationalMetrics.ObserveBackupSuccess(evidence.VerifiedAt)
+	}
+	s.migrationBackupID = evidence.BackupID
+	s.migrationBackupReady = true
+	return nil
+}
+
+func (s *RuntimeStore) migrationBackupChecksum(path string) (string, error) {
+	if s.backupChecksum != nil {
+		return s.backupChecksum(path)
+	}
+	return migrationChecksum(path)
+}
+
+func validateExternalMigrationBackup(driver, evidencePath string) (migrationcontract.BackupEvidence, error) {
+	if driver != "postgres" && driver != "mysql" {
+		return migrationcontract.BackupEvidence{}, fmt.Errorf("unsupported database driver %q", driver)
+	}
+	if strings.TrimSpace(evidencePath) == "" {
+		return migrationcontract.BackupEvidence{}, fmt.Errorf("existing %s application data detected before pending migrations; MIGRATION_BACKUP_EVIDENCE_PATH with a verified backup_id is required", driver)
+	}
+	evidence, err := migrationcontract.ReadBackupEvidence(evidencePath)
+	if err != nil {
+		return migrationcontract.BackupEvidence{}, err
+	}
+	if evidence.Engine != driver {
+		return migrationcontract.BackupEvidence{}, fmt.Errorf("backup evidence engine %q does not match %q", evidence.Engine, driver)
+	}
+	return evidence, nil
+}
+
+func (s *RuntimeStore) hasExistingApplicationData(ctx context.Context) (bool, error) {
+	tables, err := s.applicationTables(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, table := range tables {
+		var count int
+		query := "SELECT COUNT(*) FROM " + s.tableIdentifier(table)
+		if err := s.schemaDatabase().QueryRowContext(ctx, query).Scan(&count); err != nil {
+			return false, fmt.Errorf("count %s: %w", table, err)
+		}
+		if count > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *RuntimeStore) applicationTables(ctx context.Context) ([]string, error) {
+	var query string
+	var args []any
+	switch s.dialect.Name() {
+	case "sqlite":
+		query = "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+	case "mysql":
+		query = "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()"
+	case "postgres":
+		query = "SELECT table_name FROM information_schema.tables WHERE table_schema = " + s.placeholder(1)
+		args = []any{s.DatabaseSchema()}
+	default:
+		return nil, fmt.Errorf("unsupported database driver %q", s.dialect.Name())
+	}
+	rows, err := s.schemaDatabase().QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	tables := []string{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		if isMigrationSystemTable(name) {
+			continue
+		}
+		tables = append(tables, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	sort.Strings(tables)
+	return tables, nil
+}
+
+func isMigrationSystemTable(name string) bool {
+	switch strings.TrimSpace(name) {
+	case "", "_schema_migrations", "_runtime_schema_migrations":
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *RuntimeStore) createSQLiteMigrationBackup(ctx context.Context, cfg config.Config) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	dbPath := strings.TrimSpace(cfg.DatabaseDSN)
+	if dbPath == "" {
+		dbPath = strings.TrimSpace(cfg.DBPath)
+	}
+	if dbPath == "" || dbPath == ":memory:" || strings.HasPrefix(dbPath, "file:") {
+		return "", fmt.Errorf("existing SQLite data detected but APP_DB_PATH is not a copyable file path; provide a file-backed database so Runtime can create a verified encrypted backup")
+	}
+	if err := os.MkdirAll(cfg.MigrationBackupDir, 0o755); err != nil {
+		return "", fmt.Errorf("create migration backup directory: %w", err)
+	}
+	backupPath := filepath.Join(cfg.MigrationBackupDir, filepath.Base(dbPath)+"."+time.Now().UTC().Format("20060102T150405Z")+".bak.enc")
+	if _, err := os.Stat(backupPath); err == nil {
+		return "", fmt.Errorf("sqlite migration backup already exists: %s", backupPath)
+	} else if !os.IsNotExist(err) {
+		return "", fmt.Errorf("inspect sqlite migration backup: %w", err)
+	}
+	plainPath := backupPath + ".partial"
+	if _, err := s.schemaDatabase().ExecContext(ctx, "VACUUM INTO "+s.placeholder(1), plainPath); err != nil {
+		_ = os.Remove(plainPath)
+		return "", fmt.Errorf("create consistent sqlite migration backup: %w", err)
+	}
+	defer os.Remove(plainPath)
+	if err := migrationcontract.EncryptBackupFile(plainPath, backupPath, s.secretMaterialKey[:]); err != nil {
+		return "", fmt.Errorf("encrypt sqlite migration backup: %w", err)
+	}
+	return backupPath, nil
+}

@@ -1,0 +1,100 @@
+{
+  "version": "v1",
+  "groups": [
+    {
+      "id": "membership_commerce",
+      "owner": "business_project_source",
+      "runtime_policy": "forbidden_specialization",
+      "capabilities": [
+        "member_card",
+        "membership_level",
+        "balance",
+        "loyalty_points",
+        "class_pack",
+        "booking",
+        "training_session"
+      ],
+      "forbidden_runtime_tokens": [
+        "capabilitymembership",
+        "validatemembershipcapability",
+        "grant_loyalty",
+        "applygrantloyalty",
+        "membership_card",
+        "member_card",
+        "membership_level",
+        "\"membership_status\"",
+        "loyalty_balance",
+        "class_pack",
+        "trainingclass",
+        "training_session",
+        "gym",
+        "fitness",
+        "\"object_key\": \"class\"",
+        "\"object_key\": \"booking\""
+      ]
+    },
+    {
+      "id": "workforce_compensation",
+      "owner": "business_project_source",
+      "runtime_policy": "forbidden_specialization",
+      "capabilities": [
+        "payroll",
+        "attendance",
+        "labor_contract",
+        "social_insurance",
+        "leave_balance"
+      ],
+      "forbidden_runtime_tokens": [
+        "payroll_run_id",
+        "payroll",
+        "attendance_record",
+        "time_attendance",
+        "employment_contract",
+        "labor_contract",
+        "social_insurance",
+        "leave_balance",
+        "holiday_balance"
+      ]
+    },
+    {
+      "id": "industry_profiles",
+      "owner": "business_project_source",
+      "runtime_policy": "forbidden_specialization",
+      "capabilities": [
+        "student_record",
+        "medical_record",
+        "driver_qualification"
+      ],
+      "forbidden_runtime_tokens": [
+        "student_record",
+        "student_profile",
+        "enrollment_record",
+        "medical_record",
+        "patient_record",
+        "patient_profile",
+        "driver_qualification",
+        "driving_qualification"
+      ]
+    },
+    {
+      "id": "industry_workforce_operations",
+      "owner": "business_project_source",
+      "runtime_policy": "forbidden_specialization",
+      "capabilities": [
+        "employee_performance",
+        "commission",
+        "shift_scheduling"
+      ],
+      "forbidden_runtime_tokens": [
+        "employee_performance",
+        "performance_review",
+        "sales_commission",
+        "commission_rule",
+        "shift_schedule",
+        "employee_shift",
+        "staff_roster",
+        "work_roster"
+      ]
+    }
+  ]
+}

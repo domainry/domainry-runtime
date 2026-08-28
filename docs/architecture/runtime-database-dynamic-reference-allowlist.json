@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "entries": [
+    {"kind": "manifest_object_table", "owner": "record-query", "path": "runtime/infrastructure/persistence/database/query", "scope": "Runtime configured database only", "guard": "validated SQL identifier plus mandatory workspace predicate", "retired_object_access": false},
+    {"kind": "report_query", "owner": "report", "path": "runtime/domain/report", "scope": "typed Runtime report source", "guard": "report schema and record repository authorization", "retired_object_access": false},
+    {"kind": "migration_catalog", "owner": "database-migration", "path": "runtime/infrastructure/persistence/database/datamigration", "scope": "explicit source and target DSNs", "guard": "inventory and typed plan; unknown objects are blockers", "retired_object_access": false},
+    {"kind": "lazy_schema", "owner": "runtime-capability-owner", "path": "runtime/infrastructure/persistence/database/schema", "scope": "registered runtime schema evidence", "guard": "fresh-schema inventory gate", "retired_object_access": false}
+  ]
+}

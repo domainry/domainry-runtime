@@ -1,0 +1,287 @@
+{
+  "template_id": "runtime-order-to-cash",
+  "version": "1.0.0",
+  "default_locale": "en-US",
+  "name": "Order to Cash Runtime E2E",
+  "objects": [
+    {
+      "key": "customer_account",
+      "name": "Customer Account",
+      "config": {"title_field": "name", "write_policy": "direct_crud"},
+      "fields": [
+        {"key": "name", "name": "Name", "type": "text", "required": true},
+        {"key": "credit_limit", "name": "Credit Limit", "type": "number", "required": true},
+        {"key": "max_discount_percent", "name": "Maximum Discount", "type": "number", "required": true},
+        {"key": "owner", "name": "Owner", "type": "user", "required": true}
+      ]
+    },
+    {
+      "key": "inventory_stock",
+      "name": "Inventory Stock",
+      "config": {"title_field": "sku"},
+      "fields": [
+        {"key": "sku", "name": "SKU", "type": "text", "required": true, "unique": true},
+        {"key": "on_hand", "name": "On Hand", "type": "number", "required": true},
+        {"key": "reserved", "name": "Reserved", "type": "number", "required": true}
+      ]
+    },
+    {
+      "key": "sales_order",
+      "name": "Sales Order",
+      "config": {"title_field": "order_number"},
+      "fields": [
+        {"key": "order_number", "name": "Order Number", "type": "text", "required": true, "unique": true},
+        {"key": "customer", "name": "Customer", "type": "relation", "required": true, "validation": {"target": "customer_account"}},
+        {"key": "sku", "name": "SKU", "type": "text", "required": true},
+        {"key": "ordered_quantity", "name": "Ordered Quantity", "type": "number", "required": true},
+        {"key": "reserved_quantity", "name": "Reserved Quantity", "type": "number", "required": true},
+        {"key": "fulfilled_quantity", "name": "Fulfilled Quantity", "type": "number", "required": true},
+        {"key": "cancelled_quantity", "name": "Cancelled Quantity", "type": "number", "required": true},
+        {"key": "unit_price", "name": "Unit Price", "type": "number", "required": true},
+        {"key": "order_amount", "name": "Order Amount", "type": "number", "required": true},
+        {"key": "discount_percent", "name": "Discount Percent", "type": "number", "required": true},
+        {"key": "risk_status", "name": "Risk Status", "type": "select", "validation": {"options": ["pending", "reviewed"]}},
+        {"key": "status", "name": "Status", "type": "select", "required": true, "validation": {"options": ["draft", "submitted", "approved", "partially_fulfilled", "closed", "cancelled"]}},
+        {"key": "owner", "name": "Owner", "type": "user", "required": true}
+      ]
+    },
+    {
+      "key": "shipment",
+      "name": "Shipment",
+      "fields": [
+        {"key": "sales_order", "name": "Sales Order", "type": "relation", "required": true, "validation": {"target": "sales_order"}},
+        {"key": "shipment_number", "name": "Shipment Number", "type": "text", "required": true, "unique": true},
+        {"key": "quantity", "name": "Quantity", "type": "number", "required": true},
+        {"key": "status", "name": "Status", "type": "select", "required": true, "validation": {"options": ["shipped", "cancelled"]}},
+        {"key": "owner", "name": "Owner", "type": "user", "required": true}
+      ]
+    },
+    {
+      "key": "invoice",
+      "name": "Invoice",
+      "fields": [
+        {"key": "sales_order", "name": "Sales Order", "type": "relation", "required": true, "validation": {"target": "sales_order"}},
+        {"key": "invoice_number", "name": "Invoice Number", "type": "text", "required": true, "unique": true},
+        {"key": "quantity", "name": "Quantity", "type": "number", "required": true},
+        {"key": "amount", "name": "Amount", "type": "number", "required": true},
+        {"key": "paid_amount", "name": "Paid Amount", "type": "number", "required": true},
+        {"key": "status", "name": "Status", "type": "select", "required": true, "validation": {"options": ["open", "partially_paid", "paid"]}},
+        {"key": "owner", "name": "Owner", "type": "user", "required": true}
+      ]
+    },
+    {
+      "key": "payment",
+      "name": "Payment",
+      "fields": [
+        {"key": "invoice", "name": "Invoice", "type": "relation", "required": true, "validation": {"target": "invoice"}},
+        {"key": "provider_reference", "name": "Provider Reference", "type": "text", "required": true, "unique": true},
+        {"key": "amount", "name": "Amount", "type": "number", "required": true},
+        {"key": "status", "name": "Status", "type": "select", "required": true, "validation": {"options": ["callback_timeout", "settled", "refunded"]}},
+        {"key": "reconciliation_status", "name": "Reconciliation Status", "type": "select", "required": true, "validation": {"options": ["required", "matched"]}},
+        {"key": "owner", "name": "Owner", "type": "user", "required": true}
+      ]
+    },
+    {
+      "key": "return_request",
+      "name": "Return Request",
+      "fields": [
+        {"key": "sales_order", "name": "Sales Order", "type": "relation", "required": true, "validation": {"target": "sales_order"}},
+        {"key": "quantity", "name": "Quantity", "type": "number", "required": true},
+        {"key": "status", "name": "Status", "type": "select", "required": true, "validation": {"options": ["requested", "approved", "completed"]}},
+        {"key": "refund_status", "name": "Refund Status", "type": "select", "required": true, "validation": {"options": ["pending", "retry_required", "succeeded"]}},
+        {"key": "owner", "name": "Owner", "type": "user", "required": true}
+      ]
+    },
+    {
+      "key": "order_cash_ledger",
+      "name": "Order Cash Ledger",
+      "config": {"write_policy": "action_only"},
+      "fields": [
+        {"key": "entity_type", "name": "Entity Type", "type": "text", "required": true},
+        {"key": "entity_id", "name": "Entity ID", "type": "text", "required": true, "config": {"indexed": true}},
+        {"key": "event", "name": "Event", "type": "text", "required": true},
+        {"key": "amount", "name": "Amount", "type": "number", "required": true},
+        {"key": "owner", "name": "Owner", "type": "user", "required": true}
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "key": "sales_order.initialize_risk",
+      "object_key": "sales_order",
+      "label": "Initialize Order Risk",
+      "kind": "record_operation",
+      "requires_permission": "sales_order.update",
+      "audit_event": "sales_order_risk_initialized"
+    },
+    {
+      "key": "sales_order.submit",
+      "object_key": "sales_order",
+      "label": "Submit Order",
+      "kind": "record_operation",
+      "requires_permission": "sales_order.update",
+      "audit_event": "sales_order_submitted",
+      "ui_placement": "record_header",
+      "idempotency_keys": ["request_id"]
+    },
+    {
+      "key": "sales_order.approve_and_reserve",
+      "object_key": "sales_order",
+      "label": "Approve and Reserve",
+      "kind": "record_operation",
+      "requires_permission": "sales_order.update",
+      "audit_event": "sales_order_approved_and_reserved",
+      "ui_placement": "workflow_only"
+    },
+    {
+      "key": "sales_order.reject",
+      "object_key": "sales_order",
+      "label": "Reject Order",
+      "kind": "record_operation",
+      "requires_permission": "sales_order.update",
+      "audit_event": "sales_order_rejected"
+    },
+    {
+      "key": "sales_order.ship_partial",
+      "object_key": "sales_order",
+      "label": "Ship Partial Quantity",
+      "kind": "record_operation",
+      "requires_permission": "sales_order.update",
+      "audit_event": "sales_order_partially_shipped",
+      "ui_placement": "record_header",
+      "idempotency_keys": ["shipment_number"]
+    },
+    {
+      "key": "sales_order.cancel_remaining",
+      "object_key": "sales_order",
+      "label": "Cancel Remaining Quantity",
+      "kind": "record_operation",
+      "requires_permission": "sales_order.update",
+      "audit_event": "sales_order_remaining_cancelled",
+      "ui_placement": "record_header",
+      "idempotency_keys": ["request_id"]
+    },
+    {
+      "key": "payment.reconcile_timeout",
+      "object_key": "payment",
+      "label": "Reconcile Timeout",
+      "kind": "record_operation",
+      "requires_permission": "payment.update",
+      "audit_event": "payment_timeout_reconciled",
+      "ui_placement": "record_header",
+      "idempotency_keys": ["provider_reference"]
+    },
+    {
+      "key": "return_request.approve",
+      "object_key": "return_request",
+      "label": "Approve Return",
+      "kind": "record_operation",
+      "requires_permission": "return_request.update",
+      "audit_event": "return_approved_inventory_restored",
+      "ui_placement": "record_header",
+      "idempotency_keys": ["request_id"]
+    },
+    {
+      "key": "return_request.retry_refund",
+      "object_key": "return_request",
+      "label": "Retry Refund",
+      "kind": "record_operation",
+      "requires_permission": "return_request.update",
+      "audit_event": "return_refund_compensated",
+      "ui_placement": "record_header",
+      "idempotency_keys": ["provider_reference"]
+    }
+  ],
+  "automation_rules": [
+    {
+      "key": "sales_order.initialize_risk",
+      "name": "Initialize Sales Order Risk",
+      "object_key": "sales_order",
+      "enabled": true,
+      "trigger": {"phase": "after", "operation": "create"},
+      "execution": {"mode": "async", "max_depth": 3},
+      "instructions": [
+        {"key": "initialize", "type": "invoke_business_action", "config": {"action_key": "sales_order.initialize_risk", "object_key": "sales_order"}}
+      ]
+    }
+  ],
+  "workflows": [
+    {
+      "key": "sales_order.credit_discount_approval",
+      "name": "Sales Order Credit and Discount Approval",
+      "trigger": {"type": "field_changed", "object_key": "sales_order", "field": "status"},
+      "condition": {"type": "field_equals", "field": "status", "value": "submitted"},
+      "trigger_contract": {"type": "field_changed", "object_key": "sales_order", "field_key": "status"},
+      "condition_contract": {"type": "field_equals", "field": "status", "value": "submitted"},
+      "action": {"type": "workflow_graph"},
+      "enabled": true,
+      "graph": {
+        "version": 2,
+        "nodes": [
+          {"id": "submitted", "type": "trigger", "name": "Order Submitted"},
+          {"id": "credit_review", "type": "approval", "name": "Credit Review", "contract": {"approval": {"mode": "any", "resolver_mode": "first_match", "empty_assignee_policy": "fail", "resolvers": [{"type": "role", "role_key": "credit_manager"}]}}},
+          {"id": "finance_review", "type": "approval", "name": "Independent Finance Review", "contract": {"approval": {"mode": "any", "resolver_mode": "first_match", "empty_assignee_policy": "fail", "resolvers": [{"type": "role", "role_key": "finance"}]}}},
+          {"id": "approve", "type": "action", "name": "Reserve Inventory", "contract": {"action": {"action_key": "sales_order.approve_and_reserve", "on_error": "fail"}}},
+          {"id": "reject", "type": "action", "name": "Reject Order", "contract": {"action": {"action_key": "sales_order.reject", "on_error": "fail"}}}
+        ],
+        "edges": [
+          {"id": "submit-credit", "source": "submitted", "target": "credit_review"},
+          {"id": "credit-approved", "source": "credit_review", "target": "finance_review", "branch": "approved"},
+          {"id": "credit-rejected", "source": "credit_review", "target": "reject", "branch": "rejected"},
+          {"id": "finance-approved", "source": "finance_review", "target": "approve", "branch": "approved"},
+          {"id": "finance-rejected", "source": "finance_review", "target": "reject", "branch": "rejected"}
+        ]
+      }
+    }
+  ],
+  "reports": [
+    {"key": "order_to_cash_consistency", "name": "Order to Cash Consistency", "materialization": {"maximum_lag_seconds": 86400, "consistency_retries": 3}, "dataset": {"source": {"object_key": "sales_order", "alias": "order"}, "joins": [{"alias": "shipment", "object_key": "shipment", "type": "left", "left_alias": "order", "left_field": "id", "right_field": "sales_order", "cardinality": "one_to_many"}, {"alias": "invoice", "object_key": "invoice", "type": "left", "left_alias": "order", "left_field": "id", "right_field": "sales_order", "cardinality": "one_to_many"}, {"alias": "payment", "object_key": "payment", "type": "left", "left_alias": "invoice", "left_field": "id", "right_field": "invoice", "cardinality": "one_to_many"}, {"alias": "return", "object_key": "return_request", "type": "left", "left_alias": "order", "left_field": "id", "right_field": "sales_order", "cardinality": "one_to_many"}, {"alias": "ledger", "object_key": "order_cash_ledger", "type": "left", "left_alias": "order", "left_field": "id", "right_field": "entity_id", "cardinality": "one_to_many"}]}, "required_permissions": ["sales_order.read"]},
+    {"key": "order_cash_reconciliation", "name": "Order Cash Reconciliation", "dataset": {"source": {"object_key": "order_cash_ledger", "alias": "ledger"}, "dimensions": [{"key": "event", "field": {"source_alias": "ledger", "field_key": "event"}}], "measures": [{"key": "entries", "operation": "count", "source_alias": "ledger"}, {"key": "ledger_amount", "operation": "sum", "field": {"source_alias": "ledger", "field_key": "amount"}}], "sort": [{"key": "event", "direction": "asc"}]}, "required_permissions": ["order_cash_ledger.read"]}
+  ],
+  "roles": [
+    {
+      "key": "admin", "name": "Admin", "permissions": ["business.access", "workspace.admin"], "record_scope": "all_records",
+      "data_permissions": [
+        {"object_key": "customer_account", "scope": "all_records", "read": true, "write": true}, {"object_key": "inventory_stock", "scope": "all_records", "read": true, "write": true}, {"object_key": "sales_order", "scope": "all_records", "read": true, "write": true}, {"object_key": "shipment", "scope": "all_records", "read": true, "write": true}, {"object_key": "invoice", "scope": "all_records", "read": true, "write": true}, {"object_key": "payment", "scope": "all_records", "read": true, "write": true}, {"object_key": "return_request", "scope": "all_records", "read": true, "write": true}, {"object_key": "order_cash_ledger", "scope": "all_records", "read": true, "write": true}
+      ]
+    },
+    {
+      "key": "sales", "name": "Sales", "permissions": ["business.access", "workflow.run", "ops.workflow.read", "customer_account.read", "sales_order.read", "sales_order.create", "sales_order.update", "inventory_stock.read", "inventory_stock.update", "order_cash_ledger.read", "order_cash_ledger.create"], "record_scope": "all_records",
+      "data_permissions": [{"object_key": "customer_account", "scope": "all_records", "read": true, "write": false}, {"object_key": "sales_order", "scope": "all_records", "read": true, "write": true}, {"object_key": "inventory_stock", "scope": "all_records", "read": true, "write": true}, {"object_key": "order_cash_ledger", "scope": "all_records", "read": true, "write": true}]
+    },
+    {
+      "key": "credit_manager", "name": "Credit Manager", "permissions": ["business.access", "workflow.task.act", "ops.workflow.read", "customer_account.read", "sales_order.read", "sales_order.update", "inventory_stock.read", "inventory_stock.update", "order_cash_ledger.create"], "record_scope": "all_records",
+      "data_permissions": [{"object_key": "customer_account", "scope": "all_records", "read": true, "write": false}, {"object_key": "sales_order", "scope": "all_records", "read": true, "write": true}, {"object_key": "inventory_stock", "scope": "all_records", "read": true, "write": true}, {"object_key": "order_cash_ledger", "scope": "all_records", "read": true, "write": true}]
+    },
+    {
+      "key": "warehouse", "name": "Warehouse", "permissions": ["business.access", "sales_order.read", "sales_order.update", "shipment.read", "shipment.create", "shipment.update", "invoice.read", "invoice.create", "invoice.update", "inventory_stock.read", "inventory_stock.update", "order_cash_ledger.read", "order_cash_ledger.create", "order_cash_ledger.update"], "record_scope": "all_records",
+      "data_permissions": [{"object_key": "sales_order", "scope": "all_records", "read": true, "write": true}, {"object_key": "shipment", "scope": "all_records", "read": true, "write": true}, {"object_key": "invoice", "scope": "all_records", "read": true, "write": true}, {"object_key": "inventory_stock", "scope": "all_records", "read": true, "write": true}, {"object_key": "order_cash_ledger", "scope": "all_records", "read": true, "write": true}]
+    },
+    {
+      "key": "finance", "name": "Finance", "permissions": ["business.access", "workflow.task.act", "ops.workflow.read", "identity.audit.view", "sales_order.read", "sales_order.update", "shipment.read", "inventory_stock.read", "inventory_stock.update", "invoice.read", "invoice.update", "payment.read", "payment.create", "payment.update", "return_request.read", "return_request.update", "order_cash_ledger.read", "order_cash_ledger.create"], "record_scope": "all_records",
+      "data_permissions": [{"object_key": "sales_order", "scope": "all_records", "read": true, "write": true}, {"object_key": "shipment", "scope": "all_records", "read": true, "write": false}, {"object_key": "inventory_stock", "scope": "all_records", "read": true, "write": true}, {"object_key": "invoice", "scope": "all_records", "read": true, "write": true}, {"object_key": "payment", "scope": "all_records", "read": true, "write": true}, {"object_key": "return_request", "scope": "all_records", "read": true, "write": true}, {"object_key": "order_cash_ledger", "scope": "all_records", "read": true, "write": true}]
+    },
+    {
+      "key": "customer_service", "name": "Customer Service", "permissions": ["business.access", "sales_order.read", "inventory_stock.read", "inventory_stock.update", "return_request.read", "return_request.create", "return_request.update", "order_cash_ledger.read", "order_cash_ledger.create"], "record_scope": "all_records",
+      "data_permissions": [{"object_key": "sales_order", "scope": "all_records", "read": true, "write": false}, {"object_key": "inventory_stock", "scope": "all_records", "read": true, "write": true}, {"object_key": "return_request", "scope": "all_records", "read": true, "write": true}, {"object_key": "order_cash_ledger", "scope": "all_records", "read": true, "write": true}]
+    }
+  ],
+  "users": [
+    {"id": "sales_user", "name": "Sales User", "email": "sales@example.com", "role_keys": ["sales"]},
+    {"id": "credit_user", "name": "Credit Manager", "email": "credit@example.com", "role_keys": ["credit_manager"]},
+    {"id": "warehouse_user", "name": "Warehouse User", "email": "warehouse@example.com", "role_keys": ["warehouse"]},
+    {"id": "finance_user", "name": "Finance User", "email": "finance@example.com", "role_keys": ["finance"]},
+    {"id": "service_user", "name": "Customer Service", "email": "service@example.com", "role_keys": ["customer_service"]}
+  ],
+  "seed_records": [
+    {"object_key": "customer_account", "data": {"__seed_key": "customer_acme", "name": "Acme", "credit_limit": 10000, "max_discount_percent": 10, "owner": "sales_user"}},
+    {"object_key": "inventory_stock", "data": {"__seed_key": "stock_widget", "sku": "WIDGET-1", "on_hand": 20, "reserved": 0}},
+    {"object_key": "sales_order", "data": {"__seed_key": "seed_order", "order_number": "SO-SEED", "customer": "$record:customer_acme", "sku": "WIDGET-1", "ordered_quantity": 1, "reserved_quantity": 0, "fulfilled_quantity": 1, "cancelled_quantity": 0, "unit_price": 10, "order_amount": 10, "discount_percent": 0, "status": "closed", "owner": "sales_user"}},
+    {"object_key": "sales_order", "data": {"__seed_key": "stockout_order", "order_number": "SO-STOCKOUT", "customer": "$record:customer_acme", "sku": "WIDGET-1", "ordered_quantity": 21, "reserved_quantity": 0, "fulfilled_quantity": 0, "cancelled_quantity": 0, "unit_price": 10, "order_amount": 210, "discount_percent": 0, "status": "submitted", "owner": "sales_user"}},
+    {"object_key": "shipment", "data": {"__seed_key": "seed_shipment", "sales_order": "$record:seed_order", "shipment_number": "SHIP-SEED", "quantity": 1, "status": "shipped", "owner": "warehouse_user"}},
+    {"object_key": "invoice", "data": {"__seed_key": "seed_invoice", "sales_order": "$record:seed_order", "invoice_number": "INV-SEED", "quantity": 1, "amount": 10, "paid_amount": 10, "status": "paid", "owner": "finance_user"}},
+    {"object_key": "payment", "data": {"__seed_key": "seed_payment", "invoice": "$record:seed_invoice", "provider_reference": "PAY-SEED", "amount": 10, "status": "settled", "reconciliation_status": "matched", "owner": "finance_user"}},
+    {"object_key": "return_request", "data": {"__seed_key": "seed_return", "sales_order": "$record:seed_order", "quantity": 1, "status": "completed", "refund_status": "succeeded", "owner": "service_user"}},
+    {"object_key": "order_cash_ledger", "data": {"__seed_key": "seed_ledger", "entity_type": "sales_order", "entity_id": "$record:seed_order", "event": "seed_closed", "amount": 10, "owner": "finance_user"}}
+  ]
+}

@@ -1,0 +1,36 @@
+package metadata
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
+)
+
+type metadataReferenceEdgeProvider struct {
+	graph changeplanmodel.ReferenceGraph
+	err   error
+}
+
+func (p metadataReferenceEdgeProvider) Graph(context.Context, principalmodel.Principal) (changeplanmodel.ReferenceGraph, error) {
+	return p.graph, p.err
+}
+
+func TestMetadataReferenceGraphBoundaries(t *testing.T) {
+	admin := metadataSchemaAdmin()
+	service := NewMetadataApplicationService(MetadataApplicationDependencies{})
+	if _, err := service.ReferenceGraph(t.Context(), principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
+		t.Fatalf("authorization error=%v", err)
+	}
+	if _, err := service.ReferenceGraph(t.Context(), admin); apperror.KindOf(err) != apperror.KindInternal {
+		t.Fatalf("missing provider error=%v", err)
+	}
+	edgeErr := errors.New("graph failed")
+	service.references = metadataReferenceEdgeProvider{err: edgeErr}
+	if _, err := service.ReferenceGraph(t.Context(), admin); !errors.Is(err, edgeErr) {
+		t.Fatalf("provider error=%v", err)
+	}
+}

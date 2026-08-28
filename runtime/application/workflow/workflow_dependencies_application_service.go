@@ -1,0 +1,167 @@
+package workflow
+
+import (
+	"context"
+	"time"
+
+	identitysdk "github.com/domainry/domainry-identity-sdk"
+	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
+	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
+	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
+	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
+)
+
+type WorkflowDependencies struct {
+	Definitions              workflowcontract.WorkflowDefinitionStore
+	Processes                workflowcontract.WorkflowProcessStore
+	Workers                  workflowcontract.WorkflowWorkerStore
+	Decisions                workflowcontract.WorkflowDecisionStore
+	WorkflowRegistry         WorkflowRegistry
+	WorkflowScheduler        WorkflowScheduler
+	TimerScheduler           WorkflowTimerScheduler
+	ApprovalTimers           WorkflowApprovalTimerScheduler
+	Identity                 identitysdk.Directory
+	Principals               identitysdk.PrincipalResolver
+	Schema                   WorkflowSchemaProvider
+	RecordReader             WorkflowRecordReader
+	ObjectForAction          func(context.Context, principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error)
+	ObjectMap                func(context.Context) map[string]definitionmodel.ObjectSchema
+	CanAccessRecord          func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool
+	ActionExists             func(context.Context, string) bool
+	InvokeAction             func(context.Context, WorkflowBusinessActionInvocation) (WorkflowBusinessActionInvocationResult, error)
+	Audit                    func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any)
+	AuditMetadata            func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
+	Worker                   workerplatform.Dependencies
+	CompileNotification      func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
+	TaskNotificationCommit   WorkflowTaskNotificationCommitter
+	PrepareAgentTask         func(context.Context, WorkflowAgentTaskPreparation) (agentmodel.AgentTaskRun, error)
+	WakeAgentTask            func(string, string)
+	WakeWorkflowContinuation func(string, string)
+}
+
+type WorkflowAgentTaskPreparation struct {
+	RunID                  string
+	WorkspaceID            string
+	ProcessID              string
+	NodeInstanceID         string
+	NodeID                 string
+	Iteration              int
+	DefinitionVersionID    string
+	DefinitionSnapshotHash string
+	ManifestHash           string
+	Contract               definitionmodel.WorkflowAgentTaskNodeContract
+	Input                  map[string]any
+	Initiator              principalmodel.Principal
+	CorrelationID          string
+}
+
+type WorkflowTaskNotificationCommitter interface {
+	CommitWorkflowTaskNotification(context.Context, string, workflowmodel.WorkflowTask, notificationmodel.NotificationEvent) error
+	CommitWorkflowTaskOpeningNotification(context.Context, string, workflowmodel.WorkflowTask, notificationmodel.NotificationEvent) error
+	CommitWorkflowTaskReminderNotification(context.Context, string, workflowmodel.WorkflowProcessEvent, notificationmodel.NotificationEvent) error
+	CommitWorkflowTaskEscalationNotification(context.Context, string, workflowmodel.WorkflowTask, workflowmodel.WorkflowProcessEvent, []notificationmodel.NotificationEvent) error
+}
+
+type WorkflowRegistry interface {
+	List() []definitionmodel.WorkflowSchema
+	Get(string) (definitionmodel.WorkflowSchema, bool)
+	Set(string, definitionmodel.WorkflowSchema)
+	Delete(string)
+	Count() int
+}
+
+type WorkflowSchemaSnapshot struct {
+	Actions                []definitionmodel.ActionSchema
+	AgentTasks             []agentmodel.AgentTaskDefinition
+	AgentServicePrincipals []agentmodel.AgentServicePrincipalBinding
+	Dictionaries           []metadatamodel.DictionarySchema
+	Integrations           integrationmodel.IntegrationSchema
+}
+
+type WorkflowSchemaProvider interface {
+	WorkflowSchemaSnapshot(context.Context, principalmodel.Principal) WorkflowSchemaSnapshot
+	ConnectorAdapterExists(context.Context, string) bool
+}
+
+type WorkflowRecordReader interface {
+	GetWorkflowRecord(context.Context, string, definitionmodel.ObjectSchema, string) (recordmodel.Record, bool, error)
+	ListWorkflowRecords(context.Context, string, definitionmodel.ObjectSchema, recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error)
+}
+
+type WorkflowSchedulerWorkerConfig struct {
+	Enabled      bool
+	PollInterval time.Duration
+	BatchSize    int
+}
+
+type WorkflowScheduler interface {
+	ProcessDueJobs(context.Context, int, principalmodel.Principal, string) (workflowmodel.WorkflowProcessResult, error)
+	WorkerConfig() WorkflowSchedulerWorkerConfig
+	StartWorker(context.Context, WorkflowSchedulerWorkerConfig, bool) <-chan struct{}
+}
+
+type WorkflowWaitTimerRequest struct {
+	WorkspaceID string
+	ProcessID   string
+	NodeID      string
+	ObjectKey   string
+	RecordID    string
+	Contract    definitionmodel.WorkflowTimerNodeContract
+	Variables   map[string]any
+	CreatedAt   time.Time
+}
+
+type WorkflowTimerScheduler interface {
+	ScheduleWorkflowWaitTimer(context.Context, WorkflowWaitTimerRequest) (string, error)
+}
+
+type WorkflowApprovalDeadlineTimerRequest struct {
+	WorkspaceID string
+	ProcessID   string
+	NodeID      string
+	TaskID      string
+	Phase       string
+	DueAt       time.Time
+	CreatedAt   time.Time
+}
+
+type WorkflowApprovalTimerScheduler interface {
+	ScheduleWorkflowApprovalDeadlineTimer(context.Context, WorkflowApprovalDeadlineTimerRequest) (string, error)
+}
+
+type WorkflowBusinessActionSource string
+
+const WorkflowBusinessActionSourceWorkflow WorkflowBusinessActionSource = "workflow"
+
+type WorkflowBusinessActionInvocation struct {
+	ActionKey      string
+	ObjectKey      string
+	RecordID       string
+	Input          map[string]any
+	Principal      principalmodel.Principal
+	Actor          principalmodel.Principal
+	Source         WorkflowBusinessActionSource
+	ProcessID      string
+	NodeID         string
+	IdempotencyKey string
+}
+
+type WorkflowBusinessActionRecordResult struct {
+	RecordID string
+}
+
+type WorkflowBusinessActionInvocationResult struct {
+	InvocationID string
+	Status       string
+	Output       map[string]any
+	ErrorCode    string
+	Retryable    bool
+	OutboxIDs    []string
+	Record       *WorkflowBusinessActionRecordResult
+}

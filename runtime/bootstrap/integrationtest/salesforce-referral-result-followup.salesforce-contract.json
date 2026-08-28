@@ -1,0 +1,34 @@
+{
+  "schema_version": "runtime-salesforce-case-contract-v1",
+  "case_id": "salesforce_referral_result_followup",
+  "source": {
+    "title": "Tribeca Pediatrics is personalizing the patient experience at scale",
+    "url": "https://www.salesforce.com/customer-success-stories/tribeca/",
+    "accessed_on": "2026-07-19",
+    "source_facts": [
+      {"id": "multi_clinic_view", "fact": "EHR integration supports a more complete patient view across multiple clinics."},
+      {"id": "referral_dispatch", "fact": "Referral work includes sending information to specialists and tracking incomplete referrals."},
+      {"id": "result_followup", "fact": "Staff follow up with external providers for referral results."},
+      {"id": "guardian_portal", "fact": "A parent portal supports communication, appointments, result follow-up, and billing."},
+      {"id": "ehr_updates", "fact": "Portal updates can be reflected in the EHR."},
+      {"id": "automated_outreach", "fact": "Automated communication covers reminders and post-visit follow-up."}
+    ]
+  },
+  "validation_extensions": [
+    {"id": "clinic_scope", "scenario": "A synthetic patient has a unified authorized view while unrelated clinic users remain denied."},
+    {"id": "dispatch_dedup", "scenario": "Repeated referral sends create one effective dispatch plus an audit trail of attempts."},
+    {"id": "sla_cancel", "scenario": "Acknowledgement and result deadlines schedule distinct reminders and cancel future reminders after completion."},
+    {"id": "out_of_order_result", "scenario": "Early and duplicate synthetic result events preserve monotonic state and raw event evidence."},
+    {"id": "guardian_expiry", "scenario": "Expired guardian authorization blocks result access; break-glass access records reason and expiry."},
+    {"id": "ehr_uncertain", "scenario": "A remote EHR write followed by local timeout reconciles without duplicate clinical results."}
+  ],
+  "runtime_mapping": {
+    "objects": ["patient", "guardian", "clinic", "appointment", "referral", "specialist_provider", "referral_dispatch", "clinical_result", "follow_up_task", "bill"],
+    "actions": ["referral.submit", "referral.approve", "referral.dispatch", "referral.acknowledge", "clinical_result.receive", "clinical_result.review", "guardian.notify"],
+    "roles": ["guardian_user", "call_center_agent", "clinician", "referral_coordinator", "billing_staff", "privacy_auditor"],
+    "capabilities": ["object_metadata", "business_action", "workflow", "portal_identity", "relationship_authorization", "field_permission", "scheduler", "inbox", "outbox", "break_glass_audit"]
+  },
+  "synthetic_data_policy": "Use fictional patients, guardians, clinics, appointments, referral reasons, results, and bills; no real PII, PHI, images, or provider records.",
+  "acceptance_axes": ["permission", "idempotency", "transaction", "workspace", "async_execution", "external_side_effect", "failure_recovery", "audit"],
+  "forbidden_production_tokens": ["tribeca", "referral_result_followup_case"]
+}

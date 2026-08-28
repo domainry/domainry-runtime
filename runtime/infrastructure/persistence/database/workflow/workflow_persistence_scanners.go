@@ -1,0 +1,151 @@
+package workflow
+
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+
+	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
+	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+)
+
+func workflowExecutionInsertValues(execution workflowmodel.WorkflowExecution) ([]string, []any, error) {
+	actionJSON, err := json.Marshal(execution.Action)
+	if err != nil {
+		return nil, nil, fmt.Errorf("encode Workflow graph descriptor: %w", err)
+	}
+	payloadJSON, err := json.Marshal(execution.Payload)
+	if err != nil {
+		return nil, nil, fmt.Errorf("encode workflow payload: %w", err)
+	}
+	resultJSON, err := json.Marshal(execution.Result)
+	if err != nil {
+		return nil, nil, fmt.Errorf("encode workflow result: %w", err)
+	}
+	columns := workflowExecutionColumns()
+	values := []any{execution.WorkspaceID, execution.ID, execution.WorkflowKey, execution.Name, execution.Trigger, execution.Status, execution.ActionType, string(actionJSON), string(payloadJSON), string(resultJSON), execution.ProcessID, execution.NodeID, execution.ObjectKey, execution.RecordID, execution.ActorID, execution.RunAs, execution.IdempotencyKey, execution.Attempt, execution.MaxAttempts, database.NullableText(execution.NextRunAt), execution.LastError, execution.LeaseOwner, execution.LeaseExpiresAt, execution.FencingToken, execution.Message, execution.CreatedAt, execution.UpdatedAt}
+	return columns, values, nil
+}
+
+func workflowExecutionMutableColumns() []string {
+	return []string{"workflow_key", "name", "trigger", "status", "action_type", "action_json", "payload_json", "result_json", "process_id", "node_id", "object_key", "record_id", "actor_id", "run_as", "idempotency_key", "attempt", "max_attempts", "next_run_at", "last_error", "lease_owner", "lease_expires_at", "fencing_token", "message", "created_at", "updated_at"}
+}
+
+func workflowExecutionMutableValues(execution workflowmodel.WorkflowExecution) ([]any, error) {
+	actionJSON, err := json.Marshal(execution.Action)
+	if err != nil {
+		return nil, fmt.Errorf("encode Workflow graph descriptor: %w", err)
+	}
+	payloadJSON, err := json.Marshal(execution.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("encode workflow payload: %w", err)
+	}
+	resultJSON, err := json.Marshal(execution.Result)
+	if err != nil {
+		return nil, fmt.Errorf("encode workflow result: %w", err)
+	}
+	return []any{execution.WorkflowKey, execution.Name, execution.Trigger, execution.Status, execution.ActionType, string(actionJSON), string(payloadJSON), string(resultJSON), execution.ProcessID, execution.NodeID, execution.ObjectKey, execution.RecordID, execution.ActorID, execution.RunAs, execution.IdempotencyKey, execution.Attempt, execution.MaxAttempts, database.NullableText(execution.NextRunAt), execution.LastError, execution.LeaseOwner, execution.LeaseExpiresAt, execution.FencingToken, execution.Message, execution.CreatedAt, execution.UpdatedAt}, nil
+}
+
+func workflowExecutionConditionValue(key string, value any) any {
+	if key == "next_run_at" {
+		if text, ok := value.(string); ok {
+			return database.NullableText(text)
+		}
+	}
+	return value
+}
+
+func workflowExecutionColumns() []string {
+	return []string{"workspace_id", "id", "workflow_key", "name", "trigger", "status", "action_type", "action_json", "payload_json", "result_json", "process_id", "node_id", "object_key", "record_id", "actor_id", "run_as", "idempotency_key", "attempt", "max_attempts", "next_run_at", "last_error", "lease_owner", "lease_expires_at", "fencing_token", "message", "created_at", "updated_at"}
+}
+
+type workflowExecutionScanner interface{ Scan(dest ...any) error }
+
+func scanWorkflowExecution(scanner workflowExecutionScanner) (workflowmodel.WorkflowExecution, error) {
+	var execution workflowmodel.WorkflowExecution
+	var actionJSON, payloadJSON, resultJSON string
+	var processID, nodeID, nextRunAt sql.NullString
+	if err := scanner.Scan(&execution.WorkspaceID, &execution.ID, &execution.WorkflowKey, &execution.Name, &execution.Trigger, &execution.Status, &execution.ActionType, &actionJSON, &payloadJSON, &resultJSON, &processID, &nodeID, &execution.ObjectKey, &execution.RecordID, &execution.ActorID, &execution.RunAs, &execution.IdempotencyKey, &execution.Attempt, &execution.MaxAttempts, &nextRunAt, &execution.LastError, &execution.LeaseOwner, &execution.LeaseExpiresAt, &execution.FencingToken, &execution.Message, &execution.CreatedAt, &execution.UpdatedAt); err != nil {
+		return workflowmodel.WorkflowExecution{}, err
+	}
+	_ = json.Unmarshal([]byte(actionJSON), &execution.Action)
+	_ = json.Unmarshal([]byte(payloadJSON), &execution.Payload)
+	_ = json.Unmarshal([]byte(resultJSON), &execution.Result)
+	if execution.Action == nil {
+		execution.Action = map[string]any{}
+	}
+	if execution.Payload == nil {
+		execution.Payload = map[string]any{}
+	}
+	if execution.Result == nil {
+		execution.Result = map[string]any{}
+	}
+	execution.NextRunAt, execution.ProcessID, execution.NodeID = nextRunAt.String, processID.String, nodeID.String
+	return execution, nil
+}
+
+func workflowDefinitionColumns() []string {
+	return []string{"id", "workflow_key", "name", "owner_user_id", "enabled", "current_draft_version_id", "current_published_version_id", "created_at", "updated_at"}
+}
+
+func workflowDefinitionVersionColumns() []string {
+	return []string{"id", "definition_id", "version_no", "status", "revision", "content_hash", "workflow_json", "validation_report_json", "publish_note", "created_by", "published_by", "publish_idempotency_key", "created_at", "updated_at", "published_at", "archived_at"}
+}
+
+type workflowDefinitionScanner interface{ Scan(...any) error }
+
+func scanWorkflowDefinition(scanner workflowDefinitionScanner) (workflowmodel.WorkflowDefinition, error) {
+	var value workflowmodel.WorkflowDefinition
+	var owner, draft, published sql.NullString
+	var enabled int
+	err := scanner.Scan(&value.ID, &value.Key, &value.Name, &owner, &enabled, &draft, &published, &value.CreatedAt, &value.UpdatedAt)
+	value.OwnerUserID, value.CurrentDraftVersionID, value.CurrentPublishedVersionID = owner.String, draft.String, published.String
+	value.Enabled = enabled != 0
+	return value, err
+}
+
+func scanWorkflowDefinitionVersion(scanner workflowDefinitionScanner) (workflowmodel.WorkflowDefinitionVersion, error) {
+	var value workflowmodel.WorkflowDefinitionVersion
+	var workflowJSON, reportJSON string
+	var hash, note, publishedBy, idempotency, publishedAt, archivedAt sql.NullString
+	err := scanner.Scan(&value.ID, &value.DefinitionID, &value.Version, &value.Status, &value.Revision, &hash, &workflowJSON, &reportJSON, &note, &value.CreatedBy, &publishedBy, &idempotency, &value.CreatedAt, &value.UpdatedAt, &publishedAt, &archivedAt)
+	value.ContentHash, value.PublishNote, value.PublishedBy, value.PublishedAt, value.ArchivedAt = hash.String, note.String, publishedBy.String, publishedAt.String, archivedAt.String
+	value.PublishIdempotencyKey = idempotency.String
+	_ = json.Unmarshal([]byte(workflowJSON), &value.Workflow)
+	_ = json.Unmarshal([]byte(reportJSON), &value.ValidationReport)
+	return value, err
+}
+
+type workflowScanner interface{ Scan(dest ...any) error }
+
+func scanWorkflowProcess(scanner workflowScanner) (workflowmodel.WorkflowProcessInstance, error) {
+	var process workflowmodel.WorkflowProcessInstance
+	var definition, currentNodes, variables, result string
+	var objectKey, recordID, initiatorRoleKey, errorCode, completedAt sql.NullString
+	err := scanner.Scan(&process.WorkspaceID, &process.ID, &process.WorkflowKey, &process.WorkflowName, &process.DefinitionVersionID, &process.DefinitionVersion, &process.DefinitionHash, &definition, &objectKey, &recordID, &process.InitiatorID, &initiatorRoleKey, &process.Status, &currentNodes, &variables, &result, &errorCode, &process.CreatedAt, &process.UpdatedAt, &completedAt)
+	if err != nil {
+		return process, err
+	}
+	process.ObjectKey, process.RecordID, process.InitiatorRoleKey, process.ErrorCode, process.CompletedAt = objectKey.String, recordID.String, initiatorRoleKey.String, errorCode.String, completedAt.String
+	_ = json.Unmarshal([]byte(definition), &process.DefinitionSnapshot)
+	_ = json.Unmarshal([]byte(currentNodes), &process.CurrentNodeIDs)
+	_ = json.Unmarshal([]byte(variables), &process.Variables)
+	_ = json.Unmarshal([]byte(result), &process.Result)
+	return process, nil
+}
+
+func workflowTaskColumns() []string {
+	return []string{"workspace_id", "id", "process_id", "node_instance_id", "node_id", "title", "assignee_user_id", "assignee_name", "assignee_role_key", "resolver_snapshot_json", "candidate_source", "node_definition_version", "sequence_no", "status", "decision", "comment", "due_at", "completed_by", "completed_at", "created_at", "updated_at"}
+}
+
+func scanWorkflowTask(scanner workflowScanner) (workflowmodel.WorkflowTask, error) {
+	var task workflowmodel.WorkflowTask
+	var assigneeUserID, assigneeName, assigneeRoleKey, candidateSource, decision, comment, dueAt, completedBy, completedAt sql.NullString
+	var resolverSnapshot string
+	err := scanner.Scan(&task.WorkspaceID, &task.ID, &task.ProcessID, &task.NodeInstanceID, &task.NodeID, &task.Title, &assigneeUserID, &assigneeName, &assigneeRoleKey, &resolverSnapshot, &candidateSource, &task.NodeDefinitionVersion, &task.Sequence, &task.Status, &decision, &comment, &dueAt, &completedBy, &completedAt, &task.CreatedAt, &task.UpdatedAt)
+	task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.CandidateSource = assigneeUserID.String, assigneeName.String, assigneeRoleKey.String, candidateSource.String
+	_ = json.Unmarshal([]byte(resolverSnapshot), &task.ResolverSnapshot)
+	task.Decision, task.Comment, task.DueAt, task.CompletedBy, task.CompletedAt = decision.String, comment.String, dueAt.String, completedBy.String, completedAt.String
+	return task, err
+}
