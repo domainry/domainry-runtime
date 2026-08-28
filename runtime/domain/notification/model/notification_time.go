@@ -1,12 +1,16 @@
 package notificationmodel
 
-import "time"
+import (
+	"time"
+
+	notificationcontract "github.com/domainry/domainry-notification-sdk/contract"
+)
 
 // NotificationTimestampLayout is fixed-width so timestamps retain temporal
 // ordering when persisted in portable TEXT/VARCHAR columns across SQLite,
 // PostgreSQL and MySQL adapters.
-const NotificationTimestampLayout = "2006-01-02T15:04:05.000000000Z"
+const NotificationTimestampLayout = notificationcontract.NotificationTimestampLayout
 
 func NotificationTimestamp(value time.Time) string {
-	return value.UTC().Format(NotificationTimestampLayout)
+	return notificationcontract.NotificationTimestamp(value)
 }

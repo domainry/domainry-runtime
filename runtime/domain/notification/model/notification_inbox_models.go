@@ -1,5 +1,7 @@
 package notificationmodel
 
+import notificationcontract "github.com/domainry/domainry-notification-sdk/contract"
+
 const (
 	NotificationEventQueued       = "queued"
 	NotificationEventProcessing   = "processing"
@@ -50,12 +52,7 @@ type NotificationInboxResolvedAction struct {
 	Status         string            `json:"status"`
 }
 
-type NotificationInboxActionDescriptor struct {
-	Key           string            `json:"key"`
-	Kind          string            `json:"kind"`
-	ResourceType  string            `json:"resource_type"`
-	SurfaceRoutes map[string]string `json:"surface_routes"`
-}
+type NotificationInboxActionDescriptor = notificationcontract.NotificationInboxActionDescriptor
 
 // NotificationInboxSnapshot is the immutable, already-sanitized in-app
 // projection compiled for one event. Template evidence remains attached so
