@@ -1,6 +1,6 @@
 package policy
 
-import "github.com/domainry/domainry-runtime/runtime/platform/secrets"
+import "github.com/domainry/domainry-foundation/secrets"
 
 // RedactSensitiveMap owns Integration payload redaction. Integration must not
 // depend on Audit Service as a generic credential helper.

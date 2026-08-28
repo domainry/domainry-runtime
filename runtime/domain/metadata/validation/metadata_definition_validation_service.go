@@ -6,9 +6,9 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type MetadataDefinitionPayloadValidator func(ctx context.Context, resourceType, resourceKey string, payload json.RawMessage) (json.RawMessage, []metadatamodel.MetadataDefinitionValidationIssue, error)

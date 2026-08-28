@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/telemetry"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationpolicy "github.com/domainry/domainry-runtime/runtime/domain/integration/policy"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
-	"github.com/domainry/domainry-runtime/runtime/platform/telemetry"
 )
 
 func (s *IntegrationApplicationService) SendAdapterOutboxMessage(ctx context.Context, message integrationmodel.IntegrationOutboxMessage, principal principalmodel.Principal) (sendResult OutboxSendResult, err error) {

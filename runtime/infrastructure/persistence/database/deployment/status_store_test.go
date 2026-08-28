@@ -11,9 +11,9 @@ import (
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
+	"github.com/domainry/domainry-foundation/idempotency"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
 )
 
 type contextRuntimeStatusContract interface {

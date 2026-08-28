@@ -4,10 +4,10 @@ import (
 	"context"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 // ProjectBusinessHandlerOutput is the public-field boundary after trusted

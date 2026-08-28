@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
 )
 
 func (h *RecordsHandler) enqueueImportJob(w http.ResponseWriter, r *http.Request) {

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	lifecyclepolicy "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/policy"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 func (s *LifecycleApplicationService) InstallDefaultPolicies(ctx context.Context, workspaceID string, principal principalmodel.Principal, now time.Time) error {

@@ -8,6 +8,7 @@ import (
 
 	definitioncontract "github.com/domainry/domainry-runtime/runtime/domain/definition/contract"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	businessseedcontract "github.com/domainry/domainry-runtime/runtime/domain/businessseed/contract"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -15,7 +16,6 @@ import (
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type CapabilityDiscoveryFilter struct {

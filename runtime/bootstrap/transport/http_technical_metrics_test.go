@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/mutation"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 type technicalMetricsRuntimeStatusRepository struct {

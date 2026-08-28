@@ -10,6 +10,7 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
@@ -20,7 +21,6 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestMetadataRuntimeRestorationAuthorizationAndPreparation(t *testing.T) {

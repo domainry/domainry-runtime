@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func (s *AgentTaskRunStore) ensureInteractiveRunSchema(ctx context.Context) error {

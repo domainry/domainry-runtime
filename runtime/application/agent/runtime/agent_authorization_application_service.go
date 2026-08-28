@@ -11,12 +11,12 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	"go.opentelemetry.io/otel/attribute"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/telemetry"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/telemetry"
 )
 
 type AgentSchemaProvider interface {

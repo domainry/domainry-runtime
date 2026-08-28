@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func actionValidateInvocationAssurance(ctx context.Context, validate func(context.Context, actionmodel.ActionInvocation) (map[string]string, error), invocation actionmodel.ActionInvocation) (actionmodel.ActionInvocation, error) {

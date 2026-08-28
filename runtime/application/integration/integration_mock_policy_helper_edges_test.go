@@ -9,13 +9,13 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
 	"github.com/domainry/domainry-runtime/runtime/platform/resilience"
 )

@@ -17,8 +17,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 const maxObjects = 24

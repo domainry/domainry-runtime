@@ -8,10 +8,10 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/mutation"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	"github.com/domainry/domainry-foundation/apperror"
 )
 
 type instructionRepositoryStub struct {

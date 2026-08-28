@@ -11,11 +11,11 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	operationspersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 

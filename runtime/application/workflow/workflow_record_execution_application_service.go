@@ -14,11 +14,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/telemetry"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
-	"github.com/domainry/domainry-runtime/runtime/platform/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 )
 

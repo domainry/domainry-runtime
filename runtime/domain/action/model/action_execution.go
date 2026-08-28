@@ -4,7 +4,7 @@ import (
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	"time"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
+	"github.com/domainry/domainry-foundation/idempotency"
 )
 
 type ActionBusinessExecution struct {

@@ -514,9 +514,6 @@ func TestActionFailureModesKeepDistinctRollbackAndUnknownCommitSemantics(t *test
 			"database.MutationTransactionError", "mutation.TransactionCommitUnknown", "t.commitSQL(ctx)",
 			"StatusFailedRetryable", "completion.Retryable",
 		},
-		"runtime/platform/mutation/mutation_commit_unknown.go": {
-			"backend.transaction.commit_unknown", "TransactionCommitUnknownError", "IsTransactionCommitUnknown",
-		},
 	}
 	for relative, required := range requiredByFile {
 		raw, err := os.ReadFile(crossRepositoryPath(repositoryRoot, relative))

@@ -9,7 +9,7 @@ import (
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationruntime "github.com/domainry/domainry-runtime/runtime/domain/automation/runtime"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	"github.com/domainry/domainry-foundation/apperror"
 )
 
 func TestInstructionEvidenceRoundTrip(t *testing.T) {

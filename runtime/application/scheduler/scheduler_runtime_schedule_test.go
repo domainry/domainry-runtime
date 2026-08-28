@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	apperror "github.com/domainry/domainry-foundation/apperror"
 )
 
 func TestRunIDUsesStableScheduleWindows(t *testing.T) {

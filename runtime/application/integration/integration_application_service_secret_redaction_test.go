@@ -20,8 +20,8 @@ import (
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
 )

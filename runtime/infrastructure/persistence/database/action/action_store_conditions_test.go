@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/mutation"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 func TestActionExecutionClaimRetryWaitAndDatabaseStages(t *testing.T) {

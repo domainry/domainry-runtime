@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	agentstate "github.com/domainry/domainry-runtime/runtime/application/agent"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
@@ -13,7 +14,6 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type agentTaskRecordStub struct {

@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/mutation"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )

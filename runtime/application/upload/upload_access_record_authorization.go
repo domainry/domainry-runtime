@@ -3,8 +3,8 @@ package upload
 import (
 	"context"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func (s *UploadAccessApplicationService) authorizeRecordDownload(ctx context.Context, objectKey, fieldKey, recordID, filename string, principal principalmodel.Principal) error {

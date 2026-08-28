@@ -14,11 +14,11 @@ import (
 	"context"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type RecordInternalMutationPolicy string

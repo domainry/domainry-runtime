@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func (e *businessActionExecution) StageNotification(ctx context.Context, intent runtimeext.NotificationIntent) (runtimeext.NotificationReceipt, error) {

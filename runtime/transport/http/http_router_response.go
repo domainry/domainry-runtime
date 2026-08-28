@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	"io"
 	"net/http"
 	"strings"
@@ -12,9 +13,9 @@ import (
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/logging"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
+	apperror "github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/logging"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	"go.uber.org/zap"
 )
 
@@ -78,7 +79,7 @@ func valueOrDefault(value, fallback string) string {
 func (s *HTTPRouter) principalFromRequest(r *http.Request) principalmodel.Principal {
 	requestID := requestIDFromRequest(r)
 	workspaceID := workspaceIDFromRequest(r)
-	if builderTaskID := requestcontext.RuntimeAuthoringBuilderTaskID(r.Context()); builderTaskID != "" && bearerTokenFromRequest(r) == "" && apiKeyTokenFromRequest(r) == "" && strings.TrimSpace(r.Header.Get("X-User-ID")) == "" && strings.TrimSpace(r.Header.Get("X-Role")) == "" && strings.TrimSpace(r.Header.Get("X-User-Role")) == "" {
+	if builderTaskID := operationscontract.BuilderTaskID(r.Context()); builderTaskID != "" && bearerTokenFromRequest(r) == "" && apiKeyTokenFromRequest(r) == "" && strings.TrimSpace(r.Header.Get("X-User-ID")) == "" && strings.TrimSpace(r.Header.Get("X-Role")) == "" && strings.TrimSpace(r.Header.Get("X-User-Role")) == "" {
 		principal := principalmodel.NewSystemPrincipal("runtime-builder:"+builderTaskID, principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "runtime_direct_authoring"), "*")
 		principal.RequestID = requestID
 		principal.WorkspaceID = workspaceID

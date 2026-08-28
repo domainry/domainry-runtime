@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	pipelinecontract "github.com/domainry/domainry-runtime/runtime/domain/pipeline/contract"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type PipelineDependencies struct {

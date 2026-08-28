@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/mutation"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	. "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 func TestRecordTimerHundredThousandRestartClockDriftAndMultiInstanceNoLoss(t *testing.T) {

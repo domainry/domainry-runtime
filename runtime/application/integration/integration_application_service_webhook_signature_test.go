@@ -12,9 +12,9 @@ import (
 
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type webhookSignatureEventRepository struct {

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/idempotency"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 

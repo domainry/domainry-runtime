@@ -7,12 +7,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 var errBusinessSeedProbe = errors.New("business seed probe failed")

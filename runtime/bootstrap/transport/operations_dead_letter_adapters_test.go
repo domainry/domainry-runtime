@@ -8,6 +8,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
@@ -15,7 +16,6 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type deadLetterEventRepository struct {

@@ -11,9 +11,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type reportRecordRepositoryStub struct {

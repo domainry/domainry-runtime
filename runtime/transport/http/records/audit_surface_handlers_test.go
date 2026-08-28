@@ -12,13 +12,13 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/audit"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 

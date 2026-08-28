@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
@@ -14,7 +15,6 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func registerOperationsDeadLetterOwners(service *operationsapplication.OperationsApplicationService, integrations *integrationapplication.IntegrationApplicationService, workflows *workflowapplication.WorkflowApplicationService, scheduler *schedulerapplication.SchedulerApplicationService, records *recordapplication.RecordApplicationService) {

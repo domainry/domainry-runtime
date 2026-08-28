@@ -2,6 +2,7 @@ package businesssystem
 
 import (
 	"errors"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
@@ -11,11 +12,9 @@ import (
 
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 
+	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	"net/http"
 	"strings"
-
-	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 
@@ -75,7 +74,7 @@ func (h *BusinessSystemHandler) verifyRuntimeAuthoringDelivery(w http.ResponseWr
 	if !h.decodeJSON(w, r, &evidence) {
 		return
 	}
-	builderTaskID := requestcontext.RuntimeAuthoringBuilderTaskID(r.Context())
+	builderTaskID := operationscontract.BuilderTaskID(r.Context())
 	if builderTaskID == "" || h.completeDelivery == nil {
 		h.writeServiceError(w, r, errors.New("business system delivery lifecycle is unavailable"))
 		return
@@ -103,7 +102,7 @@ func (h *BusinessSystemHandler) validateRuntimeAuthoring(w http.ResponseWriter, 
 	if !h.decodeJSON(w, r, &request) {
 		return
 	}
-	builderTaskID := requestcontext.RuntimeAuthoringBuilderTaskID(r.Context())
+	builderTaskID := operationscontract.BuilderTaskID(r.Context())
 	if builderTaskID != "" && h.beginValidation != nil {
 		if err := h.beginValidation(builderTaskID); err != nil {
 			h.writeServiceError(w, r, err)

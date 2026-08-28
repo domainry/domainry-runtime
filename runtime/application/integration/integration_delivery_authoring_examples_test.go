@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestIntegrationDeliveryAuthoringMutationExamplesExecuteOwnerServices(t *testing.T) {

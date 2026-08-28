@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/idempotency"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
@@ -17,7 +18,6 @@ import (
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
 )
 
 func TestRecordIdempotencyMultipleRuntimeStoresSharingDatabaseHaveOneOwner(t *testing.T) {

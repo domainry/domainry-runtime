@@ -5,13 +5,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
 	auditservice "github.com/domainry/domainry-runtime/runtime/domain/audit/service"
 	integrationpolicy "github.com/domainry/domainry-runtime/runtime/domain/integration/policy"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type AuditApplicationService struct {

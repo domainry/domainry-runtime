@@ -24,8 +24,8 @@ import (
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 

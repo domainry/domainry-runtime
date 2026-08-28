@@ -7,11 +7,11 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	partymodel "github.com/domainry/domainry-runtime/runtime/domain/party/model"
 	partyrepository "github.com/domainry/domainry-runtime/runtime/domain/party/repository"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type SQLPartyStore struct {

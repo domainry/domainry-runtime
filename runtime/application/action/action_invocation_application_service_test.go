@@ -6,10 +6,10 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestActionInvocationNormalizationAndProjection(t *testing.T) {

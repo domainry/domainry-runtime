@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
+	"github.com/domainry/domainry-foundation/mutation"
 )
 
 type contextIntegrationDeliveryContract interface {

@@ -7,6 +7,7 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
@@ -14,7 +15,6 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func testNotificationIntent() runtimeext.NotificationIntent {

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 // AutomationValidateAuthoringFragment applies Automation-owned, context-free

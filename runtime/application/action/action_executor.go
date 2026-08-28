@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/mutation"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
@@ -14,8 +16,6 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 type ActionExecutionResult struct {
@@ -92,7 +92,7 @@ func (e *BusinessHandlerExecutor) execute(ctx context.Context, governed governed
 			return ActionExecutionResult{}, err
 		}
 		var appError *apperror.AppError
-		var businessConflict *mutation.BusinessConflictError
+		var businessConflict *mutation.PolicyConflictError
 		var conflict *mutation.MutationConflictError
 		var transient *mutation.TransactionTransientError
 		if errors.As(err, &appError) || errors.As(err, &businessConflict) || errors.As(err, &conflict) || errors.As(err, &transient) || mutation.IsTransactionCommitUnknown(err) {

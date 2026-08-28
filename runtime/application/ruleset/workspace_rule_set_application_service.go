@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	rulesetmodel "github.com/domainry/domainry-runtime/runtime/domain/ruleset/model"
 	rulesetrepository "github.com/domainry/domainry-runtime/runtime/domain/ruleset/repository"
 	rulesetservice "github.com/domainry/domainry-runtime/runtime/domain/ruleset/service"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type WorkspaceRuleSetApplicationService struct {

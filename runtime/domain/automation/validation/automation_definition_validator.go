@@ -15,8 +15,8 @@ import (
 	"math"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 // AutomationDefinitionCatalog is the read-only metadata surface needed to validate an

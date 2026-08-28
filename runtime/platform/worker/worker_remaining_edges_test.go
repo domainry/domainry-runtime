@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	"github.com/domainry/domainry-foundation/apperror"
 )
 
 type workerClockStub struct{ now time.Time }

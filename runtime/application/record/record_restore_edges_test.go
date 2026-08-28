@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/mutation"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -12,8 +14,6 @@ import (
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 type restoreEdgeRepository struct {
@@ -137,7 +137,7 @@ func TestRestoreBusinessConflictAndPlannerLifecycleFailures(t *testing.T) {
 	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
 	repository := &restoreEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{
 		"status": "deleted", "deleted_at": "before", "deleted_by": "user", "version": float64(1), "name": "Acme",
-	}}, commitErr: mutation.BusinessConflict("backend.restore.conflict", "customer", "customer-1", "status")}
+	}}, commitErr: mutation.PolicyConflict("backend.restore.conflict", "customer", "customer-1", "status")}
 	if _, err := NewRecordRestoreApplicationService(recordRestoreEdgeDependencies(repository)).Restore(t.Context(), "customer", "customer-1", principal); apperror.CodeOf(err) != "backend.restore.conflict" {
 		t.Fatalf("business conflict err=%v", err)
 	}

@@ -6,9 +6,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type changePlanRuntimeFake struct {

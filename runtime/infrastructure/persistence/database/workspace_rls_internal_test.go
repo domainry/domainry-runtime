@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	postgrespersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 func TestWorkspaceRLSStatusCopiesSlices(t *testing.T) {

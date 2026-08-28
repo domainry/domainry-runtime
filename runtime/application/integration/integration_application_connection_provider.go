@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/logging"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationvalidation "github.com/domainry/domainry-runtime/runtime/domain/integration/validation"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/logging"
 	"go.uber.org/zap"
 )
 

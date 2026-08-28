@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func (h *IntegrationsHandler) webPushReadiness(w http.ResponseWriter, r *http.Request) {

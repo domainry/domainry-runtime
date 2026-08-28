@@ -5,8 +5,8 @@ import (
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
+	"github.com/domainry/domainry-foundation/mutation"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 
@@ -213,7 +213,7 @@ func TestConditionalMutationPredicateIsAtomicAcrossDialects(t *testing.T) {
 			commit.Record.UpdatedAt = "v3"
 			commit.Record.Data["reserved"] = 21.0
 			err := recordStore(store).CommitRecordMutation(t.Context(), "default", commit)
-			var conflict *mutation.BusinessConflictError
+			var conflict *mutation.PolicyConflictError
 			if !errors.As(err, &conflict) || conflict.Code != "capacity_full" || conflict.Field != "reserved" {
 				t.Fatalf("business conflict=%#v err=%v", conflict, err)
 			}
@@ -289,7 +289,7 @@ func TestTemporalExclusionIsEnforcedInsideMutationTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 	err := recordStore(store).CommitRecordMutation(t.Context(), "default", commit("overlap", "coach-1", "2026-07-21T10:30:00Z", "2026-07-21T11:30:00Z", "confirmed"))
-	var conflict *mutation.BusinessConflictError
+	var conflict *mutation.PolicyConflictError
 	if !errors.As(err, &conflict) || conflict.Code != "booking.owner_busy" || conflict.Field != "owner_schedule" {
 		t.Fatalf("temporal conflict=%#v err=%v", conflict, err)
 	}
@@ -352,7 +352,7 @@ func TestRelatedAggregateInvariantLocksParentAndUsesExactCandidateAggregate(t *t
 		}
 	}
 	err := recordStore(store).CommitRecordMutation(t.Context(), "default", refundCommit("refund-over", "0.01", "approved"))
-	var conflict *mutation.BusinessConflictError
+	var conflict *mutation.PolicyConflictError
 	if !errors.As(err, &conflict) || conflict.Code != "refund.amount_exceeds_paid" || conflict.Field != "refund_not_above_paid" {
 		t.Fatalf("refund aggregate conflict=%#v err=%v", conflict, err)
 	}

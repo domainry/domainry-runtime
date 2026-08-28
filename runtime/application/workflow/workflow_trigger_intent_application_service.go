@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func WorkflowPrepareTriggerIntents(ctx context.Context, workflows map[string]definitionmodel.WorkflowSchema, objectKey string, record recordmodel.Record, before map[string]any, principal principalmodel.Principal, trigger string) ([]workflowmodel.WorkflowExecution, []workflowmodel.WorkflowRunSummary, error) {

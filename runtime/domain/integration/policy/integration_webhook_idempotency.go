@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
+	"github.com/domainry/domainry-foundation/idempotency"
 )
 
 // WebhookExternalEventID preserves a provider event ID when present. Providers

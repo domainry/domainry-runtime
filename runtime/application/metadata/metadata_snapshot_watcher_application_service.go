@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/logging"
+	"github.com/domainry/domainry-foundation/logging"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 

@@ -3,6 +3,7 @@ package metadata
 import (
 	"encoding/json"
 	"errors"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,15 +11,13 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
-
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
+	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
 
 func newDefinitionWriteHandler(t *testing.T, repository *definitionLifecycleRepository) (*MetadataHandler, *localizedTextHandlerCapture, *definitionLifecycleAuditRepository) {
@@ -111,7 +110,7 @@ func TestValidateMetadataDefinitionHandlerSuccessDecodeAndValidationError(t *tes
 	}
 
 	directRequest := definitionLifecycleRequest(http.MethodPost, "/", `{"payload":{}}`, "unsupported", "key")
-	directRequest = directRequest.WithContext(requestcontext.WithRuntimeAuthoringBuilderTaskID(directRequest.Context(), "task-1"))
+	directRequest = directRequest.WithContext(operationscontract.WithBuilderTaskID(directRequest.Context(), "task-1"))
 	directResponse := httptest.NewRecorder()
 	handler.validateMetadataDefinition(directResponse, directRequest)
 	if directResponse.Code != http.StatusUnprocessableEntity || !strings.Contains(directResponse.Body.String(), `"error_class":"repairable"`) || !strings.Contains(directResponse.Body.String(), `"repair_action":"repair_capability_payload"`) || !strings.Contains(directResponse.Body.String(), `"retryable":true`) || !strings.Contains(directResponse.Body.String(), `"errors":[`) {

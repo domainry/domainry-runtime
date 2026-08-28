@@ -25,11 +25,11 @@ import (
 
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/logging"
+	"github.com/domainry/domainry-foundation/mutation"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
-	"github.com/domainry/domainry-runtime/runtime/platform/logging"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 type RecordCreateDependencies struct {
@@ -317,7 +317,7 @@ func recordCreateCommitError(err error) error {
 	if errors.As(err, &applicationError) {
 		return err
 	}
-	var businessConflict *mutation.BusinessConflictError
+	var businessConflict *mutation.PolicyConflictError
 	if errors.As(err, &businessConflict) {
 		return recordCreateError(apperror.KindConflict, businessConflict.Code, err, "object", businessConflict.Resource, "record_id", businessConflict.Identifier, "policy", businessConflict.Field)
 	}

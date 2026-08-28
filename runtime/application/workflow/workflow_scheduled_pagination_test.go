@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/idempotency"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
 )
 
 type scheduledKeysetReader struct {

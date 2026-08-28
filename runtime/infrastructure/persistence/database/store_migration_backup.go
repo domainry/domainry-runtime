@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/logging"
 	migrationcontract "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/migration"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/logging"
 	"go.uber.org/zap"
 )
 

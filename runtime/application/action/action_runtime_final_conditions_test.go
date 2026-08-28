@@ -9,12 +9,12 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	"github.com/domainry/domainry-foundation/mutation"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 func TestActionReadEffectAndPhaseRemainingConditions(t *testing.T) {
@@ -92,7 +92,7 @@ func TestActionInvocationNormalizationAndErrorClasses(t *testing.T) {
 		t.Fatal("nil error changed")
 	}
 	classified := []error{
-		mutation.BusinessConflict("backend.booking.full", "booking", "one", "status"),
+		mutation.PolicyConflict("backend.booking.full", "booking", "one", "status"),
 		mutation.MutationConflict("booking", "one", mutation.MutationConflictOptimistic, errors.New("changed")),
 		mutation.TransactionTransient("booking", "one", mutation.TransactionTransientDeadlock, errors.New("deadlock")),
 		mutation.TransactionCommitUnknown("booking", "one", errors.New("unknown")),

@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
 )
 
 type operationsControlBody struct {

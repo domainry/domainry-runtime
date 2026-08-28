@@ -3,15 +3,16 @@ package http
 import (
 	"context"
 	"encoding/json"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 func TestPrincipalContextIgnoresUntrustedScopeHeadersAndUsesRequestSources(t *testing.T) {
@@ -203,7 +204,7 @@ func TestRuntimeAuthoringServiceErrorSemanticsMatrix(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			response := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodPut, "/metadata/definitions/object/order", nil)
-			request = request.WithContext(requestcontext.WithRuntimeAuthoringBuilderTaskID(request.Context(), "task-1"))
+			request = request.WithContext(operationscontract.WithBuilderTaskID(request.Context(), "task-1"))
 			writeServiceError(response, request, apperror.New(test.kind, test.code, nil, nil))
 			body := map[string]any{}
 			if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || response.Code != test.status || body["error_class"] != test.class || body["repair_action"] != test.action || body["retryable"] != test.retryable {
@@ -222,7 +223,7 @@ func TestBuilderPrincipalShortcutRejectsEveryExplicitCredentialHeader(t *testing
 		{"X-User-Role", "viewer"},
 	} {
 		request := requestWithPrincipal(httptest.NewRequest(http.MethodGet, "/", nil), principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "context-user"}})
-		request = request.WithContext(requestcontext.WithRuntimeAuthoringBuilderTaskID(request.Context(), "task"))
+		request = request.WithContext(operationscontract.WithBuilderTaskID(request.Context(), "task"))
 		request.Header.Set(header.key, header.value)
 		if principal := router.principalFromRequest(request); principal.UserID != "context-user" {
 			t.Fatalf("header %s principal=%#v", header.key, principal)

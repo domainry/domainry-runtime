@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 // AutomationValidateTriggerShape validates the context-free portion of an

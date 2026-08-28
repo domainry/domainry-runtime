@@ -3,9 +3,9 @@ package validation_test
 import (
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	automationpolicy "github.com/domainry/domainry-runtime/runtime/domain/automation/policy"
 	automationvalidation "github.com/domainry/domainry-runtime/runtime/domain/automation/validation"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestAutomationAuthoringFragmentExamplesExecutePublishedOwnerPolicy(t *testing.T) {

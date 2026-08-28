@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
 	pipelineapplication "github.com/domainry/domainry-runtime/runtime/application/pipeline"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -18,8 +20,6 @@ import (
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
 )
 
 type recordsHTTPRepository struct {

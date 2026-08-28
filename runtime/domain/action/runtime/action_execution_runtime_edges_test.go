@@ -9,14 +9,14 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/mutation"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 type executionRepositoryEdgeStub struct {
@@ -322,7 +322,7 @@ func TestActionExecutionRuntimeValueHelpers(t *testing.T) {
 	for errorValue, wantCode := range map[error]string{
 		context.Canceled:         "backend.action.cancelled",
 		context.DeadlineExceeded: "backend.action.timeout",
-		mutation.BusinessConflict("business.conflict", "record", "one", "status"):                  "business.conflict",
+		mutation.PolicyConflict("business.conflict", "record", "one", "status"):                    "business.conflict",
 		mutation.MutationConflict("record", "one", mutation.MutationConflictUnique, nil):           "backend.mutation.unique_conflict",
 		mutation.MutationConflict("record", "one", mutation.MutationConflictOptimistic, nil):       "backend.record.version_conflict",
 		mutation.TransactionTransient("record", "one", mutation.TransactionTransientDeadlock, nil): "backend.transaction.deadlock",

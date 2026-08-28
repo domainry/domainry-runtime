@@ -33,8 +33,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/domainry/domainry-foundation/idempotency"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
 )
 
 // MetadataApplicationService owns metadata authoring, lifecycle, dictionary and

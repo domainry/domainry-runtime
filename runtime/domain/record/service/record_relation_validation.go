@@ -12,10 +12,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	definitioncontract "github.com/domainry/domainry-runtime/runtime/domain/definition/contract"
 	partymodel "github.com/domainry/domainry-runtime/runtime/domain/party/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type RecordPartyReferenceLookup interface {

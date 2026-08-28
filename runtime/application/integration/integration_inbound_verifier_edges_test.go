@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type integrationWebhookVerifierAdapter struct {

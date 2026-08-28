@@ -7,8 +7,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type mutationOperationsProbe struct {

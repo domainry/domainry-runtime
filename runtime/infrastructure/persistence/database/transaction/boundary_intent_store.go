@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/mutation"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 type BoundaryIntentStore struct {

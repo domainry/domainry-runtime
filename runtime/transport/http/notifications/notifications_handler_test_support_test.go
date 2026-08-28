@@ -13,11 +13,11 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type notificationHTTPClock struct{}

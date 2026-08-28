@@ -6,6 +6,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/mutation"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
@@ -13,9 +16,6 @@ import (
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 // ActionUnitOfWorkManager creates the Runtime-owned commit boundary shared by

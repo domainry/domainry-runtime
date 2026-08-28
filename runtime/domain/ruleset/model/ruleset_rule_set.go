@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	expressionmodel "github.com/domainry/domainry-runtime/runtime/domain/expression/model"
+	expressionmodel "github.com/domainry/domainry-foundation/expression/model"
 )
 
 const RuleSetMatchFirst = "first_match"

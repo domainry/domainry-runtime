@@ -20,7 +20,7 @@ import (
 	automationruntime "github.com/domainry/domainry-runtime/runtime/domain/automation/runtime"
 	automationdomain "github.com/domainry/domainry-runtime/runtime/domain/automation/service"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	"github.com/domainry/domainry-foundation/apperror"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 

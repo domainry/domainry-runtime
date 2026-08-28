@@ -4,11 +4,11 @@ import (
 	"context"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func assembleWorkflowApplication(records *runtimeAssembly) *workflowapplication.WorkflowApplicationService {

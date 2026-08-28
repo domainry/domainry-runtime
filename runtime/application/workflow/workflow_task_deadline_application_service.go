@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 // ProcessApprovalDeadlineTimer executes one durable approval reminder or

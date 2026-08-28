@@ -3,8 +3,8 @@ package policy
 import (
 	"time"
 
+	"github.com/domainry/domainry-foundation/idempotency"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
 )
 
 const IntegrationCredentialMutationReceiptRetention = 90 * 24 * time.Hour

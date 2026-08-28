@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type AgentInteractiveAuthorization struct {

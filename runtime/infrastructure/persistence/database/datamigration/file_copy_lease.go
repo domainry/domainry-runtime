@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/filelock"
+	"github.com/domainry/domainry-foundation/filelock"
 )
 
 type FileCopyLease struct {

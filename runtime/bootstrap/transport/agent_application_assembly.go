@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	agent "github.com/domainry/domainry-runtime/runtime/application/agent"
 	agentruntime "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
@@ -14,7 +15,6 @@ import (
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	agentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/agent"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func assembleAgentApplicationPorts(dependencies HTTPServerDependencies, principalDirectories ...identitysdk.PrincipalResolver) (*agent.AgentApplicationService, *agent.AgentProposalApplicationService) {

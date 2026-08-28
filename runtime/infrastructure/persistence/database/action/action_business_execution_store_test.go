@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/mutation"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
@@ -22,8 +24,6 @@ import (
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/audit"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 	"github.com/domainry/domainry-runtime/testsupport/notificationsdkfixture"
 )
@@ -666,7 +666,7 @@ func TestBusinessActionConditionalMutationCommitsPredicateFactsAndReceiptInOneUo
 	commit.Outbox[0].ID, commit.Outbox[0].DedupKey = "capacity-outbox-conflict", "reserve-21"
 	commit.WorkflowIntents[0].ID = "capacity-workflow-conflict"
 	_, err = commitBusinessActionExecution(t.Context(), repository, []transactionmodel.RecordMutationCommit{commit}, actionmodel.ActionExecutionCompletion{Execution: conflictClaim.Execution, ExecutionID: conflictClaim.Execution.ID, LeaseOwner: conflictClaim.Execution.LeaseOwner, FencingToken: conflictClaim.Execution.FencingToken, Result: map[string]any{"reserved": 21}, ResponseStatus: 200, ExpiresAt: now.Add(time.Hour), Now: now.Add(time.Second)})
-	var businessConflict *mutation.BusinessConflictError
+	var businessConflict *mutation.PolicyConflictError
 	if !errors.As(err, &businessConflict) || businessConflict.Code != "capacity_full" {
 		t.Fatalf("conditional conflict=%#v err=%v", businessConflict, err)
 	}

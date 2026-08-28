@@ -5,9 +5,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type InboxResourceAuthorizer func(context.Context, string, principalmodel.Principal) error

@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 type MutationMetadataRevisionResolver func(context.Context, principalmodel.Principal) (string, error)

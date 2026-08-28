@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
 	workflowprojection "github.com/domainry/domainry-runtime/runtime/domain/workflow/projection"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 

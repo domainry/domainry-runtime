@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	"github.com/domainry/domainry-foundation/apperror"
 )
 
 var businessSeedKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,127}$`)

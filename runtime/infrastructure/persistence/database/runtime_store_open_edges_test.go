@@ -6,10 +6,10 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/secrets"
+	"github.com/domainry/domainry-foundation/telemetry"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/secrets"
-	"github.com/domainry/domainry-runtime/runtime/platform/telemetry"
 )
 
 type runtimeOpenDialectStub struct {
@@ -202,12 +202,12 @@ func TestDefaultRuntimeOpenDependenciesAndProfileAdapter(t *testing.T) {
 	if err != nil || profile.Profile() == nil {
 		t.Fatalf("profile=%#v err=%v", profile, err)
 	}
-	db, err := profile.Open(telemetry.NewSQLMetrics())
+	db, err := profile.Open(telemetry.NewSQLMetricsWithNamespace("domainry_runtime"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = db.Close()
-	if _, err := profile.OpenMigration(telemetry.NewSQLMetrics()); err == nil {
+	if _, err := profile.OpenMigration(telemetry.NewSQLMetricsWithNamespace("domainry_runtime")); err == nil {
 		t.Fatal("missing migration DSN accepted")
 	}
 	cancelled, cancel := context.WithCancel(t.Context())
@@ -218,7 +218,7 @@ func TestDefaultRuntimeOpenDependenciesAndProfileAdapter(t *testing.T) {
 	if err := profile.ValidateRuntimeCapabilities(postgres.Capabilities{}, postgres.Capabilities{}); err == nil {
 		t.Fatal("empty capabilities accepted")
 	}
-	observed, err := dependencies.observedSQL("sqlite", ":memory:", "runtime", telemetry.NewSQLMetrics())
+	observed, err := dependencies.observedSQL("sqlite", ":memory:", "runtime", telemetry.NewSQLMetricsWithNamespace("domainry_runtime"))
 	if err != nil {
 		t.Fatal(err)
 	}

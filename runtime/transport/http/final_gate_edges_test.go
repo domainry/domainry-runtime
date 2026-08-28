@@ -1,16 +1,15 @@
 package http
 
 import (
-	"net/http"
-	"net/http/httptest"
-	"testing"
-
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 	partyhttp "github.com/domainry/domainry-runtime/runtime/transport/http/party"
+	"net/http"
+	"net/http/httptest"
+	"testing"
 )
 
 func TestFinalHighRiskAndSurfacePolicyEdges(t *testing.T) {
@@ -66,7 +65,7 @@ func TestFinalAuthenticationAndBuilderPrincipalEdges(t *testing.T) {
 		t.Fatalf("inactive bearer principal status=%d", bearerResponse.Code)
 	}
 	builderAuthRequest := httptest.NewRequest(http.MethodGet, "/records", nil)
-	builderAuthRequest = builderAuthRequest.WithContext(requestcontext.WithRuntimeAuthoringBuilderTaskID(builderAuthRequest.Context(), "task-1"))
+	builderAuthRequest = builderAuthRequest.WithContext(operationscontract.WithBuilderTaskID(builderAuthRequest.Context(), "task-1"))
 	builderAuthResponse := httptest.NewRecorder()
 	(&HTTPRouter{}).withAuth(mux, mux).ServeHTTP(builderAuthResponse, builderAuthRequest)
 	if builderAuthResponse.Code != http.StatusNoContent {
@@ -74,14 +73,14 @@ func TestFinalAuthenticationAndBuilderPrincipalEdges(t *testing.T) {
 	}
 
 	builderRequest := httptest.NewRequest(http.MethodGet, "/records", nil)
-	builderRequest = builderRequest.WithContext(requestcontext.WithRuntimeAuthoringBuilderTaskID(builderRequest.Context(), "task-1"))
+	builderRequest = builderRequest.WithContext(operationscontract.WithBuilderTaskID(builderRequest.Context(), "task-1"))
 	builderRequest.Header.Set("X-User-ID", "developer")
 	devRouter := &HTTPRouter{allowDevAuthHeaders: true, identityAuthorization: routerIdentityAuthorizationStub{principal: principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "developer"}}}}
 	if principal := devRouter.principalFromRequest(builderRequest); principal.UserID == "runtime-builder:task-1" {
 		t.Fatal("explicit user header was replaced by builder principal")
 	}
 	userRoleRequest := httptest.NewRequest(http.MethodGet, "/records", nil)
-	userRoleRequest = userRoleRequest.WithContext(requestcontext.WithRuntimeAuthoringBuilderTaskID(userRoleRequest.Context(), "task-2"))
+	userRoleRequest = userRoleRequest.WithContext(operationscontract.WithBuilderTaskID(userRoleRequest.Context(), "task-2"))
 	userRoleRequest.Header.Set("X-User-Role", "admin")
 	_ = (&HTTPRouter{}).principalFromRequest(userRoleRequest)
 

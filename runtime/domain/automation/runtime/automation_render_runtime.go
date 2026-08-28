@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func AutomationRenderStepData(step map[string]any, ctx *automationmodel.AutomationRenderContext) (map[string]any, error) {

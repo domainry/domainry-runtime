@@ -5,8 +5,8 @@ import (
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func (s *CapabilityAuthoringApplicationService) ExecutionCapabilities(_ context.Context, principal principalmodel.Principal) (capabilitycontract.CapabilityExecutionCatalog, error) {

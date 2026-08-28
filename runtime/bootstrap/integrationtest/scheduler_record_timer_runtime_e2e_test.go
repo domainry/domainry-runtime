@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/mutation"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -15,7 +16,6 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/mutation"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 const (
@@ -101,7 +101,7 @@ func normalizeActionInvocationError(err error) error {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return apperror.New(apperror.KindUnavailable, "backend.action.timeout", err, nil)
 	}
-	var businessConflict *mutation.BusinessConflictError
+	var businessConflict *mutation.PolicyConflictError
 	if errors.As(err, &businessConflict) {
 		return apperror.New(apperror.KindConflict, businessConflict.Code, err, nil)
 	}

@@ -11,13 +11,13 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	reportexport "github.com/domainry/domainry-runtime/runtime/application/report/export"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/service"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestObjectSQLPaginationPushesBoundedWindowIntoExecutor(t *testing.T) {

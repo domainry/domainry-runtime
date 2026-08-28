@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type AgentRouterApplicationService struct{ router AgentRouter }

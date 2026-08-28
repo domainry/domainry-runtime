@@ -4,11 +4,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	partymodel "github.com/domainry/domainry-runtime/runtime/domain/party/model"
 	partyservice "github.com/domainry/domainry-runtime/runtime/domain/party/service"
 	runtimedatabase "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	partypersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/party"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 

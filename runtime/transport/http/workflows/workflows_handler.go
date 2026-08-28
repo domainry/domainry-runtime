@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
+	"github.com/domainry/domainry-foundation/idempotency"
 	operationshttp "github.com/domainry/domainry-runtime/runtime/transport/http/operations"
 )
 

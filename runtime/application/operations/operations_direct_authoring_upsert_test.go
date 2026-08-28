@@ -3,15 +3,15 @@ package operations
 import (
 	"context"
 	"errors"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 func TestExecuteDirectAuthoringUpsertPersistsReplayAndChecksHashOnlyForOwnerExecution(t *testing.T) {
@@ -21,7 +21,7 @@ func TestExecuteDirectAuthoringUpsertPersistsReplayAndChecksHashOnlyForOwnerExec
 		return capabilitycontract.CapabilityAuthoringSuccessProjection{SnapshotHash: "snapshot-1", AvailableSuccessors: []capabilitycontract.CapabilityAuthoringSuccessorSummary{{Key: "identity.role_permission", Domain: "identity", Status: "supported", DetailEndpoint: "/tenant-admin/platform-capabilities/capabilities/identity.role_permission"}}}, nil
 	})
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "builder"}}
-	ctx := requestcontext.WithRuntimeAuthoringBuilderTaskID(t.Context(), "task-1")
+	ctx := operationscontract.WithBuilderTaskID(t.Context(), "task-1")
 	request := DirectAuthoringUpsertRequest{CapabilityKey: "identity.role", ResourceID: "manager", BuilderTaskID: "task-1", IdempotencyKey: "upsert-1", ExpectedResourceHash: "empty", Payload: map[string]any{"label": "Manager"}}
 	currentHash, found, calls := "", false, 0
 
@@ -79,7 +79,7 @@ func TestExecuteDirectAuthoringUpsertRejectsHeaderAndOwnerContractViolations(t *
 	if code := apperror.CodeOf(call(t.Context(), missingKey, func(context.Context) error { return nil })); code != "backend.idempotency.key_required" {
 		t.Fatalf("missing key code=%s", code)
 	}
-	mismatched := requestcontext.WithRuntimeAuthoringBuilderTaskID(t.Context(), "other-task")
+	mismatched := operationscontract.WithBuilderTaskID(t.Context(), "other-task")
 	if code := apperror.CodeOf(call(mismatched, valid, func(context.Context) error { return nil })); code != "backend.authoring.builder_task_mismatch" {
 		t.Fatalf("task mismatch code=%s", code)
 	}

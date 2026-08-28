@@ -4,11 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
 	workflowvalidation "github.com/domainry/domainry-runtime/runtime/domain/workflow/validation"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 // ValidateAuthoringFragment applies Workflow-owned semantic validation to one

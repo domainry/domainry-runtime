@@ -5,7 +5,7 @@ import deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/depl
 import (
 	"sort"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	"github.com/domainry/domainry-foundation/apperror"
 )
 
 func firstFrontendCapabilityUsageError(issues []deploymentmodel.FrontendCapabilityUsageValidationIssue) error {

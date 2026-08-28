@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/logging"
+	"github.com/domainry/domainry-foundation/logging"
 	"go.uber.org/zap"
 )
 

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	expressioncontract "github.com/domainry/domainry-runtime/runtime/domain/expression/contract"
-	expressionmodel "github.com/domainry/domainry-runtime/runtime/domain/expression/model"
+	expressioncontract "github.com/domainry/domainry-foundation/expression/contract"
+	expressionmodel "github.com/domainry/domainry-foundation/expression/model"
 	rulesetmodel "github.com/domainry/domainry-runtime/runtime/domain/ruleset/model"
 )
 

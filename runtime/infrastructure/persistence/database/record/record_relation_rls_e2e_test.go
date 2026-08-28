@@ -10,6 +10,7 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -22,7 +23,6 @@ import (
 	. "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	querypersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/query"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExistence(t *testing.T) {

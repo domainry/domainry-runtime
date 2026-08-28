@@ -5,15 +5,15 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/mutation"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 func recordCreateEdgeDependencies(repository *createRepositoryProbe) RecordCreateDependencies {
@@ -281,7 +281,7 @@ func TestPlanCreateMutationCoversInputAuthorizationReplayAndPlannerEdges(t *test
 }
 
 func TestRecordCreateCommitErrorMapsBusinessConflict(t *testing.T) {
-	err := recordCreateCommitError(mutation.BusinessConflict("backend.order.status_conflict", "order", "order-1", "status"))
+	err := recordCreateCommitError(mutation.PolicyConflict("backend.order.status_conflict", "order", "order-1", "status"))
 	assertRecordCreateApplicationError(t, err, apperror.KindConflict, "backend.order.status_conflict", map[string]string{
 		"object": "order", "record_id": "order-1", "policy": "status",
 	})

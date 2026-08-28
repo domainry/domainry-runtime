@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
+	requestcontext "github.com/domainry/domainry-foundation/requestcontext"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	requestcontext "github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 const uploadArtifactGracePeriod = 24 * time.Hour

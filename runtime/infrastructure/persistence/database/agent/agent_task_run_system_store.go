@@ -4,11 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/capacity"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 func (s *AgentTaskRunStore) ListAgentTaskRunsForWorker(ctx context.Context, scope principalmodel.SystemScope, filter agentrepository.AgentTaskRunFilter) ([]agentmodel.AgentTaskRun, error) {

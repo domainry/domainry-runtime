@@ -7,6 +7,7 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
 	deployment "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	principalapplication "github.com/domainry/domainry-runtime/runtime/application/principal"
@@ -21,7 +22,6 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func buildRecordApplicationDependencies(s *runtimeAssembly) recordapplication.RecordApplicationDependencies {

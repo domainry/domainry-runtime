@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	"github.com/domainry/domainry-foundation/apperror"
 )
 
 func (s *WorkflowReferenceValidator) validateWorkflowRunAsActionPermission(ctx context.Context, workflow definitionmodel.WorkflowSchema, nodeID string, action definitionmodel.ActionSchema) []workflowmodel.WorkflowValidationIssue {

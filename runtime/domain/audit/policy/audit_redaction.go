@@ -1,6 +1,6 @@
 package policy
 
-import "github.com/domainry/domainry-runtime/runtime/platform/secrets"
+import "github.com/domainry/domainry-foundation/secrets"
 
 // RedactSensitiveMap returns a deep copy with credential-shaped values masked.
 func RedactSensitiveMap(value map[string]any) map[string]any {

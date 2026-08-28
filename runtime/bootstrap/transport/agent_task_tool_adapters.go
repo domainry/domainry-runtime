@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	agentstate "github.com/domainry/domainry-runtime/runtime/application/agent"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
@@ -14,7 +15,6 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type agentTaskToolQueryAdapter struct {

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func badRequest(code string, params ...string) error {

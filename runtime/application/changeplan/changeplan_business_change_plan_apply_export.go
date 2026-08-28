@@ -19,11 +19,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/logging"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
-	"github.com/domainry/domainry-runtime/runtime/platform/logging"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 type BusinessChangePlanApplyResult struct {

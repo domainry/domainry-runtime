@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -19,6 +20,8 @@ import (
 	notificationmodule "github.com/domainry/domainry-notification/module"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
@@ -28,9 +31,7 @@ import (
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	"github.com/domainry/domainry-runtime/runtime/transport/provision"
 )
@@ -459,7 +460,7 @@ func runtimeAuthoringRequest(t *testing.T, runtime *Runtime, method string, path
 		payload = bytes.NewReader(encoded)
 	}
 	request := httptest.NewRequest(method, path, payload)
-	ctx := requestcontext.WithRuntimeAuthoringBuilderTaskID(request.Context(), "builder-task-e2e")
+	ctx := operationscontract.WithBuilderTaskID(request.Context(), "builder-task-e2e")
 	ctx = requestcontext.WithWorkspaceID(ctx, "default")
 	request = request.WithContext(ctx)
 	request.Header.Set("Content-Type", "application/json")

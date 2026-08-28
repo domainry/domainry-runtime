@@ -3,9 +3,9 @@ package metadata
 import (
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
 )
 
 func TestMetadataBuilderIdempotencyRejectsSameKeyWithDifferentPayload(t *testing.T) {

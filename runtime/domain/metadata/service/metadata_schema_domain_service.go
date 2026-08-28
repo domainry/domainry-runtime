@@ -3,9 +3,9 @@ package service
 import (
 	"context"
 
+	collectionplatform "github.com/domainry/domainry-foundation/collection"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
-	collectionplatform "github.com/domainry/domainry-runtime/runtime/platform/collection"
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 

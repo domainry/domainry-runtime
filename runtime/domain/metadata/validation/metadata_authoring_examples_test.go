@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	metadataauthoring "github.com/domainry/domainry-runtime/runtime/domain/metadata/contract"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestMetadataAuthoringExamplesExecuteOwnerValidators(t *testing.T) {

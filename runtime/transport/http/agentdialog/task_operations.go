@@ -6,11 +6,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/idempotency"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
 	operationshttp "github.com/domainry/domainry-runtime/runtime/transport/http/operations"
 )
 

@@ -20,8 +20,8 @@ import (
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 
+	apperrorbusiness "github.com/domainry/domainry-foundation/apperror"
 	integrationprojection "github.com/domainry/domainry-runtime/runtime/domain/integration/projection"
-	apperrorbusiness "github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type IntegrationWorkflowRunResult struct {

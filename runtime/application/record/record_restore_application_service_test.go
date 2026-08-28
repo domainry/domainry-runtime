@@ -18,8 +18,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type restoreRepositoryProbe struct {

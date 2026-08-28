@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	partymodel "github.com/domainry/domainry-runtime/runtime/domain/party/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func (s *PartyCatalogDomainService) ListOrganizationExtensions(ctx context.Context, workspaceID string) ([]partymodel.OrganizationExtension, error) {

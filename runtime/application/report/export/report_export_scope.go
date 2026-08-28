@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/service"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func NormalizeScope(report reportmodel.ReportSchema, objectKey string, control reportmodel.ReportExportControlSchema, request reportmodel.ReportExportScopeRequest, principal principalmodel.Principal) (reportmodel.ReportExportScopeRequest, reportmodel.ReportSchema, map[string]bool, error) {

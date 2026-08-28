@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func RecordAutomationTransitionCandidate(before, candidate map[string]any) bool {

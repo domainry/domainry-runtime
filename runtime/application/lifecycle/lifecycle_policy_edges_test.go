@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 	lifecyclepolicy "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/policy"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 func lifecycleValidPolicyVersion(now time.Time) lifecyclemodel.PolicyVersion {

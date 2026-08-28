@@ -9,9 +9,9 @@ import (
 
 	"strings"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 func (e *WorkflowProcessEngine) Simulate(ctx context.Context, workflow definitionmodel.WorkflowSchema, variables map[string]any, principal principalmodel.Principal) ([]workflowmodel.WorkflowSimulationNode, error) {

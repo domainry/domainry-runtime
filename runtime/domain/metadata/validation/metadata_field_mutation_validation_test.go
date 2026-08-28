@@ -8,8 +8,8 @@ import (
 
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestNormalizeFieldMutationOwnsAllowedTypeAndRelationCardinality(t *testing.T) {

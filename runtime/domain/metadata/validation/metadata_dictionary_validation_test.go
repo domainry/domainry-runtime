@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	"github.com/domainry/domainry-foundation/apperror"
 )
 
 func TestDictionaryValidationReturnsIndexedDuplicateFieldPath(t *testing.T) {

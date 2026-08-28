@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	partymodel "github.com/domainry/domainry-runtime/runtime/domain/party/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type partyRepositoryStub struct {

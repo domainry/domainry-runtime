@@ -1,11 +1,10 @@
 package transport
 
 import (
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 func TestEntrypointMuxKeepsProvisionAndBusinessTransportsSeparate(t *testing.T) {
@@ -78,7 +77,7 @@ func TestEntrypointMuxHidesConfiguringRuntimeFromNonBuilderTraffic(t *testing.T)
 	handler := &EntrypointMux{}
 	handler.SetProvision(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusAccepted) }))
 	handler.SetBusiness(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if requestcontext.RuntimeAuthoringBuilderTaskID(r.Context()) != "task-1" {
+		if operationscontract.BuilderTaskID(r.Context()) != "task-1" {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}

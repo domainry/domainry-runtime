@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
+	"github.com/domainry/domainry-foundation/requestcontext"
 )
 
 const CurrentWorkspaceRLSPolicyVersion = "v1"

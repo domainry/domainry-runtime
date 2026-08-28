@@ -8,13 +8,13 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	metadataservice "github.com/domainry/domainry-runtime/runtime/domain/metadata/service"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/service"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestReportDirectKeyEntrypointsConcealDefinitionWithoutRequiredPermission(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	automationseed "github.com/domainry/domainry-runtime/runtime/application/seed/automation"
 	businessseed "github.com/domainry/domainry-runtime/runtime/application/seed/business"
@@ -18,7 +19,6 @@ import (
 	automationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automation"
 	changeplanpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/changeplan"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 type runtimeSeedSynchronizationOperations struct {

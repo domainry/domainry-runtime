@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	reportexport "github.com/domainry/domainry-runtime/runtime/application/report/export"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
@@ -18,7 +19,6 @@ import (
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/service"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 const reportExportDownloadTTL = 15 * time.Minute

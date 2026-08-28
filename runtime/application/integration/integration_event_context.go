@@ -4,11 +4,11 @@ import (
 	"context"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/logging"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationruntime "github.com/domainry/domainry-runtime/runtime/domain/integration/runtime"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/logging"
 	"go.uber.org/zap"
 )
 

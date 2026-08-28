@@ -8,8 +8,8 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"sort"
 
+	"github.com/domainry/domainry-foundation/mutation"
 	"github.com/domainry/domainry-runtime/runtime/platform/capacity"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 
 	"strings"
 	"time"

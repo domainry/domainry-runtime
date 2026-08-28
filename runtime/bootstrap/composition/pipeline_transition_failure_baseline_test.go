@@ -8,6 +8,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	apperror "github.com/domainry/domainry-foundation/apperror"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -17,7 +18,6 @@ import (
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type pipelineFailureRepository struct {

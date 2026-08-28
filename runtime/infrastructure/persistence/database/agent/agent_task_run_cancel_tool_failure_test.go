@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestAgentTaskRunStoreRequestCancelFailureMatrix(t *testing.T) {

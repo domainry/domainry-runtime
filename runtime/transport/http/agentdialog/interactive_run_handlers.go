@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	agentruntime "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func (h *AgentDialogHandler) runTypedInteractiveAgent(w http.ResponseWriter, r *http.Request, payload agentDialogRunRequest) {

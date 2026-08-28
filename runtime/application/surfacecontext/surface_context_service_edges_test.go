@@ -10,12 +10,12 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	surfacecontextmodel "github.com/domainry/domainry-runtime/runtime/domain/surfacecontext/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestSurfaceContextRequestNormalizationLimitsErrorsAndSelection(t *testing.T) {

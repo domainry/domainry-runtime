@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/capacity"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 var recordBatchJobColumns = []string{

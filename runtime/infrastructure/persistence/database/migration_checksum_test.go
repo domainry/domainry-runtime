@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/filelock"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/filelock"
 )
 
 func TestMigrationChecksumRejectsEditedAppliedFile(t *testing.T) {

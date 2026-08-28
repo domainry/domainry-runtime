@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestOwnerTaskProjectionMapsPayloadWithoutRecordDependencies(t *testing.T) {

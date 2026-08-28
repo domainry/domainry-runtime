@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/idempotency"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
 )
 
 const idempotencyCleanupLeaseID = "receipts"

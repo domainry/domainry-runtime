@@ -3,7 +3,7 @@ package validation
 import (
 	"strings"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	"github.com/domainry/domainry-foundation/apperror"
 )
 
 func badRequest(code string, params ...string) error {

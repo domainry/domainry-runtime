@@ -17,11 +17,11 @@ import (
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationpolicy "github.com/domainry/domainry-runtime/runtime/domain/integration/policy"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
 )
 

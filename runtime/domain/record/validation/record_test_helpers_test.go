@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	apperror "github.com/domainry/domainry-foundation/apperror"
 )
 
 func assertValidationCode(t *testing.T, err error, code string) {

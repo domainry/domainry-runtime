@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func reportJoinRecordKey(record *recordmodel.Record, equalities []reportmodel.ReportDatasetJoinFieldEquality, left bool) (string, bool) {

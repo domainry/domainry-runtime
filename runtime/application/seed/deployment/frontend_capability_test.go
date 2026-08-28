@@ -18,8 +18,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 

@@ -9,15 +9,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/mutation"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 const actionExecutionLeaseTTL = 30 * time.Second
@@ -325,7 +325,7 @@ func executionServiceError(operation string, err error) error {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return apperror.New(apperror.KindUnavailable, "backend.action.timeout", err, nil)
 	}
-	var businessConflict *mutation.BusinessConflictError
+	var businessConflict *mutation.PolicyConflictError
 	if errors.As(err, &businessConflict) {
 		return apperror.New(apperror.KindConflict, businessConflict.Code, err, map[string]string{"resource": businessConflict.Resource, "identifier": businessConflict.Identifier, "field": businessConflict.Field})
 	}

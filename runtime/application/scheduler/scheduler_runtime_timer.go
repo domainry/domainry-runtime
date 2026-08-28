@@ -19,9 +19,9 @@ import (
 
 	"time"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/logging"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/logging"
+	"github.com/domainry/domainry-foundation/mutation"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 	"go.uber.org/zap"
 )

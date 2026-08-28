@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/domainry/domainry-foundation/logging"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/logging"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 

@@ -3,7 +3,7 @@ package service
 import (
 	"errors"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	"github.com/domainry/domainry-foundation/apperror"
 )
 
 func automationErrorDetails(err error) (string, map[string]string) {

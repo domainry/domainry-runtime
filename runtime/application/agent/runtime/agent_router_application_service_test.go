@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type agentRouterFunc func(context.Context, agentmodel.GlobalAgentContext, string, []AgentRouteCandidate) (AgentRouteResult, error)

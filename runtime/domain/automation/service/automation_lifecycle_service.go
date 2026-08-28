@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func ValidateIntegrationOutput(connectors []integrationmodel.ConnectorSchema, action automationmodel.AutomationInstructionSchema, output map[string]any) error {

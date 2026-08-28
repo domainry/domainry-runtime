@@ -17,9 +17,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	notificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notification"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/testsupport/notificationsdkfixture"
 )

@@ -1,11 +1,10 @@
 package metadata
 
 import (
+	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	"net/http"
 	"strings"
-
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 type metadataAuthoringValidationFailure struct {
@@ -23,7 +22,7 @@ type metadataAuthoringValidationFailure struct {
 }
 
 func (h *MetadataHandler) writeMetadataAuthoringValidationResult(w http.ResponseWriter, r *http.Request, result metadatamodel.MetadataDefinitionValidationResult) {
-	if result.Valid || strings.TrimSpace(requestcontext.RuntimeAuthoringBuilderTaskID(r.Context())) == "" || len(result.Errors) == 0 {
+	if result.Valid || strings.TrimSpace(operationscontract.BuilderTaskID(r.Context())) == "" || len(result.Errors) == 0 {
 		h.writeJSON(w, http.StatusOK, result)
 		return
 	}

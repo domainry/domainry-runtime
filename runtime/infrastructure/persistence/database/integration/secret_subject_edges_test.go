@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/secrets"
 	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/secrets"
 )
 
 type failingIntegrationKeyProvider struct{ err error }

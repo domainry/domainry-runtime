@@ -8,11 +8,11 @@ import (
 
 	"strings"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
+	"github.com/domainry/domainry-foundation/telemetry"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationpolicy "github.com/domainry/domainry-runtime/runtime/domain/integration/policy"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
-	"github.com/domainry/domainry-runtime/runtime/platform/telemetry"
 )
 
 func (s *IntegrationApplicationService) RecordIntegrationInvocation(ctx context.Context, req integrationmodel.IntegrationInvocationRecordRequest, principal principalmodel.Principal) (integrationmodel.IntegrationInvocation, error) {

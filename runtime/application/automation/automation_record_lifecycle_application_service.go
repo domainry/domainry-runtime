@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	requestcontext "github.com/domainry/domainry-foundation/requestcontext"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
@@ -16,8 +18,6 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	requestcontext "github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 func AutomationFindBeforeCreateReplay(ctx context.Context, rules []automationmodel.AutomationRuleSchema, repository automationcontract.AutomationRecordReader, object definitionmodel.ObjectSchema, input map[string]any, principal principalmodel.Principal, canAccess func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool) (recordmodel.Record, bool, error) {

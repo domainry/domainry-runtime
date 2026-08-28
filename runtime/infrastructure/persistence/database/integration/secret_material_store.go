@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/secrets"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	"github.com/domainry/domainry-runtime/runtime/platform/secrets"
 )
 
 func (r IntegrationConfigStore) PutSecretMaterial(ctx context.Context, workspaceID, secretKey, value string) error {

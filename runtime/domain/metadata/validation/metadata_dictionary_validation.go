@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func MetadataValidateDictionaryDefinition(resourceKey string, payload json.RawMessage) error {

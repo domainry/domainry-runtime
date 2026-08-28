@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	partymodel "github.com/domainry/domainry-runtime/runtime/domain/party/model"
 	partyrepository "github.com/domainry/domainry-runtime/runtime/domain/party/repository"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type PartyDomainService struct {

@@ -7,11 +7,11 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestIntegrationConnectionExamplesExecuteRuntimeStatusValidator(t *testing.T) {

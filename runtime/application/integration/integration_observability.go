@@ -11,11 +11,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/domainry/domainry-foundation/logging"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationruntime "github.com/domainry/domainry-runtime/runtime/domain/integration/runtime"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
-	"github.com/domainry/domainry-runtime/runtime/platform/logging"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	"github.com/domainry/domainry-runtime/runtime/platform/resilience"
 	"go.uber.org/zap"

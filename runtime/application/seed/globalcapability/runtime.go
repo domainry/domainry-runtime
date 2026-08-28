@@ -9,9 +9,9 @@ import (
 
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	workflowrepository "github.com/domainry/domainry-runtime/runtime/domain/workflow/repository"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 
 	"context"
 	"strings"

@@ -1,8 +1,8 @@
 package database
 
 import (
+	"github.com/domainry/domainry-foundation/mutation"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 
 	"context"
 	"database/sql"
@@ -13,10 +13,10 @@ import (
 
 	"strings"
 
+	"github.com/domainry/domainry-foundation/secrets"
 	runtimeschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/schema"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/secrets"
 )
 
 // The methods and functions in this file are the narrow SQL seams used by

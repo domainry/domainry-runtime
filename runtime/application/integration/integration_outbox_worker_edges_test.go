@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/mutation"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationpolicy "github.com/domainry/domainry-runtime/runtime/domain/integration/policy"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	integrationruntime "github.com/domainry/domainry-runtime/runtime/domain/integration/runtime"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 	workertestkit "github.com/domainry/domainry-runtime/runtime/platform/worker/testkit"
 )

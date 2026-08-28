@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/logging"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/logging"
 	"go.uber.org/zap"
 )
 

@@ -3,7 +3,7 @@ package agent
 import (
 	"errors"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	"github.com/domainry/domainry-foundation/apperror"
 )
 
 func errorKind(err error) apperror.ErrorKind {

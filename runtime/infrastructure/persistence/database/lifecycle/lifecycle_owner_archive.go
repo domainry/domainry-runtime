@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
+	requestcontext "github.com/domainry/domainry-foundation/requestcontext"
 	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
-	requestcontext "github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 func (e OwnerExecutor) archiveCandidate(ctx context.Context, job lifecyclemodel.CleanupJob, policy lifecyclemodel.PolicyVersion, spec cleanupSpec, resourceID string) (bool, error) {

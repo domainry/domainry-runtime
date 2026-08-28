@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	"github.com/domainry/domainry-foundation/apperror"
 )
 
 // FailureClass is the shared technical recovery vocabulary. Business owners

@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/idempotency"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
 )
 
 func (h *MetadataHandler) applyMetadataAuthoringHeaders(w http.ResponseWriter, r *http.Request, request *metadatamodel.MetadataDefinitionUpsertRequest) bool {

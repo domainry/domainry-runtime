@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationprojection "github.com/domainry/domainry-runtime/runtime/domain/automation/projection"
@@ -25,7 +27,6 @@ import (
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 func businessSystemHandlerApplication(featureErr error) *businesssystemapplication.BusinessSystemApplicationService {
@@ -146,7 +147,7 @@ func TestRuntimeAuthoringValidationDrivesTrustedLifecycleCallbacks(t *testing.T)
 	})
 	body := []byte(`{"coverage":{"version":"runtime-authoring-coverage-v1","requirements":[{"requirement_id":"order-management","capability_keys":["schema.object"],"resources":[{"resource_type":"object","resource_key":"order"}],"scenario_ids":["order.create.success"]}]}}`)
 	request := httptest.NewRequest(http.MethodPost, "/domain-system-validation", bytes.NewReader(body))
-	ctx := requestcontext.WithRuntimeAuthoringBuilderTaskID(request.Context(), "task-1")
+	ctx := operationscontract.WithBuilderTaskID(request.Context(), "task-1")
 	response := httptest.NewRecorder()
 	handler.validateRuntimeAuthoring(response, request.WithContext(ctx))
 	if response.Code != http.StatusOK || len(events) != 2 || events[0] != "begin:task-1" || events[1] != "complete:task-1:true:false" {

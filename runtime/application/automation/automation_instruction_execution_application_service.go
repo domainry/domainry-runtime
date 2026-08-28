@@ -6,15 +6,15 @@ import (
 	"context"
 	"time"
 
+	"github.com/domainry/domainry-foundation/mutation"
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationruntime "github.com/domainry/domainry-runtime/runtime/domain/automation/runtime"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
 
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )

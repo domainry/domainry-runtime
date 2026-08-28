@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
 )
 
 const maxRecordImportPayloadBytes = 2 << 20

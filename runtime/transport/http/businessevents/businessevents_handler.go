@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
+	apperror "github.com/domainry/domainry-foundation/apperror"
 	businesseventapplication "github.com/domainry/domainry-runtime/runtime/application/businessevent"
 	businesseventmodel "github.com/domainry/domainry-runtime/runtime/domain/businessevent/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 const Route = "/events/business"

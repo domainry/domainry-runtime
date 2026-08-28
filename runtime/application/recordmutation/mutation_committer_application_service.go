@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/mutation"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 type MutationPlanStore interface {

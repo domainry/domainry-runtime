@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/secrets"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/secrets"
 )
 
 func TestRuntimeStoreNilAndDialectContracts(t *testing.T) {

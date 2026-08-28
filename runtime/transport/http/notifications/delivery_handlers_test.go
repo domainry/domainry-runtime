@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
 

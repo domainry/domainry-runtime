@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func newStartedOperationsReceipt(t *testing.T) (*OperationsApplicationService, *operationsRepositoryProbe, operationsmodel.OperationsReceipt, principalmodel.SystemScope) {

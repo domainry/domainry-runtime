@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/idempotency"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
 )
 
 type ActionAssuranceError struct{ Code string }

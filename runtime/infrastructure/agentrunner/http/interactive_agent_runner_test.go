@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	agentruntime "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestInteractiveAgentRunnerUsesDistinctTypedContract(t *testing.T) {

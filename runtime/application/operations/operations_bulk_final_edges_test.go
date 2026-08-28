@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestOperationsBulkFinalFilterActionAndReplayConditions(t *testing.T) {

@@ -26,7 +26,7 @@ import (
 
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	apperror "github.com/domainry/domainry-foundation/apperror"
 
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"

@@ -4,12 +4,12 @@ import (
 	"errors"
 	"strings"
 
+	apperror "github.com/domainry/domainry-foundation/apperror"
 	actionpolicy "github.com/domainry/domainry-runtime/runtime/domain/action/policy"
 	actionvalidation "github.com/domainry/domainry-runtime/runtime/domain/action/validation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 // ActionNormalizePayload coordinates Action's payload contract with Record's

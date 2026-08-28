@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/telemetry"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationpolicy "github.com/domainry/domainry-runtime/runtime/domain/integration/policy"
 	integrationprojection "github.com/domainry/domainry-runtime/runtime/domain/integration/projection"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/telemetry"
 )
 
 func (s *IntegrationApplicationService) ListIntegrationInvocations(ctx context.Context, connectorKey, recordID, workflowExecutionID, status, provider, externalPrincipal string, limit int, principal principalmodel.Principal) ([]integrationmodel.IntegrationInvocation, error) {

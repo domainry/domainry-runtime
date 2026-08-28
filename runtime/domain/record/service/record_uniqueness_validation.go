@@ -8,8 +8,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type RecordUniquenessValidator struct {

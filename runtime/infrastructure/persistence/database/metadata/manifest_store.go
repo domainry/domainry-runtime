@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 var disableRemovedGeneratedActionsForManifest = func(ctx context.Context, store MetadataStore, tx *sql.Tx, manifest manifestmodel.ManifestSchema, now string) error {

@@ -21,9 +21,9 @@ import (
 
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
 
+	"github.com/domainry/domainry-foundation/mutation"
 	schedulerbusiness "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	schedulerpolicy "github.com/domainry/domainry-runtime/runtime/domain/scheduler/policy"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 func schedulerRuntimeSystemScope() principalmodel.SystemScope {

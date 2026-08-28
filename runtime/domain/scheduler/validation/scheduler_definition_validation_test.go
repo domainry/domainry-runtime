@@ -5,7 +5,7 @@ import (
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	"testing"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	"github.com/domainry/domainry-foundation/apperror"
 )
 
 func TestSchedulerAuthoringValidationRejectsInvalidCalendarFields(t *testing.T) {

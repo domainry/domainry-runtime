@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/mutation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -18,7 +19,6 @@ import (
 	metadatapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 func TestConstraintCompilerEquivalentStrategiesAcrossDialects(t *testing.T) {
@@ -202,7 +202,7 @@ func runConstraintStrategyFixture(t *testing.T, cfg config.Config) {
 
 func assertConstraintBusinessConflict(t *testing.T, err error, code string) {
 	t.Helper()
-	var conflict *mutation.BusinessConflictError
+	var conflict *mutation.PolicyConflictError
 	if !errors.As(err, &conflict) || conflict.Code != code {
 		t.Fatalf("business conflict code=%s conflict=%#v err=%v", code, conflict, err)
 	}

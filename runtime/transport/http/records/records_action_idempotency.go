@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
 )
 
 func recordsActionIdempotencyKey(request *http.Request, payloadKey string) (string, error) {

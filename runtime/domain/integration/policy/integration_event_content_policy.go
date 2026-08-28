@@ -1,8 +1,8 @@
 package policy
 
 import (
+	"github.com/domainry/domainry-foundation/idempotency"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
 )
 
 // IntegrationEventContentFingerprint identifies the immutable business content

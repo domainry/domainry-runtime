@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func (e *BusinessHandlerExecutor) ValidationErrors() []error {

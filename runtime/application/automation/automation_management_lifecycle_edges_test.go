@@ -21,8 +21,8 @@ import (
 
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type automationManagementExecutionErrorProbe struct{ err error }

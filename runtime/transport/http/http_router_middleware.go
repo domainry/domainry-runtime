@@ -1,16 +1,17 @@
 package http
 
 import (
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	"net/http"
 	"runtime/debug"
 	"strings"
 	"time"
 
+	apperror "github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/logging"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
 	localization "github.com/domainry/domainry-runtime/runtime/platform/localization"
-	"github.com/domainry/domainry-runtime/runtime/platform/logging"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -288,7 +289,7 @@ func (s *HTTPRouter) withAuth(routes *http.ServeMux, next http.Handler) http.Han
 			next.ServeHTTP(w, r)
 			return
 		}
-		if requestcontext.RuntimeAuthoringBuilderTaskID(r.Context()) != "" {
+		if operationscontract.BuilderTaskID(r.Context()) != "" {
 			next.ServeHTTP(w, r)
 			return
 		}

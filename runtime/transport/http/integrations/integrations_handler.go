@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	integrationvalidation "github.com/domainry/domainry-runtime/runtime/domain/integration/validation"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 	operationshttp "github.com/domainry/domainry-runtime/runtime/transport/http/operations"
 )
 

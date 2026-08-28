@@ -9,9 +9,9 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	preferencemodel "github.com/domainry/domainry-runtime/runtime/domain/preference/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type workspacePreferenceRepositoryStub struct {

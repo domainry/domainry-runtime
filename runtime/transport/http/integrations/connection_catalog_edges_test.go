@@ -3,14 +3,13 @@ package integrations
 import (
 	"context"
 	"errors"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
@@ -19,7 +18,7 @@ import (
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
+	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
 
 type catalogHTTPRepository struct {
@@ -136,7 +135,7 @@ func TestUpsertIntegrationConnectionOperationsSuccess(t *testing.T) {
 		writeJSON:         func(http.ResponseWriter, int, any) { wrote = true },
 	}
 	request := httptest.NewRequest(http.MethodPut, "/", nil)
-	request = request.WithContext(requestcontext.WithRuntimeAuthoringBuilderTaskID(request.Context(), "task-1"))
+	request = request.WithContext(operationscontract.WithBuilderTaskID(request.Context(), "task-1"))
 	request.SetPathValue("connectionKey", "connection")
 	request.Header.Set("Builder-Task-ID", "task-1")
 	request.Header.Set("Idempotency-Key", "upsert-1")

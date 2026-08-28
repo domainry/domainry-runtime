@@ -32,10 +32,10 @@ import (
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 
+	apperror "github.com/domainry/domainry-foundation/apperror"
 	automationbusiness "github.com/domainry/domainry-runtime/runtime/domain/automation/service"
 	automationvalidation "github.com/domainry/domainry-runtime/runtime/domain/automation/validation"
 	capability "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 

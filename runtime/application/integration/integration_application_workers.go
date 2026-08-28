@@ -7,19 +7,19 @@ import (
 	integrationprojection "github.com/domainry/domainry-runtime/runtime/domain/integration/projection"
 	integrationruntime "github.com/domainry/domainry-runtime/runtime/domain/integration/runtime"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/mutation"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/logging"
+	"github.com/domainry/domainry-foundation/requestcontext"
+	"github.com/domainry/domainry-foundation/telemetry"
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
-	"github.com/domainry/domainry-runtime/runtime/platform/logging"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
-	"github.com/domainry/domainry-runtime/runtime/platform/telemetry"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"

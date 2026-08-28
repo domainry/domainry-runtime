@@ -16,11 +16,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/logging"
+	"github.com/domainry/domainry-foundation/logging"
 )
 
 type RecordsHandler struct {

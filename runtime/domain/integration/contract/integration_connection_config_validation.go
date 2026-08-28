@@ -10,10 +10,10 @@ import (
 	"strconv"
 	"strings"
 
+	apperror "github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func IntegrationValidateConnectionConfig(connector integrationmodel.ConnectorSchema, providerKey, status string, config map[string]any) error {

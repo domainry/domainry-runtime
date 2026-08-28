@@ -3,12 +3,12 @@ package notificationfacade
 import (
 	"context"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	runtimemodel "github.com/domainry/domainry-notification-sdk/contract"
 	sdkcontract "github.com/domainry/domainry-notification-sdk/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func inboxAuthority(ctx context.Context, surface surfacemodel.ProductSurface) (notificationsdk.UserAuthority, error) {

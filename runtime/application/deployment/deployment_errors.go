@@ -3,8 +3,8 @@ package deployment
 import (
 	"strings"
 
+	apperror "github.com/domainry/domainry-foundation/apperror"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func deploymentAuthorizeQuery(principal principalmodel.Principal) error {

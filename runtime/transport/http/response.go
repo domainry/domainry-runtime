@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	"net/http"
 	"strings"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
+	"github.com/domainry/domainry-foundation/apperror"
 )
 
 type runtimeAuthoringErrorSemantics struct {
@@ -51,7 +51,7 @@ func serviceErrorHTTPStatus(r *http.Request, err error) int {
 }
 
 func runtimeAuthoringRequestTrusted(r *http.Request) bool {
-	return r != nil && strings.TrimSpace(requestcontext.RuntimeAuthoringBuilderTaskID(r.Context())) != ""
+	return r != nil && strings.TrimSpace(operationscontract.BuilderTaskID(r.Context())) != ""
 }
 
 func runtimeAuthoringProtocolError(code string) bool {

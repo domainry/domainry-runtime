@@ -3,7 +3,7 @@ package recordmodel
 import (
 	"time"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
+	"github.com/domainry/domainry-foundation/idempotency"
 )
 
 type RecordMutationExecution struct {

@@ -4,9 +4,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 )
 

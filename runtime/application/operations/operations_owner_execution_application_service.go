@@ -3,13 +3,13 @@ package operations
 import (
 	"context"
 	"encoding/json"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationsprojection "github.com/domainry/domainry-runtime/runtime/domain/operations/projection"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 type OperationsOwnerExecutionRequest struct {
@@ -88,7 +88,7 @@ func (s *OperationsApplicationService) ExecuteDirectAuthoringUpsert(
 		// exists, so optimistic concurrency for updates is unchanged.
 		request.ExpectedResourceHash = "empty"
 	}
-	if trustedTaskID := requestcontext.RuntimeAuthoringBuilderTaskID(ctx); trustedTaskID != "" && trustedTaskID != request.BuilderTaskID {
+	if trustedTaskID := operationscontract.BuilderTaskID(ctx); trustedTaskID != "" && trustedTaskID != request.BuilderTaskID {
 		return OperationsOwnerExecutionResult{}, apperror.New(apperror.KindForbidden, "backend.authoring.builder_task_mismatch", nil, nil)
 	}
 	if authorize == nil || currentHash == nil || execute == nil {

@@ -9,9 +9,9 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	agentruntime "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type InteractiveAgentRunner struct{ config Config }

@@ -15,9 +15,9 @@ import (
 
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	capability "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type managementExecutionRepository struct {

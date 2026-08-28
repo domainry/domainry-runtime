@@ -15,9 +15,9 @@ import (
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationpolicy "github.com/domainry/domainry-runtime/runtime/domain/integration/policy"
 
+	apperror "github.com/domainry/domainry-foundation/apperror"
 	capability "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type BindingValidationRequest struct {

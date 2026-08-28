@@ -3,9 +3,9 @@ package capability
 import (
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	schedulerpolicy "github.com/domainry/domainry-runtime/runtime/domain/scheduler/policy"
 	schedulervalidation "github.com/domainry/domainry-runtime/runtime/domain/scheduler/validation"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestSchedulerDefinitionAndScheduleExamplesExecuteOwnerValidator(t *testing.T) {

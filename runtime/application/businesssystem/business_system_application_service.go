@@ -29,8 +29,8 @@ import (
 
 	"strings"
 
+	apperror "github.com/domainry/domainry-foundation/apperror"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type BusinessSystemApplicationDependencies struct {

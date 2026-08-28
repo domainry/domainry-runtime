@@ -3,13 +3,12 @@ package businesssystem
 import (
 	"context"
 	"errors"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
@@ -17,7 +16,7 @@ import (
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
+	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
 
 func authoringHandlerValidation() *businesssystemapplication.RuntimeAuthoringValidationApplicationService {
@@ -47,7 +46,7 @@ func authoringHandlerForEdges(validation *businesssystemapplication.RuntimeAutho
 func authoringRequest(taskID string) *http.Request {
 	request := httptest.NewRequest(http.MethodPost, "/domain-system-authoring", nil)
 	if taskID != "" {
-		request = request.WithContext(requestcontext.WithRuntimeAuthoringBuilderTaskID(request.Context(), taskID))
+		request = request.WithContext(operationscontract.WithBuilderTaskID(request.Context(), taskID))
 	}
 	return request
 }

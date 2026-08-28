@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/mutation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 func (s *SchedulerApplicationService) rescheduleDefinitionCursor(ctx context.Context, workspaceID string, definition recordmodel.Record, nextRunAt time.Time) (recordmodel.Record, map[string]any, error) {

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
@@ -17,7 +18,6 @@ import (
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/service"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 	"github.com/domainry/domainry-runtime/runtime/platform/productbrand"
 )
 

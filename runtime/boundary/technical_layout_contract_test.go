@@ -269,7 +269,7 @@ func TestRuntimeDomainContainsNoApplicationOrProcessLifecycleImplementations(t *
 	domainRoot := filepath.Join(runtimeRoot(t), "domain")
 	forbiddenImports := []string{
 		"github.com/domainry/domainry-runtime/runtime/platform/worker",
-		"github.com/domainry/domainry-runtime/runtime/platform/logging",
+		"github.com/domainry/domainry-foundation/logging",
 	}
 	forbiddenMutationPorts := technicalLayoutStringSet("Create", "Update", "Delete", "Restore", "Publish", "InvokeAction", "RunWorkflow", "EmitEvent")
 	forbiddenApplicationContracts := technicalLayoutStringSet(

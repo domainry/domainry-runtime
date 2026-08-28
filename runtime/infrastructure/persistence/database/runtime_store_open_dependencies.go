@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/domainry/domainry-foundation/secrets"
+	"github.com/domainry/domainry-foundation/telemetry"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/secrets"
-	"github.com/domainry/domainry-runtime/runtime/platform/telemetry"
 )
 
 type runtimePostgresProfile interface {

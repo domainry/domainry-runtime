@@ -13,11 +13,11 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
 	healthplatform "github.com/domainry/domainry-runtime/runtime/platform/health"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"

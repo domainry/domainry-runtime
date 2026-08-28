@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	agentruntime "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type agentDialogRunRequest struct {

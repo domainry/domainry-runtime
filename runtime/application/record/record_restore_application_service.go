@@ -23,9 +23,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/mutation"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 type RecordRestoreDependencies struct {
@@ -62,7 +62,7 @@ func (s *RecordRestoreApplicationService) Restore(ctx context.Context, objectKey
 		return recordmodel.Record{}, err
 	}
 	if err := s.dependencies.MutationKernel.CommitPlan(ctx, plan, nil); err != nil {
-		var businessConflict *mutation.BusinessConflictError
+		var businessConflict *mutation.PolicyConflictError
 		if errors.As(err, &businessConflict) {
 			return recordmodel.Record{}, recordRestoreError(apperror.KindConflict, businessConflict.Code, err, "object", businessConflict.Resource, "record_id", businessConflict.Identifier, "policy", businessConflict.Field)
 		}

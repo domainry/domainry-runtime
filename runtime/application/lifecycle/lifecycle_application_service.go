@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
+	requestcontext "github.com/domainry/domainry-foundation/requestcontext"
 	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
 	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 	lifecyclepolicy "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/policy"
 	lifecyclerepository "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	requestcontext "github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 const (

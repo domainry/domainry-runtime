@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	transactioncontract "github.com/domainry/domainry-runtime/runtime/domain/transaction/contract"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 type afterCommitFailureStore struct {

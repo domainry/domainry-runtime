@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	expressionmodel "github.com/domainry/domainry-runtime/runtime/domain/expression/model"
+	"github.com/domainry/domainry-foundation/apperror"
+	expressionmodel "github.com/domainry/domainry-foundation/expression/model"
 	rulesetmodel "github.com/domainry/domainry-runtime/runtime/domain/ruleset/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestDecodeRuleSetDefinitionAcceptsGenericTypedFirstMatchContract(t *testing.T) {

@@ -6,11 +6,11 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/mutation"
+	"github.com/domainry/domainry-foundation/telemetry"
 	transactioncontract "github.com/domainry/domainry-runtime/runtime/domain/transaction/contract"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
-	"github.com/domainry/domainry-runtime/runtime/platform/telemetry"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -550,7 +550,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 			}
 			if len(commit.Predicates) > 0 {
 				predicate := commit.Predicates[0]
-				return mutation.BusinessConflict(predicate.ErrorCode, commit.Object.Key, commit.Record.ID, predicate.Field)
+				return mutation.PolicyConflict(predicate.ErrorCode, commit.Object.Key, commit.Record.ID, predicate.Field)
 			}
 			return mutation.MutationConflict(commit.Object.Key, commit.Record.ID, mutation.MutationConflictOptimistic, nil)
 		}
@@ -638,7 +638,7 @@ func (r RecordStore) validateRelatedAggregateInvariantsTx(ctx context.Context, t
 		var rawLimit any
 		if err := tx.QueryRowContext(ctx, limitQuery, workspaceID, relationID).Scan(&rawLimit); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return mutation.BusinessConflict("backend.policy.related_record_missing", commit.Object.Key, commit.Record.ID, policy.RelationField)
+				return mutation.PolicyConflict("backend.policy.related_record_missing", commit.Object.Key, commit.Record.ID, policy.RelationField)
 			}
 			return fmt.Errorf("lock related aggregate limit %s: %w", policy.Key, err)
 		}
@@ -718,7 +718,7 @@ func (r RecordStore) validateRelatedAggregateInvariantsTx(ctx context.Context, t
 			return err
 		}
 		if !matched {
-			return mutation.BusinessConflict(policy.ErrorCode, commit.Object.Key, commit.Record.ID, policy.Key)
+			return mutation.PolicyConflict(policy.ErrorCode, commit.Object.Key, commit.Record.ID, policy.Key)
 		}
 	}
 	return nil
@@ -871,7 +871,7 @@ func (r RecordStore) validateTemporalExclusionTx(ctx context.Context, tx Transac
 		if err != nil {
 			return fmt.Errorf("validate temporal exclusion %s: %w", policy.Key, err)
 		}
-		return mutation.BusinessConflict(policy.ErrorCode, commit.Object.Key, commit.Record.ID, policy.Key)
+		return mutation.PolicyConflict(policy.ErrorCode, commit.Object.Key, commit.Record.ID, policy.Key)
 	}
 	return nil
 }

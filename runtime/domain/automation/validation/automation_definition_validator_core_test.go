@@ -3,9 +3,9 @@ package validation
 import (
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestAutomationDefinitionValidatorRejectsInvalidRuleContracts(t *testing.T) {

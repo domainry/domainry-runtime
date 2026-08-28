@@ -6,10 +6,10 @@ import (
 	"context"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 // AuditDomainService owns audit-domain behavior.

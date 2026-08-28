@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/mutation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 type recordTimerCalendarProbe struct{ called bool }

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/mutation"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 func TestAdapterSeamsDelegateAndNormalize(t *testing.T) {

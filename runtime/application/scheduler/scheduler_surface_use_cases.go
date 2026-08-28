@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	schedulerpolicy "github.com/domainry/domainry-runtime/runtime/domain/scheduler/policy"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 // TenantAdminSchedulerDefinitionDTO is the governed business-facing scheduler

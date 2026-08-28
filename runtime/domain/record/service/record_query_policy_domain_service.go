@@ -12,9 +12,9 @@ import (
 
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	collectionplatform "github.com/domainry/domainry-foundation/collection"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	collectionplatform "github.com/domainry/domainry-runtime/runtime/platform/collection"
 )
 
 type RecordQueryPolicyDependencies struct {

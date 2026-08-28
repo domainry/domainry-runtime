@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func (h *RecordsHandler) listActions(w http.ResponseWriter, r *http.Request) {

@@ -11,12 +11,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/secrets"
+	"github.com/domainry/domainry-foundation/telemetry"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
-	"github.com/domainry/domainry-runtime/runtime/platform/secrets"
-	"github.com/domainry/domainry-runtime/runtime/platform/telemetry"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
@@ -269,7 +269,7 @@ func openContextWithDependencies(ctx context.Context, cfg config.Config, depende
 	var postgresConnection runtimePostgresProfile
 	var postgresCapabilities postgres.Capabilities
 	var migratorCapabilities postgres.Capabilities
-	sqlMetrics := telemetry.NewSQLMetrics()
+	sqlMetrics := telemetry.NewSQLMetricsWithNamespace("domainry_runtime")
 	operationalMetrics := NewRuntimeOperationalMetrics(cfg.MigrationBackupLastSuccessAt, cfg.MigrationRestoreDrillSuccessAt)
 	dsn := ""
 	if dialect.Name() == "postgres" {

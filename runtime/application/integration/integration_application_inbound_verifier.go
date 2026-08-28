@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	"github.com/domainry/domainry-foundation/apperror"
 )
 
 func (s *IntegrationApplicationService) verifyRegisteredInboundWebhook(ctx context.Context, request integrationcontract.InboundWebhookRequest) (integrationcontract.VerifiedInboundWebhook, error) {

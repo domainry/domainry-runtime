@@ -3,9 +3,9 @@ package integration
 import (
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
 	integrationvalidation "github.com/domainry/domainry-runtime/runtime/domain/integration/validation"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestIntegrationReadExamplesExecuteOwnerValidator(t *testing.T) {

@@ -5,8 +5,8 @@ import (
 
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func RecordValidateImmutableAfterStatusPolicies(object definitionmodel.ObjectSchema, before, next map[string]any, operation string, principal principalmodel.Principal) error {

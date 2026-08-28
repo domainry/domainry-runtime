@@ -3,13 +3,13 @@ package composition
 import (
 	"context"
 
+	apperror "github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func (r recordApplicationRuntimeAdapter) Prepare(ctx context.Context, objectKey string, record recordmodel.Record, before map[string]any, principal principalmodel.Principal, trigger string) ([]workflowmodel.WorkflowExecution, []workflowmodel.WorkflowRunSummary, error) {

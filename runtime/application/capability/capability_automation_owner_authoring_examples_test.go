@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationpolicy "github.com/domainry/domainry-runtime/runtime/domain/automation/policy"
 	automationvalidation "github.com/domainry/domainry-runtime/runtime/domain/automation/validation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestAutomationInstructionExamplesExecuteOwnerValidator(t *testing.T) {

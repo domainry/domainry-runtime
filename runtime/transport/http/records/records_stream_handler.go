@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 // businessRecordSync is deliberately content-free. It only tells an

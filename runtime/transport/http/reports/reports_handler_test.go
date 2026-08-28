@@ -15,6 +15,7 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	reportapplication "github.com/domainry/domainry-runtime/runtime/application/report"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -23,7 +24,6 @@ import (
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/service"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type reportsExporterStub struct {

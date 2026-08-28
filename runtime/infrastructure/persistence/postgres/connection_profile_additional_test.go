@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
+	"github.com/domainry/domainry-foundation/telemetry"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
-	"github.com/domainry/domainry-runtime/runtime/platform/telemetry"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -103,7 +103,7 @@ func TestPostgresMigrationProfileValidationAndOpen(t *testing.T) {
 	if _, err := (ConnectionProfile{}).OpenMigration(); err == nil {
 		t.Fatal("expected missing migration DSN error")
 	}
-	db, err := profile.OpenMigration(telemetry.NewSQLMetrics())
+	db, err := profile.OpenMigration(telemetry.NewSQLMetricsWithNamespace("domainry_runtime"))
 	if err != nil || db.Stats().MaxOpenConnections != 1 {
 		t.Fatalf("migration db stats=%#v err=%v", db.Stats(), err)
 	}
@@ -131,7 +131,7 @@ func TestPostgresProfileOpenAndWorkspaceInitializer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := profile.Open(telemetry.NewSQLMetrics())
+	db, err := profile.Open(telemetry.NewSQLMetricsWithNamespace("domainry_runtime"))
 	if err != nil || db.Stats().MaxOpenConnections != 7 {
 		t.Fatalf("db stats=%#v err=%v", db.Stats(), err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	apperror "github.com/domainry/domainry-foundation/apperror"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
@@ -11,7 +12,6 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type runtimeAgentRecordVisibility struct{ records *runtimeAssembly }

@@ -15,10 +15,10 @@ import (
 
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/logging"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
-	"github.com/domainry/domainry-runtime/runtime/platform/logging"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 	"go.uber.org/zap"
 )

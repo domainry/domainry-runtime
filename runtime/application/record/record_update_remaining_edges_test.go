@@ -5,14 +5,14 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/mutation"
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 func TestRecordUpdatePersistedScopeFailureAtReadAndWriteStages(t *testing.T) {
@@ -88,7 +88,7 @@ func TestRecordUpdateFieldValidationAndTriggerDeduplication(t *testing.T) {
 }
 
 func TestRecordUpdateCommitErrorPreservesBusinessConflict(t *testing.T) {
-	err := mutation.BusinessConflict("backend.business.conflict", "customer", "customer-1", "status")
+	err := mutation.PolicyConflict("backend.business.conflict", "customer", "customer-1", "status")
 	mapped := recordUpdateCommitError(err)
 	if apperror.KindOf(mapped) != apperror.KindConflict || apperror.CodeOf(mapped) != "backend.business.conflict" {
 		t.Fatalf("mapped=%v", mapped)

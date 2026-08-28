@@ -28,11 +28,11 @@ import (
 
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/mutation"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 type actionUnitOfWorkStoreProbe struct {
@@ -533,7 +533,7 @@ func TestActionExecutionPhaseFollowsRuntimeOwnedUnitOfWork(t *testing.T) {
 
 	t.Run("business conflict is not retryable and rolls back", func(t *testing.T) {
 		handler := newHandler()
-		store := &actionUnitOfWorkStoreProbe{commitErr: mutation.BusinessConflict("backend.booking.capacity_conflict", "booking", "booking-1", "capacity")}
+		store := &actionUnitOfWorkStoreProbe{commitErr: mutation.PolicyConflict("backend.booking.capacity_conflict", "booking", "booking-1", "capacity")}
 		result, err := newService(t, store, handler).Invoke(t.Context(), actionmodel.ActionSourceHTTP, invocation)
 		if apperror.CodeOf(err) != "backend.booking.capacity_conflict" || result.Retryable || handler.execution.Phase() != runtimeext.ExecutionPhaseRolledBack {
 			t.Fatalf("result=%+v phase=%q error=%v", result, handler.execution.Phase(), err)

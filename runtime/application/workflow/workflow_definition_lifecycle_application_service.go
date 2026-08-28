@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	workflowvalidation "github.com/domainry/domainry-runtime/runtime/domain/workflow/validation"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 // InitializePublishedWorkflowDefinitions projects the already-published

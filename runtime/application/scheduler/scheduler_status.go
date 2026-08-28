@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func (s *SchedulerApplicationService) compileSchedulerRunNotification(ctx context.Context, workspaceID string, run recordmodel.Record, status string, now time.Time) (notificationmodel.NotificationEvent, bool, error) {

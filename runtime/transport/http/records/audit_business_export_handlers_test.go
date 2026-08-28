@@ -13,10 +13,10 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type recordsBusinessAuditExportStore struct {

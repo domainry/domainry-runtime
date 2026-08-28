@@ -3,7 +3,7 @@ package validation
 import (
 	"fmt"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	"github.com/domainry/domainry-foundation/apperror"
 )
 
 // IntegrationValidateReadLimit validates the public Integration list contract.

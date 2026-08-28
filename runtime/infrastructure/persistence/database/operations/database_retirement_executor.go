@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationspolicy "github.com/domainry/domainry-runtime/runtime/domain/operations/policy"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/datamigration"
 	drivercontract "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 var _ operationscontract.DatabaseRetirementExecutor = DatabaseRetirementSQLExecutor{}

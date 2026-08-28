@@ -4,10 +4,10 @@ import (
 	"context"
 	"sort"
 
+	apperror "github.com/domainry/domainry-foundation/apperror"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	deploymentvalidation "github.com/domainry/domainry-runtime/runtime/domain/deployment/validation"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func (s *DeploymentFrontendCapabilityApplicationService) ValidateManifest(ctx context.Context, manifest deploymentmodel.FrontendCapabilityManifest, principal principalmodel.Principal) (deploymentmodel.FrontendCapabilityManifestValidationResult, error) {

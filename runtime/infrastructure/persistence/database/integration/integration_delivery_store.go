@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/mutation"
+	"github.com/domainry/domainry-foundation/telemetry"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
-	"github.com/domainry/domainry-runtime/runtime/platform/telemetry"
 )
 
 type IntegrationDeliveryStore struct {
@@ -360,7 +360,7 @@ func (r IntegrationDeliveryStore) InsertOutbox(ctx context.Context, workspaceID 
 	}
 	fingerprint, err := idempotency.Fingerprint(idempotency.FingerprintInput{
 		UseCase: "integration.outbox.enqueue", ResourceType: "outbox", TargetID: value.ConnectorKey + ":" + value.ConnectionKey + ":" + value.Operation,
-		Payload: map[string]any{"payload": telemetry.BusinessPayload(value.Payload), "event_id": value.EventID, "request_ref": value.RequestRef},
+		Payload: map[string]any{"payload": telemetry.ApplicationPayload(value.Payload), "event_id": value.EventID, "request_ref": value.RequestRef},
 	})
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("fingerprint integration outbox message: %w", err)

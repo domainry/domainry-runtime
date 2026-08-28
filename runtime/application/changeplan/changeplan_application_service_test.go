@@ -12,8 +12,8 @@ import (
 
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type serviceRepositoryStub struct {

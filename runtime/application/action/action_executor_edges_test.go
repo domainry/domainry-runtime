@@ -6,13 +6,13 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/mutation"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 type actionExecutorEdgeHandler struct {
@@ -97,7 +97,7 @@ func TestBusinessHandlerExecutorPreservesClassifiedHandlerErrors(t *testing.T) {
 		name string
 		err  error
 	}{
-		{name: "business conflict", err: mutation.BusinessConflict("booking.full", "booking", "1", "status")},
+		{name: "business conflict", err: mutation.PolicyConflict("booking.full", "booking", "1", "status")},
 		{name: "mutation conflict", err: mutation.MutationConflict("booking", "1", mutation.MutationConflictOptimistic, errors.New("changed"))},
 		{name: "transient", err: mutation.TransactionTransient("booking", "1", mutation.TransactionTransientDeadlock, errors.New("deadlock"))},
 		{name: "commit unknown", err: mutation.TransactionCommitUnknown("booking", "1", errors.New("lost response"))},

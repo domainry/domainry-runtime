@@ -7,14 +7,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationspolicy "github.com/domainry/domainry-runtime/runtime/domain/operations/policy"
 	operationsprojection "github.com/domainry/domainry-runtime/runtime/domain/operations/projection"
 	operationsrepository "github.com/domainry/domainry-runtime/runtime/domain/operations/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
 )
 
 // OperationsIdempotencyReceiptControl retains the existing owner-specific

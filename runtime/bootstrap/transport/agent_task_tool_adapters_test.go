@@ -3,9 +3,9 @@ package transport
 import (
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestDecodeAgentRecordQueryBoundsSortAndRelations(t *testing.T) {

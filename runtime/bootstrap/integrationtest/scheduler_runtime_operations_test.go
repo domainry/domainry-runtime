@@ -26,7 +26,7 @@ import (
 
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
 
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	apperror "github.com/domainry/domainry-foundation/apperror"
 
 	workflowbusiness "github.com/domainry/domainry-runtime/runtime/application/workflow"
 

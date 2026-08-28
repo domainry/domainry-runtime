@@ -2,11 +2,12 @@ package transport
 
 import (
 	"encoding/json"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	"net/http"
 	"strings"
 	"sync"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
+	"github.com/domainry/domainry-foundation/requestcontext"
 )
 
 // EntrypointMux switches the process between unauthenticated Provision transport
@@ -68,7 +69,7 @@ func (h *EntrypointMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				_ = json.NewEncoder(w).Encode(map[string]any{"code": "runtime.configuring_access_required", "status": "configuring"})
 				return
 			}
-			ctx := requestcontext.WithRuntimeAuthoringBuilderTaskID(r.Context(), builderTaskID)
+			ctx := operationscontract.WithBuilderTaskID(r.Context(), builderTaskID)
 			ctx = requestcontext.WithWorkspaceID(ctx, "default")
 			ctx = requestcontext.WithActorID(ctx, "runtime-builder:"+builderTaskID)
 			r = r.WithContext(ctx)

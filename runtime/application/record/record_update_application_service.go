@@ -7,6 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/mutation"
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -19,9 +22,6 @@ import (
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 )
 
 type RecordUpdateDeniedObserver func(context.Context, string, string, principalmodel.Principal, error, string, map[string]any)
@@ -168,7 +168,7 @@ func recordUpdateCommitError(err error) error {
 	if errors.As(err, &applicationError) {
 		return err
 	}
-	var businessConflict *mutation.BusinessConflictError
+	var businessConflict *mutation.PolicyConflictError
 	if errors.As(err, &businessConflict) {
 		return recordUpdateError(apperror.KindConflict, businessConflict.Code, err, "object", businessConflict.Resource, "record_id", businessConflict.Identifier, "policy", businessConflict.Field)
 	}

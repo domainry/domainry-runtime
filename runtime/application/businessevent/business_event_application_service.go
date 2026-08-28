@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
+	apperror "github.com/domainry/domainry-foundation/apperror"
 	businesseventcontract "github.com/domainry/domainry-runtime/runtime/domain/businessevent/contract"
 	businesseventmodel "github.com/domainry/domainry-runtime/runtime/domain/businessevent/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type Limits struct {

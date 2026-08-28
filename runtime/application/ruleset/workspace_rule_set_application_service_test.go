@@ -8,10 +8,10 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
-	expressionmodel "github.com/domainry/domainry-runtime/runtime/domain/expression/model"
+	"github.com/domainry/domainry-foundation/apperror"
+	expressionmodel "github.com/domainry/domainry-foundation/expression/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	rulesetmodel "github.com/domainry/domainry-runtime/runtime/domain/ruleset/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 type workspaceRuleSetRepositoryStub struct {

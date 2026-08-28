@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/requestcontext"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )

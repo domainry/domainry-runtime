@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-connector-sdk"
+	"github.com/domainry/domainry-foundation/telemetry"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
@@ -25,7 +26,6 @@ import (
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/localization"
-	"github.com/domainry/domainry-runtime/runtime/platform/telemetry"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	"github.com/domainry/domainry-runtime/runtime/transport/provision"
 )

@@ -5,12 +5,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/idempotency"
 	changeplan "github.com/domainry/domainry-runtime/runtime/application/changeplan"
 	changeplancontract "github.com/domainry/domainry-runtime/runtime/domain/changeplan/contract"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	changeplanpolicy "github.com/domainry/domainry-runtime/runtime/domain/changeplan/policy"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
 )
 
 type ChangePlansHandler struct {

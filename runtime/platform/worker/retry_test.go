@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	"github.com/domainry/domainry-foundation/apperror"
 )
 
 type fixedJitter time.Duration

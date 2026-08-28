@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
+	"github.com/domainry/domainry-foundation/mutation"
 )
 
 func ConstraintError(err error, resource, identifier string, kind mutation.MutationConflictKind) error {

@@ -5,9 +5,9 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	apperror "github.com/domainry/domainry-foundation/apperror"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	businesseventmemory "github.com/domainry/domainry-runtime/runtime/infrastructure/broadcast/memory"
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func TestBusinessEventServiceEnforcesIdentityWorkspaceCapacityAndCleanup(t *testing.T) {

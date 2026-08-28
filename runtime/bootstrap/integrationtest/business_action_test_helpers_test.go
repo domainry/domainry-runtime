@@ -11,7 +11,7 @@ import (
 
 	. "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
+	apperror "github.com/domainry/domainry-foundation/apperror"
 
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 

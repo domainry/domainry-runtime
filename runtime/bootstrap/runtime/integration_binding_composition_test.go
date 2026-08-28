@@ -7,13 +7,13 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	connector "github.com/domainry/domainry-connector-sdk"
+	apperror "github.com/domainry/domainry-foundation/apperror"
 	businessintegration "github.com/domainry/domainry-runtime/runtime/application/integration"
 	connectortest "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit/connectors"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	apperror "github.com/domainry/domainry-runtime/runtime/platform/apperror"
 
 	"strings"
 	"testing"

@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	workflowvalidation "github.com/domainry/domainry-runtime/runtime/domain/workflow/validation"
-	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 
 func (state *validationState) validateWorkflows() {
