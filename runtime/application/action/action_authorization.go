@@ -46,11 +46,27 @@ func ActionAllowed(principal principalmodel.Principal, action definitionmodel.Ac
 	if !principal.Known {
 		return false
 	}
+	if action.Authorization != nil && !actionRoleAllowed(principal.RoleKey, action.Authorization.AllowedRoles) {
+		return false
+	}
 	objectKey, actionName := definitionmodel.ActionPermissionSubject(action)
 	if objectKey == "" {
 		objectKey = action.ObjectKey
 	}
 	return principal.Allows(objectKey, actionName)
+}
+
+func actionRoleAllowed(roleKey string, allowedRoles []string) bool {
+	roleKey = strings.TrimSpace(roleKey)
+	if roleKey == "" || len(allowedRoles) == 0 {
+		return false
+	}
+	for _, allowed := range allowedRoles {
+		if roleKey == strings.TrimSpace(allowed) {
+			return true
+		}
+	}
+	return false
 }
 
 // ActionPersistencePrincipal preserves an already-approved Action as the

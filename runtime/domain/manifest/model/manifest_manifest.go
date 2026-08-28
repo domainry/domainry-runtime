@@ -39,6 +39,7 @@ type ManifestSchema struct {
 	I18n                      localizationmodel.LocalizedTextMap              `json:"i18n,omitempty"`
 	Objects                   []definitionmodel.ObjectSchema                  `json:"objects"`
 	Views                     []definitionmodel.ViewSchema                    `json:"views"`
+	Roles                     []RoleSchema                                    `json:"roles"`
 	Actions                   []definitionmodel.ActionSchema                  `json:"actions,omitempty"`
 	Workflows                 []definitionmodel.WorkflowSchema                `json:"workflows,omitempty"`
 	SchedulerDefinitions      []map[string]any                                `json:"scheduler_definitions,omitempty"`

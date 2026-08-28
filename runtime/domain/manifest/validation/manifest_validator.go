@@ -74,6 +74,7 @@ func ValidateRuntimeDefinitionGraph(manifest manifestmodel.ManifestSchema) error
 func ValidateRuntimeDefinitionGraphWithConnectorCatalog(manifest manifestmodel.ManifestSchema, connectorCatalog []integrationmodel.ConnectorSchema) error {
 	state := newValidationState(manifest, connectorCatalog)
 	state.validateObjects()
+	state.validateRoles()
 	state.validateDictionaries()
 	state.validateIdentityProfileExtensions()
 	state.validateViews()
@@ -112,6 +113,7 @@ func validateManifestWithConnectorCatalogAndSeedEvidence(manifest manifestmodel.
 	state.validateRequiredShell()
 	state.validateSourceIntentCoverage()
 	state.validateObjects()
+	state.validateRoles()
 	state.validateDictionaries()
 	state.validateIdentityProfileExtensions()
 	state.validateViews()

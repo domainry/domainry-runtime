@@ -122,6 +122,14 @@ type ActionSchema struct {
 	AssurancePolicy       *ActionAssurancePolicy             `json:"assurance_policy,omitempty"`
 	EffectSet             *ActionEffectSet                   `json:"effect_set,omitempty"`
 	FileOperations        []string                           `json:"file_operations,omitempty"`
+	Authorization         *ActionAuthorization               `json:"authorization,omitempty"`
+}
+
+// ActionAuthorization preserves the compiler-owned exact role allowlist for
+// a project-owned Handler. Runtime evaluates it in addition to the
+// Identity-issued functional permission and data policies.
+type ActionAuthorization struct {
+	AllowedRoles []string `json:"allowed_roles"`
 }
 
 // ActionPermissionSubject derives the canonical object/action pair from the

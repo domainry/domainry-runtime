@@ -22,3 +22,22 @@ func TestActionAuthorizationAndPersistenceAuthority(t *testing.T) {
 		t.Fatalf("unexpected persistence authority: caller=%#v persistence=%#v", principal.PermissionKeys(), persist.PermissionKeys())
 	}
 }
+
+func TestHandlerActionAuthorizationRequiresExactAllowedRoleAndPermission(t *testing.T) {
+	action := definitionmodel.ActionSchema{
+		Key: "booking.book", ObjectKey: "booking", RequiresPermission: "booking.book",
+		Authorization: &definitionmodel.ActionAuthorization{AllowedRoles: []string{"member"}},
+	}
+	member := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Key: "member", Permissions: []string{"booking.book"}})
+	if !ActionAllowed(member, action) {
+		t.Fatal("allowed role with the derived Handler permission was rejected")
+	}
+	coach := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Key: "coach", Permissions: []string{"booking.book"}})
+	if ActionAllowed(coach, action) {
+		t.Fatal("role outside authorization.allowed_roles was authorized")
+	}
+	memberWithoutPermission := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Key: "member", Permissions: []string{"booking.read"}})
+	if ActionAllowed(memberWithoutPermission, action) {
+		t.Fatal("allowed role without the Identity-issued Handler permission was authorized")
+	}
+}

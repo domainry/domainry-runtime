@@ -22,6 +22,7 @@ func MergeInstalledEnvelope(persisted, installed manifestmodel.ManifestSchema, p
 	persisted.SourceIntentCoverage = installed.SourceIntentCoverage
 	persisted.Description = installed.Description
 	persisted.I18n = installed.I18n
+	persisted.Roles = append([]manifestmodel.RoleSchema(nil), installed.Roles...)
 	persisted.SeedRecords = append([]businessseedmodel.SeedRecordSchema(nil), installed.SeedRecords...)
 	persisted.AutomationExecutionSeeds = append([]automationmodel.AutomationRuleExecution(nil), installed.AutomationExecutionSeeds...)
 	persisted.BusinessLoops = append([]map[string]any(nil), installed.BusinessLoops...)
