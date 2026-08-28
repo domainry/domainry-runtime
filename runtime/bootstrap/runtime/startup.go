@@ -318,6 +318,10 @@ func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Con
 	if !ok || systemSubjectBinding.SystemSubjects() == nil {
 		mustCompleteRuntimeStartup(errors.New("Notification Binding returned no system subject lifecycle port"))
 	}
+	systemRetentionBinding, ok := notificationBinding.(notificationsdk.SystemRetentionBinding)
+	if !ok || systemRetentionBinding.SystemRetention() == nil {
+		mustCompleteRuntimeStartup(errors.New("Notification Binding returned no system retention port"))
+	}
 	manifest.TemplateID = templateID
 	manifest.Version = valueOrDefault(manifest.Version, generatedTemplateVersion)
 	sharedRateLimiter := ratelimitpersistence.NewRateLimiter(store)
@@ -332,6 +336,7 @@ func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Con
 		integrationCredentialNotifications: integrationnotificationpersistence.NewIntegrationCredentialNotificationCommitter(store),
 		integrationCredentialExpirySource:  integrationpersistence.NewIntegrationCredentialExpiryStore(store),
 		notificationSubjectLifecycle:       notificationSystemSubjectLifecycle{subjects: systemSubjectBinding.SystemSubjects()},
+		notificationRetention:              notificationSystemRetention{retention: systemRetentionBinding.SystemRetention()},
 	})
 	mustCompleteRuntimeStartup(err)
 	records, recordRepository := serviceAssembly.services, serviceAssembly.records

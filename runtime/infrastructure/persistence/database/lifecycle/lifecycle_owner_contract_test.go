@@ -25,7 +25,6 @@ func TestDefaultOwnerExecutorPoliciesHaveContractCoverage(t *testing.T) {
 		"integration":      {"integration.webhook_nonce.v1": true, "integration.event.v1": true, "integration.delivery_evidence.v1": true, "technical.lease_checkpoint.v1": true},
 		"workflow":         {"workflow.definition.v1": true, "workflow.receipt.v1": true, "workflow.execution.v1": true},
 		"automation":       {"automation.execution.v1": true},
-		"notification":     {"notification.history.v1": true, "notification.publication_history.v1": true},
 		"metadata":         {"metadata.definition_history.v1": true},
 		"audit":            {"audit.evidence.v1": true},
 		"agent":            {"agent.dialog.v1": true},
@@ -79,18 +78,20 @@ func TestEveryDefaultRetentionPolicyHasAnExplicitEnforcementMode(t *testing.T) {
 		}
 	}
 	for key, mode := range map[string]string{
-		"scheduler.execution.v1":            "manifest_owner_cleanup",
-		"record.object.default.v1":          "manifest_owner_cleanup_and_subject_policy",
-		"integration.configuration.v1":      "bounded_active_configuration",
-		"integration.secret.v1":             "subject_and_rotation_policy",
-		"integration.identity_mapping.v1":   "subject_and_provider_reconciliation",
-		"localization.text.v1":              "source_driven_projection",
-		"runtime.configuration.v1":          "bounded_current_revision",
-		"operations.control.v1":             "bounded_current_control",
-		"persistence.migration_evidence.v1": "installation_lifetime_evidence",
-		"file.upload.v1":                    "file_registry_reconciliation",
-		"cache.dictionary.v1":               "bounded_reconstructable_cache",
-		"cache.runtime_projection.v1":       "bounded_reconstructable_cache",
+		"notification.history.v1":             "notification_system_retention",
+		"notification.publication_history.v1": "notification_system_retention",
+		"scheduler.execution.v1":              "manifest_owner_cleanup",
+		"record.object.default.v1":            "manifest_owner_cleanup_and_subject_policy",
+		"integration.configuration.v1":        "bounded_active_configuration",
+		"integration.secret.v1":               "subject_and_rotation_policy",
+		"integration.identity_mapping.v1":     "subject_and_provider_reconciliation",
+		"localization.text.v1":                "source_driven_projection",
+		"runtime.configuration.v1":            "bounded_current_revision",
+		"operations.control.v1":               "bounded_current_control",
+		"persistence.migration_evidence.v1":   "installation_lifetime_evidence",
+		"file.upload.v1":                      "file_registry_reconciliation",
+		"cache.dictionary.v1":                 "bounded_reconstructable_cache",
+		"cache.runtime_projection.v1":         "bounded_reconstructable_cache",
 	} {
 		covered[key] = mode
 	}
@@ -105,7 +106,7 @@ func TestEveryDefaultRetentionPolicyHasAnExplicitEnforcementMode(t *testing.T) {
 	}
 }
 
-func TestInstallationOwnerCleanupPreservesCurrentMetadataAndNotificationVersions(t *testing.T) {
+func TestInstallationOwnerCleanupPreservesCurrentMetadataVersion(t *testing.T) {
 	store := openLifecycleStore(t)
 	now := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
 	old := lifecycleTime(now.Add(-48 * time.Hour))
@@ -128,27 +129,6 @@ func TestInstallationOwnerCleanupPreservesCurrentMetadataAndNotificationVersions
 		t.Fatalf("metadata remaining=%d err=%v", metadataRemaining, err)
 	}
 
-	if _, err := store.DB().ExecContext(t.Context(), "INSERT INTO notification_template_records (template_key, draft_json, published_json, published_version, status, updated_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", "notice", "{}", "{}", 2, "active", "admin", old, lifecycleTime(now)); err != nil {
-		t.Fatal(err)
-	}
-	for _, item := range []struct {
-		id      string
-		version int
-	}{{"notification-old", 1}, {"notification-current", 2}} {
-		if _, err := store.DB().ExecContext(t.Context(), "INSERT INTO notification_template_versions (id, template_key, version, payload_json, content_hash, published_by, published_at) VALUES (?, ?, ?, ?, ?, ?, ?)", item.id, "notice", item.version, "{}", "hash", "admin", old); err != nil {
-			t.Fatal(err)
-		}
-	}
-	notificationExecutor := ownerExecutorForTest(t, DefaultOwnerExecutors(store), "notification")
-	notificationPolicy := lifecyclemodel.PolicyVersion{Policy: lifecyclemodel.RetentionPolicy{Key: "notification.publication_history.v1", Version: "1", Owner: "notification", DefaultRetention: time.Hour}}
-	notificationResult, err := notificationExecutor.ProcessBatch(t.Context(), lifecyclemodel.CleanupJob{ID: "notification-cleanup", WorkspaceID: principalmodel.InstallationWorkspaceID, Operation: lifecyclemodel.OperationPurge, UpdatedAt: now}, notificationPolicy, nil, 20)
-	if err != nil || notificationResult.Archived != 1 || notificationResult.Purged != 1 {
-		t.Fatalf("notification result=%#v err=%v", notificationResult, err)
-	}
-	var notificationRemaining int
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM notification_template_versions WHERE template_key = ?", "notice").Scan(&notificationRemaining); err != nil || notificationRemaining != 1 {
-		t.Fatalf("notification remaining=%d err=%v", notificationRemaining, err)
-	}
 }
 
 func TestSchedulerOwnerCleanupArchivesChildrenAndBlocksActiveDeadLetter(t *testing.T) {

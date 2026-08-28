@@ -11,9 +11,6 @@ func DefaultOwnerExecutors(store *database.RuntimeStore, objects ...definitionmo
 	metadataVersions := store.TableIdentifier("metadata_definition_versions")
 	metadataNewer := "newer"
 	metadataHasNewer := "EXISTS (SELECT 1 FROM " + metadataVersions + " " + metadataNewer + " WHERE " + metadataNewer + "." + store.Identifier("resource_type") + " = " + metadataVersions + "." + store.Identifier("resource_type") + " AND " + metadataNewer + "." + store.Identifier("resource_key") + " = " + metadataVersions + "." + store.Identifier("resource_key") + " AND (" + metadataNewer + "." + store.Identifier("created_at") + " > " + metadataVersions + "." + store.Identifier("created_at") + " OR (" + metadataNewer + "." + store.Identifier("created_at") + " = " + metadataVersions + "." + store.Identifier("created_at") + " AND " + metadataNewer + "." + store.Identifier("id") + " > " + metadataVersions + "." + store.Identifier("id") + ")) )"
-	notificationVersions := store.TableIdentifier("notification_template_versions")
-	notificationRecords := store.TableIdentifier("notification_template_records")
-	notificationSuperseded := notificationVersions + "." + store.Identifier("version") + " < COALESCE((SELECT " + store.Identifier("published_version") + " FROM " + notificationRecords + " WHERE " + notificationRecords + "." + store.Identifier("template_key") + " = " + notificationVersions + "." + store.Identifier("template_key") + "), " + notificationVersions + "." + store.Identifier("version") + ")"
 	baseExecutors := []OwnerExecutor{
 		{store: store, owner: "runtime_security", specs: []cleanupSpec{
 			{policyKey: "ratelimit.bucket.v1", table: "runtime_rate_limit_bucket", idColumn: "bucket_key", timeColumn: "updated_at_ns", unixNanoTime: true},
@@ -50,19 +47,6 @@ func DefaultOwnerExecutors(store *database.RuntimeStore, objects ...definitionmo
 			{policyKey: "automation.execution.v1", table: "automation_rule_executions", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "updated_at", statusColumn: "status", eligibleStatuses: []string{"failed", "dead_letter", "cancelled"}, retentionGroup: "failed"},
 			{policyKey: "automation.execution.v1", table: "automation_instruction_executions", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "updated_at", statusColumn: "status", eligibleStatuses: []string{"succeeded", "completed"}, retentionGroup: "succeeded"},
 			{policyKey: "automation.execution.v1", table: "automation_instruction_executions", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "updated_at", statusColumn: "status", eligibleStatuses: []string{"failed", "dead_letter", "cancelled"}, retentionGroup: "failed"},
-		}},
-		{store: store, owner: "notification", specs: []cleanupSpec{
-			// Personal mailbox state is historical product data. Active actions,
-			// firing alerts and runnable channel/event work are retained; Lifecycle
-			// legal holds remain the final cleanup gate.
-			{policyKey: "notification.history.v1", table: "notification_inbox_items", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "updated_at", additionalWhere: store.Identifier("action_state") + " <> 'open' AND " + store.Identifier("alert_state") + " <> 'firing'"},
-			{policyKey: "notification.history.v1", table: "notification_alert_groups", idColumn: "last_event_id", tenantColumn: "workspace_id", timeColumn: "updated_at", statusColumn: "state", eligibleStatuses: []string{"resolved"}},
-			{policyKey: "notification.history.v1", table: "notification_channel_plans", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "updated_at", statusColumn: "status", eligibleStatuses: []string{"planned", "failed", "cancelled"}},
-			{policyKey: "notification.history.v1", table: "notification_events", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "updated_at", statusColumn: "status", eligibleStatuses: []string{"materialized", "failed"}},
-			{policyKey: "notification.history.v1", table: "notification_event_failures", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "occurred_at"},
-			{policyKey: "notification.history.v1", table: "notification_delivery_reservations", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "created_at"},
-			{policyKey: "notification.publication_history.v1", table: "notification_template_versions", idColumn: "id", timeColumn: "published_at", additionalWhere: notificationSuperseded},
-			{policyKey: "notification.publication_history.v1", table: "notification_template_publication_requests", idColumn: "id", timeColumn: "updated_at", statusColumn: "status", eligibleStatuses: []string{"published", "rejected", "failed", "cancelled"}, referenceChecks: []cleanupReferenceCheck{{table: "notification_template_publication_locks", referenceColumn: "request_id"}}},
 		}},
 		{store: store, owner: "metadata", specs: []cleanupSpec{
 			{policyKey: "metadata.definition_history.v1", table: "metadata_definition_versions", idColumn: "id", timeColumn: "created_at", additionalWhere: metadataHasNewer},

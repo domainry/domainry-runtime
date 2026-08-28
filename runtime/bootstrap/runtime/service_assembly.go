@@ -70,6 +70,7 @@ type runtimeExtensionRegistries struct {
 	integrationCredentialNotifications integrationapplication.IntegrationCredentialNotificationCommitter
 	integrationCredentialExpirySource  integrationapplication.IntegrationCredentialExpirySource
 	notificationSubjectLifecycle       lifecyclecontract.SubjectDataHandler
+	notificationRetention              lifecyclecontract.OwnerLifecycleExecutor
 }
 
 func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest manifestmodel.ManifestSchema, notifications composition.NotificationRenderer, store *persistence.RuntimeStore, identityDirectory identitysdk.Directory, identityPrincipals identitysdk.PrincipalResolver, auditApplication *auditapplication.AuditApplicationService, apiLimiter ratelimit.Limiter, workerDependencies workerplatform.Dependencies, extensionRegistries ...runtimeExtensionRegistries) (runtimeServiceAssembly, error) {
@@ -81,6 +82,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	var integrationCredentialNotifications integrationapplication.IntegrationCredentialNotificationCommitter
 	var integrationCredentialExpirySource integrationapplication.IntegrationCredentialExpirySource
 	var notificationSubjectLifecycle lifecyclecontract.SubjectDataHandler
+	var notificationRetention lifecyclecontract.OwnerLifecycleExecutor
 	if len(extensionRegistries) > 0 && extensionRegistries[0].businessHandlers != nil {
 		businessHandlers = extensionRegistries[0].businessHandlers
 	} else {
@@ -98,6 +100,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		integrationCredentialNotifications = extensionRegistries[0].integrationCredentialNotifications
 		integrationCredentialExpirySource = extensionRegistries[0].integrationCredentialExpirySource
 		notificationSubjectLifecycle = extensionRegistries[0].notificationSubjectLifecycle
+		notificationRetention = extensionRegistries[0].notificationRetention
 	}
 	records := recordpersistence.NewRecordStore(store)
 	agentTaskRuns := agentpersistence.NewAgentTaskRunStore(store)
@@ -107,6 +110,9 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	workerDependencies = workerplatform.NormalizeDependencies(workerDependencies)
 	lifecycleExecutors := lifecyclepersistence.DefaultOwnerExecutors(store, manifest.Objects...)
 	lifecycleExecutorPorts := append([]lifecyclecontract.OwnerLifecycleExecutor(nil), lifecycleExecutors...)
+	if notificationRetention != nil {
+		lifecycleExecutorPorts = append(lifecycleExecutorPorts, notificationRetention)
+	}
 	uploadDirectory := cfg.UploadDir
 	if uploadDirectory == "" {
 		uploadDirectory = "../data/uploads"
