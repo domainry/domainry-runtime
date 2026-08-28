@@ -23,6 +23,7 @@ func TestNotificationModuleSchemaOwnershipMatchesPlane(t *testing.T) {
 		{Name: "notification_inbox_delegations", Scope: notificationsql.WorkspaceData},
 		{Name: "notification_inbox_items", Scope: notificationsql.WorkspaceData},
 		{Name: "notification_inbox_saved_views", Scope: notificationsql.WorkspaceData},
+		{Name: "notification_migration_controls", Scope: notificationsql.WorkspaceData},
 		{Name: "notification_recipient_preferences", Scope: notificationsql.WorkspaceData},
 		{Name: "notification_retention_archive", Scope: notificationsql.WorkspaceData},
 		{Name: "notification_template_publication_locks", Scope: notificationsql.SystemData},
