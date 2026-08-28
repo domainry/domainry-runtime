@@ -3,17 +3,18 @@ package notifications
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	notificationsdkcontract "github.com/domainry/domainry-notification-sdk/contract"
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
 	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
-	notificationvalidation "github.com/domainry/domainry-runtime/runtime/domain/notification/validation"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
@@ -264,10 +265,29 @@ func (a *notificationHTTPApplication) SaveDraft(ctx context.Context, key string,
 	if strings.TrimSpace(value.Status) == "" {
 		value.Status = "draft"
 	}
-	if err := notificationvalidation.NotificationValidateEditableTemplate(value); err != nil {
+	if err := validateNotificationHTTPEditableTemplate(value); err != nil {
 		return notificationmodel.NotificationTemplateRecord{}, err
 	}
 	return a.repo.SaveDraft(ctx, principalmodel.SystemScope{}, value, expected, p.UserID)
+}
+
+func validateNotificationHTTPEditableTemplate(value notificationmodel.NotificationTemplate) error {
+	capabilities, err := notificationcontract.NotificationTemplateCapabilityCatalog()
+	if err != nil {
+		return err
+	}
+	validator, err := notificationsdkcontract.NewNotificationTemplateValidator(capabilities)
+	if err != nil {
+		return err
+	}
+	if err = validator.ValidateEditable(value); err == nil {
+		return nil
+	}
+	var validationError *notificationsdkcontract.TemplateValidationError
+	if !errors.As(err, &validationError) {
+		return err
+	}
+	return &apperror.AppError{Kind: apperror.KindBadRequest, Code: validationError.Code, Params: validationError.Params, Err: err}
 }
 func (a *notificationHTTPApplication) Disable(ctx context.Context, key, expected string, p principalmodel.Principal) (notificationmodel.NotificationTemplateRecord, error) {
 	if err := notificationHTTPAuthorize(p); err != nil {

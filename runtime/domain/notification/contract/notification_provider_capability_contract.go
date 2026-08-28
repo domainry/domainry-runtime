@@ -1,18 +1,12 @@
 package contract
 
-import "sort"
+import (
+	"sort"
 
-type NotificationProviderCapability struct {
-	Channel                  string `json:"channel"`
-	Provider                 string `json:"provider,omitempty"`
-	SupportsHTML             bool   `json:"supports_html"`
-	SupportsMarkdown         bool   `json:"supports_markdown"`
-	SupportsFacts            bool   `json:"supports_facts"`
-	SupportsURLActions       bool   `json:"supports_url_actions"`
-	SupportsProviderTemplate bool   `json:"supports_provider_template"`
-	MaxFacts                 int    `json:"max_facts"`
-	MaxActions               int    `json:"max_actions"`
-}
+	notificationsdkcontract "github.com/domainry/domainry-notification-sdk/contract"
+)
+
+type NotificationProviderCapability = notificationsdkcontract.NotificationTemplateCapability
 
 var notificationProviderCapabilities = map[string]NotificationProviderCapability{
 	"email/":                          {Channel: "email", SupportsHTML: true, SupportsFacts: true, SupportsURLActions: true, MaxFacts: 10, MaxActions: 5},

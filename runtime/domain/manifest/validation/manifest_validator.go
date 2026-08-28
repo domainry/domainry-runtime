@@ -17,7 +17,6 @@ import (
 	"strings"
 
 	notificationsdkcontract "github.com/domainry/domainry-notification-sdk/contract"
-	notificationvalidation "github.com/domainry/domainry-runtime/runtime/domain/notification/validation"
 )
 
 var storageValuePattern = regexp.MustCompile(`^[a-z][a-z0-9_.-]*$`)
@@ -140,7 +139,7 @@ func validateManifestWithConnectorCatalogAndSeedEvidence(manifest manifestmodel.
 }
 
 func (state *validationState) validateNotificationTemplates() {
-	if err := notificationvalidation.NotificationValidateTemplates(state.manifest.NotificationTemplates); err != nil {
+	if err := validateNotificationTemplates(state.manifest.NotificationTemplates); err != nil {
 		state.add("notification_templates", "%v", err)
 	}
 	if err := notificationsdkcontract.ValidateEventTypes(state.manifest.NotificationEventTypes, state.manifest.NotificationRules); err != nil {
