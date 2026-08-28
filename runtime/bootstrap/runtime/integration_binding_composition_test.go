@@ -32,7 +32,7 @@ func integrationBindingProvider() connector.Adapter {
 
 func TestIntegrationBindingCompositionAggregatesReadinessSecretAndProtocolIssues(t *testing.T) {
 	application, _ := newIntegrationCompositionApp(t, "binding-validation", integrationBindingProvider())
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	integrations := application.records.Applications().Integrations
 	integrations.RegisterBuiltinConnectorDefinitions([]integrationmodel.ConnectorSchema{integrationBindingTestConnector()})
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Key: "admin", Permissions: []string{businessintegration.PermissionConnectionManage}})
@@ -62,7 +62,7 @@ func TestIntegrationBindingCompositionAggregatesReadinessSecretAndProtocolIssues
 
 func TestIntegrationConnectionCompositionReusesBindingSecretValidation(t *testing.T) {
 	application, _ := newIntegrationCompositionApp(t, "binding-write", integrationBindingProvider())
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	integrations := application.records.Applications().Integrations
 	integrations.RegisterBuiltinConnectorDefinitions([]integrationmodel.ConnectorSchema{integrationBindingTestConnector()})
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Key: "admin", Permissions: []string{businessintegration.PermissionConnectionManage}})

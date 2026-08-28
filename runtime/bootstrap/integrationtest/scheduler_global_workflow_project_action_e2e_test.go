@@ -19,7 +19,7 @@ func TestSchedulerGlobalWorkflowProjectActionDurableEffectAndFailurePropagation(
 		ManifestPath: schedulerGlobalWorkflowManifest(t), UploadDir: filepath.Join(t.TempDir(), "uploads"),
 	}
 	runtime := newIntegrationRuntime(t, cfg)
-	defer runtime.Close()
+	defer runtime.CloseContext(t.Context())
 	handler := runtime.Routes()
 
 	activationLeadID := runtimeFixtureRecordIDByField(t, handler, "sales_manager", "lead", "status", "new")

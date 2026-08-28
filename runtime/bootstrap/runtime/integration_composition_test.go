@@ -13,7 +13,7 @@ import (
 
 func TestRuntimeServicesReusesCanonicalIntegrationApplication(t *testing.T) {
 	application, _ := newIntegrationCompositionApp(t, "canonical")
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	canonical := application.records.Applications().Integrations
 	if canonical == nil || application.records.Applications().Integrations != canonical {
 		t.Fatalf("canonical=%p resolved=%p", canonical, application.records.Applications().Integrations)

@@ -18,9 +18,9 @@ func TestTwoRuntimeInstancesShareAgentSessionAndReportHTTPState(t *testing.T) {
 	dir := t.TempDir()
 	cfg := config.Config{AppLocale: "en-US", DatabaseDriver: "sqlite", DBPath: filepath.Join(dir, "shared.db"), ManifestPath: filepath.Join("..", "..", "domain", "manifest", "testdata", "manifests", "domain-only-minimal.json"), UploadDir: filepath.Join(dir, "uploads")}
 	first := newIntegrationRuntime(t, cfg)
-	defer first.Close()
+	defer first.CloseContext(t.Context())
 	second := newIntegrationRuntime(t, cfg)
-	defer second.Close()
+	defer second.CloseContext(t.Context())
 	store := openRuntimePersistenceFixture(t, cfg)
 
 	created := runtimeFixtureRequest[map[string]any](t, first.Routes(), "business_admin", http.MethodPost, "/agent-dialog/sessions", map[string]any{"external_session_id": "shared-session", "title": "Shared session"})
@@ -60,7 +60,7 @@ func TestTwoRuntimeInstancesShareAgentSessionAndReportHTTPState(t *testing.T) {
 		t.Fatal(err)
 	}
 	third := newIntegrationRuntime(t, cfg)
-	defer third.Close()
+	defer third.CloseContext(t.Context())
 	proposal := runtimeFixtureRequest[map[string]any](t, third.Routes(), "business_admin", http.MethodGet, "/agent-dialog/proposals/shared-proposal", nil)
 	if proposal["status"] != "draft" {
 		t.Fatalf("replacement runtime proposal=%#v", proposal)

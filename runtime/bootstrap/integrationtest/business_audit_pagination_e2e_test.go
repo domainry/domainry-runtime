@@ -25,7 +25,7 @@ func TestRuntimeBusinessAuditPaginationTraversesStableSQLitePagesOverHTTP(t *tes
 		UploadDir:      filepath.Join(directory, "uploads"),
 	}
 	application := newIntegrationRuntime(t, cfg)
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	token := runtimeIdentityFixtureSession(t, "admin", "admin").AccessToken
 
 	store := openRuntimePersistenceFixture(t, cfg)

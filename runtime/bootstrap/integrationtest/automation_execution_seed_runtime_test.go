@@ -22,7 +22,7 @@ func TestBusinessWorkspaceIdentityCreatesCustomerAndPersistsBeforeAutomationHist
 		AppLocale: "en-US", DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "runtime.db"),
 		ManifestPath: filepath.Join("..", "..", "domain", "manifest", "testdata", "manifests", "crm-customer-360.json"), UploadDir: filepath.Join(t.TempDir(), "uploads"),
 	})
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 
 	requestStatus := func(token, surface, method, path string, body any) *httptest.ResponseRecorder {
@@ -131,19 +131,19 @@ func TestManifestAutomationExecutionSeedSurvivesRestartWithoutDuplication(t *tes
 			RuleKey: "customer.verify_business_license", RecordID: "customer_customer_acme", Limit: 20,
 		})
 		if err != nil {
-			application.Close()
+			application.CloseContext(t.Context())
 			t.Fatalf("restart %d: list seeded automation execution: %v", restart, err)
 		}
 		if len(executions) != 1 || executions[0].ID != "automation_execution_seed_customer_verify_business_license" {
-			application.Close()
+			application.CloseContext(t.Context())
 			t.Fatalf("restart %d: expected one stable execution seed, got %#v", restart, executions)
 		}
 		actions, _ := executions[0].Trace["actions"].([]any)
 		if len(actions) != 8 {
-			application.Close()
+			application.CloseContext(t.Context())
 			t.Fatalf("restart %d: expected complete seeded action trace, got %#v", restart, executions[0].Trace)
 		}
-		if err := application.Close(); err != nil {
+		if err := application.CloseContext(t.Context()); err != nil {
 			t.Fatalf("restart %d: close app: %v", restart, err)
 		}
 	}
@@ -154,7 +154,7 @@ func TestAutomationAndConnectionManagementPermissions(t *testing.T) {
 		AppLocale: "en-US", DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "runtime.db"),
 		ManifestPath: filepath.Join("..", "..", "domain", "manifest", "testdata", "manifests", "crm-customer-360.json"), UploadDir: filepath.Join(t.TempDir(), "uploads"),
 	})
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 
 	for _, path := range []string{"/automation-rules", "/automation-rules/capabilities", "/automation-rules/executions", "/tenant-admin/integrations/connections"} {
@@ -186,7 +186,7 @@ func TestAgentProposalAndApprovedExecutionRespectsAfterAutomationBoundary(t *tes
 		AppLocale: "en-US", DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "runtime.db"),
 		ManifestPath: filepath.Join("..", "..", "domain", "manifest", "testdata", "manifests", "crm-customer-360.json"), UploadDir: filepath.Join(t.TempDir(), "uploads"),
 	})
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 
 	runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPut, "/tenant-admin/integrations/external-identities/crm-agent-test", map[string]any{
@@ -283,21 +283,21 @@ func TestAutomationRuleEditSurvivesRuntimeRestart(t *testing.T) {
 	published := publishSystemDefinitionUpdateFixture(t, first.Routes(), "sales_manager", "automation-author", "automation-approver", "automation-restart-edit", current, rule, "automation.rule")
 	var saved automationmodel.AutomationRuleSchema
 	if err := json.Unmarshal(published.Payload, &saved); err != nil {
-		first.Close()
+		first.CloseContext(t.Context())
 		t.Fatal(err)
 	}
 	if saved.Name != rule.Name || saved.Priority != 42 || len(saved.Instructions) != len(rule.Instructions) {
-		first.Close()
+		first.CloseContext(t.Context())
 		t.Fatalf("expected edited rule to save before restart, got %#v", saved)
 	}
 	rule.Enabled = false
 	publishSystemDefinitionUpdateFixture(t, first.Routes(), "sales_manager", "automation-author", "automation-approver", "automation-restart-disable", published, rule, "automation.rule")
-	if err := first.Close(); err != nil {
+	if err := first.CloseContext(t.Context()); err != nil {
 		t.Fatalf("close first runtime: %v", err)
 	}
 
 	second := newIntegrationRuntime(t, cfg)
-	defer second.Close()
+	defer second.CloseContext(t.Context())
 	reloaded := runtimeFixtureRequest[automationmodel.AutomationRuleSchema](t, second.Routes(), "sales_manager", http.MethodGet, "/automation-rules/"+ruleKey, nil)
 	if reloaded.Name != rule.Name || reloaded.Priority != 42 || reloaded.Enabled {
 		t.Fatalf("expected edited and disabled rule after restart, got %#v", reloaded)

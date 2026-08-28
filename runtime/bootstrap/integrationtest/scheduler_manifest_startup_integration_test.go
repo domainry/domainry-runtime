@@ -114,13 +114,13 @@ func TestManifestSchedulerDefinitionManualCapabilityStartupRestartAndExactlyOnce
 	if state["provisioned"] != true {
 		t.Fatalf("scheduler state=%#v", state)
 	}
-	if err := runtime.Close(); err != nil {
+	if err := runtime.CloseContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
 	restarted := newIntegrationRuntime(t, cfg)
 	bootstrap.StartWorkers(t.Context(), restarted)
-	defer restarted.Close()
+	defer restarted.CloseContext(t.Context())
 	// The successful missed window advanced the durable cursor into the future;
 	// restart before that next interval must not repeat its workflow action.
 	time.Sleep(150 * time.Millisecond)

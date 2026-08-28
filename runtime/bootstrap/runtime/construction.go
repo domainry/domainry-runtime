@@ -1,8 +1,6 @@
 package runtime
 
 import (
-	"context"
-
 	connector "github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
@@ -22,7 +20,6 @@ import (
 )
 
 type runtimeConstructionInput struct {
-	lifecycleContext    context.Context
 	config              config.Config
 	templateID          string
 	store               *persistence.RuntimeStore
@@ -49,7 +46,6 @@ type runtimeConstructionInput struct {
 
 func constructRuntime(input runtimeConstructionInput) *Runtime {
 	return &Runtime{
-		lifecycleContext:    input.lifecycleContext,
 		cfg:                 input.config,
 		templateID:          input.templateID,
 		store:               input.store,

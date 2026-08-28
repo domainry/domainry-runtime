@@ -10,18 +10,16 @@ import (
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
-func (a *Runtime) Close() error {
-	return a.close(nil)
-}
-
 // CloseContext releases the shared release-cohort lease with the caller's
-// process lifecycle context. Generic callers may use Close; project Runtime
-// hosts use this method so a clean shutdown does not wait for lease expiry.
+// process lifecycle context and closes every Runtime-owned dependency.
 func (a *Runtime) CloseContext(ctx context.Context) error {
 	return a.close(ctx)
 }
 
 func (a *Runtime) close(ctx context.Context) error {
+	if ctx == nil {
+		return errors.New("runtime shutdown context is required")
+	}
 	if a.api != nil {
 		a.api.SetDraining(true)
 	}
@@ -40,14 +38,7 @@ func (a *Runtime) close(ctx context.Context) error {
 	}
 	var notificationErr error
 	if a.notificationBinding != nil {
-		closeParent := a.lifecycleContext
-		if ctx != nil {
-			closeParent = context.WithoutCancel(ctx)
-		} else if closeParent != nil {
-			closeParent = context.WithoutCancel(closeParent)
-		} else {
-			return errors.Join(releaseErr, errors.New("runtime lifecycle context is unavailable while closing Notification binding"))
-		}
+		closeParent := context.WithoutCancel(ctx)
 		closeCtx, cancel := context.WithTimeout(closeParent, a.cfg.HTTPShutdownTimeout)
 		notificationErr = a.notificationBinding.Close(closeCtx)
 		cancel()

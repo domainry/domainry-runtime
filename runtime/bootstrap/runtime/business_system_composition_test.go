@@ -73,7 +73,7 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 		accessfixture.DataPolicyFixture{ObjectKey: "job_dead_letter", Scope: "all_records", Read: true},
 	)
 	accessfixture.Set(&admin, adminAccess)
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	frontendManifest := deploymentmodel.FrontendCapabilityManifest{
 		ManifestVersion:         deploymentmodel.FrontendCapabilityManifestVersion,
 		FrontendVersion:         "frontend-1",
@@ -116,7 +116,7 @@ func TestBusinessSystemSnapshotCompositionHidesGovernanceFacts(t *testing.T) {
 		{Key: "viewer", Permissions: []string{"customer.read"}, RecordScope: "all_records", DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true}}},
 	}
 	application, _ := newMetadataCompositionApp(t, "visibility", objects, roles)
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	evidence := changeplanpersistence.NewBusinessEvidenceStore(application.store)
 	if err := evidence.UpsertSeedProvenance(t.Context(), businessseedmodel.BusinessSeedProvenance{SeedKey: "customer_acme", ObjectKey: "customer", RecordID: "customer_customer_acme", SourceKind: "template", SourceID: "visibility", ContentHash: "hash", MaterializedAt: "2026-07-11T00:00:00Z"}); err != nil {
 		t.Fatal(err)

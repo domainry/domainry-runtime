@@ -16,7 +16,7 @@ func TestRuntimeCRMRelatedRecordsArePagedAndRoleScoped(t *testing.T) {
 		ManifestPath:   filepath.Join("..", "..", "domain", "manifest", "testdata", "manifests", "crm-customer-360.json"),
 		UploadDir:      filepath.Join(t.TempDir(), "uploads"),
 	})
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 
 	customerID := runtimeFixtureRecordIDByField(t, handler, "sales_manager", "customer", "name", "Acme Manufacturing")

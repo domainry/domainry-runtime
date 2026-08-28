@@ -372,7 +372,6 @@ func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Con
 	refreshRuntimeActionCatalog(records.Schema())
 	manifest.ManifestHash = seedManifest.ManifestHash
 	runtime := constructRuntime(runtimeConstructionInput{
-		lifecycleContext:    ctx,
 		config:              cfg,
 		templateID:          templateID,
 		store:               store,

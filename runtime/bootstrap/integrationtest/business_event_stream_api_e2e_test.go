@@ -29,7 +29,7 @@ func TestRuntimeBusinessEventStreamConnectsReplaysAndRejectsCrossTenant(t *testi
 		BusinessEventHeartbeatInterval: time.Second, BusinessEventRetryInterval: 250 * time.Millisecond,
 	}
 	application := New(t.Context(), cfg, newIntegrationIdentityBinding(t, cfg), notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()))
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	server := httptest.NewServer(application.Routes())
 	defer server.Close()
 	client := server.Client()

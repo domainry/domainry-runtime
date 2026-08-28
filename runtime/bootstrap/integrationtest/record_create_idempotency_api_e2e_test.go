@@ -17,7 +17,7 @@ func TestRecordCreateAPIRequiresCallerKeyAndReplaysOneDurableRecord(t *testing.T
 		ManifestPath: filepath.Join("..", "..", "domain", "manifest", "testdata", "manifests", "restaurant-kitchen.json"),
 		UploadDir:    filepath.Join(t.TempDir(), "uploads"),
 	})
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 	body := map[string]any{"data": map[string]any{"table_no": "T-99", "status": "queued", "station": "hot", "priority": 1}}
 
@@ -68,7 +68,7 @@ func TestRecordCreateAPIRequiresCallerKeyAndReplaysOneDurableRecord(t *testing.T
 
 func TestRecordImportAPIReplaysOperationAndDoesNotDuplicateRows(t *testing.T) {
 	application := newIntegrationRuntime(t, config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "runtime.db"), ManifestPath: filepath.Join("..", "..", "domain", "manifest", "testdata", "manifests", "restaurant-kitchen.json"), UploadDir: filepath.Join(t.TempDir(), "uploads")})
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 	csv := "table_no,status,station,priority\nT-201,queued,hot,1\nT-202,queued,cold,2\n"
 	first := recordImportRequest(t, handler, "import-operation-1", csv)
@@ -104,7 +104,7 @@ func TestRecordUpdateAPIRequiresCallerKeyAndRejectsFingerprintReuse(t *testing.T
 		ManifestPath: filepath.Join("..", "..", "domain", "manifest", "testdata", "manifests", "restaurant-kitchen.json"),
 		UploadDir:    filepath.Join(t.TempDir(), "uploads"),
 	})
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 	created := recordCreateRequest(t, handler, "record-update-fixture", map[string]any{"data": map[string]any{
 		"table_no": "T-UPDATE", "status": "queued", "station": "hot", "priority": 1,

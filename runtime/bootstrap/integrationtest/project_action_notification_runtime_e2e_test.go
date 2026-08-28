@@ -102,10 +102,10 @@ func TestProjectActionNotificationDispatchRealRuntimeReplayConcurrencyLifecycleA
 		t.Fatalf("notification audit=%#v", audits)
 	}
 
-	runtime.Close()
+	runtime.CloseContext(t.Context())
 	restarted := newIntegrationRuntime(t, cfg)
 	bootstrap.StartWorkers(t.Context(), restarted)
-	defer restarted.Close()
+	defer restarted.CloseContext(t.Context())
 	reloaded := projectNotificationList(t, restarted.Routes(), "admin")
 	if len(reloaded) != 1 || reloaded[0]["id"] != notificationID || reloaded[0]["read_at"] == "" || reloaded[0]["alert_state"] != "acknowledged" {
 		t.Fatalf("cold restart inbox=%#v", reloaded)

@@ -17,7 +17,7 @@ func TestTenantAdminPublishesWorkflowDefinitionWithAuditEvidence(t *testing.T) {
 		UploadDir:      filepath.Join(t.TempDir(), "uploads"),
 	}
 	runtime := newIntegrationRuntime(t, cfg)
-	defer runtime.Close()
+	defer runtime.CloseContext(t.Context())
 	handler := runtime.Routes()
 
 	const workflowKey = "sales_order.credit_discount_approval"

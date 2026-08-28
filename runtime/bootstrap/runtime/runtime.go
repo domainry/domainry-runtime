@@ -27,7 +27,6 @@ import (
 
 // Runtime owns the process-level composition and lifecycle.
 type Runtime struct {
-	lifecycleContext    context.Context
 	cfg                 config.Config
 	templateID          string
 	store               *persistence.RuntimeStore

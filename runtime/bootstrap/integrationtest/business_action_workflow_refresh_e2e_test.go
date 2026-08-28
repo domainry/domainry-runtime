@@ -23,7 +23,7 @@ func TestBusinessActorRecordActionWorkflowTaskAndRefreshEndToEnd(t *testing.T) {
 		UploadDir:      filepath.Join(t.TempDir(), "uploads"),
 	}
 	runtime := newIntegrationRuntime(t, cfg)
-	defer runtime.Close()
+	defer runtime.CloseContext(t.Context())
 	handler := runtime.Routes()
 	publishSchedulerDefinitionFixture(t, cfg, "scheduler_p7_business_workflow", map[string]any{
 		"key": "scheduler_p7_business_workflow", "name": "P7 Business Workflow Worker",

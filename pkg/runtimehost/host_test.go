@@ -90,7 +90,7 @@ func (f *serverRuntimeFake) connectorGateway() runtimeConnectorGateway {
 	}
 	return serverConnectorGatewayFake{}
 }
-func (f *serverRuntimeFake) Close() error { f.closed++; return nil }
+func (f *serverRuntimeFake) CloseContext(context.Context) error { f.closed++; return nil }
 
 func validOptions() Options {
 	domainSDK := DomainSDKIdentity{
@@ -390,7 +390,9 @@ func TestRuntimeActivatorCoversSuccessDuplicateFailurePanicAndClose(t *testing.T
 	handler := &bootstrap.EntrypointMux{}
 	runtime := &serverRuntimeFake{}
 	created := 0
-	activator := &runtimeActivator{handler: handler, start: func(manifest manifestmodel.ManifestSchema) (runtimeProcess, error) {
+	activator := &runtimeActivator{handler: handler, close: func(runtime runtimeProcess) error {
+		return runtime.CloseContext(t.Context())
+	}, start: func(manifest manifestmodel.ManifestSchema) (runtimeProcess, error) {
 		created++
 		runtime.StartWorkers(t.Context())
 		return runtime, nil

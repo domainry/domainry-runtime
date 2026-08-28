@@ -18,7 +18,7 @@ func TestRuntimeCRMReportObjectExportsRetireTheUngovernedSecondQuery(t *testing.
 		ManifestPath:   filepath.Join("..", "..", "domain", "manifest", "testdata", "manifests", "crm-customer-360.json"),
 		UploadDir:      filepath.Join(t.TempDir(), "uploads"),
 	})
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 
 	for _, path := range []string{

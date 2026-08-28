@@ -15,7 +15,7 @@ func TestCRMAutomationRuleLifecycleThroughPublicAPI(t *testing.T) {
 		AppLocale: "en-US", DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "runtime.db"),
 		ManifestPath: filepath.Join("..", "..", "domain", "manifest", "testdata", "manifests", "crm-customer-360.json"), UploadDir: filepath.Join(t.TempDir(), "uploads"),
 	})
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 
 	rules := runtimeFixtureRequest[struct {

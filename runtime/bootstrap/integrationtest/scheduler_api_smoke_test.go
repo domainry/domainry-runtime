@@ -30,7 +30,7 @@ func TestSchedulerAPISmokeVerifiesRuntimeOperationsAndEvidence(t *testing.T) {
 		UploadDir:      filepath.Join(t.TempDir(), "uploads"),
 	}
 	application := newIntegrationRuntime(t, cfg)
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 	store := openRuntimePersistenceFixture(t, cfg)
 	recordStore := recordpersistence.NewRecordStore(store)

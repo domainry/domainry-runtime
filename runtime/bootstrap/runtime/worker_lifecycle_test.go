@@ -149,7 +149,7 @@ func TestRuntimeStartSchedulerWorkerRegistersControlledOwner(t *testing.T) {
 			len(runtime.workerCancels)-cancelsBefore,
 		)
 	}
-	if err := runtime.Close(); err != nil {
+	if err := runtime.CloseContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -237,7 +237,7 @@ func TestRuntimeCloseStopsWorkersBeforeClosingStore(t *testing.T) {
 		}()
 		return done
 	})
-	if err := runtime.Close(); err != nil {
+	if err := runtime.CloseContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.DB().PingContext(t.Context()); err == nil {
@@ -256,7 +256,7 @@ func TestRuntimeCloseLeavesStoreOpenWhenWorkerShutdownTimesOut(t *testing.T) {
 	t.Cleanup(func() { _ = store.Close() })
 	runtime := &Runtime{store: store, cfg: config.Config{HTTPShutdownTimeout: time.Millisecond}}
 	runtime.startTrackedWorker(t.Context(), func(context.Context) <-chan struct{} { return make(chan struct{}) })
-	if err := runtime.Close(); err == nil {
+	if err := runtime.CloseContext(t.Context()); err == nil {
 		t.Fatal("worker timeout must fail Close")
 	}
 	if err := store.DB().PingContext(t.Context()); err != nil {

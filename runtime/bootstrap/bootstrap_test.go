@@ -35,10 +35,10 @@ func TestBootstrapEntrypointsAssembleRunnableGraphs(t *testing.T) {
 	StartWorkers(t.Context(), runtime)
 	StartWorkers(t.Context(), runtime)
 	assertBootstrapLiveness(t, runtime.Routes())
-	if err := runtime.Close(); err != nil {
+	if err := runtime.CloseContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if err := runtime.Close(); err != nil {
+	if err := runtime.CloseContext(t.Context()); err != nil {
 		t.Fatalf("repeated close: %v", err)
 	}
 
@@ -79,7 +79,7 @@ func TestBootstrapExtensionAndProjectFacadeEntrypoints(t *testing.T) {
 		if RoutesForSurfaceGroup(runtime, runtimehttp.SurfaceRouteGroupPublic) == nil {
 			t.Fatalf("constructor %d routes nil", index)
 		}
-		if err := runtime.Close(); err != nil {
+		if err := runtime.CloseContext(t.Context()); err != nil {
 			t.Fatal(err)
 		}
 	}

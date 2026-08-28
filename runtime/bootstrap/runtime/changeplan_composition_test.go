@@ -24,7 +24,7 @@ import (
 
 func TestBusinessChangePlanCompositionPublishesSchedulerAsTheOnlyRuntimeDefinitionAuthority(t *testing.T) {
 	application, admin := newMetadataCompositionApp(t, "scheduler-metadata-authority", []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}}, nil)
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	snapshot := changePlanCompositionSnapshot()
 	graph := changeplanmodel.ReferenceGraph{Version: changeplanprojection.ChangePlanReferenceGraphVersion, Hash: "graph-hash"}
 	workflow := definitionmodel.WorkflowSchema{
@@ -76,7 +76,7 @@ func TestBusinessChangePlanCompositionPublishesSchedulerAsTheOnlyRuntimeDefiniti
 
 func TestBusinessChangePlanCompositionValidatesAndPublishesOneComposedCandidate(t *testing.T) {
 	application, admin := newMetadataCompositionApp(t, "composed-candidate", []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}}, nil)
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	snapshot := changePlanCompositionSnapshot()
 	graph := changeplanmodel.ReferenceGraph{Version: changeplanprojection.ChangePlanReferenceGraphVersion, Hash: "graph-hash"}
 	plan := changeplanmodel.BusinessSystemChangePlan{
@@ -108,7 +108,7 @@ func TestBusinessChangePlanCompositionValidatesAndPublishesOneComposedCandidate(
 
 func TestBusinessChangePlanCompositionRejectsInvalidCandidateBeforeAnyWrite(t *testing.T) {
 	application, admin := newMetadataCompositionApp(t, "invalid-candidate", []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}}, nil)
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	before := application.records.SchemaForPrincipal(t.Context(), admin)
 	snapshot := changePlanCompositionSnapshot()
 	graph := changeplanmodel.ReferenceGraph{Version: changeplanprojection.ChangePlanReferenceGraphVersion, Hash: "graph-hash"}
@@ -136,7 +136,7 @@ func TestBusinessChangePlanCompositionPublishesIdentityProfileBindingIntoRegistr
 		{Key: "territory_id", Name: "Territory", Type: "text"},
 	}}
 	application, admin := newMetadataCompositionApp(t, "identity-profile-binding", []definitionmodel.ObjectSchema{profile}, nil)
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	binding := profilebindingmodel.Binding{
 		ContractVersion: profilebindingmodel.ContractVersion, MinReaderVersion: profilebindingmodel.MinimumReaderVersion,
 		ObjectKey: "operator_profile", IdentityRelationField: "identity_user", Cardinality: "one_to_one", DefaultVisibility: "when_readable",
@@ -171,7 +171,7 @@ func TestBusinessChangePlanCompositionPublishesIdentityProfileBindingIntoRegistr
 
 func TestBusinessChangePlanCompositionAppliesMetadataAndFreezesDraft(t *testing.T) {
 	application, admin := newMetadataCompositionApp(t, "change-plan", []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}}, nil)
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	snapshot := changePlanCompositionSnapshot()
 	graph := changeplanmodel.ReferenceGraph{Version: changeplanprojection.ChangePlanReferenceGraphVersion, Hash: "graph-hash"}
 	plan := changePlanCompositionPlan(snapshot, graph)
@@ -248,7 +248,7 @@ func TestIndustryMaintenancePlanCompositionPublishesThroughSystemDraft(t *testin
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			application, admin := newMetadataCompositionApp(t, "maintenance-"+tc.objectKey, []definitionmodel.ObjectSchema{{Key: tc.objectKey, Name: tc.name}}, nil)
-			defer application.Close()
+			defer application.CloseContext(t.Context())
 			snapshot := changePlanCompositionSnapshot()
 			graph := changeplanmodel.ReferenceGraph{Version: changeplanprojection.ChangePlanReferenceGraphVersion, Hash: "graph-hash"}
 			plan := changePlanCompositionPlan(snapshot, graph)

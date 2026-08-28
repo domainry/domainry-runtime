@@ -126,10 +126,10 @@ func TestNewBuildsRunnableRuntimeAndClosesStartedWorkers(t *testing.T) {
 	if len(runtime.workerDone) != startedWorkers {
 		t.Fatalf("duplicate StartWorkers registered supervisors: first=%d second=%d", startedWorkers, len(runtime.workerDone))
 	}
-	if err := runtime.Close(); err != nil {
+	if err := runtime.CloseContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if err := runtime.Close(); err != nil {
+	if err := runtime.CloseContext(t.Context()); err != nil {
 		t.Fatalf("repeated close: %v", err)
 	}
 }
@@ -141,7 +141,7 @@ func TestNewWithBusinessHandlersBuildsRuntime(t *testing.T) {
 	if runtime.businessHandlers != handlers {
 		t.Fatal("Runtime did not retain supplied business handlers")
 	}
-	if err := runtime.Close(); err != nil {
+	if err := runtime.CloseContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -162,7 +162,7 @@ func TestProjectRuntimeOpensOneNotificationModuleBinding(t *testing.T) {
 	if runtime.store.NotificationTransactions() == nil {
 		t.Fatal("Notification Module transaction publisher was not bound to the shared Runtime store")
 	}
-	if err := runtime.Close(); err != nil {
+	if err := runtime.CloseContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -272,7 +272,7 @@ func TestNewBuildsObjectlessConfiguringRuntimeForDirectAuthoring(t *testing.T) {
 	cfg.AllowEmptyAuthoringManifest = true
 	cfg.RuntimeAllowDevIdentityHeaders = true
 	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
-	defer runtime.Close()
+	defer runtime.CloseContext(t.Context())
 	for key, object := range runtime.records.Applications().Schema.ObjectMap(t.Context()) {
 		if runtimeOwned, _ := object.Config["runtime_owned"].(bool); !runtimeOwned {
 			t.Fatalf("configuring Runtime leaked bootstrap business object %s: %#v", key, object)
@@ -316,7 +316,7 @@ func TestGlobalValidationAndDeliveryGateMoveOwnedRuntimeToReady(t *testing.T) {
 		t.Fatal(err)
 	}
 	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
-	defer runtime.Close()
+	defer runtime.CloseContext(t.Context())
 	permissions := []string{
 		"workspace.admin", "scheduler.definition.read", "ops.workflow.read", "workflow.process.read",
 		"integration.audit.view", "integration.catalog.view",
@@ -513,7 +513,7 @@ func TestNewRestoresPublishedNotificationTemplates(t *testing.T) {
 	if len(runtime.manifest.NotificationTemplates) == 0 {
 		t.Fatal("published notification templates were not restored")
 	}
-	if err := runtime.Close(); err != nil {
+	if err := runtime.CloseContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -635,7 +635,7 @@ func TestRestoreRuntimeMetadataHonorsCancelledContext(t *testing.T) {
 
 func TestRuntimeWiresCredentialExpirySourceToIdempotentNotificationPublisher(t *testing.T) {
 	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
-	t.Cleanup(func() { _ = runtime.Close() })
+	t.Cleanup(func() { _ = runtime.CloseContext(t.Context()) })
 	now := runtime.worker.Clock.Now().UTC()
 	configStore := integrationpersistence.NewIntegrationConfigStore(runtime.store)
 	if _, err := configStore.UpsertSecret(t.Context(), runtime.cfg.NotificationWorkspaceID, integrationmodel.IntegrationSecret{

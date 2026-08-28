@@ -79,7 +79,7 @@ func TestRuntimeBootstrapsBusinessManifestFixtures(t *testing.T) {
 				ManifestPath:   filepath.Join("..", "..", "domain", "manifest", "testdata", "manifests", tc.manifest),
 				UploadDir:      filepath.Join(t.TempDir(), "uploads"),
 			})
-			defer application.Close()
+			defer application.CloseContext(t.Context())
 			handler := application.Routes()
 
 			schema := runtimeFixtureRequestWithHeaders[map[string]any](t, handler, tc.role, http.MethodGet, "/business/runtime-schema", nil, map[string]string{"X-Domainry-Product-Surface": "business_workspace"})
@@ -118,7 +118,7 @@ func TestRuntimeBusinessOnlyManifestSeedsRuntimeOwnedNavigationAndLogin(t *testi
 		UploadDir:      filepath.Join(t.TempDir(), "uploads"),
 	}
 	application := newIntegrationRuntime(t, cfg)
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 
 	adminSchema := runtimeFixtureRequestWithHeaders[map[string]any](t, handler, "business_admin", http.MethodGet, "/business/runtime-schema", nil, map[string]string{"X-Domainry-Product-Surface": "business_workspace"})
@@ -205,7 +205,7 @@ func TestRuntimeCRMProofServesRoleSpecificSchema(t *testing.T) {
 		ManifestPath:   filepath.Join("..", "..", "domain", "manifest", "testdata", "manifests", "crm-customer-360.json"),
 		UploadDir:      filepath.Join(t.TempDir(), "uploads"),
 	})
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 
 	managerSchema := runtimeFixtureRequestWithHeaders[map[string]any](t, handler, "sales_manager", http.MethodGet, "/business/runtime-schema", nil, map[string]string{"X-Domainry-Product-Surface": "business_workspace"})
@@ -261,7 +261,7 @@ func TestRuntimeRestrictedRoleScopesMasksAndForbidsRecords(t *testing.T) {
 		AppLocale: "en-US", DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "runtime.db"),
 		ManifestPath: target, UploadDir: filepath.Join(t.TempDir(), "uploads"),
 	})
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 
 	manager := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/objects/contract/records?page=1&page_size=50", nil)
@@ -286,7 +286,7 @@ func TestRuntimeCRMTransitionStateActionsApplyConfiguredTarget(t *testing.T) {
 		ManifestPath:   filepath.Join("..", "..", "domain", "manifest", "testdata", "manifests", "crm-customer-360.json"),
 		UploadDir:      filepath.Join(t.TempDir(), "uploads"),
 	})
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 
 	leadID := firstRuntimeFixtureRecordID(t, handler, "sales_manager", "lead")
@@ -337,7 +337,7 @@ func TestRuntimeCRMOverdueWorkflowOnlyProcessesOverduePayments(t *testing.T) {
 		UploadDir:      filepath.Join(t.TempDir(), "uploads"),
 	}
 	application := newIntegrationRuntime(t, cfg)
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 	publishSchedulerDefinitionFixture(t, cfg, "scheduler_daily_workflow_scan_seed", map[string]any{
 		"key": "scheduler_daily_workflow_scan_seed", "name": "Daily Workflow Scan", "status": "enabled", "target_type": "workflow", "target_key": "scheduled:*",
@@ -384,7 +384,7 @@ func TestRuntimeCRMReportSummaryUsesRoleVisibleRuntimeData(t *testing.T) {
 		ManifestPath:   filepath.Join("..", "..", "domain", "manifest", "testdata", "manifests", "crm-customer-360.json"),
 		UploadDir:      filepath.Join(t.TempDir(), "uploads"),
 	})
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 
 	pipeline := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/reports/crm_pipeline_health/summary", nil)
@@ -406,7 +406,7 @@ func TestRuntimeBackendRecordUpdateVersionConflict(t *testing.T) {
 		ManifestPath:   filepath.Join("..", "..", "domain", "manifest", "testdata", "manifests", "crm-customer-360.json"),
 		UploadDir:      filepath.Join(t.TempDir(), "uploads"),
 	})
-	defer application.Close()
+	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 
 	page := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/objects/customer/records?page=1&page_size=1", nil)
