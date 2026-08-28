@@ -140,6 +140,30 @@ func runtimeIdentityCatalog(snapshot metadatamodel.MetadataSchemaSnapshot, works
 			}
 		}
 	}
+	// Embedded Notification shares Runtime's Identity application. Publish its
+	// source-owned authorization vocabulary in the same atomic application
+	// catalog; the standalone Notification SaaS publishes the identical entries
+	// for its own application/audience.
+	notificationFacts := []string{"tenant_id", "workspace_id", "application_key"}
+	for _, entry := range []struct {
+		resource string
+		actions  []string
+	}{
+		{resource: "notification_event", actions: []string{"publish"}},
+		{resource: "notification_inbox", actions: []string{"read", "update", "act"}},
+		{resource: "notification_template", actions: []string{"read", "draft", "preview", "disable"}},
+		{resource: "notification_publication", actions: []string{"read", "request", "approve", "reject", "cancel"}},
+		{resource: "notification_delivery_policy", actions: []string{"read", "update"}},
+		{resource: "notification_preference", actions: []string{"read", "update"}},
+		{resource: "notification_team_mailbox", actions: []string{"read"}},
+		{resource: "notification_delegation", actions: []string{"read", "update", "delete"}},
+		{resource: "notification_governance", actions: []string{"read"}},
+	} {
+		resources[entry.resource] = identitysdk.ResourceDefinition{Key: identitysdk.ResourceType(entry.resource), SupportedFacts: append([]string(nil), notificationFacts...)}
+		for _, action := range entry.actions {
+			addAction(entry.resource, action, "")
+		}
+	}
 	resourceKeys = resourceKeys[:0]
 	for key := range resources {
 		resourceKeys = append(resourceKeys, key)

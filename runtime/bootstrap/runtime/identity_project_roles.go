@@ -38,7 +38,7 @@ func runtimeProjectRoleCatalog(roles []manifestmodel.RoleSchema, workspaceID, ap
 		definition := identitysdk.ProjectRoleDefinition{
 			Key:                  strings.TrimSpace(role.Key),
 			Name:                 strings.TrimSpace(role.Name),
-			Permissions:          append([]string(nil), role.Permissions...),
+			Permissions:          runtimeRolePermissions(role.Permissions),
 			RecordScope:          strings.TrimSpace(role.RecordScope),
 			DataPermissions:      mustProjectRoleJSON(role.DataPermissions),
 			FieldPermissions:     mustProjectRoleJSON(role.FieldPermissions),
@@ -64,6 +64,54 @@ func runtimeProjectRoleCatalog(roles []manifestmodel.RoleSchema, workspaceID, ap
 		catalog.Roles = append(catalog.Roles, definition)
 	}
 	return catalog
+}
+
+func runtimeRolePermissions(source []string) []string {
+	result := append([]string(nil), source...)
+	seen := make(map[string]bool, len(result))
+	for _, permission := range result {
+		seen[strings.TrimSpace(permission)] = true
+	}
+	add := func(values ...string) {
+		for _, value := range values {
+			if value = strings.TrimSpace(value); value != "" && !seen[value] {
+				seen[value] = true
+				result = append(result, value)
+			}
+		}
+	}
+	// Personal Inbox, preference, and delegation operations remain available to
+	// every authenticated project role. Notification still scopes these grants
+	// to the current Identity subject and workspace at its application boundary.
+	add("notification_inbox.read", "notification_inbox.update", "notification_inbox.act",
+		"notification_preference.read", "notification_preference.update",
+		"notification_delegation.read", "notification_delegation.update", "notification_delegation.delete")
+	if seen["workspace.admin"] {
+		add("notification_team_mailbox.read", "notification_template.*", "notification_publication.*",
+			"notification_delivery_policy.*", "notification_governance.read")
+	}
+	if seen["notification.template.read"] {
+		add("notification_template.read", "notification_publication.read")
+	}
+	if seen["notification.template.manage"] {
+		add("notification_template.draft", "notification_template.disable")
+	}
+	if seen["notification.template.test"] {
+		add("notification_template.preview")
+	}
+	if seen["notification.template.publish"] {
+		add("notification_publication.request", "notification_publication.cancel")
+	}
+	if seen["notification.template.approve"] {
+		add("notification_publication.approve", "notification_publication.reject")
+	}
+	if seen["notification.policy.read"] {
+		add("notification_delivery_policy.read", "notification_governance.read")
+	}
+	if seen["notification.policy.manage"] {
+		add("notification_delivery_policy.update")
+	}
+	return result
 }
 
 func mustProjectRoleJSON(value any) json.RawMessage {
