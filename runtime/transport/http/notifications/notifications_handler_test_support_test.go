@@ -13,7 +13,6 @@ import (
 
 	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
 	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
-	notificationservice "github.com/domainry/domainry-runtime/runtime/domain/notification/service"
 	notificationvalidation "github.com/domainry/domainry-runtime/runtime/domain/notification/validation"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
@@ -192,7 +191,7 @@ func (r *notificationHTTPRepository) SaveRecipientPreference(_ context.Context, 
 type notificationHTTPApplication struct {
 	NotificationApplication
 	repo    *notificationHTTPRepository
-	catalog *notificationservice.NotificationEventCatalog
+	catalog notificationmodel.NotificationGovernanceCatalog
 }
 
 func notificationHTTPAuthorize(principal principalmodel.Principal) error {
@@ -206,7 +205,7 @@ func (a *notificationHTTPApplication) GovernanceCatalog(_ context.Context, p pri
 	if err := notificationHTTPAuthorize(p); err != nil {
 		return notificationmodel.NotificationGovernanceCatalog{}, err
 	}
-	return a.catalog.GovernanceCatalog(), nil
+	return a.catalog, nil
 }
 func (a *notificationHTTPApplication) InboxGovernanceMetrics(ctx context.Context, since string, p principalmodel.Principal) (notificationmodel.NotificationInboxGovernanceMetrics, error) {
 	if err := notificationHTTPAuthorize(p); err != nil {
@@ -542,14 +541,11 @@ func notificationHTTPTemplate() notificationmodel.NotificationTemplate {
 
 func newNotificationHTTPHandler(repo *notificationHTTPRepository) (*NotificationsHandler, *notificationHTTPResponse, *principalmodel.Principal) {
 	template := notificationHTTPTemplate()
-	catalog, err := notificationservice.NewNotificationEventCatalog([]notificationmodel.NotificationEventType{{
+	catalog := notificationmodel.NotificationGovernanceCatalog{EventTypes: []notificationmodel.NotificationEventType{{
 		Key: "test.event", Source: "test", Category: "system", DefaultSeverity: "info", Surfaces: []string{"business_workspace"}, MandatoryInApp: true,
 		TemplateKey: "builtin.test.event", DefaultLocale: "en-US", Locales: map[string]notificationmodel.NotificationInboxEventTypeContent{"en-US": {Title: "Test", Body: "Test body", ActionLabels: map[string]string{"test.open": "Open"}}}, Version: 1, Status: "published",
 		Actions: []notificationmodel.NotificationInboxActionDescriptor{{Key: "test.open", Kind: "route", ResourceType: "test", SurfaceRoutes: map[string]string{"business_workspace": "business.test"}}},
-	}})
-	if err != nil {
-		panic(err)
-	}
+	}}}
 	application := &notificationHTTPApplication{repo: repo, catalog: catalog}
 	response := &notificationHTTPResponse{}
 	principal := accessfixture.AttachPointer(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "reviewer", WorkspaceID: "workspace-1"}}, accessfixture.Bundle{Permissions: []string{
