@@ -32,7 +32,6 @@ var operationsLeaseSpecs = []operationsLeaseSpec{
 	{owner: "transaction_boundary", table: "transaction_boundary_intents"},
 	{owner: "credential_refresh", table: "integration_credential_refresh_leases"},
 	{owner: "changeplan", table: "business_change_plan_operations"},
-	{owner: "notification_publication", table: "notification_template_publication_requests"},
 	{owner: "lifecycle_cleanup", table: "lifecycle_cleanup_jobs"},
 }
 

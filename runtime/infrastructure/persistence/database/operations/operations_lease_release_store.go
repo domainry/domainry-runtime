@@ -18,20 +18,19 @@ type operationsLeaseReleaseSpec struct {
 }
 
 var operationsLeaseReleaseSpecs = map[string]operationsLeaseReleaseSpec{
-	"workflow":                 {table: "workflow_execution_receipts", idColumn: "id", workspaceColumn: "workspace_id"},
-	"workflow_execution":       {table: "_workflow_executions", idColumn: "id", workspaceColumn: "workspace_id"},
-	"workflow_deadline":        {table: "workflow_tasks", idColumn: "id", workspaceColumn: "workspace_id"},
-	"business_action":          {table: "business_action_executions", idColumn: "id", workspaceColumn: "workspace_id"},
-	"record_mutation":          {table: "record_mutation_executions", idColumn: "id", workspaceColumn: "workspace_id"},
-	"record_batch":             {table: "record_batch_jobs", idColumn: "id", workspaceColumn: "workspace_id"},
-	"idempotency_cleanup":      {table: "idempotency_cleanup_leases", idColumn: "id"},
-	"automation":               {table: "automation_instruction_executions", idColumn: "id", workspaceColumn: "workspace_id"},
-	"integration_event":        {table: "integration_events", idColumn: "id", workspaceColumn: "workspace_id"},
-	"integration_outbox":       {table: "integration_outbox_messages", idColumn: "id", workspaceColumn: "workspace_id"},
-	"transaction_boundary":     {table: "transaction_boundary_intents", idColumn: "id", workspaceColumn: "workspace_id"},
-	"changeplan":               {table: "business_change_plan_operations", idColumn: "id", workspaceColumn: "workspace_id"},
-	"notification_publication": {table: "notification_template_publication_requests", idColumn: "id"},
-	"lifecycle_cleanup":        {table: "lifecycle_cleanup_jobs", idColumn: "id", workspaceColumn: "workspace_id"},
+	"workflow":             {table: "workflow_execution_receipts", idColumn: "id", workspaceColumn: "workspace_id"},
+	"workflow_execution":   {table: "_workflow_executions", idColumn: "id", workspaceColumn: "workspace_id"},
+	"workflow_deadline":    {table: "workflow_tasks", idColumn: "id", workspaceColumn: "workspace_id"},
+	"business_action":      {table: "business_action_executions", idColumn: "id", workspaceColumn: "workspace_id"},
+	"record_mutation":      {table: "record_mutation_executions", idColumn: "id", workspaceColumn: "workspace_id"},
+	"record_batch":         {table: "record_batch_jobs", idColumn: "id", workspaceColumn: "workspace_id"},
+	"idempotency_cleanup":  {table: "idempotency_cleanup_leases", idColumn: "id"},
+	"automation":           {table: "automation_instruction_executions", idColumn: "id", workspaceColumn: "workspace_id"},
+	"integration_event":    {table: "integration_events", idColumn: "id", workspaceColumn: "workspace_id"},
+	"integration_outbox":   {table: "integration_outbox_messages", idColumn: "id", workspaceColumn: "workspace_id"},
+	"transaction_boundary": {table: "transaction_boundary_intents", idColumn: "id", workspaceColumn: "workspace_id"},
+	"changeplan":           {table: "business_change_plan_operations", idColumn: "id", workspaceColumn: "workspace_id"},
+	"lifecycle_cleanup":    {table: "lifecycle_cleanup_jobs", idColumn: "id", workspaceColumn: "workspace_id"},
 }
 
 func (s OperationsStore) ForceReleaseOperationsLease(ctx context.Context, request operationsmodel.OperationsLeaseReleaseRequest) (operationsmodel.OperationsLeaseReleaseResult, bool, error) {
