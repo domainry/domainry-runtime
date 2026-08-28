@@ -80,7 +80,7 @@ import (
 	}
 	for _, dependency := range []struct{ path, version string }{
 		{"github.com/domainry/domainry-identity", identityModuleVersion},
-		{"github.com/domainry/domainry-identity-sdk", "v0.1.0-dev2"},
+		{"github.com/domainry/domainry-identity-sdk", "v0.1.0-dev3"},
 	} {
 		escapedPath, _ := module.EscapePath(dependency.path)
 		escapedVersion, _ := module.EscapeVersion(dependency.version)
