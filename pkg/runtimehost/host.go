@@ -354,7 +354,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	defer func() {
 		_ = projectDatabase.CloseContext(context.WithoutCancel(lifecycleCtx))
 	}()
-	identityBinding, identityHTTPSurfaces, err := openProjectIdentity(lifecycleCtx, cfg, identityFactory, identitysdk.DatabaseHandle{Pool: projectDatabase.DB(), Driver: projectDatabase.Driver(), Schema: projectDatabase.DatabaseSchema(), FilePath: cfg.DBPath})
+	identityBinding, identityHTTPSurfaces, err := openProjectIdentity(lifecycleCtx, cfg, identityFactory, projectIdentityDatabaseHandle(projectDatabase, cfg.DBPath))
 	if err != nil {
 		return err
 	}
