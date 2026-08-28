@@ -38,6 +38,9 @@ func (a *Runtime) close(ctx context.Context) error {
 			a.replaceRuntimeReleaseLease(deploymentmodel.RuntimeReleaseCohortLease{})
 		}
 	}
+	if a.borrowedStore {
+		return releaseErr
+	}
 	return errors.Join(releaseErr, a.store.Close())
 }
 

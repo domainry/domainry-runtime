@@ -28,6 +28,7 @@ type Runtime struct {
 	cfg                config.Config
 	templateID         string
 	store              *persistence.RuntimeStore
+	borrowedStore      bool
 	records            *composition.RuntimeServices
 	identityBinding    identitysdk.Binding
 	identityDirectory  identitysdk.Directory

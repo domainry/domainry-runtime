@@ -12,7 +12,7 @@ import (
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 )
 
-func openProjectIdentity(ctx context.Context, cfg config.Config, factory identitysdk.Factory) (identitysdk.Binding, []identityhttpapi.Surface, error) {
+func openProjectIdentity(ctx context.Context, cfg config.Config, factory identitysdk.Factory, databases ...identitysdk.DatabaseHandle) (identitysdk.Binding, []identityhttpapi.Surface, error) {
 	if factory == nil {
 		return nil, nil, fmt.Errorf("generated project composition did not supply an Identity SDK Factory")
 	}
@@ -21,7 +21,13 @@ func openProjectIdentity(ctx context.Context, cfg config.Config, factory identit
 		ApplicationKey: identitysdk.ApplicationKey(cfg.IdentityAudience),
 		RedirectURLs:   append([]string(nil), cfg.IdentityRedirectURLs...),
 	}
-	binding, err := factory.Open(ctx, application)
+	var binding identitysdk.Binding
+	var err error
+	if databaseFactory, ok := factory.(identitysdk.DatabaseFactory); ok && len(databases) > 0 {
+		binding, err = databaseFactory.OpenWithDatabase(ctx, application, databases[0])
+	} else {
+		binding, err = factory.Open(ctx, application)
+	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("open project Identity integration: %w", err)
 	}

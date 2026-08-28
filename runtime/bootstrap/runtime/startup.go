@@ -33,6 +33,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
+	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/audit"
 	deploymentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/deployment"
 	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
@@ -163,10 +164,18 @@ func NewWithExtensions(ctx context.Context, cfg config.Config, businessHandlers 
 // Binding. The generated project host owns Module/SaaS selection, Identity
 // lifecycle, and optional Identity HTTP surfaces.
 func NewProjectWithIdentity(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, artifactEvidence deploymentapplication.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding) *Runtime {
-	return newWithExtensions(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, binding, artifactEvidence)
+	return newWithExtensionsUsingStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, binding, nil, artifactEvidence)
+}
+
+func NewProjectWithIdentityAndStore(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, artifactEvidence deploymentapplication.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, store *persistence.RuntimeStore) *Runtime {
+	return newWithExtensionsUsingStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, binding, store, artifactEvidence)
 }
 
 func newWithExtensions(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
+	return newWithExtensionsUsingStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, identityBinding, nil, artifactEvidence...)
+}
+
+func newWithExtensionsUsingStore(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, preparedStore *persistence.RuntimeStore, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
 	if ctx == nil {
 		panic("bootstrap.NewWithExtensions requires a non-nil lifecycle context")
 	}
@@ -183,14 +192,17 @@ func newWithExtensions(ctx context.Context, cfg config.Config, businessHandlers 
 	mustCompleteRuntimeStartup(cfg.ValidateSecurity())
 	seedManifest, err := prepareRuntimeManifest(ctx, cfg)
 	mustCompleteRuntimeStartup(err)
-	store, err := prepareRuntimeStore(ctx, cfg)
-	mustCompleteRuntimeStartup(err)
+	store := preparedStore
+	if store == nil {
+		store, err = prepareRuntimeStore(ctx, cfg)
+		mustCompleteRuntimeStartup(err)
+	}
 	workerDependencies, err := newRuntimeWorkerDependencies(cfg.RuntimeInstanceID)
 	mustCompleteRuntimeStartup(err)
 	releaseCohort := deploymentapplication.NewDeploymentRuntimeReleaseCohortApplicationService(deploymentpersistence.NewRuntimeReleaseCohortStore(store))
 	releaseAdmission := &deploymentapplication.RuntimeReleaseAdmission{}
 	var releaseLease deploymentmodel.RuntimeReleaseCohortLease
-	startupOwnsStore := true
+	startupOwnsStore := preparedStore == nil
 	defer func() {
 		if !startupOwnsStore {
 			return
@@ -372,6 +384,7 @@ func newWithExtensions(ctx context.Context, cfg config.Config, businessHandlers 
 		releaseAdmission:    releaseAdmission,
 		releaseIntegrity:    releaseIntegrity,
 	})
+	runtime.borrowedStore = preparedStore != nil
 	runtime.startMetadataSnapshotWatcher(ctx)
 	startupOwnsStore = false
 	return BindHTTP(ctx, runtime)

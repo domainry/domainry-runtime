@@ -8,11 +8,20 @@ import (
 )
 
 func prepareRuntimeStore(ctx context.Context, cfg config.Config) (*persistence.RuntimeStore, error) {
+	if err := persistence.EnsureProjectDatabase(ctx, cfg); err != nil {
+		return nil, err
+	}
 	store, err := persistence.OpenContext(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
 	return completeRuntimeStoreSchemaPreparation(ctx, store)
+}
+
+// PrepareProjectDatabase creates the project-owned pool and completes Runtime
+// schema preparation before in-process modules borrow that pool.
+func PrepareProjectDatabase(ctx context.Context, cfg config.Config) (*persistence.RuntimeStore, error) {
+	return prepareRuntimeStore(ctx, cfg)
 }
 
 func completeRuntimeStoreSchemaPreparation(ctx context.Context, store *persistence.RuntimeStore) (*persistence.RuntimeStore, error) {

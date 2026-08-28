@@ -12,6 +12,7 @@ import (
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	runtimebootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap/runtime"
 	transportbootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap/transport"
+	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 )
@@ -19,6 +20,11 @@ import (
 type Runtime = runtimebootstrap.Runtime
 type EntrypointMux = transportbootstrap.EntrypointMux
 type RuntimeReleaseArtifactEvidence = deploymentapplication.RuntimeReleaseArtifactEvidence
+type ProjectDatabase = persistence.RuntimeStore
+
+func PrepareProjectDatabase(ctx context.Context, cfg config.Config) (*ProjectDatabase, error) {
+	return runtimebootstrap.PrepareProjectDatabase(ctx, cfg)
+}
 
 func New(ctx context.Context, cfg config.Config, identity identitysdk.Binding) *Runtime {
 	return runtimebootstrap.New(ctx, cfg, identity)
@@ -34,6 +40,10 @@ func NewWithExtensions(ctx context.Context, cfg config.Config, handlers *runtime
 
 func NewVerifiedProjectWithIdentity(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, binding identitysdk.Binding) *Runtime {
 	return runtimebootstrap.NewProjectWithIdentity(ctx, cfg, handlers, connectors, releaseIdentity, evidence, binding)
+}
+
+func NewVerifiedProjectWithIdentityAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, database *ProjectDatabase) *Runtime {
+	return runtimebootstrap.NewProjectWithIdentityAndStore(ctx, cfg, handlers, connectors, releaseIdentity, evidence, binding, database)
 }
 
 func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {

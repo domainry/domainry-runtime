@@ -13,6 +13,7 @@ import (
 
 	"github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -21,7 +22,6 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/telemetry"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	"github.com/domainry/domainry-runtime/runtime/transport/provision"
-	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"go.uber.org/zap"
 )
 
@@ -80,7 +80,8 @@ type serverRunDependencies struct {
 	executable           func() (string, error)
 	stat                 func(string) (os.FileInfo, error)
 	readFile             func(string) ([]byte, error)
-	newRuntime           func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding) runtimeProcess
+	prepareDatabase      func(context.Context, config.Config) (*bootstrap.ProjectDatabase, error)
+	newRuntime           func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, *bootstrap.ProjectDatabase) runtimeProcess
 	listenAndServe       func(*http.Server) error
 	shutdown             func(context.Context, *http.Server) error
 }
@@ -95,8 +96,9 @@ func defaultServerRunDependencies() serverRunDependencies {
 		executable:           os.Executable,
 		stat:                 os.Stat,
 		readFile:             os.ReadFile,
-		newRuntime: func(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding) runtimeProcess {
-			return bootstrapRuntimeProcess{Runtime: bootstrap.NewVerifiedProjectWithIdentity(ctx, cfg, handlers, connectors, identity, evidence, binding)}
+		prepareDatabase:      bootstrap.PrepareProjectDatabase,
+		newRuntime: func(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, database *bootstrap.ProjectDatabase) runtimeProcess {
+			return bootstrapRuntimeProcess{Runtime: bootstrap.NewVerifiedProjectWithIdentityAndDatabase(ctx, cfg, handlers, connectors, identity, evidence, binding, database)}
 		},
 		listenAndServe: func(server *http.Server) error { return server.ListenAndServe() },
 		shutdown:       func(ctx context.Context, server *http.Server) error { return server.Shutdown(ctx) },
@@ -338,7 +340,16 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 			zap.L().Warn("telemetry shutdown failed", zap.String("error_kind", "telemetry_shutdown_failed"))
 		}
 	}()
-	identityBinding, identityHTTPSurfaces, err := openProjectIdentity(lifecycleCtx, cfg, identityFactory)
+	projectDatabaseConfig := cfg
+	projectDatabaseConfig.DatabaseMigrationDSN = ""
+	projectDatabase, err := dependencies.prepareDatabase(context.WithoutCancel(lifecycleCtx), projectDatabaseConfig)
+	if err != nil {
+		return fmt.Errorf("prepare project database: %w", err)
+	}
+	defer func() {
+		_ = projectDatabase.CloseContext(context.WithoutCancel(lifecycleCtx))
+	}()
+	identityBinding, identityHTTPSurfaces, err := openProjectIdentity(lifecycleCtx, cfg, identityFactory, identitysdk.DatabaseHandle{Pool: projectDatabase.DB(), Driver: projectDatabase.Driver(), Schema: projectDatabase.DatabaseSchema(), FilePath: cfg.DBPath})
 	if err != nil {
 		return err
 	}
@@ -384,7 +395,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 			if manifest.SourceBlueprintID == provision.DirectAuthoringSourceID && len(manifest.Objects) == 0 {
 				runtimeConfig.AllowEmptyAuthoringManifest = true
 			}
-			runtime := dependencies.newRuntime(lifecycleCtx, runtimeConfig, businessHandlers, connectorProviders, releaseIdentity, artifactEvidence, identityBinding)
+			runtime := dependencies.newRuntime(lifecycleCtx, runtimeConfig, businessHandlers, connectorProviders, releaseIdentity, artifactEvidence, identityBinding, projectDatabase)
 			if runtime == nil {
 				return nil, errors.New("Runtime bootstrap returned no process")
 			}

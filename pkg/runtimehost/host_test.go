@@ -16,6 +16,7 @@ import (
 
 	"github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
@@ -26,7 +27,6 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/telemetry"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	"github.com/domainry/domainry-runtime/runtime/transport/provision"
-	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 )
 
 type serverRuntimeFake struct {
@@ -132,6 +132,7 @@ func serverTestConfig() config.Config {
 
 func serverTestDependencies(t *testing.T, cfg config.Config, runtime runtimeProcess) serverRunDependencies {
 	t.Helper()
+	databasePath := filepath.Join(t.TempDir(), "runtimehost.db")
 	return serverRunDependencies{
 		loadConfig: func() (config.Config, config.Snapshot, error) {
 			return cfg, config.Snapshot{
@@ -150,7 +151,12 @@ func serverTestDependencies(t *testing.T, cfg config.Config, runtime runtimeProc
 		readFile: func(string) ([]byte, error) {
 			return serverManifestJSON(t, manifestDomainSDKTarget(validOptions().Identity.DomainSDK)), nil
 		},
-		newRuntime: func(_ context.Context, _ config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, _ identitysdk.Binding) runtimeProcess {
+		prepareDatabase: func(ctx context.Context, databaseConfig config.Config) (*bootstrap.ProjectDatabase, error) {
+			databaseConfig.DatabaseDriver = "sqlite"
+			databaseConfig.DBPath = databasePath
+			return bootstrap.PrepareProjectDatabase(ctx, databaseConfig)
+		},
+		newRuntime: func(_ context.Context, _ config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, _ identitysdk.Binding, _ *bootstrap.ProjectDatabase) runtimeProcess {
 			if handlers == nil || !handlers.Frozen() {
 				panic("host passed an unfrozen registry")
 			}
@@ -359,7 +365,7 @@ func TestRunWithDependenciesRejectsManifestSDKTargetBeforeRuntimeCreation(t *tes
 			created := 0
 			deps := serverTestDependencies(t, serverTestConfig(), &serverRuntimeFake{})
 			deps.readFile = func(string) ([]byte, error) { return serverManifestJSON(t, test.target), nil }
-			deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding) runtimeProcess {
+			deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, *bootstrap.ProjectDatabase) runtimeProcess {
 				created++
 				return &serverRuntimeFake{}
 			}
@@ -462,7 +468,7 @@ func TestRunWithDependenciesCoversConfigurationActivationAndServeOutcomes(t *tes
 		return runtimeext.ExtensionSet{}, nil
 	}
 	deps = serverTestDependencies(t, cfg, &serverRuntimeFake{})
-	deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding) runtimeProcess {
+	deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, *bootstrap.ProjectDatabase) runtimeProcess {
 		return nil
 	}
 	if err := runWithDependencies(options, deps); err == nil || !strings.Contains(err.Error(), "returned no process") {
