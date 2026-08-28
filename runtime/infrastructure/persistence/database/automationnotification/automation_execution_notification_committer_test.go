@@ -12,6 +12,7 @@ import (
 	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	"github.com/domainry/domainry-runtime/testsupport/notificationsdkfixture"
 )
 
 var _ automationapplication.AutomationExecutionNotificationCommitter = AutomationExecutionNotificationCommitter{}
@@ -227,6 +228,10 @@ func openAutomationNotificationStore(t *testing.T) *database.RuntimeStore {
 		t.Fatal(err)
 	}
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	if err := notificationsdkfixture.BindTransactions(store); err != nil {
 		store.Close()
 		t.Fatal(err)
 	}

@@ -5,6 +5,7 @@ import (
 
 	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
+	"github.com/domainry/domainry-runtime/testsupport/notificationsdkfixture"
 )
 
 func workflowTaskNotificationEvent(id, sourceID string) notificationmodel.NotificationEvent {
@@ -24,6 +25,9 @@ func TestWorkflowTaskAndNotificationCommitOrRollbackTogether(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := notificationsdkfixture.BindTransactions(store); err != nil {
 		t.Fatal(err)
 	}
 	committer := NewWorkflowTaskNotificationStore(store)
@@ -69,6 +73,9 @@ func TestWorkflowTaskEscalationTaskEventAndBothNotificationsAreAtomic(t *testing
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := notificationsdkfixture.BindTransactions(store); err != nil {
 		t.Fatal(err)
 	}
 	committer := NewWorkflowTaskNotificationStore(store)
@@ -123,6 +130,9 @@ func TestWorkflowTaskNotificationValidationBeginAndStageFailures(t *testing.T) {
 
 	store := openStoreForGeneratedListTest(t)
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := notificationsdkfixture.BindTransactions(store); err != nil {
 		t.Fatal(err)
 	}
 	committer := NewWorkflowTaskNotificationStore(store)
@@ -199,6 +209,9 @@ func TestWorkflowTaskNotificationDeferredCommitFailures(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := notificationsdkfixture.BindTransactions(store); err != nil {
 		t.Fatal(err)
 	}
 	for _, statement := range []string{

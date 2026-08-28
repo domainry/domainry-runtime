@@ -12,6 +12,7 @@ import (
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	"github.com/domainry/domainry-runtime/testsupport/notificationsdkfixture"
 )
 
 func integrationCredentialStoreEvent(id, sourceID string) notificationmodel.NotificationEvent {
@@ -32,6 +33,9 @@ func TestIntegrationCredentialStateAndNotificationCommitOrRollbackTogether(t *te
 	}
 	defer store.Close()
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := notificationsdkfixture.BindTransactions(store); err != nil {
 		t.Fatal(err)
 	}
 	configStore := integrationpersistence.NewIntegrationConfigStore(store)

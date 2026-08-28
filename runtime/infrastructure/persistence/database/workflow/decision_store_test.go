@@ -21,6 +21,7 @@ import (
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	"github.com/domainry/domainry-runtime/testsupport/notificationsdkfixture"
 )
 
 func TestContextWorkflowDecisionCommitIsAtomic(t *testing.T) {
@@ -304,6 +305,10 @@ func workflowDecisionStoreFixture(t *testing.T) (*database.RuntimeStore, definit
 	t.Helper()
 	store := openStoreForGeneratedListTest(t)
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	if err := notificationsdkfixture.BindTransactions(store); err != nil {
 		store.Close()
 		t.Fatal(err)
 	}

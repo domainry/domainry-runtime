@@ -5,11 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	sdkcontract "github.com/domainry/domainry-notification-sdk/contract"
-	notificationsql "github.com/domainry/domainry-notification/sqlstore"
-	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
+	"github.com/domainry/domainry-notification-sdk/modulehost"
 	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	transactioncontract "github.com/domainry/domainry-runtime/runtime/domain/transaction/contract"
@@ -27,7 +25,10 @@ func NewInboxEventWriter(store *database.RuntimeStore) InboxEventWriter {
 	return InboxEventWriter{runtimeStore: store}
 }
 
-func (w InboxEventWriter) InsertEventTx(ctx context.Context, executor notificationsql.Executor, value notificationmodel.NotificationEvent) error {
+func (w InboxEventWriter) InsertEventTx(ctx context.Context, executor modulehost.Executor, value notificationmodel.NotificationEvent) error {
+	if w.runtimeStore == nil {
+		return fmt.Errorf("Notification transaction binding is unavailable")
+	}
 	if _, saas := w.runtimeStore.NotificationSaaSPublications(); saas {
 		if value.PublicationIntent == nil {
 			return fmt.Errorf("Notification SaaS publication intent is unavailable for event %q", value.ID)
@@ -57,17 +58,7 @@ func (w InboxEventWriter) InsertEventTx(ctx context.Context, executor notificati
 		}
 		return nil
 	}
-	moduleStore, err := NewSQLStoreAdapter(w.runtimeStore, inboxEventWriterClock{})
-	if err != nil {
-		return err
-	}
-	if err = moduleStore.InsertEvent(ctx, executor, notificationcontract.ModuleInboxEvent(value)); err != nil {
-		return fmt.Errorf("insert notification inbox event: %w", database.MutationConstraintError(err, "notification_event", value.Source+"/"+value.SourceEventID, mutation.MutationConflictUnique))
-	}
-	if transactioncontract.ActiveTransaction(ctx) {
-		return w.registerAfterCommit(ctx, value)
-	}
-	return nil
+	return fmt.Errorf("Notification transaction topology is not bound")
 }
 
 func (w InboxEventWriter) registerSaaSAfterCommit(ctx context.Context, intent notificationmodel.NotificationIntent) error {
@@ -110,7 +101,3 @@ func (w InboxEventWriter) CommittedCount(ctx context.Context, event notification
 	err := w.runtimeStore.DB().QueryRowContext(ctx, query, event.WorkspaceID, event.Source, event.SourceEventID).Scan(&count)
 	return count, err
 }
-
-type inboxEventWriterClock struct{}
-
-func (inboxEventWriterClock) Now() time.Time { return time.Now().UTC() }
