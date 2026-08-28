@@ -36,14 +36,14 @@ var businessTechnicalDirectories = technicalLayoutStringSet(
 
 var applicationTopLevelDirectories = technicalLayoutStringSet(
 	"action", "agent", "audit", "automation", "businessevent", "businesssystem", "capability", "changeplan", "contractcheck",
-	"deployment", "integration", "lifecycle", "metadata", "notification", "operations", "pipeline", "preference", "principal", "record", "report", "ruleset", "scheduler",
+	"deployment", "integration", "lifecycle", "metadata", "notificationfacade", "operations", "pipeline", "preference", "principal", "record", "report", "ruleset", "scheduler",
 	"party",
 	"recordmutation", "seed", "surfacecontext", "upload", "workflow",
 )
 
 var applicationProductionBaselines = map[string]int{
 	".": 0, "action": 43, "agent": 6, "audit": 3, "automation": 8, "businesssystem": 4, "capability": 17,
-	"businessevent": 1, "changeplan": 14, "deployment": 8, "integration": 70, "lifecycle": 5, "metadata": 14, "operations": 9,
+	"businessevent": 1, "changeplan": 14, "deployment": 8, "integration": 70, "lifecycle": 5, "metadata": 14, "notificationfacade": 4, "operations": 9,
 	"pipeline": 4, "preference": 1, "record": 18, "recordmutation": 4, "report": 5, "ruleset": 1, "scheduler": 12, "surfacecontext": 2, "workflow": 26,
 	"party": 3, "principal": 1,
 	"upload": 4,
@@ -62,6 +62,7 @@ var bootstrapRuntimeProductionFiles = technicalLayoutStringSet(
 	"manifest_loader.go", "manifest_preparation.go",
 	"manifest_validation_catalog.go", "metadata_restoration.go", "repository_bindings.go",
 	"notification_startup_bindings.go", "runtime.go", "seed_synchronization.go", "service_assembly.go", "startup.go",
+	"identity_project_roles.go", "notification_sdk_module_host.go", "notification_system_retention.go", "notification_system_subjects.go",
 	"startup_errors.go", "store_preparation.go", "worker_dependencies.go", "worker_lifecycle.go", "worker_lifecycle_cleanup.go", "worker_registry.go", "operations_control_worker.go",
 )
 

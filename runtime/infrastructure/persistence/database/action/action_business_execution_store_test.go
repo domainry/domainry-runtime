@@ -25,6 +25,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
 	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
+	"github.com/domainry/domainry-runtime/testsupport/notificationsdkfixture"
 )
 
 func commitBusinessActionExecution(ctx context.Context, repository ActionBusinessExecutionStore, commits []transactionmodel.RecordMutationCommit, completion actionmodel.ActionExecutionCompletion) (actionmodel.ActionBusinessExecution, error) {
@@ -285,6 +286,9 @@ func TestBookClassPersistsClassBookingAuditsOutboxAndReceiptInOneTransaction(t *
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := notificationsdkfixture.BindTransactions(store); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.DB().Exec(`CREATE TABLE p8_group_class (

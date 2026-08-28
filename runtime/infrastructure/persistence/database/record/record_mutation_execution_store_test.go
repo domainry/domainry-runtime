@@ -19,6 +19,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/idempotency"
 	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
+	"github.com/domainry/domainry-runtime/testsupport/notificationsdkfixture"
 )
 
 func TestRecordMutationExecutionClaimCommitReplayConflictAndRollback(t *testing.T) {
@@ -28,6 +29,9 @@ func TestRecordMutationExecutionClaimCommitReplayConflictAndRollback(t *testing.
 	}
 	defer store.Close()
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := notificationsdkfixture.BindTransactions(store); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.DB().Exec(`CREATE TABLE idempotent_create_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, name TEXT)`); err != nil {

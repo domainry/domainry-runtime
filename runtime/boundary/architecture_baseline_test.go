@@ -332,6 +332,7 @@ func TestRuntimeDatabaseRootContainsOnlyTechnicalSubstrate(t *testing.T) {
 		"runtime_operational_metrics.go": true, "runtime_schema.go": true,
 		"runtime_store_open_dependencies.go": true, "store_migration_backup.go": true,
 		"runtime_store.go": true, "store_migration_status.go": true, "store_migrations.go": true,
+		"module_migration_baseline.go": true, "module_migrations.go": true, "project_database.go": true,
 		"store_sql.go":     true,
 		"workspace_rls.go": true, "workspace_scope_migration.go": true,
 	}

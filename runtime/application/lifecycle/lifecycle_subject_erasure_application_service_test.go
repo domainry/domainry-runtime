@@ -11,6 +11,7 @@ import (
 	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/lifecycle"
+	"github.com/domainry/domainry-runtime/testsupport/notificationsdkfixture"
 )
 
 type notificationSubjectLifecycleFixture struct{ database *sql.DB }
@@ -94,6 +95,9 @@ func TestSubjectErasureIsBlockedByLegalHold(t *testing.T) {
 
 func TestNotificationSubjectErasureEndToEndHonorsLegalHoldBeforeAnonymizing(t *testing.T) {
 	_, store := newLifecycleApplicationTestService(t)
+	if err := notificationsdkfixture.EnsureModuleSchema(t.Context(), store); err != nil {
+		t.Fatal(err)
+	}
 	service := NewLifecycleApplicationService(t.Context(), LifecycleApplicationDependencies{
 		Repository:      lifecyclepersistence.NewLifecycleStore(store),
 		SubjectResolver: subjectResolverStub{},

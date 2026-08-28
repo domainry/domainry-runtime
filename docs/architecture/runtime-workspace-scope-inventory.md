@@ -78,15 +78,9 @@ Registered schema tables:
   `integration_outbox_messages`, `integration_event_mapping_intents`,
   `connector_provider_states`
   — `workspace_scoped`
-- notification definitions: `notification_template_records`,
-  `notification_template_versions`, `notification_template_publication_requests`,
-  `notification_template_publication_locks`, `notification_delivery_policy`
-  — `installation_scoped`
-- `notification_recipient_preferences`, `notification_delivery_reservations`,
-  `notification_events`, `notification_event_failures`, `notification_channel_plans`, `notification_inbox_items`,
-  `notification_alert_groups`, `notification_inbox_saved_views`,
-  `notification_inbox_delegations`
-  — `workspace_scoped`
+- Notification SaaS publication handoff: `notification_publication_outbox`
+  — `workspace_scoped`; all Notification-owned tables are outside the Runtime
+  schema and are governed by the selected Module or SaaS Binding.
 - `frontend_capability_manifests` — `workspace_scoped`
 - lifecycle governance: `lifecycle_policy_versions`, `lifecycle_legal_holds`,
   `lifecycle_cleanup_jobs`, `lifecycle_subject_requests`,
@@ -120,7 +114,8 @@ Registered schema tables:
 - automation rule/instruction executions — `workspace_scoped`
 - scheduler job definitions, run records, run events and retry/dead-letter state — `workspace_scoped`
 - integration events, invocations, outbox messages and reconciliation work — `workspace_scoped`
-- notification publication requests — `installation_scoped`; delivery reservations, event intents, external channel plans, Inbox items and saved views — `workspace_scoped`
+- Notification SaaS publication outbox rows — `workspace_scoped`; Notification
+  domain state is owned and scoped outside Runtime by the selected Binding
 - report/export/download task payloads — `workspace_scoped`
 - idempotency cleanup leases — `runtime_global`; cross-boundary intents — `workspace_scoped`
 

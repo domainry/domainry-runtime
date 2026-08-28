@@ -176,6 +176,9 @@ func TestWorkspaceFallbackInventoryIsAnExactNonGrowingBaseline(t *testing.T) {
 					(strings.Contains(line, "strings.TrimSpace(artifact.WorkspaceID)") && strings.Contains(line, `== ""`)) ||
 					(strings.Contains(line, "strings.TrimSpace(value.WorkspaceID)") && strings.Contains(line, "workspaceID")) ||
 					(strings.Contains(line, "strings.TrimSpace(request.WorkspaceID)") && strings.Contains(line, `== ""`)) ||
+					(strings.Contains(line, "strings.TrimSpace(value.WorkspaceID)") && strings.Contains(line, `== ""`)) ||
+					(strings.Contains(line, "strings.TrimSpace(intent.WorkspaceID)") && strings.Contains(line, `== ""`)) ||
+					(strings.Contains(line, "strings.TrimSpace(scope.WorkspaceID)") && strings.Contains(line, `== ""`)) ||
 					strings.Contains(line, "workspaceID = strings.TrimSpace(workspaceID)") {
 					continue
 				}
