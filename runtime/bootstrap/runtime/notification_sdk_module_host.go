@@ -62,7 +62,8 @@ func notificationSDKCatalog(defaultLocale string, manifest manifestmodel.Manifes
 	}, nil
 }
 
-func (h notificationSDKModuleHost) Database() modulehost.Database { return h.store.DB() }
+func (h notificationSDKModuleHost) Database() modulehost.Database             { return h.store.DB() }
+func (h notificationSDKModuleHost) Migrations() modulehost.MigrationRegistrar { return h.store }
 func (h notificationSDKModuleHost) Dialect() modulehost.Dialect {
 	return notificationSDKDialect{h.store}
 }

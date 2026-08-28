@@ -52,7 +52,7 @@ func (s *RuntimeStore) MigrationStatus(ctx context.Context) (deploymentmodel.Mig
 			if checksum != expected {
 				status.DriftPaths = append(status.DriftPaths, path)
 			}
-		} else {
+		} else if !strings.HasPrefix(strings.TrimSpace(path), "module_") {
 			version, _ := migrationIdentity(filepath.Base(path))
 			if status.MaxSchemaVersion != "" && migration.CompareVersions(version, status.MaxSchemaVersion) > 0 {
 				status.NewerPaths = append(status.NewerPaths, path)
