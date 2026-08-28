@@ -308,6 +308,12 @@ func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Con
 		notificationHTTP = facade
 		integrationNotificationPublisher = facade.PublishInboxIntent
 	}
+	systemTemplateBinding, ok := notificationBinding.(notificationsdk.SystemTemplateBinding)
+	if !ok || systemTemplateBinding.SystemTemplates() == nil {
+		mustCompleteRuntimeStartup(errors.New("Notification Binding returned no system template restoration port"))
+	}
+	manifest, err = restoreRuntimeManifest(ctx, sdkNotificationTemplateCatalog{system: systemTemplateBinding.SystemTemplates()}, restoredMetadata.metadataStore, seedManifest)
+	mustCompleteRuntimeStartup(err)
 	manifest.TemplateID = templateID
 	manifest.Version = valueOrDefault(manifest.Version, generatedTemplateVersion)
 	sharedRateLimiter := ratelimitpersistence.NewRateLimiter(store)
