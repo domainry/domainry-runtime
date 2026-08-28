@@ -47,3 +47,13 @@ func authorizeParty(principal principalmodel.Principal, permission string) error
 	}
 	return nil
 }
+
+func authorizePartyCatalog(principal principalmodel.Principal, permission string) error {
+	if _, err := principalmodel.QueryScopeForPrincipal(principal); err != nil {
+		return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.workspace_scope_required", Err: err}
+	}
+	if !principal.HasPermission("workspace.admin") && !principal.HasPermission(permission) {
+		return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.permission.denied"}
+	}
+	return nil
+}

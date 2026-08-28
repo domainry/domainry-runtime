@@ -36,6 +36,7 @@ func TestPartyApplicationServiceAuthorizesEveryEntry(t *testing.T) {
 	reader := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"party.read"}})
 	writer := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"party.write"}})
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "party.read"}})
+	workspaceAdmin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	if _, err := service.List(t.Context(), unknown); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("unknown list error=%v", err)
 	}
@@ -44,6 +45,9 @@ func TestPartyApplicationServiceAuthorizesEveryEntry(t *testing.T) {
 	}
 	if values, err := service.List(t.Context(), reader); err != nil || len(values) != 1 {
 		t.Fatalf("list=%#v err=%v", values, err)
+	}
+	if _, err := service.List(t.Context(), workspaceAdmin); apperror.CodeOf(err) != "backend.permission.denied" {
+		t.Fatalf("workspace admin must not implicitly read party aggregates: %v", err)
 	}
 	if _, _, err := service.Get(t.Context(), "party", writer); apperror.CodeOf(err) != "backend.permission.denied" {
 		t.Fatalf("writer get error=%v", err)

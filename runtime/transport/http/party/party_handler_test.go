@@ -328,6 +328,25 @@ func TestPartyHandlerPublishesOrganizationExtensionsAndMemberships(t *testing.T)
 	}
 }
 
+func TestWorkspaceAdminReadsAndWritesOrganizationExtensions(t *testing.T) {
+	repository := &handlerPartyRepository{values: map[string]partymodel.Aggregate{}}
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	handler := testPartyHandler(repository, admin, func(*http.Request, string, string, map[string]any) {})
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	for _, request := range []*http.Request{
+		httptest.NewRequest(http.MethodPut, "/foundation/organization-extensions/team", jsonBody(`{"kind":"team","code":"TEAM","name":"Team"}`)),
+		httptest.NewRequest(http.MethodGet, "/foundation/organization-extensions", nil),
+	} {
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("%s %s status=%d body=%s", request.Method, request.URL.Path, response.Code, response.Body.String())
+		}
+	}
+}
+
 func testPartyHandler(repository *handlerPartyRepository, principal principalmodel.Principal, audit func(*http.Request, string, string, map[string]any)) *PartyHandler {
 	if repository.jobs == nil {
 		repository.jobs = map[string]partymodel.JobCatalogItem{}

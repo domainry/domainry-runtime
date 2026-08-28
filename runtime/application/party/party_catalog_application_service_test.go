@@ -147,6 +147,20 @@ func TestPartyCatalogApplicationServiceFailsClosed(t *testing.T) {
 	}
 }
 
+func TestWorkspaceAdminManagesPartyFoundationCatalog(t *testing.T) {
+	repository := newApplicationCatalogRepository()
+	service := NewPartyCatalogApplicationService(partyservice.NewPartyCatalogDomainService(repository))
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+
+	if _, err := service.UpsertOrganizationExtension(t.Context(), partymodel.OrganizationExtension{ID: "team", Kind: "team", Code: "TEAM", Name: "Team"}, admin); err != nil {
+		t.Fatalf("workspace admin write extension: %v", err)
+	}
+	values, err := service.ListOrganizationExtensions(t.Context(), admin)
+	if err != nil || len(values) != 1 || values[0].ID != "team" {
+		t.Fatalf("workspace admin read extensions=%#v err=%v", values, err)
+	}
+}
+
 func newApplicationCatalogRepository() *applicationCatalogRepository {
 	return &applicationCatalogRepository{
 		jobs: map[string]partymodel.JobCatalogItem{}, positions: map[string]partymodel.Position{},
