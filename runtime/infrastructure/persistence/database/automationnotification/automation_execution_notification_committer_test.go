@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/testsupport/notificationsdkfixture"

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )
 

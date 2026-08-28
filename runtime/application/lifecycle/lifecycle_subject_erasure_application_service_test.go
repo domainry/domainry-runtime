@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
 	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/lifecycle"
 	"github.com/domainry/domainry-runtime/testsupport/notificationsdkfixture"
 )

@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"

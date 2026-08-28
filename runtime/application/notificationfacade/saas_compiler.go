@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	runtimemodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
+	runtimemodel "github.com/domainry/domainry-notification-sdk/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 

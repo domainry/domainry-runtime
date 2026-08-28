@@ -13,6 +13,7 @@ import (
 
 	connector "github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
@@ -26,7 +27,6 @@ import (
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	agenthttp "github.com/domainry/domainry-runtime/runtime/infrastructure/agentrunner/http"

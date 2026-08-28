@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	sdkcontract "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	transactioncontract "github.com/domainry/domainry-runtime/runtime/domain/transaction/contract"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"

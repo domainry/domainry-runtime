@@ -10,10 +10,10 @@ import (
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"

@@ -5,8 +5,8 @@ import (
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 

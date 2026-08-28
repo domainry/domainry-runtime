@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"

@@ -1,7 +1,0 @@
-package notificationmodel
-
-import notificationcontract "github.com/domainry/domainry-notification-sdk/contract"
-
-type NotificationDeliveryMetricBucket = notificationcontract.NotificationDeliveryMetricBucket
-type NotificationDeliveryMetrics = notificationcontract.NotificationDeliveryMetrics
-type NotificationDeliveryFailureMetric = notificationcontract.NotificationDeliveryFailureMetric

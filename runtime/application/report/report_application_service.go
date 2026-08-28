@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 )
 
 type notificationHandlerCall struct {

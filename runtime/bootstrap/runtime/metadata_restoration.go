@@ -5,11 +5,11 @@ import (
 	"fmt"
 
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	sdkcontract "github.com/domainry/domainry-notification-sdk/contract"
 	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	manifestrepository "github.com/domainry/domainry-runtime/runtime/domain/manifest/repository"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	metadatapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata"

@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
+	runtimemodel "github.com/domainry/domainry-notification-sdk/contract"
 	sdkcontract "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
-	runtimemodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 

@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"strings"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"

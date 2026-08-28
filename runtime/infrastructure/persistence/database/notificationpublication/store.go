@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 

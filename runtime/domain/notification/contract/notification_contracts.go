@@ -4,7 +4,7 @@ import (
 	"context"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 )
 
 type NotificationRecipientDirectory interface {

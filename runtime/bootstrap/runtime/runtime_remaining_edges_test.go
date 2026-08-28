@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"

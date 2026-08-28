@@ -6,8 +6,8 @@ import (
 
 	"context"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 
 	"strings"
 	"time"

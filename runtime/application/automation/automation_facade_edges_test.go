@@ -9,6 +9,7 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
@@ -16,7 +17,6 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"

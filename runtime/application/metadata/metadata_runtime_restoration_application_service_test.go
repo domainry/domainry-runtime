@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	manifestprojection "github.com/domainry/domainry-runtime/runtime/domain/manifest/projection"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
 )
 
@@ -22,7 +22,7 @@ func notificationInboxQuery(r *http.Request) notificationmodel.NotificationInbox
 	return notificationmodel.NotificationInboxQuery{
 		Mailbox: query.Get("mailbox"), Query: query.Get("query"), Categories: query["category"], Sources: query["source"],
 		Severities: query["severity"], ActionStates: query["action_state"], From: query.Get("from"), To: query.Get("to"), Limit: limit,
-		Scope: query.Get("scope"), RecipientUserID: notificationInboxRecipientFilter(query.Get("scope"), query.Get("team_member_id"), query.Get("delegated_owner_id")),
+		Scope: query.Get("scope"), TeamMemberID: notificationInboxRecipientFilter(query.Get("scope"), query.Get("team_member_id"), query.Get("delegated_owner_id")),
 	}
 }
 

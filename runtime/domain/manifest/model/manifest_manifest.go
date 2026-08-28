@@ -16,7 +16,7 @@ import (
 
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )

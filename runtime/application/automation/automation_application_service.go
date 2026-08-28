@@ -23,8 +23,8 @@ import (
 	automationprojection "github.com/domainry/domainry-runtime/runtime/domain/automation/projection"
 	automationrepository "github.com/domainry/domainry-runtime/runtime/domain/automation/repository"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 
 	"strings"
 	"time"

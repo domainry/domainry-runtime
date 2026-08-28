@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"

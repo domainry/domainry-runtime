@@ -89,9 +89,6 @@ func TestRuntimeBoundaryInterfacesAreContextFirstOrReviewedPure(t *testing.T) {
 		"ConfigValidator.ValidateConfig", "SchemaProvider.ProviderSchema",
 		"IntegrationAutomationApplication.ValidateIntegrationOutput",
 		"OperationIdentityProvider.OperationIdentity",
-		"NotificationInboxActionRegistry.ResolveNotificationInboxAction",
-		"NotificationEventTypeRegistry.ResolveNotificationEventType",
-		"NotificationRuleRegistry.ResolveNotificationRule",
 	)
 	seenAllowed := map[string]bool{}
 	root := runtimeRoot(t)

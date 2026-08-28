@@ -1,9 +1,9 @@
 package validation
 
 import (
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	notificationsdkcontract "github.com/domainry/domainry-notification-sdk/contract"
 	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 )
 
 func validateNotificationTemplates(values []notificationmodel.NotificationTemplate) error {

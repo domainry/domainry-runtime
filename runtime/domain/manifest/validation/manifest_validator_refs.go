@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 )
 
 func (state *validationState) validateObjects() {

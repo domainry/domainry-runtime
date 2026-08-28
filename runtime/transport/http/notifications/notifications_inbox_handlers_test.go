@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 )
 
 type notificationSSEErrorWriter struct {
@@ -213,7 +213,7 @@ func TestNotificationInboxHandlerHelpersAndUnavailable(t *testing.T) {
 		t.Fatalf("surface=%s", surface)
 	}
 	query := notificationInboxQuery(httptest.NewRequest(http.MethodGet, "/business/notifications?limit=bad&mailbox=unread&query=x&category=a&source=b&severity=c&action_state=open&from=f&to=t&scope=team&team_member_id=u", nil))
-	if query.Limit != 0 || query.Mailbox != "unread" || query.Scope != "team" || query.RecipientUserID != "u" || len(query.Categories) != 1 {
+	if query.Limit != 0 || query.Mailbox != "unread" || query.Scope != "team" || query.TeamMemberID != "u" || len(query.Categories) != 1 {
 		t.Fatalf("query=%+v", query)
 	}
 

@@ -14,6 +14,7 @@ import (
 	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 
 	connector "github.com/domainry/domainry-connector-sdk"
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
@@ -29,7 +30,6 @@ import (
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
 	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	partyrepository "github.com/domainry/domainry-runtime/runtime/domain/party/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"

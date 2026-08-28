@@ -1,6 +1,6 @@
 package notifications
 
-import notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
+import notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 
 import (
 	"net/http"

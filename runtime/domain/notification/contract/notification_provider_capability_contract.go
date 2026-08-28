@@ -6,9 +6,7 @@ import (
 	notificationsdkcontract "github.com/domainry/domainry-notification-sdk/contract"
 )
 
-type NotificationProviderCapability = notificationsdkcontract.NotificationTemplateCapability
-
-var notificationProviderCapabilities = map[string]NotificationProviderCapability{
+var notificationProviderCapabilities = map[string]notificationsdkcontract.NotificationTemplateCapability{
 	"email/":                          {Channel: "email", SupportsHTML: true, SupportsFacts: true, SupportsURLActions: true, MaxFacts: 10, MaxActions: 5},
 	"whatsapp/meta_cloud_api":         {Channel: "whatsapp", Provider: "meta_cloud_api", SupportsFacts: true, SupportsURLActions: true, SupportsProviderTemplate: true, MaxFacts: 10, MaxActions: 5},
 	"collaboration/feishu":            notificationCollaborationCapability("feishu", 5),
@@ -23,17 +21,17 @@ var notificationProviderCapabilities = map[string]NotificationProviderCapability
 	"collaboration/line_works":        notificationCollaborationCapability("line_works", 5),
 }
 
-func notificationCollaborationCapability(provider string, maxActions int) NotificationProviderCapability {
-	return NotificationProviderCapability{Channel: "collaboration", Provider: provider, SupportsMarkdown: true, SupportsFacts: true, SupportsURLActions: true, MaxFacts: 10, MaxActions: maxActions}
+func notificationCollaborationCapability(provider string, maxActions int) notificationsdkcontract.NotificationTemplateCapability {
+	return notificationsdkcontract.NotificationTemplateCapability{Channel: "collaboration", Provider: provider, SupportsMarkdown: true, SupportsFacts: true, SupportsURLActions: true, MaxFacts: 10, MaxActions: maxActions}
 }
 
-func NotificationProviderCapabilityFor(channel, provider string) (NotificationProviderCapability, bool) {
+func NotificationProviderCapabilityFor(channel, provider string) (notificationsdkcontract.NotificationTemplateCapability, bool) {
 	value, ok := notificationProviderCapabilities[channel+"/"+provider]
 	return value, ok
 }
 
-func NotificationProviderCapabilities() []NotificationProviderCapability {
-	result := make([]NotificationProviderCapability, 0, len(notificationProviderCapabilities))
+func NotificationProviderCapabilities() []notificationsdkcontract.NotificationTemplateCapability {
+	result := make([]notificationsdkcontract.NotificationTemplateCapability, 0, len(notificationProviderCapabilities))
 	for _, value := range notificationProviderCapabilities {
 		result = append(result, value)
 	}

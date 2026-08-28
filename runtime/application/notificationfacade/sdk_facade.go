@@ -12,9 +12,8 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
+	runtimemodel "github.com/domainry/domainry-notification-sdk/contract"
 	sdkcontract "github.com/domainry/domainry-notification-sdk/contract"
-	runtimecontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
-	runtimemodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
@@ -122,7 +121,7 @@ func (s *Service) InboxGovernanceMetrics(ctx context.Context, since string, prin
 	}
 	return convert[runtimemodel.NotificationInboxGovernanceMetrics](v)
 }
-func (s *Service) Capabilities(ctx context.Context, principal principalmodel.Principal) ([]runtimecontract.NotificationProviderCapability, error) {
+func (s *Service) Capabilities(ctx context.Context, principal principalmodel.Principal) ([]sdkcontract.NotificationTemplateCapability, error) {
 	a, err := s.user(ctx, principal)
 	if err != nil {
 		return nil, err
@@ -131,7 +130,7 @@ func (s *Service) Capabilities(ctx context.Context, principal principalmodel.Pri
 	if err != nil {
 		return nil, mapError(err)
 	}
-	return convert[[]runtimecontract.NotificationProviderCapability](v)
+	return v, nil
 }
 func (s *Service) List(ctx context.Context, principal principalmodel.Principal) ([]runtimemodel.NotificationTemplateRecord, error) {
 	a, err := s.user(ctx, principal)

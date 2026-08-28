@@ -7,6 +7,7 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
@@ -40,7 +41,6 @@ import (
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
 	metadata "github.com/domainry/domainry-runtime/runtime/domain/metadata/service"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"

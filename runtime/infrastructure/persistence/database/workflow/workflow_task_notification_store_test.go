@@ -3,7 +3,7 @@ package workflow
 import (
 	"testing"
 
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	"github.com/domainry/domainry-runtime/testsupport/notificationsdkfixture"
 )

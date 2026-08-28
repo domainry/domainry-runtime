@@ -5,9 +5,9 @@ import recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/m
 import definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
 import (
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
 

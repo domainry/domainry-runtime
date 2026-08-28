@@ -5,11 +5,11 @@ import (
 	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"

@@ -3,13 +3,13 @@ package projection
 import (
 	"strings"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 )
 
 func MergeInstalledEnvelope(persisted, installed manifestmodel.ManifestSchema, publishedTemplates []notificationmodel.NotificationTemplate) manifestmodel.ManifestSchema {

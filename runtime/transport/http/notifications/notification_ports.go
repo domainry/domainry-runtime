@@ -3,8 +3,7 @@ package notifications
 import (
 	"context"
 
-	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
 )
@@ -19,7 +18,7 @@ type NotificationManagement interface {
 	Get(context.Context, string, principalmodel.Principal) (notificationmodel.NotificationTemplateRecord, bool, error)
 	ListVersions(context.Context, string, principalmodel.Principal) ([]notificationmodel.NotificationTemplateVersion, error)
 	ListPublicationRequests(context.Context, string, principalmodel.Principal) ([]notificationmodel.NotificationPublicationRequest, error)
-	Capabilities(context.Context, principalmodel.Principal) ([]notificationcontract.NotificationProviderCapability, error)
+	Capabilities(context.Context, principalmodel.Principal) ([]notificationmodel.NotificationTemplateCapability, error)
 	RestoreVersionDraft(context.Context, string, int, string, principalmodel.Principal) (notificationmodel.NotificationTemplateRecord, error)
 	SaveDraft(context.Context, string, notificationmodel.NotificationTemplate, string, principalmodel.Principal) (notificationmodel.NotificationTemplateRecord, error)
 	Disable(context.Context, string, string, principalmodel.Principal) (notificationmodel.NotificationTemplateRecord, error)

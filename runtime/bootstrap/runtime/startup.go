@@ -14,6 +14,7 @@ import (
 	"github.com/domainry/domainry-notification-sdk/modulehost"
 	"go.uber.org/zap"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
@@ -26,7 +27,6 @@ import (
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
@@ -235,7 +235,7 @@ func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Con
 	mustCompleteRuntimeStartup(integrationapplication.SyncManifestIntegrationConnections(ctx, integrationpersistence.NewIntegrationConfigStore(store), connectorProviders, manifest.Integrations, installationScope))
 	mustCompleteRuntimeStartup(manifestseed.SyncRows(ctx, auditpersistence.NewAuditStore(store), workflowpersistence.NewWorkflowWorkerStore(store)))
 	templateID := valueOrDefault(manifest.TemplateID, generatedTemplateID)
-	runtimeNotificationEventTypes, err := notificationfacade.NotificationRuntimeEventTypes(manifest.NotificationEventTypes, localization.SupportedLocales(), localization.DefaultLocale, localization.Lookup)
+	runtimeNotificationEventTypes, err := NotificationRuntimeEventTypes(manifest.NotificationEventTypes, localization.SupportedLocales(), localization.DefaultLocale, localization.Lookup)
 	mustCompleteRuntimeStartup(err)
 	workflowNotificationTasks := workflowpersistence.NewWorkflowProcessStore(store)
 	integrationNotificationResources := integrationpersistence.NewIntegrationConfigStore(store)

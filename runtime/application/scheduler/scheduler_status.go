@@ -3,7 +3,7 @@ package scheduler
 import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	schedulerpolicy "github.com/domainry/domainry-runtime/runtime/domain/scheduler/policy"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"

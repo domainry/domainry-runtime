@@ -19,8 +19,8 @@ import (
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	schedulercontract "github.com/domainry/domainry-runtime/runtime/domain/scheduler/contract"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/apperror"

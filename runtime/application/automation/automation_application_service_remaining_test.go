@@ -9,11 +9,11 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationprojection "github.com/domainry/domainry-runtime/runtime/domain/automation/projection"
 	automationbusiness "github.com/domainry/domainry-runtime/runtime/domain/automation/service"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/apperror"

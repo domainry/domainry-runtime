@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
 )

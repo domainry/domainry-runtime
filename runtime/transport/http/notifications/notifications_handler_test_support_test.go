@@ -13,8 +13,8 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/apperror"
@@ -238,7 +238,7 @@ func (a *notificationHTTPApplication) ListPublicationRequests(ctx context.Contex
 	}
 	return a.repo.ListPublicationRequests(ctx, principalmodel.SystemScope{}, key)
 }
-func (a *notificationHTTPApplication) Capabilities(_ context.Context, p principalmodel.Principal) ([]notificationcontract.NotificationProviderCapability, error) {
+func (a *notificationHTTPApplication) Capabilities(_ context.Context, p principalmodel.Principal) ([]notificationsdkcontract.NotificationTemplateCapability, error) {
 	if err := notificationHTTPAuthorize(p); err != nil {
 		return nil, err
 	}
@@ -412,12 +412,7 @@ func (a *notificationHTTPApplication) SaveMyNotificationPreference(ctx context.C
 	value.RecipientKey = p.UserID
 	return a.SaveRecipientPreference(ctx, value, p)
 }
-func (a *notificationHTTPApplication) scopedQuery(query notificationmodel.NotificationInboxQuery, surface surfacemodel.ProductSurface, p principalmodel.Principal) notificationmodel.NotificationInboxQuery {
-	query.WorkspaceID, query.ViewerUserID, query.Surface = p.WorkspaceID, p.UserID, string(surface)
-	query.ReportingUserIDs = append([]string(nil), p.ReportingUserIDs...)
-	if query.Scope == notificationmodel.NotificationInboxScopeDelegated {
-		query.DelegatedUserIDs = append([]string(nil), a.repo.delegatedOwners...)
-	}
+func (a *notificationHTTPApplication) scopedQuery(query notificationmodel.NotificationInboxQuery, _ surfacemodel.ProductSurface, _ principalmodel.Principal) notificationmodel.NotificationInboxQuery {
 	return query
 }
 func (a *notificationHTTPApplication) ListInbox(ctx context.Context, query notificationmodel.NotificationInboxQuery, _ string, surface surfacemodel.ProductSurface, p principalmodel.Principal) (notificationmodel.NotificationInboxPage, error) {

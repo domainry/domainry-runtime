@@ -8,8 +8,8 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"

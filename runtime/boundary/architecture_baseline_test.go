@@ -146,7 +146,6 @@ func TestRuntimeTargetPackageNamesMatchOwners(t *testing.T) {
 		"platform/mutation":                                      "mutation",
 		"platform/safehttp":                                      "safehttp",
 		"domain/notification":                                    "notification",
-		"domain/notification/model":                              "notificationmodel",
 		"domain/pipeline":                                        "pipeline",
 		"domain/principal/model":                                 "principalmodel",
 		"domain/record":                                          "record",

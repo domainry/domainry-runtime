@@ -1,10 +1,10 @@
-package notificationfacade
+package runtime
 
 import (
 	"fmt"
 	"strings"
 
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 )
 
 type NotificationLocalizationLookup func(locale, key string) (string, bool)

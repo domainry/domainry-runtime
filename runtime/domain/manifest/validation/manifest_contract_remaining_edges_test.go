@@ -4,10 +4,10 @@ import (
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	"testing"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 )
 
 func TestManifestBusinessIdentityBindingRemainingInvalidShapes(t *testing.T) {

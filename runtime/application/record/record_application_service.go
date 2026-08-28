@@ -20,8 +20,8 @@ import (
 
 	"context"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"

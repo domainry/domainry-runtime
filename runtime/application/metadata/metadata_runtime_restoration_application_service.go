@@ -3,11 +3,11 @@ package metadata
 import (
 	"context"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	manifestseed "github.com/domainry/domainry-runtime/runtime/application/seed/globalcapability"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	manifestprojection "github.com/domainry/domainry-runtime/runtime/domain/manifest/projection"
 	manifestrepository "github.com/domainry/domainry-runtime/runtime/domain/manifest/repository"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 

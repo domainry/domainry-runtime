@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
 	notificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notification"
