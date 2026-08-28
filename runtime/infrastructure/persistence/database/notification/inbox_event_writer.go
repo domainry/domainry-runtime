@@ -97,7 +97,13 @@ func (w InboxEventWriter) CommittedCount(ctx context.Context, event notification
 		err := w.runtimeStore.DB().QueryRowContext(ctx, query, scope.TenantID, event.WorkspaceID, scope.ApplicationKey, event.SourceEventID).Scan(&count)
 		return count, err
 	}
-	query := "SELECT COUNT(*) FROM " + w.runtimeStore.TableIdentifier("notification_events") + " WHERE " + w.runtimeStore.Identifier("workspace_id") + " = " + w.runtimeStore.Placeholder(1) + " AND " + w.runtimeStore.Identifier("source") + " = " + w.runtimeStore.Placeholder(2) + " AND " + w.runtimeStore.Identifier("source_event_id") + " = " + w.runtimeStore.Placeholder(3)
-	err := w.runtimeStore.DB().QueryRowContext(ctx, query, event.WorkspaceID, event.Source, event.SourceEventID).Scan(&count)
-	return count, err
+	transactions := w.runtimeStore.NotificationTransactions()
+	if transactions == nil {
+		return 0, fmt.Errorf("Notification transaction topology is not bound")
+	}
+	committed, err := transactions.EventCommitted(ctx, modulehost.EventIdentity{WorkspaceID: event.WorkspaceID, Source: event.Source, SourceEventID: event.SourceEventID})
+	if err != nil || !committed {
+		return 0, err
+	}
+	return 1, nil
 }

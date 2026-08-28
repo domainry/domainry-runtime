@@ -16,6 +16,9 @@ func (notificationTransactionsStub) CompileIntent(contract.NotificationIntent) (
 func (notificationTransactionsStub) InsertEvent(context.Context, modulehost.Executor, contract.NotificationEvent) error {
 	return nil
 }
+func (notificationTransactionsStub) EventCommitted(context.Context, modulehost.EventIdentity) (bool, error) {
+	return false, nil
+}
 
 func TestRuntimeStoreBindsOneNotificationTransactionPublisher(t *testing.T) {
 	store := &RuntimeStore{}
