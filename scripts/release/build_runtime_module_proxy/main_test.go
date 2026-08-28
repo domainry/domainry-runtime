@@ -87,6 +87,11 @@ import (
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("consumer compile: %v\n%s", err, output)
 	}
+	if matches, err := filepath.Glob(filepath.Join(moduleCache, "github.com", "domainry", "domainry-notification@*")); err != nil {
+		t.Fatal(err)
+	} else if len(matches) != 0 {
+		t.Fatalf("SDK-only Runtime consumer downloaded optional Notification implementation: %v", matches)
+	}
 	for _, dependency := range []struct{ path, version string }{
 		{"github.com/domainry/domainry-identity", identityModuleVersion},
 		{"github.com/domainry/domainry-identity-sdk", "v0.1.0-dev3"},
