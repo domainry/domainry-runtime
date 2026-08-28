@@ -144,6 +144,35 @@ func TestRelayRetriesUnknownOutcomeWithStableIntentIdentity(t *testing.T) {
 	}
 }
 
+func TestRelaySchedulesTimeoutAsUnknownOutcome(t *testing.T) {
+	store, publication, intent := openPublicationStore(t)
+	tx, err := store.DB().BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := publication.InsertIntentTx(t.Context(), tx, intent); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	clock := &relayClock{now: time.Date(2026, 8, 28, 1, 0, 0, 0, time.UTC)}
+	relay, err := NewRelay(publication, &publisherStub{errs: []error{context.DeadlineExceeded}}, "runtime-a", clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if worked, err := relay.Process(t.Context(), workerplatform.DurableTaskLocator{WorkspaceID: intent.WorkspaceID, TaskID: intent.ID}); err != nil || !worked {
+		t.Fatalf("timeout worked=%v err=%v", worked, err)
+	}
+	var status, code, next string
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,last_error_code,next_attempt_at FROM notification_publication_outbox WHERE id=?", intent.ID).Scan(&status, &code, &next); err != nil {
+		t.Fatal(err)
+	}
+	if status != "queued" || code != "notification.remote_outcome_unknown" || next == "" {
+		t.Fatalf("timeout status=%q code=%q next=%q", status, code, next)
+	}
+}
+
 func TestRelayFencesConcurrentDuplicateWorkers(t *testing.T) {
 	_, publication, intent := openPublicationStore(t)
 	tx, err := publication.runtime.DB().BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelSerializable})
