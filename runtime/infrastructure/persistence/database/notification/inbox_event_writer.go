@@ -33,7 +33,7 @@ func (w InboxEventWriter) InsertEventTx(ctx context.Context, executor modulehost
 		if value.PublicationIntent == nil {
 			return fmt.Errorf("Notification SaaS publication intent is unavailable for event %q", value.ID)
 		}
-		if err := notificationpublication.NewStore(w.runtimeStore).InsertIntentTx(ctx, executor, *value.PublicationIntent); err != nil {
+		if err := notificationpublication.NewPublicationOutboxStore(w.runtimeStore).InsertIntentTx(ctx, executor, *value.PublicationIntent); err != nil {
 			return err
 		}
 		if transactioncontract.ActiveTransaction(ctx) {

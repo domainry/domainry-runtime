@@ -26,13 +26,13 @@ type publication struct {
 }
 
 type Relay struct {
-	store     Store
+	store     PublicationOutboxStore
 	publisher notificationsdk.Publisher
 	workerID  string
 	clock     workerplatform.Clock
 }
 
-func NewRelay(store Store, publisher notificationsdk.Publisher, workerID string, clock workerplatform.Clock) (*Relay, error) {
+func NewRelay(store PublicationOutboxStore, publisher notificationsdk.Publisher, workerID string, clock workerplatform.Clock) (*Relay, error) {
 	if store.runtime == nil || publisher == nil || strings.TrimSpace(workerID) == "" || clock == nil {
 		return nil, fmt.Errorf("Notification SaaS publication relay dependencies are required")
 	}

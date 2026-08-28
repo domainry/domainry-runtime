@@ -29,7 +29,7 @@ func TestInsertIntentParticipatesInCallerTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 	intent := notificationmodel.NotificationIntent{ID: "request-a", WorkspaceID: "workspace-a", SourceEventID: "record-a:created", EventType: "record.created", Surface: "business_workspace", OccurredAt: "2026-08-28T00:00:00Z", Variables: map[string]any{"name": "A"}}
-	publication := NewStore(store)
+	publication := NewPublicationOutboxStore(store)
 
 	tx, err := store.DB().BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
@@ -292,7 +292,7 @@ func TestRelayRecoversExpiredLeaseAfterProcessRestart(t *testing.T) {
 
 	store := open()
 	intent := notificationmodel.NotificationIntent{ID: "restart-request", WorkspaceID: "workspace-a", SourceEventID: "record-restart:created", EventType: "record.created", Surface: "business_workspace", OccurredAt: "2026-08-28T00:00:00Z"}
-	publication := NewStore(store)
+	publication := NewPublicationOutboxStore(store)
 	tx, err := store.DB().BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		t.Fatal(err)
@@ -320,7 +320,7 @@ func TestRelayRecoversExpiredLeaseAfterProcessRestart(t *testing.T) {
 	restarted := open()
 	t.Cleanup(func() { _ = restarted.Close() })
 	publisher := &publisherStub{}
-	second, err := NewRelay(NewStore(restarted), publisher, "runtime-after-restart", &relayClock{now: started.Add(publicationLeaseTTL + time.Second)})
+	second, err := NewRelay(NewPublicationOutboxStore(restarted), publisher, "runtime-after-restart", &relayClock{now: started.Add(publicationLeaseTTL + time.Second)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,7 +371,7 @@ func TestRelayDeadLettersAfterBoundedUnknownOutcomeRetries(t *testing.T) {
 	}
 }
 
-func openPublicationStore(t *testing.T) (*database.RuntimeStore, Store, notificationmodel.NotificationIntent) {
+func openPublicationStore(t *testing.T) (*database.RuntimeStore, PublicationOutboxStore, notificationmodel.NotificationIntent) {
 	t.Helper()
 	store, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "relay.db")})
 	if err != nil {
@@ -384,7 +384,7 @@ func openPublicationStore(t *testing.T) (*database.RuntimeStore, Store, notifica
 	if err := store.BindNotificationSaaSPublications(database.NotificationSaaSPublicationScope{TenantID: "tenant-a", WorkspaceID: "workspace-a", ApplicationKey: "runtime-a"}); err != nil {
 		t.Fatal(err)
 	}
-	return store, NewStore(store), notificationmodel.NotificationIntent{ID: "request-a", WorkspaceID: "workspace-a", SourceEventID: "record-a:created", EventType: "record.created", Surface: "business_workspace", OccurredAt: "2026-08-28T00:00:00Z"}
+	return store, NewPublicationOutboxStore(store), notificationmodel.NotificationIntent{ID: "request-a", WorkspaceID: "workspace-a", SourceEventID: "record-a:created", EventType: "record.created", Surface: "business_workspace", OccurredAt: "2026-08-28T00:00:00Z"}
 }
 
 func assertPublicationCount(t *testing.T, store *database.RuntimeStore, want int) {

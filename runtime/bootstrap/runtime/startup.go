@@ -297,12 +297,12 @@ func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Con
 				TenantID: cfg.NotificationTenantID, WorkspaceID: cfg.NotificationWorkspaceID, ApplicationKey: cfg.NotificationApplicationKey,
 			}))
 			notificationCompiler = notificationfacade.SaaSCompiler{}
-			notificationRelay, err = notificationpublication.NewRelay(notificationpublication.NewStore(store), notificationBinding.Publisher(), workerDependencies.WorkerID.String(), workerDependencies.Clock)
+			notificationRelay, err = notificationpublication.NewRelay(notificationpublication.NewPublicationOutboxStore(store), notificationBinding.Publisher(), workerDependencies.WorkerID.String(), workerDependencies.Clock)
 			mustCompleteRuntimeStartup(err)
 		} else {
 			mustCompleteRuntimeStartup(fmt.Errorf("unsupported Notification deployment mode %q", notificationBinding.Descriptor().Mode))
 		}
-		facade, facadeErr := notificationfacade.New(notificationBinding, notificationActionAuthorizers.Authorize)
+		facade, facadeErr := notificationfacade.NewNotificationApplicationService(notificationBinding, notificationActionAuthorizers.Authorize)
 		mustCompleteRuntimeStartup(facadeErr)
 		notificationHTTP = facade
 		integrationNotificationPublisher = facade.PublishInboxIntent

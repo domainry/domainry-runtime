@@ -14,11 +14,13 @@ import (
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
-type Store struct{ runtime *database.RuntimeStore }
+type PublicationOutboxStore struct{ runtime *database.RuntimeStore }
 
-func NewStore(store *database.RuntimeStore) Store { return Store{runtime: store} }
+func NewPublicationOutboxStore(store *database.RuntimeStore) PublicationOutboxStore {
+	return PublicationOutboxStore{runtime: store}
+}
 
-func (s Store) InsertIntentTx(ctx context.Context, executor modulehost.Executor, intent notificationmodel.NotificationIntent) error {
+func (s PublicationOutboxStore) InsertIntentTx(ctx context.Context, executor modulehost.Executor, intent notificationmodel.NotificationIntent) error {
 	if s.runtime == nil || executor == nil {
 		return fmt.Errorf("Notification SaaS publication store is required")
 	}
