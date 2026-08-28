@@ -108,7 +108,7 @@ func publish(repositoryValue, proxyValue string) (publishResult, error) {
 	if err != nil {
 		return publishResult{}, err
 	}
-	dependencies, err := publishDomainryDependencyClosure(repository, proxy)
+	dependencies, dependencyVersions, err := publishDomainryDependencyClosure(repository, proxy)
 	if err != nil {
 		return publishResult{}, err
 	}
@@ -128,7 +128,7 @@ func publish(repositoryValue, proxyValue string) (publishResult, error) {
 			return publishResult{}, err
 		}
 		if relative == "go.mod" {
-			content, err = distributionGoMod(content)
+			content, err = distributionGoModWithVersions(content, dependencyVersions)
 			if err != nil {
 				return publishResult{}, fmt.Errorf("prepare Runtime distribution go.mod: %w", err)
 			}
@@ -256,14 +256,14 @@ func mergeGoSum(content []byte, additions string) []byte {
 	return []byte(strings.Join(result, "\n") + "\n")
 }
 
-func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDependencyModule, error) {
+func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDependencyModule, map[string]string, error) {
 	goMod, err := os.ReadFile(filepath.Join(repository, "go.mod"))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	parsed, err := modfile.Parse("go.mod", goMod, nil)
 	if err != nil {
-		return nil, fmt.Errorf("parse Runtime go.mod: %w", err)
+		return nil, nil, fmt.Errorf("parse Runtime go.mod: %w", err)
 	}
 	selectedIdentityVersion := strings.TrimSpace(os.Getenv("DOMAINRY_IDENTITY_MODULE_VERSION"))
 	if selectedIdentityVersion == "" {
@@ -272,9 +272,40 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 	versions := map[string]string{"github.com/domainry/domainry-identity": selectedIdentityVersion}
 	published := map[string]bool{}
 	result := []publishedDependencyModule{}
+	versionOverrides := map[string]string{}
+	for _, local := range []struct {
+		path, rootEnvironment, label string
+		patterns                     []string
+	}{
+		{path: "github.com/domainry/domainry-notification-sdk", rootEnvironment: "DOMAINRY_NOTIFICATION_SDK_REPO_ROOT", label: "Notification SDK", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-notification", rootEnvironment: "DOMAINRY_NOTIFICATION_REPO_ROOT", label: "Notification", patterns: []string{"./module"}},
+	} {
+		root := strings.TrimSpace(os.Getenv(local.rootEnvironment))
+		if root == "" {
+			root = localReplacementRoot(repository, local.path)
+		}
+		if root == "" {
+			continue
+		}
+		downloaded, packageErr := packageLocalModule(local.path, "v0.0.0", root, local.label, versionOverrides, true, local.patterns...)
+		if packageErr != nil {
+			return nil, nil, packageErr
+		}
+		identity, copyErr := copyDownloadedModule(proxy, downloaded)
+		if copyErr != nil {
+			return nil, nil, copyErr
+		}
+		result = append(result, identity)
+		versionOverrides[local.path] = downloaded.Version
+		published[local.path+"@"+downloaded.Version] = true
+	}
 	for _, requirement := range parsed.Require {
 		if strings.HasPrefix(requirement.Mod.Path, "github.com/domainry/") {
-			versions[requirement.Mod.Path] = requirement.Mod.Version
+			version := requirement.Mod.Version
+			if overridden := versionOverrides[requirement.Mod.Path]; overridden != "" {
+				version = overridden
+			}
+			versions[requirement.Mod.Path] = version
 		}
 	}
 	for len(versions) > 0 {
@@ -293,25 +324,29 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 			published[identity] = true
 			downloaded, err := dependencyModule(repository, path, version)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			moduleIdentity, err := copyDownloadedModule(proxy, downloaded)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			result = append(result, moduleIdentity)
 			dependencyMod, err := os.ReadFile(downloaded.GoMod)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			dependency, err := modfile.Parse(downloaded.GoMod, dependencyMod, nil)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			for _, requirement := range dependency.Require {
 				if strings.HasPrefix(requirement.Mod.Path, "github.com/domainry/") {
-					if !published[requirement.Mod.Path+"@"+requirement.Mod.Version] {
-						next[requirement.Mod.Path] = requirement.Mod.Version
+					version := requirement.Mod.Version
+					if overridden := versionOverrides[requirement.Mod.Path]; overridden != "" {
+						version = overridden
+					}
+					if !published[requirement.Mod.Path+"@"+version] {
+						next[requirement.Mod.Path] = version
 					}
 				}
 			}
@@ -319,7 +354,7 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 		versions = next
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
-	return result, nil
+	return result, versionOverrides, nil
 }
 
 func dependencyModule(repository, path, version string) (downloadedModule, error) {
@@ -337,7 +372,7 @@ func dependencyModule(repository, path, version string) (downloadedModule, error
 			root = localReplacementRoot(repository, path)
 		}
 		if path == candidate.path && root != "" {
-			return packageLocalModule(path, version, root, candidate.label, candidate.patterns...)
+			return packageLocalModule(path, version, root, candidate.label, nil, false, candidate.patterns...)
 		}
 	}
 	return downloadModule(repository, path, version)
@@ -365,7 +400,7 @@ func localReplacementRoot(repository, path string) string {
 	return ""
 }
 
-func packageLocalModule(path, version, rootValue, label string, patterns ...string) (downloadedModule, error) {
+func packageLocalModule(path, version, rootValue, label string, versionOverrides map[string]string, contentAddressed bool, patterns ...string) (downloadedModule, error) {
 	root, err := requiredDirectory(rootValue)
 	if err != nil {
 		return downloadedModule{}, fmt.Errorf("local %s module: %w", label, err)
@@ -396,7 +431,7 @@ func packageLocalModule(path, version, rootValue, label string, patterns ...stri
 			return downloadedModule{}, readErr
 		}
 		if relative == "go.mod" {
-			content, readErr = distributionGoMod(content)
+			content, readErr = distributionGoModWithVersions(content, versionOverrides)
 			if readErr != nil {
 				return downloadedModule{}, fmt.Errorf("prepare local %s distribution go.mod: %w", label, readErr)
 			}
@@ -409,6 +444,10 @@ func packageLocalModule(path, version, rootValue, label string, patterns ...stri
 		if err := os.WriteFile(target, content, 0o644); err != nil {
 			return downloadedModule{}, err
 		}
+	}
+	if contentAddressed {
+		contentIdentity := strings.TrimPrefix(contentVersion(source, files), "v0.0.0-source-")
+		version = "v0.0.0-domainry." + contentIdentity[:16]
 	}
 	temporary, err := os.MkdirTemp("", "domainry-local-module-archive-*")
 	if err != nil {
@@ -443,12 +482,24 @@ func packageLocalModule(path, version, rootValue, label string, patterns ...stri
 // published .mod or zip makes external consumers depend on the publisher's
 // filesystem layout.
 func distributionGoMod(content []byte) ([]byte, error) {
+	return distributionGoModWithVersions(content, nil)
+}
+
+func distributionGoModWithVersions(content []byte, versions map[string]string) ([]byte, error) {
 	parsed, err := modfile.Parse("go.mod", content, nil)
 	if err != nil {
 		return nil, err
 	}
 	for _, replacement := range append([]*modfile.Replace(nil), parsed.Replace...) {
 		if err := parsed.DropReplace(replacement.Old.Path, replacement.Old.Version); err != nil {
+			return nil, err
+		}
+	}
+	for path, version := range versions {
+		if strings.TrimSpace(version) == "" {
+			continue
+		}
+		if err := parsed.AddRequire(path, version); err != nil {
 			return nil, err
 		}
 	}

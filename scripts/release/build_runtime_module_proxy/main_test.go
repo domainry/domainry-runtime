@@ -93,6 +93,33 @@ import (
 			}
 		}
 	}
+	dependencyVersions := map[string]string{}
+	for _, dependency := range result.DependencyModules {
+		dependencyVersions[dependency.Path] = dependency.Version
+	}
+	for _, path := range []string{"github.com/domainry/domainry-notification-sdk", "github.com/domainry/domainry-notification"} {
+		if !strings.HasPrefix(dependencyVersions[path], "v0.0.0-domainry.") {
+			t.Fatalf("local dependency %s did not receive a content-addressed version: %q", path, dependencyVersions[path])
+		}
+	}
+	runtimeMod, err := os.ReadFile(filepath.Join(proxy, filepath.FromSlash(runtimeModulePath), "@v", result.Version+".mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, version := range dependencyVersions {
+		if (path == "github.com/domainry/domainry-notification" || path == "github.com/domainry/domainry-notification-sdk") && !strings.Contains(string(runtimeMod), path+" "+version) {
+			t.Fatalf("Runtime distribution go.mod does not reference %s@%s", path, version)
+		}
+	}
+	notificationPath, _ := module.EscapePath("github.com/domainry/domainry-notification")
+	notificationVersion, _ := module.EscapeVersion(dependencyVersions["github.com/domainry/domainry-notification"])
+	notificationMod, err := os.ReadFile(filepath.Join(proxy, filepath.FromSlash(notificationPath), "@v", notificationVersion+".mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(notificationMod), "github.com/domainry/domainry-notification-sdk "+dependencyVersions["github.com/domainry/domainry-notification-sdk"]) {
+		t.Fatal("Notification distribution go.mod does not reference the content-addressed SDK version")
+	}
 }
 
 func TestForbiddenRuntimeModulePathRejectsAnswersAndFixtures(t *testing.T) {
