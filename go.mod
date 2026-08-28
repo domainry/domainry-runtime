@@ -2,6 +2,8 @@ module github.com/domainry/domainry-runtime
 
 go 1.26.0
 
+toolchain go1.26.6
+
 require (
 	github.com/domainry/domainry-connector-sdk v0.1.0-dev.12
 	github.com/domainry/domainry-identity-sdk v0.1.0-dev6
