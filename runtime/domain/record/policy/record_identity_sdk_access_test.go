@@ -21,7 +21,7 @@ func TestRecordAuthorizationDelegatesHumanDecisionsToSDKBundle(t *testing.T) {
 	principal := accessfixture.Attach(
 		principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user-1", WorkspaceID: "workspace-a"}},
 		accessfixture.Bundle{
-			Key: "operator", Permissions: []string{"case.read", "case.update", "case.export"},
+			Key: "operator", Permissions: []string{"case.create", "case.read", "case.update", "case.export"},
 			DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "case", Scope: "all_records", Read: true, Write: true}},
 			FieldPolicies: []accessfixture.FieldPolicyFixture{
 				{ObjectKey: "case", FieldKey: "name", Read: true, Write: true, Export: true},
@@ -31,7 +31,7 @@ func TestRecordAuthorizationDelegatesHumanDecisionsToSDKBundle(t *testing.T) {
 	)
 	record := recordmodel.Record{ID: "case-1", Data: map[string]any{"id": "case-1", "owner": "other", "name": "Example", "email": "person@example.test"}}
 
-	if !RecordAllowsObjectAction(principal, "case", "read") || !RecordAllowsObjectAction(principal, "case", "update") || RecordAllowsObjectAction(principal, "case", "delete") {
+	if !RecordAllowsObjectAction(principal, "case", "create") || !RecordAllowsObjectAction(principal, "case", "read") || !RecordAllowsObjectAction(principal, "case", "update") || RecordAllowsObjectAction(principal, "case", "delete") {
 		t.Fatal("SDK object decisions were not preserved")
 	}
 	if !RecordCanAccess(principal, object, record) || !RecordCanWriteScope(principal, object, record.Data) {
