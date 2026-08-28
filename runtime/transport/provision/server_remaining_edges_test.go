@@ -51,6 +51,15 @@ func destructiveProvisionManifest(t *testing.T) manifestmodel.ManifestSchema {
 	t.Helper()
 	return manifestVariant(t, func(value *manifestmodel.ManifestSchema) {
 		value.Objects = value.Objects[:1]
+		for roleIndex := range value.Roles {
+			permissions := value.Roles[roleIndex].DataPermissions[:0]
+			for _, permission := range value.Roles[roleIndex].DataPermissions {
+				if permission.ObjectKey != "opportunity" {
+					permissions = append(permissions, permission)
+				}
+			}
+			value.Roles[roleIndex].DataPermissions = permissions
+		}
 		seeds := value.SeedRecords[:0]
 		for _, seed := range value.SeedRecords {
 			if seed.ObjectKey != "opportunity" {
