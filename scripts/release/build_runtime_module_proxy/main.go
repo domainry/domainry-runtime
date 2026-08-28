@@ -19,6 +19,7 @@ import (
 
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
+	"golang.org/x/mod/sumdb/dirhash"
 	modzip "golang.org/x/mod/zip"
 )
 
@@ -108,6 +109,14 @@ func publish(repositoryValue, proxyValue string) (publishResult, error) {
 		return publishResult{}, err
 	}
 	version := contentVersion(repository, files)
+	dependencies, err := publishDomainryDependencyClosure(repository, proxy)
+	if err != nil {
+		return publishResult{}, err
+	}
+	dependencySums, err := publishedDependencyGoSums(proxy, dependencies)
+	if err != nil {
+		return publishResult{}, err
+	}
 	source, err := os.MkdirTemp("", "domainry-runtime-module-closure-*")
 	if err != nil {
 		return publishResult{}, err
@@ -124,6 +133,9 @@ func publish(repositoryValue, proxyValue string) (publishResult, error) {
 			if err != nil {
 				return publishResult{}, fmt.Errorf("prepare Runtime distribution go.mod: %w", err)
 			}
+		}
+		if relative == "go.sum" && dependencySums != "" {
+			content = mergeGoSum(content, dependencySums)
 		}
 		target := filepath.Join(source, filepath.FromSlash(relative))
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
@@ -172,10 +184,6 @@ func publish(repositoryValue, proxyValue string) (publishResult, error) {
 	if err := os.WriteFile(filepath.Join(versionRoot, "list"), list, 0o644); err != nil {
 		return publishResult{}, err
 	}
-	dependencies, err := publishDomainryDependencyClosure(repository, proxy)
-	if err != nil {
-		return publishResult{}, err
-	}
 	zipContent, err := os.ReadFile(zipPath)
 	if err != nil {
 		return publishResult{}, err
@@ -192,6 +200,57 @@ func publish(repositoryValue, proxyValue string) (publishResult, error) {
 		ClosureManifestSHA256: hex.EncodeToString(closureHash.Sum(nil)),
 		DependencyModules:     dependencies,
 	}, nil
+}
+
+func publishedDependencyGoSums(proxy string, dependencies []publishedDependencyModule) (string, error) {
+	lines := make([]string, 0, len(dependencies)*2)
+	for _, dependency := range dependencies {
+		escapedPath, err := module.EscapePath(dependency.Path)
+		if err != nil {
+			return "", err
+		}
+		escapedVersion, err := module.EscapeVersion(dependency.Version)
+		if err != nil {
+			return "", err
+		}
+		root := filepath.Join(proxy, filepath.FromSlash(escapedPath), "@v")
+		zipSum, err := dirhash.HashZip(filepath.Join(root, escapedVersion+".zip"), dirhash.Hash1)
+		if err != nil {
+			return "", fmt.Errorf("hash published dependency %s@%s zip: %w", dependency.Path, dependency.Version, err)
+		}
+		modContent, err := os.ReadFile(filepath.Join(root, escapedVersion+".mod"))
+		if err != nil {
+			return "", err
+		}
+		modSum, err := dirhash.Hash1([]string{"go.mod"}, func(string) (io.ReadCloser, error) {
+			return io.NopCloser(strings.NewReader(string(modContent))), nil
+		})
+		if err != nil {
+			return "", fmt.Errorf("hash published dependency %s@%s go.mod: %w", dependency.Path, dependency.Version, err)
+		}
+		lines = append(lines,
+			dependency.Path+" "+dependency.Version+" "+zipSum,
+			dependency.Path+" "+dependency.Version+"/go.mod "+modSum,
+		)
+	}
+	sort.Strings(lines)
+	return strings.Join(lines, "\n") + "\n", nil
+}
+
+func mergeGoSum(content []byte, additions string) []byte {
+	lines := strings.FieldsFunc(string(content)+additions, func(r rune) bool { return r == '\n' || r == '\r' })
+	unique := make(map[string]bool, len(lines))
+	result := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || unique[line] {
+			continue
+		}
+		unique[line] = true
+		result = append(result, line)
+	}
+	sort.Strings(result)
+	return []byte(strings.Join(result, "\n") + "\n")
 }
 
 func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDependencyModule, error) {
