@@ -260,8 +260,8 @@ func TestActionUnitOfWorkCommitsSystemAndBusinessOwnersThroughOneBoundary(t *tes
 		service := NewActionApplication(ActionApplicationDependencies{
 			Catalog: NewActionCatalog([]definitionmodel.ActionSchema{action}, system, registry), SystemOperations: NewSystemOperationExecutor(system),
 			BusinessHandlers: newActionTestBusinessHandlerExecutor(BusinessHandlerExecutionDependencies{PlanCreateMutation: func(ctx context.Context, objectKey string, fields map[string]any, _ string, principal principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
-				if active, _ := ctx.Value(actionUnitOfWorkTransactionContextKey{}).(bool); !active {
-					t.Fatal("Business Handler mutation planning did not receive Action transaction context")
+				if active, _ := ctx.Value(actionUnitOfWorkTransactionContextKey{}).(bool); active {
+					t.Fatal("Business Handler create planning retained Action transaction before external relation validation")
 				}
 				return newPlan(action.Key, objectKey, "create", fields, principal)
 			}}),
@@ -823,7 +823,11 @@ func TestBusinessActionExecutionEnforcesConnectorLeaseAtEveryWriteBoundary(t *te
 			if err := write(t.Context(), execution); err != nil {
 				t.Fatal(err)
 			}
-			if store.beginTransactionCalls != 1 || dependencyCalls != 1 || execution.Phase() != runtimeext.ExecutionPhaseWriting {
+			wantTransactions := 1
+			if name == "mutation" {
+				wantTransactions = 0
+			}
+			if store.beginTransactionCalls != wantTransactions || dependencyCalls != 1 || execution.Phase() != runtimeext.ExecutionPhaseWriting {
 				t.Fatalf("allowed write transaction=%d dependencies=%d phase=%s", store.beginTransactionCalls, dependencyCalls, execution.Phase())
 			}
 			if _, err := execution.AcquireSynchronousConnectorCall(connectorGrant); apperror.CodeOf(err) != runtimeext.ConnectorCallAfterWriteErrorCode {

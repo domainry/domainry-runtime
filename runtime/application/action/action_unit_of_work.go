@@ -150,6 +150,31 @@ func (u *actionUnitOfWork) beginWriting(ctx context.Context) (context.Context, e
 	return transaction.Context(ctx), nil
 }
 
+// beginDeferredWriting closes the synchronous Connector-call window without
+// taking a database connection. Create planners may resolve relations through
+// independently composed modules backed by the same SQLite pool; opening the
+// Action transaction first would retain the pool's sole connection while that
+// resolver waits for another one. The physical transaction is still opened by
+// a later locking operation or by commit, so all staged mutations remain part
+// of the same atomic commit.
+func (u *actionUnitOfWork) beginDeferredWriting(ctx context.Context) (context.Context, error) {
+	if u == nil || u.manager == nil {
+		return ctx, apperror.New(apperror.KindInternal, "backend.action.transaction_unavailable", nil, nil)
+	}
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.activeSynchronousConnectorCalls > 0 {
+		return ctx, apperror.New(apperror.KindConflict, runtimeext.ActionWriteDuringConnectorCallErrorCode, nil, nil)
+	}
+	if err := u.phases.beginWriting(); err != nil {
+		return ctx, err
+	}
+	if u.transaction != nil {
+		return u.transaction.Context(ctx), nil
+	}
+	return ctx, nil
+}
+
 func (u *actionUnitOfWork) acquireSynchronousConnectorCall() (runtimeext.SynchronousConnectorCallLease, error) {
 	if u == nil {
 		return nil, apperror.New(apperror.KindInternal, runtimeext.ConnectorActionExecutionRequiredErrorCode, nil, nil)
