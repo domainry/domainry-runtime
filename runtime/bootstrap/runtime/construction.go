@@ -14,6 +14,7 @@ import (
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	notificationpublication "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
@@ -37,6 +38,7 @@ type runtimeConstructionInput struct {
 	notificationHTTP    notificationhttp.NotificationApplication
 	notificationBinding notificationsdk.Binding
 	notificationWorkers notificationsdk.LocalWorkers
+	notificationRelay   *notificationpublication.Relay
 	worker              workerplatform.Dependencies
 	businessHandlers    *runtimeext.BusinessHandlerRegistry
 	connectorProviders  *connector.Registry
@@ -68,6 +70,7 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		notificationHTTP:    notificationHTTP,
 		notificationBinding: input.notificationBinding,
 		notificationWorkers: input.notificationWorkers,
+		notificationRelay:   input.notificationRelay,
 		worker:              workerplatform.NormalizeDependencies(input.worker),
 		businessHandlers:    input.businessHandlers,
 		connectorProviders:  input.connectorProviders,

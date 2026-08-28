@@ -276,7 +276,27 @@ func (a *Runtime) startIntegrationCredentialExpiryWorker(ctx context.Context) {
 }
 
 func (a *Runtime) StartNotificationPublicationWorker(ctx context.Context) {
-	if a.notifications == nil && a.notificationWorkers == nil {
+	if a.notifications == nil && a.notificationWorkers == nil && a.notificationRelay == nil {
+		return
+	}
+	if a.notificationRelay != nil {
+		a.startControlledWorker(ctx, "notification_publication", func(workerCtx context.Context) <-chan struct{} {
+			batch := a.cfg.SchedulerBatchSize
+			if batch <= 0 || batch > 100 {
+				batch = 25
+			}
+			wakeups := a.store.WorkerWakeups().Subscribe("notification_publication", 64)
+			return workerplatform.StartWakeableRecoveryLoop(workerCtx, "notification_publication", notificationPublicationRecoveryInterval(a.cfg.SchedulerPollInterval), wakeups, func() {
+				runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "Notification SaaS publication recovery failed", func() (bool, error) {
+					processed, err := a.notificationRelay.ProcessDue(workerCtx, batch)
+					return processed > 0, err
+				})
+			}, func(locator workerplatform.DurableTaskLocator) {
+				runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "Notification SaaS publication relay failed", func() (bool, error) {
+					return a.notificationRelay.Process(workerCtx, locator)
+				})
+			})
+		})
 		return
 	}
 	if a.notificationWorkers != nil {

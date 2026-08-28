@@ -18,6 +18,7 @@ import (
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	notificationpublication "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
@@ -43,6 +44,7 @@ type Runtime struct {
 	notificationHTTP    notificationhttp.NotificationApplication
 	notificationBinding notificationsdk.Binding
 	notificationWorkers notificationsdk.LocalWorkers
+	notificationRelay   *notificationpublication.Relay
 	worker              workerplatform.Dependencies
 	api                 *runtimehttp.HTTPRouter
 	businessHandlers    *runtimeext.BusinessHandlerRegistry

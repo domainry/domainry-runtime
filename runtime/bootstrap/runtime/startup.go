@@ -42,6 +42,7 @@ import (
 	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
 	integrationnotificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integrationnotification"
 	notificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notification"
+	notificationpublication "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
 	ratelimitpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/ratelimit"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
@@ -286,6 +287,7 @@ func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Con
 	var sdkDeliveryGateway *notificationSDKDeliveryGateway
 	var notificationBinding notificationsdk.Binding
 	var notificationWorkers notificationsdk.LocalWorkers
+	var notificationRelay *notificationpublication.Relay
 	if notificationFactory == nil {
 		notificationModuleStore, err := notificationpersistence.NewSQLStoreAdapter(store, workerDependencies.Clock)
 		mustCompleteRuntimeStartup(err)
@@ -384,6 +386,8 @@ func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Con
 				TenantID: cfg.NotificationTenantID, WorkspaceID: cfg.NotificationWorkspaceID, ApplicationKey: cfg.NotificationApplicationKey,
 			}))
 			notificationCompiler = notificationfacade.SaaSCompiler{}
+			notificationRelay, err = notificationpublication.NewRelay(notificationpublication.NewStore(store), notificationBinding.Publisher(), workerDependencies.WorkerID.String(), workerDependencies.Clock)
+			mustCompleteRuntimeStartup(err)
 		} else {
 			mustCompleteRuntimeStartup(fmt.Errorf("unsupported Notification deployment mode %q", notificationBinding.Descriptor().Mode))
 		}
@@ -455,6 +459,7 @@ func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Con
 		notificationHTTP:    notificationHTTP,
 		notificationBinding: notificationBinding,
 		notificationWorkers: notificationWorkers,
+		notificationRelay:   notificationRelay,
 		worker:              serviceAssembly.worker,
 		businessHandlers:    businessHandlers,
 		connectorProviders:  connectorProviders,
