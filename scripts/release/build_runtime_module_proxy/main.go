@@ -108,7 +108,6 @@ func publish(repositoryValue, proxyValue string) (publishResult, error) {
 	if err != nil {
 		return publishResult{}, err
 	}
-	version := contentVersion(repository, files)
 	dependencies, err := publishDomainryDependencyClosure(repository, proxy)
 	if err != nil {
 		return publishResult{}, err
@@ -149,6 +148,10 @@ func publish(repositoryValue, proxyValue string) (publishResult, error) {
 		_, _ = closureHash.Write([]byte(sha256Hex(content)))
 		_, _ = closureHash.Write([]byte{0})
 	}
+	// The immutable module version must describe the bytes we publish, not the
+	// repository inputs. Distribution rewrites and sealed dependency checksums
+	// are part of the module closure and can change while source files do not.
+	version := contentVersion(source, files)
 	versionRoot := filepath.Join(proxy, filepath.FromSlash(runtimeModulePath), "@v")
 	if err := os.MkdirAll(versionRoot, 0o755); err != nil {
 		return publishResult{}, err

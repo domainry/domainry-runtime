@@ -117,3 +117,23 @@ func TestPublishResultIsJSONSerializable(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestContentVersionIncludesFinalDistributionClosure(t *testing.T) {
+	first := t.TempDir()
+	second := t.TempDir()
+	files := []string{"go.mod", "go.sum"}
+	for _, root := range []string{first, second} {
+		if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module github.com/domainry/domainry-runtime\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(first, "go.sum"), []byte("dependency v1 h1:first\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(second, "go.sum"), []byte("dependency v1 h1:second\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if contentVersion(first, files) == contentVersion(second, files) {
+		t.Fatal("final dependency closure did not affect immutable module version")
+	}
+}
