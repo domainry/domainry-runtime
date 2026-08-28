@@ -47,15 +47,25 @@ type listedModule struct {
 }
 
 type publishResult struct {
-	ContractVersion       string `json:"contract_version"`
-	ModulePath            string `json:"module_path"`
-	Version               string `json:"version"`
-	ZipSHA256             string `json:"zip_sha256"`
-	GoModSHA256           string `json:"go_mod_sha256"`
-	InfoSHA256            string `json:"info_sha256"`
-	ListSHA256            string `json:"list_sha256"`
-	FileCount             int    `json:"file_count"`
-	ClosureManifestSHA256 string `json:"closure_manifest_sha256"`
+	ContractVersion       string                      `json:"contract_version"`
+	ModulePath            string                      `json:"module_path"`
+	Version               string                      `json:"version"`
+	ZipSHA256             string                      `json:"zip_sha256"`
+	GoModSHA256           string                      `json:"go_mod_sha256"`
+	InfoSHA256            string                      `json:"info_sha256"`
+	ListSHA256            string                      `json:"list_sha256"`
+	FileCount             int                         `json:"file_count"`
+	ClosureManifestSHA256 string                      `json:"closure_manifest_sha256"`
+	DependencyModules     []publishedDependencyModule `json:"dependency_modules"`
+}
+
+type publishedDependencyModule struct {
+	Path        string `json:"path"`
+	Version     string `json:"version"`
+	ZipSHA256   string `json:"zip_sha256"`
+	GoModSHA256 string `json:"go_mod_sha256"`
+	InfoSHA256  string `json:"info_sha256"`
+	ListSHA256  string `json:"list_sha256"`
 }
 
 type downloadedModule struct {
@@ -156,7 +166,8 @@ func publish(repositoryValue, proxyValue string) (publishResult, error) {
 	if err := os.WriteFile(filepath.Join(versionRoot, "list"), list, 0o644); err != nil {
 		return publishResult{}, err
 	}
-	if err := publishDomainryDependencyClosure(repository, proxy); err != nil {
+	dependencies, err := publishDomainryDependencyClosure(repository, proxy)
+	if err != nil {
 		return publishResult{}, err
 	}
 	zipContent, err := os.ReadFile(zipPath)
@@ -173,20 +184,22 @@ func publish(repositoryValue, proxyValue string) (publishResult, error) {
 		ListSHA256:            sha256Hex(list),
 		FileCount:             len(files),
 		ClosureManifestSHA256: hex.EncodeToString(closureHash.Sum(nil)),
+		DependencyModules:     dependencies,
 	}, nil
 }
 
-func publishDomainryDependencyClosure(repository, proxy string) error {
+func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDependencyModule, error) {
 	goMod, err := os.ReadFile(filepath.Join(repository, "go.mod"))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	parsed, err := modfile.Parse("go.mod", goMod, nil)
 	if err != nil {
-		return fmt.Errorf("parse Runtime go.mod: %w", err)
+		return nil, fmt.Errorf("parse Runtime go.mod: %w", err)
 	}
 	versions := map[string]string{"github.com/domainry/domainry-identity": identityModuleVersion}
 	published := map[string]bool{}
+	result := []publishedDependencyModule{}
 	for _, requirement := range parsed.Require {
 		if strings.HasPrefix(requirement.Mod.Path, "github.com/domainry/") {
 			versions[requirement.Mod.Path] = requirement.Mod.Version
@@ -208,18 +221,20 @@ func publishDomainryDependencyClosure(repository, proxy string) error {
 			published[identity] = true
 			downloaded, err := downloadModule(repository, path, version)
 			if err != nil {
-				return err
+				return nil, err
 			}
-			if err := copyDownloadedModule(proxy, downloaded); err != nil {
-				return err
+			moduleIdentity, err := copyDownloadedModule(proxy, downloaded)
+			if err != nil {
+				return nil, err
 			}
+			result = append(result, moduleIdentity)
 			dependencyMod, err := os.ReadFile(downloaded.GoMod)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			dependency, err := modfile.Parse(downloaded.GoMod, dependencyMod, nil)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			for _, requirement := range dependency.Require {
 				if strings.HasPrefix(requirement.Mod.Path, "github.com/domainry/") {
@@ -231,7 +246,8 @@ func publishDomainryDependencyClosure(repository, proxy string) error {
 		}
 		versions = next
 	}
-	return nil
+	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
+	return result, nil
 }
 
 func downloadModule(repository, path, version string) (downloadedModule, error) {
@@ -251,29 +267,43 @@ func downloadModule(repository, path, version string) (downloadedModule, error) 
 	return result, nil
 }
 
-func copyDownloadedModule(proxy string, downloaded downloadedModule) error {
+func copyDownloadedModule(proxy string, downloaded downloadedModule) (publishedDependencyModule, error) {
 	escapedPath, err := module.EscapePath(downloaded.Path)
 	if err != nil {
-		return err
+		return publishedDependencyModule{}, err
 	}
 	escapedVersion, err := module.EscapeVersion(downloaded.Version)
 	if err != nil {
-		return err
+		return publishedDependencyModule{}, err
 	}
 	root := filepath.Join(proxy, filepath.FromSlash(escapedPath), "@v")
 	if err := os.MkdirAll(root, 0o755); err != nil {
-		return err
+		return publishedDependencyModule{}, err
 	}
+	identity := publishedDependencyModule{Path: downloaded.Path, Version: downloaded.Version}
 	for extension, source := range map[string]string{".info": downloaded.Info, ".mod": downloaded.GoMod, ".zip": downloaded.Zip} {
 		content, err := os.ReadFile(source)
 		if err != nil {
-			return err
+			return publishedDependencyModule{}, err
 		}
 		if err := os.WriteFile(filepath.Join(root, escapedVersion+extension), content, 0o644); err != nil {
-			return err
+			return publishedDependencyModule{}, err
+		}
+		switch extension {
+		case ".info":
+			identity.InfoSHA256 = sha256Hex(content)
+		case ".mod":
+			identity.GoModSHA256 = sha256Hex(content)
+		case ".zip":
+			identity.ZipSHA256 = sha256Hex(content)
 		}
 	}
-	return os.WriteFile(filepath.Join(root, "list"), []byte(downloaded.Version+"\n"), 0o644)
+	list := []byte(downloaded.Version + "\n")
+	if err := os.WriteFile(filepath.Join(root, "list"), list, 0o644); err != nil {
+		return publishedDependencyModule{}, err
+	}
+	identity.ListSHA256 = sha256Hex(list)
+	return identity, nil
 }
 
 func runtimeBuildClosure(repository string) ([]string, error) {
