@@ -1,6 +1,8 @@
 package lifecycle
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"testing"
 	"time"
@@ -9,8 +11,21 @@ import (
 	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/lifecycle"
-	notificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notification"
 )
+
+type notificationSubjectLifecycleFixture struct{ database *sql.DB }
+
+func (notificationSubjectLifecycleFixture) Owner(context.Context) string { return "notification" }
+func (notificationSubjectLifecycleFixture) PreviewSubject(context.Context, string, string) (json.RawMessage, error) {
+	return json.RawMessage(`{}`), nil
+}
+func (notificationSubjectLifecycleFixture) ExportSubject(context.Context, string, string) (json.RawMessage, error) {
+	return json.RawMessage(`{}`), nil
+}
+func (f notificationSubjectLifecycleFixture) EraseSubject(ctx context.Context, workspaceID, subjectID string, _ []lifecyclemodel.LegalHold) (json.RawMessage, error) {
+	_, err := f.database.ExecContext(ctx, "UPDATE notification_inbox_items SET title = '[erased]' WHERE workspace_id = ? AND recipient_user_id = ?", workspaceID, subjectID)
+	return json.RawMessage(`{"content_redacted":true}`), err
+}
 
 func TestSubjectErasureRegistersBackupReplayEvidence(t *testing.T) {
 	service, store := newLifecycleApplicationTestService(t)
@@ -82,7 +97,7 @@ func TestNotificationSubjectErasureEndToEndHonorsLegalHoldBeforeAnonymizing(t *t
 	service := NewLifecycleApplicationService(t.Context(), LifecycleApplicationDependencies{
 		Repository:      lifecyclepersistence.NewLifecycleStore(store),
 		SubjectResolver: subjectResolverStub{},
-		SubjectHandlers: []lifecyclecontract.SubjectDataHandler{notificationpersistence.NewNotificationSubjectLifecycleStore(store)},
+		SubjectHandlers: []lifecyclecontract.SubjectDataHandler{notificationSubjectLifecycleFixture{database: store.DB()}},
 	})
 	request, err := service.CreateSubjectRequest(t.Context(), lifecyclemodel.SubjectRequest{WorkspaceID: "workspace-a", Kind: lifecyclemodel.SubjectRequestErase, SubjectType: "user", SubjectID: "held-notification-user", Reason: "erasure request"}, lifecycleAdmin("workspace-a", "requester"))
 	if err == nil {

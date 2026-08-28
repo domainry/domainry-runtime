@@ -43,7 +43,6 @@ import (
 	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
 	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/lifecycle"
 	metadatapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata"
-	notificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notification"
 	partypersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/party"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	recordnotification "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/recordnotification"
@@ -70,6 +69,7 @@ type runtimeExtensionRegistries struct {
 	integrationNotificationPublisher   integrationapplication.IntegrationNotificationPublisher
 	integrationCredentialNotifications integrationapplication.IntegrationCredentialNotificationCommitter
 	integrationCredentialExpirySource  integrationapplication.IntegrationCredentialExpirySource
+	notificationSubjectLifecycle       lifecyclecontract.SubjectDataHandler
 }
 
 func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest manifestmodel.ManifestSchema, notifications composition.NotificationRenderer, store *persistence.RuntimeStore, identityDirectory identitysdk.Directory, identityPrincipals identitysdk.PrincipalResolver, auditApplication *auditapplication.AuditApplicationService, apiLimiter ratelimit.Limiter, workerDependencies workerplatform.Dependencies, extensionRegistries ...runtimeExtensionRegistries) (runtimeServiceAssembly, error) {
@@ -80,6 +80,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	var integrationNotificationPublisher integrationapplication.IntegrationNotificationPublisher
 	var integrationCredentialNotifications integrationapplication.IntegrationCredentialNotificationCommitter
 	var integrationCredentialExpirySource integrationapplication.IntegrationCredentialExpirySource
+	var notificationSubjectLifecycle lifecyclecontract.SubjectDataHandler
 	if len(extensionRegistries) > 0 && extensionRegistries[0].businessHandlers != nil {
 		businessHandlers = extensionRegistries[0].businessHandlers
 	} else {
@@ -96,6 +97,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		integrationNotificationPublisher = extensionRegistries[0].integrationNotificationPublisher
 		integrationCredentialNotifications = extensionRegistries[0].integrationCredentialNotifications
 		integrationCredentialExpirySource = extensionRegistries[0].integrationCredentialExpirySource
+		notificationSubjectLifecycle = extensionRegistries[0].notificationSubjectLifecycle
 	}
 	records := recordpersistence.NewRecordStore(store)
 	agentTaskRuns := agentpersistence.NewAgentTaskRunStore(store)
@@ -110,7 +112,6 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		uploadDirectory = "../data/uploads"
 	}
 	integrationSubjectLifecycle := integrationpersistence.NewIntegrationSubjectLifecycleStore(store)
-	notificationSubjectLifecycle := notificationpersistence.NewNotificationSubjectLifecycleStore(store)
 	auditSubjectLifecycle := auditpersistence.NewAuditSubjectLifecycleStore(store)
 	lifecycleArtifacts := localartifact.NewSubjectStore(uploadDirectory)
 	lifecycleFileArtifacts := lifecyclepersistence.NewFileArtifactStore(store, manifest.Objects, uploadDirectory)
@@ -121,6 +122,10 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	agentTaskRunner, interactiveAgentRunner := configuredAgentRunners(cfg)
 	agentTaskCredentialKey := sha256.Sum256([]byte("domainry-agent-task-credential-v1:" + cfg.IntegrationSecretKey))
 	projectRevision, metadataRevision := runtimeActionRevisions(manifest)
+	subjectHandlers := []lifecyclecontract.SubjectDataHandler{recordSubjectLifecycle, integrationSubjectLifecycle, auditSubjectLifecycle}
+	if notificationSubjectLifecycle != nil {
+		subjectHandlers = append(subjectHandlers, notificationSubjectLifecycle)
+	}
 	services := composition.NewRuntimeServices(ctx, composition.RuntimeServicesConfig{
 		Manifest: manifest,
 		Dependencies: composition.RuntimeServicesDependencies{
@@ -225,7 +230,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			LifecycleExecutors:                 lifecycleExecutorPorts,
 			LifecycleArtifacts:                 lifecycleArtifacts,
 			LifecycleUploadArtifacts:           lifecycleFileArtifacts,
-			LifecycleSubjectHandlers:           []lifecyclecontract.SubjectDataHandler{recordSubjectLifecycle, integrationSubjectLifecycle, notificationSubjectLifecycle, auditSubjectLifecycle},
+			LifecycleSubjectHandlers:           subjectHandlers,
 			LifecycleExternalErasure:           integrationSubjectLifecycle,
 			BatchJobQueueLimit:                 cfg.CapacityBatchJobQueueLimit,
 			BatchJobWorkspaceQueueLimit:        cfg.CapacityBatchJobWorkspaceQueueLimit,

@@ -314,6 +314,10 @@ func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Con
 	}
 	manifest, err = restoreRuntimeManifest(ctx, sdkNotificationTemplateCatalog{system: systemTemplateBinding.SystemTemplates()}, restoredMetadata.metadataStore, seedManifest)
 	mustCompleteRuntimeStartup(err)
+	systemSubjectBinding, ok := notificationBinding.(notificationsdk.SystemSubjectBinding)
+	if !ok || systemSubjectBinding.SystemSubjects() == nil {
+		mustCompleteRuntimeStartup(errors.New("Notification Binding returned no system subject lifecycle port"))
+	}
 	manifest.TemplateID = templateID
 	manifest.Version = valueOrDefault(manifest.Version, generatedTemplateVersion)
 	sharedRateLimiter := ratelimitpersistence.NewRateLimiter(store)
@@ -327,6 +331,7 @@ func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Con
 		integrationNotificationPublisher:   integrationNotificationPublisher,
 		integrationCredentialNotifications: integrationnotificationpersistence.NewIntegrationCredentialNotificationCommitter(store),
 		integrationCredentialExpirySource:  integrationpersistence.NewIntegrationCredentialExpiryStore(store),
+		notificationSubjectLifecycle:       notificationSystemSubjectLifecycle{subjects: systemSubjectBinding.SystemSubjects()},
 	})
 	mustCompleteRuntimeStartup(err)
 	records, recordRepository := serviceAssembly.services, serviceAssembly.records
