@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
 )
 
@@ -66,7 +67,12 @@ import (
 		"GOMODCACHE="+moduleCache,
 		"GOFLAGS=-modcacherw",
 		"GOPROXY=file://"+filepath.ToSlash(proxy)+",https://proxy.golang.org,direct",
-		"GONOPROXY=none",
+		// A developer machine commonly marks github.com/domainry/* private.
+		// The frozen-proxy consumer must not inherit that setting and bypass the
+		// artifacts under test by consulting a VCS checkout instead.
+		"GOPRIVATE=",
+		"GONOPROXY=off",
+		"GONOSUMDB=github.com/domainry/*",
 		"GOSUMDB=off",
 	)
 	tidy := exec.Command("go", "mod", "tidy")
@@ -109,6 +115,26 @@ import (
 	for path, version := range dependencyVersions {
 		if (path == "github.com/domainry/domainry-notification" || path == "github.com/domainry/domainry-notification-sdk") && !strings.Contains(string(runtimeMod), path+" "+version) {
 			t.Fatalf("Runtime distribution go.mod does not reference %s@%s", path, version)
+		}
+	}
+	moduleFiles, err := filepath.Glob(filepath.Join(proxy, "github.com", "domainry", "*", "@v", "*.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(moduleFiles) == 0 {
+		t.Fatal("frozen proxy did not contain any published go.mod files")
+	}
+	for _, moduleFile := range moduleFiles {
+		contents, err := os.ReadFile(moduleFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		parsed, err := modfile.Parse(moduleFile, contents, nil)
+		if err != nil {
+			t.Fatalf("parse published go.mod %s: %v", moduleFile, err)
+		}
+		if len(parsed.Replace) != 0 {
+			t.Fatalf("published go.mod retained development replace directives: %s", moduleFile)
 		}
 	}
 	notificationPath, _ := module.EscapePath("github.com/domainry/domainry-notification")
