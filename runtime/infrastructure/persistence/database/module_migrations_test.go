@@ -21,7 +21,7 @@ func openModuleMigrationStore(t *testing.T) *RuntimeStore {
 
 func TestOwnedModuleMigrationAppliesAndRejectsChecksumDrift(t *testing.T) {
 	store := openModuleMigrationStore(t)
-	migration := modulehost.SchemaMigration{Version: 1, Name: "create_owned_schema", Statements: []string{"CREATE TABLE notification_owned_test (id TEXT PRIMARY KEY)"}, BaselineTables: []string{"notification_owned_test"}}
+	migration := modulehost.SchemaMigration{Version: 1, Name: "create_owned_schema", Statements: []string{"CREATE TABLE notification_owned_test (id TEXT NOT NULL PRIMARY KEY)"}, Baseline: &modulehost.SchemaBaseline{Tables: []modulehost.SchemaTable{{Name: "notification_owned_test", Columns: []modulehost.SchemaColumn{{Name: "id", Type: "TEXT", PrimaryKey: true}}}}}}
 	if err := store.ApplyOwnedMigrations(t.Context(), "notification", []modulehost.SchemaMigration{migration}); err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,10 @@ func TestOwnedModuleMigrationAppliesAndRejectsChecksumDrift(t *testing.T) {
 
 func TestOwnedModuleMigrationBaselinesOnlyCompleteLegacySchema(t *testing.T) {
 	store := openModuleMigrationStore(t)
-	migration := modulehost.SchemaMigration{Version: 1, Name: "legacy_schema", Statements: []string{"CREATE TABLE notification_legacy_a (id TEXT)", "CREATE TABLE notification_legacy_b (id TEXT)"}, BaselineTables: []string{"notification_legacy_a", "notification_legacy_b"}}
+	migration := modulehost.SchemaMigration{Version: 1, Name: "legacy_schema", Statements: []string{"CREATE TABLE notification_legacy_a (id TEXT NOT NULL)", "CREATE TABLE notification_legacy_b (id TEXT NOT NULL)"}, Baseline: &modulehost.SchemaBaseline{Tables: []modulehost.SchemaTable{
+		{Name: "notification_legacy_a", Columns: []modulehost.SchemaColumn{{Name: "id", Type: "TEXT"}}},
+		{Name: "notification_legacy_b", Columns: []modulehost.SchemaColumn{{Name: "id", Type: "TEXT"}}},
+	}}}
 	for _, statement := range migration.Statements {
 		if _, err := store.DB().ExecContext(t.Context(), statement); err != nil {
 			t.Fatal(err)
@@ -58,8 +61,41 @@ func TestOwnedModuleMigrationBaselinesOnlyCompleteLegacySchema(t *testing.T) {
 	if _, err := partial.DB().ExecContext(t.Context(), migration.Statements[0]); err != nil {
 		t.Fatal(err)
 	}
-	if err := partial.ApplyOwnedMigrations(t.Context(), "notification", []modulehost.SchemaMigration{migration}); err == nil || !strings.Contains(err.Error(), "migration.partial_baseline") {
+	if err := partial.ApplyOwnedMigrations(t.Context(), "notification", []modulehost.SchemaMigration{migration}); err == nil || !strings.Contains(err.Error(), "migration.baseline_mismatch") {
 		t.Fatalf("partial baseline error=%v", err)
+	}
+}
+
+func TestOwnedModuleMigrationRejectsLegacyColumnAndIndexDrift(t *testing.T) {
+	baseline := &modulehost.SchemaBaseline{Tables: []modulehost.SchemaTable{{
+		Name:    "notification_legacy_shape",
+		Columns: []modulehost.SchemaColumn{{Name: "id", Type: "TEXT"}, {Name: "sequence", Type: "INTEGER"}},
+		Indexes: []modulehost.SchemaIndex{{Name: "uniq_notification_legacy_shape", Unique: true, Columns: []string{"id", "sequence"}}},
+	}}}
+	migration := modulehost.SchemaMigration{Version: 1, Name: "legacy_shape", Statements: []string{
+		"CREATE TABLE notification_legacy_shape (id TEXT NOT NULL, sequence INTEGER NOT NULL)",
+		"CREATE UNIQUE INDEX uniq_notification_legacy_shape ON notification_legacy_shape (id, sequence)",
+	}, Baseline: baseline}
+	for _, fixture := range []struct {
+		name       string
+		statements []string
+	}{
+		{name: "column type", statements: []string{"CREATE TABLE notification_legacy_shape (id TEXT NOT NULL, sequence TEXT NOT NULL)", "CREATE UNIQUE INDEX uniq_notification_legacy_shape ON notification_legacy_shape (id, sequence)"}},
+		{name: "column nullability", statements: []string{"CREATE TABLE notification_legacy_shape (id TEXT NOT NULL, sequence INTEGER)", "CREATE UNIQUE INDEX uniq_notification_legacy_shape ON notification_legacy_shape (id, sequence)"}},
+		{name: "index uniqueness", statements: []string{"CREATE TABLE notification_legacy_shape (id TEXT NOT NULL, sequence INTEGER NOT NULL)", "CREATE INDEX uniq_notification_legacy_shape ON notification_legacy_shape (id, sequence)"}},
+		{name: "index order", statements: []string{"CREATE TABLE notification_legacy_shape (id TEXT NOT NULL, sequence INTEGER NOT NULL)", "CREATE UNIQUE INDEX uniq_notification_legacy_shape ON notification_legacy_shape (sequence, id)"}},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			store := openModuleMigrationStore(t)
+			for _, statement := range fixture.statements {
+				if _, err := store.DB().ExecContext(t.Context(), statement); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := store.ApplyOwnedMigrations(t.Context(), "notification", []modulehost.SchemaMigration{migration}); err == nil || !strings.Contains(err.Error(), "migration.baseline_mismatch") {
+				t.Fatalf("drift error=%v", err)
+			}
+		})
 	}
 }
 

@@ -74,18 +74,15 @@ func (s *RuntimeStore) applyOwnedMigration(ctx context.Context, owner string, mi
 	if s.config.EffectiveDatabaseMigrationMode() == "verify" {
 		return fmt.Errorf("migration.pending: %s", path)
 	}
-	baseline, err := s.moduleMigrationBaselineState(ctx, migration)
+	baseline, err := s.proveModuleMigrationBaseline(ctx, migration.Baseline)
 	if err != nil {
-		return fmt.Errorf("inspect module migration baseline %s: %w", path, err)
-	}
-	if baseline < 0 {
-		return fmt.Errorf("migration.partial_baseline: %s", path)
+		return fmt.Errorf("migration.baseline_mismatch: %s: %w", path, err)
 	}
 	started := time.Now()
-	if err := s.insertOwnedMigration(ctx, path, owner, migration, checksum, baseline == 1); err != nil {
+	if err := s.insertOwnedMigration(ctx, path, owner, migration, checksum, baseline); err != nil {
 		return err
 	}
-	if baseline == 1 {
+	if baseline {
 		return nil
 	}
 	tx, err := s.schemaDatabase().BeginTx(ctx, nil)
@@ -108,32 +105,6 @@ func (s *RuntimeStore) applyOwnedMigration(ctx context.Context, owner string, mi
 	return nil
 }
 
-// moduleMigrationBaselineState returns 1 when every legacy table exists, 0
-// when none exists, and -1 for an unsafe partial legacy installation.
-func (s *RuntimeStore) moduleMigrationBaselineState(ctx context.Context, migration modulehost.SchemaMigration) (int, error) {
-	if migration.Version != 1 || len(migration.BaselineTables) == 0 {
-		return 0, nil
-	}
-	found := 0
-	for _, table := range migration.BaselineTables {
-		if !moduleMigrationIdentityPattern.MatchString(table) {
-			return 0, fmt.Errorf("baseline table %q is invalid", table)
-		}
-		rows, err := s.schemaDatabase().QueryContext(ctx, "SELECT 1 FROM "+s.tableIdentifier(table)+" WHERE 1=0")
-		if err == nil {
-			found++
-			_ = rows.Close()
-		}
-	}
-	if found == 0 {
-		return 0, nil
-	}
-	if found == len(migration.BaselineTables) {
-		return 1, nil
-	}
-	return -1, nil
-}
-
 func (s *RuntimeStore) insertOwnedMigration(ctx context.Context, path, owner string, migration modulehost.SchemaMigration, checksum string, complete bool) error {
 	dirty := !complete
 	query := "INSERT INTO " + s.tableIdentifier("_schema_migrations") + " (" + migrationColumns(s) + ") VALUES (" + strings.Join(placeholders(s, 12), ", ") + ")"
@@ -152,6 +123,17 @@ func moduleMigrationChecksum(migration modulehost.SchemaMigration) string {
 	_, _ = fmt.Fprintf(hash, "%d\x00%s\x00", migration.Version, strings.TrimSpace(migration.Name))
 	for _, statement := range migration.Statements {
 		_, _ = fmt.Fprintf(hash, "%s\x00", statement)
+	}
+	if migration.Baseline != nil {
+		for _, table := range migration.Baseline.Tables {
+			_, _ = fmt.Fprintf(hash, "table\x00%s\x00", table.Name)
+			for _, column := range table.Columns {
+				_, _ = fmt.Fprintf(hash, "column\x00%s\x00%s\x00%t\x00%t\x00", column.Name, column.Type, column.Nullable, column.PrimaryKey)
+			}
+			for _, index := range table.Indexes {
+				_, _ = fmt.Fprintf(hash, "index\x00%s\x00%t\x00%s\x00", index.Name, index.Unique, strings.Join(index.Columns, ","))
+			}
+		}
 	}
 	return hex.EncodeToString(hash.Sum(nil))
 }
