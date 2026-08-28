@@ -2,7 +2,6 @@ package notifications
 
 import (
 	"context"
-	notificationapplication "github.com/domainry/domainry-runtime/runtime/application/notification"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
@@ -17,9 +16,9 @@ import (
 )
 
 type NotificationsHandler struct {
-	management         *notificationapplication.NotificationApplicationService
-	delivery           *notificationapplication.NotificationApplicationService
-	inbox              *notificationapplication.NotificationApplicationService
+	management         NotificationManagement
+	delivery           NotificationDelivery
+	inbox              NotificationInbox
 	deliveryLedger     NotificationDeliveryLedger
 	principal          func(*http.Request) principalmodel.Principal
 	writeJSON          func(http.ResponseWriter, int, any)
@@ -32,9 +31,9 @@ type NotificationsHandler struct {
 }
 
 type NotificationsDependencies struct {
-	Management         *notificationapplication.NotificationApplicationService
-	Delivery           *notificationapplication.NotificationApplicationService
-	Inbox              *notificationapplication.NotificationApplicationService
+	Management         NotificationManagement
+	Delivery           NotificationDelivery
+	Inbox              NotificationInbox
 	DeliveryLedger     NotificationDeliveryLedger
 	Principal          func(*http.Request) principalmodel.Principal
 	WriteJSON          func(http.ResponseWriter, int, any)

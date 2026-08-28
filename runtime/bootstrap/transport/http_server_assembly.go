@@ -18,7 +18,6 @@ import (
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
 
-	notificationapplication "github.com/domainry/domainry-runtime/runtime/application/notification"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	businesseventcontract "github.com/domainry/domainry-runtime/runtime/domain/businessevent/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -32,6 +31,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
+	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 )
 
 type HTTPServerDependencies struct {
@@ -40,7 +40,7 @@ type HTTPServerDependencies struct {
 	IdentityBinding        identitysdk.Binding
 	Store                  *persistence.RuntimeStore
 	RateLimiter            ratelimit.Limiter
-	Notifications          *notificationapplication.NotificationApplicationService
+	Notifications          notificationhttp.NotificationApplication
 	Manifest               manifestmodel.ManifestSchema
 	WorkerControl          *workerplatform.Controller
 	Clock                  identitysdk.Clock

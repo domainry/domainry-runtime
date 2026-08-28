@@ -21,6 +21,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
+	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 )
 
 // Runtime owns the process-level composition and lifecycle.
@@ -37,6 +38,7 @@ type Runtime struct {
 	recordRepo         recordrepository.RecordRepository
 	rateLimiter        ratelimit.Limiter
 	notifications      *notificationapplication.NotificationApplicationService
+	notificationHTTP   notificationhttp.NotificationApplication
 	worker             workerplatform.Dependencies
 	api                *runtimehttp.HTTPRouter
 	businessHandlers   *runtimeext.BusinessHandlerRegistry

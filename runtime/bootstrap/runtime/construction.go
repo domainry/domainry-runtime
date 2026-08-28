@@ -15,6 +15,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
+	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 )
 
 type runtimeConstructionInput struct {
@@ -29,6 +30,7 @@ type runtimeConstructionInput struct {
 	recordRepository    recordrepository.RecordRepository
 	rateLimiter         ratelimit.Limiter
 	notifications       *notificationapplication.NotificationApplicationService
+	notificationHTTP    notificationhttp.NotificationApplication
 	worker              workerplatform.Dependencies
 	businessHandlers    *runtimeext.BusinessHandlerRegistry
 	connectorProviders  *connector.Registry
@@ -40,6 +42,10 @@ type runtimeConstructionInput struct {
 }
 
 func constructRuntime(input runtimeConstructionInput) *Runtime {
+	notificationHTTP := input.notificationHTTP
+	if notificationHTTP == nil {
+		notificationHTTP = input.notifications
+	}
 	return &Runtime{
 		cfg:                input.config,
 		templateID:         input.templateID,
@@ -52,6 +58,7 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		recordRepo:         input.recordRepository,
 		rateLimiter:        input.rateLimiter,
 		notifications:      input.notifications,
+		notificationHTTP:   notificationHTTP,
 		worker:             workerplatform.NormalizeDependencies(input.worker),
 		businessHandlers:   input.businessHandlers,
 		connectorProviders: input.connectorProviders,
