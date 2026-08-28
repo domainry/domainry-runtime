@@ -1,8 +1,11 @@
 package runtime
 
 import (
+	"context"
+
 	connector "github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	notificationapplication "github.com/domainry/domainry-runtime/runtime/application/notification"
@@ -19,6 +22,7 @@ import (
 )
 
 type runtimeConstructionInput struct {
+	lifecycleContext    context.Context
 	config              config.Config
 	templateID          string
 	store               *persistence.RuntimeStore
@@ -31,6 +35,8 @@ type runtimeConstructionInput struct {
 	rateLimiter         ratelimit.Limiter
 	notifications       *notificationapplication.NotificationApplicationService
 	notificationHTTP    notificationhttp.NotificationApplication
+	notificationBinding notificationsdk.Binding
+	notificationWorkers notificationsdk.LocalWorkers
 	worker              workerplatform.Dependencies
 	businessHandlers    *runtimeext.BusinessHandlerRegistry
 	connectorProviders  *connector.Registry
@@ -47,25 +53,28 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		notificationHTTP = input.notifications
 	}
 	return &Runtime{
-		cfg:                input.config,
-		templateID:         input.templateID,
-		store:              input.store,
-		records:            input.applicationServices,
-		identityBinding:    input.identityBinding,
-		identityDirectory:  input.identityDirectory,
-		identityPrincipals: input.identityPrincipals,
-		manifest:           input.manifest,
-		recordRepo:         input.recordRepository,
-		rateLimiter:        input.rateLimiter,
-		notifications:      input.notifications,
-		notificationHTTP:   notificationHTTP,
-		worker:             workerplatform.NormalizeDependencies(input.worker),
-		businessHandlers:   input.businessHandlers,
-		connectorProviders: input.connectorProviders,
-		releaseIdentity:    input.releaseIdentity,
-		releaseCohort:      input.releaseCohort,
-		releaseLease:       input.releaseLease,
-		releaseAdmission:   input.releaseAdmission,
-		releaseIntegrity:   input.releaseIntegrity,
+		lifecycleContext:    input.lifecycleContext,
+		cfg:                 input.config,
+		templateID:          input.templateID,
+		store:               input.store,
+		records:             input.applicationServices,
+		identityBinding:     input.identityBinding,
+		identityDirectory:   input.identityDirectory,
+		identityPrincipals:  input.identityPrincipals,
+		manifest:            input.manifest,
+		recordRepo:          input.recordRepository,
+		rateLimiter:         input.rateLimiter,
+		notifications:       input.notifications,
+		notificationHTTP:    notificationHTTP,
+		notificationBinding: input.notificationBinding,
+		notificationWorkers: input.notificationWorkers,
+		worker:              workerplatform.NormalizeDependencies(input.worker),
+		businessHandlers:    input.businessHandlers,
+		connectorProviders:  input.connectorProviders,
+		releaseIdentity:     input.releaseIdentity,
+		releaseCohort:       input.releaseCohort,
+		releaseLease:        input.releaseLease,
+		releaseAdmission:    input.releaseAdmission,
+		releaseIntegrity:    input.releaseIntegrity,
 	}
 }

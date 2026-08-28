@@ -7,6 +7,7 @@ import (
 
 	connector "github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
@@ -26,29 +27,32 @@ import (
 
 // Runtime owns the process-level composition and lifecycle.
 type Runtime struct {
-	cfg                config.Config
-	templateID         string
-	store              *persistence.RuntimeStore
-	borrowedStore      bool
-	records            *composition.RuntimeServices
-	identityBinding    identitysdk.Binding
-	identityDirectory  identitysdk.Directory
-	identityPrincipals identitysdk.PrincipalResolver
-	manifest           manifestmodel.ManifestSchema
-	recordRepo         recordrepository.RecordRepository
-	rateLimiter        ratelimit.Limiter
-	notifications      *notificationapplication.NotificationApplicationService
-	notificationHTTP   notificationhttp.NotificationApplication
-	worker             workerplatform.Dependencies
-	api                *runtimehttp.HTTPRouter
-	businessHandlers   *runtimeext.BusinessHandlerRegistry
-	connectorProviders *connector.Registry
-	releaseIdentity    runtimehttp.RuntimeReleaseIdentity
-	releaseCohort      *deploymentapplication.DeploymentRuntimeReleaseCohortApplicationService
-	releaseLease       deploymentmodel.RuntimeReleaseCohortLease
-	releaseAdmission   *deploymentapplication.RuntimeReleaseAdmission
-	releaseIntegrity   *deploymentapplication.RuntimeReleaseIntegrity
-	releaseMu          sync.Mutex
+	lifecycleContext    context.Context
+	cfg                 config.Config
+	templateID          string
+	store               *persistence.RuntimeStore
+	borrowedStore       bool
+	records             *composition.RuntimeServices
+	identityBinding     identitysdk.Binding
+	identityDirectory   identitysdk.Directory
+	identityPrincipals  identitysdk.PrincipalResolver
+	manifest            manifestmodel.ManifestSchema
+	recordRepo          recordrepository.RecordRepository
+	rateLimiter         ratelimit.Limiter
+	notifications       *notificationapplication.NotificationApplicationService
+	notificationHTTP    notificationhttp.NotificationApplication
+	notificationBinding notificationsdk.Binding
+	notificationWorkers notificationsdk.LocalWorkers
+	worker              workerplatform.Dependencies
+	api                 *runtimehttp.HTTPRouter
+	businessHandlers    *runtimeext.BusinessHandlerRegistry
+	connectorProviders  *connector.Registry
+	releaseIdentity     runtimehttp.RuntimeReleaseIdentity
+	releaseCohort       *deploymentapplication.DeploymentRuntimeReleaseCohortApplicationService
+	releaseLease        deploymentmodel.RuntimeReleaseCohortLease
+	releaseAdmission    *deploymentapplication.RuntimeReleaseAdmission
+	releaseIntegrity    *deploymentapplication.RuntimeReleaseIntegrity
+	releaseMu           sync.Mutex
 
 	workersMu                     sync.Mutex
 	workerCancels                 []context.CancelFunc

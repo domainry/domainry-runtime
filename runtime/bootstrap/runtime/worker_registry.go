@@ -38,10 +38,25 @@ func (a *Runtime) close(ctx context.Context) error {
 			a.replaceRuntimeReleaseLease(deploymentmodel.RuntimeReleaseCohortLease{})
 		}
 	}
-	if a.borrowedStore {
-		return releaseErr
+	var notificationErr error
+	if a.notificationBinding != nil {
+		closeParent := a.lifecycleContext
+		if ctx != nil {
+			closeParent = context.WithoutCancel(ctx)
+		} else if closeParent != nil {
+			closeParent = context.WithoutCancel(closeParent)
+		} else {
+			return errors.Join(releaseErr, errors.New("runtime lifecycle context is unavailable while closing Notification binding"))
+		}
+		closeCtx, cancel := context.WithTimeout(closeParent, a.cfg.HTTPShutdownTimeout)
+		notificationErr = a.notificationBinding.Close(closeCtx)
+		cancel()
+		a.notificationBinding = nil
 	}
-	return errors.Join(releaseErr, a.store.Close())
+	if a.borrowedStore {
+		return errors.Join(releaseErr, notificationErr)
+	}
+	return errors.Join(releaseErr, notificationErr, a.store.Close())
 }
 
 func (a *Runtime) startTrackedWorker(parent context.Context, start func(context.Context) <-chan struct{}) {

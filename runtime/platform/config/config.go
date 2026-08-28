@@ -127,6 +127,9 @@ type Config struct {
 	IdentityRedirectURLs           []string
 	IdentityWorkspaceID            string
 	IdentityAudience               string
+	NotificationTenantID           string
+	NotificationWorkspaceID        string
+	NotificationApplicationKey     string
 	IntegrationSecretKey           string
 	IntegrationActiveKeyID         string
 	IntegrationDecryptOnlyKeys     map[string]string
@@ -261,6 +264,9 @@ func FromEnv() Config {
 		IdentityRedirectURLs:                    csvEnv("IDENTITY_REDIRECT_URLS", []string{"http://localhost:3100/auth/callback"}),
 		IdentityWorkspaceID:                     env("IDENTITY_WORKSPACE_ID", "default"),
 		IdentityAudience:                        env("IDENTITY_AUDIENCE", "domainry-runtime"),
+		NotificationTenantID:                    env("NOTIFICATION_TENANT_ID", "default"),
+		NotificationWorkspaceID:                 env("NOTIFICATION_WORKSPACE_ID", "default"),
+		NotificationApplicationKey:              env("NOTIFICATION_APPLICATION_KEY", "domainry-runtime"),
 		IntegrationSecretKey:                    env("INTEGRATION_SECRET_KEY", DevIntegrationSecret),
 		IntegrationActiveKeyID:                  env("INTEGRATION_ACTIVE_KEY_ID", "dev-v1"),
 		IntegrationDecryptOnlyKeys:              keyMapEnv("INTEGRATION_DECRYPT_ONLY_KEYS"),

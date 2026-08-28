@@ -16,8 +16,10 @@ func TestProjectMainCompilesUsingOnlyGeneratedCompositionAndRuntimehost(t *testi
 	repositoryRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
 	identitySDKRoot := filepath.Clean(filepath.Join(repositoryRoot, "..", "domainry-identity-sdk"))
 	identityModuleRoot := filepath.Clean(filepath.Join(repositoryRoot, "..", "domainry-identity"))
+	notificationSDKRoot := filepath.Clean(filepath.Join(repositoryRoot, "..", "domainry-notification-sdk"))
+	notificationModuleRoot := filepath.Clean(filepath.Join(repositoryRoot, "..", "domainry-notification"))
 	externalRoot := t.TempDir()
-	goMod := []byte("module example.com/domainry-project\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/domainry/domainry-runtime v0.0.0\n\tgithub.com/domainry/domainry-identity v0.0.0\n)\n\nreplace github.com/domainry/domainry-runtime => " + repositoryRoot + "\nreplace github.com/domainry/domainry-identity-sdk => " + identitySDKRoot + "\nreplace github.com/domainry/domainry-identity => " + identityModuleRoot + "\n")
+	goMod := []byte("module example.com/domainry-project\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/domainry/domainry-runtime v0.0.0\n\tgithub.com/domainry/domainry-identity v0.0.0\n\tgithub.com/domainry/domainry-notification v0.0.0\n)\n\nreplace github.com/domainry/domainry-runtime => " + repositoryRoot + "\nreplace github.com/domainry/domainry-identity-sdk => " + identitySDKRoot + "\nreplace github.com/domainry/domainry-identity => " + identityModuleRoot + "\nreplace github.com/domainry/domainry-notification-sdk => " + notificationSDKRoot + "\nreplace github.com/domainry/domainry-notification => " + notificationModuleRoot + "\n")
 	if err := os.WriteFile(filepath.Join(externalRoot, "go.mod"), goMod, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -30,6 +32,7 @@ func TestProjectMainCompilesUsingOnlyGeneratedCompositionAndRuntimehost(t *testi
 import (
 	"github.com/domainry/domainry-connector-sdk"
 	identitymodule "github.com/domainry/domainry-identity/module"
+	notificationmodule "github.com/domainry/domainry-notification/module"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/pkg/runtimehost"
 )
@@ -44,6 +47,7 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 			ConnectorContractSHA256: connector.ContractSHA256,
 		},
 		IdentityFactory: identitymodule.NewFactory(identitymodule.OptionsFromEnvironment()),
+		NotificationFactory: notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()),
 	}
 }
 `)
@@ -61,8 +65,9 @@ func TestProjectMainCompilesUsingSaaSFactoryWithoutIdentityModule(t *testing.T) 
 	}
 	repositoryRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
 	identitySDKRoot := filepath.Clean(filepath.Join(repositoryRoot, "..", "domainry-identity-sdk"))
+	notificationSDKRoot := filepath.Clean(filepath.Join(repositoryRoot, "..", "domainry-notification-sdk"))
 	externalRoot := t.TempDir()
-	goMod := []byte("module example.com/domainry-saas-project\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/domainry/domainry-runtime v0.0.0\n\tgithub.com/domainry/domainry-identity-sdk v0.0.0\n)\n\nreplace github.com/domainry/domainry-runtime => " + repositoryRoot + "\nreplace github.com/domainry/domainry-identity-sdk => " + identitySDKRoot + "\n")
+	goMod := []byte("module example.com/domainry-saas-project\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/domainry/domainry-runtime v0.0.0\n\tgithub.com/domainry/domainry-identity-sdk v0.0.0\n\tgithub.com/domainry/domainry-notification-sdk v0.0.0\n)\n\nreplace github.com/domainry/domainry-runtime => " + repositoryRoot + "\nreplace github.com/domainry/domainry-identity-sdk => " + identitySDKRoot + "\nreplace github.com/domainry/domainry-notification-sdk => " + notificationSDKRoot + "\n")
 	if err := os.WriteFile(filepath.Join(externalRoot, "go.mod"), goMod, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -75,6 +80,7 @@ func TestProjectMainCompilesUsingSaaSFactoryWithoutIdentityModule(t *testing.T) 
 import (
 	"github.com/domainry/domainry-connector-sdk"
 	identityremote "github.com/domainry/domainry-identity-sdk/remote"
+	notificationremote "github.com/domainry/domainry-notification-sdk/remote"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/pkg/runtimehost"
 )
@@ -89,6 +95,7 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 			ConnectorContractSHA256: connector.ContractSHA256,
 		},
 		IdentityFactory: identityremote.NewFactory(identityremote.ConfigFromEnvironment()),
+		NotificationFactory: notificationremote.NewFactory(notificationremote.ConfigFromEnvironment()),
 	}
 }
 `)

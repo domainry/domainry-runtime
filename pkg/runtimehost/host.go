@@ -13,6 +13,7 @@ import (
 
 	"github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -81,7 +82,7 @@ type serverRunDependencies struct {
 	stat                 func(string) (os.FileInfo, error)
 	readFile             func(string) ([]byte, error)
 	prepareDatabase      func(context.Context, config.Config) (*bootstrap.ProjectDatabase, error)
-	newRuntime           func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, *bootstrap.ProjectDatabase) runtimeProcess
+	newRuntime           func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, *bootstrap.ProjectDatabase) runtimeProcess
 	listenAndServe       func(*http.Server) error
 	shutdown             func(context.Context, *http.Server) error
 }
@@ -97,8 +98,8 @@ func defaultServerRunDependencies() serverRunDependencies {
 		stat:                 os.Stat,
 		readFile:             os.ReadFile,
 		prepareDatabase:      bootstrap.PrepareProjectDatabase,
-		newRuntime: func(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, database *bootstrap.ProjectDatabase) runtimeProcess {
-			return bootstrapRuntimeProcess{Runtime: bootstrap.NewVerifiedProjectWithIdentityAndDatabase(ctx, cfg, handlers, connectors, identity, evidence, binding, database)}
+		newRuntime: func(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notificationFactory notificationsdk.Factory, database *bootstrap.ProjectDatabase) runtimeProcess {
+			return bootstrapRuntimeProcess{Runtime: bootstrap.NewVerifiedProjectWithFactoriesAndDatabase(ctx, cfg, handlers, connectors, identity, evidence, binding, notificationFactory, database)}
 		},
 		listenAndServe: func(server *http.Server) error { return server.ListenAndServe() },
 		shutdown:       func(ctx context.Context, server *http.Server) error { return server.Shutdown(ctx) },
@@ -315,6 +316,10 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	if identityFactory == nil {
 		return fmt.Errorf("configure Identity factory: generated project composition did not supply an SDK Factory")
 	}
+	notificationFactory := options.NotificationFactory
+	if notificationFactory == nil {
+		return fmt.Errorf("configure Notification factory: generated project composition did not supply an SDK Factory")
+	}
 	for _, entry := range configSnapshot.StartupReport() {
 		zap.L().Info("Runtime configuration", zap.String("name", entry.Name), zap.String("source", entry.Source), zap.String("version", entry.Version), zap.Bool("redacted", entry.Redacted))
 	}
@@ -395,7 +400,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 			if manifest.SourceBlueprintID == provision.DirectAuthoringSourceID && len(manifest.Objects) == 0 {
 				runtimeConfig.AllowEmptyAuthoringManifest = true
 			}
-			runtime := dependencies.newRuntime(lifecycleCtx, runtimeConfig, businessHandlers, connectorProviders, releaseIdentity, artifactEvidence, identityBinding, projectDatabase)
+			runtime := dependencies.newRuntime(lifecycleCtx, runtimeConfig, businessHandlers, connectorProviders, releaseIdentity, artifactEvidence, identityBinding, notificationFactory, projectDatabase)
 			if runtime == nil {
 				return nil, errors.New("Runtime bootstrap returned no process")
 			}

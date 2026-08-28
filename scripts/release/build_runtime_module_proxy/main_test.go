@@ -43,6 +43,7 @@ func TestPublishContainsOnlyRuntimeBuildClosureAndCompilesConsumer(t *testing.T)
 		}
 	}
 	consumer := filepath.Join(t.TempDir(), "consumer")
+	moduleCache := filepath.Join(t.TempDir(), "gomodcache")
 	if err := os.MkdirAll(consumer, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +63,9 @@ import (
 	}
 	environment := append(os.Environ(),
 		"GOWORK=off",
-		"GOPROXY=file://"+filepath.ToSlash(proxy),
+		"GOMODCACHE="+moduleCache,
+		"GOFLAGS=-modcacherw",
+		"GOPROXY=file://"+filepath.ToSlash(proxy)+",https://proxy.golang.org,direct",
 		"GONOPROXY=none",
 		"GOSUMDB=off",
 	)

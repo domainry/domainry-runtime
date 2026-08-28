@@ -16,6 +16,7 @@ import (
 
 	connector "github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	notificationmodule "github.com/domainry/domainry-notification/module"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
@@ -134,6 +135,30 @@ func TestNewWithBusinessHandlersBuildsRuntime(t *testing.T) {
 	runtime := NewWithBusinessHandlers(t.Context(), bootstrapTestConfig(t), handlers, runtimeIdentityBindingStub{})
 	if runtime.businessHandlers != handlers {
 		t.Fatal("Runtime did not retain supplied business handlers")
+	}
+	if err := runtime.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestProjectRuntimeOpensOneNotificationModuleBinding(t *testing.T) {
+	handlers := runtimeext.NewBusinessHandlerRegistry()
+	handlers.Freeze()
+	connectors := connector.NewRegistry()
+	connectors.Freeze()
+	runtime := NewProjectWithFactoriesAndStore(
+		t.Context(), bootstrapTestConfig(t), handlers, connectors,
+		runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{},
+		runtimeIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), nil,
+	)
+	if runtime.notificationBinding == nil || runtime.notificationBinding.Descriptor().Mode != "module" || runtime.notificationWorkers == nil || runtime.notificationHTTP == nil {
+		t.Fatalf("Notification Module composition is incomplete: binding=%v workers=%v http=%v", runtime.notificationBinding, runtime.notificationWorkers, runtime.notificationHTTP)
+	}
+	if runtime.notifications != nil {
+		t.Fatal("legacy Notification application was assembled beside the SDK Module Binding")
+	}
+	if runtime.store.NotificationTransactions() == nil {
+		t.Fatal("Notification Module transaction publisher was not bound to the shared Runtime store")
 	}
 	if err := runtime.Close(); err != nil {
 		t.Fatal(err)

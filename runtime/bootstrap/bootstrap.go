@@ -6,6 +6,7 @@ import (
 
 	"github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
@@ -44,6 +45,10 @@ func NewVerifiedProjectWithIdentity(ctx context.Context, cfg config.Config, hand
 
 func NewVerifiedProjectWithIdentityAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, database *ProjectDatabase) *Runtime {
 	return runtimebootstrap.NewProjectWithIdentityAndStore(ctx, cfg, handlers, connectors, releaseIdentity, evidence, binding, database)
+}
+
+func NewVerifiedProjectWithFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, database *ProjectDatabase) *Runtime {
+	return runtimebootstrap.NewProjectWithFactoriesAndStore(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, notification, database)
 }
 
 func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {

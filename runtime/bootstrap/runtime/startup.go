@@ -11,6 +11,8 @@ import (
 	connector "github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	sourcenotification "github.com/domainry/domainry-notification"
+	notificationsdk "github.com/domainry/domainry-notification-sdk"
+	"github.com/domainry/domainry-notification-sdk/modulehost"
 	sourcedelivery "github.com/domainry/domainry-notification/delivery"
 	sourceinbox "github.com/domainry/domainry-notification/inbox"
 	"go.uber.org/zap"
@@ -21,6 +23,7 @@ import (
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	notificationapplication "github.com/domainry/domainry-runtime/runtime/application/notification"
+	notificationfacade "github.com/domainry/domainry-runtime/runtime/application/notificationfacade"
 	manifestseed "github.com/domainry/domainry-runtime/runtime/application/seed/globalcapability"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -46,6 +49,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/localization"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
+	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 )
 
 type runtimeNotificationRecipientDirectory struct {
@@ -171,11 +175,19 @@ func NewProjectWithIdentityAndStore(ctx context.Context, cfg config.Config, busi
 	return newWithExtensionsUsingStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, binding, store, artifactEvidence)
 }
 
+func NewProjectWithFactoriesAndStore(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, artifactEvidence deploymentapplication.RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, store *persistence.RuntimeStore) *Runtime {
+	return newWithExtensionsUsingFactoriesAndStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, identity, notification, store, artifactEvidence)
+}
+
 func newWithExtensions(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
 	return newWithExtensionsUsingStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, identityBinding, nil, artifactEvidence...)
 }
 
 func newWithExtensionsUsingStore(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, preparedStore *persistence.RuntimeStore, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
+	return newWithExtensionsUsingFactoriesAndStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, identityBinding, nil, preparedStore, artifactEvidence...)
+}
+
+func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, preparedStore *persistence.RuntimeStore, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
 	if ctx == nil {
 		panic("bootstrap.NewWithExtensions requires a non-nil lifecycle context")
 	}
@@ -265,74 +277,127 @@ func newWithExtensionsUsingStore(ctx context.Context, cfg config.Config, busines
 	recordBatchNotifications := recordpersistence.NewRecordStore(store)
 	notificationActionAuthorizers.Register("record_batch_job", newRecordBatchNotificationActionAuthorizer(recordBatchNotifications.GetRecordBatchJob))
 	notificationActionAuthorizers.Freeze()
-	notificationModuleStore, err := notificationpersistence.NewSQLStoreAdapter(store, workerDependencies.Clock)
-	mustCompleteRuntimeStartup(err)
-	templateEngine, templateManager, publicationProcessor, err := notificationapplication.NewTemplateModule(
-		valueOrDefault(manifest.DefaultLocale, cfg.AppLocale), manifest.NotificationTemplates,
-		notificationapplication.TemplateModuleDependencies{Store: notificationModuleStore, Clock: workerDependencies.Clock, WorkerID: workerDependencies.WorkerID.String(), Directory: recipientDirectory, WorkNotifier: runtimeNotificationWorkNotifier{broker: store.WorkerWakeups()}},
-	)
-	mustCompleteRuntimeStartup(err)
-	templateRenderer, err := notificationapplication.NewNotificationTemplateRenderer(templateEngine)
-	mustCompleteRuntimeStartup(err)
-	inboxConfiguration, err := sourceinbox.NewConfiguration([]sourcenotification.Surface{
-		sourcenotification.Surface(runtimeext.SurfaceBusinessWorkspace),
-		sourcenotification.Surface(runtimeext.SurfaceConsumerPortal),
-	}, notificationModuleChannels(manifest.NotificationRules))
-	mustCompleteRuntimeStartup(err)
-	inboxValidator, err := sourceinbox.NewValidator(inboxConfiguration)
-	mustCompleteRuntimeStartup(err)
-	notificationCatalog, err := notificationModuleCatalog(inboxValidator, runtimeNotificationEventTypes, manifest.NotificationRules)
-	mustCompleteRuntimeStartup(err)
-	inboxCompiler, err := sourceinbox.NewCompiler(notificationCatalog, inboxValidator, workerDependencies.Clock)
-	mustCompleteRuntimeStartup(err)
-	moduleWorkNotifier := runtimeNotificationWorkNotifier{broker: store.WorkerWakeups()}
-	eventPublisher, err := sourceinbox.NewPublisher(inboxCompiler, notificationModuleStore, moduleWorkNotifier)
-	mustCompleteRuntimeStartup(err)
-	inboxProcessor, err := sourceinbox.NewProcessor(sourceinbox.ProcessorDependencies{
-		Events: notificationModuleStore, Clock: workerDependencies.Clock, WorkerID: workerDependencies.WorkerID.String(),
-		Audiences: notificationAudienceResolvers, RecipientLocale: runtimeNotificationRecipientLocale{lookup: recipientDirectory.FindUser}, WorkNotifier: moduleWorkNotifier,
-	})
-	mustCompleteRuntimeStartup(err)
-	policyManager, err := sourcedelivery.NewPolicyManager(sourcedelivery.PolicyManagerDependencies{Store: notificationModuleStore, Clock: workerDependencies.Clock})
-	mustCompleteRuntimeStartup(err)
-	notificationOutboxDispatcher, err := notificationapplication.NewNotificationOutboxDispatcher(
-		integrationpersistence.NewIntegrationDeliveryStore(store), cfg.EffectiveProductBrandName(), nil,
-	)
-	mustCompleteRuntimeStartup(err)
-	notificationDeliveryProcessor, err := sourcedelivery.NewProcessor(sourcedelivery.ProcessorDependencies{
-		Plans: notificationModuleStore, Renderer: templateEngine, Dispatcher: notificationOutboxDispatcher,
-		Policy: policyManager, Clock: workerDependencies.Clock, WorkerID: workerDependencies.WorkerID.String(),
-	})
-	mustCompleteRuntimeStartup(err)
-	mailboxManager, err := sourceinbox.NewMailboxManager(sourceinbox.MailboxManagerDependencies{
-		Validator: inboxValidator, Mailboxes: notificationModuleStore, SavedViews: notificationModuleStore,
-		Delegations: notificationModuleStore, Metrics: notificationModuleStore, Clock: workerDependencies.Clock,
-	})
-	mustCompleteRuntimeStartup(err)
-	actionResolver, err := sourceinbox.NewActionResolver(mailboxManager, notificationCatalog, workerDependencies.Clock)
-	mustCompleteRuntimeStartup(err)
-	notificationManagement := notificationapplication.NewNotificationApplicationServiceWithModule(
-		notificationActionAuthorizers.Authorize, notificationEventCatalog,
-		notificationapplication.NotificationModuleDependencies{
-			Mailbox: mailboxManager, Actions: actionResolver, Compiler: inboxCompiler, Publisher: eventPublisher, Processor: inboxProcessor, Policy: policyManager,
-			DeliveryProcessor: notificationDeliveryProcessor, Templates: templateManager, Publications: publicationProcessor,
-			DeliveryMetrics: restoredMetadata.deliveryMetricsStore, Capabilities: notificationcontract.NotificationProviderCapabilities(),
-		},
-	)
-	notificationManagement.BindWorkerWakeups(ctx, store.WorkerWakeups())
-	notificationStartupScope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "refresh published notification templates")
-	mustCompleteRuntimeStartup(notificationManagement.RefreshPublished(ctx, notificationStartupScope))
+	var templateRenderer composition.NotificationRenderer
+	var notificationManagement *notificationapplication.NotificationApplicationService
+	var notificationHTTP notificationhttp.NotificationApplication
+	var notificationCompiler runtimeNotificationCompiler
+	var integrationNotificationPublisher integrationapplication.IntegrationNotificationPublisher
+	var notificationOutboxDispatcher *notificationapplication.NotificationOutboxDispatcher
+	var sdkDeliveryGateway *notificationSDKDeliveryGateway
+	var notificationBinding notificationsdk.Binding
+	var notificationWorkers notificationsdk.LocalWorkers
+	if notificationFactory == nil {
+		notificationModuleStore, err := notificationpersistence.NewSQLStoreAdapter(store, workerDependencies.Clock)
+		mustCompleteRuntimeStartup(err)
+		templateEngine, templateManager, publicationProcessor, err := notificationapplication.NewTemplateModule(
+			valueOrDefault(manifest.DefaultLocale, cfg.AppLocale), manifest.NotificationTemplates,
+			notificationapplication.TemplateModuleDependencies{Store: notificationModuleStore, Clock: workerDependencies.Clock, WorkerID: workerDependencies.WorkerID.String(), Directory: recipientDirectory, WorkNotifier: runtimeNotificationWorkNotifier{broker: store.WorkerWakeups()}},
+		)
+		mustCompleteRuntimeStartup(err)
+		templateRenderer, err = notificationapplication.NewNotificationTemplateRenderer(templateEngine)
+		mustCompleteRuntimeStartup(err)
+		inboxConfiguration, err := sourceinbox.NewConfiguration([]sourcenotification.Surface{
+			sourcenotification.Surface(runtimeext.SurfaceBusinessWorkspace),
+			sourcenotification.Surface(runtimeext.SurfaceConsumerPortal),
+		}, notificationModuleChannels(manifest.NotificationRules))
+		mustCompleteRuntimeStartup(err)
+		inboxValidator, err := sourceinbox.NewValidator(inboxConfiguration)
+		mustCompleteRuntimeStartup(err)
+		notificationCatalog, err := notificationModuleCatalog(inboxValidator, runtimeNotificationEventTypes, manifest.NotificationRules)
+		mustCompleteRuntimeStartup(err)
+		inboxCompiler, err := sourceinbox.NewCompiler(notificationCatalog, inboxValidator, workerDependencies.Clock)
+		mustCompleteRuntimeStartup(err)
+		moduleWorkNotifier := runtimeNotificationWorkNotifier{broker: store.WorkerWakeups()}
+		eventPublisher, err := sourceinbox.NewPublisher(inboxCompiler, notificationModuleStore, moduleWorkNotifier)
+		mustCompleteRuntimeStartup(err)
+		inboxProcessor, err := sourceinbox.NewProcessor(sourceinbox.ProcessorDependencies{
+			Events: notificationModuleStore, Clock: workerDependencies.Clock, WorkerID: workerDependencies.WorkerID.String(),
+			Audiences: notificationAudienceResolvers, RecipientLocale: runtimeNotificationRecipientLocale{lookup: recipientDirectory.FindUser}, WorkNotifier: moduleWorkNotifier,
+		})
+		mustCompleteRuntimeStartup(err)
+		policyManager, err := sourcedelivery.NewPolicyManager(sourcedelivery.PolicyManagerDependencies{Store: notificationModuleStore, Clock: workerDependencies.Clock})
+		mustCompleteRuntimeStartup(err)
+		notificationOutboxDispatcher, err = notificationapplication.NewNotificationOutboxDispatcher(
+			integrationpersistence.NewIntegrationDeliveryStore(store), cfg.EffectiveProductBrandName(), nil,
+		)
+		mustCompleteRuntimeStartup(err)
+		notificationDeliveryProcessor, err := sourcedelivery.NewProcessor(sourcedelivery.ProcessorDependencies{
+			Plans: notificationModuleStore, Renderer: templateEngine, Dispatcher: notificationOutboxDispatcher,
+			Policy: policyManager, Clock: workerDependencies.Clock, WorkerID: workerDependencies.WorkerID.String(),
+		})
+		mustCompleteRuntimeStartup(err)
+		mailboxManager, err := sourceinbox.NewMailboxManager(sourceinbox.MailboxManagerDependencies{
+			Validator: inboxValidator, Mailboxes: notificationModuleStore, SavedViews: notificationModuleStore,
+			Delegations: notificationModuleStore, Metrics: notificationModuleStore, Clock: workerDependencies.Clock,
+		})
+		mustCompleteRuntimeStartup(err)
+		actionResolver, err := sourceinbox.NewActionResolver(mailboxManager, notificationCatalog, workerDependencies.Clock)
+		mustCompleteRuntimeStartup(err)
+		notificationManagement = notificationapplication.NewNotificationApplicationServiceWithModule(
+			notificationActionAuthorizers.Authorize, notificationEventCatalog,
+			notificationapplication.NotificationModuleDependencies{
+				Mailbox: mailboxManager, Actions: actionResolver, Compiler: inboxCompiler, Publisher: eventPublisher, Processor: inboxProcessor, Policy: policyManager,
+				DeliveryProcessor: notificationDeliveryProcessor, Templates: templateManager, Publications: publicationProcessor,
+				DeliveryMetrics: restoredMetadata.deliveryMetricsStore, Capabilities: notificationcontract.NotificationProviderCapabilities(),
+			},
+		)
+		notificationManagement.BindWorkerWakeups(ctx, store.WorkerWakeups())
+		notificationStartupScope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "refresh published notification templates")
+		mustCompleteRuntimeStartup(notificationManagement.RefreshPublished(ctx, notificationStartupScope))
+		notificationHTTP = notificationManagement
+		notificationCompiler = notificationManagement
+		integrationNotificationPublisher = notificationManagement.PublishInboxIntent
+	} else {
+		catalog, catalogErr := notificationSDKCatalog(valueOrDefault(manifest.DefaultLocale, cfg.AppLocale), manifest, runtimeNotificationEventTypes)
+		mustCompleteRuntimeStartup(catalogErr)
+		sdkDeliveryGateway = &notificationSDKDeliveryGateway{repository: integrationpersistence.NewIntegrationDeliveryStore(store), productName: cfg.EffectiveProductBrandName()}
+		application := notificationsdk.ApplicationRef{TenantID: cfg.NotificationTenantID, WorkspaceID: cfg.NotificationWorkspaceID, ApplicationKey: cfg.NotificationApplicationKey}
+		if moduleFactory, ok := notificationFactory.(modulehost.Factory); ok {
+			host := notificationSDKModuleHost{
+				store: store, identity: identityBinding, clock: workerDependencies.Clock, workerID: workerDependencies.WorkerID.String(), catalog: catalog,
+				directory: identityDirectory, workflow: workflowNotificationTasks.GetTask, delivery: sdkDeliveryGateway,
+				metrics: notificationSDKDeliveryMetrics{store: restoredMetadata.deliveryMetricsStore}, validator: notificationSDKProviderTemplateValidator{},
+			}
+			notificationBinding, err = moduleFactory.OpenModule(ctx, application, host)
+		} else {
+			notificationBinding, err = notificationFactory.Open(ctx, application)
+		}
+		mustCompleteRuntimeStartup(err)
+		if notificationBinding == nil {
+			mustCompleteRuntimeStartup(errors.New("Notification SDK Factory returned no Binding"))
+		}
+		if notificationBinding.Descriptor().Mode == notificationsdk.DeploymentModeSaaS && identityBinding.Descriptor().Mode != identitysdk.DeploymentModeSaaS {
+			mustCompleteRuntimeStartup(errors.New("Notification SaaS requires Identity SaaS"))
+		}
+		if notificationBinding.Descriptor().Mode == notificationsdk.DeploymentModeModule {
+			compiler, compilerErr := notificationfacade.NewModuleCompiler(notificationBinding)
+			mustCompleteRuntimeStartup(compilerErr)
+			mustCompleteRuntimeStartup(store.BindNotificationTransactions(compiler.Transactions()))
+			notificationCompiler = compiler
+			var found bool
+			notificationWorkers, found = notificationBinding.LocalWorkers()
+			if !found || notificationWorkers == nil {
+				mustCompleteRuntimeStartup(errors.New("Notification Module Binding returned no local workers"))
+			}
+		} else if notificationBinding.Descriptor().Mode != notificationsdk.DeploymentModeSaaS {
+			mustCompleteRuntimeStartup(fmt.Errorf("unsupported Notification deployment mode %q", notificationBinding.Descriptor().Mode))
+		}
+		facade, facadeErr := notificationfacade.New(notificationBinding, notificationActionAuthorizers.Authorize)
+		mustCompleteRuntimeStartup(facadeErr)
+		notificationHTTP = facade
+		integrationNotificationPublisher = facade.PublishInboxIntent
+	}
 	manifest.TemplateID = templateID
 	manifest.Version = valueOrDefault(manifest.Version, generatedTemplateVersion)
 	sharedRateLimiter := ratelimitpersistence.NewRateLimiter(store)
 	mustCompleteRuntimeStartup(sharedRateLimiter.EnsureSchema(ctx))
 	workflowNotificationScope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "compile workflow notification intent")
-	startupCallbacks := runtimeStartupCallbacks{records: nil, notificationManagement: notificationManagement, workflowNotificationScope: workflowNotificationScope}
+	startupCallbacks := runtimeStartupCallbacks{records: nil, notificationManagement: notificationCompiler, workflowNotificationScope: workflowNotificationScope}
 	serviceAssembly, err := assembleRuntimeServices(ctx, cfg, manifest, templateRenderer, store, identityDirectory, identityPrincipals, runtimeAudit, sharedRateLimiter, workerDependencies, runtimeExtensionRegistries{
 		businessHandlers: businessHandlers, connectorProviders: connectorProviders,
 		notificationCompiler:               startupCallbacks.CompileNotification,
 		taskNotificationCommitter:          workflowpersistence.NewWorkflowTaskNotificationStore(store),
-		integrationNotificationPublisher:   notificationManagement.PublishInboxIntent,
+		integrationNotificationPublisher:   integrationNotificationPublisher,
 		integrationCredentialNotifications: integrationnotificationpersistence.NewIntegrationCredentialNotificationCommitter(store),
 		integrationCredentialExpirySource:  integrationpersistence.NewIntegrationCredentialExpiryStore(store),
 	})
@@ -340,9 +405,15 @@ func newWithExtensionsUsingStore(ctx context.Context, cfg config.Config, busines
 	records, recordRepository := serviceAssembly.services, serviceAssembly.records
 	mustCompleteRuntimeStartup(publishRuntimeIdentityCatalog(ctx, identityBinding, records.Schema(), cfg.IdentityWorkspaceID, cfg.IdentityAudience, cfg.IdentityRedirectURLs))
 	startupCallbacks.records = records
-	notificationOutboxDispatcher.BindWakeup(func(message integrationmodel.IntegrationOutboxMessage) {
+	notificationWakeup := func(message integrationmodel.IntegrationOutboxMessage) {
 		integrationapplication.WakeIntegrationOutbox(records.Applications().Integrations, integrationapplication.IntegrationOutboxLocator{WorkspaceID: message.WorkspaceID, MessageID: message.ID})
-	})
+	}
+	if notificationOutboxDispatcher != nil {
+		notificationOutboxDispatcher.BindWakeup(notificationWakeup)
+	}
+	if sdkDeliveryGateway != nil {
+		sdkDeliveryGateway.BindWakeup(notificationWakeup)
+	}
 	reportNotificationActions.authorize = newReportNotificationActionAuthorizer(startupCallbacks.ReportsForPrincipal)
 	automationNotificationActions.authorize = newAutomationNotificationActionAuthorizer(records.Applications().Automations.AutomationRule)
 	projectRecordNotificationActions.authorize = newProjectRecordNotificationActionAuthorizer(records.Applications().Records.GetRecordForAction)
@@ -364,6 +435,7 @@ func newWithExtensionsUsingStore(ctx context.Context, cfg config.Config, busines
 	refreshRuntimeActionCatalog(records.Schema())
 	manifest.ManifestHash = seedManifest.ManifestHash
 	runtime := constructRuntime(runtimeConstructionInput{
+		lifecycleContext:    ctx,
 		config:              cfg,
 		templateID:          templateID,
 		store:               store,
@@ -375,6 +447,9 @@ func newWithExtensionsUsingStore(ctx context.Context, cfg config.Config, busines
 		recordRepository:    recordRepository,
 		rateLimiter:         sharedRateLimiter,
 		notifications:       notificationManagement,
+		notificationHTTP:    notificationHTTP,
+		notificationBinding: notificationBinding,
+		notificationWorkers: notificationWorkers,
 		worker:              serviceAssembly.worker,
 		businessHandlers:    businessHandlers,
 		connectorProviders:  connectorProviders,

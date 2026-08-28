@@ -84,6 +84,22 @@ func (s *Service) user(ctx context.Context, principal principalmodel.Principal) 
 	return authority(ctx, principal.SurfaceKey)
 }
 
+func (s *Service) PublishInboxIntent(ctx context.Context, value runtimemodel.NotificationIntent, scope principalmodel.SystemScope) (runtimemodel.NotificationEvent, bool, error) {
+	if _, err := principalmodel.NewSystemCommandScope(scope); err != nil {
+		return runtimemodel.NotificationEvent{}, false, err
+	}
+	input, err := convert[sdkcontract.NotificationIntent](value)
+	if err != nil {
+		return runtimemodel.NotificationEvent{}, false, err
+	}
+	event, created, err := s.binding.Publisher().PublishIntent(ctx, input)
+	if err != nil {
+		return runtimemodel.NotificationEvent{}, false, mapError(err)
+	}
+	result, err := convert[runtimemodel.NotificationEvent](event)
+	return result, created, err
+}
+
 func (s *Service) GovernanceCatalog(ctx context.Context, principal principalmodel.Principal) (runtimemodel.NotificationGovernanceCatalog, error) {
 	a, err := s.user(ctx, principal)
 	if err != nil {

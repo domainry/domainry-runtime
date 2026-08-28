@@ -243,6 +243,15 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.IdentityAudience) == "" {
 		return fmt.Errorf("IDENTITY_AUDIENCE is required")
 	}
+	if strings.TrimSpace(c.NotificationTenantID) == "" {
+		return fmt.Errorf("NOTIFICATION_TENANT_ID is required")
+	}
+	if strings.TrimSpace(c.NotificationWorkspaceID) == "" {
+		return fmt.Errorf("NOTIFICATION_WORKSPACE_ID is required")
+	}
+	if strings.TrimSpace(c.NotificationApplicationKey) == "" {
+		return fmt.Errorf("NOTIFICATION_APPLICATION_KEY is required")
+	}
 	if c.HTTPReadHeaderTimeout <= 0 || c.HTTPReadTimeout <= 0 || c.HTTPWriteTimeout <= 0 || c.HTTPIdleTimeout <= 0 || c.HTTPShutdownTimeout <= 0 {
 		return fmt.Errorf("HTTP timeouts must be positive")
 	}
@@ -464,7 +473,7 @@ func managedConfigName(name string) bool {
 	if name == "PORT" {
 		return true
 	}
-	for _, prefix := range []string{"APP_", "AUTH_", "AUDIT_", "IDENTITY_", "HTTP_", "HEALTH_", "CAPACITY_", "TELEMETRY_", "DATABASE_", "RUNTIME_", "MIGRATION_", "SCHEDULER_", "BUSINESS_", "AGENT_HTTP_", "CORS_", "INTEGRATION_", "TEMPLATE_", "FRONTEND_CAPABILITY_", "SKIP_MANIFEST_", "UPLOAD_", "DOMAINRY_RUNTIME_"} {
+	for _, prefix := range []string{"APP_", "AUTH_", "AUDIT_", "IDENTITY_", "NOTIFICATION_", "HTTP_", "HEALTH_", "CAPACITY_", "TELEMETRY_", "DATABASE_", "RUNTIME_", "MIGRATION_", "SCHEDULER_", "BUSINESS_", "AGENT_HTTP_", "CORS_", "INTEGRATION_", "TEMPLATE_", "FRONTEND_CAPABILITY_", "SKIP_MANIFEST_", "UPLOAD_", "DOMAINRY_RUNTIME_"} {
 		if strings.HasPrefix(name, prefix) {
 			return true
 		}

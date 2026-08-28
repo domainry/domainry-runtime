@@ -18,6 +18,15 @@ func normalizeRuntimeConfigWithHostname(cfg config.Config, hostname func() (stri
 	if strings.TrimSpace(cfg.IdentityAudience) == "" {
 		cfg.IdentityAudience = "domainry-runtime"
 	}
+	if strings.TrimSpace(cfg.NotificationTenantID) == "" {
+		cfg.NotificationTenantID = "default"
+	}
+	if strings.TrimSpace(cfg.NotificationWorkspaceID) == "" {
+		cfg.NotificationWorkspaceID = "default"
+	}
+	if strings.TrimSpace(cfg.NotificationApplicationKey) == "" {
+		cfg.NotificationApplicationKey = "domainry-runtime"
+	}
 	if strings.TrimSpace(cfg.RuntimeInstanceID) == "" {
 		name, _ := hostname()
 		if strings.TrimSpace(name) == "" {
