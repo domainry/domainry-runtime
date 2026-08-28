@@ -14,7 +14,6 @@ import (
 
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent"
 	agentruntime "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
-	notificationapplication "github.com/domainry/domainry-runtime/runtime/application/notification"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -219,7 +218,6 @@ func TestAssembleRuntimeHTTPServerPersistentGraphWiresOptionalOwners(t *testing.
 		Records:         services,
 		IdentityBinding: transportIdentityBindingStub{},
 		Store:           store,
-		Notifications:   notificationapplication.NewNotificationApplicationService(),
 		Config: config.Config{
 			UploadDir:                      "uploads",
 			RuntimeAllowDevIdentityHeaders: true,

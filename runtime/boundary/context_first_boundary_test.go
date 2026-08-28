@@ -173,7 +173,6 @@ func TestRuntimeApplicationContextFreeMethodsMatchReviewedPureOrConstructionExce
 		"IntegrationApplicationService.RegisterSharedIntegrationOutboxSenders",
 		"IntegrationApplicationService.ValidateAdapterConfig", "IntegrationApplicationService.ValidateAutomationOperationOutput",
 		"MetadataApplicationService.AddReloadObserver", "MetadataApplicationService.UseActionDefinitionSource",
-		"NotificationApplicationService.CompileInboxIntent",
 		"OperationsApplicationService.Definitions", "OperationsApplicationService.RegisterBreakGlass", "OperationsApplicationService.RegisterDeadLetterOwner", "OperationsApplicationService.RegisterDiagnostics",
 		"OperationsApplicationService.UseDirectAuthoringProjection",
 		"PipelineApplicationService.ApplyStageSLA", "PipelineApplicationService.ValidateStagePermission", "PipelineTransitionApplicationService.IsAction",
