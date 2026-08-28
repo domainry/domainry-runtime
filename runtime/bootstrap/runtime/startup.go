@@ -27,7 +27,6 @@ import (
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
-	notification "github.com/domainry/domainry-runtime/runtime/domain/notification/service"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
@@ -236,7 +235,7 @@ func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Con
 	mustCompleteRuntimeStartup(integrationapplication.SyncManifestIntegrationConnections(ctx, integrationpersistence.NewIntegrationConfigStore(store), connectorProviders, manifest.Integrations, installationScope))
 	mustCompleteRuntimeStartup(manifestseed.SyncRows(ctx, auditpersistence.NewAuditStore(store), workflowpersistence.NewWorkflowWorkerStore(store)))
 	templateID := valueOrDefault(manifest.TemplateID, generatedTemplateID)
-	runtimeNotificationEventTypes, err := notification.NotificationRuntimeEventTypes(manifest.NotificationEventTypes, localization.SupportedLocales(), localization.DefaultLocale, localization.Lookup)
+	runtimeNotificationEventTypes, err := notificationfacade.NotificationRuntimeEventTypes(manifest.NotificationEventTypes, localization.SupportedLocales(), localization.DefaultLocale, localization.Lookup)
 	mustCompleteRuntimeStartup(err)
 	workflowNotificationTasks := workflowpersistence.NewWorkflowProcessStore(store)
 	integrationNotificationResources := integrationpersistence.NewIntegrationConfigStore(store)
