@@ -119,6 +119,12 @@ func publish(repositoryValue, proxyValue string) (publishResult, error) {
 		if err != nil {
 			return publishResult{}, err
 		}
+		if relative == "go.mod" {
+			content, err = distributionGoMod(content)
+			if err != nil {
+				return publishResult{}, fmt.Errorf("prepare Runtime distribution go.mod: %w", err)
+			}
+		}
 		target := filepath.Join(source, filepath.FromSlash(relative))
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return publishResult{}, err
@@ -147,7 +153,7 @@ func publish(repositoryValue, proxyValue string) (publishResult, error) {
 	if err := archive.Close(); err != nil {
 		return publishResult{}, err
 	}
-	goMod, err := os.ReadFile(filepath.Join(repository, "go.mod"))
+	goMod, err := os.ReadFile(filepath.Join(source, "go.mod"))
 	if err != nil {
 		return publishResult{}, err
 	}
@@ -197,7 +203,11 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 	if err != nil {
 		return nil, fmt.Errorf("parse Runtime go.mod: %w", err)
 	}
-	versions := map[string]string{"github.com/domainry/domainry-identity": identityModuleVersion}
+	selectedIdentityVersion := strings.TrimSpace(os.Getenv("DOMAINRY_IDENTITY_MODULE_VERSION"))
+	if selectedIdentityVersion == "" {
+		selectedIdentityVersion = identityModuleVersion
+	}
+	versions := map[string]string{"github.com/domainry/domainry-identity": selectedIdentityVersion}
 	published := map[string]bool{}
 	result := []publishedDependencyModule{}
 	for _, requirement := range parsed.Require {
@@ -219,7 +229,7 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 				continue
 			}
 			published[identity] = true
-			downloaded, err := downloadModule(repository, path, version)
+			downloaded, err := dependencyModule(repository, path, version)
 			if err != nil {
 				return nil, err
 			}
@@ -248,6 +258,139 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
 	return result, nil
+}
+
+func dependencyModule(repository, path, version string) (downloadedModule, error) {
+	type localModule struct {
+		path, rootEnvironment, label string
+		patterns                     []string
+	}
+	for _, candidate := range []localModule{
+		{path: "github.com/domainry/domainry-identity", rootEnvironment: "DOMAINRY_IDENTITY_REPO_ROOT", label: "Identity", patterns: []string{"./module"}},
+		{path: "github.com/domainry/domainry-notification-sdk", rootEnvironment: "DOMAINRY_NOTIFICATION_SDK_REPO_ROOT", label: "Notification SDK", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-notification", rootEnvironment: "DOMAINRY_NOTIFICATION_REPO_ROOT", label: "Notification", patterns: []string{"./module"}},
+	} {
+		root := strings.TrimSpace(os.Getenv(candidate.rootEnvironment))
+		if root == "" {
+			root = localReplacementRoot(repository, path)
+		}
+		if path == candidate.path && root != "" {
+			return packageLocalModule(path, version, root, candidate.label, candidate.patterns...)
+		}
+	}
+	return downloadModule(repository, path, version)
+}
+
+func localReplacementRoot(repository, path string) string {
+	content, err := os.ReadFile(filepath.Join(repository, "go.mod"))
+	if err != nil {
+		return ""
+	}
+	parsed, err := modfile.Parse("go.mod", content, nil)
+	if err != nil {
+		return ""
+	}
+	for _, replacement := range parsed.Replace {
+		if replacement.Old.Path != path || replacement.New.Version != "" || strings.TrimSpace(replacement.New.Path) == "" {
+			continue
+		}
+		root := replacement.New.Path
+		if !filepath.IsAbs(root) {
+			root = filepath.Join(repository, root)
+		}
+		return filepath.Clean(root)
+	}
+	return ""
+}
+
+func packageLocalModule(path, version, rootValue, label string, patterns ...string) (downloadedModule, error) {
+	root, err := requiredDirectory(rootValue)
+	if err != nil {
+		return downloadedModule{}, fmt.Errorf("local %s module: %w", label, err)
+	}
+	if module.CheckPath(path) != nil || version == "" {
+		return downloadedModule{}, fmt.Errorf("local %s module identity is invalid", label)
+	}
+	goMod, err := os.ReadFile(filepath.Join(root, "go.mod"))
+	if err != nil {
+		return downloadedModule{}, err
+	}
+	parsed, err := modfile.Parse("go.mod", goMod, nil)
+	if err != nil || parsed.Module == nil || parsed.Module.Mod.Path != path {
+		return downloadedModule{}, fmt.Errorf("local %s module path must be %s", label, path)
+	}
+	files, err := moduleBuildClosure(root, patterns...)
+	if err != nil {
+		return downloadedModule{}, fmt.Errorf("local %s module closure: %w", label, err)
+	}
+	source, err := os.MkdirTemp("", "domainry-local-module-source-*")
+	if err != nil {
+		return downloadedModule{}, err
+	}
+	defer os.RemoveAll(source)
+	for _, relative := range files {
+		content, readErr := os.ReadFile(filepath.Join(root, filepath.FromSlash(relative)))
+		if readErr != nil {
+			return downloadedModule{}, readErr
+		}
+		if relative == "go.mod" {
+			content, readErr = distributionGoMod(content)
+			if readErr != nil {
+				return downloadedModule{}, fmt.Errorf("prepare local %s distribution go.mod: %w", label, readErr)
+			}
+			goMod = content
+		}
+		target := filepath.Join(source, filepath.FromSlash(relative))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return downloadedModule{}, err
+		}
+		if err := os.WriteFile(target, content, 0o644); err != nil {
+			return downloadedModule{}, err
+		}
+	}
+	temporary, err := os.MkdirTemp("", "domainry-local-module-archive-*")
+	if err != nil {
+		return downloadedModule{}, err
+	}
+	infoPath := filepath.Join(temporary, "module.info")
+	modPath := filepath.Join(temporary, "module.mod")
+	zipPath := filepath.Join(temporary, "module.zip")
+	info := []byte(fmt.Sprintf("{\"Version\":%q,\"Time\":\"2026-08-28T00:00:00Z\"}\n", version))
+	if err := os.WriteFile(infoPath, info, 0o644); err != nil {
+		return downloadedModule{}, err
+	}
+	if err := os.WriteFile(modPath, goMod, 0o644); err != nil {
+		return downloadedModule{}, err
+	}
+	archive, err := os.Create(zipPath)
+	if err != nil {
+		return downloadedModule{}, err
+	}
+	if err := modzip.CreateFromDir(archive, module.Version{Path: path, Version: version}, source); err != nil {
+		_ = archive.Close()
+		return downloadedModule{}, fmt.Errorf("package local %s module: %w", label, err)
+	}
+	if err := archive.Close(); err != nil {
+		return downloadedModule{}, err
+	}
+	return downloadedModule{Path: path, Version: version, Info: infoPath, GoMod: modPath, Zip: zipPath}, nil
+}
+
+// Local development replaces describe the checkout graph, not the immutable
+// module graph published into the file proxy. Keeping ../ replaces in a
+// published .mod or zip makes external consumers depend on the publisher's
+// filesystem layout.
+func distributionGoMod(content []byte) ([]byte, error) {
+	parsed, err := modfile.Parse("go.mod", content, nil)
+	if err != nil {
+		return nil, err
+	}
+	for _, replacement := range append([]*modfile.Replace(nil), parsed.Replace...) {
+		if err := parsed.DropReplace(replacement.Old.Path, replacement.Old.Version); err != nil {
+			return nil, err
+		}
+	}
+	return parsed.Format()
 }
 
 func downloadModule(repository, path, version string) (downloadedModule, error) {
@@ -307,7 +450,12 @@ func copyDownloadedModule(proxy string, downloaded downloadedModule) (publishedD
 }
 
 func runtimeBuildClosure(repository string) ([]string, error) {
-	command := exec.Command("go", "list", "-deps", "-json", "./pkg/runtimehost", "./pkg/runtimeext")
+	return moduleBuildClosure(repository, "./pkg/runtimehost", "./pkg/runtimeext")
+}
+
+func moduleBuildClosure(repository string, patterns ...string) ([]string, error) {
+	arguments := append([]string{"list", "-deps", "-json"}, patterns...)
+	command := exec.Command("go", arguments...)
 	command.Dir = repository
 	output, err := command.StdoutPipe()
 	if err != nil {

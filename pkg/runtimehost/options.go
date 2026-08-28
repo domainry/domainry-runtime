@@ -5,6 +5,7 @@ package runtimehost
 import (
 	"github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	notificationsdk "github.com/domainry/domainry-notification-sdk"
 )
 
 // Options is the complete project-owned input to Runtime process composition.
@@ -16,9 +17,13 @@ type Options struct {
 	// A module build injects domainry-identity/module.Factory; a SaaS build
 	// injects domainry-identity-sdk/remote.Factory. Runtime never selects or
 	// switches the deployment topology.
-	IdentityFactory  identitysdk.Factory
-	BusinessHandlers BusinessHandlerFactory
-	Connectors       connector.ProviderSetFactory
+	IdentityFactory identitysdk.Factory
+	// NotificationFactory is selected by generated composition. Module builds
+	// inject domainry-notification/module; SaaS builds inject the SDK Remote
+	// Factory. Runtime never switches topology from environment at startup.
+	NotificationFactory notificationsdk.Factory
+	BusinessHandlers    BusinessHandlerFactory
+	Connectors          connector.ProviderSetFactory
 	// ConnectorProcesses is an explicit host policy for optional Provider
 	// subprocesses. The zero value denies every executable.
 	ConnectorProcesses ConnectorProcessPolicy

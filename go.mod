@@ -6,6 +6,7 @@ require (
 	github.com/domainry/domainry-connector-sdk v0.1.0-dev.12
 	github.com/domainry/domainry-identity-sdk v0.1.0-dev3
 	github.com/domainry/domainry-notification v0.1.0-dev.2
+	github.com/domainry/domainry-notification-sdk v0.0.0
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/microsoft/go-mssqldb v1.10.0
@@ -22,6 +23,10 @@ require (
 	modernc.org/sqlite v1.53.0
 	vitess.io/vitess v0.23.3
 )
+
+replace github.com/domainry/domainry-notification-sdk => ../domainry-notification-sdk
+
+replace github.com/domainry/domainry-notification => ../domainry-notification
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
