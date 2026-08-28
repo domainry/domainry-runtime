@@ -19,7 +19,6 @@ import (
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
-	notificationapplication "github.com/domainry/domainry-runtime/runtime/application/notification"
 	notificationfacade "github.com/domainry/domainry-runtime/runtime/application/notificationfacade"
 	manifestseed "github.com/domainry/domainry-runtime/runtime/application/seed/globalcapability"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
@@ -70,7 +69,7 @@ func (b *runtimeNotificationActionAuthorizerBinding) Authorize(ctx context.Conte
 	return b.authorize(ctx, resourceID, principal)
 }
 
-func newProjectRecordNotificationActionAuthorizer(getRecord func(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error)) notificationapplication.NotificationInboxResolvedResourceAuthorizer {
+func newProjectRecordNotificationActionAuthorizer(getRecord func(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error)) notificationfacade.InboxResolvedResourceAuthorizer {
 	return func(ctx context.Context, action notificationmodel.NotificationInboxResolvedAction, principal principalmodel.Principal) error {
 		objectKey, recordID := strings.TrimSpace(action.RouteParams["object_key"]), strings.TrimSpace(action.RouteParams["resource_id"])
 		if getRecord == nil || objectKey == "" || recordID == "" {
@@ -86,7 +85,7 @@ type integrationNotificationResourceReader interface {
 	ListConnections(context.Context, string) ([]integrationmodel.IntegrationConnection, error)
 }
 
-func registerIntegrationNotificationActionAuthorizers(registry *notificationapplication.NotificationInboxActionAuthorizerRegistry, resources integrationNotificationResourceReader) {
+func registerIntegrationNotificationActionAuthorizers(registry *notificationfacade.ActionAuthorizerRegistry, resources integrationNotificationResourceReader) {
 	if registry == nil || resources == nil {
 		return
 	}
@@ -240,11 +239,8 @@ func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Con
 	runtimeNotificationEventTypes, err := notification.NotificationRuntimeEventTypes(manifest.NotificationEventTypes, localization.SupportedLocales(), localization.DefaultLocale, localization.Lookup)
 	mustCompleteRuntimeStartup(err)
 	workflowNotificationTasks := workflowpersistence.NewWorkflowProcessStore(store)
-	notificationAudienceResolvers := notificationapplication.NewNotificationAudienceResolverRegistry()
-	notificationAudienceResolvers.Register("workflow_task_assignee", newWorkflowTaskAssigneeResolver(workflowNotificationTasks.GetTask))
-	notificationAudienceResolvers.Freeze()
 	integrationNotificationResources := integrationpersistence.NewIntegrationConfigStore(store)
-	notificationActionAuthorizers := notificationapplication.NewNotificationInboxActionAuthorizerRegistry()
+	notificationActionAuthorizers := notificationfacade.NewActionAuthorizerRegistry()
 	reportNotificationActions := &runtimeNotificationActionAuthorizerBinding{}
 	notificationActionAuthorizers.Register("report", reportNotificationActions.Authorize)
 	automationNotificationActions := &runtimeNotificationActionAuthorizerBinding{}

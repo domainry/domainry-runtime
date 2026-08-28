@@ -8,8 +8,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
-	sourcenotification "github.com/domainry/domainry-notification"
-	sourceinbox "github.com/domainry/domainry-notification/inbox"
+	notificationcontract "github.com/domainry/domainry-notification-sdk/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
@@ -87,7 +86,7 @@ func TestNotificationRecipientLocaleResolverBoundaries(t *testing.T) {
 
 func TestWorkflowTaskNotificationBindingsBoundaryMatrix(t *testing.T) {
 	failure := errors.New("task lookup failed")
-	event := sourceinbox.Event{WorkspaceID: "workspace", SubjectID: "task"}
+	event := notificationcontract.NotificationEvent{WorkspaceID: "workspace", SubjectID: "task"}
 	for _, test := range []struct {
 		name     string
 		task     workflowmodel.WorkflowTask
@@ -102,17 +101,17 @@ func TestWorkflowTaskNotificationBindingsBoundaryMatrix(t *testing.T) {
 		{name: "assignee", found: true, task: workflowmodel.WorkflowTask{AssigneeUserID: "user"}, wantUser: "user"},
 	} {
 		t.Run("audience "+test.name, func(t *testing.T) {
-			resolver := newWorkflowTaskAssigneeResolver(func(context.Context, string, string) (workflowmodel.WorkflowTask, bool, error) {
+			resolver := notificationSDKWorkflowAudience{lookup: func(context.Context, string, string) (workflowmodel.WorkflowTask, bool, error) {
 				return test.task, test.found, test.err
-			})
-			users, err := resolver(t.Context(), event)
+			}}
+			users, err := resolver.ResolveAudience(t.Context(), "workflow_task_assignee", event)
 			if test.err != nil && !errors.Is(err, test.err) {
 				t.Fatalf("error=%v", err)
 			}
 			if test.wantCode != "" && apperror.CodeOf(err) != test.wantCode {
 				t.Fatalf("code=%q error=%v", apperror.CodeOf(err), err)
 			}
-			if test.wantUser != "" && (err != nil || len(users) != 1 || users[0] != sourcenotification.UserID(test.wantUser)) {
+			if test.wantUser != "" && (err != nil || len(users) != 1 || users[0] != test.wantUser) {
 				t.Fatalf("users=%v error=%v", users, err)
 			}
 		})

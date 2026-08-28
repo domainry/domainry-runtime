@@ -9,7 +9,7 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
-	notificationapplication "github.com/domainry/domainry-runtime/runtime/application/notification"
+	notificationfacade "github.com/domainry/domainry-runtime/runtime/application/notificationfacade"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -52,7 +52,7 @@ func TestIntegrationNotificationActionsReauthorizeTenantAdminResourceAccess(t *t
 		{name: "connection lookup failure", resourceType: "integration_connection", resourceID: "erp", permissions: []string{integrationapplication.PermissionConnectionManage}, reader: integrationNotificationResourceReaderStub{err: failure}, wantErr: failure},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			registry := notificationapplication.NewNotificationInboxActionAuthorizerRegistry()
+			registry := notificationfacade.NewActionAuthorizerRegistry()
 			registerIntegrationNotificationActionAuthorizers(registry, test.reader)
 			registry.Freeze()
 			principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "actor"}}, accessfixture.Bundle{Permissions: test.permissions})
@@ -69,7 +69,7 @@ func TestIntegrationNotificationActionsReauthorizeTenantAdminResourceAccess(t *t
 		})
 	}
 	registerIntegrationNotificationActionAuthorizers(nil, integrationNotificationResourceReaderStub{})
-	registerIntegrationNotificationActionAuthorizers(notificationapplication.NewNotificationInboxActionAuthorizerRegistry(), nil)
+	registerIntegrationNotificationActionAuthorizers(notificationfacade.NewActionAuthorizerRegistry(), nil)
 }
 
 func TestRuntimeNotificationActionAuthorizerBindingFailsClosedUntilWired(t *testing.T) {
