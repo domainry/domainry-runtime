@@ -13,7 +13,6 @@ import (
 
 	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
 	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
-	notificationpolicy "github.com/domainry/domainry-runtime/runtime/domain/notification/policy"
 	notificationservice "github.com/domainry/domainry-runtime/runtime/domain/notification/service"
 	notificationvalidation "github.com/domainry/domainry-runtime/runtime/domain/notification/validation"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -336,11 +335,29 @@ func (a *notificationHTTPApplication) SaveDeliveryPolicy(ctx context.Context, va
 	if err := notificationHTTPAuthorize(p); err != nil {
 		return value, err
 	}
-	if err := notificationpolicy.NotificationValidateDeliveryPolicy(value); err != nil {
+	if err := validateNotificationHTTPDeliveryPolicy(value); err != nil {
 		return value, err
 	}
 	value.UpdatedBy, value.UpdatedAt = p.UserID, notificationHTTPClock{}.Now().Format(time.RFC3339)
 	return a.repo.SaveDeliveryPolicy(ctx, principalmodel.SystemScope{}, value)
+}
+
+func validateNotificationHTTPDeliveryPolicy(value notificationmodel.NotificationDeliveryPolicy) error {
+	if value.MaxPerRecipientPerHour < 1 || value.MaxPerRecipientPerHour > 10000 {
+		return &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.notification.policy_frequency_invalid"}
+	}
+	if value.DedupeWindowSeconds < 0 || value.DedupeWindowSeconds > 86400 {
+		return &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.notification.policy_dedupe_invalid"}
+	}
+	if _, err := time.LoadLocation(value.Timezone); err != nil {
+		return &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.notification.policy_timezone_invalid"}
+	}
+	for _, clock := range []string{value.QuietStart, value.QuietEnd} {
+		if _, err := time.Parse("15:04", clock); err != nil {
+			return &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.notification.policy_quiet_hours_invalid"}
+		}
+	}
+	return nil
 }
 func (a *notificationHTTPApplication) ListRecipientPreferences(ctx context.Context, p principalmodel.Principal) ([]notificationmodel.NotificationRecipientPreference, error) {
 	if err := notificationHTTPAuthorize(p); err != nil {

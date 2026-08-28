@@ -8,7 +8,6 @@ import (
 	manifestprojection "github.com/domainry/domainry-runtime/runtime/domain/manifest/projection"
 	manifestrepository "github.com/domainry/domainry-runtime/runtime/domain/manifest/repository"
 	notificationmodel "github.com/domainry/domainry-runtime/runtime/domain/notification/model"
-	notificationprojection "github.com/domainry/domainry-runtime/runtime/domain/notification/projection"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -56,9 +55,19 @@ func (s *MetadataRuntimeRestorationApplicationService) Restore(ctx context.Conte
 	if err = validateInstalledActionAuthorization(installed, persisted); err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
-	restored := manifestprojection.MergeInstalledEnvelope(persisted, installed, notificationprojection.ActivePublishedTemplates(records))
+	restored := manifestprojection.MergeInstalledEnvelope(persisted, installed, activePublishedNotificationTemplates(records))
 	if err = s.manifest.SyncManifestStorage(ctx, restored); err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
 	return restored, nil
+}
+
+func activePublishedNotificationTemplates(records []notificationmodel.NotificationTemplateRecord) []notificationmodel.NotificationTemplate {
+	result := make([]notificationmodel.NotificationTemplate, 0, len(records))
+	for _, record := range records {
+		if record.Status == "active" && record.Published != nil {
+			result = append(result, *record.Published)
+		}
+	}
+	return result
 }
