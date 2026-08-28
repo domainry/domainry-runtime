@@ -14,7 +14,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-const CurrentRuntimeSchemaVersion = "010_external_identity_ownership"
+const CurrentRuntimeSchemaVersion = "011_notification_saas_publication_outbox"
 
 const (
 	managedDatabaseCohortTable           = "_domainry_managed_runtime_database_cohort"
@@ -22,7 +22,7 @@ const (
 )
 
 func SupportedRuntimeSchemaUpgradeVersions() []string {
-	return []string{"001_connector_runtime_lifecycle", "002_data_lifecycle_governance", "003_operations_reliability", "004_runtime_release_cohort", "005_identity_workforce_separation", "006_party_foundation", "007_identity_global_names", "008_identity_account_directory", "009_managed_database_cohort"}
+	return []string{"001_connector_runtime_lifecycle", "002_data_lifecycle_governance", "003_operations_reliability", "004_runtime_release_cohort", "005_identity_workforce_separation", "006_party_foundation", "007_identity_global_names", "008_identity_account_directory", "009_managed_database_cohort", "010_external_identity_ownership"}
 }
 
 func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {

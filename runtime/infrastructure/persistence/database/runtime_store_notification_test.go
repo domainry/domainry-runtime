@@ -30,3 +30,18 @@ func TestRuntimeStoreBindsOneNotificationTransactionPublisher(t *testing.T) {
 		t.Fatal("Notification transaction publisher was rebound")
 	}
 }
+
+func TestRuntimeStoreBindsExactlyOneNotificationPublicationTopology(t *testing.T) {
+	scope := NotificationSaaSPublicationScope{TenantID: "tenant-a", WorkspaceID: "workspace-a", ApplicationKey: "runtime-a"}
+	store := &RuntimeStore{}
+	if err := store.BindNotificationSaaSPublications(scope); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := store.NotificationSaaSPublications()
+	if !ok || got != scope {
+		t.Fatalf("scope=%+v ok=%v", got, ok)
+	}
+	if err := store.BindNotificationTransactions(notificationTransactionsStub{}); err == nil {
+		t.Fatal("Module transaction publisher was accepted beside SaaS outbox")
+	}
+}

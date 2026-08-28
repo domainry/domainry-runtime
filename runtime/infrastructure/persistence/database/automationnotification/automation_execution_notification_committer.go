@@ -87,8 +87,8 @@ func (s AutomationExecutionNotificationCommitter) committed(ctx context.Context,
 	if found {
 		executionCount = 1
 	}
-	eventQuery := "SELECT COUNT(*) FROM " + s.store.TableIdentifier("notification_events") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("source") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("source_event_id") + " = " + s.store.Placeholder(3)
-	if err := s.store.DB().QueryRowContext(ctx, eventQuery, execution.WorkspaceID, event.Source, event.SourceEventID).Scan(&eventCount); err != nil {
+	eventCount, err = s.notifications.CommittedCount(ctx, event)
+	if err != nil {
 		return false, fmt.Errorf("inspect automation notification replay: %w", err)
 	}
 	if executionCount == 1 && eventCount == 1 {

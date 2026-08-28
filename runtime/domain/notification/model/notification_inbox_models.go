@@ -109,6 +109,11 @@ type NotificationEvent struct {
 	FencingToken         int64                                `json:"fencing_token"`
 	CreatedAt            string                               `json:"created_at"`
 	UpdatedAt            string                               `json:"updated_at"`
+	// PublicationIntent is the source-owned producer envelope carried only
+	// between compilation and the enclosing business transaction. It is never
+	// serialized as a Notification-owned event. Module mode persists Event;
+	// SaaS mode persists this exact intent in Runtime's publication outbox.
+	PublicationIntent *NotificationIntent `json:"-"`
 }
 
 // NotificationEventFailure is append-only, non-sensitive processing evidence.

@@ -44,7 +44,12 @@ func (s *NotificationApplicationService) CompileInboxIntent(value notificationmo
 		return notificationmodel.NotificationEvent{}, &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.system_scope_required", Err: err}
 	}
 	compiled, err := s.inboxCompiler.Compile(moduleInboxIntent(value))
-	return planeInboxEvent(compiled), mapNotificationModuleError(err)
+	event := planeInboxEvent(compiled)
+	if err == nil {
+		intent := value
+		event.PublicationIntent = &intent
+	}
+	return event, mapNotificationModuleError(err)
 }
 
 func (s *NotificationApplicationService) ProcessDueInboxEvents(ctx context.Context, limit int, scope principalmodel.SystemScope) (int, error) {

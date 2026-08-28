@@ -46,5 +46,11 @@ func (c *ModuleCompiler) CompileInboxIntent(value runtimemodel.NotificationInten
 	if err != nil {
 		return runtimemodel.NotificationEvent{}, mapError(err)
 	}
-	return convert[runtimemodel.NotificationEvent](event)
+	converted, err := convert[runtimemodel.NotificationEvent](event)
+	if err != nil {
+		return runtimemodel.NotificationEvent{}, err
+	}
+	intent := value
+	converted.PublicationIntent = &intent
+	return converted, nil
 }

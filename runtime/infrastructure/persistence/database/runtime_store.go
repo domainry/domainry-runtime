@@ -47,9 +47,40 @@ type RuntimeStore struct {
 	workerWakeups        *workerplatform.WakeupBroker
 	notificationMu       sync.RWMutex
 	notificationTx       modulehost.TransactionalPublisher
+	notificationSaaS     *NotificationSaaSPublicationScope
 	schemaAssembler      runtimeSchemaAssembler
 	backupChecksum       func(string) (string, error)
 	migrationReadDir     func(string) ([]os.DirEntry, error)
+}
+
+type NotificationSaaSPublicationScope struct {
+	TenantID, WorkspaceID, ApplicationKey string
+}
+
+func (s *RuntimeStore) BindNotificationSaaSPublications(scope NotificationSaaSPublicationScope) error {
+	if s == nil || strings.TrimSpace(scope.TenantID) == "" || strings.TrimSpace(scope.WorkspaceID) == "" || strings.TrimSpace(scope.ApplicationKey) == "" {
+		return fmt.Errorf("Notification SaaS publication scope is required")
+	}
+	s.notificationMu.Lock()
+	defer s.notificationMu.Unlock()
+	if s.notificationTx != nil || s.notificationSaaS != nil {
+		return fmt.Errorf("Notification publication transaction boundary is already bound")
+	}
+	value := scope
+	s.notificationSaaS = &value
+	return nil
+}
+
+func (s *RuntimeStore) NotificationSaaSPublications() (NotificationSaaSPublicationScope, bool) {
+	if s == nil {
+		return NotificationSaaSPublicationScope{}, false
+	}
+	s.notificationMu.RLock()
+	defer s.notificationMu.RUnlock()
+	if s.notificationSaaS == nil {
+		return NotificationSaaSPublicationScope{}, false
+	}
+	return *s.notificationSaaS, true
 }
 
 // BindNotificationTransactions installs the embedded Notification transaction
@@ -62,7 +93,7 @@ func (s *RuntimeStore) BindNotificationTransactions(publisher modulehost.Transac
 	}
 	s.notificationMu.Lock()
 	defer s.notificationMu.Unlock()
-	if s.notificationTx != nil {
+	if s.notificationTx != nil || s.notificationSaaS != nil {
 		return fmt.Errorf("Notification transaction publisher is already bound")
 	}
 	s.notificationTx = publisher

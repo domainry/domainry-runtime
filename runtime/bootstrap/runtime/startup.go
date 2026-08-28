@@ -379,7 +379,12 @@ func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Con
 			if !found || notificationWorkers == nil {
 				mustCompleteRuntimeStartup(errors.New("Notification Module Binding returned no local workers"))
 			}
-		} else if notificationBinding.Descriptor().Mode != notificationsdk.DeploymentModeSaaS {
+		} else if notificationBinding.Descriptor().Mode == notificationsdk.DeploymentModeSaaS {
+			mustCompleteRuntimeStartup(store.BindNotificationSaaSPublications(persistence.NotificationSaaSPublicationScope{
+				TenantID: cfg.NotificationTenantID, WorkspaceID: cfg.NotificationWorkspaceID, ApplicationKey: cfg.NotificationApplicationKey,
+			}))
+			notificationCompiler = notificationfacade.SaaSCompiler{}
+		} else {
 			mustCompleteRuntimeStartup(fmt.Errorf("unsupported Notification deployment mode %q", notificationBinding.Descriptor().Mode))
 		}
 		facade, facadeErr := notificationfacade.New(notificationBinding, notificationActionAuthorizers.Authorize)

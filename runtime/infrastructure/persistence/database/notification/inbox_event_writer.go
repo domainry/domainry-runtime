@@ -14,6 +14,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	transactioncontract "github.com/domainry/domainry-runtime/runtime/domain/transaction/contract"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	notificationpublication "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
 	"github.com/domainry/domainry-runtime/runtime/platform/mutation"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
@@ -27,6 +28,18 @@ func NewInboxEventWriter(store *database.RuntimeStore) InboxEventWriter {
 }
 
 func (w InboxEventWriter) InsertEventTx(ctx context.Context, executor notificationsql.Executor, value notificationmodel.NotificationEvent) error {
+	if _, saas := w.runtimeStore.NotificationSaaSPublications(); saas {
+		if value.PublicationIntent == nil {
+			return fmt.Errorf("Notification SaaS publication intent is unavailable for event %q", value.ID)
+		}
+		if err := notificationpublication.NewStore(w.runtimeStore).InsertIntentTx(ctx, executor, *value.PublicationIntent); err != nil {
+			return err
+		}
+		if transactioncontract.ActiveTransaction(ctx) {
+			return w.registerSaaSAfterCommit(ctx, *value.PublicationIntent)
+		}
+		return nil
+	}
 	if transactions := w.runtimeStore.NotificationTransactions(); transactions != nil {
 		encoded, err := json.Marshal(value)
 		if err != nil {
@@ -57,6 +70,16 @@ func (w InboxEventWriter) InsertEventTx(ctx context.Context, executor notificati
 	return nil
 }
 
+func (w InboxEventWriter) registerSaaSAfterCommit(ctx context.Context, intent notificationmodel.NotificationIntent) error {
+	return transactioncontract.RegisterAfterCommit(ctx, transactioncontract.AfterCommitHook{Name: "wake Notification SaaS publication " + intent.ID, Purpose: transactioncontract.AfterCommitDurableWorkWakeup, DurableRecovery: true, Run: func(context.Context) error {
+		workspace, err := principalmodel.NewWorkspaceID(intent.WorkspaceID)
+		if err == nil && w.runtimeStore != nil {
+			w.runtimeStore.WorkerWakeups().Publish(workerplatform.DurableTaskLocator{QueueKind: "notification_publication", WorkspaceID: workspace.String(), TaskID: strings.TrimSpace(intent.ID)})
+		}
+		return nil
+	}})
+}
+
 func (w InboxEventWriter) registerAfterCommit(ctx context.Context, event notificationmodel.NotificationEvent) error {
 	return transactioncontract.RegisterAfterCommit(ctx, transactioncontract.AfterCommitHook{Name: "wake notification inbox " + event.ID, Purpose: transactioncontract.AfterCommitDurableWorkWakeup, DurableRecovery: true, Run: func(context.Context) error { w.PublishCommittedEventWakeup(event); return nil }})
 }
@@ -66,7 +89,26 @@ func (w InboxEventWriter) PublishCommittedEventWakeup(event notificationmodel.No
 	if w.runtimeStore == nil || err != nil || strings.TrimSpace(event.ID) == "" {
 		return
 	}
-	w.runtimeStore.WorkerWakeups().Publish(workerplatform.DurableTaskLocator{QueueKind: "notification_inbox", WorkspaceID: workspace.String(), TaskID: strings.TrimSpace(event.ID)})
+	queue := "notification_inbox"
+	if _, saas := w.runtimeStore.NotificationSaaSPublications(); saas {
+		queue = "notification_publication"
+	}
+	w.runtimeStore.WorkerWakeups().Publish(workerplatform.DurableTaskLocator{QueueKind: queue, WorkspaceID: workspace.String(), TaskID: strings.TrimSpace(event.ID)})
+}
+
+func (w InboxEventWriter) CommittedCount(ctx context.Context, event notificationmodel.NotificationEvent) (int, error) {
+	if w.runtimeStore == nil {
+		return 0, fmt.Errorf("Notification publication store is required")
+	}
+	var count int
+	if scope, saas := w.runtimeStore.NotificationSaaSPublications(); saas {
+		query := "SELECT COUNT(*) FROM " + w.runtimeStore.TableIdentifier("notification_publication_outbox") + " WHERE " + w.runtimeStore.Identifier("tenant_id") + " = " + w.runtimeStore.Placeholder(1) + " AND " + w.runtimeStore.Identifier("workspace_id") + " = " + w.runtimeStore.Placeholder(2) + " AND " + w.runtimeStore.Identifier("application_key") + " = " + w.runtimeStore.Placeholder(3) + " AND " + w.runtimeStore.Identifier("source_event_id") + " = " + w.runtimeStore.Placeholder(4)
+		err := w.runtimeStore.DB().QueryRowContext(ctx, query, scope.TenantID, event.WorkspaceID, scope.ApplicationKey, event.SourceEventID).Scan(&count)
+		return count, err
+	}
+	query := "SELECT COUNT(*) FROM " + w.runtimeStore.TableIdentifier("notification_events") + " WHERE " + w.runtimeStore.Identifier("workspace_id") + " = " + w.runtimeStore.Placeholder(1) + " AND " + w.runtimeStore.Identifier("source") + " = " + w.runtimeStore.Placeholder(2) + " AND " + w.runtimeStore.Identifier("source_event_id") + " = " + w.runtimeStore.Placeholder(3)
+	err := w.runtimeStore.DB().QueryRowContext(ctx, query, event.WorkspaceID, event.Source, event.SourceEventID).Scan(&count)
+	return count, err
 }
 
 type inboxEventWriterClock struct{}

@@ -37,7 +37,7 @@ func runtimeSchemaLedgerQueries(count int64, checksum string, dirty bool) []data
 
 func TestRuntimeSchemaHelpersAndDatabaseSelection(t *testing.T) {
 	versions := SupportedRuntimeSchemaUpgradeVersions()
-	if len(versions) != 9 || versions[0] != "001_connector_runtime_lifecycle" || versions[8] != "009_managed_database_cohort" {
+	if len(versions) != 10 || versions[0] != "001_connector_runtime_lifecycle" || versions[9] != "010_external_identity_ownership" {
 		t.Fatalf("versions=%#v", versions)
 	}
 	store := runtimeSchemaStore(t, &databaseSQLState{})
