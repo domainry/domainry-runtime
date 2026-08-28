@@ -151,7 +151,7 @@ func TestProjectRuntimeOpensOneNotificationModuleBinding(t *testing.T) {
 	handlers.Freeze()
 	connectors := connector.NewRegistry()
 	connectors.Freeze()
-	runtime := NewProjectWithFactoriesAndStore(
+	runtime := NewProjectWithFactoriesAndDatabase(
 		t.Context(), bootstrapTestConfig(t), handlers, connectors,
 		runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{},
 		runtimeIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), nil,

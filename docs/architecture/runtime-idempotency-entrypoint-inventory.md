@@ -5,7 +5,7 @@
 
 Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `optimistic_only`, `not_applicable`.
 
-## HTTP mutation routes (185)
+## HTTP mutation routes (186)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -72,6 +72,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `integrations` | `POST /tenant-admin/integrations/secrets/{secretKey}/rotate` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/integrations/integrations_routes.go` |
 | `integrations` | `POST /tenant-admin/integrations/webhook-subscriptions/publish` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/integrations/integrations_routes.go` |
 | `integrations` | `POST /tenant-admin/integrations/webhook-subscriptions/{subscriptionKey}/disable` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/integrations/integrations_routes.go` |
+| `integrations` | `POST /v1/notification-deliveries:accept` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/integrations/integrations_routes.go` |
 | `integrations` | `PUT /business/notifications/web-push/subscriptions/{subscriptionID}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/integrations/integrations_routes.go` |
 | `integrations` | `PUT /tenant-admin/integrations/connections/{connectionKey}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/integrations/integrations_routes.go` |
 | `integrations` | `PUT /tenant-admin/integrations/external-identities/{identityKey}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/integrations/integrations_routes.go` |
@@ -195,7 +196,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workflows` | `POST /tenant-admin/workflows/{workflowKey}/simulate` | `not_applicable` | none | `runtime/transport/http/workflows/workflows_routes.go` |
 | `workflows` | `POST /tenant-admin/workflows/{workflowKey}/validate` | `not_applicable` | none | `runtime/transport/http/workflows/workflows_routes.go` |
 
-## Application mutation commands (226)
+## Application mutation commands (218)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -293,31 +294,23 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `metadata` | `PublishedSurfaceContext` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/metadata/metadata_surface_use_cases.go` |
 | `metadata` | `Restore` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/metadata/metadata_runtime_restoration_application_service.go` |
 | `metadata` | `UpsertLocalizedText` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/metadata/metadata_schema_application_service.go` |
-| `notification` | `ApprovePublication` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/notification/notification_application_service.go` |
-| `notification` | `BindWorkerWakeups` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/notification/notification_inbox_wakeup.go` |
-| `notification` | `CancelPublication` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/notification/notification_application_service.go` |
-| `notification` | `DeleteInboxSavedView` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notification/notification_inbox_application_service.go` |
-| `notification` | `DeleteMyInboxDelegation` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notification/notification_inbox_application_service.go` |
-| `notification` | `Disable` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notification/notification_application_service.go` |
-| `notification` | `ProcessDueInboxEvents` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/notification/notification_inbox_application_service.go` |
-| `notification` | `ProcessDueNotificationChannels` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/notification/notification_delivery_worker.go` |
-| `notification` | `ProcessDuePublications` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/notification/notification_application_service.go` |
-| `notification` | `ProcessInboxEvent` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/notification/notification_inbox_wakeup.go` |
-| `notification` | `ProcessNotificationChannelPlan` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/notification/notification_delivery_worker.go` |
-| `notification` | `ProcessPublication` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/notification/notification_publication_wakeup.go` |
-| `notification` | `PublishInboxEvent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/notification/notification_inbox_application_service.go` |
-| `notification` | `PublishInboxIntent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/notification/notification_inbox_application_service.go` |
-| `notification` | `RejectPublication` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/notification/notification_application_service.go` |
-| `notification` | `ResolveInboxAction` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/notification/notification_inbox_application_service.go` |
-| `notification` | `RestoreVersionDraft` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/notification/notification_application_service.go` |
-| `notification` | `SaveDeliveryPolicy` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notification/notification_application_service.go` |
-| `notification` | `SaveDraft` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notification/notification_application_service.go` |
-| `notification` | `SaveInboxSavedView` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notification/notification_inbox_application_service.go` |
-| `notification` | `SaveMyInboxDelegation` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notification/notification_inbox_application_service.go` |
-| `notification` | `SaveMyNotificationPreference` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notification/notification_inbox_application_service.go` |
-| `notification` | `SaveRecipientPreference` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notification/notification_application_service.go` |
-| `notification` | `SetInboxArchived` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notification/notification_inbox_application_service.go` |
-| `notification` | `SetInboxRead` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notification/notification_inbox_application_service.go` |
+| `notificationfacade` | `ApprovePublication` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/notificationfacade/notification_application_service.go` |
+| `notificationfacade` | `CancelPublication` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/notificationfacade/notification_application_service.go` |
+| `notificationfacade` | `DeleteInboxSavedView` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notificationfacade/notification_inbox_application.go` |
+| `notificationfacade` | `DeleteMyInboxDelegation` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notificationfacade/notification_inbox_application.go` |
+| `notificationfacade` | `Disable` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notificationfacade/notification_application_service.go` |
+| `notificationfacade` | `PublishInboxIntent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/notificationfacade/notification_application_service.go` |
+| `notificationfacade` | `RejectPublication` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/notificationfacade/notification_application_service.go` |
+| `notificationfacade` | `ResolveInboxAction` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/notificationfacade/notification_inbox_application.go` |
+| `notificationfacade` | `RestoreVersionDraft` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/notificationfacade/notification_application_service.go` |
+| `notificationfacade` | `SaveDeliveryPolicy` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notificationfacade/notification_application_service.go` |
+| `notificationfacade` | `SaveDraft` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notificationfacade/notification_application_service.go` |
+| `notificationfacade` | `SaveInboxSavedView` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notificationfacade/notification_inbox_application.go` |
+| `notificationfacade` | `SaveMyInboxDelegation` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notificationfacade/notification_inbox_application.go` |
+| `notificationfacade` | `SaveMyNotificationPreference` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notificationfacade/notification_inbox_application.go` |
+| `notificationfacade` | `SaveRecipientPreference` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notificationfacade/notification_application_service.go` |
+| `notificationfacade` | `SetInboxArchived` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notificationfacade/notification_inbox_application.go` |
+| `notificationfacade` | `SetInboxRead` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notificationfacade/notification_inbox_application.go` |
 | `operations` | `ApplyBulkDeadLetters` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/operations/operations_bulk_application_service.go` |
 | `operations` | `DisableBreakGlass` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/operations/operations_break_glass_application_service.go` |
 | `operations` | `EnableBreakGlass` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/operations/operations_break_glass_application_service.go` |
