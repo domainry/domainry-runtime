@@ -2,11 +2,12 @@ package query
 
 import (
 	"fmt"
-
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 	"sort"
 	"strings"
+
+	ormbuilder "github.com/domainry/domainry-orm/builder"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
@@ -315,22 +316,27 @@ func inClause(s Store, field string, values []string, args *[]any) string {
 }
 
 func BuildOrder(s Store, query recordmodel.RecordListQuery) string {
-	parts := []string{}
+	orders := make([]ormbuilder.Order, 0, len(query.Sort)+1)
 	hasStableID := false
 	for _, rule := range query.Sort {
 		direction := strings.ToUpper(strings.TrimSpace(rule.Direction))
-		if direction != "DESC" {
-			direction = "ASC"
+		if direction == "DESC" {
+			orders = append(orders, ormbuilder.Descending(rule.Field))
+		} else {
+			orders = append(orders, ormbuilder.Ascending(rule.Field))
 		}
-		parts = append(parts, s.Identifier(rule.Field)+" "+direction)
 		hasStableID = hasStableID || strings.TrimSpace(rule.Field) == "id"
 	}
-	if len(parts) == 0 {
-		parts = append(parts, s.Identifier("id")+" ASC")
+	if len(orders) == 0 {
+		orders = append(orders, ormbuilder.Ascending("id"))
 	} else if !hasStableID {
-		parts = append(parts, s.Identifier("id")+" ASC")
+		orders = append(orders, ormbuilder.Ascending("id"))
 	}
-	return " ORDER BY " + strings.Join(parts, ", ")
+	prepared, err := ormbuilder.PrepareOrderBy(storeRenderer{s}, orders...)
+	if err != nil {
+		return ""
+	}
+	return " " + prepared
 }
 
 func splitFilterKey(key string) (string, string, bool) {
