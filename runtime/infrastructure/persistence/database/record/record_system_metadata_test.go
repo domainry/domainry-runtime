@@ -38,6 +38,45 @@ func TestRecordStorePersistsORMSystemMetadata(t *testing.T) {
 	}
 }
 
+func TestRecordStoreDoesNotWriteSystemColumnsFromBusinessData(t *testing.T) {
+	store := openRuntimeStore(t)
+	if _, err := store.DB().Exec(`CREATE TABLE system_metadata_ownership (
+		workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+		deleted BOOLEAN NOT NULL DEFAULT FALSE, ext_info TEXT NOT NULL DEFAULT '{}',
+		create_user_id TEXT, update_user_id TEXT, name TEXT, UNIQUE (workspace_id, id)
+	)`); err != nil {
+		t.Fatal(err)
+	}
+	repository := NewRecordStore(store)
+	object := definitionmodel.ObjectSchema{Key: "system_metadata_ownership", Fields: []definitionmodel.FieldSchema{
+		{Key: "workspace_id", Type: "text"}, {Key: "id", Type: "text"},
+		{Key: "created_at", Type: "datetime"}, {Key: "updated_at", Type: "datetime"},
+		{Key: "deleted", Type: "boolean"}, {Key: "ext_info", Type: "json"},
+		{Key: "create_user_id", Type: "text"}, {Key: "update_user_id", Type: "text"},
+		{Key: "name", Type: "text"},
+	}}
+	want := recordmodel.Record{
+		ID: "record-1", CreatedAt: "created", UpdatedAt: "updated",
+		ExtInfo: map[string]any{"owner": "record"}, CreateUserID: "creator", UpdateUserID: "updater",
+		Data: map[string]any{
+			"workspace_id": "attacker-workspace", "id": "attacker-id",
+			"created_at": "attacker-created", "updated_at": "attacker-updated", "deleted": true,
+			"ext_info": map[string]any{"owner": "data"}, "create_user_id": "attacker", "update_user_id": "attacker",
+			"name": "kept",
+		},
+	}
+	if err := repository.InsertRecord(t.Context(), "workspace-a", object, want); err != nil {
+		t.Fatal(err)
+	}
+	got, found, err := repository.GetRecord(t.Context(), "workspace-a", object, want.ID)
+	if err != nil || !found {
+		t.Fatalf("get record: found=%v err=%v", found, err)
+	}
+	if got.ID != want.ID || got.WorkspaceID != "workspace-a" || got.CreatedAt != "created" || got.UpdatedAt != "updated" || got.Deleted || got.CreateUserID != "creator" || got.UpdateUserID != "updater" || got.ExtInfo["owner"] != "record" || got.Data["name"] != "kept" {
+		t.Fatalf("business data overrode ORM system columns: %#v", got)
+	}
+}
+
 func TestRecordStoreUpdatesORMSystemMetadata(t *testing.T) {
 	store := openRuntimeStore(t)
 	if _, err := store.DB().Exec(`CREATE TABLE system_metadata_update (

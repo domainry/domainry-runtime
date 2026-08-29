@@ -305,6 +305,9 @@ func (r RecordStore) InsertRecord(ctx context.Context, workspaceID string, objec
 		return err
 	}
 	for _, field := range object.Fields {
+		if recordFieldIsSystemOwned(field.Key) {
+			continue
+		}
 		if value, ok := record.Data[field.Key]; ok {
 			columns = append(columns, field.Key)
 			values = append(values, dbFieldValue(s.Driver(), field, value))
@@ -330,6 +333,9 @@ func (r RecordStore) UpdateRecord(ctx context.Context, workspaceID string, objec
 		return err
 	}
 	for _, field := range object.Fields {
+		if recordFieldIsSystemOwned(field.Key) {
+			continue
+		}
 		if value, ok := record.Data[field.Key]; ok {
 			assignments = append(assignments, s.Identifier(field.Key)+" = "+s.Placeholder(len(values)+1))
 			values = append(values, dbFieldValue(s.Driver(), field, value))
@@ -356,6 +362,9 @@ func (r RecordStore) UpdateRecordWhere(ctx context.Context, workspaceID string, 
 		return false, err
 	}
 	for _, field := range object.Fields {
+		if recordFieldIsSystemOwned(field.Key) {
+			continue
+		}
 		if value, ok := record.Data[field.Key]; ok {
 			assignments = append(assignments, s.Identifier(field.Key)+" = "+s.Placeholder(len(values)+1))
 			values = append(values, dbFieldValue(s.Driver(), field, value))
@@ -501,6 +510,9 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 			return metadataErr
 		}
 		for _, field := range commit.Object.Fields {
+			if recordFieldIsSystemOwned(field.Key) {
+				continue
+			}
 			if value, ok := commit.Record.Data[field.Key]; ok {
 				columns = append(columns, field.Key)
 				values = append(values, dbFieldValue(s.Driver(), field, value))
@@ -517,6 +529,9 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 			return metadataErr
 		}
 		for _, field := range commit.Object.Fields {
+			if recordFieldIsSystemOwned(field.Key) {
+				continue
+			}
 			if value, ok := commit.Record.Data[field.Key]; ok {
 				assignments = append(assignments, s.Identifier(field.Key)+" = "+s.Placeholder(len(values)+1))
 				values = append(values, dbFieldValue(s.Driver(), field, value))
@@ -1052,6 +1067,11 @@ func stringsJoinIdentifiers(store *database.RuntimeStore, columns ...string) str
 		values = append(values, store.Identifier(column))
 	}
 	return strings.Join(values, ", ")
+}
+
+func recordFieldIsSystemOwned(fieldKey string) bool {
+	_, owned := ormbuilder.RecordSystemColumn(fieldKey)
+	return owned
 }
 
 func appendRecordInsertMetadata(columns []string, values []any, record recordmodel.Record) ([]string, []any, error) {

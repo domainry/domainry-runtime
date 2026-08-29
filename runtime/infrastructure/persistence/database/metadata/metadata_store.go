@@ -228,6 +228,9 @@ func (r MetadataStore) ensureObjectStorage(ctx context.Context, object definitio
 		}
 		existing["workspace_id"] = true
 	}
+	if !existing["id"] {
+		return fmt.Errorf("object %s is missing required Record system column id", object.Key)
+	}
 	for _, columnName := range []string{"deleted", "ext_info", "create_user_id", "update_user_id"} {
 		if existing[columnName] {
 			continue
