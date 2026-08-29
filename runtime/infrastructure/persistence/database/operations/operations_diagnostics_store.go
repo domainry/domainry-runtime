@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/domainry/domainry-foundation/pagination"
 	ormbuilder "github.com/domainry/domainry-orm/builder"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationsrepository "github.com/domainry/domainry-runtime/runtime/domain/operations/repository"
@@ -75,23 +76,13 @@ func (s OperationsStore) operationsLeaseDiagnostics(ctx context.Context, request
 	if err != nil {
 		return diagnosticFailure("backend.operations.diagnostics.lease_unavailable")
 	}
-	start := (request.Page - 1) * request.PageSize
-	if start > len(snapshot.Owners) {
-		start = len(snapshot.Owners)
-	}
-	end := start + request.PageSize
-	if end > len(snapshot.Owners) {
-		end = len(snapshot.Owners)
-	}
+	page := pagination.NewNumbered(request.Page, request.PageSize, pagination.NumberedOptions{DefaultPageSize: 1})
+	owners, window := pagination.SliceNumbered(page, snapshot.Owners)
 	items := []map[string]any{}
-	for _, owner := range snapshot.Owners[start:end] {
+	for _, owner := range owners {
 		items = append(items, map[string]any{"owner": owner.Owner, "live": owner.Live, "expired": owner.Expired})
 	}
-	next := 0
-	if end < len(snapshot.Owners) {
-		next = request.Page + 1
-	}
-	return operationsmodel.OperationsDiagnosticsSection{Status: "ready", Summary: map[string]any{"instance_id": request.InstanceID, "live": snapshot.Live, "expired": snapshot.Expired}, Items: items, NextPage: next, RunbookURL: "/operations/runbooks/worker-lease"}
+	return operationsmodel.OperationsDiagnosticsSection{Status: "ready", Summary: map[string]any{"instance_id": request.InstanceID, "live": snapshot.Live, "expired": snapshot.Expired}, Items: items, NextPage: window.NextPage, RunbookURL: "/operations/runbooks/worker-lease"}
 }
 
 type operationsQueueSpec struct {

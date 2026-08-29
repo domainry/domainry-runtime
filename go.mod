@@ -6,7 +6,7 @@ toolchain go1.26.6
 
 require (
 	github.com/domainry/domainry-connector-sdk v0.1.0-dev.12
-	github.com/domainry/domainry-foundation v0.1.0-dev.3
+	github.com/domainry/domainry-foundation v0.1.0-dev.5
 	github.com/domainry/domainry-identity-sdk v0.1.0-dev8
 	github.com/domainry/domainry-monitoring v0.0.0
 	github.com/domainry/domainry-monitoring-sdk v0.0.0
