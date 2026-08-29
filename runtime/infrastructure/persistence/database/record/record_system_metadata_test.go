@@ -37,3 +37,35 @@ func TestRecordStorePersistsORMSystemMetadata(t *testing.T) {
 		t.Fatalf("system metadata leaked into business data: %#v", got.Data)
 	}
 }
+
+func TestRecordStoreUpdatesORMSystemMetadata(t *testing.T) {
+	store := openRuntimeStore(t)
+	if _, err := store.DB().Exec(`CREATE TABLE system_metadata_update (
+		workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+		deleted BOOLEAN NOT NULL DEFAULT FALSE, ext_info TEXT NOT NULL DEFAULT '{}',
+		create_user_id TEXT, update_user_id TEXT, name TEXT, UNIQUE (workspace_id, id)
+	)`); err != nil {
+		t.Fatal(err)
+	}
+	repository := NewRecordStore(store)
+	object := definitionmodel.ObjectSchema{Key: "system_metadata_update", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
+	seed := recordmodel.Record{ID: "record-1", CreatedAt: "v1", UpdatedAt: "v1", CreateUserID: "creator", UpdateUserID: "creator", Data: map[string]any{"name": "before"}}
+	if err := repository.InsertRecord(t.Context(), "workspace-a", object, seed); err != nil {
+		t.Fatal(err)
+	}
+	seed.UpdatedAt = "v2"
+	seed.Deleted = true
+	seed.UpdateUserID = "deleter"
+	seed.ExtInfo = map[string]any{"reason": "retired"}
+	seed.Data["name"] = "after"
+	if err := repository.UpdateRecord(t.Context(), "workspace-a", object, seed); err != nil {
+		t.Fatal(err)
+	}
+	got, found, err := repository.GetRecord(t.Context(), "workspace-a", object, seed.ID)
+	if err != nil || !found {
+		t.Fatalf("get updated record: found=%v err=%v", found, err)
+	}
+	if !got.Deleted || got.CreateUserID != "creator" || got.UpdateUserID != "deleter" || got.ExtInfo["reason"] != "retired" {
+		t.Fatalf("updated system metadata mismatch: %#v", got)
+	}
+}

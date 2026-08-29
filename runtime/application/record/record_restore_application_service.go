@@ -175,6 +175,8 @@ func (s *RecordRestoreApplicationService) planRestore(ctx context.Context, objec
 	}
 	record.Data = nextData
 	record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	record.Deleted = false
+	record.UpdateUserID = principal.UserID
 	if expectedUpdatedAt == "" {
 		expectedUpdatedAt = readRevision
 	}

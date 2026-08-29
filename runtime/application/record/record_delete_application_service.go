@@ -220,6 +220,8 @@ func (s *RecordDeleteApplicationService) planSoftDelete(ctx context.Context, obj
 	}
 	record.Data = nextData
 	record.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
+	record.Deleted = true
+	record.UpdateUserID = principal.UserID
 	if expectedUpdatedAt == "" {
 		expectedUpdatedAt = readRevision
 	}

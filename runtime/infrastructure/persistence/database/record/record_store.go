@@ -2,6 +2,7 @@
 package record
 
 import (
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
@@ -324,7 +325,7 @@ func (r RecordStore) UpdateRecord(ctx context.Context, workspaceID string, objec
 	s := r.store
 	assignments := []string{s.Identifier("updated_at") + " = " + s.Placeholder(1)}
 	values := []any{record.UpdatedAt}
-	assignments, values, err = appendRecordUpdateMetadata(s, assignments, values, record)
+	assignments, values, err = appendRecordUpdateMetadata(s, assignments, values, record, record.Deleted)
 	if err != nil {
 		return err
 	}
@@ -350,7 +351,7 @@ func (r RecordStore) UpdateRecordWhere(ctx context.Context, workspaceID string, 
 	s := r.store
 	assignments := []string{s.Identifier("updated_at") + " = " + s.Placeholder(1)}
 	values := []any{record.UpdatedAt}
-	assignments, values, err = appendRecordUpdateMetadata(s, assignments, values, record)
+	assignments, values, err = appendRecordUpdateMetadata(s, assignments, values, record, record.Deleted)
 	if err != nil {
 		return false, err
 	}
@@ -511,7 +512,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 	case "update", "restore":
 		assignments := []string{s.Identifier("updated_at") + " = " + s.Placeholder(1)}
 		values := []any{commit.Record.UpdatedAt}
-		assignments, values, metadataErr := appendRecordUpdateMetadata(s, assignments, values, commit.Record)
+		assignments, values, metadataErr := appendRecordUpdateMetadata(s, assignments, values, commit.Record, operation == "restore" || commit.Record.Deleted)
 		if metadataErr != nil {
 			return metadataErr
 		}
@@ -1015,8 +1016,11 @@ func recordListProjection(store *database.RuntimeStore, selectFields []string) s
 	if len(selectFields) == 0 {
 		return "*"
 	}
-	fields := []string{"id", "created_at", "updated_at"}
-	seen := map[string]bool{"id": true, "created_at": true, "updated_at": true}
+	fields := ormbuilder.RecordSystemColumnNames()
+	seen := make(map[string]bool, len(fields)+len(selectFields))
+	for _, field := range fields {
+		seen[field] = true
+	}
 	for _, field := range selectFields {
 		if !seen[field] {
 			seen[field] = true
@@ -1070,7 +1074,11 @@ func appendRecordInsertMetadata(columns []string, values []any, record recordmod
 	return columns, values, nil
 }
 
-func appendRecordUpdateMetadata(store *database.RuntimeStore, assignments []string, values []any, record recordmodel.Record) ([]string, []any, error) {
+func appendRecordUpdateMetadata(store *database.RuntimeStore, assignments []string, values []any, record recordmodel.Record, writeDeleted bool) ([]string, []any, error) {
+	if writeDeleted {
+		assignments = append(assignments, store.Identifier("deleted")+" = "+store.Placeholder(len(values)+1))
+		values = append(values, record.Deleted)
+	}
 	if record.ExtInfo != nil {
 		encoded, err := recordExtInfoDBValue(record.ExtInfo)
 		if err != nil {

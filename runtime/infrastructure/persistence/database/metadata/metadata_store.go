@@ -190,9 +190,12 @@ func (r MetadataStore) SyncManifest(ctx context.Context, scope principalmodel.Sy
 func (r MetadataStore) ensureObjectStorage(ctx context.Context, object definitionmodel.ObjectSchema) error {
 	schemaDB := r.schemaDatabase()
 	constraintIndexed := metadataConstraintIndexedFields(object)
-	reserved := make(map[string]bool, len(ormbuilder.RecordSystemColumnNames()))
-	for _, column := range ormbuilder.RecordSystemColumnNames() {
-		reserved[column] = true
+	// Core identity/time columns may be declared by metadata so callers can
+	// query and sort them; they still resolve to the canonical physical columns.
+	// The remaining Record metadata columns are infrastructure-owned and cannot
+	// be redefined as business data.
+	reserved := map[string]bool{
+		"deleted": true, "ext_info": true, "create_user_id": true, "update_user_id": true,
 	}
 	for _, field := range object.Fields {
 		if reserved[strings.TrimSpace(field.Key)] {

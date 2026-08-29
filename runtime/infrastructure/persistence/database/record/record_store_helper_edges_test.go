@@ -185,6 +185,11 @@ func TestRecordMutationPredicateAndQueryProjectionBoundaries(t *testing.T) {
 	if strings.Count(projection, store.store.Identifier("status")) != 1 {
 		t.Fatalf("deduplicated projection=%q", projection)
 	}
+	for _, column := range []string{"workspace_id", "id", "created_at", "updated_at", "deleted", "ext_info", "create_user_id", "update_user_id"} {
+		if strings.Count(projection, store.store.Identifier(column)) != 1 {
+			t.Fatalf("Record system projection %s missing or duplicated: %q", column, projection)
+		}
+	}
 	if options := recordScopeReadTxOptions("postgres"); options == nil || options.Isolation.String() == "Default" {
 		t.Fatalf("postgres read tx options=%#v", options)
 	}
