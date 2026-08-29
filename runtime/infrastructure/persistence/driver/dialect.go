@@ -38,6 +38,9 @@ type EngineProfile interface {
 	MigrationBackupPolicy() MigrationBackupPolicy
 	MigrationRollbackPolicy() MigrationRollbackPolicy
 	AcquireMigrationLock(context.Context, *sql.DB, ormdialect.Renderer, MigrationLockOptions) (MigrationLock, error)
+	WorkspaceRLSSupported() bool
+	ApplyWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) error
+	InspectWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) (WorkspaceRLSStatus, error)
 }
 
 type SchemaQuery struct {
@@ -75,6 +78,17 @@ type MigrationLock struct {
 	Release    func()
 }
 
+type WorkspaceRLSStatus struct {
+	Enabled       bool     `json:"enabled"`
+	Forced        bool     `json:"forced"`
+	RuntimeRole   string   `json:"runtime_role,omitempty"`
+	RoleOwnsTable bool     `json:"role_owns_table"`
+	RoleBypassRLS bool     `json:"role_bypass_rls"`
+	PolicyVersion string   `json:"policy_version,omitempty"`
+	CoveredTables []string `json:"covered_tables,omitempty"`
+	MissingTables []string `json:"missing_tables,omitempty"`
+}
+
 type SchemaDatabase interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
@@ -110,6 +124,13 @@ func (portableEngineProfile) MigrationRollbackPolicy() MigrationRollbackPolicy {
 }
 func (portableEngineProfile) AcquireMigrationLock(context.Context, *sql.DB, ormdialect.Renderer, MigrationLockOptions) (MigrationLock, error) {
 	return MigrationLock{}, fmt.Errorf("database engine does not support migration locking")
+}
+func (portableEngineProfile) WorkspaceRLSSupported() bool { return false }
+func (portableEngineProfile) ApplyWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) error {
+	return nil
+}
+func (portableEngineProfile) InspectWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) (WorkspaceRLSStatus, error) {
+	return WorkspaceRLSStatus{}, nil
 }
 
 var portableProfileRegistry = map[ormdialect.Name]func() EngineProfile{

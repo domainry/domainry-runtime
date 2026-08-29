@@ -1,6 +1,8 @@
 package sqlite
 
 import (
+	"context"
+	"database/sql"
 	"strings"
 
 	ormdialect "github.com/domainry/domainry-orm/dialect"
@@ -8,6 +10,14 @@ import (
 	ormsqlite "github.com/domainry/domainry-orm/sqlite"
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 )
+
+func (engineProfile) WorkspaceRLSSupported() bool { return false }
+func (engineProfile) ApplyWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) error {
+	return nil
+}
+func (engineProfile) InspectWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) (persistencedriver.WorkspaceRLSStatus, error) {
+	return persistencedriver.WorkspaceRLSStatus{}, nil
+}
 
 type engineProfile struct{ ormdriver.Profile }
 
