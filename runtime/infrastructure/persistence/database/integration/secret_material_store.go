@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/secrets"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
@@ -38,13 +39,18 @@ func (r IntegrationConfigStore) PutSecretMaterial(ctx context.Context, workspace
 	if actionExecutor := database.ActionExecutionTransaction(ctx); actionExecutor != nil {
 		executor = actionExecutor
 	}
-	err = executor.QueryRowContext(ctx, "SELECT "+r.store.Identifier("created_at")+" FROM "+r.store.TableIdentifier("integration_secret_materials")+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(1)+" AND "+r.store.Identifier("secret_key")+" = "+r.store.Placeholder(2), workspaceID, secretKey).Scan(&createdAt)
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_secret_materials", workspaceID).
+		Columns("created_at").Where(ormbuilder.Equal("secret_key", secretKey)).Limit(1).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build integration secret material read: %w", buildErr)
+	}
+	err = executor.QueryRowContext(ctx, query, args...).Scan(&createdAt)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("read integration secret material: %w", err)
 	}
 	columns := []string{"id", "workspace_id", "secret_key", "ciphertext", "created_at", "updated_at"}
-	args := []any{"integration_secret_material:" + workspaceID + ":" + secretKey, workspaceID, secretKey, ciphertext, createdAt, now}
-	return r.replaceRow(ctx, "integration_secret_materials", "secret_key", workspaceID, secretKey, columns, args, "integration secret material")
+	replacementValues := []any{"integration_secret_material:" + workspaceID + ":" + secretKey, workspaceID, secretKey, ciphertext, createdAt, now}
+	return r.replaceRow(ctx, "integration_secret_materials", "secret_key", workspaceID, secretKey, columns, replacementValues, "integration secret material")
 }
 
 func (r IntegrationConfigStore) ResolveSecretMaterial(ctx context.Context, workspaceID, secretKey string) (string, error) {
@@ -58,7 +64,12 @@ func (r IntegrationConfigStore) ResolveSecretMaterial(ctx context.Context, works
 	}
 	secretKey = strings.TrimSpace(secretKey)
 	var ciphertext string
-	if err := r.db.QueryRowContext(ctx, "SELECT "+r.store.Identifier("ciphertext")+" FROM "+r.store.TableIdentifier("integration_secret_materials")+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(1)+" AND "+r.store.Identifier("secret_key")+" = "+r.store.Placeholder(2), workspaceID, secretKey).Scan(&ciphertext); err != nil {
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_secret_materials", workspaceID).
+		Columns("ciphertext").Where(ormbuilder.Equal("secret_key", secretKey)).Limit(1).Build()
+	if buildErr != nil {
+		return "", fmt.Errorf("build integration secret material resolution: %w", buildErr)
+	}
+	if err := r.db.QueryRowContext(ctx, query, args...).Scan(&ciphertext); err != nil {
 		return "", fmt.Errorf("resolve integration secret material: %w", err)
 	}
 	return r.decryptSecretMaterial(ctx, workspaceID, secretKey, ciphertext)

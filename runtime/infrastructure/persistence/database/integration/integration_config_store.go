@@ -7,10 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	"strings"
 	"time"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
+	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
@@ -190,11 +191,25 @@ func (r IntegrationConfigStore) createdMetadata(ctx context.Context, table, keyC
 }
 
 func (r IntegrationConfigStore) replaceRow(ctx context.Context, table, keyColumn, workspaceID, key string, columns []string, args []any, label string) error {
+	insertColumns, insertValues, err := workspaceInsertValues(workspaceID, columns, args)
+	if err != nil {
+		return fmt.Errorf("build %s replacement: %w", label, err)
+	}
+	deleteStatement, deleteArgs, err := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, table, workspaceID).
+		Where(ormbuilder.Equal(keyColumn, key)).Build()
+	if err != nil {
+		return fmt.Errorf("build %s replacement delete: %w", label, err)
+	}
+	insertStatement, insertArgs, err := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, table, workspaceID).
+		Columns(insertColumns...).Values(insertValues...).Build()
+	if err != nil {
+		return fmt.Errorf("build %s replacement insert: %w", label, err)
+	}
 	if executor := database.ActionExecutionTransaction(ctx); executor != nil {
-		if _, err := executor.ExecContext(ctx, "DELETE FROM "+r.store.TableIdentifier(table)+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(1)+" AND "+r.store.Identifier(keyColumn)+" = "+r.store.Placeholder(2), workspaceID, key); err != nil {
+		if _, err := executor.ExecContext(ctx, deleteStatement, deleteArgs...); err != nil {
 			return fmt.Errorf("replace %s: %w", label, err)
 		}
-		if _, err := executor.ExecContext(ctx, "INSERT INTO "+r.store.TableIdentifier(table)+" ("+stringsJoinIdentifiers(r.store, columns...)+") VALUES ("+stringsJoinPlaceholders(r.store, len(columns))+")", args...); err != nil {
+		if _, err := executor.ExecContext(ctx, insertStatement, insertArgs...); err != nil {
 			return fmt.Errorf("insert %s: %w", label, err)
 		}
 		return nil
@@ -204,16 +219,35 @@ func (r IntegrationConfigStore) replaceRow(ctx context.Context, table, keyColumn
 		return fmt.Errorf("begin %s upsert: %w", label, err)
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, "DELETE FROM "+r.store.TableIdentifier(table)+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(1)+" AND "+r.store.Identifier(keyColumn)+" = "+r.store.Placeholder(2), workspaceID, key); err != nil {
+	if _, err := tx.ExecContext(ctx, deleteStatement, deleteArgs...); err != nil {
 		return fmt.Errorf("replace %s: %w", label, err)
 	}
-	if _, err := tx.ExecContext(ctx, "INSERT INTO "+r.store.TableIdentifier(table)+" ("+stringsJoinIdentifiers(r.store, columns...)+") VALUES ("+stringsJoinPlaceholders(r.store, len(columns))+")", args...); err != nil {
+	if _, err := tx.ExecContext(ctx, insertStatement, insertArgs...); err != nil {
 		return fmt.Errorf("insert %s: %w", label, err)
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit %s upsert: %w", label, err)
 	}
 	return nil
+}
+
+func workspaceInsertValues(workspaceID string, columns []string, values []any) ([]string, []any, error) {
+	if len(columns) != len(values) {
+		return nil, nil, fmt.Errorf("SQL replacement columns and values differ")
+	}
+	insertColumns := make([]string, 0, len(columns))
+	insertValues := make([]any, 0, len(values))
+	for index, column := range columns {
+		if strings.TrimSpace(column) == "workspace_id" {
+			if fmt.Sprint(values[index]) != workspaceID {
+				return nil, nil, fmt.Errorf("SQL replacement workspace does not match repository workspace")
+			}
+			continue
+		}
+		insertColumns = append(insertColumns, column)
+		insertValues = append(insertValues, values[index])
+	}
+	return insertColumns, insertValues, nil
 }
 
 func (r IntegrationConfigStore) ListWebhookSubscriptions(ctx context.Context, workspaceID, connectorKey, eventType, status string, limit int) ([]integrationmodel.IntegrationWebhookSubscription, error) {
