@@ -44,23 +44,23 @@ type RecordQuery struct {
 	Sorts      []Sort
 	Projection []string
 	Limit      int
-	Offset     int
+	AfterID    string
 }
 
 func (q RecordQuery) Valid() bool {
 	if strings.TrimSpace(q.ObjectKey) == "" {
 		return false
 	}
-	if q.Limit < 0 || q.Offset < 0 || (q.Offset > 0 && (q.Limit == 0 || q.Offset%q.Limit != 0)) {
+	if q.Limit < 0 {
 		return false
 	}
 	switch q.Operation {
 	case QueryGet, QueryGetForUpdate:
-		return strings.TrimSpace(q.RecordID) != "" && len(q.Filters) == 0 && len(q.Sorts) == 0 && len(q.Projection) == 0 && q.Limit == 0 && q.Offset == 0
+		return strings.TrimSpace(q.RecordID) != "" && len(q.Filters) == 0 && len(q.Sorts) == 0 && len(q.Projection) == 0 && q.Limit == 0 && strings.TrimSpace(q.AfterID) == ""
 	case QueryList:
 		return strings.TrimSpace(q.RecordID) == ""
 	case QueryExists, QueryCount:
-		return strings.TrimSpace(q.RecordID) == "" && len(q.Sorts) == 0 && len(q.Projection) == 0 && q.Limit == 0 && q.Offset == 0
+		return strings.TrimSpace(q.RecordID) == "" && len(q.Sorts) == 0 && len(q.Projection) == 0 && q.Limit == 0 && strings.TrimSpace(q.AfterID) == ""
 	default:
 		return false
 	}

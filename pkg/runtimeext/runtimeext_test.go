@@ -72,7 +72,7 @@ func TestHandlerDescriptorRequiresStableIdentityAndContracts(t *testing.T) {
 }
 
 func TestRuntimeextContractIdentityIsCurrent(t *testing.T) {
-	if ContractVersion != "runtimeext-v16" {
+	if ContractVersion != "runtimeext-v17" {
 		t.Fatalf("contract version = %q", ContractVersion)
 	}
 	if got := ComputedContractSHA256(); got != ContractSHA256 {
@@ -179,8 +179,8 @@ func TestPublicExecutionValuesValidateClosedOperations(t *testing.T) {
 	if (RecordQuery{Operation: QueryGet, ObjectKey: "member", RecordID: "member-1", Projection: []string{"name"}}).Valid() {
 		t.Fatal("get query must not silently ignore projection")
 	}
-	if (RecordQuery{Operation: QueryList, ObjectKey: "member", Limit: 10, Offset: 5}).Valid() {
-		t.Fatal("offset that cannot be represented by Runtime page query must be invalid")
+	if !(RecordQuery{Operation: QueryList, ObjectKey: "member", Limit: 10, AfterID: "member-10"}).Valid() {
+		t.Fatal("list query with stable id cursor must be valid")
 	}
 	if (RecordQuery{Operation: QueryCount, ObjectKey: "member", Projection: []string{"name"}}).Valid() {
 		t.Fatal("count query must not silently accept projection")

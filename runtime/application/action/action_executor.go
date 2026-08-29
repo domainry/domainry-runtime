@@ -226,7 +226,6 @@ func (e *businessActionExecution) QueryRecords(ctx context.Context, query runtim
 		if pageSize <= 0 {
 			pageSize = 100
 		}
-		pageNumber := query.Offset/pageSize + 1
 		if query.Operation == runtimeext.QueryExists || query.Operation == runtimeext.QueryCount {
 			pageSize = 1
 		}
@@ -247,7 +246,7 @@ func (e *businessActionExecution) QueryRecords(ctx context.Context, query runtim
 			projection = append(projection, field)
 		}
 		page, err := e.dependencies.ListRecords(ctx, query.ObjectKey, recordmodel.RecordListQuery{
-			Page: pageNumber, PageSize: pageSize, FilterExpression: filterExpression,
+			Page: 1, PageSize: pageSize, AfterID: strings.TrimSpace(query.AfterID), FilterExpression: filterExpression,
 			Sort: sorts, SelectFields: projection,
 		}, authorizationPrincipal)
 		if err != nil {

@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v16"
-	ContractSHA256  = "4e696c65400f83398a9614bb40ad6193d5d1f8625265a2620f5238ae4b8ddfbd"
+	ContractVersion = "runtimeext-v17"
+	ContractSHA256  = "69470bcaed2883bf2a3449ff9d6b56401bde8114d5c0b63feb7925e60a40b975"
 )
 
-const contractSurfaceV16 = `runtimeext-v16
+const contractSurfaceV17 = `runtimeext-v17
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 BusinessHandler.Descriptor()HandlerDescriptor
@@ -45,6 +45,7 @@ BusinessHandlerRegistry.Freeze()
 BusinessHandlerRegistry.Binding(string)(BusinessHandlerBinding,bool)
 BusinessHandlerRegistry.Descriptors()[]HandlerDescriptor
 QueryOperation=get,get_for_update,list,exists,count
+RecordQueryPagination=after_id
 `
 
 // ComputedContractSHA256 returns the canonical public contract identity used
@@ -58,7 +59,7 @@ func ComputedContractSHA256() string {
 		NotificationVariable{}, NotificationIntent{}, NotificationReceipt{},
 	}
 	var surface strings.Builder
-	surface.WriteString(contractSurfaceV16)
+	surface.WriteString(contractSurfaceV17)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
 		surface.WriteString(current.Name())

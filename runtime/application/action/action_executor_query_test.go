@@ -47,7 +47,7 @@ func TestBusinessActionQueryPreservesTypedFilterSortAndProjection(t *testing.T) 
 			}},
 		},
 		Sorts:      []runtimeext.Sort{{Field: "created_at", Direction: "DESC"}},
-		Projection: []string{"status", "member_id"}, Limit: 25, Offset: 50,
+		Projection: []string{"status", "member_id"}, Limit: 25, AfterID: "booking-0",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -59,7 +59,7 @@ func TestBusinessActionQueryPreservesTypedFilterSortAndProjection(t *testing.T) 
 			{Operator: "not", Children: []recordmodel.RecordFilterExpression{{Operator: "eq", Field: "member_id", Value: "member-2"}}},
 		}},
 	}}
-	if captured.Page != 3 || captured.PageSize != 25 || !reflect.DeepEqual(captured.FilterExpression, wantFilter) ||
+	if captured.Page != 1 || captured.PageSize != 25 || captured.AfterID != "booking-0" || !reflect.DeepEqual(captured.FilterExpression, wantFilter) ||
 		!reflect.DeepEqual(captured.Sort, []recordmodel.RecordSortRule{{Field: "created_at", Direction: "desc"}}) ||
 		!reflect.DeepEqual(captured.SelectFields, []string{"status", "member_id"}) {
 		t.Fatalf("captured query=%+v", captured)
