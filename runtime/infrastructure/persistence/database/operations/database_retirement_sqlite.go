@@ -187,6 +187,6 @@ func databaseObjectNames(values []operationsmodel.DatabaseObjectIdentity) []stri
 }
 
 func sameDatabaseEngine(driver string, engine datamigration.Engine) bool {
-	driver = strings.ToLower(strings.TrimSpace(driver))
-	return (engine == datamigration.EngineSQLite && driver == "sqlite") || (engine == datamigration.EnginePostgres && (driver == "postgres" || driver == "pgx")) || (engine == datamigration.EngineMySQL && driver == "mysql")
+	parsed, err := datamigration.ParseEngine(driver)
+	return err == nil && parsed == engine
 }

@@ -90,10 +90,7 @@ func (s *RuntimeStore) RuntimeTableExists(ctx context.Context, table string) (bo
 	return count > 0, nil
 }
 func (s *RuntimeStore) LocalizedTextKeyColumnType() string {
-	if s.Driver() == "mysql" {
-		return "VARCHAR(128)"
-	}
-	return "TEXT"
+	return s.sqlBase().RuntimeEngine.TextKeyColumnType(128)
 }
 func (s *RuntimeStore) RuntimeColumnDefinition(definition string) string {
 	return s.runtimeColumnDefinition(definition)
