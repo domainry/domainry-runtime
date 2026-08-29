@@ -19,6 +19,7 @@ import (
 
 	"strings"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 )
 
@@ -195,7 +196,11 @@ func (s MetadataStore) LoadManifestMetadata(ctx context.Context) (manifestmodel.
 }
 
 func (s MetadataStore) loadMetadataCatalog(ctx context.Context) (map[string]string, error) {
-	rows, err := s.database().QueryContext(ctx, "SELECT "+s.store.Identifier("key")+", "+s.store.Identifier("value")+" FROM "+s.store.TableIdentifier("metadata_catalog"))
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "metadata_catalog").Columns("key", "value").Build()
+	if buildErr != nil {
+		return nil, fmt.Errorf("build metadata catalog load: %w", buildErr)
+	}
+	rows, err := s.database().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("load metadata catalog: %w", err)
 	}
@@ -219,7 +224,11 @@ func (s MetadataStore) loadMetadataCatalog(ctx context.Context) (map[string]stri
 }
 
 func loadMetadataSlice[T any](ctx context.Context, s MetadataStore, table string) ([]T, error) {
-	rows, err := s.database().QueryContext(ctx, "SELECT "+s.store.Identifier("payload_json")+" FROM "+s.store.TableIdentifier(table)+" WHERE "+s.store.Identifier("disabled_at")+" IS NULL ORDER BY "+s.store.Identifier("resource_key")+" ASC")
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, table).Columns("payload_json").Where(ormbuilder.IsNull("disabled_at")).OrderBy(ormbuilder.Ascending("resource_key")).Build()
+	if buildErr != nil {
+		return nil, fmt.Errorf("build %s load: %w", table, buildErr)
+	}
+	rows, err := s.database().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("load %s: %w", table, err)
 	}
