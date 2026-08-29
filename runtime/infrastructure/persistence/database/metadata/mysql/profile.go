@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -70,4 +71,19 @@ func (MetadataStorageProfile) ExactDecimalUpgradeAllowed(current string, field d
 	}
 	normalized := metadatastorage.NormalizePhysicalType(current)
 	return strings.HasPrefix(normalized, "FLOAT") || strings.HasPrefix(normalized, "DOUBLE") || strings.HasPrefix(normalized, "DECIMAL(") || strings.HasPrefix(normalized, "NUMERIC(")
+}
+
+func (MetadataStorageProfile) ExactDecimalPreflightSQL(table, column, target string) string {
+	return "SELECT COUNT(*) FROM " + table + " WHERE " + column + " IS NOT NULL AND " + column + " <> CAST(" + column + " AS " + target + ")"
+}
+
+func (MetadataStorageProfile) ExactDecimalAlterSQL(table string, definitions []string) string {
+	return "ALTER TABLE " + table + " " + strings.Join(definitions, ", ") + ", ALGORITHM=COPY"
+}
+
+func (MetadataStorageProfile) ExactDecimalColumnDefinition(ctx context.Context, queryer metadatastorage.QueryRower, table, column string) (string, sql.NullString, error) {
+	var nullable string
+	var defaultValue sql.NullString
+	err := queryer.QueryRowContext(ctx, "SELECT is_nullable, column_default FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?", table, column).Scan(&nullable, &defaultValue)
+	return nullable, defaultValue, err
 }

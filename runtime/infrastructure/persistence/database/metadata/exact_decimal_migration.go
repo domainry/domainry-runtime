@@ -7,17 +7,18 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	"github.com/shopspring/decimal"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	metadatasqlite "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata/sqlite"
+	metadatastorage "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata/storage"
 )
 
 const metadataExactDecimalMigrationContract = "domainry-metadata-exact-decimal-migration-v1"
@@ -41,6 +42,17 @@ type metadataExactDecimalMigrator interface {
 type sqliteExactDecimalMigrator struct{}
 type postgresExactDecimalMigrator struct{}
 type mysqlExactDecimalMigrator struct{}
+
+type postgresExactDecimalSQLProfile interface {
+	ExactDecimalPreflightSQL(table, column string, scale int) string
+	ExactDecimalAlterSQL(table, column, target string) string
+}
+
+type mysqlExactDecimalSQLProfile interface {
+	ExactDecimalPreflightSQL(table, column, target string) string
+	ExactDecimalAlterSQL(table string, definitions []string) string
+	ExactDecimalColumnDefinition(context.Context, metadatastorage.QueryRower, string, string) (string, sql.NullString, error)
+}
 
 func (sqliteExactDecimalMigrator) Migrate(ctx context.Context, store MetadataStore, migrations []metadataExactDecimalTableMigration) error {
 	return store.migrateSQLiteExactDecimalTables(ctx, migrations)
@@ -108,15 +120,23 @@ func (r MetadataStore) migrateExactDecimalStorage(ctx context.Context, manifest 
 }
 
 func (r MetadataStore) migrateSQLiteExactDecimalTables(ctx context.Context, migrations []metadataExactDecimalTableMigration) error {
+	profile, ok := r.storage.(interface {
+		DisableExactDecimalForeignKeys(context.Context, metadatasqlite.ExactDecimalExecutor) error
+		RestoreExactDecimalForeignKeys(context.Context, metadatasqlite.ExactDecimalExecutor) error
+		VerifyExactDecimalForeignKeys(context.Context, metadatasqlite.ExactDecimalQueryer) error
+	})
+	if !ok {
+		return fmt.Errorf("sqlite exact decimal connection profile is required")
+	}
 	connection, err := r.database().Conn(ctx)
 	if err != nil {
 		return fmt.Errorf("acquire exact decimal migration connection: %w", err)
 	}
 	defer connection.Close()
-	if _, err := connection.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
+	if err := profile.DisableExactDecimalForeignKeys(ctx, connection); err != nil {
 		return fmt.Errorf("disable foreign key enforcement for atomic exact decimal migration: %w", err)
 	}
-	defer connection.ExecContext(context.WithoutCancel(ctx), "PRAGMA foreign_keys = ON")
+	defer profile.RestoreExactDecimalForeignKeys(context.WithoutCancel(ctx), connection)
 	tx, err := connection.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return fmt.Errorf("begin exact decimal migration: %w", err)
@@ -127,16 +147,8 @@ func (r MetadataStore) migrateSQLiteExactDecimalTables(ctx context.Context, migr
 			return err
 		}
 	}
-	foreignKeyRows, err := tx.QueryContext(ctx, "PRAGMA foreign_key_check")
-	if err != nil {
+	if err := profile.VerifyExactDecimalForeignKeys(ctx, tx); err != nil {
 		return fmt.Errorf("verify foreign keys after exact decimal migration: %w", err)
-	}
-	if foreignKeyRows.Next() {
-		foreignKeyRows.Close()
-		return fmt.Errorf("foreign key violation after exact decimal migration")
-	}
-	if err := foreignKeyRows.Close(); err != nil {
-		return err
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit exact decimal migration: %w", err)
@@ -145,6 +157,19 @@ func (r MetadataStore) migrateSQLiteExactDecimalTables(ctx context.Context, migr
 }
 
 func (r MetadataStore) migrateSQLiteExactDecimalTableInTransaction(ctx context.Context, tx *sql.Tx, table string, columns []metadataExactDecimalColumn) error {
+	profile, ok := r.storage.(interface {
+		RewriteExactDecimalDDL(string, map[string]string) (string, string, error)
+		ExactDecimalSchemaArtifacts(context.Context, metadatasqlite.ExactDecimalQueryer, string) ([]string, error)
+		ExactDecimalWritableColumns(context.Context, metadatasqlite.ExactDecimalQueryer, string) ([]string, error)
+		ExactDecimalCreateShadowTableSQL(ormbuilder.Renderer, string, string, string) string
+		ExactDecimalCopySQL(ormbuilder.Renderer, string, string, []string, []string) string
+		ExactDecimalDropTableSQL(ormbuilder.Renderer, string) string
+		ExactDecimalRenameTableSQL(ormbuilder.Renderer, string, string) string
+		ExactDecimalEncodeExpression(ormbuilder.Renderer, string, int, int, string) string
+	})
+	if !ok {
+		return fmt.Errorf("sqlite exact decimal SQL profile is required")
+	}
 	beforeRows, beforeHash, err := r.exactDecimalSourceHash(ctx, tx, table, columns)
 	if err != nil {
 		return fmt.Errorf("preflight exact decimal values for %s: %w", table, err)
@@ -157,20 +182,24 @@ func (r MetadataStore) migrateSQLiteExactDecimalTableInTransaction(ctx context.C
 	if err := tx.QueryRowContext(ctx, "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", table).Scan(&createSQL); err != nil {
 		return fmt.Errorf("load table definition for %s: %w", table, err)
 	}
-	rewrittenBody, suffix, err := rewriteSQLiteExactDecimalDDL(createSQL, columns)
+	targets := make(map[string]string, len(columns))
+	for _, column := range columns {
+		targets[column.field.Key] = column.target
+	}
+	rewrittenBody, suffix, err := profile.RewriteExactDecimalDDL(createSQL, targets)
 	if err != nil {
 		return fmt.Errorf("rewrite table definition for %s: %w", table, err)
 	}
-	artifacts, err := sqliteSchemaArtifacts(ctx, tx, table)
+	artifacts, err := profile.ExactDecimalSchemaArtifacts(ctx, tx, table)
 	if err != nil {
 		return err
 	}
 	temporaryHash := sha256.Sum256([]byte(table + "|" + metadataExactDecimalMigrationContract))
 	temporary := "_domainry_exact_" + hex.EncodeToString(temporaryHash[:])[:12]
-	if _, err := tx.ExecContext(ctx, "CREATE TABLE "+r.store.TableIdentifier(temporary)+" ("+rewrittenBody+")"+suffix); err != nil {
+	if _, err := tx.ExecContext(ctx, profile.ExactDecimalCreateShadowTableSQL(r.store.SQLRenderer, temporary, rewrittenBody, suffix)); err != nil {
 		return fmt.Errorf("create exact decimal shadow table for %s: %w", table, err)
 	}
-	physicalColumns, err := sqliteWritableColumns(ctx, tx, table)
+	physicalColumns, err := profile.ExactDecimalWritableColumns(ctx, tx, table)
 	if err != nil {
 		return err
 	}
@@ -185,9 +214,9 @@ func (r MetadataStore) migrateSQLiteExactDecimalTableInTransaction(ctx context.C
 			selects[index] = r.store.Identifier(key)
 			continue
 		}
-		selects[index] = "runtime_exact_decimal_encode(" + r.store.Identifier(key) + ", " + strconv.Itoa(column.config.Precision) + ", " + strconv.Itoa(int(column.config.Scale)) + ", '" + strings.ReplaceAll(column.config.RoundingMode, "'", "''") + "')"
+		selects[index] = profile.ExactDecimalEncodeExpression(r.store.SQLRenderer, key, column.config.Precision, int(column.config.Scale), column.config.RoundingMode)
 	}
-	insert := "INSERT INTO " + r.store.TableIdentifier(temporary) + " (" + quotedMetadataIdentifiers(r.store, physicalColumns) + ") SELECT " + strings.Join(selects, ", ") + " FROM " + r.store.TableIdentifier(table)
+	insert := profile.ExactDecimalCopySQL(r.store.SQLRenderer, temporary, table, physicalColumns, selects)
 	if _, err := tx.ExecContext(ctx, insert); err != nil {
 		return fmt.Errorf("copy exact decimal rows for %s: %w", table, err)
 	}
@@ -198,10 +227,10 @@ func (r MetadataStore) migrateSQLiteExactDecimalTableInTransaction(ctx context.C
 	if beforeRows != afterRows || canonicalHash != afterHash {
 		return fmt.Errorf("exact decimal migration evidence mismatch for %s", table)
 	}
-	if _, err := tx.ExecContext(ctx, "DROP TABLE "+r.store.TableIdentifier(table)); err != nil {
+	if _, err := tx.ExecContext(ctx, profile.ExactDecimalDropTableSQL(r.store.SQLRenderer, table)); err != nil {
 		return fmt.Errorf("replace exact decimal table %s: %w", table, err)
 	}
-	if _, err := tx.ExecContext(ctx, "ALTER TABLE "+r.store.TableIdentifier(temporary)+" RENAME TO "+r.store.Identifier(table)); err != nil {
+	if _, err := tx.ExecContext(ctx, profile.ExactDecimalRenameTableSQL(r.store.SQLRenderer, temporary, table)); err != nil {
 		return fmt.Errorf("activate exact decimal table %s: %w", table, err)
 	}
 	for _, artifact := range artifacts {
@@ -267,18 +296,22 @@ func (r MetadataStore) migratePostgresExactDecimalTables(ctx context.Context, mi
 }
 
 func (r MetadataStore) migratePostgresExactDecimalTableInTransaction(ctx context.Context, tx *sql.Tx, table string, columns []metadataExactDecimalColumn) error {
+	profile, ok := r.storage.(postgresExactDecimalSQLProfile)
+	if !ok {
+		return fmt.Errorf("postgres exact decimal SQL profile is required")
+	}
 	beforeRows, beforeHash, err := r.exactDecimalLogicalHash(ctx, tx, table, columns, false)
 	if err != nil {
 		return fmt.Errorf("preflight postgres exact decimal values for %s: %w", table, err)
 	}
 	for _, column := range columns {
 		identifier := r.store.Identifier(column.field.Key)
-		preflight := postgresExactDecimalPreflightSQL(r.store.TableIdentifier(table), identifier, int(column.config.Scale))
+		preflight := profile.ExactDecimalPreflightSQL(r.store.TableIdentifier(table), identifier, int(column.config.Scale))
 		var incompatible int64
 		if err := tx.QueryRowContext(ctx, preflight).Scan(&incompatible); err != nil || incompatible != 0 {
 			return fmt.Errorf("postgres exact decimal preflight failed for %s.%s: incompatible_rows=%d: %w", table, column.field.Key, incompatible, err)
 		}
-		statement := postgresExactDecimalAlterSQL(r.store.TableIdentifier(table), identifier, column.target)
+		statement := profile.ExactDecimalAlterSQL(r.store.TableIdentifier(table), identifier, column.target)
 		if _, err := tx.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("migrate postgres exact decimal %s.%s: %w", table, column.field.Key, err)
 		}
@@ -294,10 +327,14 @@ func (r MetadataStore) migratePostgresExactDecimalTableInTransaction(ctx context
 }
 
 func (r MetadataStore) migrateMySQLExactDecimalTable(ctx context.Context, table string, columns []metadataExactDecimalColumn) error {
+	profile, ok := r.storage.(mysqlExactDecimalSQLProfile)
+	if !ok {
+		return fmt.Errorf("mysql exact decimal SQL profile is required")
+	}
 	// MySQL atomic DDL commits as one server-side operation. Preflight all values
 	// before issuing the ALTER so failure leaves the original table untouched;
-	// MODIFY preserves indexes and foreign keys and we retain NULL/default from
-	// information_schema in the generated definition.
+	// MODIFY preserves indexes and foreign keys; the MySQL profile retains each
+	// column's NULL/default definition.
 	beforeRows, beforeHash, err := r.exactDecimalLogicalHash(ctx, r.store.SchemaDB(), table, columns, false)
 	if err != nil {
 		return fmt.Errorf("preflight mysql exact decimal values for %s: %w", table, err)
@@ -305,13 +342,11 @@ func (r MetadataStore) migrateMySQLExactDecimalTable(ctx context.Context, table 
 	definitions := make([]string, 0, len(columns))
 	for _, column := range columns {
 		identifier := r.store.Identifier(column.field.Key)
-		var nullable string
-		var defaultValue sql.NullString
-		query := "SELECT is_nullable, column_default FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?"
-		if err := r.store.SchemaDB().QueryRowContext(ctx, query, table, column.field.Key).Scan(&nullable, &defaultValue); err != nil {
+		nullable, defaultValue, err := profile.ExactDecimalColumnDefinition(ctx, r.store.SchemaDB(), table, column.field.Key)
+		if err != nil {
 			return err
 		}
-		preflight := mysqlExactDecimalPreflightSQL(r.store.TableIdentifier(table), identifier, column.target)
+		preflight := profile.ExactDecimalPreflightSQL(r.store.TableIdentifier(table), identifier, column.target)
 		var incompatible int64
 		if err := r.store.SchemaDB().QueryRowContext(ctx, preflight).Scan(&incompatible); err != nil || incompatible != 0 {
 			return fmt.Errorf("mysql exact decimal preflight failed for %s.%s: incompatible_rows=%d: %w", table, column.field.Key, incompatible, err)
@@ -327,7 +362,7 @@ func (r MetadataStore) migrateMySQLExactDecimalTable(ctx context.Context, table 
 		}
 		definitions = append(definitions, definition)
 	}
-	statement := mysqlExactDecimalAlterSQL(r.store.TableIdentifier(table), definitions)
+	statement := profile.ExactDecimalAlterSQL(r.store.TableIdentifier(table), definitions)
 	if _, err := r.store.SchemaDB().ExecContext(ctx, statement); err != nil {
 		return fmt.Errorf("migrate mysql exact decimal table %s: %w", table, err)
 	}
@@ -342,33 +377,21 @@ func (r MetadataStore) migrateMySQLExactDecimalTable(ctx context.Context, table 
 }
 
 func (r MetadataStore) preflightMySQLExactDecimalTable(ctx context.Context, table string, columns []metadataExactDecimalColumn) error {
+	profile, ok := r.storage.(mysqlExactDecimalSQLProfile)
+	if !ok {
+		return fmt.Errorf("mysql exact decimal SQL profile is required")
+	}
 	if _, _, err := r.exactDecimalLogicalHash(ctx, r.store.SchemaDB(), table, columns, false); err != nil {
 		return fmt.Errorf("preflight mysql exact decimal values for %s: %w", table, err)
 	}
 	for _, column := range columns {
-		query := mysqlExactDecimalPreflightSQL(r.store.TableIdentifier(table), r.store.Identifier(column.field.Key), column.target)
+		query := profile.ExactDecimalPreflightSQL(r.store.TableIdentifier(table), r.store.Identifier(column.field.Key), column.target)
 		var incompatible int64
 		if err := r.store.SchemaDB().QueryRowContext(ctx, query).Scan(&incompatible); err != nil || incompatible != 0 {
 			return fmt.Errorf("mysql exact decimal preflight failed for %s.%s: incompatible_rows=%d: %w", table, column.field.Key, incompatible, err)
 		}
 	}
 	return nil
-}
-
-func postgresExactDecimalPreflightSQL(table, column string, scale int) string {
-	return "SELECT COUNT(*) FROM " + table + " WHERE " + column + " IS NOT NULL AND " + column + "::numeric <> ROUND(" + column + "::numeric, " + strconv.Itoa(scale) + ")"
-}
-
-func postgresExactDecimalAlterSQL(table, column, target string) string {
-	return "ALTER TABLE " + table + " ALTER COLUMN " + column + " TYPE " + target + " USING " + column + "::numeric"
-}
-
-func mysqlExactDecimalPreflightSQL(table, column, target string) string {
-	return "SELECT COUNT(*) FROM " + table + " WHERE " + column + " IS NOT NULL AND " + column + " <> CAST(" + column + " AS " + target + ")"
-}
-
-func mysqlExactDecimalAlterSQL(table string, definitions []string) string {
-	return "ALTER TABLE " + table + " " + strings.Join(definitions, ", ") + ", ALGORITHM=COPY"
 }
 
 func (r MetadataStore) exactDecimalLogicalHash(ctx context.Context, executor database.ActionExecutionExecutor, table string, columns []metadataExactDecimalColumn, encoded bool, postSchemaChange ...bool) (int64, string, error) {
@@ -456,183 +479,4 @@ func quotedMetadataIdentifiers(store *database.RuntimeStore, values []string) st
 		quoted[index] = store.Identifier(value)
 	}
 	return strings.Join(quoted, ", ")
-}
-
-func sqliteWritableColumns(ctx context.Context, executor database.ActionExecutionExecutor, table string) ([]string, error) {
-	rows, err := executor.QueryContext(ctx, "PRAGMA table_xinfo(\""+strings.ReplaceAll(table, "\"", "\"\"")+"\")")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	columns := []string{}
-	for rows.Next() {
-		var cid, notNull, primaryKey, hidden int
-		var name, dataType string
-		var defaultValue any
-		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &primaryKey, &hidden); err != nil {
-			return nil, err
-		}
-		if hidden == 0 {
-			columns = append(columns, name)
-		}
-	}
-	return columns, rows.Err()
-}
-
-func sqliteSchemaArtifacts(ctx context.Context, executor database.ActionExecutionExecutor, table string) ([]string, error) {
-	rows, err := executor.QueryContext(ctx, "SELECT sql FROM sqlite_master WHERE tbl_name = ? AND type IN ('index', 'trigger') AND sql IS NOT NULL ORDER BY type, name", table)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	artifacts := []string{}
-	for rows.Next() {
-		var statement string
-		if err := rows.Scan(&statement); err != nil {
-			return nil, err
-		}
-		artifacts = append(artifacts, statement)
-	}
-	return artifacts, rows.Err()
-}
-
-func rewriteSQLiteExactDecimalDDL(createSQL string, columns []metadataExactDecimalColumn) (string, string, error) {
-	open, close := sqliteDDLBodyBounds(createSQL)
-	if open < 0 || close <= open {
-		return "", "", fmt.Errorf("unsupported CREATE TABLE definition")
-	}
-	parts := sqliteSplitTopLevel(createSQL[open+1 : close])
-	targets := map[string]string{}
-	for _, column := range columns {
-		targets[column.field.Key] = column.target
-	}
-	seen := map[string]bool{}
-	for index, part := range parts {
-		key, nameEnd := sqliteLeadingIdentifier(part)
-		target, exists := targets[key]
-		if !exists {
-			continue
-		}
-		typeEnd := sqliteColumnTypeEnd(part, nameEnd)
-		remainder := strings.TrimLeftFunc(part[typeEnd:], unicode.IsSpace)
-		parts[index] = part[:nameEnd] + " " + target
-		if remainder != "" {
-			parts[index] += " " + remainder
-		}
-		seen[key] = true
-	}
-	for key := range targets {
-		if !seen[key] {
-			return "", "", fmt.Errorf("column definition not found: %s", key)
-		}
-	}
-	return strings.Join(parts, ","), createSQL[close+1:], nil
-}
-
-func sqliteDDLBodyBounds(value string) (int, int) {
-	open := strings.Index(value, "(")
-	if open < 0 {
-		return -1, -1
-	}
-	depth, quote := 0, rune(0)
-	for index, char := range value[open:] {
-		absolute := open + index
-		if quote != 0 {
-			if char == quote {
-				quote = 0
-			}
-			continue
-		}
-		if char == '\'' || char == '"' || char == '`' || char == ']' {
-			quote = char
-			if char == ']' {
-				quote = ']'
-			}
-			continue
-		}
-		switch char {
-		case '(':
-			depth++
-		case ')':
-			depth--
-			if depth == 0 {
-				return open, absolute
-			}
-		}
-	}
-	return open, -1
-}
-
-func sqliteSplitTopLevel(value string) []string {
-	parts, start, depth, quote := []string{}, 0, 0, rune(0)
-	for index, char := range value {
-		if quote != 0 {
-			if char == quote {
-				quote = 0
-			}
-			continue
-		}
-		if char == '\'' || char == '"' || char == '`' || char == ']' {
-			quote = char
-			continue
-		}
-		if char == '(' {
-			depth++
-		} else if char == ')' {
-			depth--
-		} else if char == ',' && depth == 0 {
-			parts = append(parts, value[start:index])
-			start = index + 1
-		}
-	}
-	return append(parts, value[start:])
-}
-
-func sqliteLeadingIdentifier(value string) (string, int) {
-	start := 0
-	for start < len(value) && unicode.IsSpace(rune(value[start])) {
-		start++
-	}
-	if start >= len(value) {
-		return "", start
-	}
-	if strings.ContainsRune("\"`[", rune(value[start])) {
-		closing := byte(value[start])
-		if closing == '[' {
-			closing = ']'
-		}
-		end := strings.IndexByte(value[start+1:], closing)
-		if end < 0 {
-			return "", start
-		}
-		end += start + 1
-		return value[start+1 : end], end + 1
-	}
-	end := start
-	for end < len(value) && !unicode.IsSpace(rune(value[end])) {
-		end++
-	}
-	return strings.Trim(value[start:end], "\"`[]"), end
-}
-
-func sqliteColumnTypeEnd(value string, start int) int {
-	keywords := map[string]bool{"PRIMARY": true, "NOT": true, "UNIQUE": true, "CHECK": true, "DEFA" + "ULT": true, "COLLATE": true, "REFERENCES": true, "GENERATED": true, "AS": true}
-	index := start
-	for index < len(value) {
-		for index < len(value) && unicode.IsSpace(rune(value[index])) {
-			index++
-		}
-		wordStart := index
-		for index < len(value) && (unicode.IsLetter(rune(value[index])) || value[index] == '_') {
-			index++
-		}
-		if wordStart == index {
-			index++
-			continue
-		}
-		if keywords[strings.ToUpper(value[wordStart:index])] {
-			return wordStart
-		}
-	}
-	return len(value)
 }

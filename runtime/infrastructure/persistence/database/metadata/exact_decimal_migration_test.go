@@ -9,6 +9,8 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	metadatamysql "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata/mysql"
+	metadatapostgres "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata/postgres"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -234,16 +236,18 @@ func TestExactDecimalMigrationDialectStrategies(t *testing.T) {
 	if metadataTestStorageProfile("sqlite").ExactDecimalUpgradeAllowed("TEXT", field) || metadataTestStorageProfile("postgres").ExactDecimalUpgradeAllowed("text", field) || metadataTestStorageProfile("mysql").ExactDecimalUpgradeAllowed("varchar(20)", field) {
 		t.Fatal("unrelated physical types were accepted")
 	}
-	if got := postgresExactDecimalPreflightSQL(`"ledger"`, `"amount"`, 2); got != `SELECT COUNT(*) FROM "ledger" WHERE "amount" IS NOT NULL AND "amount"::numeric <> ROUND("amount"::numeric, 2)` {
+	postgresProfile := metadatapostgres.NewMetadataStorageProfile()
+	mysqlProfile := metadatamysql.NewMetadataStorageProfile()
+	if got := postgresProfile.ExactDecimalPreflightSQL(`"ledger"`, `"amount"`, 2); got != `SELECT COUNT(*) FROM "ledger" WHERE "amount" IS NOT NULL AND "amount"::numeric <> ROUND("amount"::numeric, 2)` {
 		t.Fatalf("postgres preflight=%s", got)
 	}
-	if got := postgresExactDecimalAlterSQL(`"ledger"`, `"amount"`, "NUMERIC(19,2)"); got != `ALTER TABLE "ledger" ALTER COLUMN "amount" TYPE NUMERIC(19,2) USING "amount"::numeric` {
+	if got := postgresProfile.ExactDecimalAlterSQL(`"ledger"`, `"amount"`, "NUMERIC(19,2)"); got != `ALTER TABLE "ledger" ALTER COLUMN "amount" TYPE NUMERIC(19,2) USING "amount"::numeric` {
 		t.Fatalf("postgres alter=%s", got)
 	}
-	if got := mysqlExactDecimalPreflightSQL("`ledger`", "`amount`", "DECIMAL(19,2)"); got != "SELECT COUNT(*) FROM `ledger` WHERE `amount` IS NOT NULL AND `amount` <> CAST(`amount` AS DECIMAL(19,2))" {
+	if got := mysqlProfile.ExactDecimalPreflightSQL("`ledger`", "`amount`", "DECIMAL(19,2)"); got != "SELECT COUNT(*) FROM `ledger` WHERE `amount` IS NOT NULL AND `amount` <> CAST(`amount` AS DECIMAL(19,2))" {
 		t.Fatalf("mysql preflight=%s", got)
 	}
-	if got := mysqlExactDecimalAlterSQL("`ledger`", []string{"MODIFY COLUMN `amount` DECIMAL(19,2) NOT NULL DEFAULT '0.00'"}); got != "ALTER TABLE `ledger` MODIFY COLUMN `amount` DECIMAL(19,2) NOT NULL DEFAULT '0.00', ALGORITHM=COPY" {
+	if got := mysqlProfile.ExactDecimalAlterSQL("`ledger`", []string{"MODIFY COLUMN `amount` DECIMAL(19,2) NOT NULL DEFAULT '0.00'"}); got != "ALTER TABLE `ledger` MODIFY COLUMN `amount` DECIMAL(19,2) NOT NULL DEFAULT '0.00', ALGORITHM=COPY" {
 		t.Fatalf("mysql alter=%s", got)
 	}
 }

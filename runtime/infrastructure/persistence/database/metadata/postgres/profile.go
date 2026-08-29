@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	ormbuilder "github.com/domainry/domainry-orm/builder"
@@ -62,4 +63,12 @@ func (MetadataStorageProfile) ExactDecimalUpgradeAllowed(current string, field d
 	}
 	normalized := metadatastorage.NormalizePhysicalType(current)
 	return normalized == "REAL" || normalized == "DOUBLEPRECISION" || strings.HasPrefix(normalized, "NUMERIC(") || strings.HasPrefix(normalized, "DECIMAL(")
+}
+
+func (MetadataStorageProfile) ExactDecimalPreflightSQL(table, column string, scale int) string {
+	return "SELECT COUNT(*) FROM " + table + " WHERE " + column + " IS NOT NULL AND " + column + "::numeric <> ROUND(" + column + "::numeric, " + strconv.Itoa(scale) + ")"
+}
+
+func (MetadataStorageProfile) ExactDecimalAlterSQL(table, column, target string) string {
+	return "ALTER TABLE " + table + " ALTER COLUMN " + column + " TYPE " + target + " USING " + column + "::numeric"
 }

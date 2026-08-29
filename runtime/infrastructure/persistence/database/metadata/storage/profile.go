@@ -21,6 +21,10 @@ type Queryer interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }
 
+type QueryRower interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
 func ReadColumns(rows *sql.Rows, err error, table string) (map[string]bool, error) {
 	if err != nil {
 		return nil, err
