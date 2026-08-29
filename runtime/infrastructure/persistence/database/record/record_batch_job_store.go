@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/requestcontext"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -431,20 +432,20 @@ func (r RecordStore) recordBatchJobQueueStats(ctx context.Context, workspaceID s
 func (r RecordStore) registerRecordBatchWorkerQueueScope(ctx context.Context, workspaceID, updatedAt string) error {
 	digest := sha256.Sum256([]byte("record_batch\x00" + strings.TrimSpace(workspaceID)))
 	id := "worker_scope:" + hex.EncodeToString(digest[:12])
-	query := "INSERT INTO " + r.store.TableIdentifier("runtime_worker_queue_scopes") + " (" + stringsJoinIdentifiers(r.store, "id", "queue_kind", "scope_key", "updated_at") + ") VALUES (" + stringsJoinPlaceholders(r.store, 4) + ")"
-	if r.store.Driver() == "mysql" {
-		query += " ON DUPLICATE KEY UPDATE " + r.store.Identifier("updated_at") + " = VALUES(" + r.store.Identifier("updated_at") + ")"
-	} else {
-		query += " ON CONFLICT DO NOTHING"
+	insert := ormbuilder.NewInsertBuilder(r.store.SQLRenderer, "runtime_worker_queue_scopes").
+		Columns("id", "queue_kind", "scope_key", "updated_at").Values(id, "record_batch", strings.TrimSpace(workspaceID), updatedAt)
+	insert, err := r.store.Engine.ApplyUpsert(insert, []string{"id"},
+		ormbuilder.AssignExpression("updated_at", ormbuilder.InsertedValue("updated_at")),
+	)
+	if err != nil {
+		return fmt.Errorf("build record batch worker queue scope: %w", err)
 	}
-	if _, err := r.database().ExecContext(ctx, query, id, "record_batch", strings.TrimSpace(workspaceID), updatedAt); err != nil {
+	query, args, err := insert.Build()
+	if err != nil {
+		return fmt.Errorf("build record batch worker queue scope: %w", err)
+	}
+	if _, err := r.database().ExecContext(ctx, query, args...); err != nil {
 		return fmt.Errorf("register record batch worker queue scope: %w", err)
-	}
-	if r.store.Driver() != "mysql" {
-		update := "UPDATE " + r.store.TableIdentifier("runtime_worker_queue_scopes") + " SET " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(1) + " WHERE " + r.store.Identifier("queue_kind") + " = " + r.store.Placeholder(2) + " AND " + r.store.Identifier("scope_key") + " = " + r.store.Placeholder(3)
-		if _, err := r.database().ExecContext(ctx, update, updatedAt, "record_batch", strings.TrimSpace(workspaceID)); err != nil {
-			return fmt.Errorf("refresh record batch worker queue scope: %w", err)
-		}
 	}
 	return nil
 }

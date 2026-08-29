@@ -15,6 +15,7 @@ import (
 	"github.com/domainry/domainry-foundation/secrets"
 	"github.com/domainry/domainry-foundation/telemetry"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/base"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -159,32 +160,20 @@ func (s *RuntimeStore) RegisterWorkerQueueScope(ctx context.Context, executor Wo
 	}
 	digest := sha256.Sum256([]byte(queueKind + "\x00" + workspaceID))
 	id := "worker_scope:" + hex.EncodeToString(digest[:12])
-	update := "UPDATE " + s.TableIdentifier("runtime_worker_queue_scopes") + " SET " + s.Identifier("updated_at") + " = " + s.Placeholder(1) + " WHERE " + s.Identifier("id") + " = " + s.Placeholder(2)
-	result, err := executor.ExecContext(ctx, update, updatedAt, id)
+	insert := ormbuilder.NewInsertBuilder(s.SQLRenderer, "runtime_worker_queue_scopes").
+		Columns("id", "queue_kind", "scope_key", "updated_at").Values(id, queueKind, workspaceID, updatedAt)
+	insert, err := s.Engine.ApplyUpsert(insert, []string{"id"},
+		ormbuilder.AssignExpression("updated_at", ormbuilder.InsertedValue("updated_at")),
+	)
 	if err != nil {
-		return err
+		return fmt.Errorf("build worker queue scope upsert: %w", err)
 	}
-	if count, rowsErr := result.RowsAffected(); rowsErr != nil {
-		return rowsErr
-	} else if count > 0 {
-		return nil
+	statement, args, err := insert.Build()
+	if err != nil {
+		return fmt.Errorf("build worker queue scope upsert: %w", err)
 	}
-	insert := "INSERT INTO " + s.TableIdentifier("runtime_worker_queue_scopes") + " (" + s.Identifier("id") + ", " + s.Identifier("queue_kind") + ", " + s.Identifier("scope_key") + ", " + s.Identifier("updated_at") + ") VALUES (" + s.Placeholder(1) + ", " + s.Placeholder(2) + ", " + s.Placeholder(3) + ", " + s.Placeholder(4) + ")"
-	if s.Driver() == "mysql" {
-		insert += " ON DUPLICATE KEY UPDATE " + s.Identifier("updated_at") + " = VALUES(" + s.Identifier("updated_at") + ")"
-	} else {
-		insert += " ON CONFLICT (" + s.Identifier("id") + ") DO UPDATE SET " + s.Identifier("updated_at") + " = EXCLUDED." + s.Identifier("updated_at")
-	}
-	if _, err := executor.ExecContext(ctx, insert, id, queueKind, workspaceID, updatedAt); err != nil {
-		result, retryErr := executor.ExecContext(ctx, update, updatedAt, id)
-		if retryErr == nil {
-			if count, rowsErr := result.RowsAffected(); rowsErr == nil && count > 0 {
-				return nil
-			}
-		}
-		return err
-	}
-	return nil
+	_, err = executor.ExecContext(ctx, statement, args...)
+	return err
 }
 
 // WorkerQueueScopePage returns a bounded, round-robin page of active workspace
@@ -222,10 +211,15 @@ func (s *RuntimeStore) WorkerQueueScopePage(ctx context.Context, queryer WorkerS
 	cursor.mu.Lock()
 	defer cursor.mu.Unlock()
 	after := cursor.after
-	query := "SELECT " + s.Identifier("scope_key") + " FROM " + s.TableIdentifier("runtime_worker_queue_scopes") +
-		" WHERE " + s.Identifier("queue_kind") + " = " + s.Placeholder(1) + " AND " + s.Identifier("scope_key") + " > " + s.Placeholder(2) +
-		" ORDER BY " + s.Identifier("scope_key") + " ASC LIMIT " + s.Placeholder(3)
-	rows, err := queryer.QueryContext(ctx, query, queueKind, after, limit+1)
+	selectBuilder := ormbuilder.NewSelectBuilder(s.SQLRenderer, "runtime_worker_queue_scopes").
+		Columns("scope_key").
+		Where(ormbuilder.And(ormbuilder.Equal("queue_kind", queueKind), ormbuilder.GreaterThan("scope_key", after))).
+		OrderBy(ormbuilder.Ascending("scope_key")).Limit(limit + 1)
+	statement, args, err := selectBuilder.Build()
+	if err != nil {
+		return nil, fmt.Errorf("build worker queue scope page: %w", err)
+	}
+	rows, err := queryer.QueryContext(ctx, statement, args...)
 	if err != nil {
 		return nil, err
 	}
