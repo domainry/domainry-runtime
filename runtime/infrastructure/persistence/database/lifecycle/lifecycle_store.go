@@ -261,8 +261,15 @@ func (s LifecycleStore) ClaimCleanupJob(ctx context.Context, workspaceID, id, ow
 	if ttl <= 0 {
 		ttl = 2 * time.Minute
 	}
-	query := "UPDATE " + s.store.TableIdentifier("lifecycle_cleanup_jobs") + " SET " + s.store.Identifier("status") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("lease_owner") + " = " + s.store.Placeholder(2) + ", " + s.store.Identifier("lease_expires_at") + " = " + s.store.Placeholder(3) + ", " + s.store.Identifier("fencing_token") + " = " + s.store.Identifier("fencing_token") + " + 1, " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(4) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(5) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(6) + " AND " + s.store.Identifier("status") + " IN (" + s.store.Placeholder(7) + ", " + s.store.Placeholder(8) + ", " + s.store.Placeholder(9) + ", " + s.store.Placeholder(10) + ") AND (" + s.store.Identifier("lease_owner") + " = '' OR " + s.store.Identifier("lease_expires_at") + " <= " + s.store.Placeholder(11) + ")"
-	result, err := s.db.ExecContext(ctx, query, lifecyclemodel.CleanupStatusRunning, owner, lifecycleTime(now.Add(ttl)), lifecycleTime(now), workspaceID, id, lifecyclemodel.CleanupStatusPending, lifecyclemodel.CleanupStatusPaused, lifecyclemodel.CleanupStatusFailed, lifecyclemodel.CleanupStatusRunning, lifecycleTime(now))
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "lifecycle_cleanup_jobs", workspaceID).
+		Set("status", lifecyclemodel.CleanupStatusRunning).Set("lease_owner", owner).Set("lease_expires_at", lifecycleTime(now.Add(ttl))).
+		SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).Set("updated_at", lifecycleTime(now)).
+		Where(ormbuilder.And(ormbuilder.Equal("id", id), ormbuilder.In("status", lifecyclemodel.CleanupStatusPending, lifecyclemodel.CleanupStatusPaused, lifecyclemodel.CleanupStatusFailed, lifecyclemodel.CleanupStatusRunning),
+			ormbuilder.Or(ormbuilder.Equal("lease_owner", ""), ormbuilder.LessThanOrEqual("lease_expires_at", lifecycleTime(now))))).Build()
+	if buildErr != nil {
+		return lifecyclemodel.CleanupJob{}, false, fmt.Errorf("build lifecycle cleanup claim: %w", buildErr)
+	}
+	result, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return lifecyclemodel.CleanupJob{}, false, err
 	}
@@ -279,8 +286,14 @@ func (s LifecycleStore) ClaimCleanupJob(ctx context.Context, workspaceID, id, ow
 
 func (s LifecycleStore) UpdateCleanupJob(ctx context.Context, job lifecyclemodel.CleanupJob) error {
 	payload, _ := json.Marshal(job)
-	query := "UPDATE " + s.store.TableIdentifier("lifecycle_cleanup_jobs") + " SET " + s.store.Identifier("status") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("checkpoint_value") + " = " + s.store.Placeholder(2) + ", " + s.store.Identifier("lease_owner") + " = " + s.store.Placeholder(3) + ", " + s.store.Identifier("lease_expires_at") + " = " + s.store.Placeholder(4) + ", " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(5) + ", " + s.store.Identifier("payload_json") + " = " + s.store.Placeholder(6) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(7) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(8) + " AND " + s.store.Identifier("fencing_token") + " = " + s.store.Placeholder(9)
-	result, err := s.db.ExecContext(ctx, query, job.Status, job.Checkpoint, job.LeaseOwner, lifecycleTime(job.LeaseExpiresAt), lifecycleTime(job.UpdatedAt), string(payload), job.WorkspaceID, job.ID, job.FencingToken)
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "lifecycle_cleanup_jobs", job.WorkspaceID).
+		Set("status", job.Status).Set("checkpoint_value", job.Checkpoint).Set("lease_owner", job.LeaseOwner).
+		Set("lease_expires_at", lifecycleTime(job.LeaseExpiresAt)).Set("updated_at", lifecycleTime(job.UpdatedAt)).Set("payload_json", string(payload)).
+		Where(ormbuilder.And(ormbuilder.Equal("id", job.ID), ormbuilder.Equal("fencing_token", job.FencingToken))).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build lifecycle cleanup update: %w", buildErr)
+	}
+	result, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -299,8 +312,14 @@ func (s LifecycleStore) SaveSubjectRequest(ctx context.Context, request lifecycl
 	if err != nil {
 		return err
 	}
-	query := "UPDATE " + s.store.TableIdentifier("lifecycle_subject_requests") + " SET " + s.store.Identifier("kind") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("status") + " = " + s.store.Placeholder(2) + ", " + s.store.Identifier("subject_id") + " = " + s.store.Placeholder(3) + ", " + s.store.Identifier("resolved_identity") + " = " + s.store.Placeholder(4) + ", " + s.store.Identifier("download_expires_at") + " = " + s.store.Placeholder(5) + ", " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(6) + ", " + s.store.Identifier("payload_json") + " = " + s.store.Placeholder(7) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(8) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(9)
-	result, err := s.db.ExecContext(ctx, query, request.Kind, request.Status, request.SubjectID, request.ResolvedIdentity, lifecycleTime(request.DownloadExpiresAt), lifecycleTime(request.UpdatedAt), string(payload), request.WorkspaceID, request.ID)
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "lifecycle_subject_requests", request.WorkspaceID).
+		Set("kind", request.Kind).Set("status", request.Status).Set("subject_id", request.SubjectID).Set("resolved_identity", request.ResolvedIdentity).
+		Set("download_expires_at", lifecycleTime(request.DownloadExpiresAt)).Set("updated_at", lifecycleTime(request.UpdatedAt)).Set("payload_json", string(payload)).
+		Where(ormbuilder.Equal("id", request.ID)).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build lifecycle subject request update: %w", buildErr)
+	}
+	result, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -311,8 +330,13 @@ func (s LifecycleStore) SaveSubjectRequest(ctx context.Context, request lifecycl
 	if count == 1 {
 		return nil
 	}
-	columns := []string{"id", "workspace_id", "kind", "status", "subject_id", "resolved_identity", "download_expires_at", "updated_at", "payload_json"}
-	_, err = s.db.ExecContext(ctx, s.store.InsertStatement("lifecycle_subject_requests", columns), request.ID, request.WorkspaceID, request.Kind, request.Status, request.SubjectID, request.ResolvedIdentity, lifecycleTime(request.DownloadExpiresAt), lifecycleTime(request.UpdatedAt), string(payload))
+	query, args, buildErr = ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "lifecycle_subject_requests", request.WorkspaceID).
+		Columns("id", "kind", "status", "subject_id", "resolved_identity", "download_expires_at", "updated_at", "payload_json").
+		Values(request.ID, request.Kind, request.Status, request.SubjectID, request.ResolvedIdentity, lifecycleTime(request.DownloadExpiresAt), lifecycleTime(request.UpdatedAt), string(payload)).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build lifecycle subject request insert: %w", buildErr)
+	}
+	_, err = s.db.ExecContext(ctx, query, args...)
 	return err
 }
 
@@ -321,8 +345,14 @@ func (s LifecycleStore) TransitionSubjectRequest(ctx context.Context, current, n
 	if err != nil {
 		return err
 	}
-	query := "UPDATE " + s.store.TableIdentifier("lifecycle_subject_requests") + " SET " + s.store.Identifier("kind") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("status") + " = " + s.store.Placeholder(2) + ", " + s.store.Identifier("subject_id") + " = " + s.store.Placeholder(3) + ", " + s.store.Identifier("resolved_identity") + " = " + s.store.Placeholder(4) + ", " + s.store.Identifier("download_expires_at") + " = " + s.store.Placeholder(5) + ", " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(6) + ", " + s.store.Identifier("payload_json") + " = " + s.store.Placeholder(7) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(8) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(9) + " AND " + s.store.Identifier("status") + " = " + s.store.Placeholder(10) + " AND " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(11)
-	result, err := s.db.ExecContext(ctx, query, next.Kind, next.Status, next.SubjectID, next.ResolvedIdentity, lifecycleTime(next.DownloadExpiresAt), lifecycleTime(next.UpdatedAt), string(payload), next.WorkspaceID, next.ID, current.Status, lifecycleTime(current.UpdatedAt))
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "lifecycle_subject_requests", next.WorkspaceID).
+		Set("kind", next.Kind).Set("status", next.Status).Set("subject_id", next.SubjectID).Set("resolved_identity", next.ResolvedIdentity).
+		Set("download_expires_at", lifecycleTime(next.DownloadExpiresAt)).Set("updated_at", lifecycleTime(next.UpdatedAt)).Set("payload_json", string(payload)).
+		Where(ormbuilder.And(ormbuilder.Equal("id", next.ID), ormbuilder.Equal("status", current.Status), ormbuilder.Equal("updated_at", lifecycleTime(current.UpdatedAt)))).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build lifecycle subject transition: %w", buildErr)
+	}
+	result, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -337,9 +367,12 @@ func (s LifecycleStore) TransitionSubjectRequest(ctx context.Context, current, n
 }
 
 func (s LifecycleStore) GetSubjectRequest(ctx context.Context, workspaceID, id string) (lifecyclemodel.SubjectRequest, bool, error) {
-	query := "SELECT " + s.store.Identifier("payload_json") + " FROM " + s.store.TableIdentifier("lifecycle_subject_requests") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(2)
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "lifecycle_subject_requests", workspaceID).Columns("payload_json").Where(ormbuilder.Equal("id", id)).Build()
+	if buildErr != nil {
+		return lifecyclemodel.SubjectRequest{}, false, fmt.Errorf("build lifecycle subject request query: %w", buildErr)
+	}
 	var payload string
-	err := s.db.QueryRowContext(ctx, query, workspaceID, id).Scan(&payload)
+	err := s.db.QueryRowContext(ctx, query, args...).Scan(&payload)
 	if errors.Is(err, sql.ErrNoRows) {
 		return lifecyclemodel.SubjectRequest{}, false, nil
 	}
@@ -399,18 +432,26 @@ func (s LifecycleStore) ExpireSubjectExportReferences(ctx context.Context, scope
 }
 
 func (s LifecycleStore) SaveExternalErasures(ctx context.Context, erasures []lifecyclemodel.ExternalErasure) error {
-	columns := []string{"id", "request_id", "workspace_id", "status", "payload_json"}
 	for _, erasure := range erasures {
 		var existing int
-		query := "SELECT COUNT(*) FROM " + s.store.TableIdentifier("lifecycle_external_erasures") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(2)
-		if err := s.db.QueryRowContext(ctx, query, erasure.WorkspaceID, erasure.ID).Scan(&existing); err != nil {
+		query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "lifecycle_external_erasures", erasure.WorkspaceID).
+			Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(ormbuilder.Equal("id", erasure.ID)).Build()
+		if buildErr != nil {
+			return fmt.Errorf("build external erasure lookup: %w", buildErr)
+		}
+		if err := s.db.QueryRowContext(ctx, query, args...).Scan(&existing); err != nil {
 			return err
 		}
 		if existing > 0 {
 			continue
 		}
 		payload, _ := json.Marshal(erasure)
-		if _, err := s.db.ExecContext(ctx, s.store.InsertStatement("lifecycle_external_erasures", columns), erasure.ID, erasure.RequestID, erasure.WorkspaceID, erasure.Status, string(payload)); err != nil {
+		query, args, buildErr = ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "lifecycle_external_erasures", erasure.WorkspaceID).
+			Columns("id", "request_id", "status", "payload_json").Values(erasure.ID, erasure.RequestID, erasure.Status, string(payload)).Build()
+		if buildErr != nil {
+			return fmt.Errorf("build external erasure insert: %w", buildErr)
+		}
+		if _, err := s.db.ExecContext(ctx, query, args...); err != nil {
 			return err
 		}
 	}
@@ -418,11 +459,13 @@ func (s LifecycleStore) SaveExternalErasures(ctx context.Context, erasures []lif
 }
 
 func (s LifecycleStore) ListExternalErasures(ctx context.Context, workspaceID, requestID string) ([]lifecyclemodel.ExternalErasure, error) {
-	query := "SELECT " + s.store.Identifier("payload_json") + " FROM " + s.store.TableIdentifier("lifecycle_external_erasures") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1)
-	args := []any{workspaceID}
+	selectBuilder := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "lifecycle_external_erasures", workspaceID).Columns("payload_json")
 	if strings.TrimSpace(requestID) != "" {
-		query += " AND " + s.store.Identifier("request_id") + " = " + s.store.Placeholder(2)
-		args = append(args, strings.TrimSpace(requestID))
+		selectBuilder.Where(ormbuilder.Equal("request_id", strings.TrimSpace(requestID)))
+	}
+	query, args, buildErr := selectBuilder.Build()
+	if buildErr != nil {
+		return nil, fmt.Errorf("build external erasure list: %w", buildErr)
 	}
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -445,9 +488,12 @@ func (s LifecycleStore) ListExternalErasures(ctx context.Context, workspaceID, r
 }
 
 func (s LifecycleStore) ReconcileExternalErasure(ctx context.Context, workspaceID, id, evidence string, at time.Time) (lifecyclemodel.ExternalErasure, bool, error) {
-	query := "SELECT " + s.store.Identifier("payload_json") + " FROM " + s.store.TableIdentifier("lifecycle_external_erasures") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(2)
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "lifecycle_external_erasures", workspaceID).Columns("payload_json").Where(ormbuilder.Equal("id", id)).Build()
+	if buildErr != nil {
+		return lifecyclemodel.ExternalErasure{}, false, fmt.Errorf("build external erasure query: %w", buildErr)
+	}
 	var payload string
-	if err := s.db.QueryRowContext(ctx, query, workspaceID, id).Scan(&payload); errors.Is(err, sql.ErrNoRows) {
+	if err := s.db.QueryRowContext(ctx, query, args...).Scan(&payload); errors.Is(err, sql.ErrNoRows) {
 		return lifecyclemodel.ExternalErasure{}, false, nil
 	} else if err != nil {
 		return lifecyclemodel.ExternalErasure{}, false, err
@@ -458,7 +504,12 @@ func (s LifecycleStore) ReconcileExternalErasure(ctx context.Context, workspaceI
 	}
 	item.Status, item.Evidence, item.ReconciledAt = "reconciled", strings.TrimSpace(evidence), at
 	updated, _ := json.Marshal(item)
-	result, err := s.db.ExecContext(ctx, "UPDATE "+s.store.TableIdentifier("lifecycle_external_erasures")+" SET "+s.store.Identifier("status")+" = "+s.store.Placeholder(1)+", "+s.store.Identifier("payload_json")+" = "+s.store.Placeholder(2)+" WHERE "+s.store.Identifier("workspace_id")+" = "+s.store.Placeholder(3)+" AND "+s.store.Identifier("id")+" = "+s.store.Placeholder(4), item.Status, string(updated), workspaceID, id)
+	query, args, buildErr = ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "lifecycle_external_erasures", workspaceID).
+		Set("status", item.Status).Set("payload_json", string(updated)).Where(ormbuilder.Equal("id", id)).Build()
+	if buildErr != nil {
+		return lifecyclemodel.ExternalErasure{}, false, fmt.Errorf("build external erasure reconciliation: %w", buildErr)
+	}
+	result, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return lifecyclemodel.ExternalErasure{}, false, err
 	}
@@ -470,8 +521,13 @@ func (s LifecycleStore) ReconcileExternalErasure(ctx context.Context, workspaceI
 }
 
 func (s LifecycleStore) SaveDeletionRegistration(ctx context.Context, registration lifecyclemodel.DeletionRegistration) error {
-	query := "UPDATE " + s.store.TableIdentifier("lifecycle_deletion_registry") + " SET " + s.store.Identifier("resolved_identity") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("backup_pending") + " = " + s.store.Placeholder(2) + ", " + s.store.Identifier("evidence") + " = " + s.store.Placeholder(3) + ", " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(4) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(5) + " AND " + s.store.Identifier("request_id") + " = " + s.store.Placeholder(6)
-	result, err := s.db.ExecContext(ctx, query, registration.ResolvedIdentity, registration.BackupPending, registration.Evidence, lifecycleTime(registration.UpdatedAt), registration.WorkspaceID, registration.RequestID)
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "lifecycle_deletion_registry", registration.WorkspaceID).
+		Set("resolved_identity", registration.ResolvedIdentity).Set("backup_pending", registration.BackupPending).Set("evidence", registration.Evidence).
+		Set("updated_at", lifecycleTime(registration.UpdatedAt)).Where(ormbuilder.Equal("request_id", registration.RequestID)).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build lifecycle deletion registration update: %w", buildErr)
+	}
+	result, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -482,8 +538,13 @@ func (s LifecycleStore) SaveDeletionRegistration(ctx context.Context, registrati
 	if changed > 0 {
 		return nil
 	}
-	columns := []string{"request_id", "workspace_id", "resolved_identity", "backup_pending", "evidence", "updated_at"}
-	_, err = s.db.ExecContext(ctx, s.store.InsertStatement("lifecycle_deletion_registry", columns), registration.RequestID, registration.WorkspaceID, registration.ResolvedIdentity, registration.BackupPending, registration.Evidence, lifecycleTime(registration.UpdatedAt))
+	query, args, buildErr = ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "lifecycle_deletion_registry", registration.WorkspaceID).
+		Columns("request_id", "resolved_identity", "backup_pending", "evidence", "updated_at").
+		Values(registration.RequestID, registration.ResolvedIdentity, registration.BackupPending, registration.Evidence, lifecycleTime(registration.UpdatedAt)).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build lifecycle deletion registration insert: %w", buildErr)
+	}
+	_, err = s.db.ExecContext(ctx, query, args...)
 	return err
 }
 
@@ -491,8 +552,13 @@ func (s LifecycleStore) ListPendingDeletionRegistrations(ctx context.Context, wo
 	if limit <= 0 || limit > 1000 {
 		limit = 100
 	}
-	query := "SELECT " + s.store.Identifier("request_id") + ", " + s.store.Identifier("workspace_id") + ", " + s.store.Identifier("resolved_identity") + ", " + s.store.Identifier("backup_pending") + ", " + s.store.Identifier("evidence") + ", " + s.store.Identifier("updated_at") + " FROM " + s.store.TableIdentifier("lifecycle_deletion_registry") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("backup_pending") + " = " + s.store.Placeholder(2) + " ORDER BY " + s.store.Identifier("updated_at") + " LIMIT " + fmt.Sprintf("%d", limit)
-	rows, err := s.db.QueryContext(ctx, query, workspaceID, true)
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "lifecycle_deletion_registry", workspaceID).
+		Columns("request_id", "workspace_id", "resolved_identity", "backup_pending", "evidence", "updated_at").Where(ormbuilder.Equal("backup_pending", true)).
+		OrderBy(ormbuilder.Ascending("updated_at")).Limit(limit).Build()
+	if buildErr != nil {
+		return nil, fmt.Errorf("build pending lifecycle deletion registrations: %w", buildErr)
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -514,13 +580,15 @@ func (s LifecycleStore) ListArchiveEntries(ctx context.Context, workspaceID, sou
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	query := "SELECT " + lifecycleColumns(s.store, "id", "workspace_id", "owner", "source_table", "resource_id", "policy_key", "policy_version", "job_id", "payload_hash", "payload_json", "archived_at") + " FROM " + s.store.TableIdentifier("lifecycle_archive_entries") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1)
-	args := []any{workspaceID}
+	selectBuilder := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "lifecycle_archive_entries", workspaceID).
+		Columns("id", "workspace_id", "owner", "source_table", "resource_id", "policy_key", "policy_version", "job_id", "payload_hash", "payload_json", "archived_at")
 	if strings.TrimSpace(sourceTable) != "" {
-		query += " AND " + s.store.Identifier("source_table") + " = " + s.store.Placeholder(2)
-		args = append(args, strings.TrimSpace(sourceTable))
+		selectBuilder.Where(ormbuilder.Equal("source_table", strings.TrimSpace(sourceTable)))
 	}
-	query += " ORDER BY " + s.store.Identifier("archived_at") + " DESC LIMIT " + fmt.Sprintf("%d", limit)
+	query, args, buildErr := selectBuilder.OrderBy(ormbuilder.Descending("archived_at")).Limit(limit).Build()
+	if buildErr != nil {
+		return nil, fmt.Errorf("build lifecycle archive entries query: %w", buildErr)
+	}
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -544,7 +612,12 @@ func (s LifecycleStore) AppendAuditEvidence(ctx context.Context, evidence lifecy
 	if err != nil {
 		return err
 	}
-	columns := []string{"id", "workspace_id", "event", "resource_id", "policy_key", "created_at", "payload_json"}
-	_, err = s.db.ExecContext(ctx, s.store.InsertStatement("lifecycle_audit_evidence", columns), evidence.ID, evidence.WorkspaceID, evidence.Event, evidence.ResourceID, evidence.PolicyKey, lifecycleTime(evidence.CreatedAt), string(payload))
+	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "lifecycle_audit_evidence", evidence.WorkspaceID).
+		Columns("id", "event", "resource_id", "policy_key", "created_at", "payload_json").
+		Values(evidence.ID, evidence.Event, evidence.ResourceID, evidence.PolicyKey, lifecycleTime(evidence.CreatedAt), string(payload)).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build lifecycle audit evidence insert: %w", buildErr)
+	}
+	_, err = s.db.ExecContext(ctx, query, args...)
 	return err
 }

@@ -238,20 +238,20 @@ func TestLifecycleStoreRemainingEdges(t *testing.T) {
 	}
 
 	r := scriptedLifecycleStore(t, &lifecycleSQLState{execSteps: []lifecycleSQLExecStep{{rows: 1}}})
-	if err := r.UpdateCleanupJob(t.Context(), lifecyclemodel.CleanupJob{}); err != nil {
-		t.Fatal(err)
+	if err := r.UpdateCleanupJob(t.Context(), lifecyclemodel.CleanupJob{}); err == nil {
+		t.Fatal("missing cleanup workspace accepted")
 	}
 	next := lifecyclemodel.SubjectRequest{ImpactPreview: []byte("{")}
 	if err := scriptedLifecycleStore(t, &lifecycleSQLState{}).TransitionSubjectRequest(t.Context(), lifecyclemodel.SubjectRequest{}, next); err == nil {
 		t.Fatal("expected transition marshal error")
 	}
 	r = scriptedLifecycleStore(t, &lifecycleSQLState{execSteps: []lifecycleSQLExecStep{{rows: 1}}})
-	if err := r.TransitionSubjectRequest(t.Context(), lifecyclemodel.SubjectRequest{}, lifecyclemodel.SubjectRequest{}); err != nil {
-		t.Fatal(err)
+	if err := r.TransitionSubjectRequest(t.Context(), lifecyclemodel.SubjectRequest{}, lifecyclemodel.SubjectRequest{}); err == nil {
+		t.Fatal("missing subject request workspace accepted")
 	}
 	r = scriptedLifecycleStore(t, &lifecycleSQLState{execSteps: []lifecycleSQLExecStep{{rows: 1}}})
-	if err := r.SaveDeletionRegistration(t.Context(), lifecyclemodel.DeletionRegistration{}); err != nil {
-		t.Fatal(err)
+	if err := r.SaveDeletionRegistration(t.Context(), lifecyclemodel.DeletionRegistration{}); err == nil {
+		t.Fatal("missing deletion registration workspace accepted")
 	}
 
 	registrationColumns := []string{"request", "workspace", "identity", "pending", "evidence", "updated"}
