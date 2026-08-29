@@ -22,6 +22,10 @@ type BoundaryIntentStore struct {
 	db    *sql.DB
 }
 
+type BoundaryIntentTransaction interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
 var _ transactionmodel.BoundaryIntentRepository = BoundaryIntentStore{}
 
 func NewBoundaryIntentStore(store *database.RuntimeStore) BoundaryIntentStore {
@@ -32,10 +36,45 @@ func (r BoundaryIntentStore) CreateBoundaryIntent(ctx context.Context, intent tr
 	if err := ctx.Err(); err != nil {
 		return transactionmodel.BoundaryIntent{}, false, err
 	}
+	intent, statement, args, err := r.boundaryIntentInsert(intent)
+	if err != nil {
+		return transactionmodel.BoundaryIntent{}, false, err
+	}
+	if _, err := r.db.ExecContext(ctx, statement, args...); err != nil {
+		existing, found, readErr := r.findByIdentity(ctx, intent.WorkspaceID, intent.Owner, intent.Operation, intent.IdempotencyKey)
+		if readErr == nil && found {
+			return existing, true, nil
+		}
+		return transactionmodel.BoundaryIntent{}, false, fmt.Errorf("insert boundary intent: %w", err)
+	}
+	return intent, false, nil
+}
+
+// InsertBoundaryIntentTx lets another infrastructure owner enlist a boundary
+// intent in an existing local transaction without duplicating its physical
+// schema, defaults or parameterized insert contract.
+func (r BoundaryIntentStore) InsertBoundaryIntentTx(ctx context.Context, tx BoundaryIntentTransaction, intent transactionmodel.BoundaryIntent) (transactionmodel.BoundaryIntent, error) {
+	if tx == nil {
+		return transactionmodel.BoundaryIntent{}, fmt.Errorf("boundary intent transaction is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return transactionmodel.BoundaryIntent{}, err
+	}
+	intent, statement, args, err := r.boundaryIntentInsert(intent)
+	if err != nil {
+		return transactionmodel.BoundaryIntent{}, err
+	}
+	if _, err := tx.ExecContext(ctx, statement, args...); err != nil {
+		return transactionmodel.BoundaryIntent{}, fmt.Errorf("insert boundary intent: %w", err)
+	}
+	return intent, nil
+}
+
+func (r BoundaryIntentStore) boundaryIntentInsert(intent transactionmodel.BoundaryIntent) (transactionmodel.BoundaryIntent, string, []any, error) {
 	intent.WorkspaceID = strings.TrimSpace(intent.WorkspaceID)
 	intent.Owner, intent.Operation, intent.IdempotencyKey = strings.TrimSpace(intent.Owner), strings.TrimSpace(intent.Operation), strings.TrimSpace(intent.IdempotencyKey)
 	if intent.WorkspaceID == "" || intent.Owner == "" || intent.Operation == "" || intent.IdempotencyKey == "" {
-		return transactionmodel.BoundaryIntent{}, false, fmt.Errorf("boundary intent identity is required")
+		return transactionmodel.BoundaryIntent{}, "", nil, fmt.Errorf("boundary intent identity is required")
 	}
 	if intent.ID == "" {
 		sum := sha256.Sum256([]byte(intent.WorkspaceID + "\x00" + intent.Owner + "\x00" + intent.Operation + "\x00" + intent.IdempotencyKey))
@@ -48,26 +87,19 @@ func (r BoundaryIntentStore) CreateBoundaryIntent(ctx context.Context, intent tr
 	intent.CreatedAt, intent.UpdatedAt = now, now
 	payload, err := json.Marshal(nonNilMap(intent.Payload))
 	if err != nil {
-		return transactionmodel.BoundaryIntent{}, false, fmt.Errorf("encode boundary intent payload: %w", err)
+		return transactionmodel.BoundaryIntent{}, "", nil, fmt.Errorf("encode boundary intent payload: %w", err)
 	}
 	compensation, err := json.Marshal(nonNilMap(intent.CompensationPayload))
 	if err != nil {
-		return transactionmodel.BoundaryIntent{}, false, fmt.Errorf("encode boundary intent compensation: %w", err)
+		return transactionmodel.BoundaryIntent{}, "", nil, fmt.Errorf("encode boundary intent compensation: %w", err)
 	}
 	columns := []string{"id", "owner", "operation", "resource_id", "idempotency_key", "status", "payload_json", "compensation_payload_json", "attempt_count", "next_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "last_error", "created_at", "updated_at"}
 	values := []any{intent.ID, intent.Owner, intent.Operation, intent.ResourceID, intent.IdempotencyKey, intent.Status, string(payload), string(compensation), intent.AttemptCount, intent.NextAttemptAt, intent.LeaseOwner, intent.LeaseExpiresAt, intent.FencingToken, intent.LastError, intent.CreatedAt, intent.UpdatedAt}
 	statement, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "transaction_boundary_intents", intent.WorkspaceID).Columns(columns...).Values(values...).Build()
 	if buildErr != nil {
-		return transactionmodel.BoundaryIntent{}, false, fmt.Errorf("build boundary intent insert: %w", buildErr)
+		return transactionmodel.BoundaryIntent{}, "", nil, fmt.Errorf("build boundary intent insert: %w", buildErr)
 	}
-	if _, err := r.db.ExecContext(ctx, statement, args...); err != nil {
-		existing, found, readErr := r.findByIdentity(ctx, intent.WorkspaceID, intent.Owner, intent.Operation, intent.IdempotencyKey)
-		if readErr == nil && found {
-			return existing, true, nil
-		}
-		return transactionmodel.BoundaryIntent{}, false, fmt.Errorf("insert boundary intent: %w", err)
-	}
-	return intent, false, nil
+	return intent, statement, args, nil
 }
 
 func (r BoundaryIntentStore) ClaimBoundaryIntent(ctx context.Context, workspaceID, id, owner, nowText string) (transactionmodel.BoundaryIntent, bool, error) {
@@ -159,7 +191,12 @@ func (r BoundaryIntentStore) GetBoundaryIntent(ctx context.Context, workspaceID,
 }
 
 func (r BoundaryIntentStore) findByIdentity(ctx context.Context, workspaceID, owner, operation, key string) (transactionmodel.BoundaryIntent, bool, error) {
-	row := r.db.QueryRowContext(ctx, "SELECT "+boundaryIntentColumns(r.store)+" FROM "+r.store.TableIdentifier("transaction_boundary_intents")+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(1)+" AND "+r.store.Identifier("owner")+" = "+r.store.Placeholder(2)+" AND "+r.store.Identifier("operation")+" = "+r.store.Placeholder(3)+" AND "+r.store.Identifier("idempotency_key")+" = "+r.store.Placeholder(4), workspaceID, owner, operation, key)
+	statement, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "transaction_boundary_intents", workspaceID).
+		Columns(boundaryIntentColumnNames...).Where(ormbuilder.And(ormbuilder.Equal("owner", owner), ormbuilder.Equal("operation", operation), ormbuilder.Equal("idempotency_key", key))).Limit(1).Build()
+	if buildErr != nil {
+		return transactionmodel.BoundaryIntent{}, false, fmt.Errorf("build boundary intent identity lookup: %w", buildErr)
+	}
+	row := r.db.QueryRowContext(ctx, statement, args...)
 	intent, err := scanBoundaryIntent(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return transactionmodel.BoundaryIntent{}, false, nil
@@ -183,22 +220,6 @@ func scanBoundaryIntent(scanner boundaryIntentScanner) (transactionmodel.Boundar
 }
 
 var boundaryIntentColumnNames = []string{"id", "workspace_id", "owner", "operation", "resource_id", "idempotency_key", "status", "payload_json", "compensation_payload_json", "attempt_count", "next_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "last_error", "created_at", "updated_at"}
-
-func boundaryIntentColumns(store *database.RuntimeStore) string {
-	return joinIdentifiers(store, boundaryIntentColumnNames)
-}
-
-func joinIdentifiers(store *database.RuntimeStore, columns []string) string {
-	return strings.Join(database.QuotedColumns(store, columns), ", ")
-}
-
-func joinPlaceholders(store *database.RuntimeStore, count int) string {
-	values := make([]string, 0, count)
-	for index := 1; index <= count; index++ {
-		values = append(values, store.Placeholder(index))
-	}
-	return strings.Join(values, ", ")
-}
 
 func nonNilMap(value map[string]any) map[string]any {
 	if value == nil {

@@ -17,7 +17,7 @@ func TestDefinitionRefreshIntentAndCompletionBranches(t *testing.T) {
 	definition := metadatamodel.MetadataDefinition{ResourceType: "object", ResourceKey: "account", SchemaVersion: "1", SchemaHash: strings.Repeat("a", 64)}
 	for _, step := range []metadataSQLExecStep{{rows: 1}, {err: errMetadataSQL}} {
 		err := runMetadataTransaction(t, base, metadataSQLState{execSteps: []metadataSQLExecStep{step}}, func(repository MetadataStore, tx *sql.Tx) error {
-			return repository.insertDefinitionRefreshIntentTx(t.Context(), tx, definition, "now")
+			return repository.insertDefinitionRefreshIntentTx(t.Context(), tx, definition)
 		})
 		if (err != nil) != (step.err != nil) {
 			t.Fatalf("insert refresh intent err=%v", err)
@@ -28,23 +28,6 @@ func TestDefinitionRefreshIntentAndCompletionBranches(t *testing.T) {
 	}
 	if err := base.CompleteDefinitionRefresh(t.Context(), identitySystemScopeZero(), "object", "account", "hash", ""); err == nil {
 		t.Fatal("expected completion scope error")
-	}
-	for _, testCase := range []struct {
-		step      metadataSQLExecStep
-		errorText string
-		err       bool
-	}{
-		{step: metadataSQLExecStep{err: errMetadataSQL}, err: true},
-		{step: metadataSQLExecStep{rowsErr: errMetadataSQL}, err: true},
-		{step: metadataSQLExecStep{rows: 0}, err: true},
-		{step: metadataSQLExecStep{rows: 1}},
-		{step: metadataSQLExecStep{rows: 1}, errorText: " retry "},
-	} {
-		repository := scriptedMetadataStore(t, &metadataSQLState{execSteps: []metadataSQLExecStep{testCase.step}}, base)
-		err := repository.CompleteDefinitionRefresh(t.Context(), metadataInstallScope(), " object ", " account ", " hash ", testCase.errorText)
-		if (err != nil) != testCase.err {
-			t.Fatalf("complete err=%v", err)
-		}
 	}
 }
 

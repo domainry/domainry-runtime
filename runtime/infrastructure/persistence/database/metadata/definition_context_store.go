@@ -10,10 +10,12 @@ import (
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	"strings"
 	"time"
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	transactionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/transaction"
 )
 
 // PublishDefinition commits the active definition, immutable version, Audit,
@@ -87,7 +89,7 @@ func (r MetadataStore) publishDefinition(ctx context.Context, scope principalmod
 			return metadatamodel.MetadataDefinition{}, err
 		}
 	}
-	if err := r.insertDefinitionRefreshIntentTx(ctx, tx, definition, now); err != nil {
+	if err := r.insertDefinitionRefreshIntentTx(ctx, tx, definition); err != nil {
 		return metadatamodel.MetadataDefinition{}, err
 	}
 	if err := r.refreshCatalogHashTx(ctx, tx, now); err != nil {
@@ -102,14 +104,21 @@ func (r MetadataStore) publishDefinition(ctx context.Context, scope principalmod
 	return definition, nil
 }
 
-func (r MetadataStore) insertDefinitionRefreshIntentTx(ctx context.Context, tx *sql.Tx, definition metadatamodel.MetadataDefinition, now string) error {
-	payload, _ := json.Marshal(map[string]any{"resource_type": definition.ResourceType, "resource_key": definition.ResourceKey, "schema_version": definition.SchemaVersion, "schema_hash": definition.SchemaHash})
-	id := metadataDefinitionRefreshIntentID(definition.ResourceType, definition.ResourceKey, definition.SchemaHash)
-	leaseExpires := time.Now().UTC().Add(90 * time.Second).Format(time.RFC3339Nano)
-	columns := []string{"id", "workspace_id", "owner", "operation", "resource_id", "idempotency_key", "status", "payload_json", "compensation_payload_json", "attempt_count", "next_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "last_error", "created_at", "updated_at"}
-	values := []any{id, principalmodel.InstallationWorkspaceID, "metadata", "runtime_refresh", definition.ResourceType + ":" + definition.ResourceKey, definition.SchemaHash, "executing", string(payload), "{}", 0, "", "metadata-inline", leaseExpires, 1, "", now, now}
-	query := "INSERT INTO " + r.store.TableIdentifier("transaction_boundary_intents") + " (" + stringsJoinIdentifiers(r.store, columns...) + ") VALUES (" + strings.Join(placeholders(r.store, len(values)), ", ") + ")"
-	if _, err := tx.ExecContext(ctx, query, values...); err != nil {
+func (r MetadataStore) insertDefinitionRefreshIntentTx(ctx context.Context, tx *sql.Tx, definition metadatamodel.MetadataDefinition) error {
+	_, err := transactionpersistence.NewBoundaryIntentStore(r.store).InsertBoundaryIntentTx(ctx, tx, transactionmodel.BoundaryIntent{
+		ID:             metadataDefinitionRefreshIntentID(definition.ResourceType, definition.ResourceKey, definition.SchemaHash),
+		WorkspaceID:    principalmodel.InstallationWorkspaceID,
+		Owner:          "metadata",
+		Operation:      "runtime_refresh",
+		ResourceID:     definition.ResourceType + ":" + definition.ResourceKey,
+		IdempotencyKey: definition.SchemaHash,
+		Status:         transactionmodel.BoundaryIntentExecuting,
+		Payload:        map[string]any{"resource_type": definition.ResourceType, "resource_key": definition.ResourceKey, "schema_version": definition.SchemaVersion, "schema_hash": definition.SchemaHash},
+		LeaseOwner:     "metadata-inline",
+		LeaseExpiresAt: time.Now().UTC().Add(90 * time.Second).Format(time.RFC3339Nano),
+		FencingToken:   1,
+	})
+	if err != nil {
 		return fmt.Errorf("insert metadata refresh intent: %w", err)
 	}
 	return nil
@@ -120,24 +129,14 @@ func (r MetadataStore) CompleteDefinitionRefresh(ctx context.Context, scope prin
 		return err
 	}
 	id := metadataDefinitionRefreshIntentID(strings.TrimSpace(resourceType), strings.TrimSpace(resourceKey), strings.TrimSpace(schemaHash))
-	status, nextAttemptAt, attemptIncrement := "succeeded", "", 0
+	status, nextAttemptAt := transactionmodel.BoundaryIntentSucceeded, ""
 	if strings.TrimSpace(errorText) != "" {
-		status = "reconciliation_required"
+		status = transactionmodel.BoundaryIntentReconciliationRequired
 		nextAttemptAt = time.Now().UTC().Add(time.Minute).Format(time.RFC3339Nano)
-		attemptIncrement = 1
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	query := "UPDATE " + r.store.TableIdentifier("transaction_boundary_intents") + " SET " + r.store.Identifier("status") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("last_error") + " = " + r.store.Placeholder(2) + ", " + r.store.Identifier("next_attempt_at") + " = " + r.store.Placeholder(3) + ", " + r.store.Identifier("attempt_count") + " = " + r.store.Identifier("attempt_count") + " + " + r.store.Placeholder(4) + ", " + r.store.Identifier("lease_owner") + " = '', " + r.store.Identifier("lease_expires_at") + " = '', " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(5) + " WHERE " + r.store.Identifier("id") + " = " + r.store.Placeholder(6) + " AND " + r.store.Identifier("status") + " = 'executing' AND " + r.store.Identifier("lease_owner") + " = 'metadata-inline' AND " + r.store.Identifier("fencing_token") + " = 1"
-	result, err := r.database().ExecContext(ctx, query, status, strings.TrimSpace(errorText), nextAttemptAt, attemptIncrement, now, id)
+	_, err := transactionpersistence.NewBoundaryIntentStore(r.store).TransitionBoundaryIntent(ctx, principalmodel.InstallationWorkspaceID, id, "metadata-inline", 1, status, errorText, nextAttemptAt)
 	if err != nil {
 		return fmt.Errorf("complete metadata refresh intent: %w", err)
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("read completed metadata refresh intent rows: %w", err)
-	}
-	if affected != 1 {
-		return fmt.Errorf("metadata refresh intent transition conflict")
 	}
 	return nil
 }
