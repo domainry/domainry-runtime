@@ -16,9 +16,9 @@ func (r DeliveryMetricsStore) DeliveryMetrics(ctx context.Context, workspaceID, 
 	if err != nil {
 		return notificationmodel.NotificationDeliveryMetrics{}, err
 	}
-	query, args, err := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "integration_outbox_messages").
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).
 		Columns("status", "payload_json", "error").Where(ormbuilder.And(
-		ormbuilder.Equal("workspace_id", workspaceID), ormbuilder.GreaterThanOrEqual("created_at", since),
+		ormbuilder.GreaterThanOrEqual("created_at", since),
 	)).Build()
 	if err != nil {
 		return notificationmodel.NotificationDeliveryMetrics{}, err

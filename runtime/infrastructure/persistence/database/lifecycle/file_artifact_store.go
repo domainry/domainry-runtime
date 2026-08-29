@@ -62,18 +62,34 @@ func (s *FileArtifactStore) RegisterUpload(ctx context.Context, artifact lifecyc
 	}
 	createdAt := artifact.CreatedAt.UTC().Format(time.RFC3339Nano)
 	var id string
-	query := "SELECT " + s.store.Identifier("id") + " FROM " + s.store.TableIdentifier("lifecycle_file_artifacts") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("filename") + " = " + s.store.Placeholder(2)
-	err = s.db.QueryRowContext(ctx, query, artifact.WorkspaceID, artifact.Filename).Scan(&id)
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "lifecycle_file_artifacts", artifact.WorkspaceID).
+		Columns("id").Where(ormbuilder.Equal("filename", artifact.Filename)).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build upload artifact lookup: %w", buildErr)
+	}
+	err = s.db.QueryRowContext(ctx, query, args...).Scan(&id)
 	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
 	if err == nil {
-		update := "UPDATE " + s.store.TableIdentifier("lifecycle_file_artifacts") + " SET " + s.store.Identifier("object_key") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("field_key") + " = " + s.store.Placeholder(2) + ", " + s.store.Identifier("content_type") + " = " + s.store.Placeholder(3) + ", " + s.store.Identifier("sha256") + " = " + s.store.Placeholder(4) + ", " + s.store.Identifier("size_bytes") + " = " + s.store.Placeholder(5) + ", " + s.store.Identifier("status") + " = 'staged', " + s.store.Identifier("scan_status") + " = 'pending', " + s.store.Identifier("scan_provider") + " = '', " + s.store.Identifier("scan_evidence_ref") + " = '', " + s.store.Identifier("scanned_at") + " = '', " + s.store.Identifier("created_at") + " = " + s.store.Placeholder(6) + ", " + s.store.Identifier("last_referenced_at") + " = '', " + s.store.Identifier("delete_after") + " = " + s.store.Placeholder(7) + ", " + s.store.Identifier("deleted_at") + " = '' WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(8) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(9)
-		_, err = s.db.ExecContext(ctx, update, artifact.ObjectKey, artifact.FieldKey, artifact.ContentType, artifact.SHA256, artifact.Size, createdAt, artifact.CreatedAt.UTC().Add(uploadArtifactGracePeriod).Format(time.RFC3339Nano), artifact.WorkspaceID, id)
+		query, args, buildErr = ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "lifecycle_file_artifacts", artifact.WorkspaceID).
+			Set("object_key", artifact.ObjectKey).Set("field_key", artifact.FieldKey).Set("content_type", artifact.ContentType).Set("sha256", artifact.SHA256).Set("size_bytes", artifact.Size).
+			Set("status", "staged").Set("scan_status", lifecyclecontract.FileScanPending).Set("scan_provider", "").Set("scan_evidence_ref", "").Set("scanned_at", "").
+			Set("created_at", createdAt).Set("last_referenced_at", "").Set("delete_after", artifact.CreatedAt.UTC().Add(uploadArtifactGracePeriod).Format(time.RFC3339Nano)).Set("deleted_at", "").
+			Where(ormbuilder.Equal("id", id)).Build()
+		if buildErr != nil {
+			return fmt.Errorf("build upload artifact update: %w", buildErr)
+		}
+		_, err = s.db.ExecContext(ctx, query, args...)
 		return err
 	}
-	columns := []string{"id", "workspace_id", "object_key", "field_key", "filename", "content_type", "sha256", "size_bytes", "status", "scan_status", "scan_provider", "scan_evidence_ref", "scanned_at", "created_at", "last_referenced_at", "delete_after", "deleted_at"}
-	_, err = s.db.ExecContext(ctx, s.store.InsertStatement("lifecycle_file_artifacts", columns), artifact.ID, artifact.WorkspaceID, artifact.ObjectKey, artifact.FieldKey, artifact.Filename, artifact.ContentType, artifact.SHA256, artifact.Size, "staged", lifecyclecontract.FileScanPending, "", "", "", createdAt, "", artifact.CreatedAt.UTC().Add(uploadArtifactGracePeriod).Format(time.RFC3339Nano), "")
+	query, args, buildErr = ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "lifecycle_file_artifacts", artifact.WorkspaceID).
+		Columns("id", "object_key", "field_key", "filename", "content_type", "sha256", "size_bytes", "status", "scan_status", "scan_provider", "scan_evidence_ref", "scanned_at", "created_at", "last_referenced_at", "delete_after", "deleted_at").
+		Values(artifact.ID, artifact.ObjectKey, artifact.FieldKey, artifact.Filename, artifact.ContentType, artifact.SHA256, artifact.Size, "staged", lifecyclecontract.FileScanPending, "", "", "", createdAt, "", artifact.CreatedAt.UTC().Add(uploadArtifactGracePeriod).Format(time.RFC3339Nano), "").Build()
+	if buildErr != nil {
+		return fmt.Errorf("build upload artifact insert: %w", buildErr)
+	}
+	_, err = s.db.ExecContext(ctx, query, args...)
 	return err
 }
 
@@ -86,10 +102,14 @@ func (s *FileArtifactStore) FindFileScan(ctx context.Context, workspaceID, fileI
 		return lifecyclecontract.FileScanEvidence{}, err
 	}
 	columns := []string{"id", "workspace_id", "filename", "content_type", "object_key", "field_key", "sha256", "size_bytes", "scan_status", "scan_provider", "scan_evidence_ref", "scanned_at"}
-	query := "SELECT " + strings.Join(database.QuotedColumns(s.store, columns), ", ") + " FROM " + s.store.TableIdentifier("lifecycle_file_artifacts") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("deleted_at") + " = ''"
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "lifecycle_file_artifacts", workspace.String()).Columns(columns...).
+		Where(ormbuilder.And(ormbuilder.Equal("id", strings.TrimSpace(fileID)), ormbuilder.Equal("deleted_at", ""))).Build()
+	if buildErr != nil {
+		return lifecyclecontract.FileScanEvidence{}, fmt.Errorf("build file scan lookup: %w", buildErr)
+	}
 	var evidence lifecyclecontract.FileScanEvidence
 	var scannedAt string
-	err = s.db.QueryRowContext(ctx, query, workspace.String(), strings.TrimSpace(fileID)).Scan(&evidence.FileID, &evidence.WorkspaceID, &evidence.Filename, &evidence.ContentType, &evidence.ObjectKey, &evidence.FieldKey, &evidence.SHA256, &evidence.Size, &evidence.Status, &evidence.Provider, &evidence.EvidenceRef, &scannedAt)
+	err = s.db.QueryRowContext(ctx, query, args...).Scan(&evidence.FileID, &evidence.WorkspaceID, &evidence.Filename, &evidence.ContentType, &evidence.ObjectKey, &evidence.FieldKey, &evidence.SHA256, &evidence.Size, &evidence.Status, &evidence.Provider, &evidence.EvidenceRef, &scannedAt)
 	if err != nil {
 		return lifecyclecontract.FileScanEvidence{}, err
 	}
@@ -117,8 +137,13 @@ func (s *FileArtifactStore) RecordFileScan(ctx context.Context, evidence lifecyc
 	if current.SHA256 != strings.TrimSpace(evidence.SHA256) || current.Size != evidence.Size {
 		return fmt.Errorf("file scan content identity mismatch")
 	}
-	query := "UPDATE " + s.store.TableIdentifier("lifecycle_file_artifacts") + " SET " + s.store.Identifier("scan_status") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("scan_provider") + " = " + s.store.Placeholder(2) + ", " + s.store.Identifier("scan_evidence_ref") + " = " + s.store.Placeholder(3) + ", " + s.store.Identifier("scanned_at") + " = " + s.store.Placeholder(4) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(5) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(6) + " AND " + s.store.Identifier("sha256") + " = " + s.store.Placeholder(7) + " AND " + s.store.Identifier("size_bytes") + " = " + s.store.Placeholder(8)
-	result, err := s.db.ExecContext(ctx, query, evidence.Status, strings.TrimSpace(evidence.Provider), strings.TrimSpace(evidence.EvidenceRef), evidence.ScannedAt.UTC().Format(time.RFC3339Nano), current.WorkspaceID, current.FileID, current.SHA256, current.Size)
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "lifecycle_file_artifacts", current.WorkspaceID).
+		Set("scan_status", evidence.Status).Set("scan_provider", strings.TrimSpace(evidence.Provider)).Set("scan_evidence_ref", strings.TrimSpace(evidence.EvidenceRef)).
+		Set("scanned_at", evidence.ScannedAt.UTC().Format(time.RFC3339Nano)).Where(ormbuilder.And(ormbuilder.Equal("id", current.FileID), ormbuilder.Equal("sha256", current.SHA256), ormbuilder.Equal("size_bytes", current.Size))).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build file scan update: %w", buildErr)
+	}
+	result, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -221,8 +246,13 @@ func (s *FileArtifactStore) expireDownloadTasks(ctx context.Context, now time.Ti
 		return 0, nil
 	}
 	cutoff := now.Add(-7 * 24 * time.Hour).UTC().Format(time.RFC3339Nano)
-	query := "SELECT " + s.store.Identifier("workspace_id") + ", " + s.store.Identifier("id") + " FROM " + s.store.TableIdentifier("download_task") + " WHERE " + s.store.Identifier("token_status") + " = 'active' AND " + s.store.Identifier("updated_at") + " <= " + s.store.Placeholder(1) + " ORDER BY " + s.store.Identifier("updated_at") + ", " + s.store.Identifier("id") + " LIMIT " + s.store.Placeholder(2)
-	rows, err := s.db.QueryContext(ctx, query, cutoff, limit)
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "download_task").Columns("workspace_id", "id").
+		Where(ormbuilder.And(ormbuilder.Equal("token_status", "active"), ormbuilder.LessThanOrEqual("updated_at", cutoff))).
+		OrderBy(ormbuilder.Ascending("updated_at"), ormbuilder.Ascending("id")).Limit(limit).Build()
+	if buildErr != nil {
+		return 0, fmt.Errorf("build expired download task query: %w", buildErr)
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -243,8 +273,13 @@ func (s *FileArtifactStore) expireDownloadTasks(ctx context.Context, now time.Ti
 	_ = rows.Close()
 	expired := 0
 	for _, item := range identities {
-		update := "UPDATE " + s.store.TableIdentifier("download_task") + " SET " + s.store.Identifier("token_status") + " = 'expired', " + s.store.Identifier("status") + " = 'expired', " + s.store.Identifier("file_name") + " = '', " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(1) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(3) + " AND " + s.store.Identifier("token_status") + " = 'active'"
-		changed, err := s.db.ExecContext(ctx, update, now.UTC().Format(time.RFC3339Nano), item.workspaceID, item.id)
+		update, updateArgs, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "download_task", item.workspaceID).
+			Set("token_status", "expired").Set("status", "expired").Set("file_name", "").Set("updated_at", now.UTC().Format(time.RFC3339Nano)).
+			Where(ormbuilder.And(ormbuilder.Equal("id", item.id), ormbuilder.Equal("token_status", "active"))).Build()
+		if buildErr != nil {
+			return expired, fmt.Errorf("build download task expiration: %w", buildErr)
+		}
+		changed, err := s.db.ExecContext(ctx, update, updateArgs...)
 		if err != nil {
 			return expired, err
 		}
@@ -263,9 +298,13 @@ func (s *FileArtifactStore) artifactReferenced(ctx context.Context, workspaceID,
 		return false, nil
 	}
 	reference := "/uploads/" + filename
-	query := "SELECT COUNT(*) FROM " + s.store.TableIdentifier(objectKey) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND (" + s.store.Identifier(fieldKey) + " = " + s.store.Placeholder(2) + " OR " + s.store.Identifier(fieldKey) + " LIKE " + s.store.Placeholder(3) + ")"
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, objectKey, workspaceID).Projections(ormbuilder.Project(ormbuilder.CountAll())).
+		Where(ormbuilder.Or(ormbuilder.Equal(fieldKey, reference), ormbuilder.Like(fieldKey, "%\""+reference+"\"%"))).Build()
+	if buildErr != nil {
+		return false, fmt.Errorf("build upload artifact reference query: %w", buildErr)
+	}
 	var count int
-	if err := s.db.QueryRowContext(ctx, query, workspaceID, reference, "%\""+reference+"\"%").Scan(&count); err != nil {
+	if err := s.db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
 		return false, err
 	}
 	return count > 0, nil
@@ -279,14 +318,25 @@ func (s *FileArtifactStore) updateArtifactState(ctx context.Context, workspaceID
 	if !deleteAfter.IsZero() {
 		deletion = deleteAfter.UTC().Format(time.RFC3339Nano)
 	}
-	query := "UPDATE " + s.store.TableIdentifier("lifecycle_file_artifacts") + " SET " + s.store.Identifier("status") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("last_referenced_at") + " = CASE WHEN " + s.store.Placeholder(2) + " = '' THEN " + s.store.Identifier("last_referenced_at") + " ELSE " + s.store.Placeholder(3) + " END, " + s.store.Identifier("delete_after") + " = " + s.store.Placeholder(4) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(5) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(6)
-	_, err := s.db.ExecContext(ctx, query, status, lastReferenced, lastReferenced, deletion, workspaceID, id)
+	update := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "lifecycle_file_artifacts", workspaceID).Set("status", status).Set("delete_after", deletion)
+	if lastReferenced != "" {
+		update.Set("last_referenced_at", lastReferenced)
+	}
+	query, args, buildErr := update.Where(ormbuilder.Equal("id", id)).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build upload artifact state update: %w", buildErr)
+	}
+	_, err := s.db.ExecContext(ctx, query, args...)
 	return err
 }
 
 func (s *FileArtifactStore) markArtifactDeleted(ctx context.Context, workspaceID, id string, now time.Time) error {
-	query := "UPDATE " + s.store.TableIdentifier("lifecycle_file_artifacts") + " SET " + s.store.Identifier("status") + " = 'deleted', " + s.store.Identifier("delete_after") + " = '', " + s.store.Identifier("deleted_at") + " = " + s.store.Placeholder(1) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(3)
-	_, err := s.db.ExecContext(ctx, query, now.UTC().Format(time.RFC3339Nano), workspaceID, id)
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "lifecycle_file_artifacts", workspaceID).
+		Set("status", "deleted").Set("delete_after", "").Set("deleted_at", now.UTC().Format(time.RFC3339Nano)).Where(ormbuilder.Equal("id", id)).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build upload artifact deletion: %w", buildErr)
+	}
+	_, err := s.db.ExecContext(ctx, query, args...)
 	return err
 }
 
