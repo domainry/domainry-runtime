@@ -25,6 +25,10 @@ type Dialect interface {
 	SchemaMigrationSQL() string
 }
 
+type ProjectDatabaseEnsurer interface {
+	EnsureProjectDatabase(context.Context, config.Config) error
+}
+
 type EngineProfile interface {
 	ormdriver.Profile
 	MigrationDatabasePath(config.Config) string
