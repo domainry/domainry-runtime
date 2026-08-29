@@ -18,6 +18,7 @@ import (
 	agentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/agent"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	notificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notification"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 )
@@ -218,11 +219,14 @@ func (r WorkflowDecisionStore) updateAgentTaskTx(ctx context.Context, tx *sql.Tx
 	if expectedStatus == "" {
 		expectedStatus = "running"
 	}
-	query := "UPDATE " + r.store.TableIdentifier("agent_task_runs") + " SET " + r.store.Identifier("status") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("payload_json") + " = " + r.store.Placeholder(2) + ", " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(3) + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(4) + " AND " + r.store.Identifier("run_id") + " = " + r.store.Placeholder(5) + " AND " + r.store.Identifier("status") + " = " + r.store.Placeholder(6)
-	args := []any{run.Status, run.Payload, run.UpdatedAtMillis, run.WorkspaceID, run.RunID, expectedStatus}
+	predicate := ormbuilder.And(ormbuilder.Equal("run_id", run.RunID), ormbuilder.Equal("status", expectedStatus))
 	if expectedStatus == "running" {
-		query += " AND " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(7) + " AND " + r.store.Identifier("fencing_token") + " = " + r.store.Placeholder(8)
-		args = append(args, run.LeaseOwner, run.FencingToken)
+		predicate = ormbuilder.And(predicate, ormbuilder.Equal("lease_owner", run.LeaseOwner), ormbuilder.Equal("fencing_token", run.FencingToken))
+	}
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "agent_task_runs", run.WorkspaceID).
+		Set("status", run.Status).Set("payload_json", run.Payload).Set("updated_at", run.UpdatedAtMillis).Where(predicate).Build()
+	if err != nil {
+		return fmt.Errorf("build agent task update: %w", err)
 	}
 	result, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
@@ -272,8 +276,14 @@ func (r WorkflowDecisionStore) decideTaskTx(ctx context.Context, tx *sql.Tx, com
 	if status == "" {
 		status = "open"
 	}
-	query := "UPDATE " + r.store.TableIdentifier("workflow_tasks") + " SET " + r.store.Identifier("status") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("decision") + " = " + r.store.Placeholder(2) + ", " + r.store.Identifier("comment") + " = " + r.store.Placeholder(3) + ", " + r.store.Identifier("completed_by") + " = " + r.store.Placeholder(4) + ", " + r.store.Identifier("completed_at") + " = " + r.store.Placeholder(5) + ", " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(6) + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(7) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(8) + " AND " + r.store.Identifier("assignee_user_id") + " = " + r.store.Placeholder(9) + " AND " + r.store.Identifier("status") + " = " + r.store.Placeholder(10)
-	result, err := tx.ExecContext(ctx, query, task.Status, task.Decision, task.Comment, task.CompletedBy, database.NullableText(task.CompletedAt), task.UpdatedAt, commit.WorkspaceID, task.ID, commit.ExpectedAssigneeID, status)
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "workflow_tasks", commit.WorkspaceID).
+		Set("status", task.Status).Set("decision", task.Decision).Set("comment", task.Comment).Set("completed_by", task.CompletedBy).
+		Set("completed_at", database.NullableText(task.CompletedAt)).Set("updated_at", task.UpdatedAt).
+		Where(ormbuilder.And(ormbuilder.Equal("id", task.ID), ormbuilder.Equal("assignee_user_id", commit.ExpectedAssigneeID), ormbuilder.Equal("status", status))).Build()
+	if err != nil {
+		return false, fmt.Errorf("build workflow task decision: %w", err)
+	}
+	result, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
 		return false, fmt.Errorf("decide workflow task: %w", err)
 	}
@@ -333,17 +343,31 @@ func (r WorkflowDecisionStore) updateExecutionTx(ctx context.Context, tx *sql.Tx
 }
 
 func (r WorkflowDecisionStore) insertTx(ctx context.Context, tx *sql.Tx, table string, columns []string, values []any) error {
-	_, err := tx.ExecContext(ctx, "INSERT INTO "+r.store.TableIdentifier(table)+" ("+stringsJoinIdentifiers(r.store, columns...)+") VALUES ("+stringsJoinPlaceholders(r.store, len(columns))+")", values...)
+	workspaceID, scopedColumns, scopedValues, err := workflowScopedInsert(columns, values)
+	if err != nil {
+		return err
+	}
+	query, args, err := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, table, workspaceID).Columns(scopedColumns...).Values(scopedValues...).Build()
+	if err != nil {
+		return fmt.Errorf("build %s insert: %w", table, err)
+	}
+	_, err = tx.ExecContext(ctx, query, args...)
 	return err
 }
 
 func (r WorkflowDecisionStore) updateTx(ctx context.Context, tx *sql.Tx, table, workspaceID, id string, columns []string, values []any) error {
-	assignments := make([]string, 0, len(columns))
-	for index, column := range columns {
-		assignments = append(assignments, r.store.Identifier(column)+" = "+r.store.Placeholder(index+1))
+	if len(columns) != len(values) {
+		return fmt.Errorf("build %s update: columns=%d values=%d", table, len(columns), len(values))
 	}
-	values = append(values, workspaceID, id)
-	result, err := tx.ExecContext(ctx, "UPDATE "+r.store.TableIdentifier(table)+" SET "+strings.Join(assignments, ", ")+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(len(values)-1)+" AND "+r.store.Identifier("id")+" = "+r.store.Placeholder(len(values)), values...)
+	builder := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, table, workspaceID)
+	for index, column := range columns {
+		builder.Set(column, values[index])
+	}
+	query, args, err := builder.Where(ormbuilder.Equal("id", id)).Build()
+	if err != nil {
+		return fmt.Errorf("build %s update: %w", table, err)
+	}
+	result, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -352,4 +376,25 @@ func (r WorkflowDecisionStore) updateTx(ctx context.Context, tx *sql.Tx, table, 
 		return sql.ErrNoRows
 	}
 	return err
+}
+
+func workflowScopedInsert(columns []string, values []any) (string, []string, []any, error) {
+	if len(columns) != len(values) {
+		return "", nil, nil, fmt.Errorf("workflow insert columns=%d values=%d", len(columns), len(values))
+	}
+	workspaceID := ""
+	scopedColumns := make([]string, 0, len(columns)-1)
+	scopedValues := make([]any, 0, len(values)-1)
+	for index, column := range columns {
+		if column == "workspace_id" {
+			workspaceID = strings.TrimSpace(fmt.Sprint(values[index]))
+			continue
+		}
+		scopedColumns = append(scopedColumns, column)
+		scopedValues = append(scopedValues, values[index])
+	}
+	if _, err := requireWorkflowWorkspaceID(workspaceID); err != nil {
+		return "", nil, nil, err
+	}
+	return workspaceID, scopedColumns, scopedValues, nil
 }

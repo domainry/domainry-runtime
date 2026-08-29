@@ -39,14 +39,24 @@ func (r WorkflowWorkerStore) tryBeginExecutionOnce(ctx context.Context, request 
 		request.LeaseTTL = 5 * time.Minute
 	}
 	receipt := request.Receipt
-	receipt.WorkspaceID = workflowReceiptWorkspace(receipt.WorkspaceID)
+	workspaceID, err := requireWorkflowWorkspaceID(receipt.WorkspaceID)
+	if err != nil {
+		return workflowmodel.WorkflowExecutionClaimResult{}, err
+	}
+	receipt.WorkspaceID = workspaceID
 	receipt.WorkflowKey, receipt.IdempotencyKey = strings.TrimSpace(receipt.WorkflowKey), strings.TrimSpace(receipt.IdempotencyKey)
 	receipt.RequestFingerprint, receipt.LeaseOwner = strings.TrimSpace(request.RequestFingerprint), strings.TrimSpace(request.LeaseOwner)
 	receipt.ID = workflowReceiptID(receipt.WorkspaceID, receipt.WorkflowKey, receipt.IdempotencyKey)
 	receipt.Status, receipt.FencingToken = string(idempotency.StatusProcessing), 1
 	receipt.LeaseExpiresAt = now.Add(request.LeaseTTL).Format(time.RFC3339Nano)
 	receipt.CreatedAt, receipt.UpdatedAt = now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)
-	_, insertErr := r.database().ExecContext(ctx, "INSERT INTO "+r.store.TableIdentifier("workflow_execution_receipts")+" ("+strings.Join(r.storeQuotedWorkflowReceiptColumns(), ", ")+") VALUES ("+strings.Join(r.storePlaceholders(len(workflowReceiptColumns())), ", ")+")", workflowReceiptValues(receipt)...)
+	columns, values := workflowReceiptColumns(), workflowReceiptValues(receipt)
+	statement, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "workflow_execution_receipts", workspaceID).
+		Columns(append(columns[:1], columns[2:]...)...).Values(append(values[:1], values[2:]...)...).Build()
+	if buildErr != nil {
+		return workflowmodel.WorkflowExecutionClaimResult{}, fmt.Errorf("build workflow execution receipt insert: %w", buildErr)
+	}
+	_, insertErr := r.database().ExecContext(ctx, statement, args...)
 	if insertErr == nil {
 		r.store.ObserveIdempotency(ctx, receipt.WorkspaceID, "workflow.execute", idempotency.OutcomeAcquired)
 		return workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionAcquired, Receipt: receipt}, nil
@@ -63,7 +73,7 @@ func (r WorkflowWorkerStore) tryBeginExecutionOnce(ctx context.Context, request 
 		r.store.ObserveIdempotency(ctx, receipt.WorkspaceID, "workflow.execute", idempotency.OutcomeForDecision(decision, false))
 		return workflowmodel.WorkflowExecutionClaimResult{Decision: decision, Receipt: current}, nil
 	}
-	statement, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "workflow_execution_receipts", receipt.WorkspaceID).
+	statement, args, buildErr = ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "workflow_execution_receipts", receipt.WorkspaceID).
 		Set("status", string(idempotency.StatusProcessing)).
 		Set("lease_owner", receipt.LeaseOwner).
 		Set("lease_expires_at", receipt.LeaseExpiresAt).
@@ -137,29 +147,21 @@ func (r WorkflowWorkerStore) CompleteExecutionReceipt(ctx context.Context, compl
 }
 
 func (r WorkflowWorkerStore) findExecutionReceipt(ctx context.Context, workspaceID, workflowKey, key string) (workflowmodel.WorkflowExecutionReceipt, bool, error) {
-	query := "SELECT " + strings.Join(r.storeQuotedWorkflowReceiptColumns(), ", ") + " FROM " + r.store.TableIdentifier("workflow_execution_receipts") + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1) + " AND " + r.store.Identifier("workflow_key") + " = " + r.store.Placeholder(2) + " AND " + r.store.Identifier("idempotency_key") + " = " + r.store.Placeholder(3) + " LIMIT 1"
+	workspaceID, err := requireWorkflowWorkspaceID(workspaceID)
+	if err != nil {
+		return workflowmodel.WorkflowExecutionReceipt{}, false, err
+	}
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "workflow_execution_receipts", workspaceID).
+		Columns(workflowReceiptColumns()...).Where(ormbuilder.And(ormbuilder.Equal("workflow_key", strings.TrimSpace(workflowKey)), ormbuilder.Equal("idempotency_key", strings.TrimSpace(key)))).Limit(1).Build()
+	if err != nil {
+		return workflowmodel.WorkflowExecutionReceipt{}, false, fmt.Errorf("build workflow execution receipt lookup: %w", err)
+	}
 	var value workflowmodel.WorkflowExecutionReceipt
-	err := r.database().QueryRowContext(ctx, query, workflowReceiptWorkspace(workspaceID), strings.TrimSpace(workflowKey), strings.TrimSpace(key)).Scan(workflowReceiptScanTargets(&value)...)
+	err = r.database().QueryRowContext(ctx, query, args...).Scan(workflowReceiptScanTargets(&value)...)
 	if errors.Is(err, sql.ErrNoRows) {
 		return workflowmodel.WorkflowExecutionReceipt{}, false, nil
 	}
 	return value, err == nil, err
-}
-
-func (r WorkflowWorkerStore) storeQuotedWorkflowReceiptColumns() []string {
-	columns := workflowReceiptColumns()
-	for index := range columns {
-		columns[index] = r.store.Identifier(columns[index])
-	}
-	return columns
-}
-
-func (r WorkflowWorkerStore) storePlaceholders(count int) []string {
-	values := make([]string, count)
-	for index := range values {
-		values[index] = r.store.Placeholder(index + 1)
-	}
-	return values
 }
 
 func workflowReceiptColumns() []string {
@@ -180,15 +182,8 @@ func workflowReceiptLease(value workflowmodel.WorkflowExecutionReceipt) idempote
 }
 
 func workflowReceiptID(workspaceID, workflowKey, key string) string {
-	sum := sha256.Sum256([]byte(strings.Join([]string{workflowReceiptWorkspace(workspaceID), strings.TrimSpace(workflowKey), strings.TrimSpace(key)}, ":")))
+	sum := sha256.Sum256([]byte(strings.Join([]string{strings.TrimSpace(workspaceID), strings.TrimSpace(workflowKey), strings.TrimSpace(key)}, ":")))
 	return "workflow_receipt:" + hex.EncodeToString(sum[:])[:20]
-}
-
-func workflowReceiptWorkspace(value string) string {
-	if value = strings.TrimSpace(value); value != "" {
-		return value
-	}
-	return "default"
 }
 
 func workflowClaimBackoff(ctx context.Context, attempt int) error {

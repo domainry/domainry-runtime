@@ -102,12 +102,11 @@ func TestWorkflowExecutionReceiptClaimFailures(t *testing.T) {
 			t.Fatalf("error = %v", err)
 		}
 	})
-	t.Run("defaults", func(t *testing.T) {
+	t.Run("workspace required", func(t *testing.T) {
 		store := workflowWorkerFailureStore(t, &workflowSQLState{})
 		request := workflowmodel.WorkflowExecutionClaimRequest{Receipt: workflowmodel.WorkflowExecutionReceipt{WorkspaceID: "  ", WorkflowKey: " workflow ", IdempotencyKey: " key "}, RequestFingerprint: " fingerprint ", LeaseOwner: " owner "}
-		claim, err := store.TryBeginExecution(t.Context(), request)
-		if err != nil || claim.Decision != idempotency.DecisionAcquired || claim.Receipt.WorkspaceID != "default" {
-			t.Fatalf("claim=%#v err=%v", claim, err)
+		if _, err := store.TryBeginExecution(t.Context(), request); err == nil || !strings.Contains(err.Error(), "workspace id is required") {
+			t.Fatalf("error=%v", err)
 		}
 	})
 }
