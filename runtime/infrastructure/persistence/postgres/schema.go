@@ -14,15 +14,19 @@ import (
 	ormpostgres "github.com/domainry/domainry-orm/postgres"
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	postgresevidence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/evidence"
+	postgresrecord "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/record"
+	postgresreport "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/report"
 )
 
 type engineProfile struct {
 	ormdriver.Profile
 	evidence persistencedriver.EvidenceSchemaProfile
+	record   persistencedriver.RecordProfile
+	report   persistencedriver.ReportProfile
 }
 
 func newEngineProfile() engineProfile {
-	return engineProfile{Profile: ormpostgres.NewProfile(), evidence: postgresevidence.NewProfile()}
+	return engineProfile{Profile: ormpostgres.NewProfile(), evidence: postgresevidence.NewProfile(), record: postgresrecord.NewProfile(), report: postgresreport.NewProfile()}
 }
 
 func (engineProfile) ManagedDatabaseMarkerEnabled() bool        { return true }
@@ -46,15 +50,15 @@ func (profile engineProfile) NormalizeEvidenceSchema(ctx context.Context, databa
 	return profile.evidence.Normalize(ctx, database, renderer)
 }
 
-func (engineProfile) WorkspaceRLSSupported() bool             { return true }
-func (engineProfile) OrderedDecimalTextStorage() bool         { return false }
-func (engineProfile) RecordReadIsolation() sql.IsolationLevel { return sql.LevelRepeatableRead }
-func (engineProfile) ReportDateBucket(value, grain string, date bool) (string, error) {
-	castType := "TIMESTAMPTZ"
-	if date {
-		castType = "DATE"
-	}
-	return "DATE_TRUNC('" + grain + "', CAST(" + value + " AS " + castType + "))", nil
+func (engineProfile) WorkspaceRLSSupported() bool { return true }
+func (profile engineProfile) OrderedDecimalTextStorage() bool {
+	return profile.record.OrderedDecimalTextStorage()
+}
+func (profile engineProfile) RecordReadIsolation() sql.IsolationLevel {
+	return profile.record.ReadIsolation()
+}
+func (profile engineProfile) ReportDateBucket(value, grain string, date bool) (string, error) {
+	return profile.report.DateBucket(value, grain, date)
 }
 
 func (engineProfile) ApplyWorkspaceRLS(ctx context.Context, database *sql.DB, renderer ormdialect.Renderer, databaseSchema, runtimeRole, policyVersion string) error {

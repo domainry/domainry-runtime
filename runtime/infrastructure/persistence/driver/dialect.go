@@ -59,6 +59,15 @@ type EvidenceSchemaProfile interface {
 	Normalize(context.Context, SchemaDatabase, ormdialect.Renderer) error
 }
 
+type RecordProfile interface {
+	OrderedDecimalTextStorage() bool
+	ReadIsolation() sql.IsolationLevel
+}
+
+type ReportProfile interface {
+	DateBucket(string, string, bool) (string, error)
+}
+
 type SchemaQuery struct {
 	Statement string
 	Arguments []any

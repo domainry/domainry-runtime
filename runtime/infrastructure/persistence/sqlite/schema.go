@@ -10,6 +10,8 @@ import (
 	ormsqlite "github.com/domainry/domainry-orm/sqlite"
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	sqliteevidence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite/evidence"
+	sqliterecord "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite/record"
+	sqlitereport "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite/report"
 )
 
 func (engineProfile) WorkspaceRLSSupported() bool { return false }
@@ -19,26 +21,16 @@ func (engineProfile) ApplyWorkspaceRLS(context.Context, *sql.DB, ormdialect.Rend
 func (engineProfile) InspectWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) (persistencedriver.WorkspaceRLSStatus, error) {
 	return persistencedriver.WorkspaceRLSStatus{}, nil
 }
-func (engineProfile) OrderedDecimalTextStorage() bool         { return true }
-func (engineProfile) RecordReadIsolation() sql.IsolationLevel { return sql.LevelSerializable }
-func (engineProfile) ReportDateBucket(value, grain string, _ bool) (string, error) {
-	formats := map[string]string{"day": "%Y-%m-%dT00:00:00Z", "month": "%Y-%m-01T00:00:00Z", "year": "%Y-01-01T00:00:00Z"}
-	if grain == "week" {
-		return "strftime('%Y-%m-%dT00:00:00Z', " + value + ", '-' || ((CAST(strftime('%w', " + value + ") AS INTEGER) + 6) % 7) || ' days')", nil
-	}
-	if grain == "quarter" {
-		return "printf('%04d-%02d-01T00:00:00Z', CAST(strftime('%Y', " + value + ") AS INTEGER), ((CAST(strftime('%m', " + value + ") AS INTEGER) - 1) / 3) * 3 + 1)", nil
-	}
-	return "strftime('" + formats[grain] + "', " + value + ")", nil
-}
 
 type engineProfile struct {
 	ormdriver.Profile
 	evidence persistencedriver.EvidenceSchemaProfile
+	record   persistencedriver.RecordProfile
+	report   persistencedriver.ReportProfile
 }
 
 func newEngineProfile() engineProfile {
-	return engineProfile{Profile: ormsqlite.NewProfile(), evidence: sqliteevidence.NewProfile()}
+	return engineProfile{Profile: ormsqlite.NewProfile(), evidence: sqliteevidence.NewProfile(), record: sqliterecord.NewProfile(), report: sqlitereport.NewProfile()}
 }
 
 func (engineProfile) ManagedDatabaseMarkerEnabled() bool        { return false }
@@ -60,4 +52,13 @@ func (profile engineProfile) EvidenceSchemaTypes(text string) persistencedriver.
 }
 func (profile engineProfile) NormalizeEvidenceSchema(ctx context.Context, database persistencedriver.SchemaDatabase, renderer ormdialect.Renderer) error {
 	return profile.evidence.Normalize(ctx, database, renderer)
+}
+func (profile engineProfile) OrderedDecimalTextStorage() bool {
+	return profile.record.OrderedDecimalTextStorage()
+}
+func (profile engineProfile) RecordReadIsolation() sql.IsolationLevel {
+	return profile.record.ReadIsolation()
+}
+func (profile engineProfile) ReportDateBucket(value, grain string, date bool) (string, error) {
+	return profile.report.DateBucket(value, grain, date)
 }

@@ -10,6 +10,8 @@ import (
 	ormmysql "github.com/domainry/domainry-orm/mysql"
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	mysqlevidence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/evidence"
+	mysqlrecord "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/record"
+	mysqlreport "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/report"
 )
 
 func (engineProfile) WorkspaceRLSSupported() bool { return false }
@@ -19,23 +21,16 @@ func (engineProfile) ApplyWorkspaceRLS(context.Context, *sql.DB, ormdialect.Rend
 func (engineProfile) InspectWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) (persistencedriver.WorkspaceRLSStatus, error) {
 	return persistencedriver.WorkspaceRLSStatus{}, nil
 }
-func (engineProfile) OrderedDecimalTextStorage() bool         { return false }
-func (engineProfile) RecordReadIsolation() sql.IsolationLevel { return sql.LevelSerializable }
-func (engineProfile) ReportDateBucket(value, grain string, _ bool) (string, error) {
-	formats := map[string]string{"day": "%Y-%m-%d 00:00:00", "week": "%x-%v-1 00:00:00", "month": "%Y-%m-01 00:00:00", "year": "%Y-01-01 00:00:00"}
-	if grain == "quarter" {
-		return "STR_TO_DATE(CONCAT(YEAR(" + value + "), '-', LPAD(((QUARTER(" + value + ") - 1) * 3) + 1, 2, '0'), '-01'), '%Y-%m-%d')", nil
-	}
-	return "DATE_FORMAT(" + value + ", '" + formats[grain] + "')", nil
-}
 
 type engineProfile struct {
 	ormdriver.Profile
 	evidence persistencedriver.EvidenceSchemaProfile
+	record   persistencedriver.RecordProfile
+	report   persistencedriver.ReportProfile
 }
 
 func newEngineProfile() engineProfile {
-	return engineProfile{Profile: ormmysql.NewProfile(), evidence: mysqlevidence.NewProfile()}
+	return engineProfile{Profile: ormmysql.NewProfile(), evidence: mysqlevidence.NewProfile(), record: mysqlrecord.NewProfile(), report: mysqlreport.NewProfile()}
 }
 
 func (engineProfile) ManagedDatabaseMarkerEnabled() bool { return true }
@@ -63,4 +58,13 @@ func (profile engineProfile) EvidenceSchemaTypes(text string) persistencedriver.
 }
 func (profile engineProfile) NormalizeEvidenceSchema(ctx context.Context, database persistencedriver.SchemaDatabase, renderer ormdialect.Renderer) error {
 	return profile.evidence.Normalize(ctx, database, renderer)
+}
+func (profile engineProfile) OrderedDecimalTextStorage() bool {
+	return profile.record.OrderedDecimalTextStorage()
+}
+func (profile engineProfile) RecordReadIsolation() sql.IsolationLevel {
+	return profile.record.ReadIsolation()
+}
+func (profile engineProfile) ReportDateBucket(value, grain string, date bool) (string, error) {
+	return profile.report.DateBucket(value, grain, date)
 }
