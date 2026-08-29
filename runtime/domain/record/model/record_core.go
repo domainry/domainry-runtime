@@ -8,8 +8,8 @@ type Record struct {
 	UpdatedAt    string                        `json:"updated_at"`
 	Deleted      bool                          `json:"deleted"`
 	ExtInfo      map[string]any                `json:"ext_info,omitempty"`
-	CreateUserID string                        `json:"create_user_id,omitempty"`
-	UpdateUserID string                        `json:"update_user_id,omitempty"`
+	CreateBy     string                        `json:"create_by,omitempty"`
+	UpdateBy     string                        `json:"update_by,omitempty"`
 	Localization *RecordLocalizationResolution `json:"localization,omitempty"`
 }
 

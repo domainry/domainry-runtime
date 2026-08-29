@@ -195,7 +195,7 @@ func (r MetadataStore) ensureObjectStorage(ctx context.Context, object definitio
 	// The remaining Record metadata columns are infrastructure-owned and cannot
 	// be redefined as business data.
 	reserved := map[string]bool{
-		"deleted": true, "ext_info": true, "create_user_id": true, "update_user_id": true,
+		"deleted": true, "ext_info": true, "create_by": true, "update_by": true,
 	}
 	for _, field := range object.Fields {
 		if reserved[strings.TrimSpace(field.Key)] {
@@ -217,6 +217,9 @@ func (r MetadataStore) ensureObjectStorage(ctx context.Context, object definitio
 	if err != nil {
 		return err
 	}
+	if err := r.migrateLegacyRecordActorColumns(ctx, object.Key, existing); err != nil {
+		return err
+	}
 	var existingTypes map[string]string
 	indexes, _ := r.tableIndexes(ctx, object.Key)
 	if !existing["workspace_id"] {
@@ -231,7 +234,7 @@ func (r MetadataStore) ensureObjectStorage(ctx context.Context, object definitio
 	if !existing["id"] {
 		return fmt.Errorf("object %s is missing required Record system column id", object.Key)
 	}
-	for _, columnName := range []string{"deleted", "ext_info", "create_user_id", "update_user_id"} {
+	for _, columnName := range []string{"deleted", "ext_info", "create_by", "update_by"} {
 		if existing[columnName] {
 			continue
 		}

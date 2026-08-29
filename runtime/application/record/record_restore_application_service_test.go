@@ -90,7 +90,7 @@ func TestRestoreServiceOwnsCompleteRestoreTransaction(t *testing.T) {
 	if restored.Data["status"] != "active" || restored.Data["deleted_at"] != "" || restored.Data["deleted_by"] != "" || restored.Data["version"] != float64(3) {
 		t.Fatalf("restored data = %#v", restored.Data)
 	}
-	if repository.commit.Operation != "restore" || repository.commit.Record.Deleted || repository.commit.Record.UpdateUserID != "admin" || repository.commit.Optimistic.ExpectedUpdatedAt != "before" || repository.commit.Audit == nil || repository.commit.Audit.Event != "record_restored" {
+	if repository.commit.Operation != "restore" || repository.commit.Record.Deleted || repository.commit.Record.UpdateBy != "admin" || repository.commit.Optimistic.ExpectedUpdatedAt != "before" || repository.commit.Audit == nil || repository.commit.Audit.Event != "record_restored" {
 		t.Fatalf("restore commit = %#v", repository.commit)
 	}
 	if len(repository.commit.WorkflowIntents) != 1 || len(preparedTriggers) != 1 || preparedTriggers[0] != "record_updated:customer.status" || len(executed) != 1 {

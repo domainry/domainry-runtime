@@ -1085,11 +1085,11 @@ func appendRecordInsertMetadata(columns []string, values []any, record recordmod
 		}
 		columns, values = append(columns, "ext_info"), append(values, encoded)
 	}
-	if userID := strings.TrimSpace(record.CreateUserID); userID != "" {
-		columns, values = append(columns, "create_user_id"), append(values, userID)
+	if userID := strings.TrimSpace(record.CreateBy); userID != "" {
+		columns, values = append(columns, "create_by"), append(values, userID)
 	}
-	if userID := strings.TrimSpace(record.UpdateUserID); userID != "" {
-		columns, values = append(columns, "update_user_id"), append(values, userID)
+	if userID := strings.TrimSpace(record.UpdateBy); userID != "" {
+		columns, values = append(columns, "update_by"), append(values, userID)
 	}
 	return columns, values, nil
 }
@@ -1107,8 +1107,8 @@ func appendRecordUpdateMetadata(store *database.RuntimeStore, assignments []stri
 		assignments = append(assignments, store.Identifier("ext_info")+" = "+store.Placeholder(len(values)+1))
 		values = append(values, encoded)
 	}
-	if userID := strings.TrimSpace(record.UpdateUserID); userID != "" {
-		assignments = append(assignments, store.Identifier("update_user_id")+" = "+store.Placeholder(len(values)+1))
+	if userID := strings.TrimSpace(record.UpdateBy); userID != "" {
+		assignments = append(assignments, store.Identifier("update_by")+" = "+store.Placeholder(len(values)+1))
 		values = append(values, userID)
 	}
 	return assignments, values, nil

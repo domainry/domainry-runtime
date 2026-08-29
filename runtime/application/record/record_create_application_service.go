@@ -285,13 +285,13 @@ func (s *RecordCreateApplicationService) planCreate(ctx context.Context, objectK
 	}
 	now := s.now().UTC().Format(time.RFC3339Nano)
 	record := recordmodel.Record{
-		WorkspaceID:  principal.WorkspaceID,
-		ID:           recordID,
-		Data:         recordvalidation.RecordCloneData(data),
-		CreatedAt:    now,
-		UpdatedAt:    now,
-		CreateUserID: principal.UserID,
-		UpdateUserID: principal.UserID,
+		WorkspaceID: principal.WorkspaceID,
+		ID:          recordID,
+		Data:        recordvalidation.RecordCloneData(data),
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		CreateBy:    principal.UserID,
+		UpdateBy:    principal.UserID,
 	}
 	commit := transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: record, LocalizedValues: localizedValues}
 	if s.dependencies.BuildAudit != nil {

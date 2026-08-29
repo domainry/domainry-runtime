@@ -308,7 +308,7 @@ func createRelationRLSTable(t *testing.T, store *RuntimeStore, object definition
 		store.Identifier("workspace_id") + " TEXT NOT NULL", store.Identifier("id") + " TEXT NOT NULL",
 		store.Identifier("created_at") + " TEXT NOT NULL", store.Identifier("updated_at") + " TEXT NOT NULL",
 		store.Identifier("deleted") + " BOOLEAN NOT NULL DEFAULT FALSE", store.Identifier("ext_info") + " TEXT NOT NULL DEFAULT '{}'",
-		store.Identifier("create_user_id") + " TEXT", store.Identifier("update_user_id") + " TEXT",
+		store.Identifier("create_by") + " TEXT", store.Identifier("update_by") + " TEXT",
 	}
 	for _, field := range object.Fields {
 		columns = append(columns, store.Identifier(field.Key)+" TEXT")

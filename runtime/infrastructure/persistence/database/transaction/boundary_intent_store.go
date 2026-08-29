@@ -71,9 +71,13 @@ func (r BoundaryIntentStore) InsertBoundaryIntentTx(ctx context.Context, tx Boun
 }
 
 func (r BoundaryIntentStore) boundaryIntentInsert(intent transactionmodel.BoundaryIntent) (transactionmodel.BoundaryIntent, string, []any, error) {
-	intent.WorkspaceID = strings.TrimSpace(intent.WorkspaceID)
+	workspaceID, err := requireBoundaryIntentWorkspaceID(intent.WorkspaceID)
+	if err != nil {
+		return transactionmodel.BoundaryIntent{}, "", nil, err
+	}
+	intent.WorkspaceID = workspaceID
 	intent.Owner, intent.Operation, intent.IdempotencyKey = strings.TrimSpace(intent.Owner), strings.TrimSpace(intent.Operation), strings.TrimSpace(intent.IdempotencyKey)
-	if intent.WorkspaceID == "" || intent.Owner == "" || intent.Operation == "" || intent.IdempotencyKey == "" {
+	if intent.Owner == "" || intent.Operation == "" || intent.IdempotencyKey == "" {
 		return transactionmodel.BoundaryIntent{}, "", nil, fmt.Errorf("boundary intent identity is required")
 	}
 	if intent.ID == "" {
@@ -103,8 +107,12 @@ func (r BoundaryIntentStore) boundaryIntentInsert(intent transactionmodel.Bounda
 }
 
 func (r BoundaryIntentStore) ClaimBoundaryIntent(ctx context.Context, workspaceID, id, owner, nowText string) (transactionmodel.BoundaryIntent, bool, error) {
-	workspaceID, id, owner = strings.TrimSpace(workspaceID), strings.TrimSpace(id), strings.TrimSpace(owner)
-	if workspaceID == "" || id == "" || owner == "" {
+	workspaceID, err := requireBoundaryIntentWorkspaceID(workspaceID)
+	if err != nil {
+		return transactionmodel.BoundaryIntent{}, false, err
+	}
+	id, owner = strings.TrimSpace(id), strings.TrimSpace(owner)
+	if id == "" || owner == "" {
 		return transactionmodel.BoundaryIntent{}, false, fmt.Errorf("boundary intent claim identity is required")
 	}
 	now, err := time.Parse(time.RFC3339, nowText)
@@ -138,9 +146,9 @@ func (r BoundaryIntentStore) ClaimBoundaryIntent(ctx context.Context, workspaceI
 }
 
 func (r BoundaryIntentStore) TransitionBoundaryIntent(ctx context.Context, workspaceID, id, expectedLeaseOwner string, expectedFencingToken int64, next transactionmodel.BoundaryIntentStatus, errorText, nextAttemptAt string) (transactionmodel.BoundaryIntent, error) {
-	workspaceID = strings.TrimSpace(workspaceID)
-	if workspaceID == "" {
-		return transactionmodel.BoundaryIntent{}, fmt.Errorf("boundary intent workspace is required")
+	workspaceID, err := requireBoundaryIntentWorkspaceID(workspaceID)
+	if err != nil {
+		return transactionmodel.BoundaryIntent{}, err
 	}
 	current, found, err := r.GetBoundaryIntent(ctx, workspaceID, id)
 	if err != nil {
@@ -174,6 +182,14 @@ func (r BoundaryIntentStore) TransitionBoundaryIntent(ctx context.Context, works
 	}
 	updated, _, err := r.GetBoundaryIntent(ctx, workspaceID, id)
 	return updated, err
+}
+
+func requireBoundaryIntentWorkspaceID(workspaceID string) (string, error) {
+	workspaceID = strings.TrimSpace(workspaceID)
+	if workspaceID == "" {
+		return "", fmt.Errorf("boundary intent workspace is required")
+	}
+	return workspaceID, nil
 }
 
 func (r BoundaryIntentStore) GetBoundaryIntent(ctx context.Context, workspaceID, id string) (transactionmodel.BoundaryIntent, bool, error) {

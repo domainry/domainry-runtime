@@ -294,7 +294,7 @@ func (s *RecordUpdateApplicationService) planUpdate(ctx context.Context, objectK
 	}
 	record.Data = nextData
 	record.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
-	record.UpdateUserID = principal.UserID
+	record.UpdateBy = principal.UserID
 	commit := transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: record, Optimistic: optimistic, LocalizedValues: localizedValues}
 	commit.Predicates = recordmutation.MutationPredicatesFromContext(ctx)
 	if s.dependencies.AfterOutbox != nil {

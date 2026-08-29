@@ -185,7 +185,7 @@ func TestDeleteServiceOwnsSoftDeleteTransaction(t *testing.T) {
 		t.Fatalf("commits = %#v", repository.commits)
 	}
 	commit := repository.commits[0]
-	if commit.Operation != "update" || !commit.Record.Deleted || commit.Record.UpdateUserID != "admin" || commit.Record.Data["status"] != "deleted" || commit.Record.Data["deleted_at"] != "2026-07-17T12:00:00Z" || commit.Record.Data["deleted_by"] != "admin" || commit.Record.Data["version"] != float64(3) {
+	if commit.Operation != "update" || !commit.Record.Deleted || commit.Record.UpdateBy != "admin" || commit.Record.Data["status"] != "deleted" || commit.Record.Data["deleted_at"] != "2026-07-17T12:00:00Z" || commit.Record.Data["deleted_by"] != "admin" || commit.Record.Data["version"] != float64(3) {
 		t.Fatalf("soft delete commit = %#v", commit)
 	}
 	if commit.Audit == nil || commit.Audit.Metadata["soft_delete"] != true || len(commit.Outbox) != 1 || len(commit.WorkflowIntents) != 1 || !automationCalled || !policyCalled || len(executed) != 1 {

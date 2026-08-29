@@ -53,10 +53,10 @@ func recordsFromRows(driver string, object definitionmodel.ObjectSchema, rows re
 				record.Deleted = recordDeletedValue(value)
 			case "ext_info":
 				record.ExtInfo = recordExtInfoValue(value)
-			case "create_user_id":
-				record.CreateUserID = fmt.Sprint(value)
-			case "update_user_id":
-				record.UpdateUserID = fmt.Sprint(value)
+			case "create_by":
+				record.CreateBy = fmt.Sprint(value)
+			case "update_by":
+				record.UpdateBy = fmt.Sprint(value)
 			default:
 				if !recordvalidation.RecordIsEmptyValue(value) {
 					record.Data[column] = value

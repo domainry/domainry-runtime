@@ -502,7 +502,7 @@ func TestManifestMetadataSyncAddsPluginDefinitionsWithoutOverwritingUserDefiniti
 	if err != nil {
 		t.Fatalf("customer columns: %v", err)
 	}
-	for _, column := range []string{"phone", "deleted", "ext_info", "create_user_id", "update_user_id"} {
+	for _, column := range []string{"phone", "deleted", "ext_info", "create_by", "update_by"} {
 		if !customerColumns[column] {
 			t.Fatalf("expected synced customer.%s physical column, got %#v", column, customerColumns)
 		}
