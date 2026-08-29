@@ -34,7 +34,11 @@ func (r IntegrationDeliveryStore) GetOutbox(ctx context.Context, workspaceID, id
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, false, err
 	}
-	row := r.db.QueryRowContext(ctx, "SELECT "+integrationOutboxColumnsSQL(r.store)+" FROM "+r.store.TableIdentifier("integration_outbox_messages")+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(1)+" AND "+r.store.Identifier("id")+" = "+r.store.Placeholder(2), workspaceID, strings.TrimSpace(id))
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).Columns(integrationOutboxColumns...).Where(ormbuilder.Equal("id", strings.TrimSpace(id))).Build()
+	if err != nil {
+		return integrationmodel.IntegrationOutboxMessage{}, false, err
+	}
+	row := r.db.QueryRowContext(ctx, query, args...)
 	message, err := scanIntegrationOutboxMessage(row)
 	if err == sql.ErrNoRows {
 		return integrationmodel.IntegrationOutboxMessage{}, false, nil
@@ -104,7 +108,15 @@ func (r IntegrationDeliveryStore) InsertInvocation(ctx context.Context, workspac
 	}
 	columns := []string{"id", "workspace_id", "connector_key", "provider_key", "connection_key", "operation", "status", "duration_ms", "request_ref", "response_ref", "error", "event_id", "object_key", "record_id", "workflow_execution_id", "metadata_json", "created_at", "updated_at"}
 	args := []any{value.ID, value.WorkspaceID, value.ConnectorKey, value.ProviderKey, value.ConnectionKey, value.Operation, value.Status, value.DurationMS, value.RequestRef, value.ResponseRef, value.Error, value.EventID, value.ObjectKey, value.RecordID, value.WorkflowExecutionID, string(metadata), value.CreatedAt, value.UpdatedAt}
-	if _, err := r.db.ExecContext(ctx, "INSERT INTO "+r.store.TableIdentifier("integration_invocations")+" ("+stringsJoinIdentifiers(r.store, columns...)+") VALUES ("+stringsJoinPlaceholders(r.store, len(columns))+")", args...); err != nil {
+	insertColumns, insertValues, err := workspaceInsertValues(workspaceID, columns, args)
+	if err != nil {
+		return integrationmodel.IntegrationInvocation{}, err
+	}
+	query, insertArgs, err := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "integration_invocations", workspaceID).Columns(insertColumns...).Values(insertValues...).Build()
+	if err != nil {
+		return integrationmodel.IntegrationInvocation{}, fmt.Errorf("build integration invocation insert: %w", err)
+	}
+	if _, err := r.db.ExecContext(ctx, query, insertArgs...); err != nil {
 		return integrationmodel.IntegrationInvocation{}, fmt.Errorf("insert integration invocation: %w", err)
 	}
 	return value, nil
@@ -120,7 +132,11 @@ func (r IntegrationDeliveryStore) UpdateInvocationStatus(ctx context.Context, wo
 		return integrationmodel.IntegrationInvocation{}, fmt.Errorf("integration invocation id is required")
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	result, err := r.db.ExecContext(ctx, "UPDATE "+r.store.TableIdentifier("integration_invocations")+" SET "+r.store.Identifier("status")+" = "+r.store.Placeholder(1)+", "+r.store.Identifier("duration_ms")+" = "+r.store.Placeholder(2)+", "+r.store.Identifier("response_ref")+" = "+r.store.Placeholder(3)+", "+r.store.Identifier("error")+" = "+r.store.Placeholder(4)+", "+r.store.Identifier("updated_at")+" = "+r.store.Placeholder(5)+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(6)+" AND "+r.store.Identifier("id")+" = "+r.store.Placeholder(7), status, duration, responseRef, errorText, now, workspaceID, id)
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_invocations", workspaceID).Set("status", status).Set("duration_ms", duration).Set("response_ref", responseRef).Set("error", errorText).Set("updated_at", now).Where(ormbuilder.Equal("id", id)).Build()
+	if err != nil {
+		return integrationmodel.IntegrationInvocation{}, fmt.Errorf("build integration invocation status update: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return integrationmodel.IntegrationInvocation{}, fmt.Errorf("update integration invocation status: %w", err)
 	}
@@ -152,8 +168,11 @@ func (r IntegrationDeliveryStore) CompleteInvocation(ctx context.Context, worksp
 		return integrationmodel.IntegrationInvocation{}, fmt.Errorf("encode integration invocation outcome: %w", err)
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	query := "UPDATE " + r.store.TableIdentifier("integration_invocations") + " SET " + r.store.Identifier("status") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("duration_ms") + " = " + r.store.Placeholder(2) + ", " + r.store.Identifier("response_ref") + " = " + r.store.Placeholder(3) + ", " + r.store.Identifier("error") + " = " + r.store.Placeholder(4) + ", " + r.store.Identifier("metadata_json") + " = " + r.store.Placeholder(5) + ", " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(6) + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(7) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(8) + " AND " + r.store.Identifier("status") + " = 'prepared'"
-	result, err := r.db.ExecContext(ctx, query, status, duration, responseRef, errorText, string(encoded), now, workspaceID, id)
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_invocations", workspaceID).Set("status", status).Set("duration_ms", duration).Set("response_ref", responseRef).Set("error", errorText).Set("metadata_json", string(encoded)).Set("updated_at", now).Where(ormbuilder.And(ormbuilder.Equal("id", id), ormbuilder.Equal("status", "prepared"))).Build()
+	if err != nil {
+		return integrationmodel.IntegrationInvocation{}, fmt.Errorf("build integration invocation completion: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return integrationmodel.IntegrationInvocation{}, fmt.Errorf("complete integration invocation: %w", err)
 	}
@@ -185,10 +204,11 @@ func (r IntegrationDeliveryStore) ListPreparedInvocationsForReconciliation(ctx c
 	if staleBefore == "" {
 		return nil, fmt.Errorf("integration invocation reconciliation cutoff is required")
 	}
-	query := "SELECT " + integrationInvocationColumnsSQL(r.store) + " FROM " + r.store.TableIdentifier("integration_invocations") +
-		" WHERE " + r.store.Identifier("status") + " = 'prepared' AND " + r.store.Identifier("response_ref") + " = '' AND " +
-		r.store.Identifier("created_at") + " <= " + r.store.Placeholder(1) + " ORDER BY " + r.store.Identifier("created_at") + " ASC LIMIT " + r.store.Placeholder(2)
-	rows, err := r.db.QueryContext(ctx, query, staleBefore, limit)
+	query, args, err := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "integration_invocations").Columns(integrationInvocationColumns...).Where(ormbuilder.And(ormbuilder.Equal("status", "prepared"), ormbuilder.Equal("response_ref", ""), ormbuilder.LessThanOrEqual("created_at", staleBefore))).OrderBy(ormbuilder.Ascending("created_at"), ormbuilder.Ascending("workspace_id"), ormbuilder.Ascending("id")).Limit(limit).Build()
+	if err != nil {
+		return nil, fmt.Errorf("build integration invocation reconciliation list: %w", err)
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list integration invocations for reconciliation: %w", err)
 	}
@@ -217,11 +237,11 @@ func (r IntegrationDeliveryStore) MarkInvocationReconciliationRequired(ctx conte
 	if invocationID == "" || detectedAt == "" {
 		return integrationmodel.IntegrationInvocation{}, false, fmt.Errorf("integration invocation reconciliation identity is required")
 	}
-	query := "UPDATE " + r.store.TableIdentifier("integration_invocations") + " SET " + r.store.Identifier("status") + " = 'reconciliation_required', " +
-		r.store.Identifier("error") + " = 'backend.integration.invocation.external_receipt_missing', " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(1) +
-		" WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(2) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(3) +
-		" AND " + r.store.Identifier("status") + " = 'prepared' AND " + r.store.Identifier("response_ref") + " = ''"
-	result, err := r.db.ExecContext(ctx, query, detectedAt, workspaceID, invocationID)
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_invocations", workspaceID).Set("status", "reconciliation_required").Set("error", "backend.integration.invocation.external_receipt_missing").Set("updated_at", detectedAt).Where(ormbuilder.And(ormbuilder.Equal("id", invocationID), ormbuilder.Equal("status", "prepared"), ormbuilder.Equal("response_ref", ""))).Build()
+	if err != nil {
+		return integrationmodel.IntegrationInvocation{}, false, fmt.Errorf("build integration invocation reconciliation update: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return integrationmodel.IntegrationInvocation{}, false, fmt.Errorf("mark integration invocation for reconciliation: %w", err)
 	}
@@ -253,10 +273,11 @@ func (r IntegrationDeliveryStore) ListOverdueOutboxAcknowledgements(ctx context.
 	if now == "" {
 		return nil, fmt.Errorf("integration outbox acknowledgement cutoff is required")
 	}
-	query := "SELECT " + integrationOutboxColumnsSQL(r.store) + " FROM " + r.store.TableIdentifier("integration_outbox_messages") +
-		" WHERE " + r.store.Identifier("status") + " = 'sent' AND " + r.store.Identifier("ack_deadline_at") + " <> '' AND " +
-		r.store.Identifier("ack_deadline_at") + " <= " + r.store.Placeholder(1) + " ORDER BY " + r.store.Identifier("ack_deadline_at") + " ASC LIMIT " + r.store.Placeholder(2)
-	rows, err := r.db.QueryContext(ctx, query, now, limit)
+	query, args, err := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "integration_outbox_messages").Columns(integrationOutboxColumns...).Where(ormbuilder.And(ormbuilder.Equal("status", "sent"), ormbuilder.NotEqual("ack_deadline_at", ""), ormbuilder.LessThanOrEqual("ack_deadline_at", now))).OrderBy(ormbuilder.Ascending("ack_deadline_at"), ormbuilder.Ascending("workspace_id"), ormbuilder.Ascending("id")).Limit(limit).Build()
+	if err != nil {
+		return nil, fmt.Errorf("build overdue integration outbox acknowledgement list: %w", err)
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list overdue integration outbox acknowledgements: %w", err)
 	}
@@ -285,13 +306,11 @@ func (r IntegrationDeliveryStore) MarkOutboxAcknowledgementReconciliationRequire
 	if messageID == "" || detectedAt == "" {
 		return integrationmodel.IntegrationOutboxMessage{}, false, fmt.Errorf("integration outbox acknowledgement reconciliation identity is required")
 	}
-	query := "UPDATE " + r.store.TableIdentifier("integration_outbox_messages") + " SET " + r.store.Identifier("status") + " = 'quarantined', " +
-		r.store.Identifier("error") + " = 'backend.integration.outbox.ack_timeout', " + r.store.Identifier("ack_deadline_at") + " = '', " +
-		r.store.Identifier("next_attempt_at") + " = '', " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(1) +
-		" WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(2) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(3) +
-		" AND " + r.store.Identifier("status") + " = 'sent' AND " + r.store.Identifier("ack_deadline_at") + " <> '' AND " +
-		r.store.Identifier("ack_deadline_at") + " <= " + r.store.Placeholder(4)
-	result, err := r.db.ExecContext(ctx, query, detectedAt, workspaceID, messageID, detectedAt)
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).Set("status", "quarantined").Set("error", "backend.integration.outbox.ack_timeout").Set("ack_deadline_at", "").Set("next_attempt_at", "").Set("updated_at", detectedAt).Where(ormbuilder.And(ormbuilder.Equal("id", messageID), ormbuilder.Equal("status", "sent"), ormbuilder.NotEqual("ack_deadline_at", ""), ormbuilder.LessThanOrEqual("ack_deadline_at", detectedAt))).Build()
+	if err != nil {
+		return integrationmodel.IntegrationOutboxMessage{}, false, fmt.Errorf("build integration outbox acknowledgement reconciliation: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, false, fmt.Errorf("mark integration outbox acknowledgement for reconciliation: %w", err)
 	}
@@ -395,7 +414,15 @@ func (r IntegrationDeliveryStore) InsertOutbox(ctx context.Context, workspaceID 
 	payload, _ := json.Marshal(nonNilMap(value.Payload))
 	columns := []string{"id", "workspace_id", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "ack_deadline_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at"}
 	args := []any{value.ID, value.WorkspaceID, value.ConnectorKey, value.ConnectionKey, value.Operation, value.Status, string(payload), value.EventID, value.RequestRef, value.DedupKey, value.RequestFingerprint, value.ResponseRef, value.Error, value.AttemptCount, value.NextAttemptAt, value.AckDeadlineAt, value.LastAttemptAt, value.LeaseOwner, value.LeaseExpiresAt, value.FencingToken, value.CreatedBy, value.CreatedAt, value.UpdatedAt}
-	if _, err := r.db.ExecContext(ctx, "INSERT INTO "+r.store.TableIdentifier("integration_outbox_messages")+" ("+stringsJoinIdentifiers(r.store, columns...)+") VALUES ("+stringsJoinPlaceholders(r.store, len(columns))+")", args...); err != nil {
+	insertColumns, insertValues, err := workspaceInsertValues(workspaceID, columns, args)
+	if err != nil {
+		return integrationmodel.IntegrationOutboxMessage{}, err
+	}
+	query, insertArgs, err := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).Columns(insertColumns...).Values(insertValues...).Build()
+	if err != nil {
+		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("build integration outbox insert: %w", err)
+	}
+	if _, err := r.db.ExecContext(ctx, query, insertArgs...); err != nil {
 		existing, found, readErr := r.findOutboxByDedup(ctx, value)
 		if readErr == nil && found {
 			if existing.RequestFingerprint != value.RequestFingerprint {
@@ -417,7 +444,11 @@ func (r IntegrationDeliveryStore) InsertOutbox(ctx context.Context, workspaceID 
 }
 
 func (r IntegrationDeliveryStore) findOutboxByDedup(ctx context.Context, value integrationmodel.IntegrationOutboxMessage) (integrationmodel.IntegrationOutboxMessage, bool, error) {
-	row := r.db.QueryRowContext(ctx, "SELECT "+integrationOutboxColumnsSQL(r.store)+" FROM "+r.store.TableIdentifier("integration_outbox_messages")+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(1)+" AND "+r.store.Identifier("connector_key")+" = "+r.store.Placeholder(2)+" AND "+r.store.Identifier("connection_key")+" = "+r.store.Placeholder(3)+" AND "+r.store.Identifier("operation")+" = "+r.store.Placeholder(4)+" AND "+r.store.Identifier("dedup_key")+" = "+r.store.Placeholder(5), value.WorkspaceID, value.ConnectorKey, value.ConnectionKey, value.Operation, value.DedupKey)
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_outbox_messages", value.WorkspaceID).Columns(integrationOutboxColumns...).Where(ormbuilder.And(ormbuilder.Equal("connector_key", value.ConnectorKey), ormbuilder.Equal("connection_key", value.ConnectionKey), ormbuilder.Equal("operation", value.Operation), ormbuilder.Equal("dedup_key", value.DedupKey))).Build()
+	if err != nil {
+		return integrationmodel.IntegrationOutboxMessage{}, false, err
+	}
+	row := r.db.QueryRowContext(ctx, query, args...)
 	existing, err := scanIntegrationOutboxMessage(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return integrationmodel.IntegrationOutboxMessage{}, false, nil
@@ -435,7 +466,11 @@ func (r IntegrationDeliveryStore) UpdateOutboxStatus(ctx context.Context, worksp
 		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("integration outbox id is required")
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	result, err := r.db.ExecContext(ctx, "UPDATE "+r.store.TableIdentifier("integration_outbox_messages")+" SET "+r.store.Identifier("status")+" = "+r.store.Placeholder(1)+", "+r.store.Identifier("response_ref")+" = "+r.store.Placeholder(2)+", "+r.store.Identifier("error")+" = "+r.store.Placeholder(3)+", "+r.store.Identifier("next_attempt_at")+" = "+r.store.Placeholder(4)+", "+r.store.Identifier("updated_at")+" = "+r.store.Placeholder(5)+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(6)+" AND "+r.store.Identifier("id")+" = "+r.store.Placeholder(7), status, responseRef, errorText, "", now, workspaceID, id)
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).Set("status", status).Set("response_ref", responseRef).Set("error", errorText).Set("next_attempt_at", "").Set("updated_at", now).Where(ormbuilder.Equal("id", id)).Build()
+	if err != nil {
+		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("build integration outbox status update: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("update integration outbox status: %w", err)
 	}
@@ -466,7 +501,11 @@ func (r IntegrationDeliveryStore) UpdateOutboxStatusByResponseRef(ctx context.Co
 		return integrationmodel.IntegrationOutboxMessage{}, false, nil
 	}
 	for attempt := 0; attempt < 4; attempt++ {
-		row := r.db.QueryRowContext(ctx, "SELECT "+integrationOutboxColumnsSQL(r.store)+" FROM "+r.store.TableIdentifier("integration_outbox_messages")+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(1)+" AND "+r.store.Identifier("connection_key")+" = "+r.store.Placeholder(2)+" AND "+r.store.Identifier("response_ref")+" = "+r.store.Placeholder(3)+" ORDER BY "+r.store.Identifier("created_at")+" DESC", workspaceID, connectionKey, responseRef)
+		query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).Columns(integrationOutboxColumns...).Where(ormbuilder.And(ormbuilder.Equal("connection_key", connectionKey), ormbuilder.Equal("response_ref", responseRef))).OrderBy(ormbuilder.Descending("created_at"), ormbuilder.Descending("id")).Limit(1).Build()
+		if buildErr != nil {
+			return integrationmodel.IntegrationOutboxMessage{}, false, buildErr
+		}
+		row := r.db.QueryRowContext(ctx, query, args...)
 		existing, scanErr := scanIntegrationOutboxMessage(row)
 		if errors.Is(scanErr, sql.ErrNoRows) {
 			return integrationmodel.IntegrationOutboxMessage{}, false, nil
@@ -478,8 +517,11 @@ func (r IntegrationDeliveryStore) UpdateOutboxStatusByResponseRef(ctx context.Co
 			return existing, true, nil
 		}
 		now := time.Now().UTC().Format(time.RFC3339)
-		query := "UPDATE " + r.store.TableIdentifier("integration_outbox_messages") + " SET " + r.store.Identifier("status") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("error") + " = " + r.store.Placeholder(2) + ", " + r.store.Identifier("next_attempt_at") + " = '', " + r.store.Identifier("ack_deadline_at") + " = '', " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(3) + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(4) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(5) + " AND " + r.store.Identifier("status") + " = " + r.store.Placeholder(6)
-		result, updateErr := r.db.ExecContext(ctx, query, strings.TrimSpace(status), strings.TrimSpace(errorText), now, workspaceID, existing.ID, existing.Status)
+		query, args, buildErr = ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).Set("status", strings.TrimSpace(status)).Set("error", strings.TrimSpace(errorText)).Set("next_attempt_at", "").Set("ack_deadline_at", "").Set("updated_at", now).Where(ormbuilder.And(ormbuilder.Equal("id", existing.ID), ormbuilder.Equal("status", existing.Status))).Build()
+		if buildErr != nil {
+			return integrationmodel.IntegrationOutboxMessage{}, true, buildErr
+		}
+		result, updateErr := r.db.ExecContext(ctx, query, args...)
 		if updateErr != nil {
 			return integrationmodel.IntegrationOutboxMessage{}, true, fmt.Errorf("advance integration outbox delivery status: %w", updateErr)
 		}
@@ -515,7 +557,15 @@ func (r IntegrationDeliveryStore) ScheduleOutboxRetry(ctx context.Context, works
 	}
 	now := time.Now().UTC()
 	nowText, next := now.Format(time.RFC3339), now.Add(time.Duration(delay)*time.Second).Format(time.RFC3339)
-	result, err := r.db.ExecContext(ctx, "UPDATE "+r.store.TableIdentifier("integration_outbox_messages")+" SET "+r.store.Identifier("status")+" = "+r.store.Placeholder(1)+", "+r.store.Identifier("error")+" = COALESCE(NULLIF(TRIM("+r.store.Placeholder(2)+"), ''), "+r.store.Identifier("error")+"), "+r.store.Identifier("attempt_count")+" = "+r.store.Identifier("attempt_count")+" + 1, "+r.store.Identifier("next_attempt_at")+" = "+r.store.Placeholder(3)+", "+r.store.Identifier("last_attempt_at")+" = "+r.store.Placeholder(4)+", "+r.store.Identifier("updated_at")+" = "+r.store.Placeholder(5)+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(6)+" AND "+r.store.Identifier("id")+" = "+r.store.Placeholder(7), "queued", errorText, next, nowText, nowText, workspaceID, id)
+	builder := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).Set("status", "queued").SetExpression("attempt_count", ormbuilder.Add(ormbuilder.Column("attempt_count"), ormbuilder.Value(1))).Set("next_attempt_at", next).Set("last_attempt_at", nowText).Set("updated_at", nowText)
+	if strings.TrimSpace(errorText) != "" {
+		builder.Set("error", errorText)
+	}
+	query, args, err := builder.Where(ormbuilder.Equal("id", id)).Build()
+	if err != nil {
+		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("build integration outbox retry: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("schedule integration outbox retry: %w", err)
 	}
@@ -537,7 +587,11 @@ func (r IntegrationDeliveryStore) ScheduleOutboxRetry(ctx context.Context, works
 }
 
 func (r IntegrationDeliveryStore) findInvocation(ctx context.Context, workspaceID, id string) (integrationmodel.IntegrationInvocation, bool, error) {
-	row := r.db.QueryRowContext(ctx, "SELECT "+integrationInvocationColumnsSQL(r.store)+" FROM "+r.store.TableIdentifier("integration_invocations")+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(1)+" AND "+r.store.Identifier("id")+" = "+r.store.Placeholder(2), workspaceID, strings.TrimSpace(id))
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_invocations", workspaceID).Columns(integrationInvocationColumns...).Where(ormbuilder.Equal("id", strings.TrimSpace(id))).Build()
+	if err != nil {
+		return integrationmodel.IntegrationInvocation{}, false, err
+	}
+	row := r.db.QueryRowContext(ctx, query, args...)
 	value, err := scanIntegrationInvocation(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return integrationmodel.IntegrationInvocation{}, false, nil
@@ -545,7 +599,11 @@ func (r IntegrationDeliveryStore) findInvocation(ctx context.Context, workspaceI
 	return value, err == nil, err
 }
 func (r IntegrationDeliveryStore) findOutbox(ctx context.Context, workspaceID, id string) (integrationmodel.IntegrationOutboxMessage, bool, error) {
-	row := r.db.QueryRowContext(ctx, "SELECT "+integrationOutboxColumnsSQL(r.store)+" FROM "+r.store.TableIdentifier("integration_outbox_messages")+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(1)+" AND "+r.store.Identifier("id")+" = "+r.store.Placeholder(2), workspaceID, strings.TrimSpace(id))
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).Columns(integrationOutboxColumns...).Where(ormbuilder.Equal("id", strings.TrimSpace(id))).Build()
+	if err != nil {
+		return integrationmodel.IntegrationOutboxMessage{}, false, err
+	}
+	row := r.db.QueryRowContext(ctx, query, args...)
 	value, err := scanIntegrationOutboxMessage(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return integrationmodel.IntegrationOutboxMessage{}, false, nil
