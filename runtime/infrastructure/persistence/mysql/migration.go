@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 
 	ormdialect "github.com/domainry/domainry-orm/dialect"
@@ -24,6 +25,45 @@ func (engineProfile) EnsureMigrationNamespace(context.Context, persistencedriver
 }
 func (engineProfile) ConfigureMigrationTransaction(context.Context, *sql.Tx, ormdialect.Renderer, string, time.Duration, time.Duration) error {
 	return nil
+}
+func (engineProfile) AcquireMigrationLock(ctx context.Context, database *sql.DB, renderer ormdialect.Renderer, options persistencedriver.MigrationLockOptions) (persistencedriver.MigrationLock, error) {
+	conn, err := database.Conn(ctx)
+	if err != nil {
+		return persistencedriver.MigrationLock{}, fmt.Errorf("acquire migration connection: %w", err)
+	}
+	deadline := options.LockTimeout
+	if deadline <= 0 {
+		deadline = 30 * time.Second
+	}
+	lockCtx, cancel := context.WithTimeout(ctx, deadline)
+	defer cancel()
+	for {
+		var result sql.NullInt64
+		err = conn.QueryRowContext(lockCtx, "SELECT GET_LOCK("+renderer.Placeholder(1)+", 0)", "domainry_runtime_migrations").Scan(&result)
+		if err != nil {
+			_ = conn.Close()
+			return persistencedriver.MigrationLock{}, fmt.Errorf("acquire migration lock: %w", err)
+		}
+		if result.Valid && result.Int64 == 1 {
+			break
+		}
+		select {
+		case <-lockCtx.Done():
+			_ = conn.Close()
+			return persistencedriver.MigrationLock{}, fmt.Errorf("migration.lock_timeout: owner=%s timeout=%s: %w", options.Owner, deadline, lockCtx.Err())
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+	return persistencedriver.MigrationLock{Connection: conn, Release: func() {
+		timeout := options.ConnectTimeout
+		if timeout <= 0 {
+			timeout = 5 * time.Second
+		}
+		unlockCtx, unlockCancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
+		defer unlockCancel()
+		_, _ = conn.ExecContext(unlockCtx, "SELECT RELEASE_LOCK("+renderer.Placeholder(1)+")", "domainry_runtime_migrations")
+		_ = conn.Close()
+	}}, nil
 }
 
 func (engineProfile) MigrationDatabasePath(config.Config) string { return "" }

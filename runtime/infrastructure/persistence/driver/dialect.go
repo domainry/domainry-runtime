@@ -37,6 +37,7 @@ type EngineProfile interface {
 	ConfigureMigrationTransaction(context.Context, *sql.Tx, ormdialect.Renderer, string, time.Duration, time.Duration) error
 	MigrationBackupPolicy() MigrationBackupPolicy
 	MigrationRollbackPolicy() MigrationRollbackPolicy
+	AcquireMigrationLock(context.Context, *sql.DB, ormdialect.Renderer, MigrationLockOptions) (MigrationLock, error)
 }
 
 type SchemaQuery struct {
@@ -59,6 +60,19 @@ type MigrationRollbackPolicy struct {
 	Mode                   string
 	RequiresVerifiedBackup bool
 	Procedure              []string
+}
+
+type MigrationLockOptions struct {
+	DatabasePath   string
+	DatabaseSchema string
+	Owner          string
+	LockTimeout    time.Duration
+	ConnectTimeout time.Duration
+}
+
+type MigrationLock struct {
+	Connection *sql.Conn
+	Release    func()
 }
 
 type SchemaDatabase interface {
@@ -93,6 +107,9 @@ func (portableEngineProfile) MigrationBackupPolicy() MigrationBackupPolicy {
 }
 func (portableEngineProfile) MigrationRollbackPolicy() MigrationRollbackPolicy {
 	return MigrationRollbackPolicy{Mode: "unsupported", RequiresVerifiedBackup: true}
+}
+func (portableEngineProfile) AcquireMigrationLock(context.Context, *sql.DB, ormdialect.Renderer, MigrationLockOptions) (MigrationLock, error) {
+	return MigrationLock{}, fmt.Errorf("database engine does not support migration locking")
 }
 
 var portableProfileRegistry = map[ormdialect.Name]func() EngineProfile{

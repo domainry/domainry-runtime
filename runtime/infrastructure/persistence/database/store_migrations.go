@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/domainry/domainry-foundation/filelock"
+	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -224,110 +224,32 @@ func (s *RuntimeStore) ensureMigrationLedger(ctx context.Context) error {
 }
 
 func (s *RuntimeStore) acquireMigrationLock(ctx context.Context, cfg config.Config) (func(), error) {
-	if s.dialect.Name() == "sqlite" {
-		return s.acquireSQLiteMigrationLock(ctx, cfg)
-	}
 	lockDB := s.migrationDB
 	if lockDB == nil {
 		lockDB = s.db
 	}
-	conn, err := lockDB.Conn(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("acquire migration connection: %w", err)
-	}
-	key := "domainry_runtime_migrations:" + s.DatabaseSchema()
-	if s.dialect.Name() == "mysql" {
-		key = "domainry_runtime_migrations"
-	}
 	started := time.Now()
-	deadline := s.config.DatabaseLockTimeout
-	if deadline <= 0 {
-		deadline = 30 * time.Second
-	}
-	lockCtx, cancel := context.WithTimeout(ctx, deadline)
-	defer cancel()
-	locked := false
-	for !locked {
-		var result any
-		if s.dialect.Name() == "postgres" {
-			err = conn.QueryRowContext(lockCtx, "SELECT pg_try_advisory_lock(hashtextextended("+s.placeholder(1)+", 0))", key).Scan(&locked)
-		} else {
-			var mysqlResult sql.NullInt64
-			err = conn.QueryRowContext(lockCtx, "SELECT GET_LOCK("+s.placeholder(1)+", 0)", key).Scan(&mysqlResult)
-			locked = mysqlResult.Valid && mysqlResult.Int64 == 1
-			result = mysqlResult
-		}
-		_ = result
-		if err != nil {
-			_ = conn.Close()
-			return nil, fmt.Errorf("acquire migration lock: %w", err)
-		}
-		if !locked {
-			select {
-			case <-lockCtx.Done():
-				_ = conn.Close()
-				return nil, fmt.Errorf("migration.lock_timeout: owner=%s timeout=%s: %w", migrationInstanceID(cfg), deadline, lockCtx.Err())
-			case <-time.After(50 * time.Millisecond):
-			}
-		}
-	}
-	s.migrationConn = conn
+	base := s.sqlBase()
+	lock, err := base.RuntimeEngine.AcquireMigrationLock(ctx, lockDB, base.SQLRenderer, persistencedriver.MigrationLockOptions{
+		DatabasePath:   cfg.DBPath,
+		DatabaseSchema: base.DatabaseSchema,
+		Owner:          migrationInstanceID(cfg),
+		LockTimeout:    s.config.DatabaseLockTimeout,
+		ConnectTimeout: s.config.DatabaseConnectTimeout,
+	})
 	if s.operationalMetrics != nil {
 		s.operationalMetrics.ObserveMigrationLock(time.Since(started), err)
 	}
-	return func() {
-		timeout := s.config.DatabaseConnectTimeout
-		if timeout <= 0 {
-			timeout = 5 * time.Second
-		}
-		unlockCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
-		defer cancel()
-		if s.dialect.Name() == "postgres" {
-			_, _ = conn.ExecContext(unlockCtx, "SELECT pg_advisory_unlock(hashtextextended("+s.placeholder(1)+", 0))", key)
-		} else {
-			_, _ = conn.ExecContext(unlockCtx, "SELECT RELEASE_LOCK("+s.placeholder(1)+")", key)
-		}
-		s.migrationConn = nil
-		_ = conn.Close()
-	}, nil
-}
-
-func (s *RuntimeStore) acquireSQLiteMigrationLock(ctx context.Context, cfg config.Config) (func(), error) {
-	path := strings.TrimSpace(cfg.DBPath)
-	if path == "" || path == ":memory:" || strings.HasPrefix(path, "file:") {
-		return func() { _ = path }, nil
-	}
-	lockPath := path + ".migration.lock"
-	if err := os.MkdirAll(filepath.Dir(lockPath), 0o755); err != nil {
+	if err != nil {
 		return nil, err
 	}
-	file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
-	if err != nil {
-		return nil, fmt.Errorf("open sqlite migration lock: %w", err)
-	}
-	deadline := s.config.DatabaseLockTimeout
-	if deadline <= 0 {
-		deadline = 30 * time.Second
-	}
-	lockCtx, cancel := context.WithTimeout(ctx, deadline)
-	for {
-		err = filelock.TryExclusive(file)
-		if err == nil {
-			break
+	s.migrationConn = lock.Connection
+	return func() {
+		s.migrationConn = nil
+		if lock.Release != nil {
+			lock.Release()
 		}
-		select {
-		case <-lockCtx.Done():
-			cancel()
-			_ = file.Close()
-			return nil, fmt.Errorf("migration.lock_timeout: owner=%s timeout=%s: %w", migrationInstanceID(cfg), deadline, lockCtx.Err())
-		case <-time.After(50 * time.Millisecond):
-		}
-	}
-	cancel()
-	owner := migrationInstanceID(cfg) + " acquired_at=" + time.Now().UTC().Format(time.RFC3339Nano)
-	_ = file.Truncate(0)
-	_, _ = file.WriteString(owner)
-	return func() { _ = filelock.Unlock(file); _ = file.Close() }, nil
+	}, nil
 }
 
 func migrationIdentity(path string) (string, string) {

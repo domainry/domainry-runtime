@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -221,31 +222,32 @@ func writeNamedMigrationEdgeFile(t *testing.T, directory, name, contents string)
 }
 
 func TestSQLiteMigrationLockShortCircuitSuccessAndTimeout(t *testing.T) {
-	store := &RuntimeStore{dialect: sqlite.Dialect{}, config: config.Config{DatabaseLockTimeout: 20 * time.Millisecond}}
+	profile := sqlite.Dialect{}.EngineProfile()
+	renderer := sqlite.Dialect{}.SQLDialect().WithSchema("")
 	for _, path := range []string{"", ":memory:", "file:memory"} {
-		release, err := store.acquireSQLiteMigrationLock(t.Context(), config.Config{DBPath: path})
+		lock, err := profile.AcquireMigrationLock(t.Context(), nil, renderer, persistencedriver.MigrationLockOptions{DatabasePath: path})
 		if err != nil {
 			t.Fatalf("short-circuit path %q: %v", path, err)
 		}
-		release()
+		lock.Release()
 	}
 	databasePath := filepath.Join(t.TempDir(), "runtime.db")
-	release, err := store.acquireSQLiteMigrationLock(t.Context(), config.Config{DBPath: databasePath, MigrationInstanceID: "first"})
+	lock, err := profile.AcquireMigrationLock(t.Context(), nil, renderer, persistencedriver.MigrationLockOptions{DatabasePath: databasePath, Owner: "first", LockTimeout: 20 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.acquireSQLiteMigrationLock(t.Context(), config.Config{DBPath: databasePath, MigrationInstanceID: "second"}); err == nil || !strings.Contains(err.Error(), "migration.lock_timeout") {
+	if _, err := profile.AcquireMigrationLock(t.Context(), nil, renderer, persistencedriver.MigrationLockOptions{DatabasePath: databasePath, Owner: "second", LockTimeout: 20 * time.Millisecond}); err == nil || !strings.Contains(err.Error(), "migration.lock_timeout") {
 		t.Fatalf("contended lock error=%v", err)
 	}
-	release()
-	if _, err := store.acquireSQLiteMigrationLock(t.Context(), config.Config{DBPath: filepath.Join("/dev/null", "runtime.db")}); err == nil {
+	lock.Release()
+	if _, err := profile.AcquireMigrationLock(t.Context(), nil, renderer, persistencedriver.MigrationLockOptions{DatabasePath: filepath.Join("/dev/null", "runtime.db")}); err == nil {
 		t.Fatal("invalid lock directory accepted")
 	}
 	openFailurePath := filepath.Join(t.TempDir(), "runtime.db")
 	if err := os.Mkdir(openFailurePath+".migration.lock", 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.acquireSQLiteMigrationLock(t.Context(), config.Config{DBPath: openFailurePath}); err == nil || !strings.Contains(err.Error(), "open sqlite migration lock") {
+	if _, err := profile.AcquireMigrationLock(t.Context(), nil, renderer, persistencedriver.MigrationLockOptions{DatabasePath: openFailurePath}); err == nil || !strings.Contains(err.Error(), "open sqlite migration lock") {
 		t.Fatalf("open lock error=%v", err)
 	}
 }
