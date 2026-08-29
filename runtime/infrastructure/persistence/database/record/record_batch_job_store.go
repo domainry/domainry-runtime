@@ -407,11 +407,19 @@ func (r RecordStore) GlobalRecordBatchJobQueueStats(ctx context.Context, scope p
 }
 
 func (r RecordStore) recordBatchJobQueueStats(ctx context.Context, workspaceID string) (int, time.Duration, error) {
-	query := "SELECT COUNT(*), COALESCE(MIN(" + r.store.Identifier("created_at") + "), '') FROM " + r.store.TableIdentifier("record_batch_jobs") + " WHERE " + r.store.Identifier("status") + " = 'queued'"
-	args := []any{}
-	if workspaceID != "" {
-		query += " AND " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1)
-		args = append(args, workspaceID)
+	workspaceID = strings.TrimSpace(workspaceID)
+	if workspaceID == "" {
+		return 0, 0, fmt.Errorf("record batch job workspace is required")
+	}
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "record_batch_jobs", workspaceID).
+		Projections(
+			ormbuilder.Project(ormbuilder.CountAll()),
+			ormbuilder.Project(ormbuilder.Coalesce(ormbuilder.Min(ormbuilder.Column("created_at")), ormbuilder.Value(""))),
+		).
+		Where(ormbuilder.Equal("status", "queued")).
+		Build()
+	if buildErr != nil {
+		return 0, 0, fmt.Errorf("build record batch queue stats: %w", buildErr)
 	}
 	var depth int
 	var oldest string
