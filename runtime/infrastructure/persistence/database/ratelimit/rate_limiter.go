@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	runtimeschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/schema"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
@@ -82,13 +83,18 @@ func (l *RateLimiter) allowOnce(ctx context.Context, key string, limit int, wind
 		return ratelimit.Decision{}, false, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	query := "SELECT " + l.store.Identifier("window_start_ns") + ", " + l.store.Identifier("request_count") + " FROM " + l.store.TableIdentifier("runtime_rate_limit_bucket") + " WHERE " + l.store.Identifier("bucket_key") + " = " + l.store.Placeholder(1)
+	selectBuilder := ormbuilder.NewSelectBuilder(l.store.SQLRenderer, "runtime_rate_limit_bucket").
+		Columns("window_start_ns", "request_count").Where(ormbuilder.Equal("bucket_key", key))
 	if l.driver != "sqlite" {
-		query += " FOR UPDATE"
+		selectBuilder.ForUpdate()
+	}
+	query, args, err := selectBuilder.Build()
+	if err != nil {
+		return ratelimit.Decision{}, false, fmt.Errorf("build rate limit bucket query: %w", err)
 	}
 	var startNS int64
 	var count int
-	err = tx.QueryRowContext(ctx, query, key).Scan(&startNS, &count)
+	err = tx.QueryRowContext(ctx, query, args...).Scan(&startNS, &count)
 	if err != nil && err != sql.ErrNoRows {
 		return ratelimit.Decision{}, false, err
 	}
@@ -98,13 +104,23 @@ func (l *RateLimiter) allowOnce(ctx context.Context, key string, limit int, wind
 	}
 	count++
 	if err == sql.ErrNoRows {
-		insert := "INSERT INTO " + l.store.TableIdentifier("runtime_rate_limit_bucket") + " (" + l.store.Identifier("bucket_key") + ", " + l.store.Identifier("window_start_ns") + ", " + l.store.Identifier("request_count") + ", " + l.store.Identifier("updated_at_ns") + ") VALUES (" + strings.Join([]string{l.store.Placeholder(1), l.store.Placeholder(2), l.store.Placeholder(3), l.store.Placeholder(4)}, ", ") + ")"
-		if _, insertErr := tx.ExecContext(ctx, insert, key, windowStart.UnixNano(), count, now.UnixNano()); insertErr != nil {
+		insert, insertArgs, buildErr := ormbuilder.NewInsertBuilder(l.store.SQLRenderer, "runtime_rate_limit_bucket").
+			Columns("bucket_key", "window_start_ns", "request_count", "updated_at_ns").
+			Values(key, windowStart.UnixNano(), count, now.UnixNano()).Build()
+		if buildErr != nil {
+			return ratelimit.Decision{}, false, fmt.Errorf("build rate limit bucket insert: %w", buildErr)
+		}
+		if _, insertErr := tx.ExecContext(ctx, insert, insertArgs...); insertErr != nil {
 			return ratelimit.Decision{}, true, nil
 		}
 	} else {
-		update := "UPDATE " + l.store.TableIdentifier("runtime_rate_limit_bucket") + " SET " + l.store.Identifier("window_start_ns") + " = " + l.store.Placeholder(1) + ", " + l.store.Identifier("request_count") + " = " + l.store.Placeholder(2) + ", " + l.store.Identifier("updated_at_ns") + " = " + l.store.Placeholder(3) + " WHERE " + l.store.Identifier("bucket_key") + " = " + l.store.Placeholder(4)
-		if _, err := tx.ExecContext(ctx, update, windowStart.UnixNano(), count, now.UnixNano(), key); err != nil {
+		update, updateArgs, buildErr := ormbuilder.NewUpdateBuilder(l.store.SQLRenderer, "runtime_rate_limit_bucket").
+			Set("window_start_ns", windowStart.UnixNano()).Set("request_count", count).Set("updated_at_ns", now.UnixNano()).
+			Where(ormbuilder.Equal("bucket_key", key)).Build()
+		if buildErr != nil {
+			return ratelimit.Decision{}, false, fmt.Errorf("build rate limit bucket update: %w", buildErr)
+		}
+		if _, err := tx.ExecContext(ctx, update, updateArgs...); err != nil {
 			return ratelimit.Decision{}, false, err
 		}
 	}
