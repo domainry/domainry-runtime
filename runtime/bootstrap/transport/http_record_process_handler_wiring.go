@@ -1,10 +1,14 @@
 package transport
 
 import (
+	"context"
 	"crypto/sha256"
+	"fmt"
 	"strings"
 
+	identitysdk "github.com/domainry/domainry-identity-sdk"
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
+	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
 	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/lifecycle"
 	automationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/automation"
@@ -65,6 +69,19 @@ func (a *httpServerAssembly) wireRecordAndProcessHandlers() {
 		WriteJSON: a.callbacks.WriteJSON, WriteError: a.callbacks.WriteError,
 		WriteServiceError: a.callbacks.WriteServiceError, DecodeJSON: a.callbacks.DecodeJSON, Admin: a.identityHTTP.PermissionFunc("workspace.admin"),
 		Authenticated: a.identityHTTP.AuthenticatedFunc,
+		Binding:       a.dependencies.SchedulerBinding,
+		Dispatcher:    composition.NewSchedulerCallbackDispatcher(records.Applications().Scheduler, records.Applications().Integrations),
+		RuntimeID:     a.dependencies.RuntimeInstanceID,
+		AuthenticateService: func(ctx context.Context, credential string) error {
+			if a.dependencies.IdentityBinding == nil || a.dependencies.IdentityBinding.Tokens() == nil || strings.TrimSpace(credential) == "" {
+				return fmt.Errorf("Scheduler service credential is unavailable")
+			}
+			verified, err := a.dependencies.IdentityBinding.Tokens().Verify(ctx, identitysdk.VerifyTokenRequest{AccessToken: credential, Audience: identitysdk.ApplicationKey(a.dependencies.Config.IdentityAudience)})
+			if err != nil || strings.TrimSpace(string(verified.SubjectID)) == "" || string(verified.Audience) != a.dependencies.Config.IdentityAudience {
+				return fmt.Errorf("Scheduler service credential is invalid")
+			}
+			return nil
+		},
 	})
 	a.handlers.Reports = reporthttp.NewReportsHandler(reporthttp.ReportsDependencies{
 		Service: records.Applications().Reports, Principal: a.callbacks.Principal,

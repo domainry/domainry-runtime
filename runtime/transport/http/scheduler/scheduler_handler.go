@@ -11,18 +11,24 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	operationshttp "github.com/domainry/domainry-runtime/runtime/transport/http/operations"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
+	"github.com/domainry/domainry-scheduler-sdk/modulehost"
 )
 
 type SchedulerHandler struct {
-	service           schedulerService
-	operations        *operationsapplication.OperationsApplicationService
-	principal         func(*http.Request) principalmodel.Principal
-	writeJSON         func(http.ResponseWriter, int, any)
-	writeError        func(http.ResponseWriter, *http.Request, int, string, ...string)
-	writeServiceError func(http.ResponseWriter, *http.Request, error)
-	decodeJSON        func(http.ResponseWriter, *http.Request, any) bool
-	admin             func(http.HandlerFunc) http.HandlerFunc
-	authenticated     func(http.HandlerFunc) http.HandlerFunc
+	service             schedulerService
+	operations          *operationsapplication.OperationsApplicationService
+	principal           func(*http.Request) principalmodel.Principal
+	writeJSON           func(http.ResponseWriter, int, any)
+	writeError          func(http.ResponseWriter, *http.Request, int, string, ...string)
+	writeServiceError   func(http.ResponseWriter, *http.Request, error)
+	decodeJSON          func(http.ResponseWriter, *http.Request, any) bool
+	admin               func(http.HandlerFunc) http.HandlerFunc
+	authenticated       func(http.HandlerFunc) http.HandlerFunc
+	dispatcher          modulehost.Dispatcher
+	runtimeID           string
+	authenticateService SchedulerServiceAuthenticator
+	binding             schedulersdk.Binding
 }
 
 type schedulerService interface {
@@ -87,19 +93,61 @@ func (h *SchedulerHandler) getOpsSchedulerState(w http.ResponseWriter, r *http.R
 		h.writeServiceError(w, r, err)
 		return
 	}
+	if h.binding != nil {
+		runs, bindingErr := h.binding.Runs(r.Context(), 500)
+		if bindingErr != nil {
+			h.writeServiceError(w, r, bindingErr)
+			return
+		}
+		projected := make([]schedulerbusiness.OpsSchedulerRunDTO, 0, len(runs)+len(state.Runs))
+		owned := make(map[string]struct{}, len(runs))
+		for _, run := range runs {
+			projected = append(projected, projectSDKRun(run))
+			owned[run.Trigger.RunID] = struct{}{}
+		}
+		for _, run := range state.Runs {
+			if _, replaced := owned[run.ID]; replaced {
+				continue
+			}
+			projected = append(projected, run)
+		}
+		state.Provisioned = true
+		state.Runs = projected
+	}
 	h.writeJSON(w, http.StatusOK, state)
 }
 
+func projectSDKRun(run schedulersdk.Run) schedulerbusiness.OpsSchedulerRunDTO {
+	return schedulerbusiness.OpsSchedulerRunDTO{
+		ID: run.Trigger.RunID, DefinitionKey: run.Trigger.DefinitionKey, Status: run.Status,
+		Attempt: run.Trigger.Attempt, ScheduledFor: formatSchedulerTime(run.Trigger.ScheduledFor),
+		ErrorMessage: run.LastError, LeaseOwner: run.Lease.Owner, LeaseExpiresAt: formatSchedulerTime(run.Lease.ExpiresAt),
+		FencingToken: int(run.Lease.Token), CorrelationID: run.DownstreamReceipt.ID,
+		CreatedAt: formatSchedulerTime(run.CreatedAt), UpdatedAt: formatSchedulerTime(run.UpdatedAt),
+	}
+}
+
+func formatSchedulerTime(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339Nano)
+}
+
 type SchedulerDependencies struct {
-	Service           *schedulerbusiness.SchedulerApplicationService
-	Operations        *operationsapplication.OperationsApplicationService
-	Principal         func(*http.Request) principalmodel.Principal
-	WriteJSON         func(http.ResponseWriter, int, any)
-	WriteError        func(http.ResponseWriter, *http.Request, int, string, ...string)
-	WriteServiceError func(http.ResponseWriter, *http.Request, error)
-	DecodeJSON        func(http.ResponseWriter, *http.Request, any) bool
-	Admin             func(http.HandlerFunc) http.HandlerFunc
-	Authenticated     func(http.HandlerFunc) http.HandlerFunc
+	Service             *schedulerbusiness.SchedulerApplicationService
+	Operations          *operationsapplication.OperationsApplicationService
+	Principal           func(*http.Request) principalmodel.Principal
+	WriteJSON           func(http.ResponseWriter, int, any)
+	WriteError          func(http.ResponseWriter, *http.Request, int, string, ...string)
+	WriteServiceError   func(http.ResponseWriter, *http.Request, error)
+	DecodeJSON          func(http.ResponseWriter, *http.Request, any) bool
+	Admin               func(http.HandlerFunc) http.HandlerFunc
+	Authenticated       func(http.HandlerFunc) http.HandlerFunc
+	Dispatcher          modulehost.Dispatcher
+	RuntimeID           string
+	AuthenticateService SchedulerServiceAuthenticator
+	Binding             schedulersdk.Binding
 }
 
 func NewSchedulerHandler(deps SchedulerDependencies) *SchedulerHandler {
@@ -111,6 +159,7 @@ func NewSchedulerHandler(deps SchedulerDependencies) *SchedulerHandler {
 		service: deps.Service, operations: deps.Operations, principal: deps.Principal, writeJSON: deps.WriteJSON,
 		writeError: deps.WriteError, writeServiceError: deps.WriteServiceError, decodeJSON: deps.DecodeJSON, admin: deps.Admin,
 		authenticated: authenticated,
+		dispatcher:    deps.Dispatcher, runtimeID: strings.TrimSpace(deps.RuntimeID), authenticateService: deps.AuthenticateService, binding: deps.Binding,
 	}
 }
 

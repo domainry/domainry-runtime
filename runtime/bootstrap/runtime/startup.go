@@ -133,9 +133,19 @@ func New(ctx context.Context, cfg config.Config, identityBinding identitysdk.Bin
 	return NewWithExtensions(ctx, cfg, businessHandlers, connectorProviders, identityBinding, notificationFactory, partyFactory)
 }
 
+func NewWithScheduler(ctx context.Context, cfg config.Config, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, schedulerFactory schedulersdk.Factory) *Runtime {
+	businessHandlers := runtimeext.NewBusinessHandlerRegistry()
+	businessHandlers.Freeze()
+	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, businessHandlers, emptyConnectorProviderRegistry(), runtimehttp.RuntimeReleaseIdentity{}, identityBinding, notificationFactory, partyFactory, nil, schedulerFactory, nil)
+}
+
 func NewWithBusinessHandlers(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory) *Runtime {
 	connectorProviders := emptyConnectorProviderRegistry()
 	return NewWithExtensions(ctx, cfg, businessHandlers, connectorProviders, identityBinding, notificationFactory, partyFactory)
+}
+
+func NewWithBusinessHandlersAndScheduler(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, schedulerFactory schedulersdk.Factory) *Runtime {
+	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, businessHandlers, emptyConnectorProviderRegistry(), runtimehttp.RuntimeReleaseIdentity{}, identityBinding, notificationFactory, partyFactory, nil, schedulerFactory, nil)
 }
 
 func emptyConnectorProviderRegistry() *connector.Registry {
@@ -392,7 +402,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	var schedulerBinding schedulersdk.Binding
 	if schedulerFactory != nil {
 		application := schedulersdk.ApplicationRef{RuntimeID: cfg.RuntimeInstanceID}
-		host := composition.NewSchedulerSDKModuleHost(records.Applications().Scheduler, records.Applications().Integrations)
+		host := composition.NewSchedulerSDKModuleHost(records.Applications().Scheduler, records.Applications().Integrations, store, workerDependencies.WorkerID.String())
 		if moduleFactory, ok := schedulerFactory.(schedulermodulehost.Factory); ok {
 			schedulerBinding, err = moduleFactory.OpenModule(ctx, application, host)
 		} else if saasFactory, ok := schedulerFactory.(schedulersaashost.Factory); ok {

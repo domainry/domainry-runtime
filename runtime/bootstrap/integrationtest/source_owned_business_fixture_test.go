@@ -18,6 +18,7 @@ import (
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	bootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	schedulermodule "github.com/domainry/domainry-scheduler/module"
 )
 
 type sourceOwnedIntegrationFixtureHandler struct {
@@ -237,7 +238,7 @@ func newIntegrationRuntime(t *testing.T, cfg config.Config) *bootstrap.Runtime {
 		}
 	}
 	if !hasBusinessHandlers {
-		return bootstrap.New(t.Context(), cfg, identityBinding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}))
+		return bootstrap.NewWithScheduler(t.Context(), cfg, identityBinding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()))
 	}
 	if strings.TrimSpace(cfg.RuntimeVersion) == "" {
 		cfg.RuntimeVersion = "integrationtest-runtime-v1"
@@ -251,7 +252,7 @@ func newIntegrationRuntime(t *testing.T, cfg config.Config) *bootstrap.Runtime {
 	if err := os.WriteFile(cfg.ManifestPath, normalized, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	return bootstrap.NewWithBusinessHandlers(t.Context(), cfg, registry, identityBinding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}))
+	return bootstrap.NewWithBusinessHandlersAndScheduler(t.Context(), cfg, registry, identityBinding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()))
 }
 
 func sourceOwnedFixturePrecondition(actionKey string) (string, any) {

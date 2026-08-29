@@ -34,8 +34,16 @@ func New(ctx context.Context, cfg config.Config, identity identitysdk.Binding, n
 	return runtimebootstrap.New(ctx, cfg, identity, notification, party)
 }
 
+func NewWithScheduler(ctx context.Context, cfg config.Config, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, scheduler schedulersdk.Factory) *Runtime {
+	return runtimebootstrap.NewWithScheduler(ctx, cfg, identity, notification, party, scheduler)
+}
+
 func NewWithBusinessHandlers(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory) *Runtime {
 	return runtimebootstrap.NewWithBusinessHandlers(ctx, cfg, handlers, identity, notification, party)
+}
+
+func NewWithBusinessHandlersAndScheduler(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, scheduler schedulersdk.Factory) *Runtime {
+	return runtimebootstrap.NewWithBusinessHandlersAndScheduler(ctx, cfg, handlers, identity, notification, party, scheduler)
 }
 
 func NewWithExtensions(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory) *Runtime {

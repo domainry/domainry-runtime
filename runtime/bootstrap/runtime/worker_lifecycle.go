@@ -7,7 +7,6 @@ import (
 	"github.com/domainry/domainry-foundation/logging"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
-	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -89,21 +88,13 @@ func (a *Runtime) startSchedulerWorker(ctx context.Context) {
 		})
 		return
 	}
-	if a.records == nil {
-		return
-	}
-	a.startControlledWorker(ctx, "scheduler", func(workerCtx context.Context) <-chan struct{} {
-		return a.records.Applications().Scheduler.StartWorker(
-			workerCtx,
-			schedulerapplication.WorkerConfig{
-				Enabled:           a.cfg.SchedulerEnabled,
-				PollInterval:      a.cfg.SchedulerPollInterval,
-				BatchSize:         a.cfg.SchedulerBatchSize,
-				LeaseTTL:          a.cfg.SchedulerLeaseTTL,
-				MaxCatchupWindows: a.cfg.SchedulerMaxCatchupWindows,
-			},
-			len(a.manifest.Workflows) > 0,
-		)
+	// Runtime construction tests and internal embedders may not have a binding,
+	// but the lifecycle registry still owns a deterministic Scheduler slot. The
+	// closed worker deliberately performs no legacy Runtime scheduling.
+	a.startControlledWorker(ctx, "scheduler", func(context.Context) <-chan struct{} {
+		done := make(chan struct{})
+		close(done)
+		return done
 	})
 }
 

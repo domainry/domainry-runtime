@@ -156,8 +156,8 @@ func waitForSchedulerPersistence(t *testing.T, db *sql.DB, definitionID string, 
 	var cursors, runs, actions int
 	var cursorErr, runErr, actionErr error
 	for time.Now().Before(deadline) {
-		cursorErr = db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM scheduler_cursor WHERE scheduler_definition_key = ?`, definitionID).Scan(&cursors)
-		runErr = db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM job_run WHERE scheduler_definition_key = ? AND triggered_by = 'scheduler' AND status = 'succeeded'`, definitionID).Scan(&runs)
+		cursorErr = db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM scheduler_schedule_state WHERE definition_key = ?`, definitionID).Scan(&cursors)
+		runErr = db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM scheduler_runs WHERE definition_key = ? AND status = 'succeeded'`, definitionID).Scan(&runs)
 		actionErr = db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM business_action_executions WHERE action_key = 'payment.record_overdue_escalation' AND status = 'succeeded'`).Scan(&actions)
 		if cursorErr == nil && runErr == nil && actionErr == nil && cursors == 1 && runs == 1 && actions == wantActions {
 			return

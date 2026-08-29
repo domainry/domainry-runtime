@@ -11,6 +11,7 @@ import (
 	identityhttpmiddleware "github.com/domainry/domainry-identity-sdk/httpmiddleware"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
@@ -42,6 +43,7 @@ type HTTPServerDependencies struct {
 	IdentityBinding        identitysdk.Binding
 	PartyBinding           partysdk.Binding
 	MonitoringBinding      monitoringsdk.Binding
+	SchedulerBinding       schedulersdk.Binding
 	Store                  *persistence.RuntimeStore
 	RateLimiter            ratelimit.Limiter
 	Notifications          notificationhttp.NotificationApplication

@@ -3,6 +3,7 @@ package scheduler
 import "net/http"
 
 func (h *SchedulerHandler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("POST /v1/scheduler-triggers:accept", h.acceptSchedulerTrigger)
 	mux.HandleFunc("GET /tenant-admin/scheduler/definitions", h.authenticated(h.listTenantAdminSchedulerDefinitions))
 	mux.HandleFunc("GET /tenant-admin/scheduler/definitions/{definitionID}", h.authenticated(h.getTenantAdminSchedulerDefinition))
 	mux.HandleFunc("GET /tenant-admin/scheduler/definitions/{definitionID}/versions", h.authenticated(h.listTenantAdminSchedulerDefinitionVersions))
