@@ -31,6 +31,7 @@ type EngineProfile interface {
 	WorkspaceTablesQuery(ormdialect.Renderer, string) SchemaQuery
 	TableExistsQuery(ormdialect.Renderer, string, string) SchemaQuery
 	IndexesQuery(ormdialect.Renderer, string, string) SchemaQuery
+	InspectModuleSchemaTable(context.Context, SchemaDatabase, ormdialect.Renderer, string, string) (ModuleSchemaTable, bool, error)
 	EvidenceSchemaTypes(string) EvidenceSchemaTypes
 	NormalizeEvidenceSchema(context.Context, SchemaDatabase, ormdialect.Renderer) error
 	MigrationLedgerTypes() MigrationLedgerTypes
@@ -87,6 +88,7 @@ type SchemaProfile interface {
 	WorkspaceTablesQuery(ormdialect.Renderer, string) SchemaQuery
 	TableExistsQuery(ormdialect.Renderer, string, string) SchemaQuery
 	IndexesQuery(ormdialect.Renderer, string, string) SchemaQuery
+	InspectModuleSchemaTable(context.Context, SchemaDatabase, ormdialect.Renderer, string, string) (ModuleSchemaTable, bool, error)
 }
 
 type WorkspaceRLSProfile interface {
@@ -102,6 +104,24 @@ type ProjectDatabaseProfile interface {
 type SchemaQuery struct {
 	Statement string
 	Arguments []any
+}
+
+type ModuleSchemaColumn struct {
+	Name       string
+	Physical   string
+	Nullable   bool
+	PrimaryKey bool
+}
+
+type ModuleSchemaIndex struct {
+	Name    string
+	Unique  bool
+	Columns []string
+}
+
+type ModuleSchemaTable struct {
+	Columns []ModuleSchemaColumn
+	Indexes []ModuleSchemaIndex
 }
 
 type MigrationLedgerTypes struct {
@@ -158,4 +178,5 @@ type WorkspaceRLSStatus struct {
 type SchemaDatabase interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
