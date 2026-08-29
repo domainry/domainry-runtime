@@ -14,17 +14,22 @@ import (
 
 type dialect = driver.Engine
 
+var engineRegistry = map[string]func() driver.Engine{
+	"":           func() driver.Engine { return sqlite.NewEngine() },
+	"sqlite":     func() driver.Engine { return sqlite.NewEngine() },
+	"sqlite3":    func() driver.Engine { return sqlite.NewEngine() },
+	"mysql":      func() driver.Engine { return mysql.NewEngine() },
+	"postgres":   func() driver.Engine { return postgres.NewEngine() },
+	"postgresql": func() driver.Engine { return postgres.NewEngine() },
+	"pgx":        func() driver.Engine { return postgres.NewEngine() },
+}
+
 func dialectFor(driver string) (dialect, error) {
-	switch strings.ToLower(strings.TrimSpace(driver)) {
-	case "", "sqlite", "sqlite3":
-		return sqlite.NewEngine(), nil
-	case "mysql":
-		return mysql.NewEngine(), nil
-	case "postgres", "postgresql", "pgx":
-		return postgres.NewEngine(), nil
-	default:
+	factory := engineRegistry[strings.ToLower(strings.TrimSpace(driver))]
+	if factory == nil {
 		return nil, fmt.Errorf("unsupported database driver %q", driver)
 	}
+	return factory(), nil
 }
 
 func validSQLIdentifier(value string) bool {
