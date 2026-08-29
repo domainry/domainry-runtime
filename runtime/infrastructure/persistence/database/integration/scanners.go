@@ -189,10 +189,12 @@ func integrationWebhookSubscriptionColumnsSQL(s *database.RuntimeStore) string {
 	return stringsJoinIdentifiers(s, integrationWebhookSubscriptionColumns...)
 }
 
+var integrationAPIKeyColumns = []string{
+	"api_key", "workspace_id", "name", "token_prefix", "token_hash", "actor_id", "role_key", "scopes_json", "status", "expires_at", "last_used_at", "created_by", "created_at", "updated_at", "disabled_at",
+}
+
 func integrationAPIKeyColumnsSQL(s *database.RuntimeStore) string {
-	return stringsJoinIdentifiers(s,
-		"api_key", "workspace_id", "name", "token_prefix", "token_hash", "actor_id", "role_key", "scopes_json", "status", "expires_at", "last_used_at", "created_by", "created_at", "updated_at", "disabled_at",
-	)
+	return stringsJoinIdentifiers(s, integrationAPIKeyColumns...)
 }
 
 func nonNilMap(value map[string]any) map[string]any {
