@@ -78,6 +78,21 @@ type MigrationProfile interface {
 	MigrationDatabasePath(config.Config) string
 }
 
+type SchemaProfile interface {
+	ManagedDatabaseMarkerEnabled() bool
+	ColumnDefinition(string) string
+	ApplicationTablesQuery(ormdialect.Renderer, string) SchemaQuery
+	WorkspaceTablesQuery(ormdialect.Renderer, string) SchemaQuery
+	TableExistsQuery(ormdialect.Renderer, string, string) SchemaQuery
+	IndexesQuery(ormdialect.Renderer, string, string) SchemaQuery
+}
+
+type WorkspaceRLSProfile interface {
+	WorkspaceRLSSupported() bool
+	ApplyWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) error
+	InspectWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) (WorkspaceRLSStatus, error)
+}
+
 type SchemaQuery struct {
 	Statement string
 	Arguments []any

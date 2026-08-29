@@ -11,6 +11,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/requestcontext"
 	postgrespersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
+	postgresrls "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/rls"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -143,7 +144,7 @@ func TestWorkspaceTablesScanAndRowsErrors(t *testing.T) {
 
 func TestSetLocalWorkspaceRLSContext(t *testing.T) {
 	renderer := postgrespersistence.Dialect{}.SQLDialect().WithSchema("")
-	if err := postgrespersistence.SetLocalWorkspaceRLSContext(t.Context(), nil, renderer); err == nil {
+	if err := postgresrls.SetLocalWorkspaceContext(t.Context(), nil, renderer); err == nil {
 		t.Fatal("expected nil transaction error")
 	}
 	script := &workspaceRLSScript{}
@@ -154,7 +155,7 @@ func TestSetLocalWorkspaceRLSContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := requestcontext.WithActorID(requestcontext.WithWorkspaceID(t.Context(), "workspace-1"), "actor-1")
-	if err := postgrespersistence.SetLocalWorkspaceRLSContext(ctx, tx, renderer); err != nil {
+	if err := postgresrls.SetLocalWorkspaceContext(ctx, tx, renderer); err != nil {
 		t.Fatalf("set context: %v", err)
 	}
 	_ = tx.Rollback()
@@ -167,7 +168,7 @@ func TestSetLocalWorkspaceRLSContext(t *testing.T) {
 	defer db.Close()
 	tx, _ = db.BeginTx(t.Context(), nil)
 	defer tx.Rollback()
-	if err := postgrespersistence.SetLocalWorkspaceRLSContext(ctx, tx, renderer); err == nil || !strings.Contains(err.Error(), "transaction-local") {
+	if err := postgresrls.SetLocalWorkspaceContext(ctx, tx, renderer); err == nil || !strings.Contains(err.Error(), "transaction-local") {
 		t.Fatalf("set context error=%v", err)
 	}
 }

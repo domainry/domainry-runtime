@@ -6,6 +6,7 @@ import (
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	postgrespersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
+	postgresrls "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/rls"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -28,7 +29,7 @@ func TestWorkspaceRLSIsPostgresOnlyAndFailsClosedWithoutWorkspace(t *testing.T) 
 		t.Fatal(err)
 	}
 	defer tx.Rollback()
-	err = postgrespersistence.SetLocalWorkspaceRLSContext(t.Context(), tx, postgrespersistence.Dialect{}.SQLDialect().WithSchema(""))
+	err = postgresrls.SetLocalWorkspaceContext(t.Context(), tx, postgrespersistence.Dialect{}.SQLDialect().WithSchema(""))
 	if err == nil || !strings.Contains(err.Error(), "requires workspace_id") {
 		t.Fatalf("RLS transaction binding must fail closed without workspace: %v", err)
 	}

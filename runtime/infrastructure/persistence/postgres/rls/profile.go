@@ -1,4 +1,4 @@
-package postgres
+package rls
 
 import (
 	"context"
@@ -10,61 +10,17 @@ import (
 	"github.com/domainry/domainry-foundation/requestcontext"
 	ormbuilder "github.com/domainry/domainry-orm/builder"
 	ormdialect "github.com/domainry/domainry-orm/dialect"
-	ormdriver "github.com/domainry/domainry-orm/driver"
-	ormpostgres "github.com/domainry/domainry-orm/postgres"
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
-	postgresevidence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/evidence"
-	postgresmigration "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/migration"
-	postgresrecord "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/record"
-	postgresreport "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/report"
 )
 
-type engineProfile struct {
-	ormdriver.Profile
-	persistencedriver.MigrationProfile
-	evidence persistencedriver.EvidenceSchemaProfile
-	record   persistencedriver.RecordProfile
-	report   persistencedriver.ReportProfile
-}
+type Profile struct{}
 
-func newEngineProfile() engineProfile {
-	return engineProfile{Profile: ormpostgres.NewProfile(), MigrationProfile: postgresmigration.NewProfile(), evidence: postgresevidence.NewProfile(), record: postgresrecord.NewProfile(), report: postgresreport.NewProfile()}
-}
+func NewProfile() Profile { return Profile{} }
 
-func (engineProfile) ManagedDatabaseMarkerEnabled() bool        { return true }
-func (engineProfile) ColumnDefinition(definition string) string { return strings.TrimSpace(definition) }
-func (engineProfile) ApplicationTablesQuery(renderer ormdialect.Renderer, databaseSchema string) persistencedriver.SchemaQuery {
-	return persistencedriver.SchemaQuery{Statement: "SELECT table_name FROM information_schema.tables WHERE table_schema = " + renderer.Placeholder(1), Arguments: []any{databaseSchema}}
-}
-func (engineProfile) WorkspaceTablesQuery(renderer ormdialect.Renderer, databaseSchema string) persistencedriver.SchemaQuery {
-	return persistencedriver.SchemaQuery{Statement: "SELECT DISTINCT table_name FROM information_schema.columns WHERE table_schema = " + renderer.Placeholder(1) + " AND column_name = 'workspace_id' ORDER BY table_name", Arguments: []any{databaseSchema}}
-}
-func (engineProfile) TableExistsQuery(renderer ormdialect.Renderer, databaseSchema, table string) persistencedriver.SchemaQuery {
-	return persistencedriver.SchemaQuery{Statement: "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = " + renderer.Placeholder(1) + " AND table_name = " + renderer.Placeholder(2), Arguments: []any{databaseSchema, table}}
-}
-func (engineProfile) IndexesQuery(renderer ormdialect.Renderer, databaseSchema, table string) persistencedriver.SchemaQuery {
-	return persistencedriver.SchemaQuery{Statement: "SELECT indexname FROM pg_indexes WHERE schemaname = " + renderer.Placeholder(1) + " AND tablename = " + renderer.Placeholder(2), Arguments: []any{databaseSchema, table}}
-}
-func (profile engineProfile) EvidenceSchemaTypes(text string) persistencedriver.EvidenceSchemaTypes {
-	return profile.evidence.Types(text)
-}
-func (profile engineProfile) NormalizeEvidenceSchema(ctx context.Context, database persistencedriver.SchemaDatabase, renderer ormdialect.Renderer) error {
-	return profile.evidence.Normalize(ctx, database, renderer)
-}
+func (Profile) WorkspaceRLSSupported() bool { return true }
 
-func (engineProfile) WorkspaceRLSSupported() bool { return true }
-func (profile engineProfile) OrderedDecimalTextStorage() bool {
-	return profile.record.OrderedDecimalTextStorage()
-}
-func (profile engineProfile) RecordReadIsolation() sql.IsolationLevel {
-	return profile.record.ReadIsolation()
-}
-func (profile engineProfile) ReportDateBucket(value, grain string, date bool) (string, error) {
-	return profile.report.DateBucket(value, grain, date)
-}
-
-func (engineProfile) ApplyWorkspaceRLS(ctx context.Context, database *sql.DB, renderer ormdialect.Renderer, databaseSchema, runtimeRole, policyVersion string) error {
-	tables, err := postgresWorkspaceTables(ctx, database, renderer, databaseSchema)
+func (Profile) ApplyWorkspaceRLS(ctx context.Context, database *sql.DB, renderer ormdialect.Renderer, databaseSchema, runtimeRole, policyVersion string) error {
+	tables, err := workspaceTables(ctx, database, renderer, databaseSchema)
 	if err != nil {
 		return err
 	}
@@ -100,8 +56,8 @@ func (engineProfile) ApplyWorkspaceRLS(ctx context.Context, database *sql.DB, re
 	return nil
 }
 
-func (engineProfile) InspectWorkspaceRLS(ctx context.Context, database *sql.DB, renderer ormdialect.Renderer, databaseSchema, runtimeRole, policyVersion string) (persistencedriver.WorkspaceRLSStatus, error) {
-	tables, err := postgresWorkspaceTables(ctx, database, renderer, databaseSchema)
+func (Profile) InspectWorkspaceRLS(ctx context.Context, database *sql.DB, renderer ormdialect.Renderer, databaseSchema, runtimeRole, policyVersion string) (persistencedriver.WorkspaceRLSStatus, error) {
+	tables, err := workspaceTables(ctx, database, renderer, databaseSchema)
 	if err != nil {
 		return persistencedriver.WorkspaceRLSStatus{}, err
 	}
@@ -137,7 +93,7 @@ WHERE n.nspname = $1 AND c.relname = $2`, databaseSchema, table, policyName).Sca
 	return status, nil
 }
 
-func postgresWorkspaceTables(ctx context.Context, database *sql.DB, renderer ormdialect.Renderer, databaseSchema string) ([]string, error) {
+func workspaceTables(ctx context.Context, database *sql.DB, renderer ormdialect.Renderer, databaseSchema string) ([]string, error) {
 	query := "SELECT DISTINCT table_name FROM information_schema.columns WHERE table_schema = " + renderer.Placeholder(1) + " AND column_name = 'workspace_id' ORDER BY table_name"
 	rows, err := database.QueryContext(ctx, query, databaseSchema)
 	if err != nil {
@@ -159,9 +115,9 @@ func postgresWorkspaceTables(ctx context.Context, database *sql.DB, renderer orm
 	return tables, nil
 }
 
-// SetLocalWorkspaceRLSContext binds tenant and actor identity to one
-// PostgreSQL transaction so pooled connections cannot leak either value.
-func SetLocalWorkspaceRLSContext(ctx context.Context, transaction *sql.Tx, renderer ormdialect.Renderer) error {
+// SetLocalWorkspaceContext binds tenant and actor identity to one PostgreSQL
+// transaction so pooled connections cannot leak either value.
+func SetLocalWorkspaceContext(ctx context.Context, transaction *sql.Tx, renderer ormdialect.Renderer) error {
 	if transaction == nil {
 		return fmt.Errorf("workspace RLS transaction is required")
 	}
