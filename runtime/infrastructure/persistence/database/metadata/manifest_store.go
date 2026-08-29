@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/requestcontext"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -171,11 +172,11 @@ func manifestGeneratedSourceID(manifest manifestmodel.ManifestSchema) string {
 }
 
 func (s MetadataStore) disableRemovedGeneratedDefinitions(ctx context.Context, tx *sql.Tx, table, sourceID string, activeKeys map[string]bool, now string) error {
-	query := "SELECT " + s.store.Identifier("resource_key") + " FROM " + s.store.TableIdentifier(table) +
-		" WHERE " + s.store.Identifier("source_kind") + " = " + s.store.Placeholder(1) +
-		" AND " + s.store.Identifier("source_id") + " = " + s.store.Placeholder(2) +
-		" AND " + s.store.Identifier("disabled_at") + " IS NULL"
-	rows, err := tx.QueryContext(ctx, query, "generated", sourceID)
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, table).Columns("resource_key").Where(ormbuilder.And(ormbuilder.Equal("source_kind", "generated"), ormbuilder.Equal("source_id", sourceID), ormbuilder.IsNull("disabled_at"))).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build generated %s manifest sync list: %w", table, buildErr)
+	}
+	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("list generated %s for manifest sync: %w", table, err)
 	}
@@ -197,12 +198,12 @@ func (s MetadataStore) disableRemovedGeneratedDefinitions(ctx context.Context, t
 	if err := closeGeneratedActionRows(rows); err != nil {
 		return fmt.Errorf("close generated %s for manifest sync: %w", table, err)
 	}
-	update := "UPDATE " + s.store.TableIdentifier(table) +
-		" SET " + s.store.Identifier("disabled_at") + " = " + s.store.Placeholder(1) +
-		", " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(2) +
-		" WHERE " + s.store.Identifier("resource_key") + " = " + s.store.Placeholder(3)
 	for _, key := range removedKeys {
-		if _, err := tx.ExecContext(ctx, update, now, now, key); err != nil {
+		update, updateArgs, buildErr := ormbuilder.NewUpdateBuilder(s.store.SQLRenderer, table).Set("disabled_at", now).Set("updated_at", now).Where(ormbuilder.Equal("resource_key", key)).Build()
+		if buildErr != nil {
+			return fmt.Errorf("build removed generated %s entry %s disable: %w", table, key, buildErr)
+		}
+		if _, err := tx.ExecContext(ctx, update, updateArgs...); err != nil {
 			return fmt.Errorf("disable removed generated %s entry %s: %w", table, key, err)
 		}
 	}
