@@ -61,7 +61,7 @@ func TestRuntimeDatabaseRetirementInventoryCoversFreshSchema(t *testing.T) {
 	repositoryRoot := filepath.Clean(filepath.Join(runtimeRoot(t), ".."))
 	inventory := readRetirementInventory(t, repositoryRoot)
 	registered := map[string]bool{}
-	allowedStatuses := map[string]bool{"active": true, "migration_only": true, "compatibility_read": true, "compatibility_write": true, "retirement_candidate": true, "blocked": true}
+	allowedStatuses := map[string]bool{"active": true, "external_owner_active": true, "migration_only": true, "compatibility_read": true, "compatibility_write": true, "retirement_candidate": true, "blocked": true}
 	for _, group := range inventory.DatabaseObjects {
 		if group.ObjectKind != "table" || group.Database == "" || group.Schema == "" || group.Owner == "" || group.Migration == "" || group.Retention == "" || group.BackupID == "" || group.ObservationWindow == "" || !allowedStatuses[group.Status] {
 			t.Errorf("incomplete database retirement inventory group: %+v", group)

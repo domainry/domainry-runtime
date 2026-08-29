@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
+	ormdialect "github.com/domainry/domainry-orm/dialect"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -33,11 +33,11 @@ func (Dialect) Configure(ctx context.Context, db *sql.DB, _ string) error {
 }
 
 func (Dialect) Identifier(value string) string {
-	return database.QuoteIdentifier(value, "`")
+	return ormdialect.QuoteIdentifier(value, "`")
 }
 
 func (Dialect) Placeholder(position int) string {
-	return database.QuestionPlaceholder(position)
+	return ormdialect.QuestionPlaceholder(position)
 }
 
 func (Dialect) SchemaMigrationSQL() string {

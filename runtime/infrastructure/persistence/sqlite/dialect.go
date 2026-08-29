@@ -13,7 +13,7 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	"github.com/shopspring/decimal"
 
-	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
+	ormdialect "github.com/domainry/domainry-orm/dialect"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 
 	modernsqlite "modernc.org/sqlite"
@@ -208,11 +208,11 @@ func (Dialect) Configure(ctx context.Context, db *sql.DB, dsn string) error {
 }
 
 func (Dialect) Identifier(value string) string {
-	return database.QuoteIdentifier(value, `"`)
+	return ormdialect.QuoteIdentifier(value, `"`)
 }
 
 func (Dialect) Placeholder(position int) string {
-	return database.QuestionPlaceholder(position)
+	return ormdialect.QuestionPlaceholder(position)
 }
 
 func (Dialect) SchemaMigrationSQL() string {
