@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -196,6 +197,20 @@ func TestUpdateRecordWherePreventsStaleSchedulerLeaseClaim(t *testing.T) {
 	}
 	if ok {
 		t.Fatalf("expected stale scheduler lease claim to be rejected")
+	}
+}
+
+func TestSchedulerNowUsesDatabaseClock(t *testing.T) {
+	store := openStoreForGeneratedListTest(t)
+	defer store.Close()
+	before := time.Now().UTC().Add(-2 * time.Second)
+	now, err := recordStore(store).SchedulerNow(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := time.Now().UTC().Add(2 * time.Second)
+	if now.Before(before) || now.After(after) {
+		t.Fatalf("database now=%s outside [%s,%s]", now, before, after)
 	}
 }
 

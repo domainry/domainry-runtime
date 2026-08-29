@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 
@@ -61,6 +62,66 @@ func (r RecordStore) database() *sql.DB {
 		return nil
 	}
 	return r.store.DB()
+}
+
+// SchedulerNow returns the database server clock so lease arbitration does not
+// depend on clock synchronization between Runtime processes.
+func (r RecordStore) SchedulerNow(ctx context.Context) (time.Time, error) {
+	if err := ctx.Err(); err != nil {
+		return time.Time{}, err
+	}
+	database := r.database()
+	if database == nil {
+		return time.Time{}, fmt.Errorf("record database is unavailable")
+	}
+	query := "SELECT CURRENT_TIMESTAMP"
+	if r.store != nil {
+		switch string(r.store.RuntimeProfile().Name()) {
+		case "sqlite":
+			query = "SELECT CAST(strftime('%s','now') AS INTEGER)"
+		case "mysql":
+			query = "SELECT UNIX_TIMESTAMP(UTC_TIMESTAMP(6))"
+		case "postgres":
+			query = "SELECT EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)"
+		}
+	}
+	var raw any
+	if err := database.QueryRowContext(ctx, query).Scan(&raw); err != nil {
+		return time.Time{}, fmt.Errorf("read database current timestamp: %w", err)
+	}
+	switch value := raw.(type) {
+	case time.Time:
+		return value.UTC(), nil
+	case int64:
+		return time.Unix(value, 0).UTC(), nil
+	case float64:
+		seconds, fraction := math.Modf(value)
+		return time.Unix(int64(seconds), int64(fraction*float64(time.Second))).UTC(), nil
+	case string:
+		return parseSchedulerDatabaseTimeOrEpoch(value)
+	case []byte:
+		return parseSchedulerDatabaseTimeOrEpoch(string(value))
+	default:
+		return time.Time{}, fmt.Errorf("unsupported database timestamp type %T", raw)
+	}
+}
+
+func parseSchedulerDatabaseTimeOrEpoch(value string) (time.Time, error) {
+	if epoch, err := strconv.ParseFloat(strings.TrimSpace(value), 64); err == nil {
+		seconds, fraction := math.Modf(epoch)
+		return time.Unix(int64(seconds), int64(fraction*float64(time.Second))).UTC(), nil
+	}
+	return parseSchedulerDatabaseTime(value)
+}
+
+func parseSchedulerDatabaseTime(value string) (time.Time, error) {
+	value = strings.TrimSpace(value)
+	for _, layout := range []string{time.RFC3339Nano, "2006-01-02 15:04:05.999999999Z07:00", "2006-01-02 15:04:05.999999999", "2006-01-02 15:04:05"} {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed.UTC(), nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("parse database current timestamp %q", value)
 }
 
 func (r RecordStore) queryExecutor(ctx context.Context) recordQueryExecutor {

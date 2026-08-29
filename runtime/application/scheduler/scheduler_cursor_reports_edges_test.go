@@ -45,12 +45,12 @@ func TestSchedulerAdvanceCursorAndAppendEvent(t *testing.T) {
 		return definition, true, nil
 	}
 	updates, events := 0, 0
-	service.updateRecord = func(_ context.Context, workspaceID string, object definitionmodel.ObjectSchema, record recordmodel.Record, reason string) error {
+	repository.update = func(_ context.Context, workspaceID string, object definitionmodel.ObjectSchema, record recordmodel.Record, conditions map[string]any) (bool, error) {
 		updates++
-		if workspaceID != "workspace-a" || object.Key != "scheduler_cursor" || record.Data["last_run_status"] != "succeeded" || reason == "" {
-			t.Fatalf("cursor update = workspace=%q object=%q record=%+v reason=%q", workspaceID, object.Key, record, reason)
+		if workspaceID != "workspace-a" || object.Key != "scheduler_cursor" || record.Data["last_run_status"] != "succeeded" || conditions["next_run_at"] == nil {
+			t.Fatalf("cursor update = workspace=%q object=%q record=%+v conditions=%#v", workspaceID, object.Key, record, conditions)
 		}
-		return nil
+		return true, nil
 	}
 	service.insertRecord = func(_ context.Context, _ string, object definitionmodel.ObjectSchema, _ recordmodel.Record, _ string) error {
 		if object.Key == "job_run_event" {

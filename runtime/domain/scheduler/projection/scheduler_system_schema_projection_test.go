@@ -66,6 +66,13 @@ func TestSchedulerRecordTimerPublishesDurableUniqueAndOrderedClaimContract(t *te
 
 func TestSchedulerRunSchemaMatchesRuntimePersistenceContract(t *testing.T) {
 	objects := SchedulerSystemObjects()
+	if len(objects[1].Validations) != 1 || objects[1].Validations[0].Type != "composite_unique" {
+		t.Fatalf("job_run window identity contract = %#v", objects[1].Validations)
+	}
+	windows := objects[1].Validations[0].Fields
+	if len(windows) != 2 || windows[0] != "scheduler_definition_key" || windows[1] != "scheduled_for" {
+		t.Fatalf("job_run window fields = %#v", windows)
+	}
 	triggeredBy := map[string]bool{}
 	for _, field := range objects[1].Fields {
 		if field.Key == "triggered_by" {

@@ -205,6 +205,7 @@ type SchedulerApplicationService struct {
 	schema              SchemaProvider
 	runtime             SchedulerOperationRuntime
 	repository          schedulercontract.SchedulerRecordRepository
+	authoritativeClock  SchedulerAuthoritativeClock
 	audit               auditcontract.AuditTelemetryAppender
 	definitionHistory   SchedulerDefinitionHistoryReader
 	definitions         SchedulerDefinitionSource
@@ -222,6 +223,17 @@ type SchedulerApplicationService struct {
 func (s *SchedulerApplicationService) UseDefinitionSource(source SchedulerDefinitionSource) {
 	if s != nil {
 		s.definitions = source
+	}
+}
+
+// UseRepositoryAuthoritativeClock enables database-time lease arbitration for
+// distributed workers while keeping deterministic application tests injectable.
+func (s *SchedulerApplicationService) UseRepositoryAuthoritativeClock(context.Context) {
+	if s == nil {
+		return
+	}
+	if clock, ok := s.repository.(SchedulerAuthoritativeClock); ok {
+		s.authoritativeClock = clock
 	}
 }
 

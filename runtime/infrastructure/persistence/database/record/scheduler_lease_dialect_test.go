@@ -36,6 +36,10 @@ func TestSchedulerRecordLeaseContractAcrossDialects(t *testing.T) {
 			if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 				t.Fatal(err)
 			}
+			databaseNow, err := NewRecordStore(store).SchedulerNow(t.Context())
+			if err != nil || databaseNow.IsZero() {
+				t.Fatalf("scheduler database clock=%s err=%v", databaseNow, err)
+			}
 			table := fmt.Sprintf("scheduler_lease_%s_%d", test.name, time.Now().UnixNano())
 			assertSchedulerRecordLeaseContract(t, store, table)
 		})

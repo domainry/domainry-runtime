@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/domainry/domainry-foundation/mutation"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -37,6 +38,9 @@ type schedulerSDKClaim struct {
 }
 
 func NewSchedulerSDKModuleHost(scheduler *schedulerapplication.SchedulerApplicationService, integrations *integrationapplication.IntegrationApplicationService) modulehost.Host {
+	if scheduler != nil {
+		scheduler.UseRepositoryAuthoritativeClock(context.Background())
+	}
 	return &schedulerSDKModuleHost{scheduler: scheduler, integrations: integrations, definitions: map[string]recordmodel.Record{}, claimed: map[string]schedulerSDKClaim{}, completed: map[string]bool{}}
 }
 
@@ -148,7 +152,33 @@ func schedulerSDKRun(record recordmodel.Record, definition schedulersdk.Definiti
 	}
 	createdAt, _ := time.Parse(time.RFC3339, record.CreatedAt)
 	updatedAt, _ := time.Parse(time.RFC3339, record.UpdatedAt)
-	return schedulersdk.Run{Trigger: schedulersdk.Trigger{RunID: record.ID, DefinitionKey: definition.Key, DefinitionRev: definition.Revision, ScheduledFor: scheduledFor, WindowKey: scheduledFor.UTC().Format(time.RFC3339), Target: definition.Target, IdempotencyKey: record.ID, Attempt: schedulerSDKInt(record.Data["attempt"])}, Status: schedulerSDKString(record.Data, "status"), CreatedAt: createdAt, UpdatedAt: updatedAt}
+	leaseExpiresAt, _ := time.Parse(time.RFC3339, schedulerSDKString(record.Data, "lease_expires_at"))
+	return schedulersdk.Run{Trigger: schedulersdk.Trigger{RunID: record.ID, DefinitionKey: definition.Key, DefinitionRev: definition.Revision, ScheduledFor: scheduledFor, WindowKey: scheduledFor.UTC().Format(time.RFC3339), Target: definition.Target, IdempotencyKey: record.ID, Attempt: schedulerSDKInt(record.Data["attempt"])}, Lease: schedulersdk.Lease{Owner: schedulerSDKString(record.Data, "lease_owner"), Token: int64(schedulerSDKInt(record.Data["fencing_token"])), ExpiresAt: leaseExpiresAt}, Status: schedulerSDKString(record.Data, "status"), CreatedAt: createdAt, UpdatedAt: updatedAt}
+}
+
+func (h *schedulerSDKModuleHost) Renew(ctx context.Context, run schedulersdk.Run, ttl time.Duration) (schedulersdk.Run, bool, error) {
+	h.mu.Lock()
+	claim, found := h.claimed[run.Trigger.RunID]
+	h.mu.Unlock()
+	if !found || claim.run.ID == "" {
+		return run, false, nil
+	}
+	if run.Lease.Owner != schedulerSDKString(claim.run.Data, "lease_owner") || run.Lease.Token != int64(schedulerSDKInt(claim.run.Data["fencing_token"])) {
+		return run, false, nil
+	}
+	now := run.UpdatedAt.UTC()
+	if err := h.scheduler.HeartbeatRun(ctx, claim.run, now, schedulerSDKScope("renew Scheduler run lease")); err != nil {
+		if mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
+			return run, false, nil
+		}
+		return run, false, err
+	}
+	if ttl <= 0 {
+		ttl = 5 * time.Minute
+	}
+	run.Lease.ExpiresAt = now.Add(ttl)
+	run.UpdatedAt = now
+	return run, true, nil
 }
 
 func (h *schedulerSDKModuleHost) Accept(ctx context.Context, run schedulersdk.Run, _ schedulersdk.DownstreamReceipt) error {
@@ -156,7 +186,7 @@ func (h *schedulerSDKModuleHost) Accept(ctx context.Context, run schedulersdk.Ru
 	if err != nil || completed {
 		return err
 	}
-	return h.scheduler.FinishRun(ctx, claim.run, nil, nil, time.Now().UTC(), schedulerSDKScope("accept Scheduler downstream receipt"))
+	return h.scheduler.FinishRun(ctx, claim.run, nil, nil, run.CreatedAt.UTC(), schedulerSDKScope("accept Scheduler downstream receipt"))
 }
 
 func (h *schedulerSDKModuleHost) Fail(ctx context.Context, run schedulersdk.Run, executionErr error, _ time.Time) error {
@@ -164,7 +194,7 @@ func (h *schedulerSDKModuleHost) Fail(ctx context.Context, run schedulersdk.Run,
 	if err != nil || completed {
 		return err
 	}
-	return h.scheduler.FinishRun(ctx, claim.run, nil, executionErr, time.Now().UTC(), schedulerSDKScope("fail Scheduler downstream dispatch"))
+	return h.scheduler.FinishRun(ctx, claim.run, nil, executionErr, run.CreatedAt.UTC(), schedulerSDKScope("fail Scheduler downstream dispatch"))
 }
 
 func (h *schedulerSDKModuleHost) takeClaim(runID string) (schedulerSDKClaim, bool, error) {
@@ -208,7 +238,8 @@ func (h *schedulerSDKModuleHost) Dispatch(ctx context.Context, trigger scheduler
 	if !found {
 		return schedulersdk.DownstreamReceipt{}, fmt.Errorf("Scheduler run %q has no Runtime claim", trigger.RunID)
 	}
-	result, err := h.scheduler.ProcessClaimedRun(ctx, claim.definition, claim.run, 25, schedulerSDKSystemPrincipal("scheduler.command"), time.Now().UTC())
+	startedAt, _ := time.Parse(time.RFC3339, claim.run.CreatedAt)
+	result, err := h.scheduler.ProcessClaimedRun(ctx, claim.definition, claim.run, 25, schedulerSDKSystemPrincipal("scheduler.command"), startedAt.UTC())
 	if err != nil {
 		return schedulersdk.DownstreamReceipt{}, err
 	}

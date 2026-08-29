@@ -32,6 +32,10 @@ func (s *SchedulerApplicationService) readFinishedRun(ctx context.Context, works
 }
 
 func (s *SchedulerApplicationService) claimRunWithKey(ctx context.Context, workspaceID string, definition recordmodel.Record, triggerSource, callerKey string, now time.Time) (recordmodel.Record, bool, error) {
+	leaseNow, err := s.authoritativeNow(ctx, now)
+	if err != nil {
+		return recordmodel.Record{}, false, err
+	}
 	runObject, err := s.objectForPrincipal(ctx, workflowWorkerPrincipal(), "job_run")
 	if err != nil {
 		return recordmodel.Record{}, false, err
@@ -41,6 +45,9 @@ func (s *SchedulerApplicationService) claimRunWithKey(ctx context.Context, works
 		definitionKey = definition.ID
 	}
 	scheduledFor := schedulerScheduledRunTime(definition, triggerSource, now, s.maxCatchupWindows())
+	if strings.TrimSpace(triggerSource) == "scheduler" && scheduledFor.After(leaseNow) {
+		return recordmodel.Record{}, false, nil
+	}
 	runID := schedulerRunIDForDefinition(definition, triggerSource, scheduledFor)
 	idempotencyScope := "scheduler.window"
 	idempotencyKey := definitionKey + ":" + schedulerDefinitionWindowSuffix(definition, scheduledFor)
@@ -54,10 +61,10 @@ func (s *SchedulerApplicationService) claimRunWithKey(ctx context.Context, works
 		return recordmodel.Record{}, false, internalError("get scheduler job run", err)
 	} else if ok {
 		status := strings.TrimSpace(fmt.Sprint(existing.Data["status"]))
-		if status == "leased" && !schedulerpolicy.SchedulerLeaseExpired(existing, now) {
+		if status == "leased" && !schedulerpolicy.SchedulerLeaseExpired(existing, leaseNow) {
 			return existing, false, nil
 		}
-		if status == "retrying" && !schedulerpolicy.SchedulerRetryDue(existing, now) {
+		if status == "retrying" && !schedulerpolicy.SchedulerRetryDue(existing, leaseNow) {
 			return existing, false, nil
 		}
 		if status != "queued" && status != "leased" && status != "failed" && status != "retrying" {
@@ -66,14 +73,14 @@ func (s *SchedulerApplicationService) claimRunWithKey(ctx context.Context, works
 		attempt := schedulerpolicy.SchedulerNextAttempt(existing, status)
 		maxAttempts := schedulerpolicy.SchedulerInt(existing.Data["max_attempts"], schedulerpolicy.SchedulerInt(definition.Data["max_attempts"], 3))
 		if maxAttempts > 0 && attempt > maxAttempts {
-			if err := s.deadLetterRun(ctx, workspaceID, existing, definition, "backend.scheduler.max_attempts_reached", now); err != nil {
+			if err := s.deadLetterRun(ctx, workspaceID, existing, definition, "backend.scheduler.max_attempts_reached", leaseNow); err != nil {
 				return recordmodel.Record{}, false, err
 			}
 			existing.Data["status"] = "dead_letter"
 			existing.Data["lease_owner"] = ""
 			existing.Data["lease_expires_at"] = ""
 			existing.Data["error_message"] = "backend.scheduler.max_attempts_reached"
-			existing.UpdatedAt = now.Format(time.RFC3339)
+			existing.UpdatedAt = leaseNow.Format(time.RFC3339)
 			if err := s.updateRecord(ctx, workspaceID, runObject, existing, "dead-letter scheduler job run"); err != nil {
 				return recordmodel.Record{}, false, err
 			}
@@ -83,11 +90,11 @@ func (s *SchedulerApplicationService) claimRunWithKey(ctx context.Context, works
 		previousFencingToken := schedulerpolicy.SchedulerInt(existing.Data["fencing_token"], 1)
 		existing.Data["status"] = "leased"
 		existing.Data["lease_owner"] = s.worker.WorkerID.String()
-		existing.Data["lease_expires_at"] = now.Add(leaseTTL).Format(time.RFC3339)
+		existing.Data["lease_expires_at"] = leaseNow.Add(leaseTTL).Format(time.RFC3339)
 		existing.Data["next_retry_at"] = ""
 		existing.Data["attempt"] = attempt
 		existing.Data["fencing_token"] = previousFencingToken + 1
-		existing.UpdatedAt = now.Format(time.RFC3339)
+		existing.UpdatedAt = leaseNow.Format(time.RFC3339)
 		claimConditions := map[string]any{"status": status, "fencing_token": previousFencingToken}
 		if previousLeaseExpiresAt != "" || status == "leased" {
 			claimConditions["lease_expires_at"] = previousLeaseExpiresAt
@@ -99,22 +106,22 @@ func (s *SchedulerApplicationService) claimRunWithKey(ctx context.Context, works
 		if !claimed {
 			return existing, false, nil
 		}
-		if err := s.appendRunEvent(ctx, workspaceID, existing.ID, "lease_acquired", "Scheduler retry lease acquired.", now, map[string]any{"attempt": attempt}); err != nil {
+		if err := s.appendRunEvent(ctx, workspaceID, existing.ID, "lease_acquired", "Scheduler retry lease acquired.", leaseNow, map[string]any{"attempt": attempt}); err != nil {
 			return recordmodel.Record{}, false, err
 		}
 		return existing, true, nil
 	}
 	run := recordmodel.Record{
 		ID:        runID,
-		CreatedAt: now.Format(time.RFC3339),
-		UpdatedAt: now.Format(time.RFC3339),
+		CreatedAt: leaseNow.Format(time.RFC3339),
+		UpdatedAt: leaseNow.Format(time.RFC3339),
 		Data: map[string]any{
 			"scheduler_definition_key": definition.ID,
 			"status":                   "leased",
 			"triggered_by":             valueOrDefault(strings.TrimSpace(triggerSource), "scheduler"),
 			"scheduled_for":            scheduledFor.Format(time.RFC3339),
 			"lease_owner":              s.worker.WorkerID.String(),
-			"lease_expires_at":         now.Add(leaseTTL).Format(time.RFC3339),
+			"lease_expires_at":         leaseNow.Add(leaseTTL).Format(time.RFC3339),
 			"fencing_token":            1,
 			"attempt":                  1,
 			"max_attempts":             schedulerpolicy.SchedulerInt(definition.Data["max_attempts"], 3),
@@ -138,12 +145,12 @@ func (s *SchedulerApplicationService) claimRunWithKey(ctx context.Context, works
 	if err != nil {
 		return recordmodel.Record{}, false, err
 	}
-	created := schedulerRunEventRecord(run.ID, "created", "Scheduler job run created.", now, map[string]any{
+	created := schedulerRunEventRecord(run.ID, "created", "Scheduler job run created.", leaseNow, map[string]any{
 		"scheduler_definition_key": definition.ID,
 		"scheduled_for":            scheduledFor.Format(time.RFC3339),
 		"missed_window_policy":     schedulerMissedWindowPolicy(definition),
 	})
-	leaseAcquired := schedulerRunEventRecord(run.ID, "lease_acquired", "Scheduler job lease acquired.", now, map[string]any{"attempt": 1})
+	leaseAcquired := schedulerRunEventRecord(run.ID, "lease_acquired", "Scheduler job lease acquired.", leaseNow, map[string]any{"attempt": 1})
 	if err := s.repository.CommitRecordMutationBatch(ctx, workspaceID, []transactionmodel.RecordMutationCommit{
 		{Operation: "create", Object: runObject, Record: run},
 		{Operation: "create", Object: eventObject, Record: created},
@@ -165,6 +172,10 @@ func (s *SchedulerApplicationService) ClaimRun(ctx context.Context, definition r
 }
 
 func (s *SchedulerApplicationService) heartbeatRun(ctx context.Context, workspaceID string, run recordmodel.Record, now time.Time) error {
+	leaseNow, err := s.authoritativeNow(ctx, now)
+	if err != nil {
+		return err
+	}
 	owner := existingStringBefore(run, "lease_owner")
 	fencingToken := schedulerpolicy.SchedulerInt(run.Data["fencing_token"], 0)
 	if owner == "" || fencingToken <= 0 {
@@ -181,8 +192,8 @@ func (s *SchedulerApplicationService) heartbeatRun(ctx context.Context, workspac
 	if !ok {
 		return mutation.MutationConflict("job_run", run.ID, mutation.MutationConflictLeaseLost, nil)
 	}
-	current.Data["lease_expires_at"] = now.Add(s.leaseTTL()).Format(time.RFC3339)
-	current.UpdatedAt = now.Format(time.RFC3339)
+	current.Data["lease_expires_at"] = leaseNow.Add(s.leaseTTL()).Format(time.RFC3339)
+	current.UpdatedAt = leaseNow.Format(time.RFC3339)
 	status := strings.TrimSpace(fmt.Sprint(run.Data["status"]))
 	updated, err := s.updateRunIfCurrent(ctx, workspaceID, object, current, map[string]any{"status": status, "lease_owner": owner, "fencing_token": fencingToken})
 	if err != nil {
@@ -283,8 +294,12 @@ func (s *SchedulerApplicationService) advanceDefinitionCursor(ctx context.Contex
 	cursor.Data["next_run_at"] = nextRunAt.Format(time.RFC3339)
 	cursor.UpdatedAt = now.Format(time.RFC3339)
 	if cursorFound {
-		if err := s.updateRecord(ctx, workspaceID, cursorObject, cursor, "advance scheduler definition cursor"); err != nil {
+		advanced, err := s.updateRunIfCurrent(ctx, workspaceID, cursorObject, cursor, map[string]any{"next_run_at": previousNextRunAt})
+		if err != nil {
 			return err
+		}
+		if !advanced {
+			return mutation.MutationConflict("scheduler_cursor", cursor.ID, mutation.MutationConflictOptimistic, nil)
 		}
 	} else if err := s.insertRecord(ctx, workspaceID, cursorObject, cursor, "create scheduler definition cursor"); err != nil {
 		return err

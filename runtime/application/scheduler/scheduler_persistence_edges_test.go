@@ -20,6 +20,58 @@ func schedulerPersistenceService(repository *schedulerRepositoryFake, now time.T
 	return service
 }
 
+type schedulerAuthoritativeRepository struct {
+	*schedulerRepositoryFake
+	now time.Time
+	err error
+}
+
+func (r schedulerAuthoritativeRepository) SchedulerNow(context.Context) (time.Time, error) {
+	return r.now, r.err
+}
+
+func TestSchedulerClaimUsesDatabaseClockForLeaseArbitration(t *testing.T) {
+	hostNow := time.Date(2026, 7, 19, 18, 0, 0, 0, time.UTC)
+	databaseNow := hostNow.Add(-2 * time.Hour)
+	definition := recordmodel.Record{ID: "definition-1", Data: map[string]any{"key": "nightly", "schedule_type": "interval", "interval_seconds": 60}}
+	reads := 0
+	base := &schedulerRepositoryFake{get: func(context.Context, string, definitionmodel.ObjectSchema, string) (recordmodel.Record, bool, error) {
+		reads++
+		return recordmodel.Record{}, false, nil
+	}}
+	repository := schedulerAuthoritativeRepository{schedulerRepositoryFake: base, now: databaseNow}
+	service := NewSchedulerApplicationServiceWithWorker(schedulerTestSchema(), nil, repository, nil, workerplatform.Dependencies{Clock: schedulerFixedClock{now: hostNow}, WorkerID: workerplatform.WorkerID("worker-a")})
+	service.UseRepositoryAuthoritativeClock(t.Context())
+	if _, claimed, err := service.claimRun(t.Context(), "workspace-a", definition, "scheduler", hostNow); err != nil || claimed || reads != 0 {
+		t.Fatalf("future database window claimed=%v reads=%d err=%v", claimed, reads, err)
+	}
+
+	run := recordmodel.Record{ID: "run-1", Data: map[string]any{"status": "leased", "lease_owner": "worker-a", "fencing_token": 2}}
+	base.get = func(context.Context, string, definitionmodel.ObjectSchema, string) (recordmodel.Record, bool, error) {
+		return run, true, nil
+	}
+	base.update = func(_ context.Context, _ string, _ definitionmodel.ObjectSchema, updated recordmodel.Record, _ map[string]any) (bool, error) {
+		want := databaseNow.Add(service.leaseTTL()).Format(time.RFC3339)
+		if updated.Data["lease_expires_at"] != want {
+			t.Fatalf("lease expiry=%v want=%s", updated.Data["lease_expires_at"], want)
+		}
+		return true, nil
+	}
+	if err := service.heartbeatRun(t.Context(), "workspace-a", run, hostNow); err != nil {
+		t.Fatalf("database-clock heartbeat: %v", err)
+	}
+}
+
+func TestSchedulerDatabaseClockFailureStopsClaim(t *testing.T) {
+	wantErr := errors.New("database clock unavailable")
+	repository := schedulerAuthoritativeRepository{schedulerRepositoryFake: &schedulerRepositoryFake{}, err: wantErr}
+	service := NewSchedulerApplicationService(schedulerTestSchema(), nil, repository, nil)
+	service.UseRepositoryAuthoritativeClock(t.Context())
+	if _, _, err := service.claimRun(t.Context(), "workspace-a", recordmodel.Record{ID: "definition"}, "scheduler", time.Now()); !errors.Is(err, wantErr) {
+		t.Fatalf("database clock error=%v", err)
+	}
+}
+
 func TestSchedulerClaimExistingRunStateMatrix(t *testing.T) {
 	now := time.Date(2026, 7, 19, 16, 0, 0, 0, time.UTC)
 	definition := recordmodel.Record{ID: "definition-1", Data: map[string]any{"key": "nightly", "schedule_type": "interval", "interval_seconds": 60, "max_attempts": 3}}

@@ -127,8 +127,8 @@ func TestSchedulerLegacyCursorFailureBranches(t *testing.T) {
 	repository.get = func(context.Context, string, definitionmodel.ObjectSchema, string) (recordmodel.Record, bool, error) {
 		return recordmodel.Record{ID: "definition", UpdatedAt: "old", Data: map[string]any{"next_run_at": "2026-07-28T12:00:00Z"}}, true, nil
 	}
-	service.updateRecord = func(context.Context, string, definitionmodel.ObjectSchema, recordmodel.Record, string) error {
-		return wantErr
+	repository.update = func(context.Context, string, definitionmodel.ObjectSchema, recordmodel.Record, map[string]any) (bool, error) {
+		return false, wantErr
 	}
 	if err := service.advanceDefinitionCursor(t.Context(), "workspace-a", run, "succeeded", now); !errors.Is(err, wantErr) {
 		t.Fatalf("cursor update error=%v", err)
@@ -137,7 +137,7 @@ func TestSchedulerLegacyCursorFailureBranches(t *testing.T) {
 	repository.get = func(context.Context, string, definitionmodel.ObjectSchema, string) (recordmodel.Record, bool, error) {
 		return recordmodel.Record{}, false, nil
 	}
-	service.updateRecord = nil
+	repository.update = nil
 	service.insertRecord = func(context.Context, string, definitionmodel.ObjectSchema, recordmodel.Record, string) error {
 		return nil
 	}

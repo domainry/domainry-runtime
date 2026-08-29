@@ -13,7 +13,7 @@ func SchedulerSystemObjects() []definitionmodel.ObjectSchema {
 			schedulerField("last_run_at", "Last Run At", "datetime", false),
 			schedulerField("last_run_status", "Last Run Status", "text", false),
 		}),
-		schedulerObject("job_run", "Job Run", "Runtime-owned scheduler executions.", []definitionmodel.FieldSchema{
+		schedulerRunObject(schedulerObject("job_run", "Job Run", "Runtime-owned scheduler executions.", []definitionmodel.FieldSchema{
 			schedulerField("scheduler_definition_key", "Scheduler Definition Key", "text", true),
 			schedulerSelect("status", "Status", true, "queued", "leased", "running", "succeeded", "failed", "retrying", "cancelled", "dead_letter"),
 			schedulerSelect("triggered_by", "Triggered By", true, "scheduler", "manual", "manual_run", "api", "workflow", "retry"),
@@ -31,7 +31,7 @@ func SchedulerSystemObjects() []definitionmodel.ObjectSchema {
 			schedulerField("checkpoint_cursor", "Checkpoint Cursor", "long_text", false), schedulerField("checkpoint_processed", "Checkpoint Processed", "number", false),
 			schedulerField("error_message", "Error Message", "long_text", false), schedulerField("error_category", "Error Category", "text", false),
 			schedulerField("recoverability", "Recoverability", "text", false),
-		}),
+		})),
 		schedulerObject("job_run_event", "Job Run Event", "Runtime-owned scheduler audit events.", []definitionmodel.FieldSchema{
 			schedulerRelation("job_run_id", "Job Run", "job_run", true),
 			schedulerSelect("event_type", "Event Type", true, "created", "lease_acquired", "checkpoint_saved", "definition_cursor_advanced", "state_changed", "simulated", "workflow_triggered", "action_triggered", "report_query_run_created", "report_export_audit_created", "download_task_created", "retry_scheduled", "dead_lettered", "dead_letter_resolved", "cancelled"),
@@ -46,6 +46,19 @@ func SchedulerSystemObjects() []definitionmodel.ObjectSchema {
 		}),
 		schedulerTimerObject(),
 	}
+}
+
+func schedulerRunObject(object definitionmodel.ObjectSchema) definitionmodel.ObjectSchema {
+	for index := range object.Fields {
+		switch object.Fields[index].Key {
+		case "scheduler_definition_key", "scheduled_for", "status", "lease_expires_at", "next_retry_at":
+			object.Fields[index].Config["indexed"] = true
+		}
+	}
+	object.Validations = []definitionmodel.ValidationSchema{{
+		Key: "scheduler_run_window", Type: "composite_unique", Fields: []string{"scheduler_definition_key", "scheduled_for"},
+	}}
+	return object
 }
 
 func schedulerTimerObject() definitionmodel.ObjectSchema {

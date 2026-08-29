@@ -56,7 +56,10 @@ func (s *SchedulerApplicationService) checkpointRun(ctx context.Context, workspa
 }
 
 func (s *SchedulerApplicationService) finishRun(ctx context.Context, workspaceID string, run recordmodel.Record, executions []workflowmodel.WorkflowExecution, evidence []schedulerBusinessEvidence, processErr error, startedAt time.Time) error {
-	now := s.worker.Clock.Now()
+	now, err := s.authoritativeNow(ctx, s.worker.Clock.Now())
+	if err != nil {
+		return err
+	}
 	runObject, err := s.objectForPrincipal(ctx, workflowWorkerPrincipal(), "job_run")
 	if err != nil {
 		return err
