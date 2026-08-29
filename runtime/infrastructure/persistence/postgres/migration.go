@@ -15,6 +15,12 @@ import (
 func (engineProfile) MigrationLedgerTypes() persistencedriver.MigrationLedgerTypes {
 	return persistencedriver.MigrationLedgerTypes{Key: "TEXT", Timestamp: "TEXT"}
 }
+func (engineProfile) MigrationBackupPolicy() persistencedriver.MigrationBackupPolicy {
+	return persistencedriver.MigrationBackupPolicy{EvidenceEngine: "postgres"}
+}
+func (engineProfile) MigrationRollbackPolicy() persistencedriver.MigrationRollbackPolicy {
+	return persistencedriver.MigrationRollbackPolicy{Mode: "restore_external_backup_or_pitr", RequiresVerifiedBackup: true, Procedure: []string{"stop_runtime", "restore_verified_database_backup_or_pitr", "restart_runtime", "verify_migration_status"}}
+}
 func (engineProfile) EnsureMigrationNamespace(ctx context.Context, database persistencedriver.SchemaDatabase, renderer ormdialect.Renderer, databaseSchema string) error {
 	if strings.TrimSpace(databaseSchema) == "" || strings.EqualFold(databaseSchema, "public") {
 		return nil

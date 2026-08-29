@@ -275,9 +275,6 @@ func TestRestoreDrillPreviewAndCommandEdgeContracts(t *testing.T) {
 	if CompareVersions(" 1.2_release ", "1.2.0") != 0 || CompareVersions("1.x", "1.1") >= 0 || CompareVersions("1", "1.0.1") >= 0 || CompareVersions("1.0.1", "1") <= 0 {
 		t.Fatal("exported version comparison normalization mismatch")
 	}
-	if policy := RollbackPolicy("unknown"); policy.Mode != "unsupported" || !policy.RequiresVerifiedBackup {
-		t.Fatalf("unknown rollback policy=%+v", policy)
-	}
 }
 
 func mustFileInfo(t *testing.T, path string) os.FileInfo {

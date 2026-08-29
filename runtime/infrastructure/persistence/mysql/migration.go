@@ -13,6 +13,12 @@ import (
 func (engineProfile) MigrationLedgerTypes() persistencedriver.MigrationLedgerTypes {
 	return persistencedriver.MigrationLedgerTypes{Key: "VARCHAR(255)", Timestamp: "VARCHAR(64)"}
 }
+func (engineProfile) MigrationBackupPolicy() persistencedriver.MigrationBackupPolicy {
+	return persistencedriver.MigrationBackupPolicy{EvidenceEngine: "mysql"}
+}
+func (engineProfile) MigrationRollbackPolicy() persistencedriver.MigrationRollbackPolicy {
+	return persistencedriver.MigrationRollbackPolicy{Mode: "restore_external_backup", RequiresVerifiedBackup: true, Procedure: []string{"stop_runtime", "restore_verified_database_backup", "restart_runtime", "verify_migration_status"}}
+}
 func (engineProfile) EnsureMigrationNamespace(context.Context, persistencedriver.SchemaDatabase, ormdialect.Renderer, string) error {
 	return nil
 }

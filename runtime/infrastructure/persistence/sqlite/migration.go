@@ -14,6 +14,12 @@ import (
 func (engineProfile) MigrationLedgerTypes() persistencedriver.MigrationLedgerTypes {
 	return persistencedriver.MigrationLedgerTypes{Key: "TEXT", Timestamp: "TEXT"}
 }
+func (engineProfile) MigrationBackupPolicy() persistencedriver.MigrationBackupPolicy {
+	return persistencedriver.MigrationBackupPolicy{LocalSnapshot: true, EvidenceEngine: "sqlite", BackupIDPrefix: "sqlite-"}
+}
+func (engineProfile) MigrationRollbackPolicy() persistencedriver.MigrationRollbackPolicy {
+	return persistencedriver.MigrationRollbackPolicy{Mode: "restore_sqlite_backup", RequiresVerifiedBackup: true, Procedure: []string{"stop_runtime", "replace_database_with_latest_migration_backup", "restart_runtime", "verify_migration_status"}}
+}
 func (engineProfile) EnsureMigrationNamespace(context.Context, persistencedriver.SchemaDatabase, ormdialect.Renderer, string) error {
 	return nil
 }

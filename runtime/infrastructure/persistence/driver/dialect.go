@@ -35,6 +35,8 @@ type EngineProfile interface {
 	MigrationLedgerTypes() MigrationLedgerTypes
 	EnsureMigrationNamespace(context.Context, SchemaDatabase, ormdialect.Renderer, string) error
 	ConfigureMigrationTransaction(context.Context, *sql.Tx, ormdialect.Renderer, string, time.Duration, time.Duration) error
+	MigrationBackupPolicy() MigrationBackupPolicy
+	MigrationRollbackPolicy() MigrationRollbackPolicy
 }
 
 type SchemaQuery struct {
@@ -45,6 +47,18 @@ type SchemaQuery struct {
 type MigrationLedgerTypes struct {
 	Key       string
 	Timestamp string
+}
+
+type MigrationBackupPolicy struct {
+	LocalSnapshot  bool
+	EvidenceEngine string
+	BackupIDPrefix string
+}
+
+type MigrationRollbackPolicy struct {
+	Mode                   string
+	RequiresVerifiedBackup bool
+	Procedure              []string
 }
 
 type SchemaDatabase interface {
@@ -73,6 +87,12 @@ func (portableEngineProfile) EnsureMigrationNamespace(context.Context, SchemaDat
 }
 func (portableEngineProfile) ConfigureMigrationTransaction(context.Context, *sql.Tx, ormdialect.Renderer, string, time.Duration, time.Duration) error {
 	return nil
+}
+func (portableEngineProfile) MigrationBackupPolicy() MigrationBackupPolicy {
+	return MigrationBackupPolicy{}
+}
+func (portableEngineProfile) MigrationRollbackPolicy() MigrationRollbackPolicy {
+	return MigrationRollbackPolicy{Mode: "unsupported", RequiresVerifiedBackup: true}
 }
 
 var portableProfileRegistry = map[ormdialect.Name]func() EngineProfile{

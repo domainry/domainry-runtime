@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	. "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/migration"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
@@ -19,17 +18,18 @@ import (
 
 func TestMigrationRollbackPolicyCoversEveryRuntimeDatabase(t *testing.T) {
 	tests := []struct {
-		driver string
-		mode   string
+		name    string
+		profile driver.EngineProfile
+		mode    string
 	}{
-		{driver: "sqlite", mode: "restore_sqlite_backup"},
-		{driver: "postgres", mode: "restore_external_backup_or_pitr"},
-		{driver: "mysql", mode: "restore_external_backup"},
+		{name: "sqlite", profile: sqlite.Dialect{}.EngineProfile(), mode: "restore_sqlite_backup"},
+		{name: "postgres", profile: postgres.Dialect{}.EngineProfile(), mode: "restore_external_backup_or_pitr"},
+		{name: "mysql", profile: mysql.Dialect{}.EngineProfile(), mode: "restore_external_backup"},
 	}
 	wantProcedure := []string{"stop_runtime", "restart_runtime", "verify_migration_status"}
 	for _, test := range tests {
-		t.Run(test.driver, func(t *testing.T) {
-			policy := migration.RollbackPolicy(test.driver)
+		t.Run(test.name, func(t *testing.T) {
+			policy := test.profile.MigrationRollbackPolicy()
 			if policy.Mode != test.mode || !policy.RequiresVerifiedBackup {
 				t.Fatalf("policy=%+v", policy)
 			}
@@ -39,7 +39,7 @@ func TestMigrationRollbackPolicyCoversEveryRuntimeDatabase(t *testing.T) {
 					found = found || step == required
 				}
 				if !found {
-					t.Fatalf("policy %s missing %s: %+v", test.driver, required, policy)
+					t.Fatalf("policy %s missing %s: %+v", test.name, required, policy)
 				}
 			}
 		})

@@ -28,7 +28,8 @@ func (s *RuntimeStore) ensureMigrationBackupForExistingData(ctx context.Context,
 		s.migrationBackupID = "bootstrap-empty"
 		return nil
 	}
-	if s.dialect.Name() == "sqlite" {
+	policy := s.sqlBase().RuntimeEngine.MigrationBackupPolicy()
+	if policy.LocalSnapshot {
 		backupPath, err := s.createSQLiteMigrationBackup(ctx, cfg)
 		if err != nil {
 			return err
@@ -38,18 +39,21 @@ func (s *RuntimeStore) ensureMigrationBackupForExistingData(ctx context.Context,
 		if checksumErr != nil {
 			return checksumErr
 		}
-		s.migrationBackupID = "sqlite-" + checksum[:16]
+		s.migrationBackupID = policy.BackupIDPrefix + checksum[:16]
 		logging.FromContext(ctx).Info(
 			"database migration backup created",
 			zap.String("backup_id", s.migrationBackupID),
-			zap.String("database_engine", "sqlite"),
+			zap.String("database_engine", policy.EvidenceEngine),
 		)
 		if s.operationalMetrics != nil {
 			s.operationalMetrics.ObserveBackupSuccess(time.Now().UTC())
 		}
 		return nil
 	}
-	evidence, err := validateExternalMigrationBackup(s.dialect.Name(), cfg.MigrationBackupEvidencePath)
+	if strings.TrimSpace(policy.EvidenceEngine) == "" {
+		return fmt.Errorf("database engine does not define a migration backup policy")
+	}
+	evidence, err := validateExternalMigrationBackup(policy.EvidenceEngine, cfg.MigrationBackupEvidencePath)
 	if err != nil {
 		return err
 	}

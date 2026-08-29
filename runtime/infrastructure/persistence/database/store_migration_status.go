@@ -14,7 +14,9 @@ import (
 // MigrationStatus reports database infrastructure state without exposing
 // Store internals to the deployment-owned repository adapter.
 func (s *RuntimeStore) MigrationStatus(ctx context.Context) (deploymentmodel.MigrationStatus, error) {
-	status := deploymentmodel.MigrationStatus{Current: true, State: migration.StateCurrent, RuntimeVersion: s.config.RuntimeVersion, ExpectedPaths: append([]string(nil), s.expectedMigrations...), Rollback: migration.RollbackPolicy(s.Driver())}
+	profilePolicy := s.sqlBase().RuntimeEngine.MigrationRollbackPolicy()
+	rollback := deploymentmodel.MigrationRollbackPolicy{Mode: profilePolicy.Mode, RequiresVerifiedBackup: profilePolicy.RequiresVerifiedBackup, Procedure: append([]string(nil), profilePolicy.Procedure...)}
+	status := deploymentmodel.MigrationStatus{Current: true, State: migration.StateCurrent, RuntimeVersion: s.config.RuntimeVersion, ExpectedPaths: append([]string(nil), s.expectedMigrations...), Rollback: rollback}
 	sort.Strings(status.ExpectedPaths)
 	if len(status.ExpectedPaths) > 0 {
 		status.MinSchemaVersion, _ = migrationIdentity(status.ExpectedPaths[0])
