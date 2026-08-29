@@ -23,8 +23,8 @@ import (
 
 func TestApplicationTablesDialectAndFailureEdges(t *testing.T) {
 	tests := []struct {
-		name    string
-		dialect dialect
+		name   string
+		engine databaseEngine
 	}{
 		{"sqlite", sqlite.NewEngine()},
 		{"mysql", mysql.NewEngine()},
@@ -34,7 +34,7 @@ func TestApplicationTablesDialectAndFailureEdges(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			state := &databaseSQLState{querySteps: []databaseSQLQueryStep{{columns: []string{"name"}, rows: [][]driver.Value{{"zeta"}, {"_schema_migrations"}, {"alpha"}, {"_schema_materializations"}, {""}}}}}
 			store := runtimeSchemaStore(t, state)
-			store.dialect = test.dialect
+			store.engine = test.engine
 			store.databaseSchema = "runtime"
 			tables, err := store.applicationTables(t.Context())
 			if err != nil || !reflect.DeepEqual(tables, []string{"alpha", "zeta"}) {
@@ -43,7 +43,7 @@ func TestApplicationTablesDialectAndFailureEdges(t *testing.T) {
 		})
 	}
 	store := runtimeSchemaStore(t, &databaseSQLState{})
-	store.dialect = namedTestDialect{Engine: sqlite.NewEngine(), name: "oracle"}
+	store.engine = namedTestDialect{Engine: sqlite.NewEngine(), name: "oracle"}
 	if _, err := store.applicationTables(t.Context()); err == nil {
 		t.Fatal("unsupported dialect accepted")
 	}
@@ -114,7 +114,7 @@ func TestEnsureMigrationBackupShortCircuitsAndFailures(t *testing.T) {
 		{columns: []string{"name"}, rows: [][]driver.Value{{"records"}}},
 		{columns: []string{"count"}, rows: [][]driver.Value{{int64(1)}}},
 	}})
-	store.dialect = postgres.NewEngine()
+	store.engine = postgres.NewEngine()
 	if err := store.ensureMigrationBackupForExistingData(t.Context(), config.Config{}); err == nil || !strings.Contains(err.Error(), "MIGRATION_BACKUP_EVIDENCE_PATH") {
 		t.Fatalf("external evidence error=%v", err)
 	}
@@ -151,7 +151,7 @@ func TestSQLiteMigrationBackupChecksumAndStatFailures(t *testing.T) {
 	if _, err := db.ExecContext(t.Context(), `CREATE TABLE records(id TEXT); INSERT INTO records VALUES ('one')`); err != nil {
 		t.Fatal(err)
 	}
-	store := &RuntimeStore{db: db, dialect: sqlite.NewEngine(), backupChecksum: func(string) (string, error) { return "", errDatabaseSQL }}
+	store := &RuntimeStore{db: db, engine: sqlite.NewEngine(), backupChecksum: func(string) (string, error) { return "", errDatabaseSQL }}
 	if err := store.ensureMigrationBackupForExistingData(t.Context(), config.Config{DBPath: dbPath, MigrationBackupDir: filepath.Join(dir, "checksum")}); !errors.Is(err, errDatabaseSQL) {
 		t.Fatalf("checksum error=%v", err)
 	}

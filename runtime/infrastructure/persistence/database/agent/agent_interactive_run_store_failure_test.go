@@ -31,7 +31,7 @@ func validInteractiveRun(now time.Time) agentmodel.AgentInteractiveRun {
 func TestAgentInteractiveRunStoreSchemaCreateAndReadFailureMatrix(t *testing.T) {
 	base, now, wantErr := openAgentStateBaseStore(t), time.Unix(10, 0).UTC(), errors.New("interactive failure")
 	mysqlBase := openAgentStateBaseStore(t)
-	if err := mysqlBase.SetDialectForTesting("mysql"); err != nil {
+	if err := mysqlBase.SetEngineForTesting("mysql"); err != nil {
 		t.Fatal(err)
 	}
 	mysqlState := &agentStateDBState{execErrors: []error{nil}}

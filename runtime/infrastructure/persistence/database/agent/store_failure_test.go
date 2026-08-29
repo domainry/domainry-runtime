@@ -33,11 +33,11 @@ func TestAgentStateStoreValidationSchemaAndWriteStages(t *testing.T) {
 	}
 
 	t.Run("mysql schema", func(t *testing.T) {
-		if err := base.SetDialectForTesting("mysql"); err != nil {
+		if err := base.SetEngineForTesting("mysql"); err != nil {
 			t.Fatal(err)
 		}
 		defer func() {
-			if err := base.SetDialectForTesting("sqlite"); err != nil {
+			if err := base.SetEngineForTesting("sqlite"); err != nil {
 				t.Fatal(err)
 			}
 		}()

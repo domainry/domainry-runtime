@@ -131,7 +131,7 @@ func TestRecordLocalizedQuerySQLIsDialectAwareAndNonMultiplying(t *testing.T) {
 	for _, driver := range []string{"sqlite", "postgres", "mysql"} {
 		t.Run(driver, func(t *testing.T) {
 			store := openRuntimeStore(t)
-			if err := store.SetDialectForTesting(driver); err != nil {
+			if err := store.SetEngineForTesting(driver); err != nil {
 				t.Fatal(err)
 			}
 			where, args, err := recordLocalizedSearchWhere(store, "workspace-a", object, query)

@@ -36,13 +36,13 @@ func TestRuntimeStoreNilAndDialectContracts(t *testing.T) {
 	if got := SQLIdentifier("safe_name"); got != `"safe_name"` || !validSQLIdentifier("safe_name") || validSQLIdentifier("unsafe-name") {
 		t.Fatalf("identifier=%q valid=%v unsafe=%v", got, validSQLIdentifier("safe_name"), validSQLIdentifier("unsafe-name"))
 	}
-	if err := store.SetDialectForTesting("mysql"); err != nil || store.metadataIDColumnType() != "VARCHAR(191)" {
+	if err := store.SetEngineForTesting("mysql"); err != nil || store.metadataIDColumnType() != "VARCHAR(191)" {
 		t.Fatalf("mysql dialect type=%q error=%v", store.metadataIDColumnType(), err)
 	}
-	if err := store.SetDialectForTesting("postgres"); err != nil || store.metadataIDColumnType() != "TEXT" {
+	if err := store.SetEngineForTesting("postgres"); err != nil || store.metadataIDColumnType() != "TEXT" {
 		t.Fatalf("postgres dialect type=%q error=%v", store.metadataIDColumnType(), err)
 	}
-	if err := store.SetDialectForTesting("oracle"); err == nil {
+	if err := store.SetEngineForTesting("oracle"); err == nil {
 		t.Fatal("unsupported dialect accepted")
 	}
 }

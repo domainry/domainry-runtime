@@ -84,13 +84,13 @@ func TestActionExecutionClaimRetryWaitAndDatabaseStages(t *testing.T) {
 	if store.store.IsTransientError(nil) || store.store.IsTransientError(errors.New("other")) {
 		t.Fatal("non-busy error classified as busy")
 	}
-	if err := store.store.SetDialectForTesting("postgres"); err != nil {
+	if err := store.store.SetEngineForTesting("postgres"); err != nil {
 		t.Fatal(err)
 	}
 	if store.store.IsTransientError(errors.New("SQLITE_BUSY")) {
 		t.Fatal("PostgreSQL error classified as SQLite busy")
 	}
-	if err := store.store.SetDialectForTesting("sqlite"); err != nil {
+	if err := store.store.SetEngineForTesting("sqlite"); err != nil {
 		t.Fatal(err)
 	}
 	nonBusyState := &actionDBState{execSteps: []actionExecStep{{err: wantErr}}, querySteps: []actionQueryStep{{err: wantErr}}}

@@ -167,7 +167,7 @@ func TestRuntimeReleaseCohortSQLContractAcrossSupportedDialects(t *testing.T) {
 		t.Run(dialect, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "runtime.db")
 			runtimeStore, _ := openRuntimeReleaseStore(t, path)
-			if err := runtimeStore.SetDialectForTesting(dialect); err != nil {
+			if err := runtimeStore.SetEngineForTesting(dialect); err != nil {
 				t.Fatal(err)
 			}
 			store := NewRuntimeReleaseCohortStore(runtimeStore)

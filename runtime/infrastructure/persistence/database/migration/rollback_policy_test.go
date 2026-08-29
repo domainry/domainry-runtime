@@ -74,7 +74,7 @@ func TestMigrationDiscoveryUsesDatabaseSpecificDirectory(t *testing.T) {
 			if err := os.WriteFile(migration, []byte("-- "+test.name+" connector runtime migration\n"), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			paths, err := MigrationPathsForDialect(config.Config{MigrationDir: root}, test.dialect)
+			paths, err := MigrationPathsForEngine(config.Config{MigrationDir: root}, test.dialect)
 			if err != nil || len(paths) != 1 || paths[0] != migration {
 				t.Fatalf("paths=%v error=%v", paths, err)
 			}

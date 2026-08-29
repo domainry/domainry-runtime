@@ -47,7 +47,7 @@ func TestAuditListAndOptionStagedSQLFailures(t *testing.T) {
 
 func TestAuditCursorSQLMatchesExactIndexPrefixAndStableOrder(t *testing.T) {
 	base := openAuditEdgeStore(t)
-	if err := base.SetDialectForTesting("mysql"); err != nil {
+	if err := base.SetEngineForTesting("mysql"); err != nil {
 		t.Fatal(err)
 	}
 	for _, test := range []struct {
@@ -106,7 +106,7 @@ func TestAuditFilterSQLUsesDialectConcatAndPortableLikeEscape(t *testing.T) {
 	} {
 		t.Run(test.driver, func(t *testing.T) {
 			base := openAuditEdgeStore(t)
-			if err := base.SetDialectForTesting(test.driver); err != nil {
+			if err := base.SetEngineForTesting(test.driver); err != nil {
 				t.Fatal(err)
 			}
 			state := &auditDBState{}

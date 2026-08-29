@@ -14,7 +14,7 @@ func TestMySQLTextDefaultsUseExpressions(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	if err := store.SetDialectForTesting("mysql"); err != nil {
+	if err := store.SetEngineForTesting("mysql"); err != nil {
 		t.Fatal(err)
 	}
 	for input, want := range map[string]string{

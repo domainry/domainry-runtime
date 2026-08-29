@@ -28,13 +28,13 @@ func TestEnsureWorkspaceRLSGuardsAndSuccess(t *testing.T) {
 	if err := (*RuntimeStore)(nil).EnsureWorkspaceRLS(t.Context()); err != nil {
 		t.Fatalf("nil store: %v", err)
 	}
-	sqliteDialect, _ := dialectFor("sqlite")
-	store := &RuntimeStore{dialect: sqliteDialect, config: config.Config{DatabaseRLSEnabled: true}, workspaceRLS: WorkspaceRLSStatus{Enabled: true}}
+	sqliteDialect, _ := engineFor("sqlite")
+	store := &RuntimeStore{engine: sqliteDialect, config: config.Config{DatabaseRLSEnabled: true}, workspaceRLS: WorkspaceRLSStatus{Enabled: true}}
 	if err := store.EnsureWorkspaceRLS(t.Context()); err != nil || store.workspaceRLS.Enabled {
 		t.Fatalf("sqlite status=%#v err=%v", store.workspaceRLS, err)
 	}
-	postgresDialect, _ := dialectFor("postgres")
-	store = &RuntimeStore{dialect: postgresDialect, workspaceRLS: WorkspaceRLSStatus{Enabled: true}}
+	postgresDialect, _ := engineFor("postgres")
+	store = &RuntimeStore{engine: postgresDialect, workspaceRLS: WorkspaceRLSStatus{Enabled: true}}
 	if err := store.EnsureWorkspaceRLS(t.Context()); err != nil || store.workspaceRLS.Enabled {
 		t.Fatalf("disabled status=%#v err=%v", store.workspaceRLS, err)
 	}
@@ -70,7 +70,7 @@ func TestEnsureWorkspaceRLSGuardsAndSuccess(t *testing.T) {
 }
 
 func TestWorkspaceRLSApplyFailures(t *testing.T) {
-	postgresDialect, _ := dialectFor("postgres")
+	postgresDialect, _ := engineFor("postgres")
 	for _, test := range []struct {
 		name         string
 		queryErr     error
@@ -95,7 +95,7 @@ func TestWorkspaceRLSApplyFailures(t *testing.T) {
 }
 
 func TestWorkspaceRLSInspectionFailuresAndMissingCoverage(t *testing.T) {
-	postgresDialect, _ := dialectFor("postgres")
+	postgresDialect, _ := engineFor("postgres")
 	for _, test := range []struct {
 		name   string
 		script *workspaceRLSScript
@@ -173,8 +173,8 @@ func TestSetLocalWorkspaceRLSContext(t *testing.T) {
 	}
 }
 
-func newWorkspaceRLSTestStore(dialect dialect, db, migrationDB *sql.DB, mode string) *RuntimeStore {
-	return &RuntimeStore{db: db, migrationDB: migrationDB, dialect: dialect, databaseSchema: "public", config: config.Config{DatabaseRLSEnabled: true, DatabaseMigrationMode: mode}, postgresProfile: &postgrespersistence.ConnectionProfile{}, postgresCapabilities: postgrespersistence.Capabilities{User: "runtime_user"}}
+func newWorkspaceRLSTestStore(engine databaseEngine, db, migrationDB *sql.DB, mode string) *RuntimeStore {
+	return &RuntimeStore{db: db, migrationDB: migrationDB, engine: engine, databaseSchema: "public", config: config.Config{DatabaseRLSEnabled: true, DatabaseMigrationMode: mode}, postgresProfile: &postgrespersistence.ConnectionProfile{}, postgresCapabilities: postgrespersistence.Capabilities{User: "runtime_user"}}
 }
 
 type workspaceRLSScript struct {

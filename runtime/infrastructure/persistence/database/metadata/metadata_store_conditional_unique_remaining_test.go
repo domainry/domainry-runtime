@@ -57,7 +57,7 @@ func TestEnsureObjectStorageConditionalUniqueRemainingBranches(t *testing.T) {
 	base := NewMetadataStore(runtimeStore)
 	run := func(t *testing.T, dialect string, state metadataSQLState, object definitionmodel.ObjectSchema) error {
 		t.Helper()
-		if err := runtimeStore.SetDialectForTesting(dialect); err != nil {
+		if err := runtimeStore.SetEngineForTesting(dialect); err != nil {
 			t.Fatal(err)
 		}
 		repository := scriptedMetadataStore(t, &state, base)
@@ -160,7 +160,7 @@ func TestCreateConditionalUniqueIndexRemainingProfileStrategies(t *testing.T) {
 
 	runMySQL := func(t *testing.T, state metadataSQLState, createIndexErr error) error {
 		t.Helper()
-		if err := runtimeStore.SetDialectForTesting("mysql"); err != nil {
+		if err := runtimeStore.SetEngineForTesting("mysql"); err != nil {
 			t.Fatal(err)
 		}
 		repository := scriptedMetadataStore(t, &state, base)
@@ -198,7 +198,7 @@ func TestCreateConditionalUniqueIndexRemainingProfileStrategies(t *testing.T) {
 		t.Fatalf("existing mysql guard should be reused: %v", err)
 	}
 
-	if err := runtimeStore.SetDialectForTesting("postgres"); err != nil {
+	if err := runtimeStore.SetEngineForTesting("postgres"); err != nil {
 		t.Fatal(err)
 	}
 	for _, step := range []metadataSQLExecStep{{rows: 1}, {err: errMetadataSQL}} {

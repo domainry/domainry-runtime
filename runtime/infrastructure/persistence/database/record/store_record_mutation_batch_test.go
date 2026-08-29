@@ -33,7 +33,7 @@ func TestContextRecordMutationDialectContracts(t *testing.T) {
 			if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 				t.Fatalf("ensure runtime schema: %v", err)
 			}
-			if err := store.SetDialectForTesting(driver); err != nil {
+			if err := store.SetEngineForTesting(driver); err != nil {
 				t.Fatal(err)
 			}
 			if options := (&sql.TxOptions{Isolation: sql.LevelSerializable}); options.Isolation != sql.LevelSerializable || options.ReadOnly {
@@ -191,7 +191,7 @@ func TestConditionalMutationPredicateIsAtomicAcrossDialects(t *testing.T) {
 			if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 				t.Fatal(err)
 			}
-			if err := store.SetDialectForTesting(driver); err != nil {
+			if err := store.SetEngineForTesting(driver); err != nil {
 				t.Fatal(err)
 			}
 			object := definitionmodel.ObjectSchema{Key: "capacity", Fields: []definitionmodel.FieldSchema{{Key: "reserved", Type: "number"}, {Key: "status", Type: "text"}}}

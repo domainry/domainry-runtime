@@ -71,7 +71,7 @@ func TestDatabaseReadinessFailsClosedForMissingSchema(t *testing.T) {
 }
 
 func TestPostgresTableIdentifierQualifiesOnlyRelations(t *testing.T) {
-	store := &RuntimeStore{dialect: postgres.NewEngine(), databaseSchema: "domainry_runtime"}
+	store := &RuntimeStore{engine: postgres.NewEngine(), databaseSchema: "domainry_runtime"}
 	if got := store.TableIdentifier("business_records"); got != `"domainry_runtime"."business_records"` {
 		t.Fatalf("TableIdentifier() = %s", got)
 	}

@@ -20,13 +20,13 @@ type runtimeConnectionResult struct {
 	migratorCapabilities postgres.Capabilities
 }
 
-type runtimeConnectionStrategy func(context.Context, dialect, config.Config, runtimeOpenDependencies, *telemetry.SQLMetrics) (runtimeConnectionResult, error)
+type runtimeConnectionStrategy func(context.Context, databaseEngine, config.Config, runtimeOpenDependencies, *telemetry.SQLMetrics) (runtimeConnectionResult, error)
 
 var runtimeConnectionStrategies = map[string]runtimeConnectionStrategy{
 	"postgres": openRuntimePostgresConnection,
 }
 
-func openRuntimeConnection(ctx context.Context, selected dialect, cfg config.Config, dependencies runtimeOpenDependencies, metrics *telemetry.SQLMetrics) (runtimeConnectionResult, error) {
+func openRuntimeConnection(ctx context.Context, selected databaseEngine, cfg config.Config, dependencies runtimeOpenDependencies, metrics *telemetry.SQLMetrics) (runtimeConnectionResult, error) {
 	strategy := openRuntimeStandardConnection
 	if registered, found := runtimeConnectionStrategies[string(selected.Name())]; found {
 		strategy = registered
@@ -34,7 +34,7 @@ func openRuntimeConnection(ctx context.Context, selected dialect, cfg config.Con
 	return strategy(ctx, selected, cfg, dependencies, metrics)
 }
 
-func openRuntimeStandardConnection(_ context.Context, selected dialect, cfg config.Config, dependencies runtimeOpenDependencies, metrics *telemetry.SQLMetrics) (runtimeConnectionResult, error) {
+func openRuntimeStandardConnection(_ context.Context, selected databaseEngine, cfg config.Config, dependencies runtimeOpenDependencies, metrics *telemetry.SQLMetrics) (runtimeConnectionResult, error) {
 	dsn, err := selected.DSN(cfg)
 	if err != nil {
 		return runtimeConnectionResult{}, err
@@ -46,7 +46,7 @@ func openRuntimeStandardConnection(_ context.Context, selected dialect, cfg conf
 	return runtimeConnectionResult{database: database, dsn: dsn}, nil
 }
 
-func openRuntimePostgresConnection(ctx context.Context, _ dialect, cfg config.Config, dependencies runtimeOpenDependencies, metrics *telemetry.SQLMetrics) (runtimeConnectionResult, error) {
+func openRuntimePostgresConnection(ctx context.Context, _ databaseEngine, cfg config.Config, dependencies runtimeOpenDependencies, metrics *telemetry.SQLMetrics) (runtimeConnectionResult, error) {
 	connection, err := dependencies.postgresProfile(cfg)
 	if err != nil {
 		return runtimeConnectionResult{}, err

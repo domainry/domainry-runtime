@@ -22,13 +22,13 @@ import (
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
-// RuntimeStore owns the Runtime database connection and dialect.
+// RuntimeStore owns the Runtime database connection and selected engine.
 type RuntimeStore struct {
 	*base.SQLDatabase
 	db                   *sql.DB
 	migrationDB          *sql.DB
 	migrationConn        *sql.Conn
-	dialect              dialect
+	engine               databaseEngine
 	config               config.Config
 	databaseSchema       string
 	postgresProfile      *postgres.ConnectionProfile
@@ -255,19 +255,19 @@ func openContextWithDependencies(ctx context.Context, cfg config.Config, depende
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	dialect, err := dependencies.dialect(cfg.DatabaseDriver)
+	engine, err := dependencies.engine(cfg.DatabaseDriver)
 	if err != nil {
 		return nil, err
 	}
 	sqlMetrics := telemetry.NewSQLMetricsWithNamespace("domainry_runtime")
 	operationalMetrics := NewRuntimeOperationalMetrics(cfg.MigrationBackupLastSuccessAt, cfg.MigrationRestoreDrillSuccessAt)
-	connection, err := openRuntimeConnection(ctx, dialect, cfg, dependencies, sqlMetrics)
+	connection, err := openRuntimeConnection(ctx, engine, cfg, dependencies, sqlMetrics)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 	db := connection.database
 	migrationDB := connection.migrationDatabase
-	if err := dialect.Configure(ctx, db, connection.dsn); err != nil {
+	if err := engine.Configure(ctx, db, connection.dsn); err != nil {
 		connection.close()
 		return nil, err
 	}
@@ -287,7 +287,7 @@ func openContextWithDependencies(ctx context.Context, cfg config.Config, depende
 		return nil, fmt.Errorf("initialize integration key ring: %w", err)
 	}
 	databaseSchema := connection.databaseSchema
-	store := &RuntimeStore{SQLDatabase: base.NewSQLDatabase(db, dialect, databaseSchema), db: db, migrationDB: migrationDB, dialect: dialect, config: cfg, databaseSchema: databaseSchema, postgresProfile: connection.postgresProfile, postgresCapabilities: connection.postgresCapabilities, migratorCapabilities: connection.migratorCapabilities, secretMaterialKey: activeMaterial, secretKeyProvider: keyRing, idempotencyMetrics: idempotency.NewMemoryMetricsCollector(4096), sqlMetrics: sqlMetrics, operationalMetrics: operationalMetrics, workerScopeCursor: &runtimeWorkerScopeCursor{}, workerWakeups: workerplatform.NewWakeupBroker()}
+	store := &RuntimeStore{SQLDatabase: base.NewSQLDatabase(db, engine, databaseSchema), db: db, migrationDB: migrationDB, engine: engine, config: cfg, databaseSchema: databaseSchema, postgresProfile: connection.postgresProfile, postgresCapabilities: connection.postgresCapabilities, migratorCapabilities: connection.migratorCapabilities, secretMaterialKey: activeMaterial, secretKeyProvider: keyRing, idempotencyMetrics: idempotency.NewMemoryMetricsCollector(4096), sqlMetrics: sqlMetrics, operationalMetrics: operationalMetrics, workerScopeCursor: &runtimeWorkerScopeCursor{}, workerWakeups: workerplatform.NewWakeupBroker()}
 	var migrationErr error
 	migrationStarted := time.Now()
 	if cfg.EffectiveDatabaseMigrationMode() == "verify" {
@@ -387,7 +387,7 @@ func (s *RuntimeStore) OperationalMetrics() *RuntimeOperationalMetrics {
 }
 
 func (s *RuntimeStore) Driver() string {
-	return string(s.dialect.Name())
+	return string(s.engine.Name())
 }
 
 func (s *RuntimeStore) DatabaseSchema() string {

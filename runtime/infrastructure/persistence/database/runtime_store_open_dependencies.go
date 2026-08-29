@@ -38,7 +38,7 @@ func (adapter runtimePostgresProfileAdapter) Profile() *postgres.ConnectionProfi
 }
 
 type runtimeOpenDependencies struct {
-	dialect         func(string) (dialect, error)
+	engine          func(string) (databaseEngine, error)
 	postgresProfile func(config.Config) (runtimePostgresProfile, error)
 	observedSQL     func(string, string, string, *telemetry.SQLMetrics) (*sql.DB, error)
 	keyRing         func(secrets.Key, ...secrets.Key) (secrets.KeyProvider, error)
@@ -46,7 +46,7 @@ type runtimeOpenDependencies struct {
 
 func defaultRuntimeOpenDependencies() runtimeOpenDependencies {
 	return runtimeOpenDependencies{
-		dialect: dialectFor,
+		engine: engineFor,
 		postgresProfile: func(cfg config.Config) (runtimePostgresProfile, error) {
 			profile, err := postgres.NewConnectionProfile(cfg)
 			if err != nil {

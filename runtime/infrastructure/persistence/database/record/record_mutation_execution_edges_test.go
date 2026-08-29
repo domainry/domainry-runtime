@@ -72,13 +72,13 @@ func TestRecordMutationClaimSQLFailureAndRetryEdges(t *testing.T) {
 	if store.store.IsTransientError(nil) || store.store.IsTransientError(errors.New("ordinary")) || !store.store.IsTransientError(errors.New("database is locked")) {
 		t.Fatal("SQLite busy classification changed")
 	}
-	if err := store.store.SetDialectForTesting("mysql"); err != nil {
+	if err := store.store.SetEngineForTesting("mysql"); err != nil {
 		t.Fatal(err)
 	}
 	if store.store.IsTransientError(errors.New("database is locked")) {
 		t.Fatal("non-SQLite busy error was retried")
 	}
-	if err := store.store.SetDialectForTesting("sqlite"); err != nil {
+	if err := store.store.SetEngineForTesting("sqlite"); err != nil {
 		t.Fatal(err)
 	}
 	store = scriptedRecordStore(t, &recordSQLState{execSteps: []recordSQLExecStep{{err: errors.New("database is locked")}}})

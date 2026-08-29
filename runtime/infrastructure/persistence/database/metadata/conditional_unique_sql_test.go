@@ -26,7 +26,7 @@ func TestConditionalUniqueDDLUsesPartialIndexesAndMySQLNullableGuard(t *testing.
 		ConditionField: "status", ConditionValues: []string{"booked", "wait'listed"},
 	}
 	for _, driver := range []string{"sqlite", "postgres"} {
-		if err := store.raw.SetDialectForTesting(driver); err != nil {
+		if err := store.raw.SetEngineForTesting(driver); err != nil {
 			t.Fatal(err)
 		}
 		store.storage = metadataTestStorageProfile(driver)
@@ -40,7 +40,7 @@ func TestConditionalUniqueDDLUsesPartialIndexesAndMySQLNullableGuard(t *testing.
 			}
 		}
 	}
-	if err := store.raw.SetDialectForTesting("mysql"); err != nil {
+	if err := store.raw.SetEngineForTesting("mysql"); err != nil {
 		t.Fatal(err)
 	}
 	store.storage = metadataTestStorageProfile("mysql")

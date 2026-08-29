@@ -60,11 +60,11 @@ func TestMigrationStatusClassificationsAndVersionBounds(t *testing.T) {
 }
 
 func TestWorkspaceScopeInventoryAndValidationFailures(t *testing.T) {
-	for _, dialect := range []dialect{sqlite.NewEngine(), mysql.NewEngine(), postgres.NewEngine()} {
+	for _, engine := range []databaseEngine{sqlite.NewEngine(), mysql.NewEngine(), postgres.NewEngine()} {
 		store := runtimeSchemaStore(t, &databaseSQLState{})
-		store.dialect = dialect
+		store.engine = engine
 		if tables, err := store.inventoryWorkspaceTables(t.Context(), store.db); err != nil || len(tables) != 0 {
-			t.Fatalf("dialect=%s tables=%#v err=%v", dialect.Name(), tables, err)
+			t.Fatalf("engine=%s tables=%#v err=%v", engine.Name(), tables, err)
 		}
 	}
 	for _, step := range []databaseSQLQueryStep{

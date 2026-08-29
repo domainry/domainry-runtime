@@ -54,7 +54,7 @@ func TestAdapterSeamsDelegateAndNormalize(t *testing.T) {
 	if store.MetadataIDColumnType() != "TEXT" || store.LocalizedTextKeyColumnType() != "TEXT" || store.RuntimeColumnDefinition("TEXT") != "TEXT" {
 		t.Fatal("sqlite type seams failed")
 	}
-	if err := store.SetDialectForTesting("mysql"); err != nil {
+	if err := store.SetEngineForTesting("mysql"); err != nil {
 		t.Fatal(err)
 	}
 	if store.LocalizedTextKeyColumnType() != "VARCHAR(128)" {
@@ -73,7 +73,7 @@ func TestAdapterMigrationSeams(t *testing.T) {
 		t.Fatal("missing backup evidence accepted")
 	}
 	explicit := filepath.Join(t.TempDir(), "explicit.sql")
-	paths, err := MigrationPathsForDialect(config.Config{MigrationSQL: explicit}, sqlite.NewEngine())
+	paths, err := MigrationPathsForEngine(config.Config{MigrationSQL: explicit}, sqlite.NewEngine())
 	if err != nil || len(paths) != 1 || paths[0] != explicit {
 		t.Fatalf("paths=%#v err=%v", paths, err)
 	}

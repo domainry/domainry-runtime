@@ -43,7 +43,7 @@ func TestRuntimeOperationalQueriesUseWorkflowAndHierarchyIndexes(t *testing.T) {
 func TestMySQLReportingScopeQueryUsesWorkforceResolvedUserIDs(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.SetDialectForTesting("mysql"); err != nil {
+	if err := store.SetEngineForTesting("mysql"); err != nil {
 		t.Fatal(err)
 	}
 	whereSQL, args, err := store.TenantListWhereClause("default", recordmodel.RecordListQuery{

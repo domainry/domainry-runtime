@@ -112,19 +112,19 @@ func openMigrationLockScript(t *testing.T, script *migrationLockScript) *sql.DB 
 func TestAcquireMigrationLockCoversExternalDialectsAndRelease(t *testing.T) {
 	tests := []struct {
 		name      string
-		dialect   dialect
+		engine    databaseEngine
 		result    driver.Value
 		lockSQL   string
 		unlockSQL string
 	}{
-		{name: "postgres", dialect: postgres.NewEngine(), result: true, lockSQL: "pg_try_advisory_lock", unlockSQL: "pg_advisory_unlock"},
-		{name: "mysql", dialect: mysql.NewEngine(), result: int64(1), lockSQL: "GET_LOCK", unlockSQL: "RELEASE_LOCK"},
+		{name: "postgres", engine: postgres.NewEngine(), result: true, lockSQL: "pg_try_advisory_lock", unlockSQL: "pg_advisory_unlock"},
+		{name: "mysql", engine: mysql.NewEngine(), result: int64(1), lockSQL: "GET_LOCK", unlockSQL: "RELEASE_LOCK"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			script := &migrationLockScript{results: []driver.Value{test.result}}
 			db := openMigrationLockScript(t, script)
-			store := &RuntimeStore{db: db, dialect: test.dialect, databaseSchema: "runtime", operationalMetrics: NewRuntimeOperationalMetrics("", "")}
+			store := &RuntimeStore{db: db, engine: test.engine, databaseSchema: "runtime", operationalMetrics: NewRuntimeOperationalMetrics("", "")}
 			ctx, cancel := context.WithCancel(t.Context())
 			release, err := store.acquireMigrationLock(ctx, config.Config{MigrationInstanceID: "test-instance"})
 			if err != nil {
@@ -150,7 +150,7 @@ func TestAcquireMigrationLockCoversExternalDialectsAndRelease(t *testing.T) {
 	}
 	script := &migrationLockScript{results: []driver.Value{true}}
 	migrationDB := openMigrationLockScript(t, script)
-	store := &RuntimeStore{migrationDB: migrationDB, dialect: postgres.NewEngine(), config: config.Config{DatabaseConnectTimeout: time.Second}}
+	store := &RuntimeStore{migrationDB: migrationDB, engine: postgres.NewEngine(), config: config.Config{DatabaseConnectTimeout: time.Second}}
 	release, err := store.acquireMigrationLock(t.Context(), config.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -172,7 +172,7 @@ func TestAcquireMigrationLockReportsConnectionQueryAndTimeoutFailures(t *testing
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			db := openMigrationLockScript(t, test.script)
-			store := &RuntimeStore{db: db, dialect: postgres.NewEngine(), config: config.Config{DatabaseLockTimeout: test.timeout}}
+			store := &RuntimeStore{db: db, engine: postgres.NewEngine(), config: config.Config{DatabaseLockTimeout: test.timeout}}
 			if _, err := store.acquireMigrationLock(t.Context(), config.Config{MigrationInstanceID: "test-instance"}); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("error=%v want=%q", err, test.want)
 			}
@@ -183,7 +183,7 @@ func TestAcquireMigrationLockReportsConnectionQueryAndTimeoutFailures(t *testing
 func TestAcquireMigrationLockWaitsThenSucceeds(t *testing.T) {
 	script := &migrationLockScript{results: []driver.Value{false, true}}
 	db := openMigrationLockScript(t, script)
-	store := &RuntimeStore{db: db, dialect: postgres.NewEngine(), config: config.Config{DatabaseLockTimeout: time.Second}}
+	store := &RuntimeStore{db: db, engine: postgres.NewEngine(), config: config.Config{DatabaseLockTimeout: time.Second}}
 	release, err := store.acquireMigrationLock(t.Context(), config.Config{MigrationInstanceID: "wait-success"})
 	if err != nil {
 		t.Fatal(err)

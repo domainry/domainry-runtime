@@ -26,7 +26,7 @@ func openMigrationEdgeStore(t *testing.T) *RuntimeStore {
 	}
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
-	store := &RuntimeStore{db: db, dialect: sqlite.NewEngine()}
+	store := &RuntimeStore{db: db, engine: sqlite.NewEngine()}
 	if err := store.ensureMigrationLedger(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func TestMigrationApplicationLedgerAndContextEdges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	closedStore := &RuntimeStore{db: closedDB, dialect: sqlite.NewEngine()}
+	closedStore := &RuntimeStore{db: closedDB, engine: sqlite.NewEngine()}
 	_ = closedDB.Close()
 	if err := closedStore.ensureMigrationLedger(t.Context()); err == nil {
 		t.Fatal("closed database prepared a ledger")
@@ -160,7 +160,7 @@ func TestMigrationPathIdentityAndSQLHelperEdges(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(driverDir, "ignored.txt"), []byte("ignored"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	store := &RuntimeStore{dialect: sqlite.NewEngine()}
+	store := &RuntimeStore{engine: sqlite.NewEngine()}
 	got, err := store.migrationPaths(config.Config{MigrationDir: root})
 	if err != nil || !reflect.DeepEqual(got, []string{paths[1], paths[0]}) {
 		t.Fatalf("driver paths=%v error=%v", got, err)
@@ -201,7 +201,7 @@ func TestMigrationPathIdentityAndSQLHelperEdges(t *testing.T) {
 	if got, err := store.migrationPaths(config.Config{MigrationDir: rootOnly}); err != nil || !reflect.DeepEqual(got, []string{rootPath}) {
 		t.Fatalf("root paths=%v error=%v", got, err)
 	}
-	rootFailure := &RuntimeStore{dialect: sqlite.NewEngine(), migrationReadDir: func(path string) ([]os.DirEntry, error) {
+	rootFailure := &RuntimeStore{engine: sqlite.NewEngine(), migrationReadDir: func(path string) ([]os.DirEntry, error) {
 		if strings.HasSuffix(path, "sqlite") {
 			return nil, os.ErrNotExist
 		}
@@ -274,7 +274,7 @@ func TestMigrationScriptedSQLFailureEdges(t *testing.T) {
 	}
 
 	mysqlStore := runtimeSchemaStore(t, &databaseSQLState{querySteps: make([]databaseSQLQueryStep, 10)})
-	mysqlStore.dialect = mysql.NewEngine()
+	mysqlStore.engine = mysql.NewEngine()
 	if err := mysqlStore.ensureMigrationLedger(t.Context()); err != nil {
 		t.Fatalf("mysql ledger error=%v", err)
 	}
@@ -300,7 +300,7 @@ func TestMigrationBackupDiscoveryAndFailureEdges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	closedStore := &RuntimeStore{db: closedDB, dialect: sqlite.NewEngine()}
+	closedStore := &RuntimeStore{db: closedDB, engine: sqlite.NewEngine()}
 	_ = closedDB.Close()
 	if _, err := closedStore.applicationTables(t.Context()); err == nil {
 		t.Fatal("closed database listed tables")
@@ -340,7 +340,7 @@ func TestApplyMigrationsOrchestrationErrorEdges(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		store := &RuntimeStore{db: db, dialect: sqlite.NewEngine()}
+		store := &RuntimeStore{db: db, engine: sqlite.NewEngine()}
 		_ = db.Close()
 		if err := store.applyMigrations(t.Context(), config.Config{DBPath: ":memory:"}); err == nil || !strings.Contains(err.Error(), "prepare schema migration table") {
 			t.Fatalf("closed ledger error=%v", err)
