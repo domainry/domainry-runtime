@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationsrepository "github.com/domainry/domainry-runtime/runtime/domain/operations/repository"
 )
@@ -24,18 +24,19 @@ func (s OperationsStore) CreateOperationsBreakGlass(ctx context.Context, grant o
 	}
 	defer func() { _ = tx.Rollback() }()
 	var active int64
-	query := "SELECT COUNT(*) FROM " + s.store.TableIdentifier("runtime_break_glass_grants") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("state") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("expires_at") + " > " + s.store.Placeholder(3)
-	if err := tx.QueryRowContext(ctx, query, grant.WorkspaceID, string(operationsmodel.OperationsBreakGlassActive), grant.CreatedAt.UTC().Format(time.RFC3339Nano)).Scan(&active); err != nil || active > 0 {
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "runtime_break_glass_grants", grant.WorkspaceID).Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(ormbuilder.And(ormbuilder.Equal("state", string(operationsmodel.OperationsBreakGlassActive)), ormbuilder.GreaterThan("expires_at", grant.CreatedAt.UTC().Format(time.RFC3339Nano)))).Build()
+	if buildErr != nil {
+		return false, buildErr
+	}
+	if err := tx.QueryRowContext(ctx, query, args...).Scan(&active); err != nil || active > 0 {
 		return false, err
 	}
 	approvers, _ := json.Marshal(grant.ApproverIDs)
-	columns := operationsBreakGlassColumns()
-	placeholders := make([]string, len(columns))
-	for i := range placeholders {
-		placeholders[i] = s.store.Placeholder(i + 1)
+	query, args, buildErr = ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "runtime_break_glass_grants", grant.WorkspaceID).Columns("id", "state", "actor_id", "approver_ids_json", "reason", "incident_ref", "alert_target", "audit_event_id", "expires_at", "revision", "created_at", "updated_at", "revoked_at", "revoked_by", "revocation_note").Values(grant.ID, string(grant.State), grant.ActorID, string(approvers), grant.Reason, grant.IncidentRef, grant.AlertTarget, grant.AuditEventID, grant.ExpiresAt.UTC().Format(time.RFC3339Nano), grant.Revision, grant.CreatedAt.UTC().Format(time.RFC3339Nano), grant.UpdatedAt.UTC().Format(time.RFC3339Nano), "", "", "").Build()
+	if buildErr != nil {
+		return false, buildErr
 	}
-	query = "INSERT INTO " + s.store.TableIdentifier("runtime_break_glass_grants") + " (" + operationsQuotedColumns(s.store, columns) + ") VALUES (" + strings.Join(placeholders, ", ") + ")"
-	_, err = tx.ExecContext(ctx, query, grant.ID, grant.WorkspaceID, string(grant.State), grant.ActorID, string(approvers), grant.Reason, grant.IncidentRef, grant.AlertTarget, grant.AuditEventID, grant.ExpiresAt.UTC().Format(time.RFC3339Nano), grant.Revision, grant.CreatedAt.UTC().Format(time.RFC3339Nano), grant.UpdatedAt.UTC().Format(time.RFC3339Nano), "", "", "")
+	_, err = tx.ExecContext(ctx, query, args...)
 	if err != nil {
 		return false, err
 	}
@@ -49,8 +50,11 @@ func (s OperationsStore) GetOperationsBreakGlass(ctx context.Context, id string)
 	if s.database() == nil {
 		return operationsmodel.OperationsBreakGlassGrant{}, false, fmt.Errorf("operations store unavailable")
 	}
-	query := "SELECT " + operationsQuotedColumns(s.store, operationsBreakGlassColumns()) + " FROM " + s.store.TableIdentifier("runtime_break_glass_grants") + " WHERE " + s.store.Identifier("id") + " = " + s.store.Placeholder(1)
-	grant, err := operationsScanBreakGlass(s.database().QueryRowContext(ctx, query, strings.TrimSpace(id)))
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "runtime_break_glass_grants").Columns(operationsBreakGlassColumns()...).Where(ormbuilder.Equal("id", id)).Build()
+	if buildErr != nil {
+		return operationsmodel.OperationsBreakGlassGrant{}, false, buildErr
+	}
+	grant, err := operationsScanBreakGlass(s.database().QueryRowContext(ctx, query, args...))
 	if err == sql.ErrNoRows {
 		return operationsmodel.OperationsBreakGlassGrant{}, false, nil
 	}
@@ -61,8 +65,11 @@ func (s OperationsStore) ListOperationsBreakGlass(ctx context.Context, workspace
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	query := "SELECT " + operationsQuotedColumns(s.store, operationsBreakGlassColumns()) + " FROM " + s.store.TableIdentifier("runtime_break_glass_grants") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " ORDER BY " + s.store.Identifier("created_at") + " DESC LIMIT " + s.store.Placeholder(2)
-	rows, err := s.database().QueryContext(ctx, query, workspaceID, limit)
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "runtime_break_glass_grants", workspaceID).Columns(operationsBreakGlassColumns()...).OrderBy(ormbuilder.Descending("created_at"), ormbuilder.Descending("id")).Limit(limit).Build()
+	if buildErr != nil {
+		return nil, buildErr
+	}
+	rows, err := s.database().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -79,12 +86,15 @@ func (s OperationsStore) ListOperationsBreakGlass(ctx context.Context, workspace
 }
 
 func (s OperationsStore) RevokeOperationsBreakGlass(ctx context.Context, grant operationsmodel.OperationsBreakGlassGrant, expectedRevision int64) (bool, error) {
-	query := "UPDATE " + s.store.TableIdentifier("runtime_break_glass_grants") + " SET " + s.store.Identifier("state") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("revision") + " = " + s.store.Placeholder(2) + ", " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(3) + ", " + s.store.Identifier("revoked_at") + " = " + s.store.Placeholder(4) + ", " + s.store.Identifier("revoked_by") + " = " + s.store.Placeholder(5) + ", " + s.store.Identifier("revocation_note") + " = " + s.store.Placeholder(6) + " WHERE " + s.store.Identifier("id") + " = " + s.store.Placeholder(7) + " AND " + s.store.Identifier("state") + " = " + s.store.Placeholder(8) + " AND " + s.store.Identifier("revision") + " = " + s.store.Placeholder(9)
 	revokedAt := ""
 	if grant.RevokedAt != nil {
 		revokedAt = grant.RevokedAt.UTC().Format(time.RFC3339Nano)
 	}
-	result, err := s.database().ExecContext(ctx, query, string(grant.State), grant.Revision, grant.UpdatedAt.UTC().Format(time.RFC3339Nano), revokedAt, grant.RevokedBy, grant.RevocationNote, grant.ID, string(operationsmodel.OperationsBreakGlassActive), expectedRevision)
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "runtime_break_glass_grants", grant.WorkspaceID).Set("state", string(grant.State)).Set("revision", grant.Revision).Set("updated_at", grant.UpdatedAt.UTC().Format(time.RFC3339Nano)).Set("revoked_at", revokedAt).Set("revoked_by", grant.RevokedBy).Set("revocation_note", grant.RevocationNote).Where(ormbuilder.And(ormbuilder.Equal("id", grant.ID), ormbuilder.Equal("state", string(operationsmodel.OperationsBreakGlassActive)), ormbuilder.Equal("revision", expectedRevision))).Build()
+	if buildErr != nil {
+		return false, buildErr
+	}
+	result, err := s.database().ExecContext(ctx, query, args...)
 	if err != nil {
 		return false, err
 	}
