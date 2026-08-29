@@ -28,7 +28,6 @@ func TestAgentTaskRunSystemStoreFailureMatrix(t *testing.T) {
 		state     *agentStateDBState
 		wantError bool
 	}{
-		{"schema", agentrepository.AgentTaskRunFilter{}, &agentStateDBState{execErrors: []error{wantErr}}, true},
 		{"query", agentrepository.AgentTaskRunFilter{}, taskState(agentStateQueryStep{err: wantErr}), true},
 		{"scan", agentrepository.AgentTaskRunFilter{}, taskState(agentStateQueryStep{columns: []string{"payload_json", "extra"}, rows: [][]driver.Value{{mustJSON(t, run), "x"}}}), true},
 		{"default limit", agentrepository.AgentTaskRunFilter{}, taskState(taskRunRow(t, run)), false},
@@ -49,7 +48,6 @@ func TestAgentTaskRunSystemStoreFailureMatrix(t *testing.T) {
 		state     *agentStateDBState
 		wantError bool
 	}{
-		{"schema", &agentStateDBState{execErrors: []error{wantErr}}, true},
 		{"missing", taskState(agentStateQueryStep{columns: []string{"workspace_id"}}), false},
 		{"query", taskState(agentStateQueryStep{err: wantErr}), true},
 	}

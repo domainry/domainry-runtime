@@ -28,16 +28,16 @@ func TestAgentTaskRunStoreRequestCancelFailureMatrix(t *testing.T) {
 		return &agentStateDBState{execErrors: taskSchemaExecs(updateErr), querySteps: []agentStateQueryStep{taskRunRow(t, run)}}
 	}
 	rowsErr := cancelState(pending, nil)
-	rowsErr.resultErrors = []error{nil, nil, nil, nil, wantErr}
+	rowsErr.resultErrors = []error{wantErr}
 	rowsMiss := cancelState(pending, nil)
-	rowsMiss.execRows = []int64{1, 1, 1, 1, 0}
+	rowsMiss.execRows = []int64{0}
 	raced := func(latest agentStateQueryStep, trailingExecs ...error) *agentStateDBState {
 		execs := taskSchemaExecs(nil)
 		execs = append(execs, trailingExecs...)
 		if len(trailingExecs) == 0 {
 			execs = append(execs, taskSchemaExecs()...)
 		}
-		return &agentStateDBState{execErrors: execs, execRows: []int64{1, 1, 1, 1, 0}, querySteps: []agentStateQueryStep{taskRunRow(t, pending), latest}}
+		return &agentStateDBState{execErrors: execs, execRows: []int64{0}, querySteps: []agentStateQueryStep{taskRunRow(t, pending), latest}}
 	}
 	tests := []struct {
 		name                string
@@ -45,7 +45,6 @@ func TestAgentTaskRunStoreRequestCancelFailureMatrix(t *testing.T) {
 		replayed, wantError bool
 		wantStatus          agentmodel.AgentTaskRunStatus
 	}{
-		{"get schema", &agentStateDBState{execErrors: []error{wantErr}}, false, true, ""},
 		{"get missing", taskState(agentStateQueryStep{columns: []string{"payload_json"}}), false, false, ""},
 		{"get query", taskState(agentStateQueryStep{err: wantErr}), false, true, ""},
 		{"terminal replay", taskState(taskRunRow(t, terminal)), true, false, terminal.Status},
@@ -96,9 +95,9 @@ func TestAgentTaskRunStoreBeginToolCallFailureMatrix(t *testing.T) {
 	row := toolRow(t, run, string(run.Status), "worker", 2)
 	start := agentrepository.AgentToolCallStart{WorkspaceID: "default", TaskRunID: "run", Owner: "worker", FencingToken: 2, Tool: "object.get", MaxToolCalls: 2, CostUnits: 1, MaxCostUnits: 10}
 	rowsErr := toolState(row, nil)
-	rowsErr.resultErrors = []error{nil, nil, nil, nil, wantErr}
+	rowsErr.resultErrors = []error{wantErr}
 	rowsMiss := toolState(row, nil)
-	rowsMiss.execRows = []int64{1, 1, 1, 1, 0}
+	rowsMiss.execRows = []int64{0}
 	commitErr := toolState(row, nil)
 	commitErr.commitErrors = []error{wantErr}
 	used := run
@@ -109,7 +108,6 @@ func TestAgentTaskRunStoreBeginToolCallFailureMatrix(t *testing.T) {
 		state      *agentStateDBState
 		wantError  bool
 	}{
-		{"schema", "", start, &agentStateDBState{execErrors: []error{wantErr}}, true},
 		{"begin", "", start, &agentStateDBState{execErrors: taskSchemaExecs(), beginErrors: []error{wantErr}}, true},
 		{"query", "", start, toolState(agentStateQueryStep{err: wantErr}, nil), true},
 		{"status fence", "agent.task.tool_fence_rejected", start, toolState(toolRow(t, run, string(agentmodel.AgentTaskRunPending), "worker", 2), nil), true},
@@ -129,8 +127,8 @@ func TestAgentTaskRunStoreBeginToolCallFailureMatrix(t *testing.T) {
 	}
 	countReached := run
 	countReached.ToolCallCount = 2
-	tests[8].start = start
-	tests[8].state = toolState(toolRow(t, countReached, string(run.Status), "worker", 2), nil)
+	tests[7].start = start
+	tests[7].state = toolState(toolRow(t, countReached, string(run.Status), "worker", 2), nil)
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			repo, close := scriptedAgentTaskStore(base, test.state)
@@ -163,9 +161,9 @@ func TestAgentTaskRunStoreFinishToolCallFailureMatrix(t *testing.T) {
 	row := toolRow(t, run, string(run.Status), "worker", 2)
 	finish := agentrepository.AgentToolCallFinish{WorkspaceID: "default", TaskRunID: "run", CallRef: "call", Owner: "worker", FencingToken: 2, Status: "succeeded", Evidence: map[string]any{"output_hash": " hash "}}
 	rowsErr := toolState(row, nil)
-	rowsErr.resultErrors = []error{nil, nil, nil, nil, wantErr}
+	rowsErr.resultErrors = []error{wantErr}
 	rowsMiss := toolState(row, nil)
-	rowsMiss.execRows = []int64{1, 1, 1, 1, 0}
+	rowsMiss.execRows = []int64{0}
 	commitErr := toolState(row, nil)
 	commitErr.commitErrors = []error{wantErr}
 	already := run
@@ -176,7 +174,6 @@ func TestAgentTaskRunStoreFinishToolCallFailureMatrix(t *testing.T) {
 		state      *agentStateDBState
 		wantError  bool
 	}{
-		{"schema", "", finish, &agentStateDBState{execErrors: []error{wantErr}}, true},
 		{"begin", "", finish, &agentStateDBState{execErrors: taskSchemaExecs(), beginErrors: []error{wantErr}}, true},
 		{"query", "", finish, toolState(agentStateQueryStep{err: wantErr}, nil), true},
 		{"status fence", "agent.task.tool_fence_rejected", finish, toolState(toolRow(t, run, string(agentmodel.AgentTaskRunPending), "worker", 2), nil), true},

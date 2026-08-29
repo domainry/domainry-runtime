@@ -16,15 +16,19 @@ type agentSchemaOwnerStub struct{ err error }
 
 func (s agentSchemaOwnerStub) EnsureSchema(context.Context) error { return s.err }
 
+type agentScopeBackfillerStub struct{ err error }
+
+func (s agentScopeBackfillerStub) BackfillWorkerScopes(context.Context) error { return s.err }
+
 func TestEnsureAgentRuntimeSchemasReportsEachOwnerFailure(t *testing.T) {
 	wantErr := errors.New("schema failed")
-	if err := ensureAgentRuntimeSchemas(t.Context(), agentSchemaOwnerStub{err: wantErr}, agentSchemaOwnerStub{}); !errors.Is(err, wantErr) || !strings.Contains(err.Error(), "agent lifecycle") {
+	if err := ensureAgentRuntimeSchemas(t.Context(), agentSchemaOwnerStub{err: wantErr}, agentScopeBackfillerStub{}); !errors.Is(err, wantErr) || !strings.Contains(err.Error(), "schema migration") {
 		t.Fatalf("err=%v", err)
 	}
-	if err := ensureAgentRuntimeSchemas(t.Context(), agentSchemaOwnerStub{}, agentSchemaOwnerStub{err: wantErr}); !errors.Is(err, wantErr) || !strings.Contains(err.Error(), "agent task") {
+	if err := ensureAgentRuntimeSchemas(t.Context(), agentSchemaOwnerStub{}, agentScopeBackfillerStub{err: wantErr}); !errors.Is(err, wantErr) || !strings.Contains(err.Error(), "worker scopes") {
 		t.Fatalf("err=%v", err)
 	}
-	if err := ensureAgentRuntimeSchemas(t.Context(), agentSchemaOwnerStub{}, agentSchemaOwnerStub{}); err != nil {
+	if err := ensureAgentRuntimeSchemas(t.Context(), agentSchemaOwnerStub{}, agentScopeBackfillerStub{}); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 }

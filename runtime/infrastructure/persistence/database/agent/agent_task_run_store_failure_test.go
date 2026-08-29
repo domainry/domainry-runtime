@@ -27,31 +27,25 @@ func taskState(step agentStateQueryStep, extra ...error) *agentStateDBState {
 
 func TestAgentTaskRunStoreSchemaCreateGetAndListFailureMatrix(t *testing.T) {
 	base, now, wantErr := openAgentStateBaseStore(t), time.Unix(10, 0).UTC(), errors.New("task store failure")
-	if err := NewAgentTaskRunStore(nil).EnsureSchema(t.Context()); err == nil {
-		t.Fatal("nil store schema accepted")
-	}
-	if err := (&AgentTaskRunStore{store: base}).EnsureSchema(t.Context()); err == nil {
-		t.Fatal("nil db schema accepted")
-	}
 	mysqlBase := openAgentStateBaseStore(t)
 	if err := mysqlBase.SetDialectForTesting("mysql"); err != nil {
 		t.Fatal(err)
 	}
 	mysqlState := &agentStateDBState{execErrors: []error{nil, wantErr, wantErr, wantErr}}
 	mysqlRepo, mysqlClose := scriptedAgentTaskStore(mysqlBase, mysqlState)
-	if err := mysqlRepo.EnsureSchema(t.Context()); !errors.Is(err, wantErr) || !strings.Contains(mysqlState.queries[0], "VARCHAR(255)") {
+	if err := migrateAgentTaskRunSchema(t.Context(), mysqlBase, mysqlRepo.db); !errors.Is(err, wantErr) || !strings.Contains(mysqlState.queries[0], "VARCHAR(255)") {
 		t.Fatalf("mysql=%v err=%v", mysqlState.queries, err)
 	}
 	mysqlClose()
 	duplicateIndex := &mysqldriver.MySQLError{Number: 1061, Message: "duplicate key name"}
 	mysqlDuplicateState := &agentStateDBState{execErrors: []error{nil, duplicateIndex, duplicateIndex, duplicateIndex}}
 	mysqlDuplicateRepo, mysqlDuplicateClose := scriptedAgentTaskStore(mysqlBase, mysqlDuplicateState)
-	if err := mysqlDuplicateRepo.EnsureSchema(t.Context()); err != nil {
+	if err := migrateAgentTaskRunSchema(t.Context(), mysqlBase, mysqlDuplicateRepo.db); err != nil {
 		t.Fatalf("mysql duplicate index=%v err=%v", mysqlDuplicateState.queries, err)
 	}
 	mysqlDuplicateClose()
 	indexRepo, indexClose := scriptedAgentTaskStore(base, &agentStateDBState{execErrors: []error{nil, wantErr}})
-	if err := indexRepo.EnsureSchema(t.Context()); !errors.Is(err, wantErr) {
+	if err := migrateAgentTaskRunSchema(t.Context(), base, indexRepo.db); !errors.Is(err, wantErr) {
 		t.Fatalf("index=%v", err)
 	}
 	indexClose()
@@ -65,7 +59,6 @@ func TestAgentTaskRunStoreSchemaCreateGetAndListFailureMatrix(t *testing.T) {
 		state             *agentStateDBState
 		replay, wantError bool
 	}{
-		{"schema", run, &agentStateDBState{execErrors: []error{wantErr}}, false, true},
 		{"marshal", badRun, &agentStateDBState{execErrors: taskSchemaExecs()}, false, true},
 		{"insert missing", run, taskState(agentStateQueryStep{columns: []string{"payload_json"}}, wantErr), false, true},
 		{"insert query", run, taskState(agentStateQueryStep{err: wantErr}, wantErr), false, true},
@@ -86,7 +79,6 @@ func TestAgentTaskRunStoreSchemaCreateGetAndListFailureMatrix(t *testing.T) {
 		state            *agentStateDBState
 		found, wantError bool
 	}{
-		{"schema", &agentStateDBState{execErrors: []error{wantErr}}, false, true},
 		{"missing", taskState(agentStateQueryStep{columns: []string{"payload_json"}}), false, false},
 		{"query", taskState(agentStateQueryStep{err: wantErr}), false, true},
 		{"scan", taskState(agentStateQueryStep{columns: []string{"payload_json", "extra"}, rows: [][]driver.Value{{mustJSON(t, run), "x"}}}), false, true},
@@ -110,7 +102,6 @@ func TestAgentTaskRunStoreSchemaCreateGetAndListFailureMatrix(t *testing.T) {
 		wantLen   int
 		wantError bool
 	}{
-		{"schema", agentrepository.AgentTaskRunFilter{}, &agentStateDBState{execErrors: []error{wantErr}}, 0, true},
 		{"query", agentrepository.AgentTaskRunFilter{}, taskState(agentStateQueryStep{err: wantErr}), 0, true},
 		{"scan", agentrepository.AgentTaskRunFilter{}, taskState(agentStateQueryStep{columns: []string{"payload_json", "extra"}, rows: [][]driver.Value{{mustJSON(t, run), "x"}}}), 0, true},
 		{"json", agentrepository.AgentTaskRunFilter{}, taskState(agentStateQueryStep{columns: []string{"payload_json"}, rows: [][]driver.Value{{[]byte("{")}}}), 0, true},
@@ -135,9 +126,9 @@ func TestAgentTaskRunStoreClaimFailureMatrix(t *testing.T) {
 	row := agentStateQueryStep{columns: []string{"run_id", "payload_json", "fencing_token"}, rows: [][]driver.Value{{run.ID, mustJSON(t, run), int64(2)}}}
 	successState := func(extra ...error) *agentStateDBState { return taskState(row, extra...) }
 	rowsErr := successState(nil)
-	rowsErr.resultErrors = []error{nil, nil, nil, nil, wantErr}
+	rowsErr.resultErrors = []error{wantErr}
 	rowsMiss := successState(nil)
-	rowsMiss.execRows = []int64{1, 1, 1, 1, 0}
+	rowsMiss.execRows = []int64{0}
 	commitErr := successState(nil)
 	commitErr.commitErrors = []error{wantErr}
 	for _, test := range []struct {
@@ -145,7 +136,6 @@ func TestAgentTaskRunStoreClaimFailureMatrix(t *testing.T) {
 		state            *agentStateDBState
 		found, wantError bool
 	}{
-		{"schema", &agentStateDBState{execErrors: []error{wantErr}}, false, true},
 		{"begin", &agentStateDBState{execErrors: taskSchemaExecs(), beginErrors: []error{wantErr}}, false, true},
 		{"missing", taskState(agentStateQueryStep{columns: row.columns}), false, false},
 		{"query", taskState(agentStateQueryStep{err: wantErr}), false, true},
@@ -210,7 +200,6 @@ func TestAgentTaskClaimRetryBudgetAndCancellation(t *testing.T) {
 		retryErrors[index] = errors.New("database is locked")
 	}
 	repository, closeDB := scriptedAgentTaskStore(base, &agentStateDBState{beginErrors: retryErrors})
-	repository.schemaOnce.Do(func() {})
 	if _, _, err := repository.ClaimNext(t.Context(), "default", "worker", time.Unix(10, 0).UTC(), time.Minute); err == nil || !strings.Contains(err.Error(), "retry exhausted") {
 		t.Fatalf("retry exhaustion err=%v", err)
 	}
@@ -221,7 +210,6 @@ func TestAgentTaskClaimRetryBudgetAndCancellation(t *testing.T) {
 		beginErrors: []error{errors.New("SQLSTATE 40001")},
 		beginHook:   cancel,
 	})
-	repository.schemaOnce.Do(func() {})
 	if _, _, err := repository.ClaimNext(ctx, "default", "worker", time.Unix(10, 0).UTC(), time.Minute); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled retry err=%v", err)
 	}

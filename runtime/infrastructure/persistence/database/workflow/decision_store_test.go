@@ -13,6 +13,7 @@ import (
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	agentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/agent"
 
 	"path/filepath"
 	"testing"
@@ -232,6 +233,10 @@ func openStoreForGeneratedListTest(t *testing.T) *database.RuntimeStore {
 	t.Helper()
 	store, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "workflow.db")})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := agentpersistence.NewAgentSchemaMigration(store).EnsureSchema(t.Context()); err != nil {
+		_ = store.Close()
 		t.Fatal(err)
 	}
 	return store

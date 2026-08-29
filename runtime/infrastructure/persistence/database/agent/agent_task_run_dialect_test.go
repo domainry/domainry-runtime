@@ -63,16 +63,15 @@ func openAgentDialectStore(t *testing.T, cfg config.Config) *database.RuntimeSto
 		_ = store.Close()
 		t.Fatal(err)
 	}
+	if err := NewAgentSchemaMigration(store).EnsureSchema(t.Context()); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
 	return store
 }
 
 func assertAgentTaskDialectContract(t *testing.T, first, second *AgentTaskRunStore, dialect string) {
 	t.Helper()
-	for _, repository := range []*AgentTaskRunStore{first, second} {
-		if err := repository.EnsureSchema(t.Context()); err != nil {
-			t.Fatal(err)
-		}
-	}
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	suffix := fmt.Sprintf("%s-%d", dialect, now.UnixNano())
 	workspace := "agent-dialect-" + suffix

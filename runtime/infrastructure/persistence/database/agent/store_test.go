@@ -20,6 +20,9 @@ func TestAgentStateStoreContractAndCancellation(t *testing.T) {
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	if err := NewAgentSchemaMigration(store).EnsureSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	defer store.Close()
 	repository := NewAgentStateStore(store)
 	first := agentmodel.AgentStateRecord{Kind: "session", Key: "default:user:role:s1", WorkspaceID: "default", UserID: "user", RoleKey: "role", Payload: json.RawMessage(`{"title":"First"}`), UpdatedAt: 1}
@@ -85,6 +88,9 @@ func TestAgentStateStoreWorkspaceIsolationContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := NewAgentSchemaMigration(store).EnsureSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	defer store.Close()

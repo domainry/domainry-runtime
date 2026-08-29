@@ -44,7 +44,7 @@ func TestAgentStateStoreValidationSchemaAndWriteStages(t *testing.T) {
 		state := &agentStateDBState{execErrors: []error{nil}}
 		candidate, closeDB := scriptedAgentStateStore(base, state)
 		defer closeDB()
-		if err := candidate.EnsureSchema(t.Context()); err != nil {
+		if err := migrateAgentStateSchema(t.Context(), base, candidate.db); err != nil {
 			t.Fatal(err)
 		}
 		if len(state.queries) != 1 || !strings.Contains(state.queries[0], "VARCHAR(255)") {
@@ -52,35 +52,14 @@ func TestAgentStateStoreValidationSchemaAndWriteStages(t *testing.T) {
 		}
 	})
 
-	for _, operation := range []string{"put", "get", "list"} {
-		t.Run(operation+" schema", func(t *testing.T) {
-			candidate, closeDB := scriptedAgentStateStore(base, &agentStateDBState{execErrors: []error{wantErr}})
-			defer closeDB()
-			switch operation {
-			case "put":
-				if err := candidate.Put(t.Context(), "default", record); err == nil || !strings.Contains(err.Error(), "ensure agent state table") {
-					t.Fatalf("put schema error=%v", err)
-				}
-			case "get":
-				if _, _, err := candidate.Get(t.Context(), "default", "session", "key"); !errors.Is(err, wantErr) {
-					t.Fatalf("get schema error=%v", err)
-				}
-			case "list":
-				if _, err := candidate.List(t.Context(), "default", "session", "", ""); !errors.Is(err, wantErr) {
-					t.Fatalf("list schema error=%v", err)
-				}
-			}
-		})
-	}
-
 	tests := []struct {
 		name  string
 		state *agentStateDBState
 		value []agentmodel.AgentStateRecord
 	}{
-		{name: "begin", state: &agentStateDBState{execErrors: []error{nil}, beginErrors: []error{wantErr}}, value: []agentmodel.AgentStateRecord{record}},
-		{name: "upsert", state: &agentStateDBState{execErrors: []error{nil, wantErr}}, value: []agentmodel.AgentStateRecord{record}},
-		{name: "commit", state: &agentStateDBState{execErrors: []error{nil, nil}, commitErrors: []error{wantErr}}, value: []agentmodel.AgentStateRecord{record}},
+		{name: "begin", state: &agentStateDBState{beginErrors: []error{wantErr}}, value: []agentmodel.AgentStateRecord{record}},
+		{name: "upsert", state: &agentStateDBState{execErrors: []error{wantErr}}, value: []agentmodel.AgentStateRecord{record}},
+		{name: "commit", state: &agentStateDBState{execErrors: []error{nil}, commitErrors: []error{wantErr}}, value: []agentmodel.AgentStateRecord{record}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -133,19 +112,13 @@ func TestAgentStoresUseSchemaDatabaseForDDL(t *testing.T) {
 		_ = schemaDB.Close()
 	})
 
-	stateStore := NewAgentStateStore(base)
-	stateStore.db = appDB
-	stateStore.schema = schemaDB
-	if err := stateStore.EnsureSchema(t.Context()); err != nil {
+	if err := migrateAgentStateSchema(t.Context(), base, schemaDB); err != nil {
 		t.Fatal(err)
 	}
-	taskStore := NewAgentTaskRunStore(base)
-	taskStore.db = appDB
-	taskStore.schema = schemaDB
-	if err := taskStore.EnsureSchema(t.Context()); err != nil {
+	if err := migrateAgentTaskRunSchema(t.Context(), base, schemaDB); err != nil {
 		t.Fatal(err)
 	}
-	if err := taskStore.ensureInteractiveRunSchema(t.Context()); err != nil {
+	if err := migrateAgentInteractiveRunSchema(t.Context(), base, schemaDB); err != nil {
 		t.Fatal(err)
 	}
 
@@ -230,11 +203,10 @@ func TestAgentStateStoreCompareAndSwapBoundaries(t *testing.T) {
 	}
 	wantErr := errors.New("cas")
 	for name, state := range map[string]*agentStateDBState{
-		"schema":  {execErrors: []error{wantErr}},
-		"exec":    {execErrors: []error{nil, wantErr}},
-		"rows":    {execErrors: []error{nil, nil}, resultErrors: []error{nil, wantErr}},
-		"miss":    {execErrors: []error{nil, nil}, execRows: []int64{1, 0}},
-		"success": {execErrors: []error{nil, nil}},
+		"exec":    {execErrors: []error{wantErr}},
+		"rows":    {execErrors: []error{nil}, resultErrors: []error{wantErr}},
+		"miss":    {execErrors: []error{nil}, execRows: []int64{0}},
+		"success": {execErrors: []error{nil}},
 	} {
 		candidate, closeDB := scriptedAgentStateStore(base, state)
 		ok, err := candidate.CompareAndSwap(t.Context(), "default", value, 1)
@@ -257,6 +229,10 @@ func openAgentStateBaseStore(t *testing.T) *database.RuntimeStore {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := NewAgentSchemaMigration(store).EnsureSchema(t.Context()); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
 	t.Cleanup(func() { _ = store.Close() })
 	return store
 }
@@ -265,7 +241,6 @@ func scriptedAgentStateStore(store *database.RuntimeStore, state *agentStateDBSt
 	db := sql.OpenDB(agentStateConnector{state: state})
 	repository := NewAgentStateStore(store)
 	repository.db = db
-	repository.schema = db
 	return repository, func() { _ = db.Close() }
 }
 

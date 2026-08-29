@@ -26,9 +26,7 @@ func TestAgentTaskRunStoreHeartbeatFailureMatrix(t *testing.T) {
 	run.Status = agentmodel.AgentTaskRunRunning
 	run.Lease = agentmodel.AgentTaskLease{Owner: "worker", FencingToken: 2, ExpiresAt: now.Add(time.Minute)}
 	getState := func(step agentStateQueryStep, persist ...error) *agentStateDBState {
-		execs := append([]error{nil}, taskSchemaExecs()...)
-		execs = append(execs, persist...)
-		return &agentStateDBState{execErrors: execs, querySteps: []agentStateQueryStep{step}}
+		return &agentStateDBState{execErrors: persist, querySteps: []agentStateQueryStep{step}}
 	}
 	rowsErr := &agentStateDBState{execErrors: []error{nil}, resultErrors: []error{wantErr}}
 	rowsMiss := &agentStateDBState{execErrors: []error{nil}, execRows: []int64{0}}
@@ -41,7 +39,6 @@ func TestAgentTaskRunStoreHeartbeatFailureMatrix(t *testing.T) {
 		{"exec", &agentStateDBState{execErrors: []error{wantErr}}, false, true},
 		{"rows error", rowsErr, false, true},
 		{"lost", rowsMiss, true, false},
-		{"get schema", &agentStateDBState{execErrors: []error{nil, wantErr}}, false, true},
 		{"get missing", getState(agentStateQueryStep{columns: []string{"payload_json"}}), false, false},
 		{"get query", getState(agentStateQueryStep{err: wantErr}), false, true},
 		{"get scan", getState(agentStateQueryStep{columns: []string{"payload_json", "extra"}, rows: [][]driver.Value{{mustJSON(t, run), "x"}}}), false, true},
@@ -116,12 +113,6 @@ func TestAgentTaskRunStoreSaveRunningFailureMatrix(t *testing.T) {
 
 func TestAgentTaskRunStoreApprovalOverrideAndOperationFailureMatrix(t *testing.T) {
 	base := openAgentStateBaseStore(t)
-	if err := (*AgentTaskRunStore)(nil).EnsureSchema(t.Context()); err == nil {
-		t.Fatal("nil store schema accepted")
-	}
-	if err := (&AgentTaskRunStore{store: base}).EnsureSchema(t.Context()); err == nil {
-		t.Fatal("store without database accepted")
-	}
 	now := time.Unix(10, 0).UTC()
 	wantErr := errors.New("transition failure")
 	waiting := validTaskRun(now)

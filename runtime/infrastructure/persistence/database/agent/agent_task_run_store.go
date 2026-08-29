@@ -6,26 +6,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/requestcontext"
-	ormbuilder "github.com/domainry/domainry-orm/builder"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	runtimeschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/schema"
 )
 
 type AgentTaskRunStore struct {
-	store                  *database.RuntimeStore
-	db                     *sql.DB
-	schema                 runtimeschema.SQLDatabase
-	schemaOnce             sync.Once
-	schemaErr              error
-	interactiveSchemaOnce  sync.Once
-	interactiveSchemaError error
+	store *database.RuntimeStore
+	db    *sql.DB
 }
 
 const agentTaskWorkerQueueKind = "agent_task"
@@ -41,73 +33,15 @@ func NewAgentTaskRunStore(store *database.RuntimeStore) *AgentTaskRunStore {
 	if store == nil {
 		return &AgentTaskRunStore{}
 	}
-	return &AgentTaskRunStore{store: store, db: store.DB(), schema: store.SchemaDB()}
-}
-
-func (s *AgentTaskRunStore) EnsureSchema(ctx context.Context) error {
-	if s == nil {
-		return fmt.Errorf("agent task run store unavailable")
-	}
-	if s.store == nil {
-		return fmt.Errorf("agent task run store unavailable")
-	}
-	if s.db == nil || s.schema == nil {
-		return fmt.Errorf("agent task run store unavailable")
-	}
-	s.schemaOnce.Do(func() {
-		s.schemaErr = s.ensureSchema(ctx)
-	})
-	return s.schemaErr
-}
-
-func (s *AgentTaskRunStore) ensureSchema(ctx context.Context) error {
-	statement, args, buildErr := ormbuilder.NewCreateTableBuilder(s.store.SQLRenderer, "agent_task_runs").IfNotExists().Columns(
-		ormbuilder.DefineColumn("workspace_id", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("run_id", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("idempotency_key", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("task_key", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("process_id", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("status", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("lease_owner", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("fencing_token", ormbuilder.BigIntType()).NotNull(),
-		ormbuilder.DefineColumn("lease_expires_at", ormbuilder.BigIntType()).NotNull(),
-		ormbuilder.DefineColumn("next_attempt_at", ormbuilder.BigIntType()).NotNull(),
-		ormbuilder.DefineColumn("payload_json", ormbuilder.TextType()).NotNull(),
-		ormbuilder.DefineColumn("created_at", ormbuilder.BigIntType()).NotNull(),
-		ormbuilder.DefineColumn("updated_at", ormbuilder.BigIntType()).NotNull(),
-	).PrimaryKey("workspace_id", "run_id").Unique("workspace_id", "idempotency_key").Build()
-	if buildErr != nil {
-		return buildErr
-	}
-	if _, err := s.schema.ExecContext(ctx, statement, args...); err != nil {
-		return err
-	}
-	for name, columns := range map[string][]string{
-		"idx_agent_task_claim":   {"workspace_id", "status", "next_attempt_at", "lease_expires_at", "created_at"},
-		"idx_agent_task_process": {"workspace_id", "process_id", "status"},
-		"idx_agent_task_key":     {"workspace_id", "task_key", "status"},
-	} {
-		index := s.store.Engine.ApplyCreateIndex(ormbuilder.NewCreateIndexBuilder(s.store.SQLRenderer, name, "agent_task_runs").Columns(columns...))
-		query, queryArgs, buildErr := index.Build()
-		if buildErr != nil {
-			return buildErr
-		}
-		if _, err := s.schema.ExecContext(ctx, query, queryArgs...); err != nil && !s.store.Engine.IsCreateIndexAlreadyExists(err) {
-			return err
-		}
-	}
-	return nil
+	return &AgentTaskRunStore{store: store, db: store.DB()}
 }
 
 // BackfillWorkerScopes inventories legacy Agent tasks once during Runtime
 // startup. It is deliberately not part of EnsureSchema: ordinary Agent reads
 // and writes must not perform a global workspace inventory.
 func (s *AgentTaskRunStore) BackfillWorkerScopes(ctx context.Context) error {
-	if err := s.EnsureSchema(ctx); err != nil {
-		return err
-	}
 	query := "SELECT " + s.store.Identifier("workspace_id") + ", MAX(" + s.store.Identifier("updated_at") + ") FROM " + s.store.TableIdentifier("agent_task_runs") + " GROUP BY " + s.store.Identifier("workspace_id")
-	rows, err := s.schema.QueryContext(ctx, query)
+	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
 		return err
 	}
@@ -132,7 +66,7 @@ func (s *AgentTaskRunStore) BackfillWorkerScopes(ctx context.Context) error {
 		return err
 	}
 	for _, scope := range scopes {
-		if err := RegisterAgentTaskWorkerScope(ctx, s.store, s.schema, scope.workspaceID, time.UnixMilli(scope.updatedAtMillis)); err != nil {
+		if err := RegisterAgentTaskWorkerScope(ctx, s.store, s.db, scope.workspaceID, time.UnixMilli(scope.updatedAtMillis)); err != nil {
 			return err
 		}
 	}
@@ -140,9 +74,6 @@ func (s *AgentTaskRunStore) BackfillWorkerScopes(ctx context.Context) error {
 }
 
 func (s *AgentTaskRunStore) Create(ctx context.Context, run agentmodel.AgentTaskRun) (agentmodel.AgentTaskRun, bool, error) {
-	if err := s.EnsureSchema(ctx); err != nil {
-		return agentmodel.AgentTaskRun{}, false, err
-	}
 	payload, err := json.Marshal(run)
 	if err != nil {
 		return agentmodel.AgentTaskRun{}, false, err
@@ -166,9 +97,6 @@ func (s *AgentTaskRunStore) Create(ctx context.Context, run agentmodel.AgentTask
 }
 
 func (s *AgentTaskRunStore) Get(ctx context.Context, workspaceID, runID string) (agentmodel.AgentTaskRun, bool, error) {
-	if err := s.EnsureSchema(ctx); err != nil {
-		return agentmodel.AgentTaskRun{}, false, err
-	}
 	query := "SELECT " + s.store.Identifier("payload_json") + " FROM " + s.store.TableIdentifier("agent_task_runs") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("run_id") + " = " + s.store.Placeholder(2)
 	return s.scanRun(s.db.QueryRowContext(ctx, query, strings.TrimSpace(workspaceID), strings.TrimSpace(runID)))
 }
@@ -195,9 +123,6 @@ func (s *AgentTaskRunStore) scanRun(row rowScanner) (agentmodel.AgentTaskRun, bo
 }
 
 func (s *AgentTaskRunStore) List(ctx context.Context, workspaceID string, filter agentrepository.AgentTaskRunFilter) ([]agentmodel.AgentTaskRun, error) {
-	if err := s.EnsureSchema(ctx); err != nil {
-		return nil, err
-	}
 	where, args := []string{s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1)}, []any{strings.TrimSpace(workspaceID)}
 	if filter.ProcessID != "" {
 		args = append(args, strings.TrimSpace(filter.ProcessID))
@@ -237,9 +162,6 @@ func (s *AgentTaskRunStore) List(ctx context.Context, workspaceID string, filter
 }
 
 func (s *AgentTaskRunStore) ClaimNext(ctx context.Context, workspaceID string, owner string, now time.Time, duration time.Duration) (agentrepository.AgentTaskClaim, bool, error) {
-	if err := s.EnsureSchema(ctx); err != nil {
-		return agentrepository.AgentTaskClaim{}, false, err
-	}
 	ctx = requestcontext.WithWorkspaceID(ctx, strings.TrimSpace(workspaceID))
 	ctx = requestcontext.WithActorID(ctx, strings.TrimSpace(owner))
 	var lastErr error
@@ -263,9 +185,6 @@ func (s *AgentTaskRunStore) ClaimNext(ctx context.Context, workspaceID string, o
 }
 
 func (s *AgentTaskRunStore) ClaimAgentTaskRun(ctx context.Context, workspaceID, runID, owner string, now time.Time, duration time.Duration) (agentrepository.AgentTaskClaim, bool, error) {
-	if err := s.EnsureSchema(ctx); err != nil {
-		return agentrepository.AgentTaskClaim{}, false, err
-	}
 	workspaceID, runID, owner = strings.TrimSpace(workspaceID), strings.TrimSpace(runID), strings.TrimSpace(owner)
 	if len(workspaceID) == 0 {
 		return agentrepository.AgentTaskClaim{}, false, fmt.Errorf("agent task direct claim is invalid")
@@ -672,9 +591,6 @@ var _ agentrepository.AgentTaskRunRepository = (*AgentTaskRunStore)(nil)
 var _ agentrepository.AgentToolCallLedger = (*AgentTaskRunStore)(nil)
 
 func (s *AgentTaskRunStore) BeginAgentToolCall(ctx context.Context, start agentrepository.AgentToolCallStart) (string, int, error) {
-	if err := s.EnsureSchema(ctx); err != nil {
-		return "", 0, err
-	}
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return "", 0, err
@@ -731,9 +647,6 @@ func (s *AgentTaskRunStore) BeginAgentToolCall(ctx context.Context, start agentr
 }
 
 func (s *AgentTaskRunStore) FinishAgentToolCall(ctx context.Context, finish agentrepository.AgentToolCallFinish) error {
-	if err := s.EnsureSchema(ctx); err != nil {
-		return err
-	}
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return err

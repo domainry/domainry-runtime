@@ -29,7 +29,7 @@ func openAgentTaskRunStore(t *testing.T) *AgentTaskRunStore {
 		t.Fatal(err)
 	}
 	repository := NewAgentTaskRunStore(store)
-	if err := repository.EnsureSchema(t.Context()); err != nil {
+	if err := NewAgentSchemaMigration(store).EnsureSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	return repository

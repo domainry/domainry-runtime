@@ -6,55 +6,23 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
-	"sync/atomic"
 
 	ormbuilder "github.com/domainry/domainry-orm/builder"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	runtimeschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/schema"
 )
 
 type AgentStateStore struct {
-	store  *database.RuntimeStore
-	db     *sql.DB
-	schema runtimeschema.SQLDatabase
-	ready  *atomic.Bool
+	store *database.RuntimeStore
+	db    *sql.DB
 }
 
 func NewAgentStateStore(store *database.RuntimeStore) AgentStateStore {
-	return AgentStateStore{store: store, db: store.DB(), schema: store.SchemaDB(), ready: &atomic.Bool{}}
-}
-
-func (r AgentStateStore) EnsureSchema(ctx context.Context) error {
-	if r.store == nil || r.db == nil || r.schema == nil || r.ready == nil {
-		return fmt.Errorf("agent state store unavailable")
+	if store == nil {
+		return AgentStateStore{}
 	}
-	if r.ready.Load() {
-		return nil
-	}
-	if err := r.ensureTable(ctx); err != nil {
-		return err
-	}
-	r.ready.Store(true)
-	return nil
-}
-
-func (r AgentStateStore) ensureTable(ctx context.Context) error {
-	statement, args, buildErr := ormbuilder.NewCreateTableBuilder(r.store.SQLRenderer, "agent_runtime_state").IfNotExists().Columns(
-		ormbuilder.DefineColumn("kind", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("state_key", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("workspace_id", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("user_id", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("role_key", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("payload_json", ormbuilder.TextType()).NotNull(),
-		ormbuilder.DefineColumn("updated_at", ormbuilder.BigIntType()).NotNull(),
-	).PrimaryKey("workspace_id", "kind", "state_key").Build()
-	if buildErr != nil {
-		return buildErr
-	}
-	_, err := r.schema.ExecContext(ctx, statement, args...)
-	return err
+	return AgentStateStore{store: store, db: store.DB()}
 }
 
 func (r AgentStateStore) Put(ctx context.Context, workspaceID string, value agentmodel.AgentStateRecord) error {
@@ -67,9 +35,6 @@ func (r AgentStateStore) PutBatch(ctx context.Context, workspaceID string, value
 		return err
 	}
 	workspaceID = workspace.String()
-	if err := r.EnsureSchema(ctx); err != nil {
-		return fmt.Errorf("ensure agent state table: %w", err)
-	}
 	byKey := make(map[string]agentmodel.AgentStateRecord, len(values))
 	order := make([]string, 0, len(values))
 	for _, value := range values {
@@ -119,9 +84,6 @@ func (r AgentStateStore) CompareAndSwap(ctx context.Context, workspaceID string,
 	if strings.TrimSpace(value.WorkspaceID) != workspaceID {
 		return false, fmt.Errorf("agent state workspace %q does not match repository workspace %q", value.WorkspaceID, workspaceID)
 	}
-	if err := r.EnsureSchema(ctx); err != nil {
-		return false, err
-	}
 	statement, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "agent_runtime_state", workspaceID).
 		Set("payload_json", []byte(value.Payload)).Set("updated_at", value.UpdatedAt).Where(ormbuilder.And(
 		ormbuilder.Equal("kind", strings.TrimSpace(value.Kind)),
@@ -148,9 +110,6 @@ func (r AgentStateStore) Get(ctx context.Context, workspaceID, kind, key string)
 		return agentmodel.AgentStateRecord{}, false, err
 	}
 	workspaceID = workspace.String()
-	if err := r.EnsureSchema(ctx); err != nil {
-		return agentmodel.AgentStateRecord{}, false, err
-	}
 	statement, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "agent_runtime_state", workspaceID).
 		Columns("workspace_id", "user_id", "role_key", "payload_json", "updated_at").Where(ormbuilder.And(
 		ormbuilder.Equal("kind", strings.TrimSpace(kind)), ormbuilder.Equal("state_key", strings.TrimSpace(key)),
@@ -177,9 +136,6 @@ func (r AgentStateStore) List(ctx context.Context, workspaceID, kind, userID, ro
 		return nil, err
 	}
 	workspaceID = workspace.String()
-	if err := r.EnsureSchema(ctx); err != nil {
-		return nil, err
-	}
 	predicates := []ormbuilder.Predicate{ormbuilder.Equal("kind", strings.TrimSpace(kind))}
 	for _, filter := range []struct{ column, value string }{{"user_id", userID}, {"role_key", roleKey}} {
 		if strings.TrimSpace(filter.value) == "" {

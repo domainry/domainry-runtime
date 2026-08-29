@@ -104,7 +104,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	}
 	records := recordpersistence.NewRecordStore(store)
 	agentTaskRuns := agentpersistence.NewAgentTaskRunStore(store)
-	if err := ensureAgentRuntimeSchemas(ctx, agentpersistence.NewAgentStateStore(store), agentTaskRuns); err != nil {
+	if err := ensureAgentRuntimeSchemas(ctx, agentpersistence.NewAgentSchemaMigration(store), agentTaskRuns); err != nil {
 		return runtimeServiceAssembly{}, err
 	}
 	workerDependencies = workerplatform.NormalizeDependencies(workerDependencies)
@@ -268,17 +268,12 @@ type agentSchemaOwner interface {
 	EnsureSchema(context.Context) error
 }
 
-func ensureAgentRuntimeSchemas(ctx context.Context, lifecycle, tasks agentSchemaOwner) error {
-	if err := lifecycle.EnsureSchema(ctx); err != nil {
-		return fmt.Errorf("ensure agent lifecycle schema: %w", err)
+func ensureAgentRuntimeSchemas(ctx context.Context, migration agentSchemaOwner, tasks interface{ BackfillWorkerScopes(context.Context) error }) error {
+	if err := migration.EnsureSchema(ctx); err != nil {
+		return fmt.Errorf("ensure agent schema migration: %w", err)
 	}
-	if err := tasks.EnsureSchema(ctx); err != nil {
-		return fmt.Errorf("ensure agent task schema: %w", err)
-	}
-	if backfiller, ok := tasks.(interface{ BackfillWorkerScopes(context.Context) error }); ok {
-		if err := backfiller.BackfillWorkerScopes(ctx); err != nil {
-			return fmt.Errorf("backfill agent task worker scopes: %w", err)
-		}
+	if err := tasks.BackfillWorkerScopes(ctx); err != nil {
+		return fmt.Errorf("backfill agent task worker scopes: %w", err)
 	}
 	return nil
 }

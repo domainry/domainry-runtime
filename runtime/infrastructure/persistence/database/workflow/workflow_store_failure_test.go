@@ -264,20 +264,6 @@ func TestWorkflowStateCommitSuccessfulOptionalWrites(t *testing.T) {
 	}
 }
 
-func TestWorkflowStateCommitAgentSchemaFailure(t *testing.T) {
-	base := openStoreForGeneratedListTest(t)
-	store := NewWorkflowDecisionStore(base)
-	db := openWorkflowScriptedDB(&workflowSQLState{})
-	defer db.Close()
-	store.db = db
-	if err := base.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "workspace", InsertAgentTasks: []transactionmodel.WorkflowAgentTaskCommit{{RunID: "run"}}}); err == nil {
-		t.Fatal("closed Agent schema store accepted")
-	}
-}
-
 func TestWorkflowProcessStoreLimitExtremes(t *testing.T) {
 	taskStore := workflowProcessFailureStore(t, &workflowSQLState{})
 	if _, err := taskStore.ListTasks(t.Context(), "workspace", "", "", "", 501); err != nil {

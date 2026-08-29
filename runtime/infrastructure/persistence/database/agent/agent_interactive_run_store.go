@@ -14,45 +14,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
-func (s *AgentTaskRunStore) ensureInteractiveRunSchema(ctx context.Context) error {
-	if s == nil || s.store == nil || s.db == nil || s.schema == nil {
-		return apperror.New(apperror.KindUnavailable, "agent.interactive.repository_unavailable", nil, nil)
-	}
-	s.interactiveSchemaOnce.Do(func() {
-		s.interactiveSchemaError = s.createInteractiveRunSchema(ctx)
-	})
-	return s.interactiveSchemaError
-}
-
-func (s *AgentTaskRunStore) createInteractiveRunSchema(ctx context.Context) error {
-	statement, args, buildErr := ormbuilder.NewCreateTableBuilder(s.store.SQLRenderer, "agent_interactive_runs").IfNotExists().Columns(
-		ormbuilder.DefineColumn("workspace_id", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("run_id", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("session_id", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("user_id", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("role_key", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("surface", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("status", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("idempotency_key", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("process_id", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("task_run_id", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("payload_json", ormbuilder.TextType()).NotNull(),
-		ormbuilder.DefineColumn("created_at", ormbuilder.BigIntType()).NotNull(),
-		ormbuilder.DefineColumn("updated_at", ormbuilder.BigIntType()).NotNull(),
-	).PrimaryKey("workspace_id", "run_id").Unique("workspace_id", "idempotency_key").Build()
-	if buildErr != nil {
-		return buildErr
-	}
-	if _, err := s.schema.ExecContext(ctx, statement, args...); err != nil {
-		return err
-	}
-	return nil
-}
-
 func (s *AgentTaskRunStore) CreateInteractiveRun(ctx context.Context, run agentmodel.AgentInteractiveRun) (agentmodel.AgentInteractiveRun, bool, error) {
-	if err := s.ensureInteractiveRunSchema(ctx); err != nil {
-		return agentmodel.AgentInteractiveRun{}, false, err
-	}
 	payload, err := json.Marshal(run)
 	if err != nil {
 		return agentmodel.AgentInteractiveRun{}, false, err
@@ -76,9 +38,6 @@ func (s *AgentTaskRunStore) CreateInteractiveRun(ctx context.Context, run agentm
 }
 
 func (s *AgentTaskRunStore) GetInteractiveRun(ctx context.Context, workspaceID, runID string) (agentmodel.AgentInteractiveRun, bool, error) {
-	if err := s.ensureInteractiveRunSchema(ctx); err != nil {
-		return agentmodel.AgentInteractiveRun{}, false, err
-	}
 	statement, args, err := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "agent_interactive_runs", strings.TrimSpace(workspaceID)).
 		Columns("payload_json").Where(ormbuilder.Equal("run_id", strings.TrimSpace(runID))).Limit(1).Build()
 	if err != nil {
@@ -111,9 +70,6 @@ func scanInteractiveRun(row *sql.Row) (agentmodel.AgentInteractiveRun, bool, err
 }
 
 func (s *AgentTaskRunStore) ListInteractiveRuns(ctx context.Context, workspaceID, userID, roleKey string, filter agentrepository.AgentInteractiveRunFilter) ([]agentmodel.AgentInteractiveRun, error) {
-	if err := s.ensureInteractiveRunSchema(ctx); err != nil {
-		return nil, err
-	}
 	predicates := []ormbuilder.Predicate{ormbuilder.Equal("user_id", strings.TrimSpace(userID)), ormbuilder.Equal("role_key", strings.TrimSpace(roleKey))}
 	if len(filter.Statuses) > 0 {
 		values := make([]any, len(filter.Statuses))
@@ -152,9 +108,6 @@ func (s *AgentTaskRunStore) ListInteractiveRuns(ctx context.Context, workspaceID
 }
 
 func (s *AgentTaskRunStore) SaveInteractiveRun(ctx context.Context, run agentmodel.AgentInteractiveRun, expectedRevision int64) (bool, error) {
-	if err := s.ensureInteractiveRunSchema(ctx); err != nil {
-		return false, err
-	}
 	current, found, err := s.GetInteractiveRun(ctx, run.WorkspaceID, run.ID)
 	if err != nil || !found || current.Revision != expectedRevision {
 		return false, err
@@ -179,12 +132,6 @@ func (s *AgentTaskRunStore) SaveInteractiveRun(ctx context.Context, run agentmod
 }
 
 func (s *AgentTaskRunStore) CommitInteractiveTaskHandoff(ctx context.Context, run agentmodel.AgentInteractiveRun, expectedRevision int64, task agentmodel.AgentTaskRun) (agentmodel.AgentInteractiveRun, bool, error) {
-	if err := s.ensureInteractiveRunSchema(ctx); err != nil {
-		return agentmodel.AgentInteractiveRun{}, false, err
-	}
-	if err := s.EnsureSchema(ctx); err != nil {
-		return agentmodel.AgentInteractiveRun{}, false, err
-	}
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return agentmodel.AgentInteractiveRun{}, false, err

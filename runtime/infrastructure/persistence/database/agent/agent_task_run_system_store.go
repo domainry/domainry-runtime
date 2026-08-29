@@ -15,9 +15,6 @@ func (s *AgentTaskRunStore) ListAgentTaskRunsForWorker(ctx context.Context, scop
 	if err := requireAgentTaskWorkerScope(scope); err != nil {
 		return nil, err
 	}
-	if err := s.EnsureSchema(ctx); err != nil {
-		return nil, err
-	}
 	limit := filter.Limit
 	if limit <= 0 || limit > 500 {
 		limit = 100
@@ -55,9 +52,6 @@ func (s *AgentTaskRunStore) ListAgentTaskRunsForWorker(ctx context.Context, scop
 
 func (s *AgentTaskRunStore) ClaimNextAgentTaskRunForWorker(ctx context.Context, scope principalmodel.SystemScope, owner string, now time.Time, duration time.Duration) (agentrepository.AgentTaskClaim, bool, error) {
 	if err := requireAgentTaskWorkerScope(scope); err != nil {
-		return agentrepository.AgentTaskClaim{}, false, err
-	}
-	if err := s.EnsureSchema(ctx); err != nil {
 		return agentrepository.AgentTaskClaim{}, false, err
 	}
 	workspaces, err := s.store.WorkerQueueScopePage(ctx, s.db, agentTaskWorkerQueueKind, 64)

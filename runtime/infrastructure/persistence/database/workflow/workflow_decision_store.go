@@ -136,11 +136,6 @@ func (r WorkflowDecisionStore) CommitWorkflowState(ctx context.Context, commit t
 	if err != nil {
 		return err
 	}
-	if len(commit.InsertAgentTasks) > 0 {
-		if err := agentpersistence.NewAgentTaskRunStore(r.store).EnsureSchema(ctx); err != nil {
-			return err
-		}
-	}
 	tx, err := r.database().BeginTx(ctx, recordMutationTxOptions())
 	if err != nil {
 		return fmt.Errorf("begin workflow state commit: %w", err)
