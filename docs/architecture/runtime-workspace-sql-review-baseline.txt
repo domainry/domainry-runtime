@@ -1,10 +1,5 @@
 # Exact reviewed hashes for legacy or explicitly system-scoped SQL statements.
 # New entries are forbidden unless the statement receives explicit architecture review.
-runtime/infrastructure/persistence/database/action/action_business_execution_store.go|business_action_executions|114b62c30bf591eb
-runtime/infrastructure/persistence/database/action/action_business_execution_store.go|business_action_executions|32791909af3cf482
-runtime/infrastructure/persistence/database/action/action_business_execution_store.go|business_action_executions|34d7771de8211779
-runtime/infrastructure/persistence/database/action/action_business_execution_store.go|business_action_executions|5611d102b434002c
-runtime/infrastructure/persistence/database/action/action_business_execution_store.go|business_action_executions|984a0e45f4f1b293
 runtime/infrastructure/persistence/database/audit/audit_store.go|_audit_events|efbfd40c59992314
 runtime/infrastructure/persistence/database/automation/automation_execution_store.go|automation_rule_executions|8b18c3e0adb40928
 runtime/infrastructure/persistence/database/integration/integration_config_store.go|integration_webhook_subscriptions|0c7e14239dab98a0

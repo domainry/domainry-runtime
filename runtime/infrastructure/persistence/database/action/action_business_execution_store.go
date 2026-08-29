@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -74,7 +75,11 @@ func (r ActionBusinessExecutionStore) tryBeginExecutionOnce(ctx context.Context,
 	value.LeaseExpiresAt = now.Add(request.LeaseTTL).Format(time.RFC3339Nano)
 	value.CreatedAt, value.UpdatedAt = now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)
 	columns := actionExecutionColumns()
-	_, insertErr := r.db.ExecContext(ctx, "INSERT INTO "+r.store.TableIdentifier("business_action_executions")+" ("+stringsJoinIdentifiers(r.store, columns...)+") VALUES ("+stringsJoinPlaceholders(r.store, len(columns))+")", actionExecutionValues(value, "{}")...)
+	insertQuery, insertArgs, buildErr := ormbuilder.NewInsertBuilder(r.store.SQLRenderer, "business_action_executions").Columns(columns...).Values(actionExecutionValues(value, "{}")...).Build()
+	if buildErr != nil {
+		return actionmodel.ActionExecutionClaimResult{}, fmt.Errorf("build business action execution insert: %w", buildErr)
+	}
+	_, insertErr := r.db.ExecContext(ctx, insertQuery, insertArgs...)
 	if insertErr == nil {
 		r.store.ObserveIdempotency(ctx, value.WorkspaceID, "action.execute", idempotency.OutcomeAcquired)
 		return actionmodel.ActionExecutionClaimResult{Decision: idempotency.DecisionAcquired, Execution: value}, nil
@@ -91,8 +96,22 @@ func (r ActionBusinessExecutionStore) tryBeginExecutionOnce(ctx context.Context,
 		r.store.ObserveIdempotency(ctx, value.WorkspaceID, "action.execute", idempotency.OutcomeForDecision(decision, false))
 		return actionmodel.ActionExecutionClaimResult{Decision: decision, Execution: current}, nil
 	}
-	query := "UPDATE " + r.store.TableIdentifier("business_action_executions") + " SET " + r.store.Identifier("status") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(2) + ", " + r.store.Identifier("lease_expires_at") + " = " + r.store.Placeholder(3) + ", " + r.store.Identifier("fencing_token") + " = " + r.store.Identifier("fencing_token") + " + 1, " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(4) + " WHERE " + r.store.Identifier("id") + " = " + r.store.Placeholder(5) + " AND " + r.store.Identifier("request_fingerprint") + " = " + r.store.Placeholder(6) + " AND ((" + r.store.Identifier("status") + " = " + r.store.Placeholder(7) + " AND " + r.store.Identifier("lease_expires_at") + " <= " + r.store.Placeholder(8) + ") OR " + r.store.Identifier("status") + " = " + r.store.Placeholder(9) + ")"
-	result, err := r.db.ExecContext(ctx, query, string(idempotency.StatusProcessing), value.LeaseOwner, value.LeaseExpiresAt, value.UpdatedAt, value.ID, value.RequestFingerprint, string(idempotency.StatusProcessing), now.Format(time.RFC3339Nano), string(idempotency.StatusFailedRetryable))
+	query, args, buildErr := ormbuilder.NewUpdateBuilder(r.store.SQLRenderer, "business_action_executions").
+		Set("status", string(idempotency.StatusProcessing)).Set("lease_owner", value.LeaseOwner).
+		Set("lease_expires_at", value.LeaseExpiresAt).
+		SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).
+		Set("updated_at", value.UpdatedAt).
+		Where(ormbuilder.And(
+			ormbuilder.Equal("id", value.ID), ormbuilder.Equal("request_fingerprint", value.RequestFingerprint),
+			ormbuilder.Or(
+				ormbuilder.And(ormbuilder.Equal("status", string(idempotency.StatusProcessing)), ormbuilder.LessThanOrEqual("lease_expires_at", now.Format(time.RFC3339Nano))),
+				ormbuilder.Equal("status", string(idempotency.StatusFailedRetryable)),
+			),
+		)).Build()
+	if buildErr != nil {
+		return actionmodel.ActionExecutionClaimResult{}, fmt.Errorf("build business action reclaim: %w", buildErr)
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return actionmodel.ActionExecutionClaimResult{}, err
 	}
@@ -139,8 +158,12 @@ func (r ActionBusinessExecutionStore) waitForExecutionByScope(ctx context.Contex
 }
 
 func (r ActionBusinessExecutionStore) HeartbeatExecution(ctx context.Context, executionID, leaseOwner string, fencingToken int64, expiresAt, now time.Time) error {
-	query := "UPDATE " + r.store.TableIdentifier("business_action_executions") + " SET " + r.store.Identifier("lease_expires_at") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(2) + " WHERE " + r.store.Identifier("id") + " = " + r.store.Placeholder(3) + " AND " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(4) + " AND " + r.store.Identifier("fencing_token") + " = " + r.store.Placeholder(5) + " AND " + r.store.Identifier("status") + " = " + r.store.Placeholder(6)
-	result, err := r.db.ExecContext(ctx, query, expiresAt.UTC().Format(time.RFC3339Nano), now.UTC().Format(time.RFC3339Nano), executionID, strings.TrimSpace(leaseOwner), fencingToken, string(idempotency.StatusProcessing))
+	query, args, err := actionExecutionLeaseUpdate(r.store, executionID, leaseOwner, fencingToken).
+		Set("lease_expires_at", expiresAt.UTC().Format(time.RFC3339Nano)).Set("updated_at", now.UTC().Format(time.RFC3339Nano)).Build()
+	if err != nil {
+		return fmt.Errorf("build business action heartbeat: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	return r.actionLeaseMutationResult(ctx, result, err, executionID)
 }
 
@@ -160,8 +183,11 @@ func (r ActionBusinessExecutionStore) CompleteExecution(ctx context.Context, com
 			status = idempotency.StatusFailedRetryable
 		}
 	}
-	query := "UPDATE " + r.store.TableIdentifier("business_action_executions") + " SET " + r.store.Identifier("status") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("result_json") + " = " + r.store.Placeholder(2) + ", " + r.store.Identifier("response_status") + " = " + r.store.Placeholder(3) + ", " + r.store.Identifier("error_code") + " = " + r.store.Placeholder(4) + ", " + r.store.Identifier("expires_at") + " = " + r.store.Placeholder(5) + ", " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(6) + " WHERE " + r.store.Identifier("id") + " = " + r.store.Placeholder(7) + " AND " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(8) + " AND " + r.store.Identifier("fencing_token") + " = " + r.store.Placeholder(9) + " AND " + r.store.Identifier("status") + " = " + r.store.Placeholder(10)
-	result, err := r.db.ExecContext(ctx, query, string(status), string(resultJSON), completion.ResponseStatus, strings.TrimSpace(completion.ErrorCode), completion.ExpiresAt.UTC().Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), completion.ExecutionID, strings.TrimSpace(completion.LeaseOwner), completion.FencingToken, string(idempotency.StatusProcessing))
+	query, args, err := actionExecutionCompletionUpdate(r.store, completion, status, string(resultJSON), now)
+	if err != nil {
+		return actionmodel.ActionBusinessExecution{}, err
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err := r.actionLeaseMutationResult(ctx, result, err, completion.ExecutionID); err != nil {
 		return actionmodel.ActionBusinessExecution{}, err
 	}
@@ -261,8 +287,11 @@ func (t *actionExecutionTransaction) Commit(ctx context.Context, commits []trans
 			status = idempotency.StatusFailedRetryable
 		}
 	}
-	query := "UPDATE " + t.owner.store.TableIdentifier("business_action_executions") + " SET " + t.owner.store.Identifier("status") + " = " + t.owner.store.Placeholder(1) + ", " + t.owner.store.Identifier("result_json") + " = " + t.owner.store.Placeholder(2) + ", " + t.owner.store.Identifier("response_status") + " = " + t.owner.store.Placeholder(3) + ", " + t.owner.store.Identifier("error_code") + " = " + t.owner.store.Placeholder(4) + ", " + t.owner.store.Identifier("expires_at") + " = " + t.owner.store.Placeholder(5) + ", " + t.owner.store.Identifier("updated_at") + " = " + t.owner.store.Placeholder(6) + " WHERE " + t.owner.store.Identifier("id") + " = " + t.owner.store.Placeholder(7) + " AND " + t.owner.store.Identifier("lease_owner") + " = " + t.owner.store.Placeholder(8) + " AND " + t.owner.store.Identifier("fencing_token") + " = " + t.owner.store.Placeholder(9) + " AND " + t.owner.store.Identifier("status") + " = " + t.owner.store.Placeholder(10)
-	result, err := t.executor.ExecContext(ctx, query, string(status), string(resultJSON), completion.ResponseStatus, strings.TrimSpace(completion.ErrorCode), completion.ExpiresAt.UTC().Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), completion.ExecutionID, strings.TrimSpace(completion.LeaseOwner), completion.FencingToken, string(idempotency.StatusProcessing))
+	query, args, err := actionExecutionCompletionUpdate(t.owner.store, completion, status, string(resultJSON), now)
+	if err != nil {
+		return actionmodel.ActionBusinessExecution{}, err
+	}
+	result, err := t.executor.ExecContext(ctx, query, args...)
 	if err != nil {
 		return actionmodel.ActionBusinessExecution{}, database.MutationTransactionError(err, "business_action_execution", completion.ExecutionID)
 	}
@@ -309,8 +338,14 @@ func (t *actionExecutionTransaction) commitSQL(ctx context.Context) error {
 }
 
 func (r ActionBusinessExecutionStore) findExecutionByScope(ctx context.Context, workspaceID, objectKey, recordID, actionKey, idempotencyKey string) (actionmodel.ActionBusinessExecution, bool, error) {
-	query := "SELECT " + stringsJoinIdentifiers(r.store, actionExecutionColumns()...) + " FROM " + r.store.TableIdentifier("business_action_executions") + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1) + " AND " + r.store.Identifier("object_key") + " = " + r.store.Placeholder(2) + " AND " + r.store.Identifier("record_id") + " = " + r.store.Placeholder(3) + " AND " + r.store.Identifier("action_key") + " = " + r.store.Placeholder(4) + " AND " + r.store.Identifier("idempotency_key") + " = " + r.store.Placeholder(5) + " LIMIT 1"
-	value, err := actionScanBusinessActionExecution(r.db.QueryRowContext(ctx, query, workspaceID, objectKey, recordID, actionKey, idempotencyKey))
+	query, args, err := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "business_action_executions").Columns(actionExecutionColumns()...).Where(ormbuilder.And(
+		ormbuilder.Equal("workspace_id", workspaceID), ormbuilder.Equal("object_key", objectKey), ormbuilder.Equal("record_id", recordID),
+		ormbuilder.Equal("action_key", actionKey), ormbuilder.Equal("idempotency_key", idempotencyKey),
+	)).Limit(1).Build()
+	if err != nil {
+		return actionmodel.ActionBusinessExecution{}, false, err
+	}
+	value, err := actionScanBusinessActionExecution(r.db.QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return actionmodel.ActionBusinessExecution{}, false, nil
 	}
@@ -318,8 +353,25 @@ func (r ActionBusinessExecutionStore) findExecutionByScope(ctx context.Context, 
 }
 
 func (r ActionBusinessExecutionStore) findExecutionByID(ctx context.Context, executionID string) (actionmodel.ActionBusinessExecution, error) {
-	query := "SELECT " + stringsJoinIdentifiers(r.store, actionExecutionColumns()...) + " FROM " + r.store.TableIdentifier("business_action_executions") + " WHERE " + r.store.Identifier("id") + " = " + r.store.Placeholder(1) + " LIMIT 1"
-	return actionScanBusinessActionExecution(r.db.QueryRowContext(ctx, query, executionID))
+	query, args, err := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "business_action_executions").Columns(actionExecutionColumns()...).Where(ormbuilder.Equal("id", executionID)).Limit(1).Build()
+	if err != nil {
+		return actionmodel.ActionBusinessExecution{}, err
+	}
+	return actionScanBusinessActionExecution(r.db.QueryRowContext(ctx, query, args...))
+}
+
+func actionExecutionLeaseUpdate(store *database.RuntimeStore, executionID, leaseOwner string, fencingToken int64) *ormbuilder.UpdateBuilder {
+	return ormbuilder.NewUpdateBuilder(store.SQLRenderer, "business_action_executions").Where(ormbuilder.And(
+		ormbuilder.Equal("id", executionID), ormbuilder.Equal("lease_owner", strings.TrimSpace(leaseOwner)),
+		ormbuilder.Equal("fencing_token", fencingToken), ormbuilder.Equal("status", string(idempotency.StatusProcessing)),
+	))
+}
+
+func actionExecutionCompletionUpdate(store *database.RuntimeStore, completion actionmodel.ActionExecutionCompletion, status idempotency.Status, resultJSON string, now time.Time) (string, []any, error) {
+	return actionExecutionLeaseUpdate(store, completion.ExecutionID, completion.LeaseOwner, completion.FencingToken).
+		Set("status", string(status)).Set("result_json", resultJSON).Set("response_status", completion.ResponseStatus).
+		Set("error_code", strings.TrimSpace(completion.ErrorCode)).Set("expires_at", completion.ExpiresAt.UTC().Format(time.RFC3339Nano)).
+		Set("updated_at", now.Format(time.RFC3339Nano)).Build()
 }
 
 func actionExecutionColumns() []string {
@@ -379,22 +431,6 @@ func integrationWorkspaceID(value string) string {
 		return value
 	}
 	return "default"
-}
-
-func stringsJoinIdentifiers(store *database.RuntimeStore, columns ...string) string {
-	values := make([]string, 0, len(columns))
-	for _, column := range columns {
-		values = append(values, store.Identifier(column))
-	}
-	return strings.Join(values, ", ")
-}
-
-func stringsJoinPlaceholders(store *database.RuntimeStore, count int) string {
-	values := make([]string, 0, count)
-	for position := 1; position <= count; position++ {
-		values = append(values, store.Placeholder(position))
-	}
-	return strings.Join(values, ", ")
 }
 
 func nonNilMap(value map[string]any) map[string]any {

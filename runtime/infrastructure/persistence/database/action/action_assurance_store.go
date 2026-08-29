@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
@@ -24,7 +25,10 @@ func (s ActionAssuranceStore) SaveActionAssuranceGrant(ctx context.Context, gran
 	methods, _ := json.Marshal(grant.Methods)
 	columns := []string{"id", "token_hash", "workspace_id", "user_id", "action_key", "object_key", "record_id", "payload_digest", "methods_json", "approval_version", "approval_hash", "issued_at", "expires_at", "consumed_at"}
 	values := []any{grant.ID, grant.TokenHash, grant.WorkspaceID, grant.UserID, grant.ActionKey, grant.ObjectKey, grant.RecordID, grant.PayloadDigest, string(methods), grant.ApprovalVersion, grant.ApprovalHash, grant.IssuedAt, grant.ExpiresAt, grant.ConsumedAt}
-	_, err := s.db.ExecContext(ctx, s.store.InsertStatement("action_assurance_grants", columns), values...)
+	query, args, err := ormbuilder.NewInsertBuilder(s.store.SQLRenderer, "action_assurance_grants").Columns(columns...).Values(values...).Build()
+	if err == nil {
+		_, err = s.db.ExecContext(ctx, query, args...)
+	}
 	if err != nil {
 		return fmt.Errorf("save action assurance grant: %w", err)
 	}
@@ -33,10 +37,13 @@ func (s ActionAssuranceStore) SaveActionAssuranceGrant(ctx context.Context, gran
 
 func (s ActionAssuranceStore) GetActionAssuranceGrant(ctx context.Context, id string) (actionmodel.ActionAssuranceGrant, bool, error) {
 	columns := []string{"id", "token_hash", "workspace_id", "user_id", "action_key", "object_key", "record_id", "payload_digest", "methods_json", "approval_version", "approval_hash", "issued_at", "expires_at", "consumed_at"}
-	query := "SELECT " + assuranceJoinIdentifiers(s.store, columns) + " FROM " + s.store.TableIdentifier("action_assurance_grants") + " WHERE " + s.store.Identifier("id") + " = " + s.store.Placeholder(1)
+	query, args, err := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "action_assurance_grants").Columns(columns...).Where(ormbuilder.Equal("id", id)).Build()
+	if err != nil {
+		return actionmodel.ActionAssuranceGrant{}, false, fmt.Errorf("build action assurance lookup: %w", err)
+	}
 	var grant actionmodel.ActionAssuranceGrant
 	var methods string
-	err := s.db.QueryRowContext(ctx, query, id).Scan(&grant.ID, &grant.TokenHash, &grant.WorkspaceID, &grant.UserID, &grant.ActionKey, &grant.ObjectKey, &grant.RecordID, &grant.PayloadDigest, &methods, &grant.ApprovalVersion, &grant.ApprovalHash, &grant.IssuedAt, &grant.ExpiresAt, &grant.ConsumedAt)
+	err = s.db.QueryRowContext(ctx, query, args...).Scan(&grant.ID, &grant.TokenHash, &grant.WorkspaceID, &grant.UserID, &grant.ActionKey, &grant.ObjectKey, &grant.RecordID, &grant.PayloadDigest, &methods, &grant.ApprovalVersion, &grant.ApprovalHash, &grant.IssuedAt, &grant.ExpiresAt, &grant.ConsumedAt)
 	if err == sql.ErrNoRows {
 		return actionmodel.ActionAssuranceGrant{}, false, nil
 	}
@@ -51,8 +58,13 @@ func (s ActionAssuranceStore) GetActionAssuranceGrant(ctx context.Context, id st
 
 func (s ActionAssuranceStore) ConsumeActionAssuranceGrant(ctx context.Context, id string, now time.Time) (bool, error) {
 	value := now.UTC().Format(time.RFC3339Nano)
-	query := "UPDATE " + s.store.TableIdentifier("action_assurance_grants") + " SET " + s.store.Identifier("consumed_at") + " = " + s.store.Placeholder(1) + " WHERE " + s.store.Identifier("id") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("consumed_at") + " = '' AND " + s.store.Identifier("expires_at") + " > " + s.store.Placeholder(3)
-	result, err := s.db.ExecContext(ctx, query, value, id, value)
+	query, args, err := ormbuilder.NewUpdateBuilder(s.store.SQLRenderer, "action_assurance_grants").Set("consumed_at", value).Where(ormbuilder.And(
+		ormbuilder.Equal("id", id), ormbuilder.Equal("consumed_at", ""), ormbuilder.GreaterThan("expires_at", value),
+	)).Build()
+	if err != nil {
+		return false, fmt.Errorf("build action assurance consume: %w", err)
+	}
+	result, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return false, fmt.Errorf("consume action assurance grant: %w", err)
 	}
@@ -61,15 +73,4 @@ func (s ActionAssuranceStore) ConsumeActionAssuranceGrant(ctx context.Context, i
 		return false, fmt.Errorf("inspect action assurance consume: %w", err)
 	}
 	return affected == 1, nil
-}
-
-func assuranceJoinIdentifiers(store *database.RuntimeStore, values []string) string {
-	result := ""
-	for index, value := range values {
-		if index > 0 {
-			result += ", "
-		}
-		result += store.Identifier(value)
-	}
-	return result
 }
