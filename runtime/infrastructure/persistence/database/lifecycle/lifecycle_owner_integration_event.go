@@ -3,12 +3,16 @@ package lifecycle
 import (
 	"context"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 )
 
 func (e OwnerExecutor) archiveIntegrationEventMappingIntents(ctx context.Context, job lifecyclemodel.CleanupJob, policy lifecyclemodel.PolicyVersion, eventID string, purge bool) (int64, int64, error) {
-	query := "SELECT " + e.store.Identifier("id") + " FROM " + e.store.TableIdentifier("integration_event_mapping_intents") + " WHERE " + e.store.Identifier("workspace_id") + " = " + e.store.Placeholder(1) + " AND " + e.store.Identifier("event_id") + " = " + e.store.Placeholder(2)
-	rows, err := e.database().QueryContext(ctx, query, job.WorkspaceID, eventID)
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(e.store.SQLRenderer, "integration_event_mapping_intents", job.WorkspaceID).Columns("id").Where(ormbuilder.Equal("event_id", eventID)).Build()
+	if buildErr != nil {
+		return 0, 0, buildErr
+	}
+	rows, err := e.database().QueryContext(ctx, query, args...)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -40,7 +44,11 @@ func (e OwnerExecutor) archiveIntegrationEventMappingIntents(ctx context.Context
 	if !purge || len(ids) == 0 {
 		return archived, 0, nil
 	}
-	result, err := e.database().ExecContext(ctx, "DELETE FROM "+e.store.TableIdentifier("integration_event_mapping_intents")+" WHERE "+e.store.Identifier("workspace_id")+" = "+e.store.Placeholder(1)+" AND "+e.store.Identifier("event_id")+" = "+e.store.Placeholder(2), job.WorkspaceID, eventID)
+	query, args, buildErr = ormbuilder.NewWorkspaceDeleteBuilder(e.store.SQLRenderer, "integration_event_mapping_intents", job.WorkspaceID).Where(ormbuilder.Equal("event_id", eventID)).Build()
+	if buildErr != nil {
+		return archived, 0, buildErr
+	}
+	result, err := e.database().ExecContext(ctx, query, args...)
 	if err != nil {
 		return archived, 0, err
 	}
