@@ -219,8 +219,8 @@ func TestActionExecutorsReturnCanonicalPlansToRuntimeOwnedUnitOfWork(t *testing.
 		"runtime/infrastructure/persistence/database/action/action_business_execution_store.go": {
 			"BeginExecutionTransaction", "profile.BeginWrite(ctx, r.db)", "WithActionExecutionTransaction",
 		},
-		"runtime/infrastructure/persistence/database/record/record_store.go": {
-			"actionExecutionTransaction(ctx)", "RecordQueryLockForUpdate", "FOR UPDATE",
+		"runtime/infrastructure/persistence/database/record/record_query_store.go": {
+			"actionExecutionTransaction(ctx)", "RecordQueryLockForUpdate", "ApplyClaimLock",
 		},
 		"internal/controlplane/domaincodegen/templates/query_object.go.tmpl": {
 			"GetForUpdate", "runtimeext.QueryGetForUpdate",

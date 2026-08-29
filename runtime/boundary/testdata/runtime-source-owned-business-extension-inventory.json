@@ -191,7 +191,7 @@
       "replacement": "Database uniqueness and constraint conflict mapping remain authoritative concurrency and invariant enforcement.",
       "evidence": [
         {"path": "runtime/infrastructure/persistence/database/schema/index.go", "token": "func CreateIndexIfMissing"},
-        {"path": "runtime/infrastructure/persistence/database/record/record_store.go", "token": "mutation.MutationConflictUnique"}
+        {"path": "runtime/infrastructure/persistence/database/record/record_mutation_commit.go", "token": "mutation.MutationConflictUnique"}
       ]
     },
     {
