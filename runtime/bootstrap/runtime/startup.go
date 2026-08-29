@@ -17,6 +17,7 @@ import (
 	partymodulehost "github.com/domainry/domainry-party-sdk/modulehost"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 	schedulermodulehost "github.com/domainry/domainry-scheduler-sdk/modulehost"
+	schedulersaashost "github.com/domainry/domainry-scheduler-sdk/saashost"
 	"go.uber.org/zap"
 
 	"github.com/domainry/domainry-foundation/apperror"
@@ -391,8 +392,11 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	var schedulerBinding schedulersdk.Binding
 	if schedulerFactory != nil {
 		application := schedulersdk.ApplicationRef{RuntimeID: cfg.RuntimeInstanceID}
+		host := composition.NewSchedulerSDKModuleHost(records.Applications().Scheduler, records.Applications().Integrations)
 		if moduleFactory, ok := schedulerFactory.(schedulermodulehost.Factory); ok {
-			schedulerBinding, err = moduleFactory.OpenModule(ctx, application, composition.NewSchedulerSDKModuleHost(records.Applications().Scheduler, records.Applications().Integrations))
+			schedulerBinding, err = moduleFactory.OpenModule(ctx, application, host)
+		} else if saasFactory, ok := schedulerFactory.(schedulersaashost.Factory); ok {
+			schedulerBinding, err = saasFactory.OpenSaaS(ctx, application, host)
 		} else {
 			schedulerBinding, err = schedulerFactory.Open(ctx, application)
 		}
