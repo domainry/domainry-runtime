@@ -24,6 +24,8 @@ import (
 	notificationmodule "github.com/domainry/domainry-notification/module"
 	partymodule "github.com/domainry/domainry-party/module"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
+	schedulermodule "github.com/domainry/domainry-scheduler/module"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/requestcontext"
@@ -210,6 +212,22 @@ func TestProjectRuntimeOpensMonitoringModuleAndSaaSBindings(t *testing.T) {
 		t.Fatalf("saas metrics=%#v", metrics)
 	}
 	if err := saasRuntime.CloseContext(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestProjectRuntimeOpensExtractedSchedulerModuleBinding(t *testing.T) {
+	handlers := runtimeext.NewBusinessHandlerRegistry()
+	handlers.Freeze()
+	connectors := connector.NewRegistry()
+	connectors.Freeze()
+	cfg := bootstrapTestConfig(t)
+	cfg.RuntimeInstanceID = "scheduler-runtime"
+	runtime := NewProjectWithOwnerFactoriesAndDatabase(t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), nil, schedulermodule.NewFactory(schedulermodule.Options{}), nil)
+	if runtime.schedulerBinding == nil || runtime.schedulerBinding.Descriptor().Mode != schedulersdk.DeploymentModeModule {
+		t.Fatalf("scheduler binding=%#v", runtime.schedulerBinding)
+	}
+	if err := runtime.CloseContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
