@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -353,20 +354,19 @@ func backfillWorkerQueueScopes(ctx context.Context, s Store, queueKind, table st
 	for _, value := range values {
 		digest := sha256.Sum256([]byte(queueKind + "\x00" + value.workspaceID))
 		id := "worker_scope:" + hex.EncodeToString(digest[:12])
-		insert := "INSERT INTO " + s.TableIdentifier("runtime_worker_queue_scopes") + " (" + s.Identifier("id") + ", " + s.Identifier("queue_kind") + ", " + s.Identifier("scope_key") + ", " + s.Identifier("updated_at") + ") VALUES (" + s.Placeholder(1) + ", " + s.Placeholder(2) + ", " + s.Placeholder(3) + ", " + s.Placeholder(4) + ")"
-		if s.Driver() == "mysql" {
-			insert += " ON DUPLICATE KEY UPDATE " + s.Identifier("updated_at") + " = VALUES(" + s.Identifier("updated_at") + ")"
-		} else {
-			insert += " ON CONFLICT DO NOTHING"
+		insert := ormbuilder.NewInsertBuilder(s.RuntimeRenderer(), "runtime_worker_queue_scopes").
+			Columns("id", "queue_kind", "scope_key", "updated_at").
+			Values(id, queueKind, value.workspaceID, value.updatedAt)
+		insert, err = s.RuntimeProfile().ApplyUpsert(insert, []string{"queue_kind", "scope_key"}, ormbuilder.Assign("updated_at", value.updatedAt))
+		if err != nil {
+			return fmt.Errorf("build %s worker queue scope upsert: %w", queueKind, err)
 		}
-		if _, err := s.SchemaDB().ExecContext(ctx, insert, id, queueKind, value.workspaceID, value.updatedAt); err != nil {
+		statement, arguments, err := insert.Build()
+		if err != nil {
+			return fmt.Errorf("build %s worker queue scope upsert: %w", queueKind, err)
+		}
+		if _, err := s.SchemaDB().ExecContext(ctx, statement, arguments...); err != nil {
 			return fmt.Errorf("backfill %s worker queue scope: %w", queueKind, err)
-		}
-		if s.Driver() != "mysql" {
-			update := "UPDATE " + s.TableIdentifier("runtime_worker_queue_scopes") + " SET " + s.Identifier("updated_at") + " = " + s.Placeholder(1) + " WHERE " + s.Identifier("queue_kind") + " = " + s.Placeholder(2) + " AND " + s.Identifier("scope_key") + " = " + s.Placeholder(3)
-			if _, err := s.SchemaDB().ExecContext(ctx, update, value.updatedAt, queueKind, value.workspaceID); err != nil {
-				return fmt.Errorf("refresh %s worker queue scope: %w", queueKind, err)
-			}
 		}
 	}
 	return nil
