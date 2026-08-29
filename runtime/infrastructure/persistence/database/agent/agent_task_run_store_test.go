@@ -74,10 +74,7 @@ func TestAgentTaskRunBackfillWorkerScopesDoesNotBlockSingleConnection(t *testing
 	for index, workspaceID := range []string{"workspace-a", "workspace-b"} {
 		run := agentTaskRunFixture(now.Add(time.Duration(index)*time.Second), fmt.Sprintf("run-%d", index), fmt.Sprintf("idem-%d", index))
 		run.WorkspaceID = workspaceID
-		if _, err := repository.db.ExecContext(t.Context(),
-			"INSERT INTO "+repository.store.TableIdentifier("agent_task_runs")+" ("+repository.agentTaskColumns()+") VALUES ("+repository.placeholders(13)+")",
-			run.WorkspaceID, run.ID, run.IdempotencyKey, run.TaskKey, run.ProcessID, string(run.Status), "", int64(0), int64(0), timeMillis(run.NextAttemptAt), []byte(`{}`), run.CreatedAt.UnixMilli(), run.UpdatedAt.UnixMilli(),
-		); err != nil {
+		if _, _, err := repository.Create(t.Context(), run); err != nil {
 			t.Fatal(err)
 		}
 	}

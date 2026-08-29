@@ -10,6 +10,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/requestcontext"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -78,8 +79,12 @@ func (s *AgentTaskRunStore) Create(ctx context.Context, run agentmodel.AgentTask
 	if err != nil {
 		return agentmodel.AgentTaskRun{}, false, err
 	}
-	query := "INSERT INTO " + s.store.TableIdentifier("agent_task_runs") + " (" + s.agentTaskColumns() + ") VALUES (" + s.placeholders(13) + ")"
-	_, err = s.db.ExecContext(ctx, query, run.WorkspaceID, run.ID, run.IdempotencyKey, run.TaskKey, run.ProcessID, string(run.Status), "", int64(0), int64(0), timeMillis(run.NextAttemptAt), payload, run.CreatedAt.UnixMilli(), run.UpdatedAt.UnixMilli())
+	statement, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "agent_task_runs", run.WorkspaceID).
+		Columns(agentTaskRunColumns()...).Values(run.ID, run.IdempotencyKey, run.TaskKey, run.ProcessID, string(run.Status), "", int64(0), int64(0), timeMillis(run.NextAttemptAt), payload, run.CreatedAt.UnixMilli(), run.UpdatedAt.UnixMilli()).Build()
+	if buildErr != nil {
+		return agentmodel.AgentTaskRun{}, false, buildErr
+	}
+	_, err = s.db.ExecContext(ctx, statement, args...)
 	if err == nil {
 		if registerErr := RegisterAgentTaskWorkerScope(ctx, s.store, s.db, run.WorkspaceID, run.UpdatedAt); registerErr != nil {
 			return agentmodel.AgentTaskRun{}, false, registerErr
@@ -97,13 +102,21 @@ func (s *AgentTaskRunStore) Create(ctx context.Context, run agentmodel.AgentTask
 }
 
 func (s *AgentTaskRunStore) Get(ctx context.Context, workspaceID, runID string) (agentmodel.AgentTaskRun, bool, error) {
-	query := "SELECT " + s.store.Identifier("payload_json") + " FROM " + s.store.TableIdentifier("agent_task_runs") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("run_id") + " = " + s.store.Placeholder(2)
-	return s.scanRun(s.db.QueryRowContext(ctx, query, strings.TrimSpace(workspaceID), strings.TrimSpace(runID)))
+	statement, args, err := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "agent_task_runs", strings.TrimSpace(workspaceID)).
+		Columns("payload_json").Where(ormbuilder.Equal("run_id", strings.TrimSpace(runID))).Limit(1).Build()
+	if err != nil {
+		return agentmodel.AgentTaskRun{}, false, err
+	}
+	return s.scanRun(s.db.QueryRowContext(ctx, statement, args...))
 }
 
 func (s *AgentTaskRunStore) getByIdempotency(ctx context.Context, workspaceID, key string) (agentmodel.AgentTaskRun, bool, error) {
-	query := "SELECT " + s.store.Identifier("payload_json") + " FROM " + s.store.TableIdentifier("agent_task_runs") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("idempotency_key") + " = " + s.store.Placeholder(2)
-	return s.scanRun(s.db.QueryRowContext(ctx, query, workspaceID, key))
+	statement, args, err := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "agent_task_runs", workspaceID).
+		Columns("payload_json").Where(ormbuilder.Equal("idempotency_key", key)).Limit(1).Build()
+	if err != nil {
+		return agentmodel.AgentTaskRun{}, false, err
+	}
+	return s.scanRun(s.db.QueryRowContext(ctx, statement, args...))
 }
 
 type rowScanner interface{ Scan(...any) error }
@@ -123,29 +136,33 @@ func (s *AgentTaskRunStore) scanRun(row rowScanner) (agentmodel.AgentTaskRun, bo
 }
 
 func (s *AgentTaskRunStore) List(ctx context.Context, workspaceID string, filter agentrepository.AgentTaskRunFilter) ([]agentmodel.AgentTaskRun, error) {
-	where, args := []string{s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1)}, []any{strings.TrimSpace(workspaceID)}
+	predicates := []ormbuilder.Predicate{}
 	if filter.ProcessID != "" {
-		args = append(args, strings.TrimSpace(filter.ProcessID))
-		where = append(where, s.store.Identifier("process_id")+" = "+s.store.Placeholder(len(args)))
+		predicates = append(predicates, ormbuilder.Equal("process_id", strings.TrimSpace(filter.ProcessID)))
 	}
 	if filter.TaskKey != "" {
-		args = append(args, strings.TrimSpace(filter.TaskKey))
-		where = append(where, s.store.Identifier("task_key")+" = "+s.store.Placeholder(len(args)))
+		predicates = append(predicates, ormbuilder.Equal("task_key", strings.TrimSpace(filter.TaskKey)))
 	}
 	if len(filter.Statuses) > 0 {
-		values := []string{}
-		for _, status := range filter.Statuses {
-			args = append(args, string(status))
-			values = append(values, s.store.Placeholder(len(args)))
+		values := make([]any, len(filter.Statuses))
+		for index, status := range filter.Statuses {
+			values[index] = string(status)
 		}
-		where = append(where, s.store.Identifier("status")+" IN ("+strings.Join(values, ", ")+")")
+		predicates = append(predicates, ormbuilder.In("status", values...))
 	}
 	limit := filter.Limit
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	query := "SELECT " + s.store.Identifier("payload_json") + " FROM " + s.store.TableIdentifier("agent_task_runs") + " WHERE " + strings.Join(where, " AND ") + " ORDER BY " + s.store.Identifier("created_at") + " ASC LIMIT " + fmt.Sprint(limit)
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	builder := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "agent_task_runs", strings.TrimSpace(workspaceID)).Columns("payload_json")
+	if len(predicates) > 0 {
+		builder = builder.Where(ormbuilder.And(predicates...))
+	}
+	statement, args, buildErr := builder.OrderBy(ormbuilder.Ascending("created_at")).Limit(limit).Build()
+	if buildErr != nil {
+		return nil, buildErr
+	}
+	rows, err := s.db.QueryContext(ctx, statement, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -556,20 +573,8 @@ func (s *AgentTaskRunStore) SaveOperationalTransition(ctx context.Context, run a
 	return tx.Commit()
 }
 
-func (s *AgentTaskRunStore) agentTaskColumns() string {
-	columns := []string{"workspace_id", "run_id", "idempotency_key", "task_key", "process_id", "status", "lease_owner", "fencing_token", "lease_expires_at", "next_attempt_at", "payload_json", "created_at", "updated_at"}
-	for index := range columns {
-		columns[index] = s.store.Identifier(columns[index])
-	}
-	return strings.Join(columns, ", ")
-}
-
-func (s *AgentTaskRunStore) placeholders(count int) string {
-	values := make([]string, count)
-	for index := range values {
-		values[index] = s.store.Placeholder(index + 1)
-	}
-	return strings.Join(values, ", ")
+func agentTaskRunColumns() []string {
+	return []string{"run_id", "idempotency_key", "task_key", "process_id", "status", "lease_owner", "fencing_token", "lease_expires_at", "next_attempt_at", "payload_json", "created_at", "updated_at"}
 }
 
 func timeMillis(value *time.Time) int64 {
