@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strings"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -45,13 +46,15 @@ func (s *ReportExportArtifactStore) CreateOrGetReportExportArtifact(ctx context.
 	}
 	artifact.ID = reportExportArtifactID(artifact)
 	scopeJSON, _ := json.Marshal(artifact.Scope)
-	columns := reportExportArtifactColumns()
-	query := "INSERT INTO " + s.store.TableIdentifier("report_export_artifacts") + " (" + strings.Join(reportSnapshotQuoted(s.store, columns), ", ") + ") VALUES (" + strings.Join(reportSnapshotPlaceholders(s.store, len(columns)), ", ") + ")"
-	_, err := execReportExportArtifact(ctx, s.executor(ctx), query,
-		artifact.ID, artifact.WorkspaceID, artifact.ReportKey, artifact.ObjectKey, artifact.AuditID, artifact.BusinessDownloadID, artifact.RequesterUserID, artifact.RoleKey, artifact.IdempotencyKey,
+	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "report_export_artifacts", artifact.WorkspaceID).Columns(reportExportArtifactColumnsWithoutWorkspace()...).Values(
+		artifact.ID, artifact.ReportKey, artifact.ObjectKey, artifact.AuditID, artifact.BusinessDownloadID, artifact.RequesterUserID, artifact.RoleKey, artifact.IdempotencyKey,
 		artifact.Token, artifact.Filename, string(scopeJSON), artifact.ScopeSHA256, artifact.AuthorizationScopeSHA256, artifact.ReportDefinitionSHA256, artifact.ControlDefinitionSHA256,
 		base64.StdEncoding.EncodeToString(artifact.Content), artifact.ContentSHA256, artifact.RowCount, artifact.Watermarked, artifact.CreatedAt, artifact.ExpiresAt,
-	)
+	).Build()
+	if buildErr != nil {
+		return reportmodel.ReportExportArtifact{}, false, buildErr
+	}
+	_, err := execReportExportArtifact(ctx, s.executor(ctx), query, args...)
 	if err != nil {
 		if current, ok, readErr := s.byIdempotency(ctx, artifact); readErr == nil && ok {
 			return reconcileReportExportInsertConflict(current, artifact)
@@ -62,8 +65,11 @@ func (s *ReportExportArtifactStore) CreateOrGetReportExportArtifact(ctx context.
 }
 
 func (s *ReportExportArtifactStore) ReportExportArtifactByToken(ctx context.Context, workspaceID, token string) (reportmodel.ReportExportArtifact, bool, error) {
-	query := reportExportArtifactSelect(s.store) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("token") + " = " + s.store.Placeholder(2)
-	return scanReportExportArtifact(s.executor(ctx).QueryRowContext(ctx, query, strings.TrimSpace(workspaceID), strings.TrimSpace(token)))
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "report_export_artifacts", strings.TrimSpace(workspaceID)).Columns(reportExportArtifactColumns()...).Where(ormbuilder.Equal("token", strings.TrimSpace(token))).Limit(1).Build()
+	if buildErr != nil {
+		return reportmodel.ReportExportArtifact{}, false, buildErr
+	}
+	return scanReportExportArtifact(s.executor(ctx).QueryRowContext(ctx, query, args...))
 }
 
 func (s *ReportExportArtifactStore) ReportExportArtifactByIdempotency(ctx context.Context, workspaceID, requesterUserID, reportKey, key string) (reportmodel.ReportExportArtifact, bool, error) {
@@ -77,10 +83,11 @@ func (s *ReportExportArtifactStore) LinkReportExportBusinessDownload(ctx context
 	if len(workspaceID) == 0 || len(artifactID) == 0 || len(businessDownloadID) == 0 {
 		return fmt.Errorf("report export artifact and business download identity are required")
 	}
-	query := "UPDATE " + s.store.TableIdentifier("report_export_artifacts") + " SET " + s.store.Identifier("business_download_id") + " = " + s.store.Placeholder(1) +
-		" WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(3) +
-		" AND " + s.store.Identifier("business_download_id") + " = ''"
-	result, err := s.executor(ctx).ExecContext(ctx, query, businessDownloadID, workspaceID, artifactID)
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "report_export_artifacts", workspaceID).Set("business_download_id", businessDownloadID).Where(ormbuilder.And(ormbuilder.Equal("id", artifactID), ormbuilder.Equal("business_download_id", ""))).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	result, err := s.executor(ctx).ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -89,17 +96,22 @@ func (s *ReportExportArtifactStore) LinkReportExportBusinessDownload(ctx context
 		return nil
 	}
 	var current string
-	lookup := "SELECT " + s.store.Identifier("business_download_id") + " FROM " + s.store.TableIdentifier("report_export_artifacts") +
-		" WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(2)
-	if err := s.executor(ctx).QueryRowContext(ctx, lookup, workspaceID, artifactID).Scan(&current); err != nil || current != businessDownloadID {
+	lookup, lookupArgs, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "report_export_artifacts", workspaceID).Columns("business_download_id").Where(ormbuilder.Equal("id", artifactID)).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	if err := s.executor(ctx).QueryRowContext(ctx, lookup, lookupArgs...).Scan(&current); err != nil || current != businessDownloadID {
 		return fmt.Errorf("report export artifact business download link is missing or conflicts")
 	}
 	return nil
 }
 
 func (s *ReportExportArtifactStore) byIdempotency(ctx context.Context, artifact reportmodel.ReportExportArtifact) (reportmodel.ReportExportArtifact, bool, error) {
-	query := reportExportArtifactSelect(s.store) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("requester_user_id") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("report_key") + " = " + s.store.Placeholder(3) + " AND " + s.store.Identifier("idempotency_key") + " = " + s.store.Placeholder(4)
-	return scanReportExportArtifact(s.executor(ctx).QueryRowContext(ctx, query, artifact.WorkspaceID, artifact.RequesterUserID, artifact.ReportKey, artifact.IdempotencyKey))
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "report_export_artifacts", artifact.WorkspaceID).Columns(reportExportArtifactColumns()...).Where(ormbuilder.And(ormbuilder.Equal("requester_user_id", artifact.RequesterUserID), ormbuilder.Equal("report_key", artifact.ReportKey), ormbuilder.Equal("idempotency_key", artifact.IdempotencyKey))).Limit(1).Build()
+	if buildErr != nil {
+		return reportmodel.ReportExportArtifact{}, false, buildErr
+	}
+	return scanReportExportArtifact(s.executor(ctx).QueryRowContext(ctx, query, args...))
 }
 
 func (s *ReportExportArtifactStore) executor(ctx context.Context) database.ActionExecutionExecutor {
@@ -113,8 +125,9 @@ func reportExportArtifactColumns() []string {
 	return []string{"id", "workspace_id", "report_key", "object_key", "audit_id", "business_download_id", "requester_user_id", "role_key", "idempotency_key", "token", "filename", "scope_json", "scope_sha256", "authorization_scope_sha256", "report_definition_sha256", "control_definition_sha256", "content_base64", "content_sha256", "row_count", "watermarked", "created_at", "expires_at"}
 }
 
-func reportExportArtifactSelect(store *database.RuntimeStore) string {
-	return "SELECT " + strings.Join(reportSnapshotQuoted(store, reportExportArtifactColumns()), ", ") + " FROM " + store.TableIdentifier("report_export_artifacts")
+func reportExportArtifactColumnsWithoutWorkspace() []string {
+	columns := reportExportArtifactColumns()
+	return append(append([]string{}, columns[:1]...), columns[2:]...)
 }
 
 func reportExportArtifactScan(row *sql.Row) (reportmodel.ReportExportArtifact, bool, error) {

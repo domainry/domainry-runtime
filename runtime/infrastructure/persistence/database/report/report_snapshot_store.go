@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -35,17 +36,22 @@ func (s *ReportSnapshotStore) BeginReportSnapshot(ctx context.Context, request r
 		if current.Status == "succeeded" {
 			return current, false, nil
 		}
-		query := "UPDATE " + s.store.TableIdentifier("report_snapshots") + " SET " + s.store.Identifier("status") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("started_at") + " = " + s.store.Placeholder(2) + ", " + s.store.Identifier("error_code") + " = '' WHERE " + s.store.Identifier("id") + " = " + s.store.Placeholder(3)
-		if _, err := s.db.ExecContext(ctx, query, "refreshing", request.StartedAt, current.ID); err != nil {
+		query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "report_snapshots", request.WorkspaceID).Set("status", "refreshing").Set("started_at", request.StartedAt).Set("error_code", "").Where(ormbuilder.Equal("id", current.ID)).Build()
+		if buildErr != nil {
+			return reportmodel.ReportSnapshot{}, false, buildErr
+		}
+		if _, err := s.db.ExecContext(ctx, query, args...); err != nil {
 			return reportmodel.ReportSnapshot{}, false, err
 		}
 		current.Status, current.StartedAt, current.ErrorCode = "refreshing", request.StartedAt, ""
 		return current, true, nil
 	}
 	id := reportSnapshotID(request)
-	columns := []string{"id", "workspace_id", "report_key", "access_scope_hash", "idempotency_key", "status", "summary_json", "watermark", "source_versions_json", "row_count", "source_row_count", "started_at", "refreshed_at", "error_code"}
-	query := "INSERT INTO " + s.store.TableIdentifier("report_snapshots") + " (" + strings.Join(reportSnapshotQuoted(s.store, columns), ", ") + ") VALUES (" + strings.Join(reportSnapshotPlaceholders(s.store, len(columns)), ", ") + ")"
-	_, err := s.db.ExecContext(ctx, query, id, request.WorkspaceID, request.ReportKey, request.AccessScopeHash, request.IdempotencyKey, "refreshing", "{}", "", "{}", 0, 0, request.StartedAt, "", "")
+	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "report_snapshots", request.WorkspaceID).Columns("id", "report_key", "access_scope_hash", "idempotency_key", "status", "summary_json", "watermark", "source_versions_json", "row_count", "source_row_count", "started_at", "refreshed_at", "error_code").Values(id, request.ReportKey, request.AccessScopeHash, request.IdempotencyKey, "refreshing", "{}", "", "{}", 0, 0, request.StartedAt, "", "").Build()
+	if buildErr != nil {
+		return reportmodel.ReportSnapshot{}, false, buildErr
+	}
+	_, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		if current, ok, readErr := s.reportSnapshotByIdempotency(ctx, request); readErr == nil && ok {
 			return current, current.Status != "succeeded", nil
@@ -59,8 +65,15 @@ func (s *ReportSnapshotStore) CompleteReportSnapshot(ctx context.Context, reques
 	// ReportSummary and SourceVersions contain only JSON-safe concrete fields.
 	summaryJSON, _ := json.Marshal(request.Snapshot.Summary)
 	versionsJSON, _ := json.Marshal(request.Snapshot.SourceVersions)
-	query := "UPDATE " + s.store.TableIdentifier("report_snapshots") + " SET " + s.store.Identifier("status") + " = 'succeeded', " + s.store.Identifier("summary_json") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("watermark") + " = " + s.store.Placeholder(2) + ", " + s.store.Identifier("source_versions_json") + " = " + s.store.Placeholder(3) + ", " + s.store.Identifier("row_count") + " = " + s.store.Placeholder(4) + ", " + s.store.Identifier("source_row_count") + " = " + s.store.Placeholder(5) + ", " + s.store.Identifier("refreshed_at") + " = " + s.store.Placeholder(6) + ", " + s.store.Identifier("error_code") + " = '' WHERE " + s.store.Identifier("id") + " = " + s.store.Placeholder(7) + " AND " + s.store.Identifier("status") + " = " + s.store.Placeholder(8)
-	result, err := s.executor(ctx).ExecContext(ctx, query, string(summaryJSON), request.Snapshot.Watermark, string(versionsJSON), request.Snapshot.Summary.RowCount, request.Snapshot.Summary.SourceRowCount, request.Snapshot.RefreshedAt, request.Snapshot.ID, request.ExpectedStatus)
+	builder := ormbuilder.NewUpdateBuilder(s.store.SQLRenderer, "report_snapshots")
+	if strings.TrimSpace(request.Snapshot.WorkspaceID) != "" {
+		builder = ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "report_snapshots", request.Snapshot.WorkspaceID)
+	}
+	query, args, buildErr := builder.Set("status", "succeeded").Set("summary_json", string(summaryJSON)).Set("watermark", request.Snapshot.Watermark).Set("source_versions_json", string(versionsJSON)).Set("row_count", request.Snapshot.Summary.RowCount).Set("source_row_count", request.Snapshot.Summary.SourceRowCount).Set("refreshed_at", request.Snapshot.RefreshedAt).Set("error_code", "").Where(ormbuilder.And(ormbuilder.Equal("id", request.Snapshot.ID), ormbuilder.Equal("status", request.ExpectedStatus))).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	result, err := s.executor(ctx).ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -68,8 +81,14 @@ func (s *ReportSnapshotStore) CompleteReportSnapshot(ctx context.Context, reques
 }
 
 func (s *ReportSnapshotStore) FailReportSnapshot(ctx context.Context, id, expectedStatus, code string) error {
-	query := "UPDATE " + s.store.TableIdentifier("report_snapshots") + " SET " + s.store.Identifier("status") + " = 'failed', " + s.store.Identifier("error_code") + " = " + s.store.Placeholder(1) + " WHERE " + s.store.Identifier("id") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("status") + " = " + s.store.Placeholder(3)
-	result, err := s.executor(ctx).ExecContext(ctx, query, code, id, expectedStatus)
+	// The snapshot id is globally deterministic, but the workspace is not part
+	// of this legacy method signature; use a system update constrained by id and
+	// expected state rather than inventing a workspace scope.
+	query, args, buildErr := ormbuilder.NewUpdateBuilder(s.store.SQLRenderer, "report_snapshots").Set("status", "failed").Set("error_code", code).Where(ormbuilder.And(ormbuilder.Equal("id", id), ormbuilder.Equal("status", expectedStatus))).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	result, err := s.executor(ctx).ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -88,17 +107,23 @@ func (s *ReportSnapshotStore) executor(ctx context.Context) reportSnapshotExecut
 }
 
 func (s *ReportSnapshotStore) LatestReportSnapshot(ctx context.Context, workspaceID, reportKey, scopeHash string) (reportmodel.ReportSnapshot, bool, error) {
-	query := reportSnapshotSelect(s.store) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("report_key") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("access_scope_hash") + " = " + s.store.Placeholder(3) + " AND " + s.store.Identifier("status") + " = 'succeeded' ORDER BY " + s.store.Identifier("refreshed_at") + " DESC, " + s.store.Identifier("id") + " DESC"
-	return reportSnapshotScan(s.db.QueryRowContext(ctx, query, workspaceID, reportKey, scopeHash))
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "report_snapshots", workspaceID).Columns(reportSnapshotStoreColumns()...).Where(ormbuilder.And(ormbuilder.Equal("report_key", reportKey), ormbuilder.Equal("access_scope_hash", scopeHash), ormbuilder.Equal("status", "succeeded"))).OrderBy(ormbuilder.Descending("refreshed_at"), ormbuilder.Descending("id")).Limit(1).Build()
+	if buildErr != nil {
+		return reportmodel.ReportSnapshot{}, false, buildErr
+	}
+	return reportSnapshotScan(s.db.QueryRowContext(ctx, query, args...))
 }
 
 func (s *ReportSnapshotStore) reportSnapshotByIdempotency(ctx context.Context, request reportcontract.ReportSnapshotBeginRequest) (reportmodel.ReportSnapshot, bool, error) {
-	query := reportSnapshotSelect(s.store) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("report_key") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("access_scope_hash") + " = " + s.store.Placeholder(3) + " AND " + s.store.Identifier("idempotency_key") + " = " + s.store.Placeholder(4)
-	return reportSnapshotScan(s.db.QueryRowContext(ctx, query, request.WorkspaceID, request.ReportKey, request.AccessScopeHash, request.IdempotencyKey))
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "report_snapshots", request.WorkspaceID).Columns(reportSnapshotStoreColumns()...).Where(ormbuilder.And(ormbuilder.Equal("report_key", request.ReportKey), ormbuilder.Equal("access_scope_hash", request.AccessScopeHash), ormbuilder.Equal("idempotency_key", request.IdempotencyKey))).Limit(1).Build()
+	if buildErr != nil {
+		return reportmodel.ReportSnapshot{}, false, buildErr
+	}
+	return reportSnapshotScan(s.db.QueryRowContext(ctx, query, args...))
 }
 
-func reportSnapshotSelect(store *database.RuntimeStore) string {
-	return "SELECT " + strings.Join(reportSnapshotQuoted(store, []string{"id", "workspace_id", "report_key", "access_scope_hash", "idempotency_key", "status", "summary_json", "watermark", "source_versions_json", "started_at", "refreshed_at", "error_code"}), ", ") + " FROM " + store.TableIdentifier("report_snapshots")
+func reportSnapshotStoreColumns() []string {
+	return []string{"id", "workspace_id", "report_key", "access_scope_hash", "idempotency_key", "status", "summary_json", "watermark", "source_versions_json", "started_at", "refreshed_at", "error_code"}
 }
 
 func reportSnapshotScan(row *sql.Row) (reportmodel.ReportSnapshot, bool, error) {
@@ -130,22 +155,6 @@ func reportSnapshotRequestValid(request reportcontract.ReportSnapshotBeginReques
 func reportSnapshotID(request reportcontract.ReportSnapshotBeginRequest) string {
 	sum := sha256.Sum256([]byte(request.WorkspaceID + "\x00" + request.ReportKey + "\x00" + request.AccessScopeHash + "\x00" + request.IdempotencyKey))
 	return "rptsnap_" + hex.EncodeToString(sum[:16])
-}
-
-func reportSnapshotQuoted(store *database.RuntimeStore, columns []string) []string {
-	result := make([]string, len(columns))
-	for index, column := range columns {
-		result[index] = store.Identifier(column)
-	}
-	return result
-}
-
-func reportSnapshotPlaceholders(store *database.RuntimeStore, count int) []string {
-	result := make([]string, count)
-	for index := range result {
-		result[index] = store.Placeholder(index + 1)
-	}
-	return result
 }
 
 func reportSnapshotRequireAffected(result sql.Result) error {
