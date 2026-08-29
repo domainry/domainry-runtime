@@ -3,6 +3,7 @@ package runtime
 import (
 	connector "github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
@@ -34,6 +35,7 @@ type runtimeConstructionInput struct {
 	rateLimiter         ratelimit.Limiter
 	notificationHTTP    notificationhttp.NotificationApplication
 	notificationBinding notificationsdk.Binding
+	monitoringBinding   monitoringsdk.Binding
 	notificationWorkers notificationsdk.LocalWorkers
 	notificationRelay   *notificationpublication.Relay
 	worker              workerplatform.Dependencies
@@ -61,6 +63,7 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		rateLimiter:         input.rateLimiter,
 		notificationHTTP:    input.notificationHTTP,
 		notificationBinding: input.notificationBinding,
+		monitoringBinding:   input.monitoringBinding,
 		notificationWorkers: input.notificationWorkers,
 		notificationRelay:   input.notificationRelay,
 		worker:              workerplatform.NormalizeDependencies(input.worker),

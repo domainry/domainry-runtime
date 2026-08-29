@@ -5,6 +5,7 @@ package runtimehost
 import (
 	"github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
 )
@@ -24,9 +25,11 @@ type Options struct {
 	// Factory. Runtime never switches topology from environment at startup.
 	NotificationFactory notificationsdk.Factory
 	// PartyFactory selects the in-process Module or SaaS Remote Binding.
-	PartyFactory     partysdk.Factory
-	BusinessHandlers BusinessHandlerFactory
-	Connectors       connector.ProviderSetFactory
+	PartyFactory partysdk.Factory
+	// MonitoringFactory selects the Monitoring Module or SaaS Binding.
+	MonitoringFactory monitoringsdk.Factory
+	BusinessHandlers  BusinessHandlerFactory
+	Connectors        connector.ProviderSetFactory
 	// ConnectorProcesses is an explicit host policy for optional Provider
 	// subprocesses. The zero value denies every executable.
 	ConnectorProcesses ConnectorProcessPolicy

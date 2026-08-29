@@ -36,6 +36,7 @@ func (h *OperationsHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /operations/lifecycle/cleanup/jobs", h.authenticated(h.lifecycleCreateCleanupJob))
 	mux.HandleFunc("POST /operations/lifecycle/cleanup/jobs/{jobID}/run", h.authenticated(h.lifecycleRunCleanupJob))
 	mux.HandleFunc("GET /operations/lifecycle/metrics", h.authenticated(h.lifecycleMetrics))
+	mux.HandleFunc("GET /operations/monitoring/metrics", h.authenticated(h.monitoringMetrics))
 	mux.HandleFunc("GET /operations/lifecycle/archive", h.authenticated(h.lifecycleArchiveEntries))
 	mux.HandleFunc("POST /operations/lifecycle/subjects", h.authenticated(h.lifecycleCreateSubjectRequest))
 	mux.HandleFunc("POST /operations/lifecycle/subjects/{requestID}/verify", h.authenticated(h.lifecycleVerifySubjectRequest))

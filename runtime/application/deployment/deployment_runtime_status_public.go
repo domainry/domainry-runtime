@@ -7,6 +7,17 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
+func (s *DeploymentRuntimeStatusApplicationService) MonitoringSchedulerStatus(ctx context.Context) (map[string]any, error) {
+	return s.scheduler.Status(ctx, principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "collect scheduler monitoring status"))
+}
+
+func (s *DeploymentRuntimeStatusApplicationService) MonitoringLifecycleStatus(ctx context.Context) (map[string]any, error) {
+	if s.lifecycleHealth == nil {
+		return map[string]any{}, nil
+	}
+	return s.lifecycleHealth.HealthForSystem(ctx, principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "collect lifecycle monitoring status"), time.Now().UTC())
+}
+
 func (s *DeploymentRuntimeStatusApplicationService) Health(ctx context.Context) map[string]any {
 	storageStatus, storageErr := s.storageStatus(ctx)
 	migrationStatus, migrationErr := s.migrationStatus(ctx)
@@ -109,6 +120,18 @@ func intMetric(value any) int {
 }
 
 func (s *DeploymentRuntimeStatusApplicationService) Metrics(ctx context.Context) map[string]any {
+	payload, errorsByOwner := s.MonitoringMetricSections(ctx)
+	payload["template_id"] = s.templateID
+	payload["template_version"] = s.templateVersion
+	if len(errorsByOwner) > 0 {
+		payload["errors"] = errorsByOwner
+	}
+	return payload
+}
+
+// MonitoringMetricSections exposes owner-produced observations without the
+// Monitoring envelope. The external Monitoring Module owns that envelope.
+func (s *DeploymentRuntimeStatusApplicationService) MonitoringMetricSections(ctx context.Context) (map[string]any, map[string]string) {
 	workflowMetrics, workflowErr := s.workflowMetrics(ctx)
 	auditMetrics, auditErr := s.auditMetrics(ctx)
 	recordCounts, recordErr := s.businessRecordCounts(ctx)
@@ -124,14 +147,12 @@ func (s *DeploymentRuntimeStatusApplicationService) Metrics(ctx context.Context)
 		schedulerStatus = map[string]any{}
 	}
 	payload := map[string]any{
-		"template_id":      s.templateID,
-		"template_version": s.templateVersion,
-		"objects":          len(snapshot.Objects),
-		"storage":          storageStatus,
-		"migration":        migrationStatus,
-		"workflows":        workflowMetrics,
-		"scheduler":        schedulerStatus,
-		"audit":            auditMetrics,
+		"objects":   len(snapshot.Objects),
+		"storage":   storageStatus,
+		"migration": migrationStatus,
+		"workflows": workflowMetrics,
+		"scheduler": schedulerStatus,
+		"audit":     auditMetrics,
 		"domain": map[string]any{
 			"record_counts": recordCounts,
 			"actions":       actionMetrics,
@@ -166,8 +187,5 @@ func (s *DeploymentRuntimeStatusApplicationService) Metrics(ctx context.Context)
 	if actionErr != nil {
 		errors["business_actions"] = actionErr.Error()
 	}
-	if len(errors) > 0 {
-		payload["errors"] = errors
-	}
-	return payload
+	return payload, errors
 }

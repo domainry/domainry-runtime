@@ -17,6 +17,10 @@ import (
 
 	connector "github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
+	monitoringremote "github.com/domainry/domainry-monitoring-sdk/remote"
+	monitoringmodule "github.com/domainry/domainry-monitoring/module"
+	monitoringserver "github.com/domainry/domainry-monitoring/server"
 	notificationmodule "github.com/domainry/domainry-notification/module"
 	partymodule "github.com/domainry/domainry-party/module"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
@@ -169,6 +173,43 @@ func TestProjectRuntimeOpensOneNotificationModuleBinding(t *testing.T) {
 		t.Fatal("Notification Module transaction publisher was not bound to the shared Runtime store")
 	}
 	if err := runtime.CloseContext(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestProjectRuntimeOpensMonitoringModuleAndSaaSBindings(t *testing.T) {
+	build := func(t *testing.T, factory monitoringsdk.Factory) *Runtime {
+		t.Helper()
+		handlers := runtimeext.NewBusinessHandlerRegistry()
+		handlers.Freeze()
+		connectors := connector.NewRegistry()
+		connectors.Freeze()
+		cfg := bootstrapTestConfig(t)
+		cfg.RuntimeInstanceID = "monitoring-runtime"
+		return NewProjectWithAllFactoriesAndDatabase(t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), nil, factory)
+	}
+
+	moduleRuntime := build(t, monitoringmodule.NewFactory(monitoringmodule.Options{}))
+	if moduleRuntime.monitoringBinding == nil || moduleRuntime.monitoringBinding.Descriptor().Mode != monitoringsdk.DeploymentModeModule {
+		t.Fatalf("module binding=%#v", moduleRuntime.monitoringBinding)
+	}
+	if metrics := moduleRuntime.monitoringBinding.Metrics(t.Context()); metrics["runtime_id"] != "monitoring-runtime" {
+		t.Fatalf("module metrics=%#v", metrics)
+	}
+	if err := moduleRuntime.CloseContext(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	service := httptest.NewServer(monitoringserver.New(monitoringserver.Options{BearerToken: "secret"}).Routes())
+	defer service.Close()
+	saasRuntime := build(t, monitoringremote.NewFactory(monitoringremote.Config{Endpoint: service.URL, Token: "secret", Client: service.Client()}))
+	if saasRuntime.monitoringBinding == nil || saasRuntime.monitoringBinding.Descriptor().Mode != monitoringsdk.DeploymentModeSaaS {
+		t.Fatalf("saas binding=%#v", saasRuntime.monitoringBinding)
+	}
+	if metrics := saasRuntime.monitoringBinding.Metrics(t.Context()); metrics["runtime_id"] != "monitoring-runtime" {
+		t.Fatalf("saas metrics=%#v", metrics)
+	}
+	if err := saasRuntime.CloseContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }

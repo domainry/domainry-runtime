@@ -8,6 +8,8 @@ require (
 	github.com/domainry/domainry-connector-sdk v0.1.0-dev.12
 	github.com/domainry/domainry-foundation v0.1.0-dev.3
 	github.com/domainry/domainry-identity-sdk v0.1.0-dev8
+	github.com/domainry/domainry-monitoring v0.0.0
+	github.com/domainry/domainry-monitoring-sdk v0.0.0
 	github.com/domainry/domainry-notification v0.1.0-dev.7
 	github.com/domainry/domainry-notification-sdk v0.1.0-dev.3
 	github.com/go-sql-driver/mysql v1.10.0
@@ -68,5 +70,9 @@ require (
 )
 
 replace github.com/domainry/domainry-party-sdk => ../domainry-party-sdk
+
+replace github.com/domainry/domainry-monitoring-sdk => ../domainry-monitoring-sdk
+
+replace github.com/domainry/domainry-monitoring => ../domainry-monitoring
 
 replace github.com/domainry/domainry-party => ../domainry-party

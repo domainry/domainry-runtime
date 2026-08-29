@@ -18,9 +18,10 @@ func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {
 	}
 	runtime.api = transportbootstrap.AssembleRuntimeHTTPServer(ctx, transportbootstrap.HTTPServerDependencies{
 		Config: runtime.cfg, Records: runtime.records,
-		IdentityBinding: runtime.identityBinding,
-		PartyBinding:    runtime.partyBinding,
-		Store:           runtime.store, RateLimiter: runtime.rateLimiter,
+		IdentityBinding:   runtime.identityBinding,
+		PartyBinding:      runtime.partyBinding,
+		MonitoringBinding: runtime.monitoringBinding,
+		Store:             runtime.store, RateLimiter: runtime.rateLimiter,
 		Notifications: runtime.notificationHTTP, Manifest: runtime.manifest,
 		WorkerControl:     runtime.worker.Control,
 		Clock:             runtime.worker.Clock,

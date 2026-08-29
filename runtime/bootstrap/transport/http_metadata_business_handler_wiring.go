@@ -55,7 +55,8 @@ func (a *httpServerAssembly) wireMetadataAndBusinessHandlers() {
 	})
 	a.handlers.Operations = operationshttp.NewOperationsHandler(operationshttp.OperationsDependencies{
 		Service: operationsService, Controls: operationsapplication.NewOperationsControlApplicationService(operationsStore, operationsService, operationsStore, nil), Leases: operationsapplication.NewOperationsLeaseApplicationService(operationsStore, operationsService, nil), Principal: a.callbacks.Principal,
-		Lifecycle: records.Applications().Lifecycle,
+		Lifecycle:  records.Applications().Lifecycle,
+		Monitoring: runtimeMonitoringMetricsProvider(a.dependencies),
 		DatabaseRetirement: operationsapplication.NewDatabaseRetirementApplicationService(
 			operationspersistence.NewOperationsStore(a.dependencies.Store),
 			operationspersistence.NewDatabaseRetirementSQLExecutor(a.dependencies.Store, nil, nil),
@@ -125,6 +126,11 @@ func (a *httpServerAssembly) wireMetadataAndBusinessHandlers() {
 		WriteJSON: a.callbacks.WriteJSON, WriteError: a.callbacks.WriteError,
 		WriteServiceError: a.callbacks.WriteServiceError, DecodeJSON: a.callbacks.DecodeJSON,
 	})
+}
+
+func runtimeMonitoringMetricsProvider(dependencies HTTPServerDependencies) operationshttp.MonitoringMetricsService {
+	provider, _ := runtimeStatusProvider(dependencies).(operationshttp.MonitoringMetricsService)
+	return provider
 }
 
 func runtimeObjectSchemas(records *composition.RuntimeServices) func() []definitionmodel.ObjectSchema {

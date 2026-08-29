@@ -155,6 +155,9 @@ type routerRuntimeStatusStub struct {
 func (s routerRuntimeStatusStub) Health(context.Context) map[string]any {
 	return map[string]any{"status": "ok"}
 }
+func (s routerRuntimeStatusStub) Metrics(context.Context) map[string]any {
+	return map[string]any{"runtime_id": "runtime-1", "objects": 2}
+}
 func (s routerRuntimeStatusStub) StorageReadiness(context.Context) error   { return s.storageErr }
 func (s routerRuntimeStatusStub) MigrationReadiness(context.Context) error { return s.migrationErr }
 

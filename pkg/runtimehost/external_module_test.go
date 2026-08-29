@@ -19,10 +19,12 @@ func TestProjectMainCompilesUsingOnlyGeneratedCompositionAndRuntimehost(t *testi
 	identityModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-identity")
 	notificationSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-notification-sdk")
 	notificationModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-notification")
+	monitoringSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-monitoring-sdk")
+	monitoringModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-monitoring")
 	partySDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-party-sdk")
 	partyModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-party")
 	externalRoot := t.TempDir()
-	goMod := []byte("module example.com/domainry-project\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/domainry/domainry-runtime v0.0.0\n\tgithub.com/domainry/domainry-identity v0.0.0\n\tgithub.com/domainry/domainry-notification v0.0.0\n\tgithub.com/domainry/domainry-party v0.0.0\n)\n\nreplace github.com/domainry/domainry-runtime => " + repositoryRoot + "\nreplace github.com/domainry/domainry-identity-sdk => " + identitySDKRoot + "\nreplace github.com/domainry/domainry-identity => " + identityModuleRoot + "\nreplace github.com/domainry/domainry-notification-sdk => " + notificationSDKRoot + "\nreplace github.com/domainry/domainry-notification => " + notificationModuleRoot + "\nreplace github.com/domainry/domainry-party-sdk => " + partySDKRoot + "\nreplace github.com/domainry/domainry-party => " + partyModuleRoot + "\n")
+	goMod := []byte("module example.com/domainry-project\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/domainry/domainry-runtime v0.0.0\n\tgithub.com/domainry/domainry-identity v0.0.0\n\tgithub.com/domainry/domainry-notification v0.0.0\n\tgithub.com/domainry/domainry-party v0.0.0\n\tgithub.com/domainry/domainry-monitoring v0.0.0\n)\n\nreplace github.com/domainry/domainry-runtime => " + repositoryRoot + "\nreplace github.com/domainry/domainry-identity-sdk => " + identitySDKRoot + "\nreplace github.com/domainry/domainry-identity => " + identityModuleRoot + "\nreplace github.com/domainry/domainry-notification-sdk => " + notificationSDKRoot + "\nreplace github.com/domainry/domainry-notification => " + notificationModuleRoot + "\nreplace github.com/domainry/domainry-party-sdk => " + partySDKRoot + "\nreplace github.com/domainry/domainry-party => " + partyModuleRoot + "\nreplace github.com/domainry/domainry-monitoring-sdk => " + monitoringSDKRoot + "\nreplace github.com/domainry/domainry-monitoring => " + monitoringModuleRoot + "\n")
 	if err := os.WriteFile(filepath.Join(externalRoot, "go.mod"), goMod, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -37,6 +39,7 @@ import (
 	identitymodule "github.com/domainry/domainry-identity/module"
 	notificationmodule "github.com/domainry/domainry-notification/module"
 	partymodule "github.com/domainry/domainry-party/module"
+	monitoringmodule "github.com/domainry/domainry-monitoring/module"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/pkg/runtimehost"
 )
@@ -53,6 +56,7 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 		IdentityFactory: identitymodule.NewFactory(identitymodule.OptionsFromEnvironment()),
 		NotificationFactory: notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()),
 		PartyFactory: partymodule.NewFactory(partymodule.OptionsFromEnvironment()),
+		MonitoringFactory: monitoringmodule.NewFactory(monitoringmodule.OptionsFromEnvironment()),
 	}
 }
 `)
@@ -72,8 +76,9 @@ func TestProjectMainCompilesUsingSaaSFactoryWithoutIdentityModule(t *testing.T) 
 	identitySDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-identity-sdk")
 	notificationSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-notification-sdk")
 	partySDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-party-sdk")
+	monitoringSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-monitoring-sdk")
 	externalRoot := t.TempDir()
-	goMod := []byte("module example.com/domainry-saas-project\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/domainry/domainry-runtime v0.0.0\n\tgithub.com/domainry/domainry-identity-sdk v0.0.0\n\tgithub.com/domainry/domainry-notification-sdk v0.0.0\n\tgithub.com/domainry/domainry-party-sdk v0.0.0\n)\n\nreplace github.com/domainry/domainry-runtime => " + repositoryRoot + "\nreplace github.com/domainry/domainry-identity-sdk => " + identitySDKRoot + "\nreplace github.com/domainry/domainry-notification-sdk => " + notificationSDKRoot + "\nreplace github.com/domainry/domainry-party-sdk => " + partySDKRoot + "\n")
+	goMod := []byte("module example.com/domainry-saas-project\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/domainry/domainry-runtime v0.0.0\n\tgithub.com/domainry/domainry-identity-sdk v0.0.0\n\tgithub.com/domainry/domainry-notification-sdk v0.0.0\n\tgithub.com/domainry/domainry-party-sdk v0.0.0\n\tgithub.com/domainry/domainry-monitoring-sdk v0.0.0\n)\n\nreplace github.com/domainry/domainry-runtime => " + repositoryRoot + "\nreplace github.com/domainry/domainry-identity-sdk => " + identitySDKRoot + "\nreplace github.com/domainry/domainry-notification-sdk => " + notificationSDKRoot + "\nreplace github.com/domainry/domainry-party-sdk => " + partySDKRoot + "\nreplace github.com/domainry/domainry-monitoring-sdk => " + monitoringSDKRoot + "\n")
 	if err := os.WriteFile(filepath.Join(externalRoot, "go.mod"), goMod, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -88,6 +93,7 @@ import (
 	identityremote "github.com/domainry/domainry-identity-sdk/remote"
 	notificationremote "github.com/domainry/domainry-notification-sdk/remote"
 	partyremote "github.com/domainry/domainry-party-sdk/remote"
+	monitoringremote "github.com/domainry/domainry-monitoring-sdk/remote"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/pkg/runtimehost"
 )
@@ -104,6 +110,7 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 		IdentityFactory: identityremote.NewFactory(identityremote.ConfigFromEnvironment()),
 		NotificationFactory: notificationremote.NewFactory(notificationremote.ConfigFromEnvironment()),
 		PartyFactory: partyremote.NewFactory(partyremote.Config{}),
+		MonitoringFactory: monitoringremote.NewFactory(monitoringremote.ConfigFromEnvironment()),
 	}
 }
 

@@ -281,6 +281,8 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 		{path: "github.com/domainry/domainry-notification", rootEnvironment: "DOMAINRY_NOTIFICATION_REPO_ROOT", label: "Notification", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-party-sdk", rootEnvironment: "DOMAINRY_PARTY_SDK_REPO_ROOT", label: "Party SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-party", rootEnvironment: "DOMAINRY_PARTY_REPO_ROOT", label: "Party", patterns: []string{"./module"}},
+		{path: "github.com/domainry/domainry-monitoring-sdk", rootEnvironment: "DOMAINRY_MONITORING_SDK_REPO_ROOT", label: "Monitoring SDK", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-monitoring", rootEnvironment: "DOMAINRY_MONITORING_REPO_ROOT", label: "Monitoring", patterns: []string{"./module"}},
 	} {
 		root := strings.TrimSpace(os.Getenv(local.rootEnvironment))
 		if root == "" {
@@ -511,6 +513,9 @@ func distributionGoModWithVersions(content []byte, versions map[string]string) (
 		if err := parsed.DropRequire("github.com/domainry/domainry-party"); err != nil {
 			return nil, err
 		}
+		if err := parsed.DropRequire("github.com/domainry/domainry-monitoring"); err != nil {
+			return nil, err
+		}
 	}
 	for path, version := range versions {
 		if strings.TrimSpace(version) == "" {
@@ -520,6 +525,9 @@ func distributionGoModWithVersions(content []byte, versions map[string]string) (
 			continue
 		}
 		if parsed.Module != nil && parsed.Module.Mod.Path == runtimeModulePath && path == "github.com/domainry/domainry-party" {
+			continue
+		}
+		if parsed.Module != nil && parsed.Module.Mod.Path == runtimeModulePath && path == "github.com/domainry/domainry-monitoring" {
 			continue
 		}
 		if err := parsed.AddRequire(path, version); err != nil {

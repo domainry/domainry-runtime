@@ -193,6 +193,10 @@ func (s *DeploymentRuntimeStatusApplicationService) storageStatus(ctx context.Co
 	return status, nil
 }
 
+func (s *DeploymentRuntimeStatusApplicationService) MonitoringStorageStatus(ctx context.Context) (map[string]any, error) {
+	return s.storageStatus(ctx)
+}
+
 func (s *DeploymentRuntimeStatusApplicationService) migrationStatus(ctx context.Context) (deploymentmodel.MigrationStatus, error) {
 	if s.repository == nil {
 		return deploymentmodel.MigrationStatus{Current: true}, nil
@@ -202,6 +206,10 @@ func (s *DeploymentRuntimeStatusApplicationService) migrationStatus(ctx context.
 		status.Current, status.Error = false, err.Error()
 	}
 	return status, err
+}
+
+func (s *DeploymentRuntimeStatusApplicationService) MonitoringMigrationStatus(ctx context.Context) (deploymentmodel.MigrationStatus, error) {
+	return s.migrationStatus(ctx)
 }
 
 func (s *DeploymentRuntimeStatusApplicationService) StorageReadiness(ctx context.Context) error {

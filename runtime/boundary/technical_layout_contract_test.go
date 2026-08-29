@@ -63,6 +63,7 @@ var bootstrapRuntimeProductionFiles = technicalLayoutStringSet(
 	"manifest_validation_catalog.go", "metadata_restoration.go", "repository_bindings.go",
 	"notification_event_types.go", "notification_startup_bindings.go", "runtime.go", "seed_synchronization.go", "service_assembly.go", "startup.go",
 	"identity_project_roles.go", "notification_sdk_module_host.go", "party_sdk_module_host.go", "notification_system_retention.go", "notification_system_subjects.go",
+	"monitoring_module_host.go",
 	"startup_errors.go", "store_preparation.go", "worker_dependencies.go", "worker_lifecycle.go", "worker_lifecycle_cleanup.go", "worker_registry.go", "operations_control_worker.go",
 )
 

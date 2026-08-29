@@ -7,6 +7,7 @@ import (
 
 	connector "github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
@@ -42,6 +43,7 @@ type Runtime struct {
 	rateLimiter         ratelimit.Limiter
 	notificationHTTP    notificationhttp.NotificationApplication
 	notificationBinding notificationsdk.Binding
+	monitoringBinding   monitoringsdk.Binding
 	notificationWorkers notificationsdk.LocalWorkers
 	notificationRelay   *notificationpublication.Relay
 	worker              workerplatform.Dependencies

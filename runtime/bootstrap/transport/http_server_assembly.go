@@ -9,6 +9,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityprincipal "github.com/domainry/domainry-identity-sdk/authorization/principal"
 	identityhttpmiddleware "github.com/domainry/domainry-identity-sdk/httpmiddleware"
+	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
 
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
@@ -40,6 +41,7 @@ type HTTPServerDependencies struct {
 	Records                *composition.RuntimeServices
 	IdentityBinding        identitysdk.Binding
 	PartyBinding           partysdk.Binding
+	MonitoringBinding      monitoringsdk.Binding
 	Store                  *persistence.RuntimeStore
 	RateLimiter            ratelimit.Limiter
 	Notifications          notificationhttp.NotificationApplication
@@ -135,7 +137,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 				return records.Schema().IdentityProfileExtensions
 			},
 		}),
-		SecurityAudit: records.Applications().Audit, RuntimeStatus: records.Applications().RuntimeStatus,
+		SecurityAudit: records.Applications().Audit, RuntimeStatus: runtimeStatusProvider(dependencies),
 		TechnicalMetrics: func(ctx context.Context) string {
 			workerMetrics, agentTaskMetrics, agentInteractiveMetrics := runtimeOptionalWorkerMetrics(ctx, dependencies.WorkerControl, records.Applications().AgentTaskWorker, records.Applications().AgentInteractiveRuns)
 			return runtimeTechnicalOpenMetrics(ctx, dependencies.Store, records.Applications().RuntimeStatus) + integrations.OperationalMetricsOpenMetrics(ctx) + records.Applications().Records.BatchJobOpenMetrics(ctx) + workerMetrics + agentTaskMetrics + agentInteractiveMetrics
@@ -162,6 +164,13 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	server = runtimehttp.UseServiceIdentity(server, dependencies.Config.RuntimeVersion)
 	server = runtimehttp.UseRuntimeReleaseIdentity(server, dependencies.ReleaseIdentity)
 	return runtimehttp.UseManifest(server, dependencies.Manifest)
+}
+
+func runtimeStatusProvider(dependencies HTTPServerDependencies) runtimehttp.DeploymentRuntimeStatusProvider {
+	if dependencies.MonitoringBinding != nil {
+		return dependencies.MonitoringBinding
+	}
+	return dependencies.Records.Applications().RuntimeStatus
 }
 
 func runtimeOptionalWorkerMetrics(ctx context.Context, workers *workerplatform.Controller, agentTasks *agentapplication.AgentTaskWorker, interactive *agentapplication.AgentInteractiveRunApplicationService) (string, string, string) {
