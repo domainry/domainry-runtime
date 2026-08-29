@@ -266,8 +266,21 @@ func uniqueScopeIDs(values []string) []string {
 }
 
 func buildScopeRelationExists(s Store, rootTable string, expression recordmodel.RecordScopeExpression, args *[]any) (string, error) {
+	predicate, err := scopeRelationExistsPredicate(s, rootTable, expression)
+	if err != nil {
+		return "", err
+	}
+	prepared, bound, err := ormbuilder.PreparePredicate(storeRenderer{s}, predicate, len(*args))
+	if err != nil {
+		return "", err
+	}
+	*args = append(*args, bound...)
+	return prepared, nil
+}
+
+func scopeRelationExistsPredicate(s Store, rootTable string, expression recordmodel.RecordScopeExpression) (ormbuilder.Predicate, error) {
 	if len(expression.Path) == 0 {
-		return "", fmt.Errorf("relation EXISTS requires a relation path")
+		return nil, fmt.Errorf("relation EXISTS requires a relation path")
 	}
 	first := expression.Path[0]
 	firstAlias := "permission_0"
@@ -278,7 +291,7 @@ func buildScopeRelationExists(s Store, rootTable string, expression recordmodel.
 	} else if first.Direction == "reverse" {
 		anchorColumn = ormbuilder.QualifiedColumn(firstAlias, first.RelationFieldKey)
 	} else {
-		return "", fmt.Errorf("unsupported compiled relation direction %q", first.Direction)
+		return nil, fmt.Errorf("unsupported compiled relation direction %q", first.Direction)
 	}
 	lastIndex := len(expression.Path) - 1
 	lastAlias := fmt.Sprintf("permission_%d", lastIndex)
@@ -297,7 +310,7 @@ func buildScopeRelationExists(s Store, rootTable string, expression recordmodel.
 		case "reverse":
 			relation = ormbuilder.EqualExpressions(previousColumn("id"), currentColumn(segment.RelationFieldKey))
 		default:
-			return "", fmt.Errorf("unsupported compiled relation direction %q", segment.Direction)
+			return nil, fmt.Errorf("unsupported compiled relation direction %q", segment.Direction)
 		}
 		joins = append(joins, ormbuilder.CrossJoin(expression.Path[pathIndex-1].TargetObjectKey, previousAlias))
 		relationConditions = append(relationConditions,
@@ -313,10 +326,5 @@ func buildScopeRelationExists(s Store, rootTable string, expression recordmodel.
 	conditions = append(conditions, relationConditions...)
 	subquery := ormbuilder.NewSelectBuilder(storeRenderer{s}, expression.Path[lastIndex].TargetObjectKey).Alias(lastAlias).
 		Projections(ormbuilder.Project(ormbuilder.AllColumns())).Join(joins...).Where(ormbuilder.And(conditions...))
-	prepared, bound, err := ormbuilder.PreparePredicate(storeRenderer{s}, ormbuilder.ExistsSubquery(subquery), len(*args))
-	if err != nil {
-		return "", err
-	}
-	*args = append(*args, bound...)
-	return prepared, nil
+	return ormbuilder.ExistsSubquery(subquery), nil
 }

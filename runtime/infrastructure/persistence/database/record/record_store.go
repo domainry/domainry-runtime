@@ -223,26 +223,27 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 		}
 		query.ScopeExpression = &resolved
 	}
-	whereSQL, args, err := recordLocalizedSearchWhere(s, workspaceID, object, query)
+	predicate, err := recordLocalizedSearchPredicate(s, workspaceID, object, query)
 	if err != nil {
 		return recordmodel.RecordPageResult{}, err
 	}
-	countWhereSQL := whereSQL
-	countArgs := append([]any(nil), args...)
+	countPredicate := predicate
 	if afterID := strings.TrimSpace(query.AfterID); afterID != "" {
 		if !recordQueryUsesAscendingIDOrder(query.Sort) {
 			return recordmodel.RecordPageResult{}, fmt.Errorf("record keyset cursor requires ascending id sort")
 		}
-		args = append(args, afterID)
-		whereSQL += " AND " + s.TableIdentifier(object.Key) + "." + s.Identifier("id") + " > " + s.Placeholder(len(args))
+		predicate = ormbuilder.And(predicate, ormbuilder.GreaterThan("id", afterID))
 	}
 	if query.Page > 1 && strings.TrimSpace(query.AfterID) == "" {
 		return recordmodel.RecordPageResult{}, fmt.Errorf("record deep pagination requires an id cursor")
 	}
-	orderSQL, orderArgs := recordLocalizedOrder(s, workspaceID, object, query, len(args))
 	var total int
 	if !query.SkipTotal {
-		if err := executor.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+s.TableIdentifier(object.Key)+countWhereSQL, countArgs...).Scan(&total); err != nil {
+		countSQL, countArgs, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.SQLRenderer, object.Key, workspaceID).Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(countPredicate).Build()
+		if buildErr != nil {
+			return recordmodel.RecordPageResult{}, buildErr
+		}
+		if err := executor.QueryRowContext(ctx, countSQL, countArgs...).Scan(&total); err != nil {
 			return recordmodel.RecordPageResult{}, fmt.Errorf("count records: %w", err)
 		}
 	}
@@ -250,10 +251,22 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 	if query.SkipTotal || strings.TrimSpace(query.AfterID) != "" {
 		fetchLimit++
 	}
-	listArgs := append(append([]any{}, args...), orderArgs...)
-	listArgs = append(listArgs, fetchLimit)
-	lockSQL := recordQueryLockSQL(s.RuntimeEngine, lockIntent)
-	rows, err := executor.QueryContext(ctx, "SELECT "+recordListProjection(s, query.SelectFields)+" FROM "+s.TableIdentifier(object.Key)+whereSQL+orderSQL+" LIMIT "+s.Placeholder(len(args)+len(orderArgs)+1)+lockSQL, listArgs...)
+	selectBuilder := ormbuilder.NewWorkspaceSelectBuilder(s.SQLRenderer, object.Key, workspaceID).
+		Projections(recordListProjections(query.SelectFields)...).
+		Where(predicate).
+		OrderBy(recordLocalizedOrders(workspaceID, object, query)...).
+		Limit(fetchLimit)
+	if lockIntent != recordmodel.RecordQueryLockNone {
+		selectBuilder, err = s.RuntimeEngine.ApplyClaimLock(selectBuilder, lockIntent == recordmodel.RecordQueryLockForUpdateSkipLocked)
+		if err != nil {
+			return recordmodel.RecordPageResult{}, fmt.Errorf("apply record query lock: %w", err)
+		}
+	}
+	listSQL, listArgs, buildErr := selectBuilder.Build()
+	if buildErr != nil {
+		return recordmodel.RecordPageResult{}, buildErr
+	}
+	rows, err := executor.QueryContext(ctx, listSQL, listArgs...)
 	if err != nil {
 		return recordmodel.RecordPageResult{}, fmt.Errorf("list records: %w", err)
 	}
@@ -301,20 +314,6 @@ type recordQueryExecutor interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 	QueryRowContext(context.Context, string, ...any) *sql.Row
-}
-
-func recordQueryLockSQL(profile persistencedriver.EngineProfile, intent string) string {
-	if !profile.Capabilities().RowLock {
-		return ""
-	}
-	switch intent {
-	case recordmodel.RecordQueryLockForUpdate:
-		return " FOR UPDATE"
-	case recordmodel.RecordQueryLockForUpdateSkipLocked:
-		return " FOR UPDATE SKIP LOCKED"
-	default:
-		return ""
-	}
 }
 
 func recordScopeReadTxOptions(profile persistencedriver.EngineProfile) *sql.TxOptions {
@@ -986,13 +985,6 @@ func (r RecordStore) validateTemporalExclusionTx(ctx context.Context, tx Transac
 	return nil
 }
 
-func recordConstraintLockClause(profile persistencedriver.EngineProfile) string {
-	if profile.Capabilities().RowLock {
-		return " FOR UPDATE"
-	}
-	return ""
-}
-
 func recordMutationPredicateSQL(store *database.RuntimeStore, object definitionmodel.ObjectSchema, predicate transactionmodel.MutationPredicate, placeholder int) (string, []any, error) {
 	prepared, err := recordMutationPredicate(object, predicate, store.RuntimeEngine)
 	if err != nil {
@@ -1119,22 +1111,24 @@ func recordFilterDBValues(profile persistencedriver.EngineProfile, fields map[st
 	return expression
 }
 
-func recordListProjection(store *database.RuntimeStore, selectFields []string) string {
+func recordListProjections(selectFields []string) []ormbuilder.Projection {
 	if len(selectFields) == 0 {
-		return "*"
+		return []ormbuilder.Projection{ormbuilder.Project(ormbuilder.Star())}
 	}
 	fields := ormbuilder.RecordSystemColumnNames()
 	seen := make(map[string]bool, len(fields)+len(selectFields))
+	projections := make([]ormbuilder.Projection, 0, len(fields)+len(selectFields))
 	for _, field := range fields {
 		seen[field] = true
+		projections = append(projections, ormbuilder.Project(ormbuilder.Column(field)))
 	}
 	for _, field := range selectFields {
 		if !seen[field] {
 			seen[field] = true
-			fields = append(fields, field)
+			projections = append(projections, ormbuilder.Project(ormbuilder.Column(field)))
 		}
 	}
-	return stringsJoinIdentifiers(store, fields...)
+	return projections
 }
 
 // ApplyRecordMutationTx lets the workflow decision adapter participate in the

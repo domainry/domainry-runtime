@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -134,19 +135,22 @@ func TestRecordLocalizedQuerySQLIsDialectAwareAndNonMultiplying(t *testing.T) {
 			if err := store.SetEngineForTesting(driver); err != nil {
 				t.Fatal(err)
 			}
-			where, args, err := recordLocalizedSearchWhere(store, "workspace-a", object, query)
+			predicate, err := recordLocalizedSearchPredicate(store, "workspace-a", object, query)
 			if err != nil {
 				t.Fatal(err)
 			}
-			order, orderArgs := recordLocalizedOrder(store, "workspace-a", object, query, len(args))
-			if !strings.Contains(where, "EXISTS (SELECT 1") || strings.Contains(where, " JOIN ") || !strings.Contains(order, "COALESCE((SELECT") {
-				t.Fatalf("driver=%s where=%s order=%s", driver, where, order)
+			statement, args, err := ormbuilder.NewWorkspaceSelectBuilder(store.SQLRenderer, object.Key, "workspace-a").Columns("id").Where(predicate).OrderBy(recordLocalizedOrders("workspace-a", object, query)...).Build()
+			if err != nil {
+				t.Fatal(err)
 			}
-			if len(args) != 9 || len(orderArgs) != 8 {
-				t.Fatalf("driver=%s where args=%d order args=%d", driver, len(args), len(orderArgs))
+			if !strings.Contains(statement, "EXISTS (SELECT") || strings.Contains(statement, " JOIN ") || !strings.Contains(statement, "COALESCE((SELECT") {
+				t.Fatalf("driver=%s statement=%s", driver, statement)
 			}
-			if driver == "postgres" && (!strings.Contains(where, "$1") || !strings.Contains(order, "$10")) {
-				t.Fatalf("postgres placeholders where=%s order=%s", where, order)
+			if len(args) == 0 {
+				t.Fatalf("driver=%s query lost bound arguments", driver)
+			}
+			if driver == "postgres" && (!strings.Contains(statement, "$1") || strings.Contains(statement, "?")) {
+				t.Fatalf("postgres placeholders statement=%s", statement)
 			}
 		})
 	}

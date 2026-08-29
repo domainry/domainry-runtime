@@ -60,57 +60,45 @@ func nonEmptyValues(raw any) []any {
 	return result
 }
 
-// BuildTenantWhere is the only supported WHERE builder for tenant-owned record
-// tables. It rejects an absent workspace and always owns the workspace filter,
-// so caller-provided filters cannot remove or replace the tenant boundary.
-func BuildTenantWhere(s Store, workspace string, query recordmodel.RecordListQuery) (string, []any, error) {
+// BuildTenantPredicate is the only supported predicate builder for tenant-owned
+// record tables. It rejects an absent workspace and always owns the workspace
+// filter, so caller-provided filters cannot remove or replace that boundary.
+func BuildTenantPredicate(s Store, workspace string, query recordmodel.RecordListQuery) (ormbuilder.Predicate, error) {
 	workspaceID, err := principalmodel.NewWorkspaceID(workspace)
 	if err != nil {
-		return "", nil, fmt.Errorf("tenant query workspace: %w", err)
+		return nil, fmt.Errorf("tenant query workspace: %w", err)
 	}
 	workspace = workspaceID.String()
 	query.PrincipalWorkspaceID = workspace
-	clauses := make([]string, 0, 8)
-	args := make([]any, 0, 8)
-	appendPredicate := func(predicate ormbuilder.Predicate) error {
-		prepared, values, err := ormbuilder.PreparePredicate(storeRenderer{s}, predicate, len(args))
-		if err != nil {
-			return err
-		}
-		clauses = append(clauses, prepared)
-		args = append(args, values...)
-		return nil
-	}
-	if err := appendPredicate(ormbuilder.Equal("workspace_id", workspace)); err != nil {
-		return "", nil, err
-	}
+	predicates := []ormbuilder.Predicate{ormbuilder.Equal("workspace_id", workspace)}
+	appendPredicate := func(predicate ormbuilder.Predicate) { predicates = append(predicates, predicate) }
 	scope := strings.TrimSpace(query.Scope)
 	if scope == "" {
 		scope = "all_records"
 	}
 	if !map[string]bool{"all_records": true, "owned_records": true, "team": true, "department": true, "department_and_children": true, "subordinates": true, "custom": true, "none": true}[scope] {
-		return "", nil, fmt.Errorf("unsupported data scope %q", scope)
+		return nil, fmt.Errorf("unsupported data scope %q", scope)
 	}
 	if scope == "none" {
-		_ = appendPredicate(ormbuilder.AlwaysFalse())
+		appendPredicate(ormbuilder.AlwaysFalse())
 	}
 	if scope == "owned_records" && strings.TrimSpace(query.OwnerField) != "" {
-		_ = appendPredicate(ormbuilder.Equal(query.OwnerField, query.PrincipalUserID))
+		appendPredicate(ormbuilder.Equal(query.OwnerField, query.PrincipalUserID))
 	}
 	if scope == "subordinates" && strings.TrimSpace(query.OwnerField) != "" {
 		values := nonBlankStrings(query.PrincipalReportingUserIDs)
 		if len(values) == 0 {
-			_ = appendPredicate(ormbuilder.AlwaysFalse())
+			appendPredicate(ormbuilder.AlwaysFalse())
 		} else {
-			_ = appendPredicate(ormbuilder.In(query.OwnerField, stringsToAny(values)...))
+			appendPredicate(ormbuilder.In(query.OwnerField, stringsToAny(values)...))
 		}
 	}
 	if scope == "department" && strings.TrimSpace(query.DepartmentPathField) != "" && strings.TrimSpace(query.PrincipalDepartmentPath) != "" {
-		_ = appendPredicate(ormbuilder.Equal(query.DepartmentPathField, query.PrincipalDepartmentPath))
+		appendPredicate(ormbuilder.Equal(query.DepartmentPathField, query.PrincipalDepartmentPath))
 	}
 	if scope == "department_and_children" && strings.TrimSpace(query.DepartmentPathField) != "" && strings.TrimSpace(query.PrincipalDepartmentPath) != "" {
 		departmentPath := strings.TrimRight(query.PrincipalDepartmentPath, "/")
-		_ = appendPredicate(ormbuilder.Or(
+		appendPredicate(ormbuilder.Or(
 			ormbuilder.Equal(query.DepartmentPathField, departmentPath),
 			ormbuilder.LikeEscaped(query.DepartmentPathField, escapeLikePattern(departmentPath)+"/%"),
 		))
@@ -118,20 +106,20 @@ func BuildTenantWhere(s Store, workspace string, query recordmodel.RecordListQue
 	if scope == "team" && strings.TrimSpace(query.TeamField) != "" && len(query.PrincipalTeamIDs) > 0 {
 		values := nonBlankStrings(query.PrincipalTeamIDs)
 		if len(values) == 0 {
-			_ = appendPredicate(ormbuilder.AlwaysFalse())
+			appendPredicate(ormbuilder.AlwaysFalse())
 		} else {
-			_ = appendPredicate(ormbuilder.In(query.TeamField, stringsToAny(values)...))
+			appendPredicate(ormbuilder.In(query.TeamField, stringsToAny(values)...))
 		}
 	}
 	if scope == "custom" {
 		if query.ScopeExpression == nil || strings.TrimSpace(query.RootObjectKey) == "" {
-			return "", nil, fmt.Errorf("custom scope requires compiled expression")
+			return nil, fmt.Errorf("custom scope requires compiled expression")
 		}
-		compiled, err := buildScopeExpression(s, query.RootObjectKey, *query.ScopeExpression, &args, 0)
+		compiled, err := scopeExpressionPredicate(s, query.RootObjectKey, *query.ScopeExpression, 0)
 		if err != nil {
-			return "", nil, err
+			return nil, err
 		}
-		clauses = append(clauses, compiled)
+		appendPredicate(compiled)
 	}
 	if strings.TrimSpace(query.Search) != "" && len(query.SearchFields) > 0 {
 		searchPredicates := make([]ormbuilder.Predicate, 0, len(query.SearchFields))
@@ -139,7 +127,7 @@ func BuildTenantWhere(s Store, workspace string, query recordmodel.RecordListQue
 		for _, field := range query.SearchFields {
 			searchPredicates = append(searchPredicates, ormbuilder.LikeValue(ormbuilder.Lower(ormbuilder.Column(field)), searchValue))
 		}
-		_ = appendPredicate(ormbuilder.Or(searchPredicates...))
+		appendPredicate(ormbuilder.Or(searchPredicates...))
 	}
 	filterKeys := make([]string, 0, len(query.Filters))
 	for key := range query.Filters {
@@ -158,9 +146,9 @@ func BuildTenantWhere(s Store, workspace string, query recordmodel.RecordListQue
 			if operator == "in" {
 				values := nonEmptyValues(value)
 				if len(values) == 0 {
-					_ = appendPredicate(ormbuilder.AlwaysFalse())
+					appendPredicate(ormbuilder.AlwaysFalse())
 				} else {
-					_ = appendPredicate(ormbuilder.In(baseKey, values...))
+					appendPredicate(ormbuilder.In(baseKey, values...))
 				}
 				continue
 			}
@@ -170,21 +158,33 @@ func BuildTenantWhere(s Store, workspace string, query recordmodel.RecordListQue
 			} else if operator == "lte" {
 				predicate = ormbuilder.LessThanOrEqual(baseKey, dbValue(value))
 			}
-			_ = appendPredicate(predicate)
+			appendPredicate(predicate)
 		} else {
-			_ = appendPredicate(ormbuilder.Equal(key, dbValue(value)))
+			appendPredicate(ormbuilder.Equal(key, dbValue(value)))
 		}
 	}
 	if query.FilterExpression != nil {
 		predicate, err := recordFilterPredicate(*query.FilterExpression, 0)
 		if err != nil {
-			return "", nil, err
+			return nil, err
 		}
-		if err := appendPredicate(predicate); err != nil {
-			return "", nil, err
-		}
+		appendPredicate(predicate)
 	}
-	return " WHERE " + strings.Join(clauses, " AND "), args, nil
+	return ormbuilder.And(predicates...), nil
+}
+
+// BuildTenantWhere is retained as a compatibility seam for callers that have
+// not yet moved to SelectBuilder. New repositories should use the predicate.
+func BuildTenantWhere(s Store, workspace string, query recordmodel.RecordListQuery) (string, []any, error) {
+	predicate, err := BuildTenantPredicate(s, workspace, query)
+	if err != nil {
+		return "", nil, err
+	}
+	prepared, args, err := ormbuilder.PreparePredicate(storeRenderer{s}, predicate, 0)
+	if err != nil {
+		return "", nil, err
+	}
+	return " WHERE " + prepared, args, nil
 }
 
 func buildRecordFilterExpression(s Store, expression recordmodel.RecordFilterExpression, args *[]any, depth int) (string, error) {
@@ -268,42 +268,58 @@ func recordFilterPredicate(expression recordmodel.RecordFilterExpression, depth 
 }
 
 func buildScopeExpression(s Store, rootObjectKey string, expression recordmodel.RecordScopeExpression, args *[]any, depth int) (string, error) {
+	predicate, err := scopeExpressionPredicate(s, rootObjectKey, expression, depth)
+	if err != nil {
+		return "", err
+	}
+	prepared, values, err := ormbuilder.PreparePredicate(storeRenderer{s}, predicate, len(*args))
+	if err != nil {
+		return "", err
+	}
+	*args = append(*args, values...)
+	return prepared, nil
+}
+
+func scopeExpressionPredicate(s Store, rootObjectKey string, expression recordmodel.RecordScopeExpression, depth int) (ormbuilder.Predicate, error) {
 	if depth > 16 {
-		return "", fmt.Errorf("scope expression exceeds maximum depth")
+		return nil, fmt.Errorf("scope expression exceeds maximum depth")
 	}
 	switch expression.Operator {
 	case "and", "or":
 		if len(expression.Children) < 2 {
-			return "", fmt.Errorf("scope %s requires at least two children", expression.Operator)
+			return nil, fmt.Errorf("scope %s requires at least two children", expression.Operator)
 		}
-		parts := make([]string, 0, len(expression.Children))
+		predicates := make([]ormbuilder.Predicate, 0, len(expression.Children))
 		for _, child := range expression.Children {
-			part, err := buildScopeExpression(s, rootObjectKey, child, args, depth+1)
+			predicate, err := scopeExpressionPredicate(s, rootObjectKey, child, depth+1)
 			if err != nil {
-				return "", err
+				return nil, err
 			}
-			parts = append(parts, part)
+			predicates = append(predicates, predicate)
 		}
-		return "(" + strings.Join(parts, " "+strings.ToUpper(expression.Operator)+" ") + ")", nil
+		if expression.Operator == "and" {
+			return ormbuilder.And(predicates...), nil
+		}
+		return ormbuilder.Or(predicates...), nil
 	case "not":
 		if len(expression.Children) != 1 {
-			return "", fmt.Errorf("scope not requires one child")
+			return nil, fmt.Errorf("scope not requires one child")
 		}
-		part, err := buildScopeExpression(s, rootObjectKey, expression.Children[0], args, depth+1)
+		predicate, err := scopeExpressionPredicate(s, rootObjectKey, expression.Children[0], depth+1)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		return "NOT (" + part + ")", nil
+		return ormbuilder.Not(predicate), nil
 	case "eq", "in", "prefix", "starts_with", "exists", "not_exists":
 		if len(expression.Path) != 0 {
 			if !expression.RelationExists {
-				return "", fmt.Errorf("scope relation path must be resolved to permission IDs before building record query")
+				return nil, fmt.Errorf("scope relation path must be resolved to permission IDs before building record query")
 			}
-			return buildScopeRelationExists(s, rootObjectKey, expression, args)
+			return scopeRelationExistsPredicate(s, rootObjectKey, expression)
 		}
-		return prepareScopeComparison(s, ormbuilder.TableColumn(rootObjectKey, expression.FieldKey), expression.Operator, expression.Values, args)
+		return scopeComparisonPredicate(ormbuilder.TableColumn(rootObjectKey, expression.FieldKey), expression.Operator, expression.Values), nil
 	default:
-		return "", fmt.Errorf("unsupported compiled scope operator %q", expression.Operator)
+		return nil, fmt.Errorf("unsupported compiled scope operator %q", expression.Operator)
 	}
 }
 

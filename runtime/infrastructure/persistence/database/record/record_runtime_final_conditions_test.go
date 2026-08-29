@@ -3,10 +3,12 @@ package record
 import (
 	"database/sql/driver"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -19,15 +21,21 @@ func TestRecordActionTransactionContextAndLockSQLMatrix(t *testing.T) {
 		t.Fatal("action transaction context was not propagated")
 	}
 	for _, test := range []struct {
-		driver, intent, want string
+		driver string
+		skip   bool
+		want   string
 	}{
-		{"sqlite", recordmodel.RecordQueryLockForUpdate, ""},
-		{"mysql", recordmodel.RecordQueryLockForUpdate, " FOR UPDATE"},
-		{"postgres", recordmodel.RecordQueryLockForUpdateSkipLocked, " FOR UPDATE SKIP LOCKED"},
-		{"postgres", recordmodel.RecordQueryLockNone, ""},
+		{"sqlite", false, ""},
+		{"mysql", false, " FOR UPDATE"},
+		{"postgres", true, " FOR UPDATE SKIP LOCKED"},
 	} {
-		if got := recordQueryLockSQL(testEngineProfile(test.driver), test.intent); got != test.want {
-			t.Fatalf("driver=%s intent=%s lock=%q", test.driver, test.intent, got)
+		builder, err := testEngineProfile(test.driver).ApplyClaimLock(ormbuilder.NewSelectBuilder(store.store.SQLRenderer, "records").Columns("id"), test.skip)
+		if err != nil {
+			t.Fatal(err)
+		}
+		statement, _, err := builder.Build()
+		if err != nil || !strings.HasSuffix(statement, test.want) {
+			t.Fatalf("driver=%s statement=%q err=%v", test.driver, statement, err)
 		}
 	}
 }

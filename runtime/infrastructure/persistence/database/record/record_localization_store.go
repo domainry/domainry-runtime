@@ -156,69 +156,75 @@ func recordLocalizationAny(values []string) []any {
 	return result
 }
 
-func recordLocalizedSearchWhere(s *database.RuntimeStore, workspaceID string, object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (string, []any, error) {
+func recordLocalizedSearchPredicate(s *database.RuntimeStore, workspaceID string, object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (ormbuilder.Predicate, error) {
 	localized := localizedSearchFields(object, query.SearchFields)
 	if strings.TrimSpace(query.Locale) == "" || strings.TrimSpace(query.Search) == "" || len(localized) == 0 {
-		return s.TenantListWhereClause(workspaceID, query)
+		return s.TenantListPredicate(workspaceID, query)
 	}
 	baseQuery := query
 	baseQuery.Search = ""
 	baseQuery.SearchFields = nil
-	whereSQL, args, err := s.TenantListWhereClause(workspaceID, baseQuery)
+	basePredicate, err := s.TenantListPredicate(workspaceID, baseQuery)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 	searchValue := "%" + strings.ToLower(strings.TrimSpace(query.Search)) + "%"
-	parts := []string{}
+	searchPredicates := make([]ormbuilder.Predicate, 0, len(query.SearchFields)+1)
 	for _, field := range query.SearchFields {
-		args = append(args, searchValue)
-		parts = append(parts, "LOWER("+s.Identifier(field)+") LIKE "+s.Placeholder(len(args)))
+		searchPredicates = append(searchPredicates, ormbuilder.LikeValue(ormbuilder.Lower(ormbuilder.Column(field)), searchValue))
 	}
-	alias := s.Identifier("record_i18n_search")
-	conditions := []string{
-		alias + "." + s.Identifier("workspace_id") + " = " + s.Placeholder(len(args)+1),
-		alias + "." + s.Identifier("object_key") + " = " + s.Placeholder(len(args)+2),
-		alias + "." + s.Identifier("record_id") + " = " + s.TableIdentifier(object.Key) + "." + s.Identifier("id"),
+	const alias = "record_i18n_search"
+	localizedValues := recordLocalizationAny(localized)
+	locales := recordLocalizationAny(recordmodel.RecordLocalizationLocales(query.Locale, query.FallbackLocale))
+	conditions := []ormbuilder.Predicate{
+		ormbuilder.EqualValue(ormbuilder.QualifiedColumn(alias, "workspace_id"), workspaceID),
+		ormbuilder.EqualValue(ormbuilder.QualifiedColumn(alias, "object_key"), object.Key),
+		ormbuilder.EqualExpressions(ormbuilder.QualifiedColumn(alias, "record_id"), ormbuilder.TableColumn(object.Key, "id")),
+		ormbuilder.InExpression(ormbuilder.QualifiedColumn(alias, "field_key"), localizedValues...),
+		ormbuilder.InExpression(ormbuilder.QualifiedColumn(alias, "locale"), locales...),
+		ormbuilder.LikeValue(ormbuilder.Lower(ormbuilder.QualifiedColumn(alias, "text_value")), searchValue),
 	}
-	args = append(args, workspaceID, object.Key)
-	conditions = append(conditions, recordLocalizationQualifiedInClause(s, alias, "field_key", localized, &args))
-	conditions = append(conditions, recordLocalizationQualifiedInClause(s, alias, "locale", recordmodel.RecordLocalizationLocales(query.Locale, query.FallbackLocale), &args))
-	args = append(args, searchValue)
-	conditions = append(conditions, "LOWER("+alias+"."+s.Identifier("text_value")+") LIKE "+s.Placeholder(len(args)))
-	parts = append(parts, "EXISTS (SELECT 1 FROM "+s.TableIdentifier(recordLocalizedValueTable)+" AS "+alias+" WHERE "+strings.Join(conditions, " AND ")+")")
-	return whereSQL + " AND (" + strings.Join(parts, " OR ") + ")", args, nil
+	subquery := ormbuilder.NewSelectBuilder(s.SQLRenderer, recordLocalizedValueTable).Alias(alias).Projections(ormbuilder.Project(ormbuilder.Value(1))).Where(ormbuilder.And(conditions...))
+	searchPredicates = append(searchPredicates, ormbuilder.ExistsSubquery(subquery))
+	return ormbuilder.And(basePredicate, ormbuilder.Or(searchPredicates...)), nil
 }
 
-func recordLocalizedOrder(s *database.RuntimeStore, workspaceID string, object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery, placeholderStart int) (string, []any) {
+func recordLocalizedOrders(workspaceID string, object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) []ormbuilder.Order {
 	localizedSet := map[string]bool{}
 	for _, field := range recordmodel.RecordLocalizedFieldKeys(object) {
 		localizedSet[field] = true
 	}
-	parts := []string{}
-	args := []any{}
-	for index, rule := range query.Sort {
+	orders := make([]ormbuilder.Order, 0, len(query.Sort)+1)
+	for _, rule := range query.Sort {
 		direction := strings.ToUpper(strings.TrimSpace(rule.Direction))
-		if direction != "DESC" {
-			direction = "ASC"
-		}
 		if strings.TrimSpace(query.Locale) == "" || !localizedSet[rule.Field] {
-			parts = append(parts, s.Identifier(rule.Field)+" "+direction)
+			if direction == "DESC" {
+				orders = append(orders, ormbuilder.Descending(rule.Field))
+			} else {
+				orders = append(orders, ormbuilder.Ascending(rule.Field))
+			}
 			continue
 		}
-		values := []string{}
-		for localeIndex, locale := range recordmodel.RecordLocalizationLocales(query.Locale, query.FallbackLocale) {
-			alias := s.Identifier(fmt.Sprintf("record_i18n_sort_%d_%d", index, localeIndex))
-			base := placeholderStart + len(args)
-			values = append(values, "(SELECT "+alias+"."+s.Identifier("text_value")+" FROM "+s.TableIdentifier(recordLocalizedValueTable)+" AS "+alias+" WHERE "+alias+"."+s.Identifier("workspace_id")+" = "+s.Placeholder(base+1)+" AND "+alias+"."+s.Identifier("object_key")+" = "+s.Placeholder(base+2)+" AND "+alias+"."+s.Identifier("record_id")+" = "+s.TableIdentifier(object.Key)+"."+s.Identifier("id")+" AND "+alias+"."+s.Identifier("field_key")+" = "+s.Placeholder(base+3)+" AND "+alias+"."+s.Identifier("locale")+" = "+s.Placeholder(base+4)+" LIMIT 1)")
-			args = append(args, workspaceID, object.Key, rule.Field, locale)
+		values := []ormbuilder.Expression{}
+		for _, locale := range recordmodel.RecordLocalizationLocales(query.Locale, query.FallbackLocale) {
+			values = append(values, ormbuilder.ScalarSubquery(recordLocalizedValueTable, ormbuilder.Column("text_value"), ormbuilder.And(
+				ormbuilder.Equal("workspace_id", workspaceID), ormbuilder.Equal("object_key", object.Key),
+				ormbuilder.EqualExpressions(ormbuilder.Column("record_id"), ormbuilder.TableColumn(object.Key, "id")),
+				ormbuilder.Equal("field_key", rule.Field), ormbuilder.Equal("locale", locale),
+			)))
 		}
-		values = append(values, s.Identifier(rule.Field))
-		parts = append(parts, "COALESCE("+strings.Join(values, ", ")+") "+direction)
+		values = append(values, ormbuilder.Column(rule.Field))
+		expression := ormbuilder.Coalesce(values...)
+		if direction == "DESC" {
+			orders = append(orders, ormbuilder.DescendingExpression(expression))
+		} else {
+			orders = append(orders, ormbuilder.AscendingExpression(expression))
+		}
 	}
-	if len(parts) == 0 {
-		parts = append(parts, s.Identifier("id")+" ASC")
+	if len(orders) == 0 {
+		orders = append(orders, ormbuilder.Ascending("id"))
 	}
-	return " ORDER BY " + strings.Join(parts, ", "), args
+	return orders
 }
 
 func recordLocalizationProjectionFields(object definitionmodel.ObjectSchema, selectFields []string) []string {
@@ -269,24 +275,4 @@ func nonEmptyRecordLocalizationValues(values []string) []string {
 
 func recordLocalizedLookupKey(recordID, field, locale string) string {
 	return recordID + "\x00" + field + "\x00" + locale
-}
-
-func recordLocalizationInClause(s *database.RuntimeStore, field string, values []string, args *[]any) string {
-	return recordLocalizationQualifiedInClause(s, "", field, values, args)
-}
-
-func recordLocalizationQualifiedInClause(s *database.RuntimeStore, alias, field string, values []string, args *[]any) string {
-	placeholders := []string{}
-	for _, value := range values {
-		*args = append(*args, value)
-		placeholders = append(placeholders, s.Placeholder(len(*args)))
-	}
-	identifier := s.Identifier(field)
-	if alias != "" {
-		identifier = alias + "." + identifier
-	}
-	if len(placeholders) == 0 {
-		return "1 = 0"
-	}
-	return identifier + " IN (" + strings.Join(placeholders, ", ") + ")"
 }

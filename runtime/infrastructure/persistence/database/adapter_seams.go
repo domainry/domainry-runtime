@@ -2,6 +2,7 @@ package database
 
 import (
 	"github.com/domainry/domainry-foundation/mutation"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
 	"context"
@@ -26,6 +27,10 @@ import (
 // while allowing adapters to leave the database root package.
 func (s *RuntimeStore) TenantListWhereClause(workspaceID string, query recordmodel.RecordListQuery) (string, []any, error) {
 	return querypersistence.BuildTenantWhere(s, workspaceID, query)
+}
+
+func (s *RuntimeStore) TenantListPredicate(workspaceID string, query recordmodel.RecordListQuery) (ormbuilder.Predicate, error) {
+	return querypersistence.BuildTenantPredicate(s, workspaceID, query)
 }
 
 func (s *RuntimeStore) ListOrderClause(query recordmodel.RecordListQuery) string {

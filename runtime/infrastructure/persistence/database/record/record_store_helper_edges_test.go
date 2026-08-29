@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
@@ -178,10 +179,14 @@ func TestRecordMutationPredicateAndQueryProjectionBoundaries(t *testing.T) {
 		t.Fatalf("nil currency expression=%#v", nilValue)
 	}
 
-	if projection := recordListProjection(store.store, nil); projection != "*" {
-		t.Fatalf("default projection=%q", projection)
+	defaultSQL, _, err := ormbuilder.NewSelectBuilder(store.store.SQLRenderer, "records").Projections(recordListProjections(nil)...).Build()
+	if err != nil || !strings.HasPrefix(defaultSQL, "SELECT * FROM") {
+		t.Fatalf("default projection SQL=%q err=%v", defaultSQL, err)
 	}
-	projection := recordListProjection(store.store, []string{"id", "status", "status", "updated_at"})
+	projection, _, err := ormbuilder.NewSelectBuilder(store.store.SQLRenderer, "records").Projections(recordListProjections([]string{"id", "status", "status", "updated_at"})...).Build()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if strings.Count(projection, store.store.Identifier("status")) != 1 {
 		t.Fatalf("deduplicated projection=%q", projection)
 	}
