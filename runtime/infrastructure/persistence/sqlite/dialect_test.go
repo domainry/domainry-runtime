@@ -23,7 +23,7 @@ func TestSQLiteDialectContract(t *testing.T) {
 		want string
 	}{
 		{cfg: config.Config{DatabaseDSN: " file:runtime.db "}, want: "file:runtime.db"},
-		{cfg: config.Config{}, want: "../data/app.db"},
+		{cfg: config.Config{}, want: "../data/runtime.db"},
 		{cfg: config.Config{DBPath: " runtime.db "}, want: "runtime.db"},
 	} {
 		got, err := dialect.DSN(test.cfg)

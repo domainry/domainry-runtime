@@ -186,7 +186,7 @@ func (Dialect) DSN(cfg config.Config) (string, error) {
 		return strings.TrimSpace(cfg.DatabaseDSN), nil
 	}
 	if strings.TrimSpace(cfg.DBPath) == "" {
-		return "../data/app.db", nil
+		return "../data/runtime.db", nil
 	}
 	return strings.TrimSpace(cfg.DBPath), nil
 }
