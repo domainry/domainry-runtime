@@ -5,9 +5,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	"strings"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
+	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
@@ -297,39 +298,29 @@ func (r WorkflowProcessStore) UpdateTasks(ctx context.Context, workspaceID strin
 	}
 	defer tx.Rollback()
 	columns := workflowTaskColumns()
+	assignments := []ormbuilder.Assignment{}
+	for _, column := range []string{"assignee_user_id", "assignee_name", "assignee_role_key", "status", "decision", "comment", "due_at", "completed_by", "completed_at", "updated_at"} {
+		assignments = append(assignments, ormbuilder.AssignExpression(column, ormbuilder.InsertedValue(column)))
+	}
 	for start := 0; start < len(order); start += 20 {
 		end := min(start+20, len(order))
-		rows := make([]string, 0, end-start)
-		args := make([]any, 0, (end-start)*len(columns))
+		insert := ormbuilder.NewInsertBuilder(r.store.SQLRenderer, "workflow_tasks").Columns(columns...)
 		for _, id := range order[start:end] {
-			placeholders := make([]string, len(columns))
-			for index := range placeholders {
-				placeholders[index] = r.store.Placeholder(len(args) + index + 1)
-			}
-			rows = append(rows, "("+strings.Join(placeholders, ", ")+")")
-			args = append(args, workflowTaskValues(byID[id])...)
+			insert.Values(workflowTaskValues(byID[id])...)
 		}
-		query := "INSERT INTO " + r.store.TableIdentifier("workflow_tasks") + " (" + strings.Join(database.QuotedColumns(r.store, columns), ", ") + ") VALUES " + strings.Join(rows, ", ") + r.workflowTaskUpsertClause()
+		insert, buildErr := r.store.Engine.ApplyUpsert(insert, []string{"workspace_id", "id"}, assignments...)
+		if buildErr != nil {
+			return buildErr
+		}
+		query, args, buildErr := insert.Build()
+		if buildErr != nil {
+			return buildErr
+		}
 		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 			return err
 		}
 	}
 	return tx.Commit()
-}
-
-func (r WorkflowProcessStore) workflowTaskUpsertClause() string {
-	mutable := []string{"assignee_user_id", "assignee_name", "assignee_role_key", "status", "decision", "comment", "due_at", "completed_by", "completed_at", "updated_at"}
-	assignments := make([]string, 0, len(mutable))
-	if r.store.Driver() == "mysql" {
-		for _, column := range mutable {
-			assignments = append(assignments, r.store.Identifier(column)+" = VALUES("+r.store.Identifier(column)+")")
-		}
-		return " ON DUPLICATE KEY UPDATE " + strings.Join(assignments, ", ")
-	}
-	for _, column := range mutable {
-		assignments = append(assignments, r.store.Identifier(column)+" = excluded."+r.store.Identifier(column))
-	}
-	return " ON CONFLICT (" + strings.Join(database.QuotedColumns(r.store, []string{"workspace_id", "id"}), ", ") + ") DO UPDATE SET " + strings.Join(assignments, ", ")
 }
 func (r WorkflowProcessStore) GetTask(ctx context.Context, workspaceID, id string) (workflowmodel.WorkflowTask, bool, error) {
 	workspaceID, err := requireWorkflowWorkspaceID(workspaceID)
