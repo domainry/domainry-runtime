@@ -37,6 +37,7 @@ type EngineProfile interface {
 	ApplicationTablesQuery(ormdialect.Renderer, string) SchemaQuery
 	WorkspaceTablesQuery(ormdialect.Renderer, string) SchemaQuery
 	TableExistsQuery(ormdialect.Renderer, string, string) SchemaQuery
+	IndexesQuery(ormdialect.Renderer, string, string) SchemaQuery
 	MigrationLedgerTypes() MigrationLedgerTypes
 	EnsureMigrationNamespace(context.Context, SchemaDatabase, ormdialect.Renderer, string) error
 	ConfigureMigrationTransaction(context.Context, *sql.Tx, ormdialect.Renderer, string, time.Duration, time.Duration) error
@@ -116,6 +117,9 @@ func (portableEngineProfile) WorkspaceTablesQuery(ormdialect.Renderer, string) S
 	return SchemaQuery{}
 }
 func (portableEngineProfile) TableExistsQuery(ormdialect.Renderer, string, string) SchemaQuery {
+	return SchemaQuery{}
+}
+func (portableEngineProfile) IndexesQuery(ormdialect.Renderer, string, string) SchemaQuery {
 	return SchemaQuery{}
 }
 func (portableEngineProfile) MigrationLedgerTypes() MigrationLedgerTypes {

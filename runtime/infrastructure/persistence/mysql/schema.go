@@ -49,3 +49,6 @@ func (engineProfile) WorkspaceTablesQuery(renderer ormdialect.Renderer, database
 func (engineProfile) TableExistsQuery(renderer ormdialect.Renderer, _ string, table string) persistencedriver.SchemaQuery {
 	return persistencedriver.SchemaQuery{Statement: "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = " + renderer.Placeholder(1), Arguments: []any{table}}
 }
+func (engineProfile) IndexesQuery(renderer ormdialect.Renderer, _ string, table string) persistencedriver.SchemaQuery {
+	return persistencedriver.SchemaQuery{Statement: "SELECT DISTINCT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = " + renderer.Placeholder(1), Arguments: []any{table}}
+}

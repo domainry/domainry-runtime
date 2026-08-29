@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"sort"
 	"strings"
+
+	ormdialect "github.com/domainry/domainry-orm/dialect"
+	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 )
 
 // SQLDatabase is the transaction/connection-neutral DDL surface used by the
@@ -31,6 +34,8 @@ type Store interface {
 	MetadataIDColumnType() string
 	LocalizedTextKeyColumnType() string
 	RuntimeColumnDefinition(string) string
+	RuntimeProfile() persistencedriver.EngineProfile
+	RuntimeRenderer() ormdialect.Renderer
 }
 
 func sortedRuntimeSchemaTables(tables map[string][]string) []string {

@@ -46,3 +46,6 @@ func (engineProfile) WorkspaceTablesQuery(ormdialect.Renderer, string) persisten
 func (engineProfile) TableExistsQuery(renderer ormdialect.Renderer, _, table string) persistencedriver.SchemaQuery {
 	return persistencedriver.SchemaQuery{Statement: "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = " + renderer.Placeholder(1), Arguments: []any{table}}
 }
+func (engineProfile) IndexesQuery(renderer ormdialect.Renderer, _ string, table string) persistencedriver.SchemaQuery {
+	return persistencedriver.SchemaQuery{Statement: "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = " + renderer.Placeholder(1), Arguments: []any{table}}
+}

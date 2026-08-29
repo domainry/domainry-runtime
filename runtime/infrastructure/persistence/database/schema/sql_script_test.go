@@ -6,6 +6,10 @@ import (
 	"database/sql/driver"
 	"errors"
 	"io"
+
+	ormdialect "github.com/domainry/domainry-orm/dialect"
+	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite"
 )
 
 var errSchemaSQL = errors.New("scripted schema SQL failure")
@@ -136,3 +140,9 @@ func (s scriptedSchemaStore) RuntimeTableExists(ctx context.Context, table strin
 func (scriptedSchemaStore) MetadataIDColumnType() string                { return "TEXT" }
 func (scriptedSchemaStore) LocalizedTextKeyColumnType() string          { return "TEXT" }
 func (scriptedSchemaStore) RuntimeColumnDefinition(value string) string { return value }
+func (scriptedSchemaStore) RuntimeProfile() persistencedriver.EngineProfile {
+	return sqlite.Dialect{}.EngineProfile()
+}
+func (scriptedSchemaStore) RuntimeRenderer() ormdialect.Renderer {
+	return sqlite.Dialect{}.SQLDialect().WithSchema("")
+}

@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/secrets"
+	ormdialect "github.com/domainry/domainry-orm/dialect"
 	runtimeschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/schema"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -95,6 +96,8 @@ func (s *RuntimeStore) LocalizedTextKeyColumnType() string {
 func (s *RuntimeStore) RuntimeColumnDefinition(definition string) string {
 	return s.runtimeColumnDefinition(definition)
 }
+func (s *RuntimeStore) RuntimeProfile() driver.EngineProfile { return s.sqlBase().RuntimeEngine }
+func (s *RuntimeStore) RuntimeRenderer() ormdialect.Renderer { return s.sqlBase().SQLRenderer }
 
 func ValidateExternalMigrationBackup(driverName, evidencePath string) error {
 	_, err := validateExternalMigrationBackup(driverName, evidencePath)

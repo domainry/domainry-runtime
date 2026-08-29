@@ -3,7 +3,8 @@ package schema
 import (
 	"context"
 	"fmt"
-	"strings"
+
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 )
 
 func CreateIndexIfMissing(ctx context.Context, s Store, table, index string, unique bool, columns ...string) error {
@@ -14,22 +15,19 @@ func CreateIndexIfMissing(ctx context.Context, s Store, table, index string, uni
 	if existing[index] {
 		return nil
 	}
-	quoted := make([]string, 0, len(columns))
-	for _, column := range columns {
-		quoted = append(quoted, s.Identifier(column))
-	}
-	prefix := "CREATE INDEX IF NOT EXISTS "
+	builder := ormbuilder.NewCreateIndexBuilder(s.RuntimeRenderer(), index, table).Columns(columns...)
 	if unique {
-		prefix = "CREATE UNIQUE INDEX IF NOT EXISTS "
+		builder = builder.Unique()
 	}
-	if s.Driver() == "mysql" {
-		prefix = "CREATE INDEX "
-		if unique {
-			prefix = "CREATE UNIQUE INDEX "
+	profile := s.RuntimeProfile()
+	statement, arguments, err := profile.ApplyCreateIndex(builder).Build()
+	if err != nil {
+		return fmt.Errorf("build index %s: %w", index, err)
+	}
+	if _, err := s.SchemaDB().ExecContext(ctx, statement, arguments...); err != nil {
+		if profile.IsCreateIndexAlreadyExists(err) {
+			return nil
 		}
-	}
-	query := prefix + s.Identifier(index) + " ON " + s.TableIdentifier(table) + " (" + strings.Join(quoted, ", ") + ")"
-	if _, err := s.SchemaDB().ExecContext(ctx, query); err != nil {
 		return fmt.Errorf("create index %s: %w", index, err)
 	}
 	return nil
@@ -37,17 +35,11 @@ func CreateIndexIfMissing(ctx context.Context, s Store, table, index string, uni
 
 func tableIndexes(ctx context.Context, s Store, table string) (map[string]bool, error) {
 	out := map[string]bool{}
-	query := "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name=?"
-	if s.Driver() == "mysql" {
-		query = "SELECT DISTINCT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?"
-	} else if s.Driver() == "postgres" {
-		query = "SELECT indexname FROM pg_indexes WHERE schemaname = " + s.Placeholder(1) + " AND tablename = " + s.Placeholder(2)
+	query := s.RuntimeProfile().IndexesQuery(s.RuntimeRenderer(), s.DatabaseSchema(), table)
+	if query.Statement == "" {
+		return out, fmt.Errorf("database engine does not support index inspection")
 	}
-	args := []any{table}
-	if s.Driver() == "postgres" {
-		args = []any{s.DatabaseSchema(), table}
-	}
-	rows, err := s.SchemaDB().QueryContext(ctx, query, args...)
+	rows, err := s.SchemaDB().QueryContext(ctx, query.Statement, query.Arguments...)
 	if err != nil {
 		return out, fmt.Errorf("list indexes for %s: %w", table, err)
 	}

@@ -3,6 +3,10 @@ package schema
 import (
 	"context"
 	"testing"
+
+	ormdialect "github.com/domainry/domainry-orm/dialect"
+	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite"
 )
 
 type schemaHelperStore struct{}
@@ -28,6 +32,12 @@ func (schemaHelperStore) MetadataIDColumnType() string       { return "TEXT" }
 func (schemaHelperStore) LocalizedTextKeyColumnType() string { return "TEXT" }
 func (schemaHelperStore) RuntimeColumnDefinition(value string) string {
 	return "normalized:" + value
+}
+func (schemaHelperStore) RuntimeProfile() persistencedriver.EngineProfile {
+	return sqlite.Dialect{}.EngineProfile()
+}
+func (schemaHelperStore) RuntimeRenderer() ormdialect.Renderer {
+	return sqlite.Dialect{}.SQLDialect().WithSchema("")
 }
 
 func TestSchemaHelperValueShapes(t *testing.T) {

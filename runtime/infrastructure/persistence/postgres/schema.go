@@ -30,6 +30,9 @@ func (engineProfile) WorkspaceTablesQuery(renderer ormdialect.Renderer, database
 func (engineProfile) TableExistsQuery(renderer ormdialect.Renderer, databaseSchema, table string) persistencedriver.SchemaQuery {
 	return persistencedriver.SchemaQuery{Statement: "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = " + renderer.Placeholder(1) + " AND table_name = " + renderer.Placeholder(2), Arguments: []any{databaseSchema, table}}
 }
+func (engineProfile) IndexesQuery(renderer ormdialect.Renderer, databaseSchema, table string) persistencedriver.SchemaQuery {
+	return persistencedriver.SchemaQuery{Statement: "SELECT indexname FROM pg_indexes WHERE schemaname = " + renderer.Placeholder(1) + " AND tablename = " + renderer.Placeholder(2), Arguments: []any{databaseSchema, table}}
+}
 
 func (engineProfile) WorkspaceRLSSupported() bool             { return true }
 func (engineProfile) OrderedDecimalTextStorage() bool         { return false }
