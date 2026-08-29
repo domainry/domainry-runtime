@@ -327,8 +327,11 @@ func (r RecordStore) GetRecord(ctx context.Context, workspaceID string, object d
 		return recordmodel.Record{}, false, err
 	}
 	s := r.store
-	query := "SELECT * FROM " + s.TableIdentifier(object.Key) + " WHERE " + s.Identifier("workspace_id") + " = " + s.Placeholder(1) + " AND " + s.Identifier("id") + " = " + s.Placeholder(2) + " LIMIT 1"
-	rows, err := r.queryExecutor(ctx).QueryContext(ctx, query, workspaceID, recordID)
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.SQLRenderer, object.Key, workspaceID).Projections(ormbuilder.Project(ormbuilder.Star())).Where(ormbuilder.Equal("id", recordID)).Limit(1).Build()
+	if buildErr != nil {
+		return recordmodel.Record{}, false, buildErr
+	}
+	rows, err := r.queryExecutor(ctx).QueryContext(ctx, query, args...)
 	if err != nil {
 		return recordmodel.Record{}, false, fmt.Errorf("get record: %w", err)
 	}
@@ -349,8 +352,8 @@ func (r RecordStore) InsertRecord(ctx context.Context, workspaceID string, objec
 		return err
 	}
 	s := r.store
-	columns := []string{"workspace_id", "id", "created_at", "updated_at"}
-	values := []any{workspaceID, record.ID, record.CreatedAt, record.UpdatedAt}
+	columns := []string{"id", "created_at", "updated_at"}
+	values := []any{record.ID, record.CreatedAt, record.UpdatedAt}
 	columns, values, err = appendRecordInsertMetadata(columns, values, record)
 	if err != nil {
 		return err
@@ -364,8 +367,11 @@ func (r RecordStore) InsertRecord(ctx context.Context, workspaceID string, objec
 			values = append(values, dbFieldValue(s.RuntimeEngine, field, value))
 		}
 	}
-	query := "INSERT INTO " + s.TableIdentifier(object.Key) + " (" + stringsJoinIdentifiers(s, columns...) + ") VALUES (" + stringsJoinPlaceholders(s, len(columns)) + ")"
-	if _, err := r.database().ExecContext(ctx, query, values...); err != nil {
+	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.SQLRenderer, object.Key, workspaceID).Columns(columns...).Values(values...).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	if _, err := r.database().ExecContext(ctx, query, args...); err != nil {
 		return fmt.Errorf("insert record: %w", err)
 	}
 	return nil
@@ -377,10 +383,8 @@ func (r RecordStore) UpdateRecord(ctx context.Context, workspaceID string, objec
 		return err
 	}
 	s := r.store
-	assignments := []string{s.Identifier("updated_at") + " = " + s.Placeholder(1)}
-	values := []any{record.UpdatedAt}
-	assignments, values, err = appendRecordUpdateMetadata(s, assignments, values, record, record.Deleted)
-	if err != nil {
+	builder := ormbuilder.NewWorkspaceUpdateBuilder(s.SQLRenderer, object.Key, workspaceID).Set("updated_at", record.UpdatedAt)
+	if err := applyRecordUpdateBuilder(builder, record, record.Deleted); err != nil {
 		return err
 	}
 	for _, field := range object.Fields {
@@ -388,13 +392,14 @@ func (r RecordStore) UpdateRecord(ctx context.Context, workspaceID string, objec
 			continue
 		}
 		if value, ok := record.Data[field.Key]; ok {
-			assignments = append(assignments, s.Identifier(field.Key)+" = "+s.Placeholder(len(values)+1))
-			values = append(values, dbFieldValue(s.RuntimeEngine, field, value))
+			builder.Set(field.Key, dbFieldValue(s.RuntimeEngine, field, value))
 		}
 	}
-	values = append(values, workspaceID, record.ID)
-	query := "UPDATE " + s.TableIdentifier(object.Key) + " SET " + strings.Join(assignments, ", ") + " WHERE " + s.Identifier("workspace_id") + " = " + s.Placeholder(len(values)-1) + " AND " + s.Identifier("id") + " = " + s.Placeholder(len(values))
-	if _, err := r.database().ExecContext(ctx, query, values...); err != nil {
+	query, args, buildErr := builder.Where(ormbuilder.Equal("id", record.ID)).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	if _, err := r.database().ExecContext(ctx, query, args...); err != nil {
 		return fmt.Errorf("update record: %w", err)
 	}
 	return nil
@@ -406,10 +411,8 @@ func (r RecordStore) UpdateRecordWhere(ctx context.Context, workspaceID string, 
 		return false, err
 	}
 	s := r.store
-	assignments := []string{s.Identifier("updated_at") + " = " + s.Placeholder(1)}
-	values := []any{record.UpdatedAt}
-	assignments, values, err = appendRecordUpdateMetadata(s, assignments, values, record, record.Deleted)
-	if err != nil {
+	builder := ormbuilder.NewWorkspaceUpdateBuilder(s.SQLRenderer, object.Key, workspaceID).Set("updated_at", record.UpdatedAt)
+	if err := applyRecordUpdateBuilder(builder, record, record.Deleted); err != nil {
 		return false, err
 	}
 	for _, field := range object.Fields {
@@ -417,22 +420,23 @@ func (r RecordStore) UpdateRecordWhere(ctx context.Context, workspaceID string, 
 			continue
 		}
 		if value, ok := record.Data[field.Key]; ok {
-			assignments = append(assignments, s.Identifier(field.Key)+" = "+s.Placeholder(len(values)+1))
-			values = append(values, dbFieldValue(s.RuntimeEngine, field, value))
+			builder.Set(field.Key, dbFieldValue(s.RuntimeEngine, field, value))
 		}
 	}
-	where := []string{s.Identifier("workspace_id") + " = " + s.Placeholder(len(values)+1), s.Identifier("id") + " = " + s.Placeholder(len(values)+2)}
-	values = append(values, workspaceID, record.ID)
+	predicates := []ormbuilder.Predicate{ormbuilder.Equal("id", record.ID)}
 	keys := make([]string, 0, len(conditions))
 	for key := range conditions {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		where = append(where, s.Identifier(key)+" = "+s.Placeholder(len(values)+1))
-		values = append(values, recordConditionDBValue(s.RuntimeEngine, object, key, conditions[key]))
+		predicates = append(predicates, ormbuilder.Equal(key, recordConditionDBValue(s.RuntimeEngine, object, key, conditions[key])))
 	}
-	result, err := r.database().ExecContext(ctx, "UPDATE "+s.TableIdentifier(object.Key)+" SET "+strings.Join(assignments, ", ")+" WHERE "+strings.Join(where, " AND "), values...)
+	query, args, buildErr := builder.Where(ormbuilder.And(predicates...)).Build()
+	if buildErr != nil {
+		return false, buildErr
+	}
+	result, err := r.database().ExecContext(ctx, query, args...)
 	if err != nil {
 		return false, fmt.Errorf("update record with conditions: %w", err)
 	}
@@ -454,7 +458,11 @@ func (r RecordStore) DeleteRecord(ctx context.Context, workspaceID string, objec
 		return fmt.Errorf("begin record delete: %w", err)
 	}
 	defer tx.Rollback()
-	result, err := tx.ExecContext(ctx, "DELETE FROM "+s.TableIdentifier(object.Key)+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(1)+" AND "+s.Identifier("id")+" = "+s.Placeholder(2), workspaceID, recordID)
+	query, args, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(s.SQLRenderer, object.Key, workspaceID).Where(ormbuilder.Equal("id", recordID)).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	result, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("delete record: %w", err)
 	}
@@ -482,13 +490,14 @@ func (r RecordStore) UniqueExists(ctx context.Context, workspaceID, objectKey, f
 		return false, err
 	}
 	s := r.store
-	query := "SELECT " + s.Identifier("id") + " FROM " + s.TableIdentifier(objectKey) + " WHERE " + s.Identifier("workspace_id") + " = " + s.Placeholder(1) + " AND " + s.Identifier(fieldKey) + " = " + s.Placeholder(2)
-	args := []any{workspaceID, dbValue(value)}
+	predicate := ormbuilder.Predicate(ormbuilder.Equal(fieldKey, dbValue(value)))
 	if strings.TrimSpace(currentID) != "" {
-		query += " AND " + s.Identifier("id") + " <> " + s.Placeholder(3)
-		args = append(args, currentID)
+		predicate = ormbuilder.And(predicate, ormbuilder.NotEqual("id", currentID))
 	}
-	query += " LIMIT 1"
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.SQLRenderer, objectKey, workspaceID).Columns("id").Where(predicate).Limit(1).Build()
+	if buildErr != nil {
+		return false, buildErr
+	}
 	var id string
 	err = r.queryExecutor(ctx).QueryRowContext(ctx, query, args...).Scan(&id)
 	if err == nil {
@@ -554,8 +563,8 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 	}
 	switch operation {
 	case "create":
-		columns := []string{"workspace_id", "id", "created_at", "updated_at"}
-		values := []any{workspaceID, commit.Record.ID, commit.Record.CreatedAt, commit.Record.UpdatedAt}
+		columns := []string{"id", "created_at", "updated_at"}
+		values := []any{commit.Record.ID, commit.Record.CreatedAt, commit.Record.UpdatedAt}
 		columns, values, metadataErr := appendRecordInsertMetadata(columns, values, commit.Record)
 		if metadataErr != nil {
 			return metadataErr
@@ -569,14 +578,16 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 				values = append(values, dbFieldValue(s.RuntimeEngine, field, value))
 			}
 		}
-		if _, err := tx.ExecContext(ctx, "INSERT INTO "+s.TableIdentifier(commit.Object.Key)+" ("+stringsJoinIdentifiers(s, columns...)+") VALUES ("+stringsJoinPlaceholders(s, len(columns))+")", values...); err != nil {
+		query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.SQLRenderer, commit.Object.Key, workspaceID).Columns(columns...).Values(values...).Build()
+		if buildErr != nil {
+			return buildErr
+		}
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 			return fmt.Errorf("insert record mutation: %w", database.MutationConstraintError(err, commit.Object.Key, commit.Record.ID, mutation.MutationConflictUnique))
 		}
 	case "update", "restore":
-		assignments := []string{s.Identifier("updated_at") + " = " + s.Placeholder(1)}
-		values := []any{commit.Record.UpdatedAt}
-		assignments, values, metadataErr := appendRecordUpdateMetadata(s, assignments, values, commit.Record, operation == "restore" || commit.Record.Deleted)
-		if metadataErr != nil {
+		builder := ormbuilder.NewWorkspaceUpdateBuilder(s.SQLRenderer, commit.Object.Key, workspaceID).Set("updated_at", commit.Record.UpdatedAt)
+		if metadataErr := applyRecordUpdateBuilder(builder, commit.Record, operation == "restore" || commit.Record.Deleted); metadataErr != nil {
 			return metadataErr
 		}
 		for _, field := range commit.Object.Fields {
@@ -584,12 +595,10 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 				continue
 			}
 			if value, ok := commit.Record.Data[field.Key]; ok {
-				assignments = append(assignments, s.Identifier(field.Key)+" = "+s.Placeholder(len(values)+1))
-				values = append(values, dbFieldValue(s.RuntimeEngine, field, value))
+				builder.Set(field.Key, dbFieldValue(s.RuntimeEngine, field, value))
 			}
 		}
-		values = append(values, workspaceID, commit.Record.ID)
-		where := s.Identifier("workspace_id") + " = " + s.Placeholder(len(values)-1) + " AND " + s.Identifier("id") + " = " + s.Placeholder(len(values))
+		predicates := []ormbuilder.Predicate{ormbuilder.Equal("id", commit.Record.ID)}
 		conditionKeys := make([]string, 0, len(commit.Conditions))
 		for key := range commit.Conditions {
 			if strings.TrimSpace(key) != "" && key != "id" && key != "updated_at" {
@@ -598,22 +607,23 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 		}
 		sort.Strings(conditionKeys)
 		for _, key := range conditionKeys {
-			values = append(values, recordConditionDBValue(s.RuntimeEngine, commit.Object, key, commit.Conditions[key]))
-			where += " AND " + s.Identifier(key) + " = " + s.Placeholder(len(values))
+			predicates = append(predicates, ormbuilder.Equal(key, recordConditionDBValue(s.RuntimeEngine, commit.Object, key, commit.Conditions[key])))
 		}
-		for _, predicate := range commit.Predicates {
-			clause, predicateValues, err := recordMutationPredicateSQL(s, commit.Object, predicate, len(values)+1)
+		for _, mutationPredicate := range commit.Predicates {
+			predicate, err := recordMutationPredicate(commit.Object, mutationPredicate, s.RuntimeEngine)
 			if err != nil {
 				return err
 			}
-			where += " AND " + clause
-			values = append(values, predicateValues...)
+			predicates = append(predicates, predicate)
 		}
 		if expected := strings.TrimSpace(commit.OptimisticUpdatedAt()); expected != "" {
-			values = append(values, expected)
-			where += " AND " + s.Identifier("updated_at") + " = " + s.Placeholder(len(values))
+			predicates = append(predicates, ormbuilder.Equal("updated_at", expected))
 		}
-		result, err := tx.ExecContext(ctx, "UPDATE "+s.TableIdentifier(commit.Object.Key)+" SET "+strings.Join(assignments, ", ")+" WHERE "+where, values...)
+		query, args, buildErr := builder.Where(ormbuilder.And(predicates...)).Build()
+		if buildErr != nil {
+			return buildErr
+		}
+		result, err := tx.ExecContext(ctx, query, args...)
 		if err != nil {
 			return fmt.Errorf("update record mutation: %w", database.MutationConstraintError(err, commit.Object.Key, commit.Record.ID, mutation.MutationConflictUnique))
 		}
@@ -624,10 +634,11 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 		if affected == 0 {
 			if expected := strings.TrimSpace(commit.OptimisticUpdatedAt()); expected != "" {
 				var current string
-				err := tx.QueryRowContext(ctx,
-					"SELECT "+s.Identifier("updated_at")+" FROM "+s.TableIdentifier(commit.Object.Key)+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(1)+" AND "+s.Identifier("id")+" = "+s.Placeholder(2)+" LIMIT 1",
-					workspaceID, commit.Record.ID,
-				).Scan(&current)
+				lookup, lookupArgs, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.SQLRenderer, commit.Object.Key, workspaceID).Columns("updated_at").Where(ormbuilder.Equal("id", commit.Record.ID)).Limit(1).Build()
+				if buildErr != nil {
+					return buildErr
+				}
+				err := tx.QueryRowContext(ctx, lookup, lookupArgs...).Scan(&current)
 				if errors.Is(err, sql.ErrNoRows) || (err == nil && strings.TrimSpace(current) != expected) {
 					return mutation.MutationConflict(commit.Object.Key, commit.Record.ID, mutation.MutationConflictOptimistic, nil)
 				}
@@ -646,13 +657,15 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 		if id == "" {
 			id = commit.Record.ID
 		}
-		values := []any{workspaceID, id}
-		where := s.Identifier("workspace_id") + " = " + s.Placeholder(1) + " AND " + s.Identifier("id") + " = " + s.Placeholder(2)
+		predicate := ormbuilder.Predicate(ormbuilder.Equal("id", id))
 		if expected := strings.TrimSpace(commit.OptimisticUpdatedAt()); expected != "" {
-			values = append(values, expected)
-			where += " AND " + s.Identifier("updated_at") + " = " + s.Placeholder(3)
+			predicate = ormbuilder.And(predicate, ormbuilder.Equal("updated_at", expected))
 		}
-		result, err := tx.ExecContext(ctx, "DELETE FROM "+s.TableIdentifier(commit.Object.Key)+" WHERE "+where, values...)
+		query, args, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(s.SQLRenderer, commit.Object.Key, workspaceID).Where(predicate).Build()
+		if buildErr != nil {
+			return buildErr
+		}
+		result, err := tx.ExecContext(ctx, query, args...)
 		if err != nil {
 			return fmt.Errorf("delete record mutation: %w", err)
 		}
@@ -720,10 +733,16 @@ func (r RecordStore) validateRelatedAggregateInvariantsTx(ctx context.Context, t
 			continue
 		}
 		relationID := strings.TrimSpace(fmt.Sprint(commit.Record.Data[policy.RelationField]))
-		limitQuery := "SELECT " + r.store.Identifier(policy.LimitField) + " FROM " + r.store.TableIdentifier(policy.TargetObjectKey) + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(2) + " LIMIT 1"
-		limitQuery += recordConstraintLockClause(r.store.RuntimeEngine)
+		limitBuilder := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, policy.TargetObjectKey, workspaceID).Columns(policy.LimitField).Where(ormbuilder.Equal("id", relationID)).Limit(1)
+		if r.store.RuntimeEngine.Capabilities().RowLock {
+			limitBuilder.ForUpdate()
+		}
+		limitQuery, limitArgs, buildErr := limitBuilder.Build()
+		if buildErr != nil {
+			return buildErr
+		}
 		var rawLimit any
-		if err := tx.QueryRowContext(ctx, limitQuery, workspaceID, relationID).Scan(&rawLimit); err != nil {
+		if err := tx.QueryRowContext(ctx, limitQuery, limitArgs...).Scan(&rawLimit); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return mutation.PolicyConflict("backend.policy.related_record_missing", commit.Object.Key, commit.Record.ID, policy.RelationField)
 			}
@@ -736,23 +755,23 @@ func (r RecordStore) validateRelatedAggregateInvariantsTx(ctx context.Context, t
 		if policy.StatusField != "" {
 			columns = append(columns, policy.StatusField)
 		}
-		values := []any{workspaceID, relationID, commit.Record.ID}
-		clauses := []string{
-			r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1),
-			r.store.Identifier(policy.RelationField) + " = " + r.store.Placeholder(2),
-			r.store.Identifier("id") + " <> " + r.store.Placeholder(3),
-		}
+		predicates := []ormbuilder.Predicate{ormbuilder.Equal(policy.RelationField, relationID), ormbuilder.NotEqual("id", commit.Record.ID)}
 		if policy.StatusField != "" && len(policy.IncludedStatuses) > 0 {
-			placeholders := make([]string, 0, len(policy.IncludedStatuses))
+			statuses := make([]any, 0, len(policy.IncludedStatuses))
 			for _, status := range policy.IncludedStatuses {
-				values = append(values, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, policy.StatusField, status))
-				placeholders = append(placeholders, r.store.Placeholder(len(values)))
+				statuses = append(statuses, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, policy.StatusField, status))
 			}
-			clauses = append(clauses, r.store.Identifier(policy.StatusField)+" IN ("+strings.Join(placeholders, ", ")+")")
+			predicates = append(predicates, ormbuilder.In(policy.StatusField, statuses...))
 		}
-		query := "SELECT " + stringsJoinIdentifiers(r.store, columns...) + " FROM " + r.store.TableIdentifier(commit.Object.Key) + " WHERE " + strings.Join(clauses, " AND ")
-		query += recordConstraintLockClause(r.store.RuntimeEngine)
-		rows, err := tx.QueryContext(ctx, query, values...)
+		aggregateBuilder := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, commit.Object.Key, workspaceID).Columns(columns...).Where(ormbuilder.And(predicates...))
+		if r.store.RuntimeEngine.Capabilities().RowLock {
+			aggregateBuilder.ForUpdate()
+		}
+		query, args, buildErr := aggregateBuilder.Build()
+		if buildErr != nil {
+			return buildErr
+		}
+		rows, err := tx.QueryContext(ctx, query, args...)
 		if err != nil {
 			return fmt.Errorf("read related aggregate %s: %w", policy.Key, err)
 		}
@@ -929,29 +948,29 @@ func (r RecordStore) validateTemporalExclusionTx(ctx context.Context, tx Transac
 		if !applies {
 			continue
 		}
-		clauses := []string{r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1), r.store.Identifier("id") + " <> " + r.store.Placeholder(2)}
-		values := []any{workspaceID, commit.Record.ID}
+		predicates := []ormbuilder.Predicate{ormbuilder.NotEqual("id", commit.Record.ID)}
 		for _, field := range policy.ScopeFields {
-			values = append(values, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, field, commit.Record.Data[field]))
-			clauses = append(clauses, r.store.Identifier(field)+" = "+r.store.Placeholder(len(values)))
+			predicates = append(predicates, ormbuilder.Equal(field, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, field, commit.Record.Data[field])))
 		}
-		values = append(values, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, policy.StartField, commit.Record.Data[policy.EndField]))
-		clauses = append(clauses, r.store.Identifier(policy.StartField)+" < "+r.store.Placeholder(len(values)))
-		values = append(values, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, policy.EndField, commit.Record.Data[policy.StartField]))
-		clauses = append(clauses, r.store.Identifier(policy.EndField)+" > "+r.store.Placeholder(len(values)))
+		predicates = append(predicates, ormbuilder.LessThan(policy.StartField, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, policy.StartField, commit.Record.Data[policy.EndField])))
+		predicates = append(predicates, ormbuilder.GreaterThan(policy.EndField, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, policy.EndField, commit.Record.Data[policy.StartField])))
 		if policy.StatusField != "" && len(policy.ExcludedStatuses) > 0 {
-			placeholders := make([]string, 0, len(policy.ExcludedStatuses))
+			statuses := make([]any, 0, len(policy.ExcludedStatuses))
 			for _, status := range policy.ExcludedStatuses {
-				values = append(values, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, policy.StatusField, status))
-				placeholders = append(placeholders, r.store.Placeholder(len(values)))
+				statuses = append(statuses, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, policy.StatusField, status))
 			}
-			statusColumn := r.store.Identifier(policy.StatusField)
-			clauses = append(clauses, "("+statusColumn+" IS NULL OR "+statusColumn+" NOT IN ("+strings.Join(placeholders, ", ")+"))")
+			predicates = append(predicates, ormbuilder.Or(ormbuilder.IsNull(policy.StatusField), ormbuilder.NotIn(policy.StatusField, statuses...)))
 		}
-		query := "SELECT " + r.store.Identifier("id") + " FROM " + r.store.TableIdentifier(commit.Object.Key) + " WHERE " + strings.Join(clauses, " AND ") + " LIMIT 1"
-		query += recordConstraintLockClause(r.store.RuntimeEngine)
+		conflictBuilder := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, commit.Object.Key, workspaceID).Columns("id").Where(ormbuilder.And(predicates...)).Limit(1)
+		if r.store.RuntimeEngine.Capabilities().RowLock {
+			conflictBuilder.ForUpdate()
+		}
+		query, args, buildErr := conflictBuilder.Build()
+		if buildErr != nil {
+			return buildErr
+		}
 		var conflictingID string
-		err = tx.QueryRowContext(ctx, query, values...).Scan(&conflictingID)
+		err = tx.QueryRowContext(ctx, query, args...).Scan(&conflictingID)
 		if errors.Is(err, sql.ErrNoRows) {
 			continue
 		}
@@ -971,6 +990,14 @@ func recordConstraintLockClause(profile persistencedriver.EngineProfile) string 
 }
 
 func recordMutationPredicateSQL(store *database.RuntimeStore, object definitionmodel.ObjectSchema, predicate transactionmodel.MutationPredicate, placeholder int) (string, []any, error) {
+	prepared, err := recordMutationPredicate(object, predicate, store.RuntimeEngine)
+	if err != nil {
+		return "", nil, err
+	}
+	return ormbuilder.PreparePredicate(store.SQLRenderer, prepared, placeholder-1)
+}
+
+func recordMutationPredicate(object definitionmodel.ObjectSchema, predicate transactionmodel.MutationPredicate, profile persistencedriver.EngineProfile) (ormbuilder.Predicate, error) {
 	field := strings.TrimSpace(predicate.Field)
 	allowed := field == "updated_at"
 	for _, schemaField := range object.Fields {
@@ -978,24 +1005,38 @@ func recordMutationPredicateSQL(store *database.RuntimeStore, object definitionm
 	}
 	operator := strings.TrimSpace(predicate.Operator)
 	if !allowed {
-		return "", nil, fmt.Errorf("invalid record mutation predicate field %q", field)
+		return nil, fmt.Errorf("invalid record mutation predicate field %q", field)
 	}
-	sqlOperator, ok := map[string]string{"eq": "=", "ne": "<>", "lt": "<", "lte": "<=", "gt": ">", "gte": ">="}[operator]
-	if !ok {
-		return "", nil, fmt.Errorf("invalid record mutation predicate operator %q", operator)
+	if _, ok := map[string]bool{"eq": true, "ne": true, "lt": true, "lte": true, "gt": true, "gte": true}[operator]; !ok {
+		return nil, fmt.Errorf("invalid record mutation predicate operator %q", operator)
 	}
-	identifier := store.Identifier(field)
 	if predicate.Value == nil {
 		switch operator {
 		case "eq":
-			return identifier + " IS NULL", nil, nil
+			return ormbuilder.IsNull(field), nil
 		case "ne":
-			return identifier + " IS NOT NULL", nil, nil
+			return ormbuilder.IsNotNull(field), nil
 		default:
-			return "", nil, fmt.Errorf("nil predicate only supports eq/ne for field %q", field)
+			return nil, fmt.Errorf("nil predicate only supports eq/ne for field %q", field)
 		}
 	}
-	return identifier + " " + sqlOperator + " " + store.Placeholder(placeholder), []any{recordConditionDBValue(store.RuntimeEngine, object, field, predicate.Value)}, nil
+	value := recordConditionDBValue(profile, object, field, predicate.Value)
+	switch operator {
+	case "eq":
+		return ormbuilder.Equal(field, value), nil
+	case "ne":
+		return ormbuilder.NotEqual(field, value), nil
+	case "lt":
+		return ormbuilder.LessThan(field, value), nil
+	case "lte":
+		return ormbuilder.LessThanOrEqual(field, value), nil
+	case "gt":
+		return ormbuilder.GreaterThan(field, value), nil
+	case "gte":
+		return ormbuilder.GreaterThanOrEqual(field, value), nil
+	default:
+		return nil, fmt.Errorf("invalid record mutation predicate operator %q", operator)
+	}
 }
 
 func recordConditionDBValue(profile persistencedriver.EngineProfile, object definitionmodel.ObjectSchema, key string, value any) any {
@@ -1139,6 +1180,23 @@ func appendRecordInsertMetadata(columns []string, values []any, record recordmod
 		columns, values = append(columns, "update_by"), append(values, userID)
 	}
 	return columns, values, nil
+}
+
+func applyRecordUpdateBuilder(builder *ormbuilder.UpdateBuilder, record recordmodel.Record, writeDeleted bool) error {
+	if writeDeleted {
+		builder.Set("deleted", record.Deleted)
+	}
+	if record.ExtInfo != nil {
+		encoded, err := recordExtInfoDBValue(record.ExtInfo)
+		if err != nil {
+			return err
+		}
+		builder.Set("ext_info", encoded)
+	}
+	if userID := strings.TrimSpace(record.UpdateBy); userID != "" {
+		builder.Set("update_by", userID)
+	}
+	return nil
 }
 
 func appendRecordUpdateMetadata(store *database.RuntimeStore, assignments []string, values []any, record recordmodel.Record, writeDeleted bool) ([]string, []any, error) {
