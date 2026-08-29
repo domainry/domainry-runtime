@@ -240,6 +240,7 @@ func (t *actionExecutionTransaction) Commit(ctx context.Context, commits []trans
 		}
 	}
 	for _, evidence := range completion.AuditEvents {
+		evidence.WorkspaceID = completion.Execution.WorkspaceID
 		if err := recordStore.ApplyAuditTx(ctx, t.executor, evidence); err != nil {
 			return actionmodel.ActionBusinessExecution{}, database.MutationTransactionError(err, "audit_event", evidence.ID)
 		}
