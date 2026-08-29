@@ -12,6 +12,8 @@ require (
 	github.com/domainry/domainry-monitoring-sdk v0.0.0
 	github.com/domainry/domainry-notification v0.1.0-dev.7
 	github.com/domainry/domainry-notification-sdk v0.1.0-dev.3
+	github.com/domainry/domainry-scheduler v0.0.0
+	github.com/domainry/domainry-scheduler-sdk v0.0.0-00010101000000-000000000000
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/microsoft/go-mssqldb v1.10.0
@@ -76,3 +78,7 @@ replace github.com/domainry/domainry-monitoring-sdk => ../domainry-monitoring-sd
 replace github.com/domainry/domainry-monitoring => ../domainry-monitoring
 
 replace github.com/domainry/domainry-party => ../domainry-party
+
+replace github.com/domainry/domainry-scheduler-sdk => ../domainry-scheduler-sdk
+
+replace github.com/domainry/domainry-scheduler => ../domainry-scheduler

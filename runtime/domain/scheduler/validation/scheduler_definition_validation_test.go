@@ -36,6 +36,17 @@ func TestSchedulerAuthoringValidationRejectsInvalidCalendarFields(t *testing.T) 
 	}
 }
 
+func TestSchedulerAuthoringValidationAcceptsConfiguredHTTPCallback(t *testing.T) {
+	definition := map[string]any{"target_type": "http", "target_key": "sync", "connection_key": "partner", "operation": "sync", "dispatch_mode": "runtime_callback", "schedule_type": "interval", "interval_seconds": 60, "timezone": "UTC", "max_attempts": 3, "timeout_seconds": 30}
+	if err := SchedulerValidateDefinitionContract(t.Context(), definition); err != nil {
+		t.Fatal(err)
+	}
+	delete(definition, "connection_key")
+	if err := SchedulerValidateDefinitionContract(t.Context(), definition); serviceErrorCode(err) != "backend.scheduler.http_connection_required" {
+		t.Fatalf("error=%v", err)
+	}
+}
+
 func errorParams(err error) map[string]string {
 	var appErr *apperror.AppError
 	if errors.As(err, &appErr) {

@@ -19,6 +19,7 @@ import (
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 type runtimeConstructionInput struct {
@@ -36,6 +37,7 @@ type runtimeConstructionInput struct {
 	notificationHTTP    notificationhttp.NotificationApplication
 	notificationBinding notificationsdk.Binding
 	monitoringBinding   monitoringsdk.Binding
+	schedulerBinding    schedulersdk.Binding
 	notificationWorkers notificationsdk.LocalWorkers
 	notificationRelay   *notificationpublication.Relay
 	worker              workerplatform.Dependencies
@@ -64,6 +66,7 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		notificationHTTP:    input.notificationHTTP,
 		notificationBinding: input.notificationBinding,
 		monitoringBinding:   input.monitoringBinding,
+		schedulerBinding:    input.schedulerBinding,
 		notificationWorkers: input.notificationWorkers,
 		notificationRelay:   input.notificationRelay,
 		worker:              workerplatform.NormalizeDependencies(input.worker),

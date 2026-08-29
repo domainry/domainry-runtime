@@ -13,6 +13,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 var runtimeWorkerApplications = func(records *composition.RuntimeServices) composition.RuntimeApplications {
@@ -79,7 +80,16 @@ func agentTaskRecoveryInterval(interval time.Duration) time.Duration {
 }
 
 func (a *Runtime) startSchedulerWorker(ctx context.Context) {
-	if a == nil || a.records == nil {
+	if a == nil {
+		return
+	}
+	if a.schedulerBinding != nil {
+		a.startControlledWorker(ctx, "scheduler", func(workerCtx context.Context) <-chan struct{} {
+			return a.schedulerBinding.Start(workerCtx, schedulersdk.WorkerConfig{Enabled: a.cfg.SchedulerEnabled, PollInterval: a.cfg.SchedulerPollInterval, BatchSize: a.cfg.SchedulerBatchSize, LeaseTTL: a.cfg.SchedulerLeaseTTL})
+		})
+		return
+	}
+	if a.records == nil {
 		return
 	}
 	a.startControlledWorker(ctx, "scheduler", func(workerCtx context.Context) <-chan struct{} {

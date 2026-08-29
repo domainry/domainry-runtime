@@ -25,6 +25,7 @@ import (
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 // Runtime owns the process-level composition and lifecycle.
@@ -44,6 +45,7 @@ type Runtime struct {
 	notificationHTTP    notificationhttp.NotificationApplication
 	notificationBinding notificationsdk.Binding
 	monitoringBinding   monitoringsdk.Binding
+	schedulerBinding    schedulersdk.Binding
 	notificationWorkers notificationsdk.LocalWorkers
 	notificationRelay   *notificationpublication.Relay
 	worker              workerplatform.Dependencies

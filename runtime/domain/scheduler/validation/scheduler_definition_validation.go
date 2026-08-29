@@ -24,11 +24,11 @@ func SchedulerValidateDefinitionContract(ctx context.Context, data map[string]an
 func validateSchedulerDefinitionData(ctx context.Context, data map[string]any) error {
 	targetType := schedulerDefinitionTargetType(recordmodel.Record{Data: data})
 	switch targetType {
-	case "workflow", "report_export", "report_snapshot_refresh":
+	case "workflow", "report_export", "report_snapshot_refresh", "http":
 	case "":
 		return badRequest("backend.scheduler.target_type_required", "field", "target_type")
 	default:
-		return badRequest("backend.scheduler.target_type_unsupported", "field", "target_type", "allowed", "report_export,report_snapshot_refresh,workflow", "actual", targetType)
+		return badRequest("backend.scheduler.target_type_unsupported", "field", "target_type", "allowed", "http,report_export,report_snapshot_refresh,workflow", "actual", targetType)
 	}
 	targetKey := strings.TrimSpace(fmt.Sprint(data["target_key"]))
 	if targetKey == "" || targetKey == "<nil>" {
@@ -39,6 +39,18 @@ func validateSchedulerDefinitionData(ctx context.Context, data map[string]any) e
 	}
 	if (targetType == "report_export" || targetType == "report_snapshot_refresh") && strings.HasPrefix(targetKey, "scheduled:") {
 		return badRequest("backend.scheduler.report_target_invalid", "field", "target_key", "actual", targetKey)
+	}
+	if targetType == "http" {
+		if connectionKey := strings.TrimSpace(fmt.Sprint(data["connection_key"])); connectionKey == "" || connectionKey == "<nil>" {
+			return badRequest("backend.scheduler.http_connection_required", "field", "connection_key")
+		}
+		if operation := strings.TrimSpace(fmt.Sprint(data["operation"])); operation == "" || operation == "<nil>" {
+			return badRequest("backend.scheduler.http_operation_required", "field", "operation")
+		}
+		dispatchMode := strings.ToLower(strings.TrimSpace(fmt.Sprint(data["dispatch_mode"])))
+		if dispatchMode != "" && dispatchMode != "<nil>" && dispatchMode != "direct" && dispatchMode != "runtime_callback" {
+			return badRequest("backend.scheduler.http_dispatch_mode_invalid", "field", "dispatch_mode", "allowed", "direct,runtime_callback", "actual", dispatchMode)
+		}
 	}
 	maxAttempts := schedulerpolicy.SchedulerInt(data["max_attempts"], 1)
 	if maxAttempts < 1 || maxAttempts > 100 {

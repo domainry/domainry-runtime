@@ -13,7 +13,8 @@ func schedulerBusinessJobParameters() []capabilitycontract.CapabilityAuthoringPa
 		{Key: "interval_seconds", Type: "integer", Minimum: schedulerAuthoringFloatPointer(1)}, {Key: "interval_minutes", Type: "integer", Minimum: schedulerAuthoringFloatPointer(1)}, {Key: "interval_hours", Type: "integer", Minimum: schedulerAuthoringFloatPointer(1)},
 		{Key: "missed_window_policy", Type: "string", Default: "skip", Enum: []string{"catch_up_bounded", "catch_up_one", "skip"}},
 		{Key: "max_catchup_windows", Type: "integer", Minimum: schedulerAuthoringFloatPointer(0), Maximum: schedulerAuthoringFloatPointer(100)}, {Key: "timezone", Type: "iana_timezone"},
-		{Key: "target_type", Type: "string", Required: true, Enum: []string{"report_export", "report_snapshot_refresh", "workflow"}}, {Key: "target_key", Type: "string", Required: true}, {Key: "target_object", Type: "object_key"},
+		{Key: "target_type", Type: "string", Required: true, Enum: []string{"http", "report_export", "report_snapshot_refresh", "workflow"}}, {Key: "target_key", Type: "string", Required: true}, {Key: "target_object", Type: "object_key"},
+		{Key: "connection_key", Type: "string"}, {Key: "operation", Type: "string"}, {Key: "dispatch_mode", Type: "string", Default: "runtime_callback", Enum: []string{"direct", "runtime_callback"}},
 		{Key: "condition_json", Type: "string"}, {Key: "payload_json", Type: "string"}, {Key: "run_as_role", Type: "role_key"},
 		{Key: "max_attempts", Type: "integer", Required: true, Default: 1, Minimum: schedulerAuthoringFloatPointer(1), Maximum: schedulerAuthoringFloatPointer(100)},
 		{Key: "retry_backoff", Type: "string", Enum: []string{"capped_exponential", "exponential", "fixed"}}, {Key: "retry_delay_seconds", Type: "integer", Minimum: schedulerAuthoringFloatPointer(0)}, {Key: "retry_max_delay_seconds", Type: "integer", Minimum: schedulerAuthoringFloatPointer(0)},
@@ -78,6 +79,9 @@ func schedulerDefinitionAuthoringErrors() []capabilitycontract.CapabilityAuthori
 		{Code: "backend.scheduler.target_type_required", FieldPath: "target_type", MessageKey: "backend.scheduler.target_type_required"},
 		{Code: "backend.scheduler.target_type_unsupported", FieldPath: "target_type", MessageKey: "backend.scheduler.target_type_unsupported"},
 		{Code: "backend.scheduler.target_key_required", FieldPath: "target_key", MessageKey: "backend.scheduler.target_key_required"},
+		{Code: "backend.scheduler.http_connection_required", FieldPath: "connection_key", MessageKey: "backend.scheduler.http_connection_required"},
+		{Code: "backend.scheduler.http_operation_required", FieldPath: "operation", MessageKey: "backend.scheduler.http_operation_required"},
+		{Code: "backend.scheduler.http_dispatch_mode_invalid", FieldPath: "dispatch_mode", MessageKey: "backend.scheduler.http_dispatch_mode_invalid"},
 		{Code: "backend.scheduler.timezone_invalid", FieldPath: "timezone", MessageKey: "backend.scheduler.timezone_invalid"},
 		{Code: "backend.scheduler.schedule_type_invalid", FieldPath: "schedule_type", MessageKey: "backend.scheduler.schedule_type_invalid"},
 		{Code: "backend.scheduler.interval_invalid", FieldPath: "interval_seconds", MessageKey: "backend.scheduler.interval_invalid"},
@@ -94,6 +98,7 @@ func schedulerBusinessJobExamples() []capabilitycontract.CapabilityAuthoringExam
 	return []capabilitycontract.CapabilityAuthoringExample{
 		{Name: "minimal_valid", Value: map[string]any{"key": "daily_order_export", "name": "Daily order export", "status": "enabled", "trigger_type": "scheduled", "schedule_type": "daily_at", "time_of_day": "02:00", "timezone": "UTC", "target_type": "report_export", "target_key": "orders.daily", "max_attempts": 1, "timeout_seconds": 300}},
 		{Name: "representative", Value: map[string]any{"key": "order_approval_scan", "name": "Order approval scan", "status": "enabled", "trigger_type": "scheduled", "schedule_type": "cron", "schedule_expression": "*/15 * * * *", "timezone": "Asia/Shanghai", "missed_window_policy": "catch_up_bounded", "max_catchup_windows": 3, "target_type": "workflow", "target_key": "scheduled:order.approval", "target_object": "order", "payload_json": "{\"source\":\"scheduler\"}", "max_attempts": 3, "retry_backoff": "exponential", "retry_delay_seconds": 10, "retry_max_delay_seconds": 300, "timeout_seconds": 1800, "description": "Starts approval for eligible orders"}},
+		{Name: "http_callback", Value: map[string]any{"key": "sync_partner", "name": "Sync partner", "status": "enabled", "trigger_type": "scheduled", "schedule_type": "interval", "interval_seconds": 300, "timezone": "UTC", "target_type": "http", "target_key": "sync", "connection_key": "partner_primary", "operation": "sync", "dispatch_mode": "runtime_callback", "payload_json": "{}", "max_attempts": 3, "timeout_seconds": 30}},
 		{Name: "invalid_with_repair", Value: map[string]any{"key": "invalid_job", "name": "Invalid job", "status": "enabled", "trigger_type": "scheduled", "schedule_type": "interval", "interval_seconds": 0, "target_type": "workflow", "target_key": "order.approval", "max_attempts": 1, "timeout_seconds": 300}, ExpectedErrorCodes: []string{"backend.scheduler.workflow_target_invalid"}},
 	}
 }

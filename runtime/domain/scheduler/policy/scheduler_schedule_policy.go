@@ -7,94 +7,20 @@ import (
 	"time"
 
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	schedulerschedule "github.com/domainry/domainry-scheduler/schedule"
 	"github.com/robfig/cron/v3"
 )
 
 func SchedulerScheduleWindowSuffix(definition recordmodel.Record, now time.Time) string {
-	loc := scheduleLocation(definition)
-	localNow := now.In(loc)
-	switch SchedulerScheduleType(definition) {
-	case "interval":
-		seconds := SchedulerScheduleIntervalSeconds(definition)
-		if seconds <= 0 {
-			seconds = 24 * 60 * 60
-		}
-		return fmt.Sprintf("interval%d_%d", seconds, now.UTC().Unix()/int64(seconds))
-	case "weekly_at", "legacy_weekly":
-		year, week := localNow.ISOWeek()
-		return fmt.Sprintf("%04dW%02d", year, week)
-	case "monthly_at", "legacy_monthly":
-		return localNow.Format("200601")
-	case "cron":
-		return localNow.Format("200601021504")
-	case "legacy_hourly":
-		return localNow.Format("2006010215")
-	default:
-		return localNow.Format("20060102")
-	}
+	return schedulerschedule.WindowSuffix(definition.Data, now)
 }
 
 func SchedulerScheduleNextRunAt(definition recordmodel.Record, now time.Time) time.Time {
-	loc := scheduleLocation(definition)
-	localNow := now.In(loc)
-	switch SchedulerScheduleType(definition) {
-	case "interval":
-		seconds := SchedulerScheduleIntervalSeconds(definition)
-		if seconds <= 0 {
-			seconds = 24 * 60 * 60
-		}
-		return now.Add(time.Duration(seconds) * time.Second).UTC()
-	case "daily_at":
-		hour, minute, second := scheduleClock(definition)
-		return nextDailyWallClock(localNow, loc, hour, minute, second).UTC()
-	case "weekly_at":
-		hour, minute, second := scheduleClock(definition)
-		weekday := scheduleWeekday(definition)
-		return nextWeeklyWallClock(localNow, loc, weekday, hour, minute, second).UTC()
-	case "monthly_at":
-		hour, minute, second := scheduleClock(definition)
-		day := scheduleMonthDay(definition)
-		return nextMonthlyWallClock(localNow, loc, day, hour, minute, second).UTC()
-	case "cron":
-		if schedule, ok := SchedulerCronSchedule(definition); ok {
-			return schedule.Next(localNow).UTC()
-		}
-		return now.AddDate(0, 0, 1).UTC()
-	case "legacy_hourly":
-		return now.Add(time.Hour).UTC()
-	case "legacy_weekly":
-		return now.AddDate(0, 0, 7).UTC()
-	case "legacy_monthly":
-		return now.AddDate(0, 1, 0).UTC()
-	default:
-		return now.AddDate(0, 0, 1).UTC()
-	}
+	return schedulerschedule.Next(definition.Data, now)
 }
 
 func SchedulerScheduleType(definition recordmodel.Record) string {
-	rawType := strings.ToLower(strings.TrimSpace(fmt.Sprint(definition.Data["schedule_type"])))
-	switch rawType {
-	case "interval", "daily_at", "weekly_at", "monthly_at", "cron":
-		return rawType
-	}
-	expression := strings.ToLower(strings.TrimSpace(fmt.Sprint(definition.Data["schedule_expression"])))
-	switch expression {
-	case "hourly", "@hourly":
-		return "legacy_hourly"
-	case "weekly", "@weekly":
-		return "legacy_weekly"
-	case "monthly", "@monthly":
-		return "legacy_monthly"
-	case "daily", "@daily", "@midnight", "":
-		return "legacy_daily"
-	}
-	if _, err := time.ParseDuration(expression); err == nil {
-		return "interval"
-	}
-	if strings.HasPrefix(expression, "@") || len(strings.Fields(expression)) == 5 {
-		return "cron"
-	}
-	return "legacy_daily"
+	return schedulerschedule.Type(definition.Data)
 }
 
 func scheduleLocation(definition recordmodel.Record) *time.Location {
@@ -110,28 +36,7 @@ func scheduleLocation(definition recordmodel.Record) *time.Location {
 }
 
 func SchedulerScheduleIntervalSeconds(definition recordmodel.Record) int {
-	for field, multiplier := range map[string]int{
-		"interval_seconds": 1,
-		"interval_minutes": 60,
-		"interval_hours":   60 * 60,
-	} {
-		if value := intValue(definition.Data[field], 0); value > 0 {
-			return value * multiplier
-		}
-	}
-	expression := strings.ToLower(strings.TrimSpace(fmt.Sprint(definition.Data["schedule_expression"])))
-	switch expression {
-	case "hourly", "@hourly":
-		return 60 * 60
-	case "daily", "@daily", "@midnight":
-		return 24 * 60 * 60
-	case "weekly", "@weekly":
-		return 7 * 24 * 60 * 60
-	}
-	if duration, err := time.ParseDuration(expression); err == nil && duration > 0 {
-		return int(duration.Seconds())
-	}
-	return 0
+	return schedulerschedule.IntervalSeconds(definition.Data)
 }
 
 func scheduleClock(definition recordmodel.Record) (int, int, int) {
@@ -147,17 +52,7 @@ func scheduleClock(definition recordmodel.Record) (int, int, int) {
 }
 
 func SchedulerParseClock(raw string) (int, int, int, bool) {
-	value := strings.TrimSpace(raw)
-	if value == "" || value == "<nil>" || strings.Contains(value, " ") {
-		return 0, 0, 0, false
-	}
-	for _, layout := range []string{"15:04:05", "15:04"} {
-		parsed, err := time.Parse(layout, value)
-		if err == nil {
-			return parsed.Hour(), parsed.Minute(), parsed.Second(), true
-		}
-	}
-	return 0, 0, 0, false
+	return schedulerschedule.ParseClock(raw)
 }
 
 func scheduleWeekday(definition recordmodel.Record) time.Weekday {
