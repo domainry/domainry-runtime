@@ -6,7 +6,12 @@ import (
 	"strings"
 	"testing"
 
+	ormdialect "github.com/domainry/domainry-orm/dialect"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite"
 )
 
 func TestMetadataCatalogSQLBranches(t *testing.T) {
@@ -72,14 +77,22 @@ func TestMetadataCatalogSQLBranches(t *testing.T) {
 			t.Fatalf("set organization seed state err=%v", err)
 		}
 	}
-	if mysql := metadataCatalogReplaceSQL(base.store, "mysql"); !strings.Contains(mysql, "ON DUPLICATE KEY") {
-		t.Fatalf("mysql SQL=%s", mysql)
-	}
-	if postgres := metadataCatalogReplaceSQL(base.store, "postgres"); !strings.Contains(postgres, "ON CONFLICT") || strings.Contains(postgres, "INSERT OR REPLACE") {
-		t.Fatalf("postgres SQL=%s", postgres)
-	}
-	if sqlite := metadataCatalogReplaceSQL(base.store, "sqlite"); !strings.HasPrefix(sqlite, "INSERT OR REPLACE") {
-		t.Fatalf("sqlite SQL=%s", sqlite)
+	for _, testCase := range []struct {
+		name    ormdialect.Name
+		profile persistencedriver.EngineProfile
+		want    string
+	}{
+		{ormdialect.MySQL, mysql.Dialect{}, "ON DUPLICATE KEY"},
+		{ormdialect.Postgres, postgres.Dialect{}, "ON CONFLICT"},
+		{ormdialect.SQLite, sqlite.Dialect{}, "ON CONFLICT"},
+	} {
+		renderer, _ := ormdialect.New(testCase.name)
+		base.store.SQLRenderer = renderer.WithSchema("")
+		base.store.Engine = testCase.profile
+		query, _, err := buildMetadataCatalogUpsert(base, "key", "value", "now")
+		if err != nil || !strings.Contains(query, testCase.want) {
+			t.Fatalf("%s SQL=%s err=%v", testCase.name, query, err)
+		}
 	}
 	emptyQueries := metadataCatalogHashQuerySteps(metadataSQLQueryStep{columns: []string{"resource_key", "schema_hash"}})
 	if err := scriptedMetadataStore(t, &metadataSQLState{querySteps: emptyQueries, execSteps: []metadataSQLExecStep{{rows: 1}}}, base).refreshMetadataCatalogHash(t.Context()); err != nil {

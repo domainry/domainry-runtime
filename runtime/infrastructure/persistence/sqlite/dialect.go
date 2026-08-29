@@ -186,6 +186,14 @@ func (Dialect) ApplyUpdateLock(builder *ormbuilder.SelectBuilder) *ormbuilder.Se
 	return builder
 }
 
+func (Dialect) ApplyUpsert(builder *ormbuilder.InsertBuilder, conflictColumns []string, updateColumns ...string) *ormbuilder.InsertBuilder {
+	assignments := make([]ormbuilder.Assignment, len(updateColumns))
+	for index, column := range updateColumns {
+		assignments[index] = ormbuilder.AssignExpression(column, ormbuilder.InsertedValue(column))
+	}
+	return builder.OnConflictDoUpdate(conflictColumns, assignments...)
+}
+
 func (Dialect) SQLDriver() string { return "sqlite" }
 
 func (Dialect) DSN(cfg config.Config) (string, error) {

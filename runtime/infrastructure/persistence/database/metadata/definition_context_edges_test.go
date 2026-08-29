@@ -184,11 +184,6 @@ func TestDefinitionCatalogHashRefreshBranches(t *testing.T) {
 	baseDB := openStoreForGeneratedListTest(t)
 	t.Cleanup(func() { _ = baseDB.Close() })
 	base := NewMetadataStore(baseDB)
-	for _, driverName := range []string{"mysql", "postgres", "sqlite"} {
-		if query := metadataCatalogHashWriteSQL(base.store, driverName); query == "" {
-			t.Fatalf("empty catalog SQL for %s", driverName)
-		}
-	}
 	tests := []struct {
 		name  string
 		first metadataSQLQueryStep

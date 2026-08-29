@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 )
 
 type metadataSQLDialect interface {
@@ -15,18 +17,26 @@ type metadataSQLDialect interface {
 }
 
 func (s MetadataStore) manifestMetadataSeeded(ctx context.Context) (bool, error) {
-	query := "SELECT COUNT(*) FROM " + s.store.TableIdentifier("metadata_catalog") + " WHERE " + s.store.Identifier("key") + " = " + s.store.Placeholder(1)
+	query, args, err := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "metadata_catalog").
+		Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(ormbuilder.Equal("key", "template_id")).Build()
+	if err != nil {
+		return false, fmt.Errorf("build metadata catalog seed query: %w", err)
+	}
 	var count int
-	if err := s.database().QueryRowContext(ctx, query, "template_id").Scan(&count); err != nil {
+	if err := s.database().QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
 		return false, fmt.Errorf("read metadata catalog: %w", err)
 	}
 	return count > 0, nil
 }
 
 func (s MetadataStore) ManifestIdentitySeedSyncedVersion(ctx context.Context) (string, error) {
-	query := "SELECT " + s.store.Identifier("value") + " FROM " + s.store.TableIdentifier("metadata_catalog") + " WHERE " + s.store.Identifier("key") + " = " + s.store.Placeholder(1)
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "metadata_catalog").
+		Columns("value").Where(ormbuilder.Equal("key", "identity_seed_synced_version")).Build()
+	if buildErr != nil {
+		return "", fmt.Errorf("build identity seed version query: %w", buildErr)
+	}
 	var value string
-	if err := s.database().QueryRowContext(ctx, query, "identity_seed_synced_version").Scan(&value); err != nil {
+	if err := s.database().QueryRowContext(ctx, query, args...).Scan(&value); err != nil {
 		if err == sql.ErrNoRows {
 			return "", nil
 		}
@@ -37,17 +47,24 @@ func (s MetadataStore) ManifestIdentitySeedSyncedVersion(ctx context.Context) (s
 
 func (s MetadataStore) SetManifestIdentitySeedSyncedVersion(ctx context.Context, version string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
-	query := metadataCatalogReplaceSQL(s.store, s.store.Driver())
-	if _, err := s.database().ExecContext(ctx, query, "identity_seed_synced_version", strings.TrimSpace(version), now); err != nil {
+	query, args, err := buildMetadataCatalogUpsert(s, "identity_seed_synced_version", strings.TrimSpace(version), now)
+	if err != nil {
+		return fmt.Errorf("build identity seed version upsert: %w", err)
+	}
+	if _, err := s.database().ExecContext(ctx, query, args...); err != nil {
 		return fmt.Errorf("set identity seed synced version: %w", err)
 	}
 	return nil
 }
 
 func (s MetadataStore) ManifestOrganizationScopeSeedState(ctx context.Context) (string, error) {
-	query := "SELECT " + s.store.Identifier("value") + " FROM " + s.store.TableIdentifier("metadata_catalog") + " WHERE " + s.store.Identifier("key") + " = " + s.store.Placeholder(1)
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "metadata_catalog").
+		Columns("value").Where(ormbuilder.Equal("key", "organization_scope_seed_state")).Build()
+	if buildErr != nil {
+		return "", fmt.Errorf("build organization scope seed query: %w", buildErr)
+	}
 	var value string
-	if err := s.database().QueryRowContext(ctx, query, "organization_scope_seed_state").Scan(&value); err != nil {
+	if err := s.database().QueryRowContext(ctx, query, args...).Scan(&value); err != nil {
 		if err == sql.ErrNoRows {
 			return "", nil
 		}
@@ -58,28 +75,20 @@ func (s MetadataStore) ManifestOrganizationScopeSeedState(ctx context.Context) (
 
 func (s MetadataStore) SetManifestOrganizationScopeSeedState(ctx context.Context, state string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
-	query := metadataCatalogReplaceSQL(s.store, s.store.Driver())
-	if _, err := s.database().ExecContext(ctx, query, "organization_scope_seed_state", strings.TrimSpace(state), now); err != nil {
+	query, args, err := buildMetadataCatalogUpsert(s, "organization_scope_seed_state", strings.TrimSpace(state), now)
+	if err != nil {
+		return fmt.Errorf("build organization scope seed upsert: %w", err)
+	}
+	if _, err := s.database().ExecContext(ctx, query, args...); err != nil {
 		return fmt.Errorf("set organization scope seed state: %w", err)
 	}
 	return nil
 }
 
-func metadataCatalogReplaceSQL(store metadataSQLDialect, driver string) string {
-	base := "INSERT INTO " + store.TableIdentifier("metadata_catalog") +
-		" (" + store.Identifier("key") + ", " + store.Identifier("value") + ", " + store.Identifier("updated_at") + ")" +
-		" VALUES (" + store.Placeholder(1) + ", " + store.Placeholder(2) + ", " + store.Placeholder(3) + ")"
-	switch driver {
-	case "mysql":
-		return base + " ON DUPLICATE KEY UPDATE " + store.Identifier("value") + " = VALUES(" + store.Identifier("value") + ")" +
-			", " + store.Identifier("updated_at") + " = VALUES(" + store.Identifier("updated_at") + ")"
-	case "postgres":
-		return base + " ON CONFLICT (" + store.Identifier("key") + ") DO UPDATE SET " +
-			store.Identifier("value") + " = EXCLUDED." + store.Identifier("value") +
-			", " + store.Identifier("updated_at") + " = EXCLUDED." + store.Identifier("updated_at")
-	default:
-		return strings.Replace(base, "INSERT INTO", "INSERT OR REPLACE INTO", 1)
-	}
+func buildMetadataCatalogUpsert(store MetadataStore, key, value, now string) (string, []any, error) {
+	insert := ormbuilder.NewInsertBuilder(store.store.SQLRenderer, "metadata_catalog").
+		Columns("key", "value", "updated_at").Values(key, value, now)
+	return store.store.Engine.ApplyUpsert(insert, []string{"key"}, "value", "updated_at").Build()
 }
 
 func (s MetadataStore) insertMetadataCatalog(ctx context.Context, tx *sql.Tx, key string, value string, now string) error {

@@ -25,6 +25,7 @@ type Dialect interface {
 type EngineProfile interface {
 	TextKeyColumnType(int) string
 	ApplyUpdateLock(*ormbuilder.SelectBuilder) *ormbuilder.SelectBuilder
+	ApplyUpsert(*ormbuilder.InsertBuilder, []string, ...string) *ormbuilder.InsertBuilder
 }
 
 type portableEngineProfile struct{}
@@ -32,6 +33,13 @@ type portableEngineProfile struct{}
 func (portableEngineProfile) TextKeyColumnType(int) string { return "TEXT" }
 func (portableEngineProfile) ApplyUpdateLock(builder *ormbuilder.SelectBuilder) *ormbuilder.SelectBuilder {
 	return builder
+}
+func (portableEngineProfile) ApplyUpsert(builder *ormbuilder.InsertBuilder, conflictColumns []string, updateColumns ...string) *ormbuilder.InsertBuilder {
+	assignments := make([]ormbuilder.Assignment, len(updateColumns))
+	for index, column := range updateColumns {
+		assignments[index] = ormbuilder.AssignExpression(column, ormbuilder.InsertedValue(column))
+	}
+	return builder.OnConflictDoUpdate(conflictColumns, assignments...)
 }
 
 func ProfileFor(dialect Dialect) EngineProfile {
