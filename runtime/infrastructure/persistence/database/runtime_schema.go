@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/base"
 	runtimeschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/schema"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -87,6 +88,7 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 
 func (s *RuntimeStore) runtimeMigrationStore() *RuntimeStore {
 	return &RuntimeStore{
+		SQLStore:             base.NewSQLStore(s.migrationDB, s.dialect.SQLDialect(), s.databaseSchema),
 		db:                   s.migrationDB,
 		dialect:              s.dialect,
 		config:               s.config,

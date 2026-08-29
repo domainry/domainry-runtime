@@ -15,6 +15,7 @@ import (
 	"github.com/domainry/domainry-foundation/secrets"
 	"github.com/domainry/domainry-foundation/telemetry"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/base"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
@@ -22,6 +23,7 @@ import (
 
 // RuntimeStore owns the Runtime database connection and dialect.
 type RuntimeStore struct {
+	*base.SQLStore
 	db                   *sql.DB
 	migrationDB          *sql.DB
 	migrationConn        *sql.Conn
@@ -351,7 +353,7 @@ func openContextWithDependencies(ctx context.Context, cfg config.Config, depende
 	if postgresProfile != nil {
 		databaseSchema = postgresProfile.Schema
 	}
-	store := &RuntimeStore{db: db, migrationDB: migrationDB, dialect: dialect, config: cfg, databaseSchema: databaseSchema, postgresProfile: postgresProfile, postgresCapabilities: postgresCapabilities, migratorCapabilities: migratorCapabilities, secretMaterialKey: activeMaterial, secretKeyProvider: keyRing, idempotencyMetrics: idempotency.NewMemoryMetricsCollector(4096), sqlMetrics: sqlMetrics, operationalMetrics: operationalMetrics, workerScopeCursor: &runtimeWorkerScopeCursor{}, workerWakeups: workerplatform.NewWakeupBroker()}
+	store := &RuntimeStore{SQLStore: base.NewSQLStore(db, dialect.SQLDialect(), databaseSchema), db: db, migrationDB: migrationDB, dialect: dialect, config: cfg, databaseSchema: databaseSchema, postgresProfile: postgresProfile, postgresCapabilities: postgresCapabilities, migratorCapabilities: migratorCapabilities, secretMaterialKey: activeMaterial, secretKeyProvider: keyRing, idempotencyMetrics: idempotency.NewMemoryMetricsCollector(4096), sqlMetrics: sqlMetrics, operationalMetrics: operationalMetrics, workerScopeCursor: &runtimeWorkerScopeCursor{}, workerWakeups: workerplatform.NewWakeupBroker()}
 	var migrationErr error
 	migrationStarted := time.Now()
 	if cfg.EffectiveDatabaseMigrationMode() == "verify" {

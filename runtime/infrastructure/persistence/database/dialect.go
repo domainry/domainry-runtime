@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	ormdialect "github.com/domainry/domainry-orm/dialect"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/base"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
@@ -50,5 +51,6 @@ func (s *RuntimeStore) SetDialectForTesting(driver string) error {
 		return err
 	}
 	s.dialect = dialect
+	s.SQLStore = base.NewSQLStore(s.db, dialect.SQLDialect(), s.databaseSchema)
 	return nil
 }
