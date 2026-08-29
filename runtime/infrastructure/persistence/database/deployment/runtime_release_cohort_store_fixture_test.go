@@ -7,6 +7,9 @@ import (
 	"errors"
 	"io"
 	"strconv"
+
+	ormdriver "github.com/domainry/domainry-orm/driver"
+	ormsqlite "github.com/domainry/domainry-orm/sqlite"
 )
 
 type releaseSQLStore struct{ db *sql.DB }
@@ -15,6 +18,10 @@ func (s releaseSQLStore) DB() *sql.DB                       { return s.db }
 func (releaseSQLStore) TableIdentifier(value string) string { return `"` + value + `"` }
 func (releaseSQLStore) Identifier(value string) string      { return `"` + value + `"` }
 func (releaseSQLStore) Placeholder(int) string              { return "?" }
+func (releaseSQLStore) IsCoordinationRetryableError(err error) bool {
+	kind := ormsqlite.NewProfile().ClassifyError(err)
+	return kind == ormdriver.ErrorConflict || kind == ormdriver.ErrorUnavailable || kind == ormdriver.ErrorTimeout
+}
 
 func scriptedReleaseStore(state *releaseSQLState) (RuntimeReleaseCohortStore, func()) {
 	db := sql.OpenDB(releaseSQLConnector{state: state})

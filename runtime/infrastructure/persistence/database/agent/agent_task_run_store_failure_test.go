@@ -172,26 +172,21 @@ func TestAgentTaskRunStoreClaimFailureMatrix(t *testing.T) {
 }
 
 func TestAgentTaskClaimRetryBudgetAndCancellation(t *testing.T) {
+	base := openAgentStateBaseStore(t)
+	store := NewAgentTaskRunStore(base)
 	for _, message := range []string{
 		"database is locked",
 		"database table is locked",
 		"SQLITE_BUSY",
-		"deadlock",
-		"Error 1213",
-		"SQLSTATE 40001",
-		"serialization failure",
-		"could not serialize access",
-		"lock wait timeout",
 	} {
-		if !agentTaskClaimRetryable(errors.New(message)) {
+		if !store.store.IsTransientError(errors.New(message)) {
 			t.Fatalf("retry marker %q was not classified", message)
 		}
 	}
-	if agentTaskClaimRetryable(nil) || agentTaskClaimRetryable(errors.New("permanent failure")) {
+	if store.store.IsTransientError(nil) || store.store.IsTransientError(errors.New("permanent failure")) {
 		t.Fatal("non-retryable claim error was classified as retryable")
 	}
 
-	base := openAgentStateBaseStore(t)
 	retryErrors := make([]error, 16)
 	for index := range retryErrors {
 		retryErrors[index] = errors.New("database is locked")
@@ -204,7 +199,7 @@ func TestAgentTaskClaimRetryBudgetAndCancellation(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	repository, closeDB = scriptedAgentTaskStore(base, &agentStateDBState{
-		beginErrors: []error{errors.New("SQLSTATE 40001")},
+		beginErrors: []error{errors.New("database is locked")},
 		beginHook:   cancel,
 	})
 	if _, _, err := repository.ClaimNext(ctx, "default", "worker", time.Unix(10, 0).UTC(), time.Minute); !errors.Is(err, context.Canceled) {

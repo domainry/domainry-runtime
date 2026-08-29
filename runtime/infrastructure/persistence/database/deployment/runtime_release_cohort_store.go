@@ -26,6 +26,7 @@ type runtimeReleaseSQLStore interface {
 	TableIdentifier(string) string
 	Identifier(string) string
 	Placeholder(int) string
+	IsCoordinationRetryableError(error) bool
 }
 
 func NewRuntimeReleaseCohortStore(store runtimeReleaseSQLStore) RuntimeReleaseCohortStore {
@@ -38,7 +39,7 @@ func (s RuntimeReleaseCohortStore) ClaimRuntimeRelease(ctx context.Context, clai
 	}
 	for attempt := 0; attempt < 8; attempt++ {
 		lease, err := s.claim(ctx, claim)
-		if err == nil || errors.Is(err, deploymentmodel.ErrRuntimeReleaseConflict) || !runtimeReleaseCoordinationRetryable(err) {
+		if err == nil || errors.Is(err, deploymentmodel.ErrRuntimeReleaseConflict) || !s.store.IsCoordinationRetryableError(err) {
 			return lease, err
 		}
 		timer := time.NewTimer(time.Duration(attempt+1) * 5 * time.Millisecond)
@@ -278,17 +279,4 @@ func (s RuntimeReleaseCohortStore) placeholders(count int) string {
 		values[index] = s.store.Placeholder(index + 1)
 	}
 	return strings.Join(values, ", ")
-}
-
-func runtimeReleaseCoordinationRetryable(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	for _, marker := range []string{"unique", "duplicate", "database is locked", "database table is locked", "sqlite_busy", "deadlock", "sqlstate 40001", "could not serialize", "lock wait timeout"} {
-		if strings.Contains(message, marker) {
-			return true
-		}
-	}
-	return false
 }

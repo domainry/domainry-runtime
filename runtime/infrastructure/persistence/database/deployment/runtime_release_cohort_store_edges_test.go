@@ -41,14 +41,14 @@ func TestRuntimeReleaseClaimUnavailableAndRetryEdges(t *testing.T) {
 	if _, err := NewRuntimeReleaseCohortStore(releaseSQLStore{}).ClaimRuntimeRelease(t.Context(), deploymentmodel.RuntimeReleaseCohortClaim{}); !errors.Is(err, deploymentmodel.ErrRuntimeReleaseAdmission) {
 		t.Fatalf("nil database error=%v", err)
 	}
-	if runtimeReleaseCoordinationRetryable(nil) || runtimeReleaseCoordinationRetryable(errors.New("plain")) {
+	profileStore := NewRuntimeReleaseCohortStore(openDeploymentFailureStore(t))
+	if profileStore.store.IsCoordinationRetryableError(nil) || profileStore.store.IsCoordinationRetryableError(errors.New("plain")) {
 		t.Fatal("plain errors marked retryable")
 	}
 	for _, message := range []string{
-		"unique", "duplicate", "database is locked", "database table is locked", "SQLITE_BUSY",
-		"deadlock", "SQLSTATE 40001", "could not serialize", "lock wait timeout",
+		"UNIQUE constraint failed", "database is locked", "database table is locked", "SQLITE_BUSY",
 	} {
-		if !runtimeReleaseCoordinationRetryable(errors.New(message)) {
+		if !profileStore.store.IsCoordinationRetryableError(errors.New(message)) {
 			t.Fatalf("retry marker %q missed", message)
 		}
 	}

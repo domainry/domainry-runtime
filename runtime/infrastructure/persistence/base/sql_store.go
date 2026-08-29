@@ -39,3 +39,13 @@ func (s *SQLStore) IsTransientError(err error) bool {
 		return false
 	}
 }
+
+// IsCoordinationRetryableError additionally treats uniqueness races as
+// retryable. It is reserved for lease/cohort acquisition loops where another
+// writer winning the same identity is an expected coordination outcome.
+func (s *SQLStore) IsCoordinationRetryableError(err error) bool {
+	if s == nil || s.Engine == nil || err == nil {
+		return false
+	}
+	return s.IsTransientError(err) || s.Engine.ClassifyError(err) == ormdriver.ErrorConflict
+}

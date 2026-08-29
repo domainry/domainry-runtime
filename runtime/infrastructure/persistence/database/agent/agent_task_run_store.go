@@ -193,7 +193,7 @@ func (s *AgentTaskRunStore) ClaimNext(ctx context.Context, workspaceID string, o
 		if err == nil {
 			return claim, found, nil
 		}
-		if !agentTaskClaimRetryable(err) {
+		if !s.store.IsTransientError(err) {
 			return agentrepository.AgentTaskClaim{}, false, err
 		}
 		lastErr = err
@@ -223,7 +223,7 @@ func (s *AgentTaskRunStore) ClaimAgentTaskRun(ctx context.Context, workspaceID, 
 		if err == nil {
 			return claim, found, nil
 		}
-		if !agentTaskClaimRetryable(err) {
+		if !s.store.IsTransientError(err) {
 			return agentrepository.AgentTaskClaim{}, false, err
 		}
 		lastErr = err
@@ -335,29 +335,6 @@ func (s *AgentTaskRunStore) claimNextOnce(ctx context.Context, workspaceID strin
 		return agentrepository.AgentTaskClaim{}, false, err
 	}
 	return agentrepository.AgentTaskClaim{Run: run, Lease: run.Lease}, true, nil
-}
-
-func agentTaskClaimRetryable(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	for _, marker := range []string{
-		"database is locked",
-		"database table is locked",
-		"sqlite_busy",
-		"deadlock",
-		"error 1213",
-		"sqlstate 40001",
-		"serialization failure",
-		"could not serialize access",
-		"lock wait timeout",
-	} {
-		if strings.Contains(message, marker) {
-			return true
-		}
-	}
-	return false
 }
 
 func (s *AgentTaskRunStore) Heartbeat(ctx context.Context, workspaceID, runID string, owner string, token int64, now time.Time, duration time.Duration) (agentrepository.AgentTaskHeartbeatResult, error) {
