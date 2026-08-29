@@ -4,20 +4,21 @@ package reportmodel
 // has no legacy per-object summary representation: every response is produced
 // from dimensions and measures declared by the Report Dataset.
 type ReportSummary struct {
-	Key            string                     `json:"key"`
-	Name           string                     `json:"name,omitempty"`
-	Rows           []ReportResultRow          `json:"rows"`
-	RowCount       int                        `json:"row_count"`
-	SourceRowCount int                        `json:"source_row_count"`
-	Analyses       []ReportAnalysisResult     `json:"analyses,omitempty"`
-	ExecutionMode  string                     `json:"execution_mode"`
-	Snapshot       *ReportSnapshotFreshness   `json:"snapshot,omitempty"`
-	ResultSchema   []ReportResultColumnSchema `json:"result_schema,omitempty"`
-	PageSize       int                        `json:"page_size,omitempty"`
-	NextCursor     string                     `json:"next_cursor,omitempty"`
-	Truncated      bool                       `json:"truncated"`
-	Total          int                        `json:"total"`
-	TotalSemantics string                     `json:"total_semantics"`
+	Key             string                     `json:"key"`
+	Name            string                     `json:"name,omitempty"`
+	Rows            []ReportResultRow          `json:"rows"`
+	RowCount        int                        `json:"row_count"`
+	SourceRowCount  int                        `json:"source_row_count"`
+	Analyses        []ReportAnalysisResult     `json:"analyses,omitempty"`
+	ExecutionMode   string                     `json:"execution_mode"`
+	Snapshot        *ReportSnapshotFreshness   `json:"snapshot,omitempty"`
+	ResultSchema    []ReportResultColumnSchema `json:"result_schema,omitempty"`
+	PageSize        int                        `json:"page_size,omitempty"`
+	NextCursor      string                     `json:"next_cursor,omitempty"`
+	ExecutionCursor string                     `json:"-"`
+	Truncated       bool                       `json:"truncated"`
+	Total           int                        `json:"total"`
+	TotalSemantics  string                     `json:"total_semantics"`
 }
 
 const (

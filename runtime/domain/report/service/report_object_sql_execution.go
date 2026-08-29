@@ -19,10 +19,10 @@ import (
 )
 
 func (s *ReportDomainService) executeReportObjectSQL(ctx context.Context, report reportmodel.ReportSchema, rawParameters map[string]any, principal principalmodel.Principal) (reportmodel.ReportSummary, error) {
-	return s.executeReportObjectSQLPage(ctx, report, rawParameters, 0, 0, principal)
+	return s.executeReportObjectSQLPage(ctx, report, rawParameters, "", 0, 0, principal)
 }
 
-func (s *ReportDomainService) executeReportObjectSQLPage(ctx context.Context, report reportmodel.ReportSchema, rawParameters map[string]any, pageOffset, pageSize int, principal principalmodel.Principal) (reportmodel.ReportSummary, error) {
+func (s *ReportDomainService) executeReportObjectSQLPage(ctx context.Context, report reportmodel.ReportSchema, rawParameters map[string]any, pageCursor string, pagePosition, pageSize int, principal principalmodel.Principal) (reportmodel.ReportSummary, error) {
 	if s == nil || s.dependencies.Access == nil || s.dependencies.ObjectSQL == nil || report.ObjectSQLV1 == nil {
 		return reportmodel.ReportSummary{}, reportAppError(apperror.KindInternal, "backend.report.object_sql_execution_unavailable", nil)
 	}
@@ -38,7 +38,7 @@ func (s *ReportDomainService) executeReportObjectSQLPage(ctx context.Context, re
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	result, err := s.dependencies.ObjectSQL.ExecuteReportObjectSQL(ctx, reportcontract.ReportObjectSQLExecutionRequest{WorkspaceID: principal.WorkspaceID, Plan: plan, Objects: objects, Queries: queries, Parameters: parameters, Timeout: timeout, PageOffset: pageOffset, PageSize: pageSize})
+	result, err := s.dependencies.ObjectSQL.ExecuteReportObjectSQL(ctx, reportcontract.ReportObjectSQLExecutionRequest{WorkspaceID: principal.WorkspaceID, Plan: plan, Objects: objects, Queries: queries, Parameters: parameters, Timeout: timeout, PageCursor: pageCursor, PagePosition: pagePosition, PageSize: pageSize})
 	if err != nil {
 		return reportmodel.ReportSummary{}, reportAppError(apperror.KindInternal, "backend.report.object_sql_query_failed", err)
 	}
@@ -75,7 +75,7 @@ func (s *ReportDomainService) executeReportObjectSQLPage(ctx context.Context, re
 			summary.Total = result.Total
 			summary.TotalSemantics = reportmodel.ReportTotalExact
 		} else {
-			summary.Total = pageOffset + len(rows)
+			summary.Total = pagePosition + len(rows)
 			summary.TotalSemantics = reportmodel.ReportTotalExact
 		}
 		if !result.TotalKnown && result.HasMore {
@@ -83,6 +83,7 @@ func (s *ReportDomainService) executeReportObjectSQLPage(ctx context.Context, re
 			summary.TotalSemantics = reportmodel.ReportTotalAtLeast
 		}
 	}
+	summary.ExecutionCursor = result.NextCursor
 	return summary, nil
 }
 

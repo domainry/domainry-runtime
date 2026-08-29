@@ -78,10 +78,10 @@ func (s *ReportDomainService) QueryObjectSQL(ctx context.Context, reportKey stri
 }
 
 // QueryObjectSQLPage executes the authored Object SQL with Runtime-owned
-// LIMIT/OFFSET controls in the persistence query itself. It is intentionally
+// keyset controls in the persistence query itself. It is intentionally
 // separate from QueryObjectSQL so exports and legacy internal callers retain
 // their existing complete-result contract.
-func (s *ReportDomainService) QueryObjectSQLPage(ctx context.Context, reportKey string, parameters map[string]any, pageOffset, pageSize int, principal principalmodel.Principal) (reportmodel.ReportSummary, error) {
+func (s *ReportDomainService) QueryObjectSQLPage(ctx context.Context, reportKey string, parameters map[string]any, pageCursor string, pagePosition, pageSize int, principal principalmodel.Principal) (reportmodel.ReportSummary, error) {
 	report, ok := s.reportForPrincipal(ctx, reportKey, principal)
 	if !ok {
 		return reportmodel.ReportSummary{}, reportAppError(apperror.KindNotFound, "backend.report.not_found", nil)
@@ -89,10 +89,10 @@ func (s *ReportDomainService) QueryObjectSQLPage(ctx context.Context, reportKey 
 	if report.ObjectSQLV1 == nil {
 		return reportmodel.ReportSummary{}, reportAppError(apperror.KindBadRequest, "backend.report.object_sql_not_enabled", nil)
 	}
-	if pageOffset < 0 || pageSize < 1 || pageSize > reportmodel.ReportPageMaximumSize {
+	if pagePosition < 0 || pageSize < 1 || pageSize > reportmodel.ReportPageMaximumSize {
 		return reportmodel.ReportSummary{}, reportAppError(apperror.KindBadRequest, "backend.report.page_size_invalid", nil)
 	}
-	return s.executeReportObjectSQLPage(ctx, report, parameters, pageOffset, pageSize, principal)
+	return s.executeReportObjectSQLPage(ctx, report, parameters, pageCursor, pagePosition, pageSize, principal)
 }
 
 func (s *ReportDomainService) ReportForExport(ctx context.Context, reportKey, objectKey string, principal principalmodel.Principal) (reportmodel.ReportSchema, error) {
@@ -133,21 +133,21 @@ func (s *ReportDomainService) ExecuteExportReport(ctx context.Context, report re
 }
 
 // ExecuteExportReportPage is the bounded worker path for object_sql_v1. The
-// caller supplies only a server-owned offset and bounded size; the same parsed,
+// caller supplies only a server-owned opaque cursor, position, and bounded size; the same parsed,
 // authorized Report definition remains the query authority.
-func (s *ReportDomainService) ExecuteExportReportPage(ctx context.Context, report reportmodel.ReportSchema, parameters map[string]any, pageOffset, pageSize int, principal principalmodel.Principal) (reportmodel.ReportSummary, error) {
-	if pageOffset < 0 || pageSize < 1 || pageSize > reportmodel.ReportPageMaximumSize {
+func (s *ReportDomainService) ExecuteExportReportPage(ctx context.Context, report reportmodel.ReportSchema, parameters map[string]any, pageCursor string, pagePosition, pageSize int, principal principalmodel.Principal) (reportmodel.ReportSummary, error) {
+	if pagePosition < 0 || pageSize < 1 || pageSize > reportmodel.ReportPageMaximumSize {
 		return reportmodel.ReportSummary{}, reportAppError(apperror.KindBadRequest, "backend.report.page_size_invalid", nil)
 	}
 	if report.ObjectSQLV1 != nil {
-		return s.executeReportObjectSQLPage(ctx, report, parameters, pageOffset, pageSize, principal)
+		return s.executeReportObjectSQLPage(ctx, report, parameters, pageCursor, pagePosition, pageSize, principal)
 	}
 	plan, err := reportcontract.BuildReportDatasetPlan(report)
 	if err != nil {
 		planErr := err.(*reportmodel.ReportDatasetPlanError)
 		return reportmodel.ReportSummary{}, &apperror.AppError{Kind: apperror.KindBadRequest, Code: planErr.Code, Params: planErr.Params, Err: planErr}
 	}
-	return s.executeReportDatasetPage(ctx, report, plan, pageOffset, pageSize, principal)
+	return s.executeReportDatasetPage(ctx, report, plan, pageCursor, pagePosition, pageSize, principal)
 }
 
 // AuthorizeObjectSQLExportFields reuses the canonical Object SQL compiler and

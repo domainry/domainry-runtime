@@ -40,8 +40,15 @@ func (s *ReportDatasetStore) ExecuteReportObjectSQL(ctx context.Context, request
 	if err != nil {
 		return reportcontract.ReportObjectSQLExecutionResult{}, err
 	}
-	if request.PageOffset < 0 || request.PageSize < 0 {
+	if request.PagePosition < 0 || request.PageSize < 0 {
 		return reportcontract.ReportObjectSQLExecutionResult{}, fmt.Errorf("invalid report object SQL page")
+	}
+	after, err := decodeReportObjectSQLCursor(request.PageCursor, len(request.Plan.OrderBy))
+	if err != nil {
+		return reportcontract.ReportObjectSQLExecutionResult{}, err
+	}
+	if request.PagePosition == 0 && len(after) > 0 || request.PagePosition > 0 && len(after) == 0 {
+		return reportcontract.ReportObjectSQLExecutionResult{}, fmt.Errorf("invalid report object SQL page cursor position")
 	}
 	result := reportcontract.ReportObjectSQLExecutionResult{Rows: []map[string]string{}}
 	if request.PageSize > 0 {
@@ -56,7 +63,7 @@ func (s *ReportDatasetStore) ExecuteReportObjectSQL(ctx context.Context, request
 			return reportcontract.ReportObjectSQLExecutionResult{}, fmt.Errorf("count report object SQL: %w", countErr)
 		}
 		result.TotalKnown = true
-		if request.PageOffset >= request.Plan.Limit {
+		if request.PagePosition >= request.Plan.Limit {
 			if err := tx.Commit(); err != nil {
 				return reportcontract.ReportObjectSQLExecutionResult{}, err
 			}
@@ -65,7 +72,12 @@ func (s *ReportDatasetStore) ExecuteReportObjectSQL(ctx context.Context, request
 	}
 	args := append([]any(nil), sourceArgs...)
 	emitter := reportObjectSQLEmitter{dialect: s.store, profile: s.store.RuntimeEngine, parameters: request.Parameters, args: &args}
-	statement, err := emitter.statementPage(request.Plan, cteParts, request.PageOffset, request.PageSize)
+	statement := ""
+	if request.PageSize > 0 {
+		statement, err = emitter.statementKeysetPage(request.Plan, cteParts, after, request.PagePosition, request.PageSize)
+	} else {
+		statement, err = emitter.statement(request.Plan, cteParts)
+	}
 	if err != nil {
 		return reportcontract.ReportObjectSQLExecutionResult{}, err
 	}
@@ -74,8 +86,13 @@ func (s *ReportDatasetStore) ExecuteReportObjectSQL(ctx context.Context, request
 		return reportcontract.ReportObjectSQLExecutionResult{}, fmt.Errorf("query report object SQL: %w", err)
 	}
 	defer rows.Close()
+	cursorValues := make([][]any, 0, request.PageSize+1)
 	for rows.Next() {
-		raw := make([]any, len(request.Plan.ResultSchema))
+		hiddenColumns := 0
+		if request.PageSize > 0 {
+			hiddenColumns = len(request.Plan.OrderBy) * 2
+		}
+		raw := make([]any, len(request.Plan.ResultSchema)+hiddenColumns)
 		destinations := make([]any, len(raw))
 		for index := range raw {
 			destinations[index] = &raw[index]
@@ -95,6 +112,13 @@ func (s *ReportDatasetStore) ExecuteReportObjectSQL(ctx context.Context, request
 			row[column.Key] = normalized
 		}
 		result.Rows = append(result.Rows, row)
+		if request.PageSize > 0 {
+			values := make([]any, len(request.Plan.OrderBy))
+			for index := range request.Plan.OrderBy {
+				values[index] = raw[len(request.Plan.ResultSchema)+index*2+1]
+			}
+			cursorValues = append(cursorValues, values)
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return reportcontract.ReportObjectSQLExecutionResult{}, err
@@ -102,6 +126,13 @@ func (s *ReportDatasetStore) ExecuteReportObjectSQL(ctx context.Context, request
 	if request.PageSize > 0 && len(result.Rows) > request.PageSize {
 		result.Rows = result.Rows[:request.PageSize]
 		result.HasMore = true
+		cursorValues = cursorValues[:request.PageSize]
+	}
+	if result.HasMore && len(cursorValues) > 0 {
+		result.NextCursor, err = encodeReportObjectSQLCursor(cursorValues[len(cursorValues)-1])
+		if err != nil {
+			return reportcontract.ReportObjectSQLExecutionResult{}, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return reportcontract.ReportObjectSQLExecutionResult{}, err

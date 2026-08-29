@@ -129,7 +129,7 @@ func (s *reportExportObjectSQLExecutorStub) ExecuteReportObjectSQL(_ context.Con
 	s.requests = append(s.requests, request)
 	rows := s.rows
 	if request.PageSize > 0 {
-		start := request.PageOffset
+		start := request.PagePosition
 		if start > len(rows) {
 			start = len(rows)
 		}
@@ -138,7 +138,11 @@ func (s *reportExportObjectSQLExecutorStub) ExecuteReportObjectSQL(_ context.Con
 		if end > len(rows) {
 			end = len(rows)
 		}
-		return reportcontract.ReportObjectSQLExecutionResult{Rows: append([]map[string]string(nil), rows[start:end]...), HasMore: hasMore, Total: len(rows), TotalKnown: true}, nil
+		nextCursor := ""
+		if hasMore {
+			nextCursor = fmt.Sprintf("cursor:%d", end)
+		}
+		return reportcontract.ReportObjectSQLExecutionResult{Rows: append([]map[string]string(nil), rows[start:end]...), HasMore: hasMore, Total: len(rows), TotalKnown: true, NextCursor: nextCursor}, nil
 	}
 	return reportcontract.ReportObjectSQLExecutionResult{Rows: append([]map[string]string(nil), rows...)}, nil
 }

@@ -286,8 +286,8 @@ func (s *ReportApplicationService) QueryObjectSQLPage(ctx context.Context, repor
 	if err != nil {
 		return reportmodel.ReportSummary{}, reportApplicationError(err)
 	}
-	return s.executeStableReportOffsetPage(ctx, report, fingerprint, page, pageSize, principal, func(offset, size int) (reportmodel.ReportSummary, error) {
-		return s.domain.QueryObjectSQLPage(ctx, reportKey, normalized, offset, size, principal)
+	return s.executeStableReportKeysetPage(ctx, report, fingerprint, page, pageSize, principal, func(cursor string, position, size int) (reportmodel.ReportSummary, error) {
+		return s.domain.QueryObjectSQLPage(ctx, reportKey, normalized, cursor, position, size, principal)
 	})
 }
 

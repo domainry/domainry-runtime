@@ -138,7 +138,6 @@ func (e *reportObjectSQLEmitter) reportKeysetOrderExpression(plan reportmodel.Re
 }
 
 func (e *reportObjectSQLEmitter) reportKeysetPredicate(orders []reportmodel.ReportObjectSQLOrder, after []any) (string, error) {
-	prefix := make([]string, 0, len(orders)*2)
 	branches := make([]string, 0, len(orders)*2)
 	for index, order := range orders {
 		nullColumn := e.dialect.Identifier(reportKeysetNullAlias(index))
@@ -147,25 +146,40 @@ func (e *reportObjectSQLEmitter) reportKeysetPredicate(orders []reportmodel.Repo
 		if after[index] == nil {
 			nullRank = 1
 		}
-		placeholder := e.reportKeysetArgument(nullRank)
-		branches = append(branches, reportKeysetBranch(prefix, nullColumn+" > "+placeholder))
-		prefix = append(prefix, nullColumn+" = "+placeholder)
+		nullPrefix := e.reportKeysetEqualityPrefix(after, index)
+		branches = append(branches, reportKeysetBranch(nullPrefix, nullColumn+" > "+e.reportKeysetArgument(nullRank)))
 		if after[index] == nil {
-			prefix = append(prefix, valueColumn+" IS NULL")
 			continue
 		}
-		valuePlaceholder := e.reportKeysetArgument(after[index])
+		valuePrefix := e.reportKeysetEqualityPrefix(after, index)
+		valuePrefix = append(valuePrefix, nullColumn+" = "+e.reportKeysetArgument(nullRank))
 		operator := ">"
 		if strings.EqualFold(order.Direction, "desc") {
 			operator = "<"
 		}
-		branches = append(branches, reportKeysetBranch(prefix, valueColumn+" "+operator+" "+valuePlaceholder))
-		prefix = append(prefix, valueColumn+" = "+valuePlaceholder)
+		branches = append(branches, reportKeysetBranch(valuePrefix, valueColumn+" "+operator+" "+e.reportKeysetArgument(after[index])))
 	}
 	if len(branches) == 0 {
 		return "", fmt.Errorf("empty report object SQL keyset cursor")
 	}
 	return "(" + strings.Join(branches, " OR ") + ")", nil
+}
+
+func (e *reportObjectSQLEmitter) reportKeysetEqualityPrefix(after []any, count int) []string {
+	prefix := make([]string, 0, count*2)
+	for index := 0; index < count; index++ {
+		nullRank := 0
+		if after[index] == nil {
+			nullRank = 1
+		}
+		prefix = append(prefix, e.dialect.Identifier(reportKeysetNullAlias(index))+" = "+e.reportKeysetArgument(nullRank))
+		if after[index] == nil {
+			prefix = append(prefix, e.dialect.Identifier(reportKeysetValueAlias(index))+" IS NULL")
+		} else {
+			prefix = append(prefix, e.dialect.Identifier(reportKeysetValueAlias(index))+" = "+e.reportKeysetArgument(after[index]))
+		}
+	}
+	return prefix
 }
 
 func (e *reportObjectSQLEmitter) reportKeysetArgument(value any) string {

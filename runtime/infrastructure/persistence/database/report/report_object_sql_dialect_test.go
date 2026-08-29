@@ -68,7 +68,7 @@ func TestReportObjectSQLDialectGoldens(t *testing.T) {
 	}
 }
 
-func TestReportObjectSQLDialectAppliesRuntimeBoundedPage(t *testing.T) {
+func TestReportObjectSQLDialectCompleteQueryHasNoOffset(t *testing.T) {
 	plan := reportmodel.ReportObjectSQLPlan{
 		Sources:     []reportmodel.ReportObjectSQLSource{{ObjectKey: "ledger", Alias: "l"}},
 		Projections: []reportmodel.ReportObjectSQLProjection{{Alias: "id", Expression: objectSQLField("l", "id", "text")}},
@@ -76,9 +76,9 @@ func TestReportObjectSQLDialectAppliesRuntimeBoundedPage(t *testing.T) {
 	}
 	args := []any{}
 	emitter := reportObjectSQLEmitter{dialect: objectSQLGoldenDialect{driver: "postgres"}, profile: reportTestEngineProfile("postgres"), args: &args}
-	statement, err := emitter.statementPage(plan, []string{`"src" AS (SELECT 1)`}, 400, 200)
-	if err != nil || !strings.Contains(statement, `ORDER BY "l"."id" ASC LIMIT 201 OFFSET 400`) {
-		t.Fatalf("bounded SQL=%q err=%v", statement, err)
+	statement, err := emitter.statement(plan, []string{`"src" AS (SELECT 1)`})
+	if err != nil || !strings.Contains(statement, `ORDER BY "l"."id" ASC LIMIT 1000`) || strings.Contains(statement, " OFFSET ") {
+		t.Fatalf("complete SQL=%q err=%v", statement, err)
 	}
 }
 

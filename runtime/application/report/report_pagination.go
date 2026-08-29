@@ -25,11 +25,12 @@ type reportPageCursor struct {
 	Checksum    string `json:"checksum"`
 }
 
-type reportOffsetCursor struct {
+type reportExecutionCursor struct {
 	Version             int    `json:"v"`
 	Fingerprint         string `json:"fingerprint"`
 	SourceVersionSHA256 string `json:"source_version_sha256"`
-	Offset              int    `json:"offset"`
+	StoreCursor         string `json:"store_cursor"`
+	Position            int    `json:"position"`
 	Checksum            string `json:"checksum"`
 }
 
@@ -164,55 +165,56 @@ func reportCursorError(err error) error {
 	return &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.report.cursor_invalid", Err: err}
 }
 
-func encodeReportOffsetCursor(cursor reportOffsetCursor, key []byte) string {
-	cursor.Checksum = reportOffsetCursorChecksum(cursor, key)
+func encodeReportExecutionCursor(cursor reportExecutionCursor, key []byte) string {
+	cursor.Checksum = reportExecutionCursorChecksum(cursor, key)
 	content, _ := json.Marshal(cursor)
 	return base64.RawURLEncoding.EncodeToString(content)
 }
 
-func decodeReportOffsetCursor(value, fingerprint string, key []byte) (reportOffsetCursor, error) {
+func decodeReportExecutionCursor(value, fingerprint string, key []byte) (reportExecutionCursor, error) {
 	content, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(value))
 	if err != nil {
-		return reportOffsetCursor{}, reportCursorError(err)
+		return reportExecutionCursor{}, reportCursorError(err)
 	}
-	var cursor reportOffsetCursor
-	if err := json.Unmarshal(content, &cursor); err != nil || cursor.Version != 3 || cursor.Fingerprint != fingerprint || strings.TrimSpace(cursor.SourceVersionSHA256) == "" || cursor.Offset < 1 || !hmac.Equal([]byte(cursor.Checksum), []byte(reportOffsetCursorChecksum(cursor, key))) {
-		return reportOffsetCursor{}, reportCursorError(err)
+	var cursor reportExecutionCursor
+	if err := json.Unmarshal(content, &cursor); err != nil || cursor.Version != 4 || cursor.Fingerprint != fingerprint || strings.TrimSpace(cursor.SourceVersionSHA256) == "" || strings.TrimSpace(cursor.StoreCursor) == "" || cursor.Position < 1 || !hmac.Equal([]byte(cursor.Checksum), []byte(reportExecutionCursorChecksum(cursor, key))) {
+		return reportExecutionCursor{}, reportCursorError(err)
 	}
 	return cursor, nil
 }
 
-func reportOffsetCursorChecksum(cursor reportOffsetCursor, key []byte) string {
+func reportExecutionCursorChecksum(cursor reportExecutionCursor, key []byte) string {
 	mac := hmac.New(sha256.New, key)
-	_, _ = mac.Write([]byte(fmt.Sprintf("%d\x00%s\x00%s\x00%d", cursor.Version, cursor.Fingerprint, cursor.SourceVersionSHA256, cursor.Offset)))
+	_, _ = mac.Write([]byte(fmt.Sprintf("%d\x00%s\x00%s\x00%s\x00%d", cursor.Version, cursor.Fingerprint, cursor.SourceVersionSHA256, cursor.StoreCursor, cursor.Position)))
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-// executeStableReportOffsetPage keeps bounded OFFSET traversal honest across
+// executeStableReportKeysetPage keeps bounded keyset traversal honest across
 // separate HTTP requests. The signed cursor is tied to the authorized source
 // version, and every page is fenced by a before/after version read. A first
 // page may retry a short concurrent-write window; a continued traversal fails
 // closed because returning it against a new version could duplicate or omit
 // rows already delivered to the client.
-func (s *ReportApplicationService) executeStableReportOffsetPage(
+func (s *ReportApplicationService) executeStableReportKeysetPage(
 	ctx context.Context,
 	report reportmodel.ReportSchema,
 	fingerprint string,
 	page reportmodel.ReportPageRequest,
 	pageSize int,
 	principal principalmodel.Principal,
-	execute func(offset, size int) (reportmodel.ReportSummary, error),
+	execute func(storeCursor string, position, size int) (reportmodel.ReportSummary, error),
 ) (reportmodel.ReportSummary, error) {
 	const consistencyRetries = 3
-	offset := 0
+	position := 0
+	storeCursor := ""
 	expectedSourceVersion := ""
 	continued := strings.TrimSpace(page.Cursor) != ""
 	if continued {
-		cursor, err := decodeReportOffsetCursor(page.Cursor, fingerprint, s.cursorKey)
+		cursor, err := decodeReportExecutionCursor(page.Cursor, fingerprint, s.cursorKey)
 		if err != nil {
 			return reportmodel.ReportSummary{}, err
 		}
-		offset, expectedSourceVersion = cursor.Offset, cursor.SourceVersionSHA256
+		storeCursor, position, expectedSourceVersion = cursor.StoreCursor, cursor.Position, cursor.SourceVersionSHA256
 	}
 	for attempt := 0; attempt < consistencyRetries; attempt++ {
 		before, err := s.domain.ExportSourceVersion(ctx, report, principal)
@@ -226,7 +228,7 @@ func (s *ReportApplicationService) executeStableReportOffsetPage(
 		if continued && beforeHash != expectedSourceVersion {
 			return reportmodel.ReportSummary{}, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.cursor_stale"}
 		}
-		summary, err := execute(offset, pageSize)
+		summary, err := execute(storeCursor, position, pageSize)
 		if err != nil {
 			return reportmodel.ReportSummary{}, err
 		}
@@ -240,7 +242,10 @@ func (s *ReportApplicationService) executeStableReportOffsetPage(
 		if reportservice.ReportSourceVersionsEqual(before, after) {
 			summary.NextCursor = ""
 			if summary.Truncated {
-				summary.NextCursor = encodeReportOffsetCursor(reportOffsetCursor{Version: 3, Fingerprint: fingerprint, SourceVersionSHA256: beforeHash, Offset: offset + len(summary.Rows)}, s.cursorKey)
+				if strings.TrimSpace(summary.ExecutionCursor) == "" {
+					return reportmodel.ReportSummary{}, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.page_cursor_missing"}
+				}
+				summary.NextCursor = encodeReportExecutionCursor(reportExecutionCursor{Version: 4, Fingerprint: fingerprint, SourceVersionSHA256: beforeHash, StoreCursor: summary.ExecutionCursor, Position: position + len(summary.Rows)}, s.cursorKey)
 			}
 			return summary, nil
 		}
@@ -311,8 +316,8 @@ func (s *ReportApplicationService) SummaryScopedPage(ctx context.Context, report
 	if err != nil {
 		return reportmodel.ReportSummary{}, reportApplicationError(err)
 	}
-	return s.executeStableReportOffsetPage(ctx, scoped, fingerprint, page, pageSize, principal, func(offset, size int) (reportmodel.ReportSummary, error) {
-		return s.domain.ExecuteExportReportPage(ctx, scoped, nil, offset, size, principal)
+	return s.executeStableReportKeysetPage(ctx, scoped, fingerprint, page, pageSize, principal, func(cursor string, position, size int) (reportmodel.ReportSummary, error) {
+		return s.domain.ExecuteExportReportPage(ctx, scoped, nil, cursor, position, size, principal)
 	})
 }
 
@@ -346,12 +351,13 @@ func (s *ReportApplicationService) probeReportExport(ctx context.Context, report
 
 func (s *ReportApplicationService) probeReportExportRows(ctx context.Context, report, scopedReport reportmodel.ReportSchema, scope reportmodel.ReportExportScopeRequest, maxRows int, principal principalmodel.Principal) ([]reportmodel.ReportResultRow, int, error) {
 	rows := make([]reportmodel.ReportResultRow, 0, reportExportAsyncThreshold+1)
+	pageCursor := ""
 	for len(rows) <= reportExportAsyncThreshold {
 		pageSize := reportmodel.ReportPageMaximumSize
 		if remaining := reportExportAsyncThreshold + 1 - len(rows); remaining < pageSize {
 			pageSize = remaining
 		}
-		summary, err := s.domain.ExecuteExportReportPage(ctx, scopedReport, scope.Parameters, len(rows), pageSize, principal)
+		summary, err := s.domain.ExecuteExportReportPage(ctx, scopedReport, scope.Parameters, pageCursor, len(rows), pageSize, principal)
 		if err != nil {
 			if apperror.CodeOf(err) != "backend.report.bounded_page_unavailable" || maxRows <= 0 || maxRows > reportExportAsyncThreshold {
 				return nil, 0, err
@@ -377,6 +383,7 @@ func (s *ReportApplicationService) probeReportExportRows(ctx context.Context, re
 			return nil, 0, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_result_changed"}
 		}
 		rows = append(rows, pageRows...)
+		pageCursor = summary.ExecutionCursor
 		if maxRows > 0 && len(rows) > maxRows {
 			return nil, 0, &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.report.export_too_many_rows", Params: map[string]string{"limit": fmt.Sprint(maxRows)}}
 		}

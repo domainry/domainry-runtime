@@ -71,11 +71,11 @@ func TestDatasetBoundedPageExecutesLimitInDatabaseWithWorkspaceIsolation(t *test
 		ObjectSQL: reportpersistence.NewReportDatasetStore(store),
 	})
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "user-a"}}
-	first, err := service.ExecuteExportReportPage(t.Context(), report, nil, 0, 1, principal)
+	first, err := service.ExecuteExportReportPage(t.Context(), report, nil, "", 0, 1, principal)
 	if err != nil || len(first.Rows) != 1 || first.Rows[0].Dimensions["category"] != "alpha" || first.Rows[0].Measures["records"] != "2" || !first.Truncated || first.Total != 2 || first.TotalSemantics != reportmodel.ReportTotalExact {
 		t.Fatalf("first=%#v err=%v", first, err)
 	}
-	second, err := service.ExecuteExportReportPage(t.Context(), report, nil, 1, 1, principal)
+	second, err := service.ExecuteExportReportPage(t.Context(), report, nil, first.ExecutionCursor, 1, 1, principal)
 	if err != nil || len(second.Rows) != 1 || second.Rows[0].Dimensions["category"] != "beta" || second.Rows[0].Measures["records"] != "1" || second.Truncated || second.Total != 2 || second.TotalSemantics != reportmodel.ReportTotalExact {
 		t.Fatalf("second=%#v err=%v", second, err)
 	}

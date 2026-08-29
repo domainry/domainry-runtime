@@ -25,10 +25,6 @@ type reportObjectSQLEmitter struct {
 }
 
 func (e *reportObjectSQLEmitter) statement(plan reportmodel.ReportObjectSQLPlan, ctes []string) (string, error) {
-	return e.statementPage(plan, ctes, 0, 0)
-}
-
-func (e *reportObjectSQLEmitter) statementPage(plan reportmodel.ReportObjectSQLPlan, ctes []string, offset, pageSize int) (string, error) {
 	if len(plan.Sources) == 0 || len(ctes) != len(plan.Sources) {
 		return "", fmt.Errorf("invalid report object SQL sources")
 	}
@@ -92,24 +88,7 @@ func (e *reportObjectSQLEmitter) statementPage(plan reportmodel.ReportObjectSQLP
 		}
 		statement += " ORDER BY " + strings.Join(values, ", ")
 	}
-	limit := plan.Limit
-	if offset < 0 || pageSize < 0 {
-		return "", fmt.Errorf("invalid report object SQL page")
-	}
-	if pageSize > 0 {
-		remaining := plan.Limit - offset
-		if remaining < 0 {
-			remaining = 0
-		}
-		limit = pageSize + 1
-		if limit > remaining {
-			limit = remaining
-		}
-	}
-	statement += " LIMIT " + strconv.Itoa(limit)
-	if offset > 0 {
-		statement += " OFFSET " + strconv.Itoa(offset)
-	}
+	statement += " LIMIT " + strconv.Itoa(plan.Limit)
 	return statement, nil
 }
 

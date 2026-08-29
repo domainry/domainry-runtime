@@ -153,7 +153,7 @@ func (s *ReportApplicationService) processReportExportBatch(ctx context.Context,
 		if err := verifySourceVersion(); err != nil {
 			return err
 		}
-		summary, executeErr := s.domain.ExecuteExportReportPage(ctx, scopedReport, normalizedScope.Parameters, job.Checkpoint, reportmodel.ReportPageMaximumSize, principal)
+		summary, executeErr := s.domain.ExecuteExportReportPage(ctx, scopedReport, normalizedScope.Parameters, job.CheckpointCursor, job.Checkpoint, reportmodel.ReportPageMaximumSize, principal)
 		if executeErr != nil {
 			return executeErr
 		}
@@ -187,7 +187,10 @@ func (s *ReportApplicationService) processReportExportBatch(ctx context.Context,
 		}
 		nextCursor, total := "", processed
 		if hasMore {
-			nextCursor, total = fmt.Sprintf("offset:%d", processed), processed+1
+			if strings.TrimSpace(summary.ExecutionCursor) == "" {
+				return &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_cursor_missing"}
+			}
+			nextCursor, total = summary.ExecutionCursor, processed+1
 		}
 		if err := writer.CommitPage(ctx, job, string(content), nextCursor, processed, total); err != nil {
 			return err

@@ -34,7 +34,7 @@ func TestReportObjectSQLKeysetPageUsesStableCompositeCursorWithoutOffset(t *test
 			t.Fatalf("keyset statement missing %q: %s", required, statement)
 		}
 	}
-	if len(args) != 4 {
+	if len(args) != 10 {
 		t.Fatalf("keyset args=%#v", args)
 	}
 }

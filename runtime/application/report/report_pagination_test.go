@@ -48,7 +48,7 @@ func TestObjectSQLPaginationPushesBoundedWindowIntoExecutor(t *testing.T) {
 	if err != nil || len(third.Rows) != 1 || third.Truncated || third.NextCursor != "" || third.Total != 5 || third.TotalSemantics != reportmodel.ReportTotalExact {
 		t.Fatalf("third=%+v err=%v", third, err)
 	}
-	if len(executor.requests) != 3 || executor.requests[0].PageOffset != 0 || executor.requests[1].PageOffset != 2 || executor.requests[2].PageOffset != 4 {
+	if len(executor.requests) != 3 || executor.requests[0].PagePosition != 0 || executor.requests[1].PagePosition != 2 || executor.requests[2].PagePosition != 4 || executor.requests[0].PageCursor != "" || executor.requests[1].PageCursor != "cursor:2" || executor.requests[2].PageCursor != "cursor:4" {
 		t.Fatalf("executor requests=%+v", executor.requests)
 	}
 	for _, request := range executor.requests {

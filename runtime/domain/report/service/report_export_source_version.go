@@ -10,7 +10,7 @@ import (
 )
 
 // ExportSourceVersion captures the authorized database sources behind one
-// already-scoped report. Async OFFSET pagination is permitted only while this
+// already-scoped report. Async keyset pagination is permitted only while this
 // version remains unchanged, otherwise a retry could silently duplicate or
 // omit rows.
 func (s *ReportDomainService) ExportSourceVersion(ctx context.Context, report reportmodel.ReportSchema, principal principalmodel.Principal) (reportmodel.ReportSnapshotSourceVersion, error) {

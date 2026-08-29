@@ -16,12 +16,12 @@ type ReportObjectSQLExecutionRequest struct {
 	Queries     map[string]recordmodel.RecordListQuery
 	Parameters  map[string]any
 	Timeout     time.Duration
-	// PageOffset and PageSize are Runtime-owned execution controls. They are
-	// never interpolated from author SQL. A positive PageSize makes the store
-	// fetch at most PageSize+1 rows so callers can derive has-more without
-	// materializing the complete Report result.
-	PageOffset int
-	PageSize   int
+	// PageCursor is the opaque persistence cursor returned by the previous
+	// execution. PagePosition fences the authored LIMIT without rescanning or
+	// exposing cursor values above the persistence boundary.
+	PageCursor   string
+	PagePosition int
+	PageSize     int
 }
 
 type ReportObjectSQLExecutionResult struct {
@@ -29,6 +29,7 @@ type ReportObjectSQLExecutionResult struct {
 	HasMore    bool
 	Total      int
 	TotalKnown bool
+	NextCursor string
 }
 
 // ReportObjectSQLExecutor executes only an already parsed, metadata-bound,

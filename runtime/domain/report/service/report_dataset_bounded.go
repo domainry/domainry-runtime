@@ -17,8 +17,8 @@ import (
 // same metadata-bound SQL executor used by object_sql_v1. Complex analyses,
 // comparisons, tag-set semantics, contextual masking, and non-UTC bucketing
 // fail closed instead of silently falling back to full-result materialization.
-func (s *ReportDomainService) executeReportDatasetPage(ctx context.Context, report reportmodel.ReportSchema, plan reportmodel.ReportDatasetPlan, pageOffset, pageSize int, principal principalmodel.Principal) (reportmodel.ReportSummary, error) {
-	if s == nil || s.dependencies.Access == nil || s.dependencies.ObjectSQL == nil || pageOffset < 0 || pageSize < 1 || pageSize > reportmodel.ReportPageMaximumSize {
+func (s *ReportDomainService) executeReportDatasetPage(ctx context.Context, report reportmodel.ReportSchema, plan reportmodel.ReportDatasetPlan, pageCursor string, pagePosition, pageSize int, principal principalmodel.Principal) (reportmodel.ReportSummary, error) {
+	if s == nil || s.dependencies.Access == nil || s.dependencies.ObjectSQL == nil || pagePosition < 0 || pageSize < 1 || pageSize > reportmodel.ReportPageMaximumSize {
 		return reportmodel.ReportSummary{}, reportAppError(apperror.KindBadRequest, "backend.report.bounded_page_unavailable", nil)
 	}
 	dataset := report.Dataset
@@ -57,7 +57,7 @@ func (s *ReportDomainService) executeReportDatasetPage(ctx context.Context, repo
 	// result without emitting an invalid SQL SELECT with no projections.
 	if len(dataset.Dimensions) == 0 && len(dataset.Measures) == 0 {
 		rows := []reportmodel.ReportResultRow{}
-		if pageOffset == 0 {
+		if pagePosition == 0 {
 			rows = append(rows, reportmodel.ReportResultRow{})
 		}
 		return reportmodel.ReportSummary{Key: report.Key, Name: report.Name, Rows: rows, RowCount: len(rows), SourceRowCount: -1, ExecutionMode: "dataset_sql_v1", PageSize: pageSize, Total: 1, TotalSemantics: reportmodel.ReportTotalExact}, nil
@@ -194,7 +194,7 @@ func (s *ReportDomainService) executeReportDatasetPage(ctx context.Context, repo
 		}
 	}
 
-	result, err := s.dependencies.ObjectSQL.ExecuteReportObjectSQL(ctx, reportcontract.ReportObjectSQLExecutionRequest{WorkspaceID: principal.WorkspaceID, Plan: sqlPlan, Objects: objects, Queries: queries, Parameters: parameters, PageOffset: pageOffset, PageSize: pageSize})
+	result, err := s.dependencies.ObjectSQL.ExecuteReportObjectSQL(ctx, reportcontract.ReportObjectSQLExecutionRequest{WorkspaceID: principal.WorkspaceID, Plan: sqlPlan, Objects: objects, Queries: queries, Parameters: parameters, PageCursor: pageCursor, PagePosition: pagePosition, PageSize: pageSize})
 	if err != nil {
 		return reportmodel.ReportSummary{}, reportAppError(apperror.KindInternal, "backend.report.query_failed", err)
 	}
@@ -216,7 +216,7 @@ func (s *ReportDomainService) executeReportDatasetPage(ctx context.Context, repo
 		}
 		rows = append(rows, row)
 	}
-	summary := reportmodel.ReportSummary{Key: report.Key, Name: report.Name, Rows: rows, RowCount: len(rows), SourceRowCount: -1, ExecutionMode: "dataset_sql_v1", PageSize: pageSize, Truncated: result.HasMore, Total: pageOffset + len(rows), TotalSemantics: reportmodel.ReportTotalExact}
+	summary := reportmodel.ReportSummary{Key: report.Key, Name: report.Name, Rows: rows, RowCount: len(rows), SourceRowCount: -1, ExecutionMode: "dataset_sql_v1", PageSize: pageSize, Truncated: result.HasMore, Total: pagePosition + len(rows), TotalSemantics: reportmodel.ReportTotalExact, ExecutionCursor: result.NextCursor}
 	if result.TotalKnown {
 		summary.Total = result.Total
 	} else if result.HasMore {
