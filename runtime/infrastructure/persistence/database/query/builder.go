@@ -299,7 +299,7 @@ func buildScopeExpression(s Store, rootObjectKey string, expression recordmodel.
 			if !expression.RelationExists {
 				return "", fmt.Errorf("scope relation path must be resolved to permission IDs before building record query")
 			}
-			return buildScopeRelationExists(s, s.TableIdentifier(rootObjectKey), expression, args)
+			return buildScopeRelationExists(s, rootObjectKey, expression, args)
 		}
 		return prepareScopeComparison(s, ormbuilder.TableColumn(rootObjectKey, expression.FieldKey), expression.Operator, expression.Values, args)
 	default:
