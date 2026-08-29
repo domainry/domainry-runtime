@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	deploymentrepository "github.com/domainry/domainry-runtime/runtime/domain/deployment/repository"
 )
@@ -27,6 +28,18 @@ type runtimeReleaseSQLStore interface {
 	Identifier(string) string
 	Placeholder(int) string
 	IsCoordinationRetryableError(error) bool
+}
+
+type runtimeReleaseRenderer struct{ store runtimeReleaseSQLStore }
+
+func (r runtimeReleaseRenderer) Identifier(value string) string { return r.store.Identifier(value) }
+func (r runtimeReleaseRenderer) Table(value string) string      { return r.store.TableIdentifier(value) }
+func (r runtimeReleaseRenderer) Placeholder(position int) string {
+	return r.store.Placeholder(position)
+}
+
+func (s RuntimeReleaseCohortStore) renderer() ormbuilder.Renderer {
+	return runtimeReleaseRenderer{store: s.store}
 }
 
 func NewRuntimeReleaseCohortStore(store runtimeReleaseSQLStore) RuntimeReleaseCohortStore {
@@ -112,9 +125,11 @@ type runtimeReleaseCohortRow struct {
 }
 
 func (s RuntimeReleaseCohortStore) lockCohort(ctx context.Context, tx *sql.Tx) (runtimeReleaseCohortRow, bool, error) {
-	table := s.store.TableIdentifier("runtime_release_cohorts")
-	update := "UPDATE " + table + " SET " + s.store.Identifier("revision") + " = " + s.store.Identifier("revision") + " + 1 WHERE " + s.store.Identifier("cohort_key") + " = " + s.store.Placeholder(1)
-	result, err := tx.ExecContext(ctx, update, activeRuntimeReleaseCohort)
+	update, updateArgs, err := ormbuilder.NewUpdateBuilder(s.renderer(), "runtime_release_cohorts").SetExpression("revision", ormbuilder.Add(ormbuilder.Column("revision"), ormbuilder.Value(1))).Where(ormbuilder.Equal("cohort_key", activeRuntimeReleaseCohort)).Build()
+	if err != nil {
+		return runtimeReleaseCohortRow{}, false, err
+	}
+	result, err := tx.ExecContext(ctx, update, updateArgs...)
 	if err != nil {
 		return runtimeReleaseCohortRow{}, false, err
 	}
@@ -123,15 +138,20 @@ func (s RuntimeReleaseCohortStore) lockCohort(ctx context.Context, tx *sql.Tx) (
 		return runtimeReleaseCohortRow{}, false, err
 	}
 	if rows == 0 {
-		columns := []string{"cohort_key", "combination_sha256", "identity_json", "generation", "revision", "updated_at"}
-		query := "INSERT INTO " + table + " (" + s.quoted(columns) + ") VALUES (" + s.placeholders(len(columns)) + ")"
-		if _, err := tx.ExecContext(ctx, query, activeRuntimeReleaseCohort, "", "", int64(0), int64(1), ""); err != nil {
+		query, args, buildErr := ormbuilder.NewInsertBuilder(s.renderer(), "runtime_release_cohorts").Columns("cohort_key", "combination_sha256", "identity_json", "generation", "revision", "updated_at").Values(activeRuntimeReleaseCohort, "", "", int64(0), int64(1), "").Build()
+		if buildErr != nil {
+			return runtimeReleaseCohortRow{}, false, buildErr
+		}
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 			return runtimeReleaseCohortRow{}, false, err
 		}
 	}
-	query := "SELECT " + s.quoted([]string{"combination_sha256", "identity_json", "generation"}) + " FROM " + table + " WHERE " + s.store.Identifier("cohort_key") + " = " + s.store.Placeholder(1)
+	query, args, err := ormbuilder.NewSelectBuilder(s.renderer(), "runtime_release_cohorts").Columns("combination_sha256", "identity_json", "generation").Where(ormbuilder.Equal("cohort_key", activeRuntimeReleaseCohort)).Build()
+	if err != nil {
+		return runtimeReleaseCohortRow{}, false, err
+	}
 	var row runtimeReleaseCohortRow
-	if err := tx.QueryRowContext(ctx, query, activeRuntimeReleaseCohort).Scan(&row.combinationSHA256, &row.identityJSON, &row.generation); err != nil {
+	if err := tx.QueryRowContext(ctx, query, args...).Scan(&row.combinationSHA256, &row.identityJSON, &row.generation); err != nil {
 		return runtimeReleaseCohortRow{}, false, err
 	}
 	return row, row.combinationSHA256 != "", nil
@@ -145,9 +165,11 @@ type runtimeReleaseInstanceRow struct {
 }
 
 func (s RuntimeReleaseCohortStore) liveInstances(ctx context.Context, tx *sql.Tx, now time.Time) ([]runtimeReleaseInstanceRow, error) {
-	table := s.store.TableIdentifier("runtime_release_instances")
-	query := "SELECT " + s.quoted([]string{"instance_id", "combination_sha256", "generation", "lease_expires_at"}) + " FROM " + table
-	rows, err := tx.QueryContext(ctx, query)
+	query, args, err := ormbuilder.NewSelectBuilder(s.renderer(), "runtime_release_instances").Columns("instance_id", "combination_sha256", "generation", "lease_expires_at").Build()
+	if err != nil {
+		return nil, err
+	}
+	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +196,11 @@ func (s RuntimeReleaseCohortStore) liveInstances(ctx context.Context, tx *sql.Tx
 		return nil, err
 	}
 	for _, instanceID := range expired {
-		if _, err := tx.ExecContext(ctx, "DELETE FROM "+table+" WHERE "+s.store.Identifier("instance_id")+" = "+s.store.Placeholder(1), instanceID); err != nil {
+		statement, statementArgs, buildErr := ormbuilder.NewDeleteBuilder(s.renderer(), "runtime_release_instances").Where(ormbuilder.Equal("instance_id", instanceID)).Build()
+		if buildErr != nil {
+			return nil, buildErr
+		}
+		if _, err := tx.ExecContext(ctx, statement, statementArgs...); err != nil {
 			return nil, err
 		}
 	}
@@ -182,8 +208,11 @@ func (s RuntimeReleaseCohortStore) liveInstances(ctx context.Context, tx *sql.Tx
 }
 
 func (s RuntimeReleaseCohortStore) replaceCohort(ctx context.Context, tx *sql.Tx, generation int64, combination, identityJSON string, now time.Time) error {
-	query := "UPDATE " + s.store.TableIdentifier("runtime_release_cohorts") + " SET " + s.store.Identifier("combination_sha256") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("identity_json") + " = " + s.store.Placeholder(2) + ", " + s.store.Identifier("generation") + " = " + s.store.Placeholder(3) + ", " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(4) + " WHERE " + s.store.Identifier("cohort_key") + " = " + s.store.Placeholder(5)
-	result, err := tx.ExecContext(ctx, query, combination, identityJSON, generation, now.UTC().Format(time.RFC3339Nano), activeRuntimeReleaseCohort)
+	query, args, err := ormbuilder.NewUpdateBuilder(s.renderer(), "runtime_release_cohorts").Set("combination_sha256", combination).Set("identity_json", identityJSON).Set("generation", generation).Set("updated_at", now.UTC().Format(time.RFC3339Nano)).Where(ormbuilder.Equal("cohort_key", activeRuntimeReleaseCohort)).Build()
+	if err != nil {
+		return err
+	}
+	result, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -195,9 +224,11 @@ func (s RuntimeReleaseCohortStore) replaceCohort(ctx context.Context, tx *sql.Tx
 }
 
 func (s RuntimeReleaseCohortStore) writeInstanceLease(ctx context.Context, tx *sql.Tx, lease deploymentmodel.RuntimeReleaseCohortLease, now time.Time) error {
-	table := s.store.TableIdentifier("runtime_release_instances")
-	query := "UPDATE " + table + " SET " + s.store.Identifier("combination_sha256") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("generation") + " = " + s.store.Placeholder(2) + ", " + s.store.Identifier("lease_expires_at") + " = " + s.store.Placeholder(3) + ", " + s.store.Identifier("heartbeat_at") + " = " + s.store.Placeholder(4) + " WHERE " + s.store.Identifier("instance_id") + " = " + s.store.Placeholder(5)
-	result, err := tx.ExecContext(ctx, query, lease.CombinationSHA256, lease.Generation, lease.ExpiresAt.Format(time.RFC3339Nano), now.UTC().Format(time.RFC3339Nano), lease.InstanceID)
+	query, args, err := ormbuilder.NewUpdateBuilder(s.renderer(), "runtime_release_instances").Set("combination_sha256", lease.CombinationSHA256).Set("generation", lease.Generation).Set("lease_expires_at", lease.ExpiresAt.Format(time.RFC3339Nano)).Set("heartbeat_at", now.UTC().Format(time.RFC3339Nano)).Where(ormbuilder.Equal("instance_id", lease.InstanceID)).Build()
+	if err != nil {
+		return err
+	}
+	result, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -208,9 +239,11 @@ func (s RuntimeReleaseCohortStore) writeInstanceLease(ctx context.Context, tx *s
 	if rows == 1 {
 		return nil
 	}
-	columns := []string{"instance_id", "combination_sha256", "generation", "lease_expires_at", "joined_at", "heartbeat_at"}
-	insert := "INSERT INTO " + table + " (" + s.quoted(columns) + ") VALUES (" + s.placeholders(len(columns)) + ")"
-	_, err = tx.ExecContext(ctx, insert, lease.InstanceID, lease.CombinationSHA256, lease.Generation, lease.ExpiresAt.Format(time.RFC3339Nano), now.UTC().Format(time.RFC3339Nano), now.UTC().Format(time.RFC3339Nano))
+	insert, insertArgs, err := ormbuilder.NewInsertBuilder(s.renderer(), "runtime_release_instances").Columns("instance_id", "combination_sha256", "generation", "lease_expires_at", "joined_at", "heartbeat_at").Values(lease.InstanceID, lease.CombinationSHA256, lease.Generation, lease.ExpiresAt.Format(time.RFC3339Nano), now.UTC().Format(time.RFC3339Nano), now.UTC().Format(time.RFC3339Nano)).Build()
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, insert, insertArgs...)
 	return err
 }
 
@@ -227,9 +260,13 @@ func (s RuntimeReleaseCohortStore) HeartbeatRuntimeRelease(ctx context.Context, 
 	if !exists || cohort.generation != lease.Generation || cohort.combinationSHA256 != lease.CombinationSHA256 {
 		return lease, fmt.Errorf("%w: active cohort changed", deploymentmodel.ErrRuntimeReleaseLeaseLost)
 	}
-	selectQuery := "SELECT " + s.store.Identifier("lease_expires_at") + " FROM " + s.store.TableIdentifier("runtime_release_instances") + " WHERE " + s.store.Identifier("instance_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("combination_sha256") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("generation") + " = " + s.store.Placeholder(3)
+	leasePredicate := ormbuilder.And(ormbuilder.Equal("instance_id", lease.InstanceID), ormbuilder.Equal("combination_sha256", lease.CombinationSHA256), ormbuilder.Equal("generation", lease.Generation))
+	selectQuery, selectArgs, buildErr := ormbuilder.NewSelectBuilder(s.renderer(), "runtime_release_instances").Columns("lease_expires_at").Where(leasePredicate).Build()
+	if buildErr != nil {
+		return lease, buildErr
+	}
 	var expiresAt string
-	if err := tx.QueryRowContext(ctx, selectQuery, lease.InstanceID, lease.CombinationSHA256, lease.Generation).Scan(&expiresAt); err != nil {
+	if err := tx.QueryRowContext(ctx, selectQuery, selectArgs...).Scan(&expiresAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return lease, fmt.Errorf("%w: instance=%s generation=%d", deploymentmodel.ErrRuntimeReleaseLeaseLost, lease.InstanceID, lease.Generation)
 		}
@@ -240,8 +277,11 @@ func (s RuntimeReleaseCohortStore) HeartbeatRuntimeRelease(ctx context.Context, 
 		return lease, fmt.Errorf("%w: instance=%s lease expired", deploymentmodel.ErrRuntimeReleaseLeaseLost, lease.InstanceID)
 	}
 	next := now.Add(duration).UTC()
-	query := "UPDATE " + s.store.TableIdentifier("runtime_release_instances") + " SET " + s.store.Identifier("lease_expires_at") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("heartbeat_at") + " = " + s.store.Placeholder(2) + " WHERE " + s.store.Identifier("instance_id") + " = " + s.store.Placeholder(3) + " AND " + s.store.Identifier("combination_sha256") + " = " + s.store.Placeholder(4) + " AND " + s.store.Identifier("generation") + " = " + s.store.Placeholder(5)
-	result, err := tx.ExecContext(ctx, query, next.Format(time.RFC3339Nano), now.UTC().Format(time.RFC3339Nano), lease.InstanceID, lease.CombinationSHA256, lease.Generation)
+	query, args, buildErr := ormbuilder.NewUpdateBuilder(s.renderer(), "runtime_release_instances").Set("lease_expires_at", next.Format(time.RFC3339Nano)).Set("heartbeat_at", now.UTC().Format(time.RFC3339Nano)).Where(leasePredicate).Build()
+	if buildErr != nil {
+		return lease, buildErr
+	}
+	result, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
 		return lease, err
 	}
@@ -260,11 +300,16 @@ func (s RuntimeReleaseCohortStore) HeartbeatRuntimeRelease(ctx context.Context, 
 }
 
 func (s RuntimeReleaseCohortStore) ReleaseRuntimeRelease(ctx context.Context, lease deploymentmodel.RuntimeReleaseCohortLease) error {
-	query := "DELETE FROM " + s.store.TableIdentifier("runtime_release_instances") + " WHERE " + s.store.Identifier("instance_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("combination_sha256") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("generation") + " = " + s.store.Placeholder(3)
-	_, err := s.store.DB().ExecContext(ctx, query, lease.InstanceID, lease.CombinationSHA256, lease.Generation)
+	query, args, err := ormbuilder.NewDeleteBuilder(s.renderer(), "runtime_release_instances").Where(ormbuilder.And(ormbuilder.Equal("instance_id", lease.InstanceID), ormbuilder.Equal("combination_sha256", lease.CombinationSHA256), ormbuilder.Equal("generation", lease.Generation))).Build()
+	if err != nil {
+		return err
+	}
+	_, err = s.store.DB().ExecContext(ctx, query, args...)
 	return err
 }
 
+// quoted and placeholders remain as compatibility helpers for store-level
+// diagnostics; production CRUD is rendered exclusively through ORM builders.
 func (s RuntimeReleaseCohortStore) quoted(columns []string) string {
 	quoted := make([]string, len(columns))
 	for index, column := range columns {
