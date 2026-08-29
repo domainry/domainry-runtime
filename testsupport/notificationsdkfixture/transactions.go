@@ -7,7 +7,7 @@ import (
 
 	"github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
-	notificationsql "github.com/domainry/domainry-notification/sqlstore"
+	notificationmodule "github.com/domainry/domainry-notification/module"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
@@ -30,15 +30,11 @@ func EnsureModuleSchema(ctx context.Context, store *database.RuntimeStore) error
 	if store == nil {
 		return fmt.Errorf("Runtime store is required")
 	}
-	migrations, err := notificationsql.SchemaMigrations(notificationsql.Driver(store.Driver()), store.DatabaseSchema(), "")
+	migrations, err := notificationmodule.SchemaMigrations(store.Driver(), store.DatabaseSchema(), "")
 	if err != nil {
 		return err
 	}
-	hostMigrations := make([]modulehost.SchemaMigration, len(migrations))
-	for index, migration := range migrations {
-		hostMigrations[index] = modulehost.SchemaMigration{Version: migration.Version, Name: migration.Name, Statements: append([]string(nil), migration.Statements...)}
-	}
-	return store.ApplyOwnedMigrations(ctx, "notification", hostMigrations)
+	return store.ApplyOwnedMigrations(ctx, "notification", migrations)
 }
 
 type transactions struct{ store *database.RuntimeStore }
