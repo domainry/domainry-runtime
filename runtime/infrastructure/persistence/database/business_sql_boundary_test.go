@@ -86,3 +86,26 @@ func TestReportDatasetStoreUsesStructuredCTEAndJoinBuilders(t *testing.T) {
 		}
 	}
 }
+
+func TestReportObjectSQLSourcesUseStructuredWorkspaceBuilders(t *testing.T) {
+	_, source, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve persistence boundary path")
+	}
+	path := filepath.Join(filepath.Dir(source), "report", "report_object_sql_execution.go")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	for _, forbidden := range []string{"BuildTenantWhere", "reportQueryDialect", "reportStoreColumnList", "TableIdentifier(object.Key)"} {
+		if strings.Contains(text, forbidden) {
+			t.Errorf("Report Object SQL source reintroduced hand-built tenant SQL token %q", forbidden)
+		}
+	}
+	for _, required := range []string{"BuildTenantPredicate", "NewSelectBuilder", "BuildWithOffset"} {
+		if !strings.Contains(text, required) {
+			t.Errorf("Report Object SQL source lost structured builder %q", required)
+		}
+	}
+}
