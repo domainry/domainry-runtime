@@ -25,6 +25,41 @@ func dbValue(value any) any {
 	}
 }
 
+func nonBlankStrings(values []string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			result = append(result, value)
+		}
+	}
+	return result
+}
+
+func stringsToAny(values []string) []any {
+	result := make([]any, len(values))
+	for index, value := range values {
+		result[index] = value
+	}
+	return result
+}
+
+func nonEmptyValues(raw any) []any {
+	values := make([]any, 0)
+	switch typed := raw.(type) {
+	case []any:
+		values = append(values, typed...)
+	case []string:
+		values = stringsToAny(typed)
+	}
+	result := make([]any, 0, len(values))
+	for _, value := range values {
+		if !recordvalidation.RecordIsEmptyValue(value) {
+			result = append(result, dbValue(value))
+		}
+	}
+	return result
+}
+
 // BuildTenantWhere is the only supported WHERE builder for tenant-owned record
 // tables. It rejects an absent workspace and always owns the workspace filter,
 // so caller-provided filters cannot remove or replace the tenant boundary.
@@ -35,8 +70,20 @@ func BuildTenantWhere(s Store, workspace string, query recordmodel.RecordListQue
 	}
 	workspace = workspaceID.String()
 	query.PrincipalWorkspaceID = workspace
-	clauses := []string{s.Identifier("workspace_id") + " = " + s.Placeholder(1)}
-	args := []any{workspace}
+	clauses := make([]string, 0, 8)
+	args := make([]any, 0, 8)
+	appendPredicate := func(predicate ormbuilder.Predicate) error {
+		prepared, values, err := ormbuilder.PreparePredicate(storeRenderer{s}, predicate, len(args))
+		if err != nil {
+			return err
+		}
+		clauses = append(clauses, prepared)
+		args = append(args, values...)
+		return nil
+	}
+	if err := appendPredicate(ormbuilder.Equal("workspace_id", workspace)); err != nil {
+		return "", nil, err
+	}
 	scope := strings.TrimSpace(query.Scope)
 	if scope == "" {
 		scope = "all_records"
@@ -45,29 +92,36 @@ func BuildTenantWhere(s Store, workspace string, query recordmodel.RecordListQue
 		return "", nil, fmt.Errorf("unsupported data scope %q", scope)
 	}
 	if scope == "none" {
-		clauses = append(clauses, "1 = 0")
+		_ = appendPredicate(ormbuilder.AlwaysFalse())
 	}
 	if scope == "owned_records" && strings.TrimSpace(query.OwnerField) != "" {
-		args = append(args, query.PrincipalUserID)
-		clauses = append(clauses, s.Identifier(query.OwnerField)+" = "+s.Placeholder(len(args)))
+		_ = appendPredicate(ormbuilder.Equal(query.OwnerField, query.PrincipalUserID))
 	}
 	if scope == "subordinates" && strings.TrimSpace(query.OwnerField) != "" {
-		clauses = append(clauses, inClause(s, query.OwnerField, query.PrincipalReportingUserIDs, &args))
+		values := nonBlankStrings(query.PrincipalReportingUserIDs)
+		if len(values) == 0 {
+			_ = appendPredicate(ormbuilder.AlwaysFalse())
+		} else {
+			_ = appendPredicate(ormbuilder.In(query.OwnerField, stringsToAny(values)...))
+		}
 	}
 	if scope == "department" && strings.TrimSpace(query.DepartmentPathField) != "" && strings.TrimSpace(query.PrincipalDepartmentPath) != "" {
-		args = append(args, query.PrincipalDepartmentPath)
-		clauses = append(clauses, s.Identifier(query.DepartmentPathField)+" = "+s.Placeholder(len(args)))
+		_ = appendPredicate(ormbuilder.Equal(query.DepartmentPathField, query.PrincipalDepartmentPath))
 	}
 	if scope == "department_and_children" && strings.TrimSpace(query.DepartmentPathField) != "" && strings.TrimSpace(query.PrincipalDepartmentPath) != "" {
 		departmentPath := strings.TrimRight(query.PrincipalDepartmentPath, "/")
-		args = append(args, departmentPath)
-		exactPlaceholder := s.Placeholder(len(args))
-		args = append(args, escapeLikePattern(departmentPath)+"/%")
-		childPlaceholder := s.Placeholder(len(args))
-		clauses = append(clauses, "("+s.Identifier(query.DepartmentPathField)+" = "+exactPlaceholder+" OR "+s.Identifier(query.DepartmentPathField)+" LIKE "+childPlaceholder+" ESCAPE '~')")
+		_ = appendPredicate(ormbuilder.Or(
+			ormbuilder.Equal(query.DepartmentPathField, departmentPath),
+			ormbuilder.LikeEscaped(query.DepartmentPathField, escapeLikePattern(departmentPath)+"/%"),
+		))
 	}
 	if scope == "team" && strings.TrimSpace(query.TeamField) != "" && len(query.PrincipalTeamIDs) > 0 {
-		clauses = append(clauses, inClause(s, query.TeamField, query.PrincipalTeamIDs, &args))
+		values := nonBlankStrings(query.PrincipalTeamIDs)
+		if len(values) == 0 {
+			_ = appendPredicate(ormbuilder.AlwaysFalse())
+		} else {
+			_ = appendPredicate(ormbuilder.In(query.TeamField, stringsToAny(values)...))
+		}
 	}
 	if scope == "custom" {
 		if query.ScopeExpression == nil || strings.TrimSpace(query.RootObjectKey) == "" {
@@ -80,13 +134,12 @@ func BuildTenantWhere(s Store, workspace string, query recordmodel.RecordListQue
 		clauses = append(clauses, compiled)
 	}
 	if strings.TrimSpace(query.Search) != "" && len(query.SearchFields) > 0 {
-		searchParts := []string{}
+		searchPredicates := make([]ormbuilder.Predicate, 0, len(query.SearchFields))
 		searchValue := "%" + strings.ToLower(strings.TrimSpace(query.Search)) + "%"
 		for _, field := range query.SearchFields {
-			args = append(args, searchValue)
-			searchParts = append(searchParts, "LOWER("+s.Identifier(field)+") LIKE "+s.Placeholder(len(args)))
+			searchPredicates = append(searchPredicates, ormbuilder.LikeValue(ormbuilder.Lower(ormbuilder.Column(field)), searchValue))
 		}
-		clauses = append(clauses, "("+strings.Join(searchParts, " OR ")+")")
+		_ = appendPredicate(ormbuilder.Or(searchPredicates...))
 	}
 	filterKeys := make([]string, 0, len(query.Filters))
 	for key := range query.Filters {
@@ -103,84 +156,114 @@ func BuildTenantWhere(s Store, workspace string, query recordmodel.RecordListQue
 		}
 		if baseKey, operator, ok := splitFilterKey(key); ok {
 			if operator == "in" {
-				clauses = append(clauses, inAnyClause(s, baseKey, value, &args))
+				values := nonEmptyValues(value)
+				if len(values) == 0 {
+					_ = appendPredicate(ormbuilder.AlwaysFalse())
+				} else {
+					_ = appendPredicate(ormbuilder.In(baseKey, values...))
+				}
 				continue
 			}
-			args = append(args, dbValue(value))
-			comparator := "="
+			predicate := ormbuilder.Equal(baseKey, dbValue(value))
 			if operator == "gte" {
-				comparator = ">="
+				predicate = ormbuilder.GreaterThanOrEqual(baseKey, dbValue(value))
+			} else if operator == "lte" {
+				predicate = ormbuilder.LessThanOrEqual(baseKey, dbValue(value))
 			}
-			if operator == "lte" {
-				comparator = "<="
-			}
-			clauses = append(clauses, s.Identifier(baseKey)+" "+comparator+" "+s.Placeholder(len(args)))
+			_ = appendPredicate(predicate)
 		} else {
-			args = append(args, dbValue(value))
-			clauses = append(clauses, s.Identifier(key)+" = "+s.Placeholder(len(args)))
+			_ = appendPredicate(ormbuilder.Equal(key, dbValue(value)))
 		}
 	}
 	if query.FilterExpression != nil {
-		compiled, err := buildRecordFilterExpression(s, *query.FilterExpression, &args, 0)
+		predicate, err := recordFilterPredicate(*query.FilterExpression, 0)
 		if err != nil {
 			return "", nil, err
 		}
-		clauses = append(clauses, compiled)
+		if err := appendPredicate(predicate); err != nil {
+			return "", nil, err
+		}
 	}
 	return " WHERE " + strings.Join(clauses, " AND "), args, nil
 }
 
 func buildRecordFilterExpression(s Store, expression recordmodel.RecordFilterExpression, args *[]any, depth int) (string, error) {
+	predicate, err := recordFilterPredicate(expression, depth)
+	if err != nil {
+		return "", err
+	}
+	prepared, values, err := ormbuilder.PreparePredicate(storeRenderer{s}, predicate, len(*args))
+	if err != nil {
+		return "", err
+	}
+	*args = append(*args, values...)
+	return prepared, nil
+}
+
+func recordFilterPredicate(expression recordmodel.RecordFilterExpression, depth int) (ormbuilder.Predicate, error) {
 	if depth > 16 {
-		return "", fmt.Errorf("record filter exceeds maximum depth")
+		return nil, fmt.Errorf("record filter exceeds maximum depth")
 	}
 	switch expression.Operator {
 	case "and", "or":
 		if len(expression.Children) < 2 {
-			return "", fmt.Errorf("record filter %s requires at least two children", expression.Operator)
+			return nil, fmt.Errorf("record filter %s requires at least two children", expression.Operator)
 		}
-		parts := make([]string, 0, len(expression.Children))
+		predicates := make([]ormbuilder.Predicate, 0, len(expression.Children))
 		for _, child := range expression.Children {
-			part, err := buildRecordFilterExpression(s, child, args, depth+1)
+			predicate, err := recordFilterPredicate(child, depth+1)
 			if err != nil {
-				return "", err
+				return nil, err
 			}
-			parts = append(parts, part)
+			predicates = append(predicates, predicate)
 		}
-		return "(" + strings.Join(parts, " "+strings.ToUpper(expression.Operator)+" ") + ")", nil
+		if expression.Operator == "and" {
+			return ormbuilder.And(predicates...), nil
+		}
+		return ormbuilder.Or(predicates...), nil
 	case "not":
 		if len(expression.Children) != 1 {
-			return "", fmt.Errorf("record filter not requires exactly one child")
+			return nil, fmt.Errorf("record filter not requires exactly one child")
 		}
-		part, err := buildRecordFilterExpression(s, expression.Children[0], args, depth+1)
+		predicate, err := recordFilterPredicate(expression.Children[0], depth+1)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		return "NOT (" + part + ")", nil
+		return ormbuilder.Not(predicate), nil
 	case "eq", "ne", "gt", "gte", "lt", "lte":
-		operator := map[string]string{"eq": "=", "ne": "<>", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}[expression.Operator]
-		*args = append(*args, dbValue(expression.Value))
-		return s.Identifier(expression.Field) + " " + operator + " " + s.Placeholder(len(*args)), nil
+		value := dbValue(expression.Value)
+		switch expression.Operator {
+		case "eq":
+			return ormbuilder.Equal(expression.Field, value), nil
+		case "ne":
+			return ormbuilder.NotEqual(expression.Field, value), nil
+		case "gt":
+			return ormbuilder.GreaterThan(expression.Field, value), nil
+		case "gte":
+			return ormbuilder.GreaterThanOrEqual(expression.Field, value), nil
+		case "lt":
+			return ormbuilder.LessThan(expression.Field, value), nil
+		default:
+			return ormbuilder.LessThanOrEqual(expression.Field, value), nil
+		}
 	case "in", "not_in":
-		placeholders := make([]string, 0, len(expression.Values))
+		values := make([]any, 0, len(expression.Values))
 		for _, value := range expression.Values {
-			*args = append(*args, dbValue(value))
-			placeholders = append(placeholders, s.Placeholder(len(*args)))
+			values = append(values, dbValue(value))
 		}
-		if len(placeholders) == 0 {
-			return "", fmt.Errorf("record filter %s requires values", expression.Operator)
+		if len(values) == 0 {
+			return nil, fmt.Errorf("record filter %s requires values", expression.Operator)
 		}
-		operator := "IN"
 		if expression.Operator == "not_in" {
-			operator = "NOT IN"
+			return ormbuilder.NotIn(expression.Field, values...), nil
 		}
-		return s.Identifier(expression.Field) + " " + operator + " (" + strings.Join(placeholders, ", ") + ")", nil
+		return ormbuilder.In(expression.Field, values...), nil
 	case "is_null":
-		return s.Identifier(expression.Field) + " IS NULL", nil
+		return ormbuilder.IsNull(expression.Field), nil
 	case "is_not_null":
-		return s.Identifier(expression.Field) + " IS NOT NULL", nil
+		return ormbuilder.IsNotNull(expression.Field), nil
 	default:
-		return "", fmt.Errorf("unsupported record filter operator %q", expression.Operator)
+		return nil, fmt.Errorf("unsupported record filter operator %q", expression.Operator)
 	}
 }
 
@@ -218,101 +301,97 @@ func buildScopeExpression(s Store, rootObjectKey string, expression recordmodel.
 			}
 			return buildScopeRelationExists(s, s.TableIdentifier(rootObjectKey), expression, args)
 		}
-		rootReference := s.TableIdentifier(rootObjectKey)
-		return buildScopeComparison(s, rootReference, expression.FieldKey, expression.Operator, expression.Values, args), nil
+		return prepareScopeComparison(s, ormbuilder.TableColumn(rootObjectKey, expression.FieldKey), expression.Operator, expression.Values, args)
 	default:
 		return "", fmt.Errorf("unsupported compiled scope operator %q", expression.Operator)
 	}
 }
 
 func buildScopeComparison(s Store, reference, fieldKey, operator string, values []string, args *[]any) string {
-	column := reference + "." + s.Identifier(fieldKey)
+	prepared, err := prepareScopeComparison(s, ormbuilder.QualifiedColumn(reference, fieldKey), operator, values, args)
+	if err != nil {
+		return ""
+	}
+	return prepared
+}
+
+func prepareScopeComparison(s Store, column ormbuilder.Expression, operator string, values []string, args *[]any) (string, error) {
+	predicate := scopeComparisonPredicate(column, operator, values)
+	prepared, bound, err := ormbuilder.PreparePredicate(storeRenderer{s}, predicate, len(*args))
+	if err != nil {
+		return "", err
+	}
+	*args = append(*args, bound...)
+	return prepared, nil
+}
+
+func scopeComparisonPredicate(column ormbuilder.Expression, operator string, values []string) ormbuilder.Predicate {
 	if operator == "exists" {
-		return column + " IS NOT NULL"
+		return ormbuilder.IsNotNullExpression(column)
 	}
 	if operator == "not_exists" {
-		return column + " IS NULL"
+		return ormbuilder.IsNullExpression(column)
 	}
 	if len(values) == 0 {
-		return "1 = 0"
+		return ormbuilder.AlwaysFalse()
 	}
 	if operator == "starts_with" {
-		*args = append(*args, escapeLikePattern(values[0])+"%")
-		return column + " LIKE " + s.Placeholder(len(*args)) + " ESCAPE '~'"
+		return ormbuilder.LikeValueEscaped(column, escapeLikePattern(values[0])+"%")
 	}
 	if operator == "prefix" {
 		prefix := strings.TrimRight(strings.TrimSpace(values[0]), "/")
 		if prefix == "" {
-			return "1 = 0"
+			return ormbuilder.AlwaysFalse()
 		}
-		*args = append(*args, prefix)
-		exact := s.Placeholder(len(*args))
-		*args = append(*args, escapeLikePattern(prefix)+"/%")
-		children := s.Placeholder(len(*args))
-		return "(" + column + " = " + exact + " OR " + column + " LIKE " + children + " ESCAPE '~')"
+		return ormbuilder.Or(
+			ormbuilder.EqualValue(column, prefix),
+			ormbuilder.LikeValueEscaped(column, escapeLikePattern(prefix)+"/%"),
+		)
 	}
 	if operator == "eq" {
-		*args = append(*args, values[0])
-		return column + " = " + s.Placeholder(len(*args))
+		return ormbuilder.EqualValue(column, values[0])
 	}
 	const permissionIDChunkSize = ScopeMembershipINThreshold
-	chunks := make([]string, 0, (len(values)+permissionIDChunkSize-1)/permissionIDChunkSize)
+	chunks := make([]ormbuilder.Predicate, 0, (len(values)+permissionIDChunkSize-1)/permissionIDChunkSize)
 	for offset := 0; offset < len(values); offset += permissionIDChunkSize {
 		end := offset + permissionIDChunkSize
 		if end > len(values) {
 			end = len(values)
 		}
-		placeholders := make([]string, 0, end-offset)
-		for _, value := range values[offset:end] {
-			*args = append(*args, value)
-			placeholders = append(placeholders, s.Placeholder(len(*args)))
-		}
-		chunks = append(chunks, column+" IN ("+strings.Join(placeholders, ", ")+")")
+		chunks = append(chunks, ormbuilder.InExpression(column, stringsToAny(values[offset:end])...))
 	}
 	if len(chunks) == 1 {
 		return chunks[0]
 	}
-	return "(" + strings.Join(chunks, " OR ") + ")"
+	return ormbuilder.Or(chunks...)
 }
 
 func inAnyClause(s Store, field string, raw any, args *[]any) string {
-	values := []any{}
-	switch typed := raw.(type) {
-	case []any:
-		values = typed
-	case []string:
-		for _, value := range typed {
-			values = append(values, value)
-		}
+	values := nonEmptyValues(raw)
+	predicate := ormbuilder.Predicate(ormbuilder.AlwaysFalse())
+	if len(values) > 0 {
+		predicate = ormbuilder.In(field, values...)
 	}
-	placeholders := make([]string, 0, len(values))
-	for _, value := range values {
-		if recordvalidation.RecordIsEmptyValue(value) {
-			continue
-		}
-		*args = append(*args, dbValue(value))
-		placeholders = append(placeholders, s.Placeholder(len(*args)))
+	prepared, bound, err := ormbuilder.PreparePredicate(storeRenderer{s}, predicate, len(*args))
+	if err != nil {
+		return ""
 	}
-	if len(placeholders) == 0 {
-		return "1 = 0"
-	}
-	return s.Identifier(field) + " IN (" + strings.Join(placeholders, ", ") + ")"
+	*args = append(*args, bound...)
+	return prepared
 }
 
 func inClause(s Store, field string, values []string, args *[]any) string {
-	placeholders := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		*args = append(*args, value)
-		placeholders = append(placeholders, s.Placeholder(len(*args)))
+	values = nonBlankStrings(values)
+	predicate := ormbuilder.Predicate(ormbuilder.AlwaysFalse())
+	if len(values) > 0 {
+		predicate = ormbuilder.In(field, stringsToAny(values)...)
 	}
-	if len(placeholders) == 0 {
-		return "1 = 0"
+	prepared, bound, err := ormbuilder.PreparePredicate(storeRenderer{s}, predicate, len(*args))
+	if err != nil {
+		return ""
 	}
-	return s.Identifier(field) + " IN (" + strings.Join(placeholders, ", ") + ")"
+	*args = append(*args, bound...)
+	return prepared
 }
 
 func BuildOrder(s Store, query recordmodel.RecordListQuery) string {

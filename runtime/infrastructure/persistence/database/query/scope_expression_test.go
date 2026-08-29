@@ -30,7 +30,7 @@ func TestResolveScopeMembershipQueriesPermissionIDsBeforeRootFieldIN(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, fragment := range []string{`SELECT DISTINCT permission_0."id" FROM "member" permission_2`, `CROSS JOIN "card" permission_1`, `CROSS JOIN "account" permission_0`, `permission_2."id" = $2`} {
+	for _, fragment := range []string{`SELECT DISTINCT permission_0."id" FROM "member" permission_2`, `CROSS JOIN "card" permission_1`, `CROSS JOIN "account" permission_0`, `"permission_2"."id" = $2`} {
 		if !strings.Contains(lookupSQL, fragment) {
 			t.Fatalf("permission lookup missing %q in %s", fragment, lookupSQL)
 		}
@@ -59,7 +59,7 @@ func TestBuildTenantWhereCompilesReverseExistenceAndDenyAllClaim(t *testing.T) {
 	store := fuzzQueryStore{}
 	reverse := &recordmodel.RecordScopeExpression{Operator: "eq", Path: []recordmodel.RecordScopePathSegment{{SourceObjectKey: "member", Direction: "reverse", RelationFieldKey: "member_id", TargetObjectKey: "package"}}, FieldKey: "coach_id", Values: []string{"coach-1"}}
 	resolved, err := ResolveScopeMembership(store, "workspace-a", *reverse, 100, func(statement string, args ...any) ([]string, error) {
-		if !strings.Contains(statement, `SELECT DISTINCT permission_0."member_id" FROM "package" permission_0`) || !strings.Contains(statement, `permission_0."coach_id" = $2`) {
+		if !strings.Contains(statement, `SELECT DISTINCT permission_0."member_id" FROM "package" permission_0`) || !strings.Contains(statement, `"permission_0"."coach_id" = $2`) {
 			t.Fatalf("reverse permission lookup=%s", statement)
 		}
 		return []string{"member-1"}, nil
@@ -101,7 +101,7 @@ func TestCandidateScopeMatchesConstrainsRelationLookupToUnpersistedCandidate(t *
 	if err != nil || !matched {
 		t.Fatalf("candidate match=%v err=%v", matched, err)
 	}
-	for _, fragment := range []string{`FROM "order" permission_0`, `permission_0."warehouse_id" = $2`, `permission_0."id" = $3`, `LIMIT 1`} {
+	for _, fragment := range []string{`FROM "order" permission_0`, `"permission_0"."warehouse_id" = $2`, `permission_0."id" = $3`, `LIMIT 1`} {
 		if !strings.Contains(statement, fragment) {
 			t.Fatalf("candidate relation lookup missing %q in %s", fragment, statement)
 		}
