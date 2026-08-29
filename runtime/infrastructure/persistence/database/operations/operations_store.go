@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationspolicy "github.com/domainry/domainry-runtime/runtime/domain/operations/policy"
 	operationsrepository "github.com/domainry/domainry-runtime/runtime/domain/operations/repository"
@@ -72,15 +73,25 @@ func (s OperationsStore) RegisterOperationsCommand(ctx context.Context, receipt 
 	}
 	values := operationsReceiptValues(receipt)
 	columns := operationsReceiptColumns()
-	placeholders := make([]string, len(columns))
-	for index := range columns {
-		placeholders[index] = s.store.Placeholder(index + 1)
+	var query string
+	var args []any
+	if workspaceID, err := principalmodel.NewWorkspaceID(receipt.Command.Scope.WorkspaceID); err == nil {
+		insertColumns := append(append([]string{}, columns[:1]...), columns[2:]...)
+		insertValues := append(append([]any{}, values[:1]...), values[2:]...)
+		query, args, err = ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "runtime_operations", workspaceID.String()).Columns(insertColumns...).Values(insertValues...).Build()
+		if err != nil {
+			return operationsmodel.OperationsReceipt{}, "", err
+		}
+	} else {
+		query, args, err = ormbuilder.NewInsertBuilder(s.store.SQLRenderer, "runtime_operations").Columns(columns...).Values(values...).Build()
+		if err != nil {
+			return operationsmodel.OperationsReceipt{}, "", err
+		}
 	}
-	query := "INSERT INTO " + s.store.TableIdentifier("runtime_operations") + " (" + operationsQuotedColumns(s.store, columns) + ") VALUES (" + strings.Join(placeholders, ", ") + ")"
 	if err := workerplatform.CheckFault(ctx, s.faults, workerplatform.FaultTransactionBeforeWrite); err != nil {
 		return operationsmodel.OperationsReceipt{}, "", err
 	}
-	if _, err := tx.ExecContext(ctx, query, values...); err != nil {
+	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 		_ = tx.Rollback()
 		if replay, replayFound, replayErr := s.GetOperationsReceiptByKey(ctx, receipt.Command.Scope, receipt.Command.Kind, receipt.Command.IdempotencyKey); replayErr == nil && replayFound {
 			return replay, operationspolicy.OperationsClassifySubmission(&replay, receipt.Command), nil
@@ -120,13 +131,18 @@ func (s OperationsStore) ListOperationsReceipts(ctx context.Context, scope opera
 	if s.database() == nil {
 		return nil, fmt.Errorf("operations store unavailable")
 	}
-	where, args := s.scopePredicate(scope, 1)
-	if status != "" {
-		args = append(args, string(status))
-		where += " AND " + s.store.Identifier("status") + " = " + s.store.Placeholder(len(args))
+	workspaceID, predicate, err := operationsScopePredicate(scope)
+	if err != nil {
+		return nil, err
 	}
-	args = append(args, limit)
-	query := "SELECT " + operationsQuotedColumns(s.store, operationsReceiptColumns()) + " FROM " + s.store.TableIdentifier("runtime_operations") + " WHERE " + where + " ORDER BY " + s.store.Identifier("created_at") + " DESC LIMIT " + s.store.Placeholder(len(args))
+	if status != "" {
+		predicate = combineOperationsPredicate(predicate, ormbuilder.Equal("status", string(status)))
+	}
+	builder := operationsSelectBuilder(s.store, workspaceID).Columns(operationsReceiptColumns()...).Where(predicate).OrderBy(ormbuilder.Descending("created_at"), ormbuilder.Descending("id")).Limit(limit)
+	query, args, buildErr := builder.Build()
+	if buildErr != nil {
+		return nil, buildErr
+	}
 	rows, err := s.database().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -147,13 +163,15 @@ func (s OperationsStore) SearchOperationsReceipts(ctx context.Context, scope ope
 	if s.database() == nil {
 		return operationsmodel.OperationsReceiptPage{}, fmt.Errorf("operations store unavailable")
 	}
-	where, args := s.scopePredicate(scope, 1)
+	workspaceID, predicate, scopeErr := operationsScopePredicate(scope)
+	if scopeErr != nil {
+		return operationsmodel.OperationsReceiptPage{}, scopeErr
+	}
 	addExact := func(column string, value any, present bool) {
 		if !present {
 			return
 		}
-		args = append(args, value)
-		where += " AND " + s.store.Identifier(column) + " = " + s.store.Placeholder(len(args))
+		predicate = combineOperationsPredicate(predicate, ormbuilder.Equal(column, value))
 	}
 	addExact("status", string(filter.Status), filter.Status != "")
 	addExact("failure_class", string(filter.FailureClass), filter.FailureClass != "")
@@ -163,30 +181,33 @@ func (s OperationsStore) SearchOperationsReceipts(ctx context.Context, scope ope
 	addExact("requested_by", filter.RequestedBy, filter.RequestedBy != "")
 	addExact("correlation", filter.Correlation, filter.Correlation != "")
 	if filter.CreatedFrom != "" {
-		args = append(args, filter.CreatedFrom)
-		where += " AND " + s.store.Identifier("created_at") + " >= " + s.store.Placeholder(len(args))
+		predicate = combineOperationsPredicate(predicate, ormbuilder.GreaterThanOrEqual("created_at", filter.CreatedFrom))
 	}
 	if filter.CreatedTo != "" {
-		args = append(args, filter.CreatedTo)
-		where += " AND " + s.store.Identifier("created_at") + " <= " + s.store.Placeholder(len(args))
+		predicate = combineOperationsPredicate(predicate, ormbuilder.LessThanOrEqual("created_at", filter.CreatedTo))
 	}
 	if filter.Search != "" {
 		searchColumns := []string{"id", "kind", "resource_type", "resource_id", "requested_by", "reason", "correlation", "error_code", "next_action"}
-		terms := make([]string, 0, len(searchColumns))
+		terms := make([]ormbuilder.Predicate, 0, len(searchColumns))
 		for _, column := range searchColumns {
-			args = append(args, "%"+strings.ToLower(filter.Search)+"%")
-			terms = append(terms, "LOWER("+s.store.Identifier(column)+") LIKE "+s.store.Placeholder(len(args)))
+			terms = append(terms, ormbuilder.LikeValue(ormbuilder.Lower(ormbuilder.Column(column)), "%"+strings.ToLower(filter.Search)+"%"))
 		}
-		where += " AND (" + strings.Join(terms, " OR ") + ")"
+		predicate = combineOperationsPredicate(predicate, ormbuilder.Or(terms...))
 	}
 	var count int
-	countQuery := "SELECT COUNT(*) FROM " + s.store.TableIdentifier("runtime_operations") + " WHERE " + where
-	if err := s.database().QueryRowContext(ctx, countQuery, args...).Scan(&count); err != nil {
+	countQuery, countArgs, buildErr := operationsSelectBuilder(s.store, workspaceID).Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(predicate).Build()
+	if buildErr != nil {
+		return operationsmodel.OperationsReceiptPage{}, buildErr
+	}
+	if err := s.database().QueryRowContext(ctx, countQuery, countArgs...).Scan(&count); err != nil {
 		return operationsmodel.OperationsReceiptPage{}, err
 	}
 	summary := operationsmodel.OperationsReceiptSummary{}
-	summaryQuery := "SELECT " + s.store.Identifier("status") + ", " + s.store.Identifier("failure_class") + ", COUNT(*) FROM " + s.store.TableIdentifier("runtime_operations") + " WHERE " + where + " GROUP BY " + s.store.Identifier("status") + ", " + s.store.Identifier("failure_class")
-	summaryRows, err := s.database().QueryContext(ctx, summaryQuery, args...)
+	summaryQuery, summaryArgs, buildErr := operationsSelectBuilder(s.store, workspaceID).Projections(ormbuilder.Project(ormbuilder.Column("status")), ormbuilder.Project(ormbuilder.Column("failure_class")), ormbuilder.Project(ormbuilder.CountAll())).Where(predicate).GroupBy(ormbuilder.Column("status"), ormbuilder.Column("failure_class")).Build()
+	if buildErr != nil {
+		return operationsmodel.OperationsReceiptPage{}, buildErr
+	}
+	summaryRows, err := s.database().QueryContext(ctx, summaryQuery, summaryArgs...)
 	if err != nil {
 		return operationsmodel.OperationsReceiptPage{}, err
 	}
@@ -215,8 +236,10 @@ func (s OperationsStore) SearchOperationsReceipts(ctx context.Context, scope ope
 		_ = summaryRows.Close()
 		return operationsmodel.OperationsReceiptPage{}, err
 	}
-	args = append(args, filter.Limit)
-	query := "SELECT " + operationsQuotedColumns(s.store, operationsReceiptColumns()) + " FROM " + s.store.TableIdentifier("runtime_operations") + " WHERE " + where + " ORDER BY " + s.store.Identifier("created_at") + " DESC LIMIT " + s.store.Placeholder(len(args))
+	query, args, buildErr := operationsSelectBuilder(s.store, workspaceID).Columns(operationsReceiptColumns()...).Where(predicate).OrderBy(ormbuilder.Descending("created_at"), ormbuilder.Descending("id")).Limit(filter.Limit).Build()
+	if buildErr != nil {
+		return operationsmodel.OperationsReceiptPage{}, buildErr
+	}
 	rows, err := s.database().QueryContext(ctx, query, args...)
 	if err != nil {
 		return operationsmodel.OperationsReceiptPage{}, err
@@ -245,16 +268,19 @@ func (s OperationsStore) UpdateOperationsReceipt(ctx context.Context, receipt op
 	if receipt.Command.FinishedAt != nil {
 		finishedAt = receipt.Command.FinishedAt.UTC().Format(time.RFC3339Nano)
 	}
-	assignments := []string{
-		"status", "started_at", "finished_at", "updated_at", "result_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json",
+	workspaceID, scopePredicate, scopeErr := operationsScopePredicate(receipt.Command.Scope)
+	if scopeErr != nil {
+		return false, scopeErr
 	}
-	args := []any{string(receipt.Command.Status), startedAt, finishedAt, receipt.Command.UpdatedAt.UTC().Format(time.RFC3339Nano), resultJSON, strings.TrimSpace(receipt.ErrorCode), string(receipt.FailureClass), strings.TrimSpace(receipt.NextAction), relatedJSON, strings.TrimSpace(receipt.Correlation), evidenceJSON}
-	set := make([]string, len(assignments))
-	for index, column := range assignments {
-		set[index] = s.store.Identifier(column) + " = " + s.store.Placeholder(index+1)
+	predicate := combineOperationsPredicate(scopePredicate, ormbuilder.And(ormbuilder.Equal("id", receipt.Command.ID), ormbuilder.Equal("status", string(expected))))
+	builder := ormbuilder.NewUpdateBuilder(s.store.SQLRenderer, "runtime_operations")
+	if workspaceID != "" {
+		builder = ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "runtime_operations", workspaceID)
 	}
-	args = append(args, receipt.Command.ID, string(expected))
-	query := "UPDATE " + s.store.TableIdentifier("runtime_operations") + " SET " + strings.Join(set, ", ") + " WHERE " + s.store.Identifier("id") + " = " + s.store.Placeholder(len(args)-1) + " AND " + s.store.Identifier("status") + " = " + s.store.Placeholder(len(args))
+	query, args, buildErr := builder.Set("status", string(receipt.Command.Status)).Set("started_at", startedAt).Set("finished_at", finishedAt).Set("updated_at", receipt.Command.UpdatedAt.UTC().Format(time.RFC3339Nano)).Set("result_json", resultJSON).Set("error_code", strings.TrimSpace(receipt.ErrorCode)).Set("failure_class", string(receipt.FailureClass)).Set("next_action", strings.TrimSpace(receipt.NextAction)).Set("related_ids_json", relatedJSON).Set("correlation", strings.TrimSpace(receipt.Correlation)).Set("evidence_json", evidenceJSON).Where(predicate).Build()
+	if buildErr != nil {
+		return false, buildErr
+	}
 	result, err := s.database().ExecContext(ctx, query, args...)
 	if err != nil {
 		return false, err
@@ -268,15 +294,19 @@ type operationsQuery interface {
 }
 
 func (s OperationsStore) get(ctx context.Context, database operationsQuery, scope operationsmodel.OperationsScope, id, kind, key string) (operationsmodel.OperationsReceipt, bool, error) {
-	where, args := s.scopePredicate(scope, 1)
-	if id != "" {
-		args = append(args, id)
-		where += " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(len(args))
-	} else {
-		args = append(args, kind, key)
-		where += " AND " + s.store.Identifier("kind") + " = " + s.store.Placeholder(len(args)-1) + " AND " + s.store.Identifier("idempotency_key") + " = " + s.store.Placeholder(len(args))
+	workspaceID, predicate, scopeErr := operationsScopePredicate(scope)
+	if scopeErr != nil {
+		return operationsmodel.OperationsReceipt{}, false, scopeErr
 	}
-	query := "SELECT " + operationsQuotedColumns(s.store, operationsReceiptColumns()) + " FROM " + s.store.TableIdentifier("runtime_operations") + " WHERE " + where
+	if id != "" {
+		predicate = combineOperationsPredicate(predicate, ormbuilder.Equal("id", id))
+	} else {
+		predicate = combineOperationsPredicate(predicate, ormbuilder.And(ormbuilder.Equal("kind", kind), ormbuilder.Equal("idempotency_key", key)))
+	}
+	query, args, buildErr := operationsSelectBuilder(s.store, workspaceID).Columns(operationsReceiptColumns()...).Where(predicate).Build()
+	if buildErr != nil {
+		return operationsmodel.OperationsReceipt{}, false, buildErr
+	}
 	receipt, err := operationsScanReceipt(database.QueryRowContext(ctx, query, args...))
 	if err == sql.ErrNoRows {
 		return operationsmodel.OperationsReceipt{}, false, nil
@@ -284,14 +314,48 @@ func (s OperationsStore) get(ctx context.Context, database operationsQuery, scop
 	return receipt, err == nil, err
 }
 
-func (s OperationsStore) scopePredicate(scope operationsmodel.OperationsScope, position int) (string, []any) {
+func operationsScopePredicate(scope operationsmodel.OperationsScope) (string, ormbuilder.Predicate, error) {
 	if workspaceID, err := principalmodel.NewWorkspaceID(scope.WorkspaceID); err == nil {
-		return s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(position), []any{workspaceID.String()}
+		return workspaceID.String(), nil, nil
 	}
 	if systemPurpose := strings.TrimSpace(scope.SystemPurpose); systemPurpose != "" {
-		return s.store.Identifier("system_purpose") + " = " + s.store.Placeholder(position), []any{systemPurpose}
+		return "", ormbuilder.Equal("system_purpose", systemPurpose), nil
 	}
-	return "1 = 0", nil
+	return "", nil, fmt.Errorf("operations scope requires workspace_id or system_purpose")
+}
+
+// scopePredicate is retained for diagnostic compatibility. Runtime repository
+// paths use operationsScopePredicate and typed builders above.
+func (s OperationsStore) scopePredicate(scope operationsmodel.OperationsScope, position int) (string, []any) {
+	workspaceID, predicate, err := operationsScopePredicate(scope)
+	if err != nil {
+		return "1 = 0", nil
+	}
+	if workspaceID != "" {
+		predicate = ormbuilder.Equal("workspace_id", workspaceID)
+	}
+	prepared, args, err := ormbuilder.PreparePredicate(s.store.SQLRenderer, predicate, position-1)
+	if err != nil {
+		return "1 = 0", nil
+	}
+	return prepared, args
+}
+
+func operationsSelectBuilder(store *database.RuntimeStore, workspaceID string) *ormbuilder.SelectBuilder {
+	if workspaceID != "" {
+		return ormbuilder.NewWorkspaceSelectBuilder(store.SQLRenderer, "runtime_operations", workspaceID)
+	}
+	return ormbuilder.NewSelectBuilder(store.SQLRenderer, "runtime_operations")
+}
+
+func combineOperationsPredicate(left, right ormbuilder.Predicate) ormbuilder.Predicate {
+	if left == nil {
+		return right
+	}
+	if right == nil {
+		return left
+	}
+	return ormbuilder.And(left, right)
 }
 
 func operationsReceiptColumns() []string {
