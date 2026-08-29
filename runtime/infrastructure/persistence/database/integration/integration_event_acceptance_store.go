@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationpolicy "github.com/domainry/domainry-runtime/runtime/domain/integration/policy"
 )
@@ -48,7 +49,11 @@ func (r IntegrationEventStore) AcceptEvent(ctx context.Context, workspaceID stri
 		}
 		if existingFingerprint != incomingFingerprint {
 			now := time.Now().UTC().Format(time.RFC3339)
-			if _, err := tx.ExecContext(ctx, "UPDATE "+r.store.TableIdentifier("integration_events")+" SET "+r.store.Identifier("status")+" = 'quarantined', "+r.store.Identifier("error")+" = 'backend.integration.event.external_id_conflict', "+r.store.Identifier("next_retry_at")+" = '', "+r.store.Identifier("updated_at")+" = "+r.store.Placeholder(1)+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(2)+" AND "+r.store.Identifier("id")+" = "+r.store.Placeholder(3), now, existing.WorkspaceID, existing.ID); err != nil {
+			query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_events", existing.WorkspaceID).Set("status", "quarantined").Set("error", "backend.integration.event.external_id_conflict").Set("next_retry_at", "").Set("updated_at", now).Where(ormbuilder.Equal("id", existing.ID)).Build()
+			if buildErr != nil {
+				return integrationmodel.IntegrationEvent{}, false, fmt.Errorf("build conflicting integration event quarantine: %w", buildErr)
+			}
+			if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 				return integrationmodel.IntegrationEvent{}, false, fmt.Errorf("quarantine conflicting integration event: %w", err)
 			}
 			existing.Status, existing.Error, existing.NextRetryAt, existing.UpdatedAt = "quarantined", "backend.integration.event.external_id_conflict", "", now
@@ -75,7 +80,15 @@ func (r IntegrationEventStore) AcceptEvent(ctx context.Context, workspaceID stri
 	}
 	columns := []string{"id", "workspace_id", "provider", "event_type", "external_id", "status", "payload_json", "error", "attempt_count", "next_retry_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "received_at", "updated_at"}
 	args := []any{event.ID, event.WorkspaceID, event.Provider, event.EventType, event.ExternalID, event.Status, string(payload), event.Error, event.AttemptCount, event.NextRetryAt, event.LastAttemptAt, event.LeaseOwner, event.LeaseExpiresAt, event.FencingToken, event.ReceivedAt, event.UpdatedAt}
-	if _, err := tx.ExecContext(ctx, "INSERT INTO "+r.store.TableIdentifier("integration_events")+" ("+stringsJoinIdentifiers(r.store, columns...)+") VALUES ("+stringsJoinPlaceholders(r.store, len(columns))+")", args...); err != nil {
+	insertColumns, insertValues, err := workspaceInsertValues(workspaceID, columns, args)
+	if err != nil {
+		return integrationmodel.IntegrationEvent{}, false, err
+	}
+	query, insertArgs, err := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "integration_events", workspaceID).Columns(insertColumns...).Values(insertValues...).Build()
+	if err != nil {
+		return integrationmodel.IntegrationEvent{}, false, fmt.Errorf("build accepted integration event insert: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, query, insertArgs...); err != nil {
 		return integrationmodel.IntegrationEvent{}, false, fmt.Errorf("insert accepted integration event: %w", err)
 	}
 	if err := r.insertMappingIntentTx(ctx, tx, event, intent); err != nil {
@@ -108,7 +121,15 @@ func (r IntegrationEventStore) insertMappingIntentTx(ctx context.Context, tx *sq
 	}
 	columns := []string{"id", "workspace_id", "event_id", "mapping_key", "target_type", "status", "payload_json", "created_at", "updated_at"}
 	args := []any{intent.ID, intent.WorkspaceID, intent.EventID, intent.MappingKey, intent.TargetType, intent.Status, string(payload), intent.CreatedAt, intent.UpdatedAt}
-	if _, err := tx.ExecContext(ctx, "INSERT INTO "+r.store.TableIdentifier("integration_event_mapping_intents")+" ("+stringsJoinIdentifiers(r.store, columns...)+") VALUES ("+stringsJoinPlaceholders(r.store, len(columns))+")", args...); err != nil {
+	insertColumns, insertValues, err := workspaceInsertValues(intent.WorkspaceID, columns, args)
+	if err != nil {
+		return err
+	}
+	query, insertArgs, err := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "integration_event_mapping_intents", intent.WorkspaceID).Columns(insertColumns...).Values(insertValues...).Build()
+	if err != nil {
+		return fmt.Errorf("build integration event mapping intent insert: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, query, insertArgs...); err != nil {
 		if isUniqueConstraintError(err) {
 			return nil
 		}
@@ -118,7 +139,11 @@ func (r IntegrationEventStore) insertMappingIntentTx(ctx context.Context, tx *sq
 }
 
 func (r IntegrationEventStore) findByExternalIDTx(ctx context.Context, tx *sql.Tx, workspaceID, provider, externalID string) (integrationmodel.IntegrationEvent, bool, error) {
-	row := tx.QueryRowContext(ctx, "SELECT "+integrationEventColumnsSQL(r.store)+" FROM "+r.store.TableIdentifier("integration_events")+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(1)+" AND "+r.store.Identifier("provider")+" = "+r.store.Placeholder(2)+" AND "+r.store.Identifier("external_id")+" = "+r.store.Placeholder(3), workspaceID, strings.TrimSpace(provider), strings.TrimSpace(externalID))
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_events", workspaceID).Columns(integrationEventColumns...).Where(ormbuilder.And(ormbuilder.Equal("provider", strings.TrimSpace(provider)), ormbuilder.Equal("external_id", strings.TrimSpace(externalID)))).Build()
+	if err != nil {
+		return integrationmodel.IntegrationEvent{}, false, err
+	}
+	row := tx.QueryRowContext(ctx, query, args...)
 	value, err := scanIntegrationEvent(row)
 	if err == sql.ErrNoRows {
 		return integrationmodel.IntegrationEvent{}, false, nil

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 )
 
 func (r IntegrationConfigStore) DeleteConnection(ctx context.Context, workspaceID, connectionKey string) (bool, error) {
@@ -15,13 +17,17 @@ func (r IntegrationConfigStore) DeleteConnection(ctx context.Context, workspaceI
 	if connectionKey == "" {
 		return false, fmt.Errorf("integration connection key is required")
 	}
-	s := r.store
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return false, fmt.Errorf("begin integration connection delete: %w", err)
 	}
 	defer tx.Rollback()
-	result, err := tx.ExecContext(ctx, "DELETE FROM "+s.TableIdentifier("integration_connections")+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(1)+" AND "+s.Identifier("connection_key")+" = "+s.Placeholder(2)+" AND NOT EXISTS (SELECT 1 FROM "+s.TableIdentifier("integration_webhook_subscriptions")+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(3)+" AND "+s.Identifier("connection_key")+" = "+s.Placeholder(4)+")", workspaceID, connectionKey, workspaceID, connectionKey)
+	references := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_webhook_subscriptions", workspaceID).Columns("id").Where(ormbuilder.Equal("connection_key", connectionKey))
+	query, args, err := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, "integration_connections", workspaceID).Where(ormbuilder.And(ormbuilder.Equal("connection_key", connectionKey), ormbuilder.NotExistsSubquery(references))).Build()
+	if err != nil {
+		return false, fmt.Errorf("build integration connection delete: %w", err)
+	}
+	result, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
 		return false, fmt.Errorf("delete integration connection: %w", err)
 	}
@@ -32,7 +38,11 @@ func (r IntegrationConfigStore) DeleteConnection(ctx context.Context, workspaceI
 	if count != 1 {
 		return false, nil
 	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM "+s.TableIdentifier("connector_provider_states")+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(1)+" AND "+s.Identifier("connection_key")+" = "+s.Placeholder(2), workspaceID, connectionKey); err != nil {
+	stateDelete, stateArgs, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, "connector_provider_states", workspaceID).Where(ormbuilder.Equal("connection_key", connectionKey)).Build()
+	if buildErr != nil {
+		return false, fmt.Errorf("build connector provider state delete: %w", buildErr)
+	}
+	if _, err := tx.ExecContext(ctx, stateDelete, stateArgs...); err != nil {
 		return false, fmt.Errorf("delete connector provider states: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
