@@ -4,6 +4,7 @@ import (
 	"context"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	partysdk "github.com/domainry/domainry-party-sdk"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
@@ -30,7 +31,6 @@ import (
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
 	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
-	partyrepository "github.com/domainry/domainry-runtime/runtime/domain/party/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
@@ -116,7 +116,7 @@ type RuntimeServicesDependencies struct {
 	FrontendCapabilities                deploymentrepository.DeploymentFrontendCapabilityRepository
 	Notifications                       NotificationRenderer
 	IdentityDirectory                   identitysdk.Directory
-	PartyDirectory                      partyrepository.PartyRepository
+	PartyDirectory                      partysdk.Directory
 	IntegrationAPILimiter               ratelimit.Limiter
 	IntegrationNotificationCompiler     integrationapplication.IntegrationNotificationCompiler
 	IntegrationNotificationPublisher    integrationapplication.IntegrationNotificationPublisher

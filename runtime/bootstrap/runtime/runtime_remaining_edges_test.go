@@ -193,7 +193,7 @@ func TestRuntimeStartsConfiguredWorkerOwners(t *testing.T) {
 	cfg := bootstrapTestConfig(t)
 	cfg.SchedulerPollInterval = 0
 	cfg.SchedulerBatchSize = 0
-	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	if RoutesForSurfaceGroup(runtime, runtimehttp.SurfaceRouteGroupAll) == nil || ActionConnectorGateway(runtime) == nil {
 		t.Fatal("assembled Runtime helpers were unavailable")
 	}
@@ -206,7 +206,7 @@ func TestRuntimeStartsConfiguredWorkerOwners(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	highBatch := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+	highBatch := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	highBatch.cfg.SchedulerPollInterval = time.Millisecond
 	highBatch.cfg.SchedulerBatchSize = 26
 	highBatch.startRecordBatchWorker(t.Context())
@@ -219,7 +219,7 @@ func TestRuntimeStartsConfiguredWorkerOwners(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mediumBatch := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+	mediumBatch := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	mediumBatch.cfg.SchedulerPollInterval = time.Millisecond
 	mediumBatch.cfg.SchedulerBatchSize = 10
 	mediumBatch.startRecordBatchWorker(t.Context())
@@ -250,7 +250,7 @@ func TestRuntimeStartupNamedCallbacks(t *testing.T) {
 
 func TestRuntimeNotificationWorkerBoundsAndLiveErrors(t *testing.T) {
 	for _, batch := range []int{10, 101} {
-		runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+		runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 		runtime.cfg.SchedulerPollInterval = time.Millisecond
 		runtime.cfg.SchedulerBatchSize = batch
 		runtime.startNotificationChannelWorker(t.Context())
@@ -264,7 +264,7 @@ func TestRuntimeNotificationWorkerBoundsAndLiveErrors(t *testing.T) {
 		}
 	}
 
-	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	runtime.cfg.SchedulerPollInterval = time.Millisecond
 	runtime.cfg.SchedulerBatchSize = 10
 	if err := runtime.store.Close(); err != nil {
@@ -390,7 +390,7 @@ func TestRuntimeWorkerTickErrorAndCancellationOutcomes(t *testing.T) {
 }
 
 func TestControlledWorkerObservesChildCompletion(t *testing.T) {
-	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
 	started := make(chan int, 2)

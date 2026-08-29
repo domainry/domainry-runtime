@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	partymodel "github.com/domainry/domainry-runtime/runtime/domain/party/model"
+	partymodel "github.com/domainry/domainry-party-sdk/contract"
 )
 
 func (h *PartyHandler) listOrganizationExtensions(w http.ResponseWriter, r *http.Request) {

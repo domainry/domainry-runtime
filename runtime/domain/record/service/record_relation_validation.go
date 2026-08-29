@@ -13,13 +13,13 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	partymodel "github.com/domainry/domainry-party-sdk/contract"
 	definitioncontract "github.com/domainry/domainry-runtime/runtime/domain/definition/contract"
-	partymodel "github.com/domainry/domainry-runtime/runtime/domain/party/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 type RecordPartyReferenceLookup interface {
-	Get(context.Context, string, string) (partymodel.Aggregate, bool, error)
+	Get(context.Context, string) (partymodel.Aggregate, bool, error)
 }
 
 type RecordRelationValidationDependencies struct {
@@ -165,7 +165,7 @@ func (s *RecordRelationValidator) Validate(ctx context.Context, object definitio
 			if s.party == nil {
 				return recordInternalError("check party relation", fmt.Errorf("party directory is not configured"))
 			}
-			party, found, err := s.party.Get(ctx, principal.WorkspaceID, recordID)
+			party, found, err := s.party.Get(ctx, recordID)
 			if err != nil {
 				return recordInternalError("check party relation", err)
 			}

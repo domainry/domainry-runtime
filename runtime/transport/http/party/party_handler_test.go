@@ -14,10 +14,10 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	partymodel "github.com/domainry/domainry-party-sdk/contract"
 	partyapplication "github.com/domainry/domainry-runtime/runtime/application/party"
-	partymodel "github.com/domainry/domainry-runtime/runtime/domain/party/model"
-	partyservice "github.com/domainry/domainry-runtime/runtime/domain/party/service"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	partysdkfixture "github.com/domainry/domainry-runtime/testsupport/partysdkfixture"
 )
 
 type handlerPartyRepository struct {
@@ -361,8 +361,8 @@ func testPartyHandler(repository *handlerPartyRepository, principal principalmod
 		repository.memberships = map[string]partymodel.OrganizationExtensionMembership{}
 	}
 	return NewPartyHandler(PartyDependencies{
-		Service:       partyapplication.NewPartyApplicationService(partyservice.NewPartyDomainService(repository)),
-		Catalog:       partyapplication.NewPartyCatalogApplicationService(partyservice.NewPartyCatalogDomainService(repository)),
+		Service:       partyapplication.NewPartyApplicationService(partysdkfixture.NewBinding("workspace", repository, nil)),
+		Catalog:       partyapplication.NewPartyCatalogApplicationService(partysdkfixture.NewBinding("workspace", nil, repository)),
 		Authenticated: func(next http.HandlerFunc) http.HandlerFunc { return next },
 		Principal:     func(*http.Request) principalmodel.Principal { return principal },
 		WriteJSON: func(w http.ResponseWriter, status int, value any) {

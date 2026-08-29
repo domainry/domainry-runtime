@@ -9,9 +9,9 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	partymodel "github.com/domainry/domainry-runtime/runtime/domain/party/model"
-	partyservice "github.com/domainry/domainry-runtime/runtime/domain/party/service"
+	partymodel "github.com/domainry/domainry-party-sdk/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	partysdkfixture "github.com/domainry/domainry-runtime/testsupport/partysdkfixture"
 )
 
 type applicationCatalogRepository struct {
@@ -81,7 +81,7 @@ func (r *applicationCatalogRepository) UpsertPosition(_ context.Context, _ strin
 
 func TestPartyCatalogApplicationServiceAuthorizesLifecycle(t *testing.T) {
 	repository := newApplicationCatalogRepository()
-	service := NewPartyCatalogApplicationService(partyservice.NewPartyCatalogDomainService(repository))
+	service := NewPartyCatalogApplicationService(partysdkfixture.NewBinding("workspace", nil, repository))
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"party.read", "party.write"}})
 	if _, err := service.UpsertJob(t.Context(), partymodel.JobCatalogItem{ID: "job", Code: "J", Name: "Job"}, principal); err != nil {
 		t.Fatal(err)
@@ -117,7 +117,7 @@ func TestPartyCatalogApplicationServiceAuthorizesLifecycle(t *testing.T) {
 
 func TestPartyCatalogApplicationServiceFailsClosed(t *testing.T) {
 	repository := newApplicationCatalogRepository()
-	service := NewPartyCatalogApplicationService(partyservice.NewPartyCatalogDomainService(repository))
+	service := NewPartyCatalogApplicationService(partysdkfixture.NewBinding("workspace", nil, repository))
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}
 	checks := []error{}
 	_, err := service.ListJobs(t.Context(), principal)
@@ -149,7 +149,7 @@ func TestPartyCatalogApplicationServiceFailsClosed(t *testing.T) {
 
 func TestWorkspaceAdminManagesPartyFoundationCatalog(t *testing.T) {
 	repository := newApplicationCatalogRepository()
-	service := NewPartyCatalogApplicationService(partyservice.NewPartyCatalogDomainService(repository))
+	service := NewPartyCatalogApplicationService(partysdkfixture.NewBinding("workspace", nil, repository))
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 
 	if _, err := service.UpsertOrganizationExtension(t.Context(), partymodel.OrganizationExtension{ID: "team", Kind: "team", Code: "TEAM", Name: "Team"}, admin); err != nil {

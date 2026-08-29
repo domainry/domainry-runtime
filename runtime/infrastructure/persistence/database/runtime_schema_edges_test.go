@@ -200,9 +200,6 @@ func (stub runtimeSchemaAssemblerStub) result(stage string) error {
 func (stub runtimeSchemaAssemblerStub) EnsureMetadataSchema(context.Context, runtimeschema.Store) error {
 	return stub.result("metadata")
 }
-func (stub runtimeSchemaAssemblerStub) EnsurePartySchema(context.Context, runtimeschema.Store) error {
-	return stub.result("party")
-}
 func (stub runtimeSchemaAssemblerStub) EnsureEvidenceSchema(context.Context, runtimeschema.Store) error {
 	return stub.result("evidence")
 }
@@ -214,7 +211,7 @@ func (stub runtimeSchemaAssemblerStub) EnsureLifecycleSchema(context.Context, ru
 }
 
 func TestEnsureRuntimeSchemaAssemblerFailures(t *testing.T) {
-	for _, stage := range []string{"metadata", "party", "evidence", "workflow", "lifecycle"} {
+	for _, stage := range []string{"metadata", "evidence", "workflow", "lifecycle"} {
 		t.Run(stage, func(t *testing.T) {
 			state := &databaseSQLState{querySteps: runtimeSchemaLedgerQueries(1, currentRuntimeSchemaChecksum(), false)}
 			store := runtimeSchemaStore(t, state)

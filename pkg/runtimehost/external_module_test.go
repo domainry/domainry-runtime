@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -14,12 +15,14 @@ func TestProjectMainCompilesUsingOnlyGeneratedCompositionAndRuntimehost(t *testi
 		t.Fatal("resolve current file")
 	}
 	repositoryRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
-	identitySDKRoot := filepath.Clean(filepath.Join(repositoryRoot, "..", "domainry-identity-sdk"))
-	identityModuleRoot := filepath.Clean(filepath.Join(repositoryRoot, "..", "domainry-identity"))
-	notificationSDKRoot := filepath.Clean(filepath.Join(repositoryRoot, "..", "domainry-notification-sdk"))
-	notificationModuleRoot := filepath.Clean(filepath.Join(repositoryRoot, "..", "domainry-notification"))
+	identitySDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-identity-sdk")
+	identityModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-identity")
+	notificationSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-notification-sdk")
+	notificationModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-notification")
+	partySDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-party-sdk")
+	partyModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-party")
 	externalRoot := t.TempDir()
-	goMod := []byte("module example.com/domainry-project\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/domainry/domainry-runtime v0.0.0\n\tgithub.com/domainry/domainry-identity v0.0.0\n\tgithub.com/domainry/domainry-notification v0.0.0\n)\n\nreplace github.com/domainry/domainry-runtime => " + repositoryRoot + "\nreplace github.com/domainry/domainry-identity-sdk => " + identitySDKRoot + "\nreplace github.com/domainry/domainry-identity => " + identityModuleRoot + "\nreplace github.com/domainry/domainry-notification-sdk => " + notificationSDKRoot + "\nreplace github.com/domainry/domainry-notification => " + notificationModuleRoot + "\n")
+	goMod := []byte("module example.com/domainry-project\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/domainry/domainry-runtime v0.0.0\n\tgithub.com/domainry/domainry-identity v0.0.0\n\tgithub.com/domainry/domainry-notification v0.0.0\n\tgithub.com/domainry/domainry-party v0.0.0\n)\n\nreplace github.com/domainry/domainry-runtime => " + repositoryRoot + "\nreplace github.com/domainry/domainry-identity-sdk => " + identitySDKRoot + "\nreplace github.com/domainry/domainry-identity => " + identityModuleRoot + "\nreplace github.com/domainry/domainry-notification-sdk => " + notificationSDKRoot + "\nreplace github.com/domainry/domainry-notification => " + notificationModuleRoot + "\nreplace github.com/domainry/domainry-party-sdk => " + partySDKRoot + "\nreplace github.com/domainry/domainry-party => " + partyModuleRoot + "\n")
 	if err := os.WriteFile(filepath.Join(externalRoot, "go.mod"), goMod, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -33,6 +36,7 @@ import (
 	"github.com/domainry/domainry-connector-sdk"
 	identitymodule "github.com/domainry/domainry-identity/module"
 	notificationmodule "github.com/domainry/domainry-notification/module"
+	partymodule "github.com/domainry/domainry-party/module"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/pkg/runtimehost"
 )
@@ -48,6 +52,7 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 		},
 		IdentityFactory: identitymodule.NewFactory(identitymodule.OptionsFromEnvironment()),
 		NotificationFactory: notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()),
+		PartyFactory: partymodule.NewFactory(partymodule.OptionsFromEnvironment()),
 	}
 }
 `)
@@ -64,10 +69,11 @@ func TestProjectMainCompilesUsingSaaSFactoryWithoutIdentityModule(t *testing.T) 
 		t.Fatal("resolve current file")
 	}
 	repositoryRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
-	identitySDKRoot := filepath.Clean(filepath.Join(repositoryRoot, "..", "domainry-identity-sdk"))
-	notificationSDKRoot := filepath.Clean(filepath.Join(repositoryRoot, "..", "domainry-notification-sdk"))
+	identitySDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-identity-sdk")
+	notificationSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-notification-sdk")
+	partySDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-party-sdk")
 	externalRoot := t.TempDir()
-	goMod := []byte("module example.com/domainry-saas-project\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/domainry/domainry-runtime v0.0.0\n\tgithub.com/domainry/domainry-identity-sdk v0.0.0\n\tgithub.com/domainry/domainry-notification-sdk v0.0.0\n)\n\nreplace github.com/domainry/domainry-runtime => " + repositoryRoot + "\nreplace github.com/domainry/domainry-identity-sdk => " + identitySDKRoot + "\nreplace github.com/domainry/domainry-notification-sdk => " + notificationSDKRoot + "\n")
+	goMod := []byte("module example.com/domainry-saas-project\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/domainry/domainry-runtime v0.0.0\n\tgithub.com/domainry/domainry-identity-sdk v0.0.0\n\tgithub.com/domainry/domainry-notification-sdk v0.0.0\n\tgithub.com/domainry/domainry-party-sdk v0.0.0\n)\n\nreplace github.com/domainry/domainry-runtime => " + repositoryRoot + "\nreplace github.com/domainry/domainry-identity-sdk => " + identitySDKRoot + "\nreplace github.com/domainry/domainry-notification-sdk => " + notificationSDKRoot + "\nreplace github.com/domainry/domainry-party-sdk => " + partySDKRoot + "\n")
 	if err := os.WriteFile(filepath.Join(externalRoot, "go.mod"), goMod, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -81,6 +87,7 @@ import (
 	"github.com/domainry/domainry-connector-sdk"
 	identityremote "github.com/domainry/domainry-identity-sdk/remote"
 	notificationremote "github.com/domainry/domainry-notification-sdk/remote"
+	partyremote "github.com/domainry/domainry-party-sdk/remote"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/pkg/runtimehost"
 )
@@ -96,8 +103,10 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 		},
 		IdentityFactory: identityremote.NewFactory(identityremote.ConfigFromEnvironment()),
 		NotificationFactory: notificationremote.NewFactory(notificationremote.ConfigFromEnvironment()),
+		PartyFactory: partyremote.NewFactory(partyremote.Config{}),
 	}
 }
+
 `)
 	if err := os.WriteFile(filepath.Join(compositionDir, "extensions.gen.go"), compositionSource, 0o600); err != nil {
 		t.Fatal(err)
@@ -116,6 +125,30 @@ func writeExternalProjectMain(t *testing.T, externalRoot, compositionImport stri
 	if err := os.WriteFile(filepath.Join(mainDir, "main.go"), mainSource, 0o600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func siblingModuleRoot(t *testing.T, repositoryRoot, name string) string {
+	t.Helper()
+	candidate := filepath.Clean(filepath.Join(repositoryRoot, "..", name))
+	if _, err := os.Stat(filepath.Join(candidate, "go.mod")); err == nil {
+		return candidate
+	}
+	data, err := os.ReadFile(filepath.Join(repositoryRoot, ".git"))
+	if err != nil {
+		t.Fatalf("resolve canonical repository for %s: %v", name, err)
+	}
+	gitdir := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(string(data)), "gitdir:"))
+	marker := string(filepath.Separator) + ".git" + string(filepath.Separator)
+	index := strings.Index(gitdir, marker)
+	if index < 0 {
+		t.Fatalf("resolve canonical git directory from %q", gitdir)
+	}
+	canonical := gitdir[:index]
+	candidate = filepath.Join(filepath.Dir(canonical), name)
+	if _, err := os.Stat(filepath.Join(candidate, "go.mod")); err != nil {
+		t.Fatalf("resolve sibling module %s: %v", name, err)
+	}
+	return candidate
 }
 
 func compileExternalProject(t *testing.T, externalRoot, label string) {

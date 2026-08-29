@@ -9,8 +9,8 @@ import (
 	"io"
 	"sync"
 
-	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
+	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 )
 
 type runtimeConnectorGateway interface {

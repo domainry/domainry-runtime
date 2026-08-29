@@ -8,6 +8,7 @@ import (
 	connector "github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
+	partysdk "github.com/domainry/domainry-party-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
@@ -35,6 +36,7 @@ type Runtime struct {
 	identityBinding     identitysdk.Binding
 	identityDirectory   identitysdk.Directory
 	identityPrincipals  identitysdk.PrincipalResolver
+	partyBinding        partysdk.Binding
 	manifest            manifestmodel.ManifestSchema
 	recordRepo          recordrepository.RecordRepository
 	rateLimiter         ratelimit.Limiter
@@ -85,4 +87,13 @@ func ActionConnectorGateway(runtime *Runtime) *integrationapplication.ActionConn
 		return integrationapplication.NewActionConnectorGateway(nil)
 	}
 	return integrationapplication.NewActionConnectorGateway(runtime.records.Applications().Integrations)
+}
+
+// PartyOrganizationScopes exposes only the Party-owned fact projection needed
+// by Identity assembly; it does not expose Party stores or domain services.
+func PartyOrganizationScopes(runtime *Runtime) partysdk.OrganizationScopes {
+	if runtime == nil || runtime.partyBinding == nil {
+		return nil
+	}
+	return runtime.partyBinding.OrganizationScopes()
 }

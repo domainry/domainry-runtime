@@ -70,9 +70,6 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 	if err := s.EnsureMetadataSchema(ctx); err != nil {
 		return err
 	}
-	if err := s.EnsurePartySchema(ctx); err != nil {
-		return err
-	}
 	if err := s.EnsureEvidenceSchema(ctx); err != nil {
 		return err
 	}
@@ -143,17 +140,9 @@ type schemaDatabase = runtimeschema.SQLDatabase
 
 type runtimeSchemaAssembler interface {
 	EnsureMetadataSchema(context.Context, runtimeschema.Store) error
-	EnsurePartySchema(context.Context, runtimeschema.Store) error
 	EnsureEvidenceSchema(context.Context, runtimeschema.Store) error
 	EnsureWorkflowProcessSchema(context.Context, runtimeschema.Store) error
 	EnsureLifecycleSchema(context.Context, runtimeschema.Store) error
-}
-
-func (s *RuntimeStore) EnsurePartySchema(ctx context.Context) error {
-	if s.schemaAssembler != nil {
-		return s.schemaAssembler.EnsurePartySchema(ctx, s)
-	}
-	return runtimeschema.EnsurePartySchema(ctx, s)
 }
 
 func (s *RuntimeStore) schemaDatabase() schemaDatabase {

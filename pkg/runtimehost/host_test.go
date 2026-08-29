@@ -18,6 +18,7 @@ import (
 	"github.com/domainry/domainry-foundation/telemetry"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
+	partysdk "github.com/domainry/domainry-party-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
@@ -63,6 +64,12 @@ func (notificationFactoryStub) Open(context.Context, notificationsdk.Application
 	return nil, nil
 }
 
+type partyFactoryStub struct{}
+
+func (partyFactoryStub) Open(context.Context, partysdk.ApplicationRef) (partysdk.Binding, error) {
+	return nil, nil
+}
+
 func (identityBindingStub) Descriptor() identitysdk.Descriptor {
 	return identitysdk.Descriptor{Mode: identitysdk.DeploymentModeSaaS}
 }
@@ -105,7 +112,7 @@ func validOptions() Options {
 		ConnectorContractVersion:  connector.ContractVersion,
 		ConnectorContractSHA256:   connector.ContractSHA256,
 		DomainSDK:                 domainSDK,
-	}, IdentityFactory: identityFactoryStub{}, NotificationFactory: notificationFactoryStub{}}
+	}, IdentityFactory: identityFactoryStub{}, NotificationFactory: notificationFactoryStub{}, PartyFactory: partyFactoryStub{}}
 }
 
 func serverManifestJSON(t *testing.T, target *manifestmodel.GeneratedDomainSDKIdentity) []byte {
@@ -163,7 +170,7 @@ func serverTestDependencies(t *testing.T, cfg config.Config, runtime runtimeProc
 			databaseConfig.DBPath = databasePath
 			return bootstrap.PrepareProjectDatabase(ctx, databaseConfig)
 		},
-		newRuntime: func(_ context.Context, _ config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, _ identitysdk.Binding, _ notificationsdk.Factory, _ *bootstrap.ProjectDatabase) runtimeProcess {
+		newRuntime: func(_ context.Context, _ config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, _ identitysdk.Binding, _ notificationsdk.Factory, _ partysdk.Factory, _ *bootstrap.ProjectDatabase) runtimeProcess {
 			if handlers == nil || !handlers.Frozen() {
 				panic("host passed an unfrozen registry")
 			}
@@ -372,7 +379,7 @@ func TestRunWithDependenciesRejectsManifestSDKTargetBeforeRuntimeCreation(t *tes
 			created := 0
 			deps := serverTestDependencies(t, serverTestConfig(), &serverRuntimeFake{})
 			deps.readFile = func(string) ([]byte, error) { return serverManifestJSON(t, test.target), nil }
-			deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, *bootstrap.ProjectDatabase) runtimeProcess {
+			deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, partysdk.Factory, *bootstrap.ProjectDatabase) runtimeProcess {
 				created++
 				return &serverRuntimeFake{}
 			}
@@ -477,7 +484,7 @@ func TestRunWithDependenciesCoversConfigurationActivationAndServeOutcomes(t *tes
 		return runtimeext.ExtensionSet{}, nil
 	}
 	deps = serverTestDependencies(t, cfg, &serverRuntimeFake{})
-	deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, *bootstrap.ProjectDatabase) runtimeProcess {
+	deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, partysdk.Factory, *bootstrap.ProjectDatabase) runtimeProcess {
 		return nil
 	}
 	if err := runWithDependencies(options, deps); err == nil || !strings.Contains(err.Error(), "returned no process") {

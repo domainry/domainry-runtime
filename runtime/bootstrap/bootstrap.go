@@ -7,6 +7,7 @@ import (
 	"github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
+	partysdk "github.com/domainry/domainry-party-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
@@ -27,28 +28,36 @@ func PrepareProjectDatabase(ctx context.Context, cfg config.Config) (*ProjectDat
 	return runtimebootstrap.PrepareProjectDatabase(ctx, cfg)
 }
 
-func New(ctx context.Context, cfg config.Config, identity identitysdk.Binding, notification notificationsdk.Factory) *Runtime {
-	return runtimebootstrap.New(ctx, cfg, identity, notification)
+func New(ctx context.Context, cfg config.Config, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory) *Runtime {
+	return runtimebootstrap.New(ctx, cfg, identity, notification, party)
 }
 
-func NewWithBusinessHandlers(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, identity identitysdk.Binding, notification notificationsdk.Factory) *Runtime {
-	return runtimebootstrap.NewWithBusinessHandlers(ctx, cfg, handlers, identity, notification)
+func NewWithBusinessHandlers(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory) *Runtime {
+	return runtimebootstrap.NewWithBusinessHandlers(ctx, cfg, handlers, identity, notification, party)
 }
 
-func NewWithExtensions(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity identitysdk.Binding, notification notificationsdk.Factory) *Runtime {
-	return runtimebootstrap.NewWithExtensions(ctx, cfg, handlers, connectors, identity, notification)
+func NewWithExtensions(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory) *Runtime {
+	return runtimebootstrap.NewWithExtensions(ctx, cfg, handlers, connectors, identity, notification, party)
 }
 
-func NewVerifiedProjectWithIdentity(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notification notificationsdk.Factory) *Runtime {
-	return runtimebootstrap.NewProjectWithIdentity(ctx, cfg, handlers, connectors, releaseIdentity, evidence, binding, notification)
+func NewVerifiedProjectWithIdentity(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory) *Runtime {
+	return runtimebootstrap.NewProjectWithIdentity(ctx, cfg, handlers, connectors, releaseIdentity, evidence, binding, notification, party)
 }
 
-func NewVerifiedProjectWithIdentityAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notification notificationsdk.Factory, database *ProjectDatabase) *Runtime {
-	return runtimebootstrap.NewProjectWithIdentityAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, binding, notification, database)
+func NewVerifiedProjectWithIdentityAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, database *ProjectDatabase) *Runtime {
+	return runtimebootstrap.NewProjectWithIdentityAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, binding, notification, party, database)
 }
 
-func NewVerifiedProjectWithFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, database *ProjectDatabase) *Runtime {
-	return runtimebootstrap.NewProjectWithFactoriesAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, notification, database)
+func NewVerifiedProjectWithFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, database *ProjectDatabase) *Runtime {
+	return runtimebootstrap.NewProjectWithFactoriesAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, notification, party, database)
+}
+
+func NewVerifiedProjectWithAllFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, database *ProjectDatabase) *Runtime {
+	return runtimebootstrap.NewProjectWithAllFactoriesAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, notification, party, database)
+}
+
+func PartyOrganizationScopes(runtime *Runtime) partysdk.OrganizationScopes {
+	return runtimebootstrap.PartyOrganizationScopes(runtime)
 }
 
 func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {

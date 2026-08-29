@@ -90,7 +90,6 @@ func TestSchemaAssemblersPropagateEveryOrderedMutationFailure(t *testing.T) {
 		{name: "lifecycle", ensure: runtimeschema.EnsureLifecycleSchema},
 		{name: "workflow-process", ensure: runtimeschema.EnsureWorkflowProcessSchema},
 		{name: "evidence", ensure: runtimeschema.EnsureEvidenceSchema},
-		{name: "party", ensure: runtimeschema.EnsurePartySchema},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -134,7 +133,6 @@ func TestSchemaAssemblersPreserveCancellation(t *testing.T) {
 		runtimeschema.EnsureLifecycleSchema,
 		runtimeschema.EnsureWorkflowProcessSchema,
 		runtimeschema.EnsureEvidenceSchema,
-		runtimeschema.EnsurePartySchema,
 	} {
 		if err := ensure(cancelled, store); !errors.Is(err, context.Canceled) {
 			t.Fatalf("schema cancellation=%v", err)
@@ -151,7 +149,6 @@ func TestSchemaAssemblersReachMySQLTypeBranchesBeforeMutation(t *testing.T) {
 	for name, ensure := range map[string]func(context.Context, runtimeschema.Store) error{
 		"metadata": runtimeschema.EnsureMetadataSchema,
 		"evidence": runtimeschema.EnsureEvidenceSchema,
-		"party":    runtimeschema.EnsurePartySchema,
 	} {
 		t.Run(name, func(t *testing.T) {
 			faults := &schemaFaultStore{Store: schemaDriverStore{Store: store, driver: "mysql"}, failAt: 1}
@@ -159,10 +156,6 @@ func TestSchemaAssemblersReachMySQLTypeBranchesBeforeMutation(t *testing.T) {
 				t.Fatalf("mysql first mutation error=%v", err)
 			}
 		})
-	}
-	postgresPartyFaults := &schemaFaultStore{Store: schemaDriverStore{Store: store, driver: "postgres"}, failAt: 1}
-	if err := runtimeschema.EnsurePartySchema(t.Context(), postgresPartyFaults); !errors.Is(err, errSchemaMutationFault) {
-		t.Fatalf("postgres party first mutation error=%v", err)
 	}
 }
 

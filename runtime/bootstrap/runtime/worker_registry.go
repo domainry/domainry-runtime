@@ -44,10 +44,17 @@ func (a *Runtime) close(ctx context.Context) error {
 		cancel()
 		a.notificationBinding = nil
 	}
-	if a.borrowedStore {
-		return errors.Join(releaseErr, notificationErr)
+	var partyErr error
+	if a.partyBinding != nil {
+		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), a.cfg.HTTPShutdownTimeout)
+		partyErr = a.partyBinding.Close(closeCtx)
+		cancel()
+		a.partyBinding = nil
 	}
-	return errors.Join(releaseErr, notificationErr, a.store.Close())
+	if a.borrowedStore {
+		return errors.Join(releaseErr, notificationErr, partyErr)
+	}
+	return errors.Join(releaseErr, notificationErr, partyErr, a.store.Close())
 }
 
 func (a *Runtime) startTrackedWorker(parent context.Context, start func(context.Context) <-chan struct{}) {

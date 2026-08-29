@@ -279,6 +279,8 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 	}{
 		{path: "github.com/domainry/domainry-notification-sdk", rootEnvironment: "DOMAINRY_NOTIFICATION_SDK_REPO_ROOT", label: "Notification SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-notification", rootEnvironment: "DOMAINRY_NOTIFICATION_REPO_ROOT", label: "Notification", patterns: []string{"./module"}},
+		{path: "github.com/domainry/domainry-party-sdk", rootEnvironment: "DOMAINRY_PARTY_SDK_REPO_ROOT", label: "Party SDK", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-party", rootEnvironment: "DOMAINRY_PARTY_REPO_ROOT", label: "Party", patterns: []string{"./module"}},
 	} {
 		root := strings.TrimSpace(os.Getenv(local.rootEnvironment))
 		if root == "" {
@@ -366,6 +368,8 @@ func dependencyModule(repository, path, version string) (downloadedModule, error
 		{path: "github.com/domainry/domainry-identity", rootEnvironment: "DOMAINRY_IDENTITY_REPO_ROOT", label: "Identity", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-notification-sdk", rootEnvironment: "DOMAINRY_NOTIFICATION_SDK_REPO_ROOT", label: "Notification SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-notification", rootEnvironment: "DOMAINRY_NOTIFICATION_REPO_ROOT", label: "Notification", patterns: []string{"./module"}},
+		{path: "github.com/domainry/domainry-party-sdk", rootEnvironment: "DOMAINRY_PARTY_SDK_REPO_ROOT", label: "Party SDK", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-party", rootEnvironment: "DOMAINRY_PARTY_REPO_ROOT", label: "Party", patterns: []string{"./module"}},
 	} {
 		root := strings.TrimSpace(os.Getenv(candidate.rootEnvironment))
 		if root == "" {
@@ -504,12 +508,18 @@ func distributionGoModWithVersions(content []byte, versions map[string]string) (
 		if err := parsed.DropRequire("github.com/domainry/domainry-notification"); err != nil {
 			return nil, err
 		}
+		if err := parsed.DropRequire("github.com/domainry/domainry-party"); err != nil {
+			return nil, err
+		}
 	}
 	for path, version := range versions {
 		if strings.TrimSpace(version) == "" {
 			continue
 		}
 		if parsed.Module != nil && parsed.Module.Mod.Path == runtimeModulePath && path == "github.com/domainry/domainry-notification" {
+			continue
+		}
+		if parsed.Module != nil && parsed.Module.Mod.Path == runtimeModulePath && path == "github.com/domainry/domainry-party" {
 			continue
 		}
 		if err := parsed.AddRequire(path, version); err != nil {
@@ -630,6 +640,9 @@ func moduleBuildClosure(repository string, patterns ...string) ([]string, error)
 	result := make([]string, 0, len(files))
 	for path := range files {
 		if _, err := os.Stat(filepath.Join(repository, filepath.FromSlash(path))); err != nil {
+			if path == "go.sum" && errors.Is(err, os.ErrNotExist) {
+				continue
+			}
 			return nil, fmt.Errorf("build closure file %s: %w", path, err)
 		}
 		result = append(result, path)

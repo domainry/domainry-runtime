@@ -42,16 +42,16 @@ func TestAssembleRuntimeServicesReportsFrontendManifestAndWorkflowFailures(t *te
 	missingFrontend := cfg
 	missingFrontend.UploadDir = ""
 	missingFrontend.FrontendCapabilityManifestPath = filepath.Join(t.TempDir(), "missing-frontend-capability.json")
-	if _, err := assembleRuntimeServices(t.Context(), missingFrontend, manifest, nil, store, runtimeIdentityDirectoryStub{}, nil, nil, nil, worker.Dependencies{}); err == nil {
+	if _, err := assembleRuntimeServices(t.Context(), missingFrontend, manifest, nil, store, runtimeIdentityDirectoryStub{}, nil, nil, nil, nil, worker.Dependencies{}); err == nil {
 		t.Fatal("missing frontend capability manifest must fail assembly")
 	}
-	if _, err := assembleRuntimeServices(t.Context(), missingFrontend, manifest, nil, store, runtimeIdentityDirectoryStub{}, nil, nil, nil, worker.Dependencies{}, runtimeExtensionRegistries{}); err == nil {
+	if _, err := assembleRuntimeServices(t.Context(), missingFrontend, manifest, nil, store, runtimeIdentityDirectoryStub{}, nil, nil, nil, nil, worker.Dependencies{}, runtimeExtensionRegistries{}); err == nil {
 		t.Fatal("missing frontend capability manifest with empty extension registries must fail assembly")
 	}
 
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := assembleRuntimeServices(cancelled, cfg, manifest, nil, store, runtimeIdentityDirectoryStub{}, nil, nil, nil, worker.Dependencies{}); err == nil {
+	if _, err := assembleRuntimeServices(cancelled, cfg, manifest, nil, store, runtimeIdentityDirectoryStub{}, nil, nil, nil, nil, worker.Dependencies{}); err == nil {
 		t.Fatal("cancelled workflow initialization must fail assembly")
 	}
 }

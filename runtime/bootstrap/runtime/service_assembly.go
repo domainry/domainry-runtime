@@ -14,6 +14,7 @@ import (
 	connector "github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	partysdk "github.com/domainry/domainry-party-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
@@ -43,7 +44,6 @@ import (
 	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
 	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/lifecycle"
 	metadatapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata"
-	partypersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/party"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	recordnotification "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/recordnotification"
 	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
@@ -73,7 +73,7 @@ type runtimeExtensionRegistries struct {
 	notificationRetention              lifecyclecontract.OwnerLifecycleExecutor
 }
 
-func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest manifestmodel.ManifestSchema, notifications composition.NotificationRenderer, store *persistence.RuntimeStore, identityDirectory identitysdk.Directory, identityPrincipals identitysdk.PrincipalResolver, auditApplication *auditapplication.AuditApplicationService, apiLimiter ratelimit.Limiter, workerDependencies workerplatform.Dependencies, extensionRegistries ...runtimeExtensionRegistries) (runtimeServiceAssembly, error) {
+func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest manifestmodel.ManifestSchema, notifications composition.NotificationRenderer, store *persistence.RuntimeStore, identityDirectory identitysdk.Directory, identityPrincipals identitysdk.PrincipalResolver, partyDirectory partysdk.Directory, auditApplication *auditapplication.AuditApplicationService, apiLimiter ratelimit.Limiter, workerDependencies workerplatform.Dependencies, extensionRegistries ...runtimeExtensionRegistries) (runtimeServiceAssembly, error) {
 	businessHandlers := runtimeext.NewBusinessHandlerRegistry()
 	connectorProviders := connector.NewRegistry()
 	var notificationCompiler func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
@@ -226,7 +226,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			FrontendCapabilities:               frontendcapabilitypersistence.NewFrontendCapabilityStore(store),
 			Notifications:                      notifications,
 			IdentityDirectory:                  identityDirectory,
-			PartyDirectory:                     partypersistence.NewSQLPartyStore(store.DB(), store.Driver(), store.DatabaseSchema()),
+			PartyDirectory:                     partyDirectory,
 			IntegrationAPILimiter:              apiLimiter,
 			IntegrationNotificationCompiler:    notificationCompiler,
 			IntegrationNotificationPublisher:   integrationNotificationPublisher,

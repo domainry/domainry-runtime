@@ -18,6 +18,7 @@ import (
 	connector "github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationmodule "github.com/domainry/domainry-notification/module"
+	partymodule "github.com/domainry/domainry-party/module"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
@@ -39,6 +40,10 @@ import (
 func runtimeTestNotificationFactory() *notificationmodule.Factory {
 	factory := notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment())
 	return factory
+}
+
+func runtimeTestPartyFactory() *partymodule.Factory {
+	return partymodule.NewFactory(partymodule.Options{})
 }
 
 type startupContractMismatchHandler struct{}
@@ -91,16 +96,16 @@ func TestRuntimeStartupRegistryAndReadinessBoundaryGuards(t *testing.T) {
 	frozenConnectors.Freeze()
 	for name, run := range map[string]func(){
 		"nil handlers": func() {
-			newWithExtensions(t.Context(), bootstrapTestConfig(t), nil, frozenConnectors, runtimehttp.RuntimeReleaseIdentity{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+			newWithExtensions(t.Context(), bootstrapTestConfig(t), nil, frozenConnectors, runtimehttp.RuntimeReleaseIdentity{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 		},
 		"unfrozen handlers": func() {
-			newWithExtensions(t.Context(), bootstrapTestConfig(t), runtimeext.NewBusinessHandlerRegistry(), frozenConnectors, runtimehttp.RuntimeReleaseIdentity{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+			newWithExtensions(t.Context(), bootstrapTestConfig(t), runtimeext.NewBusinessHandlerRegistry(), frozenConnectors, runtimehttp.RuntimeReleaseIdentity{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 		},
 		"nil connectors": func() {
-			newWithExtensions(t.Context(), bootstrapTestConfig(t), frozenHandlers, nil, runtimehttp.RuntimeReleaseIdentity{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+			newWithExtensions(t.Context(), bootstrapTestConfig(t), frozenHandlers, nil, runtimehttp.RuntimeReleaseIdentity{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 		},
 		"unfrozen connectors": func() {
-			newWithExtensions(t.Context(), bootstrapTestConfig(t), frozenHandlers, connector.NewRegistry(), runtimehttp.RuntimeReleaseIdentity{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+			newWithExtensions(t.Context(), bootstrapTestConfig(t), frozenHandlers, connector.NewRegistry(), runtimehttp.RuntimeReleaseIdentity{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 		},
 	} {
 		t.Run(name, func(t *testing.T) { assertBootstrapPanic(t, run) })
@@ -108,7 +113,7 @@ func TestRuntimeStartupRegistryAndReadinessBoundaryGuards(t *testing.T) {
 }
 
 func TestNewBuildsRunnableRuntimeAndClosesStartedWorkers(t *testing.T) {
-	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	if runtime.store == nil || runtime.records == nil || runtime.identityBinding == nil {
 		t.Fatal("runtime composition is incomplete")
 	}
@@ -138,7 +143,7 @@ func TestNewBuildsRunnableRuntimeAndClosesStartedWorkers(t *testing.T) {
 func TestNewWithBusinessHandlersBuildsRuntime(t *testing.T) {
 	handlers := runtimeext.NewBusinessHandlerRegistry()
 	handlers.Freeze()
-	runtime := NewWithBusinessHandlers(t.Context(), bootstrapTestConfig(t), handlers, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+	runtime := NewWithBusinessHandlers(t.Context(), bootstrapTestConfig(t), handlers, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	if runtime.businessHandlers != handlers {
 		t.Fatal("Runtime did not retain supplied business handlers")
 	}
@@ -155,7 +160,7 @@ func TestProjectRuntimeOpensOneNotificationModuleBinding(t *testing.T) {
 	runtime := NewProjectWithFactoriesAndDatabase(
 		t.Context(), bootstrapTestConfig(t), handlers, connectors,
 		runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{},
-		runtimeIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), nil,
+		runtimeIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), runtimeTestPartyFactory(), nil,
 	)
 	if runtime.notificationBinding == nil || runtime.notificationBinding.Descriptor().Mode != "module" || runtime.notificationWorkers == nil || runtime.notificationHTTP == nil {
 		t.Fatalf("Notification Module composition is incomplete: binding=%v workers=%v http=%v", runtime.notificationBinding, runtime.notificationWorkers, runtime.notificationHTTP)
@@ -176,7 +181,7 @@ func TestProjectRuntimeJoinsSharedReleaseCohortBeforeServingTraffic(t *testing.T
 	handlers.Freeze()
 	connectors := connector.NewRegistry()
 	connectors.Freeze()
-	first := NewProjectWithIdentity(t.Context(), cfg, handlers, connectors, identity, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+	first := NewProjectWithIdentity(t.Context(), cfg, handlers, connectors, identity, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	t.Cleanup(func() { _ = first.CloseContext(t.Context()) })
 	firstLease := first.runtimeReleaseLease()
 	if firstLease.InstanceID != cfg.RuntimeInstanceID || firstLease.Generation == 0 || first.releaseAdmission.Check() != nil {
@@ -185,7 +190,7 @@ func TestProjectRuntimeJoinsSharedReleaseCohortBeforeServingTraffic(t *testing.T
 
 	matchingConfig := cfg
 	matchingConfig.RuntimeInstanceID = "runtime-release-b"
-	matching := NewProjectWithIdentity(t.Context(), matchingConfig, handlers, connectors, identity, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+	matching := NewProjectWithIdentity(t.Context(), matchingConfig, handlers, connectors, identity, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	matchingLease := matching.runtimeReleaseLease()
 	if matchingLease.Generation != firstLease.Generation {
 		t.Fatalf("matching generations first=%d second=%d", firstLease.Generation, matchingLease.Generation)
@@ -210,7 +215,7 @@ func TestProjectRuntimeJoinsSharedReleaseCohortBeforeServingTraffic(t *testing.T
 			t.Fatalf("conflicting Runtime startup panic=%v", value)
 		}
 	}()
-	NewProjectWithIdentity(t.Context(), conflictConfig, handlers, connectors, conflicting, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+	NewProjectWithIdentity(t.Context(), conflictConfig, handlers, connectors, conflicting, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 }
 
 func bootstrapRuntimeReleaseIdentity(t *testing.T, marker byte) deploymentmodel.RuntimeReleaseIdentity {
@@ -251,7 +256,7 @@ func TestProjectRuntimeReleaseIntegrityTracksLiveSchemaAndFrozenRegistries(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime := NewProjectWithIdentity(t.Context(), cfg, handlers, connectors, identity, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+	runtime := NewProjectWithIdentity(t.Context(), cfg, handlers, connectors, identity, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	t.Cleanup(func() { _ = runtime.CloseContext(t.Context()) })
 	if err := runtime.releaseIntegrity.SchemaReadiness(t.Context()); err != nil {
 		t.Fatalf("initial Schema readiness=%v", err)
@@ -272,7 +277,7 @@ func TestNewBuildsObjectlessConfiguringRuntimeForDirectAuthoring(t *testing.T) {
 	cfg.ManifestPath = writeManifestLoaderFixture(t, `{"schema_version":"2","template_id":"direct-authoring-project","version":"0.0.0-configuring","source_blueprint_id":"runtime-direct-authoring-v4","objects":[],"views":[]}`)
 	cfg.AllowEmptyAuthoringManifest = true
 	cfg.RuntimeAllowDevIdentityHeaders = true
-	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	defer runtime.CloseContext(t.Context())
 	for key, object := range runtime.records.Applications().Schema.ObjectMap(t.Context()) {
 		if runtimeOwned, _ := object.Config["runtime_owned"].(bool); !runtimeOwned {
@@ -316,7 +321,7 @@ func TestGlobalValidationAndDeliveryGateMoveOwnedRuntimeToReady(t *testing.T) {
 	if err := os.WriteFile(provision.LifecyclePath(cfg.ManifestPath), lifecycleRaw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	defer runtime.CloseContext(t.Context())
 	permissions := []string{
 		"workspace.admin", "scheduler.definition.read", "ops.workflow.read", "workflow.process.read",
@@ -510,7 +515,7 @@ func TestNewRestoresPublishedNotificationTemplates(t *testing.T) {
 	if err := os.WriteFile(cfg.ManifestPath, raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	if len(runtime.manifest.NotificationTemplates) == 0 {
 		t.Fatal("published notification templates were not restored")
 	}
@@ -524,20 +529,22 @@ func TestBindHTTPRejectsNilRuntime(t *testing.T) {
 }
 
 func TestNewRejectsNilContextInvalidSecurityAndMissingManifest(t *testing.T) {
-	assertBootstrapPanic(t, func() { New(nil, config.Config{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory()) })
+	assertBootstrapPanic(t, func() {
+		New(nil, config.Config{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
+	})
 	assertBootstrapPanic(t, func() {
 		New(t.Context(), config.Config{
 			Environment:                    "production",
 			RuntimeAllowDevIdentityHeaders: true,
-		}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+		}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	})
 	assertBootstrapPanic(t, func() {
-		New(t.Context(), config.Config{ManifestPath: filepath.Join(t.TempDir(), "missing.json")}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+		New(t.Context(), config.Config{ManifestPath: filepath.Join(t.TempDir(), "missing.json")}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	})
 	assertBootstrapPanic(t, func() {
 		cfg := bootstrapTestConfig(t)
 		cfg.DatabaseDriver = "unsupported"
-		New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+		New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	})
 }
 
@@ -550,7 +557,7 @@ func TestNewPropagatesIntegrationNotificationAndServiceAssemblyFailures(t *testi
 	}`)
 	unknownConnection.SkipManifestValidation = true
 	assertBootstrapPanic(t, func() {
-		New(t.Context(), unknownConnection, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+		New(t.Context(), unknownConnection, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	})
 
 	invalidNotification := bootstrapTestConfig(t)
@@ -561,13 +568,13 @@ func TestNewPropagatesIntegrationNotificationAndServiceAssemblyFailures(t *testi
 	}`)
 	invalidNotification.SkipManifestValidation = true
 	assertBootstrapPanic(t, func() {
-		New(t.Context(), invalidNotification, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+		New(t.Context(), invalidNotification, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	})
 
 	missingFrontend := bootstrapTestConfig(t)
 	missingFrontend.FrontendCapabilityManifestPath = filepath.Join(t.TempDir(), "missing-frontend-capability.json")
 	assertBootstrapPanic(t, func() {
-		New(t.Context(), missingFrontend, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+		New(t.Context(), missingFrontend, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	})
 
 }
@@ -635,7 +642,7 @@ func TestRestoreRuntimeMetadataHonorsCancelledContext(t *testing.T) {
 }
 
 func TestRuntimeWiresCredentialExpirySourceToIdempotentNotificationPublisher(t *testing.T) {
-	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory())
+	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	t.Cleanup(func() { _ = runtime.CloseContext(t.Context()) })
 	now := runtime.worker.Clock.Now().UTC()
 	configStore := integrationpersistence.NewIntegrationConfigStore(runtime.store)

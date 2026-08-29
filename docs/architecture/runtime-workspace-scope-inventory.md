@@ -63,7 +63,7 @@ Registered schema tables:
   `agent_service_principal_definitions`, `agent_task_definitions`, `role_definitions`,
   `identity_profile_binding_definitions` — `installation_scoped`
 - `report_snapshots`, `report_export_artifacts` — `workspace_scoped`
-- optional Party foundation: `party_parties`, `party_persons`,
+- Party Module-owned foundation tables in the borrowed Runtime database (or isolated behind Party SaaS): `party_parties`, `party_persons`,
   `party_organizations`, `party_contact_points`, `party_addresses`,
   `party_identifiers`, `party_communication_preferences`, `party_consents`,
   `party_privacy_preferences`, `party_marketing_subscriptions`,

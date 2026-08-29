@@ -6,6 +6,7 @@ import (
 	"github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
+	partysdk "github.com/domainry/domainry-party-sdk"
 )
 
 // Options is the complete project-owned input to Runtime process composition.
@@ -22,8 +23,10 @@ type Options struct {
 	// inject domainry-notification/module; SaaS builds inject the SDK Remote
 	// Factory. Runtime never switches topology from environment at startup.
 	NotificationFactory notificationsdk.Factory
-	BusinessHandlers    BusinessHandlerFactory
-	Connectors          connector.ProviderSetFactory
+	// PartyFactory selects the in-process Module or SaaS Remote Binding.
+	PartyFactory     partysdk.Factory
+	BusinessHandlers BusinessHandlerFactory
+	Connectors       connector.ProviderSetFactory
 	// ConnectorProcesses is an explicit host policy for optional Provider
 	// subprocesses. The zero value denies every executable.
 	ConnectorProcesses ConnectorProcessPolicy

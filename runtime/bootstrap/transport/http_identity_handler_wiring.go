@@ -8,9 +8,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	partyapplication "github.com/domainry/domainry-runtime/runtime/application/party"
-	partyservice "github.com/domainry/domainry-runtime/runtime/domain/party/service"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	partypersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/party"
 	partyhttp "github.com/domainry/domainry-runtime/runtime/transport/http/party"
 )
 
@@ -23,11 +21,10 @@ func (a *httpServerAssembly) wirePartyAndIdentityReferences(constructionContext 
 }
 
 func (a *httpServerAssembly) wirePartyHandler() {
-	if a.dependencies.Store != nil {
-		partyStore := partypersistence.NewSQLPartyStore(a.dependencies.Store.DB(), a.dependencies.Store.Driver(), a.dependencies.Store.DatabaseSchema())
+	if a.dependencies.PartyBinding != nil {
 		a.handlers.Party = partyhttp.NewPartyHandler(partyhttp.PartyDependencies{
-			Service:       partyapplication.NewPartyApplicationService(partyservice.NewPartyDomainService(partyStore)),
-			Catalog:       partyapplication.NewPartyCatalogApplicationService(partyservice.NewPartyCatalogDomainService(partyStore)),
+			Service:       partyapplication.NewPartyApplicationService(a.dependencies.PartyBinding),
+			Catalog:       partyapplication.NewPartyCatalogApplicationService(a.dependencies.PartyBinding),
 			Authenticated: a.identityHTTP.AuthenticatedFunc, Principal: a.callbacks.Principal,
 			WriteJSON: a.callbacks.WriteJSON, WriteError: a.callbacks.WriteError,
 			WriteServiceError: a.callbacks.WriteServiceError, DecodeJSON: a.callbacks.DecodeJSON,

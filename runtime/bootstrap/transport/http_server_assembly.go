@@ -9,6 +9,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityprincipal "github.com/domainry/domainry-identity-sdk/authorization/principal"
 	identityhttpmiddleware "github.com/domainry/domainry-identity-sdk/httpmiddleware"
+	partysdk "github.com/domainry/domainry-party-sdk"
 
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
@@ -38,6 +39,7 @@ type HTTPServerDependencies struct {
 	Config                 config.Config
 	Records                *composition.RuntimeServices
 	IdentityBinding        identitysdk.Binding
+	PartyBinding           partysdk.Binding
 	Store                  *persistence.RuntimeStore
 	RateLimiter            ratelimit.Limiter
 	Notifications          notificationhttp.NotificationApplication

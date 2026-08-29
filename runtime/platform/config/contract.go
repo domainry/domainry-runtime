@@ -252,6 +252,15 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.NotificationApplicationKey) == "" {
 		return fmt.Errorf("NOTIFICATION_APPLICATION_KEY is required")
 	}
+	if strings.TrimSpace(c.PartyTenantID) == "" {
+		return errors.New("PARTY_TENANT_ID is required")
+	}
+	if strings.TrimSpace(c.PartyWorkspaceID) == "" {
+		return errors.New("PARTY_WORKSPACE_ID is required")
+	}
+	if strings.TrimSpace(c.PartyApplicationKey) == "" {
+		return errors.New("PARTY_APPLICATION_KEY is required")
+	}
 	if c.HTTPReadHeaderTimeout <= 0 || c.HTTPReadTimeout <= 0 || c.HTTPWriteTimeout <= 0 || c.HTTPIdleTimeout <= 0 || c.HTTPShutdownTimeout <= 0 {
 		return fmt.Errorf("HTTP timeouts must be positive")
 	}

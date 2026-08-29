@@ -9,9 +9,9 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	partymodel "github.com/domainry/domainry-runtime/runtime/domain/party/model"
-	partyservice "github.com/domainry/domainry-runtime/runtime/domain/party/service"
+	partymodel "github.com/domainry/domainry-party-sdk/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	partysdkfixture "github.com/domainry/domainry-runtime/testsupport/partysdkfixture"
 )
 
 type applicationPartyRepository struct {
@@ -31,7 +31,7 @@ func (r *applicationPartyRepository) Upsert(_ context.Context, _ string, value p
 
 func TestPartyApplicationServiceAuthorizesEveryEntry(t *testing.T) {
 	repository := &applicationPartyRepository{value: partymodel.Aggregate{Party: partymodel.Party{ID: "party"}}}
-	service := NewPartyApplicationService(partyservice.NewPartyDomainService(repository))
+	service := NewPartyApplicationService(partysdkfixture.NewBinding("workspace", repository, nil))
 	unknown := principalmodel.Principal{}
 	reader := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"party.read"}})
 	writer := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"party.write"}})

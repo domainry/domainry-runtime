@@ -12,6 +12,8 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
+	partysdk "github.com/domainry/domainry-party-sdk"
+	partymodulehost "github.com/domainry/domainry-party-sdk/modulehost"
 	"go.uber.org/zap"
 
 	"github.com/domainry/domainry-foundation/apperror"
@@ -120,16 +122,16 @@ func registerIntegrationNotificationActionAuthorizers(registry *notificationfaca
 	})
 }
 
-func New(ctx context.Context, cfg config.Config, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory) *Runtime {
+func New(ctx context.Context, cfg config.Config, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory) *Runtime {
 	businessHandlers := runtimeext.NewBusinessHandlerRegistry()
 	businessHandlers.Freeze()
 	connectorProviders := emptyConnectorProviderRegistry()
-	return NewWithExtensions(ctx, cfg, businessHandlers, connectorProviders, identityBinding, notificationFactory)
+	return NewWithExtensions(ctx, cfg, businessHandlers, connectorProviders, identityBinding, notificationFactory, partyFactory)
 }
 
-func NewWithBusinessHandlers(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory) *Runtime {
+func NewWithBusinessHandlers(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory) *Runtime {
 	connectorProviders := emptyConnectorProviderRegistry()
-	return NewWithExtensions(ctx, cfg, businessHandlers, connectorProviders, identityBinding, notificationFactory)
+	return NewWithExtensions(ctx, cfg, businessHandlers, connectorProviders, identityBinding, notificationFactory, partyFactory)
 }
 
 func emptyConnectorProviderRegistry() *connector.Registry {
@@ -138,34 +140,44 @@ func emptyConnectorProviderRegistry() *connector.Registry {
 	return registry
 }
 
-func NewWithExtensions(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory) *Runtime {
-	return newWithExtensions(ctx, cfg, businessHandlers, connectorProviders, runtimehttp.RuntimeReleaseIdentity{}, identityBinding, notificationFactory)
+func NewWithExtensions(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory) *Runtime {
+	return newWithExtensions(ctx, cfg, businessHandlers, connectorProviders, runtimehttp.RuntimeReleaseIdentity{}, identityBinding, notificationFactory, partyFactory)
 }
 
 // NewProjectWithIdentity assembles Runtime against one already-opened SDK
 // Binding. The generated project host owns Module/SaaS selection, Identity
 // lifecycle, and optional Identity HTTP surfaces.
-func NewProjectWithIdentity(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, artifactEvidence deploymentapplication.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notificationFactory notificationsdk.Factory) *Runtime {
-	return newWithExtensionsUsingStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, binding, notificationFactory, nil, artifactEvidence)
+func NewProjectWithIdentity(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, artifactEvidence deploymentapplication.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory) *Runtime {
+	return newWithExtensionsUsingStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, binding, notificationFactory, partyFactory, nil, artifactEvidence)
 }
 
-func NewProjectWithIdentityAndDatabase(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, artifactEvidence deploymentapplication.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notificationFactory notificationsdk.Factory, store *persistence.RuntimeStore) *Runtime {
-	return newWithExtensionsUsingStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, binding, notificationFactory, store, artifactEvidence)
+func NewProjectWithIdentityAndDatabase(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, artifactEvidence deploymentapplication.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, store *persistence.RuntimeStore) *Runtime {
+	return newWithExtensionsUsingStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, binding, notificationFactory, partyFactory, store, artifactEvidence)
 }
 
-func NewProjectWithFactoriesAndDatabase(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, artifactEvidence deploymentapplication.RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, store *persistence.RuntimeStore) *Runtime {
-	return newWithExtensionsUsingFactoriesAndStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, identity, notification, store, artifactEvidence)
+func NewProjectWithFactoriesAndDatabase(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, artifactEvidence deploymentapplication.RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, store *persistence.RuntimeStore) *Runtime {
+	return newWithExtensionsUsingFactoriesAndStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, identity, notification, party, store, artifactEvidence)
 }
 
-func newWithExtensions(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
-	return newWithExtensionsUsingStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, identityBinding, notificationFactory, nil, artifactEvidence...)
+// NewProjectWithAllFactoriesAndDatabase lets a generated project select Party
+// Module or SaaS explicitly. Existing constructors retain Module by default.
+func NewProjectWithAllFactoriesAndDatabase(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, artifactEvidence deploymentapplication.RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, store *persistence.RuntimeStore) *Runtime {
+	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, identity, notification, party, store, artifactEvidence)
 }
 
-func newWithExtensionsUsingStore(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, preparedStore *persistence.RuntimeStore, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
-	return newWithExtensionsUsingFactoriesAndStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, identityBinding, notificationFactory, preparedStore, artifactEvidence...)
+func newWithExtensions(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
+	return newWithExtensionsUsingStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, identityBinding, notificationFactory, partyFactory, nil, artifactEvidence...)
 }
 
-func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, preparedStore *persistence.RuntimeStore, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
+func newWithExtensionsUsingStore(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, preparedStore *persistence.RuntimeStore, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
+	return newWithExtensionsUsingFactoriesAndStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, identityBinding, notificationFactory, partyFactory, preparedStore, artifactEvidence...)
+}
+
+func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, preparedStore *persistence.RuntimeStore, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
+	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, identityBinding, notificationFactory, partyFactory, preparedStore, artifactEvidence...)
+}
+
+func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, preparedStore *persistence.RuntimeStore, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
 	if ctx == nil {
 		panic("bootstrap.NewWithExtensions requires a non-nil lifecycle context")
 	}
@@ -180,6 +192,9 @@ func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Con
 	}
 	if notificationFactory == nil {
 		panic("bootstrap.NewWithExtensions requires a Notification SDK Factory")
+	}
+	if partyFactory == nil {
+		panic("bootstrap.NewWithExtensions requires a Party SDK Factory")
 	}
 	cfg = normalizeRuntimeConfig(cfg)
 	mustCompleteRuntimeStartup(cfg.ValidateSecurity())
@@ -215,6 +230,23 @@ func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Con
 	identityPrincipals := identityBinding.Principals()
 	if identityDirectory == nil || identityPrincipals == nil {
 		mustCompleteRuntimeStartup(errors.New("Identity Binding returned incomplete Runtime ports"))
+	}
+	partyApplication := partysdk.ApplicationRef{TenantID: cfg.PartyTenantID, WorkspaceID: cfg.PartyWorkspaceID, ApplicationKey: cfg.PartyApplicationKey}
+	var partyBinding partysdk.Binding
+	if moduleFactory, ok := partyFactory.(partymodulehost.Factory); ok {
+		partyBinding, err = moduleFactory.OpenModule(ctx, partyApplication, partySDKModuleHost{store: store, directory: identityDirectory})
+	} else {
+		partyBinding, err = partyFactory.Open(ctx, partyApplication)
+	}
+	mustCompleteRuntimeStartup(err)
+	if partyBinding == nil {
+		mustCompleteRuntimeStartup(errors.New("Party SDK Factory returned no Binding"))
+	}
+	if err := partyBinding.Descriptor().Validate(); err != nil {
+		mustCompleteRuntimeStartup(err)
+	}
+	if partyBinding.Descriptor().Mode == partysdk.DeploymentModeSaaS && identityBinding.Descriptor().Mode != identitysdk.DeploymentModeSaaS {
+		mustCompleteRuntimeStartup(errors.New("Party SaaS requires Identity SaaS"))
 	}
 	expectedSchemaRevision := ""
 	if releaseIdentity.Coordinated() {
@@ -327,7 +359,7 @@ func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Con
 	mustCompleteRuntimeStartup(sharedRateLimiter.EnsureSchema(ctx))
 	workflowNotificationScope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "compile workflow notification intent")
 	startupCallbacks := runtimeStartupCallbacks{records: nil, notificationManagement: notificationCompiler, workflowNotificationScope: workflowNotificationScope}
-	serviceAssembly, err := assembleRuntimeServices(ctx, cfg, manifest, templateRenderer, store, identityDirectory, identityPrincipals, runtimeAudit, sharedRateLimiter, workerDependencies, runtimeExtensionRegistries{
+	serviceAssembly, err := assembleRuntimeServices(ctx, cfg, manifest, templateRenderer, store, identityDirectory, identityPrincipals, partyBinding.Directory(), runtimeAudit, sharedRateLimiter, workerDependencies, runtimeExtensionRegistries{
 		businessHandlers: businessHandlers, connectorProviders: connectorProviders,
 		notificationCompiler:               startupCallbacks.CompileNotification,
 		taskNotificationCommitter:          workflowpersistence.NewWorkflowTaskNotificationStore(store),
@@ -379,6 +411,7 @@ func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Con
 		identityBinding:     identityBinding,
 		identityDirectory:   identityDirectory,
 		identityPrincipals:  identityPrincipals,
+		partyBinding:        partyBinding,
 		manifest:            manifest,
 		recordRepository:    recordRepository,
 		rateLimiter:         sharedRateLimiter,

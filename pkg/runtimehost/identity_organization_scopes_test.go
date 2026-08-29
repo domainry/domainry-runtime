@@ -2,13 +2,13 @@ package runtimehost
 
 import (
 	"context"
+	partysdkcontract "github.com/domainry/domainry-party-sdk/contract"
 	"path/filepath"
 	"reflect"
 	"testing"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	partymodel "github.com/domainry/domainry-runtime/runtime/domain/party/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -16,14 +16,19 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
+type scopeResolverStub struct{ t *testing.T }
+
+func (s scopeResolverStub) Resolve(_ context.Context, ids []string) (partysdkcontract.OrganizationScopeFacts, error) {
+	if !reflect.DeepEqual(ids, []string{"workforce-1"}) {
+		s.t.Fatalf("profiles=%v", ids)
+	}
+	return partysdkcontract.OrganizationScopeFacts{StoreIDs: []string{"store-1"}}, nil
+}
+
 func TestRuntimeOrganizationScopeResolverBridgesPartyFacts(t *testing.T) {
-	resolver := runtimeOrganizationScopeResolver(func(_ context.Context, workspaceID string, workforceProfileIDs []string) (partymodel.OrganizationScopeFacts, error) {
-		if workspaceID != "workspace" || !reflect.DeepEqual(workforceProfileIDs, []string{"workforce-1"}) {
-			t.Fatalf("workspace=%q profiles=%v", workspaceID, workforceProfileIDs)
-		}
-		return partymodel.OrganizationScopeFacts{StoreIDs: []string{"store-1"}}, nil
-	})
-	facts, err := resolver(t.Context(), "workspace", []string{"workforce-1"})
+	projection := &partyOrganizationScopeProjection{}
+	projection.Bind("workspace", scopeResolverStub{t})
+	facts, err := projection.Resolve(t.Context(), "workspace", []string{"workforce-1"})
 	if err != nil || !reflect.DeepEqual(facts.StoreIDs, []string{"store-1"}) {
 		t.Fatalf("facts=%#v err=%v", facts, err)
 	}

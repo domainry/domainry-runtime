@@ -145,15 +145,15 @@
       "database": "runtime",
       "schema": "configured_runtime_schema",
       "object_names": ["party_parties", "party_persons", "party_organizations", "party_contact_points", "party_addresses", "party_identifiers", "party_communication_preferences", "party_consents", "party_privacy_preferences", "party_marketing_subscriptions", "party_job_catalog", "party_positions", "party_organization_extensions", "party_organization_extension_memberships"],
-      "owner": "party",
-      "replacement": "",
-      "read_paths": ["runtime/application/party", "runtime/infrastructure/persistence/database/party"],
-      "write_paths": ["runtime/application/party", "runtime/infrastructure/persistence/database/party"],
-      "migration": "006_party_foundation",
+      "owner": "domainry-party",
+      "replacement": "domainry-party Module-owned tables in the borrowed Runtime database or remote Party SaaS",
+      "read_paths": ["github.com/domainry/domainry-party/module", "github.com/domainry/domainry-party-sdk/remote"],
+      "write_paths": ["github.com/domainry/domainry-party/module", "github.com/domainry/domainry-party-sdk/remote"],
+      "migration": "adopted as Party-owned migration 1 after exact legacy baseline verification",
       "retention": "workspace Party foundation lifecycle policy",
       "backup_id": "required before destructive migration",
-      "observation_window": "not applicable while active",
-      "status": "active"
+      "observation_window": "one complete release and rollback window with zero direct Runtime persistence access",
+      "status": "external_owner_active"
     },
     {
       "object_kind": "table",

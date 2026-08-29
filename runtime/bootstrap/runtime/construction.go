@@ -4,6 +4,7 @@ import (
 	connector "github.com/domainry/domainry-connector-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
+	partysdk "github.com/domainry/domainry-party-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
@@ -27,6 +28,7 @@ type runtimeConstructionInput struct {
 	identityBinding     identitysdk.Binding
 	identityDirectory   identitysdk.Directory
 	identityPrincipals  identitysdk.PrincipalResolver
+	partyBinding        partysdk.Binding
 	manifest            manifestmodel.ManifestSchema
 	recordRepository    recordrepository.RecordRepository
 	rateLimiter         ratelimit.Limiter
@@ -53,6 +55,7 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		identityBinding:     input.identityBinding,
 		identityDirectory:   input.identityDirectory,
 		identityPrincipals:  input.identityPrincipals,
+		partyBinding:        input.partyBinding,
 		manifest:            input.manifest,
 		recordRepo:          input.recordRepository,
 		rateLimiter:         input.rateLimiter,

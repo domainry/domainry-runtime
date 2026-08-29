@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	partymodel "github.com/domainry/domainry-runtime/runtime/domain/party/model"
+	partymodel "github.com/domainry/domainry-party-sdk/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -53,7 +53,7 @@ type partyLookupProbe struct {
 	err   error
 }
 
-func (p partyLookupProbe) Get(context.Context, string, string) (partymodel.Aggregate, bool, error) {
+func (p partyLookupProbe) Get(context.Context, string) (partymodel.Aggregate, bool, error) {
 	return p.value, p.found, p.err
 }
 

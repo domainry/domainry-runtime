@@ -3,85 +3,113 @@ package party
 import (
 	"context"
 
-	partymodel "github.com/domainry/domainry-runtime/runtime/domain/party/model"
-	partyservice "github.com/domainry/domainry-runtime/runtime/domain/party/service"
+	partysdk "github.com/domainry/domainry-party-sdk"
+	partymodel "github.com/domainry/domainry-party-sdk/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-type PartyCatalogApplicationService struct {
-	domain *partyservice.PartyCatalogDomainService
-}
+type PartyCatalogApplicationService struct{ catalog partysdk.Catalog }
 
-func NewPartyCatalogApplicationService(domain *partyservice.PartyCatalogDomainService) *PartyCatalogApplicationService {
-	return &PartyCatalogApplicationService{domain: domain}
-}
-
-func (s *PartyCatalogApplicationService) ListJobs(ctx context.Context, principal principalmodel.Principal) ([]partymodel.JobCatalogItem, error) {
-	if err := authorizePartyCatalog(principal, "party.read"); err != nil {
-		return nil, err
+func NewPartyCatalogApplicationService(binding partysdk.Binding) *PartyCatalogApplicationService {
+	var catalog partysdk.Catalog
+	if binding != nil {
+		catalog = binding.Catalog()
 	}
-	return s.domain.ListJobs(ctx, principal.WorkspaceID)
+	return &PartyCatalogApplicationService{catalog: catalog}
 }
-
-func (s *PartyCatalogApplicationService) GetJob(ctx context.Context, id string, principal principalmodel.Principal) (partymodel.JobCatalogItem, bool, error) {
-	if err := authorizePartyCatalog(principal, "party.read"); err != nil {
-		return partymodel.JobCatalogItem{}, false, err
+func (s *PartyCatalogApplicationService) available() error {
+	if s.catalog == nil {
+		return partyUnavailable()
 	}
-	return s.domain.GetJob(ctx, principal.WorkspaceID, id)
+	return nil
 }
-
-func (s *PartyCatalogApplicationService) UpsertJob(ctx context.Context, value partymodel.JobCatalogItem, principal principalmodel.Principal) (partymodel.JobCatalogItem, error) {
-	if err := authorizePartyCatalog(principal, "party.write"); err != nil {
-		return partymodel.JobCatalogItem{}, err
+func (s *PartyCatalogApplicationService) ListJobs(ctx context.Context, p principalmodel.Principal) ([]partymodel.JobCatalogItem, error) {
+	if e := authorizePartyCatalog(p, "party.read"); e != nil {
+		return nil, e
 	}
-	return s.domain.UpsertJob(ctx, principal.WorkspaceID, value)
+	if e := s.available(); e != nil {
+		return nil, e
+	}
+	return s.catalog.ListJobs(ctx)
 }
-
-func (s *PartyCatalogApplicationService) ListPositions(ctx context.Context, principal principalmodel.Principal) ([]partymodel.Position, error) {
-	if err := authorizePartyCatalog(principal, "party.read"); err != nil {
-		return nil, err
+func (s *PartyCatalogApplicationService) GetJob(ctx context.Context, id string, p principalmodel.Principal) (partymodel.JobCatalogItem, bool, error) {
+	if e := authorizePartyCatalog(p, "party.read"); e != nil {
+		return partymodel.JobCatalogItem{}, false, e
 	}
-	return s.domain.ListPositions(ctx, principal.WorkspaceID)
+	if e := s.available(); e != nil {
+		return partymodel.JobCatalogItem{}, false, e
+	}
+	return s.catalog.GetJob(ctx, id)
 }
-
-func (s *PartyCatalogApplicationService) GetPosition(ctx context.Context, id string, principal principalmodel.Principal) (partymodel.Position, bool, error) {
-	if err := authorizePartyCatalog(principal, "party.read"); err != nil {
-		return partymodel.Position{}, false, err
+func (s *PartyCatalogApplicationService) UpsertJob(ctx context.Context, v partymodel.JobCatalogItem, p principalmodel.Principal) (partymodel.JobCatalogItem, error) {
+	if e := authorizePartyCatalog(p, "party.write"); e != nil {
+		return partymodel.JobCatalogItem{}, e
 	}
-	return s.domain.GetPosition(ctx, principal.WorkspaceID, id)
+	if e := s.available(); e != nil {
+		return partymodel.JobCatalogItem{}, e
+	}
+	return s.catalog.UpsertJob(ctx, v)
 }
-
-func (s *PartyCatalogApplicationService) UpsertPosition(ctx context.Context, value partymodel.Position, principal principalmodel.Principal) (partymodel.Position, error) {
-	if err := authorizePartyCatalog(principal, "party.write"); err != nil {
-		return partymodel.Position{}, err
+func (s *PartyCatalogApplicationService) ListPositions(ctx context.Context, p principalmodel.Principal) ([]partymodel.Position, error) {
+	if e := authorizePartyCatalog(p, "party.read"); e != nil {
+		return nil, e
 	}
-	return s.domain.UpsertPosition(ctx, principal.WorkspaceID, value)
+	if e := s.available(); e != nil {
+		return nil, e
+	}
+	return s.catalog.ListPositions(ctx)
 }
-
-func (s *PartyCatalogApplicationService) ListOrganizationExtensions(ctx context.Context, principal principalmodel.Principal) ([]partymodel.OrganizationExtension, error) {
-	if err := authorizePartyCatalog(principal, "party.read"); err != nil {
-		return nil, err
+func (s *PartyCatalogApplicationService) GetPosition(ctx context.Context, id string, p principalmodel.Principal) (partymodel.Position, bool, error) {
+	if e := authorizePartyCatalog(p, "party.read"); e != nil {
+		return partymodel.Position{}, false, e
 	}
-	return s.domain.ListOrganizationExtensions(ctx, principal.WorkspaceID)
+	if e := s.available(); e != nil {
+		return partymodel.Position{}, false, e
+	}
+	return s.catalog.GetPosition(ctx, id)
 }
-
-func (s *PartyCatalogApplicationService) UpsertOrganizationExtension(ctx context.Context, value partymodel.OrganizationExtension, principal principalmodel.Principal) (partymodel.OrganizationExtension, error) {
-	if err := authorizePartyCatalog(principal, "party.write"); err != nil {
-		return partymodel.OrganizationExtension{}, err
+func (s *PartyCatalogApplicationService) UpsertPosition(ctx context.Context, v partymodel.Position, p principalmodel.Principal) (partymodel.Position, error) {
+	if e := authorizePartyCatalog(p, "party.write"); e != nil {
+		return partymodel.Position{}, e
 	}
-	return s.domain.UpsertOrganizationExtension(ctx, principal.WorkspaceID, value)
+	if e := s.available(); e != nil {
+		return partymodel.Position{}, e
+	}
+	return s.catalog.UpsertPosition(ctx, v)
 }
-
-func (s *PartyCatalogApplicationService) ListOrganizationExtensionMemberships(ctx context.Context, workforceProfileID string, principal principalmodel.Principal) ([]partymodel.OrganizationExtensionMembership, error) {
-	if err := authorizePartyCatalog(principal, "party.read"); err != nil {
-		return nil, err
+func (s *PartyCatalogApplicationService) ListOrganizationExtensions(ctx context.Context, p principalmodel.Principal) ([]partymodel.OrganizationExtension, error) {
+	if e := authorizePartyCatalog(p, "party.read"); e != nil {
+		return nil, e
 	}
-	return s.domain.ListOrganizationExtensionMemberships(ctx, principal.WorkspaceID, workforceProfileID)
+	if e := s.available(); e != nil {
+		return nil, e
+	}
+	return s.catalog.ListOrganizationExtensions(ctx)
 }
-
-func (s *PartyCatalogApplicationService) UpsertOrganizationExtensionMembership(ctx context.Context, value partymodel.OrganizationExtensionMembership, principal principalmodel.Principal) (partymodel.OrganizationExtensionMembership, error) {
-	if err := authorizePartyCatalog(principal, "party.write"); err != nil {
-		return partymodel.OrganizationExtensionMembership{}, err
+func (s *PartyCatalogApplicationService) UpsertOrganizationExtension(ctx context.Context, v partymodel.OrganizationExtension, p principalmodel.Principal) (partymodel.OrganizationExtension, error) {
+	if e := authorizePartyCatalog(p, "party.write"); e != nil {
+		return partymodel.OrganizationExtension{}, e
 	}
-	return s.domain.UpsertOrganizationExtensionMembership(ctx, principal.WorkspaceID, value)
+	if e := s.available(); e != nil {
+		return partymodel.OrganizationExtension{}, e
+	}
+	return s.catalog.UpsertOrganizationExtension(ctx, v)
+}
+func (s *PartyCatalogApplicationService) ListOrganizationExtensionMemberships(ctx context.Context, id string, p principalmodel.Principal) ([]partymodel.OrganizationExtensionMembership, error) {
+	if e := authorizePartyCatalog(p, "party.read"); e != nil {
+		return nil, e
+	}
+	if e := s.available(); e != nil {
+		return nil, e
+	}
+	return s.catalog.ListOrganizationExtensionMemberships(ctx, id)
+}
+func (s *PartyCatalogApplicationService) UpsertOrganizationExtensionMembership(ctx context.Context, v partymodel.OrganizationExtensionMembership, p principalmodel.Principal) (partymodel.OrganizationExtensionMembership, error) {
+	if e := authorizePartyCatalog(p, "party.write"); e != nil {
+		return partymodel.OrganizationExtensionMembership{}, e
+	}
+	if e := s.available(); e != nil {
+		return partymodel.OrganizationExtensionMembership{}, e
+	}
+	return s.catalog.UpsertOrganizationExtensionMembership(ctx, v)
 }

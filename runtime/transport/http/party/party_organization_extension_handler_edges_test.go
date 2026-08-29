@@ -10,7 +10,7 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
-	partymodel "github.com/domainry/domainry-runtime/runtime/domain/party/model"
+	partymodel "github.com/domainry/domainry-party-sdk/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 

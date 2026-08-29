@@ -28,6 +28,8 @@ require (
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/domainry/domainry-party v0.1.0-dev.1
+	github.com/domainry/domainry-party-sdk v0.1.0-dev.1
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -63,3 +65,7 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
+
+replace github.com/domainry/domainry-party-sdk => ../domainry-party-sdk
+
+replace github.com/domainry/domainry-party => ../domainry-party

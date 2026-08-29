@@ -130,6 +130,9 @@ type Config struct {
 	NotificationTenantID           string
 	NotificationWorkspaceID        string
 	NotificationApplicationKey     string
+	PartyTenantID                  string
+	PartyWorkspaceID               string
+	PartyApplicationKey            string
 	IntegrationSecretKey           string
 	IntegrationActiveKeyID         string
 	IntegrationDecryptOnlyKeys     map[string]string
@@ -267,6 +270,9 @@ func FromEnv() Config {
 		NotificationTenantID:                    env("NOTIFICATION_TENANT_ID", "default"),
 		NotificationWorkspaceID:                 env("NOTIFICATION_WORKSPACE_ID", "default"),
 		NotificationApplicationKey:              env("NOTIFICATION_APPLICATION_KEY", "domainry-runtime"),
+		PartyTenantID:                           env("PARTY_TENANT_ID", "default"),
+		PartyWorkspaceID:                        env("PARTY_WORKSPACE_ID", "default"),
+		PartyApplicationKey:                     env("PARTY_APPLICATION_KEY", "domainry-runtime"),
 		IntegrationSecretKey:                    env("INTEGRATION_SECRET_KEY", DevIntegrationSecret),
 		IntegrationActiveKeyID:                  env("INTEGRATION_ACTIVE_KEY_ID", "dev-v1"),
 		IntegrationDecryptOnlyKeys:              keyMapEnv("INTEGRATION_DECRYPT_ONLY_KEYS"),

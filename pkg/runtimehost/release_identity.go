@@ -11,9 +11,9 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-connector-sdk"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
-	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 )
 
 const RuntimeReleaseIdentityVersion = deploymentmodel.RuntimeReleaseIdentityVersion

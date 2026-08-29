@@ -4,40 +4,52 @@ import (
 	"context"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	partymodel "github.com/domainry/domainry-runtime/runtime/domain/party/model"
-	partyservice "github.com/domainry/domainry-runtime/runtime/domain/party/service"
+	partysdk "github.com/domainry/domainry-party-sdk"
+	partymodel "github.com/domainry/domainry-party-sdk/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-type PartyApplicationService struct {
-	domain *partyservice.PartyDomainService
-}
+// PartyApplicationService is the Runtime authorization adapter. Party domain
+// behavior and persistence live behind the deployment-neutral SDK Binding.
+type PartyApplicationService struct{ directory partysdk.Directory }
 
-func NewPartyApplicationService(domain *partyservice.PartyDomainService) *PartyApplicationService {
-	return &PartyApplicationService{domain: domain}
+func NewPartyApplicationService(binding partysdk.Binding) *PartyApplicationService {
+	var directory partysdk.Directory
+	if binding != nil {
+		directory = binding.Directory()
+	}
+	return &PartyApplicationService{directory: directory}
 }
-
 func (s *PartyApplicationService) List(ctx context.Context, principal principalmodel.Principal) ([]partymodel.Aggregate, error) {
 	if err := authorizeParty(principal, "party.read"); err != nil {
 		return nil, err
 	}
-	return s.domain.List(ctx, principal.WorkspaceID)
+	if s.directory == nil {
+		return nil, partyUnavailable()
+	}
+	return s.directory.List(ctx)
 }
-
-func (s *PartyApplicationService) Get(ctx context.Context, partyID string, principal principalmodel.Principal) (partymodel.Aggregate, bool, error) {
+func (s *PartyApplicationService) Get(ctx context.Context, id string, principal principalmodel.Principal) (partymodel.Aggregate, bool, error) {
 	if err := authorizeParty(principal, "party.read"); err != nil {
 		return partymodel.Aggregate{}, false, err
 	}
-	return s.domain.Get(ctx, principal.WorkspaceID, partyID)
+	if s.directory == nil {
+		return partymodel.Aggregate{}, false, partyUnavailable()
+	}
+	return s.directory.Get(ctx, id)
 }
-
 func (s *PartyApplicationService) Upsert(ctx context.Context, value partymodel.Aggregate, principal principalmodel.Principal) (partymodel.Aggregate, error) {
 	if err := authorizeParty(principal, "party.write"); err != nil {
 		return partymodel.Aggregate{}, err
 	}
-	return s.domain.Upsert(ctx, principal.WorkspaceID, value)
+	if s.directory == nil {
+		return partymodel.Aggregate{}, partyUnavailable()
+	}
+	return s.directory.Upsert(ctx, value)
 }
-
+func partyUnavailable() error {
+	return &apperror.AppError{Kind: apperror.KindUnavailable, Code: "backend.party.unavailable"}
+}
 func authorizeParty(principal principalmodel.Principal, permission string) error {
 	if _, err := principalmodel.QueryScopeForPrincipal(principal); err != nil {
 		return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.workspace_scope_required", Err: err}
@@ -47,7 +59,6 @@ func authorizeParty(principal principalmodel.Principal, permission string) error
 	}
 	return nil
 }
-
 func authorizePartyCatalog(principal principalmodel.Principal, permission string) error {
 	if _, err := principalmodel.QueryScopeForPrincipal(principal); err != nil {
 		return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.workspace_scope_required", Err: err}
