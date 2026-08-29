@@ -188,7 +188,12 @@ func (r IntegrationEventStore) RecordWebhookNonce(ctx context.Context, workspace
 		return false, fmt.Errorf("integration webhook nonce identity is required")
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	if _, err := r.db.ExecContext(ctx, "DELETE FROM "+r.store.TableIdentifier("integration_webhook_nonces")+" WHERE "+r.store.Identifier("expires_at")+" <= "+r.store.Placeholder(1), now); err != nil {
+	deleteStatement, deleteArgs, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, "integration_webhook_nonces", workspaceID).
+		Where(ormbuilder.LessThanOrEqual("expires_at", now)).Build()
+	if buildErr != nil {
+		return false, fmt.Errorf("build expired integration webhook nonce cleanup: %w", buildErr)
+	}
+	if _, err := r.db.ExecContext(ctx, deleteStatement, deleteArgs...); err != nil {
 		return false, fmt.Errorf("delete expired integration webhook nonces: %w", err)
 	}
 	var existing string

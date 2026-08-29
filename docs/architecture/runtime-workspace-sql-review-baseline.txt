@@ -1,6 +1,5 @@
 # Exact reviewed hashes for legacy or explicitly system-scoped SQL statements.
 # New entries are forbidden unless the statement receives explicit architecture review.
-runtime/infrastructure/persistence/database/integration/integration_event_store.go|integration_webhook_nonces|7d4a796a637c8a9e
 runtime/infrastructure/persistence/database/integration/provider_state_store.go|connector_provider_states|7998d26bc690066a
 runtime/infrastructure/persistence/database/integration/provider_state_store.go|integration_connections|7998d26bc690066a
 runtime/infrastructure/persistence/database/lifecycle/file_artifact_store.go|lifecycle_file_artifacts|536eacb14234d3b9
