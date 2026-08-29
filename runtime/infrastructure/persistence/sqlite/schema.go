@@ -10,6 +10,7 @@ import (
 	ormsqlite "github.com/domainry/domainry-orm/sqlite"
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	sqliteevidence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite/evidence"
+	sqlitemigration "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite/migration"
 	sqliterecord "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite/record"
 	sqlitereport "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite/report"
 )
@@ -24,13 +25,14 @@ func (engineProfile) InspectWorkspaceRLS(context.Context, *sql.DB, ormdialect.Re
 
 type engineProfile struct {
 	ormdriver.Profile
+	persistencedriver.MigrationProfile
 	evidence persistencedriver.EvidenceSchemaProfile
 	record   persistencedriver.RecordProfile
 	report   persistencedriver.ReportProfile
 }
 
 func newEngineProfile() engineProfile {
-	return engineProfile{Profile: ormsqlite.NewProfile(), evidence: sqliteevidence.NewProfile(), record: sqliterecord.NewProfile(), report: sqlitereport.NewProfile()}
+	return engineProfile{Profile: ormsqlite.NewProfile(), MigrationProfile: sqlitemigration.NewProfile(), evidence: sqliteevidence.NewProfile(), record: sqliterecord.NewProfile(), report: sqlitereport.NewProfile()}
 }
 
 func (engineProfile) ManagedDatabaseMarkerEnabled() bool        { return false }

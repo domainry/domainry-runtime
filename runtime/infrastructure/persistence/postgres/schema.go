@@ -14,19 +14,21 @@ import (
 	ormpostgres "github.com/domainry/domainry-orm/postgres"
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	postgresevidence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/evidence"
+	postgresmigration "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/migration"
 	postgresrecord "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/record"
 	postgresreport "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/report"
 )
 
 type engineProfile struct {
 	ormdriver.Profile
+	persistencedriver.MigrationProfile
 	evidence persistencedriver.EvidenceSchemaProfile
 	record   persistencedriver.RecordProfile
 	report   persistencedriver.ReportProfile
 }
 
 func newEngineProfile() engineProfile {
-	return engineProfile{Profile: ormpostgres.NewProfile(), evidence: postgresevidence.NewProfile(), record: postgresrecord.NewProfile(), report: postgresreport.NewProfile()}
+	return engineProfile{Profile: ormpostgres.NewProfile(), MigrationProfile: postgresmigration.NewProfile(), evidence: postgresevidence.NewProfile(), record: postgresrecord.NewProfile(), report: postgresreport.NewProfile()}
 }
 
 func (engineProfile) ManagedDatabaseMarkerEnabled() bool        { return true }

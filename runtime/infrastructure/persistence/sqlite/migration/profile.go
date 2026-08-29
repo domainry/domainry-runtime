@@ -1,4 +1,4 @@
-package sqlite
+package migration
 
 import (
 	"context"
@@ -15,22 +15,26 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-func (engineProfile) MigrationLedgerTypes() persistencedriver.MigrationLedgerTypes {
+type Profile struct{}
+
+func NewProfile() Profile { return Profile{} }
+
+func (Profile) MigrationLedgerTypes() persistencedriver.MigrationLedgerTypes {
 	return persistencedriver.MigrationLedgerTypes{Key: "TEXT", Timestamp: "TEXT"}
 }
-func (engineProfile) MigrationBackupPolicy() persistencedriver.MigrationBackupPolicy {
+func (Profile) MigrationBackupPolicy() persistencedriver.MigrationBackupPolicy {
 	return persistencedriver.MigrationBackupPolicy{LocalSnapshot: true, EvidenceEngine: "sqlite", BackupIDPrefix: "sqlite-"}
 }
-func (engineProfile) MigrationRollbackPolicy() persistencedriver.MigrationRollbackPolicy {
+func (Profile) MigrationRollbackPolicy() persistencedriver.MigrationRollbackPolicy {
 	return persistencedriver.MigrationRollbackPolicy{Mode: "restore_sqlite_backup", RequiresVerifiedBackup: true, Procedure: []string{"stop_runtime", "replace_database_with_latest_migration_backup", "restart_runtime", "verify_migration_status"}}
 }
-func (engineProfile) EnsureMigrationNamespace(context.Context, persistencedriver.SchemaDatabase, ormdialect.Renderer, string) error {
+func (Profile) EnsureMigrationNamespace(context.Context, persistencedriver.SchemaDatabase, ormdialect.Renderer, string) error {
 	return nil
 }
-func (engineProfile) ConfigureMigrationTransaction(context.Context, *sql.Tx, ormdialect.Renderer, string, time.Duration, time.Duration) error {
+func (Profile) ConfigureMigrationTransaction(context.Context, *sql.Tx, ormdialect.Renderer, string, time.Duration, time.Duration) error {
 	return nil
 }
-func (engineProfile) AcquireMigrationLock(ctx context.Context, _ *sql.DB, _ ormdialect.Renderer, options persistencedriver.MigrationLockOptions) (persistencedriver.MigrationLock, error) {
+func (Profile) AcquireMigrationLock(ctx context.Context, _ *sql.DB, _ ormdialect.Renderer, options persistencedriver.MigrationLockOptions) (persistencedriver.MigrationLock, error) {
 	path := strings.TrimSpace(options.DatabasePath)
 	if path == "" || path == ":memory:" || strings.HasPrefix(path, "file:") {
 		return persistencedriver.MigrationLock{Release: func() {}}, nil
@@ -66,8 +70,7 @@ func (engineProfile) AcquireMigrationLock(ctx context.Context, _ *sql.DB, _ ormd
 	_, _ = file.WriteString(owner)
 	return persistencedriver.MigrationLock{Release: func() { _ = filelock.Unlock(file); _ = file.Close() }}, nil
 }
-
-func (engineProfile) MigrationDatabasePath(cfg config.Config) string {
+func (Profile) MigrationDatabasePath(cfg config.Config) string {
 	if value := strings.TrimSpace(cfg.DBPath); value != "" {
 		return value
 	}

@@ -30,6 +30,11 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 	if err := ensureWorkspaceScopedIdentities(ctx, s, workspaceIdentities); err != nil {
 		return err
 	}
+	// Backfill uses an engine-native upsert on this business key, so the
+	// constraint must exist before any legacy queue rows are projected.
+	if err := s.CreateIndexIfMissing(ctx, "runtime_worker_queue_scopes", "uniq_runtime_worker_queue_scope", true, "queue_kind", "scope_key"); err != nil {
+		return fmt.Errorf("create uniq_runtime_worker_queue_scope: %w", err)
+	}
 	if _, exists := tables["record_batch_jobs"]; exists {
 		if err := backfillWorkerQueueScopes(ctx, s, "record_batch", "record_batch_jobs"); err != nil {
 			return err
@@ -175,7 +180,6 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		{name: "uniq_record_batch_job_idempotency", table: "record_batch_jobs", columns: []string{"workspace_id", "kind", "object_key", "idempotency_key"}, unique: true},
 		{name: "idx_record_batch_job_due", table: "record_batch_jobs", columns: []string{"status", "next_attempt_at", "lease_expires_at", "created_at"}},
 		{name: "uniq_record_batch_job_chunk", table: "record_batch_job_chunks", columns: []string{"workspace_id", "job_id", "sequence_no"}, unique: true},
-		{name: "uniq_runtime_worker_queue_scope", table: "runtime_worker_queue_scopes", columns: []string{"queue_kind", "scope_key"}, unique: true},
 		{name: "uniq_workflow_execution_workspace_id", table: "_workflow_executions", columns: []string{"workspace_id", "id"}, unique: true},
 		{name: "idx_workflow_execution_process", table: "_workflow_executions", columns: []string{"workspace_id", "process_id", "node_id", "status"}},
 		{name: "uniq_workflow_execution_receipt_scope", table: "workflow_execution_receipts", columns: []string{"workspace_id", "workflow_key", "idempotency_key"}, unique: true},

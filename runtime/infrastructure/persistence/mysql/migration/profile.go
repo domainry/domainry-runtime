@@ -1,4 +1,4 @@
-package mysql
+package migration
 
 import (
 	"context"
@@ -11,22 +11,26 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-func (engineProfile) MigrationLedgerTypes() persistencedriver.MigrationLedgerTypes {
+type Profile struct{}
+
+func NewProfile() Profile { return Profile{} }
+
+func (Profile) MigrationLedgerTypes() persistencedriver.MigrationLedgerTypes {
 	return persistencedriver.MigrationLedgerTypes{Key: "VARCHAR(255)", Timestamp: "VARCHAR(64)"}
 }
-func (engineProfile) MigrationBackupPolicy() persistencedriver.MigrationBackupPolicy {
+func (Profile) MigrationBackupPolicy() persistencedriver.MigrationBackupPolicy {
 	return persistencedriver.MigrationBackupPolicy{EvidenceEngine: "mysql"}
 }
-func (engineProfile) MigrationRollbackPolicy() persistencedriver.MigrationRollbackPolicy {
+func (Profile) MigrationRollbackPolicy() persistencedriver.MigrationRollbackPolicy {
 	return persistencedriver.MigrationRollbackPolicy{Mode: "restore_external_backup", RequiresVerifiedBackup: true, Procedure: []string{"stop_runtime", "restore_verified_database_backup", "restart_runtime", "verify_migration_status"}}
 }
-func (engineProfile) EnsureMigrationNamespace(context.Context, persistencedriver.SchemaDatabase, ormdialect.Renderer, string) error {
+func (Profile) EnsureMigrationNamespace(context.Context, persistencedriver.SchemaDatabase, ormdialect.Renderer, string) error {
 	return nil
 }
-func (engineProfile) ConfigureMigrationTransaction(context.Context, *sql.Tx, ormdialect.Renderer, string, time.Duration, time.Duration) error {
+func (Profile) ConfigureMigrationTransaction(context.Context, *sql.Tx, ormdialect.Renderer, string, time.Duration, time.Duration) error {
 	return nil
 }
-func (engineProfile) AcquireMigrationLock(ctx context.Context, database *sql.DB, renderer ormdialect.Renderer, options persistencedriver.MigrationLockOptions) (persistencedriver.MigrationLock, error) {
+func (Profile) AcquireMigrationLock(ctx context.Context, database *sql.DB, renderer ormdialect.Renderer, options persistencedriver.MigrationLockOptions) (persistencedriver.MigrationLock, error) {
 	conn, err := database.Conn(ctx)
 	if err != nil {
 		return persistencedriver.MigrationLock{}, fmt.Errorf("acquire migration connection: %w", err)
@@ -65,5 +69,4 @@ func (engineProfile) AcquireMigrationLock(ctx context.Context, database *sql.DB,
 		_ = conn.Close()
 	}}, nil
 }
-
-func (engineProfile) MigrationDatabasePath(config.Config) string { return "" }
+func (Profile) MigrationDatabasePath(config.Config) string { return "" }

@@ -68,6 +68,16 @@ type ReportProfile interface {
 	DateBucket(string, string, bool) (string, error)
 }
 
+type MigrationProfile interface {
+	MigrationLedgerTypes() MigrationLedgerTypes
+	EnsureMigrationNamespace(context.Context, SchemaDatabase, ormdialect.Renderer, string) error
+	ConfigureMigrationTransaction(context.Context, *sql.Tx, ormdialect.Renderer, string, time.Duration, time.Duration) error
+	MigrationBackupPolicy() MigrationBackupPolicy
+	MigrationRollbackPolicy() MigrationRollbackPolicy
+	AcquireMigrationLock(context.Context, *sql.DB, ormdialect.Renderer, MigrationLockOptions) (MigrationLock, error)
+	MigrationDatabasePath(config.Config) string
+}
+
 type SchemaQuery struct {
 	Statement string
 	Arguments []any

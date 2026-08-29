@@ -10,6 +10,7 @@ import (
 	ormmysql "github.com/domainry/domainry-orm/mysql"
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	mysqlevidence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/evidence"
+	mysqlmigration "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/migration"
 	mysqlrecord "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/record"
 	mysqlreport "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/report"
 )
@@ -24,13 +25,14 @@ func (engineProfile) InspectWorkspaceRLS(context.Context, *sql.DB, ormdialect.Re
 
 type engineProfile struct {
 	ormdriver.Profile
+	persistencedriver.MigrationProfile
 	evidence persistencedriver.EvidenceSchemaProfile
 	record   persistencedriver.RecordProfile
 	report   persistencedriver.ReportProfile
 }
 
 func newEngineProfile() engineProfile {
-	return engineProfile{Profile: ormmysql.NewProfile(), evidence: mysqlevidence.NewProfile(), record: mysqlrecord.NewProfile(), report: mysqlreport.NewProfile()}
+	return engineProfile{Profile: ormmysql.NewProfile(), MigrationProfile: mysqlmigration.NewProfile(), evidence: mysqlevidence.NewProfile(), record: mysqlrecord.NewProfile(), report: mysqlreport.NewProfile()}
 }
 
 func (engineProfile) ManagedDatabaseMarkerEnabled() bool { return true }
