@@ -47,6 +47,7 @@ type EngineProfile interface {
 	InspectWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) (WorkspaceRLSStatus, error)
 	OrderedDecimalTextStorage() bool
 	RecordReadIsolation() sql.IsolationLevel
+	ReportDateBucket(string, string, bool) (string, error)
 }
 
 type SchemaQuery struct {
@@ -140,6 +141,9 @@ func (portableEngineProfile) InspectWorkspaceRLS(context.Context, *sql.DB, ormdi
 }
 func (portableEngineProfile) OrderedDecimalTextStorage() bool         { return false }
 func (portableEngineProfile) RecordReadIsolation() sql.IsolationLevel { return sql.LevelSerializable }
+func (portableEngineProfile) ReportDateBucket(string, string, bool) (string, error) {
+	return "", fmt.Errorf("database engine does not support report date buckets")
+}
 
 var portableProfileRegistry = map[ormdialect.Name]func() EngineProfile{
 	ormdialect.SQLite: func() EngineProfile { return portableEngineProfile{Profile: ormsqlite.NewProfile()} },

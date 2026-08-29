@@ -51,7 +51,7 @@ func TestReportObjectSQLDialectGoldens(t *testing.T) {
 	for driver, fragments := range wants {
 		t.Run(driver, func(t *testing.T) {
 			args := []any{}
-			emitter := reportObjectSQLEmitter{dialect: objectSQLGoldenDialect{driver: driver}, parameters: map[string]any{"from": "2026-01-01T00:00:00Z"}, args: &args}
+			emitter := reportObjectSQLEmitter{dialect: objectSQLGoldenDialect{driver: driver}, profile: reportTestEngineProfile(driver), parameters: map[string]any{"from": "2026-01-01T00:00:00Z"}, args: &args}
 			statement, err := emitter.statement(plan, ctes)
 			if err != nil {
 				t.Fatal(err)
@@ -75,7 +75,7 @@ func TestReportObjectSQLDialectAppliesRuntimeBoundedPage(t *testing.T) {
 		OrderBy:     []reportmodel.ReportObjectSQLOrder{{Expression: objectSQLField("l", "id", "text"), Direction: "asc"}}, Limit: 1000,
 	}
 	args := []any{}
-	emitter := reportObjectSQLEmitter{dialect: objectSQLGoldenDialect{driver: "postgres"}, args: &args}
+	emitter := reportObjectSQLEmitter{dialect: objectSQLGoldenDialect{driver: "postgres"}, profile: reportTestEngineProfile("postgres"), args: &args}
 	statement, err := emitter.statementPage(plan, []string{`"src" AS (SELECT 1)`}, 400, 200)
 	if err != nil || !strings.Contains(statement, `ORDER BY "l"."id" ASC LIMIT 201 OFFSET 400`) {
 		t.Fatalf("bounded SQL=%q err=%v", statement, err)
@@ -93,7 +93,7 @@ func TestReportObjectSQLPostgresDateBucketCastsTextBackedTemporalTypes(t *testin
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			args := []any{}
-			emitter := reportObjectSQLEmitter{dialect: objectSQLGoldenDialect{driver: "postgres"}, args: &args}
+			emitter := reportObjectSQLEmitter{dialect: objectSQLGoldenDialect{driver: "postgres"}, profile: reportTestEngineProfile("postgres"), args: &args}
 			got, err := emitter.dateBucket(reportmodel.ReportObjectSQLExpression{
 				Kind:  "function",
 				Name:  "date_bucket",
@@ -128,7 +128,7 @@ func TestReportObjectSQLCurrencyResultSerializationKeepsDeclaredScale(t *testing
 		{driver: "postgres", raw: "5.05"},
 		{driver: "mysql", raw: []byte("5.0500")},
 	} {
-		got, err := reportObjectSQLResultValue(test.driver, column, test.raw)
+		got, err := reportObjectSQLResultValue(reportTestEngineProfile(test.driver), column, test.raw)
 		if err != nil || got != "5.05" {
 			t.Fatalf("driver=%s got=%q err=%v", test.driver, got, err)
 		}
@@ -141,16 +141,16 @@ func TestReportObjectSQLNumberAndExactDecimalResultSerialization(t *testing.T) {
 		raw  any
 		want string
 	}{{float64(1.25), "1.25"}, {float32(2.5), "2.5"}, {int64(3), "3"}} {
-		got, err := reportObjectSQLResultValue("sqlite", number, test.raw)
+		got, err := reportObjectSQLResultValue(reportTestEngineProfile("sqlite"), number, test.raw)
 		if err != nil || got != test.want {
 			t.Fatalf("number raw=%#v got=%q err=%v", test.raw, got, err)
 		}
 	}
 	exact := reportmodel.ReportResultColumnSchema{Key: "rate", Type: "decimal", Precision: 8, Scale: 2}
-	if got, err := reportObjectSQLResultValue("sqlite", exact, int64(750)); err != nil || got != "7.50" {
+	if got, err := reportObjectSQLResultValue(reportTestEngineProfile("sqlite"), exact, int64(750)); err != nil || got != "7.50" {
 		t.Fatalf("exact percent got=%q err=%v", got, err)
 	}
-	if _, err := reportObjectSQLResultValue("sqlite", reportmodel.ReportResultColumnSchema{Key: "unsafe", Type: "decimal"}, float64(1.25)); err == nil {
+	if _, err := reportObjectSQLResultValue(reportTestEngineProfile("sqlite"), reportmodel.ReportResultColumnSchema{Key: "unsafe", Type: "decimal"}, float64(1.25)); err == nil {
 		t.Fatal("floating value was accepted as exact decimal")
 	}
 }

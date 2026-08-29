@@ -9,16 +9,17 @@ import (
 	"github.com/shopspring/decimal"
 
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
+	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 )
 
 type reportObjectSQLDialect interface {
-	Driver() string
 	Identifier(string) string
 	Placeholder(int) string
 }
 
 type reportObjectSQLEmitter struct {
 	dialect    reportObjectSQLDialect
+	profile    persistencedriver.EngineProfile
 	parameters map[string]any
 	args       *[]any
 }
@@ -116,7 +117,7 @@ func (e *reportObjectSQLEmitter) expression(expression reportmodel.ReportObjectS
 	switch expression.Kind {
 	case "field":
 		reference := e.dialect.Identifier(expression.Alias) + "." + e.dialect.Identifier(expression.FieldKey)
-		if e.dialect.Driver() == "sqlite" && (expression.Type == "currency" || expression.Type == "decimal" && expression.Precision > 0) {
+		if e.profile.OrderedDecimalTextStorage() && (expression.Type == "currency" || expression.Type == "decimal" && expression.Precision > 0) {
 			return "runtime_decimal_minor(" + reference + ", " + strconv.Itoa(expression.Precision) + ")", nil
 		}
 		return reference, nil
@@ -127,7 +128,7 @@ func (e *reportObjectSQLEmitter) expression(expression reportmodel.ReportObjectS
 		if !exists {
 			return "", fmt.Errorf("missing bound report parameter %s", expression.Name)
 		}
-		if e.dialect.Driver() == "sqlite" && expression.Type == "currency" && value != nil {
+		if e.profile.OrderedDecimalTextStorage() && expression.Type == "currency" && value != nil {
 			parsed, err := decimal.NewFromString(strings.TrimSpace(fmt.Sprint(value)))
 			if err != nil {
 				return "", err
@@ -141,7 +142,7 @@ func (e *reportObjectSQLEmitter) expression(expression reportmodel.ReportObjectS
 		*e.args = append(*e.args, value)
 		return e.dialect.Placeholder(len(*e.args)), nil
 	case "literal":
-		if expression.Type == "currency" && e.dialect.Driver() == "sqlite" {
+		if expression.Type == "currency" && e.profile.OrderedDecimalTextStorage() {
 			parsed, err := decimal.NewFromString(expression.Value)
 			if err != nil {
 				return "", err
@@ -162,7 +163,7 @@ func (e *reportObjectSQLEmitter) expression(expression reportmodel.ReportObjectS
 		if err != nil {
 			return "", err
 		}
-		if e.dialect.Driver() == "sqlite" && expression.Kind == "binary" && expression.Operator == "/" && expression.Type == "currency" {
+		if e.profile.OrderedDecimalTextStorage() && expression.Kind == "binary" && expression.Operator == "/" && expression.Type == "currency" {
 			return "runtime_currency_divide_minor(" + left + ", " + right + ")", nil
 		}
 		return "(" + left + " " + strings.ToUpper(expression.Operator) + " " + right + ")", nil
@@ -268,7 +269,7 @@ func (e *reportObjectSQLEmitter) functionExpression(expression reportmodel.Repor
 		}
 		arguments[index] = value
 	}
-	if e.dialect.Driver() == "sqlite" && expression.Type == "currency" {
+	if e.profile.OrderedDecimalTextStorage() && expression.Type == "currency" {
 		switch expression.Name {
 		case "round":
 			if len(expression.Arguments) == 1 {
@@ -304,13 +305,13 @@ func (e *reportObjectSQLEmitter) aggregateExpression(expression reportmodel.Repo
 	if expression.Distinct {
 		prefix = "DISTINCT "
 	}
-	if e.dialect.Driver() == "sqlite" && expression.Type == "currency" {
+	if e.profile.OrderedDecimalTextStorage() && expression.Type == "currency" {
 		name := map[string]string{"sum": "runtime_decimal_sum_minor", "avg": "runtime_decimal_avg_minor"}[expression.Name]
 		if name != "" {
 			return name + "(" + prefix + arguments[0] + ")", nil
 		}
 	}
-	if e.dialect.Driver() == "sqlite" && expression.Type == "decimal" && expression.Precision > 0 {
+	if e.profile.OrderedDecimalTextStorage() && expression.Type == "decimal" && expression.Precision > 0 {
 		name := map[string]string{"sum": "runtime_decimal_sum_minor", "avg": "runtime_decimal_avg_minor"}[expression.Name]
 		if name != "" {
 			return name + "(" + prefix + arguments[0] + ")", nil
@@ -324,31 +325,5 @@ func (e *reportObjectSQLEmitter) dateBucket(expression reportmodel.ReportObjectS
 	if err != nil {
 		return "", err
 	}
-	grain := expression.Value
-	switch e.dialect.Driver() {
-	case "postgres":
-		castType := "TIMESTAMPTZ"
-		if expression.Arguments[0].Type == "date" {
-			castType = "DATE"
-		}
-		return "DATE_TRUNC('" + grain + "', CAST(" + value + " AS " + castType + "))", nil
-	case "mysql":
-		formats := map[string]string{"day": "%Y-%m-%d 00:00:00", "week": "%x-%v-1 00:00:00", "month": "%Y-%m-01 00:00:00", "year": "%Y-01-01 00:00:00"}
-		if grain == "quarter" {
-			return "STR_TO_DATE(CONCAT(YEAR(" + value + "), '-', LPAD(((QUARTER(" + value + ") - 1) * 3) + 1, 2, '0'), '-01'), '%Y-%m-%d')", nil
-		}
-		format := formats[grain]
-		return "DATE_FORMAT(" + value + ", '" + format + "')", nil
-	case "sqlite":
-		formats := map[string]string{"day": "%Y-%m-%dT00:00:00Z", "month": "%Y-%m-01T00:00:00Z", "year": "%Y-01-01T00:00:00Z"}
-		if grain == "week" {
-			return "strftime('%Y-%m-%dT00:00:00Z', " + value + ", '-' || ((CAST(strftime('%w', " + value + ") AS INTEGER) + 6) % 7) || ' days')", nil
-		}
-		if grain == "quarter" {
-			return "printf('%04d-%02d-01T00:00:00Z', CAST(strftime('%Y', " + value + ") AS INTEGER), ((CAST(strftime('%m', " + value + ") AS INTEGER) - 1) / 3) * 3 + 1)", nil
-		}
-		return "strftime('" + formats[grain] + "', " + value + ")", nil
-	default:
-		return "", fmt.Errorf("unsupported report SQL dialect %q", e.dialect.Driver())
-	}
+	return e.profile.ReportDateBucket(value, expression.Value, expression.Arguments[0].Type == "date")
 }

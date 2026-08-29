@@ -16,6 +16,7 @@ import (
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	querypersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/query"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
+	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 )
 
 var _ reportcontract.ReportObjectSQLExecutor = (*ReportDatasetStore)(nil)
@@ -45,7 +46,7 @@ func (s *ReportDatasetStore) ExecuteReportObjectSQL(ctx context.Context, request
 	result := reportcontract.ReportObjectSQLExecutionResult{Rows: []map[string]string{}}
 	if request.PageSize > 0 {
 		countArgs := append([]any(nil), sourceArgs...)
-		countEmitter := reportObjectSQLEmitter{dialect: s.store, parameters: request.Parameters, args: &countArgs}
+		countEmitter := reportObjectSQLEmitter{dialect: s.store, profile: s.store.RuntimeEngine, parameters: request.Parameters, args: &countArgs}
 		completeStatement, countErr := countEmitter.statement(request.Plan, cteParts)
 		if countErr != nil {
 			return reportcontract.ReportObjectSQLExecutionResult{}, countErr
@@ -63,7 +64,7 @@ func (s *ReportDatasetStore) ExecuteReportObjectSQL(ctx context.Context, request
 		}
 	}
 	args := append([]any(nil), sourceArgs...)
-	emitter := reportObjectSQLEmitter{dialect: s.store, parameters: request.Parameters, args: &args}
+	emitter := reportObjectSQLEmitter{dialect: s.store, profile: s.store.RuntimeEngine, parameters: request.Parameters, args: &args}
 	statement, err := emitter.statementPage(request.Plan, cteParts, request.PageOffset, request.PageSize)
 	if err != nil {
 		return reportcontract.ReportObjectSQLExecutionResult{}, err
@@ -87,7 +88,7 @@ func (s *ReportDatasetStore) ExecuteReportObjectSQL(ctx context.Context, request
 			if raw[index] == nil {
 				continue
 			}
-			normalized, normalizeErr := reportObjectSQLResultValue(s.store.Driver(), column, raw[index])
+			normalized, normalizeErr := reportObjectSQLResultValue(s.store.RuntimeEngine, column, raw[index])
 			if normalizeErr != nil {
 				return reportcontract.ReportObjectSQLExecutionResult{}, normalizeErr
 			}
@@ -148,12 +149,12 @@ func (s *ReportDatasetStore) reportObjectSQLSources(ctx context.Context, tx *sql
 
 func reportObjectSQLCTE(index int) string { return fmt.Sprintf("report_object_sql_source_%d", index) }
 
-func reportObjectSQLResultValue(driver string, column reportmodel.ReportResultColumnSchema, raw any) (string, error) {
+func reportObjectSQLResultValue(profile persistencedriver.EngineProfile, column reportmodel.ReportResultColumnSchema, raw any) (string, error) {
 	if bytes, ok := raw.([]byte); ok {
 		raw = string(bytes)
 	}
 	if column.Type == "currency" {
-		if driver == "sqlite" {
+		if profile.OrderedDecimalTextStorage() {
 			minor, ok := new(big.Int).SetString(strings.TrimSpace(fmt.Sprint(raw)), 10)
 			if !ok {
 				return "", fmt.Errorf("invalid exact currency result for %s", column.Key)
@@ -167,7 +168,7 @@ func reportObjectSQLResultValue(driver string, column reportmodel.ReportResultCo
 		return value.StringFixed(int32(column.Scale)), nil
 	}
 	if column.Type == "decimal" {
-		if driver == "sqlite" && column.Precision > 0 {
+		if profile.OrderedDecimalTextStorage() && column.Precision > 0 {
 			minor, ok := new(big.Int).SetString(strings.TrimSpace(fmt.Sprint(raw)), 10)
 			if !ok {
 				return "", fmt.Errorf("invalid exact decimal result for %s", column.Key)

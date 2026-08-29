@@ -31,6 +31,13 @@ func (engineProfile) WorkspaceTablesQuery(renderer ormdialect.Renderer, database
 func (engineProfile) WorkspaceRLSSupported() bool             { return true }
 func (engineProfile) OrderedDecimalTextStorage() bool         { return false }
 func (engineProfile) RecordReadIsolation() sql.IsolationLevel { return sql.LevelRepeatableRead }
+func (engineProfile) ReportDateBucket(value, grain string, date bool) (string, error) {
+	castType := "TIMESTAMPTZ"
+	if date {
+		castType = "DATE"
+	}
+	return "DATE_TRUNC('" + grain + "', CAST(" + value + " AS " + castType + "))", nil
+}
 
 func (engineProfile) ApplyWorkspaceRLS(ctx context.Context, database *sql.DB, renderer ormdialect.Renderer, databaseSchema, runtimeRole, policyVersion string) error {
 	tables, err := postgresWorkspaceTables(ctx, database, renderer, databaseSchema)
