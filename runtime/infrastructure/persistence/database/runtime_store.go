@@ -353,7 +353,7 @@ func openContextWithDependencies(ctx context.Context, cfg config.Config, depende
 	if postgresProfile != nil {
 		databaseSchema = postgresProfile.Schema
 	}
-	store := &RuntimeStore{SQLStore: base.NewSQLStore(db, dialect.SQLDialect(), databaseSchema), db: db, migrationDB: migrationDB, dialect: dialect, config: cfg, databaseSchema: databaseSchema, postgresProfile: postgresProfile, postgresCapabilities: postgresCapabilities, migratorCapabilities: migratorCapabilities, secretMaterialKey: activeMaterial, secretKeyProvider: keyRing, idempotencyMetrics: idempotency.NewMemoryMetricsCollector(4096), sqlMetrics: sqlMetrics, operationalMetrics: operationalMetrics, workerScopeCursor: &runtimeWorkerScopeCursor{}, workerWakeups: workerplatform.NewWakeupBroker()}
+	store := &RuntimeStore{SQLStore: base.NewSQLStore(db, dialect, databaseSchema), db: db, migrationDB: migrationDB, dialect: dialect, config: cfg, databaseSchema: databaseSchema, postgresProfile: postgresProfile, postgresCapabilities: postgresCapabilities, migratorCapabilities: migratorCapabilities, secretMaterialKey: activeMaterial, secretKeyProvider: keyRing, idempotencyMetrics: idempotency.NewMemoryMetricsCollector(4096), sqlMetrics: sqlMetrics, operationalMetrics: operationalMetrics, workerScopeCursor: &runtimeWorkerScopeCursor{}, workerWakeups: workerplatform.NewWakeupBroker()}
 	var migrationErr error
 	migrationStarted := time.Now()
 	if cfg.EffectiveDatabaseMigrationMode() == "verify" {

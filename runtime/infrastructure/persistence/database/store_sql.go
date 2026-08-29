@@ -10,7 +10,7 @@ import (
 
 func (s *RuntimeStore) sqlBase() *base.SQLStore {
 	if s.SQLStore == nil {
-		s.SQLStore = base.NewSQLStore(s.db, s.dialect.SQLDialect(), s.databaseSchema)
+		s.SQLStore = base.NewSQLStore(s.db, s.dialect, s.databaseSchema)
 	}
 	return s.SQLStore
 }

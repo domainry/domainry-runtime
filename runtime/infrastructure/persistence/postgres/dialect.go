@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	ormdialect "github.com/domainry/domainry-orm/dialect"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -13,6 +14,12 @@ import (
 type Dialect struct{}
 
 func (Dialect) Name() string { return "postgres" }
+
+func (Dialect) TextKeyColumnType(int) string { return "TEXT" }
+
+func (Dialect) ApplyUpdateLock(builder *ormbuilder.SelectBuilder) *ormbuilder.SelectBuilder {
+	return builder.ForUpdate()
+}
 
 func (Dialect) SQLDriver() string { return "pgx" }
 

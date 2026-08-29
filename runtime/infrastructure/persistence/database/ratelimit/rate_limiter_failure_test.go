@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -36,7 +38,8 @@ func TestRateLimiterInputSchemaAndRetryBoundaries(t *testing.T) {
 		state := &rateLimitDBState{execSteps: []rateLimitExecStep{{rows: 1}}}
 		candidate, closeDB := scriptedRateLimiter(t, base, state)
 		defer closeDB()
-		candidate.driver = "mysql"
+		candidate.store.Engine = mysql.Dialect{}
+		candidate.store.SQLRenderer = mysql.Dialect{}.SQLDialect().WithSchema(candidate.store.SQLStore.DatabaseSchema)
 		if err := candidate.EnsureSchema(t.Context()); err != nil {
 			t.Fatal(err)
 		}
@@ -114,8 +117,9 @@ func TestRateLimiterAllowOnceDatabaseStages(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			candidate, closeDB := scriptedRateLimiter(t, base, test.state)
 			defer closeDB()
-			if test.driverName != "" {
-				candidate.driver = test.driverName
+			if test.driverName == "postgres" {
+				candidate.store.Engine = postgres.Dialect{}
+				candidate.store.SQLRenderer = postgres.Dialect{}.SQLDialect().WithSchema(candidate.store.SQLStore.DatabaseSchema)
 			}
 			decision, retry, err := candidate.allowOnce(t.Context(), "key", test.limit, test.window, now)
 			if test.wantErr == errAny {

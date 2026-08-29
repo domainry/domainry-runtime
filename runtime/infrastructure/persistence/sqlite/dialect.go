@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	"github.com/shopspring/decimal"
 
@@ -178,6 +179,12 @@ func sqliteAggregateInteger(value sqldriver.Value) (*big.Int, bool) {
 type Dialect struct{}
 
 func (Dialect) Name() string { return "sqlite" }
+
+func (Dialect) TextKeyColumnType(int) string { return "TEXT" }
+
+func (Dialect) ApplyUpdateLock(builder *ormbuilder.SelectBuilder) *ormbuilder.SelectBuilder {
+	return builder
+}
 
 func (Dialect) SQLDriver() string { return "sqlite" }
 

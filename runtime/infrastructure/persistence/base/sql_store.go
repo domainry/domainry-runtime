@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	ormdialect "github.com/domainry/domainry-orm/dialect"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 )
 
 // SQLStore is the engine-neutral persistence foundation used by Runtime
@@ -16,9 +17,10 @@ type SQLStore struct {
 	DB             *sql.DB
 	SQLRenderer    ormdialect.Renderer
 	DatabaseSchema string
+	Engine         driver.EngineProfile
 }
 
-func NewSQLStore(database *sql.DB, dialect ormdialect.Dialect, schema string) *SQLStore {
+func NewSQLStore(database *sql.DB, engine driver.Dialect, schema string) *SQLStore {
 	schema = strings.TrimSpace(schema)
-	return &SQLStore{DB: database, SQLRenderer: dialect.WithSchema(schema), DatabaseSchema: schema}
+	return &SQLStore{DB: database, SQLRenderer: engine.SQLDialect().WithSchema(schema), DatabaseSchema: schema, Engine: driver.ProfileFor(engine)}
 }

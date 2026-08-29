@@ -19,13 +19,12 @@ type RateLimiter struct {
 	store  *database.RuntimeStore
 	db     *sql.DB
 	schema runtimeschema.SQLDatabase
-	driver string
 	now    func() time.Time
 	ready  atomic.Bool
 }
 
 func NewRateLimiter(store *database.RuntimeStore) *RateLimiter {
-	return &RateLimiter{store: store, db: store.DB(), schema: store.SchemaDB(), driver: store.Driver(), now: time.Now}
+	return &RateLimiter{store: store, db: store.DB(), schema: store.SchemaDB(), now: time.Now}
 }
 
 func (l *RateLimiter) EnsureSchema(ctx context.Context) error {
@@ -40,10 +39,7 @@ func (l *RateLimiter) EnsureSchema(ctx context.Context) error {
 }
 
 func (l *RateLimiter) ensureTable(ctx context.Context) error {
-	keyType := "TEXT"
-	if l.driver == "mysql" {
-		keyType = "VARCHAR(255)"
-	}
+	keyType := l.store.Engine.TextKeyColumnType(255)
 	query := "CREATE TABLE IF NOT EXISTS " + l.store.TableIdentifier("runtime_rate_limit_bucket") + " (" +
 		l.store.Identifier("bucket_key") + " " + keyType + " PRIMARY KEY, " +
 		l.store.Identifier("window_start_ns") + " BIGINT NOT NULL, " +
@@ -85,9 +81,7 @@ func (l *RateLimiter) allowOnce(ctx context.Context, key string, limit int, wind
 	defer func() { _ = tx.Rollback() }()
 	selectBuilder := ormbuilder.NewSelectBuilder(l.store.SQLRenderer, "runtime_rate_limit_bucket").
 		Columns("window_start_ns", "request_count").Where(ormbuilder.Equal("bucket_key", key))
-	if l.driver != "sqlite" {
-		selectBuilder.ForUpdate()
-	}
+	selectBuilder = l.store.Engine.ApplyUpdateLock(selectBuilder)
 	query, args, err := selectBuilder.Build()
 	if err != nil {
 		return ratelimit.Decision{}, false, fmt.Errorf("build rate limit bucket query: %w", err)
