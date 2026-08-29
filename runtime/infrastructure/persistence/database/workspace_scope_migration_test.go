@@ -49,7 +49,7 @@ func TestWorkspaceScopeMigrationReportsLegacyRowsWithoutBackfill(t *testing.T) {
 		t.Fatalf("workspace validation initialized retired report table: count=%d err=%v", reportTableCount, err)
 	}
 	var dirtyMigrationCount int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _runtime_schema_migrations WHERE version = ?`, database.CurrentRuntimeSchemaVersion).Scan(&dirtyMigrationCount); err != nil || dirtyMigrationCount != 0 {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_materializations WHERE version = ?`, database.CurrentRuntimeSchemaVersion).Scan(&dirtyMigrationCount); err != nil || dirtyMigrationCount != 0 {
 		t.Fatalf("workspace preflight left a dirty migration ledger row: count=%d err=%v", dirtyMigrationCount, err)
 	}
 	var missing, blank, legacyDefault sqlNullString

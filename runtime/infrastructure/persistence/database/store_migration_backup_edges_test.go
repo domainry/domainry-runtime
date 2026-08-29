@@ -31,7 +31,7 @@ func TestApplicationTablesDialectAndFailureEdges(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			state := &databaseSQLState{querySteps: []databaseSQLQueryStep{{columns: []string{"name"}, rows: [][]driver.Value{{"zeta"}, {"_schema_migrations"}, {"alpha"}, {"_runtime_schema_migrations"}, {""}}}}}
+			state := &databaseSQLState{querySteps: []databaseSQLQueryStep{{columns: []string{"name"}, rows: [][]driver.Value{{"zeta"}, {"_schema_migrations"}, {"alpha"}, {"_schema_materializations"}, {""}}}}}
 			store := runtimeSchemaStore(t, state)
 			store.dialect = test.dialect
 			store.databaseSchema = "runtime"

@@ -7,7 +7,7 @@
       "object_kind": "table",
       "database": "runtime",
       "schema": "configured_runtime_schema",
-      "object_names": ["_runtime_schema_migrations", "_schema_migrations"],
+      "object_names": ["_schema_materializations", "_schema_migrations"],
       "owner": "database-migration",
       "replacement": "",
       "read_paths": ["runtime/infrastructure/persistence/database/runtime_schema.go", "runtime/infrastructure/persistence/database/store_migrations.go"],

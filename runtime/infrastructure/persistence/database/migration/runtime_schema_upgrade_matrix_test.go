@@ -38,7 +38,7 @@ func TestEverySupportedRuntimeSchemaVersionUpgradesToCurrent(t *testing.T) {
 				t.Fatalf("repeat upgrade %s: %v", version, err)
 			}
 			var currentRows, dirty int
-			if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*), COALESCE(MAX(dirty), 0) FROM _runtime_schema_migrations WHERE version = ?`, CurrentRuntimeSchemaVersion).Scan(&currentRows, &dirty); err != nil || currentRows != 1 || dirty != 0 {
+			if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*), COALESCE(MAX(dirty), 0) FROM _schema_materializations WHERE version = ?`, CurrentRuntimeSchemaVersion).Scan(&currentRows, &dirty); err != nil || currentRows != 1 || dirty != 0 {
 				t.Fatalf("current ledger version=%s rows=%d dirty=%d err=%v", CurrentRuntimeSchemaVersion, currentRows, dirty, err)
 			}
 			var auditWorkspace, workflowLease string

@@ -39,7 +39,7 @@ func (s OperationsStore) OperationsDiagnosticsSnapshot(ctx context.Context, requ
 func (s OperationsStore) operationsMigrationDiagnostics(ctx context.Context) operationsmodel.OperationsDiagnosticsSection {
 	items := []map[string]any{}
 	status := "ready"
-	for _, table := range []string{"_schema_migrations", "_runtime_schema_migrations"} {
+	for _, table := range []string{"_schema_migrations", "_schema_materializations"} {
 		var total, dirty int64
 		query := "SELECT COUNT(*), SUM(CASE WHEN " + s.store.Identifier("dirty") + " THEN 1 ELSE 0 END) FROM " + s.store.TableIdentifier(table)
 		var dirtyValue sql.NullInt64

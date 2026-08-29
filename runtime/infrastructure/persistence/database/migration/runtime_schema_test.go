@@ -33,7 +33,7 @@ func TestRuntimeSchemaMigrationBacksUpExistingDataAndRecordsVersion(t *testing.T
 		t.Fatalf("runtime schema backups=%v error=%v", entries, err)
 	}
 	var applied int
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM _runtime_schema_migrations WHERE version = ?", CurrentRuntimeSchemaVersion).Scan(&applied); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM _schema_materializations WHERE version = ?", CurrentRuntimeSchemaVersion).Scan(&applied); err != nil {
 		t.Fatal(err)
 	}
 	if applied != 1 {
@@ -63,7 +63,7 @@ func TestRuntimeSchemaMigrationFailureLeavesDirtyLedger(t *testing.T) {
 	}
 	var applied int
 	var dirty bool
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*), MAX(dirty) FROM _runtime_schema_migrations WHERE version = ?", CurrentRuntimeSchemaVersion).Scan(&applied, &dirty); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*), MAX(dirty) FROM _schema_materializations WHERE version = ?", CurrentRuntimeSchemaVersion).Scan(&applied, &dirty); err != nil {
 		t.Fatal(err)
 	}
 	if applied != 1 || !dirty {

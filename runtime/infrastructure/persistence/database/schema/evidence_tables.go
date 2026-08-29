@@ -154,7 +154,7 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		{name: "idx_integration_outbox_ack_due", table: "integration_outbox_messages", columns: []string{"status", "ack_deadline_at"}},
 		{name: "uniq_integration_outbox_dedup", table: "integration_outbox_messages", columns: []string{"workspace_id", "connector_key", "connection_key", "operation", "dedup_key"}, unique: true},
 		{name: "uniq_notification_publication_source", table: "notification_publication_outbox", columns: []string{"tenant_id", "workspace_id", "application_key", "source_event_id"}, unique: true},
-		{name: "idx_notification_saas_publication_due", table: "notification_publication_outbox", columns: []string{"status", "next_attempt_at", "lease_expires_at", "created_at"}},
+		{name: "idx_notification_service_publication_due", table: "notification_publication_outbox", columns: []string{"status", "next_attempt_at", "lease_expires_at", "created_at"}},
 		{name: "uniq_integration_credential_refresh_lease", table: "integration_credential_refresh_leases", columns: []string{"workspace_id", "connection_key"}, unique: true},
 		{name: "idx_integration_credential_refresh_lease_expiry", table: "integration_credential_refresh_leases", columns: []string{"lease_expires_at"}},
 		{name: "uniq_integration_secret_material", table: "integration_secret_materials", columns: []string{"workspace_id", "secret_key"}, unique: true},

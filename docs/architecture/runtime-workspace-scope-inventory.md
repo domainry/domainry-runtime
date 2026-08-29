@@ -21,7 +21,7 @@ SaaS mode keeps them in the remote Identity service.
 
 Registered schema tables:
 
-- `_runtime_schema_migrations`, `_schema_migrations` — `installation_scoped`
+- `_schema_materializations`, `_schema_migrations` — `installation_scoped`
 - `runtime_release_cohorts`, `runtime_release_instances` — `installation_scoped`;
   they coordinate one process release identity across the whole Runtime
   installation and must never be partitioned by tenant workspace

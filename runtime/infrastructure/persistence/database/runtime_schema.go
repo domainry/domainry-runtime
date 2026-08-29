@@ -14,7 +14,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-const CurrentRuntimeSchemaVersion = "011_notification_saas_publication_outbox"
+const CurrentRuntimeSchemaVersion = "011_notification_service_publication_outbox"
 
 const (
 	managedDatabaseCohortTable           = "_domainry_managed_runtime_database_cohort"
@@ -123,7 +123,7 @@ func (s *RuntimeStore) recordRuntimeSchemaMigrationIfPending(ctx context.Context
 func (s *RuntimeStore) verifyRuntimeSchema(ctx context.Context) error {
 	var checksum string
 	var dirty bool
-	query := "SELECT " + s.identifier("checksum") + ", " + s.identifier("dirty") + " FROM " + s.tableIdentifier("_runtime_schema_migrations") + " WHERE " + s.identifier("version") + " = " + s.placeholder(1)
+	query := "SELECT " + s.identifier("checksum") + ", " + s.identifier("dirty") + " FROM " + s.tableIdentifier("_schema_materializations") + " WHERE " + s.identifier("version") + " = " + s.placeholder(1)
 	if err := s.db.QueryRowContext(ctx, query, CurrentRuntimeSchemaVersion).Scan(&checksum, &dirty); err != nil {
 		return fmt.Errorf("verify runtime schema compatibility: %w", err)
 	}
@@ -206,22 +206,22 @@ func (s *RuntimeStore) runtimeMigrationConfig() config.Config {
 func (s *RuntimeStore) runtimeSchemaMigrationPending(ctx context.Context, version string) (bool, error) {
 	db := s.schemaDatabase()
 	text := s.metadataIDColumnType()
-	if _, err := db.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.tableIdentifier("_runtime_schema_migrations")+" ("+s.identifier("version")+" "+text+" PRIMARY KEY, "+s.identifier("name")+" "+text+" NOT NULL DEFAULT '', "+s.identifier("kind")+" "+text+" NOT NULL DEFAULT 'runtime_schema_data', "+s.identifier("checksum")+" "+text+" NOT NULL DEFAULT '', "+s.identifier("dirty")+" BOOLEAN NOT NULL DEFAULT FALSE, "+s.identifier("applied_at")+" "+text+" NOT NULL, "+s.identifier("runtime_version")+" "+text+" NOT NULL DEFAULT '', "+s.identifier("duration_ms")+" BIGINT NOT NULL DEFAULT 0, "+s.identifier("operator")+" "+text+" NOT NULL DEFAULT '', "+s.identifier("instance_id")+" "+text+" NOT NULL DEFAULT '', "+s.identifier("backup_id")+" "+text+" NOT NULL DEFAULT '')"); err != nil {
+	if _, err := db.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.tableIdentifier("_schema_materializations")+" ("+s.identifier("version")+" "+text+" PRIMARY KEY, "+s.identifier("name")+" "+text+" NOT NULL DEFAULT '', "+s.identifier("kind")+" "+text+" NOT NULL DEFAULT 'runtime_schema_data', "+s.identifier("checksum")+" "+text+" NOT NULL DEFAULT '', "+s.identifier("dirty")+" BOOLEAN NOT NULL DEFAULT FALSE, "+s.identifier("applied_at")+" "+text+" NOT NULL, "+s.identifier("runtime_version")+" "+text+" NOT NULL DEFAULT '', "+s.identifier("duration_ms")+" BIGINT NOT NULL DEFAULT 0, "+s.identifier("operator")+" "+text+" NOT NULL DEFAULT '', "+s.identifier("instance_id")+" "+text+" NOT NULL DEFAULT '', "+s.identifier("backup_id")+" "+text+" NOT NULL DEFAULT '')"); err != nil {
 		return false, fmt.Errorf("prepare runtime schema migration ledger: %w", err)
 	}
 	columns := []struct{ name, definition string }{{"name", text + " NOT NULL DEFAULT ''"}, {"kind", text + " NOT NULL DEFAULT 'runtime_schema_data'"}, {"checksum", text + " NOT NULL DEFAULT ''"}, {"dirty", "BOOLEAN NOT NULL DEFAULT FALSE"}, {"runtime_version", text + " NOT NULL DEFAULT ''"}, {"duration_ms", "BIGINT NOT NULL DEFAULT 0"}, {"operator", text + " NOT NULL DEFAULT ''"}, {"instance_id", text + " NOT NULL DEFAULT ''"}, {"backup_id", text + " NOT NULL DEFAULT ''"}}
 	for _, column := range columns {
-		rows, queryErr := db.QueryContext(ctx, "SELECT "+s.identifier(column.name)+" FROM "+s.tableIdentifier("_runtime_schema_migrations")+" WHERE 1 = 0")
+		rows, queryErr := db.QueryContext(ctx, "SELECT "+s.identifier(column.name)+" FROM "+s.tableIdentifier("_schema_materializations")+" WHERE 1 = 0")
 		if queryErr == nil {
 			_ = rows.Close()
 			continue
 		}
-		if _, alterErr := db.ExecContext(ctx, "ALTER TABLE "+s.tableIdentifier("_runtime_schema_migrations")+" ADD COLUMN "+s.identifier(column.name)+" "+column.definition); alterErr != nil {
+		if _, alterErr := db.ExecContext(ctx, "ALTER TABLE "+s.tableIdentifier("_schema_materializations")+" ADD COLUMN "+s.identifier(column.name)+" "+column.definition); alterErr != nil {
 			return false, alterErr
 		}
 	}
 	var count int
-	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+s.tableIdentifier("_runtime_schema_migrations")+" WHERE "+s.identifier("version")+" = "+s.placeholder(1), version).Scan(&count); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+s.tableIdentifier("_schema_materializations")+" WHERE "+s.identifier("version")+" = "+s.placeholder(1), version).Scan(&count); err != nil {
 		return false, fmt.Errorf("check runtime schema migration: %w", err)
 	}
 	if count == 0 {
@@ -229,14 +229,14 @@ func (s *RuntimeStore) runtimeSchemaMigrationPending(ctx context.Context, versio
 	}
 	var checksum string
 	var dirty bool
-	if err := db.QueryRowContext(ctx, "SELECT "+s.identifier("checksum")+", "+s.identifier("dirty")+" FROM "+s.tableIdentifier("_runtime_schema_migrations")+" WHERE "+s.identifier("version")+" = "+s.placeholder(1), version).Scan(&checksum, &dirty); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT "+s.identifier("checksum")+", "+s.identifier("dirty")+" FROM "+s.tableIdentifier("_schema_materializations")+" WHERE "+s.identifier("version")+" = "+s.placeholder(1), version).Scan(&checksum, &dirty); err != nil {
 		return false, err
 	}
 	if dirty {
 		return false, fmt.Errorf("migration.dirty: runtime schema %s", version)
 	}
 	if strings.TrimSpace(checksum) == "" {
-		_, err := db.ExecContext(ctx, "UPDATE "+s.tableIdentifier("_runtime_schema_migrations")+" SET "+s.identifier("checksum")+" = "+s.placeholder(1)+" WHERE "+s.identifier("version")+" = "+s.placeholder(2), currentRuntimeSchemaChecksum(), version)
+		_, err := db.ExecContext(ctx, "UPDATE "+s.tableIdentifier("_schema_materializations")+" SET "+s.identifier("checksum")+" = "+s.placeholder(1)+" WHERE "+s.identifier("version")+" = "+s.placeholder(2), currentRuntimeSchemaChecksum(), version)
 		return false, err
 	}
 	if checksum != currentRuntimeSchemaChecksum() {
@@ -247,13 +247,13 @@ func (s *RuntimeStore) runtimeSchemaMigrationPending(ctx context.Context, versio
 
 func (s *RuntimeStore) startRuntimeSchemaMigration(ctx context.Context, version string) error {
 	columns := []string{"version", "name", "kind", "checksum", "dirty", "applied_at", "runtime_version", "duration_ms", "operator", "instance_id", "backup_id"}
-	query := "INSERT INTO " + s.tableIdentifier("_runtime_schema_migrations") + " (" + strings.Join(quotedColumns(s, columns), ", ") + ") VALUES (" + strings.Join(placeholders(s, len(columns)), ", ") + ")"
+	query := "INSERT INTO " + s.tableIdentifier("_schema_materializations") + " (" + strings.Join(quotedColumns(s, columns), ", ") + ") VALUES (" + strings.Join(placeholders(s, len(columns)), ", ") + ")"
 	_, err := s.schemaDatabase().ExecContext(ctx, query, version, "managed_database_cohort", "runtime_schema_data", currentRuntimeSchemaChecksum(), true, time.Now().UTC().Format(time.RFC3339), s.config.RuntimeVersion, 0, migrationOperator(s.config), migrationInstanceID(s.config), s.migrationBackupID)
 	return err
 }
 
 func (s *RuntimeStore) recordRuntimeSchemaMigration(ctx context.Context, version string, duration time.Duration) error {
-	_, err := s.schemaDatabase().ExecContext(ctx, "UPDATE "+s.tableIdentifier("_runtime_schema_migrations")+" SET "+s.identifier("dirty")+" = FALSE, "+s.identifier("duration_ms")+" = "+s.placeholder(1)+", "+s.identifier("applied_at")+" = "+s.placeholder(2)+" WHERE "+s.identifier("version")+" = "+s.placeholder(3), duration.Milliseconds(), time.Now().UTC().Format(time.RFC3339), version)
+	_, err := s.schemaDatabase().ExecContext(ctx, "UPDATE "+s.tableIdentifier("_schema_materializations")+" SET "+s.identifier("dirty")+" = FALSE, "+s.identifier("duration_ms")+" = "+s.placeholder(1)+", "+s.identifier("applied_at")+" = "+s.placeholder(2)+" WHERE "+s.identifier("version")+" = "+s.placeholder(3), duration.Milliseconds(), time.Now().UTC().Format(time.RFC3339), version)
 	if err != nil {
 		return fmt.Errorf("record runtime schema migration: %w", err)
 	}
