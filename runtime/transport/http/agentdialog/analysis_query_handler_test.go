@@ -37,10 +37,10 @@ func (repository *agentAnalysisRecordRepository) ListRecords(_ context.Context, 
 }
 
 type agentAnalysisSchemaProvider struct {
-	snapshot metadatamodel.MetadataSchemaSnapshot
+	snapshot metadatamodel.ApplicationSchemaSnapshot
 }
 
-func (provider agentAnalysisSchemaProvider) SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot {
+func (provider agentAnalysisSchemaProvider) SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
 	return provider.snapshot
 }
 
@@ -51,7 +51,7 @@ type agentAnalysisHTTPResult struct {
 }
 
 func agentAnalysisHandler(repository *agentDialogStateRepository, principal principalmodel.Principal) (*AgentDialogHandler, *agentAnalysisHTTPResult) {
-	snapshot := metadatamodel.MetadataSchemaSnapshot{
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{
 		Objects: []definitionmodel.ObjectSchema{{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}, {Key: "secret", Type: "text"}}}},
 		Reports: []reportmodel.ReportSchema{{Key: "customer.summary"}},
 	}
@@ -181,7 +181,7 @@ func TestAgentDialogAnalysisMaskedFieldsAndResultErrors(t *testing.T) {
 	accessfixture.Mutate(&principal, func(role *accessfixture.Bundle) {
 		role.FieldPolicies = append(role.FieldPolicies, accessfixture.FieldPolicyFixture{ObjectKey: "order", FieldKey: "secret", Read: true, Masked: true})
 	})
-	handler.analysisCatalog = metadataapplication.NewMetadataSchemaApplicationService(agentAnalysisSchemaProvider{snapshot: metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{
+	handler.analysisCatalog = metadataapplication.NewMetadataSchemaApplicationService(agentAnalysisSchemaProvider{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{
 		{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "secret", Type: "text"}}},
 		{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "secret", Type: "text"}}},
 	}}}, nil)

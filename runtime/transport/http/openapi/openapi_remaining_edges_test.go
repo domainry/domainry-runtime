@@ -15,10 +15,10 @@ import (
 )
 
 type openAPISchemaProvider struct {
-	snapshot metadatamodel.MetadataSchemaSnapshot
+	snapshot metadatamodel.ApplicationSchemaSnapshot
 }
 
-func (p openAPISchemaProvider) SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot {
+func (p openAPISchemaProvider) SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
 	return p.snapshot
 }
 
@@ -97,7 +97,7 @@ func TestObjectActionPathsAndConnectorWebhookPathCannotChangeRuntimeRoute(t *tes
 		t.Fatalf("record paths=%v", paths)
 	}
 
-	spec := Build(metadatamodel.MetadataSchemaSnapshot{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{
+	spec := Build(metadatamodel.ApplicationSchemaSnapshot{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{
 		{Key: "empty", Config: nil},
 		{Key: "webhook", Name: "Webhook", Config: map[string]any{"webhook_path": " /hooks/provider "}},
 	}}})
@@ -173,7 +173,7 @@ func TestOpenAPIFieldValidationOptionsAreIndependentlyOptional(t *testing.T) {
 }
 
 func TestOpenAPIHandlerPublishesSnapshotHeadersAndRouteContract(t *testing.T) {
-	snapshot := metadatamodel.MetadataSchemaSnapshot{TemplateID: "runtime", SchemaHash: "schema-hash"}
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{TemplateID: "runtime", SchemaHash: "schema-hash"}
 	service := metadataapplication.NewMetadataSchemaApplicationService(openAPISchemaProvider{snapshot: snapshot}, nil)
 	var status int
 	var value any
@@ -203,11 +203,11 @@ func TestOpenAPIHandlerPublishesSnapshotHeadersAndRouteContract(t *testing.T) {
 }
 
 func TestOpenAPIDefaultTitleUsesProductBrand(t *testing.T) {
-	defaultSpec := Build(metadatamodel.MetadataSchemaSnapshot{})
+	defaultSpec := Build(metadatamodel.ApplicationSchemaSnapshot{})
 	if got := defaultSpec["info"].(map[string]any)["title"]; got != "Generated Domainry API" {
 		t.Fatalf("default title=%v", got)
 	}
-	overridden := BuildWithProductBrand(metadatamodel.MetadataSchemaSnapshot{}, " Acme ")
+	overridden := BuildWithProductBrand(metadatamodel.ApplicationSchemaSnapshot{}, " Acme ")
 	if got := overridden["info"].(map[string]any)["title"]; got != "Generated Acme API" {
 		t.Fatalf("overridden title=%v", got)
 	}

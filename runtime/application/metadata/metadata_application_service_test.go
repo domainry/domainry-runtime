@@ -23,8 +23,8 @@ import (
 	"encoding/json"
 	"errors"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 
 	"testing"
 
@@ -97,12 +97,12 @@ func (r *upsertMetadataRepository) SyncManifest(context.Context, principalmodel.
 }
 
 type upsertMetadataRuntime struct {
-	snapshot metadatamodel.MetadataSchemaSnapshot
+	snapshot metadatamodel.ApplicationSchemaSnapshot
 }
 
 func (*upsertMetadataRuntime) ApplyManifestMetadata(string, string, string, []definitionmodel.ObjectSchema, []definitionmodel.ViewSchema, []definitionmodel.ActionSchema, []definitionmodel.WorkflowSchema, []automationmodel.AutomationRuleSchema, []metadatamodel.DictionarySchema, integrationmodel.IntegrationSchema, []reportmodel.ReportSchema, []definitionmodel.EntryPointSchema, []agentmodel.SkillSchema, []agentmodel.AgentSchema, []profilebindingmodel.Binding) {
 }
-func (r *upsertMetadataRuntime) Schema() metadatamodel.MetadataSchemaSnapshot { return r.snapshot }
+func (r *upsertMetadataRuntime) Schema() metadatamodel.ApplicationSchemaSnapshot { return r.snapshot }
 
 type upsertWorkflowInitializer struct{ err error }
 
@@ -115,8 +115,8 @@ func TestServiceOwnsDefinitionUpsertReloadAndAudit(t *testing.T) {
 		before: metadatamodel.MetadataDefinition{ResourceType: "action", ResourceKey: "order.approve", Payload: json.RawMessage(`{"old":true}`)},
 		saved:  metadatamodel.MetadataDefinition{ResourceType: "action", ResourceKey: "order.approve", SchemaVersion: "2", SchemaHash: "hash-2", Payload: json.RawMessage(`{"new":true}`)},
 	}
-	runtime := &upsertMetadataRuntime{snapshot: metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "order"}}}}
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: repository, Runtime: runtime, Workflows: upsertWorkflowInitializer{}, Audit: auditEventFactoryStub{}})
+	runtime := &upsertMetadataRuntime{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "order"}}}}
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: repository, Runtime: runtime, Workflows: upsertWorkflowInitializer{}, Audit: auditEventFactoryStub{}})
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	definition, snapshot, err := service.upsertMetadataDefinitionWithOptions(t.Context(), " action ", " order.approve ", metadatamodel.MetadataDefinitionUpsertRequest{Payload: json.RawMessage(`{"draft":true}`)}, admin, MetadataUpsertDefinitionOptions{
 		Normalize: func(_ context.Context, resourceType, resourceKey string, request metadatamodel.MetadataDefinitionUpsertRequest) (metadatamodel.MetadataDefinitionUpsertRequest, error) {
@@ -138,7 +138,7 @@ func TestServiceOwnsDefinitionUpsertReloadAndAudit(t *testing.T) {
 func TestDefinitionPublishMarksDurableIntentForReconciliationWhenRuntimeRefreshFails(t *testing.T) {
 	repository := &upsertMetadataRepository{saved: metadatamodel.MetadataDefinition{ResourceType: "action", ResourceKey: "order.approve", SchemaVersion: "1", SchemaHash: "hash-1", Payload: json.RawMessage(`{"new":true}`)}}
 	want := errors.New("workflow refresh unavailable")
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: repository, Runtime: &upsertMetadataRuntime{}, Workflows: upsertWorkflowInitializer{err: want}, Audit: auditEventFactoryStub{}})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: repository, Runtime: &upsertMetadataRuntime{}, Workflows: upsertWorkflowInitializer{err: want}, Audit: auditEventFactoryStub{}})
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	_, _, err := service.upsertMetadataDefinitionWithOptions(t.Context(), "action", "order.approve", metadatamodel.MetadataDefinitionUpsertRequest{Payload: json.RawMessage(`{"draft":true}`)}, admin, MetadataUpsertDefinitionOptions{Normalize: func(_ context.Context, _, _ string, request metadatamodel.MetadataDefinitionUpsertRequest) (metadatamodel.MetadataDefinitionUpsertRequest, error) {
 		return request, nil
@@ -151,8 +151,8 @@ func TestDefinitionPublishMarksDurableIntentForReconciliationWhenRuntimeRefreshF
 func TestServiceDoesNotDuplicateAuditForDefinitionPublishReplay(t *testing.T) {
 	current := metadatamodel.MetadataDefinition{ResourceType: "automation_rule", ResourceKey: "order.sync", SchemaVersion: "3", SchemaHash: "hash-3", Payload: json.RawMessage(`{"key":"order.sync"}`)}
 	repository := &upsertMetadataRepository{before: current, saved: current}
-	runtime := &upsertMetadataRuntime{snapshot: metadatamodel.MetadataSchemaSnapshot{AutomationRules: []automationmodel.AutomationRuleSchema{{Key: "order.sync"}}}}
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: repository, Runtime: runtime, Workflows: upsertWorkflowInitializer{}, Audit: auditEventFactoryStub{}})
+	runtime := &upsertMetadataRuntime{snapshot: metadatamodel.ApplicationSchemaSnapshot{AutomationRules: []automationmodel.AutomationRuleSchema{{Key: "order.sync"}}}}
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: repository, Runtime: runtime, Workflows: upsertWorkflowInitializer{}, Audit: auditEventFactoryStub{}})
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	_, _, err := service.upsertMetadataDefinitionWithOptions(t.Context(), "automation_rule", "order.sync", metadatamodel.MetadataDefinitionUpsertRequest{Payload: current.Payload}, admin, MetadataUpsertDefinitionOptions{
 		Normalize: func(_ context.Context, _, _ string, request metadatamodel.MetadataDefinitionUpsertRequest) (metadatamodel.MetadataDefinitionUpsertRequest, error) {
@@ -165,7 +165,7 @@ func TestServiceDoesNotDuplicateAuditForDefinitionPublishReplay(t *testing.T) {
 }
 
 func TestServiceRejectsDefinitionUpsertWithoutAdmin(t *testing.T) {
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{})
 	_, _, err := service.upsertMetadataDefinitionWithOptions(t.Context(), "action", "order.approve", metadatamodel.MetadataDefinitionUpsertRequest{}, principalmodel.Principal{}, MetadataUpsertDefinitionOptions{})
 	if err == nil {
 		t.Fatal("expected authorization error")
@@ -174,7 +174,7 @@ func TestServiceRejectsDefinitionUpsertWithoutAdmin(t *testing.T) {
 
 func TestServiceOwnsDefinitionDisableImpactReloadAndAudit(t *testing.T) {
 	repository := &upsertMetadataRepository{before: metadatamodel.MetadataDefinition{ResourceType: "action", ResourceKey: "order.approve", Payload: json.RawMessage(`{"key":"order.approve"}`)}}
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: repository, Runtime: &upsertMetadataRuntime{}, Workflows: upsertWorkflowInitializer{}, Audit: auditEventFactoryStub{}})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: repository, Runtime: &upsertMetadataRuntime{}, Workflows: upsertWorkflowInitializer{}, Audit: auditEventFactoryStub{}})
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	audited := false
 	err := service.disableMetadataDefinitionWithOptions(t.Context(), " action ", " order.approve ", admin, MetadataDisableDefinitionOptions{
@@ -195,7 +195,7 @@ func TestServiceOwnsDefinitionDisableImpactReloadAndAudit(t *testing.T) {
 
 func TestServiceBlocksDefinitionDisableBeforeRepositoryMutation(t *testing.T) {
 	repository := &upsertMetadataRepository{}
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: repository})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: repository})
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	err := service.disableMetadataDefinitionWithOptions(t.Context(), "action", "order.approve", admin, MetadataDisableDefinitionOptions{
 		ResolveImpact: func(context.Context, string, string, principalmodel.Principal) (DisableReferenceImpact, error) {
@@ -213,7 +213,7 @@ func TestServiceOwnsDefinitionRollbackContractRepositoryReloadAndAudit(t *testin
 		versions: []metadatamodel.MetadataDefinitionVersion{{SchemaVersion: "2", SchemaHash: "hash-2", Payload: json.RawMessage(`{"version":2}`)}},
 		rollback: metadatamodel.MetadataDefinition{ResourceType: "action", ResourceKey: "order.approve", SchemaVersion: "2", SchemaHash: "hash-2"},
 	}
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: repository, Runtime: &upsertMetadataRuntime{}, Workflows: upsertWorkflowInitializer{}, Audit: auditEventFactoryStub{}})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: repository, Runtime: &upsertMetadataRuntime{}, Workflows: upsertWorkflowInitializer{}, Audit: auditEventFactoryStub{}})
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	request := metadatamodel.MetadataDefinitionRollbackRequest{
 		TargetVersion: "2", ExpectedSchemaHash: "hash-3", ExpectedReferenceGraphHash: "graph-1",

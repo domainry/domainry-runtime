@@ -210,7 +210,8 @@ func TestWorkerLifecycleRetainsPollingRecoveryWhenWakeupIsLost(t *testing.T) {
 			t.Errorf("Runtime worker lifecycle missing durable polling loop %q", required)
 		}
 	}
-	loop, err := os.ReadFile(filepath.Join(root, "platform", "worker", "lifecycle.go"))
+	foundationRoot := filepath.Clean(filepath.Join(root, "..", "..", "domainry-foundation"))
+	loop, err := os.ReadFile(filepath.Join(foundationRoot, "worker", "lifecycle.go"))
 	if err != nil {
 		t.Fatal(err)
 	}

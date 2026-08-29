@@ -359,7 +359,7 @@ func (f evidenceReaderFunc) ListRecords(ctx context.Context, workspace string, o
 
 func TestReportValidationEdges(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}, {Key: "email", Type: "text"}}}
-	snapshot := metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{object}}
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{object}}
 	invalid := reportmodel.ReportSchema{
 		Dataset:              reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "missing", Alias: ""}, Joins: []reportmodel.ReportDatasetJoin{{ObjectKey: "customer", Alias: "customer", LeftAlias: "unknown", LeftField: "id", RightField: "id", Type: "outer", Cardinality: "many_to_many"}}, Filters: []reportmodel.ReportDatasetFilter{{Field: reportmodel.ReportDatasetField{SourceAlias: "unknown", FieldKey: "x"}, Operator: "magic"}}, Measures: []reportmodel.ReportDatasetMeasure{{Key: "total", Operation: "sum"}}, Sort: []reportmodel.ReportDatasetSort{{Key: "missing", Direction: "sideways"}}, Limit: 10001},
 		RequiredPermissions:  []string{"", "unknown", "unknown"},

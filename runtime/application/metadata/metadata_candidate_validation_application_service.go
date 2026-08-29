@@ -25,18 +25,18 @@ import (
 // graph before persistence. This is the system-draft validation boundary:
 // references created, replaced, or removed in the same draft are evaluated as
 // one candidate rather than against the old Runtime one item at a time.
-func (s *MetadataApplicationService) ValidateMetadataCandidate(ctx context.Context, mutations []metadatamodel.MetadataDefinitionMutation) error {
+func (s *ApplicationSchemaService) ValidateMetadataCandidate(ctx context.Context, mutations []metadatamodel.MetadataDefinitionMutation) error {
 	return s.validateMetadataCandidateWithConnectorCatalog(ctx, mutations, nil)
 }
 
 // ValidateCurrentRuntimeDefinitions reuses the Change Plan candidate boundary
 // for the active graph while resolving connector references against the live
 // Runtime catalog, matching bootstrap and manifest validation semantics.
-func (s *MetadataApplicationService) ValidateCurrentRuntimeDefinitions(ctx context.Context, connectorCatalog []integrationmodel.ConnectorSchema) error {
+func (s *ApplicationSchemaService) ValidateCurrentRuntimeDefinitions(ctx context.Context, connectorCatalog []integrationmodel.ConnectorSchema) error {
 	return s.validateMetadataCandidateWithConnectorCatalog(ctx, nil, connectorCatalog)
 }
 
-func (s *MetadataApplicationService) validateMetadataCandidateWithConnectorCatalog(ctx context.Context, mutations []metadatamodel.MetadataDefinitionMutation, connectorCatalog []integrationmodel.ConnectorSchema) error {
+func (s *ApplicationSchemaService) validateMetadataCandidateWithConnectorCatalog(ctx context.Context, mutations []metadatamodel.MetadataDefinitionMutation, connectorCatalog []integrationmodel.ConnectorSchema) error {
 	if s == nil || s.repository == nil {
 		return badRequest("backend.change_plan.candidate_invalid", "diagnostic", "metadata repository is unavailable")
 	}
@@ -68,7 +68,7 @@ func (s *MetadataApplicationService) validateMetadataCandidateWithConnectorCatal
 	return nil
 }
 
-func (s *MetadataApplicationService) validateMetadataCandidateSchedulers(ctx context.Context, candidate manifestmodel.ManifestSchema, mutations []metadatamodel.MetadataDefinitionMutation) error {
+func (s *ApplicationSchemaService) validateMetadataCandidateSchedulers(ctx context.Context, candidate manifestmodel.ManifestSchema, mutations []metadatamodel.MetadataDefinitionMutation) error {
 	installation := metadataInstallationScope("validate composed scheduler definitions")
 	definitions := map[string]map[string]any{}
 	active, err := s.repository.ListDefinitions(ctx, installation, "scheduler")

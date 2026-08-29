@@ -108,7 +108,7 @@ func findInteractiveAgent(agents []agentmodel.AgentSchema, key string) (agentmod
 	return agentmodel.AgentSchema{}, false
 }
 
-func agentToolsForInteractiveAgent(snapshot metadatamodel.MetadataSchemaSnapshot, agent agentmodel.AgentSchema) []string {
+func agentToolsForInteractiveAgent(snapshot metadatamodel.ApplicationSchemaSnapshot, agent agentmodel.AgentSchema) []string {
 	tools := append([]string(nil), agent.Tools...)
 	skills := agentStringSet(agent.SkillKeys)
 	for _, skill := range snapshot.Skills {

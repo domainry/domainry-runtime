@@ -13,7 +13,7 @@ import (
 )
 
 type CapabilityAuthoringSchemaProvider interface {
-	SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot
+	SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
 }
 
 // MetadataSchemaDomainService owns read-only schema and permission projections.
@@ -28,11 +28,11 @@ func NewMetadataSchemaDomainService(schema CapabilityAuthoringSchemaProvider, me
 	return &MetadataSchemaDomainService{schema: schema, metadata: metadata}
 }
 
-func (s *MetadataSchemaDomainService) Snapshot(ctx context.Context) metadatamodel.MetadataSchemaSnapshot {
+func (s *MetadataSchemaDomainService) Snapshot(ctx context.Context) metadatamodel.ApplicationSchemaSnapshot {
 	return s.schema.SchemaForPrincipal(ctx, principalmodel.Principal{})
 }
 
-func (s *MetadataSchemaDomainService) ForPrincipal(ctx context.Context, principal principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot {
+func (s *MetadataSchemaDomainService) ForPrincipal(ctx context.Context, principal principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
 	return s.schema.SchemaForPrincipal(ctx, principal)
 }
 

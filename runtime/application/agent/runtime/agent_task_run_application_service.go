@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 type AgentTaskRunApplicationService struct {

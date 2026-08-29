@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-func openAPISchemas(snapshot metadatamodel.MetadataSchemaSnapshot) map[string]any {
+func openAPISchemas(snapshot metadatamodel.ApplicationSchemaSnapshot) map[string]any {
 	schemas := map[string]any{
 		"Error": map[string]any{
 			"type":       "object",

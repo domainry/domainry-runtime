@@ -20,6 +20,6 @@ type BusinessReferenceImpact = changeplanmodel.ReferenceImpact
 
 const BusinessReferenceGraphVersion = changeplanprojection.ChangePlanReferenceGraphVersion
 
-func NewBusinessChangePlanApplicationService(repository changeplanrepository.ChangePlanRepository, metadata metadatarepository.MetadataRepository, audit auditrepository.AuditRepository, runtime *metadataapplication.MetadataApplicationService) *changeplanapplication.ChangePlanApplicationService {
+func NewBusinessChangePlanApplicationService(repository changeplanrepository.ChangePlanRepository, metadata metadatarepository.MetadataRepository, audit auditrepository.AuditRepository, runtime *metadataapplication.ApplicationSchemaService) *changeplanapplication.ChangePlanApplicationService {
 	return newChangePlanApplicationService(repository, metadata, audit, runtime)
 }

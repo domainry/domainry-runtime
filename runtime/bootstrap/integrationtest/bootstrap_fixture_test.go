@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/audit"
+	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
 
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -170,7 +170,7 @@ func TestRuntimeBusinessOnlyManifestSeedsRuntimeOwnedNavigationAndLogin(t *testi
 		t.Fatalf("expected seeded workflow execution, got %#v", globalExecutions)
 	}
 
-	globalAuditEvents, err := auditpersistence.NewAuditStore(store).ListAuditEvents(t.Context(), "default", auditmodel.AuditEventQuery{Limit: 100})
+	globalAuditEvents, err := auditpersistence.NewRepositoryFromStore(store).ListAuditEvents(t.Context(), "default", auditmodel.AuditEventQuery{Limit: 100})
 	if err != nil {
 		t.Fatal(err)
 	}

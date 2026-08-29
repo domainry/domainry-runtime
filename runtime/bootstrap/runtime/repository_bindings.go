@@ -2,7 +2,6 @@ package runtime
 
 import (
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
-	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationrepository "github.com/domainry/domainry-runtime/runtime/domain/automation/repository"
@@ -15,8 +14,8 @@ import (
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 	workflowrepository "github.com/domainry/domainry-runtime/runtime/domain/workflow/repository"
+	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	actionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/action"
-	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/audit"
 	automationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automation"
 	changeplanpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/changeplan"
 	deploymentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/deployment"
@@ -33,10 +32,9 @@ import (
 var (
 	_ recordrepository.RecordRepository                      = recordpersistence.RecordStore{}
 	_ recordrepository.RecordBusinessSeedRepository          = recordpersistence.RecordStore{}
-	_ auditrepository.AuditRepository                        = auditpersistence.AuditStore{}
-	_ auditrepository.AuditEventWriterRepository             = auditpersistence.AuditStore{}
-	_ auditrepository.AuditEventRepository                   = auditpersistence.AuditStore{}
-	_ auditcontract.AuditBusinessExportStore                 = (*auditpersistence.AuditBusinessExportStore)(nil)
+	_ auditrepository.AuditRepository                        = (*auditpersistence.Repository)(nil)
+	_ auditrepository.AuditEventWriterRepository             = (*auditpersistence.Repository)(nil)
+	_ auditrepository.AuditEventRepository                   = (*auditpersistence.Repository)(nil)
 	_ metadatarepository.MetadataRepository                  = metadatapersistence.MetadataStore{}
 	_ metadatarepository.DefinitionMutationRepository        = metadatapersistence.MetadataStore{}
 	_ integrationrepository.IntegrationConfigRepository      = integrationpersistence.IntegrationConfigStore{}

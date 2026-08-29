@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"

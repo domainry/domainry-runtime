@@ -7,7 +7,7 @@ import (
 )
 
 func TestBackendIntegrationRoutesPublishTypedRuntimeClientContracts(t *testing.T) {
-	paths := Build(metadatamodel.MetadataSchemaSnapshot{})["paths"].(map[string]any)
+	paths := Build(metadatamodel.ApplicationSchemaSnapshot{})["paths"].(map[string]any)
 	for _, item := range []struct {
 		path   string
 		method string
@@ -72,7 +72,7 @@ func TestBackendIntegrationRoutesPublishTypedRuntimeClientContracts(t *testing.T
 }
 
 func TestPersonalInboxAndWorkforcePublishDurableIntegrationContracts(t *testing.T) {
-	paths := Build(metadatamodel.MetadataSchemaSnapshot{})["paths"].(map[string]any)
+	paths := Build(metadatamodel.ApplicationSchemaSnapshot{})["paths"].(map[string]any)
 	inbox := map[string]map[string]string{
 		"/notifications":                                              {"get": "listNotifications"},
 		"/notifications/facets":                                       {"get": "notificationFacets"},

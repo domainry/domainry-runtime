@@ -1,43 +1,21 @@
 package metadata
 
-import auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+import auditmodel "github.com/domainry/domainry-audit-sdk/contract"
+import auditmoduleimpl "github.com/domainry/domainry-audit/module"
+import auditsdk "github.com/domainry/domainry-audit-sdk"
 
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	ormbuilder "github.com/domainry/domainry-orm/builder"
+	runtimeauditmodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 )
 
 func (s MetadataStore) insertMetadataChangeAudit(ctx context.Context, tx *sql.Tx, event auditmodel.AuditEvent) error {
-	if strings.TrimSpace(event.WorkspaceID) == "" {
-		return fmt.Errorf("metadata change audit workspace is required")
-	}
-	before, err := json.Marshal(event.Before)
-	if err != nil {
-		return fmt.Errorf("encode audit before: %w", err)
-	}
-	after, err := json.Marshal(event.After)
-	if err != nil {
-		return fmt.Errorf("encode audit after: %w", err)
-	}
-	metadata, err := json.Marshal(event.Metadata)
-	if err != nil {
-		return fmt.Errorf("encode audit metadata: %w", err)
-	}
-	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "_audit_events", event.WorkspaceID).
-		Columns("id", "event", "object_key", "record_id", "actor_id", "role_key", "summary", "metadata_json", "before_json", "after_json", "created_at").
-		Values(event.ID, event.Event, event.ObjectKey, event.RecordID, event.ActorID, event.RoleKey, event.Summary, string(metadata), string(before), string(after), event.CreatedAt).Build()
-	if buildErr != nil {
-		return fmt.Errorf("build metadata change audit: %w", buildErr)
-	}
-	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
-		return fmt.Errorf("insert metadata change audit: %w", err)
-	}
-	return nil
+	return auditmoduleimpl.AppendPreparedWithin(ctx, auditsdk.DatabaseHandle{Pool: s.store.DB(), Driver: s.store.Driver(), Schema: s.store.DatabaseSchema()}, runtimeauditmodule.NewTransaction(tx), event)
 }
 
 func (s MetadataStore) nextMetadataSchemaVersionTx(ctx context.Context, tx *sql.Tx, resourceType, resourceKey string) (string, error) {

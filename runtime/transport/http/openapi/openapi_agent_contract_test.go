@@ -7,7 +7,7 @@ import (
 )
 
 func TestOpenAPIPublishesVersionedAgentContracts(t *testing.T) {
-	document := Build(metadatamodel.MetadataSchemaSnapshot{})
+	document := Build(metadatamodel.ApplicationSchemaSnapshot{})
 	schemas := document["components"].(map[string]any)["schemas"].(map[string]any)
 	for _, name := range []string{"AgentTaskDefinition", "AgentEntrypointAssignment", "GlobalAgentContextContract", "AgentRoutingContract", "WorkflowAgentTaskNodeContract", "InteractiveAgentHandoff"} {
 		if schemas[name] == nil {

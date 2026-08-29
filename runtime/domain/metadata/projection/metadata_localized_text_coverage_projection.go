@@ -21,7 +21,7 @@ func MetadataLocalizedTextCoverage(
 	workspaceID string,
 	locale string,
 	fallbackLocale string,
-	snapshot metadatamodel.MetadataSchemaSnapshot,
+	snapshot metadatamodel.ApplicationSchemaSnapshot,
 	values []metadatamodel.LocalizedText,
 ) metadatamodel.LocalizedTextCoverageResult {
 	byLocale := make(map[string]metadatamodel.LocalizedText, len(values))
@@ -87,7 +87,7 @@ func MetadataLocalizedTextCoverage(
 	}
 }
 
-func metadataLocalizedTextExpectedItems(snapshot metadatamodel.MetadataSchemaSnapshot) []metadataLocalizedTextExpectedItem {
+func metadataLocalizedTextExpectedItems(snapshot metadatamodel.ApplicationSchemaSnapshot) []metadataLocalizedTextExpectedItem {
 	out := []metadataLocalizedTextExpectedItem{}
 	add := func(entityType string, entityKey string, property string, defaultText string) {
 		entityKey = strings.TrimSpace(entityKey)

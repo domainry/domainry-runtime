@@ -30,12 +30,12 @@ import (
 )
 
 func businessSystemHandlerApplication(featureErr error) *businesssystemapplication.BusinessSystemApplicationService {
-	schema := metadatamodel.MetadataSchemaSnapshot{SchemaHash: "schema-hash"}
+	schema := metadatamodel.ApplicationSchemaSnapshot{SchemaHash: "schema-hash"}
 	return businesssystemapplication.NewBusinessSystemApplicationService(businesssystemapplication.BusinessSystemApplicationDependencies{
 		FeaturePermissions: func(context.Context, principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error) {
 			return recordcontract.RecordFeaturePermissionSnapshot{}, featureErr
 		},
-		SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot { return schema },
+		SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot { return schema },
 		MetadataDefinitions: func(context.Context, string, string, principalmodel.Principal) ([]metadatamodel.MetadataDefinition, error) {
 			return []metadatamodel.MetadataDefinition{}, nil
 		},
@@ -61,7 +61,7 @@ func businessSystemHandlerApplication(featureErr error) *businesssystemapplicati
 			IntegrationOutbox: func(context.Context, string, string, int, principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error) {
 				return []integrationmodel.IntegrationOutboxMessage{}, nil
 			},
-			SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot { return schema },
+			SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot { return schema },
 			SchemaObjectMap: func(context.Context) map[string]definitionmodel.ObjectSchema {
 				return map[string]definitionmodel.ObjectSchema{}
 			},

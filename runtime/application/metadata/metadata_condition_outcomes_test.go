@@ -92,7 +92,7 @@ func TestMetadataRemainingLifecycleConditionOutcomes(t *testing.T) {
 	}
 
 	nonAdmin := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: admin.WorkspaceID, UserID: admin.UserID}}
-	schemaService := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: &metadataSchemaEdgeRepository{}, Dictionary: &metadataDictionaryEdgeRuntime{}})
+	schemaService := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: &metadataSchemaEdgeRepository{}, Dictionary: &metadataDictionaryEdgeRuntime{}})
 	for name, call := range map[string]func() error{
 		"definitions": func() error {
 			_, err := schemaService.ListMetadataDefinitions(t.Context(), "object", "workspace-1", nonAdmin)
@@ -142,7 +142,7 @@ func TestMetadataFieldMutationEarlyReturnConditions(t *testing.T) {
 
 func TestMetadataFinalConditionOutcomes(t *testing.T) {
 	validScope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "nil metadata application watcher")
-	var nilApplication *MetadataApplicationService
+	var nilApplication *ApplicationSchemaService
 	ctx, cancel := context.WithCancel(t.Context())
 	done := nilApplication.StartSnapshotWatcher(ctx, time.Millisecond, validScope)
 	time.Sleep(2 * time.Millisecond)
@@ -150,7 +150,7 @@ func TestMetadataFinalConditionOutcomes(t *testing.T) {
 	<-done
 
 	validDictionary := json.RawMessage(`{"key":"dict","items":[{"key":"root","value":"Root"}]}`)
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{})
 	if _, issues, err := service.ValidateMetadataDefinitionRequestPayload(t.Context(), "dictionary", "dict", metadatamodel.MetadataDefinitionUpsertRequest{Payload: validDictionary}); err != nil || len(issues) != 0 {
 		t.Fatalf("issues=%v err=%v", issues, err)
 	}

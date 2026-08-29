@@ -7,7 +7,7 @@ import (
 )
 
 func TestHighRiskOwnerRoutesPublishIdempotencyAndReceiptHeaders(t *testing.T) {
-	document := Build(metadatamodel.MetadataSchemaSnapshot{})
+	document := Build(metadatamodel.ApplicationSchemaSnapshot{})
 	paths := document["paths"].(map[string]any)
 	for _, item := range []struct{ path, method string }{
 		{path: "/operations/scheduler/runs/{runID}/retry", method: "post"},

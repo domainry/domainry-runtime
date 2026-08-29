@@ -108,7 +108,7 @@ func TestMetadataDictionaryConversionAndNormalization(t *testing.T) {
 }
 
 func TestMetadataLocalizedTextCoverageProjection(t *testing.T) {
-	snapshot := metadatamodel.MetadataSchemaSnapshot{
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{
 		Name: "App", Objects: []definitionmodel.ObjectSchema{{Key: "object", Name: "Object", Description: "", Fields: []definitionmodel.FieldSchema{{Key: "field", Name: "Field", Options: []map[string]any{{"value": "one", "label": "One", "description": "Desc"}, {"value": "", "key": "two", "label": "", "description": ""}, {"value": "three"}, {"value": "", "key": ""}, {}}}}, Validations: []definitionmodel.ValidationSchema{{Key: "", Type: "required", FieldKey: "field", Message: "Required"}, {Key: "explicit", Message: "Explicit"}}}},
 		Views: []definitionmodel.ViewSchema{{Key: "view", Name: "View"}}, Actions: []definitionmodel.ActionSchema{{Key: "action", Label: "Action", PayloadFields: []definitionmodel.ActionPayloadField{{Key: "payload", Name: "Payload"}}}}, Workflows: []definitionmodel.WorkflowSchema{{Key: "workflow", Name: "Workflow"}},
 		Dictionaries: []metadatamodel.DictionarySchema{{Key: "dict", Name: "Dictionary", Items: []metadatamodel.DictionaryItemSchema{{Key: "item", Label: "Item"}, {Value: "value", Description: "Description"}}}}, Reports: []reportmodel.ReportSchema{{Key: "report", Name: "Report"}}, EntryPoints: []definitionmodel.EntryPointSchema{{Key: "entry", Name: "Entry", Description: "Description"}}, Skills: []agentmodel.SkillSchema{{Key: "skill", Name: "Skill", Description: "Description"}}, Agents: []agentmodel.AgentSchema{{Key: "agent", Name: "Agent", Description: "Description"}},
@@ -117,7 +117,7 @@ func TestMetadataLocalizedTextCoverageProjection(t *testing.T) {
 	if len(expected) < 20 {
 		t.Fatalf("expected items too small: %d", len(expected))
 	}
-	_ = metadataLocalizedTextExpectedItems(metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: ""}}})
+	_ = metadataLocalizedTextExpectedItems(metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: ""}}})
 	values := []metadatamodel.LocalizedText{
 		{Locale: "zh-CN", EntityType: "app", EntityKey: "app", Property: "name", Text: "应用", SourceKind: "manual", SourceID: "id"},
 		{Locale: "en-US", EntityType: "object", EntityKey: "object", Property: "description", Text: "Fallback"},
@@ -126,7 +126,7 @@ func TestMetadataLocalizedTextCoverageProjection(t *testing.T) {
 	if result.TotalCount != len(expected) || result.MissingCount == 0 || result.Items[0].Missing != true {
 		t.Fatalf("coverage result = %#v", result)
 	}
-	withoutFallback := MetadataLocalizedTextCoverage("workspace", "zh-CN", "", metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "humanized_key", Fields: []definitionmodel.FieldSchema{{Key: "", Name: ""}}}}}, nil)
+	withoutFallback := MetadataLocalizedTextCoverage("workspace", "zh-CN", "", metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "humanized_key", Fields: []definitionmodel.FieldSchema{{Key: "", Name: ""}}}}}, nil)
 	if withoutFallback.TotalCount == 0 {
 		t.Fatal("empty fallback coverage missing")
 	}

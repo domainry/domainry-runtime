@@ -5,13 +5,13 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/logging"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
@@ -402,7 +402,7 @@ func runLoggedRuntimeWorkerTickWork(ctx context.Context, control *workerplatform
 func (a *Runtime) startMetadataSnapshotWatcher(ctx context.Context) {
 	a.startControlledWorker(ctx, "metadata_snapshot", func(workerCtx context.Context) <-chan struct{} {
 		scope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "watch Runtime metadata snapshot revision")
-		return a.records.Applications().Metadata.StartSnapshotWatcher(workerCtx, 5*time.Second, scope)
+		return a.records.Applications().ApplicationSchema.StartSnapshotWatcher(workerCtx, 5*time.Second, scope)
 	})
 }
 

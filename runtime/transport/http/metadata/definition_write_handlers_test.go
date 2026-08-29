@@ -24,9 +24,9 @@ func newDefinitionWriteHandler(t *testing.T, repository *definitionLifecycleRepo
 	t.Helper()
 	auditRepository := &definitionLifecycleAuditRepository{}
 	auditService := auditapplication.NewAuditApplicationService(auditRepository)
-	definitions := metadataapplication.NewMetadataApplicationService(metadataapplication.MetadataApplicationDependencies{
+	definitions := metadataapplication.NewApplicationSchemaService(metadataapplication.ApplicationSchemaDependencies{
 		Repository: repository,
-		Runtime:    localizedTextHandlerRuntime{snapshot: metadatamodel.MetadataSchemaSnapshot{Name: "Runtime", SchemaHash: "schema-hash", Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}}},
+		Runtime:    localizedTextHandlerRuntime{snapshot: metadatamodel.ApplicationSchemaSnapshot{Name: "Runtime", SchemaHash: "schema-hash", Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}}},
 		Workflows:  definitionLifecycleWorkflows{},
 		Audit:      auditService,
 	})

@@ -40,7 +40,7 @@ func ReportAuthoringDomain() capabilitycontract.CapabilityAuthoringDomain {
 		Sources: []capabilitycontract.CapabilityAuthoringSource{
 			{Kind: "model", Path: "runtime/domain/report/model/report_schema.go", Symbol: "ReportSchema"},
 			{Kind: "validation", Path: "runtime/domain/metadata/validation/metadata_report_validation.go", Symbol: "MetadataValidateReportDefinitionContract"},
-			{Kind: "service", Path: "runtime/application/metadata/metadata_definition_orchestration_application_service.go", Symbol: "MetadataApplicationService.UpsertMetadataDefinition"},
+			{Kind: "service", Path: "runtime/application/metadata/metadata_definition_orchestration_application_service.go", Symbol: "ApplicationSchemaService.UpsertMetadataDefinition"},
 		},
 	}}}
 }

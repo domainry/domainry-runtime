@@ -1,13 +1,15 @@
 package record
 
 import (
+	auditsdk "github.com/domainry/domainry-audit-sdk"
+	auditmoduleimpl "github.com/domainry/domainry-audit/module"
 	ormbuilder "github.com/domainry/domainry-orm/builder"
 
 	"github.com/domainry/domainry-foundation/mutation"
 	"github.com/domainry/domainry-foundation/telemetry"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	transactioncontract "github.com/domainry/domainry-runtime/runtime/domain/transaction/contract"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 
@@ -15,13 +17,14 @@ import (
 	"encoding/json"
 	"fmt"
 
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 
 	"strings"
 	"time"
 
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 
+	runtimeauditmodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 
 	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
@@ -70,23 +73,8 @@ func (r RecordStore) insertAuditEventTx(ctx context.Context, tx TransactionExecu
 	if strings.TrimSpace(event.ID) == "" {
 		return fmt.Errorf("mutation audit requires deterministic id")
 	}
-	before, err := json.Marshal(event.Before)
+	err := auditmoduleimpl.AppendPreparedWithin(ctx, auditsdk.DatabaseHandle{Pool: r.store.DB(), Driver: r.store.Driver(), Schema: r.store.DatabaseSchema()}, runtimeauditmodule.NewTransaction(tx), event)
 	if err != nil {
-		return fmt.Errorf("encode mutation audit before: %w", err)
-	}
-	after, err := json.Marshal(event.After)
-	if err != nil {
-		return fmt.Errorf("encode mutation audit after: %w", err)
-	}
-	metadata, err := json.Marshal(event.Metadata)
-	if err != nil {
-		return fmt.Errorf("encode mutation audit metadata: %w", err)
-	}
-	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_audit_events", event.WorkspaceID).Columns("id", "event", "object_key", "record_id", "actor_id", "role_key", "summary", "metadata_json", "before_json", "after_json", "created_at").Values(event.ID, event.Event, event.ObjectKey, event.RecordID, event.ActorID, event.RoleKey, event.Summary, string(metadata), string(before), string(after), event.CreatedAt).Build()
-	if buildErr != nil {
-		return buildErr
-	}
-	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 		return fmt.Errorf("insert mutation audit: %w", database.MutationConstraintError(err, "audit_event", event.ID, mutation.MutationConflictIdempotency))
 	}
 	return nil

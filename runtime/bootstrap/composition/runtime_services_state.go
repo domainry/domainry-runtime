@@ -5,8 +5,10 @@ import (
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	"sync"
 
+	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
@@ -49,7 +51,6 @@ import (
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	resilience "github.com/domainry/domainry-runtime/runtime/platform/resilience"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 // runtimeAssembly is the private, constructor-only composition graph.
@@ -76,6 +77,8 @@ type runtimeAssembly struct {
 	agentServicePrincipals            []agentmodel.AgentServicePrincipalBinding
 	identityProfileExtensions         []profilebindingmodel.Binding
 	recordRepo                        recordrepository.RecordRepository
+	dataExchange                      dataexchange.Binding
+	dataExchangeProviders             *recordapplication.DataExchangeProviders
 	reportDatasetRows                 reportcontract.ReportDatasetRowReader
 	reportObjectSQL                   reportcontract.ReportObjectSQLExecutor
 	reportSnapshots                   reportcontract.ReportSnapshotStore
@@ -113,7 +116,7 @@ type runtimeAssembly struct {
 	integrationCredentialExpirySource   businessintegration.IntegrationCredentialExpirySource
 	workflowWorkerRepo                  workflowcontract.WorkflowWorkerStore
 	workflowApplicationService          *workflowapplication.WorkflowApplicationService
-	metadataApplicationService          *metadataapplication.MetadataApplicationService
+	applicationSchemaService            *metadataapplication.ApplicationSchemaService
 	automationApplicationService        *automationapplication.AutomationApplicationService
 	workflowDecisionRepo                workflowcontract.WorkflowDecisionStore
 	workflowDefinitionRepo              workflowcontract.WorkflowDefinitionStore

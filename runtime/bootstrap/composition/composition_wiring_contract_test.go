@@ -380,14 +380,14 @@ func TestOptionalMetadataAndIntegrationCompositionFallbacks(t *testing.T) {
 	if foundation.auditApplicationService == nil {
 		t.Fatal("schema foundation did not create fallback audit owner")
 	}
-	if assembleMetadataApplication(nil) == nil {
+	if assembleApplicationSchema(nil) == nil {
 		t.Fatal("nil runtime must still produce a metadata application owner")
 	}
 	if integrationApplication(nil) == nil {
 		t.Fatal("nil runtime must still produce an integration application owner")
 	}
 	runtime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{})
-	if got := assembleMetadataApplication(runtime); got != runtime.metadataApplicationService {
+	if got := assembleApplicationSchema(runtime); got != runtime.applicationSchemaService {
 		t.Fatal("metadata composition did not reuse the canonical owner")
 	}
 	if got := integrationApplication(runtime); got != runtime.integrationService {

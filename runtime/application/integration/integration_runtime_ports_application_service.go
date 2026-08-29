@@ -33,7 +33,7 @@ type IntegrationAutomationApplication interface {
 	ExecuteOutboxMessage(context.Context, integrationmodel.IntegrationOutboxMessage) error
 }
 
-type IntegrationSchemaProvider func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot
+type IntegrationSchemaProvider func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
 type IntegrationSchemaObjectMapProvider func(context.Context) map[string]definitionmodel.ObjectSchema
 type IntegrationActionInvoker func(context.Context, actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error)
 type IntegrationEventWorkflowExecutor func(context.Context, string, integrationmodel.IntegrationEntrypointWorkflowRequest, principalmodel.Principal) (IntegrationWorkflowRunResult, error)

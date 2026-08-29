@@ -94,5 +94,5 @@ func schedulerTestPrincipal(permissions ...string) principalmodel.Principal {
 }
 
 func schedulerTestSchema() schedulerSchemaStub {
-	return schedulerSchemaStub{snapshot: metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "record_timer"}, {Key: "record_timer_event"}}}}
+	return schedulerSchemaStub{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "record_timer"}, {Key: "record_timer_event"}}}}
 }

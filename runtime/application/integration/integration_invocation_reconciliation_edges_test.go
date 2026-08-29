@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 type integrationFixedClock struct{ now time.Time }

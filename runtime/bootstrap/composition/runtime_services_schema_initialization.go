@@ -9,7 +9,7 @@ import (
 
 func initializeSchemaAndRecordFoundation(s *runtimeAssembly, deps RuntimeServicesDependencies) recordQueryPolicyAdapter {
 	if s.auditApplicationService == nil {
-		s.auditApplicationService = auditapplication.NewAuditApplicationService(deps.Audit, deps.AuditExports)
+		s.auditApplicationService = auditapplication.NewAuditApplicationService(deps.Audit)
 	}
 	s.RecordScopeOwnerFactDerivationService = recordservice.NewRecordScopeOwnerFactDerivationDomainService(recordservice.RecordScopeOwnerFactDerivationDependencies{
 		WorkforceDirectory: deps.IdentityDirectory,

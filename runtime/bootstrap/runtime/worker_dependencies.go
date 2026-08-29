@@ -3,7 +3,7 @@ package runtime
 import (
 	"fmt"
 
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 )
 
 func newRuntimeWorkerDependencies(instanceID string) (workerplatform.Dependencies, error) {

@@ -11,7 +11,7 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
-func (s *MetadataApplicationService) normalizeAndValidateFieldMetadataMutation(ctx context.Context, req metadatamodel.MetadataDefinitionUpsertRequest) (metadatamodel.MetadataDefinitionUpsertRequest, error) {
+func (s *ApplicationSchemaService) normalizeAndValidateFieldMetadataMutation(ctx context.Context, req metadatamodel.MetadataDefinitionUpsertRequest) (metadatamodel.MetadataDefinitionUpsertRequest, error) {
 	return MetadataNormalizeFieldMutation(ctx, req, s.runtime.Schema().Objects, metadataauthoring.MetadataAuthoringFieldTypes(), func(ctx context.Context, object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
 		return s.records.ListRecords(ctx, principalmodel.InstallationWorkspaceID, object, query)
 	})
@@ -19,9 +19,9 @@ func (s *MetadataApplicationService) normalizeAndValidateFieldMetadataMutation(c
 
 // ReferenceGraph is a read-only projection used by human and model clients to
 // prepare the same workspace-scoped system draft. Definition mutations are
-// intentionally absent from MetadataApplicationService: reviewed Change Plan
+// intentionally absent from ApplicationSchemaService: reviewed Change Plan
 // publication is the only production authoring command boundary.
-func (s *MetadataApplicationService) ReferenceGraph(ctx context.Context, principal principalmodel.Principal) (changeplanmodel.ReferenceGraph, error) {
+func (s *ApplicationSchemaService) ReferenceGraph(ctx context.Context, principal principalmodel.Principal) (changeplanmodel.ReferenceGraph, error) {
 	if err := metadataAuthorizeQuery(principal); err != nil {
 		return changeplanmodel.ReferenceGraph{}, err
 	}

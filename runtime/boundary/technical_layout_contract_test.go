@@ -269,7 +269,7 @@ func TestRuntimeDomainDependencyMatrixIsClosed(t *testing.T) {
 func TestRuntimeDomainContainsNoApplicationOrProcessLifecycleImplementations(t *testing.T) {
 	domainRoot := filepath.Join(runtimeRoot(t), "domain")
 	forbiddenImports := []string{
-		"github.com/domainry/domainry-runtime/runtime/platform/worker",
+		"github.com/domainry/domainry-foundation/worker",
 		"github.com/domainry/domainry-foundation/logging",
 	}
 	forbiddenMutationPorts := technicalLayoutStringSet("Create", "Update", "Delete", "Restore", "Publish", "InvokeAction", "RunWorkflow", "EmitEvent")
@@ -1457,7 +1457,7 @@ func TestRuntimeLeafOwnerPackagesStayDependencyFree(t *testing.T) {
 		),
 		"localization": {},
 		"transaction": technicalLayoutStringSet(
-			"github.com/domainry/domainry-runtime/runtime/domain/audit/model",
+			"github.com/domainry/domainry-audit-sdk/contract",
 			"github.com/domainry/domainry-runtime/runtime/domain/definition/model",
 			"github.com/domainry/domainry-runtime/runtime/domain/integration/model",
 			"github.com/domainry/domainry-runtime/runtime/domain/record/model",

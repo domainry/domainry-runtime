@@ -90,7 +90,7 @@ func (s *MetadataSchemaApplicationService) PublishedSurfaceContext(ctx context.C
 	}, nil
 }
 
-func (s *MetadataApplicationService) OpsMetadataDiagnostics(ctx context.Context, principal principalmodel.Principal) (OpsMetadataDiagnosticsDTO, error) {
+func (s *ApplicationSchemaService) OpsMetadataDiagnostics(ctx context.Context, principal principalmodel.Principal) (OpsMetadataDiagnosticsDTO, error) {
 	if _, err := principalmodel.QueryScopeForPrincipal(principal); err != nil {
 		return OpsMetadataDiagnosticsDTO{}, &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.workspace_scope_required", Err: err}
 	}

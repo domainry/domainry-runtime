@@ -21,7 +21,7 @@ func (p metadataReferenceEdgeProvider) Graph(context.Context, principalmodel.Pri
 
 func TestMetadataReferenceGraphBoundaries(t *testing.T) {
 	admin := metadataSchemaAdmin()
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{})
 	if _, err := service.ReferenceGraph(t.Context(), principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("authorization error=%v", err)
 	}

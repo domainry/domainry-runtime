@@ -10,8 +10,8 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -93,10 +93,10 @@ func TestMetadataSchemaApplicationAuthorizedDelegation(t *testing.T) {
 		texts:       []metadatamodel.LocalizedText{{WorkspaceID: "workspace-1", Locale: "en-US", Text: "Order"}},
 		upserted:    metadatamodel.LocalizedText{WorkspaceID: "workspace-1", Locale: "en-US", Text: "Saved"},
 	}
-	runtime := &upsertMetadataRuntime{snapshot: metadatamodel.MetadataSchemaSnapshot{Name: "Runtime", Objects: []definitionmodel.ObjectSchema{{Key: "order"}}}}
+	runtime := &upsertMetadataRuntime{snapshot: metadatamodel.ApplicationSchemaSnapshot{Name: "Runtime", Objects: []definitionmodel.ObjectSchema{{Key: "order"}}}}
 	dictionary := &metadataDictionaryEdgeRuntime{}
 	records := &metadataRequiredFieldRecordRepository{}
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: repository, Runtime: runtime, Workflows: upsertWorkflowInitializer{}, Dictionary: dictionary, Records: records})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: repository, Runtime: runtime, Workflows: upsertWorkflowInitializer{}, Dictionary: dictionary, Records: records})
 	admin := metadataSchemaAdmin()
 
 	if snapshot, err := service.ReloadMetadata(t.Context(), admin); err != nil || snapshot.Name != "Runtime" || repository.syncCalls != 1 {
@@ -144,7 +144,7 @@ func TestMetadataSchemaApplicationProjectsEffectiveActionExecutionContract(t *te
 		SourceID:     "source-project",
 		Payload:      json.RawMessage(`{"key":"order.reserve","object_key":"order"}`),
 	}}}
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: repository})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: repository})
 	service.UseActionDefinitionSource(func() []definitionmodel.ActionSchema {
 		return []definitionmodel.ActionSchema{{
 			Key: "order.reserve", ObjectKey: "order",
@@ -176,7 +176,7 @@ func TestMetadataSchemaApplicationProjectsEffectiveActionExecutionContract(t *te
 func TestMetadataSchemaApplicationAuthorizationAndRepositoryErrors(t *testing.T) {
 	edgeErr := errors.New("repository failed")
 	repository := &metadataSchemaEdgeRepository{err: edgeErr}
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: repository, Runtime: &upsertMetadataRuntime{}, Workflows: upsertWorkflowInitializer{}, Dictionary: &metadataDictionaryEdgeRuntime{err: edgeErr}})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: repository, Runtime: &upsertMetadataRuntime{}, Workflows: upsertWorkflowInitializer{}, Dictionary: &metadataDictionaryEdgeRuntime{err: edgeErr}})
 	admin := metadataSchemaAdmin()
 	nonAdmin := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: admin.WorkspaceID, UserID: admin.UserID}}
 
@@ -255,8 +255,8 @@ func TestMetadataSchemaApplicationAuthorizationAndRepositoryErrors(t *testing.T)
 	if _, err := service.MetadataObjectRecordCount(t.Context(), "missing", admin); apperror.CodeOf(err) != "backend.metadata.object_not_found" {
 		t.Fatalf("missing object error=%v", err)
 	}
-	nilRecordsService := NewMetadataApplicationService(MetadataApplicationDependencies{
-		Runtime: &upsertMetadataRuntime{snapshot: metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "order"}}}},
+	nilRecordsService := NewApplicationSchemaService(ApplicationSchemaDependencies{
+		Runtime: &upsertMetadataRuntime{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "order"}}}},
 	})
 	if _, err := nilRecordsService.MetadataObjectRecordCount(t.Context(), "order", admin); apperror.CodeOf(err) != "backend.internal" {
 		t.Fatalf("nil records error=%v", err)
@@ -273,7 +273,7 @@ func TestMetadataCurrentManifestAuthorizationAndRepositoryBoundaries(t *testing.
 		"non admin":         nonAdmin,
 	} {
 		t.Run(name, func(t *testing.T) {
-			service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: &metadataSchemaEdgeRepository{}})
+			service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: &metadataSchemaEdgeRepository{}})
 			if _, err := service.CurrentManifest(t.Context(), principal); apperror.KindOf(err) != apperror.KindForbidden {
 				t.Fatalf("error=%v", err)
 			}
@@ -284,7 +284,7 @@ func TestMetadataCurrentManifestAuthorizationAndRepositoryBoundaries(t *testing.
 		manifest: manifestmodel.ManifestSchema{TemplateID: "template-1"},
 		loadErr:  edgeErr,
 	}
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: repository})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: repository})
 	if _, err := service.CurrentManifest(t.Context(), admin); !errors.Is(err, edgeErr) {
 		t.Fatalf("repository error=%v", err)
 	}
@@ -297,7 +297,7 @@ func TestMetadataCurrentManifestAuthorizationAndRepositoryBoundaries(t *testing.
 
 func TestMetadataReloadReportsManifestSyncFailure(t *testing.T) {
 	edgeErr := errors.New("manifest sync failed")
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{
 		Repository: &metadataSchemaEdgeRepository{
 			manifest: manifestmodel.ManifestSchema{TemplateID: "template-1"},
 			syncErr:  edgeErr,
@@ -312,15 +312,15 @@ func TestMetadataReloadReportsManifestSyncFailure(t *testing.T) {
 
 func TestMetadataObjectRecordCountAuthorizationLookupAndRepositoryFailures(t *testing.T) {
 	admin := metadataSchemaAdmin()
-	if _, err := NewMetadataApplicationService(MetadataApplicationDependencies{}).
+	if _, err := NewApplicationSchemaService(ApplicationSchemaDependencies{}).
 		MetadataObjectRecordCount(t.Context(), "order", principalmodel.Principal{}); apperror.KindOf(err) != apperror.KindForbidden {
 		t.Fatalf("authorization error=%v", err)
 	}
 
 	edgeErr := errors.New("record count failed")
 	records := &metadataRequiredFieldRecordRepository{err: edgeErr}
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{
-		Runtime: &upsertMetadataRuntime{snapshot: metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{
+		Runtime: &upsertMetadataRuntime{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{
 			{Key: "other"},
 			{Key: "order"},
 		}}},
@@ -332,7 +332,7 @@ func TestMetadataObjectRecordCountAuthorizationLookupAndRepositoryFailures(t *te
 }
 
 func TestMetadataEffectiveActionProjectionPreservesUnmatchedAndUnserializableDefinitions(t *testing.T) {
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{})
 	original := []metadatamodel.MetadataDefinition{{ResourceType: "action", ResourceKey: "original"}}
 	if projected := service.withEffectiveActionDefinitions("action", original); len(projected) != 1 || projected[0].ResourceKey != "original" {
 		t.Fatalf("nil-source projection=%#v", projected)
@@ -359,7 +359,7 @@ func TestMetadataEffectiveActionProjectionPreservesUnmatchedAndUnserializableDef
 }
 
 func TestMetadataGetDefinitionReportsCleanNotFound(t *testing.T) {
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: &metadataSchemaEdgeRepository{}})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: &metadataSchemaEdgeRepository{}})
 	value, found, err := service.GetMetadataDefinition(t.Context(), "object", "missing", metadataSchemaAdmin())
 	if err != nil || found || value.ResourceKey != "" {
 		t.Fatalf("definition=%#v found=%v error=%v", value, found, err)

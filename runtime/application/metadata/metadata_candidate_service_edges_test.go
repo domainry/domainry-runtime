@@ -27,29 +27,29 @@ func candidateSchedulerPayload(key, targetType, targetKey string) string {
 }
 
 func TestMetadataCandidateServiceAvailabilityAndRepositoryFailures(t *testing.T) {
-	var nilService *MetadataApplicationService
+	var nilService *ApplicationSchemaService
 	if code := apperror.CodeOf(nilService.ValidateMetadataCandidate(t.Context(), nil)); code != "backend.change_plan.candidate_invalid" {
 		t.Fatalf("nil service code=%q", code)
 	}
-	if code := apperror.CodeOf((&MetadataApplicationService{}).ValidateMetadataCandidate(t.Context(), nil)); code != "backend.change_plan.candidate_invalid" {
+	if code := apperror.CodeOf((&ApplicationSchemaService{}).ValidateMetadataCandidate(t.Context(), nil)); code != "backend.change_plan.candidate_invalid" {
 		t.Fatalf("nil repository code=%q", code)
 	}
 	want := errors.New("manifest unavailable")
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: metadataCandidateRepository{err: want}})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: metadataCandidateRepository{err: want}})
 	if err := service.ValidateMetadataCandidate(t.Context(), nil); !errors.Is(err, want) {
 		t.Fatalf("load manifest error=%v", err)
 	}
 
 	invalid := loadMetadataCandidateFixture(t)
 	invalid.Objects = append(invalid.Objects, invalid.Objects[0])
-	service = NewMetadataApplicationService(MetadataApplicationDependencies{Repository: metadataCandidateRepository{manifest: invalid}})
+	service = NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: metadataCandidateRepository{manifest: invalid}})
 	if code := apperror.CodeOf(service.ValidateMetadataCandidate(t.Context(), nil)); code != "backend.change_plan.candidate_invalid" {
 		t.Fatalf("invalid graph code=%q", code)
 	}
 
 	invalidConnector := loadMetadataCandidateFixture(t)
 	invalidConnector.Integrations.Connectors = []integrationmodel.ConnectorSchema{{Key: "broken"}}
-	service = NewMetadataApplicationService(MetadataApplicationDependencies{Repository: metadataCandidateRepository{manifest: invalidConnector}})
+	service = NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: metadataCandidateRepository{manifest: invalidConnector}})
 	if code := apperror.CodeOf(service.ValidateMetadataCandidate(t.Context(), nil)); code != "backend.change_plan.candidate_invalid" {
 		t.Fatalf("invalid connector code=%q", code)
 	}
@@ -63,7 +63,7 @@ func TestMetadataCandidateServiceAvailabilityAndRepositoryFailures(t *testing.T)
 			Output: []definitionmodel.FieldSchema{{Key: "result", Type: "json"}},
 		}},
 	}}
-	service = NewMetadataApplicationService(MetadataApplicationDependencies{Repository: metadataCandidateRepository{manifest: validConnector}})
+	service = NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: metadataCandidateRepository{manifest: validConnector}})
 	if err := service.ValidateMetadataCandidate(t.Context(), nil); err != nil {
 		t.Fatalf("valid connector candidate: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestMetadataCandidateServiceAvailabilityAndRepositoryFailures(t *testing.T)
 		Key: "customer.invalid", ObjectKey: "customer", Label: "Invalid", Kind: "unsupported",
 		RequiresPermission: "customer.read", AuditEvent: "customer.invalid",
 	}}
-	service = NewMetadataApplicationService(MetadataApplicationDependencies{Repository: metadataCandidateRepository{manifest: invalidAction}})
+	service = NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: metadataCandidateRepository{manifest: invalidAction}})
 	if code := apperror.CodeOf(service.ValidateMetadataCandidate(t.Context(), nil)); code != "backend.change_plan.candidate_invalid" {
 		t.Fatalf("invalid action code=%q", code)
 	}
@@ -85,7 +85,7 @@ func TestMetadataCandidateSchedulerCompositionFailureAndReferenceBoundaries(t *t
 		Reports:   []reportmodel.ReportSchema{{Key: "customer.summary"}},
 	}
 	listFailure := errors.New("scheduler list failed")
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: metadataCandidateRepository{definitionErrs: map[string]error{"scheduler": listFailure}}})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: metadataCandidateRepository{definitionErrs: map[string]error{"scheduler": listFailure}}})
 	if err := service.validateMetadataCandidateSchedulers(t.Context(), manifest, nil); !errors.Is(err, listFailure) {
 		t.Fatalf("list failure=%v", err)
 	}
@@ -106,7 +106,7 @@ func TestMetadataCandidateSchedulerCompositionFailureAndReferenceBoundaries(t *t
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: metadataCandidateRepository{definitions: map[string][]metadatamodel.MetadataDefinition{"scheduler": test.definitions}}})
+			service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: metadataCandidateRepository{definitions: map[string][]metadatamodel.MetadataDefinition{"scheduler": test.definitions}}})
 			err := service.validateMetadataCandidateSchedulers(t.Context(), manifest, test.mutations)
 			if err == nil || !strings.Contains(err.Error(), test.contains) {
 				t.Fatalf("error=%v, want %q", err, test.contains)
@@ -125,7 +125,7 @@ func TestMetadataCandidateSchedulerCompositionFailureAndReferenceBoundaries(t *t
 		candidateMutation("delete", "scheduler", "workflow", "", `{`),
 		candidateMutation("create", "object", "ignored", "", `{`),
 	}
-	service = NewMetadataApplicationService(MetadataApplicationDependencies{Repository: metadataCandidateRepository{definitions: map[string][]metadatamodel.MetadataDefinition{"scheduler": valid}}})
+	service = NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: metadataCandidateRepository{definitions: map[string][]metadatamodel.MetadataDefinition{"scheduler": valid}}})
 	if err := service.validateMetadataCandidateSchedulers(t.Context(), manifest, mutations); err != nil {
 		t.Fatalf("valid scheduler composition: %v", err)
 	}

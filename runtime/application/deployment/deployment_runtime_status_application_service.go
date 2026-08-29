@@ -18,8 +18,8 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/logging"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 	"go.uber.org/zap"
 )
 
@@ -30,7 +30,7 @@ type SchedulerStatusProvider interface {
 }
 
 type RuntimeSchemaProvider interface {
-	SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot
+	SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
 }
 
 type IdempotencyMetricsProvider interface {

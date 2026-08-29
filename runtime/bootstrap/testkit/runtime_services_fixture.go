@@ -4,8 +4,8 @@ import (
 	"context"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
+	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	actionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/action"
-	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/audit"
 	automationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automation"
 	changeplanpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/changeplan"
 	deploymentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/deployment"
@@ -66,7 +66,7 @@ func focusedPersistenceDependencies(config RuntimeServicesConfig) composition.Ru
 		ReportSnapshots:       reportpersistence.NewReportSnapshotStore(config.Store),
 		ReportExportArtifacts: reportpersistence.NewReportExportArtifactStore(config.Store),
 		ReportSnapshotSources: reportDataset,
-		Audit:                 auditpersistence.NewAuditStore(config.Store),
+		Audit:                 auditpersistence.NewRepositoryFromStore(config.Store),
 		IntegrationConfig:     integrationpersistence.NewIntegrationConfigStore(config.Store),
 		IntegrationEvents:     integrationpersistence.NewIntegrationEventStore(config.Store),
 		IntegrationDelivery:   integrationpersistence.NewIntegrationDeliveryStore(config.Store),

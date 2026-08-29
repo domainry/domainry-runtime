@@ -1,23 +1,27 @@
 package record
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	exchangecontract "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	"github.com/domainry/domainry-runtime/pkg/dataexchange"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 const recordBatchResultChunkBytes = 1 << 20
@@ -26,6 +30,7 @@ type RecordBatchJobDependencies struct {
 	Store                 recordcontract.RecordBatchJobStore
 	Importer              *RecordImportApplicationService
 	Exporter              *RecordExportApplicationService
+	DataExchange          exchangecontract.Binding
 	ResolvePrincipal      func(context.Context, string, string) principalmodel.Principal
 	Audit                 func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
 	QueueLimit            int
@@ -86,7 +91,10 @@ func (w recordBatchPageWriter) Chunks(ctx context.Context, job recordmodel.Recor
 }
 
 type recordBatchImportPayload struct {
-	CSV string `json:"csv"`
+	CSV          string `json:"csv,omitempty"`
+	SourceSHA256 string `json:"source_sha256,omitempty"`
+	SourceBytes  int    `json:"source_bytes,omitempty"`
+	SourceChunks int    `json:"source_chunks,omitempty"`
 }
 
 type recordBatchExportPayload struct {
@@ -196,17 +204,57 @@ func (s *RecordBatchJobApplicationService) FindOwnedByIdempotency(ctx context.Co
 }
 
 func (s *RecordBatchJobApplicationService) EnqueueImport(ctx context.Context, objectKey string, rawCSV []byte, key string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, bool, error) {
+	return s.EnqueueImportStream(ctx, objectKey, bytes.NewReader(rawCSV), objectKey+".csv", "text/csv", int64(len(rawCSV)), key, principal)
+}
+
+func (s *RecordBatchJobApplicationService) EnqueueImportStream(ctx context.Context, objectKey string, source io.Reader, filename, contentType string, maxBytes int64, key string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, bool, error) {
 	if err := recordAuthorizeCommand(principal); err != nil {
 		return recordmodel.RecordBatchJob{}, false, err
 	}
 	if strings.TrimSpace(key) == "" {
 		return recordmodel.RecordBatchJob{}, false, apperror.New(apperror.KindBadRequest, idempotency.ErrorCodeMissingKey, nil, map[string]string{"use_case": "record.import.async"})
 	}
+	if s != nil && s.dependencies.DataExchange != nil {
+		job, replayed, err := s.dependencies.DataExchange.SubmitImport(ctx, exchangecontract.ImportRequest{Scope: exchangeScope(principal), Provider: "records", ObjectKey: strings.TrimSpace(objectKey), IdempotencyKey: key, Filename: filename, ContentType: contentType, Source: source, MaxBytes: maxBytes})
+		if err != nil {
+			if errors.Is(err, exchangecontract.ErrSourceTooLarge) {
+				return recordmodel.RecordBatchJob{}, false, apperror.New(apperror.KindBadRequest, "backend.import.payload_too_large", err, nil)
+			}
+			if errors.Is(err, exchangecontract.ErrSourceUnreadable) {
+				return recordmodel.RecordBatchJob{}, false, apperror.New(apperror.KindBadRequest, "backend.import.read_csv_failed", err, nil)
+			}
+			return recordmodel.RecordBatchJob{}, false, err
+		}
+		return recordJobFromExchange(job), replayed, nil
+	}
+	rawCSV, err := io.ReadAll(io.LimitReader(source, recordImportMaxBytes+1))
+	if err != nil {
+		return recordmodel.RecordBatchJob{}, false, apperror.New(apperror.KindBadRequest, "backend.import.read_csv_failed", err, nil)
+	}
+	if int64(len(rawCSV)) > recordImportMaxBytes {
+		return recordmodel.RecordBatchJob{}, false, apperror.New(apperror.KindBadRequest, "backend.import.payload_too_large", nil, nil)
+	}
 	if s == nil || s.dependencies.Store == nil || s.dependencies.Importer == nil {
 		return recordmodel.RecordBatchJob{}, false, apperror.New(apperror.KindInternal, "backend.record_batch.unavailable", nil, nil)
 	}
-	// recordBatchImportPayload contains only a string, so JSON encoding cannot fail.
-	payload, _ := json.Marshal(recordBatchImportPayload{CSV: string(rawCSV)})
+	sourceDigest := sha256.Sum256(rawCSV)
+	sourceChunks := make([]recordmodel.RecordBatchJobChunk, 0, (len(rawCSV)+recordBatchResultChunkBytes-1)/recordBatchResultChunkBytes)
+	chunker, _ := dataexchange.NewChunkWriter(ctx, recordBatchResultChunkBytes, func(_ context.Context, chunk dataexchange.Chunk) error {
+		sourceChunks = append(sourceChunks, recordmodel.RecordBatchJobChunk{WorkspaceID: principal.WorkspaceID, Sequence: chunk.Sequence, Content: string(chunk.Content)})
+		return nil
+	})
+	if _, err := chunker.Write(rawCSV); err != nil {
+		return recordmodel.RecordBatchJob{}, false, err
+	}
+	if err := chunker.Close(); err != nil {
+		return recordmodel.RecordBatchJob{}, false, err
+	}
+	sourceStore, durableSource := s.dependencies.Store.(recordcontract.RecordBatchJobSourceEnqueuer)
+	metadata := recordBatchImportPayload{SourceSHA256: hex.EncodeToString(sourceDigest[:]), SourceBytes: len(rawCSV), SourceChunks: len(sourceChunks)}
+	if !durableSource {
+		metadata = recordBatchImportPayload{CSV: string(rawCSV)}
+	}
+	payload, _ := json.Marshal(metadata)
 	if replay, found, err := s.preflightEnqueue(ctx, principal.WorkspaceID, "import", objectKey, key, string(payload)); err != nil || found {
 		return replay, found, err
 	}
@@ -216,7 +264,16 @@ func (s *RecordBatchJobApplicationService) EnqueueImport(ctx context.Context, ob
 	if err := s.admitEnqueue(ctx, principal.WorkspaceID); err != nil {
 		return recordmodel.RecordBatchJob{}, false, err
 	}
-	job, replayed, err := s.dependencies.Store.EnqueueRecordBatchJob(ctx, recordmodel.RecordBatchJob{WorkspaceID: principal.WorkspaceID, Kind: "import", ObjectKey: strings.TrimSpace(objectKey), IdempotencyKey: key, PayloadJSON: string(payload), ActorID: principal.UserID, RoleKey: principal.RoleKey})
+	jobInput := recordmodel.RecordBatchJob{WorkspaceID: principal.WorkspaceID, Kind: "import", ObjectKey: strings.TrimSpace(objectKey), IdempotencyKey: key, PayloadJSON: string(payload), ActorID: principal.UserID, RoleKey: principal.RoleKey}
+	var job recordmodel.RecordBatchJob
+	var replayed bool
+	if durableSource {
+		job, replayed, err = sourceStore.EnqueueRecordBatchJobWithSource(ctx, jobInput, sourceChunks)
+	} else {
+		// Compatibility for simple external stores during the contract migration.
+		// Production stores implement the atomic source capability.
+		job, replayed, err = s.dependencies.Store.EnqueueRecordBatchJob(ctx, jobInput)
+	}
 	if errors.Is(err, recordcontract.ErrRecordBatchJobIdempotencyConflict) {
 		return recordmodel.RecordBatchJob{}, false, apperror.New(apperror.KindConflict, idempotency.ErrorCodeKeyReused, err, map[string]string{"use_case": "record.import.async"})
 	}
@@ -234,6 +291,22 @@ func (s *RecordBatchJobApplicationService) EnqueueExport(ctx context.Context, ob
 	}
 	if strings.TrimSpace(key) == "" {
 		return recordmodel.RecordBatchJob{}, false, apperror.New(apperror.KindBadRequest, idempotency.ErrorCodeMissingKey, nil, map[string]string{"use_case": "record.export.async"})
+	}
+	if s != nil && s.dependencies.DataExchange != nil {
+		evidence, err := s.dependencies.Exporter.authorizeForBatch(ctx, objectKey, principal, options)
+		if err != nil {
+			return recordmodel.RecordBatchJob{}, false, err
+		}
+		options.AssuranceToken = ""
+		payload, err := json.Marshal(recordBatchExportPayload{Options: options, AssuranceEvidence: evidence})
+		if err != nil {
+			return recordmodel.RecordBatchJob{}, false, err
+		}
+		job, replayed, err := s.dependencies.DataExchange.SubmitExport(ctx, exchangecontract.ExportRequest{Scope: exchangeScope(principal), Provider: "records", ObjectKey: strings.TrimSpace(objectKey), IdempotencyKey: key, Options: payload})
+		if err != nil {
+			return recordmodel.RecordBatchJob{}, false, err
+		}
+		return recordJobFromExchange(job), replayed, nil
 	}
 	if s == nil || s.dependencies.Store == nil || s.dependencies.Exporter == nil {
 		return recordmodel.RecordBatchJob{}, false, apperror.New(apperror.KindInternal, "backend.record_batch.unavailable", nil, nil)
@@ -270,6 +343,13 @@ func (s *RecordBatchJobApplicationService) EnqueueExport(ctx context.Context, ob
 func (s *RecordBatchJobApplicationService) Get(ctx context.Context, jobID string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, error) {
 	if err := recordAuthorizeQuery(principal); err != nil {
 		return recordmodel.RecordBatchJob{}, err
+	}
+	if s != nil && s.dependencies.DataExchange != nil && strings.HasPrefix(strings.TrimSpace(jobID), "data_exchange:") {
+		job, err := s.dependencies.DataExchange.Job(ctx, exchangecontract.JobRequest{Scope: exchangeScope(principal), JobID: strings.TrimSpace(jobID)})
+		if err != nil {
+			return recordmodel.RecordBatchJob{}, err
+		}
+		return recordJobFromExchange(job), nil
 	}
 	if s == nil || s.dependencies.Store == nil {
 		return recordmodel.RecordBatchJob{}, apperror.New(apperror.KindInternal, "backend.record_batch.unavailable", nil, nil)
@@ -329,6 +409,29 @@ func (s *RecordBatchJobApplicationService) Download(ctx context.Context, jobID s
 	if job.Status != "completed" || job.Kind != "export" {
 		return recordmodel.RecordBatchJob{}, nil, apperror.New(apperror.KindConflict, "backend.record_batch.result_not_ready", nil, nil)
 	}
+	if s.dependencies.DataExchange != nil && strings.HasPrefix(job.ID, "data_exchange:") {
+		artifact, err := s.dependencies.DataExchange.Download(ctx, exchangecontract.JobRequest{Scope: exchangeScope(principal), JobID: job.ID})
+		if err != nil {
+			return recordmodel.RecordBatchJob{}, nil, err
+		}
+		defer artifact.Content.Close()
+		chunks := make([]recordmodel.RecordBatchJobChunk, 0)
+		buffer := make([]byte, recordBatchResultChunkBytes)
+		for sequence := 0; ; sequence++ {
+			n, readErr := io.ReadFull(artifact.Content, buffer)
+			if n > 0 {
+				chunks = append(chunks, recordmodel.RecordBatchJobChunk{WorkspaceID: principal.WorkspaceID, JobID: job.ID, Sequence: sequence, Content: string(buffer[:n])})
+			}
+			if readErr == io.EOF || readErr == io.ErrUnexpectedEOF {
+				break
+			}
+			if readErr != nil {
+				return recordmodel.RecordBatchJob{}, nil, readErr
+			}
+		}
+		job.ResultFilename, job.ResultType, job.ResultChunks = artifact.Filename, artifact.ContentType, len(chunks)
+		return job, chunks, nil
+	}
 	chunks, err := s.dependencies.Store.ListRecordBatchJobChunks(ctx, principal.WorkspaceID, job.ID)
 	if err == nil && s.dependencies.Audit != nil {
 		hasher := sha256.New()
@@ -347,6 +450,40 @@ func (s *RecordBatchJobApplicationService) Download(ctx context.Context, jobID s
 		})
 	}
 	return job, chunks, err
+}
+
+func (s *RecordBatchJobApplicationService) OpenDownload(ctx context.Context, jobID string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, io.ReadCloser, error) {
+	job, err := s.Get(ctx, jobID, principal)
+	if err != nil {
+		return recordmodel.RecordBatchJob{}, nil, err
+	}
+	if job.Status != "completed" || job.Kind != "export" {
+		return recordmodel.RecordBatchJob{}, nil, apperror.New(apperror.KindConflict, "backend.record_batch.result_not_ready", nil, nil)
+	}
+	if s.dependencies.DataExchange != nil && strings.HasPrefix(job.ID, "data_exchange:") {
+		artifact, err := s.dependencies.DataExchange.Download(ctx, exchangecontract.JobRequest{Scope: exchangeScope(principal), JobID: job.ID})
+		if err != nil {
+			return recordmodel.RecordBatchJob{}, nil, err
+		}
+		job.ResultFilename, job.ResultType, job.ResultArtifactID = artifact.Filename, artifact.ContentType, artifact.ID
+		return job, artifact.Content, nil
+	}
+	_, chunks, err := s.Download(ctx, jobID, principal)
+	if err != nil {
+		return recordmodel.RecordBatchJob{}, nil, err
+	}
+	readers := make([]io.Reader, len(chunks))
+	for i := range chunks {
+		readers[i] = strings.NewReader(chunks[i].Content)
+	}
+	return job, io.NopCloser(io.MultiReader(readers...)), nil
+}
+
+func exchangeScope(principal principalmodel.Principal) exchangecontract.Scope {
+	return exchangecontract.Scope{WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID, RoleKey: principal.RoleKey, RequestID: principal.RequestID}
+}
+func recordJobFromExchange(job exchangecontract.Job) recordmodel.RecordBatchJob {
+	return recordmodel.RecordBatchJob{ID: job.ID, WorkspaceID: job.WorkspaceID, Kind: job.Operation, ObjectKey: job.ObjectKey, ActorID: job.ActorID, RoleKey: job.RoleKey, Status: job.Status, Checkpoint: job.Checkpoint, Total: job.Total, ResultArtifactID: job.ArtifactID, ErrorCode: job.ErrorCode, CreatedAt: job.CreatedAt.Format(time.RFC3339Nano), UpdatedAt: job.UpdatedAt.Format(time.RFC3339Nano)}
 }
 
 func (s *RecordBatchJobApplicationService) admitEnqueue(ctx context.Context, workspaceID string) error {

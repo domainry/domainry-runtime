@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"time"
 
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -15,7 +16,6 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	schedulercontract "github.com/domainry/domainry-runtime/runtime/domain/scheduler/contract"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 type schedulerMetadataDefinitionSource struct {

@@ -7,16 +7,16 @@ import (
 	"errors"
 	"strings"
 
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 
 	"time"
 

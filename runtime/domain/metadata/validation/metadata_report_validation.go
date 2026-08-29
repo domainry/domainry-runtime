@@ -15,11 +15,11 @@ import (
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
-func MetadataValidateReportDefinition(ctx context.Context, workspaceID string, snapshot metadatamodel.MetadataSchemaSnapshot, records metadatacontract.MetadataReportEvidenceReader, report reportmodel.ReportSchema) error {
+func MetadataValidateReportDefinition(ctx context.Context, workspaceID string, snapshot metadatamodel.ApplicationSchemaSnapshot, records metadatacontract.MetadataReportEvidenceReader, report reportmodel.ReportSchema) error {
 	return MetadataFirstDefinitionIssueError(MetadataValidateReportDefinitionIssues(ctx, workspaceID, snapshot, records, report))
 }
 
-func MetadataValidateReportDefinitionIssues(ctx context.Context, workspaceID string, snapshot metadatamodel.MetadataSchemaSnapshot, records metadatacontract.MetadataReportEvidenceReader, report reportmodel.ReportSchema) []metadatamodel.MetadataDefinitionValidationIssue {
+func MetadataValidateReportDefinitionIssues(ctx context.Context, workspaceID string, snapshot metadatamodel.ApplicationSchemaSnapshot, records metadatacontract.MetadataReportEvidenceReader, report reportmodel.ReportSchema) []metadatamodel.MetadataDefinitionValidationIssue {
 	validator := reportDefinitionValidator{workspaceID: workspaceID, snapshot: snapshot, records: records, report: report, issues: []metadatamodel.MetadataDefinitionValidationIssue{}}
 	validator.loadRuntimeReferences()
 	validator.validateIdentity()
@@ -32,7 +32,7 @@ func MetadataValidateReportDefinitionIssues(ctx context.Context, workspaceID str
 
 // MetadataValidateReportDefinitionContract omits live-record evidence availability,
 // which belongs to an already-started Runtime instance.
-func MetadataValidateReportDefinitionContract(ctx context.Context, snapshot metadatamodel.MetadataSchemaSnapshot, report reportmodel.ReportSchema) []metadatamodel.MetadataDefinitionValidationIssue {
+func MetadataValidateReportDefinitionContract(ctx context.Context, snapshot metadatamodel.ApplicationSchemaSnapshot, report reportmodel.ReportSchema) []metadatamodel.MetadataDefinitionValidationIssue {
 	validator := reportDefinitionValidator{snapshot: snapshot, report: report, issues: []metadatamodel.MetadataDefinitionValidationIssue{}, requireObjectSQLExplicitBounds: true}
 	validator.loadRuntimeReferences()
 	validator.validateIdentity()
@@ -45,7 +45,7 @@ func MetadataValidateReportDefinitionContract(ctx context.Context, snapshot meta
 
 type reportDefinitionValidator struct {
 	workspaceID string
-	snapshot    metadatamodel.MetadataSchemaSnapshot
+	snapshot    metadatamodel.ApplicationSchemaSnapshot
 	records     metadatacontract.MetadataReportEvidenceReader
 	report      reportmodel.ReportSchema
 	objects     map[string]definitionmodel.ObjectSchema

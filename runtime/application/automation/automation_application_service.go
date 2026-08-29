@@ -33,10 +33,10 @@ import (
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 
 	apperror "github.com/domainry/domainry-foundation/apperror"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	automationbusiness "github.com/domainry/domainry-runtime/runtime/domain/automation/service"
 	automationvalidation "github.com/domainry/domainry-runtime/runtime/domain/automation/validation"
 	capability "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 type AutomationConnectorCatalog interface {
@@ -61,7 +61,7 @@ type AutomationApplicationDependencies struct {
 	ConfigRepository      integrationrepository.IntegrationConfigRepository
 	Audit                 func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
 	Principal             func(context.Context, string, string, string) principalmodel.Principal
-	Schema                func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot
+	Schema                func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
 	InvokeAction          func(context.Context, actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error)
 	Workflows             AutomationWorkflowRunner
 	Metadata              AutomationMetadataDefinitionPort
@@ -92,7 +92,7 @@ type AutomationApplicationService struct {
 	configRepo          integrationrepository.IntegrationConfigRepository
 	audit               func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
 	principal           func(context.Context, string, string, string) principalmodel.Principal
-	schema              func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot
+	schema              func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
 	invokeAction        func(context.Context, actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error)
 	workflows           AutomationWorkflowRunner
 	metadata            AutomationMetadataDefinitionPort

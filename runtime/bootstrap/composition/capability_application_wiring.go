@@ -10,7 +10,7 @@ import (
 )
 
 type CapabilityAuthoringSchemaProvider interface {
-	SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot
+	SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
 }
 
 // CanonicalSchemaProvider exposes Runtime-owned schema facts to internal
@@ -18,7 +18,7 @@ type CapabilityAuthoringSchemaProvider interface {
 // projection: authorization filters are applied only at the consuming
 // application boundary.
 type CanonicalSchemaProvider interface {
-	Schema() metadatamodel.MetadataSchemaSnapshot
+	Schema() metadatamodel.ApplicationSchemaSnapshot
 }
 
 func newCapabilityAuthoringApplicationService(schema CapabilityAuthoringSchemaProvider) *capabilityapplication.CapabilityAuthoringApplicationService {

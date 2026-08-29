@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/mutation"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
+	workertestkit "github.com/domainry/domainry-foundation/worker/testkit"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
-	workertestkit "github.com/domainry/domainry-runtime/runtime/platform/worker/testkit"
 )
 
 type integrationEventWorkerEdgeRepository struct {

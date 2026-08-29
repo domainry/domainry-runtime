@@ -67,8 +67,8 @@ func (r *metadataWatcherRuntime) ApplyManifestMetadata(_ string, _ string, name 
 	r.names = append(r.names, name)
 }
 
-func (r *metadataWatcherRuntime) Schema() metadatamodel.MetadataSchemaSnapshot {
-	return metadatamodel.MetadataSchemaSnapshot{}
+func (r *metadataWatcherRuntime) Schema() metadatamodel.ApplicationSchemaSnapshot {
+	return metadatamodel.ApplicationSchemaSnapshot{}
 }
 
 type metadataWatcherWorkflowStub struct{}
@@ -80,7 +80,7 @@ func (metadataWatcherWorkflowStub) InitializePublishedWorkflowDefinitions(contex
 func TestSnapshotWatcherReloadsOnlyAfterSharedRevisionChanges(t *testing.T) {
 	repository := &metadataWatcherRepository{revision: "r1", manifest: manifestmodel.ManifestSchema{Name: "one"}}
 	runtime := &metadataWatcherRuntime{}
-	application := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: repository, Runtime: runtime, Workflows: metadataWatcherWorkflowStub{}})
+	application := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: repository, Runtime: runtime, Workflows: metadataWatcherWorkflowStub{}})
 	ctx, cancel := context.WithCancel(t.Context())
 	done := application.StartSnapshotWatcher(ctx, 5*time.Millisecond, principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "test metadata snapshot watcher"))
 	time.Sleep(15 * time.Millisecond)

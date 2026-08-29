@@ -7,7 +7,7 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"

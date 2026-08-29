@@ -23,9 +23,9 @@ import (
 	"strings"
 	"time"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/mutation"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 )
 
 type RecordRestoreDependencies struct {

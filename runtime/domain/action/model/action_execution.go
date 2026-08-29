@@ -1,7 +1,7 @@
 package actionmodel
 
 import (
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"time"
 
 	"github.com/domainry/domainry-foundation/idempotency"

@@ -13,6 +13,7 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent"
 	agentruntime "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
@@ -21,7 +22,6 @@ import (
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	agentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/agent"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 )
 

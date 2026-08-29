@@ -64,7 +64,7 @@ func TestRoutePolicyUsesRegisteredPatternInsteadOfUserPathSegments(t *testing.T)
 
 func TestRuntimeRoutesAndOpenAPIDoNotDrift(t *testing.T) {
 	routes := declaredRuntimeRoutes(t)
-	spec := runtimeopenapi.Build(metadatamodel.MetadataSchemaSnapshot{})
+	spec := runtimeopenapi.Build(metadatamodel.ApplicationSchemaSnapshot{})
 	paths, ok := spec["paths"].(map[string]any)
 	if !ok {
 		t.Fatal("OpenAPI paths missing")
@@ -143,7 +143,7 @@ func TestRuntimePublishesOneInboundWebhookRoute(t *testing.T) {
 		t.Fatalf("inbound webhook routes=%v want=[%s]", webhookRoutes, want)
 	}
 
-	spec := runtimeopenapi.Build(metadatamodel.MetadataSchemaSnapshot{})
+	spec := runtimeopenapi.Build(metadatamodel.ApplicationSchemaSnapshot{})
 	paths := spec["paths"].(map[string]any)
 	webhookPaths := make([]string, 0)
 	for path := range paths {

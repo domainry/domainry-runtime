@@ -13,7 +13,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-func newChangePlanApplicationService(repository changeplanrepository.ChangePlanRepository, metadata metadatarepository.MetadataRepository, audit auditrepository.AuditRepository, runtime *metadataapplication.MetadataApplicationService, actionServices ...*actionapplication.ActionApplicationService) *changeplanapplication.ChangePlanApplicationService {
+func newChangePlanApplicationService(repository changeplanrepository.ChangePlanRepository, metadata metadatarepository.MetadataRepository, audit auditrepository.AuditRepository, runtime *metadataapplication.ApplicationSchemaService, actionServices ...*actionapplication.ActionApplicationService) *changeplanapplication.ChangePlanApplicationService {
 	var runtimePort changeplanapplication.Runtime
 	if runtime != nil {
 		runtimePort = changePlanMetadataRuntimeAdapter{metadata: runtime}
@@ -23,7 +23,7 @@ func newChangePlanApplicationService(repository changeplanrepository.ChangePlanR
 }
 
 type changePlanMetadataRuntimeAdapter struct {
-	metadata *metadataapplication.MetadataApplicationService
+	metadata *metadataapplication.ApplicationSchemaService
 }
 
 func (adapter changePlanMetadataRuntimeAdapter) ValidateMetadataDefinitionPayload(ctx context.Context, resourceType, resourceKey string, request metadatamodel.MetadataDefinitionUpsertRequest) (metadatamodel.MetadataDefinitionUpsertRequest, error) {

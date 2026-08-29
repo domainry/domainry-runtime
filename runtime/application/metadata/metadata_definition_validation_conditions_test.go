@@ -10,8 +10,8 @@ import (
 )
 
 func TestMetadataDefinitionRequestPayloadCoversObjectPreferenceRuleSetAndReferenceIssues(t *testing.T) {
-	runtime := &upsertMetadataRuntime{snapshot: metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "order"}}}}
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Runtime: runtime, Repository: &upsertMetadataRepository{}})
+	runtime := &upsertMetadataRuntime{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "order"}}}}
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Runtime: runtime, Repository: &upsertMetadataRepository{}})
 	if _, issues, err := service.ValidateMetadataDefinitionRequestPayload(t.Context(), "action", "bad", metadatamodel.MetadataDefinitionUpsertRequest{Payload: json.RawMessage(`{`)}); err != nil || len(issues) != 1 {
 		t.Fatalf("malformed action issues=%#v err=%v", issues, err)
 	}
@@ -50,7 +50,7 @@ func TestMetadataDefinitionPayloadCoversPreferenceRuleSetIdentityBindingAndValid
 		ObjectKey: "other", IdentityRelationField: "identity_user", Cardinality: "one_to_one", DefaultVisibility: "when_readable",
 		BusinessIdentity: profilebindingmodel.BusinessIdentityBinding{Key: "member", SurfaceKeys: []string{"portal"}},
 	}
-	runtime := &upsertMetadataRuntime{snapshot: metadatamodel.MetadataSchemaSnapshot{
+	runtime := &upsertMetadataRuntime{snapshot: metadatamodel.ApplicationSchemaSnapshot{
 		Objects: []definitionmodel.ObjectSchema{
 			{Key: "identity_user"},
 			{Key: "person"},
@@ -58,7 +58,7 @@ func TestMetadataDefinitionPayloadCoversPreferenceRuleSetIdentityBindingAndValid
 		},
 		IdentityProfileExtensions: []profilebindingmodel.Binding{binding},
 	}}
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Runtime: runtime})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Runtime: runtime})
 	preference := metadatamodel.MetadataDefinitionUpsertRequest{Payload: json.RawMessage(`{"key":"policy.limit","name":"Limit","value_type":"integer","value":10,"effective_from":"2026-01-01"}`)}
 	if normalized, err := service.ValidateMetadataDefinitionPayload(t.Context(), "preference", preference); err != nil || len(normalized.Payload) == 0 {
 		t.Fatalf("preference=%s err=%v", normalized.Payload, err)

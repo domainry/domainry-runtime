@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/logging"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 func (a *Runtime) startLifecycleCleanupWorker(ctx context.Context) {

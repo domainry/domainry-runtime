@@ -8,13 +8,13 @@ import (
 	"strings"
 	"time"
 
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	ormbuilder "github.com/domainry/domainry-orm/builder"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationspolicy "github.com/domainry/domainry-runtime/runtime/domain/operations/policy"
 	operationsrepository "github.com/domainry/domainry-runtime/runtime/domain/operations/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 var _ operationsrepository.OperationsRepository = OperationsStore{}

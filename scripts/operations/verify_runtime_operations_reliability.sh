@@ -67,8 +67,8 @@ deterministic_gate() {
     ./runtime/domain/operations/... \
     ./runtime/application/operations \
     ./runtime/infrastructure/persistence/database/operations
+  run_test foundation-worker go -C ../domainry-foundation test -count=1 -timeout=5m ./worker/...
   run_test worker-recovery go test -count=1 -timeout=5m \
-    ./runtime/platform/worker/... \
     ./runtime/application/integration \
     ./runtime/bootstrap/runtime
   run_test protocol-observability go test -count=1 -timeout=5m \
@@ -87,8 +87,8 @@ deterministic_gate() {
 }
 
 race_gate() {
+  run_test race-foundation-worker go -C ../domainry-foundation test -race -count=1 -timeout=20m ./worker/...
   run_test race-core go test -race -count=1 -timeout=20m \
-    ./runtime/platform/worker/... \
     ./runtime/platform/capacity \
     ./runtime/platform/ratelimit \
     ./runtime/platform/resilience \

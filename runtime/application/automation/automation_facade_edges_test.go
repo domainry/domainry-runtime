@@ -85,8 +85,8 @@ func newAutomationFacade(registry *automationFacadeRegistry, metadata *automatio
 		Rules:      registry,
 		Connectors: automationFacadeConnectorCatalog{schema: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "erp"}}}},
 		Metadata:   metadata,
-		Schema: func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot {
-			return metadatamodel.MetadataSchemaSnapshot{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "erp"}}}}
+		Schema: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+			return metadatamodel.ApplicationSchemaSnapshot{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "erp"}}}}
 		},
 		Principal: func(_ context.Context, userID, roleKey, _ string) principalmodel.Principal {
 			return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: userID}}, accessfixture.Bundle{Key: roleKey, Permissions: []string{"workspace.admin"}})
@@ -361,8 +361,8 @@ func TestAutomationFacadeExecutesPureBeforeConditionAndDerivationWithoutIO(t *te
 	audits := []string{}
 	service := NewAutomationApplicationService(AutomationApplicationDependencies{
 		Rules: registry, Connectors: automationFacadeConnectorCatalog{},
-		Schema: func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot {
-			return metadatamodel.MetadataSchemaSnapshot{}
+		Schema: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+			return metadatamodel.ApplicationSchemaSnapshot{}
 		},
 		Audit: func(_ context.Context, event, _, _ string, _ principalmodel.Principal, _ string, _, _, _ map[string]any) {
 			audits = append(audits, event)

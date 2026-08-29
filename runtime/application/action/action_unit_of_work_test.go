@@ -18,7 +18,7 @@ import (
 
 	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
 
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 

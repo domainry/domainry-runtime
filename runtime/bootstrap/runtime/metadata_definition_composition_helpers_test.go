@@ -36,7 +36,7 @@ import (
 func TestMetadataDefinitionCompositionReusesOwnerValidationForSystemDraftCandidates(t *testing.T) {
 	application, admin := newMetadataCompositionApp(t, "definition-validation", []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}, {Key: "order", Name: "Order"}}, nil)
 	defer application.CloseContext(t.Context())
-	metadata := application.records.Applications().Metadata
+	metadata := application.records.Applications().ApplicationSchema
 	definitionsBeforePreview, err := metadata.ListMetadataDefinitions(t.Context(), "field", "default", admin)
 	if err != nil {
 		t.Fatal(err)

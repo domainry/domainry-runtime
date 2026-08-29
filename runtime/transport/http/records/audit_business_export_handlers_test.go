@@ -7,58 +7,34 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-type recordsBusinessAuditExportStore struct {
-	artifact auditmodel.AuditBusinessExportArtifact
-}
+type recordsBusinessAuditExporter struct{}
 
-func (s *recordsBusinessAuditExportStore) CreateOrGetBusinessAuditExport(_ context.Context, value auditmodel.AuditBusinessExportArtifact) (auditmodel.AuditBusinessExportArtifact, bool, error) {
-	if s.artifact.ID != "" {
-		return s.artifact, false, nil
-	}
-	s.artifact = value
-	return value, true, nil
+func (*recordsBusinessAuditExporter) ConfigureExport([]byte, auditmodel.ExportAuthorizer) {}
+func (*recordsBusinessAuditExporter) PrepareExport(context.Context, auditmodel.AuditBusinessExportRequest, string, auditmodel.ExportPrincipal) (auditmodel.ExportPrepared, error) {
+	return auditmodel.ExportPrepared{ID: "export-1", ReportSource: "business_audit_events", Filename: "audit.csv", ContentSHA256: "hash", RowCount: 1, AuditIdentity: "identity", ScopeSHA256: "scope", DownloadToken: "token-token-token-token-token-token-token-token-token-token-token-token-token-token-token-token", ExpiresAt: "2026-08-30T00:00:00Z"}, nil
 }
-
-func (s *recordsBusinessAuditExportStore) BusinessAuditExportByTokenHash(_ context.Context, workspaceID, tokenHash string) (auditmodel.AuditBusinessExportArtifact, bool, error) {
-	return s.artifact, s.artifact.WorkspaceID == workspaceID && s.artifact.TokenSHA256 == tokenHash, nil
-}
-
-func (s *recordsBusinessAuditExportStore) RecordBusinessAuditExportDownload(_ context.Context, workspaceID, artifactID, downloadedAt string) (bool, error) {
-	if s.artifact.WorkspaceID != workspaceID || s.artifact.ID != artifactID {
-		return false, nil
-	}
-	if s.artifact.DownloadCount > 0 {
-		return false, nil
-	}
-	s.artifact.DownloadCount = 1
-	s.artifact.LastDownloadedAt = downloadedAt
-	return true, nil
+func (*recordsBusinessAuditExporter) DownloadExport(context.Context, string, auditmodel.ExportPrincipal) ([]byte, string, error) {
+	return []byte("audit_id,event\naudit-1,order.completed\n"), "audit.csv", nil
 }
 
 func TestBusinessAuditExportHandlersRejectUnknownFiltersAndReturnServerBytes(t *testing.T) {
-	now := time.Date(2026, 8, 12, 1, 2, 3, 0, time.UTC)
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "auditor"}}, accessfixture.Bundle{
 		Key: "business-auditor", RecordScope: "all_records", Permissions: []string{auditapplication.PermissionBusinessAuditRead, auditapplication.PermissionBusinessAuditExport},
 	})
-	repository := &recordsAuditRepository{events: []auditmodel.AuditEvent{{
-		ID: "audit-1", Event: "order.completed", ObjectKey: "order", RecordID: "order-1", ActorID: "auditor", Metadata: map[string]any{"result": "completed", "secret": "hidden"}, CreatedAt: now.Format(time.RFC3339),
-	}}}
-	store := &recordsBusinessAuditExportStore{}
-	service := auditapplication.NewAuditApplicationService(repository, store)
+	repository := &recordsAuditRepository{}
+	service := auditapplication.NewAuditApplicationService(repository, &recordsBusinessAuditExporter{})
 	service.ConfigureBusinessExport([]byte("0123456789abcdef0123456789abcdef"), nil)
-	service.SetBusinessExportClock(func() time.Time { return now })
 	handler, serviceErr := recordsHandlerForTest(principal)
 	handler.audit = service
 

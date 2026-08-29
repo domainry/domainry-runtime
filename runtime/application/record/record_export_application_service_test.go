@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-runtime/pkg/dataexchange"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -192,9 +193,10 @@ func TestExportServiceAuditsUnknownPrincipalDenial(t *testing.T) {
 }
 
 func TestExportServiceBoundsOutputAndHonorsCancellation(t *testing.T) {
-	buffer := recordExportBuffer{limit: 3}
-	if _, err := buffer.Write([]byte("four")); !errors.Is(err, errRecordExportTooLarge) || len(buffer.Bytes()) != 0 {
-		t.Fatalf("bounded buffer accepted oversized write: bytes=%q err=%v", buffer.Bytes(), err)
+	var output strings.Builder
+	buffer := dataexchange.BoundedWriter{Writer: &output, Limit: 3}
+	if _, err := buffer.Write([]byte("four")); !errors.Is(err, dataexchange.ErrPayloadTooLarge) || output.Len() != 0 {
+		t.Fatalf("bounded buffer accepted oversized write: bytes=%q err=%v", output.String(), err)
 	}
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
 	service := NewRecordExportApplicationService(RecordExportDependencies{

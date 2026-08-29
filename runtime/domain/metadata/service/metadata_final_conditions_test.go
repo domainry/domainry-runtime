@@ -13,7 +13,7 @@ import (
 )
 
 func TestMetadataSchemaFacadeDoesNotDeriveGuardedWritesFromActionConfig(t *testing.T) {
-	provider := schemaServiceProviderStub{snapshot: metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}}}
+	provider := schemaServiceProviderStub{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}}}
 	service := NewMetadataSchemaDomainService(provider, nil)
 	if got := service.ForPrincipal(t.Context(), principalmodel.Principal{}); len(got.Objects) != 1 {
 		t.Fatalf("principal snapshot=%#v", got)
@@ -52,7 +52,7 @@ func TestMetadataVisibilityRemainingCompoundOperands(t *testing.T) {
 	if !actionAllowed(principal, definitionmodel.ActionSchema{ObjectKey: "customer", RequiresPermission: "customer.approve"}) {
 		t.Fatal("explicit action permission denied")
 	}
-	snapshot := metadatamodel.MetadataSchemaSnapshot{
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{
 		Objects:       []definitionmodel.ObjectSchema{{Key: "customer"}},
 		GuardedWrites: []metadatamodel.MetadataGuardedWriteContract{{ObjectKey: "hidden", ActionKey: "hidden.action"}},
 	}

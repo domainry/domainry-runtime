@@ -76,7 +76,7 @@ func TestRecordTimerRetryPolicyDefaultsValidationAndBackoff(t *testing.T) {
 func TestFailRecordTimerReleasesLeaseRetriesAndFencesStaleWorker(t *testing.T) {
 	now := time.Date(2026, 7, 21, 9, 0, 0, 0, time.UTC)
 	object := definitionmodel.ObjectSchema{Key: "record_timer"}
-	schema := schedulerSchemaStub{snapshot: metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{object, {Key: "record_timer_event"}}}}
+	schema := schedulerSchemaStub{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{object, {Key: "record_timer_event"}}}}
 	var saved recordmodel.Record
 	var conditions map[string]any
 	repository := &schedulerRepositoryFake{commit: func(_ context.Context, workspaceID string, commits []transactionmodel.RecordMutationCommit) error {

@@ -11,7 +11,7 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
 
-func SchemaSnapshotHash(snapshot metadatamodel.MetadataSchemaSnapshot) string {
+func SchemaSnapshotHash(snapshot metadatamodel.ApplicationSchemaSnapshot) string {
 	snapshot.SchemaHash, snapshot.SnapshotVersion = "", ""
 	payload, _ := json.Marshal(snapshot)
 	hash := sha256.Sum256(payload)

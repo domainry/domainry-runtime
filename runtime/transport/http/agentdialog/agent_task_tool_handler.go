@@ -6,10 +6,10 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	agentruntime "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 type agentTaskToolInvokeRequest struct {

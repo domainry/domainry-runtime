@@ -18,7 +18,7 @@ import (
 )
 
 func TestPublishedRuntimeSchemaOmitsAdministrationAndInternalConfiguration(t *testing.T) {
-	snapshot := metadatamodel.MetadataSchemaSnapshot{
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{
 		TemplateID: "template", TemplateVersion: "1", SchemaHash: "hash", SnapshotVersion: "snapshot",
 		Objects: []definitionmodel.ObjectSchema{{
 			Key: "order", Name: "Order",
@@ -47,7 +47,7 @@ func TestPublishedRuntimeSchemaOmitsAdministrationAndInternalConfiguration(t *te
 }
 
 func TestPublishedSurfaceContextIsBoundToBackendPrincipalSurface(t *testing.T) {
-	service := NewMetadataSchemaApplicationService(metadataSchemaApplicationProviderStub{snapshot: metadatamodel.MetadataSchemaSnapshot{SchemaHash: "hash"}}, nil)
+	service := NewMetadataSchemaApplicationService(metadataSchemaApplicationProviderStub{snapshot: metadatamodel.ApplicationSchemaSnapshot{SchemaHash: "hash"}}, nil)
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "user-a"}, SurfaceKey: "consumer_portal",
 
 		ActiveBusinessProfile: &profilebindingmodel.Reference{BindingKey: "customer-profile"},
@@ -64,11 +64,11 @@ func TestPublishedSurfaceContextIsBoundToBackendPrincipalSurface(t *testing.T) {
 
 func TestOpsMetadataDiagnosticsRequiresExplicitPermissionAndReturnsOnlyCompatibilityFacts(t *testing.T) {
 	repository := &metadataWatcherRepository{revision: "revision-7"}
-	runtime := &upsertMetadataRuntime{snapshot: metadatamodel.MetadataSchemaSnapshot{
+	runtime := &upsertMetadataRuntime{snapshot: metadatamodel.ApplicationSchemaSnapshot{
 		SchemaHash: "schema-hash", SnapshotVersion: "snapshot-7", TemplateVersion: "3",
 		Objects: []definitionmodel.ObjectSchema{{Key: "order"}}, Actions: []definitionmodel.ActionSchema{{Key: "order.submit"}},
 	}}
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: repository, Runtime: runtime})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: repository, Runtime: runtime})
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	if _, err := service.OpsMetadataDiagnostics(t.Context(), principal); apperror.KindOf(err) != apperror.KindForbidden {
 		t.Fatalf("workspace.admin unexpectedly granted metadata Ops diagnostics: %v", err)
@@ -86,7 +86,7 @@ func TestOpsMetadataDiagnosticsRequiresExplicitPermissionAndReturnsOnlyCompatibi
 
 func TestMetadataSurfaceUseCasesRejectMissingScopeAndCoverOptionalContext(t *testing.T) {
 	schemaService := NewMetadataSchemaApplicationService(
-		metadataSchemaApplicationProviderStub{snapshot: metadatamodel.MetadataSchemaSnapshot{SchemaHash: "hash"}},
+		metadataSchemaApplicationProviderStub{snapshot: metadatamodel.ApplicationSchemaSnapshot{SchemaHash: "hash"}},
 		nil,
 	)
 	unknown := principalmodel.Principal{}
@@ -103,7 +103,7 @@ func TestMetadataSurfaceUseCasesRejectMissingScopeAndCoverOptionalContext(t *tes
 		t.Fatalf("surface context=%+v err=%v", result, err)
 	}
 
-	application := NewMetadataApplicationService(MetadataApplicationDependencies{})
+	application := NewApplicationSchemaService(ApplicationSchemaDependencies{})
 	if _, err := application.OpsMetadataDiagnostics(t.Context(), unknown); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("ops diagnostics scope err=%v", err)
 	}
@@ -115,14 +115,14 @@ func TestMetadataSurfaceUseCasesRejectMissingScopeAndCoverOptionalContext(t *tes
 func TestOpsMetadataDiagnosticsRejectsEveryUnavailableDependency(t *testing.T) {
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{PermissionMetadataOpsRead}})
 	repository := &metadataWatcherRepository{revision: "revision"}
-	runtime := &upsertMetadataRuntime{snapshot: metadatamodel.MetadataSchemaSnapshot{SchemaHash: "hash"}}
+	runtime := &upsertMetadataRuntime{snapshot: metadatamodel.ApplicationSchemaSnapshot{SchemaHash: "hash"}}
 	tests := []struct {
 		name    string
-		service *MetadataApplicationService
+		service *ApplicationSchemaService
 	}{
 		{name: "nil service"},
-		{name: "nil repository", service: NewMetadataApplicationService(MetadataApplicationDependencies{Runtime: runtime})},
-		{name: "nil runtime", service: NewMetadataApplicationService(MetadataApplicationDependencies{Repository: repository})},
+		{name: "nil repository", service: NewApplicationSchemaService(ApplicationSchemaDependencies{Runtime: runtime})},
+		{name: "nil runtime", service: NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: repository})},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -135,9 +135,9 @@ func TestOpsMetadataDiagnosticsRejectsEveryUnavailableDependency(t *testing.T) {
 }
 
 func TestOpsMetadataDiagnosticsForwardsRepositoryRevisionFailure(t *testing.T) {
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{
 		Repository: &metadataWatcherRepository{revision: "revision"},
-		Runtime:    &upsertMetadataRuntime{snapshot: metadatamodel.MetadataSchemaSnapshot{SchemaHash: "hash"}},
+		Runtime:    &upsertMetadataRuntime{snapshot: metadatamodel.ApplicationSchemaSnapshot{SchemaHash: "hash"}},
 	})
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{PermissionMetadataOpsRead}})
 	ctx, cancel := context.WithCancel(t.Context())

@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	businesseventcontract "github.com/domainry/domainry-runtime/runtime/domain/businessevent/contract"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"

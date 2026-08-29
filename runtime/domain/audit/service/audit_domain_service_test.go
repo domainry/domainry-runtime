@@ -10,8 +10,8 @@ import (
 	"errors"
 	"testing"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 )
 
 type repositoryStub struct {

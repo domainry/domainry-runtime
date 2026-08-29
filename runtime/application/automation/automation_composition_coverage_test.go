@@ -35,8 +35,8 @@ func TestAutomationCompositionRepositoriesForwardToManagement(t *testing.T) {
 	registry := &automationFacadeRegistry{rules: map[string]automationmodel.AutomationRuleSchema{}}
 	service := NewAutomationApplicationService(AutomationApplicationDependencies{
 		Rules: registry, DeliveryRepository: automationDeliveryRepositoryProbe{}, ConfigRepository: automationConfigRepositoryProbe{},
-		Schema: func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot {
-			return metadatamodel.MetadataSchemaSnapshot{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "email"}}}}
+		Schema: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+			return metadatamodel.ApplicationSchemaSnapshot{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "email"}}}}
 		},
 	})
 	principal := automationFacadePrincipal()

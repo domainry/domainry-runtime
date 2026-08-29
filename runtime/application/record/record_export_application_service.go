@@ -12,36 +12,19 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/csv"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-runtime/pkg/dataexchange"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 const recordExportBatchSize = 200
 const recordExportMaxRows = 10_000
 const recordExportMaxBytes = 32 << 20
-
-var errRecordExportTooLarge = errors.New("record export output exceeds capacity")
-
-type recordExportBuffer struct {
-	buffer bytes.Buffer
-	limit  int
-}
-
-func (b *recordExportBuffer) Write(value []byte) (int, error) {
-	if len(value) > b.limit-b.buffer.Len() {
-		return 0, errRecordExportTooLarge
-	}
-	return b.buffer.Write(value)
-}
-
-func (b *recordExportBuffer) Bytes() []byte { return b.buffer.Bytes() }
 
 type RecordExportOptions struct {
 	Fields         []string
@@ -71,6 +54,20 @@ type RecordExportApplicationService struct {
 	dependencies RecordExportDependencies
 }
 
+type recordExportPrepared struct {
+	object    definitionmodel.ObjectSchema
+	fields    []definitionmodel.FieldSchema
+	evidence  map[string]string
+	options   RecordExportOptions
+	principal principalmodel.Principal
+}
+
+type recordExportEncodedPage struct {
+	content []byte
+	rows    int
+	hasNext bool
+}
+
 func NewRecordExportApplicationService(dependencies RecordExportDependencies) *RecordExportApplicationService {
 	return &RecordExportApplicationService{dependencies: dependencies}
 }
@@ -93,92 +90,25 @@ func (s *RecordExportApplicationService) exportWithAssurance(ctx context.Context
 		return nil, "", err
 	}
 	objectKey = object.Key
-	buffer := recordExportBuffer{limit: recordExportMaxBytes}
-	writer := csv.NewWriter(&buffer)
-	header := []string{"id", "created_at", "updated_at"}
-	for _, field := range fields {
-		header = append(header, field.Key)
-		if field.Type == "relation" {
-			header = append(header, field.Key+"__display")
-		}
-	}
-	// csv.Writer may defer the bounded-buffer error until a subsequent write or Flush.
-	_ = writer.Write(header)
+	var buffer bytes.Buffer
+	bounded := dataexchange.BoundedWriter{Writer: &buffer, Limit: recordExportMaxBytes}
+	prepared := recordExportPrepared{object: object, fields: fields, evidence: evidence, options: options, principal: principal}
 	exportedRecords := 0
 	for pageNumber := 1; ; pageNumber++ {
-		if err := ctx.Err(); err != nil {
+		page, err := s.encodeExportPage(ctx, prepared, pageNumber, pageNumber == 1, recordExportMaxBytes)
+		if err != nil {
 			return nil, "", err
 		}
-		queryOptions := options.Query
-		queryOptions.Page = pageNumber
-		queryOptions.PageSize = recordExportBatchSize
-		query := queryOptions
-		if s.dependencies.NormalizeQuery != nil {
-			query = s.dependencies.NormalizeQuery(object, queryOptions, principal)
+		if exportedRecords+page.rows > recordExportMaxRows {
+			return nil, "", recordExportError(apperror.KindBadRequest, "backend.export.too_many_records", nil, "limit", fmt.Sprint(recordExportMaxRows))
 		}
-		page, err := s.dependencies.Repository.ListRecords(ctx, principal.WorkspaceID, object, query)
-		if err != nil {
-			return nil, "", recordExportInternalError("export records", err)
+		if _, err := bounded.Write(page.content); err != nil {
+			return nil, "", recordExportError(apperror.KindBadRequest, "backend.export.output_too_large", err)
 		}
-		relationLabels := s.relationLabels(ctx, object, fields, page.Items, principal)
-		projectedByID := map[string]recordmodel.Record{}
-		if s.dependencies.ProjectRecords != nil {
-			projectedRecords, projectErr := s.dependencies.ProjectRecords(ctx, principal, object, page.Items, "export")
-			if projectErr != nil {
-				return nil, "", projectErr
-			}
-			for _, projected := range projectedRecords {
-				projectedByID[projected.ID] = projected
-			}
-		}
-		for _, record := range page.Items {
-			if err := ctx.Err(); err != nil {
-				return nil, "", err
-			}
-			if query.ScopeExpression == nil && s.dependencies.CanAccess != nil && !s.dependencies.CanAccess(principal, object, record) {
-				continue
-			}
-			if exportedRecords >= recordExportMaxRows {
-				return nil, "", recordExportError(apperror.KindBadRequest, "backend.export.too_many_records", nil, "limit", fmt.Sprint(recordExportMaxRows))
-			}
-			projected := record
-			if s.dependencies.ProjectRecords != nil {
-				projected = projectedByID[record.ID]
-			}
-			row := []string{record.ID, record.CreatedAt, record.UpdatedAt}
-			for _, field := range fields {
-				value := ""
-				if s.dependencies.ProjectRecords != nil {
-					if projectedValue, present := projected.Data[field.Key]; present && projectedValue != nil {
-						value = fmt.Sprint(projectedValue)
-					}
-				} else {
-					value, err = recordExportFieldValue(principal, object.Key, field, record.Data[field.Key])
-					if err != nil {
-						return nil, "", err
-					}
-				}
-				row = append(row, value)
-				if field.Type == "relation" {
-					display := ""
-					if _, visible := projected.Data[field.Key]; visible {
-						display = relationLabels[field.Key][strings.TrimSpace(fmt.Sprint(record.Data[field.Key]))]
-					}
-					row = append(row, display)
-				}
-			}
-			// csv.Writer owns deferred output errors; Flush/Error below is the
-			// authoritative boundary for the bounded export buffer.
-			_ = writer.Write(row)
-			exportedRecords++
-		}
-		if !page.HasNext {
+		exportedRecords += page.rows
+		if !page.hasNext {
 			break
 		}
-	}
-	writer.Flush()
-	if err := writer.Error(); err != nil {
-		return nil, "", recordExportError(apperror.KindBadRequest, "backend.export.output_too_large", err)
 	}
 	maskedFields := recordpolicy.RecordExportMaskedFieldKeysForPrincipal(principal, object)
 	contentDigest := sha256.Sum256(buffer.Bytes())
@@ -186,10 +116,101 @@ func (s *RecordExportApplicationService) exportWithAssurance(ctx context.Context
 		"fields": len(fields), "exported_fields": recordpolicy.RecordExportFieldKeys(fields), "masked_fields": maskedFields, "masked_field_count": len(maskedFields),
 		"record_count": exportedRecords, "data_scope": recordpolicy.RecordDataScopeForPrincipal(principal, object.Key, "export"),
 		"export_reason": strings.TrimSpace(options.Reason), "masking_policy": strings.TrimSpace(options.MaskingPolicy), "filter_summary": strings.TrimSpace(options.FilterSummary),
-		"download_status": "ready", "download_sha256": hex.EncodeToString(contentDigest[:]), "download_bytes": len(buffer.Bytes()),
+		"download_status": "ready", "download_sha256": hex.EncodeToString(contentDigest[:]), "download_bytes": int(bounded.Bytes),
 		"assurance_grant_id": evidence["grant_id"], "assurance_methods": evidence["methods"], "assurance_payload_digest": evidence["payload_digest"],
 	})
 	return buffer.Bytes(), objectKey + ".csv", nil
+}
+
+// encodeExportPage is the Record-owned projection boundary used by both sync
+// responses and the durable Data Exchange worker. It reuses Record policy and
+// emits at most one bounded repository page; callers own job/checkpoint state.
+func (s *RecordExportApplicationService) encodeExportPage(ctx context.Context, prepared recordExportPrepared, pageNumber int, includeHeader bool, maxBytes int64) (recordExportEncodedPage, error) {
+	if err := ctx.Err(); err != nil {
+		return recordExportEncodedPage{}, err
+	}
+	queryOptions := prepared.options.Query
+	queryOptions.Page, queryOptions.PageSize = pageNumber, recordExportBatchSize
+	query := queryOptions
+	if s.dependencies.NormalizeQuery != nil {
+		query = s.dependencies.NormalizeQuery(prepared.object, queryOptions, prepared.principal)
+	}
+	page, err := s.dependencies.Repository.ListRecords(ctx, prepared.principal.WorkspaceID, prepared.object, query)
+	if err != nil {
+		return recordExportEncodedPage{}, recordExportInternalError("export records", err)
+	}
+	var output bytes.Buffer
+	encoder := dataexchange.NewCSVEncoder(&output, maxBytes)
+	if includeHeader {
+		if err := encoder.Write(recordExportHeader(prepared.fields)); err != nil {
+			return recordExportEncodedPage{}, err
+		}
+	}
+	relationLabels := s.relationLabels(ctx, prepared.object, prepared.fields, page.Items, prepared.principal)
+	projectedByID := map[string]recordmodel.Record{}
+	if s.dependencies.ProjectRecords != nil {
+		projectedRecords, projectErr := s.dependencies.ProjectRecords(ctx, prepared.principal, prepared.object, page.Items, "export")
+		if projectErr != nil {
+			return recordExportEncodedPage{}, projectErr
+		}
+		for _, projected := range projectedRecords {
+			projectedByID[projected.ID] = projected
+		}
+	}
+	rows := 0
+	for _, record := range page.Items {
+		if err := ctx.Err(); err != nil {
+			return recordExportEncodedPage{}, err
+		}
+		if query.ScopeExpression == nil && s.dependencies.CanAccess != nil && !s.dependencies.CanAccess(prepared.principal, prepared.object, record) {
+			continue
+		}
+		projected := record
+		if s.dependencies.ProjectRecords != nil {
+			projected = projectedByID[record.ID]
+		}
+		row := []string{record.ID, record.CreatedAt, record.UpdatedAt}
+		for _, field := range prepared.fields {
+			value := ""
+			if s.dependencies.ProjectRecords != nil {
+				if projectedValue, present := projected.Data[field.Key]; present && projectedValue != nil {
+					value = fmt.Sprint(projectedValue)
+				}
+			} else {
+				value, err = recordExportFieldValue(prepared.principal, prepared.object.Key, field, record.Data[field.Key])
+				if err != nil {
+					return recordExportEncodedPage{}, err
+				}
+			}
+			row = append(row, value)
+			if field.Type == "relation" {
+				display := ""
+				if _, visible := projected.Data[field.Key]; visible {
+					display = relationLabels[field.Key][strings.TrimSpace(fmt.Sprint(record.Data[field.Key]))]
+				}
+				row = append(row, display)
+			}
+		}
+		if err := encoder.Write(row); err != nil {
+			return recordExportEncodedPage{}, err
+		}
+		rows++
+	}
+	if err := encoder.Close(); err != nil {
+		return recordExportEncodedPage{}, recordExportError(apperror.KindBadRequest, "backend.export.output_too_large", err)
+	}
+	return recordExportEncodedPage{content: output.Bytes(), rows: rows, hasNext: page.HasNext}, nil
+}
+
+func recordExportHeader(fields []definitionmodel.FieldSchema) []string {
+	header := []string{"id", "created_at", "updated_at"}
+	for _, field := range fields {
+		header = append(header, field.Key)
+		if field.Type == "relation" {
+			header = append(header, field.Key+"__display")
+		}
+	}
+	return header
 }
 
 func (s *RecordExportApplicationService) authorizeForBatch(ctx context.Context, objectKey string, principal principalmodel.Principal, options RecordExportOptions) (map[string]string, error) {

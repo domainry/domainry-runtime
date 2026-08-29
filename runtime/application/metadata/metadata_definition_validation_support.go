@@ -29,15 +29,15 @@ func normalizedDefinitionValue(value any) string {
 	return metadatavalidation.MetadataNormalizedDefinitionValue(value)
 }
 
-func (s *MetadataApplicationService) validateReportDefinitionIssues(ctx context.Context, report reportmodel.ReportSchema) []metadatamodel.MetadataDefinitionValidationIssue {
+func (s *ApplicationSchemaService) validateReportDefinitionIssues(ctx context.Context, report reportmodel.ReportSchema) []metadatamodel.MetadataDefinitionValidationIssue {
 	return metadatavalidation.MetadataValidateReportDefinitionIssues(ctx, principalmodel.InstallationWorkspaceID, s.runtime.Schema(), s.records, report)
 }
 
-func validateReportDefinitionForSnapshot(ctx context.Context, snapshot metadatamodel.MetadataSchemaSnapshot, records recordrepository.RecordRepository, report reportmodel.ReportSchema) error {
+func validateReportDefinitionForSnapshot(ctx context.Context, snapshot metadatamodel.ApplicationSchemaSnapshot, records recordrepository.RecordRepository, report reportmodel.ReportSchema) error {
 	return metadatavalidation.MetadataValidateReportDefinition(ctx, principalmodel.InstallationWorkspaceID, snapshot, records, report)
 }
 
-func (s *MetadataApplicationService) ValidateAutomationRuleDefinition(ctx context.Context, rule automationmodel.AutomationRuleSchema) error {
+func (s *ApplicationSchemaService) ValidateAutomationRuleDefinition(ctx context.Context, rule automationmodel.AutomationRuleSchema) error {
 	return (automationapplication.AutomationDefinitionValidationApplicationService{
 		Catalog: func() automationvalidation.AutomationDefinitionCatalog {
 			snapshot := s.runtime.Schema()

@@ -180,6 +180,6 @@ func initializeWorkflowAutomationAndGovernance(s *runtimeAssembly, deps RuntimeS
 		s.authoringCapabilities.UseRuleSetReferenceSource(metadataDefinitionReferenceSource(s.metadataRepo, "rule_set", "discover rule set references"))
 	}
 	s.businessReferences = assembleChangePlanReferenceApplication(s, businessReferenceRuntimeAdapter{records: s, workflows: s.workflowApplicationService}, s.businessEvidenceRepo, s.frontendCapabilities)
-	s.metadataApplicationService = assembleMetadataApplication(s)
+	s.applicationSchemaService = assembleApplicationSchema(s)
 	s.automationApplicationService = assembleAutomationApplication(s)
 }

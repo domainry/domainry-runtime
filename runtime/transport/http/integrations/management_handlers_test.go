@@ -13,9 +13,9 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	connectortest "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit/connectors"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"

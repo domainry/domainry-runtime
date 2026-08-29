@@ -59,7 +59,7 @@ func TestSnapshotVisibilityFiltersObjectsActionsReportsAndAgentRegistry(t *testi
 		"customer.read", "customer.update", "customer.approve", "integration.tool.crm_sync", "report.read",
 	}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true, Write: true}}}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}, SurfaceKey: "workspace"}, role)
-	snapshot := metadatamodel.MetadataSchemaSnapshot{
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{
 		Objects: []definitionmodel.ObjectSchema{
 			{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name"}, {Key: "secret"}}},
 			{Key: "invoice", Fields: []definitionmodel.FieldSchema{{Key: "amount"}}},
@@ -176,7 +176,7 @@ func TestVisibilityPermissionAndToolHelperEdges(t *testing.T) {
 	if principal.HasAllPermissions(nil) || !principal.HasAllPermissions([]string{"customer.read"}) || principal.HasAllPermissions([]string{"admin.read"}) {
 		t.Fatal("entrypoint visibility mismatch")
 	}
-	contractSnapshot := metadatamodel.MetadataSchemaSnapshot{
+	contractSnapshot := metadatamodel.ApplicationSchemaSnapshot{
 		Agents:     []agentmodel.AgentSchema{{Key: "agent"}},
 		AgentTasks: []agentmodel.AgentTaskDefinition{{Key: "task", AgentKey: "agent", Enabled: true}},
 		AgentEntrypoints: []agentmodel.AgentEntrypointAssignment{

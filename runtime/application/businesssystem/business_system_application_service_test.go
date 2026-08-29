@@ -32,12 +32,12 @@ func (stub businessSystemEvidenceStub) ListSeedProvenance(context.Context) ([]bu
 }
 
 func businessSystemTestDependencies() BusinessSystemApplicationDependencies {
-	schema := metadatamodel.MetadataSchemaSnapshot{SchemaHash: "schema-hash", Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}, Workflows: []definitionmodel.WorkflowSchema{{Key: "approval"}}}
+	schema := metadatamodel.ApplicationSchemaSnapshot{SchemaHash: "schema-hash", Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}, Workflows: []definitionmodel.WorkflowSchema{{Key: "approval"}}}
 	return BusinessSystemApplicationDependencies{
 		FeaturePermissions: func(context.Context, principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error) {
 			return recordcontract.RecordFeaturePermissionSnapshot{}, nil
 		},
-		SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot { return schema },
+		SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot { return schema },
 		MetadataDefinitions: func(context.Context, string, string, principalmodel.Principal) ([]metadatamodel.MetadataDefinition, error) {
 			return nil, nil
 		},
@@ -66,7 +66,7 @@ func businessSystemTestDependencies() BusinessSystemApplicationDependencies {
 			SchedulerDefinitions: func(context.Context, principalmodel.Principal) ([]recordmodel.Record, error) {
 				return []recordmodel.Record{{ID: "nightly"}}, nil
 			},
-			SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot { return schema },
+			SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot { return schema },
 			SchemaObjectMap: func(context.Context) map[string]definitionmodel.ObjectSchema {
 				return map[string]definitionmodel.ObjectSchema{}
 			},

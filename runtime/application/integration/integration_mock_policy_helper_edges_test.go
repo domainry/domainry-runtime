@@ -262,8 +262,8 @@ func TestIntegrationRuntimeOrchestrationAndMetricsHelpers(t *testing.T) {
 	if references, err := service.IntegrationConnectionReferences(t.Context(), "connection", principal); err != nil || references != nil {
 		t.Fatalf("nil schema references=%#v err=%v", references, err)
 	}
-	service.schema = func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot {
-		return metadatamodel.MetadataSchemaSnapshot{
+	service.schema = func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+		return metadatamodel.ApplicationSchemaSnapshot{
 			Actions:         []definitionmodel.ActionSchema{{Key: "action"}},
 			AutomationRules: []automationmodel.AutomationRuleSchema{{Key: "automation", Instructions: []automationmodel.AutomationInstructionSchema{{ConnectionKey: "connection"}}}},
 			Workflows:       []definitionmodel.WorkflowSchema{{Key: "workflow", Action: map[string]any{"connection_key": "connection"}}},

@@ -171,7 +171,7 @@ func TestInvokeIntegrationAgentToolEdges(t *testing.T) {
 	repository := integrationEntrypointIdentityRepository()
 	records := &integrationEntrypointRecords{}
 	delivery := &independentDeliveryRepository{}
-	snapshot := metadatamodel.MetadataSchemaSnapshot{
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{
 		Agents:       []agentmodel.AgentSchema{{Key: "agent", Tools: []string{"readRecord", "createRecord", "callConnector"}}},
 		Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "connector"}}},
 	}
@@ -179,7 +179,9 @@ func TestInvokeIntegrationAgentToolEdges(t *testing.T) {
 		ConfigRepository:   repository,
 		DeliveryRepository: delivery,
 		Records:            records,
-		Schema:             func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot { return snapshot },
+		Schema: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+			return snapshot
+		},
 		PrincipalResolver: func(_ context.Context, actorID, roleKey, _ string) principalmodel.Principal {
 			return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: actorID, WorkspaceID: "workspace"}}, accessfixture.Bundle{Key: roleKey})
 		},
@@ -212,11 +214,15 @@ func TestInvokeIntegrationAgentToolEdges(t *testing.T) {
 	}
 	guarded := snapshot
 	guarded.GuardedWrites = []metadatamodel.MetadataGuardedWriteContract{{ObjectKey: "customer", Operation: "create", ActionKey: "create_customer", Endpoint: "/customers"}}
-	service.schema = func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot { return guarded }
+	service.schema = func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+		return guarded
+	}
 	if _, err := service.InvokeIntegrationAgentTool(t.Context(), "agent", "createRecord", request, caller); apperror.CodeOf(err) != "backend.integration.agent_tool.guarded_action_required" {
 		t.Fatalf("guarded write error=%v", err)
 	}
-	service.schema = func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot { return snapshot }
+	service.schema = func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+		return snapshot
+	}
 	if result, err := service.InvokeIntegrationAgentTool(t.Context(), "agent", "createRecord", request, caller); err != nil || result.Status != "approval_required" || result.ApprovalPlan == nil {
 		t.Fatalf("approval result=%#v err=%v", result, err)
 	}

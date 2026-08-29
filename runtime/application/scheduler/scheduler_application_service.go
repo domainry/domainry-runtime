@@ -16,15 +16,15 @@ import (
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/requestcontext"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	schedulercontract "github.com/domainry/domainry-runtime/runtime/domain/scheduler/contract"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 type SchedulerDefinitionHistoryReader interface {
@@ -92,7 +92,7 @@ func schedulerDefinitionReadAllowed(principal principalmodel.Principal) error {
 }
 
 type SchemaProvider interface {
-	SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot
+	SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
 }
 
 type WorkerConfig struct {

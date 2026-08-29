@@ -41,7 +41,7 @@ func TestMetadataRuntimeRestorationAuthorizationAndPreparation(t *testing.T) {
 func TestMetadataLocalizedTextCoverageBoundaries(t *testing.T) {
 	admin := metadataSchemaAdmin()
 	nonAdmin := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: admin.WorkspaceID, UserID: admin.UserID}}
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: &metadataSchemaEdgeRepository{}, Runtime: &upsertMetadataRuntime{}})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: &metadataSchemaEdgeRepository{}, Runtime: &upsertMetadataRuntime{}})
 	if _, err := service.LocalizedTextCoverage(t.Context(), "en-US", "", principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("authorization error=%v", err)
 	}
@@ -63,8 +63,8 @@ func TestMetadataLocalizedTextCoverageBoundaries(t *testing.T) {
 }
 
 func TestMetadataValidationSupportReportAndAutomation(t *testing.T) {
-	snapshot := metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}}}
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Runtime: &upsertMetadataRuntime{snapshot: snapshot}})
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}}}
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Runtime: &upsertMetadataRuntime{snapshot: snapshot}})
 	report := reportmodel.ReportSchema{Key: "orders", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "order", Alias: "order"}}}
 	_ = service.validateReportDefinitionIssues(t.Context(), report)
 	_ = validateReportDefinitionForSnapshot(t.Context(), snapshot, nil, report)
@@ -74,7 +74,7 @@ func TestMetadataValidationSupportReportAndAutomation(t *testing.T) {
 }
 
 func TestMetadataSnapshotWatcherInvalidAndNilDependenciesStop(t *testing.T) {
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{})
 	select {
 	case <-service.StartSnapshotWatcher(t.Context(), 0, principalmodel.SystemScope{}):
 	default:
@@ -108,7 +108,7 @@ func (r *metadataRequiredFieldRecordRepository) ListRecords(context.Context, str
 }
 
 func TestMetadataRemainingAuthorizedAndSuccessfulValidationPaths(t *testing.T) {
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: &metadataSchemaEdgeRepository{}, Dictionary: &metadataDictionaryEdgeRuntime{}})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: &metadataSchemaEdgeRepository{}, Dictionary: &metadataDictionaryEdgeRuntime{}})
 	for name, call := range map[string]func() error{
 		"versions": func() error {
 			_, err := service.ListMetadataDefinitionVersions(t.Context(), "object", "order", principalmodel.Principal{})
@@ -137,7 +137,7 @@ func TestMetadataRemainingAuthorizedAndSuccessfulValidationPaths(t *testing.T) {
 	operation := integrationmodel.ConnectorOperationSchema{Key: "read", Method: "GET", ExecutionMode: "sync", SideEffect: "read", TimeoutDefaultSeconds: 1, TimeoutMaxSeconds: 2, Input: []definitionmodel.FieldSchema{{Key: "id", Type: "text"}}, Output: []definitionmodel.FieldSchema{{Key: "result", Type: "json"}}}
 	connector := integrationmodel.ConnectorSchema{Key: "api", Type: "http", Provider: "api", Operations: []integrationmodel.ConnectorOperationSchema{operation}}
 	payload, _ := json.Marshal(connector)
-	validationService := NewMetadataApplicationService(MetadataApplicationDependencies{Runtime: &upsertMetadataRuntime{}})
+	validationService := NewApplicationSchemaService(ApplicationSchemaDependencies{Runtime: &upsertMetadataRuntime{}})
 	if normalized, issues, err := validationService.ValidateMetadataDefinitionRequestPayload(t.Context(), "connector", "api", metadatamodel.MetadataDefinitionUpsertRequest{Payload: payload}); err != nil || len(issues) != 0 || len(normalized) == 0 {
 		t.Fatalf("normalized=%s issues=%v err=%v", normalized, issues, err)
 	}

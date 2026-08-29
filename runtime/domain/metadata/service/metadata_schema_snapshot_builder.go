@@ -36,7 +36,7 @@ type SchemaSnapshotState struct {
 	IdentityProfileExtensions         []profilebindingmodel.Binding
 }
 
-func BuildSchemaSnapshot(state SchemaSnapshotState) metadatamodel.MetadataSchemaSnapshot {
+func BuildSchemaSnapshot(state SchemaSnapshotState) metadatamodel.ApplicationSchemaSnapshot {
 	objects := append([]definitionmodel.ObjectSchema(nil), state.Objects...)
 	actions := append([]definitionmodel.ActionSchema(nil), state.Actions...)
 	workflows := append([]definitionmodel.WorkflowSchema(nil), state.Workflows...)
@@ -45,7 +45,7 @@ func BuildSchemaSnapshot(state SchemaSnapshotState) metadatamodel.MetadataSchema
 	sort.Slice(actions, func(i, j int) bool { return actions[i].Key < actions[j].Key })
 	sort.Slice(workflows, func(i, j int) bool { return workflows[i].Key < workflows[j].Key })
 	sort.Slice(automationRules, func(i, j int) bool { return automationRules[i].Key < automationRules[j].Key })
-	snapshot := metadatamodel.MetadataSchemaSnapshot{
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{
 		TemplateID: state.TemplateID, TemplateVersion: state.TemplateVersion, Name: state.Name,
 		Objects: objects, Views: append([]definitionmodel.ViewSchema(nil), state.Views...), Actions: actions,
 		GuardedWrites: GuardedWriteContracts(actions), Workflows: workflows, AutomationRules: automationRules,

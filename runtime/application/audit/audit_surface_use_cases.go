@@ -2,11 +2,10 @@ package audit
 
 import (
 	"context"
-	"strings"
 	"time"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -16,11 +15,11 @@ const (
 	PermissionTenantGovernanceExport = "audit.governance.export"
 	PermissionOperationsAuditRead    = "audit.ops.read"
 	PermissionOperationsAuditExport  = "audit.ops.export"
-
-	businessAuditRetentionDays   = 365
-	governanceAuditRetentionDays = 2555
-	operationsAuditRetentionDays = 90
-	businessAuditMaxPageSize     = 200
+)
+const (
+	businessAuditRetentionDays   = auditmodel.BusinessRetentionDays
+	governanceAuditRetentionDays = auditmodel.GovernanceRetentionDays
+	operationsAuditRetentionDays = auditmodel.OperationsRetentionDays
 )
 
 type BusinessAuditEventDTO struct {
@@ -34,7 +33,6 @@ type BusinessAuditEventDTO struct {
 	After     map[string]any `json:"after,omitempty"`
 	CreatedAt string         `json:"created_at"`
 }
-
 type TenantGovernanceAuditEventDTO struct {
 	ID        string         `json:"id"`
 	Event     string         `json:"event"`
@@ -48,7 +46,6 @@ type TenantGovernanceAuditEventDTO struct {
 	After     map[string]any `json:"after,omitempty"`
 	CreatedAt string         `json:"created_at"`
 }
-
 type OperationsAuditEventDTO struct {
 	ID        string         `json:"id"`
 	Event     string         `json:"event"`
@@ -59,7 +56,6 @@ type OperationsAuditEventDTO struct {
 	Metadata  map[string]any `json:"metadata,omitempty"`
 	CreatedAt string         `json:"created_at"`
 }
-
 type SurfaceAuditResult[T any] struct {
 	Items          []T    `json:"items"`
 	Count          int    `json:"count"`
@@ -70,142 +66,90 @@ type SurfaceAuditResult[T any] struct {
 	RetentionDays  int    `json:"retention_days"`
 }
 
-func (service *AuditApplicationService) BusinessEvents(ctx context.Context, query auditmodel.AuditEventQuery, principal principalmodel.Principal) (SurfaceAuditResult[BusinessAuditEventDTO], error) {
-	if err := requireAuditPermission(principal, PermissionBusinessAuditRead, false); err != nil {
+func (s *AuditApplicationService) BusinessEvents(ctx context.Context, q auditmodel.AuditEventQuery, p principalmodel.Principal) (SurfaceAuditResult[BusinessAuditEventDTO], error) {
+	if err := requireAuditPermission(p, PermissionBusinessAuditRead, false); err != nil {
 		return SurfaceAuditResult[BusinessAuditEventDTO]{}, err
 	}
-	if strings.TrimSpace(query.ObjectKey) == "" || strings.TrimSpace(query.RecordID) == "" {
-		query.ActorID = principal.UserID
-	}
-	query = applyAuditRetention(query, businessAuditRetentionDays)
-	if query.Limit > businessAuditMaxPageSize {
-		query.Limit = businessAuditMaxPageSize
-	}
-	if query.Cursor != "" {
-		if _, err := auditmodel.DecodeAuditEventCursor(query.Cursor); err != nil {
-			return SurfaceAuditResult[BusinessAuditEventDTO]{}, &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.audit.cursor_invalid", Err: err}
-		}
-	}
-	pageSize := query.Limit
-	query.Limit = pageSize + 1
-	query.Class = auditmodel.AuditEventClassBusiness
-	events, err := service.surfaceEvents(ctx, query, principal)
+	r, err := s.sharedSurface(ctx, auditmodel.SurfaceBusiness, q, p)
 	if err != nil {
 		return SurfaceAuditResult[BusinessAuditEventDTO]{}, err
 	}
-	truncated := len(events) > pageSize
-	if truncated {
-		events = events[:pageSize]
+	items := make([]BusinessAuditEventDTO, 0, len(r.Items))
+	for _, e := range r.Items {
+		items = append(items, BusinessAuditEventDTO{ID: e.ID, Event: e.Event, ObjectKey: e.ObjectKey, RecordID: e.RecordID, ActorID: e.ActorID, Summary: e.Summary, Before: e.Before, After: e.After, CreatedAt: e.CreatedAt})
 	}
-	nextCursor := ""
-	if truncated && len(events) > 0 {
-		nextCursor = auditmodel.EncodeAuditEventCursor(events[len(events)-1])
-	}
-	items := []BusinessAuditEventDTO{}
-	for _, event := range events {
-		if auditmodel.ClassifyAuditEvent(event) != auditmodel.AuditEventClassBusiness {
-			continue
-		}
-		items = append(items, BusinessAuditEventDTO{
-			ID: event.ID, Event: event.Event, ObjectKey: event.ObjectKey, RecordID: event.RecordID,
-			ActorID: event.ActorID, Summary: event.Summary, Before: AuditRedactSensitiveMap(event.Before),
-			After: AuditRedactSensitiveMap(event.After), CreatedAt: event.CreatedAt,
-		})
-	}
-	return SurfaceAuditResult[BusinessAuditEventDTO]{Items: items, Count: len(items), PageSize: pageSize, Truncated: truncated, NextCursor: nextCursor, RetentionClass: "business_history", RetentionDays: businessAuditRetentionDays}, nil
+	return surfaceResult(r, items), nil
 }
-
-func (service *AuditApplicationService) TenantGovernanceEvents(ctx context.Context, query auditmodel.AuditEventQuery, principal principalmodel.Principal) (SurfaceAuditResult[TenantGovernanceAuditEventDTO], error) {
-	if err := requireAuditPermission(principal, PermissionTenantGovernanceRead, true); err != nil {
+func (s *AuditApplicationService) TenantGovernanceEvents(ctx context.Context, q auditmodel.AuditEventQuery, p principalmodel.Principal) (SurfaceAuditResult[TenantGovernanceAuditEventDTO], error) {
+	if err := requireAuditPermission(p, PermissionTenantGovernanceRead, true); err != nil {
 		return SurfaceAuditResult[TenantGovernanceAuditEventDTO]{}, err
 	}
-	query = applyAuditRetention(query, governanceAuditRetentionDays)
-	query.Class = auditmodel.AuditEventClassGovernance
-	events, err := service.surfaceEvents(ctx, query, principal)
+	r, err := s.sharedSurface(ctx, auditmodel.SurfaceGovernance, q, p)
 	if err != nil {
 		return SurfaceAuditResult[TenantGovernanceAuditEventDTO]{}, err
 	}
-	items := []TenantGovernanceAuditEventDTO{}
-	for _, event := range events {
-		if auditmodel.ClassifyAuditEvent(event) != auditmodel.AuditEventClassGovernance {
-			continue
-		}
-		items = append(items, TenantGovernanceAuditEventDTO{
-			ID: event.ID, Event: event.Event, ObjectKey: event.ObjectKey, RecordID: event.RecordID,
-			ActorID: event.ActorID, RoleKey: event.RoleKey, Summary: event.Summary,
-			Metadata: AuditRedactSensitiveMap(event.Metadata), Before: AuditRedactSensitiveMap(event.Before),
-			After: AuditRedactSensitiveMap(event.After), CreatedAt: event.CreatedAt,
-		})
+	items := make([]TenantGovernanceAuditEventDTO, 0, len(r.Items))
+	for _, e := range r.Items {
+		items = append(items, TenantGovernanceAuditEventDTO{ID: e.ID, Event: e.Event, ObjectKey: e.ObjectKey, RecordID: e.RecordID, ActorID: e.ActorID, RoleKey: e.RoleKey, Summary: e.Summary, Metadata: e.Metadata, Before: e.Before, After: e.After, CreatedAt: e.CreatedAt})
 	}
-	return SurfaceAuditResult[TenantGovernanceAuditEventDTO]{Items: items, Count: len(items), PageSize: query.Limit, RetentionClass: "tenant_governance", RetentionDays: governanceAuditRetentionDays}, nil
+	return surfaceResult(r, items), nil
 }
-
-func (service *AuditApplicationService) OperationsEvents(ctx context.Context, query auditmodel.AuditEventQuery, principal principalmodel.Principal) (SurfaceAuditResult[OperationsAuditEventDTO], error) {
-	if err := requireAuditPermission(principal, PermissionOperationsAuditRead, false); err != nil {
+func (s *AuditApplicationService) OperationsEvents(ctx context.Context, q auditmodel.AuditEventQuery, p principalmodel.Principal) (SurfaceAuditResult[OperationsAuditEventDTO], error) {
+	if err := requireAuditPermission(p, PermissionOperationsAuditRead, false); err != nil {
 		return SurfaceAuditResult[OperationsAuditEventDTO]{}, err
 	}
-	query = applyAuditRetention(query, operationsAuditRetentionDays)
-	query.Class = auditmodel.AuditEventClassOperations
-	events, err := service.surfaceEvents(ctx, query, principal)
+	r, err := s.sharedSurface(ctx, auditmodel.SurfaceOperations, q, p)
 	if err != nil {
 		return SurfaceAuditResult[OperationsAuditEventDTO]{}, err
 	}
-	items := []OperationsAuditEventDTO{}
-	for _, event := range events {
-		if auditmodel.ClassifyAuditEvent(event) != auditmodel.AuditEventClassOperations {
-			continue
-		}
-		items = append(items, OperationsAuditEventDTO{
-			ID: event.ID, Event: event.Event, ObjectKey: event.ObjectKey, RecordID: event.RecordID,
-			ActorID: event.ActorID, Summary: event.Summary, Metadata: AuditRedactSensitiveMap(event.Metadata), CreatedAt: event.CreatedAt,
-		})
+	items := make([]OperationsAuditEventDTO, 0, len(r.Items))
+	for _, e := range r.Items {
+		items = append(items, OperationsAuditEventDTO{ID: e.ID, Event: e.Event, ObjectKey: e.ObjectKey, RecordID: e.RecordID, ActorID: e.ActorID, Summary: e.Summary, Metadata: e.Metadata, CreatedAt: e.CreatedAt})
 	}
-	return SurfaceAuditResult[OperationsAuditEventDTO]{Items: items, Count: len(items), PageSize: query.Limit, RetentionClass: "technical_security", RetentionDays: operationsAuditRetentionDays}, nil
+	return surfaceResult(r, items), nil
 }
-
-func (service *AuditApplicationService) TenantGovernanceExport(ctx context.Context, query auditmodel.AuditEventQuery, principal principalmodel.Principal) (SurfaceAuditResult[TenantGovernanceAuditEventDTO], error) {
-	if err := requireAuditPermission(principal, PermissionTenantGovernanceExport, true); err != nil {
+func (s *AuditApplicationService) TenantGovernanceExport(ctx context.Context, q auditmodel.AuditEventQuery, p principalmodel.Principal) (SurfaceAuditResult[TenantGovernanceAuditEventDTO], error) {
+	if err := requireAuditPermission(p, PermissionTenantGovernanceExport, true); err != nil {
 		return SurfaceAuditResult[TenantGovernanceAuditEventDTO]{}, err
 	}
-	return service.TenantGovernanceEvents(ctx, query, principal)
+	return s.TenantGovernanceEvents(ctx, q, p)
 }
-
-func (service *AuditApplicationService) OperationsExport(ctx context.Context, query auditmodel.AuditEventQuery, principal principalmodel.Principal) (SurfaceAuditResult[OperationsAuditEventDTO], error) {
-	if err := requireAuditPermission(principal, PermissionOperationsAuditExport, false); err != nil {
+func (s *AuditApplicationService) OperationsExport(ctx context.Context, q auditmodel.AuditEventQuery, p principalmodel.Principal) (SurfaceAuditResult[OperationsAuditEventDTO], error) {
+	if err := requireAuditPermission(p, PermissionOperationsAuditExport, false); err != nil {
 		return SurfaceAuditResult[OperationsAuditEventDTO]{}, err
 	}
-	return service.OperationsEvents(ctx, query, principal)
+	return s.OperationsEvents(ctx, q, p)
 }
-
-func (service *AuditApplicationService) surfaceEvents(ctx context.Context, query auditmodel.AuditEventQuery, principal principalmodel.Principal) ([]auditmodel.AuditEvent, error) {
-	if _, err := principalmodel.QueryScopeForPrincipal(principal); err != nil {
-		return nil, &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.workspace_scope_required", Err: err}
+func (s *AuditApplicationService) sharedSurface(ctx context.Context, kind auditmodel.SurfaceKind, q auditmodel.AuditEventQuery, p principalmodel.Principal) (auditmodel.SurfaceResult, error) {
+	if _, err := principalmodel.QueryScopeForPrincipal(p); err != nil {
+		return auditmodel.SurfaceResult{}, &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.workspace_scope_required", Err: err}
 	}
-	events, err := service.ListAuditEvents(ctx, AuditPrincipalWorkspaceID(principal), query)
-	if err != nil || service.projectEvents == nil {
-		return events, err
+	plan, err := auditmodel.PlanSurface(kind, q, p.UserID, time.Now())
+	if err != nil {
+		return auditmodel.SurfaceResult{}, &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.audit.cursor_invalid", Err: err}
 	}
-	return service.projectEvents(ctx, events, principal)
+	events, err := s.ListAuditEvents(ctx, AuditPrincipalWorkspaceID(p), plan.Query)
+	if err != nil {
+		return auditmodel.SurfaceResult{}, err
+	}
+	if s.projectEvents != nil {
+		events, err = s.projectEvents(ctx, events, p)
+		if err != nil {
+			return auditmodel.SurfaceResult{}, err
+		}
+	}
+	return auditmodel.ProjectSurface(events, plan), nil
 }
-
-func requireAuditPermission(principal principalmodel.Principal, permission string, allowWorkspaceAdmin bool) error {
-	allowed := principal.HasExactPermission(permission)
+func requireAuditPermission(p principalmodel.Principal, permission string, allowWorkspaceAdmin bool) error {
+	allowed := p.HasExactPermission(permission)
 	if allowWorkspaceAdmin {
-		allowed = principal.HasPermission(permission)
+		allowed = p.HasPermission(permission)
 	}
-	if !principal.Known || !allowed {
+	if !p.Known || !allowed {
 		return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.audit.view_permission_required"}
 	}
 	return nil
 }
-
-func applyAuditRetention(query auditmodel.AuditEventQuery, days int) auditmodel.AuditEventQuery {
-	cutoff := time.Now().UTC().AddDate(0, 0, -days)
-	if current, err := time.Parse(time.RFC3339, strings.TrimSpace(query.CreatedFrom)); err != nil || current.Before(cutoff) {
-		query.CreatedFrom = cutoff.Format(time.RFC3339)
-	}
-	if query.Limit <= 0 || query.Limit > 1000 {
-		query.Limit = 200
-	}
-	return query
+func surfaceResult[T any](r auditmodel.SurfaceResult, items []T) SurfaceAuditResult[T] {
+	return SurfaceAuditResult[T]{Items: items, Count: len(items), PageSize: r.PageSize, Truncated: r.Truncated, NextCursor: r.NextCursor, RetentionClass: r.RetentionClass, RetentionDays: r.RetentionDays}
 }

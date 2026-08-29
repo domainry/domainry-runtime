@@ -27,7 +27,7 @@ func (r metadataLocaleRepository) ListLocalizedTexts(context.Context, string, me
 }
 
 func TestMetadataSchemaLocaleProjectsAllOwnedShapes(t *testing.T) {
-	snapshot := metadatamodel.MetadataSchemaSnapshot{
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{
 		Name: "App", SchemaHash: "hash",
 		Objects: []definitionmodel.ObjectSchema{{Validations: []definitionmodel.ValidationSchema{{}}}, {Key: "order", Name: "Order", Description: "Description", Fields: []definitionmodel.FieldSchema{{
 			Key: "status", Name: "Status", Options: []map[string]any{{"value": "ready", "label": "Ready"}},
@@ -54,7 +54,7 @@ func TestMetadataSchemaLocaleProjectsAllOwnedShapes(t *testing.T) {
 }
 
 func TestMetadataSchemaLocaleRepositoryFailuresAndEmptyValuesFallback(t *testing.T) {
-	snapshot := metadatamodel.MetadataSchemaSnapshot{SchemaHash: "hash"}
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{SchemaHash: "hash"}
 	for _, repository := range []metadataLocaleRepository{{err: errors.New("store failed")}, {values: nil}} {
 		service := NewMetadataSchemaDomainService(schemaServiceProviderStub{snapshot: snapshot}, repository)
 		if got := service.ForPrincipalLocale(t.Context(), principalmodel.Principal{}, "de"); got.SchemaHash != "hash" {

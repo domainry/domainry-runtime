@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-connector-sdk"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	. "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
@@ -18,7 +19,6 @@ import (
 	actionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/action"
 	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 type p8GateReliabilityClock struct {

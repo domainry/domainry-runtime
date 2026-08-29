@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
 	ormpostgres "github.com/domainry/domainry-orm/postgres"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 

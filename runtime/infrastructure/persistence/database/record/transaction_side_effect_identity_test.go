@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	transactioncontract "github.com/domainry/domainry-runtime/runtime/domain/transaction/contract"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"

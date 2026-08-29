@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
@@ -46,7 +46,7 @@ func TestMetadataSnapshotWatcherInvalidatesSecondRuntimeFromSharedDatabase(t *te
 	})
 	ctx, cancel := context.WithCancel(t.Context())
 	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "test metadata snapshot watcher")
-	done := second.Applications().Metadata.StartSnapshotWatcher(ctx, 5*time.Millisecond, scope)
+	done := second.Applications().ApplicationSchema.StartSnapshotWatcher(ctx, 5*time.Millisecond, scope)
 	time.Sleep(15 * time.Millisecond)
 	current, ok, err := repository.GetDefinition(t.Context(), scope, "object", "account")
 	if err != nil || !ok {

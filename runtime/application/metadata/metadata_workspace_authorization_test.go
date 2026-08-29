@@ -37,7 +37,7 @@ func (p metadataWorkspaceAuthorizationProbe) LoadManifest(context.Context, princ
 
 func TestMetadataApplicationAuthorizesWorkspaceBeforeRepositoryAccess(t *testing.T) {
 	calls := 0
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: metadataWorkspaceAuthorizationProbe{calls: &calls}})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: metadataWorkspaceAuthorizationProbe{calls: &calls}})
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	checks := []func() error{
 		func() error {

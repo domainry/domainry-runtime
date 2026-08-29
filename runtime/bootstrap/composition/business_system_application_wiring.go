@@ -14,7 +14,7 @@ import (
 
 func assembleBusinessSystemApplication(
 	schema *metadataapplication.MetadataSchemaApplicationService,
-	metadata *metadataapplication.MetadataApplicationService,
+	metadata *metadataapplication.ApplicationSchemaService,
 	workflows *workflowapplication.WorkflowApplicationService,
 	automations *automationapplication.AutomationApplicationService,
 	integrations *integrationapplication.IntegrationApplicationService,

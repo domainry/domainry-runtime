@@ -12,20 +12,20 @@ import (
 
 // RecordSchemaSnapshotProvider projects mutable Runtime schema state.
 type RecordSchemaSnapshotProvider struct {
-	snapshot func() metadatamodel.MetadataSchemaSnapshot
+	snapshot func() metadatamodel.ApplicationSchemaSnapshot
 }
 
 func ensureRecordSchemaSnapshotProvider(records *runtimeAssembly) {
 	if records != nil && records.RecordSchemaSnapshotProvider == nil {
-		records.RecordSchemaSnapshotProvider = &RecordSchemaSnapshotProvider{snapshot: func() metadatamodel.MetadataSchemaSnapshot { return recordSchemaSnapshot(records) }}
+		records.RecordSchemaSnapshotProvider = &RecordSchemaSnapshotProvider{snapshot: func() metadatamodel.ApplicationSchemaSnapshot { return recordSchemaSnapshot(records) }}
 	}
 }
 
-func (s *RecordSchemaSnapshotProvider) Schema() metadatamodel.MetadataSchemaSnapshot {
+func (s *RecordSchemaSnapshotProvider) Schema() metadatamodel.ApplicationSchemaSnapshot {
 	return s.snapshot()
 }
 
-func recordSchemaSnapshot(s *runtimeAssembly) metadatamodel.MetadataSchemaSnapshot {
+func recordSchemaSnapshot(s *runtimeAssembly) metadatamodel.ApplicationSchemaSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	objects := make([]definitionmodel.ObjectSchema, 0, len(s.schema))
@@ -53,6 +53,6 @@ func recordSchemaSnapshot(s *runtimeAssembly) metadatamodel.MetadataSchemaSnapsh
 	})
 }
 
-func (s *RecordSchemaSnapshotProvider) SchemaForPrincipal(_ context.Context, principal principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot {
+func (s *RecordSchemaSnapshotProvider) SchemaForPrincipal(_ context.Context, principal principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
 	return metadatabusiness.SnapshotForPrincipal(s.Schema(), principal)
 }

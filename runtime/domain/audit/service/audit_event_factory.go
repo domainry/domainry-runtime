@@ -2,76 +2,35 @@ package service
 
 import (
 	"context"
-
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-
-	"strings"
 	"time"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
-	auditpolicy "github.com/domainry/domainry-runtime/runtime/domain/audit/policy"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-// AuditEventFactory is the canonical Audit event constructor used through the
-// contract.AuditEventFactory boundary.
 type AuditEventFactory struct{}
 
-func (AuditEventFactory) NewAuditEvent(ctx context.Context, request auditcontract.AuditAppendRequest) auditmodel.AuditEvent {
-	return newAuditEvent(ctx, request)
+func (AuditEventFactory) NewAuditEvent(_ context.Context, request auditcontract.AuditAppendRequest) auditmodel.AuditEvent {
+	event, err := auditmodel.BuildEvent(auditmodel.AppendRequest{IdempotencyKey: request.IdempotencyKey, Event: request.Event, ObjectKey: request.ObjectKey, RecordID: request.RecordID, Actor: runtimeAuditActor(request.Principal), Summary: request.Summary, Before: request.Before, After: request.After, Metadata: request.Metadata}, time.Now())
+	if err != nil {
+		return auditmodel.AuditEvent{}
+	}
+	return event
 }
-
 func (s *AuditDomainService) NewAuditEvent(ctx context.Context, request auditcontract.AuditAppendRequest) auditmodel.AuditEvent {
 	return AuditEventFactory{}.NewAuditEvent(ctx, request)
 }
-
-func newAuditEvent(ctx context.Context, request auditcontract.AuditAppendRequest) auditmodel.AuditEvent {
-	principal := request.Principal
-	metadata := auditpolicy.RedactSensitiveMap(request.Metadata)
-	if metadata == nil {
-		metadata = map[string]any{}
+func runtimeAuditActor(p principalmodel.Principal) auditmodel.Actor {
+	workspace := p.WorkspaceID
+	if workspace == "" {
+		workspace = "default"
 	}
-	metadata["workspace_id"] = principalWorkspaceID(principal)
-	// A transport request ID identifies one delivery attempt, not the durable
-	// business fact. Including it in a deterministically keyed audit event makes
-	// a legitimate retry look like conflicting content in the repository.
-	// Callers that need a stable business correlation may still provide it
-	// explicitly in Metadata.
-	if principal.RequestID != "" && strings.TrimSpace(request.IdempotencyKey) == "" {
-		metadata["request_id"] = principal.RequestID
-	}
-	if principal.UserID != "" {
-		metadata["actor_id"] = principal.UserID
-	}
-	if principal.RoleKey != "" {
-		metadata["role_key"] = principal.RoleKey
-	}
-	now := time.Now().UTC()
-	workspaceID := principalWorkspaceID(principal)
-	eventID := auditmodel.NewEventID(now)
-	if strings.TrimSpace(request.IdempotencyKey) != "" {
-		eventID = auditmodel.IdempotentEventID(workspaceID, request.IdempotencyKey)
-	}
-	return auditmodel.AuditEvent{
-		ID: eventID, WorkspaceID: workspaceID, Event: request.Event,
-		ObjectKey: request.ObjectKey, RecordID: request.RecordID,
-		ActorID: valueOrDefault(principal.UserID, "system"), RoleKey: principal.RoleKey,
-		Summary: request.Summary, Metadata: metadata,
-		Before: auditpolicy.RedactSensitiveMap(request.Before), After: auditpolicy.RedactSensitiveMap(request.After),
-		CreatedAt: now.Format(time.RFC3339),
-	}
+	return auditmodel.Actor{WorkspaceID: workspace, SubjectID: p.UserID, RoleKey: p.RoleKey, Kind: "user", RequestID: p.RequestID, CorrelationID: p.CorrelationID, AuthorizationRevision: p.AuthorizationRevision}
 }
-
-func principalWorkspaceID(principal principalmodel.Principal) string {
-	if workspaceID := strings.TrimSpace(principal.WorkspaceID); workspaceID != "" {
-		return workspaceID
+func principalWorkspaceID(p principalmodel.Principal) string {
+	if p.WorkspaceID != "" {
+		return p.WorkspaceID
 	}
 	return "default"
-}
-
-func valueOrDefault(value, fallback string) string {
-	if value = strings.TrimSpace(value); value != "" {
-		return value
-	}
-	return fallback
 }

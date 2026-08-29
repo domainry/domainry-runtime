@@ -7,8 +7,8 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -69,12 +69,12 @@ func (r *metadataLifecycleFailureRepository) SyncManifest(ctx context.Context, s
 	return r.upsertMetadataRepository.SyncManifest(ctx, scope, manifest)
 }
 
-func metadataLifecycleService(repository *metadataLifecycleFailureRepository, audit bool, workflowErr error) *MetadataApplicationService {
-	dependencies := MetadataApplicationDependencies{Repository: repository, Runtime: &upsertMetadataRuntime{}, Workflows: upsertWorkflowInitializer{err: workflowErr}}
+func metadataLifecycleService(repository *metadataLifecycleFailureRepository, audit bool, workflowErr error) *ApplicationSchemaService {
+	dependencies := ApplicationSchemaDependencies{Repository: repository, Runtime: &upsertMetadataRuntime{}, Workflows: upsertWorkflowInitializer{err: workflowErr}}
 	if audit {
 		dependencies.Audit = auditEventFactoryStub{}
 	}
-	return NewMetadataApplicationService(dependencies)
+	return NewApplicationSchemaService(dependencies)
 }
 
 func TestMetadataUpsertLifecycleFailureWindows(t *testing.T) {

@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	operationspersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 func TestOperationsControlsShareOneLoadPerPollInterval(t *testing.T) {

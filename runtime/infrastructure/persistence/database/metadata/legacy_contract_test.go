@@ -6,7 +6,7 @@ import (
 
 	"encoding/json"
 
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"

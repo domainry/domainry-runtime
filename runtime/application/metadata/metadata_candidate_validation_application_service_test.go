@@ -46,7 +46,7 @@ func loadMetadataCandidateFixture(t *testing.T) manifestmodel.ManifestSchema {
 }
 
 func TestMetadataCandidateValidatesResourcesCreatedTogetherAsOneGraph(t *testing.T) {
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: metadataCandidateRepository{manifest: loadMetadataCandidateFixture(t)}})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: metadataCandidateRepository{manifest: loadMetadataCandidateFixture(t)}})
 	mutations := []metadatamodel.MetadataDefinitionMutation{
 		{Operation: "create", ResourceType: "object", ResourceKey: "project", Request: metadatamodel.MetadataDefinitionUpsertRequest{Payload: json.RawMessage(`{"key":"project","name":"Project","description":"Project"}`)}},
 		{Operation: "create", ResourceType: "field", ResourceKey: "project.name", Request: metadatamodel.MetadataDefinitionUpsertRequest{ObjectKey: "project", Payload: json.RawMessage(`{"key":"name","name":"Name","type":"text","required":true}`)}},
@@ -58,7 +58,7 @@ func TestMetadataCandidateValidatesResourcesCreatedTogetherAsOneGraph(t *testing
 }
 
 func TestMetadataCandidateRejectsDanglingReferencesBeforePersistence(t *testing.T) {
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: metadataCandidateRepository{manifest: loadMetadataCandidateFixture(t)}})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: metadataCandidateRepository{manifest: loadMetadataCandidateFixture(t)}})
 	mutations := []metadatamodel.MetadataDefinitionMutation{{Operation: "create", ResourceType: "field", ResourceKey: "missing.name", Request: metadatamodel.MetadataDefinitionUpsertRequest{ObjectKey: "missing", Payload: json.RawMessage(`{"key":"name","name":"Name","type":"text"}`)}}}
 	err := service.ValidateMetadataCandidate(t.Context(), mutations)
 	if apperror.CodeOf(err) != "backend.change_plan.candidate_invalid" {
@@ -67,7 +67,7 @@ func TestMetadataCandidateRejectsDanglingReferencesBeforePersistence(t *testing.
 }
 
 func TestMetadataCandidateResolvesSchedulerTargetCreatedInSameDraft(t *testing.T) {
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: metadataCandidateRepository{manifest: loadMetadataCandidateFixture(t)}})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: metadataCandidateRepository{manifest: loadMetadataCandidateFixture(t)}})
 	workflow := `{"key":"customer.refresh","name":"Refresh","enabled":true,"trigger":{"type":"scheduled"},"trigger_contract":{"type":"scheduled"},"action":{"type":"workflow_graph"},"idempotency_keys":["scheduled_at"],"graph":{"version":2,"nodes":[{"id":"trigger","type":"trigger"}],"edges":[]}}`
 	scheduler := `{"key":"customer.refresh","name":"Refresh","status":"enabled","target_type":"workflow","target_key":"scheduled:customer.refresh","schedule_type":"interval","interval_seconds":60,"max_attempts":3,"timeout_seconds":300}`
 	mutations := []metadatamodel.MetadataDefinitionMutation{

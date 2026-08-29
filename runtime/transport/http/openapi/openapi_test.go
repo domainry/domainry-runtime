@@ -9,7 +9,7 @@ import (
 )
 
 func TestOpenAPISpecCoversFrontendRuntimeContract(t *testing.T) {
-	spec := Build(metadatamodel.MetadataSchemaSnapshot{
+	spec := Build(metadatamodel.ApplicationSchemaSnapshot{
 		TemplateID:      "domain-only",
 		TemplateVersion: "0.1.0",
 		Objects: []definitionmodel.ObjectSchema{

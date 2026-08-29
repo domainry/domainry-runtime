@@ -19,7 +19,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-func SnapshotForPrincipal(snapshot metadatamodel.MetadataSchemaSnapshot, principal principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot {
+func SnapshotForPrincipal(snapshot metadatamodel.ApplicationSchemaSnapshot, principal principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
 	if !principal.Known {
 		snapshot.Reports = nil
 		snapshot.AgentServicePrincipals = nil
@@ -109,7 +109,7 @@ func SnapshotForPrincipal(snapshot metadatamodel.MetadataSchemaSnapshot, princip
 	return snapshot
 }
 
-func visibleAgentContractsForPrincipal(snapshot metadatamodel.MetadataSchemaSnapshot, principal principalmodel.Principal, visibleObjects, visibleActions map[string]bool) ([]agentmodel.AgentTaskDefinition, []agentmodel.AgentEntrypointAssignment) {
+func visibleAgentContractsForPrincipal(snapshot metadatamodel.ApplicationSchemaSnapshot, principal principalmodel.Principal, visibleObjects, visibleActions map[string]bool) ([]agentmodel.AgentTaskDefinition, []agentmodel.AgentEntrypointAssignment) {
 	agents := map[string]bool{}
 	for _, agent := range snapshot.Agents {
 		agents[strings.TrimSpace(agent.Key)] = true

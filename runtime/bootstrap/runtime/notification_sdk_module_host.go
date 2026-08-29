@@ -10,6 +10,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/requestcontext"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	"github.com/domainry/domainry-notification-sdk/contract"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
@@ -21,7 +22,6 @@ import (
 	runtimecontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	notificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notification"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 type notificationSDKModuleHost struct {

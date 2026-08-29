@@ -2,7 +2,9 @@ package record
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -65,4 +67,71 @@ func (r RecordStore) ListRecordBatchJobChunks(ctx context.Context, workspaceID, 
 		out = append(out, chunk)
 	}
 	return out, rows.Err()
+}
+
+func (r RecordStore) OpenRecordBatchJobSource(ctx context.Context, workspaceID, jobID string, expectedChunks int) (io.ReadCloser, error) {
+	if expectedChunks < 0 {
+		return nil, fmt.Errorf("record batch source chunk count is invalid")
+	}
+	ctx = recordBatchWorkspaceContext(ctx, workspaceID, "")
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "record_batch_job_chunks", workspaceID).
+		Columns("sequence_no", "content").Where(ormbuilder.Equal("job_id", strings.TrimSpace(jobID))).OrderBy(ormbuilder.Ascending("sequence_no")).Build()
+	if buildErr != nil {
+		return nil, buildErr
+	}
+	rows, err := r.database().QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	return &recordBatchChunkSourceReader{rows: rows, expected: expectedChunks}, nil
+}
+
+type recordBatchChunkSourceReader struct {
+	rows     *sql.Rows
+	expected int
+	next     int
+	current  *strings.Reader
+	done     bool
+}
+
+func (r *recordBatchChunkSourceReader) Read(target []byte) (int, error) {
+	if r == nil || r.rows == nil || r.done {
+		return 0, io.EOF
+	}
+	for {
+		if r.current != nil && r.current.Len() > 0 {
+			return r.current.Read(target)
+		}
+		r.current = nil
+		if !r.rows.Next() {
+			r.done = true
+			rowErr := r.rows.Err()
+			_ = r.rows.Close()
+			if rowErr != nil {
+				return 0, rowErr
+			}
+			if r.next != r.expected {
+				return 0, fmt.Errorf("record batch source chunk count mismatch: expected %d, got %d", r.expected, r.next)
+			}
+			return 0, io.EOF
+		}
+		var sequence int
+		var content string
+		if err := r.rows.Scan(&sequence, &content); err != nil {
+			return 0, err
+		}
+		if sequence != r.next {
+			return 0, fmt.Errorf("record batch source chunk sequence mismatch: expected %d, got %d", r.next, sequence)
+		}
+		r.next++
+		r.current = strings.NewReader(content)
+	}
+}
+
+func (r *recordBatchChunkSourceReader) Close() error {
+	if r == nil || r.rows == nil {
+		return nil
+	}
+	r.done = true
+	return r.rows.Close()
 }

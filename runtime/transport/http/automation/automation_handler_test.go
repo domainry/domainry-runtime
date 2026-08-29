@@ -92,8 +92,8 @@ func newAutomationHandlerFixture() *automationHandlerFixture {
 	fixture := &automationHandlerFixture{registry: registry, executions: executions, metadata: metadata, capture: capture, principal: principal}
 	service := automationapplication.NewAutomationApplicationService(automationapplication.AutomationApplicationDependencies{
 		Rules: registry, ExecutionRepository: executions, Metadata: metadata,
-		Schema: func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot {
-			return metadatamodel.MetadataSchemaSnapshot{}
+		Schema: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+			return metadatamodel.ApplicationSchemaSnapshot{}
 		},
 		ValidateRule: func(context.Context, automationmodel.AutomationRuleSchema) error { return fixture.validateErr },
 	})

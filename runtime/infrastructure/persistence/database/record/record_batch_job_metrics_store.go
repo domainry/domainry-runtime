@@ -74,6 +74,10 @@ func (r RecordStore) recordBatchJobQueueStats(ctx context.Context, workspaceID s
 }
 
 func (r RecordStore) registerRecordBatchWorkerQueueScope(ctx context.Context, workspaceID, updatedAt string) error {
+	return r.registerRecordBatchWorkerQueueScopeWith(ctx, r.database(), workspaceID, updatedAt)
+}
+
+func (r RecordStore) registerRecordBatchWorkerQueueScopeWith(ctx context.Context, executor recordQueryExecutor, workspaceID, updatedAt string) error {
 	digest := sha256.Sum256([]byte("record_batch\x00" + strings.TrimSpace(workspaceID)))
 	id := "worker_scope:" + hex.EncodeToString(digest[:12])
 	insert := ormbuilder.NewInsertBuilder(r.store.SQLRenderer, "runtime_worker_queue_scopes").
@@ -88,7 +92,7 @@ func (r RecordStore) registerRecordBatchWorkerQueueScope(ctx context.Context, wo
 	if err != nil {
 		return fmt.Errorf("build record batch worker queue scope: %w", err)
 	}
-	if _, err := r.database().ExecContext(ctx, query, args...); err != nil {
+	if _, err := executor.ExecContext(ctx, query, args...); err != nil {
 		return fmt.Errorf("register record batch worker queue scope: %w", err)
 	}
 	return nil

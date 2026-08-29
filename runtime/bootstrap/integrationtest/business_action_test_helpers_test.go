@@ -17,7 +17,7 @@ import (
 
 	actionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/action"
 
-	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/audit"
+	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 
 	automationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automation"
 
@@ -99,7 +99,7 @@ func objectActionTestDependencies(store *persistence.RuntimeStore) RuntimeServic
 	}
 	return RuntimeServicesDependencies{
 		Records:              recordpersistence.NewRecordStore(store),
-		Audit:                auditpersistence.NewAuditStore(store),
+		Audit:                auditpersistence.NewRepositoryFromStore(store),
 		IntegrationConfig:    integrationpersistence.NewIntegrationConfigStore(store),
 		IntegrationEvents:    integrationpersistence.NewIntegrationEventStore(store),
 		IntegrationDelivery:  integrationpersistence.NewIntegrationDeliveryStore(store),
@@ -138,8 +138,8 @@ func mapFromAny(value any) map[string]any {
 	return mapped
 }
 
-func auditStore(store *persistence.RuntimeStore) auditpersistence.AuditStore {
-	return auditpersistence.NewAuditStore(store)
+func auditStore(store *persistence.RuntimeStore) *auditpersistence.Repository {
+	return auditpersistence.NewRepositoryFromStore(store)
 }
 
 func workflowProcessStore(store *persistence.RuntimeStore) workflowpersistence.WorkflowProcessStore {

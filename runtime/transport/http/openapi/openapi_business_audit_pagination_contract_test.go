@@ -7,7 +7,7 @@ import (
 )
 
 func TestBusinessAuditOpenAPIPublishesBoundedCursorPage(t *testing.T) {
-	document := Build(metadatamodel.MetadataSchemaSnapshot{})
+	document := Build(metadatamodel.ApplicationSchemaSnapshot{})
 	paths, _ := document["paths"].(map[string]any)
 	operation := openAPITestOperation(t, paths, "/business/audit-events", "get")
 	if operation["operationId"] != "listBusinessAuditEventPage" || operation["x-domainry-runtime-client-method"] != "listBusinessAuditEventPage" {

@@ -13,6 +13,7 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
@@ -26,7 +27,6 @@ import (
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationprojection "github.com/domainry/domainry-runtime/runtime/domain/automation/projection"
@@ -556,10 +556,10 @@ func TestRuntimeInitializationSupportsOptionalFrontendAndSurfacePorts(t *testing
 
 func TestMetadataSnapshotWatcherSupportsCanonicalAndFallbackOwners(t *testing.T) {
 	records := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{})
-	canonical := assembleMetadataApplication(records)
-	fallback := metadataapplication.NewMetadataApplicationService(metadataapplication.MetadataApplicationDependencies{Runtime: metadataLifecycleRuntimeAdapter{runtime: records}, Workflows: assembleWorkflowApplication(records)})
+	canonical := assembleApplicationSchema(records)
+	fallback := metadataapplication.NewApplicationSchemaService(metadataapplication.ApplicationSchemaDependencies{Runtime: applicationSchemaLifecycleRuntimeAdapter{runtime: records}, Workflows: assembleWorkflowApplication(records)})
 
-	for _, service := range []*metadataapplication.MetadataApplicationService{canonical, fallback} {
+	for _, service := range []*metadataapplication.ApplicationSchemaService{canonical, fallback} {
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
 		select {
@@ -718,7 +718,7 @@ func TestMetadataDefinitionValidationRoutesOwnerContracts(t *testing.T) {
 		Manifest:     manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}}},
 		Dependencies: RuntimeServicesDependencies{Records: repository},
 	})
-	service := assembleMetadataApplication(runtime)
+	service := assembleApplicationSchema(runtime)
 	request := func(payload string) metadatamodel.MetadataDefinitionUpsertRequest {
 		return metadatamodel.MetadataDefinitionUpsertRequest{Payload: json.RawMessage(payload)}
 	}
@@ -896,13 +896,13 @@ func TestIntegrationApplicationWiringUsesOwnerPortsAndCanonicalService(t *testin
 		{Key: "smtp-main", WorkspaceID: "default", ConnectorKey: "email", ProviderKey: "smtp"},
 		{Key: "wrong-main", WorkspaceID: "default", ConnectorKey: "webhook", ProviderKey: "webhook"},
 	}}
-	var schema metadatamodel.MetadataSchemaSnapshot
-	service := newIntegrationApplicationServiceWithDependencies(IntegrationRuntimeWiringDependencies{ConnectorRegistry: registry, ConfigRepository: config, Schema: func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot { return schema }})
+	var schema metadatamodel.ApplicationSchemaSnapshot
+	service := newIntegrationApplicationServiceWithDependencies(IntegrationRuntimeWiringDependencies{ConnectorRegistry: registry, ConfigRepository: config, Schema: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot { return schema }})
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}
 	if references, err := service.IntegrationConnectionReferences(t.Context(), "smtp-main", principal); err != nil || len(references) != 0 {
 		t.Fatalf("nil-schema references=%#v error=%v", references, err)
 	}
-	schema = metadatamodel.MetadataSchemaSnapshot{
+	schema = metadatamodel.ApplicationSchemaSnapshot{
 		Actions:         []definitionmodel.ActionSchema{{Key: "customer.notify"}},
 		AutomationRules: []automationmodel.AutomationRuleSchema{{Key: "customer.created"}},
 		Workflows:       []definitionmodel.WorkflowSchema{{Key: "customer.follow_up"}},
@@ -964,8 +964,8 @@ func TestIntegrationEntrypointsUseNarrowActionWorkflowAndRecordPorts(t *testing.
 		InvokeAction: func(ctx context.Context, invocation actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error) {
 			return invokeAction(ctx, invocation)
 		},
-		Schema: func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot {
-			return metadatamodel.MetadataSchemaSnapshot{Agents: agents, Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "email"}}}}
+		Schema: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+			return metadatamodel.ApplicationSchemaSnapshot{Agents: agents, Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "email"}}}}
 		},
 	})
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
@@ -1126,8 +1126,8 @@ func TestBusinessRuntimeProjectionPropagatesOwnerFailures(t *testing.T) {
 				}
 				return []recordmodel.Record{{ID: "scheduler-1"}}, nil
 			},
-			SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot {
-				return metadatamodel.MetadataSchemaSnapshot{Reports: []reportmodel.ReportSchema{{Key: "pipeline"}}}
+			SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+				return metadatamodel.ApplicationSchemaSnapshot{Reports: []reportmodel.ReportSchema{{Key: "pipeline"}}}
 			},
 			SchemaObjectMap: func(context.Context) map[string]definitionmodel.ObjectSchema { return objects },
 			ListRecords: func(_ context.Context, objectKey string, _ recordmodel.RecordListQuery, _ principalmodel.Principal) (recordmodel.RecordPageResult, error) {
@@ -1166,7 +1166,7 @@ func TestBusinessSystemSnapshotUsesNarrowOwnerPorts(t *testing.T) {
 	reader := accessfixture.Attach(limited, accessfixture.Bundle{Permissions: []string{"workflow.definition.read"}})
 
 	newService := func(failAt string, evidence BusinessEvidenceRepository) *businesssystemapplication.BusinessSystemApplicationService {
-		schema := metadatamodel.MetadataSchemaSnapshot{SchemaHash: "schema-1", Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}, Workflows: []definitionmodel.WorkflowSchema{{Key: "customer.approval"}}}
+		schema := metadatamodel.ApplicationSchemaSnapshot{SchemaHash: "schema-1", Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}, Workflows: []definitionmodel.WorkflowSchema{{Key: "customer.approval"}}}
 		service := businesssystemapplication.NewBusinessSystemApplicationService(businesssystemapplication.BusinessSystemApplicationDependencies{
 			FeaturePermissions: func(context.Context, principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error) {
 				if failAt == "permissions" {
@@ -1174,7 +1174,7 @@ func TestBusinessSystemSnapshotUsesNarrowOwnerPorts(t *testing.T) {
 				}
 				return recordcontract.RecordFeaturePermissionSnapshot{RoleKey: "admin"}, nil
 			},
-			SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot { return schema },
+			SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot { return schema },
 			MetadataDefinitions: func(_ context.Context, resourceType, _ string, _ principalmodel.Principal) ([]metadatamodel.MetadataDefinition, error) {
 				if failAt == "metadata" {
 					return nil, failure
@@ -1213,7 +1213,7 @@ func TestBusinessSystemSnapshotUsesNarrowOwnerPorts(t *testing.T) {
 				IntegrationOutbox: func(context.Context, string, string, int, principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error) {
 					return nil, nil
 				},
-				SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot { return schema },
+				SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot { return schema },
 				SchemaObjectMap:    func(context.Context) map[string]definitionmodel.ObjectSchema { return nil },
 				ListRecords: func(context.Context, string, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error) {
 					if failAt == "records" {
@@ -1363,7 +1363,7 @@ func TestBusinessChangePlanCompositionBuildsOwnerServiceWithOptionalRuntime(t *t
 		t.Fatal("Business Change Plan owner service was not constructed")
 	}
 
-	metadata := assembleMetadataApplication(newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{}))
+	metadata := assembleApplicationSchema(newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{}))
 	runtime := businessChangePlanMetadataRuntimeAdapter{metadata: metadata}
 	invalidDictionary := metadatamodel.MetadataDefinitionUpsertRequest{Payload: json.RawMessage(`{"key":"status","items":[{"key":"active","value":"active"},{"key":"active","value":"duplicate"}]}`)}
 	if _, err := runtime.ValidateMetadataDefinitionPayload(t.Context(), "dictionary", "status", invalidDictionary); err == nil {

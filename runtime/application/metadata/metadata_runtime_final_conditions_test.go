@@ -30,7 +30,7 @@ func (r metadataReloadFailureRepository) LoadManifest(context.Context, principal
 }
 
 func TestMetadataCanonicalCandidateRemainingOperations(t *testing.T) {
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: metadataCandidateRepository{manifest: loadMetadataCandidateFixture(t)}})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: metadataCandidateRepository{manifest: loadMetadataCandidateFixture(t)}})
 	mutations := []metadatamodel.MetadataDefinitionMutation{
 		candidateMutation("create", "object", "project", "", `{ "key": "project", "name": "Project", "description": "Project" }`),
 		candidateMutation("create", "field", "project.name", "project", `{ "key": "name", "name": "Name", "type": "text" }`),
@@ -57,7 +57,7 @@ func TestMetadataCanonicalCandidateRemainingOperations(t *testing.T) {
 func TestMetadataCandidateAndDefinitionValidationSuccessConditions(t *testing.T) {
 	manifest := loadMetadataCandidateFixture(t)
 	manifest.Actions = []definitionmodel.ActionSchema{{Key: "customer.approve", ObjectKey: "customer", Label: "Approve", Kind: "record_operation", RequiresPermission: "customer.approve", AuditEvent: "customer.approved"}}
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: metadataCandidateRepository{manifest: manifest}})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: metadataCandidateRepository{manifest: manifest}})
 	if err := service.ValidateMetadataCandidate(t.Context(), nil); err != nil {
 		t.Fatalf("valid action candidate rejected: %v", err)
 	}
@@ -74,8 +74,8 @@ func TestMetadataCandidateAndDefinitionValidationSuccessConditions(t *testing.T)
 	if _, err := decodeActionDefinitionPayload(append(validAction, []byte(` x`)...)); err == nil {
 		t.Fatal("malformed trailing action JSON accepted")
 	}
-	runtime := &upsertMetadataRuntime{snapshot: metadatamodel.MetadataSchemaSnapshot{Objects: manifest.Objects}}
-	validation := NewMetadataApplicationService(MetadataApplicationDependencies{Runtime: runtime, Integrations: &metadataIntegrationValidationRepository{}})
+	runtime := &upsertMetadataRuntime{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: manifest.Objects}}
+	validation := NewApplicationSchemaService(ApplicationSchemaDependencies{Runtime: runtime, Integrations: &metadataIntegrationValidationRepository{}})
 	if _, err := validation.ValidateMetadataDefinitionPayload(t.Context(), "action", metadatamodel.MetadataDefinitionUpsertRequest{Payload: validAction}); err != nil {
 		t.Fatalf("valid action payload rejected: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestMetadataCandidateAndDefinitionValidationSuccessConditions(t *testing.T)
 
 func TestMetadataUpsertIdempotencyAndFieldReaderRemainingBlocks(t *testing.T) {
 	repository := &upsertMetadataRepository{before: metadatamodel.MetadataDefinition{ResourceKey: "order", SourceID: "source", Payload: json.RawMessage(`{"value":1}`)}}
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: repository})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: repository})
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	request := metadatamodel.MetadataDefinitionUpsertRequest{SourceKind: "builder_v4", SourceID: "source", Payload: json.RawMessage(`{"value":2}`)}
 	_, _, err := service.upsertMetadataDefinitionWithOptions(t.Context(), "object", "order", request, admin, MetadataUpsertDefinitionOptions{Normalize: func(_ context.Context, _, _ string, request metadatamodel.MetadataDefinitionUpsertRequest) (metadatamodel.MetadataDefinitionUpsertRequest, error) {
@@ -110,8 +110,8 @@ func TestMetadataUpsertIdempotencyAndFieldReaderRemainingBlocks(t *testing.T) {
 	}
 
 	records := &metadataRequiredFieldRecordRepository{}
-	fieldService := NewMetadataApplicationService(MetadataApplicationDependencies{
-		Runtime: &upsertMetadataRuntime{snapshot: metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "order"}}}}, Records: records,
+	fieldService := NewApplicationSchemaService(ApplicationSchemaDependencies{
+		Runtime: &upsertMetadataRuntime{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "order"}}}}, Records: records,
 	})
 	payload := json.RawMessage(`{"key":"required","name":"Required","type":"text","required":true}`)
 	_, _ = fieldService.ValidateMetadataDefinitionPayload(t.Context(), "field", metadatamodel.MetadataDefinitionUpsertRequest{ObjectKey: "order", Payload: payload})
@@ -137,14 +137,14 @@ func TestInstalledAuthorizationRemainingMismatchConditions(t *testing.T) {
 }
 
 func TestMetadataServiceObserverAndIdempotencyRemainingConditions(t *testing.T) {
-	var nilService *MetadataApplicationService
+	var nilService *ApplicationSchemaService
 	nilService.UseActionDefinitionSource(func() []definitionmodel.ActionSchema { return nil })
-	nilService.AddReloadObserver(func(metadatamodel.MetadataSchemaSnapshot) {})
-	service := &MetadataApplicationService{}
+	nilService.AddReloadObserver(func(metadatamodel.ApplicationSchemaSnapshot) {})
+	service := &ApplicationSchemaService{}
 	service.AddReloadObserver(nil)
 	called := 0
-	service.AddReloadObserver(func(metadatamodel.MetadataSchemaSnapshot) { called++ })
-	service.notifyReloadObservers(metadatamodel.MetadataSchemaSnapshot{})
+	service.AddReloadObserver(func(metadatamodel.ApplicationSchemaSnapshot) { called++ })
+	service.notifyReloadObservers(metadatamodel.ApplicationSchemaSnapshot{})
 	if called != 1 {
 		t.Fatalf("observer calls=%d", called)
 	}
@@ -168,12 +168,12 @@ func TestMetadataServiceObserverAndIdempotencyRemainingConditions(t *testing.T) 
 
 func TestMetadataSnapshotReloadRemainingFailures(t *testing.T) {
 	loadErr := errors.New("load manifest")
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: metadataReloadFailureRepository{err: loadErr}})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: metadataReloadFailureRepository{err: loadErr}})
 	if err := service.reloadMetadataFromSource(t.Context()); !errors.Is(err, loadErr) {
 		t.Fatalf("load err=%v", err)
 	}
 	workflowErr := errors.New("initialize workflows")
-	service = NewMetadataApplicationService(MetadataApplicationDependencies{
+	service = NewApplicationSchemaService(ApplicationSchemaDependencies{
 		Repository: metadataReloadFailureRepository{manifest: manifestmodel.ManifestSchema{}},
 		Runtime:    &upsertMetadataRuntime{}, Workflows: upsertWorkflowInitializer{err: workflowErr},
 	})

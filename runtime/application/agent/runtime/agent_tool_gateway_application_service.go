@@ -12,12 +12,12 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/telemetry"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	agentcatalog "github.com/domainry/domainry-runtime/runtime/domain/agent/contract/catalog"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 const (

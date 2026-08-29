@@ -35,7 +35,7 @@ import (
 
 type BusinessSystemApplicationDependencies struct {
 	FeaturePermissions  func(context.Context, principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error)
-	SchemaForPrincipal  func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot
+	SchemaForPrincipal  func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
 	MetadataDefinitions func(context.Context, string, string, principalmodel.Principal) ([]metadatamodel.MetadataDefinition, error)
 	FrontendSnapshot    func(context.Context, principalmodel.Principal) (deploymentmodel.FrontendCapabilitySnapshot, error)
 	Evidence            changeplanrepository.ChangePlanEvidenceRepository
@@ -46,7 +46,7 @@ type BusinessSystemApplicationDependencies struct {
 // the governed business-system snapshot.
 type businessSystemSnapshotPorts struct {
 	featurePermissions  func(context.Context, principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error)
-	schemaForPrincipal  func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot
+	schemaForPrincipal  func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
 	metadataDefinitions func(context.Context, string, string, principalmodel.Principal) ([]metadatamodel.MetadataDefinition, error)
 	frontendSnapshot    func(context.Context, principalmodel.Principal) (deploymentmodel.FrontendCapabilitySnapshot, error)
 }

@@ -27,8 +27,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 
 	"strings"
 	"sync"
@@ -37,11 +37,11 @@ import (
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 )
 
-// MetadataApplicationService owns metadata authoring, lifecycle, dictionary and
+// ApplicationSchemaService owns metadata authoring, lifecycle, dictionary and
 // localization entrypoints. Cross-domain behavior is exposed through narrow
 // runtime ports; the service does not retain the aggregate RuntimeServices.
-// MetadataApplicationService owns metadata lifecycle behavior.
-type MetadataApplicationService struct {
+// ApplicationSchemaService owns metadata lifecycle behavior.
+type ApplicationSchemaService struct {
 	repository        metadatarepository.MetadataRepository
 	runtime           LifecycleRuntime
 	workflows         WorkflowDefinitionInitializer
@@ -58,19 +58,19 @@ type MetadataApplicationService struct {
 	auditAppender     MetadataAuditAppender
 	actionDefinitions func() []definitionmodel.ActionSchema
 	reloadObserversMu sync.RWMutex
-	reloadObservers   []func(metadatamodel.MetadataSchemaSnapshot)
+	reloadObservers   []func(metadatamodel.ApplicationSchemaSnapshot)
 }
 
 // UseActionDefinitionSource binds the effective execution catalog used by
 // read-only metadata projections. Persisted definition lifecycle and source
 // identity remain owned by the metadata repository.
-func (s *MetadataApplicationService) UseActionDefinitionSource(source func() []definitionmodel.ActionSchema) {
+func (s *ApplicationSchemaService) UseActionDefinitionSource(source func() []definitionmodel.ActionSchema) {
 	if s != nil {
 		s.actionDefinitions = source
 	}
 }
 
-func (s *MetadataApplicationService) AddReloadObserver(observer func(metadatamodel.MetadataSchemaSnapshot)) {
+func (s *ApplicationSchemaService) AddReloadObserver(observer func(metadatamodel.ApplicationSchemaSnapshot)) {
 	if s == nil || observer == nil {
 		return
 	}
@@ -79,9 +79,9 @@ func (s *MetadataApplicationService) AddReloadObserver(observer func(metadatamod
 	s.reloadObservers = append(s.reloadObservers, observer)
 }
 
-func (s *MetadataApplicationService) notifyReloadObservers(snapshot metadatamodel.MetadataSchemaSnapshot) {
+func (s *ApplicationSchemaService) notifyReloadObservers(snapshot metadatamodel.ApplicationSchemaSnapshot) {
 	s.reloadObserversMu.RLock()
-	observers := append([]func(metadatamodel.MetadataSchemaSnapshot){}, s.reloadObservers...)
+	observers := append([]func(metadatamodel.ApplicationSchemaSnapshot){}, s.reloadObservers...)
 	s.reloadObserversMu.RUnlock()
 	for _, observer := range observers {
 		observer(snapshot)
@@ -96,7 +96,7 @@ type MetadataAuditAppender func(context.Context, string, string, string, princip
 
 type LifecycleRuntime interface {
 	ApplyManifestMetadata(string, string, string, []definitionmodel.ObjectSchema, []definitionmodel.ViewSchema, []definitionmodel.ActionSchema, []definitionmodel.WorkflowSchema, []automationmodel.AutomationRuleSchema, []metadatamodel.DictionarySchema, integrationmodel.IntegrationSchema, []reportmodel.ReportSchema, []definitionmodel.EntryPointSchema, []agentmodel.SkillSchema, []agentmodel.AgentSchema, []profilebindingmodel.Binding)
-	Schema() metadatamodel.MetadataSchemaSnapshot
+	Schema() metadatamodel.ApplicationSchemaSnapshot
 }
 
 type agentLifecycleRuntime interface {
@@ -118,7 +118,7 @@ type DictionaryRuntime interface {
 	Items(context.Context, metadatarepository.MetadataRepository, string, string, principalmodel.Principal) (metadatamodel.DictionaryItemsResult, bool, error)
 }
 
-type MetadataApplicationDependencies struct {
+type ApplicationSchemaDependencies struct {
 	Repository    metadatarepository.MetadataRepository
 	Runtime       LifecycleRuntime
 	Workflows     WorkflowDefinitionInitializer
@@ -134,9 +134,9 @@ type MetadataApplicationDependencies struct {
 	AuditAppender MetadataAuditAppender
 }
 
-func NewMetadataApplicationService(dependencies MetadataApplicationDependencies) *MetadataApplicationService {
+func NewApplicationSchemaService(dependencies ApplicationSchemaDependencies) *ApplicationSchemaService {
 	operations, _ := dependencies.ChangePlans.(changeplanrepository.ChangePlanOperationRepository)
-	return &MetadataApplicationService{
+	return &ApplicationSchemaService{
 		repository: dependencies.Repository, runtime: dependencies.Runtime, workflows: dependencies.Workflows,
 		dictionary: dependencies.Dictionary, audit: dependencies.Audit, templateID: dependencies.TemplateID,
 		version: dependencies.Version, name: dependencies.Name, records: dependencies.Records,
@@ -174,40 +174,40 @@ type MetadataRollbackDefinitionOptions struct {
 	ResolveImpact            func(context.Context, string, string, principalmodel.Principal) (RollbackReferenceImpact, error)
 }
 
-func (s *MetadataApplicationService) rollbackMetadataDefinitionWithOptions(ctx context.Context, resourceType, resourceKey string, request metadatamodel.MetadataDefinitionRollbackRequest, principal principalmodel.Principal, options MetadataRollbackDefinitionOptions) (metadatamodel.MetadataDefinition, metadatamodel.MetadataSchemaSnapshot, error) {
+func (s *ApplicationSchemaService) rollbackMetadataDefinitionWithOptions(ctx context.Context, resourceType, resourceKey string, request metadatamodel.MetadataDefinitionRollbackRequest, principal principalmodel.Principal, options MetadataRollbackDefinitionOptions) (metadatamodel.MetadataDefinition, metadatamodel.ApplicationSchemaSnapshot, error) {
 	if err := metadataAuthorizeCommand(principal); err != nil {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, err
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, err
 	}
 	if !principal.HasPermission("workspace.admin") {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, forbidden("auth.permission_denied")
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, forbidden("auth.permission_denied")
 	}
 	resourceType, resourceKey = strings.TrimSpace(resourceType), strings.TrimSpace(resourceKey)
 	if code := metadatavalidation.MetadataRollbackRequestErrorCode(request); code != "" {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, badRequest(code)
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, badRequest(code)
 	}
 	if request.AuthoringContractVersion != options.AuthoringContractVersion || request.AuthoringContractHash != options.AuthoringContractHash {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, conflict("backend.metadata.rollback_contract_stale", "expected_version", options.AuthoringContractVersion, "expected_hash", options.AuthoringContractHash)
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, conflict("backend.metadata.rollback_contract_stale", "expected_version", options.AuthoringContractVersion, "expected_hash", options.AuthoringContractHash)
 	}
 	current, found, err := s.repository.GetDefinition(ctx, metadataInstallationScope("load metadata definition for rollback"), resourceType, resourceKey)
 	if err != nil {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, wrapMetadataError(err)
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, wrapMetadataError(err)
 	}
 	if !found {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, notFound("backend.metadata.definition_not_found")
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, notFound("backend.metadata.definition_not_found")
 	}
 	if options.ResolveImpact == nil {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, metadataInternalError("resolve metadata rollback reference impact")
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, metadataInternalError("resolve metadata rollback reference impact")
 	}
 	impact, err := options.ResolveImpact(ctx, resourceType, resourceKey, principal)
 	if err != nil {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, err
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, err
 	}
 	if request.ExpectedReferenceGraphHash != impact.GraphHash {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, conflict("backend.metadata.rollback_reference_graph_stale", "expected", impact.GraphHash, "actual", request.ExpectedReferenceGraphHash)
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, conflict("backend.metadata.rollback_reference_graph_stale", "expected", impact.GraphHash, "actual", request.ExpectedReferenceGraphHash)
 	}
 	versions, err := s.repository.ListDefinitionVersions(ctx, metadataInstallationScope("list metadata rollback versions"), resourceType, resourceKey)
 	if err != nil {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, wrapMetadataError(err)
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, wrapMetadataError(err)
 	}
 	var target metadatamodel.MetadataDefinitionVersion
 	for _, version := range versions {
@@ -217,15 +217,15 @@ func (s *MetadataApplicationService) rollbackMetadataDefinitionWithOptions(ctx c
 		}
 	}
 	if target.SchemaVersion == "" {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, notFound("backend.metadata.rollback_target_not_found")
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, notFound("backend.metadata.rollback_target_not_found")
 	}
 	if s.audit == nil {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, metadataInternalError("build metadata rollback audit")
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, metadataInternalError("build metadata rollback audit")
 	}
 	audit := buildRollbackAudit(ctx, s.audit, resourceType, resourceKey, current, target, request, impact, principal)
 	definition, err := s.repository.RollbackDefinition(ctx, metadataInstallationScope("rollback metadata definition"), resourceType, resourceKey, request, audit)
 	if err != nil {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, wrapMetadataError(err)
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, wrapMetadataError(err)
 	}
 	snapshot, err := s.ReloadMetadata(ctx, principal)
 	return definition, snapshot, err
@@ -251,7 +251,7 @@ func rollbackJSONMap(payload json.RawMessage) map[string]any {
 	return value
 }
 
-func (s *MetadataApplicationService) disableMetadataDefinitionWithOptions(ctx context.Context, resourceType, resourceKey string, principal principalmodel.Principal, options MetadataDisableDefinitionOptions) error {
+func (s *ApplicationSchemaService) disableMetadataDefinitionWithOptions(ctx context.Context, resourceType, resourceKey string, principal principalmodel.Principal, options MetadataDisableDefinitionOptions) error {
 	if err := metadataAuthorizeCommand(principal); err != nil {
 		return err
 	}
@@ -288,33 +288,33 @@ func (s *MetadataApplicationService) disableMetadataDefinitionWithOptions(ctx co
 	return nil
 }
 
-func (s *MetadataApplicationService) upsertMetadataDefinitionWithOptions(ctx context.Context, resourceType, resourceKey string, request metadatamodel.MetadataDefinitionUpsertRequest, principal principalmodel.Principal, options MetadataUpsertDefinitionOptions) (metadatamodel.MetadataDefinition, metadatamodel.MetadataSchemaSnapshot, error) {
+func (s *ApplicationSchemaService) upsertMetadataDefinitionWithOptions(ctx context.Context, resourceType, resourceKey string, request metadatamodel.MetadataDefinitionUpsertRequest, principal principalmodel.Principal, options MetadataUpsertDefinitionOptions) (metadatamodel.MetadataDefinition, metadatamodel.ApplicationSchemaSnapshot, error) {
 	if err := metadataAuthorizeCommand(principal); err != nil {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, err
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, err
 	}
 	if !principal.HasPermission("workspace.admin") {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, forbidden("auth.permission_denied")
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, forbidden("auth.permission_denied")
 	}
 	resourceType, resourceKey = strings.TrimSpace(resourceType), strings.TrimSpace(resourceKey)
 	if resourceType == "workflow" {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, badRequest("backend.workflow.lifecycle_api_required")
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, badRequest("backend.workflow.lifecycle_api_required")
 	}
 	if options.Normalize == nil {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, metadataInternalError("normalize metadata definition")
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, metadataInternalError("normalize metadata definition")
 	}
 	normalized, err := options.Normalize(ctx, resourceType, resourceKey, request)
 	if err != nil {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, err
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, err
 	}
 	before, beforeFound, err := s.repository.GetDefinition(ctx, metadataInstallationScope("load metadata definition for publish"), resourceType, resourceKey)
 	if err != nil {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, wrapMetadataError(err)
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, wrapMetadataError(err)
 	}
 	if err := metadataBuilderIdempotencyConflict(before, beforeFound, normalized); err != nil {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, err
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, err
 	}
 	if s.audit == nil {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, metadataInternalError("build metadata publication audit")
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, metadataInternalError("build metadata publication audit")
 	}
 	audit := s.audit.NewAuditEvent(ctx, auditcontract.AuditAppendRequest{
 		Event: "metadata_definition.saved", ObjectKey: resourceType, RecordID: resourceKey, Principal: principal,
@@ -323,7 +323,7 @@ func (s *MetadataApplicationService) upsertMetadataDefinitionWithOptions(ctx con
 	})
 	definition, err := s.repository.PublishDefinition(ctx, metadataInstallationScope("publish metadata definition"), resourceType, resourceKey, normalized, audit)
 	if err != nil {
-		return metadatamodel.MetadataDefinition{}, metadatamodel.MetadataSchemaSnapshot{}, wrapMetadataError(err)
+		return metadatamodel.MetadataDefinition{}, metadatamodel.ApplicationSchemaSnapshot{}, wrapMetadataError(err)
 	}
 	replayed := beforeFound && before.SchemaVersion == definition.SchemaVersion && before.SchemaHash == definition.SchemaHash
 	snapshot, reloadErr := s.ReloadMetadata(ctx, principal)
@@ -333,11 +333,11 @@ func (s *MetadataApplicationService) upsertMetadataDefinitionWithOptions(ctx con
 			errorText = reloadErr.Error()
 		}
 		if completeErr := s.repository.CompleteDefinitionRefresh(ctx, metadataInstallationScope("complete metadata definition refresh"), resourceType, resourceKey, definition.SchemaHash, errorText); completeErr != nil {
-			return definition, metadatamodel.MetadataSchemaSnapshot{}, metadataInternalErrorWithCause("complete metadata refresh intent", completeErr)
+			return definition, metadatamodel.ApplicationSchemaSnapshot{}, metadataInternalErrorWithCause("complete metadata refresh intent", completeErr)
 		}
 	}
 	if reloadErr != nil {
-		return definition, metadatamodel.MetadataSchemaSnapshot{}, reloadErr
+		return definition, metadatamodel.ApplicationSchemaSnapshot{}, reloadErr
 	}
 	return definition, snapshot, nil
 }

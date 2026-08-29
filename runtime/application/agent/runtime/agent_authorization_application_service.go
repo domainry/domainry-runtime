@@ -20,14 +20,14 @@ import (
 )
 
 type AgentSchemaProvider interface {
-	SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot
+	SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
 }
 
 type agentInternalSchemaProvider interface {
-	Schema() metadatamodel.MetadataSchemaSnapshot
+	Schema() metadatamodel.ApplicationSchemaSnapshot
 }
 
-func fullAgentSchema(ctx context.Context, provider AgentSchemaProvider) metadatamodel.MetadataSchemaSnapshot {
+func fullAgentSchema(ctx context.Context, provider AgentSchemaProvider) metadatamodel.ApplicationSchemaSnapshot {
 	if internal, ok := provider.(agentInternalSchemaProvider); ok {
 		return internal.Schema()
 	}
@@ -185,7 +185,7 @@ func (s *AgentAuthorizationApplicationService) AuthorizeTask(ctx context.Context
 	return AgentTaskAuthorization{Principal: execution, Identity: identity, Task: task, AllowedObjects: objects, AllowedActions: actions, AllowedOutcomes: outcomes, AllowedTools: tools, VisibleFields: fields, Evidence: evidence}, nil
 }
 
-func agentToolsForTask(snapshot metadatamodel.MetadataSchemaSnapshot, task agentmodel.AgentTaskDefinition) []string {
+func agentToolsForTask(snapshot metadatamodel.ApplicationSchemaSnapshot, task agentmodel.AgentTaskDefinition) []string {
 	skillKeys := map[string]bool{}
 	tools := []string{}
 	for _, agent := range snapshot.Agents {

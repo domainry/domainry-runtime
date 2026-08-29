@@ -6,12 +6,12 @@ import (
 	"strings"
 	"testing"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	ormdialect "github.com/domainry/domainry-orm/dialect"
 	ormdriver "github.com/domainry/domainry-orm/driver"
 	ormmysql "github.com/domainry/domainry-orm/mysql"
 	ormpostgres "github.com/domainry/domainry-orm/postgres"
 	ormsqlite "github.com/domainry/domainry-orm/sqlite"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 )
 
 func TestMetadataCatalogSQLBranches(t *testing.T) {

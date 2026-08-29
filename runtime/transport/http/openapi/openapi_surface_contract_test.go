@@ -10,7 +10,7 @@ import (
 )
 
 func TestOpenAPIOperationsPublishSurfaceAndAudience(t *testing.T) {
-	spec := Build(metadatamodel.MetadataSchemaSnapshot{})
+	spec := Build(metadatamodel.ApplicationSchemaSnapshot{})
 	paths, ok := spec["paths"].(map[string]any)
 	if !ok {
 		t.Fatal("OpenAPI paths are missing")

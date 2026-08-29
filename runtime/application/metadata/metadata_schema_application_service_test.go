@@ -15,15 +15,15 @@ import (
 )
 
 type metadataSchemaApplicationProviderStub struct {
-	snapshot metadatamodel.MetadataSchemaSnapshot
+	snapshot metadatamodel.ApplicationSchemaSnapshot
 }
 
-func (s metadataSchemaApplicationProviderStub) SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot {
+func (s metadataSchemaApplicationProviderStub) SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
 	return s.snapshot
 }
 
 func TestMetadataSchemaApplicationServiceOwnsFeaturePermissionProjection(t *testing.T) {
-	application := NewMetadataSchemaApplicationService(metadataSchemaApplicationProviderStub{snapshot: metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}}}}, nil)
+	application := NewMetadataSchemaApplicationService(metadataSchemaApplicationProviderStub{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}}}}, nil)
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default", UserID: "admin"}}, accessfixture.Bundle{
 		Permissions:  []string{"customer.read"},
 		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true}},

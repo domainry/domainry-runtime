@@ -13,9 +13,9 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
 	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -148,9 +148,9 @@ func newDefinitionLifecycleHandler(t *testing.T, repository *definitionLifecycle
 	t.Helper()
 	auditRepository := &definitionLifecycleAuditRepository{}
 	auditService := auditapplication.NewAuditApplicationService(auditRepository)
-	service := metadataapplication.NewMetadataApplicationService(metadataapplication.MetadataApplicationDependencies{
+	service := metadataapplication.NewApplicationSchemaService(metadataapplication.ApplicationSchemaDependencies{
 		Repository:    repository,
-		Runtime:       localizedTextHandlerRuntime{snapshot: metadatamodel.MetadataSchemaSnapshot{Name: "Runtime", SchemaHash: "schema-hash"}},
+		Runtime:       localizedTextHandlerRuntime{snapshot: metadatamodel.ApplicationSchemaSnapshot{Name: "Runtime", SchemaHash: "schema-hash"}},
 		Workflows:     definitionLifecycleWorkflows{},
 		References:    references,
 		ChangePlans:   operations,

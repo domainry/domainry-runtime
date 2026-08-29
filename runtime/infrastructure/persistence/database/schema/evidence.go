@@ -5,7 +5,7 @@ import "context"
 func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 	text := s.MetadataIDColumnType()
 	types := s.RuntimeProfile().EvidenceSchemaTypes(text)
-	largeText, idempotencyScopeText, auditCursorText := types.LargeText, types.IdempotencyScope, types.AuditCursor
+	largeText, idempotencyScopeText := types.LargeText, types.IdempotencyScope
 	retirementEngineText, retirementNamespaceText, retirementKindText, retirementObjectText := types.RetirementEngine, types.RetirementNamespace, types.RetirementKind, types.RetirementObject
 	tables := map[string][]string{
 		"runtime_release_cohorts": {
@@ -34,18 +34,11 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"token " + idempotencyScopeText + " NOT NULL", "filename TEXT NOT NULL", "scope_json TEXT NOT NULL", "scope_sha256 " + text + " NOT NULL", "authorization_scope_sha256 " + text + " NOT NULL", "report_definition_sha256 " + text + " NOT NULL", "control_definition_sha256 " + text + " NOT NULL",
 			"content_base64 " + largeText + " NOT NULL", "content_sha256 " + text + " NOT NULL", "row_count BIGINT NOT NULL", "watermarked BOOLEAN NOT NULL", "created_at " + text + " NOT NULL", "expires_at " + text + " NOT NULL",
 		},
-		"business_audit_export_artifacts": {
-			"id " + text + " PRIMARY KEY", "workspace_id " + idempotencyScopeText + " NOT NULL", "requester_user_id " + idempotencyScopeText + " NOT NULL", "role_key " + text + " NOT NULL", "idempotency_key " + idempotencyScopeText + " NOT NULL",
-			"filters_json TEXT NOT NULL", "scope_sha256 " + text + " NOT NULL", "authorization_scope_sha256 " + text + " NOT NULL", "token_sha256 " + idempotencyScopeText + " NOT NULL",
-			"filename TEXT NOT NULL", "content_sha256 " + text + " NOT NULL", "row_count BIGINT NOT NULL", "content_base64 " + largeText + " NOT NULL", "audit_identity " + text + " NOT NULL",
-			"status " + text + " NOT NULL", "created_at " + text + " NOT NULL", "expires_at " + text + " NOT NULL", "download_count BIGINT NOT NULL DEFAULT 0", "last_downloaded_at " + text + " NOT NULL DEFAULT ''",
-		},
 		"_business_seed_provenance": {
 			"seed_key " + text + " PRIMARY KEY", "object_key " + text + " NOT NULL", "record_id " + text + " NOT NULL",
 			"source_kind " + text + " NOT NULL", "source_id " + text, "template_id " + text, "template_version " + text,
 			"content_hash " + text + " NOT NULL", "materialized_at " + text + " NOT NULL",
 		},
-		"_audit_events": auditEventColumnDefinitions(text, auditCursorText),
 		"_workflow_executions": {
 			"workspace_id " + idempotencyScopeText + " NOT NULL",
 			"id " + text + " NOT NULL",
@@ -569,21 +562,4 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 		},
 	}
 	return ensureEvidenceTables(ctx, s, tables, text)
-}
-
-func auditEventColumnDefinitions(text, cursorText string) []string {
-	return []string{
-		"id " + cursorText + " PRIMARY KEY",
-		"workspace_id " + text + " NOT NULL",
-		"event " + text + " NOT NULL",
-		"object_key " + text,
-		"record_id " + text,
-		"actor_id " + text,
-		"role_key " + text,
-		"summary TEXT",
-		"metadata_json TEXT NOT NULL",
-		"before_json TEXT NOT NULL",
-		"after_json TEXT NOT NULL",
-		"created_at " + cursorText + " NOT NULL",
-	}
 }

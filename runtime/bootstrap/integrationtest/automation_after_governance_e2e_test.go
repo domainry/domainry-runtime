@@ -101,7 +101,7 @@ func TestGovernedAfterAutomationExecutesSourceActionWorkflowAndEventForBusinessI
 		t.Fatalf("published rule is not queryable with all three after instructions: %#v", actualRule)
 	}
 
-	schema := runtimeFixtureRequest[metadatamodel.MetadataSchemaSnapshot](t, handler, "sales_manager", http.MethodGet, "/tenant-admin/runtime-schema", nil)
+	schema := runtimeFixtureRequest[metadatamodel.ApplicationSchemaSnapshot](t, handler, "sales_manager", http.MethodGet, "/tenant-admin/runtime-schema", nil)
 	foundAction := false
 	for _, action := range schema.Actions {
 		if action.Key != actionKey {

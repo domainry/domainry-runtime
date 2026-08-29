@@ -18,8 +18,8 @@ import (
 
 type discoverySchemaProvider struct{}
 
-func (discoverySchemaProvider) SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot {
-	return metadatamodel.MetadataSchemaSnapshot{TemplateID: "discovery", SchemaHash: "schema-hash"}
+func (discoverySchemaProvider) SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+	return metadatamodel.ApplicationSchemaSnapshot{TemplateID: "discovery", SchemaHash: "schema-hash"}
 }
 
 func discoveryTestHandler() *DiscoveryHandler {

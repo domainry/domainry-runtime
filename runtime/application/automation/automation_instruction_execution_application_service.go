@@ -16,7 +16,7 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
 
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 )
 
 func AutomationWorkflowInstructionResult(workflowKey string, run workflowmodel.WorkflowRunResult, err error) (map[string]any, error) {

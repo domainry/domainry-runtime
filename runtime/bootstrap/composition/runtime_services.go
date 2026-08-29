@@ -3,6 +3,7 @@ package composition
 import (
 	"context"
 
+	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
@@ -15,10 +16,10 @@ import (
 	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 
 	connector "github.com/domainry/domainry-connector-sdk"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
-	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationrepository "github.com/domainry/domainry-runtime/runtime/domain/automation/repository"
@@ -39,7 +40,6 @@ import (
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	resilience "github.com/domainry/domainry-runtime/runtime/platform/resilience"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 // RuntimeServices is the immutable facade exported by the composition root.
@@ -51,8 +51,8 @@ type RuntimeServices struct {
 }
 
 type runtimeSchemaReader interface {
-	Schema() metadatamodel.MetadataSchemaSnapshot
-	SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot
+	Schema() metadatamodel.ApplicationSchemaSnapshot
+	SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
 }
 
 type NotificationRenderer interface {
@@ -73,8 +73,9 @@ type RuntimeServicesDependencies struct {
 	ReportExportArtifacts               reportcontract.ReportExportArtifactStore
 	ReportSnapshotSources               reportcontract.ReportSnapshotSourceVersionReader
 	RecordExecutions                    recordcontract.RecordMutationExecutionStore
+	DataExchange                        dataexchange.Binding
+	DataExchangeProviders               *recordapplication.DataExchangeProviders
 	Audit                               auditrepository.AuditRepository
-	AuditExports                        auditcontract.AuditBusinessExportStore
 	AuditApplication                    *auditapplication.AuditApplicationService
 	AuditExportTokenKey                 []byte
 	IntegrationConfig                   integrationrepository.IntegrationConfigRepository

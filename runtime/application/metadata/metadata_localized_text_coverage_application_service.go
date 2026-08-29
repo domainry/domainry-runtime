@@ -9,7 +9,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-func (s *MetadataApplicationService) LocalizedTextCoverage(ctx context.Context, locale string, fallbackLocale string, principal principalmodel.Principal) (metadatamodel.LocalizedTextCoverageResult, error) {
+func (s *ApplicationSchemaService) LocalizedTextCoverage(ctx context.Context, locale string, fallbackLocale string, principal principalmodel.Principal) (metadatamodel.LocalizedTextCoverageResult, error) {
 	if err := metadataAuthorizeQuery(principal); err != nil {
 		return metadatamodel.LocalizedTextCoverageResult{}, err
 	}

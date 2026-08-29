@@ -3,6 +3,7 @@ package contract
 import (
 	"context"
 	"errors"
+	"io"
 	"time"
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -39,4 +40,16 @@ type RecordBatchJobPageCommitter interface {
 
 type RecordBatchJobFingerprintReader interface {
 	FindLatestRecordBatchJobByFingerprint(context.Context, string, string, string, string) (recordmodel.RecordBatchJob, bool, error)
+}
+
+// RecordBatchJobSourceEnqueuer atomically creates a job and its immutable input
+// chunks. Implementations must never expose a queued job without its source.
+type RecordBatchJobSourceEnqueuer interface {
+	EnqueueRecordBatchJobWithSource(context.Context, recordmodel.RecordBatchJob, []recordmodel.RecordBatchJobChunk) (recordmodel.RecordBatchJob, bool, error)
+}
+
+// RecordBatchJobSourceReader reopens an immutable source as a bounded stream.
+// The reader validates contiguous sequence numbers and the expected count.
+type RecordBatchJobSourceReader interface {
+	OpenRecordBatchJobSource(context.Context, string, string, int) (io.ReadCloser, error)
 }

@@ -223,7 +223,7 @@ func TestProjectRuntimeOpensExtractedSchedulerModuleBinding(t *testing.T) {
 	connectors.Freeze()
 	cfg := bootstrapTestConfig(t)
 	cfg.RuntimeInstanceID = "scheduler-runtime"
-	runtime := NewProjectWithOwnerFactoriesAndDatabase(t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), nil, schedulermodule.NewFactory(schedulermodule.Options{}), nil)
+	runtime := NewProjectWithOwnerFactoriesAndDatabase(t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), nil, schedulermodule.NewFactory(schedulermodule.Options{}), dataexchangemodule.NewFactory(dataexchangemodule.Options{}), nil)
 	if runtime.schedulerBinding == nil || runtime.schedulerBinding.Descriptor().Mode != schedulersdk.DeploymentModeModule {
 		t.Fatalf("scheduler binding=%#v", runtime.schedulerBinding)
 	}

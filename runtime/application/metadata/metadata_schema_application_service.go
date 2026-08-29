@@ -16,7 +16,7 @@ import (
 	recordprojection "github.com/domainry/domainry-runtime/runtime/domain/record/projection"
 )
 
-func (s *MetadataApplicationService) CurrentManifest(ctx context.Context, principal principalmodel.Principal) (manifestmodel.ManifestSchema, error) {
+func (s *ApplicationSchemaService) CurrentManifest(ctx context.Context, principal principalmodel.Principal) (manifestmodel.ManifestSchema, error) {
 	if err := metadataAuthorizeQuery(principal); err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
@@ -32,7 +32,7 @@ type MetadataSchemaApplicationService struct {
 }
 
 type MetadataSchemaProvider interface {
-	SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot
+	SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
 }
 
 func NewMetadataSchemaApplicationService(schema MetadataSchemaProvider, repository metadatarepository.MetadataRepository) *MetadataSchemaApplicationService {
@@ -47,32 +47,32 @@ func (s *MetadataSchemaApplicationService) FeaturePermissions(ctx context.Contex
 	return recordprojection.RecordBuildFeaturePermissions(snapshot.Objects, snapshot.Actions, principal)
 }
 
-func (s *MetadataApplicationService) ReloadMetadata(ctx context.Context, principal principalmodel.Principal) (metadatamodel.MetadataSchemaSnapshot, error) {
+func (s *ApplicationSchemaService) ReloadMetadata(ctx context.Context, principal principalmodel.Principal) (metadatamodel.ApplicationSchemaSnapshot, error) {
 	if err := metadataAuthorizeCommand(principal); err != nil {
-		return metadatamodel.MetadataSchemaSnapshot{}, err
+		return metadatamodel.ApplicationSchemaSnapshot{}, err
 	}
 	if !principal.HasPermission("workspace.admin") {
-		return metadatamodel.MetadataSchemaSnapshot{}, forbidden("auth.permission_denied")
+		return metadatamodel.ApplicationSchemaSnapshot{}, forbidden("auth.permission_denied")
 	}
 	manifest, err := s.repository.LoadManifest(ctx, metadataInstallationScope("reload metadata manifest"))
 	if err != nil {
-		return metadatamodel.MetadataSchemaSnapshot{}, err
+		return metadatamodel.ApplicationSchemaSnapshot{}, err
 	}
 	if err := s.repository.SyncManifest(ctx, metadataInstallationScope("synchronize metadata manifest"), manifest); err != nil {
-		return metadatamodel.MetadataSchemaSnapshot{}, wrapMetadataError(err)
+		return metadatamodel.ApplicationSchemaSnapshot{}, wrapMetadataError(err)
 	}
 	s.runtime.ApplyManifestMetadata(valueOrDefault(manifest.TemplateID, s.templateID), valueOrDefault(manifest.Version, s.version), valueOrDefault(manifest.Name, s.name), manifest.Objects, manifest.Views, manifest.Actions, manifest.Workflows, manifest.AutomationRules, manifest.Dictionaries, manifest.Integrations, manifest.Reports, manifest.EntryPoints, manifest.Skills, manifest.Agents, manifest.IdentityProfileExtensions)
 	applyManifestAgentMetadata(s.runtime, manifest)
 	workflowScope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "reload published workflow definitions")
 	if err := s.workflows.InitializePublishedWorkflowDefinitions(ctx, manifest.Workflows, workflowScope); err != nil {
-		return metadatamodel.MetadataSchemaSnapshot{}, err
+		return metadatamodel.ApplicationSchemaSnapshot{}, err
 	}
 	snapshot := s.runtime.Schema()
 	s.notifyReloadObservers(snapshot)
 	return snapshot, nil
 }
 
-func (s *MetadataApplicationService) MetadataMigrationPlan(ctx context.Context, principal principalmodel.Principal) ([]metadatamodel.MetadataMigrationStep, error) {
+func (s *ApplicationSchemaService) MetadataMigrationPlan(ctx context.Context, principal principalmodel.Principal) ([]metadatamodel.MetadataMigrationStep, error) {
 	if err := metadataAuthorizeQuery(principal); err != nil {
 		return nil, err
 	}
@@ -91,7 +91,7 @@ func (s *MetadataApplicationService) MetadataMigrationPlan(ctx context.Context, 
 // Schema changes. It deliberately bypasses business record data scopes so a
 // metadata administrator never has to receive record payloads merely to decide
 // whether a required field needs a default value.
-func (s *MetadataApplicationService) MetadataObjectRecordCount(ctx context.Context, objectKey string, principal principalmodel.Principal) (int, error) {
+func (s *ApplicationSchemaService) MetadataObjectRecordCount(ctx context.Context, objectKey string, principal principalmodel.Principal) (int, error) {
 	if err := metadataAuthorizeQuery(principal); err != nil {
 		return 0, err
 	}
@@ -120,7 +120,7 @@ func (s *MetadataApplicationService) MetadataObjectRecordCount(ctx context.Conte
 	return page.Total, nil
 }
 
-func (s *MetadataApplicationService) ListMetadataDefinitions(ctx context.Context, resourceType, workspaceID string, principal principalmodel.Principal) ([]metadatamodel.MetadataDefinition, error) {
+func (s *ApplicationSchemaService) ListMetadataDefinitions(ctx context.Context, resourceType, workspaceID string, principal principalmodel.Principal) ([]metadatamodel.MetadataDefinition, error) {
 	if err := metadataAuthorizeQuery(principal); err != nil {
 		return nil, err
 	}
@@ -135,7 +135,7 @@ func (s *MetadataApplicationService) ListMetadataDefinitions(ctx context.Context
 	return s.withEffectiveActionDefinitions(resourceType, definitions), nil
 }
 
-func (s *MetadataApplicationService) GetMetadataDefinition(ctx context.Context, resourceType, resourceKey string, principal principalmodel.Principal) (metadatamodel.MetadataDefinition, bool, error) {
+func (s *ApplicationSchemaService) GetMetadataDefinition(ctx context.Context, resourceType, resourceKey string, principal principalmodel.Principal) (metadatamodel.MetadataDefinition, bool, error) {
 	if err := metadataAuthorizeQuery(principal); err != nil {
 		return metadatamodel.MetadataDefinition{}, false, err
 	}
@@ -150,7 +150,7 @@ func (s *MetadataApplicationService) GetMetadataDefinition(ctx context.Context, 
 	return definition, true, nil
 }
 
-func (s *MetadataApplicationService) withEffectiveActionDefinitions(resourceType string, definitions []metadatamodel.MetadataDefinition) []metadatamodel.MetadataDefinition {
+func (s *ApplicationSchemaService) withEffectiveActionDefinitions(resourceType string, definitions []metadatamodel.MetadataDefinition) []metadatamodel.MetadataDefinition {
 	if strings.TrimSpace(resourceType) != "action" || s.actionDefinitions == nil || len(definitions) == 0 {
 		return definitions
 	}
@@ -174,7 +174,7 @@ func (s *MetadataApplicationService) withEffectiveActionDefinitions(resourceType
 	return result
 }
 
-func (s *MetadataApplicationService) ListMetadataDefinitionVersions(ctx context.Context, resourceType, resourceKey string, principal principalmodel.Principal) ([]metadatamodel.MetadataDefinitionVersion, error) {
+func (s *ApplicationSchemaService) ListMetadataDefinitionVersions(ctx context.Context, resourceType, resourceKey string, principal principalmodel.Principal) ([]metadatamodel.MetadataDefinitionVersion, error) {
 	if err := metadataAuthorizeQuery(principal); err != nil {
 		return nil, err
 	}
@@ -185,7 +185,7 @@ func (s *MetadataApplicationService) ListMetadataDefinitionVersions(ctx context.
 	return versions, wrapMetadataError(err)
 }
 
-func (s *MetadataApplicationService) ListLocalizedTexts(ctx context.Context, query metadatamodel.LocalizedTextQuery, principal principalmodel.Principal) ([]metadatamodel.LocalizedText, error) {
+func (s *ApplicationSchemaService) ListLocalizedTexts(ctx context.Context, query metadatamodel.LocalizedTextQuery, principal principalmodel.Principal) ([]metadatamodel.LocalizedText, error) {
 	if err := metadataAuthorizeQuery(principal); err != nil {
 		return nil, err
 	}
@@ -196,7 +196,7 @@ func (s *MetadataApplicationService) ListLocalizedTexts(ctx context.Context, que
 	return values, wrapMetadataError(err)
 }
 
-func (s *MetadataApplicationService) LocalizedTextsForLocale(ctx context.Context, workspaceID, locale string) ([]metadatamodel.LocalizedText, error) {
+func (s *ApplicationSchemaService) LocalizedTextsForLocale(ctx context.Context, workspaceID, locale string) ([]metadatamodel.LocalizedText, error) {
 	workspaceID = strings.TrimSpace(workspaceID)
 	if err := metadataAuthorizeWorkspaceQuery(workspaceID); err != nil {
 		return nil, err
@@ -209,7 +209,7 @@ func (s *MetadataApplicationService) LocalizedTextsForLocale(ctx context.Context
 	return values, wrapMetadataError(err)
 }
 
-func (s *MetadataApplicationService) UpsertLocalizedText(ctx context.Context, req metadatamodel.LocalizedTextUpsertRequest, principal principalmodel.Principal) (metadatamodel.LocalizedText, error) {
+func (s *ApplicationSchemaService) UpsertLocalizedText(ctx context.Context, req metadatamodel.LocalizedTextUpsertRequest, principal principalmodel.Principal) (metadatamodel.LocalizedText, error) {
 	if err := metadataAuthorizeCommand(principal); err != nil {
 		return metadatamodel.LocalizedText{}, err
 	}
@@ -224,7 +224,7 @@ func (s *MetadataApplicationService) UpsertLocalizedText(ctx context.Context, re
 	return value, nil
 }
 
-func (s *MetadataApplicationService) DictionaryItems(ctx context.Context, dictionaryKey, locale string, principal principalmodel.Principal) (metadatamodel.DictionaryItemsResult, bool, error) {
+func (s *ApplicationSchemaService) DictionaryItems(ctx context.Context, dictionaryKey, locale string, principal principalmodel.Principal) (metadatamodel.DictionaryItemsResult, bool, error) {
 	if err := metadataAuthorizeQuery(principal); err != nil {
 		return metadatamodel.DictionaryItemsResult{}, false, err
 	}

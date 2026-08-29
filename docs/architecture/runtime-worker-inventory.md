@@ -4,7 +4,7 @@ This inventory is the production-reachability record for Runtime background exec
 
 ## Inventory contract
 
-Every process loop or durable task must record: owner, entrypoint, durable store, atomic claim, lease TTL, heartbeat, retry, dead letter, cancellation, recovery, and current migration gap. `platform/worker` owns only process lifecycle and the shared `Lease`, `FencingToken`, `HeartbeatResult`, `ShutdownState`, `Clock`, `WorkerID`, and `JitterSource` contracts.
+Every process loop or durable task must record: owner, entrypoint, durable store, atomic claim, lease TTL, heartbeat, retry, dead letter, cancellation, recovery, and current migration gap. `domainry-foundation/worker` owns only process lifecycle and the shared `Lease`, `FencingToken`, `HeartbeatResult`, `ShutdownState`, `Clock`, `WorkerID`, and `JitterSource` contracts.
 
 | Worker ID | Business owner | Production entrypoint | Durable store / claim | Lease TTL / heartbeat | Retry / DLQ | Cancel / recovery | Current gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -35,17 +35,17 @@ Every process loop or durable task must record: owner, entrypoint, durable store
 ## Non-worker goroutines
 
 - `cmd/server` runs `http.Server.ListenAndServe` in a lifecycle goroutine; it does not claim durable work.
-- `platform/worker.WithHeartbeat` owns the shared per-claim heartbeat goroutine.
+- `domainry-foundation/worker.WithHeartbeat` owns the shared per-claim heartbeat goroutine.
 - Record batch execution owns one per-claim cancellation and heartbeat goroutine. It is registered above as part of `record_batch`, not as a separate business worker.
 - Connector plugins do not start provider-owned polling loops; `plugins.StartBackgroundWorkers` intentionally delegates durable delivery to Integration event/outbox workers.
 - Notification Inbox SSE owns request-scoped poll and heartbeat tickers; both stop with the request context, do not claim durable work, and only emit invalidation cursors.
 
 ## Reviewed raw ticker baseline
 
-Process polling loops must use `platform/worker.StartNamedLoop`. The only reviewed production `time.NewTicker` call sites are:
+Process polling loops must use `domainry-foundation/worker.StartNamedLoop`. The only reviewed production `time.NewTicker` call sites are:
 
-- `runtime/platform/worker/lifecycle.go`: shared named loop implementation;
-- `runtime/platform/worker/heartbeat.go`: shared per-claim heartbeat implementation;
+- `domainry-foundation/worker/lifecycle.go`: shared named loop implementation;
+- `domainry-foundation/worker/heartbeat.go`: shared per-claim heartbeat implementation;
 - `runtime/application/record/record_batch_job_runtime_application_service.go`: Record-owned per-claim persisted cancellation plus heartbeat.
 - `runtime/transport/http/notifications/notifications_inbox_stream_handler.go`: request-scoped SSE invalidation polling and heartbeat; not a process worker.
 - `runtime/transport/http/records/records_stream_handler.go`: request-scoped content-free Business Workspace SSE invalidation polling and heartbeat; not a process worker.

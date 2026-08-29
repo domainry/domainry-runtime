@@ -56,6 +56,8 @@ func buildRecordApplicationDependencies(s *runtimeAssembly) recordapplication.Re
 		BuildAudit:                  auditapplication.AuditBuildEvent,
 		RecordMutationExecution:     s.RecordMutationExecutionRuntime,
 		BatchJobs:                   recordBatchJobStore(s.recordRepo),
+		DataExchange:                s.dataExchange,
+		DataExchangeProviders:       s.dataExchangeProviders,
 		BatchJobQueueLimit:          s.batchJobQueueLimit,
 		BatchJobWorkspaceQueueLimit: s.batchJobWorkspaceQueueLimit,
 		Worker:                      s.workerDependencies,
@@ -161,12 +163,12 @@ func listRuntimeSurfaceContextDirectoryUsers(ctx context.Context, services *runt
 }
 
 func initializeIntegrationAndBusinessSystem(ctx context.Context, s *runtimeAssembly, manifest manifestmodel.ManifestSchema, deps RuntimeServicesDependencies, queryPolicy recordQueryPolicyAdapter) {
-	s.actionService = assembleActionApplication(s, s, queryPolicy, s.metadataApplicationService, deps.BusinessHandlers, func(ctx context.Context, event, objectKey, recordID string, principal principalmodel.Principal, summary string, metadata map[string]any) {
+	s.actionService = assembleActionApplication(s, s, queryPolicy, s.applicationSchemaService, deps.BusinessHandlers, func(ctx context.Context, event, objectKey, recordID string, principal principalmodel.Principal, summary string, metadata map[string]any) {
 		s.auditApplicationService.AppendWithMetadata(ctx, event, objectKey, recordID, principal, summary, nil, nil, metadata)
 	})
 	// Change Plan scenario simulation depends on the canonical Action planner,
 	// so construct the Change Plan service only after Action wiring is complete.
-	s.businessChangePlans = newChangePlanApplicationService(s.businessChangePlanRepo, s.metadataRepo, s.auditRepo, s.metadataApplicationService, s.actionService)
+	s.businessChangePlans = newChangePlanApplicationService(s.businessChangePlanRepo, s.metadataRepo, s.auditRepo, s.applicationSchemaService, s.actionService)
 	s.runtimeStatusService = deployment.NewDeploymentRuntimeStatusApplicationServiceWithWorker(manifest.TemplateID, manifest.Version, s, s.schedulerService, deps.RuntimeStatus, deps.Records, s.auditApplicationService, deps.WorkflowWorker, deps.IntegrationDelivery, s.workerDependencies)
 	s.runtimeStatusService.ConfigureLifecycleHealth(ctx, s.lifecycleService)
 	s.workflowProcesses = assembleWorkflowProcessEngine(s)
@@ -174,5 +176,5 @@ func initializeIntegrationAndBusinessSystem(ctx context.Context, s *runtimeAssem
 	integrationsService.RegisterDefaultIntegrationOutboxSenders()
 	integrationsService.RegisterProviderIntegrationOutboxSenders()
 	s.integrationService = integrationsService
-	s.businessSystemService = assembleBusinessSystemApplication(s.schemaService, s.metadataApplicationService, s.workflowApplicationService, s.automationApplicationService, integrationsService, s.recordApplicationService, s.schedulerService, s.frontendCapabilities, s.runtimeStatusService, s.businessEvidenceRepo)
+	s.businessSystemService = assembleBusinessSystemApplication(s.schemaService, s.applicationSchemaService, s.workflowApplicationService, s.automationApplicationService, integrationsService, s.recordApplicationService, s.schedulerService, s.frontendCapabilities, s.runtimeStatusService, s.businessEvidenceRepo)
 }

@@ -3,11 +3,10 @@ package audit
 import (
 	"context"
 	"strings"
-	"time"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
 	auditservice "github.com/domainry/domainry-runtime/runtime/domain/audit/service"
 	integrationpolicy "github.com/domainry/domainry-runtime/runtime/domain/integration/policy"
@@ -16,31 +15,32 @@ import (
 
 type AuditApplicationService struct {
 	*auditservice.AuditDomainService
-	projectEvents        func(context.Context, []auditmodel.AuditEvent, principalmodel.Principal) ([]auditmodel.AuditEvent, error)
-	exportStore          auditcontract.AuditBusinessExportStore
-	exportTokenKey       []byte
-	authorizeExportScope func(context.Context, auditmodel.AuditBusinessExportFilter, principalmodel.Principal) error
-	clock                func() time.Time
+	projectEvents func(context.Context, []auditmodel.AuditEvent, principalmodel.Principal) ([]auditmodel.AuditEvent, error)
+	exporter      auditmodel.Exporter
 }
 
-func NewAuditApplicationService(repository auditrepository.AuditRepository, exportStores ...auditcontract.AuditBusinessExportStore) *AuditApplicationService {
-	service := &AuditApplicationService{AuditDomainService: auditservice.NewAuditDomainService(repository), clock: time.Now}
-	if len(exportStores) > 0 {
-		service.exportStore = exportStores[0]
+func NewAuditApplicationService(repository auditrepository.AuditRepository, exporters ...auditmodel.Exporter) *AuditApplicationService {
+	service := &AuditApplicationService{AuditDomainService: auditservice.NewAuditDomainService(repository)}
+	if len(exporters) > 0 {
+		service.exporter = exporters[0]
 	}
 	return service
 }
 
-func (service *AuditApplicationService) SetBusinessExportClock(clock func() time.Time) {
-	if service != nil && clock != nil {
-		service.clock = clock
-	}
-}
-
 func (service *AuditApplicationService) ConfigureBusinessExport(tokenKey []byte, authorizer func(context.Context, auditmodel.AuditBusinessExportFilter, principalmodel.Principal) error) {
 	if service != nil {
-		service.exportTokenKey = append([]byte(nil), tokenKey...)
-		service.authorizeExportScope = authorizer
+		if service.exporter != nil {
+			service.exporter.ConfigureExport(tokenKey, func(ctx context.Context, filters auditmodel.AuditBusinessExportFilter, actor auditmodel.ExportPrincipal) error {
+				if authorizer == nil {
+					return nil
+				}
+				principal, ok := actor.AuthorizationContext.(principalmodel.Principal)
+				if !ok {
+					return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.audit.export_scope_changed"}
+				}
+				return authorizer(ctx, filters, principal)
+			})
+		}
 	}
 }
 

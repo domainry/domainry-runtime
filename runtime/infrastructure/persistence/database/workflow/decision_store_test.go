@@ -2,7 +2,7 @@ package workflow
 
 import (
 	"encoding/json"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"

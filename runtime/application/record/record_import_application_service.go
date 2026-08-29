@@ -11,10 +11,8 @@ import (
 
 	"bytes"
 	"context"
-	"encoding/csv"
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +20,7 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/logging"
+	"github.com/domainry/domainry-runtime/pkg/dataexchange"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
@@ -165,39 +164,14 @@ func (s *RecordImportApplicationService) ApplyIdempotent(ctx context.Context, ob
 }
 
 func (s *RecordImportApplicationService) buildPreview(ctx context.Context, object definitionmodel.ObjectSchema, rawCSV []byte, principal principalmodel.Principal) (recordmodel.RecordImportPreview, error) {
-	if len(rawCSV) > recordImportMaxBytes {
-		return recordmodel.RecordImportPreview{}, recordImportError(apperror.KindBadRequest, "backend.import.payload_too_large", nil)
-	}
-	reader := csv.NewReader(bytes.NewReader(rawCSV))
-	reader.TrimLeadingSpace = true
-	headers, err := reader.Read()
-	if err != nil {
-		if errors.Is(err, io.EOF) {
-			return recordmodel.RecordImportPreview{}, recordImportError(apperror.KindBadRequest, "backend.import.header_required", nil)
-		}
-		return recordmodel.RecordImportPreview{}, recordImportError(apperror.KindBadRequest, "backend.import.invalid_csv", nil)
-	}
-	if len(headers) > recordImportMaxColumns {
-		return recordmodel.RecordImportPreview{}, recordImportError(apperror.KindBadRequest, "backend.import.too_many_columns", nil)
-	}
 	fieldByHeader := recordvalidation.RecordImportFieldHeaderAliases(object)
 	seenImportKeys := map[string]int{}
 	preview := recordmodel.RecordImportPreview{ObjectKey: object.Key}
-	for index := 0; ; index++ {
-		if err := ctx.Err(); err != nil {
-			return recordmodel.RecordImportPreview{}, err
-		}
-		rawRow, err := reader.Read()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return recordmodel.RecordImportPreview{}, recordImportError(apperror.KindBadRequest, "backend.import.invalid_csv", nil)
-		}
-		if index >= recordImportMaxRows {
-			return recordmodel.RecordImportPreview{}, recordImportError(apperror.KindBadRequest, "backend.import.too_many_rows", nil)
-		}
-		row := recordmodel.RecordImportPreviewRow{Row: index + 2, Data: map[string]any{}, RawValues: map[string]string{}, Valid: true}
+	_, decodeErr := dataexchange.DecodeCSV(ctx, bytes.NewReader(rawCSV), dataexchange.CSVDecodeLimits{
+		MaxBytes: recordImportMaxBytes, MaxRows: recordImportMaxRows, MaxColumns: recordImportMaxColumns,
+	}, func(headers []string, sourceRow dataexchange.CSVRecord) error {
+		rawRow := sourceRow.Values
+		row := recordmodel.RecordImportPreviewRow{Row: sourceRow.Number, Data: map[string]any{}, RawValues: map[string]string{}, Valid: true}
 		for columnIndex, rawHeader := range headers {
 			header := strings.TrimSpace(rawHeader)
 			if header == "" || strings.HasSuffix(header, "__display") {
@@ -268,7 +242,7 @@ func (s *RecordImportApplicationService) buildPreview(ctx context.Context, objec
 			}
 			exists, err := s.dependencies.Repository.UniqueExists(ctx, principal.WorkspaceID, object.Key, field.Key, "", value)
 			if err != nil {
-				return recordmodel.RecordImportPreview{}, recordImportInternalError("check duplicate field", err)
+				return recordImportInternalError("check duplicate field", err)
 			}
 			if exists {
 				row.Duplicate = true
@@ -292,6 +266,23 @@ func (s *RecordImportApplicationService) buildPreview(ctx context.Context, objec
 			preview.InvalidRows++
 		}
 		preview.Rows = append(preview.Rows, row)
+		return nil
+	})
+	if decodeErr != nil {
+		switch {
+		case errors.Is(decodeErr, dataexchange.ErrPayloadTooLarge):
+			return recordmodel.RecordImportPreview{}, recordImportError(apperror.KindBadRequest, "backend.import.payload_too_large", decodeErr)
+		case errors.Is(decodeErr, dataexchange.ErrTooManyRows):
+			return recordmodel.RecordImportPreview{}, recordImportError(apperror.KindBadRequest, "backend.import.too_many_rows", decodeErr)
+		case errors.Is(decodeErr, dataexchange.ErrTooManyColumns):
+			return recordmodel.RecordImportPreview{}, recordImportError(apperror.KindBadRequest, "backend.import.too_many_columns", decodeErr)
+		case errors.Is(decodeErr, dataexchange.ErrHeaderRequired):
+			return recordmodel.RecordImportPreview{}, recordImportError(apperror.KindBadRequest, "backend.import.header_required", decodeErr)
+		case errors.Is(decodeErr, dataexchange.ErrInvalidCSV):
+			return recordmodel.RecordImportPreview{}, recordImportError(apperror.KindBadRequest, "backend.import.invalid_csv", decodeErr)
+		default:
+			return recordmodel.RecordImportPreview{}, decodeErr
+		}
 	}
 	preview.CanApply = len(preview.Rows) > 0 && preview.InvalidRows == 0 && preview.DuplicateRows == 0
 	return preview, nil

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 )
 
 func (h *AgentDialogHandler) agentDialogDiagnostics(w http.ResponseWriter, r *http.Request) {

@@ -8,7 +8,7 @@ import (
 )
 
 func TestRuntimeIdentityCatalogPublishesUniversalFactForPermissionOnlyResource(t *testing.T) {
-	snapshot := metadatamodel.MetadataSchemaSnapshot{
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{
 		EntryPoints: []definitionmodel.EntryPointSchema{{RequiredPermissions: []string{"workflow.task.act"}}},
 	}
 	catalog := runtimeIdentityCatalog(snapshot, "default", "runtime", nil)

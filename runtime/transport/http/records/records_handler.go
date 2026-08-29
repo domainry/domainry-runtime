@@ -16,9 +16,9 @@ import (
 	"strings"
 	"time"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 
 	"github.com/domainry/domainry-foundation/logging"
 )

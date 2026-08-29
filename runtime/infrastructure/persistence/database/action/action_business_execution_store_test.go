@@ -11,20 +11,20 @@ import (
 	"testing"
 	"time"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/audit"
+	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 	"github.com/domainry/domainry-runtime/testsupport/notificationsdkfixture"
 )
 
@@ -757,7 +757,7 @@ func TestBusinessActionExecutionStoreRollsBackMutationAndDurableIntentWhenAction
 		t.Fatal(err)
 	}
 	duplicateAudit := auditmodel.AuditEvent{ID: "action-audit-duplicate", WorkspaceID: "workspace-a", Event: "existing_event", CreatedAt: now.Format(time.RFC3339Nano)}
-	if err := auditpersistence.NewAuditStore(store).InsertAuditEvent(t.Context(), "workspace-a", duplicateAudit); err != nil {
+	if err := auditpersistence.NewRepositoryFromStore(store).InsertAuditEvent(t.Context(), "workspace-a", duplicateAudit); err != nil {
 		t.Fatal(err)
 	}
 	object := definitionmodel.ObjectSchema{Key: "action_audit_rollback", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}

@@ -9,7 +9,7 @@ import (
 )
 
 func TestOpenAPIOperationsShareSecurityResponseAndOperationIDContract(t *testing.T) {
-	spec := Build(metadatamodel.MetadataSchemaSnapshot{})
+	spec := Build(metadatamodel.ApplicationSchemaSnapshot{})
 	components, _ := spec["components"].(map[string]any)
 	schemas, _ := components["schemas"].(map[string]any)
 	walkOpenAPIRefs(t, spec, schemas)

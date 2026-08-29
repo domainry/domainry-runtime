@@ -77,7 +77,7 @@ func TestRuntimeRolePermissionsMapsLegacyNotificationAdministration(t *testing.T
 }
 
 func TestRuntimeIdentityCatalogIncludesEmbeddedNotificationAuthorization(t *testing.T) {
-	catalog := runtimeIdentityCatalog(metadatamodel.MetadataSchemaSnapshot{}, "workspace", "runtime", nil)
+	catalog := runtimeIdentityCatalog(metadatamodel.ApplicationSchemaSnapshot{}, "workspace", "runtime", nil)
 	resources := map[string]identitysdk.ResourceDefinition{}
 	for _, resource := range catalog.Resources {
 		resources[string(resource.Key)] = resource

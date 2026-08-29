@@ -48,7 +48,7 @@ func ValidateStructuredMetadataDefinition(resourceType string, payload json.RawM
 // system drafts. It validates the complete composed candidate first, removes
 // client JSON representation differences, and always derives compiler-owned
 // Action effect sets on the server.
-func (s *MetadataApplicationService) CanonicalizeMetadataCandidate(ctx context.Context, mutations []metadatamodel.MetadataDefinitionMutation) ([]metadatamodel.MetadataDefinitionMutation, error) {
+func (s *ApplicationSchemaService) CanonicalizeMetadataCandidate(ctx context.Context, mutations []metadatamodel.MetadataDefinitionMutation) ([]metadatamodel.MetadataDefinitionMutation, error) {
 	if err := s.ValidateMetadataCandidate(ctx, mutations); err != nil {
 		return nil, err
 	}

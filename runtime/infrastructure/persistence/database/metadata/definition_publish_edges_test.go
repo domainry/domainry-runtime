@@ -4,7 +4,7 @@ import (
 	"database/sql/driver"
 	"testing"
 
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 )
 

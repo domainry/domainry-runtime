@@ -21,6 +21,7 @@ import (
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
 
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	businesseventcontract "github.com/domainry/domainry-runtime/runtime/domain/businessevent/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -32,7 +33,6 @@ import (
 	operationspersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 )
@@ -64,7 +64,7 @@ type httpServerAssembly struct {
 	handlers      runtimehttp.HTTPRouterHandlers
 	recordQueries *recordapplication.RecordApplicationService
 	integrations  *integrationapplication.IntegrationApplicationService
-	metadata      *metadataapplication.MetadataApplicationService
+	metadata      *metadataapplication.ApplicationSchemaService
 	operations    *operationsapplication.OperationsApplicationService
 	identityHTTP  *identityhttpmiddleware.Middleware
 	principals    identitysdk.PrincipalResolver
@@ -154,7 +154,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	assembly := &httpServerAssembly{
 		dependencies: dependencies, server: server, callbacks: server.HandlerCallbacks(),
 		recordQueries: recordApplication, integrations: integrations,
-		metadata: records.Applications().Metadata, identityHTTP: identityAuthentication,
+		metadata: records.Applications().ApplicationSchema, identityHTTP: identityAuthentication,
 		principals: identityPrincipals,
 	}
 	assembly.wireOperationsApplication()

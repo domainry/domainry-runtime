@@ -96,8 +96,8 @@ func newIntegrationEntrypointHTTPApplication(t *testing.T) (*database.RuntimeSto
 			}
 			return principalmodel.Principal{}
 		},
-		Schema: func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot {
-			return metadatamodel.MetadataSchemaSnapshot{Agents: []agentmodel.AgentSchema{{Key: "assistant", Name: "Assistant", Tools: []string{"readRecord"}}}}
+		Schema: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+			return metadatamodel.ApplicationSchemaSnapshot{Agents: []agentmodel.AgentSchema{{Key: "assistant", Name: "Assistant", Tools: []string{"readRecord"}}}}
 		},
 		InvokeAction: func(_ context.Context, invocation actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error) {
 			return actionmodel.ActionInvocationResult{Record: &actionmodel.ActionResult{ActionKey: invocation.ActionKey, ObjectKey: invocation.ObjectKey, RecordID: invocation.RecordID, Message: "ok"}}, nil

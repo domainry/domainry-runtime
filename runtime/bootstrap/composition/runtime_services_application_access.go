@@ -3,6 +3,7 @@ package composition
 import (
 	"context"
 
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
@@ -22,7 +23,6 @@ import (
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 type RuntimeApplications struct {
@@ -32,7 +32,7 @@ type RuntimeApplications struct {
 	AgentTaskWorker       *agentapplication.AgentTaskWorker
 	Records               *recordapplication.RecordApplicationService
 	Workflows             *workflowapplication.WorkflowApplicationService
-	Metadata              *metadataapplication.MetadataApplicationService
+	ApplicationSchema     *metadataapplication.ApplicationSchemaService
 	Automations           *automationapplication.AutomationApplicationService
 	Audit                 *auditapplication.AuditApplicationService
 	Actions               *actionapplication.ActionApplicationService
@@ -73,7 +73,7 @@ func (s *runtimeAssembly) Applications() RuntimeApplications {
 		AgentTaskWorker:       s.agentTaskWorker,
 		Records:               s.recordApplicationService,
 		Workflows:             s.workflowApplicationService,
-		Metadata:              s.metadataApplicationService,
+		ApplicationSchema:     s.applicationSchemaService,
 		Automations:           s.automationApplicationService,
 		Audit:                 s.auditApplicationService,
 		Actions:               s.actionService,
@@ -101,16 +101,16 @@ func (s *RuntimeServices) Applications() RuntimeApplications {
 	return s.applications
 }
 
-func (s *RuntimeServices) Schema() metadatamodel.MetadataSchemaSnapshot {
+func (s *RuntimeServices) Schema() metadatamodel.ApplicationSchemaSnapshot {
 	if s == nil || s.schema == nil {
-		return metadatamodel.MetadataSchemaSnapshot{}
+		return metadatamodel.ApplicationSchemaSnapshot{}
 	}
 	return s.schema.Schema()
 }
 
-func (s *RuntimeServices) SchemaForPrincipal(ctx context.Context, principal principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot {
+func (s *RuntimeServices) SchemaForPrincipal(ctx context.Context, principal principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
 	if s == nil || s.schema == nil {
-		return metadatamodel.MetadataSchemaSnapshot{}
+		return metadatamodel.ApplicationSchemaSnapshot{}
 	}
 	return s.schema.SchemaForPrincipal(ctx, principal)
 }

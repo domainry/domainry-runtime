@@ -38,16 +38,63 @@ func recordBatchLeasePredicate(job recordmodel.RecordBatchJob) ormbuilder.Predic
 }
 
 func (r RecordStore) EnqueueRecordBatchJob(ctx context.Context, job recordmodel.RecordBatchJob) (recordmodel.RecordBatchJob, bool, error) {
-	if err := ctx.Err(); err != nil {
+	job, err := r.prepareRecordBatchJob(ctx, job)
+	if err != nil {
 		return recordmodel.RecordBatchJob{}, false, err
+	}
+	if err := r.insertRecordBatchJob(ctx, r.database(), job); err != nil {
+		return r.resolveRecordBatchEnqueueConflict(ctx, job, err)
+	}
+	return job, false, nil
+}
+
+// EnqueueRecordBatchJobWithSource publishes the queue row and immutable input
+// chunks in one transaction. A worker can therefore never claim a partially
+// uploaded import source.
+func (r RecordStore) EnqueueRecordBatchJobWithSource(ctx context.Context, job recordmodel.RecordBatchJob, chunks []recordmodel.RecordBatchJobChunk) (recordmodel.RecordBatchJob, bool, error) {
+	job, err := r.prepareRecordBatchJob(ctx, job)
+	if err != nil {
+		return recordmodel.RecordBatchJob{}, false, err
+	}
+	tx, err := r.database().BeginTx(ctx, nil)
+	if err != nil {
+		return recordmodel.RecordBatchJob{}, false, err
+	}
+	defer tx.Rollback()
+	if err := r.insertRecordBatchJob(ctx, tx, job); err != nil {
+		_ = tx.Rollback()
+		return r.resolveRecordBatchEnqueueConflict(ctx, job, err)
+	}
+	for index, chunk := range chunks {
+		if chunk.Sequence != index || chunk.WorkspaceID != "" && strings.TrimSpace(chunk.WorkspaceID) != job.WorkspaceID {
+			return recordmodel.RecordBatchJob{}, false, fmt.Errorf("record batch source chunk sequence or workspace is invalid")
+		}
+		query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "record_batch_job_chunks", job.WorkspaceID).
+			Columns("job_id", "sequence_no", "content", "created_at").Values(job.ID, index, chunk.Content, job.CreatedAt).Build()
+		if buildErr != nil {
+			return recordmodel.RecordBatchJob{}, false, buildErr
+		}
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+			return recordmodel.RecordBatchJob{}, false, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return recordmodel.RecordBatchJob{}, false, err
+	}
+	return job, false, nil
+}
+
+func (r RecordStore) prepareRecordBatchJob(ctx context.Context, job recordmodel.RecordBatchJob) (recordmodel.RecordBatchJob, error) {
+	if err := ctx.Err(); err != nil {
+		return recordmodel.RecordBatchJob{}, err
 	}
 	job.WorkspaceID = strings.TrimSpace(job.WorkspaceID)
 	job.Kind, job.ObjectKey, job.IdempotencyKey = strings.TrimSpace(job.Kind), strings.TrimSpace(job.ObjectKey), strings.TrimSpace(job.IdempotencyKey)
 	if len(job.WorkspaceID) == 0 {
-		return recordmodel.RecordBatchJob{}, false, fmt.Errorf("record batch job workspace is required")
+		return recordmodel.RecordBatchJob{}, fmt.Errorf("record batch job workspace is required")
 	}
 	if job.Kind == "" || job.ObjectKey == "" || job.IdempotencyKey == "" {
-		return recordmodel.RecordBatchJob{}, false, fmt.Errorf("record batch job identity is required")
+		return recordmodel.RecordBatchJob{}, fmt.Errorf("record batch job identity is required")
 	}
 	if job.ID == "" {
 		digest := sha256.Sum256([]byte(job.WorkspaceID + "\x00" + job.Kind + "\x00" + job.ObjectKey + "\x00" + job.IdempotencyKey))
@@ -58,30 +105,37 @@ func (r RecordStore) EnqueueRecordBatchJob(ctx context.Context, job recordmodel.
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	job.Status, job.CreatedAt, job.UpdatedAt = "queued", now, now
 	if err := r.registerRecordBatchWorkerQueueScope(ctx, job.WorkspaceID, now); err != nil {
-		return recordmodel.RecordBatchJob{}, false, err
+		return recordmodel.RecordBatchJob{}, err
 	}
+	ctx = recordBatchWorkspaceContext(ctx, job.WorkspaceID, job.ActorID)
+	return job, nil
+}
+
+func (r RecordStore) insertRecordBatchJob(ctx context.Context, executor recordQueryExecutor, job recordmodel.RecordBatchJob) error {
 	ctx = recordBatchWorkspaceContext(ctx, job.WorkspaceID, job.ActorID)
 	columns := append(append([]string{}, recordBatchJobColumns[:1]...), recordBatchJobColumns[2:]...)
 	values := recordBatchJobValues(job)
 	values = append(append([]any{}, values[:1]...), values[2:]...)
 	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "record_batch_jobs", job.WorkspaceID).Columns(columns...).Values(values...).Build()
 	if buildErr != nil {
-		return recordmodel.RecordBatchJob{}, false, buildErr
+		return buildErr
 	}
-	if _, err := r.database().ExecContext(ctx, query, args...); err != nil {
-		existing, found, findErr := r.findRecordBatchJobByScope(ctx, job.WorkspaceID, job.Kind, job.ObjectKey, job.IdempotencyKey)
-		if findErr != nil {
-			return recordmodel.RecordBatchJob{}, false, fmt.Errorf("resolve record batch enqueue conflict: %w", findErr)
-		}
-		if found {
-			if existing.Fingerprint != job.Fingerprint {
-				return recordmodel.RecordBatchJob{}, false, recordcontract.ErrRecordBatchJobIdempotencyConflict
-			}
-			return existing, true, nil
-		}
-		return recordmodel.RecordBatchJob{}, false, fmt.Errorf("enqueue record batch job: %w", err)
+	_, err := executor.ExecContext(ctx, query, args...)
+	return err
+}
+
+func (r RecordStore) resolveRecordBatchEnqueueConflict(ctx context.Context, job recordmodel.RecordBatchJob, insertErr error) (recordmodel.RecordBatchJob, bool, error) {
+	existing, found, findErr := r.findRecordBatchJobByScope(ctx, job.WorkspaceID, job.Kind, job.ObjectKey, job.IdempotencyKey)
+	if findErr != nil {
+		return recordmodel.RecordBatchJob{}, false, fmt.Errorf("resolve record batch enqueue conflict: %w", findErr)
 	}
-	return job, false, nil
+	if found {
+		if existing.Fingerprint != job.Fingerprint {
+			return recordmodel.RecordBatchJob{}, false, recordcontract.ErrRecordBatchJobIdempotencyConflict
+		}
+		return existing, true, nil
+	}
+	return recordmodel.RecordBatchJob{}, false, fmt.Errorf("enqueue record batch job: %w", insertErr)
 }
 
 func (r RecordStore) GetRecordBatchJob(ctx context.Context, workspaceID, jobID string) (recordmodel.RecordBatchJob, bool, error) {

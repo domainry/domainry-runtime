@@ -84,7 +84,7 @@ func TestFirstDefinitionIssueErrorPreservesField(t *testing.T) {
 }
 
 func TestReportValidationRejectsOneToManyMeasureAmplification(t *testing.T) {
-	snapshot := metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{
 		{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "paid_amount", Type: "currency"}}},
 		{Key: "order_line", Fields: []definitionmodel.FieldSchema{{Key: "order_id", Type: "relation"}, {Key: "amount", Type: "currency"}}},
 	}}
@@ -104,7 +104,7 @@ func TestReportValidationRejectsOneToManyMeasureAmplification(t *testing.T) {
 }
 
 func TestReportValidationPublishesObjectSQLAndRejectsUnsafeSelection(t *testing.T) {
-	snapshot := metadatamodel.MetadataSchemaSnapshot{
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{
 		Objects: []definitionmodel.ObjectSchema{{Key: "sale", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "select"}, {Key: "amount", Type: "currency", Config: map[string]any{"precision": 19, "scale": 2}}}}},
 	}
 	report := reportmodel.ReportSchema{Key: "sales.sql", RequiredPermissions: []string{"sale.read"}, ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{
@@ -122,7 +122,7 @@ func TestReportValidationPublishesObjectSQLAndRejectsUnsafeSelection(t *testing.
 }
 
 func TestReportValidationBlocksUnindexedDatasetAccessPath(t *testing.T) {
-	snapshot := metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "event", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "select"}}}}}
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "event", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "select"}}}}}
 	report := reportmodel.ReportSchema{Key: "event.summary", Dataset: reportmodel.ReportDatasetSchema{
 		Source:  reportmodel.ReportDatasetSource{ObjectKey: "event", Alias: "events"},
 		Filters: []reportmodel.ReportDatasetFilter{{Field: reportmodel.ReportDatasetField{SourceAlias: "events", FieldKey: "status"}, Operator: "eq", Value: "open"}},
@@ -138,7 +138,7 @@ func TestReportValidationBlocksUnindexedDatasetAccessPath(t *testing.T) {
 }
 
 func TestReportValidationAcceptsClosedExportScopeAndRejectsUnsafeFragments(t *testing.T) {
-	snapshot := metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{
 		{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "order_no", Type: "text"}}},
 		{Key: "tag_assignment", Fields: []definitionmodel.FieldSchema{{Key: "target_id", Type: "text"}, {Key: "tag_definition_id", Type: "text"}, {Key: "active", Type: "boolean"}}},
 		{Key: "tag_definition", Fields: []definitionmodel.FieldSchema{{Key: "stable_key", Type: "text"}}},
@@ -164,8 +164,8 @@ func TestReportValidationAcceptsClosedExportScopeAndRejectsUnsafeFragments(t *te
 	}
 }
 
-func reportValidationFixture() (metadatamodel.MetadataSchemaSnapshot, reportmodel.ReportSchema) {
-	return metadatamodel.MetadataSchemaSnapshot{
+func reportValidationFixture() (metadatamodel.ApplicationSchemaSnapshot, reportmodel.ReportSchema) {
+	return metadatamodel.ApplicationSchemaSnapshot{
 			Objects: []definitionmodel.ObjectSchema{{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}},
 		}, reportmodel.ReportSchema{
 			Key: "customer.summary", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "customer", Alias: "customer"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "name", Field: reportmodel.ReportDatasetField{SourceAlias: "customer", FieldKey: "name"}}}},

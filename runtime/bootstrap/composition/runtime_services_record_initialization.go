@@ -3,12 +3,12 @@ package composition
 import (
 	"context"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordruntime "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	reportapplication "github.com/domainry/domainry-runtime/runtime/application/report"
 	surfacecontextbusiness "github.com/domainry/domainry-runtime/runtime/application/surfacecontext"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	metadatabusiness "github.com/domainry/domainry-runtime/runtime/domain/metadata/service"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"

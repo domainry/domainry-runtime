@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	deploymentprojection "github.com/domainry/domainry-runtime/runtime/domain/deployment/projection"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"

@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"strings"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/logging"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 )
 
 func (h *RecordsHandler) prepareBusinessAuditEventExport(w http.ResponseWriter, r *http.Request) {

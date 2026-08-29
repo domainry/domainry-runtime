@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 func TestRecordTimerFailureRecoveryOwnsStateAndEvidence(t *testing.T) {

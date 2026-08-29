@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 

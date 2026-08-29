@@ -8,8 +8,8 @@ import (
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
-func objectSQLBoundsSnapshot() metadatamodel.MetadataSchemaSnapshot {
-	return metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{
+func objectSQLBoundsSnapshot() metadatamodel.ApplicationSchemaSnapshot {
+	return metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{
 		Key: "repair_order",
 		Fields: []definitionmodel.FieldSchema{
 			{Key: "status", Type: "select"},

@@ -4,13 +4,13 @@ import (
 	"context"
 	"time"
 
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 // StartSnapshotWatcher invalidates the local immutable schema projection when
 // another Runtime publishes a new database metadata revision.
-func (s *MetadataApplicationService) StartSnapshotWatcher(ctx context.Context, interval time.Duration, scope principalmodel.SystemScope) <-chan struct{} {
+func (s *ApplicationSchemaService) StartSnapshotWatcher(ctx context.Context, interval time.Duration, scope principalmodel.SystemScope) <-chan struct{} {
 	if _, err := principalmodel.NewSystemQueryScope(scope); err != nil {
 		return workerplatform.Stopped()
 	}
@@ -25,7 +25,7 @@ func (s *MetadataApplicationService) StartSnapshotWatcher(ctx context.Context, i
 	return watcher.Start(ctx, interval)
 }
 
-func (s *MetadataApplicationService) reloadMetadataFromSource(ctx context.Context) error {
+func (s *ApplicationSchemaService) reloadMetadataFromSource(ctx context.Context) error {
 	manifest, err := s.repository.LoadManifest(ctx, metadataInstallationScope("refresh metadata snapshot"))
 	if err != nil {
 		return err

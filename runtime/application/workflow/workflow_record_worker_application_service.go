@@ -13,9 +13,9 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/requestcontext"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 func (s *WorkflowApplicationService) ProcessDueWorkflowExecutions(ctx context.Context, limit int, principal principalmodel.Principal) (workflowmodel.WorkflowProcessResult, error) {

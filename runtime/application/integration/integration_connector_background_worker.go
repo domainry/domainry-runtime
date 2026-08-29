@@ -8,11 +8,11 @@ import (
 	"time"
 
 	connector "github.com/domainry/domainry-connector-sdk"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	integrationruntime "github.com/domainry/domainry-runtime/runtime/domain/integration/runtime"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 const connectorBackgroundLeaseTTL = 2 * time.Minute

@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-connector-sdk"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	projectconnector "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit/projectconnector"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 type projectConnectorAcceptanceDeliveryRepository struct {

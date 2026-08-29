@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationpolicy "github.com/domainry/domainry-runtime/runtime/domain/integration/policy"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 func integrationFailureClass(err error) workerplatform.FailureClass {

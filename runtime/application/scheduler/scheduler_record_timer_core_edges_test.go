@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 type recordTimerErrorCalendar struct{ err error }
@@ -34,7 +34,7 @@ func recordTimerTestService(repository *schedulerRepositoryFake, now time.Time, 
 		objects = append(objects, definitionmodel.ObjectSchema{Key: "record_timer"})
 	}
 	return NewSchedulerApplicationServiceWithWorker(
-		schedulerSchemaStub{snapshot: metadatamodel.MetadataSchemaSnapshot{Objects: objects}}, nil, repository, nil,
+		schedulerSchemaStub{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: objects}}, nil, repository, nil,
 		workerplatform.Dependencies{Clock: schedulerFixedClock{now: now}},
 	)
 }

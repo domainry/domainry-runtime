@@ -25,7 +25,7 @@ func TestReportDirectKeyEntrypointsConcealDefinitionWithoutRequiredPermission(t 
 			Source: reportmodel.ReportDatasetSource{ObjectKey: "order_line", Alias: "order_line"},
 		},
 	}
-	snapshot := metadatamodel.MetadataSchemaSnapshot{
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{
 		Objects: []definitionmodel.ObjectSchema{{Key: "order_line"}},
 		Reports: []reportmodel.ReportSchema{reportDefinition},
 	}

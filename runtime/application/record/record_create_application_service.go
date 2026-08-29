@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"strings"
 
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 
 	"time"
 

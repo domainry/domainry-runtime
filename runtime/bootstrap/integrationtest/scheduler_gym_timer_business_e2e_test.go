@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -16,14 +17,13 @@ import (
 	schedulerprojection "github.com/domainry/domainry-runtime/runtime/domain/scheduler/projection"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 type gymTimerFixtureSchema struct {
-	snapshot metadatamodel.MetadataSchemaSnapshot
+	snapshot metadatamodel.ApplicationSchemaSnapshot
 }
 
-func (s gymTimerFixtureSchema) SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot {
+func (s gymTimerFixtureSchema) SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
 	return s.snapshot
 }
 
@@ -116,7 +116,7 @@ func gymTimerFixtureService(t *testing.T) (*schedulerapplication.SchedulerApplic
 		objectMap[object.Key] = object
 	}
 	runtime := &gymTimerFixtureRuntime{repository: repository, objects: objectMap, alerts: map[string]int{}}
-	service := schedulerapplication.NewSchedulerApplicationServiceWithWorker(gymTimerFixtureSchema{snapshot: metadatamodel.MetadataSchemaSnapshot{Objects: objects}}, runtime, repository, nil, workerplatform.Dependencies{WorkerID: workerplatform.WorkerID("gym-timer-fixture")})
+	service := schedulerapplication.NewSchedulerApplicationServiceWithWorker(gymTimerFixtureSchema{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: objects}}, runtime, repository, nil, workerplatform.Dependencies{WorkerID: workerplatform.WorkerID("gym-timer-fixture")})
 	service.ConfigureWorker(schedulerapplication.WorkerConfig{Enabled: true, BatchSize: 100, LeaseTTL: time.Minute})
 	return service, repository, runtime, objects
 }

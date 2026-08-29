@@ -21,7 +21,7 @@ func TestVisibilityWriteOnlyFieldAndActionFallbackEdges(t *testing.T) {
 			{ObjectKey: "customer", FieldKey: "hidden"},
 		},
 	}
-	snapshot := metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "write_only"}, {Key: "hidden"}}}}}
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "write_only"}, {Key: "hidden"}}}}}
 	filtered := SnapshotForPrincipal(snapshot, accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, role))
 	if len(filtered.Objects) != 1 || len(filtered.Objects[0].Fields) != 1 || filtered.Objects[0].Fields[0].Key != "write_only" {
 		t.Fatalf("write-only visibility=%#v", filtered.Objects)

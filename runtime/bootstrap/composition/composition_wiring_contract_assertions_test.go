@@ -16,7 +16,7 @@ var (
 	_ workflowapplication.WorkflowRegistry       = runtimeWorkflowRegistry{}
 	_ workflowapplication.WorkflowSchemaProvider = runtimeWorkflowSchemaProvider{}
 
-	_ metadataapplication.LifecycleRuntime = metadataLifecycleRuntimeAdapter{}
+	_ metadataapplication.LifecycleRuntime = applicationSchemaLifecycleRuntimeAdapter{}
 
 	_ changeplanapplication.ReferenceRuntime       = businessReferenceRuntimePortAdapter{}
 	_ changeplanapplication.FrontendSnapshotSource = businessReferenceFrontendPortAdapter{}

@@ -3,6 +3,7 @@ package record
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -146,6 +147,93 @@ func TestRecordBatchProcessExportChunksAndCancellation(t *testing.T) {
 	store.replaceChunksErr = errRecordBatchJobTest
 	if err := service.processExport(t.Context(), &job, principal); !errors.Is(err, errRecordBatchJobTest) {
 		t.Fatalf("replace chunks error: %v", err)
+	}
+}
+
+type pagedRecordBatchStore struct {
+	*recordBatchStoreProbe
+	commits int
+}
+
+func (s *pagedRecordBatchStore) CommitRecordBatchJobPage(_ context.Context, job recordmodel.RecordBatchJob, expected string, chunk recordmodel.RecordBatchJobChunk, next string, processed, total int, _ time.Time) error {
+	if expected != job.CheckpointCursor {
+		return fmt.Errorf("cursor mismatch: expected=%q job=%q", expected, job.CheckpointCursor)
+	}
+	if s.chunks == nil {
+		s.chunks = map[string][]recordmodel.RecordBatchJobChunk{}
+	}
+	s.chunks[job.ID] = append(s.chunks[job.ID], chunk)
+	job.Checkpoint, job.Total, job.CheckpointCursor = processed, total, next
+	job.ResultChunks++
+	if s.jobs == nil {
+		s.jobs = map[string]recordmodel.RecordBatchJob{}
+	}
+	s.jobs[job.ID] = job
+	s.commits++
+	return nil
+}
+
+type pagedExportRepository struct {
+	recordrepository.RecordRepository
+	pages []recordmodel.RecordPageResult
+	seen  []int
+}
+
+func (r *pagedExportRepository) ListRecords(_ context.Context, _ string, _ definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
+	r.seen = append(r.seen, query.Page)
+	if query.Page < 1 || query.Page > len(r.pages) {
+		return recordmodel.RecordPageResult{}, fmt.Errorf("unexpected page %d", query.Page)
+	}
+	return r.pages[query.Page-1], nil
+}
+
+func TestRecordBatchPagedExportCommitsAndResumesAtOwnerPageBoundary(t *testing.T) {
+	principal := recordBatchPrincipal()
+	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
+	repository := &pagedExportRepository{pages: []recordmodel.RecordPageResult{
+		{Items: []recordmodel.Record{{ID: "one", Data: map[string]any{"name": "Ada"}}}, HasNext: true},
+		{Items: []recordmodel.Record{{ID: "two", Data: map[string]any{"name": "Grace"}}}},
+	}}
+	exporter := NewRecordExportApplicationService(RecordExportDependencies{
+		Repository: repository,
+		Objects: func() map[string]definitionmodel.ObjectSchema {
+			return map[string]definitionmodel.ObjectSchema{"customer": object}
+		},
+		CanAccess: func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return true },
+	})
+	store := &pagedRecordBatchStore{recordBatchStoreProbe: &recordBatchStoreProbe{}}
+	service := NewRecordBatchJobApplicationService(RecordBatchJobDependencies{Store: store, Exporter: exporter})
+	job := recordmodel.RecordBatchJob{ID: "paged", WorkspaceID: principal.WorkspaceID, Kind: "export", ObjectKey: "customer", PayloadJSON: `{"options":{}}`}
+	if err := service.processExport(t.Context(), &job, principal); err != nil {
+		t.Fatal(err)
+	}
+	chunks := store.chunks[job.ID]
+	if store.commits != 2 || job.Checkpoint != 2 || job.ResultChunks != 2 || job.CheckpointCursor != "" || len(chunks) != 2 {
+		t.Fatalf("job=%+v commits=%d chunks=%+v", job, store.commits, chunks)
+	}
+	if !strings.HasPrefix(chunks[0].Content, "id,created_at,updated_at,name\n") || strings.Contains(chunks[1].Content, "id,created_at") {
+		t.Fatalf("chunks=%+v", chunks)
+	}
+
+	// A reclaimed job resumes from the next durable owner page and does not
+	// repeat the CSV header or the already committed source query.
+	repository.seen = nil
+	store.commits = 0
+	store.chunks[job.ID] = chunks[:1]
+	resumed := recordmodel.RecordBatchJob{ID: job.ID, WorkspaceID: job.WorkspaceID, Kind: "export", ObjectKey: "customer", PayloadJSON: job.PayloadJSON, Checkpoint: 1, CheckpointCursor: recordExportPageCursorPrefix + "2", ResultChunks: 1}
+	if err := service.processExport(t.Context(), &resumed, principal); err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(repository.seen) != "[2]" || resumed.Checkpoint != 2 || resumed.ResultChunks != 2 || strings.Contains(store.chunks[job.ID][1].Content, "id,created_at") {
+		t.Fatalf("seen=%v resumed=%+v chunks=%+v", repository.seen, resumed, store.chunks[job.ID])
+	}
+}
+
+func TestRecordBatchPagedExportRejectsUnknownCheckpoint(t *testing.T) {
+	service := NewRecordBatchJobApplicationService(RecordBatchJobDependencies{Store: &pagedRecordBatchStore{recordBatchStoreProbe: &recordBatchStoreProbe{}}, Exporter: recordBatchExporter()})
+	job := recordmodel.RecordBatchJob{ID: "bad-cursor", WorkspaceID: "workspace-a", Kind: "export", ObjectKey: "customer", PayloadJSON: `{"options":{}}`, CheckpointCursor: "foreign:cursor"}
+	if err := service.processExport(t.Context(), &job, recordBatchPrincipal()); apperror.CodeOf(err) != "backend.record_batch.checkpoint_invalid" {
+		t.Fatalf("err=%v", err)
 	}
 }
 

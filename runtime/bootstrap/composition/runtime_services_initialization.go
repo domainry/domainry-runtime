@@ -3,6 +3,7 @@ package composition
 import (
 	"context"
 
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
 	deployment "github.com/domainry/domainry-runtime/runtime/application/deployment"
@@ -16,7 +17,6 @@ import (
 	recordruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	resilience "github.com/domainry/domainry-runtime/runtime/platform/resilience"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 // newRuntimeServicesState allocates state before ordered service initialization.
@@ -33,7 +33,7 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 	connectorRegistry := businessintegration.NewConnectorRegistryWithProviders(manifest.Integrations, deps.ConnectorProviders)
 	auditApplicationService := deps.AuditApplication
 	if auditApplicationService == nil {
-		auditApplicationService = auditapplication.NewAuditApplicationService(deps.Audit, deps.AuditExports)
+		auditApplicationService = auditapplication.NewAuditApplicationService(deps.Audit)
 	}
 	services := &runtimeAssembly{
 		productBrandName:                    deps.ProductBrandName,
@@ -41,6 +41,8 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 		actionProjectRevision:               deps.ActionProjectRevision,
 		actionMetadataRevision:              deps.ActionMetadataRevision,
 		recordRepo:                          deps.Records,
+		dataExchange:                        deps.DataExchange,
+		dataExchangeProviders:               deps.DataExchangeProviders,
 		reportDatasetRows:                   deps.ReportDatasetRows,
 		reportObjectSQL:                     deps.ReportObjectSQL,
 		reportSnapshots:                     deps.ReportSnapshots,
@@ -96,7 +98,7 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 		return frontendBusinessBindings(services)
 	})
 	services.dictionaryRuntime = metadatabusiness.NewMetadataDictionaryDomainService(manifest.Dictionaries)
-	services.RecordSchemaSnapshotProvider = &RecordSchemaSnapshotProvider{snapshot: func() metadatamodel.MetadataSchemaSnapshot { return recordSchemaSnapshot(services) }}
+	services.RecordSchemaSnapshotProvider = &RecordSchemaSnapshotProvider{snapshot: func() metadatamodel.ApplicationSchemaSnapshot { return recordSchemaSnapshot(services) }}
 	services.ActionExecutionRuntime = actionruntime.NewActionExecutionRuntime(deps.ActionExecutions)
 	services.agentTaskRunService = agentapplication.NewAgentTaskRunApplicationServiceWithAudit(deps.AgentTaskRuns, services.workerDependencies.Clock, runtimeAgentTaskTerminalCommitter{records: services}, auditApplicationService)
 	if interactiveRuns, ok := deps.AgentTaskRuns.(agentrepository.AgentInteractiveRunRepository); ok {

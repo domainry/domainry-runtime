@@ -11,7 +11,11 @@ import (
 	"strings"
 	"time"
 
+	auditsdk "github.com/domainry/domainry-audit-sdk"
+	auditmoduleimpl "github.com/domainry/domainry-audit/module"
 	connector "github.com/domainry/domainry-connector-sdk"
+	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	partysdk "github.com/domainry/domainry-party-sdk"
@@ -25,6 +29,7 @@ import (
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
+	auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -32,10 +37,10 @@ import (
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	agenthttp "github.com/domainry/domainry-runtime/runtime/infrastructure/agentrunner/http"
 	localartifact "github.com/domainry/domainry-runtime/runtime/infrastructure/lifecycleartifact/filesystem"
+	runtimeauditmodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	actionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/action"
 	agentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/agent"
-	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/audit"
 	automationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automation"
 	automationnotification "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automationnotification"
 	changeplanpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/changeplan"
@@ -51,7 +56,6 @@ import (
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 // runtimeServiceAssembly is the result of wiring domain ports to adapters.
@@ -71,6 +75,9 @@ type runtimeExtensionRegistries struct {
 	integrationCredentialExpirySource  integrationapplication.IntegrationCredentialExpirySource
 	notificationSubjectLifecycle       lifecyclecontract.SubjectDataHandler
 	notificationRetention              lifecyclecontract.OwnerLifecycleExecutor
+	auditRepository                    auditrepository.AuditRepository
+	auditSubjectLifecycle              lifecyclecontract.SubjectDataHandler
+	dataExchangeFactory                dataexchangesdk.Factory
 }
 
 func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest manifestmodel.ManifestSchema, notifications composition.NotificationRenderer, store *persistence.RuntimeStore, identityDirectory identitysdk.Directory, identityPrincipals identitysdk.PrincipalResolver, partyDirectory partysdk.Directory, auditApplication *auditapplication.AuditApplicationService, apiLimiter ratelimit.Limiter, workerDependencies workerplatform.Dependencies, extensionRegistries ...runtimeExtensionRegistries) (runtimeServiceAssembly, error) {
@@ -83,6 +90,9 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	var integrationCredentialExpirySource integrationapplication.IntegrationCredentialExpirySource
 	var notificationSubjectLifecycle lifecyclecontract.SubjectDataHandler
 	var notificationRetention lifecyclecontract.OwnerLifecycleExecutor
+	var auditRepository auditrepository.AuditRepository
+	var auditSubjectLifecycle lifecyclecontract.SubjectDataHandler
+	var dataExchangeFactory dataexchangesdk.Factory
 	if len(extensionRegistries) > 0 && extensionRegistries[0].businessHandlers != nil {
 		businessHandlers = extensionRegistries[0].businessHandlers
 	} else {
@@ -101,8 +111,38 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		integrationCredentialExpirySource = extensionRegistries[0].integrationCredentialExpirySource
 		notificationSubjectLifecycle = extensionRegistries[0].notificationSubjectLifecycle
 		notificationRetention = extensionRegistries[0].notificationRetention
+		if extensionRegistries[0].auditRepository != nil {
+			auditRepository = extensionRegistries[0].auditRepository
+		}
+		if extensionRegistries[0].auditSubjectLifecycle != nil {
+			auditSubjectLifecycle = extensionRegistries[0].auditSubjectLifecycle
+			dataExchangeFactory = extensionRegistries[0].dataExchangeFactory
+		}
+	}
+	if auditRepository == nil || auditSubjectLifecycle == nil {
+		binding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenWithDatabase(ctx,
+			auditsdk.ApplicationRef{InstallationID: valueOrDefault(manifest.TemplateID, "domainry-runtime")},
+			auditsdk.DatabaseHandle{Pool: store.DB(), Driver: store.Driver(), Schema: store.DatabaseSchema()},
+		)
+		if err != nil {
+			return runtimeServiceAssembly{}, fmt.Errorf("open Audit module: %w", err)
+		}
+		if auditRepository == nil {
+			auditRepository = runtimeauditmodule.NewRepository(binding)
+		}
+		if auditSubjectLifecycle == nil {
+			auditSubjectLifecycle = runtimeauditmodule.NewSubjectLifecycle(binding)
+		}
 	}
 	records := recordpersistence.NewRecordStore(store)
+	if dataExchangeFactory == nil {
+		return runtimeServiceAssembly{}, fmt.Errorf("Data Exchange factory is required")
+	}
+	dataExchangeProviders := recordapplication.NewDataExchangeProviders(nil)
+	dataExchangeBinding, err := openDataExchangeBinding(ctx, dataExchangeFactory, dataexchangesdk.ApplicationRef{ApplicationID: valueOrDefault(manifest.TemplateID, "domainry-runtime"), RuntimeID: valueOrDefault(cfg.RuntimeVersion, "domainry-runtime")}, dataExchangeModuleHost{store: store, providers: dataExchangeProviders})
+	if err != nil {
+		return runtimeServiceAssembly{}, fmt.Errorf("open Data Exchange module: %w", err)
+	}
 	agentTaskRuns := agentpersistence.NewAgentTaskRunStore(store)
 	if err := ensureAgentRuntimeSchemas(ctx, agentpersistence.NewAgentSchemaMigration(store), agentTaskRuns); err != nil {
 		return runtimeServiceAssembly{}, err
@@ -118,7 +158,6 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		uploadDirectory = "../data/uploads"
 	}
 	integrationSubjectLifecycle := integrationpersistence.NewIntegrationSubjectLifecycleStore(store)
-	auditSubjectLifecycle := auditpersistence.NewAuditSubjectLifecycleStore(store)
 	lifecycleArtifacts := localartifact.NewSubjectStore(uploadDirectory)
 	lifecycleFileArtifacts := lifecyclepersistence.NewFileArtifactStore(store, manifest.Objects, uploadDirectory)
 	fileScanKey := sha256.Sum256([]byte("domainry-file-scan-receipt-v1:" + cfg.IntegrationSecretKey))
@@ -152,8 +191,9 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			ReportExportArtifacts:               reportpersistence.NewReportExportArtifactStore(store),
 			ReportSnapshotSources:               reportDatasetStore,
 			RecordExecutions:                    records,
-			Audit:                               auditpersistence.NewAuditStore(store),
-			AuditExports:                        auditpersistence.NewAuditBusinessExportStore(store),
+			DataExchange:                        dataExchangeBinding,
+			DataExchangeProviders:               dataExchangeProviders,
+			Audit:                               auditRepository,
 			AuditApplication:                    auditApplication,
 			AuditExportTokenKey:                 []byte(cfg.AuditExportTokenKey),
 			Metadata:                            metadatapersistence.NewMetadataStore(store),

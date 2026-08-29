@@ -37,7 +37,7 @@ func MetadataRelationAuthoringCapability() capabilitycontract.CapabilityAuthorin
 		Sources: []capabilitycontract.CapabilityAuthoringSource{
 			{Kind: "contract", Path: "runtime/domain/metadata/contract/metadata_relation_authoring.go", Symbol: "MetadataRelationAuthoringCapability"},
 			{Kind: "validation", Path: "runtime/domain/metadata/validation/metadata_field_mutation_validation.go", Symbol: "MetadataNormalizeFieldMutation"},
-			{Kind: "service", Path: "runtime/application/metadata/metadata_definition_orchestration_application_service.go", Symbol: "MetadataApplicationService.UpsertMetadataDefinition"},
+			{Kind: "service", Path: "runtime/application/metadata/metadata_definition_orchestration_application_service.go", Symbol: "ApplicationSchemaService.UpsertMetadataDefinition"},
 		},
 	}
 }

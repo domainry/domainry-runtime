@@ -101,7 +101,7 @@ func TestFieldMutationConditionOutcomes(t *testing.T) {
 
 func TestReportValidationConditionOutcomes(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
-	snapshot := metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{object}}
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{object}}
 	report := reportmodel.ReportSchema{
 		Key: "r", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "customer", Alias: "customer"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "missing", Field: reportmodel.ReportDatasetField{SourceAlias: "customer", FieldKey: ""}}}}, RequiredPermissions: []string{"customer.read"},
 	}
@@ -113,7 +113,7 @@ func TestReportValidationConditionOutcomes(t *testing.T) {
 
 func TestReportAndRollbackRuntimeFinalConditionOutcomes(t *testing.T) {
 	whitespaceSource := reportmodel.ReportSchema{Key: "r", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: " ", Alias: "source"}}}
-	if issues := MetadataValidateReportDefinitionContract(t.Context(), metadatamodel.MetadataSchemaSnapshot{}, whitespaceSource); !hasMetadataIssue(issues, "backend.report.dataset_source_invalid") {
+	if issues := MetadataValidateReportDefinitionContract(t.Context(), metadatamodel.ApplicationSchemaSnapshot{}, whitespaceSource); !hasMetadataIssue(issues, "backend.report.dataset_source_invalid") {
 		t.Fatalf("whitespace source issues=%#v", issues)
 	}
 	validator := reportDefinitionValidator{

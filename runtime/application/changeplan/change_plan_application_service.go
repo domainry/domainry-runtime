@@ -8,7 +8,7 @@ import (
 	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 
 	"context"
 	"encoding/json"

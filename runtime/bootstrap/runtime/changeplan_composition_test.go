@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"strings"
 
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 
 	"testing"
 
@@ -19,7 +19,7 @@ import (
 
 	capabilitybusiness "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 
-	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/audit"
+	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 )
 
 func TestBusinessChangePlanCompositionPublishesSchedulerAsTheOnlyRuntimeDefinitionAuthority(t *testing.T) {
@@ -49,7 +49,7 @@ func TestBusinessChangePlanCompositionPublishesSchedulerAsTheOnlyRuntimeDefiniti
 	if err != nil || result.Status != "applied" || len(result.AppliedDefinitions) != 2 {
 		t.Fatalf("result=%#v err=%v params=%#v", result, err, apperror.ParamsOf(err))
 	}
-	definition, found, err := application.records.Applications().Metadata.GetMetadataDefinition(t.Context(), "scheduler", "customer.refresh", admin)
+	definition, found, err := application.records.Applications().ApplicationSchema.GetMetadataDefinition(t.Context(), "scheduler", "customer.refresh", admin)
 	if err != nil || !found || definition.SourceID != plan.PlanID {
 		t.Fatalf("metadata definition=%#v found=%v err=%v", definition, found, err)
 	}
@@ -120,7 +120,7 @@ func TestBusinessChangePlanCompositionRejectsInvalidCandidateBeforeAnyWrite(t *t
 	if apperror.CodeOf(err) != "backend.change_plan.candidate_invalid" {
 		t.Fatalf("error=%v params=%#v", err, apperror.ParamsOf(err))
 	}
-	if _, found, getErr := application.records.Applications().Metadata.GetMetadataDefinition(t.Context(), "field", "missing.segment", admin); getErr != nil || found {
+	if _, found, getErr := application.records.Applications().ApplicationSchema.GetMetadataDefinition(t.Context(), "field", "missing.segment", admin); getErr != nil || found {
 		t.Fatalf("invalid candidate leaked definition: found=%v err=%v", found, getErr)
 	}
 	after := application.records.SchemaForPrincipal(t.Context(), admin)
@@ -156,7 +156,7 @@ func TestBusinessChangePlanCompositionPublishesIdentityProfileBindingIntoRegistr
 	if err != nil || result.Status != "applied" || len(result.AppliedDefinitions) != 1 {
 		t.Fatalf("result=%#v err=%v params=%#v", result, err, apperror.ParamsOf(err))
 	}
-	definition, found, err := application.records.Applications().Metadata.GetMetadataDefinition(t.Context(), "identity_profile_binding", binding.ObjectKey, admin)
+	definition, found, err := application.records.Applications().ApplicationSchema.GetMetadataDefinition(t.Context(), "identity_profile_binding", binding.ObjectKey, admin)
 	if err != nil || !found || definition.SourceID != plan.PlanID {
 		t.Fatalf("definition=%#v found=%v err=%v", definition, found, err)
 	}
@@ -216,16 +216,16 @@ func TestBusinessChangePlanCompositionAppliesMetadataAndFreezesDraft(t *testing.
 	if err != nil || frozen.Status != "published" || frozen.Revision != 4 {
 		t.Fatalf("frozen=%#v err=%v", frozen, err)
 	}
-	definition, found, err := application.records.Applications().Metadata.GetMetadataDefinition(t.Context(), "field", "customer.segment", admin)
+	definition, found, err := application.records.Applications().ApplicationSchema.GetMetadataDefinition(t.Context(), "field", "customer.segment", admin)
 	if err != nil || !found || definition.SourceKind != "builder" || definition.SourceID != plan.PlanID {
 		t.Fatalf("definition=%#v found=%v err=%v", definition, found, err)
 	}
-	audits, err := auditpersistence.NewAuditStore(application.store).ListAuditEvents(t.Context(), "default", auditmodel.AuditEventQuery{Event: "business_change_plan.published", Limit: 10})
+	audits, err := auditpersistence.NewRepositoryFromStore(application.store).ListAuditEvents(t.Context(), "default", auditmodel.AuditEventQuery{Event: "business_change_plan.published", Limit: 10})
 	if err != nil || len(audits) != 1 || audits[0].Metadata["request_id"] != admin.RequestID {
 		t.Fatalf("audits=%#v err=%v", audits, err)
 	}
 	for _, status := range []string{"succeeded", "replayed", "fingerprint_conflict"} {
-		idempotencyAudits, listErr := auditpersistence.NewAuditStore(application.store).ListAuditEvents(t.Context(), "default", auditmodel.AuditEventQuery{Event: "business_change_plan.idempotency_" + status, Limit: 10})
+		idempotencyAudits, listErr := auditpersistence.NewRepositoryFromStore(application.store).ListAuditEvents(t.Context(), "default", auditmodel.AuditEventQuery{Event: "business_change_plan.idempotency_" + status, Limit: 10})
 		if listErr != nil || len(idempotencyAudits) != 1 {
 			t.Fatalf("idempotency status=%s audits=%#v err=%v", status, idempotencyAudits, listErr)
 		}
@@ -258,7 +258,7 @@ func TestIndustryMaintenancePlanCompositionPublishesThroughSystemDraft(t *testin
 			if _, err := application.records.Applications().BusinessChangePlans.Apply(t.Context(), plan, plan.PlanID, snapshot, graph, admin); err != nil {
 				t.Fatal(err)
 			}
-			metadata := application.records.Applications().Metadata
+			metadata := application.records.Applications().ApplicationSchema
 			definition, found, err := metadata.GetMetadataDefinition(t.Context(), "field", plan.Items[0].ResourceKey, admin)
 			if err != nil || !found {
 				t.Fatalf("definition=%#v found=%v err=%v", definition, found, err)

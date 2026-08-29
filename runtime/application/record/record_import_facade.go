@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	"io"
 	"strings"
 	"time"
 
@@ -74,6 +75,10 @@ func (s *RecordApplicationService) EnqueueImportJob(ctx context.Context, objectK
 	return s.batchJobs.EnqueueImport(ctx, objectKey, rawCSV, key, principal)
 }
 
+func (s *RecordApplicationService) EnqueueImportStream(ctx context.Context, objectKey string, source io.Reader, filename, contentType string, maxBytes int64, key string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, bool, error) {
+	return s.batchJobs.EnqueueImportStream(ctx, objectKey, source, filename, contentType, maxBytes, key, principal)
+}
+
 func (s *RecordApplicationService) EnqueueExportJob(ctx context.Context, objectKey, key string, options RecordExportOptions, principal principalmodel.Principal) (recordmodel.RecordBatchJob, bool, error) {
 	return s.batchJobs.EnqueueExport(ctx, objectKey, key, options, principal)
 }
@@ -115,6 +120,10 @@ func (s *RecordApplicationService) CancelBatchJob(ctx context.Context, jobID str
 
 func (s *RecordApplicationService) DownloadBatchJob(ctx context.Context, jobID string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, []recordmodel.RecordBatchJobChunk, error) {
 	return s.batchJobs.Download(ctx, jobID, principal)
+}
+
+func (s *RecordApplicationService) OpenBatchJobDownload(ctx context.Context, jobID string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, io.ReadCloser, error) {
+	return s.batchJobs.OpenDownload(ctx, jobID, principal)
 }
 
 func (s *RecordApplicationService) StartBatchJobWorker(ctx context.Context, interval time.Duration, limit int) <-chan struct{} {

@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
-	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/audit"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
+	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -29,7 +29,7 @@ func TestRuntimeBusinessAuditPaginationTraversesStableSQLitePagesOverHTTP(t *tes
 	token := runtimeIdentityFixtureSession(t, "admin", "admin").AccessToken
 
 	store := openRuntimePersistenceFixture(t, cfg)
-	audits := auditpersistence.NewAuditStore(store)
+	audits := auditpersistence.NewRepositoryFromStore(store)
 	for index := 1; index <= 5; index++ {
 		id := fmt.Sprintf("pagination-%03d", index)
 		if err := audits.InsertAuditEvent(t.Context(), "default", auditmodel.AuditEvent{

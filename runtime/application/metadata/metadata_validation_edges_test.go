@@ -147,7 +147,7 @@ func TestMetadataNormalizeFieldMutationReadsAllRecordPages(t *testing.T) {
 }
 
 func TestMetadataDefinitionValidationApplicationPaths(t *testing.T) {
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Runtime: localizedLifecycleRuntimeStub{snapshot: metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "number"}}}}}}})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Runtime: localizedLifecycleRuntimeStub{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "number"}}}}}}})
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	if _, err := service.ValidateMetadataDefinition(t.Context(), "action", "action-1", metadatamodel.MetadataDefinitionUpsertRequest{Payload: json.RawMessage(`{}`)}, principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("authorization error=%v", err)

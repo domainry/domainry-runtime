@@ -1,26 +1,51 @@
 package records
 
 import (
+	"bufio"
+	"io"
 	"net/http"
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
 func (h *RecordsHandler) enqueueImportJob(w http.ResponseWriter, r *http.Request) {
-	rawCSV, ok := h.readCSVPayload(w, r)
-	if !ok {
-		return
+	var csvSource io.Reader = r.Body
+	isCSV := strings.Contains(r.Header.Get("Content-Type"), "text/csv")
+	if isCSV {
+		buffered := bufio.NewReaderSize(r.Body, 1)
+		if _, err := buffered.Peek(1); err != nil && err != io.EOF {
+			h.writeError(w, r, http.StatusBadRequest, "backend.import.read_csv_failed")
+			return
+		}
+		csvSource = buffered
 	}
 	key, _ := recordsActionIdempotencyKey(r, "")
 	if key == "" {
 		h.writeServiceError(w, r, apperror.New(apperror.KindBadRequest, idempotency.ErrorCodeMissingKey, nil, map[string]string{"use_case": "record.import.async"}))
 		return
 	}
-	job, replayed, err := h.queries.EnqueueImportJob(r.Context(), strings.TrimSpace(r.PathValue("objectKey")), rawCSV, key, h.principal(r))
+	objectKey := strings.TrimSpace(r.PathValue("objectKey"))
+	var job recordmodel.RecordBatchJob
+	var replayed bool
+	var err error
+	if isCSV {
+		job, replayed, err = h.queries.EnqueueImportStream(r.Context(), objectKey, csvSource, objectKey+".csv", r.Header.Get("Content-Type"), 128<<20, key, h.principal(r))
+	} else {
+		rawCSV, ok := h.readCSVPayload(w, r)
+		if !ok {
+			return
+		}
+		job, replayed, err = h.queries.EnqueueImportJob(r.Context(), objectKey, rawCSV, key, h.principal(r))
+	}
 	if err != nil {
+		if apperror.CodeOf(err) == "backend.import.read_csv_failed" || apperror.KindOf(err) == apperror.KindBadRequest {
+			h.writeError(w, r, http.StatusBadRequest, "backend.import.read_csv_failed")
+			return
+		}
 		setBatchCapacityRetryAfter(w, err)
 		h.writeServiceError(w, r, err)
 		return
@@ -84,20 +109,26 @@ func (h *RecordsHandler) cancelBatchJob(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *RecordsHandler) downloadBatchJob(w http.ResponseWriter, r *http.Request) {
-	job, chunks, err := h.queries.DownloadBatchJob(r.Context(), strings.TrimSpace(r.PathValue("jobID")), h.principal(r))
+	job, content, err := h.queries.OpenBatchJobDownload(r.Context(), strings.TrimSpace(r.PathValue("jobID")), h.principal(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
 	}
+	defer content.Close()
 	w.Header().Set("Content-Type", job.ResultType)
 	w.Header().Set("Content-Disposition", "attachment; filename="+job.ResultFilename)
 	w.WriteHeader(http.StatusOK)
-	for _, chunk := range chunks {
-		if err := r.Context().Err(); err != nil {
-			return
+	ctx := r.Context()
+	_, _ = io.Copy(w, readerFunc(func(buffer []byte) (int, error) {
+		if err := ctx.Err(); err != nil {
+			return 0, err
 		}
-		if _, err := w.Write([]byte(chunk.Content)); err != nil {
-			return
-		}
-	}
+		return content.Read(buffer)
+	}))
+}
+
+type readerFunc func([]byte) (int, error)
+
+func (f readerFunc) Read(buffer []byte) (int, error) {
+	return f(buffer)
 }

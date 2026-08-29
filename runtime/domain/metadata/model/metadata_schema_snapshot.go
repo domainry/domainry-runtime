@@ -9,7 +9,7 @@ import (
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
-type MetadataSchemaSnapshot struct {
+type ApplicationSchemaSnapshot struct {
 	TemplateID                string                                    `json:"template_id"`
 	TemplateVersion           string                                    `json:"template_version"`
 	Name                      string                                    `json:"name,omitempty"`

@@ -10,9 +10,9 @@ import (
 )
 
 type MetadataHandler struct {
-	definitions       *metadataapplication.MetadataApplicationService
-	localizedTexts    *metadataapplication.MetadataApplicationService
-	runtimeCatalog    *metadataapplication.MetadataApplicationService
+	definitions       *metadataapplication.ApplicationSchemaService
+	localizedTexts    *metadataapplication.ApplicationSchemaService
+	runtimeCatalog    *metadataapplication.ApplicationSchemaService
 	capabilities      *capabilityapplication.CapabilityAuthoringApplicationService
 	audit             *auditapplication.AuditApplicationService
 	principal         func(*http.Request) principalmodel.Principal
@@ -27,9 +27,9 @@ type MetadataHandler struct {
 }
 
 type MetadataDependencies struct {
-	Definitions       *metadataapplication.MetadataApplicationService
-	LocalizedTexts    *metadataapplication.MetadataApplicationService
-	RuntimeCatalog    *metadataapplication.MetadataApplicationService
+	Definitions       *metadataapplication.ApplicationSchemaService
+	LocalizedTexts    *metadataapplication.ApplicationSchemaService
+	RuntimeCatalog    *metadataapplication.ApplicationSchemaService
 	Capabilities      *capabilityapplication.CapabilityAuthoringApplicationService
 	Audit             *auditapplication.AuditApplicationService
 	Principal         func(*http.Request) principalmodel.Principal

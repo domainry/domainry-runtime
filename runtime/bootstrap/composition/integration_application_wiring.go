@@ -1,11 +1,11 @@
 package composition
 
 import (
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	"github.com/domainry/domainry-runtime/runtime/platform/resilience"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 type IntegrationRuntimeWiringDependencies struct {

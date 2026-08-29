@@ -42,25 +42,25 @@ func (r localizedTextRepositoryStub) ListLocalizedTexts(_ context.Context, _ str
 }
 
 type localizedSchemaProviderStub struct {
-	snapshot metadatamodel.MetadataSchemaSnapshot
+	snapshot metadatamodel.ApplicationSchemaSnapshot
 }
 
-func (s localizedSchemaProviderStub) SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot {
+func (s localizedSchemaProviderStub) SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
 	return s.snapshot
 }
 
 type localizedLifecycleRuntimeStub struct {
-	snapshot metadatamodel.MetadataSchemaSnapshot
+	snapshot metadatamodel.ApplicationSchemaSnapshot
 }
 
-func (s localizedLifecycleRuntimeStub) Schema() metadatamodel.MetadataSchemaSnapshot {
+func (s localizedLifecycleRuntimeStub) Schema() metadatamodel.ApplicationSchemaSnapshot {
 	return s.snapshot
 }
 func (localizedLifecycleRuntimeStub) ApplyManifestMetadata(string, string, string, []definitionmodel.ObjectSchema, []definitionmodel.ViewSchema, []definitionmodel.ActionSchema, []definitionmodel.WorkflowSchema, []automationmodel.AutomationRuleSchema, []metadatamodel.DictionarySchema, integrationmodel.IntegrationSchema, []reportmodel.ReportSchema, []definitionmodel.EntryPointSchema, []agentmodel.SkillSchema, []agentmodel.AgentSchema, []profilebindingmodel.Binding) {
 }
 
 func TestSchemaLocalizationAndCoveragePreserveStableValues(t *testing.T) {
-	snapshot := metadatamodel.MetadataSchemaSnapshot{
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{
 		Name: "客户系统", SchemaHash: "schema",
 		Objects: []definitionmodel.ObjectSchema{{Key: "customer", Name: "客户", Fields: []definitionmodel.FieldSchema{{
 			Key: "status", Name: "状态", Type: "status", DefaultValue: "active", Validation: definitionmodel.FieldValidation{Options: []string{"active"}},
@@ -93,7 +93,7 @@ func TestSchemaLocalizationAndCoveragePreserveStableValues(t *testing.T) {
 		t.Fatalf("localized projections = %#v", localized)
 	}
 
-	service := NewMetadataApplicationService(MetadataApplicationDependencies{Repository: repository, Runtime: localizedLifecycleRuntimeStub{snapshot: snapshot}})
+	service := NewApplicationSchemaService(ApplicationSchemaDependencies{Repository: repository, Runtime: localizedLifecycleRuntimeStub{snapshot: snapshot}})
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	coverage, err := service.LocalizedTextCoverage(t.Context(), "fr-FR", "en-US", admin)
 	if err != nil || coverage.MissingCount == 0 {

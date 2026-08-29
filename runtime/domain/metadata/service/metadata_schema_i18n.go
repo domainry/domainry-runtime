@@ -11,7 +11,7 @@ import (
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 )
 
-func (s *MetadataSchemaDomainService) ForPrincipalLocale(ctx context.Context, principal principalmodel.Principal, locale string) metadatamodel.MetadataSchemaSnapshot {
+func (s *MetadataSchemaDomainService) ForPrincipalLocale(ctx context.Context, principal principalmodel.Principal, locale string) metadatamodel.ApplicationSchemaSnapshot {
 	snapshot := s.schema.SchemaForPrincipal(ctx, principal)
 	locale = strings.TrimSpace(locale)
 	if locale == "" {

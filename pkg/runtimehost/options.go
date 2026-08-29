@@ -4,6 +4,7 @@ package runtimehost
 
 import (
 	"github.com/domainry/domainry-connector-sdk"
+	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
@@ -31,8 +32,11 @@ type Options struct {
 	MonitoringFactory monitoringsdk.Factory
 	// SchedulerFactory selects the in-process clock Module or SaaS Binding.
 	SchedulerFactory schedulersdk.Factory
-	BusinessHandlers BusinessHandlerFactory
-	Connectors       connector.ProviderSetFactory
+	// DataExchangeFactory selects the in-process large-file engine or its SaaS
+	// Remote binding. Generated composition owns this topology decision.
+	DataExchangeFactory dataexchangesdk.Factory
+	BusinessHandlers    BusinessHandlerFactory
+	Connectors          connector.ProviderSetFactory
 	// ConnectorProcesses is an explicit host policy for optional Provider
 	// subprocesses. The zero value denies every executable.
 	ConnectorProcesses ConnectorProcessPolicy

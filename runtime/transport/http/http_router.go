@@ -8,6 +8,7 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	businesseventapplication "github.com/domainry/domainry-runtime/runtime/application/businessevent"
 	capabilitybusiness "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -15,7 +16,6 @@ import (
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
 	healthplatform "github.com/domainry/domainry-runtime/runtime/platform/health"
 	"github.com/domainry/domainry-runtime/runtime/platform/productbrand"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 	businesseventhttp "github.com/domainry/domainry-runtime/runtime/transport/http/businessevents"
 	businesssystemhttp "github.com/domainry/domainry-runtime/runtime/transport/http/businesssystem"
 	"go.uber.org/zap"

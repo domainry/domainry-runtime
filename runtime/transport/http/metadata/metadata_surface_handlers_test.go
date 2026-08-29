@@ -32,9 +32,9 @@ func (repository *opsMetadataRepository) SnapshotRevision(context.Context, princ
 
 func TestOpsMetadataDiagnosticsHandlerSuccessAndServiceError(t *testing.T) {
 	repository := &opsMetadataRepository{revision: "revision-1"}
-	service := metadataapplication.NewMetadataApplicationService(metadataapplication.MetadataApplicationDependencies{
+	service := metadataapplication.NewApplicationSchemaService(metadataapplication.ApplicationSchemaDependencies{
 		Repository: repository,
-		Runtime: localizedTextHandlerRuntime{snapshot: metadatamodel.MetadataSchemaSnapshot{
+		Runtime: localizedTextHandlerRuntime{snapshot: metadatamodel.ApplicationSchemaSnapshot{
 			SchemaHash: "schema-hash", SnapshotVersion: "snapshot-1", TemplateVersion: "1",
 			Objects: []definitionmodel.ObjectSchema{{Key: "customer"}},
 		}},

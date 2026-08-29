@@ -74,8 +74,6 @@ func TestRuntimeRawTickerBaselineIsExact(t *testing.T) {
 	repositoryRoot := filepath.Clean(filepath.Join(runtimeRoot(t), ".."))
 	expected := map[string]bool{
 		"runtime/application/record/record_batch_job_runtime_application_service.go": false,
-		"runtime/platform/worker/heartbeat.go":                                       false,
-		"runtime/platform/worker/lifecycle.go":                                       false,
 		"runtime/transport/http/notifications/notifications_inbox_stream_handler.go": false,
 		"runtime/transport/http/records/records_stream_handler.go":                   false,
 	}
@@ -99,7 +97,7 @@ func TestRuntimeRawTickerBaselineIsExact(t *testing.T) {
 		}
 		relative = filepath.ToSlash(relative)
 		if _, ok := expected[relative]; !ok {
-			t.Errorf("unregistered production ticker %s; use platform/worker.StartNamedLoop or update the reviewed inventory", relative)
+				t.Errorf("unregistered production ticker %s; use domainry-foundation/worker.StartNamedLoop or update the reviewed inventory", relative)
 			return nil
 		}
 		expected[relative] = true

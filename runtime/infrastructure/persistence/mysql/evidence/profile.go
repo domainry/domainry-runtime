@@ -29,9 +29,9 @@ func (Profile) Normalize(ctx context.Context, database persistencedriver.SchemaD
 }
 
 func normalizeLargeColumns(ctx context.Context, database persistencedriver.SchemaDatabase, renderer ormdialect.Renderer) error {
-	specs := map[string][]string{"report_export_artifacts": {"content_base64"}, "business_audit_export_artifacts": {"content_base64"}, "record_batch_job_chunks": {"content"}}
-	query := "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND ((TABLE_NAME = " + renderer.Placeholder(1) + " AND COLUMN_NAME = " + renderer.Placeholder(2) + ") OR (TABLE_NAME = " + renderer.Placeholder(3) + " AND COLUMN_NAME = " + renderer.Placeholder(4) + ") OR (TABLE_NAME = " + renderer.Placeholder(5) + " AND COLUMN_NAME = " + renderer.Placeholder(6) + "))"
-	rows, err := database.QueryContext(ctx, query, "report_export_artifacts", "content_base64", "business_audit_export_artifacts", "content_base64", "record_batch_job_chunks", "content")
+	specs := map[string][]string{"report_export_artifacts": {"content_base64"}, "record_batch_job_chunks": {"content"}}
+	query := "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND ((TABLE_NAME = " + renderer.Placeholder(1) + " AND COLUMN_NAME = " + renderer.Placeholder(2) + ") OR (TABLE_NAME = " + renderer.Placeholder(3) + " AND COLUMN_NAME = " + renderer.Placeholder(4) + "))"
+	rows, err := database.QueryContext(ctx, query, "report_export_artifacts", "content_base64", "record_batch_job_chunks", "content")
 	if err != nil {
 		return fmt.Errorf("inspect MySQL large evidence columns: %w", err)
 	}

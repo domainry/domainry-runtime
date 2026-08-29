@@ -10,7 +10,10 @@ import (
 	"strings"
 	"time"
 
+	auditsdk "github.com/domainry/domainry-audit-sdk"
+	auditmodule "github.com/domainry/domainry-audit/module"
 	ormbuilder "github.com/domainry/domainry-orm/builder"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/base"
 	runtimeschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/schema"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -183,6 +186,14 @@ func (s *RuntimeStore) EnsureEvidenceSchema(ctx context.Context) error {
 	if s.schemaAssembler != nil {
 		return s.schemaAssembler.EnsureEvidenceSchema(ctx, s)
 	}
+	binding, err := auditmodule.NewFactory(auditmodule.Options{}).OpenWithDatabase(ctx,
+		auditsdk.ApplicationRef{InstallationID: "domainry-runtime"},
+		auditsdk.DatabaseHandle{Pool: s.DB(), Driver: s.Driver(), Schema: s.DatabaseSchema(), SchemaManager: s, InstallationWorkspaceID: principalmodel.InstallationWorkspaceID},
+	)
+	if err != nil {
+		return fmt.Errorf("prepare Audit module schema: %w", err)
+	}
+	defer binding.Close(ctx)
 	return runtimeschema.EnsureEvidenceSchema(ctx, s)
 }
 

@@ -218,7 +218,7 @@ func TestRuntimeAuthoringValidationDiagnosticOwnersAndHashEdges(t *testing.T) {
 func TestRuntimeAuthoringGlobalCheckConditionOutcomes(t *testing.T) {
 	report := RuntimeAuthoringValidationReport{Checks: map[string]string{"definition_graph": "ok", "manifest": "ok"}}
 	snapshot := changeplanprojection.BusinessSystemSnapshot{
-		Schema: metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "order"}}},
+		Schema: metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "order"}}},
 		RuntimeState: changeplanprojection.BusinessRuntimeStateSnapshot{Connections: []changeplanprojection.IntegrationConnectionSummary{
 			{Key: "inactive", Status: "disabled", Ready: false},
 			{Key: "ready", Status: "active", Ready: true},
@@ -253,11 +253,11 @@ func TestRuntimeAuthoringGlobalCheckConditionOutcomes(t *testing.T) {
 	if _, err := NewBusinessSystemApplicationService(dependencies).RuntimeStateSnapshot(t.Context(), principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}); err != nil {
 		t.Fatalf("optional scheduler definitions should be omitted: %v", err)
 	}
-	objectSchema := metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{
+	objectSchema := metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{
 		{Key: "runtime_job", Config: map[string]any{"runtime_owned": true}},
 		{Key: "order"},
 	}}
-	dependencies.SchemaForPrincipal = func(context.Context, principalmodel.Principal) metadatamodel.MetadataSchemaSnapshot {
+	dependencies.SchemaForPrincipal = func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
 		return objectSchema
 	}
 	counts, err := NewBusinessSystemApplicationService(dependencies).businessObjectRecordCounts(t.Context(), principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})

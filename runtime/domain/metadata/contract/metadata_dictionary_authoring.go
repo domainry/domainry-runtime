@@ -36,7 +36,7 @@ func MetadataDictionaryAuthoringCapabilities() []capabilitycontract.CapabilityAu
 		Sources: []capabilitycontract.CapabilityAuthoringSource{
 			{Kind: "contract", Path: "runtime/domain/metadata/contract/metadata_dictionary_authoring.go", Symbol: "MetadataDictionaryAuthoringCapabilities"},
 			{Kind: "validation", Path: "runtime/domain/metadata/validation/metadata_dictionary_validation.go", Symbol: "MetadataValidateDictionaryDefinition"},
-			{Kind: "service", Path: "runtime/application/metadata/metadata_definition_orchestration_application_service.go", Symbol: "MetadataApplicationService.UpsertMetadataDefinition"},
+			{Kind: "service", Path: "runtime/application/metadata/metadata_definition_orchestration_application_service.go", Symbol: "ApplicationSchemaService.UpsertMetadataDefinition"},
 		},
 	}}
 }

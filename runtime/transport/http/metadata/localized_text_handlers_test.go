@@ -57,10 +57,12 @@ func (r *localizedTextHandlerRepository) UpsertLocalizedText(_ context.Context, 
 }
 
 type localizedTextHandlerRuntime struct {
-	snapshot metadatamodel.MetadataSchemaSnapshot
+	snapshot metadatamodel.ApplicationSchemaSnapshot
 }
 
-func (r localizedTextHandlerRuntime) Schema() metadatamodel.MetadataSchemaSnapshot { return r.snapshot }
+func (r localizedTextHandlerRuntime) Schema() metadatamodel.ApplicationSchemaSnapshot {
+	return r.snapshot
+}
 func (localizedTextHandlerRuntime) ApplyManifestMetadata(string, string, string, []definitionmodel.ObjectSchema, []definitionmodel.ViewSchema, []definitionmodel.ActionSchema, []definitionmodel.WorkflowSchema, []automationmodel.AutomationRuleSchema, []metadatamodel.DictionarySchema, integrationmodel.IntegrationSchema, []reportmodel.ReportSchema, []definitionmodel.EntryPointSchema, []agentmodel.SkillSchema, []agentmodel.AgentSchema, []profilebindingmodel.Binding) {
 }
 
@@ -77,10 +79,10 @@ type localizedTextHandlerCapture struct {
 	errorArgs  []string
 }
 
-func newLocalizedTextHandler(t *testing.T, repository *localizedTextHandlerRepository, snapshot metadatamodel.MetadataSchemaSnapshot) (*MetadataHandler, *localizedTextHandlerDictionary, *localizedTextHandlerCapture) {
+func newLocalizedTextHandler(t *testing.T, repository *localizedTextHandlerRepository, snapshot metadatamodel.ApplicationSchemaSnapshot) (*MetadataHandler, *localizedTextHandlerDictionary, *localizedTextHandlerCapture) {
 	t.Helper()
 	dictionary := &localizedTextHandlerDictionary{}
-	localizedTexts := metadataapplication.NewMetadataApplicationService(metadataapplication.MetadataApplicationDependencies{
+	localizedTexts := metadataapplication.NewApplicationSchemaService(metadataapplication.ApplicationSchemaDependencies{
 		Repository: repository,
 		Runtime:    localizedTextHandlerRuntime{snapshot: snapshot},
 		Dictionary: dictionary,
@@ -116,7 +118,7 @@ func newLocalizedTextHandler(t *testing.T, repository *localizedTextHandlerRepos
 
 func TestLocalizedTextHandlersDefaultWorkspaceAndReturnExports(t *testing.T) {
 	repository := &localizedTextHandlerRepository{values: []metadatamodel.LocalizedText{{WorkspaceID: "workspace-a", EntityType: "object", EntityKey: "customer", Property: "name", Locale: "en-US", Text: "Customer"}}}
-	snapshot := metadatamodel.MetadataSchemaSnapshot{Name: "CRM", Objects: []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}}}
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{Name: "CRM", Objects: []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}}}
 	handler, dictionary, capture := newLocalizedTextHandler(t, repository, snapshot)
 
 	listRequest := httptest.NewRequest(http.MethodGet, "/metadata/localized-texts?entity_type=%20object%20&entity_key=%20customer%20&property=%20name%20&locale=%20en-US%20", nil)
@@ -192,7 +194,7 @@ func TestMetadataPayloadETagFallsBackForUnencodablePayload(t *testing.T) {
 
 func TestLocalizedTextHandlersReportDecodeAndServiceErrors(t *testing.T) {
 	repository := &localizedTextHandlerRepository{}
-	handler, _, capture := newLocalizedTextHandler(t, repository, metadatamodel.MetadataSchemaSnapshot{})
+	handler, _, capture := newLocalizedTextHandler(t, repository, metadatamodel.ApplicationSchemaSnapshot{})
 
 	badJSONResponse := httptest.NewRecorder()
 	handler.upsertLocalizedText(badJSONResponse, httptest.NewRequest(http.MethodPut, "/", strings.NewReader("{")))
@@ -221,7 +223,7 @@ func TestLocalizedTextHandlersReportDecodeAndServiceErrors(t *testing.T) {
 }
 
 func TestImportLocalizedTextsValidatesCatalogAndDefaultsWorkspace(t *testing.T) {
-	snapshot := metadatamodel.MetadataSchemaSnapshot{Name: "CRM", Objects: []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}}}
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{Name: "CRM", Objects: []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}}}
 	repository := &localizedTextHandlerRepository{}
 	handler, dictionary, capture := newLocalizedTextHandler(t, repository, snapshot)
 
@@ -256,7 +258,7 @@ func TestImportLocalizedTextsValidatesCatalogAndDefaultsWorkspace(t *testing.T) 
 }
 
 func TestImportLocalizedTextsRejectsInvalidInputAndDependencyFailures(t *testing.T) {
-	snapshot := metadatamodel.MetadataSchemaSnapshot{Name: "CRM", Objects: []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}}}
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{Name: "CRM", Objects: []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}}}
 	tests := []struct {
 		name             string
 		body             string

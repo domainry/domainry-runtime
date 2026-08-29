@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/logging"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationprojection "github.com/domainry/domainry-runtime/runtime/domain/integration/projection"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	integrationruntime "github.com/domainry/domainry-runtime/runtime/domain/integration/runtime"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 	"go.uber.org/zap"
 )
 

@@ -9,7 +9,11 @@ replace github.com/domainry/domainry-orm => ../domainry-orm
 toolchain go1.26.6
 
 require (
+	github.com/domainry/domainry-audit v0.0.0-00010101000000-000000000000
+	github.com/domainry/domainry-audit-sdk v0.0.0
 	github.com/domainry/domainry-connector-sdk v0.1.0-dev.12
+	github.com/domainry/domainry-data-exchange v0.0.0-00010101000000-000000000000
+	github.com/domainry/domainry-data-exchange-sdk v0.0.0-00010101000000-000000000000
 	github.com/domainry/domainry-foundation v0.1.0-dev.5
 	github.com/domainry/domainry-identity-sdk v0.1.0-dev8
 	github.com/domainry/domainry-monitoring v0.0.0
@@ -31,6 +35,14 @@ require (
 	modernc.org/sqlite v1.53.0
 	vitess.io/vitess v0.23.3
 )
+
+replace github.com/domainry/domainry-audit => ../domainry-audit
+
+replace github.com/domainry/domainry-audit-sdk => ../domainry-audit-sdk
+
+replace github.com/domainry/domainry-data-exchange => ../domainry-data-exchange
+
+replace github.com/domainry/domainry-data-exchange-sdk => ../domainry-data-exchange-sdk
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect

@@ -3,19 +3,25 @@ package record
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	exchangecontract "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/logging"
 	"github.com/domainry/domainry-foundation/requestcontext"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	"github.com/domainry/domainry-runtime/pkg/dataexchange"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 func (s *RecordBatchJobApplicationService) wake(job recordmodel.RecordBatchJob) {
@@ -77,26 +83,79 @@ func (s *RecordBatchJobApplicationService) processImport(ctx context.Context, jo
 	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
 		return apperror.New(apperror.KindBadRequest, "backend.record_batch.payload_invalid", err, nil)
 	}
-	preview, err := s.dependencies.Importer.Preview(ctx, job.ObjectKey, []byte(payload.CSV), principal)
+	openSource, sourceBytes, sourceSHA256, err := s.recordBatchImportSource(ctx, *job, payload)
 	if err != nil {
 		return err
 	}
-	job.Total = len(preview.Rows)
-	if err := s.dependencies.Store.SaveRecordBatchJobCheckpoint(ctx, *job, s.dependencies.Worker.Clock.Now()); err != nil {
-		return err
-	}
-	result, _, err := s.dependencies.Importer.ApplyIdempotent(ctx, job.ObjectKey, []byte(payload.CSV), "record-batch:"+job.ID, principal)
+	provider := newLegacyRecordDataExchangeImportProvider(s.dependencies.Importer, principal)
+	result, err := dataexchange.ProcessCSVImport(ctx, provider, dataexchange.ImportEngineRequest{
+		Batch: dataexchange.ImportBatch{
+			Scope:     dataexchange.Scope{WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID, RoleKey: principal.RoleKey, RequestID: job.ID},
+			ObjectKey: job.ObjectKey, JobID: job.ID,
+		},
+		Open:      openSource,
+		Limits:    dataexchange.CSVDecodeLimits{MaxBytes: sourceBytes, MaxRows: 1_000_000, MaxColumns: recordImportMaxColumns},
+		BatchSize: recordImportMaxRows / 2,
+		OnValidated: func(ctx context.Context, validation dataexchange.ImportEngineResult) error {
+			if sourceSHA256 != "" && (validation.SHA256 != sourceSHA256 || validation.Bytes != sourceBytes) {
+				return apperror.New(apperror.KindConflict, "backend.record_batch.source_integrity_failed", nil, nil)
+			}
+			job.Total = validation.Validated + validation.Rejected
+			return s.dependencies.Store.SaveRecordBatchJobCheckpoint(ctx, *job, s.dependencies.Worker.Clock.Now())
+		},
+	})
 	if err != nil {
 		return err
 	}
-	job.Checkpoint = result.Created
+	job.Total = result.Validated + result.Rejected
+	if result.Rejected > 0 {
+		return recordImportError(apperror.KindBadRequest, "backend.import.invalid_rows", nil)
+	}
+	job.Checkpoint = result.Applied
 	return nil
+}
+
+func (s *RecordBatchJobApplicationService) recordBatchImportSource(ctx context.Context, job recordmodel.RecordBatchJob, payload recordBatchImportPayload) (dataexchange.ImportSourceOpener, int64, string, error) {
+	if payload.CSV != "" {
+		value := payload.CSV
+		return func(context.Context) (io.ReadCloser, error) { return io.NopCloser(strings.NewReader(value)), nil }, int64(len(value)), "", nil
+	}
+	if payload.SourceBytes < 0 || payload.SourceChunks < 0 || strings.TrimSpace(payload.SourceSHA256) == "" {
+		return nil, 0, "", apperror.New(apperror.KindBadRequest, "backend.record_batch.source_invalid", nil, nil)
+	}
+	if sourceReader, ok := s.dependencies.Store.(recordcontract.RecordBatchJobSourceReader); ok {
+		return func(openCtx context.Context) (io.ReadCloser, error) {
+			return sourceReader.OpenRecordBatchJobSource(openCtx, job.WorkspaceID, job.ID, payload.SourceChunks)
+		}, int64(payload.SourceBytes), strings.TrimSpace(payload.SourceSHA256), nil
+	}
+	chunks, err := s.dependencies.Store.ListRecordBatchJobChunks(ctx, job.WorkspaceID, job.ID)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	if len(chunks) != payload.SourceChunks {
+		return nil, 0, "", apperror.New(apperror.KindConflict, "backend.record_batch.source_incomplete", nil, map[string]string{"expected_chunks": strconv.Itoa(payload.SourceChunks), "actual_chunks": strconv.Itoa(len(chunks))})
+	}
+	for index, chunk := range chunks {
+		if chunk.Sequence != index {
+			return nil, 0, "", apperror.New(apperror.KindConflict, "backend.record_batch.source_invalid", nil, nil)
+		}
+	}
+	return func(context.Context) (io.ReadCloser, error) {
+		readers := make([]io.Reader, 0, len(chunks))
+		for _, chunk := range chunks {
+			readers = append(readers, strings.NewReader(chunk.Content))
+		}
+		return io.NopCloser(io.MultiReader(readers...)), nil
+	}, int64(payload.SourceBytes), strings.TrimSpace(payload.SourceSHA256), nil
 }
 
 func (s *RecordBatchJobApplicationService) processExport(ctx context.Context, job *recordmodel.RecordBatchJob, principal principalmodel.Principal) error {
 	var payload recordBatchExportPayload
 	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
 		return apperror.New(apperror.KindBadRequest, "backend.record_batch.payload_invalid", err, nil)
+	}
+	if _, ok := s.dependencies.Store.(recordcontract.RecordBatchJobPageCommitter); ok {
+		return s.processPagedExport(ctx, job, principal, payload)
 	}
 	content, filename, err := s.dependencies.Exporter.exportWithVerifiedAssurance(ctx, job.ObjectKey, principal, payload.Options, payload.AssuranceEvidence)
 	if err != nil {
@@ -119,6 +178,62 @@ func (s *RecordBatchJobApplicationService) processExport(ctx context.Context, jo
 	job.ResultFilename, job.ResultType, job.ResultChunks = filename, "text/csv; charset=utf-8", len(chunks)
 	job.Checkpoint, job.Total = bytesCountCSVRows(content), bytesCountCSVRows(content)
 	return nil
+}
+
+const recordExportPageCursorPrefix = "record-export-page:"
+
+// processPagedExport never materializes the complete result. Each authorized
+// Record page is encoded into one bounded CSV chunk and committed atomically
+// with the next source cursor. Retries resume after the last durable page.
+func (s *RecordBatchJobApplicationService) processPagedExport(ctx context.Context, job *recordmodel.RecordBatchJob, principal principalmodel.Principal, payload recordBatchExportPayload) error {
+	object, fields, evidence, err := s.dependencies.Exporter.prepareExport(ctx, job.ObjectKey, principal, payload.Options, payload.AssuranceEvidence, true)
+	if err != nil {
+		return err
+	}
+	prepared := recordExportPrepared{object: object, fields: fields, evidence: evidence, options: payload.Options, principal: principal}
+	pageNumber, err := recordExportPageNumber(job.CheckpointCursor)
+	if err != nil {
+		return apperror.New(apperror.KindConflict, "backend.record_batch.checkpoint_invalid", err, nil)
+	}
+	job.ResultFilename, job.ResultType = object.Key+".csv", "text/csv; charset=utf-8"
+	writer := recordBatchPageWriter{service: s}
+	processed := job.Checkpoint
+	for {
+		page, err := s.dependencies.Exporter.encodeExportPage(ctx, prepared, pageNumber, job.ResultChunks == 0, recordBatchResultChunkBytes)
+		if err != nil {
+			return err
+		}
+		if processed+page.rows > recordExportMaxRows {
+			return recordExportError(apperror.KindBadRequest, "backend.export.too_many_records", nil, "limit", fmt.Sprint(recordExportMaxRows))
+		}
+		processed += page.rows
+		nextCursor := ""
+		if page.hasNext {
+			nextCursor = recordExportPageCursorPrefix + strconv.Itoa(pageNumber+1)
+		}
+		if err := writer.CommitPage(ctx, job, string(page.content), nextCursor, processed, processed); err != nil {
+			return err
+		}
+		if !page.hasNext {
+			return nil
+		}
+		pageNumber++
+	}
+}
+
+func recordExportPageNumber(cursor string) (int, error) {
+	cursor = strings.TrimSpace(cursor)
+	if cursor == "" {
+		return 1, nil
+	}
+	if !strings.HasPrefix(cursor, recordExportPageCursorPrefix) {
+		return 0, fmt.Errorf("unsupported Record export cursor")
+	}
+	page, err := strconv.Atoi(strings.TrimPrefix(cursor, recordExportPageCursorPrefix))
+	if err != nil || page < 1 {
+		return 0, fmt.Errorf("invalid Record export cursor")
+	}
+	return page, nil
 }
 
 func (s *RecordBatchJobApplicationService) resolvePrincipal(ctx context.Context, job recordmodel.RecordBatchJob) principalmodel.Principal {
@@ -257,6 +372,9 @@ func (s *RecordBatchJobApplicationService) audit(ctx context.Context, event stri
 }
 
 func (s *RecordBatchJobApplicationService) StartWorker(ctx context.Context, interval time.Duration, limit int) <-chan struct{} {
+	if s != nil && s.dependencies.DataExchange != nil {
+		return s.dependencies.DataExchange.Start(ctx, exchangecontract.WorkerConfig{Enabled: true, PollInterval: interval, BatchSize: limit, LeaseTTL: time.Minute})
+	}
 	if s == nil || s.dependencies.Store == nil {
 		return workerplatform.Stopped()
 	}

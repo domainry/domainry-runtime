@@ -21,7 +21,7 @@ func TestEveryAdminBusinessReuseRouteHasOpenAPIOperation(t *testing.T) {
 	if err := json.Unmarshal(capabilitycontract.RuntimeAPIContractDocument(), &contract); err != nil {
 		t.Fatal(err)
 	}
-	paths := openapihttp.Build(metadatamodel.MetadataSchemaSnapshot{})["paths"].(map[string]any)
+	paths := openapihttp.Build(metadatamodel.ApplicationSchemaSnapshot{})["paths"].(map[string]any)
 	for _, route := range contract.AdminBusinessReuse.Routes {
 		method, path, ok := strings.Cut(route.EndpointIdentity, " ")
 		if !ok {

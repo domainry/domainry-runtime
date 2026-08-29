@@ -33,7 +33,7 @@ func IntegrationConnectorDefinitionAuthoringCapability() capabilitycontract.Capa
 		OutputVariables: []capabilitycontract.CapabilityAuthoringOutput{{Name: "connector_key", JSONPointer: "/definition/resource_key", Type: "connector_key", VisibleTo: "subsequent_capability_calls"}, {Name: "schema_hash", JSONPointer: "/definition/schema_hash", Type: "schema_hash", VisibleTo: "subsequent_capability_calls"}},
 		Execution:       metadatacontract.VersionedMetadataDefinitionExecution("integration.connector_definition"),
 		Errors:          integrationConnectorAuthoringErrors(), Examples: integrationConnectorDefinitionExamples(),
-		Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "model", Path: "runtime/domain/integration/model/integration_definition.go", Symbol: "ConnectorSchema"}, {Kind: "validation", Path: "runtime/domain/metadata/validation/metadata_connector_validation.go", Symbol: "MetadataValidateConnectorDefinitionIssues"}, {Kind: "service", Path: "runtime/application/metadata/metadata_definition_orchestration_application_service.go", Symbol: "MetadataApplicationService.UpsertMetadataDefinition"}},
+		Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "model", Path: "runtime/domain/integration/model/integration_definition.go", Symbol: "ConnectorSchema"}, {Kind: "validation", Path: "runtime/domain/metadata/validation/metadata_connector_validation.go", Symbol: "MetadataValidateConnectorDefinitionIssues"}, {Kind: "service", Path: "runtime/application/metadata/metadata_definition_orchestration_application_service.go", Symbol: "ApplicationSchemaService.UpsertMetadataDefinition"}},
 	}
 }
 

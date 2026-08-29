@@ -91,7 +91,7 @@ func candidateRemove[T any](values []T, key string, keyOf func(T) string) []T {
 	return out
 }
 
-func (s *MetadataApplicationService) ValidateMetadataDefinition(ctx context.Context, resourceType, resourceKey string, req metadatamodel.MetadataDefinitionUpsertRequest, principal principalmodel.Principal) (metadatamodel.MetadataDefinitionValidationResult, error) {
+func (s *ApplicationSchemaService) ValidateMetadataDefinition(ctx context.Context, resourceType, resourceKey string, req metadatamodel.MetadataDefinitionUpsertRequest, principal principalmodel.Principal) (metadatamodel.MetadataDefinitionValidationResult, error) {
 	if err := metadataAuthorizeQuery(principal); err != nil {
 		return metadatamodel.MetadataDefinitionValidationResult{}, err
 	}
@@ -102,7 +102,7 @@ func (s *MetadataApplicationService) ValidateMetadataDefinition(ctx context.Cont
 		})
 }
 
-func (s *MetadataApplicationService) ValidateMetadataDefinitionRequestPayload(ctx context.Context, resourceType, resourceKey string, req metadatamodel.MetadataDefinitionUpsertRequest) (json.RawMessage, []metadatamodel.MetadataDefinitionValidationIssue, error) {
+func (s *ApplicationSchemaService) ValidateMetadataDefinitionRequestPayload(ctx context.Context, resourceType, resourceKey string, req metadatamodel.MetadataDefinitionUpsertRequest) (json.RawMessage, []metadatamodel.MetadataDefinitionValidationIssue, error) {
 	if resourceType == "object" {
 		normalized, err := metadatavalidation.MetadataValidateObjectDefinition(resourceKey, req.Payload)
 		return normalized, nil, err
@@ -167,7 +167,7 @@ func (s *MetadataApplicationService) ValidateMetadataDefinitionRequestPayload(ct
 	return normalized.Payload, nil, nil
 }
 
-func (s *MetadataApplicationService) ValidateMetadataDefinitionPayload(ctx context.Context, resourceType string, req metadatamodel.MetadataDefinitionUpsertRequest) (metadatamodel.MetadataDefinitionUpsertRequest, error) {
+func (s *ApplicationSchemaService) ValidateMetadataDefinitionPayload(ctx context.Context, resourceType string, req metadatamodel.MetadataDefinitionUpsertRequest) (metadatamodel.MetadataDefinitionUpsertRequest, error) {
 	switch resourceType {
 	case "field":
 		return s.normalizeAndValidateFieldMetadataMutation(ctx, req)

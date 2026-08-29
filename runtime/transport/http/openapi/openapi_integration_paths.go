@@ -5,7 +5,7 @@ import (
 	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
 )
 
-func addIntegrationOpenAPIPaths(paths map[string]any, _ metadatamodel.MetadataSchemaSnapshot) {
+func addIntegrationOpenAPIPaths(paths map[string]any, _ metadatamodel.ApplicationSchemaSnapshot) {
 	paths["/tenant-admin/integrations/connectors"] = map[string]any{"get": openAPIOperation("listIntegrationConnectors", "Integration Administration", "Runtime-owned Connector catalog and connection state", openAPIAdminSecurity(), openAPIJSONResponse("Connectors", openAPIObject(nil)))}
 	paths["/tenant-admin/integrations/connections"] = map[string]any{"get": openAPIOperation("listIntegrationConnections", "Integration Administration", "Integration connections", openAPIAdminSecurity(), openAPIJSONResponse("Connections", openAPIArray(openAPIRef("IntegrationConnection"))))}
 	paths["/tenant-admin/integrations/connections/{connectionKey}"] = map[string]any{

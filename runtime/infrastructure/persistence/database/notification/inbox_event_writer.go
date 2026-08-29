@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/mutation"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	sdkcontract "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
@@ -15,7 +16,6 @@ import (
 	transactioncontract "github.com/domainry/domainry-runtime/runtime/domain/transaction/contract"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	notificationpublication "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 // InboxEventWriter writes an already compiled module event through a

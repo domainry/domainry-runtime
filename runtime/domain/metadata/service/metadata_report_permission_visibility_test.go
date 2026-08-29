@@ -23,7 +23,7 @@ func TestSnapshotReportPermissionAndObjectVisibilityIntersection(t *testing.T) {
 			RequiredPermissions: permissions,
 		}
 	}
-	snapshot := metadatamodel.MetadataSchemaSnapshot{
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{
 		Objects: []definitionmodel.ObjectSchema{orderLine},
 		Reports: []reportmodel.ReportSchema{
 			report("order_line_permission", []string{"order_line.read"}),

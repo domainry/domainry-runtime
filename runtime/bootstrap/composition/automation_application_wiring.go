@@ -14,7 +14,7 @@ import (
 )
 
 func assembleAutomationApplication(records *runtimeAssembly) *automationapplication.AutomationApplicationService {
-	metadata := records.metadataApplicationService
+	metadata := records.applicationSchemaService
 	return automationapplication.NewAutomationApplicationService(automationapplication.AutomationApplicationDependencies{
 		Rules:               runtimeAutomationRuleRegistry{records: records},
 		Connectors:          records.connectorRegistry,

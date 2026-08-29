@@ -40,7 +40,7 @@ func MetadataObjectAuthoringCapability() capabilitycontract.CapabilityAuthoringD
 		Sources: []capabilitycontract.CapabilityAuthoringSource{
 			{Kind: "contract", Path: "runtime/domain/metadata/contract/metadata_object_authoring.go", Symbol: "MetadataObjectAuthoringCapability"},
 			{Kind: "validation", Path: "runtime/domain/metadata/validation/metadata_object_validation.go", Symbol: "MetadataValidateObjectDefinition"},
-			{Kind: "service", Path: "runtime/application/metadata/metadata_definition_orchestration_application_service.go", Symbol: "MetadataApplicationService.UpsertMetadataDefinition"},
+			{Kind: "service", Path: "runtime/application/metadata/metadata_definition_orchestration_application_service.go", Symbol: "ApplicationSchemaService.UpsertMetadataDefinition"},
 		},
 	}
 }

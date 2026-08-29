@@ -48,9 +48,9 @@ func (r *runtimeMetadataRecordRepository) ListRecords(context.Context, string, d
 
 func newRuntimeCapabilityHandler(t *testing.T, repository *definitionLifecycleRepository, dictionary *runtimeMetadataDictionary) (*MetadataHandler, *localizedTextHandlerCapture, *int) {
 	t.Helper()
-	runtimeCatalog := metadataapplication.NewMetadataApplicationService(metadataapplication.MetadataApplicationDependencies{
+	runtimeCatalog := metadataapplication.NewApplicationSchemaService(metadataapplication.ApplicationSchemaDependencies{
 		Repository: repository,
-		Runtime:    localizedTextHandlerRuntime{snapshot: metadatamodel.MetadataSchemaSnapshot{Name: "Runtime", SchemaHash: "schema-hash", Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}}},
+		Runtime:    localizedTextHandlerRuntime{snapshot: metadatamodel.ApplicationSchemaSnapshot{Name: "Runtime", SchemaHash: "schema-hash", Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}}},
 		Workflows:  definitionLifecycleWorkflows{},
 		Dictionary: dictionary,
 		Records:    &runtimeMetadataRecordRepository{},
@@ -95,9 +95,9 @@ func TestRuntimeCapabilityHandlersSuccessAndServiceErrors(t *testing.T) {
 		t.Fatalf("record count status=%d body=%s", recordCountResponse.Code, recordCountResponse.Body.String())
 	}
 	runtimeCatalog := handler.runtimeCatalog
-	runtimeCatalogWithError := metadataapplication.NewMetadataApplicationService(metadataapplication.MetadataApplicationDependencies{
+	runtimeCatalogWithError := metadataapplication.NewApplicationSchemaService(metadataapplication.ApplicationSchemaDependencies{
 		Repository: repository,
-		Runtime:    localizedTextHandlerRuntime{snapshot: metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}}},
+		Runtime:    localizedTextHandlerRuntime{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}}},
 		Workflows:  definitionLifecycleWorkflows{}, Records: &runtimeMetadataRecordRepository{err: errors.New("count failed")},
 	})
 	handler.runtimeCatalog = runtimeCatalogWithError

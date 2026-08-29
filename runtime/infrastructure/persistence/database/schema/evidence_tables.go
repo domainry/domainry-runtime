@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	ormbuilder "github.com/domainry/domainry-orm/builder"
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]string, text string) error {
@@ -20,12 +19,6 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 	}
 	if err := s.RuntimeProfile().NormalizeEvidenceSchema(ctx, s.SchemaDB(), s.RuntimeRenderer()); err != nil {
 		return err
-	}
-	if err := s.EnsureRuntimeColumn(ctx, "_audit_events", "workspace_id", text); err != nil {
-		return err
-	}
-	if _, err := s.SchemaDB().ExecContext(ctx, "UPDATE "+s.TableIdentifier("_audit_events")+" SET "+s.Identifier("workspace_id")+" = COALESCE(NULLIF("+s.Identifier("workspace_id")+", ''), "+s.Placeholder(1)+")", principalmodel.InstallationWorkspaceID); err != nil {
-		return fmt.Errorf("backfill audit event workspace: %w", err)
 	}
 	if err := ensureWorkspaceScopedIdentities(ctx, s, workspaceIdentities); err != nil {
 		return err
@@ -191,11 +184,6 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		{name: "uniq_report_export_idempotency", table: "report_export_artifacts", columns: []string{"workspace_id", "requester_user_id", "report_key", "idempotency_key"}, unique: true},
 		{name: "uniq_report_export_token", table: "report_export_artifacts", columns: []string{"workspace_id", "token"}, unique: true},
 		{name: "idx_report_export_expiry", table: "report_export_artifacts", columns: []string{"workspace_id", "expires_at"}},
-		{name: "uniq_business_audit_export_idempotency", table: "business_audit_export_artifacts", columns: []string{"workspace_id", "requester_user_id", "idempotency_key"}, unique: true},
-		{name: "uniq_business_audit_export_token_hash", table: "business_audit_export_artifacts", columns: []string{"workspace_id", "token_sha256"}, unique: true},
-		{name: "idx_business_audit_export_expiry", table: "business_audit_export_artifacts", columns: []string{"workspace_id", "expires_at"}},
-		{name: "idx_audit_event_actor_cursor", table: "_audit_events", columns: auditEventActorCursorColumns()},
-		{name: "idx_audit_event_record_cursor", table: "_audit_events", columns: auditEventRecordCursorColumns()},
 		{name: "uniq_runtime_operation_control", table: "runtime_operation_controls", columns: []string{"system_purpose", "control_kind", "owner"}, unique: true},
 		{name: "idx_runtime_operation_control_state", table: "runtime_operation_controls", columns: []string{"system_purpose", "control_kind", "state"}},
 		{name: "idx_runtime_release_instance_expiry", table: "runtime_release_instances", columns: []string{"lease_expires_at"}},
@@ -214,14 +202,6 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		}
 	}
 	return nil
-}
-
-func auditEventActorCursorColumns() []string {
-	return []string{"workspace_id", "actor_id", "created_at", "id"}
-}
-
-func auditEventRecordCursorColumns() []string {
-	return []string{"workspace_id", "object_key", "record_id", "created_at", "id"}
 }
 
 func backfillWorkerQueueScopes(ctx context.Context, s Store, queueKind, table string) error {

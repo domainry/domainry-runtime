@@ -3,6 +3,7 @@ package record
 import (
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"testing"
 	"time"
@@ -115,6 +116,55 @@ func TestRecordBatchJobStoreEnqueueClaimCheckpointChunksCancelAndFence(t *testin
 	}
 	if err := repository.CompleteRecordBatchJob(t.Context(), claimed[0], time.Now()); err == nil {
 		t.Fatal("stale fenced worker completed a cancelled job")
+	}
+}
+
+func TestRecordBatchJobStoreAtomicallyPublishesImportSourceChunks(t *testing.T) {
+	store := openRuntimeStore(t)
+	defer store.Close()
+	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	repository := NewRecordStore(store)
+	input := recordmodel.RecordBatchJob{WorkspaceID: "workspace-a", Kind: "import", ObjectKey: "customer", IdempotencyKey: "source-1", PayloadJSON: `{"source_sha256":"digest","source_bytes":10,"source_chunks":2}`, ActorID: "admin"}
+	source := []recordmodel.RecordBatchJobChunk{{WorkspaceID: "workspace-a", Sequence: 0, Content: "name\n"}, {WorkspaceID: "workspace-a", Sequence: 1, Content: "Ada\n"}}
+	job, replayed, err := repository.EnqueueRecordBatchJobWithSource(t.Context(), input, source)
+	if err != nil || replayed {
+		t.Fatalf("job=%+v replayed=%v err=%v", job, replayed, err)
+	}
+	chunks, err := repository.ListRecordBatchJobChunks(t.Context(), job.WorkspaceID, job.ID)
+	if err != nil || len(chunks) != 2 || chunks[0].Content+chunks[1].Content != "name\nAda\n" {
+		t.Fatalf("chunks=%+v err=%v", chunks, err)
+	}
+	reader, err := repository.OpenRecordBatchJobSource(t.Context(), job.WorkspaceID, job.ID, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	streamed, err := io.ReadAll(reader)
+	_ = reader.Close()
+	if err != nil || string(streamed) != "name\nAda\n" {
+		t.Fatalf("streamed=%q err=%v", streamed, err)
+	}
+	incomplete, err := repository.OpenRecordBatchJobSource(t.Context(), job.WorkspaceID, job.ID, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.ReadAll(incomplete); err == nil {
+		t.Fatal("source reader accepted a missing chunk")
+	}
+	_ = incomplete.Close()
+	replay, replayed, err := repository.EnqueueRecordBatchJobWithSource(t.Context(), input, source)
+	if err != nil || !replayed || replay.ID != job.ID {
+		t.Fatalf("replay=%+v replayed=%v err=%v", replay, replayed, err)
+	}
+
+	invalid := input
+	invalid.IdempotencyKey = "source-invalid"
+	if _, _, err := repository.EnqueueRecordBatchJobWithSource(t.Context(), invalid, []recordmodel.RecordBatchJobChunk{{WorkspaceID: "other", Sequence: 0, Content: "bad"}}); err == nil {
+		t.Fatal("invalid source was accepted")
+	}
+	if _, found, err := repository.FindRecordBatchJobByIdempotency(t.Context(), invalid.WorkspaceID, invalid.Kind, invalid.ObjectKey, invalid.IdempotencyKey); err != nil || found {
+		t.Fatalf("partial source job found=%v err=%v", found, err)
 	}
 }
 

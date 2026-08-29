@@ -2,6 +2,7 @@ package runtime
 
 import (
 	connector "github.com/domainry/domainry-connector-sdk"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
@@ -16,7 +17,6 @@ import (
 	notificationpublication "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"

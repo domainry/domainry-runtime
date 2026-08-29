@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/idempotency"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 func runtimeTechnicalOpenMetrics(ctx context.Context, store *persistence.RuntimeStore, status *deploymentapplication.DeploymentRuntimeStatusApplicationService) string {

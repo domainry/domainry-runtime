@@ -2,9 +2,9 @@ package integration
 
 import (
 	"context"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"sort"

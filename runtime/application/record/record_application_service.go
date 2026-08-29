@@ -1,12 +1,13 @@
 package record
 
 import (
+	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	pipelineapplication "github.com/domainry/domainry-runtime/runtime/application/pipeline"
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
@@ -25,8 +26,8 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 type RecordApplicationService struct {
@@ -71,6 +72,8 @@ type RecordApplicationDependencies struct {
 	BuildAudit                   func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any) auditmodel.AuditEvent
 	RecordMutationExecution      *recordruntime.RecordMutationExecutionRuntime
 	BatchJobs                    recordcontract.RecordBatchJobStore
+	DataExchange                 dataexchange.Binding
+	DataExchangeProviders        *DataExchangeProviders
 	ResolveBatchPrincipal        func(context.Context, string, string) principalmodel.Principal
 	BatchJobQueueLimit           int
 	BatchJobWorkspaceQueueLimit  int
@@ -332,7 +335,11 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 		ValidateAssurance: dependencies.ValidateExportAssurance,
 		Audit:             service.audit,
 	})
-	batchJobs := NewRecordBatchJobApplicationService(RecordBatchJobDependencies{Store: dependencies.BatchJobs, Importer: importer, Exporter: exporter, ResolvePrincipal: dependencies.ResolveBatchPrincipal, Audit: service.audit, QueueLimit: dependencies.BatchJobQueueLimit, WorkspaceLimit: dependencies.BatchJobWorkspaceQueueLimit, Worker: dependencies.Worker, WorkerWakeups: dependencies.WorkerWakeups, NotificationCompiler: dependencies.NotificationCompiler, NotificationCommitter: dependencies.BatchNotificationCommitter})
+	if dependencies.DataExchangeProviders != nil {
+		dependencies.DataExchangeProviders.ConfigureResolver(dependencies.ResolveBatchPrincipal)
+		dependencies.DataExchangeProviders.Bind(importer, exporter)
+	}
+	batchJobs := NewRecordBatchJobApplicationService(RecordBatchJobDependencies{Store: dependencies.BatchJobs, Importer: importer, Exporter: exporter, DataExchange: dependencies.DataExchange, ResolvePrincipal: dependencies.ResolveBatchPrincipal, Audit: service.audit, QueueLimit: dependencies.BatchJobQueueLimit, WorkspaceLimit: dependencies.BatchJobWorkspaceQueueLimit, Worker: dependencies.Worker, WorkerWakeups: dependencies.WorkerWakeups, NotificationCompiler: dependencies.NotificationCompiler, NotificationCommitter: dependencies.BatchNotificationCommitter})
 	service.RecordDomainService = recordservice.NewRecordDomainService(recordservice.RecordDomainServiceDependencies{
 		Repository: dependencies.Repository, Reader: reader, References: references,
 		IdentityDirectory: dependencies.IdentityDirectory,

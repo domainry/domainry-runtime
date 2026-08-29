@@ -13,7 +13,7 @@ import (
 
 func TestReportAuthoringExamplesExecuteRuntimeReportValidator(t *testing.T) {
 	capability := reportcontract.ReportAuthoringDomain().Capabilities[0]
-	snapshot := metadatamodel.MetadataSchemaSnapshot{
+	snapshot := metadatamodel.ApplicationSchemaSnapshot{
 		Objects: []definitionmodel.ObjectSchema{{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}},
 	}
 	for _, example := range capability.Examples {

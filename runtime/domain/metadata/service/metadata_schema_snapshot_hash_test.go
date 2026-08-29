@@ -11,8 +11,8 @@ import (
 )
 
 func TestSchemaSnapshotHashCoversAllManifestDomains(t *testing.T) {
-	newSnapshot := func(dictionaries []metadatamodel.DictionarySchema, reports []reportmodel.ReportSchema) metadatamodel.MetadataSchemaSnapshot {
-		snapshot := metadatamodel.MetadataSchemaSnapshot{TemplateID: "template", TemplateVersion: "1", Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}, Dictionaries: dictionaries, Reports: reports}
+	newSnapshot := func(dictionaries []metadatamodel.DictionarySchema, reports []reportmodel.ReportSchema) metadatamodel.ApplicationSchemaSnapshot {
+		snapshot := metadatamodel.ApplicationSchemaSnapshot{TemplateID: "template", TemplateVersion: "1", Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}, Dictionaries: dictionaries, Reports: reports}
 		snapshot.SchemaHash = SchemaSnapshotHash(snapshot)
 		snapshot.SnapshotVersion = snapshot.SchemaHash
 		return snapshot

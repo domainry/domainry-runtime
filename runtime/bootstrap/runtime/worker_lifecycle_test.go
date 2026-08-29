@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
 func TestRuntimeStopWorkersCancelsAndWaits(t *testing.T) {

@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 )
 
 func WithGeneratedSchema(manifest manifestmodel.ManifestSchema) manifestmodel.ManifestSchema {
