@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -18,12 +19,11 @@ type AgentStateStore struct {
 	store  *database.RuntimeStore
 	db     *sql.DB
 	schema runtimeschema.SQLDatabase
-	driver string
 	ready  *atomic.Bool
 }
 
 func NewAgentStateStore(store *database.RuntimeStore) AgentStateStore {
-	return AgentStateStore{store: store, db: store.DB(), schema: store.SchemaDB(), driver: store.Driver(), ready: &atomic.Bool{}}
+	return AgentStateStore{store: store, db: store.DB(), schema: store.SchemaDB(), ready: &atomic.Bool{}}
 }
 
 func (r AgentStateStore) EnsureSchema(ctx context.Context) error {
@@ -41,10 +41,7 @@ func (r AgentStateStore) EnsureSchema(ctx context.Context) error {
 }
 
 func (r AgentStateStore) ensureTable(ctx context.Context) error {
-	textType := "TEXT"
-	if r.driver == "mysql" {
-		textType = "VARCHAR(255)"
-	}
+	textType := r.store.Engine.TextKeyColumnType(255)
 	query := "CREATE TABLE IF NOT EXISTS " + r.store.TableIdentifier("agent_runtime_state") + " (" +
 		r.store.Identifier("kind") + " " + textType + " NOT NULL, " +
 		r.store.Identifier("state_key") + " " + textType + " NOT NULL, " +
@@ -90,41 +87,24 @@ func (r AgentStateStore) PutBatch(ctx context.Context, workspaceID string, value
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	columns := []string{"kind", "state_key", "workspace_id", "user_id", "role_key", "payload_json", "updated_at"}
+	columns := []string{"kind", "state_key", "user_id", "role_key", "payload_json", "updated_at"}
 	for start := 0; start < len(order); start += 50 {
 		end := min(start+50, len(order))
-		rows := make([]string, 0, end-start)
-		args := make([]any, 0, (end-start)*len(columns))
+		insert := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "agent_runtime_state", workspaceID).Columns(columns...)
 		for _, key := range order[start:end] {
 			value := byKey[key]
-			placeholders := make([]string, len(columns))
-			for index := range placeholders {
-				placeholders[index] = r.store.Placeholder(len(args) + index + 1)
-			}
-			rows = append(rows, "("+strings.Join(placeholders, ", ")+")")
-			args = append(args, strings.TrimSpace(value.Kind), strings.TrimSpace(value.Key), workspaceID, strings.TrimSpace(value.UserID), strings.TrimSpace(value.RoleKey), []byte(value.Payload), value.UpdatedAt)
+			insert.Values(strings.TrimSpace(value.Kind), strings.TrimSpace(value.Key), strings.TrimSpace(value.UserID), strings.TrimSpace(value.RoleKey), []byte(value.Payload), value.UpdatedAt)
 		}
-		insertSQL := "INSERT INTO " + r.store.TableIdentifier("agent_runtime_state") + " (" + strings.Join(database.QuotedColumns(r.store, columns), ", ") + ") VALUES " + strings.Join(rows, ", ") + r.agentStateUpsertClause()
-		if _, err := tx.ExecContext(ctx, insertSQL, args...); err != nil {
+		insert = r.store.Engine.ApplyUpsert(insert, []string{"workspace_id", "kind", "state_key"}, "user_id", "role_key", "payload_json", "updated_at")
+		statement, args, buildErr := insert.Build()
+		if buildErr != nil {
+			return buildErr
+		}
+		if _, err := tx.ExecContext(ctx, statement, args...); err != nil {
 			return err
 		}
 	}
 	return tx.Commit()
-}
-
-func (r AgentStateStore) agentStateUpsertClause() string {
-	columns := []string{"user_id", "role_key", "payload_json", "updated_at"}
-	assignments := make([]string, 0, len(columns))
-	if r.driver == "mysql" {
-		for _, column := range columns {
-			assignments = append(assignments, r.store.Identifier(column)+" = VALUES("+r.store.Identifier(column)+")")
-		}
-		return " ON DUPLICATE KEY UPDATE " + strings.Join(assignments, ", ")
-	}
-	for _, column := range columns {
-		assignments = append(assignments, r.store.Identifier(column)+" = excluded."+r.store.Identifier(column))
-	}
-	return " ON CONFLICT (" + strings.Join(database.QuotedColumns(r.store, []string{"workspace_id", "kind", "state_key"}), ", ") + ") DO UPDATE SET " + strings.Join(assignments, ", ")
 }
 
 func (r AgentStateStore) CompareAndSwap(ctx context.Context, workspaceID string, value agentmodel.AgentStateRecord, expectedUpdatedAt int64) (bool, error) {
@@ -139,8 +119,16 @@ func (r AgentStateStore) CompareAndSwap(ctx context.Context, workspaceID string,
 	if err := r.EnsureSchema(ctx); err != nil {
 		return false, err
 	}
-	query := "UPDATE " + r.store.TableIdentifier("agent_runtime_state") + " SET " + r.store.Identifier("payload_json") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(2) + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(3) + " AND " + r.store.Identifier("kind") + " = " + r.store.Placeholder(4) + " AND " + r.store.Identifier("state_key") + " = " + r.store.Placeholder(5) + " AND " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(6)
-	result, err := r.db.ExecContext(ctx, query, []byte(value.Payload), value.UpdatedAt, workspaceID, strings.TrimSpace(value.Kind), strings.TrimSpace(value.Key), expectedUpdatedAt)
+	statement, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "agent_runtime_state", workspaceID).
+		Set("payload_json", []byte(value.Payload)).Set("updated_at", value.UpdatedAt).Where(ormbuilder.And(
+		ormbuilder.Equal("kind", strings.TrimSpace(value.Kind)),
+		ormbuilder.Equal("state_key", strings.TrimSpace(value.Key)),
+		ormbuilder.Equal("updated_at", expectedUpdatedAt),
+	)).Build()
+	if buildErr != nil {
+		return false, buildErr
+	}
+	result, err := r.db.ExecContext(ctx, statement, args...)
 	if err != nil {
 		return false, err
 	}
@@ -160,10 +148,16 @@ func (r AgentStateStore) Get(ctx context.Context, workspaceID, kind, key string)
 	if err := r.EnsureSchema(ctx); err != nil {
 		return agentmodel.AgentStateRecord{}, false, err
 	}
-	query := "SELECT " + strings.Join([]string{r.store.Identifier("workspace_id"), r.store.Identifier("user_id"), r.store.Identifier("role_key"), r.store.Identifier("payload_json"), r.store.Identifier("updated_at")}, ", ") + " FROM " + r.store.TableIdentifier("agent_runtime_state") + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1) + " AND " + r.store.Identifier("kind") + " = " + r.store.Placeholder(2) + " AND " + r.store.Identifier("state_key") + " = " + r.store.Placeholder(3)
+	statement, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "agent_runtime_state", workspaceID).
+		Columns("workspace_id", "user_id", "role_key", "payload_json", "updated_at").Where(ormbuilder.And(
+		ormbuilder.Equal("kind", strings.TrimSpace(kind)), ormbuilder.Equal("state_key", strings.TrimSpace(key)),
+	)).Limit(1).Build()
+	if buildErr != nil {
+		return agentmodel.AgentStateRecord{}, false, buildErr
+	}
 	value := agentmodel.AgentStateRecord{Kind: kind, Key: key}
 	var payload []byte
-	err = r.db.QueryRowContext(ctx, query, workspaceID, kind, key).Scan(&value.WorkspaceID, &value.UserID, &value.RoleKey, &payload, &value.UpdatedAt)
+	err = r.db.QueryRowContext(ctx, statement, args...).Scan(&value.WorkspaceID, &value.UserID, &value.RoleKey, &payload, &value.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return agentmodel.AgentStateRecord{}, false, nil
 	}
@@ -183,17 +177,20 @@ func (r AgentStateStore) List(ctx context.Context, workspaceID, kind, userID, ro
 	if err := r.EnsureSchema(ctx); err != nil {
 		return nil, err
 	}
-	where := []string{r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1), r.store.Identifier("kind") + " = " + r.store.Placeholder(2)}
-	args := []any{workspaceID, kind}
+	predicates := []ormbuilder.Predicate{ormbuilder.Equal("kind", strings.TrimSpace(kind))}
 	for _, filter := range []struct{ column, value string }{{"user_id", userID}, {"role_key", roleKey}} {
 		if strings.TrimSpace(filter.value) == "" {
 			continue
 		}
-		args = append(args, strings.TrimSpace(filter.value))
-		where = append(where, r.store.Identifier(filter.column)+" = "+r.store.Placeholder(len(args)))
+		predicates = append(predicates, ormbuilder.Equal(filter.column, strings.TrimSpace(filter.value)))
 	}
-	query := "SELECT " + strings.Join([]string{r.store.Identifier("state_key"), r.store.Identifier("workspace_id"), r.store.Identifier("user_id"), r.store.Identifier("role_key"), r.store.Identifier("payload_json"), r.store.Identifier("updated_at")}, ", ") + " FROM " + r.store.TableIdentifier("agent_runtime_state") + " WHERE " + strings.Join(where, " AND ") + " ORDER BY " + r.store.Identifier("updated_at") + " DESC"
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	statement, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "agent_runtime_state", workspaceID).
+		Columns("state_key", "workspace_id", "user_id", "role_key", "payload_json", "updated_at").
+		Where(ormbuilder.And(predicates...)).OrderBy(ormbuilder.Descending("updated_at")).Build()
+	if buildErr != nil {
+		return nil, buildErr
+	}
+	rows, err := r.db.QueryContext(ctx, statement, args...)
 	if err != nil {
 		return nil, err
 	}

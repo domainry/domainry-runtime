@@ -33,10 +33,17 @@ func TestAgentStateStoreValidationSchemaAndWriteStages(t *testing.T) {
 	}
 
 	t.Run("mysql schema", func(t *testing.T) {
+		if err := base.SetDialectForTesting("mysql"); err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if err := base.SetDialectForTesting("sqlite"); err != nil {
+				t.Fatal(err)
+			}
+		}()
 		state := &agentStateDBState{execErrors: []error{nil}}
 		candidate, closeDB := scriptedAgentStateStore(base, state)
 		defer closeDB()
-		candidate.driver = "mysql"
 		if err := candidate.EnsureSchema(t.Context()); err != nil {
 			t.Fatal(err)
 		}
