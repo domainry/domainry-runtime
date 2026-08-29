@@ -2,7 +2,6 @@ package composition
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -39,15 +38,17 @@ func NewSchedulerSDKModuleHost(scheduler *schedulerapplication.SchedulerApplicat
 func (h *schedulerSDKModuleHost) Definitions() modulehost.DefinitionProvider         { return h }
 func (h *schedulerSDKModuleHost) Dispatcher() modulehost.Dispatcher                  { return h }
 func (h *schedulerSDKModuleHost) HTTPConnections() modulehost.HTTPConnectionProvider { return h }
-func (h *schedulerSDKModuleHost) Database() *sql.DB                                  { return h.store.DB() }
-func (h *schedulerSDKModuleHost) Driver() string                                     { return h.store.Driver() }
-func (h *schedulerSDKModuleHost) Schema() string                                     { return h.store.DatabaseSchema() }
+func (h *schedulerSDKModuleHost) Database() modulehost.Database                      { return h.store.DB() }
+func (h *schedulerSDKModuleHost) Dialect() modulehost.Dialect                        { return h.store.SQLRenderer }
 func (h *schedulerSDKModuleHost) WorkerID() string                                   { return h.workerID }
 func (h *schedulerSDKModuleHost) Migrations() modulehost.MigrationRegistrar {
 	return schedulerSDKMigrationRegistrar{store: h.store}
 }
 
 type schedulerSDKMigrationRegistrar struct{ store *persistence.RuntimeStore }
+
+func (r schedulerSDKMigrationRegistrar) Driver() string { return r.store.Driver() }
+func (r schedulerSDKMigrationRegistrar) Schema() string { return r.store.DatabaseSchema() }
 
 func (r schedulerSDKMigrationRegistrar) ApplyOwnedMigrations(ctx context.Context, owner string, migrations []modulehost.SchemaMigration) error {
 	values := make([]notificationmodulehost.SchemaMigration, len(migrations))
