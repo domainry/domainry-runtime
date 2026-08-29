@@ -28,6 +28,10 @@ func (Dialect) ApplyUpsert(builder *ormbuilder.InsertBuilder, conflictColumns []
 	}
 	return builder.OnConflictDoUpdate(conflictColumns, assignments...)
 }
+func (Dialect) ApplyCreateIndex(builder *ormbuilder.CreateIndexBuilder) *ormbuilder.CreateIndexBuilder {
+	return builder.IfNotExists()
+}
+func (Dialect) IsCreateIndexAlreadyExists(error) bool { return false }
 
 func (Dialect) SQLDriver() string { return "pgx" }
 

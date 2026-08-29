@@ -10,6 +10,7 @@ import (
 
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
+	mysqldriver "github.com/go-sql-driver/mysql"
 )
 
 func validTaskRun(now time.Time) agentmodel.AgentTaskRun {
@@ -38,10 +39,17 @@ func TestAgentTaskRunStoreSchemaCreateGetAndListFailureMatrix(t *testing.T) {
 	}
 	mysqlState := &agentStateDBState{execErrors: []error{nil, wantErr, wantErr, wantErr}}
 	mysqlRepo, mysqlClose := scriptedAgentTaskStore(mysqlBase, mysqlState)
-	if err := mysqlRepo.EnsureSchema(t.Context()); err != nil || !strings.Contains(mysqlState.queries[0], "VARCHAR(255)") {
+	if err := mysqlRepo.EnsureSchema(t.Context()); !errors.Is(err, wantErr) || !strings.Contains(mysqlState.queries[0], "VARCHAR(255)") {
 		t.Fatalf("mysql=%v err=%v", mysqlState.queries, err)
 	}
 	mysqlClose()
+	duplicateIndex := &mysqldriver.MySQLError{Number: 1061, Message: "duplicate key name"}
+	mysqlDuplicateState := &agentStateDBState{execErrors: []error{nil, duplicateIndex, duplicateIndex, duplicateIndex}}
+	mysqlDuplicateRepo, mysqlDuplicateClose := scriptedAgentTaskStore(mysqlBase, mysqlDuplicateState)
+	if err := mysqlDuplicateRepo.EnsureSchema(t.Context()); err != nil {
+		t.Fatalf("mysql duplicate index=%v err=%v", mysqlDuplicateState.queries, err)
+	}
+	mysqlDuplicateClose()
 	indexRepo, indexClose := scriptedAgentTaskStore(base, &agentStateDBState{execErrors: []error{nil, wantErr}})
 	if err := indexRepo.EnsureSchema(t.Context()); !errors.Is(err, wantErr) {
 		t.Fatalf("index=%v", err)

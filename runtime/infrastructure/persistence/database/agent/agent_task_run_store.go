@@ -11,6 +11,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/requestcontext"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -60,29 +61,25 @@ func (s *AgentTaskRunStore) EnsureSchema(ctx context.Context) error {
 }
 
 func (s *AgentTaskRunStore) ensureSchema(ctx context.Context) error {
-	table := s.store.TableIdentifier("agent_task_runs")
-	textType := "TEXT"
-	if s.store.Driver() == "mysql" {
-		textType = "VARCHAR(255)"
+	statement, args, buildErr := ormbuilder.NewCreateTableBuilder(s.store.SQLRenderer, "agent_task_runs").IfNotExists().Columns(
+		ormbuilder.DefineColumn("workspace_id", ormbuilder.TextKeyType(255)).NotNull(),
+		ormbuilder.DefineColumn("run_id", ormbuilder.TextKeyType(255)).NotNull(),
+		ormbuilder.DefineColumn("idempotency_key", ormbuilder.TextKeyType(255)).NotNull(),
+		ormbuilder.DefineColumn("task_key", ormbuilder.TextKeyType(255)).NotNull(),
+		ormbuilder.DefineColumn("process_id", ormbuilder.TextKeyType(255)).NotNull(),
+		ormbuilder.DefineColumn("status", ormbuilder.TextKeyType(255)).NotNull(),
+		ormbuilder.DefineColumn("lease_owner", ormbuilder.TextKeyType(255)).NotNull(),
+		ormbuilder.DefineColumn("fencing_token", ormbuilder.BigIntType()).NotNull(),
+		ormbuilder.DefineColumn("lease_expires_at", ormbuilder.BigIntType()).NotNull(),
+		ormbuilder.DefineColumn("next_attempt_at", ormbuilder.BigIntType()).NotNull(),
+		ormbuilder.DefineColumn("payload_json", ormbuilder.TextType()).NotNull(),
+		ormbuilder.DefineColumn("created_at", ormbuilder.BigIntType()).NotNull(),
+		ormbuilder.DefineColumn("updated_at", ormbuilder.BigIntType()).NotNull(),
+	).PrimaryKey("workspace_id", "run_id").Unique("workspace_id", "idempotency_key").Build()
+	if buildErr != nil {
+		return buildErr
 	}
-	columns := []string{
-		s.store.Identifier("workspace_id") + " " + textType + " NOT NULL",
-		s.store.Identifier("run_id") + " " + textType + " NOT NULL",
-		s.store.Identifier("idempotency_key") + " " + textType + " NOT NULL",
-		s.store.Identifier("task_key") + " " + textType + " NOT NULL",
-		s.store.Identifier("process_id") + " " + textType + " NOT NULL",
-		s.store.Identifier("status") + " " + textType + " NOT NULL",
-		s.store.Identifier("lease_owner") + " " + textType + " NOT NULL",
-		s.store.Identifier("fencing_token") + " BIGINT NOT NULL",
-		s.store.Identifier("lease_expires_at") + " BIGINT NOT NULL",
-		s.store.Identifier("next_attempt_at") + " BIGINT NOT NULL",
-		s.store.Identifier("payload_json") + " TEXT NOT NULL",
-		s.store.Identifier("created_at") + " BIGINT NOT NULL",
-		s.store.Identifier("updated_at") + " BIGINT NOT NULL",
-		"PRIMARY KEY (" + s.store.Identifier("workspace_id") + ", " + s.store.Identifier("run_id") + ")",
-		"UNIQUE (" + s.store.Identifier("workspace_id") + ", " + s.store.Identifier("idempotency_key") + ")",
-	}
-	if _, err := s.schema.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+table+" ("+strings.Join(columns, ", ")+")"); err != nil {
+	if _, err := s.schema.ExecContext(ctx, statement, args...); err != nil {
 		return err
 	}
 	for name, columns := range map[string][]string{
@@ -90,15 +87,12 @@ func (s *AgentTaskRunStore) ensureSchema(ctx context.Context) error {
 		"idx_agent_task_process": {"workspace_id", "process_id", "status"},
 		"idx_agent_task_key":     {"workspace_id", "task_key", "status"},
 	} {
-		parts := make([]string, 0, len(columns))
-		for _, column := range columns {
-			parts = append(parts, s.store.Identifier(column))
+		index := s.store.Engine.ApplyCreateIndex(ormbuilder.NewCreateIndexBuilder(s.store.SQLRenderer, name, "agent_task_runs").Columns(columns...))
+		query, queryArgs, buildErr := index.Build()
+		if buildErr != nil {
+			return buildErr
 		}
-		query := "CREATE INDEX IF NOT EXISTS " + s.store.Identifier(name) + " ON " + table + " (" + strings.Join(parts, ", ") + ")"
-		if s.store.Driver() == "mysql" {
-			query = "CREATE INDEX " + s.store.Identifier(name) + " ON " + table + " (" + strings.Join(parts, ", ") + ")"
-		}
-		if _, err := s.schema.ExecContext(ctx, query); err != nil && s.store.Driver() != "mysql" {
+		if _, err := s.schema.ExecContext(ctx, query, queryArgs...); err != nil && !s.store.Engine.IsCreateIndexAlreadyExists(err) {
 			return err
 		}
 	}

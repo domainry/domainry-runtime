@@ -41,16 +41,19 @@ func (r AgentStateStore) EnsureSchema(ctx context.Context) error {
 }
 
 func (r AgentStateStore) ensureTable(ctx context.Context) error {
-	textType := r.store.Engine.TextKeyColumnType(255)
-	query := "CREATE TABLE IF NOT EXISTS " + r.store.TableIdentifier("agent_runtime_state") + " (" +
-		r.store.Identifier("kind") + " " + textType + " NOT NULL, " +
-		r.store.Identifier("state_key") + " " + textType + " NOT NULL, " +
-		r.store.Identifier("workspace_id") + " " + textType + " NOT NULL, " +
-		r.store.Identifier("user_id") + " " + textType + " NOT NULL, " +
-		r.store.Identifier("role_key") + " " + textType + " NOT NULL, " +
-		r.store.Identifier("payload_json") + " TEXT NOT NULL, " +
-		r.store.Identifier("updated_at") + " BIGINT NOT NULL, PRIMARY KEY (" + r.store.Identifier("workspace_id") + ", " + r.store.Identifier("kind") + ", " + r.store.Identifier("state_key") + "))"
-	_, err := r.schema.ExecContext(ctx, query)
+	statement, args, buildErr := ormbuilder.NewCreateTableBuilder(r.store.SQLRenderer, "agent_runtime_state").IfNotExists().Columns(
+		ormbuilder.DefineColumn("kind", ormbuilder.TextKeyType(255)).NotNull(),
+		ormbuilder.DefineColumn("state_key", ormbuilder.TextKeyType(255)).NotNull(),
+		ormbuilder.DefineColumn("workspace_id", ormbuilder.TextKeyType(255)).NotNull(),
+		ormbuilder.DefineColumn("user_id", ormbuilder.TextKeyType(255)).NotNull(),
+		ormbuilder.DefineColumn("role_key", ormbuilder.TextKeyType(255)).NotNull(),
+		ormbuilder.DefineColumn("payload_json", ormbuilder.TextType()).NotNull(),
+		ormbuilder.DefineColumn("updated_at", ormbuilder.BigIntType()).NotNull(),
+	).PrimaryKey("workspace_id", "kind", "state_key").Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	_, err := r.schema.ExecContext(ctx, statement, args...)
 	return err
 }
 

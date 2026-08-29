@@ -26,6 +26,8 @@ type EngineProfile interface {
 	TextKeyColumnType(int) string
 	ApplyUpdateLock(*ormbuilder.SelectBuilder) *ormbuilder.SelectBuilder
 	ApplyUpsert(*ormbuilder.InsertBuilder, []string, ...string) *ormbuilder.InsertBuilder
+	ApplyCreateIndex(*ormbuilder.CreateIndexBuilder) *ormbuilder.CreateIndexBuilder
+	IsCreateIndexAlreadyExists(error) bool
 }
 
 type portableEngineProfile struct{}
@@ -41,6 +43,10 @@ func (portableEngineProfile) ApplyUpsert(builder *ormbuilder.InsertBuilder, conf
 	}
 	return builder.OnConflictDoUpdate(conflictColumns, assignments...)
 }
+func (portableEngineProfile) ApplyCreateIndex(builder *ormbuilder.CreateIndexBuilder) *ormbuilder.CreateIndexBuilder {
+	return builder.IfNotExists()
+}
+func (portableEngineProfile) IsCreateIndexAlreadyExists(error) bool { return false }
 
 func ProfileFor(dialect Dialect) EngineProfile {
 	if profile, ok := dialect.(EngineProfile); ok {
