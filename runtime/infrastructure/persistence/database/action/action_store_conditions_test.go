@@ -12,6 +12,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
+	ormpostgres "github.com/domainry/domainry-orm/postgres"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -158,7 +159,7 @@ func TestActionExecutionAtomicCommitStages(t *testing.T) {
 			defer closeDB()
 			// The script driver exercises database/sql transaction failure stages.
 			// SQLite's production-only BEGIN IMMEDIATE branch has a real-driver test.
-			store.driver = "postgres"
+			store.profile = ormpostgres.NewProfile()
 			value, err := commitBusinessActionExecution(t.Context(), store, nil, test.completion)
 			if test.wantOK && (err != nil || value.Status != string(idempotency.StatusSucceeded)) {
 				t.Fatalf("value=%#v err=%v", value, err)
@@ -340,7 +341,7 @@ func TestActionExecutionTransactionRollbackCommitAndResultEdges(t *testing.T) {
 	closeDB()
 
 	store, closeDB = scriptedActionStore(base, &actionDBState{rollbackErrors: []error{sql.ErrTxDone}})
-	store.driver = "postgres"
+	store.profile = ormpostgres.NewProfile()
 	transaction, err = store.BeginExecutionTransaction(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -395,7 +396,7 @@ func TestActionExecutionTransactionRollbackCommitAndResultEdges(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			store, closeDB := scriptedActionStore(base, tc.state)
 			defer closeDB()
-			store.driver = "postgres"
+			store.profile = ormpostgres.NewProfile()
 			ctx := t.Context()
 			if tc.context != nil {
 				var cancel context.CancelFunc

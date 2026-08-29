@@ -13,6 +13,7 @@ import (
 	"time"
 
 	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormdriver "github.com/domainry/domainry-orm/driver"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -26,7 +27,7 @@ import (
 type ActionBusinessExecutionStore struct {
 	store         *database.RuntimeStore
 	db            *sql.DB
-	driver        string
+	profile       ormdriver.Profile
 	claimAttempts int
 	waitAttempts  int
 	claimDelay    func(int) time.Duration
@@ -35,7 +36,7 @@ type ActionBusinessExecutionStore struct {
 
 func NewActionBusinessExecutionStore(store *database.RuntimeStore) ActionBusinessExecutionStore {
 	return ActionBusinessExecutionStore{
-		store: store, db: store.DB(), driver: store.Driver(), claimAttempts: 50, waitAttempts: 50,
+		store: store, db: store.DB(), profile: store.Engine, claimAttempts: 50, waitAttempts: 50,
 		claimDelay: func(attempt int) time.Duration { return time.Duration(attempt+1) * time.Millisecond },
 		waitDelay:  2 * time.Millisecond,
 	}
@@ -187,33 +188,21 @@ func (r ActionBusinessExecutionStore) CompleteExecution(ctx context.Context, com
 }
 
 type actionExecutionTransaction struct {
-	owner    ActionBusinessExecutionStore
-	executor recordpersistence.TransactionExecutor
-	tx       *sql.Tx
-	conn     *sql.Conn
-	done     bool
+	owner       ActionBusinessExecutionStore
+	transaction ormdriver.Transaction
+	executor    recordpersistence.TransactionExecutor
+	done        bool
 }
 
 func (r ActionBusinessExecutionStore) BeginExecutionTransaction(ctx context.Context) (actioncontract.ActionExecutionTransaction, error) {
 	if r.db == nil {
 		return nil, fmt.Errorf("begin domain action execution transaction: database is required")
 	}
-	if r.driver == "sqlite" {
-		conn, err := r.db.Conn(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("acquire sqlite domain action connection: %w", err)
-		}
-		if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
-			_ = conn.Close()
-			return nil, fmt.Errorf("begin sqlite domain action execution transaction: %w", err)
-		}
-		return &actionExecutionTransaction{owner: r, executor: conn, conn: conn}, nil
-	}
-	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	transaction, err := r.profile.BeginWrite(ctx, r.db)
 	if err != nil {
 		return nil, fmt.Errorf("begin domain action execution transaction: %w", err)
 	}
-	return &actionExecutionTransaction{owner: r, executor: tx, tx: tx}, nil
+	return &actionExecutionTransaction{owner: r, transaction: transaction, executor: transaction}, nil
 }
 
 func (t *actionExecutionTransaction) Context(ctx context.Context) context.Context {
@@ -228,18 +217,7 @@ func (t *actionExecutionTransaction) RollBack(ctx context.Context) error {
 		return nil
 	}
 	t.done = true
-	var err error
-	if t.tx != nil {
-		err = t.tx.Rollback()
-	} else {
-		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
-		_, err = t.conn.ExecContext(cleanupCtx, "ROLLBACK")
-		closeErr := t.conn.Close()
-		if err == nil {
-			err = closeErr
-		}
-	}
+	err := t.transaction.Rollback(ctx)
 	if errors.Is(err, sql.ErrTxDone) {
 		return nil
 	}
@@ -314,19 +292,7 @@ func (t *actionExecutionTransaction) Commit(ctx context.Context, commits []trans
 }
 
 func (t *actionExecutionTransaction) commitSQL(ctx context.Context) error {
-	if t.tx != nil {
-		return t.tx.Commit()
-	}
-	_, err := t.conn.ExecContext(ctx, "COMMIT")
-	if err != nil {
-		return err
-	}
-	// COMMIT succeeded even if returning the dedicated connection fails. Mark
-	// the transaction terminal so the deferred cleanup cannot issue ROLLBACK
-	// against an already committed connection.
-	t.done = true
-	_ = t.conn.Close()
-	return nil
+	return t.transaction.Commit(ctx)
 }
 
 func (r ActionBusinessExecutionStore) findExecutionByScope(ctx context.Context, workspaceID, objectKey, recordID, actionKey, idempotencyKey string) (actionmodel.ActionBusinessExecution, bool, error) {
