@@ -299,6 +299,10 @@ func (r RecordStore) InsertRecord(ctx context.Context, workspaceID string, objec
 	s := r.store
 	columns := []string{"workspace_id", "id", "created_at", "updated_at"}
 	values := []any{workspaceID, record.ID, record.CreatedAt, record.UpdatedAt}
+	columns, values, err = appendRecordInsertMetadata(columns, values, record)
+	if err != nil {
+		return err
+	}
 	for _, field := range object.Fields {
 		if value, ok := record.Data[field.Key]; ok {
 			columns = append(columns, field.Key)
@@ -320,6 +324,10 @@ func (r RecordStore) UpdateRecord(ctx context.Context, workspaceID string, objec
 	s := r.store
 	assignments := []string{s.Identifier("updated_at") + " = " + s.Placeholder(1)}
 	values := []any{record.UpdatedAt}
+	assignments, values, err = appendRecordUpdateMetadata(s, assignments, values, record)
+	if err != nil {
+		return err
+	}
 	for _, field := range object.Fields {
 		if value, ok := record.Data[field.Key]; ok {
 			assignments = append(assignments, s.Identifier(field.Key)+" = "+s.Placeholder(len(values)+1))
@@ -342,6 +350,10 @@ func (r RecordStore) UpdateRecordWhere(ctx context.Context, workspaceID string, 
 	s := r.store
 	assignments := []string{s.Identifier("updated_at") + " = " + s.Placeholder(1)}
 	values := []any{record.UpdatedAt}
+	assignments, values, err = appendRecordUpdateMetadata(s, assignments, values, record)
+	if err != nil {
+		return false, err
+	}
 	for _, field := range object.Fields {
 		if value, ok := record.Data[field.Key]; ok {
 			assignments = append(assignments, s.Identifier(field.Key)+" = "+s.Placeholder(len(values)+1))
@@ -483,6 +495,10 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 	case "create":
 		columns := []string{"workspace_id", "id", "created_at", "updated_at"}
 		values := []any{workspaceID, commit.Record.ID, commit.Record.CreatedAt, commit.Record.UpdatedAt}
+		columns, values, metadataErr := appendRecordInsertMetadata(columns, values, commit.Record)
+		if metadataErr != nil {
+			return metadataErr
+		}
 		for _, field := range commit.Object.Fields {
 			if value, ok := commit.Record.Data[field.Key]; ok {
 				columns = append(columns, field.Key)
@@ -495,6 +511,10 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 	case "update", "restore":
 		assignments := []string{s.Identifier("updated_at") + " = " + s.Placeholder(1)}
 		values := []any{commit.Record.UpdatedAt}
+		assignments, values, metadataErr := appendRecordUpdateMetadata(s, assignments, values, commit.Record)
+		if metadataErr != nil {
+			return metadataErr
+		}
 		for _, field := range commit.Object.Fields {
 			if value, ok := commit.Record.Data[field.Key]; ok {
 				assignments = append(assignments, s.Identifier(field.Key)+" = "+s.Placeholder(len(values)+1))
@@ -1028,6 +1048,42 @@ func stringsJoinIdentifiers(store *database.RuntimeStore, columns ...string) str
 		values = append(values, store.Identifier(column))
 	}
 	return strings.Join(values, ", ")
+}
+
+func appendRecordInsertMetadata(columns []string, values []any, record recordmodel.Record) ([]string, []any, error) {
+	if record.Deleted {
+		columns, values = append(columns, "deleted"), append(values, true)
+	}
+	if record.ExtInfo != nil {
+		encoded, err := recordExtInfoDBValue(record.ExtInfo)
+		if err != nil {
+			return nil, nil, err
+		}
+		columns, values = append(columns, "ext_info"), append(values, encoded)
+	}
+	if userID := strings.TrimSpace(record.CreateUserID); userID != "" {
+		columns, values = append(columns, "create_user_id"), append(values, userID)
+	}
+	if userID := strings.TrimSpace(record.UpdateUserID); userID != "" {
+		columns, values = append(columns, "update_user_id"), append(values, userID)
+	}
+	return columns, values, nil
+}
+
+func appendRecordUpdateMetadata(store *database.RuntimeStore, assignments []string, values []any, record recordmodel.Record) ([]string, []any, error) {
+	if record.ExtInfo != nil {
+		encoded, err := recordExtInfoDBValue(record.ExtInfo)
+		if err != nil {
+			return nil, nil, err
+		}
+		assignments = append(assignments, store.Identifier("ext_info")+" = "+store.Placeholder(len(values)+1))
+		values = append(values, encoded)
+	}
+	if userID := strings.TrimSpace(record.UpdateUserID); userID != "" {
+		assignments = append(assignments, store.Identifier("update_user_id")+" = "+store.Placeholder(len(values)+1))
+		values = append(values, userID)
+	}
+	return assignments, values, nil
 }
 
 func stringsJoinPlaceholders(store *database.RuntimeStore, count int) string {

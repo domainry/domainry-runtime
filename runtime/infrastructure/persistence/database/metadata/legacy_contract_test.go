@@ -502,8 +502,10 @@ func TestManifestMetadataSyncAddsPluginDefinitionsWithoutOverwritingUserDefiniti
 	if err != nil {
 		t.Fatalf("customer columns: %v", err)
 	}
-	if !customerColumns["phone"] {
-		t.Fatalf("expected synced customer.phone physical column, got %#v", customerColumns)
+	for _, column := range []string{"phone", "deleted", "ext_info", "create_user_id", "update_user_id"} {
+		if !customerColumns[column] {
+			t.Fatalf("expected synced customer.%s physical column, got %#v", column, customerColumns)
+		}
 	}
 
 	customPayload, _ := json.Marshal(map[string]any{"key": "phone", "name": "VIP Phone", "type": "phone"})

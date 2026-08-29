@@ -35,6 +35,10 @@ github.com/domainry/domainry-orm v0.1.8 h1:1paj4TLdY/on60aluZGp0oNfxz6y1Q/kmAAJj
 github.com/domainry/domainry-orm v0.1.8/go.mod h1:NKMojLuridkYCS4i5L7BO7LMTMsf/uOkWQ9OQ+9Vdn4=
 github.com/domainry/domainry-orm v0.1.9 h1:ydwrYDawyrtPi8IYYcJy/RqlQLHDoPdIS++c3uTLkQo=
 github.com/domainry/domainry-orm v0.1.9/go.mod h1:NKMojLuridkYCS4i5L7BO7LMTMsf/uOkWQ9OQ+9Vdn4=
+github.com/domainry/domainry-orm v0.1.10 h1:orpTxIHXsOY+gxBNmg+tULXIDROhHAfF4/cjUwmtl44=
+github.com/domainry/domainry-orm v0.1.10/go.mod h1:NKMojLuridkYCS4i5L7BO7LMTMsf/uOkWQ9OQ+9Vdn4=
+github.com/domainry/domainry-orm v0.1.11 h1:JNYjARWgeLWrgtdWCnxvHwScy8h9we8bc7zIwsNOJKE=
+github.com/domainry/domainry-orm v0.1.11/go.mod h1:NKMojLuridkYCS4i5L7BO7LMTMsf/uOkWQ9OQ+9Vdn4=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
 github.com/go-logr/logr v1.2.2/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=

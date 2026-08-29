@@ -2,18 +2,17 @@
 package metadata
 
 import (
-	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-
 	"context"
 	"database/sql"
 	"fmt"
-
 	"strings"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -169,9 +168,25 @@ func (r MetadataStore) SyncManifest(ctx context.Context, scope principalmodel.Sy
 func (r MetadataStore) ensureObjectStorage(ctx context.Context, object definitionmodel.ObjectSchema) error {
 	schemaDB := r.schemaDatabase()
 	constraintIndexed := metadataConstraintIndexedFields(object)
-	columns := []string{r.store.Identifier("workspace_id") + " " + r.metadataIDColumnType() + " NOT NULL", r.store.Identifier("id") + " " + r.metadataIDColumnType() + " NOT NULL", r.store.Identifier("created_at") + " TEXT NOT NULL", r.store.Identifier("updated_at") + " TEXT NOT NULL"}
-	createSQL := "CREATE TABLE IF NOT EXISTS " + r.store.TableIdentifier(object.Key) + " (\n  " + strings.Join(columns, ",\n  ") + "\n)"
-	if _, err := schemaDB.ExecContext(ctx, createSQL); err != nil {
+	reserved := make(map[string]bool, len(ormbuilder.RecordSystemColumnNames()))
+	for _, column := range ormbuilder.RecordSystemColumnNames() {
+		reserved[column] = true
+	}
+	for _, field := range object.Fields {
+		if reserved[strings.TrimSpace(field.Key)] {
+			return fmt.Errorf("object %s field %s conflicts with a Record system column", object.Key, field.Key)
+		}
+	}
+	createStatement, createArgs, buildErr := ormbuilder.NewCreateTableBuilder(r.store.SQLRenderer, object.Key).IfNotExists().Columns(
+		ormbuilder.DefineColumn("workspace_id", ormbuilder.TextKeyType(191)).NotNull(),
+		ormbuilder.DefineColumn("id", ormbuilder.TextKeyType(191)).NotNull(),
+		ormbuilder.DefineColumn("created_at", ormbuilder.TextType()).NotNull(),
+		ormbuilder.DefineColumn("updated_at", ormbuilder.TextType()).NotNull(),
+	).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build object table %s: %w", object.Key, buildErr)
+	}
+	if _, err := schemaDB.ExecContext(ctx, createStatement, createArgs...); err != nil {
 		return fmt.Errorf("ensure object table %s: %w", object.Key, err)
 	}
 	existing, err := r.tableColumns(ctx, object.Key)
@@ -188,6 +203,23 @@ func (r MetadataStore) ensureObjectStorage(ctx context.Context, object definitio
 			return fmt.Errorf("backfill column %s.workspace_id: %w", object.Key, err)
 		}
 		existing["workspace_id"] = true
+	}
+	for _, columnName := range []string{"deleted", "ext_info", "create_user_id", "update_user_id"} {
+		if existing[columnName] {
+			continue
+		}
+		column, ok := ormbuilder.RecordSystemColumn(columnName)
+		if !ok {
+			return fmt.Errorf("record system column %s is unavailable", columnName)
+		}
+		statement, args, buildErr := ormbuilder.NewAddColumnBuilder(r.store.SQLRenderer, object.Key, column).Build()
+		if buildErr != nil {
+			return fmt.Errorf("build record system column %s.%s: %w", object.Key, columnName, buildErr)
+		}
+		if _, err := schemaDB.ExecContext(ctx, statement, args...); err != nil {
+			return fmt.Errorf("add record system column %s.%s: %w", object.Key, columnName, err)
+		}
+		existing[columnName] = true
 	}
 	if err := r.createIndexIfMissing(ctx, object.Key, r.metadataFieldIndexName(object.Key, "workspace_id_id", true), true, "workspace_id", "id"); err != nil {
 		return fmt.Errorf("create workspace record identity index for %s: %w", object.Key, err)

@@ -1,10 +1,15 @@
 package recordmodel
 
 type Record struct {
+	WorkspaceID  string                        `json:"workspace_id"`
 	ID           string                        `json:"id"`
 	Data         map[string]any                `json:"data"`
 	CreatedAt    string                        `json:"created_at"`
 	UpdatedAt    string                        `json:"updated_at"`
+	Deleted      bool                          `json:"deleted"`
+	ExtInfo      map[string]any                `json:"ext_info,omitempty"`
+	CreateUserID string                        `json:"create_user_id,omitempty"`
+	UpdateUserID string                        `json:"update_user_id,omitempty"`
 	Localization *RecordLocalizationResolution `json:"localization,omitempty"`
 }
 

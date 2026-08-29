@@ -304,7 +304,12 @@ func relationRLSObjects() []definitionmodel.ObjectSchema {
 
 func createRelationRLSTable(t *testing.T, store *RuntimeStore, object definitionmodel.ObjectSchema) {
 	t.Helper()
-	columns := []string{store.Identifier("workspace_id") + " TEXT NOT NULL", store.Identifier("id") + " TEXT NOT NULL", store.Identifier("created_at") + " TEXT NOT NULL", store.Identifier("updated_at") + " TEXT NOT NULL"}
+	columns := []string{
+		store.Identifier("workspace_id") + " TEXT NOT NULL", store.Identifier("id") + " TEXT NOT NULL",
+		store.Identifier("created_at") + " TEXT NOT NULL", store.Identifier("updated_at") + " TEXT NOT NULL",
+		store.Identifier("deleted") + " BOOLEAN NOT NULL DEFAULT FALSE", store.Identifier("ext_info") + " TEXT NOT NULL DEFAULT '{}'",
+		store.Identifier("create_user_id") + " TEXT", store.Identifier("update_user_id") + " TEXT",
+	}
 	for _, field := range object.Fields {
 		columns = append(columns, store.Identifier(field.Key)+" TEXT")
 	}

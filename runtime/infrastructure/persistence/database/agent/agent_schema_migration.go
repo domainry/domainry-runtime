@@ -40,7 +40,7 @@ func (m *AgentSchemaMigration) EnsureSchema(ctx context.Context) error {
 }
 
 func migrateAgentStateSchema(ctx context.Context, store *database.RuntimeStore, schema runtimeschema.SQLDatabase) error {
-	statement, args, err := ormbuilder.NewCreateTableBuilder(store.SQLRenderer, "agent_runtime_state").IfNotExists().Columns(
+	statement, args, err := ormbuilder.NewCreateTableBuilder(store.SQLRenderer, "agent_runtime_state").WithoutSystemColumns().IfNotExists().Columns(
 		ormbuilder.DefineColumn("kind", ormbuilder.TextKeyType(255)).NotNull(),
 		ormbuilder.DefineColumn("state_key", ormbuilder.TextKeyType(255)).NotNull(),
 		ormbuilder.DefineColumn("workspace_id", ormbuilder.TextKeyType(255)).NotNull(),
@@ -57,7 +57,7 @@ func migrateAgentStateSchema(ctx context.Context, store *database.RuntimeStore, 
 }
 
 func migrateAgentTaskRunSchema(ctx context.Context, store *database.RuntimeStore, schema runtimeschema.SQLDatabase) error {
-	statement, args, err := ormbuilder.NewCreateTableBuilder(store.SQLRenderer, "agent_task_runs").IfNotExists().Columns(
+	statement, args, err := ormbuilder.NewCreateTableBuilder(store.SQLRenderer, "agent_task_runs").WithoutSystemColumns().IfNotExists().Columns(
 		ormbuilder.DefineColumn("workspace_id", ormbuilder.TextKeyType(255)).NotNull(),
 		ormbuilder.DefineColumn("run_id", ormbuilder.TextKeyType(255)).NotNull(),
 		ormbuilder.DefineColumn("idempotency_key", ormbuilder.TextKeyType(255)).NotNull(),
@@ -100,7 +100,7 @@ func migrateAgentTaskRunSchema(ctx context.Context, store *database.RuntimeStore
 }
 
 func migrateAgentInteractiveRunSchema(ctx context.Context, store *database.RuntimeStore, schema runtimeschema.SQLDatabase) error {
-	statement, args, err := ormbuilder.NewCreateTableBuilder(store.SQLRenderer, "agent_interactive_runs").IfNotExists().Columns(
+	statement, args, err := ormbuilder.NewCreateTableBuilder(store.SQLRenderer, "agent_interactive_runs").WithoutSystemColumns().IfNotExists().Columns(
 		ormbuilder.DefineColumn("workspace_id", ormbuilder.TextKeyType(255)).NotNull(),
 		ormbuilder.DefineColumn("run_id", ormbuilder.TextKeyType(255)).NotNull(),
 		ormbuilder.DefineColumn("session_id", ormbuilder.TextKeyType(255)).NotNull(),

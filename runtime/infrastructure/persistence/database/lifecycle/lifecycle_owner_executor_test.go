@@ -59,7 +59,7 @@ func TestOwnerExecutorArchivesBeforePurgeAndHonorsLegalHold(t *testing.T) {
 func TestAgentOwnerCleanupOnlyPurgesArchivedSessionsAndDecidedProposals(t *testing.T) {
 	store := openLifecycleStore(t)
 	repository := agentpersistence.NewAgentStateStore(store)
-	if err := repository.EnsureSchema(t.Context()); err != nil {
+	if err := agentpersistence.NewAgentSchemaMigration(store).EnsureSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)

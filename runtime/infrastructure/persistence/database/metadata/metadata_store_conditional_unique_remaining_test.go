@@ -30,11 +30,25 @@ func metadataConditionalUniqueObject(value string) definitionmodel.ObjectSchema 
 }
 
 func metadataInformationSchemaColumnStep(names ...string) metadataSQLQueryStep {
+	names = appendRecordSystemColumns(names)
 	rows := make([][]driver.Value, 0, len(names))
 	for _, name := range names {
 		rows = append(rows, []driver.Value{name})
 	}
 	return metadataSQLQueryStep{columns: []string{"column_name"}, rows: rows}
+}
+
+func appendRecordSystemColumns(names []string) []string {
+	existing := make(map[string]bool, len(names))
+	for _, name := range names {
+		existing[name] = true
+	}
+	for _, name := range []string{"deleted", "ext_info", "create_user_id", "update_user_id"} {
+		if !existing[name] {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 func TestEnsureObjectStorageConditionalUniqueRemainingBranches(t *testing.T) {
@@ -55,7 +69,7 @@ func TestEnsureObjectStorageConditionalUniqueRemainingBranches(t *testing.T) {
 
 	sqliteQueries := func(indexes ...string) []metadataSQLQueryStep {
 		return []metadataSQLQueryStep{
-			metadataSQLiteColumnStep("workspace_id", "id", "member_id", "status"),
+			metadataSQLiteColumnStep(appendRecordSystemColumns([]string{"workspace_id", "id", "member_id", "status"})...),
 			metadataIndexStep(indexes...),
 		}
 	}

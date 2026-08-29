@@ -1,6 +1,7 @@
 package record
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -46,7 +47,15 @@ func recordsFromRows(driver string, object definitionmodel.ObjectSchema, rows re
 			case "updated_at":
 				record.UpdatedAt = fmt.Sprint(value)
 			case "workspace_id":
-				// Persistence-only tenant discriminator; never expose it as business data.
+				record.WorkspaceID = fmt.Sprint(value)
+			case "deleted":
+				record.Deleted = recordDeletedValue(value)
+			case "ext_info":
+				record.ExtInfo = recordExtInfoValue(value)
+			case "create_user_id":
+				record.CreateUserID = fmt.Sprint(value)
+			case "update_user_id":
+				record.UpdateUserID = fmt.Sprint(value)
 			default:
 				if !recordvalidation.RecordIsEmptyValue(value) {
 					record.Data[column] = value
@@ -59,6 +68,42 @@ func recordsFromRows(driver string, object definitionmodel.ObjectSchema, rows re
 		return nil, fmt.Errorf("read records: %w", err)
 	}
 	return records, nil
+}
+
+func recordDeletedValue(value any) bool {
+	switch typed := value.(type) {
+	case bool:
+		return typed
+	case int64:
+		return typed != 0
+	case float64:
+		return typed != 0
+	default:
+		text := strings.ToLower(strings.TrimSpace(fmt.Sprint(value)))
+		return text == "1" || text == "true" || text == "yes" || text == "on"
+	}
+}
+
+func recordExtInfoValue(value any) map[string]any {
+	if value == nil {
+		return nil
+	}
+	if typed, ok := value.(map[string]any); ok {
+		return typed
+	}
+	var result map[string]any
+	if json.Unmarshal([]byte(fmt.Sprint(value)), &result) != nil || len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+func recordExtInfoDBValue(value map[string]any) (string, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return "", fmt.Errorf("encode record ext_info: %w", err)
+	}
+	return string(encoded), nil
 }
 
 func dbValue(value any) any {
