@@ -63,7 +63,15 @@ func (r AgentStateStore) PutBatch(ctx context.Context, workspaceID string, value
 			value := byKey[key]
 			insert.Values(strings.TrimSpace(value.Kind), strings.TrimSpace(value.Key), strings.TrimSpace(value.UserID), strings.TrimSpace(value.RoleKey), []byte(value.Payload), value.UpdatedAt)
 		}
-		insert = r.store.Engine.ApplyUpsert(insert, []string{"workspace_id", "kind", "state_key"}, "user_id", "role_key", "payload_json", "updated_at")
+		insert, buildErr := r.store.Engine.ApplyUpsert(insert, []string{"workspace_id", "kind", "state_key"},
+			ormbuilder.AssignExpression("user_id", ormbuilder.InsertedValue("user_id")),
+			ormbuilder.AssignExpression("role_key", ormbuilder.InsertedValue("role_key")),
+			ormbuilder.AssignExpression("payload_json", ormbuilder.InsertedValue("payload_json")),
+			ormbuilder.AssignExpression("updated_at", ormbuilder.InsertedValue("updated_at")),
+		)
+		if buildErr != nil {
+			return buildErr
+		}
 		statement, args, buildErr := insert.Build()
 		if buildErr != nil {
 			return buildErr

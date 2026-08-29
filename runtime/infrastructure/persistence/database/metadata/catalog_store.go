@@ -88,7 +88,14 @@ func (s MetadataStore) SetManifestOrganizationScopeSeedState(ctx context.Context
 func buildMetadataCatalogUpsert(store MetadataStore, key, value, now string) (string, []any, error) {
 	insert := ormbuilder.NewInsertBuilder(store.store.SQLRenderer, "metadata_catalog").
 		Columns("key", "value", "updated_at").Values(key, value, now)
-	return store.store.Engine.ApplyUpsert(insert, []string{"key"}, "value", "updated_at").Build()
+	insert, err := store.store.Engine.ApplyUpsert(insert, []string{"key"},
+		ormbuilder.AssignExpression("value", ormbuilder.InsertedValue("value")),
+		ormbuilder.AssignExpression("updated_at", ormbuilder.InsertedValue("updated_at")),
+	)
+	if err != nil {
+		return "", nil, err
+	}
+	return insert.Build()
 }
 
 func (s MetadataStore) insertMetadataCatalog(ctx context.Context, tx *sql.Tx, key string, value string, now string) error {

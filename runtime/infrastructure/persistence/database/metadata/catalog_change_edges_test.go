@@ -7,11 +7,11 @@ import (
 	"testing"
 
 	ormdialect "github.com/domainry/domainry-orm/dialect"
+	ormdriver "github.com/domainry/domainry-orm/driver"
+	ormmysql "github.com/domainry/domainry-orm/mysql"
+	ormpostgres "github.com/domainry/domainry-orm/postgres"
+	ormsqlite "github.com/domainry/domainry-orm/sqlite"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
-	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
-	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql"
-	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
-	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite"
 )
 
 func TestMetadataCatalogSQLBranches(t *testing.T) {
@@ -79,12 +79,12 @@ func TestMetadataCatalogSQLBranches(t *testing.T) {
 	}
 	for _, testCase := range []struct {
 		name    ormdialect.Name
-		profile persistencedriver.EngineProfile
+		profile ormdriver.Profile
 		want    string
 	}{
-		{ormdialect.MySQL, mysql.Dialect{}, "ON DUPLICATE KEY"},
-		{ormdialect.Postgres, postgres.Dialect{}, "ON CONFLICT"},
-		{ormdialect.SQLite, sqlite.Dialect{}, "ON CONFLICT"},
+		{ormdialect.MySQL, ormmysql.NewProfile(), "ON DUPLICATE KEY"},
+		{ormdialect.Postgres, ormpostgres.NewProfile(), "ON CONFLICT"},
+		{ormdialect.SQLite, ormsqlite.NewProfile(), "ON CONFLICT"},
 	} {
 		renderer, _ := ormdialect.New(testCase.name)
 		base.store.SQLRenderer = renderer.WithSchema("")

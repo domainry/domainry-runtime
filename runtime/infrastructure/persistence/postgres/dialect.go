@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
 	ormdialect "github.com/domainry/domainry-orm/dialect"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -14,24 +13,6 @@ import (
 type Dialect struct{}
 
 func (Dialect) Name() string { return "postgres" }
-
-func (Dialect) TextKeyColumnType(int) string { return "TEXT" }
-
-func (Dialect) ApplyUpdateLock(builder *ormbuilder.SelectBuilder) *ormbuilder.SelectBuilder {
-	return builder.ForUpdate()
-}
-
-func (Dialect) ApplyUpsert(builder *ormbuilder.InsertBuilder, conflictColumns []string, updateColumns ...string) *ormbuilder.InsertBuilder {
-	assignments := make([]ormbuilder.Assignment, len(updateColumns))
-	for index, column := range updateColumns {
-		assignments[index] = ormbuilder.AssignExpression(column, ormbuilder.InsertedValue(column))
-	}
-	return builder.OnConflictDoUpdate(conflictColumns, assignments...)
-}
-func (Dialect) ApplyCreateIndex(builder *ormbuilder.CreateIndexBuilder) *ormbuilder.CreateIndexBuilder {
-	return builder.IfNotExists()
-}
-func (Dialect) IsCreateIndexAlreadyExists(error) bool { return false }
 
 func (Dialect) SQLDriver() string { return "pgx" }
 

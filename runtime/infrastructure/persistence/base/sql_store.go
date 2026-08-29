@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	ormdialect "github.com/domainry/domainry-orm/dialect"
+	ormdriver "github.com/domainry/domainry-orm/driver"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 )
 
@@ -17,7 +18,7 @@ type SQLStore struct {
 	DB             *sql.DB
 	SQLRenderer    ormdialect.Renderer
 	DatabaseSchema string
-	Engine         driver.EngineProfile
+	Engine         ormdriver.Profile
 }
 
 func NewSQLStore(database *sql.DB, engine driver.Dialect, schema string) *SQLStore {

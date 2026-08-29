@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	"github.com/shopspring/decimal"
 
@@ -179,24 +178,6 @@ func sqliteAggregateInteger(value sqldriver.Value) (*big.Int, bool) {
 type Dialect struct{}
 
 func (Dialect) Name() string { return "sqlite" }
-
-func (Dialect) TextKeyColumnType(int) string { return "TEXT" }
-
-func (Dialect) ApplyUpdateLock(builder *ormbuilder.SelectBuilder) *ormbuilder.SelectBuilder {
-	return builder
-}
-
-func (Dialect) ApplyUpsert(builder *ormbuilder.InsertBuilder, conflictColumns []string, updateColumns ...string) *ormbuilder.InsertBuilder {
-	assignments := make([]ormbuilder.Assignment, len(updateColumns))
-	for index, column := range updateColumns {
-		assignments[index] = ormbuilder.AssignExpression(column, ormbuilder.InsertedValue(column))
-	}
-	return builder.OnConflictDoUpdate(conflictColumns, assignments...)
-}
-func (Dialect) ApplyCreateIndex(builder *ormbuilder.CreateIndexBuilder) *ormbuilder.CreateIndexBuilder {
-	return builder.IfNotExists()
-}
-func (Dialect) IsCreateIndexAlreadyExists(error) bool { return false }
 
 func (Dialect) SQLDriver() string { return "sqlite" }
 

@@ -61,7 +61,14 @@ func (r MetadataStore) refreshCatalogHashWithExecutorAt(
 	value := hex.EncodeToString(hash.Sum(nil))
 	insert := ormbuilder.NewInsertBuilder(r.store.SQLRenderer, "metadata_catalog").
 		Columns("key", "value", "updated_at").Values("schema_hash", value, now)
-	query, args, err := r.store.Engine.ApplyUpsert(insert, []string{"key"}, "value", "updated_at").Build()
+	insert, err := r.store.Engine.ApplyUpsert(insert, []string{"key"},
+		ormbuilder.AssignExpression("value", ormbuilder.InsertedValue("value")),
+		ormbuilder.AssignExpression("updated_at", ormbuilder.InsertedValue("updated_at")),
+	)
+	if err != nil {
+		return err
+	}
+	query, args, err := insert.Build()
 	if err != nil {
 		return err
 	}

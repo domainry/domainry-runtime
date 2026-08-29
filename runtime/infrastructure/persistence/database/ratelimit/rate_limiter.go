@@ -81,7 +81,10 @@ func (l *RateLimiter) allowOnce(ctx context.Context, key string, limit int, wind
 	defer func() { _ = tx.Rollback() }()
 	selectBuilder := ormbuilder.NewSelectBuilder(l.store.SQLRenderer, "runtime_rate_limit_bucket").
 		Columns("window_start_ns", "request_count").Where(ormbuilder.Equal("bucket_key", key))
-	selectBuilder = l.store.Engine.ApplyUpdateLock(selectBuilder)
+	selectBuilder, err = l.store.Engine.ApplyClaimLock(selectBuilder, false)
+	if err != nil {
+		return ratelimit.Decision{}, false, fmt.Errorf("apply rate limit claim lock: %w", err)
+	}
 	query, args, err := selectBuilder.Build()
 	if err != nil {
 		return ratelimit.Decision{}, false, fmt.Errorf("build rate limit bucket query: %w", err)

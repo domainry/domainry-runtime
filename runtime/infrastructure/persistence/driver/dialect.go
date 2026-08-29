@@ -3,9 +3,13 @@ package driver
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
 	ormdialect "github.com/domainry/domainry-orm/dialect"
+	ormdriver "github.com/domainry/domainry-orm/driver"
+	ormmysql "github.com/domainry/domainry-orm/mysql"
+	ormpostgres "github.com/domainry/domainry-orm/postgres"
+	ormsqlite "github.com/domainry/domainry-orm/sqlite"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -20,37 +24,15 @@ type Dialect interface {
 	SchemaMigrationSQL() string
 }
 
-// EngineProfile exposes optional SQL-engine capabilities without expanding
-// the connection/migration Dialect contract implemented by test adapters.
-type EngineProfile interface {
-	TextKeyColumnType(int) string
-	ApplyUpdateLock(*ormbuilder.SelectBuilder) *ormbuilder.SelectBuilder
-	ApplyUpsert(*ormbuilder.InsertBuilder, []string, ...string) *ormbuilder.InsertBuilder
-	ApplyCreateIndex(*ormbuilder.CreateIndexBuilder) *ormbuilder.CreateIndexBuilder
-	IsCreateIndexAlreadyExists(error) bool
-}
-
-type portableEngineProfile struct{}
-
-func (portableEngineProfile) TextKeyColumnType(int) string { return "TEXT" }
-func (portableEngineProfile) ApplyUpdateLock(builder *ormbuilder.SelectBuilder) *ormbuilder.SelectBuilder {
-	return builder
-}
-func (portableEngineProfile) ApplyUpsert(builder *ormbuilder.InsertBuilder, conflictColumns []string, updateColumns ...string) *ormbuilder.InsertBuilder {
-	assignments := make([]ormbuilder.Assignment, len(updateColumns))
-	for index, column := range updateColumns {
-		assignments[index] = ormbuilder.AssignExpression(column, ormbuilder.InsertedValue(column))
+func ProfileFor(value Dialect) ormdriver.Profile {
+	switch value.Name() {
+	case "sqlite":
+		return ormsqlite.NewProfile()
+	case "mysql":
+		return ormmysql.NewProfile()
+	case "postgres":
+		return ormpostgres.NewProfile()
+	default:
+		panic(fmt.Sprintf("unsupported database profile %q", value.Name()))
 	}
-	return builder.OnConflictDoUpdate(conflictColumns, assignments...)
-}
-func (portableEngineProfile) ApplyCreateIndex(builder *ormbuilder.CreateIndexBuilder) *ormbuilder.CreateIndexBuilder {
-	return builder.IfNotExists()
-}
-func (portableEngineProfile) IsCreateIndexAlreadyExists(error) bool { return false }
-
-func ProfileFor(dialect Dialect) EngineProfile {
-	if profile, ok := dialect.(EngineProfile); ok {
-		return profile
-	}
-	return portableEngineProfile{}
 }
