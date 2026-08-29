@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationpolicy "github.com/domainry/domainry-runtime/runtime/domain/integration/policy"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -49,15 +50,22 @@ func (r IntegrationDeliveryStore) ListInvocations(ctx context.Context, workspace
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	where, args := []string{r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1)}, []any{workspaceID}
+	predicates := []ormbuilder.Predicate{}
 	for _, filter := range []struct{ column, value string }{{"connector_key", connectorKey}, {"record_id", recordID}, {"workflow_execution_id", executionID}, {"status", status}} {
 		if filter.value = strings.TrimSpace(filter.value); filter.value != "" {
-			args = append(args, filter.value)
-			where = append(where, r.store.Identifier(filter.column)+" = "+r.store.Placeholder(len(args)))
+			predicates = append(predicates, ormbuilder.Equal(filter.column, filter.value))
 		}
 	}
-	args = append(args, limit)
-	rows, err := r.db.QueryContext(ctx, "SELECT "+integrationInvocationColumnsSQL(r.store)+" FROM "+r.store.TableIdentifier("integration_invocations")+" WHERE "+strings.Join(where, " AND ")+" ORDER BY "+r.store.Identifier("created_at")+" DESC LIMIT "+r.store.Placeholder(len(args)), args...)
+	builder := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_invocations", workspaceID).
+		Columns(integrationInvocationColumns...).OrderBy(ormbuilder.Descending("created_at")).Limit(limit)
+	if len(predicates) != 0 {
+		builder.Where(ormbuilder.And(predicates...))
+	}
+	query, args, buildErr := builder.Build()
+	if buildErr != nil {
+		return nil, fmt.Errorf("build integration invocation query: %w", buildErr)
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list integration invocations: %w", err)
 	}
@@ -312,15 +320,22 @@ func (r IntegrationDeliveryStore) ListOutbox(ctx context.Context, workspaceID, c
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	where, args := []string{r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1)}, []any{workspaceID}
+	predicates := []ormbuilder.Predicate{}
 	for _, filter := range []struct{ column, value string }{{"connector_key", connectorKey}, {"status", status}} {
 		if filter.value = strings.TrimSpace(filter.value); filter.value != "" {
-			args = append(args, filter.value)
-			where = append(where, r.store.Identifier(filter.column)+" = "+r.store.Placeholder(len(args)))
+			predicates = append(predicates, ormbuilder.Equal(filter.column, filter.value))
 		}
 	}
-	args = append(args, limit)
-	rows, err := r.db.QueryContext(ctx, "SELECT "+integrationOutboxColumnsSQL(r.store)+" FROM "+r.store.TableIdentifier("integration_outbox_messages")+" WHERE "+strings.Join(where, " AND ")+" ORDER BY "+r.store.Identifier("created_at")+" DESC LIMIT "+r.store.Placeholder(len(args)), args...)
+	builder := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).
+		Columns(integrationOutboxColumns...).OrderBy(ormbuilder.Descending("created_at")).Limit(limit)
+	if len(predicates) != 0 {
+		builder.Where(ormbuilder.And(predicates...))
+	}
+	query, args, buildErr := builder.Build()
+	if buildErr != nil {
+		return nil, fmt.Errorf("build integration outbox query: %w", buildErr)
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list integration outbox messages: %w", err)
 	}

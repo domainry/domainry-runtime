@@ -8,11 +8,11 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/base"
 )
 
-func (s *RuntimeStore) sqlBase() *base.SQLStore {
-	if s.SQLStore == nil {
-		s.SQLStore = base.NewSQLStore(s.db, s.dialect, s.databaseSchema)
+func (s *RuntimeStore) sqlBase() *base.SQLDatabase {
+	if s.SQLDatabase == nil {
+		s.SQLDatabase = base.NewSQLDatabase(s.db, s.dialect, s.databaseSchema)
 	}
-	return s.SQLStore
+	return s.SQLDatabase
 }
 
 func quotedColumns(s *RuntimeStore, columns []string) []string {

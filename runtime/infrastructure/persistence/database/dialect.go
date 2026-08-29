@@ -51,6 +51,6 @@ func (s *RuntimeStore) SetDialectForTesting(driver string) error {
 		return err
 	}
 	s.dialect = dialect
-	s.SQLStore = base.NewSQLStore(s.db, dialect, s.databaseSchema)
+	s.SQLDatabase = base.NewSQLDatabase(s.db, dialect, s.databaseSchema)
 	return nil
 }

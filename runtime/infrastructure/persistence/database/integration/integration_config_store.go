@@ -258,17 +258,24 @@ func (r IntegrationConfigStore) ListWebhookSubscriptions(ctx context.Context, wo
 	if limit <= 0 || limit > 500 {
 		limit = 200
 	}
-	where, args := []string{r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1)}, []any{workspaceID}
+	predicates := []ormbuilder.Predicate{}
 	if connectorKey = strings.TrimSpace(connectorKey); connectorKey != "" {
-		args = append(args, connectorKey)
-		where = append(where, r.store.Identifier("connector_key")+" = "+r.store.Placeholder(len(args)))
+		predicates = append(predicates, ormbuilder.Equal("connector_key", connectorKey))
 	}
 	if status = strings.TrimSpace(status); status != "" {
-		args = append(args, status)
-		where = append(where, r.store.Identifier("status")+" = "+r.store.Placeholder(len(args)))
+		predicates = append(predicates, ormbuilder.Equal("status", status))
 	}
-	args = append(args, limit)
-	query := "SELECT " + integrationWebhookSubscriptionColumnsSQL(r.store) + " FROM " + r.store.TableIdentifier("integration_webhook_subscriptions") + " WHERE " + strings.Join(where, " AND ") + " ORDER BY " + r.store.Identifier("subscription_key") + " ASC LIMIT " + r.store.Placeholder(len(args))
+	builder := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_webhook_subscriptions", workspaceID).
+		Columns(integrationWebhookSubscriptionColumns...).
+		OrderBy(ormbuilder.Ascending("subscription_key")).
+		Limit(limit)
+	if len(predicates) != 0 {
+		builder.Where(ormbuilder.And(predicates...))
+	}
+	query, args, buildErr := builder.Build()
+	if buildErr != nil {
+		return nil, fmt.Errorf("build integration webhook subscription query: %w", buildErr)
+	}
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list integration webhook subscriptions: %w", err)

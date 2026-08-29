@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	"strings"
 	"time"
@@ -31,17 +32,23 @@ func (r IntegrationEventStore) ListEvents(ctx context.Context, workspaceID, prov
 	if limit <= 0 || limit > 200 {
 		limit = 100
 	}
-	where, args := []string{r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1)}, []any{workspaceID}
+	predicates := []ormbuilder.Predicate{}
 	if provider = strings.TrimSpace(provider); provider != "" {
-		args = append(args, provider)
-		where = append(where, r.store.Identifier("provider")+" = "+r.store.Placeholder(len(args)))
+		predicates = append(predicates, ormbuilder.Equal("provider", provider))
 	}
 	if status = strings.TrimSpace(status); status != "" {
-		args = append(args, status)
-		where = append(where, r.store.Identifier("status")+" = "+r.store.Placeholder(len(args)))
+		predicates = append(predicates, ormbuilder.Equal("status", status))
 	}
-	args = append(args, limit)
-	rows, err := r.db.QueryContext(ctx, "SELECT "+integrationEventColumnsSQL(r.store)+" FROM "+r.store.TableIdentifier("integration_events")+" WHERE "+strings.Join(where, " AND ")+" ORDER BY "+r.store.Identifier("received_at")+" DESC LIMIT "+r.store.Placeholder(len(args)), args...)
+	builder := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_events", workspaceID).
+		Columns(integrationEventColumns...).OrderBy(ormbuilder.Descending("received_at")).Limit(limit)
+	if len(predicates) != 0 {
+		builder.Where(ormbuilder.And(predicates...))
+	}
+	query, args, buildErr := builder.Build()
+	if buildErr != nil {
+		return nil, fmt.Errorf("build integration event query: %w", buildErr)
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list integration events: %w", err)
 	}
@@ -204,8 +211,10 @@ func (r IntegrationEventStore) RecordWebhookNonce(ctx context.Context, workspace
 	return false, nil
 }
 
+var integrationEventColumns = []string{"id", "workspace_id", "provider", "event_type", "external_id", "status", "payload_json", "error", "attempt_count", "next_retry_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "received_at", "updated_at"}
+
 func integrationEventColumnsSQL(store *database.RuntimeStore) string {
-	return stringsJoinIdentifiers(store, "id", "workspace_id", "provider", "event_type", "external_id", "status", "payload_json", "error", "attempt_count", "next_retry_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "received_at", "updated_at")
+	return stringsJoinIdentifiers(store, integrationEventColumns...)
 }
 
 func (r IntegrationEventStore) findByID(ctx context.Context, workspaceID, eventID string) (integrationmodel.IntegrationEvent, bool, error) {

@@ -165,22 +165,28 @@ func OutboxDedupID(workspaceID, connectorKey, connectionKey, operation, dedupKey
 	return "integration_outbox:" + hex.EncodeToString(sum[:])[:24]
 }
 
+var integrationInvocationColumns = []string{
+	"id", "workspace_id", "connector_key", "provider_key", "connection_key", "operation", "status", "duration_ms", "request_ref", "response_ref", "error", "event_id", "object_key", "record_id", "workflow_execution_id", "metadata_json", "created_at", "updated_at",
+}
+
 func integrationInvocationColumnsSQL(s *database.RuntimeStore) string {
-	return stringsJoinIdentifiers(s,
-		"id", "workspace_id", "connector_key", "provider_key", "connection_key", "operation", "status", "duration_ms", "request_ref", "response_ref", "error", "event_id", "object_key", "record_id", "workflow_execution_id", "metadata_json", "created_at", "updated_at",
-	)
+	return stringsJoinIdentifiers(s, integrationInvocationColumns...)
+}
+
+var integrationOutboxColumns = []string{
+	"id", "workspace_id", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "ack_deadline_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at",
 }
 
 func integrationOutboxColumnsSQL(s *database.RuntimeStore) string {
-	return stringsJoinIdentifiers(s,
-		"id", "workspace_id", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "ack_deadline_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at",
-	)
+	return stringsJoinIdentifiers(s, integrationOutboxColumns...)
+}
+
+var integrationWebhookSubscriptionColumns = []string{
+	"subscription_key", "workspace_id", "name", "connector_key", "connection_key", "event_types_json", "status", "description", "created_by", "created_at", "updated_at", "disabled_at",
 }
 
 func integrationWebhookSubscriptionColumnsSQL(s *database.RuntimeStore) string {
-	return stringsJoinIdentifiers(s,
-		"subscription_key", "workspace_id", "name", "connector_key", "connection_key", "event_types_json", "status", "description", "created_by", "created_at", "updated_at", "disabled_at",
-	)
+	return stringsJoinIdentifiers(s, integrationWebhookSubscriptionColumns...)
 }
 
 func integrationAPIKeyColumnsSQL(s *database.RuntimeStore) string {

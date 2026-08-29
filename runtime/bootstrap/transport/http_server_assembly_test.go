@@ -208,7 +208,7 @@ func TestAssembleRuntimeHTTPServerPersistentGraphWiresOptionalOwners(t *testing.
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	if err := agentpersistence.NewAgentStateStore(store).EnsureSchema(t.Context()); err != nil {
+	if err := agentpersistence.NewAgentSchemaMigration(store).EnsureSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	services := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{

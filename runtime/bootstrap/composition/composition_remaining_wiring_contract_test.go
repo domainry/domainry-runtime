@@ -235,7 +235,7 @@ func TestRuntimeCompositionWiresPersistentAgentWorkersAndInteractiveFactory(t *t
 		t.Fatal(err)
 	}
 	repository := agentpersistence.NewAgentTaskRunStore(store)
-	if err := repository.EnsureSchema(t.Context()); err != nil {
+	if err := agentpersistence.NewAgentSchemaMigration(store).EnsureSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	withoutRunner := NewRuntimeServices(t.Context(), RuntimeServicesConfig{Dependencies: RuntimeServicesDependencies{AgentTaskRuns: repository, AgentPrincipals: agentPrincipalDirectoryStub{}}})

@@ -217,7 +217,7 @@ func TestActionExecutorsReturnCanonicalPlansToRuntimeOwnedUnitOfWork(t *testing.
 			"pipelineTransitions.Plan(", "GetRecordForUpdate", "ValidateDurableIntent", "NewActionUnitOfWorkManager(records.ActionExecutionRuntime)",
 		},
 		"runtime/infrastructure/persistence/database/action/action_business_execution_store.go": {
-			"BeginExecutionTransaction", "BEGIN IMMEDIATE", "WithActionExecutionTransaction",
+			"BeginExecutionTransaction", "profile.BeginWrite(ctx, r.db)", "WithActionExecutionTransaction",
 		},
 		"runtime/infrastructure/persistence/database/record/record_store.go": {
 			"actionExecutionTransaction(ctx)", "RecordQueryLockForUpdate", "FOR UPDATE",

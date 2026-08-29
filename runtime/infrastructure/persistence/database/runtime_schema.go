@@ -88,7 +88,7 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 
 func (s *RuntimeStore) runtimeMigrationStore() *RuntimeStore {
 	return &RuntimeStore{
-		SQLStore:             base.NewSQLStore(s.migrationDB, s.dialect, s.databaseSchema),
+		SQLDatabase:          base.NewSQLDatabase(s.migrationDB, s.dialect, s.databaseSchema),
 		db:                   s.migrationDB,
 		dialect:              s.dialect,
 		config:               s.config,
