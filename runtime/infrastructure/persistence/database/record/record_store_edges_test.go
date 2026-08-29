@@ -211,6 +211,13 @@ func TestRecordStoreSQLFailureAndProjectionEdges(t *testing.T) {
 	if got := normalizeDBValue("sqlite", definitionmodel.FieldSchema{Type: "text"}, "text"); got != "text" {
 		t.Fatalf("text=%v", got)
 	}
+	timestamp := time.Date(2026, 8, 29, 8, 30, 0, 123456000, time.FixedZone("UTC+8", 8*60*60))
+	if got, want := recordTimestampValue(timestamp), timestamp.UTC().Format(time.RFC3339Nano); got != want {
+		t.Fatalf("timestamp=%q want=%q", got, want)
+	}
+	if got := recordTimestampValue("version-1"); got != "version-1" {
+		t.Fatalf("text timestamp=%q", got)
+	}
 	for name, rows := range map[string]recordRows{
 		"columns":  fakeRecordRows{columnsErr: errRecordSQL},
 		"scan":     fakeRecordRows{columns: []string{"id"}, next: true, scanErr: errRecordSQL},

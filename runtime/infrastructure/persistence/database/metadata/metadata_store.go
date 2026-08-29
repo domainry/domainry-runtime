@@ -202,12 +202,11 @@ func (r MetadataStore) ensureObjectStorage(ctx context.Context, object definitio
 			return fmt.Errorf("object %s field %s conflicts with a Record system column", object.Key, field.Key)
 		}
 	}
-	createStatement, createArgs, buildErr := ormbuilder.NewCreateTableBuilder(r.store.SQLRenderer, object.Key).IfNotExists().Columns(
-		ormbuilder.DefineColumn("workspace_id", ormbuilder.TextKeyType(191)).NotNull(),
-		ormbuilder.DefineColumn("id", ormbuilder.TextKeyType(191)).NotNull(),
-		ormbuilder.DefineColumn("created_at", ormbuilder.TextType()).NotNull(),
-		ormbuilder.DefineColumn("updated_at", ormbuilder.TextType()).NotNull(),
-	).Build()
+	// Record identity, timestamps, deletion metadata, extension metadata and
+	// actor metadata are owned by domainry-orm. Runtime only adds business
+	// fields below; redeclaring system columns here would override the ORM's
+	// canonical cross-dialect types and defaults.
+	createStatement, createArgs, buildErr := ormbuilder.NewCreateTableBuilder(r.store.SQLRenderer, object.Key).IfNotExists().Build()
 	if buildErr != nil {
 		return fmt.Errorf("build object table %s: %w", object.Key, buildErr)
 	}

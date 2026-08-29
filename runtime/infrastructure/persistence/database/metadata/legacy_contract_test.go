@@ -153,11 +153,11 @@ func TestMetadataRefreshIntentCanBeReconciledAfterInlineFailure(t *testing.T) {
 	}
 	intentID := metadataDefinitionRefreshIntentID("object", "account", definition.SchemaHash)
 	intents := transactionpersistence.NewBoundaryIntentStore(store.raw)
-	claimed, ok, err := intents.ClaimBoundaryIntent(t.Context(), intentID, "metadata-reconciler", time.Now().UTC().Add(2*time.Minute).Format(time.RFC3339Nano))
+	claimed, ok, err := intents.ClaimBoundaryIntent(t.Context(), "default", intentID, "metadata-reconciler", time.Now().UTC().Add(2*time.Minute).Format(time.RFC3339Nano))
 	if err != nil || !ok || claimed.Status != transactionmodel.BoundaryIntentExecuting || claimed.AttemptCount != 1 {
 		t.Fatalf("claimed=%+v ok=%v err=%v", claimed, ok, err)
 	}
-	completed, err := intents.TransitionBoundaryIntent(t.Context(), intentID, claimed.LeaseOwner, claimed.FencingToken, transactionmodel.BoundaryIntentSucceeded, "", "")
+	completed, err := intents.TransitionBoundaryIntent(t.Context(), claimed.WorkspaceID, intentID, claimed.LeaseOwner, claimed.FencingToken, transactionmodel.BoundaryIntentSucceeded, "", "")
 	if err != nil || completed.Status != transactionmodel.BoundaryIntentSucceeded {
 		t.Fatalf("completed=%+v err=%v", completed, err)
 	}

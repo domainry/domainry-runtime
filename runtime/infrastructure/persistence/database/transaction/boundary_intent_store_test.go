@@ -16,26 +16,26 @@ import (
 
 func TestBoundaryIntentReconciliationAndCompensationStateMachine(t *testing.T) {
 	store := openBoundaryIntentStore(t)
-	intent, duplicate, err := store.CreateBoundaryIntent(t.Context(), transactionmodel.BoundaryIntent{Owner: "integration", Operation: "provider_reserve", ResourceID: "order-1", IdempotencyKey: "reserve-1", Payload: map[string]any{"order_id": "order-1"}, CompensationPayload: map[string]any{"operation": "release"}})
+	intent, duplicate, err := store.CreateBoundaryIntent(t.Context(), transactionmodel.BoundaryIntent{WorkspaceID: "workspace-a", Owner: "integration", Operation: "provider_reserve", ResourceID: "order-1", IdempotencyKey: "reserve-1", Payload: map[string]any{"order_id": "order-1"}, CompensationPayload: map[string]any{"operation": "release"}})
 	if err != nil || duplicate || intent.Status != transactionmodel.BoundaryIntentPending {
 		t.Fatalf("create intent=%+v duplicate=%v err=%v", intent, duplicate, err)
 	}
-	if replay, duplicate, err := store.CreateBoundaryIntent(t.Context(), transactionmodel.BoundaryIntent{Owner: "integration", Operation: "provider_reserve", IdempotencyKey: "reserve-1"}); err != nil || !duplicate || replay.ID != intent.ID {
+	if replay, duplicate, err := store.CreateBoundaryIntent(t.Context(), transactionmodel.BoundaryIntent{WorkspaceID: intent.WorkspaceID, Owner: "integration", Operation: "provider_reserve", IdempotencyKey: "reserve-1"}); err != nil || !duplicate || replay.ID != intent.ID {
 		t.Fatalf("replay=%+v duplicate=%v err=%v", replay, duplicate, err)
 	}
-	claimed, ok, err := store.ClaimBoundaryIntent(t.Context(), intent.ID, "worker-1", time.Now().UTC().Format(time.RFC3339Nano))
+	claimed, ok, err := store.ClaimBoundaryIntent(t.Context(), intent.WorkspaceID, intent.ID, "worker-1", time.Now().UTC().Format(time.RFC3339Nano))
 	if err != nil || !ok || claimed.Status != transactionmodel.BoundaryIntentExecuting || claimed.FencingToken != 1 {
 		t.Fatalf("claim=%+v ok=%v err=%v", claimed, ok, err)
 	}
-	reconcile, err := store.TransitionBoundaryIntent(t.Context(), intent.ID, claimed.LeaseOwner, claimed.FencingToken, transactionmodel.BoundaryIntentReconciliationRequired, "provider outcome unknown", "")
+	reconcile, err := store.TransitionBoundaryIntent(t.Context(), intent.WorkspaceID, intent.ID, claimed.LeaseOwner, claimed.FencingToken, transactionmodel.BoundaryIntentReconciliationRequired, "provider outcome unknown", "")
 	if err != nil || reconcile.Status != transactionmodel.BoundaryIntentReconciliationRequired || reconcile.AttemptCount != 1 {
 		t.Fatalf("reconcile=%+v err=%v", reconcile, err)
 	}
-	compensating, err := store.TransitionBoundaryIntent(t.Context(), intent.ID, "", reconcile.FencingToken, transactionmodel.BoundaryIntentCompensating, "", "")
+	compensating, err := store.TransitionBoundaryIntent(t.Context(), intent.WorkspaceID, intent.ID, "", reconcile.FencingToken, transactionmodel.BoundaryIntentCompensating, "", "")
 	if err != nil || compensating.Status != transactionmodel.BoundaryIntentCompensating {
 		t.Fatalf("compensating=%+v err=%v", compensating, err)
 	}
-	compensated, err := store.TransitionBoundaryIntent(t.Context(), intent.ID, "", compensating.FencingToken, transactionmodel.BoundaryIntentCompensated, "", "")
+	compensated, err := store.TransitionBoundaryIntent(t.Context(), intent.WorkspaceID, intent.ID, "", compensating.FencingToken, transactionmodel.BoundaryIntentCompensated, "", "")
 	if err != nil || compensated.Status != transactionmodel.BoundaryIntentCompensated {
 		t.Fatalf("compensated=%+v err=%v", compensated, err)
 	}
@@ -68,33 +68,33 @@ func TestBoundaryIntentInputAndStorageBoundaries(t *testing.T) {
 		t.Fatal("invalid compensation accepted")
 	}
 
-	for _, claim := range []struct{ id, owner string }{{id: "", owner: "worker"}, {id: "explicit", owner: ""}} {
-		if _, _, err := store.ClaimBoundaryIntent(t.Context(), claim.id, claim.owner, time.Now().UTC().Format(time.RFC3339)); err == nil {
+	for _, claim := range []struct{ workspaceID, id, owner string }{{workspaceID: "workspace-a", id: "", owner: "worker"}, {workspaceID: "workspace-a", id: "explicit", owner: ""}, {id: "explicit", owner: "worker"}} {
+		if _, _, err := store.ClaimBoundaryIntent(t.Context(), claim.workspaceID, claim.id, claim.owner, time.Now().UTC().Format(time.RFC3339)); err == nil {
 			t.Fatalf("invalid claim accepted: %+v", claim)
 		}
 	}
-	if _, _, err := store.ClaimBoundaryIntent(t.Context(), "explicit", "worker", "invalid"); err == nil {
+	if _, _, err := store.ClaimBoundaryIntent(t.Context(), explicit.WorkspaceID, "explicit", "worker", "invalid"); err == nil {
 		t.Fatal("invalid claim time accepted")
 	}
-	if intent, claimed, err := store.ClaimBoundaryIntent(t.Context(), "missing", "worker", time.Now().UTC().Format(time.RFC3339)); err != nil || claimed || intent.ID != "" {
+	if intent, claimed, err := store.ClaimBoundaryIntent(t.Context(), explicit.WorkspaceID, "missing", "worker", time.Now().UTC().Format(time.RFC3339)); err != nil || claimed || intent.ID != "" {
 		t.Fatalf("missing claim=%+v claimed=%v err=%v", intent, claimed, err)
 	}
-	if _, found, err := store.GetBoundaryIntent(t.Context(), "missing"); err != nil || found {
+	if _, found, err := store.GetBoundaryIntent(t.Context(), explicit.WorkspaceID, "missing"); err != nil || found {
 		t.Fatalf("missing get found=%v err=%v", found, err)
 	}
-	if _, err := store.TransitionBoundaryIntent(t.Context(), "missing", "worker", 1, transactionmodel.BoundaryIntentSucceeded, "", ""); err == nil {
+	if _, err := store.TransitionBoundaryIntent(t.Context(), explicit.WorkspaceID, "missing", "worker", 1, transactionmodel.BoundaryIntentSucceeded, "", ""); err == nil {
 		t.Fatal("missing transition accepted")
 	}
 
-	claimed, ok, err := store.ClaimBoundaryIntent(t.Context(), explicit.ID, "worker", time.Now().UTC().Format(time.RFC3339Nano))
+	claimed, ok, err := store.ClaimBoundaryIntent(t.Context(), explicit.WorkspaceID, explicit.ID, "worker", time.Now().UTC().Format(time.RFC3339Nano))
 	if err != nil || !ok {
 		t.Fatalf("explicit claim=%+v ok=%v err=%v", claimed, ok, err)
 	}
-	reconcile, err := store.TransitionBoundaryIntent(t.Context(), explicit.ID, claimed.LeaseOwner, claimed.FencingToken, transactionmodel.BoundaryIntentReconciliationRequired, "uncertain", "")
+	reconcile, err := store.TransitionBoundaryIntent(t.Context(), explicit.WorkspaceID, explicit.ID, claimed.LeaseOwner, claimed.FencingToken, transactionmodel.BoundaryIntentReconciliationRequired, "uncertain", "")
 	if err != nil {
 		t.Fatalf("reconciliation=%+v err=%v", reconcile, err)
 	}
-	manual, err := store.TransitionBoundaryIntent(t.Context(), explicit.ID, "", reconcile.FencingToken, transactionmodel.BoundaryIntentManualReview, "review", "")
+	manual, err := store.TransitionBoundaryIntent(t.Context(), explicit.WorkspaceID, explicit.ID, "", reconcile.FencingToken, transactionmodel.BoundaryIntentManualReview, "review", "")
 	if err != nil || manual.AttemptCount != 2 {
 		t.Fatalf("manual review=%+v err=%v", manual, err)
 	}
@@ -105,13 +105,13 @@ func TestBoundaryIntentDatabaseFailures(t *testing.T) {
 	if err := store.store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := store.CreateBoundaryIntent(t.Context(), transactionmodel.BoundaryIntent{Owner: "owner", Operation: "operation", IdempotencyKey: "key"}); err == nil || !strings.Contains(err.Error(), "insert boundary intent") {
+	if _, _, err := store.CreateBoundaryIntent(t.Context(), transactionmodel.BoundaryIntent{WorkspaceID: "workspace-a", Owner: "owner", Operation: "operation", IdempotencyKey: "key"}); err == nil || !strings.Contains(err.Error(), "insert boundary intent") {
 		t.Fatalf("create database error=%v", err)
 	}
-	if _, _, err := store.ClaimBoundaryIntent(t.Context(), "id", "worker", time.Now().UTC().Format(time.RFC3339)); err == nil || !strings.Contains(err.Error(), "claim boundary intent") {
+	if _, _, err := store.ClaimBoundaryIntent(t.Context(), "workspace-a", "id", "worker", time.Now().UTC().Format(time.RFC3339)); err == nil || !strings.Contains(err.Error(), "claim boundary intent") {
 		t.Fatalf("claim database error=%v", err)
 	}
-	if _, _, err := store.GetBoundaryIntent(t.Context(), "id"); err == nil {
+	if _, _, err := store.GetBoundaryIntent(t.Context(), "workspace-a", "id"); err == nil {
 		t.Fatal("closed database get succeeded")
 	}
 }
@@ -122,25 +122,25 @@ func TestBoundaryIntentInsertFailureWithoutReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, duplicate, err := store.CreateBoundaryIntent(t.Context(), transactionmodel.BoundaryIntent{Owner: "owner", Operation: "operation", IdempotencyKey: "key"}); err == nil || duplicate || !strings.Contains(err.Error(), "insert boundary intent") {
+	if _, duplicate, err := store.CreateBoundaryIntent(t.Context(), transactionmodel.BoundaryIntent{WorkspaceID: "workspace-a", Owner: "owner", Operation: "operation", IdempotencyKey: "key"}); err == nil || duplicate || !strings.Contains(err.Error(), "insert boundary intent") {
 		t.Fatalf("insert failure duplicate=%v err=%v", duplicate, err)
 	}
 }
 
 func TestBoundaryIntentRejectsStaleFencingAndIllegalTransition(t *testing.T) {
 	store := openBoundaryIntentStore(t)
-	intent, _, err := store.CreateBoundaryIntent(t.Context(), transactionmodel.BoundaryIntent{Owner: "metadata", Operation: "runtime_refresh", ResourceID: "object:account", IdempotencyKey: "hash-1"})
+	intent, _, err := store.CreateBoundaryIntent(t.Context(), transactionmodel.BoundaryIntent{WorkspaceID: "workspace-a", Owner: "metadata", Operation: "runtime_refresh", ResourceID: "object:account", IdempotencyKey: "hash-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	claimed, ok, err := store.ClaimBoundaryIntent(t.Context(), intent.ID, "worker-1", time.Now().UTC().Format(time.RFC3339Nano))
+	claimed, ok, err := store.ClaimBoundaryIntent(t.Context(), intent.WorkspaceID, intent.ID, "worker-1", time.Now().UTC().Format(time.RFC3339Nano))
 	if err != nil || !ok {
 		t.Fatalf("claim=%+v ok=%v err=%v", claimed, ok, err)
 	}
-	if _, err := store.TransitionBoundaryIntent(t.Context(), intent.ID, "worker-1", 0, transactionmodel.BoundaryIntentSucceeded, "", ""); !mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
+	if _, err := store.TransitionBoundaryIntent(t.Context(), intent.WorkspaceID, intent.ID, "worker-1", 0, transactionmodel.BoundaryIntentSucceeded, "", ""); !mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
 		t.Fatalf("stale fencing error=%v", err)
 	}
-	if _, err := store.TransitionBoundaryIntent(t.Context(), intent.ID, "worker-1", claimed.FencingToken, transactionmodel.BoundaryIntentCompensated, "", ""); err == nil {
+	if _, err := store.TransitionBoundaryIntent(t.Context(), intent.WorkspaceID, intent.ID, "worker-1", claimed.FencingToken, transactionmodel.BoundaryIntentCompensated, "", ""); err == nil {
 		t.Fatal("expected illegal transition error")
 	}
 }

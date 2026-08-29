@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -43,9 +44,9 @@ func recordsFromRows(driver string, object definitionmodel.ObjectSchema, rows re
 			case "id":
 				record.ID = fmt.Sprint(value)
 			case "created_at":
-				record.CreatedAt = fmt.Sprint(value)
+				record.CreatedAt = recordTimestampValue(value)
 			case "updated_at":
-				record.UpdatedAt = fmt.Sprint(value)
+				record.UpdatedAt = recordTimestampValue(value)
 			case "workspace_id":
 				record.WorkspaceID = fmt.Sprint(value)
 			case "deleted":
@@ -68,6 +69,13 @@ func recordsFromRows(driver string, object definitionmodel.ObjectSchema, rows re
 		return nil, fmt.Errorf("read records: %w", err)
 	}
 	return records, nil
+}
+
+func recordTimestampValue(value any) string {
+	if timestamp, ok := value.(time.Time); ok {
+		return timestamp.UTC().Format(time.RFC3339Nano)
+	}
+	return fmt.Sprint(value)
 }
 
 func recordDeletedValue(value any) bool {

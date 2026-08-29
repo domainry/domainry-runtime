@@ -10,12 +10,7 @@ import (
 
 func planToProduceCreateTable(t *testing.T, store *persistence.RuntimeStore, object definitionmodel.ObjectSchema) {
 	t.Helper()
-	columns := []ormbuilder.SchemaColumn{
-		ormbuilder.DefineColumn("workspace_id", ormbuilder.TextKeyType(191)).NotNull(),
-		ormbuilder.DefineColumn("id", ormbuilder.TextKeyType(191)).NotNull(),
-		ormbuilder.DefineColumn("created_at", ormbuilder.TextType()).NotNull(),
-		ormbuilder.DefineColumn("updated_at", ormbuilder.TextType()).NotNull(),
-	}
+	columns := make([]ormbuilder.SchemaColumn, 0, len(object.Fields))
 	for _, field := range object.Fields {
 		columns = append(columns, ormbuilder.DefineColumn(field.Key, ormbuilder.TextType()))
 	}

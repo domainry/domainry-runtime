@@ -39,9 +39,9 @@ type BoundaryIntent struct {
 
 type BoundaryIntentRepository interface {
 	CreateBoundaryIntent(context.Context, BoundaryIntent) (BoundaryIntent, bool, error)
-	ClaimBoundaryIntent(context.Context, string, string, string) (BoundaryIntent, bool, error)
-	TransitionBoundaryIntent(context.Context, string, string, int64, BoundaryIntentStatus, string, string) (BoundaryIntent, error)
-	GetBoundaryIntent(context.Context, string) (BoundaryIntent, bool, error)
+	ClaimBoundaryIntent(context.Context, string, string, string, string) (BoundaryIntent, bool, error)
+	TransitionBoundaryIntent(context.Context, string, string, string, int64, BoundaryIntentStatus, string, string) (BoundaryIntent, error)
+	GetBoundaryIntent(context.Context, string, string) (BoundaryIntent, bool, error)
 }
 
 func BoundaryIntentTransitionAllowed(from, to BoundaryIntentStatus) bool {
