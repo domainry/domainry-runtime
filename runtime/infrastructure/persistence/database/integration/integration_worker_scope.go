@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/requestcontext"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
@@ -51,8 +52,12 @@ func registerIntegrationWorkerQueueScope(ctx context.Context, store *database.Ru
 	}
 	digest := sha256.Sum256([]byte(queueKind + "\x00" + workspaceID))
 	id := "worker_scope:" + hex.EncodeToString(digest[:12])
-	update := "UPDATE " + store.TableIdentifier("runtime_worker_queue_scopes") + " SET " + store.Identifier("updated_at") + " = " + store.Placeholder(1) + " WHERE " + store.Identifier("id") + " = " + store.Placeholder(2)
-	updated, err := executor.ExecContext(ctx, update, updatedAt, id)
+	update, updateArgs, buildErr := ormbuilder.NewUpdateBuilder(store.SQLRenderer, "runtime_worker_queue_scopes").
+		Set("updated_at", updatedAt).Where(ormbuilder.Equal("id", id)).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build %s worker queue scope refresh: %w", queueKind, buildErr)
+	}
+	updated, err := executor.ExecContext(ctx, update, updateArgs...)
 	if err != nil {
 		return fmt.Errorf("refresh %s worker queue scope: %w", queueKind, err)
 	}
@@ -61,13 +66,16 @@ func registerIntegrationWorkerQueueScope(ctx context.Context, store *database.Ru
 	} else if affected > 0 {
 		return nil
 	}
-	columns := []string{"id", "queue_kind", "scope_key", "updated_at"}
-	insert := "INSERT INTO " + store.TableIdentifier("runtime_worker_queue_scopes") + " (" + stringsJoinIdentifiers(store, columns...) + ") VALUES (" + stringsJoinPlaceholders(store, len(columns)) + ")"
-	if _, err := executor.ExecContext(ctx, insert, id, queueKind, workspaceID, updatedAt); err != nil {
+	insert, insertArgs, buildErr := ormbuilder.NewInsertBuilder(store.SQLRenderer, "runtime_worker_queue_scopes").
+		Columns("id", "queue_kind", "scope_key", "updated_at").Values(id, queueKind, workspaceID, updatedAt).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build %s worker queue scope registration: %w", queueKind, buildErr)
+	}
+	if _, err := executor.ExecContext(ctx, insert, insertArgs...); err != nil {
 		// A concurrent producer may have inserted the deterministic scope after
 		// our update. A second update distinguishes that harmless race from a
 		// real insert failure without relying on driver-specific error strings.
-		retried, retryErr := executor.ExecContext(ctx, update, updatedAt, id)
+		retried, retryErr := executor.ExecContext(ctx, update, updateArgs...)
 		if retryErr == nil {
 			if affected, rowsErr := retried.RowsAffected(); rowsErr == nil && affected > 0 {
 				return nil
@@ -79,8 +87,12 @@ func registerIntegrationWorkerQueueScope(ctx context.Context, store *database.Ru
 }
 
 func (r IntegrationWorkerStore) integrationWorkerQueueScopes(ctx context.Context, queueKind string) ([]string, error) {
-	query := "SELECT " + r.store.Identifier("scope_key") + " FROM " + r.store.TableIdentifier("runtime_worker_queue_scopes") + " WHERE " + r.store.Identifier("queue_kind") + " = " + r.store.Placeholder(1) + " ORDER BY " + r.store.Identifier("scope_key") + " ASC"
-	rows, err := r.db.QueryContext(ctx, query, queueKind)
+	query, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "runtime_worker_queue_scopes").
+		Columns("scope_key").Where(ormbuilder.Equal("queue_kind", queueKind)).OrderBy(ormbuilder.Ascending("scope_key")).Build()
+	if buildErr != nil {
+		return nil, fmt.Errorf("build %s worker queue scope list: %w", queueKind, buildErr)
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list %s worker queue scopes: %w", queueKind, err)
 	}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 )
 
 func (r IntegrationConfigStore) TryAcquireCredentialRefreshLease(ctx context.Context, workspaceID, connectionKey, owner, now, expiresAt string) (bool, error) {
@@ -16,7 +18,15 @@ func (r IntegrationConfigStore) TryAcquireCredentialRefreshLease(ctx context.Con
 		return false, fmt.Errorf("credential refresh lease identity and timestamps are required")
 	}
 	s := r.store
-	result, err := r.db.ExecContext(ctx, "UPDATE "+s.TableIdentifier("integration_credential_refresh_leases")+" SET "+s.Identifier("lease_owner")+" = "+s.Placeholder(1)+", "+s.Identifier("lease_expires_at")+" = "+s.Placeholder(2)+", "+s.Identifier("updated_at")+" = "+s.Placeholder(3)+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(4)+" AND "+s.Identifier("connection_key")+" = "+s.Placeholder(5)+" AND ("+s.Identifier("lease_owner")+" = "+s.Placeholder(6)+" OR "+s.Identifier("lease_expires_at")+" <= "+s.Placeholder(7)+")", owner, expiresAt, now, workspaceID, connectionKey, owner, now)
+	statement, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.SQLRenderer, "integration_credential_refresh_leases", workspaceID).
+		Set("lease_owner", owner).Set("lease_expires_at", expiresAt).Set("updated_at", now).Where(ormbuilder.And(
+		ormbuilder.Equal("connection_key", connectionKey),
+		ormbuilder.Or(ormbuilder.Equal("lease_owner", owner), ormbuilder.LessThanOrEqual("lease_expires_at", now)),
+	)).Build()
+	if buildErr != nil {
+		return false, fmt.Errorf("build credential refresh lease update: %w", buildErr)
+	}
+	result, err := r.db.ExecContext(ctx, statement, args...)
 	if err != nil {
 		return false, fmt.Errorf("update credential refresh lease: %w", err)
 	}
@@ -27,12 +37,23 @@ func (r IntegrationConfigStore) TryAcquireCredentialRefreshLease(ctx context.Con
 	if count > 0 {
 		return true, nil
 	}
-	_, err = r.db.ExecContext(ctx, "INSERT INTO "+s.TableIdentifier("integration_credential_refresh_leases")+" ("+stringsJoinIdentifiers(s, "id", "workspace_id", "connection_key", "lease_owner", "lease_expires_at", "updated_at")+") VALUES ("+s.Placeholder(1)+", "+s.Placeholder(2)+", "+s.Placeholder(3)+", "+s.Placeholder(4)+", "+s.Placeholder(5)+", "+s.Placeholder(6)+")", "integration_credential_refresh_lease:"+workspaceID+":"+connectionKey, workspaceID, connectionKey, owner, expiresAt, now)
+	statement, args, buildErr = ormbuilder.NewWorkspaceInsertBuilder(s.SQLRenderer, "integration_credential_refresh_leases", workspaceID).
+		Columns("id", "connection_key", "lease_owner", "lease_expires_at", "updated_at").
+		Values("integration_credential_refresh_lease:"+workspaceID+":"+connectionKey, connectionKey, owner, expiresAt, now).Build()
+	if buildErr != nil {
+		return false, fmt.Errorf("build credential refresh lease insert: %w", buildErr)
+	}
+	_, err = r.db.ExecContext(ctx, statement, args...)
 	if err == nil {
 		return true, nil
 	}
 	var existing string
-	readErr := r.db.QueryRowContext(ctx, "SELECT "+s.Identifier("lease_owner")+" FROM "+s.TableIdentifier("integration_credential_refresh_leases")+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(1)+" AND "+s.Identifier("connection_key")+" = "+s.Placeholder(2), workspaceID, connectionKey).Scan(&existing)
+	query, queryArgs, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.SQLRenderer, "integration_credential_refresh_leases", workspaceID).
+		Columns("lease_owner").Where(ormbuilder.Equal("connection_key", connectionKey)).Limit(1).Build()
+	if buildErr != nil {
+		return false, fmt.Errorf("build credential refresh lease read: %w", buildErr)
+	}
+	readErr := r.db.QueryRowContext(ctx, query, queryArgs...).Scan(&existing)
 	if readErr == nil {
 		return false, nil
 	}
@@ -45,7 +66,15 @@ func (r IntegrationConfigStore) ReleaseCredentialRefreshLease(ctx context.Contex
 		return err
 	}
 	s := r.store
-	_, err = r.db.ExecContext(ctx, "DELETE FROM "+s.TableIdentifier("integration_credential_refresh_leases")+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(1)+" AND "+s.Identifier("connection_key")+" = "+s.Placeholder(2)+" AND "+s.Identifier("lease_owner")+" = "+s.Placeholder(3), workspaceID, strings.TrimSpace(connectionKey), strings.TrimSpace(owner))
+	statement, args, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(s.SQLRenderer, "integration_credential_refresh_leases", workspaceID).
+		Where(ormbuilder.And(
+			ormbuilder.Equal("connection_key", strings.TrimSpace(connectionKey)),
+			ormbuilder.Equal("lease_owner", strings.TrimSpace(owner)),
+		)).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build credential refresh lease release: %w", buildErr)
+	}
+	_, err = r.db.ExecContext(ctx, statement, args...)
 	if err != nil {
 		return fmt.Errorf("release credential refresh lease: %w", err)
 	}
