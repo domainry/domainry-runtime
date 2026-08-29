@@ -171,7 +171,8 @@ func TestMetadataCompilesTemporalExclusionScopeRangeIndex(t *testing.T) {
 			t.Fatalf("constraint field %q not marked indexed: %#v", field, indexed)
 		}
 	}
-	if got := metadataSQLTypeForFieldDriver("mysql", metadataConstraintIndexedField(object.Fields[1], true)); got != "VARCHAR(191)" {
+	field := metadataConstraintIndexedField(object.Fields[1], true)
+	if got := metadataTestStorageProfile("mysql").FieldColumnType(field, metadataFieldIndexed(field)); got != "VARCHAR(191)" {
 		t.Fatalf("mysql temporal range type=%q", got)
 	}
 }

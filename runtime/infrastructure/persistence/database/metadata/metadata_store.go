@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormdialect "github.com/domainry/domainry-orm/dialect"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
@@ -16,6 +17,10 @@ import (
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	metadatamysql "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata/mysql"
+	metadatapostgres "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata/postgres"
+	metadatasqlite "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata/sqlite"
+	metadatastorage "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata/storage"
 	runtimeschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/schema"
 )
 
@@ -25,6 +30,7 @@ type MetadataStore struct {
 	db          *sql.DB
 	schemaDB    runtimeschema.SQLDatabase
 	createIndex func(context.Context, string, string, bool, ...string) error
+	storage     metadatastorage.Profile
 }
 
 var _ metadatarepository.MetadataRepository = MetadataStore{}
@@ -52,7 +58,18 @@ func (r MetadataStore) SnapshotRevision(ctx context.Context, scope principalmode
 }
 
 func NewMetadataStore(store *database.RuntimeStore) MetadataStore {
-	return MetadataStore{store: store, db: store.DB()}
+	var profile metadatastorage.Profile
+	switch store.Engine.Name() {
+	case ormdialect.SQLite:
+		profile = metadatasqlite.NewMetadataStorageProfile()
+	case ormdialect.MySQL:
+		profile = metadatamysql.NewMetadataStorageProfile()
+	case ormdialect.Postgres:
+		profile = metadatapostgres.NewMetadataStorageProfile()
+	default:
+		panic(fmt.Sprintf("unsupported Metadata storage profile %q", store.Engine.Name()))
+	}
+	return MetadataStore{store: store, db: store.DB(), storage: profile}
 }
 
 func (r MetadataStore) database() *sql.DB {
@@ -518,113 +535,11 @@ func metadataDBValue(value any) any {
 }
 
 func (r MetadataStore) tableColumns(ctx context.Context, table string) (map[string]bool, error) {
-	return r.tableColumnsForDriver(ctx, table, r.store.Driver())
-}
-
-func (r MetadataStore) tableColumnsForDriver(ctx context.Context, table, driver string) (map[string]bool, error) {
-	out := map[string]bool{}
-	if driver == "sqlite" {
-		rows, err := r.database().QueryContext(ctx, "PRAGMA table_info("+r.store.Identifier(table)+")")
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var cid int
-			var name, dataType string
-			var notNull, pk int
-			var defaultValue any
-			if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
-				return nil, err
-			}
-			out[name] = true
-		}
-		if len(out) == 0 {
-			return nil, fmt.Errorf("table not found: %s", table)
-		}
-		return out, rows.Err()
-	}
-	query := "SELECT column_name FROM information_schema.columns WHERE table_name = " + r.store.Placeholder(1)
-	args := []any{table}
-	if driver == "mysql" {
-		query += " AND table_schema = DATABASE()"
-	} else if driver == "postgres" {
-		query = "SELECT column_name FROM information_schema.columns WHERE table_schema = " + r.store.Placeholder(1) + " AND table_name = " + r.store.Placeholder(2)
-		args = []any{r.store.DatabaseSchema(), table}
-	}
-	rows, err := r.database().QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
-		}
-		out[name] = true
-	}
-	if len(out) == 0 {
-		return nil, fmt.Errorf("table not found: %s", table)
-	}
-	return out, rows.Err()
+	return r.storage.Columns(ctx, r.database(), r.store.SQLRenderer, r.store.DatabaseSchema(), table)
 }
 
 func (r MetadataStore) tableColumnTypes(ctx context.Context, table string) (map[string]string, error) {
-	return r.tableColumnTypesForDriver(ctx, table, r.store.Driver())
-}
-
-func (r MetadataStore) tableColumnTypesForDriver(ctx context.Context, table, driver string) (map[string]string, error) {
-	out := map[string]string{}
-	if driver == "sqlite" {
-		rows, err := r.database().QueryContext(ctx, "PRAGMA table_info("+r.store.Identifier(table)+")")
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var cid int
-			var name, dataType string
-			var notNull, pk int
-			var defaultValue any
-			if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
-				return nil, err
-			}
-			out[name] = dataType
-		}
-		if len(out) == 0 {
-			return nil, fmt.Errorf("table not found: %s", table)
-		}
-		return out, rows.Err()
-	}
-	query := "SELECT column_name, data_type, numeric_precision, numeric_scale FROM information_schema.columns WHERE table_name = " + r.store.Placeholder(1)
-	args := []any{table}
-	if driver == "mysql" {
-		query += " AND table_schema = DATABASE()"
-	} else if driver == "postgres" {
-		query = "SELECT column_name, data_type, numeric_precision, numeric_scale FROM information_schema.columns WHERE table_schema = " + r.store.Placeholder(1) + " AND table_name = " + r.store.Placeholder(2)
-		args = []any{r.store.DatabaseSchema(), table}
-	}
-	rows, err := r.database().QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var name, dataType string
-		var precision, scale sql.NullInt64
-		if err := rows.Scan(&name, &dataType, &precision, &scale); err != nil {
-			return nil, err
-		}
-		if precision.Valid && scale.Valid && (strings.EqualFold(dataType, "decimal") || strings.EqualFold(dataType, "numeric")) {
-			dataType = fmt.Sprintf("%s(%d,%d)", dataType, precision.Int64, scale.Int64)
-		}
-		out[name] = dataType
-	}
-	if len(out) == 0 {
-		return nil, fmt.Errorf("table not found: %s", table)
-	}
-	return out, rows.Err()
+	return r.storage.ColumnTypes(ctx, r.database(), r.store.SQLRenderer, r.store.DatabaseSchema(), table)
 }
 
 func metadataColumnTypeMatches(current, target string) bool {
@@ -653,48 +568,11 @@ func metadataPhysicalSchemaMismatch(objectKey, columnKey, expectedType, actualTy
 }
 
 func (r MetadataStore) tableIndexes(ctx context.Context, table string) (map[string]bool, error) {
-	return r.tableIndexesForDriver(ctx, table, r.store.Driver())
-}
-
-func (r MetadataStore) tableIndexesForDriver(ctx context.Context, table, driver string) (map[string]bool, error) {
-	out := map[string]bool{}
-	query, args := "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name="+r.store.Placeholder(1), []any{table}
-	if driver == "mysql" {
-		query = "SELECT DISTINCT index_name FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = " + r.store.Placeholder(1)
-	} else if driver == "postgres" {
-		query = "SELECT indexname FROM pg_indexes WHERE schemaname = " + r.store.Placeholder(1) + " AND tablename = " + r.store.Placeholder(2)
-		args = []any{r.store.DatabaseSchema(), table}
-	}
-	rows, err := r.database().QueryContext(ctx, query, args...)
-	if err != nil {
-		// Index introspection is best-effort during schema reconciliation; the
-		// table may have been created moments earlier by this same operation.
-		return out, nil
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
-		}
-		out[name] = true
-	}
-	return out, rows.Err()
+	return r.storage.Indexes(ctx, r.database(), r.store.SQLRenderer, r.store.DatabaseSchema(), table)
 }
 
 func (r MetadataStore) dropManagedIndex(ctx context.Context, table, index string) error {
-	return r.dropManagedIndexForDriver(ctx, table, index, r.store.Driver())
-}
-
-func (r MetadataStore) dropManagedIndexForDriver(ctx context.Context, table, index, driver string) error {
-	query := "DROP INDEX IF EXISTS " + r.store.Identifier(index)
-	if driver == "mysql" {
-		// MySQL has no DROP INDEX IF EXISTS form on this path. Callers derive
-		// existence from information_schema and only invoke this operation for
-		// a present managed index.
-		query = "DROP INDEX " + r.store.Identifier(index) + " ON " + r.store.TableIdentifier(table)
-	}
-	if _, err := r.schemaDatabase().ExecContext(ctx, query); err != nil {
+	if err := r.storage.DropIndex(ctx, r.schemaDatabase(), r.store.SQLRenderer, table, index); err != nil {
 		return fmt.Errorf("drop index %s: %w", index, err)
 	}
 	return nil

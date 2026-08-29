@@ -28,7 +28,7 @@ func TestMetadataStorageSchemaBranches(t *testing.T) {
 			t.Fatalf("field=%#v indexed=%v want=%v", testCase.field, got, testCase.want)
 		}
 	}
-	if metadataIDColumnTypeForDriver("mysql") != "VARCHAR(191)" || metadataIDColumnTypeForDriver("sqlite") != "TEXT" {
+	if metadataTestStorageProfile("mysql").IDColumnType() != "VARCHAR(191)" || metadataTestStorageProfile("sqlite").IDColumnType() != "TEXT" {
 		t.Fatal("ID column type mapping failed")
 	}
 	for _, testCase := range []struct {
@@ -58,7 +58,8 @@ func TestMetadataStorageSchemaBranches(t *testing.T) {
 		{"mysql", definitionmodel.FieldSchema{Type: "text", Config: map[string]any{"indexed": true, "max_length": json.Number("64")}}, "VARCHAR(64)"},
 		{"mysql", definitionmodel.FieldSchema{Type: "text", Config: map[string]any{"indexed": true, "max_length": 999}}, "VARCHAR(191)"},
 	} {
-		if got := metadataSQLTypeForFieldDriver(testCase.driver, testCase.field); got != testCase.want {
+		profile := metadataTestStorageProfile(testCase.driver)
+		if got := profile.FieldColumnType(testCase.field, metadataFieldIndexed(testCase.field)); got != testCase.want {
 			t.Fatalf("driver=%s field=%#v got=%s want=%s", testCase.driver, testCase.field, got, testCase.want)
 		}
 	}

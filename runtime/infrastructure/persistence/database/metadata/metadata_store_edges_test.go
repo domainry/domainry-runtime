@@ -9,7 +9,22 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	metadatamysql "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata/mysql"
+	metadatapostgres "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata/postgres"
+	metadatasqlite "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata/sqlite"
+	metadatastorage "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata/storage"
 )
+
+func metadataTestStorageProfile(name string) metadatastorage.Profile {
+	switch name {
+	case "mysql":
+		return metadatamysql.NewMetadataStorageProfile()
+	case "postgres":
+		return metadatapostgres.NewMetadataStorageProfile()
+	default:
+		return metadatasqlite.NewMetadataStorageProfile()
+	}
+}
 
 func TestMetadataSnapshotRevisionBranches(t *testing.T) {
 	baseDB := openStoreForGeneratedListTest(t)
@@ -50,7 +65,7 @@ func TestMetadataSnapshotRevisionBranches(t *testing.T) {
 	}
 }
 
-func TestMetadataTableIntrospectionDriverBranches(t *testing.T) {
+func TestMetadataTableIntrospectionProfileStrategies(t *testing.T) {
 	baseDB := openStoreForGeneratedListTest(t)
 	t.Cleanup(func() { _ = baseDB.Close() })
 	base := NewMetadataStore(baseDB)
@@ -66,12 +81,13 @@ func TestMetadataTableIntrospectionDriverBranches(t *testing.T) {
 		{step: metadataSQLQueryStep{columns: []string{"cid", "name", "type", "notnull", "default", "pk"}, rows: [][]driver.Value{{int64(0), "id", "TEXT", int64(0), nil, int64(1)}}, nextErr: errMetadataSQL}, want: true, err: true},
 	} {
 		repository := scriptedMetadataStore(t, &metadataSQLState{querySteps: []metadataSQLQueryStep{testCase.step}}, base)
-		columns, err := repository.tableColumnsForDriver(t.Context(), "account", "sqlite")
+		repository.storage = metadataTestStorageProfile("sqlite")
+		columns, err := repository.tableColumns(t.Context(), "account")
 		if columns["id"] != testCase.want || (err != nil) != testCase.err {
 			t.Fatalf("sqlite columns=%#v err=%v", columns, err)
 		}
 	}
-	for _, driverName := range []string{"mysql", "postgres", "other"} {
+	for _, driverName := range []string{"mysql", "postgres"} {
 		for _, testCase := range []struct {
 			step metadataSQLQueryStep
 			want bool
@@ -84,7 +100,8 @@ func TestMetadataTableIntrospectionDriverBranches(t *testing.T) {
 			{step: metadataSQLQueryStep{columns: []string{"column_name"}, rows: [][]driver.Value{{"id"}}, nextErr: errMetadataSQL}, want: true, err: true},
 		} {
 			repository := scriptedMetadataStore(t, &metadataSQLState{querySteps: []metadataSQLQueryStep{testCase.step}}, base)
-			columns, err := repository.tableColumnsForDriver(t.Context(), "account", driverName)
+			repository.storage = metadataTestStorageProfile(driverName)
+			columns, err := repository.tableColumns(t.Context(), "account")
 			if columns["id"] != testCase.want || (err != nil) != testCase.err {
 				t.Fatalf("driver=%s columns=%#v err=%v", driverName, columns, err)
 			}
@@ -102,7 +119,8 @@ func TestMetadataTableIntrospectionDriverBranches(t *testing.T) {
 			{step: metadataSQLQueryStep{columns: []string{"name"}, rows: [][]driver.Value{{"idx"}}, nextErr: errMetadataSQL}, want: true, err: true},
 		} {
 			repository := scriptedMetadataStore(t, &metadataSQLState{querySteps: []metadataSQLQueryStep{testCase.step}}, base)
-			indexes, err := repository.tableIndexesForDriver(t.Context(), "account", driverName)
+			repository.storage = metadataTestStorageProfile(driverName)
+			indexes, err := repository.tableIndexes(t.Context(), "account")
 			if indexes["idx"] != testCase.want || (err != nil) != testCase.err {
 				t.Fatalf("driver=%s indexes=%#v err=%v", driverName, indexes, err)
 			}
@@ -112,7 +130,8 @@ func TestMetadataTableIntrospectionDriverBranches(t *testing.T) {
 		for _, step := range []metadataSQLExecStep{{rows: 1}, {err: errMetadataSQL}} {
 			state := &metadataSQLState{execSteps: []metadataSQLExecStep{step}}
 			repository := scriptedMetadataStore(t, state, base)
-			err := repository.dropManagedIndexForDriver(t.Context(), "account", "idx", driverName)
+			repository.storage = metadataTestStorageProfile(driverName)
+			err := repository.dropManagedIndex(t.Context(), "account", "idx")
 			if (err != nil) != (step.err != nil) {
 				t.Fatalf("driver=%s drop err=%v", driverName, err)
 			}
@@ -129,7 +148,7 @@ func TestMetadataTableIntrospectionDriverBranches(t *testing.T) {
 	}
 }
 
-func TestMetadataTableColumnTypeIntrospectionDriverBranches(t *testing.T) {
+func TestMetadataTableColumnTypeIntrospectionProfileStrategies(t *testing.T) {
 	baseDB := openStoreForGeneratedListTest(t)
 	t.Cleanup(func() { _ = baseDB.Close() })
 	base := NewMetadataStore(baseDB)
@@ -144,7 +163,8 @@ func TestMetadataTableColumnTypeIntrospectionDriverBranches(t *testing.T) {
 		{step: metadataSQLQueryStep{columns: []string{"cid", "name", "type", "notnull", "default", "pk"}, rows: [][]driver.Value{{int64(0), "amount", "TEXT", int64(0), nil, int64(0)}}}, want: "TEXT"},
 	} {
 		repository := scriptedMetadataStore(t, &metadataSQLState{querySteps: []metadataSQLQueryStep{testCase.step}}, base)
-		types, err := repository.tableColumnTypesForDriver(t.Context(), "account", "sqlite")
+		repository.storage = metadataTestStorageProfile("sqlite")
+		types, err := repository.tableColumnTypes(t.Context(), "account")
 		if types["amount"] != testCase.want || (err != nil) != testCase.err {
 			t.Fatalf("sqlite types=%#v err=%v", types, err)
 		}
@@ -156,7 +176,7 @@ func TestMetadataTableColumnTypeIntrospectionDriverBranches(t *testing.T) {
 		{"decimal_amount", "decimal", int64(12), int64(2)},
 		{"numeric_amount", "numeric", int64(9), int64(3)},
 	}
-	for _, driverName := range []string{"mysql", "postgres", "other"} {
+	for _, driverName := range []string{"mysql", "postgres"} {
 		for _, testCase := range []struct {
 			step metadataSQLQueryStep
 			want string
@@ -169,7 +189,8 @@ func TestMetadataTableColumnTypeIntrospectionDriverBranches(t *testing.T) {
 			{step: metadataSQLQueryStep{columns: []string{"column_name", "data_type", "numeric_precision", "numeric_scale"}, rows: rows, nextErr: errMetadataSQL}, want: "decimal(12,2)", err: true},
 		} {
 			repository := scriptedMetadataStore(t, &metadataSQLState{querySteps: []metadataSQLQueryStep{testCase.step}}, base)
-			types, err := repository.tableColumnTypesForDriver(t.Context(), "account", driverName)
+			repository.storage = metadataTestStorageProfile(driverName)
+			types, err := repository.tableColumnTypes(t.Context(), "account")
 			if types["decimal_amount"] != testCase.want || (err != nil) != testCase.err {
 				t.Fatalf("driver=%s types=%#v err=%v", driverName, types, err)
 			}

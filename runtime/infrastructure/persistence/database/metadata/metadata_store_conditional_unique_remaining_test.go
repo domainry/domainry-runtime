@@ -61,6 +61,7 @@ func TestEnsureObjectStorageConditionalUniqueRemainingBranches(t *testing.T) {
 			t.Fatal(err)
 		}
 		repository := scriptedMetadataStore(t, &state, base)
+		repository.storage = metadataTestStorageProfile(dialect)
 		repository.createIndex = func(context.Context, string, string, bool, ...string) error {
 			return nil
 		}
@@ -144,7 +145,7 @@ func TestEnsureObjectStorageConditionalUniqueRemainingBranches(t *testing.T) {
 	}
 }
 
-func TestCreateConditionalUniqueIndexRemainingDriverBranches(t *testing.T) {
+func TestCreateConditionalUniqueIndexRemainingProfileStrategies(t *testing.T) {
 	runtimeStore := openStoreForGeneratedListTest(t)
 	t.Cleanup(func() { _ = runtimeStore.Close() })
 	base := NewMetadataStore(runtimeStore)
@@ -163,6 +164,7 @@ func TestCreateConditionalUniqueIndexRemainingDriverBranches(t *testing.T) {
 			t.Fatal(err)
 		}
 		repository := scriptedMetadataStore(t, &state, base)
+		repository.storage = metadataTestStorageProfile("mysql")
 		repository.createIndex = func(context.Context, string, string, bool, ...string) error {
 			return createIndexErr
 		}
