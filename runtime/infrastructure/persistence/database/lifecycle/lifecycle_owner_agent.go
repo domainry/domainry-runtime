@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
 	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -86,8 +87,13 @@ func (e AgentOwnerExecutor) ProcessBatch(ctx context.Context, job lifecyclemodel
 		if job.Operation == lifecyclemodel.OperationArchive {
 			continue
 		}
-		query := "DELETE FROM " + e.store.TableIdentifier("agent_runtime_state") + " WHERE " + e.store.Identifier("workspace_id") + " = " + e.store.Placeholder(1) + " AND " + e.store.Identifier("kind") + " = " + e.store.Placeholder(2) + " AND " + e.store.Identifier("state_key") + " = " + e.store.Placeholder(3) + " AND EXISTS (SELECT 1 FROM " + e.store.TableIdentifier("lifecycle_archive_entries") + " WHERE " + e.store.Identifier("workspace_id") + " = " + e.store.Placeholder(4) + " AND " + e.store.Identifier("source_table") + " = 'agent_runtime_state' AND " + e.store.Identifier("resource_id") + " = " + e.store.Placeholder(5) + ")"
-		deleted, err := e.database().ExecContext(ctx, query, job.WorkspaceID, candidate.kind, candidate.stateKey, job.WorkspaceID, resourceID)
+		archive := ormbuilder.NewWorkspaceSelectBuilder(e.store.SQLRenderer, "lifecycle_archive_entries", job.WorkspaceID).Columns("id").Where(ormbuilder.And(ormbuilder.Equal("source_table", "agent_runtime_state"), ormbuilder.Equal("resource_id", resourceID)))
+		query, args, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(e.store.SQLRenderer, "agent_runtime_state", job.WorkspaceID).Where(ormbuilder.And(ormbuilder.Equal("kind", candidate.kind), ormbuilder.Equal("state_key", candidate.stateKey), ormbuilder.ExistsSubquery(archive))).Build()
+		if buildErr != nil {
+			result.Failed++
+			return result, buildErr
+		}
+		deleted, err := e.database().ExecContext(ctx, query, args...)
 		if err != nil {
 			result.Failed++
 			return result, err
@@ -103,8 +109,12 @@ func (e AgentOwnerExecutor) ProcessBatch(ctx context.Context, job lifecyclemodel
 }
 
 func (e AgentOwnerExecutor) candidates(ctx context.Context, workspaceID string, cutoff time.Time, limit int) ([]agentLifecycleCandidate, error) {
-	query := "SELECT " + strings.Join(database.QuotedColumns(e.store, []string{"kind", "state_key", "user_id", "role_key", "payload_json", "updated_at"}), ", ") + " FROM " + e.store.TableIdentifier("agent_runtime_state") + " WHERE " + e.store.Identifier("workspace_id") + " = " + e.store.Placeholder(1) + " AND " + e.store.Identifier("kind") + " IN ('session', 'proposal') AND " + e.store.Identifier("updated_at") + " <= " + e.store.Placeholder(2) + " ORDER BY " + e.store.Identifier("updated_at") + ", " + e.store.Identifier("kind") + ", " + e.store.Identifier("state_key")
-	rows, err := e.database().QueryContext(ctx, query, workspaceID, cutoff.UTC().UnixNano())
+	builder := ormbuilder.NewWorkspaceSelectBuilder(e.store.SQLRenderer, "agent_runtime_state", workspaceID).Columns("kind", "state_key", "user_id", "role_key", "payload_json", "updated_at").Where(ormbuilder.And(ormbuilder.In("kind", "session", "proposal"), ormbuilder.LessThanOrEqual("updated_at", cutoff.UTC().UnixNano()))).OrderBy(ormbuilder.Ascending("updated_at"), ormbuilder.Ascending("kind"), ormbuilder.Ascending("state_key"))
+	query, args, buildErr := builder.Build()
+	if buildErr != nil {
+		return nil, buildErr
+	}
+	rows, err := e.database().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

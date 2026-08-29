@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 )
 
@@ -17,8 +18,11 @@ func (e OwnerExecutor) archiveWorkflowProcessChildren(ctx context.Context, job l
 	}
 	var archived, purged int64
 	for _, child := range children {
-		query := "SELECT " + e.store.Identifier("id") + " FROM " + e.store.TableIdentifier(child.table) + " WHERE " + e.store.Identifier("workspace_id") + " = " + e.store.Placeholder(1) + " AND " + e.store.Identifier("process_id") + " = " + e.store.Placeholder(2) + " ORDER BY " + e.store.Identifier("id")
-		rows, err := e.database().QueryContext(ctx, query, job.WorkspaceID, processID)
+		query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(e.store.SQLRenderer, child.table, job.WorkspaceID).Columns("id").Where(ormbuilder.Equal("process_id", processID)).OrderBy(ormbuilder.Ascending("id")).Build()
+		if buildErr != nil {
+			return archived, purged, buildErr
+		}
+		rows, err := e.database().QueryContext(ctx, query, args...)
 		if err != nil {
 			return archived, purged, err
 		}
@@ -48,7 +52,11 @@ func (e OwnerExecutor) archiveWorkflowProcessChildren(ctx context.Context, job l
 		if !purge || len(ids) == 0 {
 			continue
 		}
-		result, err := e.database().ExecContext(ctx, "DELETE FROM "+e.store.TableIdentifier(child.table)+" WHERE "+e.store.Identifier("workspace_id")+" = "+e.store.Placeholder(1)+" AND "+e.store.Identifier("process_id")+" = "+e.store.Placeholder(2), job.WorkspaceID, processID)
+		query, args, buildErr = ormbuilder.NewWorkspaceDeleteBuilder(e.store.SQLRenderer, child.table, job.WorkspaceID).Where(ormbuilder.Equal("process_id", processID)).Build()
+		if buildErr != nil {
+			return archived, purged, buildErr
+		}
+		result, err := e.database().ExecContext(ctx, query, args...)
 		if err != nil {
 			return archived, purged, fmt.Errorf("purge workflow process children %s: %w", child.table, err)
 		}

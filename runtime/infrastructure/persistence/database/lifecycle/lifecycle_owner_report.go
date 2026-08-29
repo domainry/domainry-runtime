@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"time"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
 	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -113,8 +114,12 @@ func (e ReportOwnerExecutor) ProcessBatch(ctx context.Context, job lifecyclemode
 		if job.Operation == lifecyclemodel.OperationArchive {
 			continue
 		}
-		query := "DELETE FROM " + e.store.TableIdentifier("agent_runtime_state") + " WHERE " + e.store.Identifier("workspace_id") + " = " + e.store.Placeholder(1) + " AND " + e.store.Identifier("kind") + " = " + e.store.Placeholder(2) + " AND " + e.store.Identifier("state_key") + " = " + e.store.Placeholder(3)
-		deleted, deleteErr := e.database().ExecContext(ctx, query, job.WorkspaceID, state.kind, state.stateKey)
+		query, args, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(e.store.SQLRenderer, "agent_runtime_state", job.WorkspaceID).Where(ormbuilder.And(ormbuilder.Equal("kind", state.kind), ormbuilder.Equal("state_key", state.stateKey))).Build()
+		if buildErr != nil {
+			result.Failed++
+			return result, buildErr
+		}
+		deleted, deleteErr := e.database().ExecContext(ctx, query, args...)
 		if deleteErr != nil {
 			result.Failed++
 			return result, deleteErr
@@ -140,8 +145,11 @@ func (e ReportOwnerExecutor) reportStateCandidates(ctx context.Context, workspac
 		if item.policyKey != policy.Key {
 			continue
 		}
-		query := "SELECT " + e.store.Identifier("state_key") + ", " + e.store.Identifier("user_id") + ", " + e.store.Identifier("role_key") + ", " + e.store.Identifier("payload_json") + ", " + e.store.Identifier("updated_at") + " FROM " + e.store.TableIdentifier("agent_runtime_state") + " WHERE " + e.store.Identifier("workspace_id") + " = " + e.store.Placeholder(1) + " AND " + e.store.Identifier("kind") + " = " + e.store.Placeholder(2) + " AND " + e.store.Identifier("updated_at") + " <= " + e.store.Placeholder(3) + " ORDER BY " + e.store.Identifier("updated_at") + ", " + e.store.Identifier("state_key")
-		rows, err := e.database().QueryContext(ctx, query, workspaceID, item.kind, now.Add(-item.retention).UTC().UnixNano())
+		query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(e.store.SQLRenderer, "agent_runtime_state", workspaceID).Columns("state_key", "user_id", "role_key", "payload_json", "updated_at").Where(ormbuilder.And(ormbuilder.Equal("kind", item.kind), ormbuilder.LessThanOrEqual("updated_at", now.Add(-item.retention).UTC().UnixNano()))).OrderBy(ormbuilder.Ascending("updated_at"), ormbuilder.Ascending("state_key")).Build()
+		if buildErr != nil {
+			return nil, buildErr
+		}
+		rows, err := e.database().QueryContext(ctx, query, args...)
 		if err != nil {
 			return nil, err
 		}
@@ -180,9 +188,12 @@ func (e ReportOwnerExecutor) reportStateReferenced(ctx context.Context, workspac
 	if childKind == "" {
 		return false, nil
 	}
-	query := "SELECT COUNT(*) FROM " + e.store.TableIdentifier("agent_runtime_state") + " WHERE " + e.store.Identifier("workspace_id") + " = " + e.store.Placeholder(1) + " AND " + e.store.Identifier("kind") + " = " + e.store.Placeholder(2) + " AND " + e.store.Identifier("state_key") + " = " + e.store.Placeholder(3)
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(e.store.SQLRenderer, "agent_runtime_state", workspaceID).Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(ormbuilder.And(ormbuilder.Equal("kind", childKind), ormbuilder.Equal("state_key", stateKey))).Build()
+	if buildErr != nil {
+		return false, buildErr
+	}
 	var count int
-	if err := e.database().QueryRowContext(ctx, query, workspaceID, childKind, stateKey).Scan(&count); err != nil {
+	if err := e.database().QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
 		return false, err
 	}
 	return count > 0, nil
