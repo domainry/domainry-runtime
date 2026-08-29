@@ -13,6 +13,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -55,7 +56,13 @@ func (r RecordStore) tryBeginRecordMutationOnce(ctx context.Context, request rec
 	value.LeaseOwner, value.LeaseExpiresAt, value.FencingToken = strings.TrimSpace(request.LeaseOwner), now.Add(request.LeaseTTL).Format(time.RFC3339Nano), 1
 	value.CreatedAt, value.UpdatedAt = now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)
 	columns := recordMutationExecutionColumns()
-	_, insertErr := r.database().ExecContext(ctx, "INSERT INTO "+r.store.TableIdentifier("record_mutation_executions")+" ("+stringsJoinIdentifiers(r.store, columns...)+") VALUES ("+stringsJoinPlaceholders(r.store, len(columns))+")", recordMutationExecutionValues(value, "{}")...)
+	values := recordMutationExecutionValues(value, "{}")
+	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "record_mutation_executions", workspaceID).
+		Columns(append(columns[:1], columns[2:]...)...).Values(append(values[:1], values[2:]...)...).Build()
+	if buildErr != nil {
+		return recordmodel.RecordMutationClaimResult{}, buildErr
+	}
+	_, insertErr := r.database().ExecContext(ctx, query, args...)
 	if insertErr == nil {
 		r.store.ObserveIdempotency(ctx, value.WorkspaceID, "record."+value.Operation, idempotency.OutcomeAcquired)
 		return recordmodel.RecordMutationClaimResult{Decision: idempotency.DecisionAcquired, Execution: value}, nil
@@ -72,8 +79,16 @@ func (r RecordStore) tryBeginRecordMutationOnce(ctx context.Context, request rec
 		r.store.ObserveIdempotency(ctx, value.WorkspaceID, "record."+value.Operation, idempotency.OutcomeForDecision(decision, false))
 		return recordmodel.RecordMutationClaimResult{Decision: decision, Execution: current}, nil
 	}
-	query := "UPDATE " + r.store.TableIdentifier("record_mutation_executions") + " SET " + r.store.Identifier("status") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(2) + ", " + r.store.Identifier("lease_expires_at") + " = " + r.store.Placeholder(3) + ", " + r.store.Identifier("fencing_token") + " = " + r.store.Identifier("fencing_token") + " + 1, " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(4) + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(5) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(6) + " AND " + r.store.Identifier("request_fingerprint") + " = " + r.store.Placeholder(7) + " AND " + r.store.Identifier("status") + " = " + r.store.Placeholder(8) + " AND " + r.store.Identifier("lease_expires_at") + " <= " + r.store.Placeholder(9)
-	result, err := r.database().ExecContext(ctx, query, string(idempotency.StatusProcessing), value.LeaseOwner, value.LeaseExpiresAt, value.UpdatedAt, value.WorkspaceID, value.ID, value.RequestFingerprint, string(idempotency.StatusProcessing), now.Format(time.RFC3339Nano))
+	query, args, err = ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "record_mutation_executions", workspaceID).
+		Set("status", string(idempotency.StatusProcessing)).Set("lease_owner", value.LeaseOwner).
+		Set("lease_expires_at", value.LeaseExpiresAt).
+		SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).
+		Set("updated_at", value.UpdatedAt).
+		Where(ormbuilder.And(ormbuilder.Equal("id", value.ID), ormbuilder.Equal("request_fingerprint", value.RequestFingerprint), ormbuilder.Equal("status", string(idempotency.StatusProcessing)), ormbuilder.LessThanOrEqual("lease_expires_at", now.Format(time.RFC3339Nano)))).Build()
+	if err != nil {
+		return recordmodel.RecordMutationClaimResult{}, err
+	}
+	result, err := r.database().ExecContext(ctx, query, args...)
 	if err != nil {
 		return recordmodel.RecordMutationClaimResult{}, err
 	}
@@ -117,8 +132,11 @@ func (r RecordStore) CommitRecordMutationExecution(ctx context.Context, commit t
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	query := "UPDATE " + r.store.TableIdentifier("record_mutation_executions") + " SET " + r.store.Identifier("status") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("result_json") + " = " + r.store.Placeholder(2) + ", " + r.store.Identifier("response_status") + " = " + r.store.Placeholder(3) + ", " + r.store.Identifier("expires_at") + " = " + r.store.Placeholder(4) + ", " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(5) + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(6) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(7) + " AND " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(8) + " AND " + r.store.Identifier("fencing_token") + " = " + r.store.Placeholder(9) + " AND " + r.store.Identifier("status") + " = " + r.store.Placeholder(10)
-	result, err := tx.ExecContext(ctx, query, string(idempotency.StatusSucceeded), string(resultJSON), 201, completion.ExpiresAt.UTC().Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), workspaceID, completion.ExecutionID, strings.TrimSpace(completion.LeaseOwner), completion.FencingToken, string(idempotency.StatusProcessing))
+	query, args, err := recordMutationCompletionUpdate(r.store, workspaceID, completion, string(resultJSON), 201, now)
+	if err != nil {
+		return recordmodel.RecordMutationExecution{}, err
+	}
+	result, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
 		return recordmodel.RecordMutationExecution{}, err
 	}
@@ -149,8 +167,11 @@ func (r RecordStore) CompleteRecordMutationExecution(ctx context.Context, comple
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	query := "UPDATE " + r.store.TableIdentifier("record_mutation_executions") + " SET " + r.store.Identifier("status") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("result_json") + " = " + r.store.Placeholder(2) + ", " + r.store.Identifier("response_status") + " = " + r.store.Placeholder(3) + ", " + r.store.Identifier("expires_at") + " = " + r.store.Placeholder(4) + ", " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(5) + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(6) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(7) + " AND " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(8) + " AND " + r.store.Identifier("fencing_token") + " = " + r.store.Placeholder(9) + " AND " + r.store.Identifier("status") + " = " + r.store.Placeholder(10)
-	result, err := r.database().ExecContext(ctx, query, string(idempotency.StatusSucceeded), string(resultJSON), 200, completion.ExpiresAt.UTC().Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), workspaceID, completion.ExecutionID, strings.TrimSpace(completion.LeaseOwner), completion.FencingToken, string(idempotency.StatusProcessing))
+	query, args, err := recordMutationCompletionUpdate(r.store, workspaceID, completion, string(resultJSON), 200, now)
+	if err != nil {
+		return recordmodel.RecordMutationExecution{}, err
+	}
+	result, err := r.database().ExecContext(ctx, query, args...)
 	if err != nil {
 		return recordmodel.RecordMutationExecution{}, err
 	}
@@ -172,8 +193,13 @@ func (r RecordStore) observeRecordMutationLeaseLost(ctx context.Context, workspa
 }
 
 func (r RecordStore) findRecordMutationExecution(ctx context.Context, scope recordmodel.RecordMutationExecution) (recordmodel.RecordMutationExecution, bool, error) {
-	query := "SELECT " + stringsJoinIdentifiers(r.store, recordMutationExecutionColumns()...) + " FROM " + r.store.TableIdentifier("record_mutation_executions") + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1) + " AND " + r.store.Identifier("operation") + " = " + r.store.Placeholder(2) + " AND " + r.store.Identifier("object_key") + " = " + r.store.Placeholder(3) + " AND " + r.store.Identifier("target_id") + " = " + r.store.Placeholder(4) + " AND " + r.store.Identifier("idempotency_key") + " = " + r.store.Placeholder(5) + " LIMIT 1"
-	value, err := scanRecordMutationExecution(r.database().QueryRowContext(ctx, query, scope.WorkspaceID, scope.Operation, scope.ObjectKey, scope.TargetID, scope.IdempotencyKey))
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "record_mutation_executions", scope.WorkspaceID).Columns(recordMutationExecutionColumns()...).Where(ormbuilder.And(
+		ormbuilder.Equal("operation", scope.Operation), ormbuilder.Equal("object_key", scope.ObjectKey), ormbuilder.Equal("target_id", scope.TargetID), ormbuilder.Equal("idempotency_key", scope.IdempotencyKey),
+	)).Limit(1).Build()
+	if err != nil {
+		return recordmodel.RecordMutationExecution{}, false, err
+	}
+	value, err := scanRecordMutationExecution(r.database().QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return recordmodel.RecordMutationExecution{}, false, nil
 	}
@@ -191,8 +217,18 @@ func (r RecordStore) findRecordMutationExecutionByID(ctx context.Context, worksp
 	if err != nil {
 		return recordmodel.RecordMutationExecution{}, err
 	}
-	query := "SELECT " + stringsJoinIdentifiers(r.store, recordMutationExecutionColumns()...) + " FROM " + r.store.TableIdentifier("record_mutation_executions") + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(2)
-	return scanRecordMutationExecution(r.database().QueryRowContext(ctx, query, workspaceID, id))
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "record_mutation_executions", workspaceID).Columns(recordMutationExecutionColumns()...).Where(ormbuilder.Equal("id", id)).Build()
+	if err != nil {
+		return recordmodel.RecordMutationExecution{}, err
+	}
+	return scanRecordMutationExecution(r.database().QueryRowContext(ctx, query, args...))
+}
+
+func recordMutationCompletionUpdate(store *database.RuntimeStore, workspaceID string, completion recordmodel.RecordMutationCompletion, resultJSON string, responseStatus int, now time.Time) (string, []any, error) {
+	return ormbuilder.NewWorkspaceUpdateBuilder(store.SQLRenderer, "record_mutation_executions", workspaceID).
+		Set("status", string(idempotency.StatusSucceeded)).Set("result_json", resultJSON).Set("response_status", responseStatus).
+		Set("expires_at", completion.ExpiresAt.UTC().Format(time.RFC3339Nano)).Set("updated_at", now.Format(time.RFC3339Nano)).
+		Where(ormbuilder.And(ormbuilder.Equal("id", completion.ExecutionID), ormbuilder.Equal("lease_owner", strings.TrimSpace(completion.LeaseOwner)), ormbuilder.Equal("fencing_token", completion.FencingToken), ormbuilder.Equal("status", string(idempotency.StatusProcessing)))).Build()
 }
 
 func recordMutationExecutionColumns() []string {
