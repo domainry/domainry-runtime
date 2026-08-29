@@ -28,7 +28,7 @@ func (s *actionAssuranceFaultStore) GetActionAssuranceGrant(context.Context, str
 	return s.grant, s.found, s.getErr
 }
 
-func (s *actionAssuranceFaultStore) ConsumeActionAssuranceGrant(context.Context, string, time.Time) (bool, error) {
+func (s *actionAssuranceFaultStore) ConsumeActionAssuranceGrant(context.Context, string, string, time.Time) (bool, error) {
 	return s.consumed, s.consumeErr
 }
 

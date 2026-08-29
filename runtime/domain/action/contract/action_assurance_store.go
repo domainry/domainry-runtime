@@ -10,5 +10,5 @@ import (
 type ActionAssuranceStore interface {
 	SaveActionAssuranceGrant(context.Context, actionmodel.ActionAssuranceGrant) error
 	GetActionAssuranceGrant(context.Context, string) (actionmodel.ActionAssuranceGrant, bool, error)
-	ConsumeActionAssuranceGrant(context.Context, string, time.Time) (bool, error)
+	ConsumeActionAssuranceGrant(context.Context, string, string, time.Time) (bool, error)
 }

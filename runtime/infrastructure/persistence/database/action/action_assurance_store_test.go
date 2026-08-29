@@ -32,10 +32,10 @@ func TestActionAssuranceStoreConsumesGrantExactlyOnce(t *testing.T) {
 		t.Fatalf("loaded=%#v found=%v err=%v", loaded, found, err)
 	}
 	now := time.Date(2026, 7, 21, 10, 1, 0, 0, time.UTC)
-	if consumed, err := repository.ConsumeActionAssuranceGrant(t.Context(), grant.ID, now); err != nil || !consumed {
+	if consumed, err := repository.ConsumeActionAssuranceGrant(t.Context(), grant.WorkspaceID, grant.ID, now); err != nil || !consumed {
 		t.Fatalf("first consume=%v err=%v", consumed, err)
 	}
-	if consumed, err := repository.ConsumeActionAssuranceGrant(t.Context(), grant.ID, now); err != nil || consumed {
+	if consumed, err := repository.ConsumeActionAssuranceGrant(t.Context(), grant.WorkspaceID, grant.ID, now); err != nil || consumed {
 		t.Fatalf("second consume=%v err=%v", consumed, err)
 	}
 	loaded, found, err = repository.GetActionAssuranceGrant(t.Context(), grant.ID)
@@ -51,7 +51,7 @@ func TestActionAssuranceStoreFailureEdges(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = base.Close() })
 	wantErr := errors.New("assurance store failure")
-	grant := actionmodel.ActionAssuranceGrant{ID: "grant", Methods: []string{"otp"}}
+	grant := actionmodel.ActionAssuranceGrant{ID: "grant", WorkspaceID: "workspace", Methods: []string{"otp"}}
 
 	scripted := func(state *actionDBState) (ActionAssuranceStore, func()) {
 		db := sql.OpenDB(actionConnector{state: state})
@@ -86,7 +86,7 @@ func TestActionAssuranceStoreFailureEdges(t *testing.T) {
 
 	for _, step := range []actionExecStep{{err: wantErr}, {rowsErr: wantErr}} {
 		repository, closeDB = scripted(&actionDBState{execSteps: []actionExecStep{step}})
-		if _, err := repository.ConsumeActionAssuranceGrant(t.Context(), "grant", time.Now()); !errors.Is(err, wantErr) {
+		if _, err := repository.ConsumeActionAssuranceGrant(t.Context(), "workspace", "grant", time.Now()); !errors.Is(err, wantErr) {
 			t.Fatalf("consume error=%v for step=%#v", err, step)
 		}
 		closeDB()

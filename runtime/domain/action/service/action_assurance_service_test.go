@@ -24,7 +24,7 @@ func (s *actionAssuranceMemoryStore) GetActionAssuranceGrant(_ context.Context, 
 	grant, ok := s.grants[id]
 	return grant, ok, nil
 }
-func (s *actionAssuranceMemoryStore) ConsumeActionAssuranceGrant(_ context.Context, id string, now time.Time) (bool, error) {
+func (s *actionAssuranceMemoryStore) ConsumeActionAssuranceGrant(_ context.Context, _ string, id string, now time.Time) (bool, error) {
 	grant, ok := s.grants[id]
 	if !ok || grant.ConsumedAt != "" {
 		return false, nil

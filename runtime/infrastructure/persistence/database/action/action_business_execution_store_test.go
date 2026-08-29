@@ -65,7 +65,7 @@ func TestBusinessActionExecutionStoreAtomicClaimReplayConflictAndFencing(t *test
 	if err != nil || conflict.Decision != idempotency.DecisionFingerprintConflict {
 		t.Fatalf("conflicting claim=%#v err=%v", conflict, err)
 	}
-	completion := actionmodel.ActionExecutionCompletion{ExecutionID: first.Execution.ID, LeaseOwner: "runtime-a", FencingToken: 99, Result: map[string]any{"status": "active"}, ResponseStatus: 200, ExpiresAt: now.Add(30 * 24 * time.Hour), Now: now.Add(time.Second)}
+	completion := actionmodel.ActionExecutionCompletion{Execution: first.Execution, ExecutionID: first.Execution.ID, LeaseOwner: "runtime-a", FencingToken: 99, Result: map[string]any{"status": "active"}, ResponseStatus: 200, ExpiresAt: now.Add(30 * 24 * time.Hour), Now: now.Add(time.Second)}
 	if _, err := repository.CompleteExecution(t.Context(), completion); !mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
 		t.Fatalf("stale completion error=%v", err)
 	}
@@ -112,6 +112,7 @@ func TestBusinessActionExecutionStoreReplaysTerminalFailureAndReclaimsRetryableF
 		t.Fatal(err)
 	}
 	terminal, err := repository.CompleteExecution(t.Context(), actionmodel.ActionExecutionCompletion{
+		Execution:   terminalClaim.Execution,
 		ExecutionID: terminalClaim.Execution.ID, LeaseOwner: terminalClaim.Execution.LeaseOwner,
 		FencingToken: terminalClaim.Execution.FencingToken, Result: map[string]any{"kind": "conflict"},
 		ErrorCode: "gym.class_waitlist_full", ExpiresAt: now.Add(24 * time.Hour), Now: now,
@@ -131,6 +132,7 @@ func TestBusinessActionExecutionStoreReplaysTerminalFailureAndReclaimsRetryableF
 		t.Fatal(err)
 	}
 	retryable, err := repository.CompleteExecution(t.Context(), actionmodel.ActionExecutionCompletion{
+		Execution:   retryableClaim.Execution,
 		ExecutionID: retryableClaim.Execution.ID, LeaseOwner: retryableClaim.Execution.LeaseOwner,
 		FencingToken: retryableClaim.Execution.FencingToken, Result: map[string]any{"kind": "unavailable"},
 		ErrorCode: "backend.action.timeout", Retryable: true, ExpiresAt: now.Add(24 * time.Hour), Now: now,

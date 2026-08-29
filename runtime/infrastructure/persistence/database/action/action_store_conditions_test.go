@@ -182,7 +182,7 @@ func TestActionExecutionCompletionLeaseAndLookupStages(t *testing.T) {
 	defer base.Close()
 	wantErr := errors.New("injected action completion failure")
 	now := time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)
-	completion := actionmodel.ActionExecutionCompletion{ExecutionID: "execution", LeaseOwner: " owner ", FencingToken: 1, ResponseStatus: 500, ErrorCode: " failed ", ExpiresAt: now.Add(time.Hour)}
+	completion := actionmodel.ActionExecutionCompletion{Execution: actionmodel.ActionBusinessExecution{WorkspaceID: "default"}, ExecutionID: "execution", LeaseOwner: " owner ", FencingToken: 1, ResponseStatus: 500, ErrorCode: " failed ", ExpiresAt: now.Add(time.Hour)}
 	if _, err := NewActionBusinessExecutionStore(base).CompleteExecution(t.Context(), actionmodel.ActionExecutionCompletion{Result: map[string]any{"bad": make(chan int)}}); err == nil {
 		t.Fatal("unencodable completion result accepted")
 	}

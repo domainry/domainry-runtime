@@ -125,7 +125,7 @@ func (s *ActionAssuranceDomainService) ValidateAndConsume(ctx context.Context, a
 			return actionmodel.ActionAssuranceEvidence{}, actionAssuranceError("backend.action.assurance_reauth_expired")
 		}
 	}
-	consumed, err := s.store.ConsumeActionAssuranceGrant(ctx, grant.ID, now)
+	consumed, err := s.store.ConsumeActionAssuranceGrant(ctx, grant.WorkspaceID, grant.ID, now)
 	if err != nil {
 		return actionmodel.ActionAssuranceEvidence{}, err
 	}

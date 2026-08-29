@@ -662,7 +662,7 @@ func (s *actionWiringAssuranceStore) GetActionAssuranceGrant(_ context.Context, 
 	return grant, ok, nil
 }
 
-func (s *actionWiringAssuranceStore) ConsumeActionAssuranceGrant(_ context.Context, id string, consumedAt time.Time) (bool, error) {
+func (s *actionWiringAssuranceStore) ConsumeActionAssuranceGrant(_ context.Context, _ string, id string, consumedAt time.Time) (bool, error) {
 	if s.consumeErr != nil {
 		return false, s.consumeErr
 	}
