@@ -133,15 +133,15 @@ func (r RecordStore) ListDueRecordTimerWorkspaces(ctx context.Context, object de
 	}
 	s := r.store
 	nowValue := now.UTC().Format(time.RFC3339Nano)
-	workspaceColumn := s.Identifier("workspace_id")
-	statusColumn := s.Identifier("status")
-	dueAtColumn := s.Identifier("due_at")
-	leaseExpiresColumn := s.Identifier("lease_expires_at")
-	query := "SELECT DISTINCT " + workspaceColumn + " FROM " + s.TableIdentifier(object.Key) +
-		" WHERE (" + statusColumn + " = " + s.Placeholder(1) + " AND " + dueAtColumn + " <= " + s.Placeholder(2) + ")" +
-		" OR (" + statusColumn + " = " + s.Placeholder(3) + " AND " + dueAtColumn + " <= " + s.Placeholder(4) + " AND " + leaseExpiresColumn + " <= " + s.Placeholder(5) + ")" +
-		" ORDER BY " + workspaceColumn + " ASC"
-	rows, err := r.database().QueryContext(ctx, query, "scheduled", nowValue, "leased", nowValue, nowValue)
+	predicate := ormbuilder.Or(
+		ormbuilder.And(ormbuilder.Equal("status", "scheduled"), ormbuilder.LessThanOrEqual("due_at", nowValue)),
+		ormbuilder.And(ormbuilder.Equal("status", "leased"), ormbuilder.LessThanOrEqual("due_at", nowValue), ormbuilder.LessThanOrEqual("lease_expires_at", nowValue)),
+	)
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.SQLRenderer, object.Key).Columns("workspace_id").Distinct().Where(predicate).OrderBy(ormbuilder.Ascending("workspace_id")).Build()
+	if buildErr != nil {
+		return nil, buildErr
+	}
+	rows, err := r.database().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list record workspaces: %w", err)
 	}
