@@ -1139,7 +1139,7 @@ func TestBusinessRuntimeProjectionPropagatesOwnerFailures(t *testing.T) {
 		}
 	}
 
-	for _, failAt := range []string{"workflow", "rules", "executions", "connectors", "connections", "outbox", "scheduler_definitions", "job_run", "job_dead_letter"} {
+	for _, failAt := range []string{"workflow", "rules", "executions", "connectors", "connections", "outbox", "scheduler_definitions"} {
 		service := businesssystemapplication.NewBusinessSystemApplicationService(businesssystemapplication.BusinessSystemApplicationDependencies{Runtime: portsFor(failAt)})
 		if _, err := service.RuntimeStateSnapshot(t.Context(), principal); !errors.Is(err, failure) {
 			t.Fatalf("failure=%q error=%v", failAt, err)
@@ -1147,7 +1147,7 @@ func TestBusinessRuntimeProjectionPropagatesOwnerFailures(t *testing.T) {
 	}
 	service := businesssystemapplication.NewBusinessSystemApplicationService(businesssystemapplication.BusinessSystemApplicationDependencies{Runtime: portsFor("")})
 	snapshot, err := service.RuntimeStateSnapshot(t.Context(), principal)
-	if err != nil || len(snapshot.Scheduler.Definitions) != 1 || len(snapshot.Scheduler.RecentRuns) != 1 || len(snapshot.Scheduler.DeadLetters) != 1 || len(snapshot.Reports) != 1 {
+	if err != nil || len(snapshot.Scheduler.Definitions) != 1 || len(snapshot.Scheduler.RecentRuns) != 0 || len(snapshot.Scheduler.DeadLetters) != 0 || len(snapshot.Reports) != 1 {
 		t.Fatalf("snapshot=%#v error=%v", snapshot, err)
 	}
 

@@ -5,10 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	schedulerpolicy "github.com/domainry/domainry-runtime/runtime/domain/scheduler/policy"
@@ -308,6 +310,87 @@ func recordTimerRetryDelay(record recordmodel.Record) time.Duration {
 		}
 	}
 	return time.Duration(delay) * time.Second
+}
+
+func schedulerOperationAllowed(principal principalmodel.Principal) error {
+	if err := schedulerAuthorizeCommand(principal); err != nil {
+		return err
+	}
+	if principal.HasPermission("workspace.admin") || principal.HasExactPermission("scheduler.command") {
+		return nil
+	}
+	return forbidden("backend.scheduler.permission_required")
+}
+
+func schedulerAuthorizeQuery(principal principalmodel.Principal) error {
+	if _, err := principalmodel.QueryScopeForPrincipal(principal); err != nil {
+		return schedulerError(apperror.KindForbidden, "backend.workspace_scope_required", err)
+	}
+	return nil
+}
+
+func schedulerAuthorizeCommand(principal principalmodel.Principal) error {
+	if _, err := principalmodel.CommandScopeForPrincipal(principal); err != nil {
+		return schedulerError(apperror.KindForbidden, "backend.workspace_scope_required", err)
+	}
+	return nil
+}
+
+func (s *SchedulerApplicationService) objectForPrincipal(ctx context.Context, principal principalmodel.Principal, objectKey string) (definitionmodel.ObjectSchema, error) {
+	if s == nil || s.schema == nil {
+		return definitionmodel.ObjectSchema{}, notFound("backend.scheduler.runtime_object_not_found", "object_key", objectKey)
+	}
+	for _, object := range s.schema.SchemaForPrincipal(ctx, principal).Objects {
+		if object.Key == objectKey {
+			return object, nil
+		}
+	}
+	return definitionmodel.ObjectSchema{}, notFound("backend.scheduler.runtime_object_not_found", "object_key", objectKey)
+}
+
+func schemaObjectMap(objects []definitionmodel.ObjectSchema) map[string]definitionmodel.ObjectSchema {
+	result := make(map[string]definitionmodel.ObjectSchema, len(objects))
+	for _, object := range objects {
+		result[object.Key] = object
+	}
+	return result
+}
+
+func existingStringBefore(record recordmodel.Record, key string) string {
+	value := strings.TrimSpace(fmt.Sprint(record.Data[key]))
+	if value == "<nil>" {
+		return ""
+	}
+	return value
+}
+
+func ExistingStringBefore(record recordmodel.Record, key string) string {
+	return existingStringBefore(record, key)
+}
+
+func firstNonNil(values ...any) any {
+	for _, value := range values {
+		if value != nil {
+			return value
+		}
+	}
+	return nil
+}
+
+func (s *SchedulerApplicationService) recordTimerEventObject(ctx context.Context) (definitionmodel.ObjectSchema, error) {
+	return s.objectForPrincipal(ctx, workflowWorkerPrincipal(), "record_timer_event")
+}
+
+func buildRecordTimerEventCommit(object definitionmodel.ObjectSchema, timer recordmodel.Record, eventType, workerID, errorCode, message, nextDueAt string, now time.Time) transactionmodel.RecordMutationCommit {
+	attempt := schedulerpolicy.SchedulerInt(timer.Data["attempt"], 0)
+	token := schedulerpolicy.SchedulerInt(timer.Data["fencing_token"], 0)
+	stamp := now.UTC().Format(time.RFC3339Nano)
+	hash := sha256.Sum256([]byte(strings.Join([]string{timer.ID, eventType, stamp, workerID, strconv.Itoa(attempt), strconv.Itoa(token)}, "\x00")))
+	event := recordmodel.Record{ID: "record_timer_event_" + hex.EncodeToString(hash[:12]), CreatedAt: stamp, UpdatedAt: stamp, Data: map[string]any{
+		"record_timer_id": timer.ID, "event_type": eventType, "attempt": attempt, "fencing_token": token,
+		"worker_id": strings.TrimSpace(workerID), "error_code": strings.TrimSpace(errorCode), "message": strings.TrimSpace(message), "next_due_at": strings.TrimSpace(nextDueAt),
+	}}
+	return transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: event}
 }
 
 func cloneRecordTimer(record recordmodel.Record) recordmodel.Record {

@@ -23,7 +23,6 @@ type WorkflowDependencies struct {
 	Workers                  workflowcontract.WorkflowWorkerStore
 	Decisions                workflowcontract.WorkflowDecisionStore
 	WorkflowRegistry         WorkflowRegistry
-	WorkflowScheduler        WorkflowScheduler
 	TimerScheduler           WorkflowTimerScheduler
 	ApprovalTimers           WorkflowApprovalTimerScheduler
 	Identity                 identitysdk.Directory
@@ -92,18 +91,6 @@ type WorkflowSchemaProvider interface {
 type WorkflowRecordReader interface {
 	GetWorkflowRecord(context.Context, string, definitionmodel.ObjectSchema, string) (recordmodel.Record, bool, error)
 	ListWorkflowRecords(context.Context, string, definitionmodel.ObjectSchema, recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error)
-}
-
-type WorkflowSchedulerWorkerConfig struct {
-	Enabled      bool
-	PollInterval time.Duration
-	BatchSize    int
-}
-
-type WorkflowScheduler interface {
-	ProcessDueJobs(context.Context, int, principalmodel.Principal, string) (workflowmodel.WorkflowProcessResult, error)
-	WorkerConfig() WorkflowSchedulerWorkerConfig
-	StartWorker(context.Context, WorkflowSchedulerWorkerConfig, bool) <-chan struct{}
 }
 
 type WorkflowWaitTimerRequest struct {

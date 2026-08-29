@@ -20,12 +20,10 @@ import (
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	schedulercontract "github.com/domainry/domainry-runtime/runtime/domain/scheduler/contract"
-	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	workerplatform "github.com/domainry/domainry-runtime/runtime/platform/worker"
 )
 
@@ -44,66 +42,6 @@ func (s *SchedulerApplicationService) UseDefinitionHistoryReader(reader Schedule
 	if s != nil {
 		s.definitionHistory = reader
 	}
-}
-
-// provisionPublishedDefinitions materializes the durable cursor owned by each
-// enabled published definition before its first execution.
-func (s *SchedulerApplicationService) provisionPublishedDefinitions(ctx context.Context, workspaceID string, now time.Time) (int, error) {
-	if s.definitions == nil {
-		return 0, schedulerError(apperror.KindUnavailable, "backend.scheduler.definition_source_unavailable", nil)
-	}
-	definitions, err := s.definitions.ListSchedulerDefinitions(ctx)
-	if err != nil {
-		return 0, internalError("list scheduler job definitions", err)
-	}
-	cursorObject, err := s.ownerObject(ctx, "scheduler_cursor")
-	if err != nil {
-		return 0, err
-	}
-	existingCursors, err := s.schedulerCursorMap(ctx, workspaceID)
-	if err != nil {
-		return 0, err
-	}
-	provisioned := 0
-	for _, definition := range definitions {
-		if strings.TrimSpace(fmt.Sprint(definition.Data["status"])) != "enabled" {
-			continue
-		}
-		if err := schedulervalidation.SchedulerValidateDefinitionContract(ctx, definition.Data); err != nil {
-			return provisioned, err
-		}
-		if _, found := existingCursors[definition.ID]; found {
-			continue
-		}
-		nextRunAt, ok := schedulerDefinitionNextRunAt(definition)
-		if !ok {
-			nextRunAt = schedulerNextRunAt(definition, now)
-		}
-		cursor := recordmodel.Record{ID: definition.ID, CreatedAt: now.UTC().Format(time.RFC3339), UpdatedAt: now.UTC().Format(time.RFC3339), Data: map[string]any{
-			"scheduler_definition_key": definition.ID, "next_run_at": nextRunAt.UTC().Format(time.RFC3339), "last_run_at": "", "last_run_status": "",
-		}}
-		if s.insertRecord != nil {
-			err = s.insertRecord(ctx, workspaceID, cursorObject, cursor, "provision published scheduler definition")
-		} else {
-			err = s.repository.CommitRecordMutationBatch(ctx, workspaceID, []transactionmodel.RecordMutationCommit{{Operation: "create", Object: cursorObject, Record: cursor}})
-		}
-		if err != nil {
-			if _, found, getErr := s.repository.GetRecord(ctx, workspaceID, cursorObject, definition.ID); getErr == nil && found {
-				continue
-			}
-			return provisioned, internalError("provision scheduler cursor", err)
-		}
-		provisioned++
-		existingCursors[definition.ID] = cursor
-	}
-	return provisioned, nil
-}
-
-func (s *SchedulerApplicationService) ProvisionPublishedDefinitions(ctx context.Context, now time.Time, scope principalmodel.SystemScope) (int, error) {
-	if _, err := principalmodel.NewSystemCommandScope(scope); err != nil {
-		return 0, schedulerError(apperror.KindForbidden, "backend.system_scope_required", err)
-	}
-	return s.provisionPublishedDefinitions(ctx, principalmodel.InstallationWorkspaceID, now.UTC())
 }
 
 func (s *SchedulerApplicationService) GetDefinition(ctx context.Context, definitionID string, principal principalmodel.Principal) (recordmodel.Record, error) {
@@ -200,7 +138,8 @@ type SchedulerDefinitionSource interface {
 	ListSchedulerDefinitionVersions(context.Context, string) ([]SchedulerDefinitionVersion, error)
 }
 
-// SchedulerApplicationService owns scheduled-job lifecycle behavior.
+// SchedulerApplicationService owns Runtime definition authoring, downstream
+// dispatch and record timers. Clock runs and dead letters live in Scheduler.
 type SchedulerApplicationService struct {
 	schema              SchemaProvider
 	runtime             SchedulerOperationRuntime
@@ -245,45 +184,6 @@ func (s *SchedulerApplicationService) UseNotificationCompiler(compiler func(noti
 
 func (s *SchedulerApplicationService) UseReportSnapshotRuntime(runtime ReportSnapshotRuntime) {
 	s.reportSnapshots = runtime
-}
-
-func (s *SchedulerApplicationService) runJob(ctx context.Context, definitionID, idempotencyKey string, principal principalmodel.Principal) (SchedulerOperationResult, error) {
-	if strings.TrimSpace(idempotencyKey) == "" {
-		return SchedulerOperationResult{}, badRequest(idempotency.ErrorCodeMissingKey)
-	}
-	if err := schedulerOpsCommandAllowed(principal); err != nil {
-		return SchedulerOperationResult{}, err
-	}
-	definition, err := s.schedulerDefinitionForOperation(ctx, definitionID, principal)
-	if err != nil {
-		return SchedulerOperationResult{}, err
-	}
-	now := s.worker.Clock.Now()
-	run, claimed, err := s.claimRunWithKey(ctx, principal.WorkspaceID, definition, "manual_run", idempotencyKey, now)
-	if err != nil {
-		return SchedulerOperationResult{}, err
-	}
-	if !claimed {
-		return SchedulerOperationResult{Status: "replayed", Message: "backend.scheduler.run_replayed", Run: run}, nil
-	}
-	result, err := s.processClaimedRun(ctx, principal.WorkspaceID, definition, run, 25, workflowWorkerPrincipal(), now)
-	if err != nil {
-		return SchedulerOperationResult{}, err
-	}
-	runObject, err := s.ownerObject(ctx, "job_run")
-	if err != nil {
-		return SchedulerOperationResult{}, err
-	}
-	finished, err := s.readFinishedRun(ctx, principal.WorkspaceID, runObject, run.ID)
-	if err != nil {
-		return SchedulerOperationResult{}, err
-	}
-	s.insertOperationAudit(ctx, "scheduler_job_manual_run", "job_run", finished.ID, principal, "Manual scheduler job run "+definition.ID, nil, finished.Data, map[string]any{
-		"scheduler_definition_key": definition.ID,
-		"target_type":              schedulerDefinitionTargetType(definition),
-		"target_key":               strings.TrimSpace(fmt.Sprint(definition.Data["target_key"])),
-	})
-	return SchedulerOperationResult{Status: "completed", Message: "backend.scheduler.manual_run_completed", Run: finished, Result: result}, nil
 }
 
 type RecordMutationRuntime interface {

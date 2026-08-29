@@ -34,16 +34,16 @@ func TestRecordLifecyclePolicies(t *testing.T) {
 }
 
 func TestValidateSchedulerOperationalCRUD(t *testing.T) {
-	object := definitionmodel.ObjectSchema{Key: "job_run", Config: map[string]any{"scheduler_runtime": true}}
+	object := definitionmodel.ObjectSchema{Key: "record_timer", Config: map[string]any{"record_timer_runtime": true}}
 	err := recordpolicy.RecordValidateSchedulerOperationalCRUD(object, "create")
 	var appErr *apperror.AppError
 	if !errors.As(err, &appErr) || appErr.Kind != apperror.KindForbidden || appErr.Code != "backend.scheduler.runtime_api_required" {
 		t.Fatalf("scheduler CRUD error = %#v", err)
 	}
-	if appErr.Params["object"] != "job_run" || appErr.Params["operation"] != "create" {
+	if appErr.Params["object"] != "record_timer" || appErr.Params["operation"] != "create" {
 		t.Fatalf("scheduler CRUD params = %#v", appErr.Params)
 	}
-	if err := recordpolicy.RecordValidateSchedulerOperationalCRUD(definitionmodel.ObjectSchema{Key: "customer", Config: map[string]any{"scheduler_runtime": true}}, "update"); err != nil {
+	if err := recordpolicy.RecordValidateSchedulerOperationalCRUD(definitionmodel.ObjectSchema{Key: "customer"}, "update"); err != nil {
 		t.Fatalf("unrelated object update rejected: %v", err)
 	}
 }

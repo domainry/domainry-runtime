@@ -14,21 +14,19 @@ import (
 )
 
 type cleanupSpec struct {
-	policyKey                string
-	table                    string
-	idColumn                 string
-	tenantColumn             string
-	timeColumn               string
-	statusColumn             string
-	ineligibleStatuses       []string
-	eligibleStatuses         []string
-	retentionGroup           string
-	referenceChecks          []cleanupReferenceCheck
-	schedulerEventTable      string
-	schedulerDeadLetterTable string
-	workflowProcessChildren  bool
-	additionalPredicate      func(string) ormbuilder.Predicate
-	unixNanoTime             bool
+	policyKey               string
+	table                   string
+	idColumn                string
+	tenantColumn            string
+	timeColumn              string
+	statusColumn            string
+	ineligibleStatuses      []string
+	eligibleStatuses        []string
+	retentionGroup          string
+	referenceChecks         []cleanupReferenceCheck
+	workflowProcessChildren bool
+	additionalPredicate     func(string) ormbuilder.Predicate
+	unixNanoTime            bool
 }
 
 type cleanupReferenceCheck struct {

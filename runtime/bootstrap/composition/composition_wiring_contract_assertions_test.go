@@ -15,7 +15,6 @@ var (
 
 	_ workflowapplication.WorkflowRegistry       = runtimeWorkflowRegistry{}
 	_ workflowapplication.WorkflowSchemaProvider = runtimeWorkflowSchemaProvider{}
-	_ workflowapplication.WorkflowScheduler      = runtimeWorkflowScheduler{}
 
 	_ metadataapplication.LifecycleRuntime = metadataLifecycleRuntimeAdapter{}
 

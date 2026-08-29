@@ -89,14 +89,6 @@ func TestChangePlanReferenceServiceAuthorizationAndDependencyErrors(t *testing.T
 		t.Fatalf("workflow process error = %v", err)
 	}
 	runtime.processErr = nil
-	runtime.recordErrors["job_run"] = wantErr
-	if _, err := service.Graph(t.Context(), changePlanAdmin()); !errors.Is(err, wantErr) {
-		t.Fatalf("job run error = %v", err)
-	}
-	runtime.recordErrors = map[string]error{"job_dead_letter": wantErr}
-	if _, err := service.Graph(t.Context(), changePlanAdmin()); !errors.Is(err, wantErr) {
-		t.Fatalf("dead-letter error = %v", err)
-	}
 	runtime.recordErrors = map[string]error{}
 	runtime.messageErr = wantErr
 	if _, err := service.Graph(t.Context(), changePlanAdmin()); !errors.Is(err, wantErr) {
@@ -135,7 +127,7 @@ func TestChangePlanReferenceServiceBuildsOptionalRuntimeEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(graph.Nodes) < 20 || len(graph.Edges) < 20 || graph.Hash == "" {
+	if len(graph.Nodes) < 18 || len(graph.Edges) < 18 || graph.Hash == "" {
 		t.Fatalf("optional graph too small: nodes=%d edges=%d hash=%q", len(graph.Nodes), len(graph.Edges), graph.Hash)
 	}
 

@@ -40,7 +40,7 @@ func TestInternalMutationPolicyRejectsUnapprovedBypass(t *testing.T) {
 	assertRecordApplicationError(t, err, apperror.KindForbidden, "backend.record.internal_mutation_policy_denied", map[string]string{
 		"policy": "owner_department_path_rebuild", "operation": "update", "object": "customer",
 	})
-	if err := RecordValidateInternalMutationPolicy(RecordInternalMutationSchedulerRuntime, RecordInternalMutationUpdate, definitionmodel.ObjectSchema{Key: "job_run"}); err != nil {
+	if err := RecordValidateInternalMutationPolicy(RecordInternalMutationSchedulerRuntime, RecordInternalMutationUpdate, definitionmodel.ObjectSchema{Key: "record_timer"}); err != nil {
 		t.Fatalf("scheduler evidence update rejected: %v", err)
 	}
 }
@@ -56,12 +56,12 @@ func TestInternalMutationServiceOwnsWriteAndAudit(t *testing.T) {
 			event, objectKey, recordID, principal, metadata = gotEvent, gotObjectKey, gotRecordID, gotPrincipal, gotMetadata
 		},
 	})
-	object := definitionmodel.ObjectSchema{Key: "job_run"}
-	record := recordmodel.Record{ID: "run-1"}
+	object := definitionmodel.ObjectSchema{Key: "record_timer_event"}
+	record := recordmodel.Record{ID: "event-1"}
 	if err := service.Insert(t.Context(), "default", RecordInternalMutationSchedulerRuntime, object, record, " scheduler evidence "); err != nil {
 		t.Fatal(err)
 	}
-	if repository.inserted.ID != "run-1" || event != "internal_record_mutation" || objectKey != "job_run" || recordID != "run-1" || !principal.Known || principal.UserID != "system" {
+	if repository.inserted.ID != "event-1" || event != "internal_record_mutation" || objectKey != "record_timer_event" || recordID != "event-1" || !principal.Known || principal.UserID != "system" {
 		t.Fatalf("insert=%#v event=%q object=%q record=%q principal=%#v", repository.inserted, event, objectKey, recordID, principal)
 	}
 	if metadata["policy"] != "scheduler_runtime" || metadata["operation"] != "create" || metadata["reason"] != "scheduler evidence" {

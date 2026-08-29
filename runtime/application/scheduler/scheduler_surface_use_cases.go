@@ -198,57 +198,7 @@ func (s *SchedulerApplicationService) OpsState(ctx context.Context, principal pr
 	if err := schedulerOpsReadAllowed(principal); err != nil {
 		return OpsSchedulerStateDTO{}, err
 	}
-	if s.repository == nil {
-		return OpsSchedulerStateDTO{}, schedulerErrorUnavailable("backend.scheduler.repository_unavailable")
-	}
-	if !s.RuntimeAvailable(ctx, principal) {
-		return OpsSchedulerStateDTO{
-			Provisioned: false,
-			Runs:        []OpsSchedulerRunDTO{},
-			Attempts:    []OpsSchedulerAttemptDTO{},
-			DeadLetters: []OpsSchedulerDeadLetterDTO{},
-		}, nil
-	}
-	runs, err := s.opsRecords(ctx, principal, "job_run")
-	if err != nil {
-		return OpsSchedulerStateDTO{}, err
-	}
-	attempts, err := s.opsRecords(ctx, principal, "job_run_event")
-	if err != nil {
-		return OpsSchedulerStateDTO{}, err
-	}
-	deadLetters, err := s.opsRecords(ctx, principal, "job_dead_letter")
-	if err != nil {
-		return OpsSchedulerStateDTO{}, err
-	}
-	result := OpsSchedulerStateDTO{
-		Provisioned: true,
-		Runs:        make([]OpsSchedulerRunDTO, 0, len(runs)),
-		Attempts:    make([]OpsSchedulerAttemptDTO, 0, len(attempts)),
-		DeadLetters: make([]OpsSchedulerDeadLetterDTO, 0, len(deadLetters)),
-	}
-	for _, record := range runs {
-		result.Runs = append(result.Runs, projectOpsSchedulerRun(record))
-	}
-	for _, record := range attempts {
-		result.Attempts = append(result.Attempts, projectOpsSchedulerAttempt(record))
-	}
-	for _, record := range deadLetters {
-		result.DeadLetters = append(result.DeadLetters, projectOpsSchedulerDeadLetter(record))
-	}
-	return result, nil
-}
-
-func (s *SchedulerApplicationService) opsRecords(ctx context.Context, principal principalmodel.Principal, objectKey string) ([]recordmodel.Record, error) {
-	object, err := s.ownerObject(ctx, objectKey)
-	if err != nil {
-		return nil, err
-	}
-	page, err := s.repository.ListRecords(ctx, principal.WorkspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 500})
-	if err != nil {
-		return nil, internalError("list scheduler "+objectKey, err)
-	}
-	return page.Items, nil
+	return OpsSchedulerStateDTO{Provisioned: false, Runs: []OpsSchedulerRunDTO{}, Attempts: []OpsSchedulerAttemptDTO{}, DeadLetters: []OpsSchedulerDeadLetterDTO{}}, nil
 }
 
 func projectTenantAdminSchedulerDefinition(record recordmodel.Record) TenantAdminSchedulerDefinitionDTO {
@@ -352,7 +302,7 @@ func schedulerOpsReadAllowed(principal principalmodel.Principal) error {
 	if err := schedulerAuthorizeQuery(principal); err != nil {
 		return err
 	}
-	if principal.HasExactPermission("operations.read") || principal.HasExactPermission("job_run.read") || principal.HasExactPermission("job_run.update") || principal.HasExactPermission("scheduler.command") {
+	if principal.HasExactPermission("operations.read") || principal.HasExactPermission("scheduler.command") {
 		return nil
 	}
 	return forbidden("backend.scheduler.permission_required")
@@ -362,7 +312,7 @@ func schedulerOpsCommandAllowed(principal principalmodel.Principal) error {
 	if err := schedulerAuthorizeCommand(principal); err != nil {
 		return err
 	}
-	if principal.HasExactPermission("scheduler.definition.run") || principal.HasExactPermission("job_run.update") || principal.HasExactPermission("scheduler.command") {
+	if principal.HasExactPermission("scheduler.definition.run") || principal.HasExactPermission("scheduler.command") {
 		return nil
 	}
 	return forbidden("backend.scheduler.permission_required")

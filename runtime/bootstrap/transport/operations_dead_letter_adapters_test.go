@@ -3,6 +3,7 @@ package transport
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -11,11 +12,11 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
-	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 type deadLetterEventRepository struct {
@@ -180,9 +181,9 @@ func TestIntegrationOutboxDeadLetterOwnerInspectRetryResolveAndProjectionFallbac
 }
 
 func TestDeadLetterAdapterHelpersAndNilRegistration(t *testing.T) {
-	registerOperationsDeadLetterOwners(nil, nil, nil, nil, nil)
+	registerOperationsDeadLetterOwners(nil, nil, nil, nil, nil, nil)
 	service := operationsapplication.NewOperationsApplicationService(nil, nil, nil, nil)
-	registerOperationsDeadLetterOwners(service, nil, nil, nil, nil)
+	registerOperationsDeadLetterOwners(service, nil, nil, nil, nil, nil)
 	if valueOr(" value ", "fallback") != "value" || valueOr(" ", "fallback") != "fallback" {
 		t.Fatal("value fallback mismatch")
 	}
@@ -305,14 +306,14 @@ type schedulerDeadLetterServiceStub struct {
 	requeueErr error
 }
 
-func (s *schedulerDeadLetterServiceStub) InspectDeadLetter(context.Context, string, principalmodel.Principal) (recordmodel.Record, error) {
-	return s.record, s.inspectErr
+func (s *schedulerDeadLetterServiceStub) DeadLetter(context.Context, string) (schedulersdk.DeadLetter, error) {
+	return schedulersdk.DeadLetter{RunID: fmt.Sprint(s.record.Data["job_run_id"]), DefinitionKey: fmt.Sprint(s.record.Data["scheduler_definition_key"]), Status: fmt.Sprint(s.record.Data["status"]), Reason: fmt.Sprint(s.record.Data["last_error"])}, s.inspectErr
 }
-func (s *schedulerDeadLetterServiceStub) ResolveDeadLetter(context.Context, string, string, string, principalmodel.Principal) (schedulerapplication.SchedulerOperationResult, error) {
-	return schedulerapplication.SchedulerOperationResult{}, s.resolveErr
+func (s *schedulerDeadLetterServiceStub) ResolveDeadLetter(context.Context, string, string) (schedulersdk.DeadLetter, error) {
+	return schedulersdk.DeadLetter{}, s.resolveErr
 }
-func (s *schedulerDeadLetterServiceStub) RequeueDeadLetter(context.Context, string, string, string, principalmodel.Principal) (schedulerapplication.SchedulerOperationResult, error) {
-	return schedulerapplication.SchedulerOperationResult{}, s.requeueErr
+func (s *schedulerDeadLetterServiceStub) RequeueDeadLetter(context.Context, string, string) (schedulersdk.Run, error) {
+	return schedulersdk.Run{}, s.requeueErr
 }
 
 func TestSchedulerDeadLetterOwnerAllActionsAndFailures(t *testing.T) {

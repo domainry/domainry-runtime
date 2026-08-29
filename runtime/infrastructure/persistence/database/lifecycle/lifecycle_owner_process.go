@@ -71,16 +71,6 @@ func (e OwnerExecutor) processSpec(ctx context.Context, job lifecyclemodel.Clean
 			result.Skipped++
 			continue
 		}
-		if spec.schedulerDeadLetterTable != "" {
-			blocked, blockErr := e.schedulerRunHasActiveDeadLetter(ctx, job.WorkspaceID, spec.schedulerDeadLetterTable, candidate.id)
-			if blockErr != nil {
-				return result, blockErr
-			}
-			if blocked {
-				result.Skipped++
-				continue
-			}
-		}
 		if job.Operation == lifecyclemodel.OperationPurge {
 			referenced, referenceErr := e.cleanupCandidateReferenced(ctx, job.WorkspaceID, candidate.id, spec.referenceChecks)
 			if referenceErr != nil {
@@ -120,14 +110,6 @@ func (e OwnerExecutor) processSpec(ctx context.Context, job lifecyclemodel.Clean
 		}
 		if spec.workflowProcessChildren {
 			childArchived, childPurged, childErr := e.archiveWorkflowProcessChildren(ctx, job, policy, candidate.id, job.Operation == lifecyclemodel.OperationPurge)
-			result.Archived, result.Purged = result.Archived+childArchived, result.Purged+childPurged
-			if childErr != nil {
-				result.Failed++
-				return result, childErr
-			}
-		}
-		if spec.table == "job_run" {
-			childArchived, childPurged, childErr := e.archiveSchedulerRunChildren(ctx, job, policy, spec, candidate.id, job.Operation == lifecyclemodel.OperationPurge)
 			result.Archived, result.Purged = result.Archived+childArchived, result.Purged+childPurged
 			if childErr != nil {
 				result.Failed++

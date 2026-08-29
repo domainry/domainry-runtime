@@ -217,8 +217,8 @@ func TestPlanConditionalUpdateMutationCoversAuthorizationLookupScopeAndPlanning(
 		t.Fatalf("lookup err=%v", err)
 	}
 	schedulerObject := object
-	schedulerObject.Key = "job_run"
-	schedulerObject.Config = map[string]any{"scheduler_runtime": true}
+	schedulerObject.Key = "record_timer"
+	schedulerObject.Config = map[string]any{"record_timer_runtime": true}
 	service = newService(repository, func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
 		return schedulerObject, nil
 	}, nil)

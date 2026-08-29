@@ -3,9 +3,7 @@ package workflow
 import (
 	"context"
 	"errors"
-	"reflect"
 	"testing"
-	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
@@ -27,32 +25,6 @@ type workflowListWorkerEdgeStub struct {
 func (s *workflowListWorkerEdgeStub) ListExecutions(_ context.Context, _ string, limit int) ([]workflowmodel.WorkflowExecution, error) {
 	s.listLimits = append(s.listLimits, limit)
 	return s.list, s.listErr
-}
-
-type workflowSchedulerEdgeStub struct {
-	result       workflowmodel.WorkflowProcessResult
-	err          error
-	config       WorkflowSchedulerWorkerConfig
-	processLimit int
-	startConfig  WorkflowSchedulerWorkerConfig
-	startEnabled bool
-	done         chan struct{}
-}
-
-func (s *workflowSchedulerEdgeStub) ProcessDueJobs(_ context.Context, limit int, _ principalmodel.Principal, _ string) (workflowmodel.WorkflowProcessResult, error) {
-	s.processLimit = limit
-	return s.result, s.err
-}
-
-func (s *workflowSchedulerEdgeStub) WorkerConfig() WorkflowSchedulerWorkerConfig { return s.config }
-
-func (s *workflowSchedulerEdgeStub) StartWorker(_ context.Context, config WorkflowSchedulerWorkerConfig, enabled bool) <-chan struct{} {
-	s.startConfig, s.startEnabled = config, enabled
-	if s.done == nil {
-		s.done = make(chan struct{})
-		close(s.done)
-	}
-	return s.done
 }
 
 func TestWorkflowApplicationListDefinitionsAuthorizationSortingAndProjection(t *testing.T) {
@@ -163,46 +135,5 @@ func TestWorkflowExecutionQueryFilterVisibilityLimitAndFailureMatrix(t *testing.
 	})
 	if _, err := service.WorkflowExecutions(t.Context(), principal, "order", "", 10); apperror.CodeOf(err) != "backend.internal" {
 		t.Fatalf("visibility error=%v", err)
-	}
-}
-
-func TestWorkflowSchedulerManualProcessAndWorkerConfiguration(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"ops.workflow.process"}})
-	scheduler := &workflowSchedulerEdgeStub{result: workflowmodel.WorkflowProcessResult{Processed: 2}, config: WorkflowSchedulerWorkerConfig{Enabled: true, PollInterval: time.Minute, BatchSize: 10}}
-	registry := &workflowRegistryStub{items: map[string]definitionmodel.WorkflowSchema{"flow": {Key: "flow"}}}
-	service := &WorkflowApplicationService{scheduler: scheduler, registry: registry}
-	if _, err := service.ProcessWorkflowExecutions(t.Context(), 2, principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
-		t.Fatalf("workspace error=%v", err)
-	}
-	unknown := principal
-	unknown.Known = false
-	if _, err := service.ProcessWorkflowExecutions(t.Context(), 2, unknown); apperror.CodeOf(err) != "backend.workspace_scope_required" {
-		t.Fatalf("unknown error=%v", err)
-	}
-	denied := principal
-	denied = workflowPrincipalWithPermissions(denied)
-	if _, err := service.ProcessWorkflowExecutions(t.Context(), 2, denied); apperror.CodeOf(err) != "backend.workflow.process_permission_required" {
-		t.Fatalf("denied error=%v", err)
-	}
-	result, err := service.ProcessWorkflowExecutions(t.Context(), 2, principal)
-	if err != nil || result.Processed != 2 || scheduler.processLimit != 2 {
-		t.Fatalf("result=%+v limit=%d err=%v", result, scheduler.processLimit, err)
-	}
-	scheduler.err = errors.New("scheduler")
-	if _, err := service.ProcessWorkflowExecutions(t.Context(), 2, principal); !errors.Is(err, scheduler.err) {
-		t.Fatalf("scheduler error=%v", err)
-	}
-	scheduler.err = nil
-	done := service.StartWorker(t.Context(), 2*time.Second, 20)
-	<-done
-	if !scheduler.startEnabled || !scheduler.startConfig.Enabled || scheduler.startConfig.PollInterval != 2*time.Second || scheduler.startConfig.BatchSize != 20 {
-		t.Fatalf("config=%+v enabled=%v", scheduler.startConfig, scheduler.startEnabled)
-	}
-	scheduler.done = nil
-	registry.items = map[string]definitionmodel.WorkflowSchema{}
-	done = service.StartWorker(t.Context(), 0, 0)
-	<-done
-	if scheduler.startEnabled || !reflect.DeepEqual(scheduler.startConfig, scheduler.config) {
-		t.Fatalf("default config=%+v enabled=%v", scheduler.startConfig, scheduler.startEnabled)
 	}
 }

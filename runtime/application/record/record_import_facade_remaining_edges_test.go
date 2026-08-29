@@ -113,8 +113,8 @@ func TestPlanUpdateMutationCoversDependencyAndScopeEdges(t *testing.T) {
 		t.Fatalf("object err=%v", err)
 	}
 	schedulerObject := object
-	schedulerObject.Key = "job_run"
-	schedulerObject.Config = map[string]any{"scheduler_runtime": true}
+	schedulerObject.Key = "record_timer"
+	schedulerObject.Config = map[string]any{"record_timer_runtime": true}
 	if _, _, err := newService(&updateRepositoryProbe{}, func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
 		return schedulerObject, nil
 	}, nil, true).PlanUpdateMutation(t.Context(), schedulerObject.Key, record.ID, nil, principal); apperror.CodeOf(err) != "backend.scheduler.runtime_api_required" {

@@ -25,13 +25,10 @@ func TestRecordSchedulerCRUDSoftDeleteAndRestorePolicy(t *testing.T) {
 		operation string
 		code      string
 	}{
-		{object: definitionmodel.ObjectSchema{Key: "job_run"}},
-		{object: definitionmodel.ObjectSchema{Key: "job_run", Config: map[string]any{"scheduler_runtime": true}}, operation: "update", code: "backend.scheduler.runtime_api_required"},
-		{object: definitionmodel.ObjectSchema{Key: "job_run_event", Config: map[string]any{"scheduler_runtime": "true"}}, operation: "delete", code: "backend.scheduler.runtime_api_required"},
-		{object: definitionmodel.ObjectSchema{Key: "job_dead_letter", Config: map[string]any{"scheduler_runtime": true}}, operation: "create", code: "backend.scheduler.runtime_api_required"},
-		{object: definitionmodel.ObjectSchema{Key: "scheduler_cursor", Config: map[string]any{"scheduler_runtime": true}}, operation: "update", code: "backend.scheduler.runtime_api_required"},
-		{object: definitionmodel.ObjectSchema{Key: "record_timer", Config: map[string]any{"scheduler_runtime": true}}, operation: "delete", code: "backend.scheduler.runtime_api_required"},
-		{object: definitionmodel.ObjectSchema{Key: "other", Config: map[string]any{"scheduler_runtime": true}}, operation: "delete"},
+		{object: definitionmodel.ObjectSchema{Key: "record_timer"}},
+		{object: definitionmodel.ObjectSchema{Key: "record_timer", Config: map[string]any{"record_timer_runtime": true}}, operation: "update", code: "backend.scheduler.runtime_api_required"},
+		{object: definitionmodel.ObjectSchema{Key: "record_timer_event", Config: map[string]any{"record_timer_runtime": "true"}}, operation: "delete", code: "backend.scheduler.runtime_api_required"},
+		{object: definitionmodel.ObjectSchema{Key: "other"}, operation: "delete"},
 	} {
 		err := RecordValidateSchedulerOperationalCRUD(test.object, test.operation)
 		if test.code == "" && err != nil || test.code != "" && apperror.CodeOf(err) != test.code {

@@ -15,7 +15,6 @@ func TestWorkflowSurfaceReadHandlersAndErrors(t *testing.T) {
 	handler, processes, workers, scheduler, response := newWorkflowHTTPRuntimeFixture()
 	seedWorkflowHTTPProcess(processes, "waiting")
 	workers.executions["execution-1"] = workflowmodel.WorkflowExecution{ID: "execution-1", Status: "completed"}
-	scheduler.result = workflowmodel.WorkflowProcessResult{Processed: 1, Executions: []workflowmodel.WorkflowExecution{{ID: "processed-1", Status: "completed"}}}
 
 	tests := []struct {
 		name   string
@@ -31,7 +30,7 @@ func TestWorkflowSurfaceReadHandlersAndErrors(t *testing.T) {
 		{name: "ops executions", target: "/operations/workflow/executions?limit=10", call: handler.listOpsWorkflowExecutions, fail: func() { workers.err = errWorkflowHTTPTest }},
 		{name: "ops processes", target: "/operations/workflow/processes?status=waiting&limit=10", call: handler.listOpsWorkflowProcesses, fail: func() { processes.err = errWorkflowHTTPTest }},
 		{name: "ops process", target: "/operations/workflow/processes/process-1", paths: map[string]string{"processID": " process-1 "}, call: handler.getOpsWorkflowProcess, fail: func() { processes.err = errWorkflowHTTPTest }},
-		{name: "process executions", target: "/operations/workflow/executions/process?limit=10", call: handler.processOpsWorkflowExecutions, fail: func() { scheduler.err = errWorkflowHTTPTest }},
+		{name: "process executions", target: "/operations/workflow/executions/process?limit=10", call: handler.processOpsWorkflowExecutions, fail: func() { workers.err = errWorkflowHTTPTest }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

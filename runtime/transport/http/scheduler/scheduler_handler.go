@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -43,12 +44,13 @@ type schedulerService interface {
 	GetDefinition(context.Context, string, principalmodel.Principal) (recordmodel.Record, error)
 	DefinitionVersions(context.Context, string, principalmodel.Principal) ([]schedulerbusiness.SchedulerDefinitionVersion, error)
 	SimulateJob(context.Context, string, principalmodel.Principal) (schedulerbusiness.SchedulerOperationResult, error)
-	RunJob(context.Context, string, string, principalmodel.Principal) (schedulerbusiness.SchedulerOperationResult, error)
-	RescheduleDefinition(context.Context, string, time.Time, principalmodel.Principal) (schedulerbusiness.SchedulerOperationResult, error)
-	RetryRun(context.Context, string, string, principalmodel.Principal) (schedulerbusiness.SchedulerOperationResult, error)
-	CancelRun(context.Context, string, string, principalmodel.Principal) (schedulerbusiness.SchedulerOperationResult, error)
-	ResolveDeadLetter(context.Context, string, string, string, principalmodel.Principal) (schedulerbusiness.SchedulerOperationResult, error)
-	RequeueDeadLetter(context.Context, string, string, string, principalmodel.Principal) (schedulerbusiness.SchedulerOperationResult, error)
+}
+
+func (h *SchedulerHandler) ownerBinding() (schedulersdk.Binding, error) {
+	if h.binding == nil {
+		return nil, fmt.Errorf("Scheduler owner binding is unavailable")
+	}
+	return h.binding, nil
 }
 
 func (h *SchedulerHandler) listTenantAdminSchedulerDefinitions(w http.ResponseWriter, r *http.Request) {
@@ -219,9 +221,13 @@ func (h *SchedulerHandler) simulateSchedulerJob(w http.ResponseWriter, r *http.R
 }
 
 func (h *SchedulerHandler) runSchedulerJob(w http.ResponseWriter, r *http.Request) {
-	resourceID, key, principal := strings.TrimSpace(r.PathValue("definitionID")), strings.TrimSpace(r.Header.Get("Idempotency-Key")), h.principal(r)
+	resourceID := strings.TrimSpace(r.PathValue("definitionID"))
 	operation, err := h.executeOwnerOperation(r, "scheduler.job.run", "scheduler_definition", resourceID, nil, func(ctx context.Context) (any, error) {
-		return h.service.RunJob(ctx, resourceID, key, principal)
+		binding, bindErr := h.ownerBinding()
+		if bindErr != nil {
+			return nil, bindErr
+		}
+		return binding.TriggerNow(ctx, resourceID, "operator requested scheduler.job.run")
 	})
 	operationshttp.WriteOwnerReceiptHeaders(w, operation)
 	if err != nil {
@@ -232,10 +238,14 @@ func (h *SchedulerHandler) runSchedulerJob(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *SchedulerHandler) runOpsSchedulerJob(w http.ResponseWriter, r *http.Request) {
-	resourceID, key, principal := strings.TrimSpace(r.PathValue("definitionID")), strings.TrimSpace(r.Header.Get("Idempotency-Key")), h.principal(r)
+	resourceID := strings.TrimSpace(r.PathValue("definitionID"))
 	operation, err := h.executeOwnerOperation(r, "scheduler.job.run", "scheduler_definition", resourceID, nil, func(ctx context.Context) (any, error) {
-		result, executeErr := h.service.RunJob(ctx, resourceID, key, principal)
-		return schedulerbusiness.ProjectOpsSchedulerOperation(result), executeErr
+		binding, bindErr := h.ownerBinding()
+		if bindErr != nil {
+			return nil, bindErr
+		}
+		run, executeErr := binding.TriggerNow(ctx, resourceID, "operator requested scheduler.job.run")
+		return projectSDKRun(run), executeErr
 	})
 	operationshttp.WriteOwnerReceiptHeaders(w, operation)
 	if err != nil {
@@ -257,10 +267,16 @@ func (h *SchedulerHandler) rescheduleOpsSchedulerDefinition(w http.ResponseWrite
 		h.writeError(w, r, http.StatusBadRequest, "backend.scheduler.next_run_at_invalid")
 		return
 	}
-	resourceID, principal := strings.TrimSpace(r.PathValue("definitionID")), h.principal(r)
+	resourceID := strings.TrimSpace(r.PathValue("definitionID"))
 	operation, err := h.executeOwnerOperation(r, "scheduler.definition.reschedule", "scheduler_definition", resourceID, request, func(ctx context.Context) (any, error) {
-		result, executeErr := h.service.RescheduleDefinition(ctx, resourceID, nextRunAt, principal)
-		return schedulerbusiness.ProjectOpsSchedulerOperation(result), executeErr
+		binding, bindErr := h.ownerBinding()
+		if bindErr != nil {
+			return nil, bindErr
+		}
+		if executeErr := binding.Reschedule(ctx, resourceID, nextRunAt, "operator requested scheduler.definition.reschedule"); executeErr != nil {
+			return nil, executeErr
+		}
+		return map[string]any{"status": "rescheduled", "definition_key": resourceID, "next_run_at": nextRunAt.UTC()}, nil
 	})
 	operationshttp.WriteOwnerReceiptHeaders(w, operation)
 	if err != nil {
@@ -271,9 +287,13 @@ func (h *SchedulerHandler) rescheduleOpsSchedulerDefinition(w http.ResponseWrite
 }
 
 func (h *SchedulerHandler) retrySchedulerRun(w http.ResponseWriter, r *http.Request) {
-	resourceID, key, principal := strings.TrimSpace(r.PathValue("runID")), strings.TrimSpace(r.Header.Get("Idempotency-Key")), h.principal(r)
-	operation, err := h.executeOwnerOperation(r, "scheduler.run.retry", "job_run", resourceID, nil, func(ctx context.Context) (any, error) {
-		return h.service.RetryRun(ctx, resourceID, key, principal)
+	resourceID := strings.TrimSpace(r.PathValue("runID"))
+	operation, err := h.executeOwnerOperation(r, "scheduler.run.retry", "scheduler_run", resourceID, nil, func(ctx context.Context) (any, error) {
+		binding, bindErr := h.ownerBinding()
+		if bindErr != nil {
+			return nil, bindErr
+		}
+		return binding.RetryRun(ctx, resourceID, "operator requested scheduler.run.retry")
 	})
 	operationshttp.WriteOwnerReceiptHeaders(w, operation)
 	if err != nil {
@@ -284,10 +304,14 @@ func (h *SchedulerHandler) retrySchedulerRun(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *SchedulerHandler) retryOpsSchedulerRun(w http.ResponseWriter, r *http.Request) {
-	resourceID, key, principal := strings.TrimSpace(r.PathValue("runID")), strings.TrimSpace(r.Header.Get("Idempotency-Key")), h.principal(r)
-	operation, err := h.executeOwnerOperation(r, "scheduler.run.retry", "job_run", resourceID, nil, func(ctx context.Context) (any, error) {
-		result, executeErr := h.service.RetryRun(ctx, resourceID, key, principal)
-		return schedulerbusiness.ProjectOpsSchedulerOperation(result), executeErr
+	resourceID := strings.TrimSpace(r.PathValue("runID"))
+	operation, err := h.executeOwnerOperation(r, "scheduler.run.retry", "scheduler_run", resourceID, nil, func(ctx context.Context) (any, error) {
+		binding, bindErr := h.ownerBinding()
+		if bindErr != nil {
+			return nil, bindErr
+		}
+		run, executeErr := binding.RetryRun(ctx, resourceID, "operator requested scheduler.run.retry")
+		return projectSDKRun(run), executeErr
 	})
 	operationshttp.WriteOwnerReceiptHeaders(w, operation)
 	if err != nil {
@@ -298,9 +322,13 @@ func (h *SchedulerHandler) retryOpsSchedulerRun(w http.ResponseWriter, r *http.R
 }
 
 func (h *SchedulerHandler) cancelSchedulerRun(w http.ResponseWriter, r *http.Request) {
-	resourceID, key, principal := strings.TrimSpace(r.PathValue("runID")), strings.TrimSpace(r.Header.Get("Idempotency-Key")), h.principal(r)
-	operation, err := h.executeOwnerOperation(r, "scheduler.run.cancel", "job_run", resourceID, nil, func(ctx context.Context) (any, error) {
-		return h.service.CancelRun(ctx, resourceID, key, principal)
+	resourceID := strings.TrimSpace(r.PathValue("runID"))
+	operation, err := h.executeOwnerOperation(r, "scheduler.run.cancel", "scheduler_run", resourceID, nil, func(ctx context.Context) (any, error) {
+		binding, bindErr := h.ownerBinding()
+		if bindErr != nil {
+			return nil, bindErr
+		}
+		return binding.CancelRun(ctx, resourceID, "operator requested scheduler.run.cancel")
 	})
 	operationshttp.WriteOwnerReceiptHeaders(w, operation)
 	if err != nil {
@@ -311,10 +339,14 @@ func (h *SchedulerHandler) cancelSchedulerRun(w http.ResponseWriter, r *http.Req
 }
 
 func (h *SchedulerHandler) cancelOpsSchedulerRun(w http.ResponseWriter, r *http.Request) {
-	resourceID, key, principal := strings.TrimSpace(r.PathValue("runID")), strings.TrimSpace(r.Header.Get("Idempotency-Key")), h.principal(r)
-	operation, err := h.executeOwnerOperation(r, "scheduler.run.cancel", "job_run", resourceID, nil, func(ctx context.Context) (any, error) {
-		result, executeErr := h.service.CancelRun(ctx, resourceID, key, principal)
-		return schedulerbusiness.ProjectOpsSchedulerOperation(result), executeErr
+	resourceID := strings.TrimSpace(r.PathValue("runID"))
+	operation, err := h.executeOwnerOperation(r, "scheduler.run.cancel", "scheduler_run", resourceID, nil, func(ctx context.Context) (any, error) {
+		binding, bindErr := h.ownerBinding()
+		if bindErr != nil {
+			return nil, bindErr
+		}
+		run, executeErr := binding.CancelRun(ctx, resourceID, "operator requested scheduler.run.cancel")
+		return projectSDKRun(run), executeErr
 	})
 	operationshttp.WriteOwnerReceiptHeaders(w, operation)
 	if err != nil {
@@ -333,9 +365,13 @@ func (h *SchedulerHandler) resolveSchedulerDeadLetter(w http.ResponseWriter, r *
 			return
 		}
 	}
-	resourceID, key, principal := strings.TrimSpace(r.PathValue("deadLetterID")), strings.TrimSpace(r.Header.Get("Idempotency-Key")), h.principal(r)
-	operation, err := h.executeOwnerOperation(r, "scheduler.dead_letter.resolve", "job_dead_letter", resourceID, request, func(ctx context.Context) (any, error) {
-		return h.service.ResolveDeadLetter(ctx, resourceID, request.Note, key, principal)
+	resourceID := strings.TrimSpace(r.PathValue("deadLetterID"))
+	operation, err := h.executeOwnerOperation(r, "scheduler.dead_letter.resolve", "scheduler_dead_letter", resourceID, request, func(ctx context.Context) (any, error) {
+		binding, bindErr := h.ownerBinding()
+		if bindErr != nil {
+			return nil, bindErr
+		}
+		return binding.ResolveDeadLetter(ctx, resourceID, request.Note)
 	})
 	operationshttp.WriteOwnerReceiptHeaders(w, operation)
 	if err != nil {
@@ -354,10 +390,13 @@ func (h *SchedulerHandler) resolveOpsSchedulerDeadLetter(w http.ResponseWriter, 
 			return
 		}
 	}
-	resourceID, key, principal := strings.TrimSpace(r.PathValue("deadLetterID")), strings.TrimSpace(r.Header.Get("Idempotency-Key")), h.principal(r)
-	operation, err := h.executeOwnerOperation(r, "scheduler.dead_letter.resolve", "job_dead_letter", resourceID, request, func(ctx context.Context) (any, error) {
-		result, executeErr := h.service.ResolveDeadLetter(ctx, resourceID, request.Note, key, principal)
-		return schedulerbusiness.ProjectOpsSchedulerOperation(result), executeErr
+	resourceID := strings.TrimSpace(r.PathValue("deadLetterID"))
+	operation, err := h.executeOwnerOperation(r, "scheduler.dead_letter.resolve", "scheduler_dead_letter", resourceID, request, func(ctx context.Context) (any, error) {
+		binding, bindErr := h.ownerBinding()
+		if bindErr != nil {
+			return nil, bindErr
+		}
+		return binding.ResolveDeadLetter(ctx, resourceID, request.Note)
 	})
 	operationshttp.WriteOwnerReceiptHeaders(w, operation)
 	if err != nil {
@@ -376,10 +415,14 @@ func (h *SchedulerHandler) requeueOpsSchedulerDeadLetter(w http.ResponseWriter, 
 			return
 		}
 	}
-	resourceID, key, principal := strings.TrimSpace(r.PathValue("deadLetterID")), strings.TrimSpace(r.Header.Get("Idempotency-Key")), h.principal(r)
-	operation, err := h.executeOwnerOperation(r, "scheduler.dead_letter.requeue", "job_dead_letter", resourceID, request, func(ctx context.Context) (any, error) {
-		result, executeErr := h.service.RequeueDeadLetter(ctx, resourceID, request.Note, key, principal)
-		return schedulerbusiness.ProjectOpsSchedulerOperation(result), executeErr
+	resourceID := strings.TrimSpace(r.PathValue("deadLetterID"))
+	operation, err := h.executeOwnerOperation(r, "scheduler.dead_letter.requeue", "scheduler_dead_letter", resourceID, request, func(ctx context.Context) (any, error) {
+		binding, bindErr := h.ownerBinding()
+		if bindErr != nil {
+			return nil, bindErr
+		}
+		run, executeErr := binding.RequeueDeadLetter(ctx, resourceID, request.Note)
+		return projectSDKRun(run), executeErr
 	})
 	operationshttp.WriteOwnerReceiptHeaders(w, operation)
 	if err != nil {

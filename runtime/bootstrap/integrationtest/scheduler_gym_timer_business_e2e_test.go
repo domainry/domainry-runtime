@@ -141,7 +141,7 @@ func gymTimerSchedule(t *testing.T, service *schedulerapplication.SchedulerAppli
 func TestGymWaitlistTimeoutAdvancesOnlyNextEntryAndRejectsLateConfirmation(t *testing.T) {
 	service, repository, _, objects := gymTimerFixtureService(t)
 	now := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
-	waitlist := objects[5]
+	waitlist := schedulerRuntimeObjectByKey(t, objects, "gym_waitlist_entry")
 	for index, status := range []string{"notified", "waiting", "waiting"} {
 		gymTimerInsertRecord(t, repository, waitlist, fmt.Sprintf("wait-%d", index+1), map[string]any{"session_id": "class-1", "status": status, "position": index + 1}, now)
 	}
@@ -170,7 +170,7 @@ func TestGymWaitlistTimeoutAdvancesOnlyNextEntryAndRejectsLateConfirmation(t *te
 func TestGymClassCancellationCancelsEveryFutureAttendanceTimer(t *testing.T) {
 	service, repository, _, objects := gymTimerFixtureService(t)
 	now := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
-	classSession := objects[6]
+	classSession := schedulerRuntimeObjectByKey(t, objects, "gym_class_session")
 	gymTimerInsertRecord(t, repository, classSession, "class-1", map[string]any{"status": "scheduled"}, now)
 	for index, purpose := range []string{"check_in_open", "check_in_close", "no_show", "attendance_finalize"} {
 		gymTimerSchedule(t, service, now, schedulerapplication.RecordTimerSchedule{TimerKey: purpose, ObjectKey: classSession.Key, RecordID: "class-1", Purpose: purpose, DueAt: now.Add(time.Duration(index+1) * time.Hour), TargetType: "action", TargetKey: "attendance.window", Sequence: int64(index)})
@@ -179,7 +179,7 @@ func TestGymClassCancellationCancelsEveryFutureAttendanceTimer(t *testing.T) {
 	if err != nil || cancelled != 4 {
 		t.Fatalf("cancelled attendance timers=%d err=%v", cancelled, err)
 	}
-	page, err := repository.ListRecords(t.Context(), "default", objects[4], recordmodel.RecordListQuery{Page: 1, PageSize: 10, Filters: map[string]any{"object_key": classSession.Key, "record_id": "class-1", "status": "scheduled"}})
+	page, err := repository.ListRecords(t.Context(), "default", schedulerRuntimeObjectByKey(t, objects, "record_timer"), recordmodel.RecordListQuery{Page: 1, PageSize: 10, Filters: map[string]any{"object_key": classSession.Key, "record_id": "class-1", "status": "scheduled"}})
 	if err != nil || page.Total != 0 {
 		t.Fatalf("future attendance timers=%d err=%v", page.Total, err)
 	}
@@ -188,7 +188,7 @@ func TestGymClassCancellationCancelsEveryFutureAttendanceTimer(t *testing.T) {
 func TestGymUrgentTicketResponseCancelsAlertAndUnansweredEscalatesOnce(t *testing.T) {
 	service, repository, runtime, objects := gymTimerFixtureService(t)
 	now := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
-	tickets := objects[7]
+	tickets := schedulerRuntimeObjectByKey(t, objects, "gym_service_ticket")
 	for _, id := range []string{"ticket-responded", "ticket-unanswered"} {
 		gymTimerInsertRecord(t, repository, tickets, id, map[string]any{"status": "open"}, now)
 		gymTimerSchedule(t, service, now, schedulerapplication.RecordTimerSchedule{TimerKey: id + ":sla", ObjectKey: tickets.Key, RecordID: id, Purpose: "response_sla", DueAt: now.Add(2 * time.Hour), TargetType: "action", TargetKey: "ticket.escalate"})
@@ -243,7 +243,7 @@ func TestGymCardPackageExpiryAndNinetyDayReviewUseRelativeRecordTimers(t *testin
 			t.Fatalf("timer %s due_at=%v want=%s", testCase.key, timer.Data["due_at"], testCase.want.Format(time.RFC3339Nano))
 		}
 	}
-	page, err := repository.ListRecords(t.Context(), "default", objects[4], recordmodel.RecordListQuery{Page: 1, PageSize: 10, Filters: map[string]any{"status": "scheduled"}})
+	page, err := repository.ListRecords(t.Context(), "default", schedulerRuntimeObjectByKey(t, objects, "record_timer"), recordmodel.RecordListQuery{Page: 1, PageSize: 10, Filters: map[string]any{"status": "scheduled"}})
 	if err != nil || page.Total != 3 {
 		t.Fatalf("lifecycle timers=%d err=%v", page.Total, err)
 	}

@@ -24,7 +24,7 @@ func TestRecordTimerHundredThousandRestartClockDriftAndMultiInstanceNoLoss(t *te
 	if err := metadataStore(store).SyncManifestStorage(t.Context(), manifestmodel.ManifestSchema{Objects: objects}); err != nil {
 		t.Fatal(err)
 	}
-	timerObject := objects[4]
+	timerObject := schedulerRuntimeObjectByKey(t, objects, "record_timer")
 	now := time.Date(2026, 7, 21, 10, 0, 0, 0, time.UTC)
 	const total = 100_000
 	for start := 0; start < total; start += 1000 {

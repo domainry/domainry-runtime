@@ -109,7 +109,7 @@ func TestNonInteractiveMutationEntrypointsHaveExplicitCanonicalOrInternalDecisio
 	}
 	want := map[string]string{
 		"record_import_batch":                 "canonical_facade",
-		"scheduler_internal_records":          "audited_internal_owner",
+		"record_timer_internal_records":       "audited_internal_owner",
 		"integration_callback_mutation":       "canonical_facade",
 		"subject_lifecycle_internal_mutation": "audited_internal_owner",
 		"business_seed_records":               "installation_internal_owner",
@@ -156,7 +156,7 @@ func TestNonInteractiveMutationEntrypointsHaveExplicitCanonicalOrInternalDecisio
 		}
 	}
 	internalPolicy := read("runtime/application/record/record_internal_mutation_application_service.go")
-	for _, required := range []string{"RecordValidateInternalMutationPolicy", "scheduler_cursor", "job_run", "record_timer", "report_query_run", "backend.record.internal_mutation_policy_denied"} {
+	for _, required := range []string{"RecordValidateInternalMutationPolicy", "record_timer", "record_timer_event", "report_query_run", "backend.record.internal_mutation_policy_denied"} {
 		if !strings.Contains(internalPolicy, required) {
 			t.Errorf("internal mutation policy missing %q", required)
 		}

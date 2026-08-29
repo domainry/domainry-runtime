@@ -119,12 +119,7 @@ func (s *BusinessSystemApplicationService) schedulerStateSnapshot(ctx context.Co
 			return changeplanprojection.SchedulerStateSnapshot{}, err
 		}
 	}
-	runs, err := s.SnapshotObjectRecords(ctx, "job_run", principal, 100)
-	if err != nil {
-		return changeplanprojection.SchedulerStateSnapshot{}, err
-	}
-	deadLetters, err := s.SnapshotObjectRecords(ctx, "job_dead_letter", principal, 100)
-	return changeplanprojection.SchedulerStateSnapshot{Definitions: definitions, RecentRuns: runs, DeadLetters: deadLetters}, err
+	return changeplanprojection.SchedulerStateSnapshot{Definitions: definitions, RecentRuns: []recordmodel.Record{}, DeadLetters: []recordmodel.Record{}}, nil
 }
 
 func (s *BusinessSystemApplicationService) SnapshotObjectRecords(ctx context.Context, objectKey string, principal principalmodel.Principal, limit int) ([]recordmodel.Record, error) {

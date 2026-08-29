@@ -159,7 +159,7 @@ func TestOperationsOwnerExecutionFinalDefinitionAndReceiptEdges(t *testing.T) {
 		t.Fatalf("resource mismatch error = %v", err)
 	}
 
-	request := OperationsOwnerExecutionRequest{Kind: "scheduler.run.retry", ResourceType: "job_run", ResourceID: "run", Reason: "test", Key: "empty-result"}
+	request := OperationsOwnerExecutionRequest{Kind: "scheduler.run.retry", ResourceType: "scheduler_run", ResourceID: "run", Reason: "test", Key: "empty-result"}
 	ledger := &operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}
 	service = NewOperationsApplicationService(ledger, nil, nil, func() string { return "owner-result" })
 	if _, err := service.ExecuteOwnerOperation(t.Context(), request, principal, func(context.Context) (any, error) { return nil, nil }); err != nil {

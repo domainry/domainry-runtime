@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-	"time"
 
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -234,22 +233,6 @@ type workflowHTTPScheduler struct {
 	err    error
 }
 
-func (s *workflowHTTPScheduler) ProcessDueJobs(context.Context, int, principalmodel.Principal, string) (workflowmodel.WorkflowProcessResult, error) {
-	if len(s.result.Executions) > 0 || s.result.Processed != 0 {
-		return s.result, s.err
-	}
-	return workflowmodel.WorkflowProcessResult{Processed: 1}, s.err
-}
-
-func (s *workflowHTTPScheduler) WorkerConfig() workflowapplication.WorkflowSchedulerWorkerConfig {
-	return workflowapplication.WorkflowSchedulerWorkerConfig{PollInterval: time.Second, BatchSize: 10}
-}
-func (s *workflowHTTPScheduler) StartWorker(context.Context, workflowapplication.WorkflowSchedulerWorkerConfig, bool) <-chan struct{} {
-	done := make(chan struct{})
-	close(done)
-	return done
-}
-
 func newWorkflowHTTPRuntimeFixture() (*WorkflowsHandler, *workflowHTTPProcessStore, *workflowHTTPWorkerStore, *workflowHTTPScheduler, *workflowHTTPResponse) {
 	definitions := &workflowHTTPDefinitionStore{definitions: map[string]workflowmodel.WorkflowDefinition{}, versions: map[string]workflowmodel.WorkflowDefinitionVersion{}}
 	processes := &workflowHTTPProcessStore{processes: map[string]workflowmodel.WorkflowProcessInstance{}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}, tasks: map[string]workflowmodel.WorkflowTask{}, events: map[string][]workflowmodel.WorkflowProcessEvent{}}
@@ -258,7 +241,7 @@ func newWorkflowHTTPRuntimeFixture() (*WorkflowsHandler, *workflowHTTPProcessSto
 	registry := &workflowHTTPRegistry{items: map[string]definitionmodel.WorkflowSchema{"order.approve": workflowHTTPSchema("order.approve", "Order approve")}}
 	service := workflowapplication.NewWorkflowApplicationService(workflowapplication.WorkflowDependencies{
 		Definitions: definitions, Processes: processes, Workers: workers, Decisions: processes,
-		WorkflowRegistry: registry, WorkflowScheduler: scheduler, Schema: workflowHTTPSchemaProvider{},
+		WorkflowRegistry: registry, Schema: workflowHTTPSchemaProvider{},
 		ObjectMap: func(context.Context) map[string]definitionmodel.ObjectSchema {
 			return map[string]definitionmodel.ObjectSchema{}
 		},

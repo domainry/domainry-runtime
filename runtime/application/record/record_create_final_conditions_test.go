@@ -29,9 +29,9 @@ func TestRecordCreateAuthorizationSchedulerNilPayloadAndWritableEdges(t *testing
 	repository := &createRepositoryProbe{}
 	dependencies := recordCreateEdgeDependencies(repository)
 	dependencies.ObjectForAction = func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
-		return definitionmodel.ObjectSchema{Key: "job_run", Config: map[string]any{"scheduler_runtime": true}}, nil
+		return definitionmodel.ObjectSchema{Key: "record_timer", Config: map[string]any{"record_timer_runtime": true}}, nil
 	}
-	if _, err := NewRecordCreateApplicationService(dependencies).Create(t.Context(), "job_run", nil, principal); apperror.CodeOf(err) != "backend.scheduler.runtime_api_required" {
+	if _, err := NewRecordCreateApplicationService(dependencies).Create(t.Context(), "record_timer", nil, principal); apperror.CodeOf(err) != "backend.scheduler.runtime_api_required" {
 		t.Fatalf("scheduler guard error = %v", err)
 	}
 

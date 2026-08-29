@@ -7,13 +7,12 @@ import (
 	"strings"
 	"time"
 
-	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
+	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	metadatabusiness "github.com/domainry/domainry-runtime/runtime/domain/metadata/service"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
 
 func (p runtimeWorkflowSchemaProvider) WorkflowSchemaSnapshot(ctx context.Context, principal principalmodel.Principal) workflowapplication.WorkflowSchemaSnapshot {
@@ -52,27 +51,12 @@ func (p runtimeWorkflowSchemaProvider) ConnectorAdapterExists(ctx context.Contex
 }
 
 type runtimeWorkflowScheduler struct {
-	scheduler *schedulerapplication.SchedulerApplicationService
-}
-
-func (s runtimeWorkflowScheduler) ProcessDueJobs(ctx context.Context, limit int, principal principalmodel.Principal, trigger string) (workflowmodel.WorkflowProcessResult, error) {
-	return s.scheduler.ProcessDueJobs(ctx, limit, principal, trigger)
-}
-
-func (s runtimeWorkflowScheduler) WorkerConfig() workflowapplication.WorkflowSchedulerWorkerConfig {
-	cfg := s.scheduler.WorkerConfig()
-	return workflowapplication.WorkflowSchedulerWorkerConfig{Enabled: cfg.Enabled, PollInterval: cfg.PollInterval, BatchSize: cfg.BatchSize}
-}
-
-func (s runtimeWorkflowScheduler) StartWorker(ctx context.Context, cfg workflowapplication.WorkflowSchedulerWorkerConfig, hasDefinitions bool) <-chan struct{} {
-	base := s.scheduler.WorkerConfig()
-	base.Enabled, base.PollInterval, base.BatchSize = cfg.Enabled, cfg.PollInterval, cfg.BatchSize
-	return s.scheduler.StartWorker(ctx, base, hasDefinitions)
+	recordTimers *recordtimerapplication.RecordTimerApplicationService
 }
 
 func (s runtimeWorkflowScheduler) ScheduleWorkflowWaitTimer(ctx context.Context, request workflowapplication.WorkflowWaitTimerRequest) (string, error) {
 	contract := request.Contract
-	schedule := schedulerapplication.RecordTimerSchedule{
+	schedule := recordtimerapplication.RecordTimerSchedule{
 		TimerKey: strings.TrimSpace(contract.TimerKey), ObjectKey: "workflow_process", RecordID: request.ProcessID,
 		Purpose: strings.TrimSpace(contract.Purpose), SourceField: strings.TrimSpace(contract.SourceField), OffsetSeconds: contract.OffsetSeconds,
 		Timezone: strings.TrimSpace(contract.Timezone), BusinessCalendarKey: strings.TrimSpace(contract.BusinessCalendarKey),
@@ -104,7 +88,7 @@ func (s runtimeWorkflowScheduler) ScheduleWorkflowWaitTimer(ctx context.Context,
 	if nested, ok := request.Variables["after"].(map[string]any); ok {
 		sourceData = nested
 	}
-	timer, err := s.scheduler.ScheduleRecordTimer(ctx, request.WorkspaceID, schedule, recordmodel.Record{ID: request.RecordID, Data: sourceData}, schedulerapplication.StandardRecordTimerBusinessCalendar{}, request.CreatedAt, principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, fmt.Sprintf("schedule workflow timer %s", request.NodeID)))
+	timer, err := s.recordTimers.Schedule(ctx, request.WorkspaceID, schedule, recordmodel.Record{ID: request.RecordID, Data: sourceData}, recordtimerapplication.StandardRecordTimerBusinessCalendar{}, request.CreatedAt, principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, fmt.Sprintf("schedule workflow timer %s", request.NodeID)))
 	if err != nil {
 		return "", err
 	}
@@ -117,7 +101,7 @@ func (s runtimeWorkflowScheduler) ScheduleWorkflowApprovalDeadlineTimer(ctx cont
 		return "", fmt.Errorf("unsupported workflow approval deadline phase %q", phase)
 	}
 	payload, _ := json.Marshal(map[string]any{"process_id": request.ProcessID, "node_id": request.NodeID, "task_id": request.TaskID, "phase": phase})
-	timer, err := s.scheduler.ScheduleRecordTimer(ctx, request.WorkspaceID, schedulerapplication.RecordTimerSchedule{
+	timer, err := s.recordTimers.Schedule(ctx, request.WorkspaceID, recordtimerapplication.RecordTimerSchedule{
 		TimerKey: request.TaskID + ":" + phase, ObjectKey: "workflow_task", RecordID: request.TaskID,
 		Purpose: "approval_" + phase, ScheduleMode: "absolute", DueAt: request.DueAt, Timezone: "UTC",
 		TargetType: "workflow", TargetKey: "approval_deadline", PayloadJSON: string(payload), Sequence: request.CreatedAt.UnixNano(),

@@ -213,7 +213,7 @@ func TestRecordTimerCancellationDrainsEveryPage(t *testing.T) {
 	if err != nil || cancelled != 501 {
 		t.Fatalf("cancelled=%d err=%v", cancelled, err)
 	}
-	page, err := recordLegacyStore(store).ListRecords(t.Context(), "default", objects[4], recordmodel.RecordListQuery{Page: 1, PageSize: 1, Filters: map[string]any{"object_key": "source", "record_id": "source-1", "status": "scheduled"}})
+	page, err := recordLegacyStore(store).ListRecords(t.Context(), "default", schedulerRuntimeObjectByKey(t, objects, "record_timer"), recordmodel.RecordListQuery{Page: 1, PageSize: 1, Filters: map[string]any{"object_key": "source", "record_id": "source-1", "status": "scheduled"}})
 	if err != nil || page.Total != 0 {
 		t.Fatalf("scheduled timers after cancellation=%d err=%v", page.Total, err)
 	}
@@ -239,7 +239,8 @@ func TestRecordTimerFailureReleasesEntireClaimBatchAndStopsAtAttemptLimit(t *tes
 	if processed, err := service.ProcessDueRecordTimers(t.Context(), "default", now, 10, schedulerRuntimePrincipal(), schedulerRuntimeSystemScope()); err == nil || processed != 0 {
 		t.Fatalf("first failed batch processed=%d err=%v", processed, err)
 	}
-	page, err := recordLegacyStore(store).ListRecords(t.Context(), "default", objects[4], recordmodel.RecordListQuery{Page: 1, PageSize: 10, Sort: []recordmodel.RecordSortRule{{Field: "sequence", Direction: "asc"}}})
+	timerObject := schedulerRuntimeObjectByKey(t, objects, "record_timer")
+	page, err := recordLegacyStore(store).ListRecords(t.Context(), "default", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 10, Sort: []recordmodel.RecordSortRule{{Field: "sequence", Direction: "asc"}}})
 	if err != nil || len(page.Items) != 2 {
 		t.Fatalf("failed timers=%#v err=%v", page, err)
 	}
@@ -254,7 +255,7 @@ func TestRecordTimerFailureReleasesEntireClaimBatchAndStopsAtAttemptLimit(t *tes
 	if processed, err := service.ProcessDueRecordTimers(t.Context(), "default", now.Add(2*time.Second), 10, schedulerRuntimePrincipal(), schedulerRuntimeSystemScope()); err == nil || processed != 0 {
 		t.Fatalf("second failed attempt processed=%d err=%v", processed, err)
 	}
-	retried, found, err := recordLegacyStore(store).GetRecord(t.Context(), "default", objects[4], page.Items[1].ID)
+	retried, found, err := recordLegacyStore(store).GetRecord(t.Context(), "default", timerObject, page.Items[1].ID)
 	if err != nil || !found || retried.Data["status"] != "failed" || fmt.Sprint(retried.Data["attempt"]) != "2" {
 		t.Fatalf("exhausted retry timer=%#v found=%v err=%v", retried, found, err)
 	}

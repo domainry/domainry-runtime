@@ -309,13 +309,8 @@ func TestWorkflowSchedulerTimerModeAndFailureEdges(t *testing.T) {
 		Manifest:     manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "record_timer", Name: "Record timer"}}},
 		Dependencies: RuntimeServicesDependencies{Records: repository},
 	})
-	scheduler := runtimeWorkflowScheduler{scheduler: runtime.schedulerService}
+	scheduler := runtimeWorkflowScheduler{recordTimers: runtime.recordTimerService}
 	createdAt := time.Date(2026, 7, 27, 10, 0, 0, 0, time.UTC)
-	_, _ = scheduler.ProcessDueJobs(t.Context(), 1, principalmodel.Principal{}, "test")
-	_ = scheduler.WorkerConfig()
-	cancelledWorker, cancelWorker := context.WithCancel(t.Context())
-	cancelWorker()
-	_ = scheduler.StartWorker(cancelledWorker, workflowapplication.WorkflowSchedulerWorkerConfig{}, false)
 	request := workflowapplication.WorkflowWaitTimerRequest{
 		WorkspaceID: "default", ProcessID: "process", NodeID: "timer", ObjectKey: "order", RecordID: "order-1",
 		CreatedAt: createdAt, Variables: map[string]any{"starts_at": createdAt.Format(time.RFC3339Nano)},

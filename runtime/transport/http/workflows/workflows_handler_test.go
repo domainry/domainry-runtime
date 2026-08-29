@@ -59,7 +59,7 @@ func TestWorkflowHTTPIntQuery(t *testing.T) {
 }
 
 func TestWorkflowExecutionListAndProcessHandlers(t *testing.T) {
-	handler, _, workers, scheduler, response := newWorkflowHTTPRuntimeFixture()
+	handler, _, workers, _, response := newWorkflowHTTPRuntimeFixture()
 	workers.executions["execution-1"] = workflowmodel.WorkflowExecution{ID: "execution-1", WorkspaceID: "workspace-1", WorkflowKey: "order.approve", Status: "completed", Payload: map[string]any{"object_key": "order", "record_id": "record-1"}}
 	writer, request := workflowHTTPRequest(http.MethodGet, "/workflow-executions?limit=25", "", nil)
 	handler.listWorkflowExecutions(writer, request)
@@ -81,8 +81,7 @@ func TestWorkflowExecutionListAndProcessHandlers(t *testing.T) {
 	if response.err == nil || response.value != nil {
 		t.Fatalf("list error value=%#v err=%v", response.value, response.err)
 	}
-	workers.err = nil
-	scheduler.err = errWorkflowHTTPTest
+	workers.err = errWorkflowHTTPTest
 	resetWorkflowHTTPResponse(response)
 	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow-executions/process", "", nil)
 	handler.processWorkflowExecutions(writer, request)

@@ -340,8 +340,9 @@ func RecordValidateInternalMutationPolicy(policy RecordInternalMutationPolicy, o
 	switch policy {
 	case RecordInternalMutationSchedulerRuntime:
 		allowed := map[string]bool{
-			"scheduler_cursor": true, "job_run": true, "job_run_event": true, "job_dead_letter": true, "record_timer": true,
-			"report_query_run": true, "report_export_audit": true, "download_task": true, "report_definition": true,
+			"record_timer":       true,
+			"record_timer_event": true,
+			"report_query_run":   true, "report_export_audit": true, "download_task": true, "report_definition": true,
 		}
 		if allowed[strings.TrimSpace(object.Key)] {
 			return nil

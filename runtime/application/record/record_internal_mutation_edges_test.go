@@ -28,8 +28,8 @@ func (r *internalMutationEdgeRepository) UpdateRecord(_ context.Context, _ strin
 }
 
 func TestInternalMutationUpdateAndRepositoryFailures(t *testing.T) {
-	object := definitionmodel.ObjectSchema{Key: "job_run"}
-	record := recordmodel.Record{ID: "run-1"}
+	object := definitionmodel.ObjectSchema{Key: "record_timer"}
+	record := recordmodel.Record{ID: "timer-1"}
 	repository := &internalMutationEdgeRepository{}
 	service := NewRecordInternalMutationApplicationService(RecordInternalMutationDependencies{Repository: repository})
 	if err := service.Update(t.Context(), "workspace-a", RecordInternalMutationSchedulerRuntime, object, record, "runtime progress"); err != nil || repository.updated.ID != record.ID {

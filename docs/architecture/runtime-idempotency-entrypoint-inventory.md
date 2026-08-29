@@ -5,7 +5,7 @@
 
 Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `optimistic_only`, `not_applicable`.
 
-## HTTP mutation routes (186)
+## HTTP mutation routes (187)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -178,6 +178,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `scheduler` | `POST /tenant-admin/scheduler/definitions/validate` | `not_applicable` | none | `runtime/transport/http/scheduler/scheduler_routes.go` |
 | `scheduler` | `POST /tenant-admin/scheduler/definitions/{definitionID}/simulate` | `not_applicable` | none | `runtime/transport/http/scheduler/scheduler_routes.go` |
 | `scheduler` | `POST /tenant-admin/scheduler/schedules/preview` | `not_applicable` | none | `runtime/transport/http/scheduler/scheduler_routes.go` |
+| `scheduler` | `POST /v1/scheduler-triggers:accept` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/scheduler/scheduler_routes.go` |
 | `surfacecontext` | `POST /surfaces/{surfaceKey}/context` | `not_applicable` | none | `runtime/transport/http/surfacecontext/surfacecontext_routes.go` |
 | `uploads` | `POST /files` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/uploads/uploads_routes.go` |
 | `workflows` | `POST /business/workflow/processes/{processID}/retry` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
@@ -196,7 +197,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workflows` | `POST /tenant-admin/workflows/{workflowKey}/simulate` | `not_applicable` | none | `runtime/transport/http/workflows/workflows_routes.go` |
 | `workflows` | `POST /tenant-admin/workflows/{workflowKey}/validate` | `not_applicable` | none | `runtime/transport/http/workflows/workflows_routes.go` |
 
-## Application mutation commands (218)
+## Application mutation commands (217)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -380,18 +381,17 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `record` | `UpdateRecord` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_import_facade.go` |
 | `record` | `UpdateRecordIdempotent` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_import_facade.go` |
 | `recordmutation` | `Dispatch` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/recordmutation/record_mutation_application_service.go` |
+| `recordtimer` | `ProcessDueForAllWorkspaces` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/recordtimer/record_timer_application_service.go` |
+| `recordtimer` | `ResolveFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/recordtimer/record_timer_application_service.go` |
+| `recordtimer` | `RetryFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/recordtimer/record_timer_application_service.go` |
 | `report` | `CancelExportJob` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/report/report_export_batch_application.go` |
 | `scheduler` | `CancelRecordTimers` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/scheduler/scheduler_record_timer_core.go` |
-| `scheduler` | `CancelRun` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/scheduler/scheduler_operations.go` |
-| `scheduler` | `ProcessClaimedRun` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/scheduler/scheduler_runtime_availability_application_service.go` |
-| `scheduler` | `ProcessDueJobs` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/scheduler/scheduler_runtime_timer.go` |
-| `scheduler` | `ProcessDueRecordTimers` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/scheduler/scheduler_runtime_timer.go` |
-| `scheduler` | `ProcessDueRecordTimersForAllWorkspaces` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/scheduler/scheduler_runtime_timer.go` |
+| `scheduler` | `DispatchOwnedTrigger` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/scheduler/scheduler_external_dispatch.go` |
+| `scheduler` | `ProcessDueRecordTimers` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/scheduler/scheduler_record_timer_processing.go` |
+| `scheduler` | `ProcessDueRecordTimersForAllWorkspaces` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/scheduler/scheduler_record_timer_processing.go` |
 | `scheduler` | `PublishedDefinitions` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/scheduler/scheduler_application_service.go` |
-| `scheduler` | `ResolveDeadLetter` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/scheduler/scheduler_operations.go` |
-| `scheduler` | `RetryRun` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/scheduler/scheduler_operations.go` |
-| `scheduler` | `RunJob` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/scheduler/scheduler_operations.go` |
-| `scheduler` | `RuntimeAvailable` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/scheduler/scheduler_runtime_availability_application_service.go` |
+| `scheduler` | `ResolveRecordTimerFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/scheduler/scheduler_record_timer_recovery.go` |
+| `scheduler` | `RetryRecordTimerFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/scheduler/scheduler_record_timer_recovery.go` |
 | `seed` | `Apply` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/seed/business/business_seed_authoring_application_service.go` |
 | `upload` | `RecordUploaded` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/upload/upload_access_application_service.go` |
 | `workflow` | `CancelWorkflowProcess` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_process_application_service.go` |

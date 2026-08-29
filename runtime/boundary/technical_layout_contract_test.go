@@ -38,13 +38,13 @@ var applicationTopLevelDirectories = technicalLayoutStringSet(
 	"action", "agent", "audit", "automation", "businessevent", "businesssystem", "capability", "changeplan", "contractcheck",
 	"deployment", "integration", "lifecycle", "metadata", "notificationfacade", "operations", "pipeline", "preference", "principal", "record", "report", "ruleset", "scheduler",
 	"party",
-	"recordmutation", "seed", "surfacecontext", "upload", "workflow",
+	"recordmutation", "recordtimer", "seed", "surfacecontext", "upload", "workflow",
 )
 
 var applicationProductionBaselines = map[string]int{
 	".": 0, "action": 43, "agent": 6, "audit": 3, "automation": 8, "businesssystem": 4, "capability": 17,
 	"businessevent": 1, "changeplan": 14, "deployment": 8, "integration": 70, "lifecycle": 5, "metadata": 14, "notificationfacade": 4, "operations": 9,
-	"pipeline": 4, "preference": 1, "record": 18, "recordmutation": 4, "report": 5, "ruleset": 1, "scheduler": 12, "surfacecontext": 2, "workflow": 26,
+	"pipeline": 4, "preference": 1, "record": 18, "recordmutation": 4, "recordtimer": 1, "report": 5, "ruleset": 1, "scheduler": 12, "surfacecontext": 2, "workflow": 26,
 	"party": 3, "principal": 1,
 	"upload": 4,
 	"seed":   0, "seed/automation": 2, "seed/business": 2,

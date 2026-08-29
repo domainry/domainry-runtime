@@ -68,7 +68,7 @@ func TestGeneratedGlobalCapabilitySchemaAndMerges(t *testing.T) {
 	if len(manifest.Workflows) != 2 || manifest.Workflows[0].Name != "Custom retention" {
 		t.Fatalf("workflows=%+v", manifest.Workflows)
 	}
-	if len(manifest.Objects) != 6 || manifest.Objects[0].Key != "customer" || manifest.Objects[5].Key != "record_timer" || manifest.Objects[5].Name != "Record Timer" {
+	if len(manifest.Objects) != 3 || manifest.Objects[0].Key != "customer" || manifest.Objects[1].Key != "record_timer" || manifest.Objects[1].Name != "Record Timer" || manifest.Objects[2].Key != "record_timer_event" {
 		t.Fatalf("canonical system objects=%+v", manifest.Objects)
 	}
 	if len(manifest.Dictionaries[1].Items) == 0 || manifest.Workflows[1].Graph == nil {

@@ -22,6 +22,7 @@ import (
 	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
 	pipelineapplication "github.com/domainry/domainry-runtime/runtime/application/pipeline"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
+	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	reportapplication "github.com/domainry/domainry-runtime/runtime/application/report"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	surfacecontextbusiness "github.com/domainry/domainry-runtime/runtime/application/surfacecontext"
@@ -148,6 +149,7 @@ type runtimeAssembly struct {
 	reportsService                      *reportapplication.ReportApplicationService
 	reportExportControls                []reportmodel.ReportExportControlSchema
 	schedulerService                    *schedulerapplication.SchedulerApplicationService
+	recordTimerService                  *recordtimerapplication.RecordTimerApplicationService
 	agentTaskRunService                 *agentapplication.AgentTaskRunApplicationService
 	agentInteractiveRunService          *agentapplication.AgentInteractiveRunApplicationService
 	newAgentInteractiveExecution        func(*agentapplication.AgentToolGateway) *agentapplication.AgentInteractiveExecutionApplicationService

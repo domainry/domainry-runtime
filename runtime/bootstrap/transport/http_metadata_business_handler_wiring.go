@@ -37,7 +37,7 @@ func (a *httpServerAssembly) wireOperationsApplication() {
 	useDirectAuthoringProjection(operationsService, records.Applications().AuthoringCapabilities)
 	_ = operationsService.RegisterDiagnostics(operationsStore, a.dependencies.RuntimeInstanceID)
 	_ = operationsService.RegisterBreakGlass(operationsStore, operationsBreakGlassAuditAlert{audit: records.Applications().Audit})
-	registerOperationsDeadLetterOwners(operationsService, records.Applications().Integrations, records.Applications().Workflows, records.Applications().Scheduler, records.Applications().Records)
+	registerOperationsDeadLetterOwners(operationsService, records.Applications().Integrations, records.Applications().Workflows, a.dependencies.SchedulerBinding, records.Applications().RecordTimers, records.Applications().Records)
 	a.operations = operationsService
 }
 

@@ -15,7 +15,7 @@ const (
 
 var auditOperationsClassMarkers = []string{
 	"break_glass", "support_session", "security", "recovery", "retry", "dead_letter", "lease", "fencing",
-	"worker", "infrastructure", "runtime_operation", "scheduler_run", "job_run", "integration_event",
+	"worker", "infrastructure", "runtime_operation", "scheduler_run", "integration_event",
 	"integration_outbox", "workflow_execution", "cleanup_job",
 }
 

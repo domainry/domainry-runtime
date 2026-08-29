@@ -4,20 +4,22 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
-	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
+	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
-func registerOperationsDeadLetterOwners(service *operationsapplication.OperationsApplicationService, integrations *integrationapplication.IntegrationApplicationService, workflows *workflowapplication.WorkflowApplicationService, scheduler *schedulerapplication.SchedulerApplicationService, records *recordapplication.RecordApplicationService) {
+func registerOperationsDeadLetterOwners(service *operationsapplication.OperationsApplicationService, integrations *integrationapplication.IntegrationApplicationService, workflows *workflowapplication.WorkflowApplicationService, scheduler schedulerDeadLetterService, recordTimers recordTimerDeadLetterService, records *recordapplication.RecordApplicationService) {
 	if service == nil {
 		return
 	}
@@ -31,10 +33,59 @@ func registerOperationsDeadLetterOwners(service *operationsapplication.Operation
 	if scheduler != nil {
 		_ = service.RegisterDeadLetterOwner("scheduler", schedulerDeadLetterOwner{service: scheduler})
 	}
+	if recordTimers != nil {
+		_ = service.RegisterDeadLetterOwner("record_timer", recordTimerDeadLetterOwner{service: recordTimers})
+	}
 	if records != nil {
 		_ = service.RegisterDeadLetterOwner("record_batch", recordBatchDeadLetterOwner{service: records})
 	}
 }
+
+type recordTimerDeadLetterService interface {
+	InspectFailure(context.Context, string, principalmodel.Principal) (recordmodel.Record, error)
+	RetryFailure(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error)
+	ResolveFailure(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error)
+}
+
+type recordTimerDeadLetterOwner struct{ service recordTimerDeadLetterService }
+
+func (o recordTimerDeadLetterOwner) Inspect(ctx context.Context, id string, principal principalmodel.Principal) (operationsapplication.OperationsDeadLetterItem, error) {
+	record, err := o.service.InspectFailure(ctx, id, principal)
+	return recordTimerDeadLetterItem(record), err
+}
+
+func (o recordTimerDeadLetterOwner) Act(ctx context.Context, id, action, reason, _ string, principal principalmodel.Principal) (operationsapplication.OperationsDeadLetterItem, error) {
+	var record recordmodel.Record
+	var err error
+	switch action {
+	case operationsapplication.OperationsDeadLetterRetry:
+		record, err = o.service.RetryFailure(ctx, id, reason, principal)
+	case operationsapplication.OperationsDeadLetterResolve, operationsapplication.OperationsDeadLetterAck:
+		record, err = o.service.ResolveFailure(ctx, id, reason, principal)
+	default:
+		err = deadLetterActionUnsupported()
+	}
+	return recordTimerDeadLetterItem(record), err
+}
+
+func recordTimerDeadLetterItem(record recordmodel.Record) operationsapplication.OperationsDeadLetterItem {
+	data := record.Data
+	return operationsapplication.OperationsDeadLetterItem{
+		Owner: "record_timer", ID: record.ID, ResourceType: "record_timer", Status: strings.TrimSpace(valueString(data, "status")),
+		FailureCode: valueString(data, "last_error"), BusinessKey: strings.Trim(strings.Join([]string{valueString(data, "object_key"), valueString(data, "record_id"), valueString(data, "purpose")}, ":"), ":"),
+		EvidenceRef: "record_timer_event:" + record.ID, AllowedActions: []string{"resolve", "retry", "ack"},
+		Details: map[string]any{"target_type": valueString(data, "target_type"), "target_key": valueString(data, "target_key"), "attempt": data["attempt"], "max_attempts": data["max_attempts"], "fencing_token": data["fencing_token"]}, UpdatedAt: record.UpdatedAt,
+	}
+}
+
+func valueString(data map[string]any, key string) string {
+	if data == nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(data[key]))
+}
+
+var _ recordTimerDeadLetterService = (*recordtimerapplication.RecordTimerApplicationService)(nil)
 
 type recordBatchDeadLetterOwner struct {
 	service recordBatchDeadLetterService
@@ -174,26 +225,26 @@ type schedulerDeadLetterOwner struct {
 }
 
 type schedulerDeadLetterService interface {
-	InspectDeadLetter(context.Context, string, principalmodel.Principal) (recordmodel.Record, error)
-	ResolveDeadLetter(context.Context, string, string, string, principalmodel.Principal) (schedulerapplication.SchedulerOperationResult, error)
-	RequeueDeadLetter(context.Context, string, string, string, principalmodel.Principal) (schedulerapplication.SchedulerOperationResult, error)
+	DeadLetter(context.Context, string) (schedulersdk.DeadLetter, error)
+	ResolveDeadLetter(context.Context, string, string) (schedulersdk.DeadLetter, error)
+	RequeueDeadLetter(context.Context, string, string) (schedulersdk.Run, error)
 }
 
 func (o schedulerDeadLetterOwner) Inspect(ctx context.Context, id string, principal principalmodel.Principal) (operationsapplication.OperationsDeadLetterItem, error) {
-	record, err := o.service.InspectDeadLetter(ctx, id, principal)
+	record, err := o.service.DeadLetter(ctx, id)
 	if err != nil {
 		return operationsapplication.OperationsDeadLetterItem{}, err
 	}
-	return operationsapplication.OperationsDeadLetterItem{Owner: "scheduler", ID: record.ID, ResourceType: "job_dead_letter", Status: fmt.Sprint(record.Data["status"]), FailureCode: fmt.Sprint(record.Data["last_error"]), CorrelationID: fmt.Sprint(record.Data["job_run_id"]), BusinessKey: fmt.Sprint(record.Data["scheduler_definition_key"]), EvidenceRef: "job_dead_letter:" + record.ID, AllowedActions: []string{"resolve", "retry", "ack"}, Details: map[string]any{"reason": record.Data["reason"]}, UpdatedAt: record.UpdatedAt}, nil
+	return operationsapplication.OperationsDeadLetterItem{Owner: "scheduler", ID: record.RunID, ResourceType: "scheduler_dead_letter", Status: record.Status, FailureCode: record.Reason, CorrelationID: record.RunID, BusinessKey: record.DefinitionKey, EvidenceRef: "scheduler_dead_letter:" + record.RunID, AllowedActions: []string{"resolve", "retry", "ack"}, Details: map[string]any{"reason": record.Reason}, UpdatedAt: record.FailedAt.UTC().Format(time.RFC3339Nano)}, nil
 }
 func (o schedulerDeadLetterOwner) Act(ctx context.Context, id, action, reason, key string, principal principalmodel.Principal) (operationsapplication.OperationsDeadLetterItem, error) {
 	switch action {
 	case operationsapplication.OperationsDeadLetterRetry:
-		if _, err := o.service.RequeueDeadLetter(ctx, id, reason, key, principal); err != nil {
+		if _, err := o.service.RequeueDeadLetter(ctx, id, reason); err != nil {
 			return operationsapplication.OperationsDeadLetterItem{}, err
 		}
 	case operationsapplication.OperationsDeadLetterResolve, operationsapplication.OperationsDeadLetterAck:
-		if _, err := o.service.ResolveDeadLetter(ctx, id, reason, key, principal); err != nil {
+		if _, err := o.service.ResolveDeadLetter(ctx, id, reason); err != nil {
 			return operationsapplication.OperationsDeadLetterItem{}, err
 		}
 	default:

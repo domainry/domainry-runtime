@@ -8,6 +8,7 @@ import (
 
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
+	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -159,6 +160,7 @@ func metadataDefinitionReferenceSource(
 func initializeWorkflowAutomationAndGovernance(s *runtimeAssembly, deps RuntimeServicesDependencies) {
 	schedulerRuntime := newSchedulerOperationRuntimeAdapter(s)
 	s.schedulerService = newSchedulerApplicationService(s, schedulerRuntime, s.recordRepo, s.auditApplicationService, s.workerDependencies)
+	s.recordTimerService = recordtimerapplication.NewRecordTimerApplicationService(s.schedulerService)
 	s.schedulerService.UseNotificationCompiler(s.workflowNotificationCompiler)
 	if s.metadataRepo != nil {
 		s.schedulerService.UseDefinitionSource(schedulerMetadataDefinitionSource{repository: s.metadataRepo})

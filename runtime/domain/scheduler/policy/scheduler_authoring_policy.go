@@ -68,14 +68,15 @@ func schedulerCommandAuthoringCapability(key, lifecycle, resourceParameter, rout
 		Key: key, Status: "supported", Lifecycle: lifecycle, Parameters: parameters, Requires: []string{"scheduler.business_job"}, Permissions: []string{"scheduler.command"},
 		ConfigurationRoutes: []string{route}, FrontendSupportKey: "scheduler.command.v1", InputSchema: schedulerObjectSchema(parameters), OutputSchema: schedulerOperationOutputSchema(),
 		OutputVariables: []capabilitycontract.CapabilityAuthoringOutput{{Name: "status", JSONPointer: "/status", Type: "string", VisibleTo: "subsequent_capability_calls"}, {Name: "run", JSONPointer: "/run", Type: "scheduler_run", VisibleTo: "subsequent_capability_calls"}},
-		Execution:       &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"metadata.scheduler_definition", "scheduler_cursor", "job_run"}, WriteSet: []string{"scheduler_cursor", "job_run", "job_run_event", "job_dead_letter"}, Transaction: "scheduler_owner_operation", Idempotency: "idempotency_key", SideEffects: []string{"scheduler_operation_audit"}, SideEffectLevel: "internal", PermissionModel: "scheduler.command"},
+		Execution:       &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"metadata.scheduler_definition", "scheduler_service.schedule", "scheduler_service.run"}, WriteSet: []string{"scheduler_service.run", "scheduler_service.dead_letter"}, Transaction: "scheduler_owner_operation", Idempotency: "idempotency_key", SideEffects: []string{"scheduler_operation_audit"}, SideEffectLevel: "external", Compensation: "issue an explicit owner retry, cancel, resolve, or reschedule command; never roll back Scheduler evidence", PermissionModel: "scheduler.command"},
 		Examples:        schedulerCommandExamples(resourceParameter, idempotencyRequired),
 		Sources:         []capabilitycontract.CapabilityAuthoringSource{{Kind: "service", Path: "runtime/application/scheduler/scheduler_operations.go", Symbol: schedulerCommandSymbol(key)}, {Kind: "transport", Path: "runtime/transport/http/scheduler/scheduler_routes.go", Symbol: "RegisterRoutes"}},
 	}
 	if key == "scheduler.job.simulate" {
 		capability.SimulationEndpoint = route
-		capability.Execution.WriteSet = []string{"job_run", "job_run_event"}
-		capability.Execution.Idempotency = "simulation_run_identity"
+		capability.Execution.WriteSet = nil
+		capability.Execution.Idempotency = "naturally_idempotent"
+		capability.Execution.SideEffectLevel = "none"
 	}
 	return capability
 }

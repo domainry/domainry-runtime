@@ -17,7 +17,7 @@ func TestExecuteOwnerOperationPersistsTerminalReceiptAndNeverRepeatsOwner(t *tes
 	repository := &operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}
 	service := NewOperationsApplicationService(repository, nil, nil, func() string { return "owner-operation" })
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
-	request := OperationsOwnerExecutionRequest{Kind: "scheduler.run.retry", ResourceType: "job_run", ResourceID: "run-1", Reason: "recover failed run", Key: "retry-1", Payload: map[string]any{"attempt": 2}}
+	request := OperationsOwnerExecutionRequest{Kind: "scheduler.run.retry", ResourceType: "scheduler_run", ResourceID: "run-1", Reason: "recover failed run", Key: "retry-1", Payload: map[string]any{"attempt": 2}}
 	calls := 0
 	execute := func(context.Context) (any, error) {
 		calls++

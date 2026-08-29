@@ -204,9 +204,9 @@ func TestPlanCreateMutationCoversInputAuthorizationReplayAndPlannerEdges(t *test
 	t.Run("scheduler runtime object", func(t *testing.T) {
 		dependencies := recordCreateEdgeDependencies(&createRepositoryProbe{})
 		dependencies.ObjectForAction = func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
-			return definitionmodel.ObjectSchema{Key: "job_run", Config: map[string]any{"scheduler_runtime": true}}, nil
+			return definitionmodel.ObjectSchema{Key: "record_timer", Config: map[string]any{"record_timer_runtime": true}}, nil
 		}
-		_, _, err := NewRecordCreateApplicationService(dependencies).PlanCreateMutation(t.Context(), "job_run", nil, "", principal)
+		_, _, err := NewRecordCreateApplicationService(dependencies).PlanCreateMutation(t.Context(), "record_timer", nil, "", principal)
 		if apperror.CodeOf(err) != "backend.scheduler.runtime_api_required" {
 			t.Fatalf("err=%v", err)
 		}

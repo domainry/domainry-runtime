@@ -43,7 +43,7 @@ func TestWorkflowWaitDurationUsesDurableRecordTimerAndResumesAfterFire(t *testin
 	if err != nil || process.Status != "waiting" || len(process.CurrentNodeIDs) != 1 || process.CurrentNodeIDs[0] != "wait" {
 		t.Fatalf("waiting process=%#v err=%v", process, err)
 	}
-	timerObject := schedulerprojection.SchedulerSystemObjects()[4]
+	timerObject := schedulerRuntimeObjectByKey(t, schedulerprojection.SchedulerSystemObjects(), "record_timer")
 	timers, err := recordLegacyStore(store).ListRecords(t.Context(), "default", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 10})
 	if err != nil || timers.Total != 1 || timers.Items[0].Data["status"] != "scheduled" {
 		t.Fatalf("durable workflow timer page=%#v err=%v", timers, err)
@@ -96,7 +96,7 @@ func TestWorkflowApprovalDeadlineUsesDurableRecordTimerForEscalation(t *testing.
 	if err != nil || process.Status != "waiting" {
 		t.Fatalf("approval process=%#v err=%v", process, err)
 	}
-	timerObject := schedulerprojection.SchedulerSystemObjects()[4]
+	timerObject := schedulerRuntimeObjectByKey(t, schedulerprojection.SchedulerSystemObjects(), "record_timer")
 	timers, err := recordLegacyStore(store).ListRecords(t.Context(), "default", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 10})
 	if err != nil || timers.Total != 1 || timers.Items[0].Data["target_key"] != "approval_deadline" || timers.Items[0].Data["purpose"] != "approval_escalation" {
 		t.Fatalf("approval timers=%#v err=%v", timers, err)

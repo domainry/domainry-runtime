@@ -131,46 +131,6 @@ func TestInstallationOwnerCleanupPreservesCurrentMetadataVersion(t *testing.T) {
 
 }
 
-func TestSchedulerOwnerCleanupArchivesChildrenAndBlocksActiveDeadLetter(t *testing.T) {
-	store := openLifecycleStore(t)
-	objects := []definitionmodel.ObjectSchema{
-		{Key: "job_run", Config: map[string]any{"scheduler_runtime": true}, Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}},
-		{Key: "job_run_event", Config: map[string]any{"scheduler_runtime": true}, Fields: []definitionmodel.FieldSchema{{Key: "job_run_id", Type: "text"}, {Key: "event_type", Type: "text"}}},
-		{Key: "job_dead_letter", Config: map[string]any{"scheduler_runtime": true}, Fields: []definitionmodel.FieldSchema{{Key: "job_run_id", Type: "text"}, {Key: "status", Type: "text"}}},
-	}
-	manifest := manifestmodel.ManifestSchema{TemplateID: "scheduler-lifecycle", Version: "1", Name: "Scheduler lifecycle", Objects: objects}
-	if err := metadatapersistence.NewMetadataStore(store).SyncManifest(t.Context(), principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "scheduler lifecycle test"), manifest); err != nil {
-		t.Fatal(err)
-	}
-	now := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
-	old := lifecycleTime(now.Add(-48 * time.Hour))
-	for _, item := range []struct{ id, status string }{{"run-purge", "succeeded"}, {"run-blocked", "dead_letter"}} {
-		if _, err := store.DB().ExecContext(t.Context(), "INSERT INTO job_run (workspace_id, id, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?)", "workspace-a", item.id, old, old, item.status); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if _, err := store.DB().ExecContext(t.Context(), "INSERT INTO job_run_event (workspace_id, id, created_at, updated_at, job_run_id, event_type) VALUES (?, ?, ?, ?, ?, ?)", "workspace-a", "event-1", old, old, "run-purge", "completed"); err != nil {
-		t.Fatal(err)
-	}
-	for _, item := range []struct{ id, run, status string }{{"dead-resolved", "run-purge", "resolved"}, {"dead-open", "run-blocked", "open"}} {
-		if _, err := store.DB().ExecContext(t.Context(), "INSERT INTO job_dead_letter (workspace_id, id, created_at, updated_at, job_run_id, status) VALUES (?, ?, ?, ?, ?, ?)", "workspace-a", item.id, old, old, item.run, item.status); err != nil {
-			t.Fatal(err)
-		}
-	}
-	executor := ownerExecutorForTest(t, DefaultOwnerExecutors(store, objects...), "scheduler")
-	policy := lifecyclemodel.PolicyVersion{Policy: lifecyclemodel.RetentionPolicy{Key: "scheduler.execution.v1", Version: "1", Owner: "scheduler", DefaultRetention: time.Hour, StatusRetention: map[string]time.Duration{"succeeded": time.Hour, "failed": time.Hour}}}
-	result, err := executor.ProcessBatch(t.Context(), lifecyclemodel.CleanupJob{ID: "scheduler-cleanup", WorkspaceID: "workspace-a", Operation: lifecyclemodel.OperationPurge, UpdatedAt: now}, policy, nil, 20)
-	if err != nil || result.Archived != 3 || result.Purged != 3 || result.Skipped != 1 {
-		t.Fatalf("result=%#v err=%v", result, err)
-	}
-	for table, want := range map[string]int{"job_run": 1, "job_run_event": 0, "job_dead_letter": 1} {
-		var count int
-		if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+table+" WHERE workspace_id = ?", "workspace-a").Scan(&count); err != nil || count != want {
-			t.Fatalf("table=%s count=%d want=%d err=%v", table, count, want, err)
-		}
-	}
-}
-
 func TestReportOwnerCleanupExpiresThenPurgesInReferenceOrder(t *testing.T) {
 	store := openLifecycleStore(t)
 	if err := agentpersistence.NewAgentSchemaMigration(store).EnsureSchema(t.Context()); err != nil {

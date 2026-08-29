@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/domainry/domainry-foundation/mutation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 )
 
 type recordTimerCalendarProbe struct{ called bool }
@@ -76,15 +76,18 @@ func TestRecordTimerRetryPolicyDefaultsValidationAndBackoff(t *testing.T) {
 func TestFailRecordTimerReleasesLeaseRetriesAndFencesStaleWorker(t *testing.T) {
 	now := time.Date(2026, 7, 21, 9, 0, 0, 0, time.UTC)
 	object := definitionmodel.ObjectSchema{Key: "record_timer"}
-	schema := schedulerSchemaStub{snapshot: metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{object}}}
+	schema := schedulerSchemaStub{snapshot: metadatamodel.MetadataSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{object, {Key: "record_timer_event"}}}}
 	var saved recordmodel.Record
 	var conditions map[string]any
-	repository := &schedulerRepositoryFake{update: func(_ context.Context, workspaceID string, actualObject definitionmodel.ObjectSchema, record recordmodel.Record, actualConditions map[string]any) (bool, error) {
-		if workspaceID != "workspace-a" || actualObject.Key != "record_timer" {
-			t.Fatalf("failure persistence workspace=%q object=%q", workspaceID, actualObject.Key)
+	repository := &schedulerRepositoryFake{commit: func(_ context.Context, workspaceID string, commits []transactionmodel.RecordMutationCommit) error {
+		if workspaceID != "workspace-a" || len(commits) != 2 || commits[0].Object.Key != "record_timer" || commits[1].Object.Key != "record_timer_event" {
+			t.Fatalf("failure persistence workspace=%q commits=%#v", workspaceID, commits)
 		}
-		saved, conditions = record, actualConditions
-		return true, nil
+		saved, conditions = commits[0].Record, commits[0].Conditions
+		if commits[1].Record.Data["record_timer_id"] != "timer-1" || commits[1].Record.Data["event_type"] == "" {
+			t.Fatalf("record timer event=%#v", commits[1].Record)
+		}
+		return nil
 	}}
 	service := NewSchedulerApplicationService(schema, nil, repository, nil)
 	lease := RecordTimerLease{Owner: "worker-a", Token: 7, Record: recordmodel.Record{ID: "timer-1", Data: map[string]any{
@@ -106,12 +109,6 @@ func TestFailRecordTimerReleasesLeaseRetriesAndFencesStaleWorker(t *testing.T) {
 	}
 	if saved.Data["status"] != "failed" || saved.Data["failed_at"] != now.Format(time.RFC3339Nano) {
 		t.Fatalf("terminal failed timer=%#v", saved)
-	}
-	repository.update = func(context.Context, string, definitionmodel.ObjectSchema, recordmodel.Record, map[string]any) (bool, error) {
-		return false, nil
-	}
-	if err := service.FailRecordTimer(t.Context(), "workspace-a", lease, errors.New("injected"), now, schedulerRuntimeScope()); !mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
-		t.Fatalf("stale failure transition=%v", err)
 	}
 	if err := service.FailRecordTimer(t.Context(), "workspace-a", lease, nil, now, schedulerRuntimeScope()); err == nil {
 		t.Fatal("nil execution failure accepted")

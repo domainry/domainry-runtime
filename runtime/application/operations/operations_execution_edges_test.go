@@ -162,7 +162,7 @@ func TestExecuteOwnerOperationRejectsRunningReplayWithoutRepeatingOwner(t *testi
 	repository := &operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}
 	service := NewOperationsApplicationService(repository, nil, nil, func() string { return "running-owner" })
 	principal := operationsAdminPrincipal()
-	request := OperationsOwnerExecutionRequest{Kind: "scheduler.run.retry", ResourceType: "job_run", ResourceID: "run-1", Reason: "recover", Key: "retry", Payload: map[string]any{"attempt": 2}}
+	request := OperationsOwnerExecutionRequest{Kind: "scheduler.run.retry", ResourceType: "scheduler_run", ResourceID: "run-1", Reason: "recover", Key: "retry", Payload: map[string]any{"attempt": 2}}
 	receipt, _, err := service.Submit(t.Context(), OperationsSubmitRequest{Kind: request.Kind, Permission: "workspace.admin", ResourceType: request.ResourceType, ResourceID: request.ResourceID, Reason: request.Reason, Payload: request.Payload}, request.Key, principal)
 	if err != nil {
 		t.Fatal(err)
@@ -183,7 +183,7 @@ func TestExecuteOwnerOperationValidationMarshalAndPersistenceFailures(t *testing
 	if _, err := service.ExecuteOwnerOperation(t.Context(), OperationsOwnerExecutionRequest{Kind: "backup.restore", ResourceType: "job_run"}, principal, func(context.Context) (any, error) { return nil, nil }); apperror.CodeOf(err) != "backend.operations.definition_mismatch" {
 		t.Fatalf("definition err=%v", err)
 	}
-	request := OperationsOwnerExecutionRequest{Kind: "scheduler.run.retry", ResourceType: "job_run", ResourceID: "run-1", Reason: "recover", Key: "retry"}
+	request := OperationsOwnerExecutionRequest{Kind: "scheduler.run.retry", ResourceType: "scheduler_run", ResourceID: "run-1", Reason: "recover", Key: "retry"}
 	if _, err := service.ExecuteOwnerOperation(t.Context(), request, principalmodel.Principal{}, func(context.Context) (any, error) { return nil, nil }); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("authorization err=%v", err)
 	}

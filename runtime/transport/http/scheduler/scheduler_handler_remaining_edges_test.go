@@ -44,6 +44,7 @@ func TestSchedulerTenantAndOpsReadSurfaceRemainingEdges(t *testing.T) {
 				result := &schedulerHTTPResult{}
 				handler := newSchedulerHTTPHandler(result)
 				handler.service = service
+				handler.binding = service
 				handler.principal = func(*http.Request) principalmodel.Principal { return principal }
 				writer, request := schedulerHTTPRequest("", test.path)
 				test.invoke(handler, writer, request)
@@ -102,6 +103,7 @@ func TestSchedulerOpsMutationSurfaceRemainingEdges(t *testing.T) {
 				result := &schedulerHTTPResult{}
 				handler := newSchedulerHTTPHandler(result)
 				handler.service = service
+				handler.binding = service
 				writer, request := schedulerHTTPRequest(test.body, test.path)
 				request.Header.Set("Idempotency-Key", " command-a ")
 				test.invoke(handler, writer, request)
@@ -137,7 +139,9 @@ func TestSchedulerOpsDeadLetterOptionalBodyEdges(t *testing.T) {
 			for _, nilBody := range []bool{false, true} {
 				result := &schedulerHTTPResult{}
 				handler := newSchedulerHTTPHandler(result)
-				handler.service = &fakeSchedulerService{result: schedulerapplication.SchedulerOperationResult{Status: "ok"}}
+				service := &fakeSchedulerService{result: schedulerapplication.SchedulerOperationResult{Status: "ok"}}
+				handler.service = service
+				handler.binding = service
 				writer, request := schedulerHTTPRequest("", map[string]string{"deadLetterID": "dead-a"})
 				if nilBody {
 					request.Body = nil
@@ -150,7 +154,9 @@ func TestSchedulerOpsDeadLetterOptionalBodyEdges(t *testing.T) {
 
 			result := &schedulerHTTPResult{}
 			handler := newSchedulerHTTPHandler(result)
-			handler.service = &fakeSchedulerService{}
+			service := &fakeSchedulerService{}
+			handler.service = service
+			handler.binding = service
 			writer, request := schedulerHTTPRequest("{", map[string]string{"deadLetterID": "dead-a"})
 			test.invoke(handler, writer, request)
 			if result.status != http.StatusBadRequest || result.err == nil {

@@ -163,9 +163,6 @@ func TestOwnerChildFailurePaths(t *testing.T) {
 		func(e OwnerExecutor) (int64, int64, error) {
 			return e.archiveWorkflowProcessChildren(t.Context(), job, policy, "process", true)
 		},
-		func(e OwnerExecutor) (int64, int64, error) {
-			return e.archiveSchedulerRunChildren(t.Context(), job, policy, cleanupSpec{schedulerEventTable: "events"}, "run", true)
-		},
 	} {
 		for _, state := range []*lifecycleSQLState{
 			{querySteps: []lifecycleSQLQueryStep{{err: errLifecycleSQL}}},
@@ -180,9 +177,6 @@ func TestOwnerChildFailurePaths(t *testing.T) {
 	}
 	_, _, _ = scriptedOwner(t, &lifecycleSQLState{}, "x").archiveIntegrationEventMappingIntents(t.Context(), job, policy, "event", false)
 	_, _, _ = scriptedOwner(t, &lifecycleSQLState{}, "x").archiveIntegrationEventMappingIntents(t.Context(), job, policy, "event", true)
-	_, _, _ = scriptedOwner(t, &lifecycleSQLState{}, "x").archiveSchedulerRunChildren(t.Context(), job, policy, cleanupSpec{}, "run", false)
-	_, _, _ = scriptedOwner(t, &lifecycleSQLState{querySteps: []lifecycleSQLQueryStep{{}}}, "x").archiveSchedulerRunChildren(t.Context(), job, policy, cleanupSpec{schedulerEventTable: "events"}, "run", false)
-	_, _, _ = scriptedOwner(t, &lifecycleSQLState{querySteps: []lifecycleSQLQueryStep{{}}}, "x").archiveSchedulerRunChildren(t.Context(), job, policy, cleanupSpec{schedulerEventTable: "events"}, "run", true)
 	_, _, _ = scriptedOwner(t, &lifecycleSQLState{querySteps: []lifecycleSQLQueryStep{{}, {}, {}}}, "x").archiveWorkflowProcessChildren(t.Context(), job, policy, "process", false)
 	_, _, _ = scriptedOwner(t, &lifecycleSQLState{querySteps: []lifecycleSQLQueryStep{{}, {}, {}}}, "x").archiveWorkflowProcessChildren(t.Context(), job, policy, "process", true)
 	chunk := lifecycleSQLQueryStep{columns: []string{"sequence", "content", "created"}, rows: [][]driver.Value{{int64(1), "x", "now"}}}
@@ -198,9 +192,6 @@ func TestOwnerChildFailurePaths(t *testing.T) {
 	}
 	_, _, _ = scriptedOwner(t, &lifecycleSQLState{}, "x").archiveRecordBatchChunks(t.Context(), job, policy, "batch", false)
 	_, _, _ = scriptedOwner(t, &lifecycleSQLState{}, "x").archiveRecordBatchChunks(t.Context(), job, policy, "batch", true)
-	for _, state := range []*lifecycleSQLState{{querySteps: []lifecycleSQLQueryStep{{err: errLifecycleSQL}}}, {querySteps: []lifecycleSQLQueryStep{{columns: []string{"count"}, rows: [][]driver.Value{{int64(1)}}}}}} {
-		_, _ = scriptedOwner(t, state, "x").schedulerRunHasActiveDeadLetter(t.Context(), "w", "dead", "run")
-	}
 }
 
 func TestOwnerProcessSpecFailurePaths(t *testing.T) {
@@ -232,15 +223,6 @@ func TestOwnerProcessSpecFailurePaths(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dead := base
-	dead.schedulerDeadLetterTable = "dead"
-	for _, state := range []*lifecycleSQLState{
-		{querySteps: []lifecycleSQLQueryStep{candidate(now.Format(time.RFC3339Nano)), {err: errLifecycleSQL}}},
-		{querySteps: []lifecycleSQLQueryStep{candidate(now.Format(time.RFC3339Nano)), {columns: []string{"count"}, rows: [][]driver.Value{{int64(1)}}}}},
-	} {
-		_, _ = scriptedOwner(t, state, "x").processSpec(t.Context(), job, policy, dead, nil, now, 1)
-	}
-
 	referenced := base
 	referenced.referenceChecks = []cleanupReferenceCheck{{table: "refs", referenceColumn: "id"}}
 	for _, state := range []*lifecycleSQLState{
@@ -256,7 +238,6 @@ func TestOwnerProcessSpecFailurePaths(t *testing.T) {
 		{policyKey: "p", table: "record_batch_jobs", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "updated_at"},
 		{policyKey: "p", table: "integration_events", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "updated_at"},
 		{policyKey: "p", table: "workflow_process_instances", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "updated_at", workflowProcessChildren: true},
-		{policyKey: "p", table: "job_run", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "updated_at", schedulerEventTable: "events"},
 	} {
 		state := &lifecycleSQLState{querySteps: []lifecycleSQLQueryStep{candidate(now.Format(time.RFC3339Nano)), exists, {err: errLifecycleSQL}}}
 		_, _ = scriptedOwner(t, state, "x").processSpec(t.Context(), job, policy, spec, nil, now, 1)

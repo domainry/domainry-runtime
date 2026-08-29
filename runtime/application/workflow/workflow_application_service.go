@@ -26,7 +26,6 @@ type WorkflowApplicationService struct {
 	definitionRepo            workflowcontract.WorkflowDefinitionStore
 	processRepo               workflowcontract.WorkflowProcessStore
 	workerRepo                workflowcontract.WorkflowWorkerStore
-	scheduler                 WorkflowScheduler
 	registry                  WorkflowRegistry
 	processEngine             *WorkflowProcessEngine
 	objectForAction           func(context.Context, principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error)
@@ -111,7 +110,7 @@ func newWorkflowApplicationService(dependencies WorkflowDependencies, processEng
 	return &WorkflowApplicationService{
 		definitionRepo: dependencies.Definitions,
 		processRepo:    dependencies.Processes, workerRepo: dependencies.Workers,
-		scheduler: dependencies.WorkflowScheduler, registry: dependencies.WorkflowRegistry,
+		registry:        dependencies.WorkflowRegistry,
 		processEngine:   processEngine,
 		objectForAction: dependencies.ObjectForAction, audit: dependencies.Audit, auditMetadata: dependencies.AuditMetadata,
 		decisions:  processEngine.DecisionRuntime(),
@@ -216,22 +215,7 @@ func (s *WorkflowApplicationService) ProcessWorkflowExecutions(ctx context.Conte
 	if !workflowpolicy.WorkflowPermissionAllows(principal, "process") {
 		return workflowmodel.WorkflowProcessResult{}, forbidden("backend.workflow.process_permission_required")
 	}
-	return s.scheduler.ProcessDueJobs(ctx, limit, workflowWorkerPrincipal(), "manual")
-}
-
-func (s *WorkflowApplicationService) StartWorker(ctx context.Context, interval time.Duration, limit int) <-chan struct{} {
-	cfg := s.scheduler.WorkerConfig()
-	hasDefinitions := s.registry.Count() > 0
-	if hasDefinitions {
-		cfg.Enabled = true
-	}
-	if interval > 0 {
-		cfg.PollInterval = interval
-	}
-	if limit > 0 {
-		cfg.BatchSize = limit
-	}
-	return s.scheduler.StartWorker(ctx, cfg, hasDefinitions)
+	return s.ProcessDueWorkflowExecutions(ctx, limit, workflowWorkerPrincipal())
 }
 
 func authorizeOpsWorkflowProcessRead(principal principalmodel.Principal) error {

@@ -15,6 +15,7 @@ import (
 	lifecycleapplication "github.com/domainry/domainry-runtime/runtime/application/lifecycle"
 	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
+	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	reportapplication "github.com/domainry/domainry-runtime/runtime/application/report"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	surfacecontextbusiness "github.com/domainry/domainry-runtime/runtime/application/surfacecontext"
@@ -47,18 +48,23 @@ type RuntimeApplications struct {
 	BusinessChangePlans   *changeplanapplication.ChangePlanApplicationService
 	Reports               *reportapplication.ReportApplicationService
 	Scheduler             *schedulerapplication.SchedulerApplicationService
+	RecordTimers          *recordtimerapplication.RecordTimerApplicationService
 }
 
 // Applications exposes the assembled application services through one typed
 // composition access point.
 func (s *runtimeAssembly) Applications() RuntimeApplications {
 	if s == nil {
-		return RuntimeApplications{Scheduler: newSchedulerApplicationService(nil, nil, nil, nil, workerplatform.Dependencies{})}
+		scheduler := newSchedulerApplicationService(nil, nil, nil, nil, workerplatform.Dependencies{})
+		return RuntimeApplications{Scheduler: scheduler, RecordTimers: recordtimerapplication.NewRecordTimerApplicationService(scheduler)}
 	}
 	scheduler := s.schedulerService
 	if scheduler == nil {
-
 		scheduler = newSchedulerApplicationService(nil, nil, nil, nil, workerplatform.Dependencies{})
+	}
+	recordTimers := s.recordTimerService
+	if recordTimers == nil {
+		recordTimers = recordtimerapplication.NewRecordTimerApplicationService(scheduler)
 	}
 	return RuntimeApplications{
 		AgentTasks:            s.agentTaskRunService,
@@ -83,12 +89,14 @@ func (s *runtimeAssembly) Applications() RuntimeApplications {
 		BusinessChangePlans:   s.businessChangePlans,
 		Reports:               s.reportsService,
 		Scheduler:             scheduler,
+		RecordTimers:          recordTimers,
 	}
 }
 
 func (s *RuntimeServices) Applications() RuntimeApplications {
 	if s == nil {
-		return RuntimeApplications{Scheduler: newSchedulerApplicationService(nil, nil, nil, nil, workerplatform.Dependencies{})}
+		scheduler := newSchedulerApplicationService(nil, nil, nil, nil, workerplatform.Dependencies{})
+		return RuntimeApplications{Scheduler: scheduler, RecordTimers: recordtimerapplication.NewRecordTimerApplicationService(scheduler)}
 	}
 	return s.applications
 }

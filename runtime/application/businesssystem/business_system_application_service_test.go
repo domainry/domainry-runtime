@@ -320,18 +320,4 @@ func TestBusinessSystemRemainingProjectionOutcomes(t *testing.T) {
 		t.Fatalf("frontend=%+v", frontend)
 	}
 
-	want := errors.New("job runs unavailable")
-	dependencies = businessSystemTestDependencies()
-	dependencies.Runtime.SchemaObjectMap = func(context.Context) map[string]definitionmodel.ObjectSchema {
-		return map[string]definitionmodel.ObjectSchema{"job_run": {Key: "job_run"}}
-	}
-	dependencies.Runtime.ListRecords = func(_ context.Context, objectKey string, _ recordmodel.RecordListQuery, _ principalmodel.Principal) (recordmodel.RecordPageResult, error) {
-		if objectKey == "job_run" {
-			return recordmodel.RecordPageResult{}, want
-		}
-		return recordmodel.RecordPageResult{}, nil
-	}
-	if _, err := NewBusinessSystemApplicationService(dependencies).schedulerStateSnapshot(t.Context(), principal); !errors.Is(err, want) {
-		t.Fatalf("scheduler error=%v", err)
-	}
 }

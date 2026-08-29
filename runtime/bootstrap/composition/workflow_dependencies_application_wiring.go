@@ -74,9 +74,8 @@ func workflowDependencies(records *runtimeAssembly) workflowapplication.Workflow
 		Workers:                records.workflowWorkerRepo,
 		Decisions:              records.workflowDecisionRepo,
 		WorkflowRegistry:       runtimeWorkflowRegistry{records: records},
-		WorkflowScheduler:      runtimeWorkflowScheduler{scheduler: records.schedulerService},
-		TimerScheduler:         runtimeWorkflowScheduler{scheduler: records.schedulerService},
-		ApprovalTimers:         runtimeWorkflowScheduler{scheduler: records.schedulerService},
+		TimerScheduler:         runtimeWorkflowScheduler{recordTimers: records.recordTimerService},
+		ApprovalTimers:         runtimeWorkflowScheduler{recordTimers: records.recordTimerService},
 		CompileNotification:    records.workflowNotificationCompiler,
 		TaskNotificationCommit: records.workflowTaskNotificationCommitter,
 		PrepareAgentTask: func(ctx context.Context, preparation workflowapplication.WorkflowAgentTaskPreparation) (agentmodel.AgentTaskRun, error) {

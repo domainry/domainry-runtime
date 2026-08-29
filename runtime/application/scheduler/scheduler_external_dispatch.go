@@ -2,16 +2,18 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
 
 // DispatchOwnedTrigger executes downstream Runtime semantics for a run whose
 // lifecycle and durable evidence are owned by the extracted Scheduler. It must
-// not create, lease or finish Runtime job_run records.
+// not create, lease or finish Scheduler-owned run records.
 func (s *SchedulerApplicationService) DispatchOwnedTrigger(ctx context.Context, definition recordmodel.Record, runID string, scheduledFor time.Time, limit int, principal principalmodel.Principal) (string, error) {
 	if s == nil || s.runtime == nil {
 		return "", schedulerErrorUnavailable("backend.scheduler.runtime_operation_executor_unavailable")
@@ -55,4 +57,16 @@ func (s *SchedulerApplicationService) DispatchOwnedTrigger(ctx context.Context, 
 	default:
 		return "", badRequest("backend.scheduler.unsupported_target_type", "target_type", schedulerDefinitionTargetType(definition))
 	}
+}
+
+func (s *SchedulerApplicationService) processWorkflowTarget(ctx context.Context, definition, run recordmodel.Record, limit int, principal principalmodel.Principal) (workflowmodel.WorkflowProcessResult, error) {
+	target := strings.TrimSpace(fmt.Sprint(definition.Data["target_key"]))
+	scheduledFor, parseErr := time.Parse(time.RFC3339Nano, existingStringBefore(run, "scheduled_for"))
+	if windowed, ok := s.runtime.(WindowedTargetedSchedulerOperationRuntime); ok && parseErr == nil {
+		return windowed.ProcessDueWorkflowExecutionsForScheduledWindow(ctx, target, scheduledFor.UTC(), limit, principal)
+	}
+	if targeted, ok := s.runtime.(TargetedSchedulerOperationRuntime); ok {
+		return targeted.ProcessDueWorkflowExecutionsForTarget(ctx, target, limit, principal)
+	}
+	return s.runtime.ProcessDueWorkflowExecutions(ctx, limit, principal)
 }

@@ -16,6 +16,7 @@ import (
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 type schedulerHTTPResult struct {
@@ -39,6 +40,50 @@ type fakeSchedulerService struct {
 	preview schedulerapplication.SchedulerDefinitionPreview
 	err     error
 }
+
+func (*fakeSchedulerService) Descriptor() schedulersdk.Descriptor { return schedulersdk.Descriptor{} }
+func (*fakeSchedulerService) Reconcile(context.Context) error     { return nil }
+func (*fakeSchedulerService) Preview(context.Context, schedulersdk.Schedule, time.Time, int) ([]time.Time, error) {
+	return nil, nil
+}
+func (*fakeSchedulerService) Tick(context.Context, time.Time, int) (int, error) { return 0, nil }
+func (f *fakeSchedulerService) TriggerNow(_ context.Context, resource, _ string) (schedulersdk.Run, error) {
+	f.call = schedulerServiceCall{operation: "run", resource: resource, key: "command-a"}
+	return schedulersdk.Run{Trigger: schedulersdk.Trigger{RunID: "run-a", DefinitionKey: resource}}, f.err
+}
+func (f *fakeSchedulerService) Reschedule(_ context.Context, resource string, _ time.Time, _ string) error {
+	f.call = schedulerServiceCall{operation: "reschedule", resource: resource, key: "command-a"}
+	return f.err
+}
+func (*fakeSchedulerService) Runs(context.Context, int) ([]schedulersdk.Run, error) { return nil, nil }
+func (*fakeSchedulerService) Run(context.Context, string) (schedulersdk.Run, error) {
+	return schedulersdk.Run{}, nil
+}
+func (f *fakeSchedulerService) RetryRun(_ context.Context, resource, _ string) (schedulersdk.Run, error) {
+	f.call = schedulerServiceCall{operation: "retry", resource: resource, key: "command-a"}
+	return schedulersdk.Run{Trigger: schedulersdk.Trigger{RunID: resource}}, f.err
+}
+func (f *fakeSchedulerService) CancelRun(_ context.Context, resource, _ string) (schedulersdk.Run, error) {
+	f.call = schedulerServiceCall{operation: "cancel", resource: resource, key: "command-a"}
+	return schedulersdk.Run{Trigger: schedulersdk.Trigger{RunID: resource}}, f.err
+}
+func (*fakeSchedulerService) DeadLetter(context.Context, string) (schedulersdk.DeadLetter, error) {
+	return schedulersdk.DeadLetter{}, nil
+}
+func (f *fakeSchedulerService) ResolveDeadLetter(_ context.Context, resource, note string) (schedulersdk.DeadLetter, error) {
+	f.call = schedulerServiceCall{operation: "resolve", resource: resource, key: "command-a", note: note}
+	return schedulersdk.DeadLetter{RunID: resource}, f.err
+}
+func (f *fakeSchedulerService) RequeueDeadLetter(_ context.Context, resource, note string) (schedulersdk.Run, error) {
+	f.call = schedulerServiceCall{operation: "requeue", resource: resource, key: "command-a", note: note}
+	return schedulersdk.Run{Trigger: schedulersdk.Trigger{RunID: resource}}, f.err
+}
+func (*fakeSchedulerService) Start(context.Context, schedulersdk.WorkerConfig) <-chan struct{} {
+	done := make(chan struct{})
+	close(done)
+	return done
+}
+func (*fakeSchedulerService) Close(context.Context) error { return nil }
 
 func (f *fakeSchedulerService) TenantAdminDefinitions(_ context.Context, principal principalmodel.Principal) ([]schedulerapplication.TenantAdminSchedulerDefinitionDTO, error) {
 	f.call = schedulerServiceCall{operation: "tenant_definitions", principal: principal}
@@ -95,32 +140,7 @@ func (f *fakeSchedulerService) SimulateTenantAdminDefinition(_ context.Context, 
 	return f.result, f.err
 }
 
-func (f *fakeSchedulerService) RunJob(_ context.Context, resource, key string, principal principalmodel.Principal) (schedulerapplication.SchedulerOperationResult, error) {
-	f.call = schedulerServiceCall{operation: "run", resource: resource, key: key, principal: principal}
-	return f.result, f.err
-}
-
-func (f *fakeSchedulerService) RescheduleDefinition(_ context.Context, resource string, nextRunAt time.Time, principal principalmodel.Principal) (schedulerapplication.SchedulerOperationResult, error) {
-	f.call = schedulerServiceCall{operation: "reschedule", resource: resource, data: map[string]any{"next_run_at": nextRunAt.UTC().Format(time.RFC3339)}, principal: principal}
-	return f.result, f.err
-}
-
-func (f *fakeSchedulerService) RetryRun(_ context.Context, resource, key string, principal principalmodel.Principal) (schedulerapplication.SchedulerOperationResult, error) {
-	f.call = schedulerServiceCall{operation: "retry", resource: resource, key: key, principal: principal}
-	return f.result, f.err
-}
-
-func (f *fakeSchedulerService) CancelRun(_ context.Context, resource, key string, principal principalmodel.Principal) (schedulerapplication.SchedulerOperationResult, error) {
-	f.call = schedulerServiceCall{operation: "cancel", resource: resource, key: key, principal: principal}
-	return f.result, f.err
-}
-
-func (f *fakeSchedulerService) ResolveDeadLetter(_ context.Context, resource, note, key string, principal principalmodel.Principal) (schedulerapplication.SchedulerOperationResult, error) {
-	f.call = schedulerServiceCall{operation: "resolve", resource: resource, key: key, note: note, principal: principal}
-	return f.result, f.err
-}
-
-func (f *fakeSchedulerService) RequeueDeadLetter(_ context.Context, resource, note, key string, principal principalmodel.Principal) (schedulerapplication.SchedulerOperationResult, error) {
+func (f *fakeSchedulerService) RequeueDeadLetterLegacy(_ context.Context, resource, note, key string, principal principalmodel.Principal) (schedulerapplication.SchedulerOperationResult, error) {
 	f.call = schedulerServiceCall{operation: "requeue", resource: resource, key: key, note: note, principal: principal}
 	return f.result, f.err
 }
@@ -153,6 +173,7 @@ func TestSchedulerHandlersWriteSuccessfulResultsAndNormalizeInputs(t *testing.T)
 	result := &schedulerHTTPResult{}
 	handler := newSchedulerHTTPHandler(result)
 	handler.service = service
+	handler.binding = service
 	handler.principal = func(*http.Request) principalmodel.Principal { return principal }
 
 	tests := []struct {
@@ -186,8 +207,12 @@ func TestSchedulerHandlersWriteSuccessfulResultsAndNormalizeInputs(t *testing.T)
 			if result.status != http.StatusOK || result.err != nil {
 				t.Fatalf("status=%d error=%v", result.status, result.err)
 			}
-			if service.call.operation != test.operation || service.call.resource != test.resource || service.call.principal.WorkspaceID != principal.WorkspaceID || service.call.principal.UserID != principal.UserID {
+			if service.call.operation != test.operation || service.call.resource != test.resource {
 				t.Fatalf("call=%+v", service.call)
+			}
+			ownerOperation := test.operation == "run" || test.operation == "reschedule" || test.operation == "retry" || test.operation == "cancel" || test.operation == "resolve"
+			if !ownerOperation && (service.call.principal.WorkspaceID != principal.WorkspaceID || service.call.principal.UserID != principal.UserID) {
+				t.Fatalf("principal call=%+v", service.call)
 			}
 			if service.call.note != test.note {
 				t.Fatalf("note=%q want %q", service.call.note, test.note)
@@ -200,11 +225,8 @@ func TestSchedulerHandlersWriteSuccessfulResultsAndNormalizeInputs(t *testing.T)
 				if service.call.data["schedule_type"] != "interval" {
 					t.Fatalf("schedule preview data=%v", service.call.data)
 				}
-			} else if (test.operation == "run" || test.operation == "retry" || test.operation == "cancel" || test.operation == "resolve") && service.call.key != "command-a" {
+			} else if (test.operation == "run" || test.operation == "reschedule" || test.operation == "retry" || test.operation == "cancel" || test.operation == "resolve") && service.call.key != "command-a" {
 				t.Fatalf("key=%q", service.call.key)
-			}
-			if test.operation == "reschedule" && service.call.data["next_run_at"] != "2026-08-22T09:00:00Z" {
-				t.Fatalf("reschedule data=%v", service.call.data)
 			}
 		})
 	}
@@ -216,6 +238,7 @@ func TestSchedulerHandlersPropagateFakeServiceErrors(t *testing.T) {
 	result := &schedulerHTTPResult{}
 	handler := newSchedulerHTTPHandler(result)
 	handler.service = service
+	handler.binding = service
 	tests := []struct {
 		name string
 		body string

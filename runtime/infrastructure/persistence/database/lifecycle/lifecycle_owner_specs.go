@@ -93,19 +93,6 @@ func DefaultOwnerExecutors(store *database.RuntimeStore, objects ...definitionmo
 		executors[index] = recordExecutor
 		break
 	}
-	if object, ok := objectMap["job_run"]; ok && lifecycleConfigEnabled(object.Config, "scheduler_runtime") {
-		eventTable, deadLetterTable := "", ""
-		if _, exists := objectMap["job_run_event"]; exists {
-			eventTable = "job_run_event"
-		}
-		if _, exists := objectMap["job_dead_letter"]; exists {
-			deadLetterTable = "job_dead_letter"
-		}
-		executors = append(executors, OwnerExecutor{store: store, owner: "scheduler", specs: []cleanupSpec{
-			{policyKey: "scheduler.execution.v1", table: "job_run", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "updated_at", statusColumn: "status", eligibleStatuses: []string{"succeeded", "cancelled"}, retentionGroup: "succeeded", schedulerEventTable: eventTable, schedulerDeadLetterTable: deadLetterTable},
-			{policyKey: "scheduler.execution.v1", table: "job_run", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "updated_at", statusColumn: "status", eligibleStatuses: []string{"failed", "dead_letter"}, retentionGroup: "failed", schedulerEventTable: eventTable, schedulerDeadLetterTable: deadLetterTable},
-		}})
-	}
 	reportSpecs := []cleanupSpec{{policyKey: "report.download.v1", table: "report_export_artifacts", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "expires_at"}}
 	if _, ok := objectMap["download_task"]; ok {
 		reportSpecs = append(reportSpecs, cleanupSpec{policyKey: "report.download.v1", table: "download_task", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "updated_at", statusColumn: "status", eligibleStatuses: []string{"expired", "failed", "cancelled"}})

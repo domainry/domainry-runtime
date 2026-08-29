@@ -29,6 +29,7 @@ func StartWorkers(ctx context.Context, runtime *Runtime) {
 	// Runtime construction can bind the lease to a shorter activation context.
 	runtime.startRuntimeReleaseHeartbeat(ctx)
 	runtime.startSchedulerWorker(ctx)
+	runtime.startRecordTimerWorker(ctx)
 	runtime.startAgentTaskWorker(ctx)
 	runtime.StartWorkflowWorker(ctx)
 	runtime.StartIntegrationEventWorker(ctx)
@@ -45,6 +46,39 @@ func StartWorkers(ctx context.Context, runtime *Runtime) {
 	if runtime.api != nil {
 		runtime.api.MarkStartupComplete()
 	}
+}
+
+func (a *Runtime) startRecordTimerWorker(ctx context.Context) {
+	if a == nil || a.records == nil || runtimeWorkerApplications(a.records).RecordTimers == nil {
+		return
+	}
+	a.startControlledWorker(ctx, "record_timer", func(workerCtx context.Context) <-chan struct{} {
+		interval := a.cfg.EffectiveWorkerPollInterval()
+		if interval <= 0 {
+			interval = time.Second
+		}
+		maxInterval := interval * 30
+		if maxInterval < 30*time.Second {
+			maxInterval = 30 * time.Second
+		}
+		batch := a.cfg.EffectiveWorkerBatchSize()
+		if batch <= 0 {
+			batch = 25
+		}
+		service := runtimeWorkerApplications(a.records).RecordTimers
+		return workerplatform.StartAdaptiveLoop(workerCtx, "record_timer", interval, maxInterval, func() bool {
+			return runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "record timer worker failed", func() (bool, error) {
+				processed, err := service.ProcessDueForAllWorkspaces(
+					workerCtx,
+					time.Time{},
+					batch,
+					workflowapplication.WorkflowWorkerPrincipal(),
+					principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "process due record timers"),
+				)
+				return processed > 0, err
+			})
+		})
+	})
 }
 
 func (a *Runtime) startAgentTaskWorker(ctx context.Context) {
