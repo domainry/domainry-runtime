@@ -6,6 +6,7 @@ import (
 
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/failure"
 
@@ -76,6 +77,18 @@ func (s *RuntimeStore) EnsureRuntimeColumn(ctx context.Context, table, column, d
 }
 
 func (s *RuntimeStore) MetadataIDColumnType() string { return s.metadataIDColumnType() }
+func (s *RuntimeStore) RuntimeTableExists(ctx context.Context, table string) (bool, error) {
+	base := s.sqlBase()
+	query := base.RuntimeEngine.TableExistsQuery(base.SQLRenderer, base.DatabaseSchema, strings.TrimSpace(table))
+	if strings.TrimSpace(query.Statement) == "" {
+		return false, fmt.Errorf("database engine does not support table inspection")
+	}
+	var count int
+	if err := s.schemaDatabase().QueryRowContext(ctx, query.Statement, query.Arguments...).Scan(&count); err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
 func (s *RuntimeStore) LocalizedTextKeyColumnType() string {
 	if s.Driver() == "mysql" {
 		return "VARCHAR(128)"

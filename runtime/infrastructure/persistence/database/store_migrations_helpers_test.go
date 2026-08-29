@@ -72,7 +72,7 @@ func TestMigrationHelpersCoverDialectAndFilesystemEdges(t *testing.T) {
 
 func TestMigrationBackupAndTableDiscoveryRejectInvalidInputs(t *testing.T) {
 	for _, test := range []struct{ driver, evidence, want string }{
-		{driver: "sqlite", want: "unsupported database driver"},
+		{driver: "sqlite", want: "MIGRATION_BACKUP_EVIDENCE_PATH"},
 		{driver: "postgres", want: "MIGRATION_BACKUP_EVIDENCE_PATH"},
 		{driver: "mysql", evidence: filepath.Join(t.TempDir(), "missing.json"), want: "read backup evidence"},
 	} {

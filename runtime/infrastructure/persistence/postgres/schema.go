@@ -27,6 +27,9 @@ func (engineProfile) ApplicationTablesQuery(renderer ormdialect.Renderer, databa
 func (engineProfile) WorkspaceTablesQuery(renderer ormdialect.Renderer, databaseSchema string) persistencedriver.SchemaQuery {
 	return persistencedriver.SchemaQuery{Statement: "SELECT DISTINCT table_name FROM information_schema.columns WHERE table_schema = " + renderer.Placeholder(1) + " AND column_name = 'workspace_id' ORDER BY table_name", Arguments: []any{databaseSchema}}
 }
+func (engineProfile) TableExistsQuery(renderer ormdialect.Renderer, databaseSchema, table string) persistencedriver.SchemaQuery {
+	return persistencedriver.SchemaQuery{Statement: "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = " + renderer.Placeholder(1) + " AND table_name = " + renderer.Placeholder(2), Arguments: []any{databaseSchema, table}}
+}
 
 func (engineProfile) WorkspaceRLSSupported() bool             { return true }
 func (engineProfile) OrderedDecimalTextStorage() bool         { return false }

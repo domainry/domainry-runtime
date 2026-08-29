@@ -21,6 +21,9 @@ func (schemaHelperStore) CreateIndexIfMissing(context.Context, string, string, b
 func (schemaHelperStore) EnsureRuntimeColumn(context.Context, string, string, string) error {
 	return nil
 }
+func (schemaHelperStore) RuntimeTableExists(context.Context, string) (bool, error) {
+	return false, nil
+}
 func (schemaHelperStore) MetadataIDColumnType() string       { return "TEXT" }
 func (schemaHelperStore) LocalizedTextKeyColumnType() string { return "TEXT" }
 func (schemaHelperStore) RuntimeColumnDefinition(value string) string {

@@ -73,8 +73,9 @@ func (s *RuntimeStore) migrationBackupChecksum(path string) (string, error) {
 }
 
 func validateExternalMigrationBackup(driver, evidencePath string) (migrationcontract.BackupEvidence, error) {
-	if driver != "postgres" && driver != "mysql" {
-		return migrationcontract.BackupEvidence{}, fmt.Errorf("unsupported database driver %q", driver)
+	driver = strings.TrimSpace(driver)
+	if driver == "" {
+		return migrationcontract.BackupEvidence{}, fmt.Errorf("migration backup evidence engine is required")
 	}
 	if strings.TrimSpace(evidencePath) == "" {
 		return migrationcontract.BackupEvidence{}, fmt.Errorf("existing %s application data detected before pending migrations; MIGRATION_BACKUP_EVIDENCE_PATH with a verified backup_id is required", driver)

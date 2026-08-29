@@ -43,3 +43,6 @@ func (engineProfile) ApplicationTablesQuery(ormdialect.Renderer, string) persist
 func (engineProfile) WorkspaceTablesQuery(ormdialect.Renderer, string) persistencedriver.SchemaQuery {
 	return persistencedriver.SchemaQuery{Statement: "SELECT DISTINCT m.name FROM sqlite_master m JOIN pragma_table_info(m.name) p WHERE m.type = 'table' AND p.name = 'workspace_id' ORDER BY m.name"}
 }
+func (engineProfile) TableExistsQuery(renderer ormdialect.Renderer, _, table string) persistencedriver.SchemaQuery {
+	return persistencedriver.SchemaQuery{Statement: "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = " + renderer.Placeholder(1), Arguments: []any{table}}
+}

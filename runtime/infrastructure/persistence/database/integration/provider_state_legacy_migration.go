@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -36,21 +35,7 @@ func (r IntegrationConfigStore) MigrateLegacyConnectorProviderStates(ctx context
 }
 
 func (r IntegrationConfigStore) legacyProviderStateTableExists(ctx context.Context, table string) (bool, error) {
-	var count int
-	var err error
-	switch r.driver {
-	case "postgres":
-		schema := strings.TrimSpace(r.store.DatabaseSchema())
-		if schema == "" {
-			schema = "public"
-		}
-		err = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema="+r.store.Placeholder(1)+" AND table_name="+r.store.Placeholder(2), schema, table).Scan(&count)
-	case "mysql":
-		err = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name="+r.store.Placeholder(1), table).Scan(&count)
-	default:
-		err = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name="+r.store.Placeholder(1), table).Scan(&count)
-	}
-	return count > 0, err
+	return r.store.RuntimeTableExists(ctx, table)
 }
 
 func (r IntegrationConfigStore) migrateLegacyProviderStateTable(ctx context.Context, table, task, columns string) error {

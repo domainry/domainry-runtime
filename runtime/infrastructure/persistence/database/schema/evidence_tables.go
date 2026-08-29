@@ -374,22 +374,9 @@ func backfillWorkerQueueScopes(ctx context.Context, s Store, queueKind, table st
 
 func runtimeSchemaTableExists(ctx context.Context, s Store, table string) (bool, error) {
 	table = strings.TrimSpace(table)
-	var count int
-	var err error
-	switch s.Driver() {
-	case "postgres":
-		schema := strings.TrimSpace(s.DatabaseSchema())
-		if schema == "" {
-			schema = "public"
-		}
-		err = s.SchemaDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = "+s.Placeholder(1)+" AND table_name = "+s.Placeholder(2), schema, table).Scan(&count)
-	case "mysql":
-		err = s.SchemaDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = "+s.Placeholder(1), table).Scan(&count)
-	default:
-		err = s.SchemaDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = "+s.Placeholder(1), table).Scan(&count)
-	}
+	exists, err := s.RuntimeTableExists(ctx, table)
 	if err != nil {
 		return false, fmt.Errorf("inspect runtime schema table %s: %w", table, err)
 	}
-	return count > 0, nil
+	return exists, nil
 }
