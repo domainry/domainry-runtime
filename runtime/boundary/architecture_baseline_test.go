@@ -328,6 +328,7 @@ func TestRuntimeDatabaseRootContainsOnlyTechnicalSubstrate(t *testing.T) {
 	root := filepath.Join(runtimeRoot(t), "infrastructure", "persistence", "database")
 	allowed := map[string]bool{
 		"action_execution_context.go": true, "adapter_seams.go": true, "dialect.go": true,
+		"engine.go": true, "runtime_store_connection_strategy.go": true,
 		"runtime_operational_metrics.go": true, "runtime_schema.go": true,
 		"runtime_store_open_dependencies.go": true, "store_migration_backup.go": true,
 		"runtime_store.go": true, "store_migration_status.go": true, "store_migrations.go": true,

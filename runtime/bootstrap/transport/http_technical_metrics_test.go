@@ -44,7 +44,9 @@ func TestRuntimeTechnicalMetricsExposeBoundedDatabaseAndWorkerOutcomes(t *testin
 		`domainry_runtime_idempotency_decisions_total{outcome="lease_lost"} 1`,
 		`operation="update",outcome="serialization_failure"`,
 		`operation="insert",outcome="conflict"`,
-		`domainry_runtime_migration_lock_attempts_total 1`,
+		// Opening the store acquires the successful schema-migration lock; the
+		// explicit failed observation above is the second bounded attempt.
+		`domainry_runtime_migration_lock_attempts_total 2`,
 		`domainry_runtime_migration_lock_failures_total 1`,
 	} {
 		if !strings.Contains(output, expected) {
