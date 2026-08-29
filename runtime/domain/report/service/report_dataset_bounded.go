@@ -193,6 +193,7 @@ func (s *ReportDomainService) executeReportDatasetPage(ctx context.Context, repo
 			sqlPlan.OrderBy = append(sqlPlan.OrderBy, candidate)
 		}
 	}
+	ensureReportDatasetSQLStableOrder(&sqlPlan)
 
 	result, err := s.dependencies.ObjectSQL.ExecuteReportObjectSQL(ctx, reportcontract.ReportObjectSQLExecutionRequest{WorkspaceID: principal.WorkspaceID, Plan: sqlPlan, Objects: objects, Queries: queries, Parameters: parameters, PageCursor: pageCursor, PagePosition: pagePosition, PageSize: pageSize})
 	if err != nil {
@@ -224,6 +225,21 @@ func (s *ReportDomainService) executeReportDatasetPage(ctx context.Context, repo
 		summary.TotalSemantics = reportmodel.ReportTotalAtLeast
 	}
 	return summary, nil
+}
+
+// A measure-only aggregate has exactly one result row and therefore no domain
+// identity column that can act as a cursor tie-breaker. Ordering by its first
+// projected measure gives the keyset executor a deterministic first-page term
+// without inventing OFFSET pagination. Grouped datasets are already ordered by
+// every dimension above.
+func ensureReportDatasetSQLStableOrder(plan *reportmodel.ReportObjectSQLPlan) {
+	if plan == nil || len(plan.OrderBy) != 0 || len(plan.GroupBy) != 0 || len(plan.Projections) == 0 {
+		return
+	}
+	plan.OrderBy = append(plan.OrderBy, reportmodel.ReportObjectSQLOrder{
+		Expression: reportmodel.ReportObjectSQLExpression{Kind: "result", Alias: plan.Projections[0].Alias},
+		Direction:  "asc",
+	})
 }
 
 func reportDatasetSQLFieldExpression(objects map[string]definitionmodel.ObjectSchema, reference reportmodel.ReportDatasetField) reportmodel.ReportObjectSQLExpression {
