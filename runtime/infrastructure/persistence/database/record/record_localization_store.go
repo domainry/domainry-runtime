@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -24,15 +25,15 @@ func (r RecordStore) ListRecordLocalizedValues(ctx context.Context, workspaceID 
 	if len(recordIDs) == 0 || len(fieldKeys) == 0 || len(locales) == 0 {
 		return nil, nil
 	}
-	s := r.store
-	args := []any{workspaceID, strings.TrimSpace(object.Key)}
-	query := "SELECT " + stringsJoinIdentifiers(s, "record_id", "field_key", "locale", "text_value") +
-		" FROM " + s.TableIdentifier(recordLocalizedValueTable) +
-		" WHERE " + s.Identifier("workspace_id") + " = " + s.Placeholder(1) +
-		" AND " + s.Identifier("object_key") + " = " + s.Placeholder(2) +
-		" AND " + recordLocalizationInClause(s, "record_id", recordIDs, &args) +
-		" AND " + recordLocalizationInClause(s, "field_key", fieldKeys, &args) +
-		" AND " + recordLocalizationInClause(s, "locale", locales, &args)
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, recordLocalizedValueTable, workspaceID).Columns("record_id", "field_key", "locale", "text_value").Where(ormbuilder.And(
+		ormbuilder.Equal("object_key", strings.TrimSpace(object.Key)),
+		ormbuilder.In("record_id", recordLocalizationAny(recordIDs)...),
+		ormbuilder.In("field_key", recordLocalizationAny(fieldKeys)...),
+		ormbuilder.In("locale", recordLocalizationAny(locales)...),
+	)).Build()
+	if buildErr != nil {
+		return nil, buildErr
+	}
 	rows, err := r.queryExecutor(ctx).QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list record localized values: %w", err)
@@ -112,24 +113,23 @@ func (r RecordStore) applyRecordLocalizedMutationsTx(ctx context.Context, tx Tra
 	if len(mutations) == 0 {
 		return nil
 	}
-	s := r.store
 	for _, value := range mutations {
-		deleteArgs := []any{workspaceID, commitObject.Key, recordID, value.FieldKey, value.Locale}
-		deleteSQL := "DELETE FROM " + s.TableIdentifier(recordLocalizedValueTable) + " WHERE " +
-			s.Identifier("workspace_id") + " = " + s.Placeholder(1) + " AND " +
-			s.Identifier("object_key") + " = " + s.Placeholder(2) + " AND " +
-			s.Identifier("record_id") + " = " + s.Placeholder(3) + " AND " +
-			s.Identifier("field_key") + " = " + s.Placeholder(4) + " AND " +
-			s.Identifier("locale") + " = " + s.Placeholder(5)
+		predicate := ormbuilder.And(ormbuilder.Equal("object_key", commitObject.Key), ormbuilder.Equal("record_id", recordID), ormbuilder.Equal("field_key", value.FieldKey), ormbuilder.Equal("locale", value.Locale))
+		deleteSQL, deleteArgs, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, recordLocalizedValueTable, workspaceID).Where(predicate).Build()
+		if buildErr != nil {
+			return buildErr
+		}
 		if _, err := tx.ExecContext(ctx, deleteSQL, deleteArgs...); err != nil {
 			return fmt.Errorf("replace record localized value: %w", err)
 		}
 		if strings.TrimSpace(value.TextValue) == "" {
 			continue
 		}
-		columns := []string{"workspace_id", "object_key", "record_id", "field_key", "locale", "text_value", "created_at", "updated_at"}
-		args := []any{workspaceID, commitObject.Key, recordID, value.FieldKey, value.Locale, value.TextValue, changedAt, changedAt}
-		if _, err := tx.ExecContext(ctx, "INSERT INTO "+s.TableIdentifier(recordLocalizedValueTable)+" ("+stringsJoinIdentifiers(s, columns...)+") VALUES ("+stringsJoinPlaceholders(s, len(columns))+")", args...); err != nil {
+		insert, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, recordLocalizedValueTable, workspaceID).Columns("object_key", "record_id", "field_key", "locale", "text_value", "created_at", "updated_at").Values(commitObject.Key, recordID, value.FieldKey, value.Locale, value.TextValue, changedAt, changedAt).Build()
+		if buildErr != nil {
+			return buildErr
+		}
+		if _, err := tx.ExecContext(ctx, insert, args...); err != nil {
 			return fmt.Errorf("insert record localized value: %w", err)
 		}
 	}
@@ -137,12 +137,23 @@ func (r RecordStore) applyRecordLocalizedMutationsTx(ctx context.Context, tx Tra
 }
 
 func (r RecordStore) deleteRecordLocalizedValuesTx(ctx context.Context, tx TransactionExecutor, workspaceID, objectKey, recordID string) error {
-	s := r.store
-	_, err := tx.ExecContext(ctx, "DELETE FROM "+s.TableIdentifier(recordLocalizedValueTable)+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(1)+" AND "+s.Identifier("object_key")+" = "+s.Placeholder(2)+" AND "+s.Identifier("record_id")+" = "+s.Placeholder(3), workspaceID, objectKey, recordID)
+	query, args, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, recordLocalizedValueTable, workspaceID).Where(ormbuilder.And(ormbuilder.Equal("object_key", objectKey), ormbuilder.Equal("record_id", recordID))).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	_, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("delete record localized values: %w", err)
 	}
 	return nil
+}
+
+func recordLocalizationAny(values []string) []any {
+	result := make([]any, len(values))
+	for index, value := range values {
+		result[index] = value
+	}
+	return result
 }
 
 func recordLocalizedSearchWhere(s *database.RuntimeStore, workspaceID string, object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (string, []any, error) {
