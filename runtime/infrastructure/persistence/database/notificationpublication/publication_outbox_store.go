@@ -11,6 +11,7 @@ import (
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
@@ -40,24 +41,13 @@ func (s PublicationOutboxStore) InsertIntentTx(ctx context.Context, executor mod
 	}
 	digest := sha256.Sum256(payload)
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	columns := []string{"id", "tenant_id", "workspace_id", "application_key", "source_event_id", "event_type", "intent_json", "request_fingerprint", "status", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "remote_event_id", "last_error_code", "last_error", "terminal_at", "created_at", "updated_at"}
-	values := []any{intent.ID, scope.TenantID, scope.WorkspaceID, scope.ApplicationKey, intent.SourceEventID, intent.EventType, string(payload), hex.EncodeToString(digest[:]), "queued", 0, "", "", "", "", 0, "", "", "", "", now, now}
-	query := "INSERT INTO " + s.runtime.TableIdentifier("notification_publication_outbox") + " ("
-	for index, column := range columns {
-		if index > 0 {
-			query += ","
-		}
-		query += s.runtime.Identifier(column)
+	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.runtime.SQLRenderer, "notification_publication_outbox", scope.WorkspaceID).
+		Columns("id", "tenant_id", "application_key", "source_event_id", "event_type", "intent_json", "request_fingerprint", "status", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "remote_event_id", "last_error_code", "last_error", "terminal_at", "created_at", "updated_at").
+		Values(intent.ID, scope.TenantID, scope.ApplicationKey, intent.SourceEventID, intent.EventType, string(payload), hex.EncodeToString(digest[:]), "queued", 0, "", "", "", "", 0, "", "", "", "", now, now).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build Notification SaaS publication outbox insert: %w", buildErr)
 	}
-	query += ") VALUES ("
-	for index := range columns {
-		if index > 0 {
-			query += ","
-		}
-		query += s.runtime.Placeholder(index + 1)
-	}
-	query += ")"
-	if _, err := executor.ExecContext(ctx, query, values...); err != nil {
+	if _, err := executor.ExecContext(ctx, query, args...); err != nil {
 		return fmt.Errorf("insert Notification SaaS publication outbox: %w", err)
 	}
 	return nil
