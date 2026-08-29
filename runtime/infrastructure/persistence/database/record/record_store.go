@@ -690,16 +690,20 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 		}
 	}
 	if commit.Audit != nil {
-		if err := r.insertAuditEventTx(ctx, tx, *commit.Audit); err != nil {
+		audit := *commit.Audit
+		audit.WorkspaceID = workspaceID
+		if err := r.insertAuditEventTx(ctx, tx, audit); err != nil {
 			return err
 		}
 	}
 	for _, audit := range commit.Audits {
+		audit.WorkspaceID = workspaceID
 		if err := r.insertAuditEventTx(ctx, tx, audit); err != nil {
 			return err
 		}
 	}
 	for _, message := range commit.Outbox {
+		message.WorkspaceID = workspaceID
 		if err := r.insertIntegrationOutboxTx(ctx, tx, message); err != nil {
 			return err
 		}
@@ -1235,7 +1239,13 @@ func (r RecordStore) insertWorkflowIntentTx(ctx context.Context, tx TransactionE
 	if err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, "INSERT INTO "+r.store.TableIdentifier("_workflow_executions")+" ("+stringsJoinIdentifiers(r.store, columns...)+") VALUES ("+stringsJoinPlaceholders(r.store, len(columns))+")", values...); err != nil {
+	columns = append([]string{}, columns[1:]...)
+	values = append([]any{}, values[1:]...)
+	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_executions", intent.WorkspaceID).Columns(columns...).Values(values...).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 		return fmt.Errorf("insert mutation workflow intent: %w", database.MutationConstraintError(err, "workflow_execution", intent.ID, mutation.MutationConflictIdempotency))
 	}
 	return nil
@@ -1275,9 +1285,11 @@ func (r RecordStore) insertAuditEventTx(ctx context.Context, tx TransactionExecu
 	if err != nil {
 		return fmt.Errorf("encode mutation audit metadata: %w", err)
 	}
-	columns := []string{"id", "workspace_id", "event", "object_key", "record_id", "actor_id", "role_key", "summary", "metadata_json", "before_json", "after_json", "created_at"}
-	values := []any{event.ID, event.WorkspaceID, event.Event, event.ObjectKey, event.RecordID, event.ActorID, event.RoleKey, event.Summary, string(metadata), string(before), string(after), event.CreatedAt}
-	if _, err := tx.ExecContext(ctx, "INSERT INTO "+r.store.TableIdentifier("_audit_events")+" ("+stringsJoinIdentifiers(r.store, columns...)+") VALUES ("+stringsJoinPlaceholders(r.store, len(columns))+")", values...); err != nil {
+	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_audit_events", event.WorkspaceID).Columns("id", "event", "object_key", "record_id", "actor_id", "role_key", "summary", "metadata_json", "before_json", "after_json", "created_at").Values(event.ID, event.Event, event.ObjectKey, event.RecordID, event.ActorID, event.RoleKey, event.Summary, string(metadata), string(before), string(after), event.CreatedAt).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 		return fmt.Errorf("insert mutation audit: %w", database.MutationConstraintError(err, "audit_event", event.ID, mutation.MutationConflictIdempotency))
 	}
 	return nil
@@ -1304,9 +1316,11 @@ func (r RecordStore) insertIntegrationOutboxTx(ctx context.Context, tx Transacti
 	if err != nil {
 		return fmt.Errorf("encode mutation outbox payload: %w", err)
 	}
-	columns := []string{"id", "workspace_id", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at"}
-	values := []any{message.ID, message.WorkspaceID, message.ConnectorKey, message.ConnectionKey, message.Operation, message.Status, string(payload), message.EventID, message.RequestRef, message.DedupKey, message.RequestFingerprint, message.ResponseRef, message.Error, message.AttemptCount, message.NextAttemptAt, message.LastAttemptAt, message.LeaseOwner, message.LeaseExpiresAt, message.FencingToken, message.CreatedBy, message.CreatedAt, message.UpdatedAt}
-	if _, err := tx.ExecContext(ctx, "INSERT INTO "+s.TableIdentifier("integration_outbox_messages")+" ("+stringsJoinIdentifiers(s, columns...)+") VALUES ("+stringsJoinPlaceholders(s, len(columns))+")", values...); err != nil {
+	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.SQLRenderer, "integration_outbox_messages", message.WorkspaceID).Columns("id", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at").Values(message.ID, message.ConnectorKey, message.ConnectionKey, message.Operation, message.Status, string(payload), message.EventID, message.RequestRef, message.DedupKey, message.RequestFingerprint, message.ResponseRef, message.Error, message.AttemptCount, message.NextAttemptAt, message.LastAttemptAt, message.LeaseOwner, message.LeaseExpiresAt, message.FencingToken, message.CreatedBy, message.CreatedAt, message.UpdatedAt).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 		return fmt.Errorf("insert mutation outbox: %w", database.MutationConstraintError(err, "integration_outbox", message.ID, mutation.MutationConflictIdempotency))
 	}
 	if err := integrationpersistence.RegisterOutboxWorkerQueueScope(ctx, r.store, tx, message.WorkspaceID, now); err != nil {
