@@ -83,7 +83,10 @@ func (e *reportObjectSQLEmitter) statementKeysetPage(plan reportmodel.ReportObje
 	for index := range plan.OrderBy {
 		outerColumns = append(outerColumns, e.dialect.Identifier(reportKeysetNullAlias(index)), e.dialect.Identifier(reportKeysetValueAlias(index)))
 	}
-	statement := "WITH " + strings.Join(allCTEs, ", ") + " SELECT " + strings.Join(outerColumns, ", ") + " FROM " + e.dialect.Identifier(reportObjectSQLPageCTE)
+	// CTE names are statement-local identifiers, not physical relations and
+	// therefore must not pass through the schema/table-prefix renderer.
+	pageRelation := e.dialect.Identifier(reportObjectSQLPageCTE)
+	statement := "WITH " + strings.Join(allCTEs, ", ") + " SELECT " + strings.Join(outerColumns, ", ") + " FROM " + pageRelation
 	if len(after) > 0 {
 		predicate, predicateErr := e.reportKeysetPredicate(plan.OrderBy, after)
 		if predicateErr != nil {
@@ -107,7 +110,8 @@ func (e *reportObjectSQLEmitter) statementKeysetPage(plan reportmodel.ReportObje
 }
 
 func (e *reportObjectSQLEmitter) reportKeysetFrom(plan reportmodel.ReportObjectSQLPlan) (string, error) {
-	from := e.dialect.Identifier(reportObjectSQLCTE(0)) + " " + e.dialect.Identifier(plan.Sources[0].Alias)
+	firstRelation := e.dialect.Identifier(reportObjectSQLCTE(0))
+	from := firstRelation + " " + e.dialect.Identifier(plan.Sources[0].Alias)
 	for index, source := range plan.Sources[1:] {
 		if source.On == nil {
 			return "", fmt.Errorf("missing report object SQL join condition")
@@ -120,7 +124,8 @@ func (e *reportObjectSQLEmitter) reportKeysetFrom(plan reportmodel.ReportObjectS
 		if source.JoinType == "left" {
 			keyword = " LEFT JOIN "
 		}
-		from += keyword + e.dialect.Identifier(reportObjectSQLCTE(index+1)) + " " + e.dialect.Identifier(source.Alias) + " ON " + on
+		relation := e.dialect.Identifier(reportObjectSQLCTE(index + 1))
+		from += keyword + relation + " " + e.dialect.Identifier(source.Alias) + " ON " + on
 	}
 	return from, nil
 }
