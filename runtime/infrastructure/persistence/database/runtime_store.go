@@ -259,74 +259,17 @@ func openContextWithDependencies(ctx context.Context, cfg config.Config, depende
 	if err != nil {
 		return nil, err
 	}
-	var db *sql.DB
-	var migrationDB *sql.DB
-	var postgresProfile *postgres.ConnectionProfile
-	var postgresConnection runtimePostgresProfile
-	var postgresCapabilities postgres.Capabilities
-	var migratorCapabilities postgres.Capabilities
 	sqlMetrics := telemetry.NewSQLMetricsWithNamespace("domainry_runtime")
 	operationalMetrics := NewRuntimeOperationalMetrics(cfg.MigrationBackupLastSuccessAt, cfg.MigrationRestoreDrillSuccessAt)
-	dsn := ""
-	if dialect.Name() == "postgres" {
-		profile, profileErr := dependencies.postgresProfile(cfg)
-		if profileErr != nil {
-			return nil, profileErr
-		}
-		db, err = profile.Open(sqlMetrics)
-		if err == nil {
-			postgresConnection = profile
-			postgresProfile = profile.Profile()
-		}
-	} else {
-		dsn, err = dialect.DSN(cfg)
-		if err == nil {
-			db, err = dependencies.observedSQL(dialect.SQLDriver(), dsn, "runtime", sqlMetrics)
-		}
-	}
+	connection, err := openRuntimeConnection(ctx, dialect, cfg, dependencies, sqlMetrics)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
-	if err := dialect.Configure(ctx, db, dsn); err != nil {
-		_ = db.Close()
+	db := connection.database
+	migrationDB := connection.migrationDatabase
+	if err := dialect.Configure(ctx, db, connection.dsn); err != nil {
+		connection.close()
 		return nil, err
-	}
-	if postgresProfile != nil {
-		if postgresProfile.MigrationConfigured {
-			migrationDB, err = postgresConnection.OpenMigration(sqlMetrics)
-			if err != nil {
-				_ = db.Close()
-				return nil, err
-			}
-			if err := migrationDB.PingContext(ctx); err != nil {
-				_ = migrationDB.Close()
-				_ = db.Close()
-				return nil, fmt.Errorf("connect postgres migration database (%s)", postgres.ClassifyConnectionFailure(err))
-			}
-		}
-		postgresCapabilities, err = postgresConnection.ProbeWithBackoff(ctx, db)
-		if err != nil {
-			if migrationDB != nil {
-				_ = migrationDB.Close()
-			}
-			_ = db.Close()
-			return nil, fmt.Errorf("probe postgres query connection (%s)", postgres.ClassifyConnectionFailure(err))
-		}
-		if migrationDB != nil {
-			migratorCapabilities, err = postgresConnection.ProbeWithBackoff(ctx, migrationDB)
-			if err != nil {
-				_ = migrationDB.Close()
-				_ = db.Close()
-				return nil, fmt.Errorf("probe postgres migration connection (%s)", postgres.ClassifyConnectionFailure(err))
-			}
-		}
-		if err := postgresConnection.ValidateRuntimeCapabilities(postgresCapabilities, migratorCapabilities); err != nil {
-			if migrationDB != nil {
-				_ = migrationDB.Close()
-			}
-			_ = db.Close()
-			return nil, err
-		}
 	}
 	activeMaterial := sha256.Sum256([]byte(cfg.IntegrationSecretKey))
 	activeID := strings.TrimSpace(cfg.IntegrationActiveKeyID)
@@ -343,11 +286,8 @@ func openContextWithDependencies(ctx context.Context, cfg config.Config, depende
 		_ = db.Close()
 		return nil, fmt.Errorf("initialize integration key ring: %w", err)
 	}
-	databaseSchema := ""
-	if postgresProfile != nil {
-		databaseSchema = postgresProfile.Schema
-	}
-	store := &RuntimeStore{SQLDatabase: base.NewSQLDatabase(db, dialect, databaseSchema), db: db, migrationDB: migrationDB, dialect: dialect, config: cfg, databaseSchema: databaseSchema, postgresProfile: postgresProfile, postgresCapabilities: postgresCapabilities, migratorCapabilities: migratorCapabilities, secretMaterialKey: activeMaterial, secretKeyProvider: keyRing, idempotencyMetrics: idempotency.NewMemoryMetricsCollector(4096), sqlMetrics: sqlMetrics, operationalMetrics: operationalMetrics, workerScopeCursor: &runtimeWorkerScopeCursor{}, workerWakeups: workerplatform.NewWakeupBroker()}
+	databaseSchema := connection.databaseSchema
+	store := &RuntimeStore{SQLDatabase: base.NewSQLDatabase(db, dialect, databaseSchema), db: db, migrationDB: migrationDB, dialect: dialect, config: cfg, databaseSchema: databaseSchema, postgresProfile: connection.postgresProfile, postgresCapabilities: connection.postgresCapabilities, migratorCapabilities: connection.migratorCapabilities, secretMaterialKey: activeMaterial, secretKeyProvider: keyRing, idempotencyMetrics: idempotency.NewMemoryMetricsCollector(4096), sqlMetrics: sqlMetrics, operationalMetrics: operationalMetrics, workerScopeCursor: &runtimeWorkerScopeCursor{}, workerWakeups: workerplatform.NewWakeupBroker()}
 	var migrationErr error
 	migrationStarted := time.Now()
 	if cfg.EffectiveDatabaseMigrationMode() == "verify" {
