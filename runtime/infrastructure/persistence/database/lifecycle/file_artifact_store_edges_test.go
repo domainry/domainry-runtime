@@ -76,16 +76,16 @@ func TestFileArtifactRegisterValidationAndSQLFailures(t *testing.T) {
 func TestFileArtifactReconcileFailures(t *testing.T) {
 	now := time.Date(2026, 7, 20, 1, 0, 0, 0, time.UTC)
 	var nilStore *FileArtifactStore
-	if _, err := nilStore.ReconcileUploadArtifacts(t.Context(), now, 1); err == nil {
+	if _, err := nilStore.ReconcileUploadArtifacts(t.Context(), uploadReconciliationScope(), now, 1); err == nil {
 		t.Fatal("expected unavailable error")
 	}
-	if _, err := (&FileArtifactStore{}).ReconcileUploadArtifacts(t.Context(), now, 1); err == nil {
+	if _, err := (&FileArtifactStore{}).ReconcileUploadArtifacts(t.Context(), uploadReconciliationScope(), now, 1); err == nil {
 		t.Fatal("expected missing store error")
 	}
-	if _, err := scriptedArtifactStore(t, &lifecycleSQLState{querySteps: []lifecycleSQLQueryStep{{err: errLifecycleSQL}}}, artifactObjects()).ReconcileUploadArtifacts(t.Context(), now, 1); err == nil {
+	if _, err := scriptedArtifactStore(t, &lifecycleSQLState{querySteps: []lifecycleSQLQueryStep{{err: errLifecycleSQL}}}, artifactObjects()).ReconcileUploadArtifacts(t.Context(), uploadReconciliationScope(), now, 1); err == nil {
 		t.Fatal("expected download expiration error")
 	}
-	if _, err := scriptedArtifactStore(t, &lifecycleSQLState{querySteps: []lifecycleSQLQueryStep{{}, {}}}, artifactObjects()).ReconcileUploadArtifacts(t.Context(), now, 1001); err != nil {
+	if _, err := scriptedArtifactStore(t, &lifecycleSQLState{querySteps: []lifecycleSQLQueryStep{{}, {}}}, artifactObjects()).ReconcileUploadArtifacts(t.Context(), uploadReconciliationScope(), now, 1001); err != nil {
 		t.Fatal(err)
 	}
 
@@ -96,7 +96,7 @@ func TestFileArtifactReconcileFailures(t *testing.T) {
 		{columns: []string{"id"}, rows: [][]driver.Value{{"x"}}},
 		{columns: []string{"id", "workspace_id", "object_key", "field_key", "filename", "status", "created_at", "delete_after"}, nextErr: errLifecycleSQL},
 	} {
-		if _, err := scriptedArtifactStore(t, &lifecycleSQLState{querySteps: []lifecycleSQLQueryStep{step}}, assetOnly).ReconcileUploadArtifacts(t.Context(), now, 0); err == nil {
+		if _, err := scriptedArtifactStore(t, &lifecycleSQLState{querySteps: []lifecycleSQLQueryStep{step}}, assetOnly).ReconcileUploadArtifacts(t.Context(), uploadReconciliationScope(), now, 0); err == nil {
 			t.Fatal("expected candidate error")
 		}
 	}
@@ -111,7 +111,7 @@ func TestFileArtifactReconcileFailures(t *testing.T) {
 		{querySteps: []lifecycleSQLQueryStep{candidate("referenced", "workspace-a", "a.txt", ""), {columns: []string{"count"}, rows: [][]driver.Value{{int64(0)}}}}, execSteps: []lifecycleSQLExecStep{{err: errLifecycleSQL}}},
 		{querySteps: []lifecycleSQLQueryStep{candidate("orphaned", "", "a.txt", now.Add(-time.Hour).Format(time.RFC3339Nano)), {columns: []string{"count"}, rows: [][]driver.Value{{int64(0)}}}}},
 	} {
-		if _, err := scriptedArtifactStore(t, state, assetOnly).ReconcileUploadArtifacts(t.Context(), now, 1); err == nil {
+		if _, err := scriptedArtifactStore(t, state, assetOnly).ReconcileUploadArtifacts(t.Context(), uploadReconciliationScope(), now, 1); err == nil {
 			t.Fatal("expected reconciliation error")
 		}
 	}
@@ -119,21 +119,21 @@ func TestFileArtifactReconcileFailures(t *testing.T) {
 	state := &lifecycleSQLState{querySteps: []lifecycleSQLQueryStep{candidate("orphaned", "workspace-a", "a.txt", now.Add(-time.Hour).Format(time.RFC3339Nano)), {columns: []string{"count"}, rows: [][]driver.Value{{int64(0)}}}}}
 	s := scriptedArtifactStore(t, state, assetOnly)
 	s.removeFile = func(string) error { return errLifecycleSQL }
-	if _, err := s.ReconcileUploadArtifacts(t.Context(), now, 1); err == nil {
+	if _, err := s.ReconcileUploadArtifacts(t.Context(), uploadReconciliationScope(), now, 1); err == nil {
 		t.Fatal("expected remove error")
 	}
 
 	state = &lifecycleSQLState{querySteps: []lifecycleSQLQueryStep{candidate("orphaned", "workspace-a", "a.txt", now.Add(-time.Hour).Format(time.RFC3339Nano)), {columns: []string{"count"}, rows: [][]driver.Value{{int64(0)}}}}, execSteps: []lifecycleSQLExecStep{{err: errLifecycleSQL}}}
 	s = scriptedArtifactStore(t, state, assetOnly)
 	s.removeFile = func(string) error { return os.ErrNotExist }
-	if _, err := s.ReconcileUploadArtifacts(t.Context(), now, 1); err == nil {
+	if _, err := s.ReconcileUploadArtifacts(t.Context(), uploadReconciliationScope(), now, 1); err == nil {
 		t.Fatal("expected deleted-state error")
 	}
 
 	state = &lifecycleSQLState{querySteps: []lifecycleSQLQueryStep{candidate("staged", "workspace-a", "a.txt", "")}}
 	s = scriptedArtifactStore(t, state, assetOnly)
 	s.contextErr = func(context.Context) error { return context.Canceled }
-	if _, err := s.ReconcileUploadArtifacts(t.Context(), now, 1); err == nil {
+	if _, err := s.ReconcileUploadArtifacts(t.Context(), uploadReconciliationScope(), now, 1); err == nil {
 		t.Fatal("expected context error")
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	requestcontext "github.com/domainry/domainry-foundation/requestcontext"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -131,10 +132,13 @@ func (s *FileArtifactStore) RecordFileScan(ctx context.Context, evidence lifecyc
 	return nil
 }
 
-func (s *FileArtifactStore) ReconcileUploadArtifacts(ctx context.Context, now time.Time, limit int) (lifecyclecontract.UploadCleanupResult, error) {
+func (s *FileArtifactStore) ReconcileUploadArtifacts(ctx context.Context, scope principalmodel.SystemScope, now time.Time, limit int) (lifecyclecontract.UploadCleanupResult, error) {
 	result := lifecyclecontract.UploadCleanupResult{}
 	if s == nil || s.store == nil {
 		return result, fmt.Errorf("upload artifact store unavailable")
+	}
+	if _, err := principalmodel.NewSystemCommandScope(scope); err != nil {
+		return result, err
 	}
 	if limit <= 0 || limit > 1000 {
 		limit = 500
@@ -145,8 +149,12 @@ func (s *FileArtifactStore) ReconcileUploadArtifacts(ctx context.Context, now ti
 	}
 	result.ExpiredDownloads = expiredDownloads
 	columns := []string{"id", "workspace_id", "object_key", "field_key", "filename", "status", "created_at", "delete_after"}
-	query := "SELECT " + strings.Join(database.QuotedColumns(s.store, columns), ", ") + " FROM " + s.store.TableIdentifier("lifecycle_file_artifacts") + " WHERE " + s.store.Identifier("status") + " <> 'deleted' ORDER BY " + s.store.Identifier("created_at") + ", " + s.store.Identifier("id") + " LIMIT " + s.store.Placeholder(1)
-	rows, err := s.db.QueryContext(ctx, query, limit)
+	statement, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "lifecycle_file_artifacts").Columns(columns...).
+		Where(ormbuilder.NotEqual("status", "deleted")).OrderBy(ormbuilder.Ascending("created_at"), ormbuilder.Ascending("id")).Limit(limit).Build()
+	if buildErr != nil {
+		return result, fmt.Errorf("build upload artifact reconciliation query: %w", buildErr)
+	}
+	rows, err := s.db.QueryContext(ctx, statement, args...)
 	if err != nil {
 		return result, err
 	}

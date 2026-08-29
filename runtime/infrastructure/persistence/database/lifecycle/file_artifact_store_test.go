@@ -50,7 +50,7 @@ func TestFileArtifactStoreReconcilesReferencesAndDeletesOnlyMatureOrphans(t *tes
 		t.Fatal(err)
 	}
 
-	result, err := artifactStore.ReconcileUploadArtifacts(t.Context(), now.Add(time.Hour), 100)
+	result, err := artifactStore.ReconcileUploadArtifacts(t.Context(), uploadReconciliationScope(), now.Add(time.Hour), 100)
 	if err != nil || result.Deleted != 0 || result.Orphaned != 0 || result.ExpiredDownloads != 1 {
 		t.Fatalf("staging grace result=%#v err=%v", result, err)
 	}
@@ -68,7 +68,7 @@ func TestFileArtifactStoreReconcilesReferencesAndDeletesOnlyMatureOrphans(t *tes
 	if err := records.InsertRecord(t.Context(), "workspace-a", object, recordmodel.Record{ID: "asset-1", CreatedAt: created, UpdatedAt: created, Data: map[string]any{"file_url": "/uploads/" + filename}}); err != nil {
 		t.Fatal(err)
 	}
-	result, err = artifactStore.ReconcileUploadArtifacts(t.Context(), now.Add(2*time.Hour), 100)
+	result, err = artifactStore.ReconcileUploadArtifacts(t.Context(), uploadReconciliationScope(), now.Add(2*time.Hour), 100)
 	if err != nil || result.Referenced != 1 {
 		t.Fatalf("referenced result=%#v err=%v", result, err)
 	}
@@ -80,11 +80,11 @@ func TestFileArtifactStoreReconcilesReferencesAndDeletesOnlyMatureOrphans(t *tes
 	if err := records.UpdateRecord(t.Context(), "workspace-a", object, record); err != nil {
 		t.Fatal(err)
 	}
-	result, err = artifactStore.ReconcileUploadArtifacts(t.Context(), now.Add(3*time.Hour), 100)
+	result, err = artifactStore.ReconcileUploadArtifacts(t.Context(), uploadReconciliationScope(), now.Add(3*time.Hour), 100)
 	if err != nil || result.Orphaned != 1 || result.Deleted != 0 {
 		t.Fatalf("orphan result=%#v err=%v", result, err)
 	}
-	result, err = artifactStore.ReconcileUploadArtifacts(t.Context(), now.Add(28*time.Hour), 100)
+	result, err = artifactStore.ReconcileUploadArtifacts(t.Context(), uploadReconciliationScope(), now.Add(28*time.Hour), 100)
 	if err != nil || result.Deleted != 1 {
 		t.Fatalf("delete result=%#v err=%v", result, err)
 	}
@@ -95,6 +95,10 @@ func TestFileArtifactStoreReconcilesReferencesAndDeletesOnlyMatureOrphans(t *tes
 	if err := store.DB().QueryRowContext(t.Context(), "SELECT status, sha256 FROM lifecycle_file_artifacts WHERE workspace_id = ? AND filename = ?", "workspace-a", filename).Scan(&status, &hash); err != nil || status != "deleted" || hash != "hash" {
 		t.Fatalf("status=%s hash=%s err=%v", status, hash, err)
 	}
+}
+
+func uploadReconciliationScope() principalmodel.SystemScope {
+	return principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "upload artifact reconciliation test")
 }
 
 func TestFileArtifactStorePersistsPendingThenTrustedTerminalScan(t *testing.T) {

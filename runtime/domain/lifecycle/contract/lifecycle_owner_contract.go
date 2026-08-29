@@ -6,6 +6,7 @@ import (
 	"time"
 
 	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 type CleanupPreview struct {
@@ -112,7 +113,7 @@ type UploadCleanupResult struct {
 
 type UploadArtifactStore interface {
 	RegisterUpload(context.Context, UploadArtifact) error
-	ReconcileUploadArtifacts(context.Context, time.Time, int) (UploadCleanupResult, error)
+	ReconcileUploadArtifacts(context.Context, principalmodel.SystemScope, time.Time, int) (UploadCleanupResult, error)
 }
 
 type FileScanStore interface {

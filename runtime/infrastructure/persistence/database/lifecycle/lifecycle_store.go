@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -184,8 +185,14 @@ func (s LifecycleStore) ListRunnableCleanupJobs(ctx context.Context, scope princ
 	if limit <= 0 || limit > 1000 {
 		limit = 100
 	}
-	query := "SELECT " + s.store.Identifier("payload_json") + " FROM " + s.store.TableIdentifier("lifecycle_cleanup_jobs") + " WHERE " + s.store.Identifier("status") + " IN (" + s.store.Placeholder(1) + ", " + s.store.Placeholder(2) + ", " + s.store.Placeholder(3) + ", " + s.store.Placeholder(4) + ") AND (" + s.store.Identifier("lease_owner") + " = '' OR " + s.store.Identifier("lease_expires_at") + " <= " + s.store.Placeholder(5) + ") ORDER BY " + s.store.Identifier("updated_at") + " LIMIT " + s.store.Placeholder(6)
-	rows, err := s.db.QueryContext(ctx, query, lifecyclemodel.CleanupStatusPending, lifecyclemodel.CleanupStatusPaused, lifecyclemodel.CleanupStatusFailed, lifecyclemodel.CleanupStatusRunning, lifecycleTime(now), limit)
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "lifecycle_cleanup_jobs").Columns("payload_json").Where(ormbuilder.And(
+		ormbuilder.In("status", lifecyclemodel.CleanupStatusPending, lifecyclemodel.CleanupStatusPaused, lifecyclemodel.CleanupStatusFailed, lifecyclemodel.CleanupStatusRunning),
+		ormbuilder.Or(ormbuilder.Equal("lease_owner", ""), ormbuilder.LessThanOrEqual("lease_expires_at", lifecycleTime(now))),
+	)).OrderBy(ormbuilder.Ascending("updated_at")).Limit(limit).Build()
+	if buildErr != nil {
+		return nil, fmt.Errorf("build runnable lifecycle cleanup query: %w", buildErr)
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -308,8 +315,14 @@ func (s LifecycleStore) ExpireSubjectExportReferences(ctx context.Context, scope
 	if _, err := principalmodel.NewSystemCommandScope(scope); err != nil {
 		return nil, err
 	}
-	query := "SELECT " + s.store.Identifier("payload_json") + " FROM " + s.store.TableIdentifier("lifecycle_subject_requests") + " WHERE " + s.store.Identifier("kind") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("status") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("download_expires_at") + " <> '' AND " + s.store.Identifier("download_expires_at") + " <= " + s.store.Placeholder(3)
-	rows, err := s.db.QueryContext(ctx, query, lifecyclemodel.SubjectRequestExport, lifecyclemodel.SubjectRequestSucceeded, lifecycleTime(now))
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "lifecycle_subject_requests").Columns("payload_json").Where(ormbuilder.And(
+		ormbuilder.Equal("kind", lifecyclemodel.SubjectRequestExport), ormbuilder.Equal("status", lifecyclemodel.SubjectRequestSucceeded),
+		ormbuilder.NotEqual("download_expires_at", ""), ormbuilder.LessThanOrEqual("download_expires_at", lifecycleTime(now)),
+	)).Build()
+	if buildErr != nil {
+		return nil, fmt.Errorf("build expired lifecycle subject export query: %w", buildErr)
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

@@ -46,7 +46,7 @@ type lifecycleUploadArtifactProbe struct {
 func (*lifecycleUploadArtifactProbe) RegisterUpload(context.Context, lifecyclecontract.UploadArtifact) error {
 	return nil
 }
-func (p *lifecycleUploadArtifactProbe) ReconcileUploadArtifacts(ctx context.Context, now time.Time, limit int) (lifecyclecontract.UploadCleanupResult, error) {
+func (p *lifecycleUploadArtifactProbe) ReconcileUploadArtifacts(ctx context.Context, _ principalmodel.SystemScope, now time.Time, limit int) (lifecyclecontract.UploadCleanupResult, error) {
 	if p.reconcile != nil {
 		return p.reconcile(ctx, now, limit)
 	}

@@ -90,7 +90,7 @@ func TestOwnerAndArtifactRemainingConditionOutcomes(t *testing.T) {
 		{columns: []string{"count"}, rows: [][]driver.Value{{int64(0)}}},
 	}}
 	artifact := scriptedArtifactStore(t, artifactState, artifactObjects()[:1])
-	if result, err := artifact.ReconcileUploadArtifacts(t.Context(), now, 1); err != nil || result.Orphaned != 1 {
+	if result, err := artifact.ReconcileUploadArtifacts(t.Context(), uploadReconciliationScope(), now, 1); err != nil || result.Orphaned != 1 {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
 }

@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -15,18 +17,35 @@ func (s LifecycleStore) GlobalMetrics(ctx context.Context, scope principalmodel.
 		return lifecyclemodel.Metrics{}, err
 	}
 	metrics := lifecyclemodel.Metrics{}
-	query := "SELECT COUNT(*), MIN(" + s.store.Identifier("updated_at") + ") FROM " + s.store.TableIdentifier("lifecycle_cleanup_jobs") + " WHERE " + s.store.Identifier("status") + " IN (" + s.store.Placeholder(1) + ", " + s.store.Placeholder(2) + ", " + s.store.Placeholder(3) + ")"
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "lifecycle_cleanup_jobs").Projections(
+		ormbuilder.Project(ormbuilder.CountAll()), ormbuilder.Project(ormbuilder.Min(ormbuilder.Column("updated_at"))),
+	).Where(ormbuilder.In("status", lifecyclemodel.CleanupStatusPending, lifecyclemodel.CleanupStatusPaused, lifecyclemodel.CleanupStatusFailed)).Build()
+	if buildErr != nil {
+		return metrics, fmt.Errorf("build lifecycle cleanup metrics query: %w", buildErr)
+	}
 	var oldest sql.NullString
-	if err := s.db.QueryRowContext(ctx, query, lifecyclemodel.CleanupStatusPending, lifecyclemodel.CleanupStatusPaused, lifecyclemodel.CleanupStatusFailed).Scan(&metrics.EligibleBacklog, &oldest); err != nil {
+	if err := s.db.QueryRowContext(ctx, query, args...).Scan(&metrics.EligibleBacklog, &oldest); err != nil {
 		return metrics, err
 	}
 	if oldest.Valid {
 		metrics.OldestEligible = parseLifecycleTime(oldest.String)
 	}
-	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+s.store.TableIdentifier("lifecycle_legal_holds")+" WHERE "+s.store.Identifier("starts_at")+" <= "+s.store.Placeholder(1)+" AND ("+s.store.Identifier("ends_at")+" = '' OR "+s.store.Identifier("ends_at")+" > "+s.store.Placeholder(2)+")", lifecycleTime(now), lifecycleTime(now)).Scan(&metrics.LegalHoldCount); err != nil {
+	query, args, buildErr = ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "lifecycle_legal_holds").Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(ormbuilder.And(
+		ormbuilder.LessThanOrEqual("starts_at", lifecycleTime(now)), ormbuilder.Or(ormbuilder.Equal("ends_at", ""), ormbuilder.GreaterThan("ends_at", lifecycleTime(now))),
+	)).Build()
+	if buildErr != nil {
+		return metrics, fmt.Errorf("build lifecycle legal hold metrics query: %w", buildErr)
+	}
+	if err := s.db.QueryRowContext(ctx, query, args...).Scan(&metrics.LegalHoldCount); err != nil {
 		return metrics, err
 	}
-	rows, err := s.db.QueryContext(ctx, "SELECT "+s.store.Identifier("event")+", "+s.store.Identifier("payload_json")+" FROM "+s.store.TableIdentifier("lifecycle_audit_evidence")+" WHERE "+s.store.Identifier("event")+" IN ("+s.store.Placeholder(1)+", "+s.store.Placeholder(2)+")", "lifecycle.cleanup.succeeded", "lifecycle.cleanup.failed")
+	query, args, buildErr = ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "lifecycle_audit_evidence").Columns("event", "payload_json").Where(
+		ormbuilder.In("event", "lifecycle.cleanup.succeeded", "lifecycle.cleanup.failed"),
+	).Build()
+	if buildErr != nil {
+		return metrics, fmt.Errorf("build lifecycle audit metrics query: %w", buildErr)
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return metrics, err
 	}

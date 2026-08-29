@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -18,7 +19,13 @@ func (r IntegrationConfigStore) ListConnectorProviderConnections(ctx context.Con
 	if _, err := principalmodel.NewSystemQueryScope(scope); err != nil {
 		return nil, err
 	}
-	rows, err := r.db.QueryContext(ctx, "SELECT "+stringsJoinIdentifiers(r.store, "connection_key", "workspace_id", "connector_key", "provider_key", "name", "status", "config_json", "secret_refs_json", "created_by", "created_at", "updated_at")+" FROM "+r.store.TableIdentifier("integration_connections")+" ORDER BY "+r.store.Identifier("workspace_id")+","+r.store.Identifier("connection_key"))
+	statement, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "integration_connections").Columns(
+		"connection_key", "workspace_id", "connector_key", "provider_key", "name", "status", "config_json", "secret_refs_json", "created_by", "created_at", "updated_at",
+	).OrderBy(ormbuilder.Ascending("workspace_id"), ormbuilder.Ascending("connection_key")).Build()
+	if buildErr != nil {
+		return nil, fmt.Errorf("build connector provider connection query: %w", buildErr)
+	}
+	rows, err := r.db.QueryContext(ctx, statement, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -104,10 +111,31 @@ func (r IntegrationConfigStore) ListDueConnectorProviderStates(ctx context.Conte
 	if limit <= 0 || limit > 100 {
 		limit = 25
 	}
-	s, c := r.store.Identifier("s"), r.store.Identifier("c")
-	col := func(a, n string) string { return a + "." + r.store.Identifier(n) }
-	query := "SELECT " + col(s, "workspace_id") + "," + col(s, "connector_key") + "," + col(s, "provider_key") + "," + col(s, "connection_key") + "," + col(s, "task_key") + "," + col(s, "state_version") + "," + col(s, "payload_json") + "," + col(s, "status") + "," + col(s, "due_at") + "," + col(s, "last_error_code") + "," + col(s, "attempt_count") + "," + col(s, "lease_owner") + "," + col(s, "lease_expires_at") + "," + col(s, "fencing_token") + "," + col(s, "updated_at") + "," + col(c, "name") + "," + col(c, "status") + "," + col(c, "config_json") + "," + col(c, "secret_refs_json") + "," + col(c, "created_by") + "," + col(c, "created_at") + "," + col(c, "updated_at") + " FROM " + r.store.TableIdentifier("connector_provider_states") + " " + s + " JOIN " + r.store.TableIdentifier("integration_connections") + " " + c + " ON " + col(c, "workspace_id") + "=" + col(s, "workspace_id") + " AND " + col(c, "connection_key") + "=" + col(s, "connection_key") + " WHERE " + col(c, "status") + "='active' AND ((" + col(s, "status") + "='running' AND " + col(s, "lease_expires_at") + "<=" + r.store.Placeholder(1) + ") OR (" + col(s, "status") + " IN ('ready','retry') AND (" + col(s, "due_at") + "='' OR " + col(s, "due_at") + "<=" + r.store.Placeholder(2) + "))) ORDER BY " + col(s, "due_at") + " ASC LIMIT " + r.store.Placeholder(3)
-	rows, err := r.db.QueryContext(ctx, query, now, now, limit)
+	stateColumns := []string{"workspace_id", "connector_key", "provider_key", "connection_key", "task_key", "state_version", "payload_json", "status", "due_at", "last_error_code", "attempt_count", "lease_owner", "lease_expires_at", "fencing_token", "updated_at"}
+	connectionColumns := []string{"name", "status", "config_json", "secret_refs_json", "created_by", "created_at", "updated_at"}
+	projections := make([]ormbuilder.Projection, 0, len(stateColumns)+len(connectionColumns))
+	for _, column := range stateColumns {
+		projections = append(projections, ormbuilder.Project(ormbuilder.QualifiedColumn("s", column)))
+	}
+	for _, column := range connectionColumns {
+		projections = append(projections, ormbuilder.Project(ormbuilder.QualifiedColumn("c", column)))
+	}
+	statement, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "connector_provider_states").Alias("s").Projections(projections...).Join(
+		ormbuilder.InnerJoin("integration_connections", "c", ormbuilder.And(
+			ormbuilder.EqualExpressions(ormbuilder.QualifiedColumn("c", "workspace_id"), ormbuilder.QualifiedColumn("s", "workspace_id")),
+			ormbuilder.EqualExpressions(ormbuilder.QualifiedColumn("c", "connection_key"), ormbuilder.QualifiedColumn("s", "connection_key")),
+		)),
+	).Where(ormbuilder.And(
+		ormbuilder.EqualValue(ormbuilder.QualifiedColumn("c", "status"), "active"),
+		ormbuilder.Or(
+			ormbuilder.And(ormbuilder.EqualValue(ormbuilder.QualifiedColumn("s", "status"), "running"), ormbuilder.LessThanOrEqualValue(ormbuilder.QualifiedColumn("s", "lease_expires_at"), now)),
+			ormbuilder.And(ormbuilder.InExpression(ormbuilder.QualifiedColumn("s", "status"), "ready", "retry"), ormbuilder.Or(ormbuilder.EqualValue(ormbuilder.QualifiedColumn("s", "due_at"), ""), ormbuilder.LessThanOrEqualValue(ormbuilder.QualifiedColumn("s", "due_at"), now))),
+		),
+	)).OrderBy(ormbuilder.AscendingExpression(ormbuilder.QualifiedColumn("s", "due_at"))).Limit(limit).Build()
+	if buildErr != nil {
+		return nil, fmt.Errorf("build runnable connector provider state query: %w", buildErr)
+	}
+	rows, err := r.db.QueryContext(ctx, statement, args...)
 	if err != nil {
 		return nil, err
 	}

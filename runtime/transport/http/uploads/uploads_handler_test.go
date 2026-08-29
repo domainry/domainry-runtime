@@ -38,7 +38,7 @@ func (s *uploadArtifactStoreStub) RegisterUpload(_ context.Context, artifact lif
 	return s.err
 }
 
-func (*uploadArtifactStoreStub) ReconcileUploadArtifacts(context.Context, time.Time, int) (lifecyclecontract.UploadCleanupResult, error) {
+func (*uploadArtifactStoreStub) ReconcileUploadArtifacts(context.Context, principalmodel.SystemScope, time.Time, int) (lifecyclecontract.UploadCleanupResult, error) {
 	return lifecyclecontract.UploadCleanupResult{}, nil
 }
 

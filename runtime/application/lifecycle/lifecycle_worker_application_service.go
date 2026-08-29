@@ -74,7 +74,7 @@ func (s *LifecycleApplicationService) CleanupExpiredSubjectArtifacts(ctx context
 		return deleted, err
 	}
 	if s.uploadArtifacts != nil {
-		result, reconcileErr := s.uploadArtifacts.ReconcileUploadArtifacts(ctx, now, 500)
+		result, reconcileErr := s.uploadArtifacts.ReconcileUploadArtifacts(ctx, scope, now, 500)
 		deleted += result.Deleted
 		if reconcileErr != nil {
 			return deleted, reconcileErr
