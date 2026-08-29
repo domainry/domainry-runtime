@@ -2,6 +2,10 @@ module github.com/domainry/domainry-runtime
 
 go 1.26.0
 
+replace github.com/domainry/domainry-foundation => ../domainry-foundation
+
+replace github.com/domainry/domainry-orm => ../domainry-orm
+
 toolchain go1.26.6
 
 require (
