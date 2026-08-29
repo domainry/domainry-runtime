@@ -5,6 +5,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"slices"
 	"strings"
 
 	ormbuilder "github.com/domainry/domainry-orm/builder"
@@ -260,7 +262,13 @@ func (r WorkflowProcessStore) InsertTask(ctx context.Context, workspaceID string
 		return err
 	}
 	task.WorkspaceID = workspaceID
-	return r.store.InsertSystemRowContext(ctx, "workflow_tasks", workflowTaskColumns(), workflowTaskValues(task))
+	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "workflow_tasks", workspaceID).
+		Columns(workflowTaskColumns()[1:]...).Values(workflowTaskValues(task)[1:]...).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build workflow task insert: %w", buildErr)
+	}
+	_, err = r.database().ExecContext(ctx, query, args...)
+	return err
 }
 func (r WorkflowProcessStore) UpdateTask(ctx context.Context, workspaceID string, task workflowmodel.WorkflowTask) error {
 	workspaceID, err := requireWorkflowWorkspaceID(workspaceID)
@@ -297,16 +305,16 @@ func (r WorkflowProcessStore) UpdateTasks(ctx context.Context, workspaceID strin
 		return err
 	}
 	defer tx.Rollback()
-	columns := workflowTaskColumns()
+	columns := workflowTaskColumns()[1:]
 	assignments := []ormbuilder.Assignment{}
 	for _, column := range []string{"assignee_user_id", "assignee_name", "assignee_role_key", "status", "decision", "comment", "due_at", "completed_by", "completed_at", "updated_at"} {
 		assignments = append(assignments, ormbuilder.AssignExpression(column, ormbuilder.InsertedValue(column)))
 	}
 	for start := 0; start < len(order); start += 20 {
 		end := min(start+20, len(order))
-		insert := ormbuilder.NewInsertBuilder(r.store.SQLRenderer, "workflow_tasks").Columns(columns...)
+		insert := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "workflow_tasks", workspaceID).Columns(columns...)
 		for _, id := range order[start:end] {
-			insert.Values(workflowTaskValues(byID[id])...)
+			insert.Values(slices.Clone(workflowTaskValues(byID[id])[1:])...)
 		}
 		insert, buildErr := r.store.Engine.ApplyUpsert(insert, []string{"workspace_id", "id"}, assignments...)
 		if buildErr != nil {
