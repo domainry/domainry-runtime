@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationsrepository "github.com/domainry/domainry-runtime/runtime/domain/operations/repository"
 )
@@ -41,9 +42,13 @@ func (s OperationsStore) operationsMigrationDiagnostics(ctx context.Context) ope
 	status := "ready"
 	for _, table := range []string{"_schema_migrations", "_schema_materializations"} {
 		var total, dirty int64
-		query := "SELECT COUNT(*), SUM(CASE WHEN " + s.store.Identifier("dirty") + " THEN 1 ELSE 0 END) FROM " + s.store.TableIdentifier(table)
+		dirtyCount := ormbuilder.Coalesce(ormbuilder.Sum(ormbuilder.CaseWhen(ormbuilder.Equal("dirty", true), 1).Else(0)), ormbuilder.Value(0))
+		query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, table).Projections(ormbuilder.Project(ormbuilder.CountAll()), ormbuilder.Project(dirtyCount)).Build()
+		if buildErr != nil {
+			return diagnosticFailure("backend.operations.diagnostics.migration_unavailable")
+		}
 		var dirtyValue sql.NullInt64
-		if err := s.database().QueryRowContext(ctx, query).Scan(&total, &dirtyValue); err != nil {
+		if err := s.database().QueryRowContext(ctx, query, args...).Scan(&total, &dirtyValue); err != nil {
 			return diagnosticFailure("backend.operations.diagnostics.migration_unavailable")
 		}
 		dirty = dirtyValue.Int64
@@ -89,10 +94,13 @@ func (s OperationsStore) operationsLeaseDiagnostics(ctx context.Context, request
 	return operationsmodel.OperationsDiagnosticsSection{Status: "ready", Summary: map[string]any{"instance_id": request.InstanceID, "live": snapshot.Live, "expired": snapshot.Expired}, Items: items, NextPage: next, RunbookURL: "/operations/runbooks/worker-lease"}
 }
 
-type operationsQueueSpec struct{ owner, table, timestamp, states string }
+type operationsQueueSpec struct {
+	owner, table, timestamp string
+	states                  []any
+}
 
 func (s OperationsStore) operationsQueueDiagnostics(ctx context.Context, request operationsmodel.OperationsDiagnosticsRequest) operationsmodel.OperationsDiagnosticsSection {
-	specs := []operationsQueueSpec{{"integration_event", "integration_events", "received_at", "'received','processing','failed'"}, {"integration_outbox", "integration_outbox_messages", "created_at", "'queued','sending','failed'"}, {"workflow_execution", "_workflow_executions", "created_at", "'pending','running','failed'"}, {"record_batch", "record_batch_jobs", "created_at", "'queued','running','retrying'"}}
+	specs := []operationsQueueSpec{{"integration_event", "integration_events", "received_at", []any{"received", "processing", "failed"}}, {"integration_outbox", "integration_outbox_messages", "created_at", []any{"queued", "sending", "failed"}}, {"workflow_execution", "_workflow_executions", "created_at", []any{"pending", "running", "failed"}}, {"record_batch", "record_batch_jobs", "created_at", []any{"queued", "running", "retrying"}}}
 	items := []map[string]any{}
 	for _, spec := range specs {
 		count, oldest, err := s.operationsQueueCount(ctx, spec, request.WorkspaceID)
@@ -106,7 +114,7 @@ func (s OperationsStore) operationsQueueDiagnostics(ctx context.Context, request
 }
 
 func (s OperationsStore) operationsDLQDiagnostics(ctx context.Context, request operationsmodel.OperationsDiagnosticsRequest) operationsmodel.OperationsDiagnosticsSection {
-	specs := []operationsQueueSpec{{"integration_event", "integration_events", "updated_at", "'dead_letter','quarantined'"}, {"integration_outbox", "integration_outbox_messages", "updated_at", "'dead_letter','quarantined'"}, {"workflow_execution", "_workflow_executions", "updated_at", "'dead_letter'"}}
+	specs := []operationsQueueSpec{{"integration_event", "integration_events", "updated_at", []any{"dead_letter", "quarantined"}}, {"integration_outbox", "integration_outbox_messages", "updated_at", []any{"dead_letter", "quarantined"}}, {"workflow_execution", "_workflow_executions", "updated_at", []any{"dead_letter"}}}
 	items := []map[string]any{}
 	for _, spec := range specs {
 		count, oldest, err := s.operationsQueueCount(ctx, spec, request.WorkspaceID)
@@ -119,10 +127,13 @@ func (s OperationsStore) operationsDLQDiagnostics(ctx context.Context, request o
 }
 
 func (s OperationsStore) operationsQueueCount(ctx context.Context, spec operationsQueueSpec, workspaceID string) (int64, string, error) {
-	query := "SELECT COUNT(*), MIN(" + s.store.Identifier(spec.timestamp) + ") FROM " + s.store.TableIdentifier(spec.table) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("status") + " IN (" + spec.states + ")"
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, spec.table, workspaceID).Projections(ormbuilder.Project(ormbuilder.CountAll()), ormbuilder.Project(ormbuilder.Min(ormbuilder.Column(spec.timestamp)))).Where(ormbuilder.In("status", spec.states...)).Build()
+	if buildErr != nil {
+		return 0, "", buildErr
+	}
 	var count int64
 	var oldest sql.NullString
-	err := s.database().QueryRowContext(ctx, query, workspaceID).Scan(&count, &oldest)
+	err := s.database().QueryRowContext(ctx, query, args...).Scan(&count, &oldest)
 	return count, oldest.String, err
 }
 
