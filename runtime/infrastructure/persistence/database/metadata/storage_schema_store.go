@@ -74,11 +74,6 @@ func (s MetadataStore) conditionalUniqueIndexName(table string, policy recordval
 	return "uidx_conditional_" + hex.EncodeToString(h.Sum(nil))[:16]
 }
 
-func conditionalUniqueGuardColumn(indexName string) string {
-	hash := sha256.Sum256([]byte(indexName))
-	return "_domainry_cuq_" + hex.EncodeToString(hash[:])[:16]
-}
-
 func (s MetadataStore) temporalExclusionIndexName(table, policyKey string, fields []string) string {
 	h := sha256.New()
 	h.Write([]byte(strings.TrimSpace(table) + "|" + strings.TrimSpace(policyKey)))

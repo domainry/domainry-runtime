@@ -7,6 +7,7 @@ import (
 
 	ormbuilder "github.com/domainry/domainry-orm/builder"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 	metadatastorage "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata/storage"
 )
 
@@ -45,5 +46,13 @@ func (MetadataStorageProfile) Indexes(ctx context.Context, queryer metadatastora
 }
 func (MetadataStorageProfile) DropIndex(ctx context.Context, executor metadatastorage.Executor, renderer ormbuilder.Renderer, _, index string) error {
 	_, err := executor.ExecContext(ctx, "DROP INDEX IF EXISTS "+renderer.Identifier(index))
+	return err
+}
+func (MetadataStorageProfile) ConditionalUniquePlan(renderer ormbuilder.Renderer, table, index string, policy recordvalidation.RecordConditionalUniquePolicy) metadatastorage.ConditionalUniquePlan {
+	return metadatastorage.PartialConditionalUniquePlan(renderer, table, index, policy)
+}
+func (MetadataStorageProfile) ConditionalUniqueGuard(string) string { return "" }
+func (MetadataStorageProfile) DropColumn(ctx context.Context, executor metadatastorage.Executor, renderer ormbuilder.Renderer, table, column string) error {
+	_, err := executor.ExecContext(ctx, "ALTER TABLE "+renderer.Table(table)+" DROP COLUMN "+renderer.Identifier(column))
 	return err
 }

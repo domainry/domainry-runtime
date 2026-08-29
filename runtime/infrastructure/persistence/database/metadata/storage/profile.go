@@ -4,7 +4,9 @@ package storage
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -12,6 +14,7 @@ import (
 	ormbuilder "github.com/domainry/domainry-orm/builder"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 )
 
 type Queryer interface {
@@ -87,6 +90,42 @@ type Profile interface {
 	ColumnTypes(context.Context, Queryer, ormbuilder.Renderer, string, string) (map[string]string, error)
 	Indexes(context.Context, Queryer, ormbuilder.Renderer, string, string) (map[string]bool, error)
 	DropIndex(context.Context, Executor, ormbuilder.Renderer, string, string) error
+	ConditionalUniquePlan(ormbuilder.Renderer, string, string, recordvalidation.RecordConditionalUniquePolicy) ConditionalUniquePlan
+	ConditionalUniqueGuard(string) string
+	DropColumn(context.Context, Executor, ormbuilder.Renderer, string, string) error
+}
+
+type ConditionalUniquePlan struct {
+	GuardColumn       string
+	AddGuardStatement string
+	PartialStatement  string
+	IndexFields       []string
+}
+
+func GuardColumn(indexName string) string {
+	hash := sha256.Sum256([]byte(indexName))
+	return "_domainry_cuq_" + hex.EncodeToString(hash[:])[:16]
+}
+
+func ConditionalUniqueFields(policy recordvalidation.RecordConditionalUniquePolicy) []string {
+	return append([]string{"workspace_id"}, policy.Fields...)
+}
+
+func ConditionalUniqueCondition(renderer ormbuilder.Renderer, policy recordvalidation.RecordConditionalUniquePolicy) string {
+	values := make([]string, len(policy.ConditionValues))
+	for index, value := range policy.ConditionValues {
+		values[index] = "'" + strings.ReplaceAll(value, "'", "''") + "'"
+	}
+	return renderer.Identifier(policy.ConditionField) + " IN (" + strings.Join(values, ", ") + ")"
+}
+
+func PartialConditionalUniquePlan(renderer ormbuilder.Renderer, table, indexName string, policy recordvalidation.RecordConditionalUniquePolicy) ConditionalUniquePlan {
+	fields := ConditionalUniqueFields(policy)
+	quoted := make([]string, len(fields))
+	for index, field := range fields {
+		quoted[index] = renderer.Identifier(field)
+	}
+	return ConditionalUniquePlan{IndexFields: fields, PartialStatement: "CREATE UNIQUE INDEX IF NOT EXISTS " + renderer.Identifier(indexName) + " ON " + renderer.Table(table) + " (" + strings.Join(quoted, ", ") + ") WHERE " + ConditionalUniqueCondition(renderer, policy)}
 }
 
 func DecimalConfig(field definitionmodel.FieldSchema) recordmodel.RecordDecimalConfig {

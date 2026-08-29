@@ -354,15 +354,13 @@ func (r MetadataStore) ensureObjectStorage(ctx context.Context, object definitio
 		if err := r.dropManagedIndex(ctx, object.Key, existingIndex); err != nil {
 			return err
 		}
-		if r.store.Driver() == "mysql" {
-			guard := conditionalUniqueGuardColumn(existingIndex)
+		if guard := r.storage.ConditionalUniqueGuard(existingIndex); guard != "" {
 			columns, columnErr := r.tableColumns(ctx, object.Key)
 			if columnErr != nil {
 				return columnErr
 			}
 			if columns[guard] {
-				query := "ALTER TABLE " + r.store.TableIdentifier(object.Key) + " DROP COLUMN " + r.store.Identifier(guard)
-				if _, columnErr := schemaDB.ExecContext(ctx, query); columnErr != nil {
+				if columnErr := r.storage.DropColumn(ctx, schemaDB, r.store.SQLRenderer, object.Key, guard); columnErr != nil {
 					return fmt.Errorf("drop stale conditional unique guard %s: %w", guard, columnErr)
 				}
 			}
@@ -446,47 +444,23 @@ func metadataConstraintIndexedFields(object definitionmodel.ObjectSchema) map[st
 }
 
 func (r MetadataStore) createConditionalUniqueIndex(ctx context.Context, table, indexName string, policy recordvalidation.RecordConditionalUniquePolicy) error {
-	guard, guardSQL, partialSQL, fields := r.conditionalUniqueIndexDDL(table, indexName, policy)
-	if r.store.Driver() == "mysql" {
+	plan := r.storage.ConditionalUniquePlan(r.store.SQLRenderer, table, indexName, policy)
+	if plan.GuardColumn != "" {
 		columns, err := r.tableColumns(ctx, table)
 		if err != nil {
 			return err
 		}
-		if !columns[guard] {
-			if _, err := r.schemaDatabase().ExecContext(ctx, guardSQL); err != nil {
-				return fmt.Errorf("add conditional unique guard %s: %w", guard, err)
+		if !columns[plan.GuardColumn] {
+			if _, err := r.schemaDatabase().ExecContext(ctx, plan.AddGuardStatement); err != nil {
+				return fmt.Errorf("add conditional unique guard %s: %w", plan.GuardColumn, err)
 			}
 		}
-		return r.createIndexIfMissing(ctx, table, indexName, true, fields...)
+		return r.createIndexIfMissing(ctx, table, indexName, true, plan.IndexFields...)
 	}
-	if _, err := r.schemaDatabase().ExecContext(ctx, partialSQL); err != nil {
+	if _, err := r.schemaDatabase().ExecContext(ctx, plan.PartialStatement); err != nil {
 		return fmt.Errorf("create partial unique index: %w", err)
 	}
 	return nil
-}
-
-func (r MetadataStore) conditionalUniqueIndexDDL(table, indexName string, policy recordvalidation.RecordConditionalUniquePolicy) (guard, guardSQL, partialSQL string, fields []string) {
-	fields = append([]string{"workspace_id"}, policy.Fields...)
-	values := make([]string, len(policy.ConditionValues))
-	for index, value := range policy.ConditionValues {
-		values[index] = "'" + strings.ReplaceAll(value, "'", "''") + "'"
-	}
-	condition := r.store.Identifier(policy.ConditionField) + " IN (" + strings.Join(values, ", ") + ")"
-	if r.store.Driver() == "mysql" {
-		guard = conditionalUniqueGuardColumn(indexName)
-		guardSQL = "ALTER TABLE " + r.store.TableIdentifier(table) +
-			" ADD COLUMN " + r.store.Identifier(guard) +
-			" TINYINT GENERATED ALWAYS AS (CASE WHEN " + condition + " THEN 1 ELSE NULL END) STORED"
-		fields = append(fields, guard)
-		return guard, guardSQL, "", fields
-	}
-	quotedFields := make([]string, len(fields))
-	for index, field := range fields {
-		quotedFields[index] = r.store.Identifier(field)
-	}
-	partialSQL = "CREATE UNIQUE INDEX IF NOT EXISTS " + r.store.Identifier(indexName) +
-		" ON " + r.store.TableIdentifier(table) + " (" + strings.Join(quotedFields, ", ") + ") WHERE " + condition
-	return "", "", partialSQL, fields
 }
 
 func metadataConstraintIndexedField(field definitionmodel.FieldSchema, indexed bool) definitionmodel.FieldSchema {

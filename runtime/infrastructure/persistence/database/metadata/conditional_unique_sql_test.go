@@ -29,26 +29,28 @@ func TestConditionalUniqueDDLUsesPartialIndexesAndMySQLNullableGuard(t *testing.
 		if err := store.raw.SetDialectForTesting(driver); err != nil {
 			t.Fatal(err)
 		}
-		guard, guardSQL, partialSQL, fields := store.conditionalUniqueIndexDDL("class_booking", "uidx_active", policy)
-		if guard != "" || guardSQL != "" || !reflect.DeepEqual(fields, []string{"workspace_id", "class_id", "member_id"}) {
-			t.Fatalf("%s spec guard=%q guardSQL=%q fields=%v", driver, guard, guardSQL, fields)
+		store.storage = metadataTestStorageProfile(driver)
+		plan := store.storage.ConditionalUniquePlan(store.store.SQLRenderer, "class_booking", "uidx_active", policy)
+		if plan.GuardColumn != "" || plan.AddGuardStatement != "" || !reflect.DeepEqual(plan.IndexFields, []string{"workspace_id", "class_id", "member_id"}) {
+			t.Fatalf("%s spec guard=%q guardSQL=%q fields=%v", driver, plan.GuardColumn, plan.AddGuardStatement, plan.IndexFields)
 		}
 		for _, fragment := range []string{"CREATE UNIQUE INDEX IF NOT EXISTS", "class_booking", "workspace_id", "class_id", "member_id", "WHERE", "status", "'booked'", "'wait''listed'"} {
-			if !strings.Contains(partialSQL, fragment) {
-				t.Fatalf("%s partial DDL missing %q: %s", driver, fragment, partialSQL)
+			if !strings.Contains(plan.PartialStatement, fragment) {
+				t.Fatalf("%s partial DDL missing %q: %s", driver, fragment, plan.PartialStatement)
 			}
 		}
 	}
 	if err := store.raw.SetDialectForTesting("mysql"); err != nil {
 		t.Fatal(err)
 	}
-	guard, guardSQL, partialSQL, fields := store.conditionalUniqueIndexDDL("class_booking", "uidx_active", policy)
-	if guard == "" || partialSQL != "" || !reflect.DeepEqual(fields, []string{"workspace_id", "class_id", "member_id", guard}) {
-		t.Fatalf("mysql spec guard=%q partial=%q fields=%v", guard, partialSQL, fields)
+	store.storage = metadataTestStorageProfile("mysql")
+	plan := store.storage.ConditionalUniquePlan(store.store.SQLRenderer, "class_booking", "uidx_active", policy)
+	if plan.GuardColumn == "" || plan.PartialStatement != "" || !reflect.DeepEqual(plan.IndexFields, []string{"workspace_id", "class_id", "member_id", plan.GuardColumn}) {
+		t.Fatalf("mysql spec guard=%q partial=%q fields=%v", plan.GuardColumn, plan.PartialStatement, plan.IndexFields)
 	}
 	for _, fragment := range []string{"ALTER TABLE", "ADD COLUMN", "TINYINT GENERATED ALWAYS AS", "CASE WHEN", "status", "'booked'", "'wait''listed'", "THEN 1 ELSE NULL END", "STORED"} {
-		if !strings.Contains(guardSQL, fragment) {
-			t.Fatalf("mysql guard DDL missing %q: %s", fragment, guardSQL)
+		if !strings.Contains(plan.AddGuardStatement, fragment) {
+			t.Fatalf("mysql guard DDL missing %q: %s", fragment, plan.AddGuardStatement)
 		}
 	}
 }

@@ -123,7 +123,7 @@ func TestEnsureObjectStorageConditionalUniqueRemainingBranches(t *testing.T) {
 	}, definitionmodel.ObjectSchema{Key: "booking"}); err != nil {
 		t.Fatalf("stale index without guard column: %v", err)
 	}
-	guard := conditionalUniqueGuardColumn(staleIndex)
+	guard := metadataTestStorageProfile("mysql").ConditionalUniqueGuard(staleIndex)
 	if err := run(t, "mysql", metadataSQLState{
 		execSteps:  []metadataSQLExecStep{{rows: 1}, {rows: 1}, {err: errMetadataSQL}},
 		querySteps: mysqlBaseQueries(metadataInformationSchemaColumnStep("workspace_id", "id", guard)),
@@ -156,7 +156,7 @@ func TestCreateConditionalUniqueIndexRemainingProfileStrategies(t *testing.T) {
 		ConditionValues: []string{"active"},
 	}
 	indexName := "uidx_conditional_booking_active"
-	guard := conditionalUniqueGuardColumn(indexName)
+	guard := metadataTestStorageProfile("mysql").ConditionalUniqueGuard(indexName)
 
 	runMySQL := func(t *testing.T, state metadataSQLState, createIndexErr error) error {
 		t.Helper()
