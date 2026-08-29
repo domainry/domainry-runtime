@@ -8,6 +8,7 @@ import (
 	"time"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 )
 
 func (r DeliveryMetricsStore) DeliveryMetrics(ctx context.Context, workspaceID, since string) (notificationmodel.NotificationDeliveryMetrics, error) {
@@ -15,8 +16,14 @@ func (r DeliveryMetricsStore) DeliveryMetrics(ctx context.Context, workspaceID, 
 	if err != nil {
 		return notificationmodel.NotificationDeliveryMetrics{}, err
 	}
-	query := "SELECT " + r.store.Identifier("status") + ", " + r.store.Identifier("payload_json") + ", " + r.store.Identifier("error") + " FROM " + r.store.TableIdentifier("integration_outbox_messages") + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1) + " AND " + r.store.Identifier("created_at") + " >= " + r.store.Placeholder(2)
-	rows, err := r.database().QueryContext(ctx, query, workspaceID, since)
+	query, args, err := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "integration_outbox_messages").
+		Columns("status", "payload_json", "error").Where(ormbuilder.And(
+		ormbuilder.Equal("workspace_id", workspaceID), ormbuilder.GreaterThanOrEqual("created_at", since),
+	)).Build()
+	if err != nil {
+		return notificationmodel.NotificationDeliveryMetrics{}, err
+	}
+	rows, err := r.database().QueryContext(ctx, query, args...)
 	if err != nil {
 		return notificationmodel.NotificationDeliveryMetrics{}, err
 	}

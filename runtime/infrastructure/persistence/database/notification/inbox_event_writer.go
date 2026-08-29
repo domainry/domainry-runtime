@@ -10,6 +10,7 @@ import (
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	sdkcontract "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	transactioncontract "github.com/domainry/domainry-runtime/runtime/domain/transaction/contract"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -93,8 +94,15 @@ func (w InboxEventWriter) CommittedCount(ctx context.Context, event notification
 	}
 	var count int
 	if scope, saas := w.runtimeStore.NotificationSaaSPublications(); saas {
-		query := "SELECT COUNT(*) FROM " + w.runtimeStore.TableIdentifier("notification_publication_outbox") + " WHERE " + w.runtimeStore.Identifier("tenant_id") + " = " + w.runtimeStore.Placeholder(1) + " AND " + w.runtimeStore.Identifier("workspace_id") + " = " + w.runtimeStore.Placeholder(2) + " AND " + w.runtimeStore.Identifier("application_key") + " = " + w.runtimeStore.Placeholder(3) + " AND " + w.runtimeStore.Identifier("source_event_id") + " = " + w.runtimeStore.Placeholder(4)
-		err := w.runtimeStore.DB().QueryRowContext(ctx, query, scope.TenantID, event.WorkspaceID, scope.ApplicationKey, event.SourceEventID).Scan(&count)
+		query, args, err := ormbuilder.NewSelectBuilder(w.runtimeStore.SQLRenderer, "notification_publication_outbox").
+			Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(ormbuilder.And(
+			ormbuilder.Equal("tenant_id", scope.TenantID), ormbuilder.Equal("workspace_id", event.WorkspaceID),
+			ormbuilder.Equal("application_key", scope.ApplicationKey), ormbuilder.Equal("source_event_id", event.SourceEventID),
+		)).Build()
+		if err != nil {
+			return 0, fmt.Errorf("build Notification publication commit inspection: %w", err)
+		}
+		err = w.runtimeStore.DB().QueryRowContext(ctx, query, args...).Scan(&count)
 		return count, err
 	}
 	transactions := w.runtimeStore.NotificationTransactions()
