@@ -399,7 +399,7 @@ func (r MetadataStore) applyDefinitionArchive(ctx context.Context, tx *sql.Tx, m
 
 func (r MetadataStore) insertChangeAudit(ctx context.Context, tx *sql.Tx, event auditmodel.AuditEvent) error {
 	if strings.TrimSpace(event.WorkspaceID) == "" {
-		event.WorkspaceID = principalmodel.InstallationWorkspaceID
+		return fmt.Errorf("metadata definition audit workspace is required")
 	}
 	before, err := json.Marshal(event.Before)
 	if err != nil {

@@ -92,7 +92,7 @@ func TestReportSnapshotBeginValidationAndSQLFailureConditions(t *testing.T) {
 
 func TestReportSnapshotCompleteFailAndScanFailureConditions(t *testing.T) {
 	wantErr := errors.New("snapshot mutation failure")
-	snapshot := reportmodel.ReportSnapshot{ID: "snapshot", Summary: reportmodel.ReportSummary{}, SourceVersions: map[string]string{}}
+	snapshot := reportmodel.ReportSnapshot{ID: "snapshot", WorkspaceID: "workspace", Summary: reportmodel.ReportSummary{}, SourceVersions: map[string]string{}}
 	request := reportcontract.ReportSnapshotCompleteRequest{Snapshot: snapshot, ExpectedStatus: "refreshing"}
 	for _, call := range []func(*ReportSnapshotStore) error{
 		func(repository *ReportSnapshotStore) error {

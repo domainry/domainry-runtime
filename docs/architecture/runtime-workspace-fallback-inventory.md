@@ -33,13 +33,9 @@ empty workspace comparisons, workspace/default proximity, and literal
 | 1 | `runtime/infrastructure/persistence/database/integration/integration_worker_scope.go` |
 | 1 | `runtime/infrastructure/persistence/database/metadata/manifest_store.go` |
 | 1 | `runtime/infrastructure/persistence/database/metadata/definition_store.go` |
-| 1 | `runtime/infrastructure/persistence/database/operations/operations_lease_release_store.go` |
-| 3 | `runtime/infrastructure/persistence/database/record/record_batch_job_store.go` |
 | 1 | `runtime/infrastructure/persistence/database/schema/idempotency_receipt_migration.go` |
 | 1 | `runtime/infrastructure/persistence/database/schema/evidence_tables.go` |
 | 1 | `runtime/infrastructure/persistence/database/transaction/boundary_intent_store.go` |
-| 1 | `runtime/infrastructure/persistence/database/workflow/workflow_execution_receipt_store.go` |
-| 1 | `runtime/infrastructure/persistence/database/workspace_rls.go` |
 
 The next checklist item turns this inventory into an executable exact baseline
 that may only decrease. This scan itself does not authorize any fallback.

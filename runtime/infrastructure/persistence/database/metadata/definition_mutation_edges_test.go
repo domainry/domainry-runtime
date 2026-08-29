@@ -75,7 +75,9 @@ func TestDefinitionMutationAuditAndLocalizedProjectionBranches(t *testing.T) {
 		{step: metadataSQLExecStep{rows: 1}},
 	} {
 		err := runMetadataTransaction(t, base, metadataSQLState{execSteps: []metadataSQLExecStep{testCase.step}}, func(repository MetadataStore, tx *sql.Tx) error {
-			return repository.insertChangeAudit(t.Context(), tx, testCase.event)
+			event := testCase.event
+			event.WorkspaceID = "default"
+			return repository.insertChangeAudit(t.Context(), tx, event)
 		})
 		if (err != nil) != testCase.err {
 			t.Fatalf("audit err=%v", err)
@@ -189,7 +191,7 @@ func TestApplyDefinitionMutationsControlBranches(t *testing.T) {
 		}
 	}
 	repository := scriptedMetadataStore(t, &metadataSQLState{execSteps: []metadataSQLExecStep{{rows: 1}}}, base)
-	if _, err := repository.ApplyDefinitionMutations(t.Context(), metadataInstallScope(), nil, []auditmodel.AuditEvent{{}}, &changeplanmodel.BusinessChangePlanPublication{}); err != nil {
+	if _, err := repository.ApplyDefinitionMutations(t.Context(), metadataInstallScope(), nil, []auditmodel.AuditEvent{{WorkspaceID: "default"}}, &changeplanmodel.BusinessChangePlanPublication{}); err != nil {
 		t.Fatalf("valid audit without publication revision: %v", err)
 	}
 	create := []metadatamodel.MetadataDefinitionMutation{{Operation: "create", ResourceType: "object", ResourceKey: "account", Request: metadataObjectUpsertRequest()}}

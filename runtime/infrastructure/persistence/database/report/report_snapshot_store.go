@@ -62,13 +62,13 @@ func (s *ReportSnapshotStore) BeginReportSnapshot(ctx context.Context, request r
 }
 
 func (s *ReportSnapshotStore) CompleteReportSnapshot(ctx context.Context, request reportcontract.ReportSnapshotCompleteRequest) error {
+	if strings.TrimSpace(request.Snapshot.WorkspaceID) == "" {
+		return fmt.Errorf("report snapshot workspace is required")
+	}
 	// ReportSummary and SourceVersions contain only JSON-safe concrete fields.
 	summaryJSON, _ := json.Marshal(request.Snapshot.Summary)
 	versionsJSON, _ := json.Marshal(request.Snapshot.SourceVersions)
-	builder := ormbuilder.NewUpdateBuilder(s.store.SQLRenderer, "report_snapshots")
-	if strings.TrimSpace(request.Snapshot.WorkspaceID) != "" {
-		builder = ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "report_snapshots", request.Snapshot.WorkspaceID)
-	}
+	builder := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "report_snapshots", request.Snapshot.WorkspaceID)
 	query, args, buildErr := builder.Set("status", "succeeded").Set("summary_json", string(summaryJSON)).Set("watermark", request.Snapshot.Watermark).Set("source_versions_json", string(versionsJSON)).Set("row_count", request.Snapshot.Summary.RowCount).Set("source_row_count", request.Snapshot.Summary.SourceRowCount).Set("refreshed_at", request.Snapshot.RefreshedAt).Set("error_code", "").Where(ormbuilder.And(ormbuilder.Equal("id", request.Snapshot.ID), ormbuilder.Equal("status", request.ExpectedStatus))).Build()
 	if buildErr != nil {
 		return buildErr

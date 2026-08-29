@@ -53,7 +53,7 @@ func openStoreForMetadataTest(t *testing.T) *metadataTestStore {
 func TestPublishDefinitionCommitsDefinitionVersionAuditAndActiveRevision(t *testing.T) {
 	store := openStoreForMetadataTest(t)
 	defer store.raw.Close()
-	audit := auditmodel.AuditEvent{ID: "audit-metadata-publish", Event: "metadata_definition.saved", ObjectKey: "object", RecordID: "account", ActorID: "admin", RoleKey: "admin", Summary: "Saved object account", CreatedAt: "2026-07-19T00:00:00Z"}
+	audit := auditmodel.AuditEvent{ID: "audit-metadata-publish", WorkspaceID: "default", Event: "metadata_definition.saved", ObjectKey: "object", RecordID: "account", ActorID: "admin", RoleKey: "admin", Summary: "Saved object account", CreatedAt: "2026-07-19T00:00:00Z"}
 	definition, err := store.PublishDefinition(t.Context(), metadataTestInstallationScope(), "object", "account", metadatamodel.MetadataDefinitionUpsertRequest{Payload: json.RawMessage(`{"key":"account","name":"Account"}`)}, audit)
 	if err != nil {
 		t.Fatal(err)
@@ -85,7 +85,7 @@ func TestPublishDefinitionReplayDoesNotDuplicateVersionAuditOrRefreshIntent(t *t
 	defer store.raw.Close()
 	expectAbsent := ""
 	request := metadatamodel.MetadataDefinitionUpsertRequest{SourceKind: "builder_v4", SourceID: "task-1:create-account", ExpectedSchemaHash: &expectAbsent, Payload: json.RawMessage(`{"key":"account","name":"Account"}`)}
-	firstAudit := auditmodel.AuditEvent{ID: "audit-first", Event: "metadata_definition.saved", ObjectKey: "object", RecordID: "account", CreatedAt: "2026-07-21T00:00:00Z"}
+	firstAudit := auditmodel.AuditEvent{ID: "audit-first", WorkspaceID: "default", Event: "metadata_definition.saved", ObjectKey: "object", RecordID: "account", CreatedAt: "2026-07-21T00:00:00Z"}
 	first, err := store.PublishDefinition(t.Context(), metadataTestInstallationScope(), "object", "account", request, firstAudit)
 	if err != nil {
 		t.Fatal(err)
@@ -120,7 +120,7 @@ func TestPublishDefinitionRollsBackAllFactsWhenActiveRevisionFails(t *testing.T)
 	if _, err := store.raw.DB().Exec(`CREATE TRIGGER fail_metadata_active_revision BEFORE INSERT ON metadata_catalog WHEN NEW.key = 'schema_hash' BEGIN SELECT RAISE(FAIL, 'injected active revision failure'); END`); err != nil {
 		t.Fatal(err)
 	}
-	audit := auditmodel.AuditEvent{ID: "audit-metadata-rollback", Event: "metadata_definition.saved", ObjectKey: "object", RecordID: "account", ActorID: "admin", RoleKey: "admin", Summary: "Saved object account", CreatedAt: "2026-07-19T00:00:00Z"}
+	audit := auditmodel.AuditEvent{ID: "audit-metadata-rollback", WorkspaceID: "default", Event: "metadata_definition.saved", ObjectKey: "object", RecordID: "account", ActorID: "admin", RoleKey: "admin", Summary: "Saved object account", CreatedAt: "2026-07-19T00:00:00Z"}
 	if _, err := store.PublishDefinition(t.Context(), metadataTestInstallationScope(), "object", "account", metadatamodel.MetadataDefinitionUpsertRequest{Payload: json.RawMessage(`{"key":"account","name":"Account"}`)}, audit); err == nil {
 		t.Fatal("expected injected active revision failure")
 	}
@@ -143,7 +143,7 @@ func TestPublishDefinitionRollsBackAllFactsWhenActiveRevisionFails(t *testing.T)
 func TestMetadataRefreshIntentCanBeReconciledAfterInlineFailure(t *testing.T) {
 	store := openStoreForMetadataTest(t)
 	defer store.raw.Close()
-	audit := auditmodel.AuditEvent{ID: "audit-metadata-reconcile", Event: "metadata_definition.saved", ObjectKey: "object", RecordID: "account", ActorID: "admin", RoleKey: "admin", Summary: "Saved object account", CreatedAt: "2026-07-19T00:00:00Z"}
+	audit := auditmodel.AuditEvent{ID: "audit-metadata-reconcile", WorkspaceID: "default", Event: "metadata_definition.saved", ObjectKey: "object", RecordID: "account", ActorID: "admin", RoleKey: "admin", Summary: "Saved object account", CreatedAt: "2026-07-19T00:00:00Z"}
 	definition, err := store.PublishDefinition(t.Context(), metadataTestInstallationScope(), "object", "account", metadatamodel.MetadataDefinitionUpsertRequest{Payload: json.RawMessage(`{"key":"account","name":"Account"}`)}, audit)
 	if err != nil {
 		t.Fatal(err)

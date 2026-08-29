@@ -16,30 +16,26 @@ import (
 var workspaceFallbackLine = regexp.MustCompile(`(?i)workspace[^\n]{0,80}(==|!=)[[:space:]]*""|workspace[^\n]{0,100}(default|fallback)|default[^\n]{0,100}workspace|"default"|'default'`)
 
 var reviewedWorkspaceFallbackBaseline = map[string]int{
-	"runtime/application/seed/business/records.go":                                             1,
-	"runtime/application/seed/globalcapability/runtime.go":                                     1,
-	"runtime/application/audit/audit_application_service.go":                                   2,
-	"runtime/application/automation/automation_definition_validation_application_service.go":   1,
-	"runtime/application/integration/integration_application_delivery_management.go":           2,
-	"runtime/application/integration/integration_application_execution_evidence.go":            1,
-	"runtime/application/integration/integration_application_failure_alerts.go":                3,
-	"runtime/application/integration/integration_application_inbound_webhooks.go":              2,
-	"runtime/application/metadata/metadata_localized_text_coverage_application_service.go":     1,
-	"runtime/application/seed/deployment/frontend_capability.go":                               1,
-	"runtime/application/workflow/workflow_execution_idempotency_application_service.go":       1,
-	"runtime/infrastructure/persistence/database/action/action_business_execution_store.go":    1,
-	"runtime/infrastructure/persistence/database/automation/sql_values.go":                     1,
-	"runtime/infrastructure/persistence/database/deployment/runtime_status_store.go":           3,
-	"runtime/infrastructure/persistence/database/integration/integration_worker_scope.go":      1,
-	"runtime/infrastructure/persistence/database/metadata/manifest_store.go":                   1,
-	"runtime/infrastructure/persistence/database/metadata/definition_store.go":                 1,
-	"runtime/infrastructure/persistence/database/operations/operations_lease_release_store.go": 1,
-	"runtime/infrastructure/persistence/database/record/record_batch_job_store.go":             3,
-	"runtime/infrastructure/persistence/database/schema/idempotency_receipt_migration.go":      1,
-	"runtime/infrastructure/persistence/database/schema/evidence_tables.go":                    1,
-	"runtime/infrastructure/persistence/database/transaction/boundary_intent_store.go":         1,
-	"runtime/infrastructure/persistence/database/workflow/workflow_execution_receipt_store.go": 1,
-	"runtime/infrastructure/persistence/database/workspace_rls.go":                             1,
+	"runtime/application/seed/business/records.go":                                           1,
+	"runtime/application/seed/globalcapability/runtime.go":                                   1,
+	"runtime/application/audit/audit_application_service.go":                                 2,
+	"runtime/application/automation/automation_definition_validation_application_service.go": 1,
+	"runtime/application/integration/integration_application_delivery_management.go":         2,
+	"runtime/application/integration/integration_application_execution_evidence.go":          1,
+	"runtime/application/integration/integration_application_failure_alerts.go":              3,
+	"runtime/application/integration/integration_application_inbound_webhooks.go":            2,
+	"runtime/application/metadata/metadata_localized_text_coverage_application_service.go":   1,
+	"runtime/application/seed/deployment/frontend_capability.go":                             1,
+	"runtime/application/workflow/workflow_execution_idempotency_application_service.go":     1,
+	"runtime/infrastructure/persistence/database/action/action_business_execution_store.go":  1,
+	"runtime/infrastructure/persistence/database/automation/sql_values.go":                   1,
+	"runtime/infrastructure/persistence/database/deployment/runtime_status_store.go":         3,
+	"runtime/infrastructure/persistence/database/integration/integration_worker_scope.go":    1,
+	"runtime/infrastructure/persistence/database/metadata/manifest_store.go":                 1,
+	"runtime/infrastructure/persistence/database/metadata/definition_store.go":               1,
+	"runtime/infrastructure/persistence/database/schema/idempotency_receipt_migration.go":    1,
+	"runtime/infrastructure/persistence/database/schema/evidence_tables.go":                  1,
+	"runtime/infrastructure/persistence/database/transaction/boundary_intent_store.go":       1,
 }
 
 func TestWorkspaceScopeInventoryCoversRuntimeSchemaAndNonDatabaseSurfaces(t *testing.T) {
@@ -180,6 +176,27 @@ func TestWorkspaceFallbackInventoryIsAnExactNonGrowingBaseline(t *testing.T) {
 					(strings.Contains(line, "strings.TrimSpace(intent.WorkspaceID)") && strings.Contains(line, `== ""`)) ||
 					(strings.Contains(line, "strings.TrimSpace(scope.WorkspaceID)") && strings.Contains(line, `== ""`)) ||
 					strings.Contains(line, "workspaceID = strings.TrimSpace(workspaceID)") {
+					continue
+				}
+				relativePath := filepath.ToSlash(relative)
+				// Operations receipts deliberately support two typed channels: a
+				// tenant workspace builder or an explicitly purposed system builder.
+				// Choosing between those already-validated scopes is not fallback.
+				if (relativePath == "runtime/infrastructure/persistence/database/operations/operations_store.go" && strings.Contains(line, `workspaceID != ""`)) ||
+					(relativePath == "runtime/infrastructure/persistence/database/operations/operations_lease_release_store.go" && strings.Contains(line, `spec.workspaceColumn != ""`)) {
+					continue
+				}
+				// These conditions reject missing workspace identity or discard an
+				// invalid persisted scope; none supplies a replacement workspace.
+				if (relativePath == "runtime/infrastructure/persistence/database/record/record_batch_job_metrics_store.go" ||
+					relativePath == "runtime/infrastructure/persistence/database/record/record_batch_job_transition_store.go" ||
+					relativePath == "runtime/infrastructure/persistence/postgres/rls/profile.go" ||
+					relativePath == "runtime/infrastructure/persistence/database/metadata/change_plan_store.go" ||
+					relativePath == "runtime/infrastructure/persistence/database/metadata/definition_context_store.go" ||
+					relativePath == "runtime/infrastructure/persistence/database/report/report_snapshot_store.go") &&
+					(strings.Contains(line, `workspaceID == ""`) || strings.Contains(line, `workspaceID != ""`) ||
+						strings.Contains(line, `strings.TrimSpace(workspaceID) == ""`) || strings.Contains(line, `strings.TrimSpace(event.WorkspaceID) == ""`) ||
+						strings.Contains(line, `strings.TrimSpace(request.Snapshot.WorkspaceID) == ""`)) {
 					continue
 				}
 				if workspaceFallbackLine.MatchString(line) {

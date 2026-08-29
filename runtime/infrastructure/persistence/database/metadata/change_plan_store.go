@@ -10,12 +10,11 @@ import (
 	"strings"
 
 	ormbuilder "github.com/domainry/domainry-orm/builder"
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 func (s MetadataStore) insertMetadataChangeAudit(ctx context.Context, tx *sql.Tx, event auditmodel.AuditEvent) error {
 	if strings.TrimSpace(event.WorkspaceID) == "" {
-		event.WorkspaceID = principalmodel.InstallationWorkspaceID
+		return fmt.Errorf("metadata change audit workspace is required")
 	}
 	before, err := json.Marshal(event.Before)
 	if err != nil {
