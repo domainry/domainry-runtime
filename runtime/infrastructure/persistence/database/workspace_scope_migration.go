@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"sort"
 	"strings"
@@ -58,16 +57,12 @@ func (s *RuntimeStore) ValidateLegacyWorkspaceScopes(ctx context.Context) error 
 }
 
 func (s *RuntimeStore) inventoryWorkspaceTables(ctx context.Context, db schemaDatabase) ([]string, error) {
-	var rows *sql.Rows
-	var err error
-	switch s.dialect.Name() {
-	case "sqlite":
-		rows, err = db.QueryContext(ctx, `SELECT DISTINCT m.name FROM sqlite_master m JOIN pragma_table_info(m.name) p WHERE m.type = 'table' AND p.name = 'workspace_id' ORDER BY m.name`)
-	case "mysql":
-		rows, err = db.QueryContext(ctx, `SELECT DISTINCT table_name FROM information_schema.columns WHERE table_schema = ? AND column_name = 'workspace_id' ORDER BY table_name`, s.DatabaseSchema())
-	default:
-		rows, err = db.QueryContext(ctx, `SELECT DISTINCT table_name FROM information_schema.columns WHERE table_schema = $1 AND column_name = 'workspace_id' ORDER BY table_name`, s.DatabaseSchema())
+	base := s.sqlBase()
+	query := base.RuntimeEngine.WorkspaceTablesQuery(base.SQLRenderer, base.DatabaseSchema)
+	if strings.TrimSpace(query.Statement) == "" {
+		return nil, fmt.Errorf("database engine does not support workspace table introspection")
 	}
+	rows, err := db.QueryContext(ctx, query.Statement, query.Arguments...)
 	if err != nil {
 		return nil, fmt.Errorf("inventory workspace migration tables: %w", err)
 	}

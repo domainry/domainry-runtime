@@ -1,10 +1,25 @@
 package sqlite
 
 import (
+	"context"
+	"database/sql"
 	"strings"
+	"time"
 
+	ormdialect "github.com/domainry/domainry-orm/dialect"
+	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
+
+func (engineProfile) MigrationLedgerTypes() persistencedriver.MigrationLedgerTypes {
+	return persistencedriver.MigrationLedgerTypes{Key: "TEXT", Timestamp: "TEXT"}
+}
+func (engineProfile) EnsureMigrationNamespace(context.Context, persistencedriver.SchemaDatabase, ormdialect.Renderer, string) error {
+	return nil
+}
+func (engineProfile) ConfigureMigrationTransaction(context.Context, *sql.Tx, ormdialect.Renderer, string, time.Duration, time.Duration) error {
+	return nil
+}
 
 func (engineProfile) MigrationDatabasePath(cfg config.Config) string {
 	if value := strings.TrimSpace(cfg.DBPath); value != "" {

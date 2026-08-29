@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	ormdialect "github.com/domainry/domainry-orm/dialect"
 	ormdriver "github.com/domainry/domainry-orm/driver"
@@ -29,6 +30,26 @@ type EngineProfile interface {
 	MigrationDatabasePath(config.Config) string
 	ManagedDatabaseMarkerEnabled() bool
 	ColumnDefinition(string) string
+	ApplicationTablesQuery(ormdialect.Renderer, string) SchemaQuery
+	WorkspaceTablesQuery(ormdialect.Renderer, string) SchemaQuery
+	MigrationLedgerTypes() MigrationLedgerTypes
+	EnsureMigrationNamespace(context.Context, SchemaDatabase, ormdialect.Renderer, string) error
+	ConfigureMigrationTransaction(context.Context, *sql.Tx, ormdialect.Renderer, string, time.Duration, time.Duration) error
+}
+
+type SchemaQuery struct {
+	Statement string
+	Arguments []any
+}
+
+type MigrationLedgerTypes struct {
+	Key       string
+	Timestamp string
+}
+
+type SchemaDatabase interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }
 
 type engineProfileProvider interface{ EngineProfile() EngineProfile }
@@ -38,6 +59,21 @@ type portableEngineProfile struct{ ormdriver.Profile }
 func (portableEngineProfile) MigrationDatabasePath(config.Config) string { return "" }
 func (portableEngineProfile) ManagedDatabaseMarkerEnabled() bool         { return true }
 func (portableEngineProfile) ColumnDefinition(value string) string       { return value }
+func (portableEngineProfile) ApplicationTablesQuery(ormdialect.Renderer, string) SchemaQuery {
+	return SchemaQuery{}
+}
+func (portableEngineProfile) WorkspaceTablesQuery(ormdialect.Renderer, string) SchemaQuery {
+	return SchemaQuery{}
+}
+func (portableEngineProfile) MigrationLedgerTypes() MigrationLedgerTypes {
+	return MigrationLedgerTypes{Key: "TEXT", Timestamp: "TEXT"}
+}
+func (portableEngineProfile) EnsureMigrationNamespace(context.Context, SchemaDatabase, ormdialect.Renderer, string) error {
+	return nil
+}
+func (portableEngineProfile) ConfigureMigrationTransaction(context.Context, *sql.Tx, ormdialect.Renderer, string, time.Duration, time.Duration) error {
+	return nil
+}
 
 var portableProfileRegistry = map[ormdialect.Name]func() EngineProfile{
 	ormdialect.SQLite: func() EngineProfile { return portableEngineProfile{Profile: ormsqlite.NewProfile()} },
