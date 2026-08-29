@@ -41,8 +41,14 @@ func NewAgentTaskRunStore(store *database.RuntimeStore) *AgentTaskRunStore {
 // startup. It is deliberately not part of EnsureSchema: ordinary Agent reads
 // and writes must not perform a global workspace inventory.
 func (s *AgentTaskRunStore) BackfillWorkerScopes(ctx context.Context) error {
-	query := "SELECT " + s.store.Identifier("workspace_id") + ", MAX(" + s.store.Identifier("updated_at") + ") FROM " + s.store.TableIdentifier("agent_task_runs") + " GROUP BY " + s.store.Identifier("workspace_id")
-	rows, err := s.db.QueryContext(ctx, query)
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "agent_task_runs").Projections(
+		ormbuilder.Project(ormbuilder.Column("workspace_id")),
+		ormbuilder.Project(ormbuilder.Max(ormbuilder.Column("updated_at"))),
+	).GroupBy(ormbuilder.Column("workspace_id")).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -236,11 +242,16 @@ func (s *AgentTaskRunStore) claimAgentTaskRunOnce(ctx context.Context, workspace
 		return agentrepository.AgentTaskClaim{}, false, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	eligible := "((" + s.store.Identifier("status") + " IN (" + s.store.Placeholder(3) + ", " + s.store.Placeholder(4) + ") AND " + s.store.Identifier("next_attempt_at") + " <= " + s.store.Placeholder(5) + ") OR (" + s.store.Identifier("status") + " = " + s.store.Placeholder(6) + " AND " + s.store.Identifier("lease_expires_at") + " <= " + s.store.Placeholder(7) + "))"
-	query := "SELECT " + s.store.Identifier("payload_json") + ", " + s.store.Identifier("fencing_token") + " FROM " + s.store.TableIdentifier("agent_task_runs") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("run_id") + " = " + s.store.Placeholder(2) + " AND " + eligible
+	query, queryArgs, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "agent_task_runs", workspaceID).
+		Columns("payload_json", "fencing_token").Where(ormbuilder.And(
+		ormbuilder.Equal("run_id", runID), agentTaskEligiblePredicate(now),
+	)).Limit(1).Build()
+	if buildErr != nil {
+		return agentrepository.AgentTaskClaim{}, false, buildErr
+	}
 	var payload []byte
 	var priorToken int64
-	err = tx.QueryRowContext(ctx, query, workspaceID, runID, string(agentmodel.AgentTaskRunPending), string(agentmodel.AgentTaskRunRetryScheduled), now.UnixMilli(), string(agentmodel.AgentTaskRunRunning), now.UnixMilli()).Scan(&payload, &priorToken)
+	err = tx.QueryRowContext(ctx, query, queryArgs...).Scan(&payload, &priorToken)
 	if err == sql.ErrNoRows {
 		return agentrepository.AgentTaskClaim{}, false, nil
 	}
@@ -256,8 +267,11 @@ func (s *AgentTaskRunStore) claimAgentTaskRunOnce(ctx context.Context, workspace
 	run.Lease = agentmodel.AgentTaskLease{Owner: owner, FencingToken: token, ExpiresAt: expires}
 	run.Attempts = append(run.Attempts, agentmodel.AgentTaskAttempt{Number: run.Attempt, StartedAt: now})
 	updatedPayload, _ := json.Marshal(run)
-	update := "UPDATE " + s.store.TableIdentifier("agent_task_runs") + " SET " + s.store.Identifier("status") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("lease_owner") + " = " + s.store.Placeholder(2) + ", " + s.store.Identifier("fencing_token") + " = " + s.store.Placeholder(3) + ", " + s.store.Identifier("lease_expires_at") + " = " + s.store.Placeholder(4) + ", " + s.store.Identifier("payload_json") + " = " + s.store.Placeholder(5) + ", " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(6) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(7) + " AND " + s.store.Identifier("run_id") + " = " + s.store.Placeholder(8) + " AND " + s.store.Identifier("fencing_token") + " = " + s.store.Placeholder(9) + " AND " + eligibleWithOffset(s.store, 9)
-	result, err := tx.ExecContext(ctx, update, string(run.Status), owner, token, expires.UnixMilli(), updatedPayload, now.UnixMilli(), workspaceID, runID, priorToken, string(agentmodel.AgentTaskRunPending), string(agentmodel.AgentTaskRunRetryScheduled), now.UnixMilli(), string(agentmodel.AgentTaskRunRunning), now.UnixMilli())
+	update, updateArgs, buildErr := agentTaskClaimUpdate(s.store, workspaceID, runID, owner, token, priorToken, expires, now, updatedPayload)
+	if buildErr != nil {
+		return agentrepository.AgentTaskClaim{}, false, buildErr
+	}
+	result, err := tx.ExecContext(ctx, update, updateArgs...)
 	if err != nil {
 		return agentrepository.AgentTaskClaim{}, false, err
 	}
@@ -277,12 +291,16 @@ func (s *AgentTaskRunStore) claimNextOnce(ctx context.Context, workspaceID strin
 		return agentrepository.AgentTaskClaim{}, false, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	eligible := "((" + s.store.Identifier("status") + " IN (" + s.store.Placeholder(2) + ", " + s.store.Placeholder(3) + ") AND " + s.store.Identifier("next_attempt_at") + " <= " + s.store.Placeholder(4) + ") OR (" + s.store.Identifier("status") + " = " + s.store.Placeholder(5) + " AND " + s.store.Identifier("lease_expires_at") + " <= " + s.store.Placeholder(6) + "))"
-	query := "SELECT " + s.store.Identifier("run_id") + ", " + s.store.Identifier("payload_json") + ", " + s.store.Identifier("fencing_token") + " FROM " + s.store.TableIdentifier("agent_task_runs") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + eligible + " ORDER BY " + s.store.Identifier("created_at") + " ASC LIMIT 1"
+	query, queryArgs, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "agent_task_runs", workspaceID).
+		Columns("run_id", "payload_json", "fencing_token").Where(agentTaskEligiblePredicate(now)).
+		OrderBy(ormbuilder.Ascending("created_at")).Limit(1).Build()
+	if buildErr != nil {
+		return agentrepository.AgentTaskClaim{}, false, buildErr
+	}
 	var runID string
 	var payload []byte
 	var priorToken int64
-	err = tx.QueryRowContext(ctx, query, workspaceID, string(agentmodel.AgentTaskRunPending), string(agentmodel.AgentTaskRunRetryScheduled), now.UnixMilli(), string(agentmodel.AgentTaskRunRunning), now.UnixMilli()).Scan(&runID, &payload, &priorToken)
+	err = tx.QueryRowContext(ctx, query, queryArgs...).Scan(&runID, &payload, &priorToken)
 	if err == sql.ErrNoRows {
 		return agentrepository.AgentTaskClaim{}, false, nil
 	}
@@ -298,8 +316,11 @@ func (s *AgentTaskRunStore) claimNextOnce(ctx context.Context, workspaceID strin
 	run.Lease = agentmodel.AgentTaskLease{Owner: owner, FencingToken: token, ExpiresAt: expires}
 	run.Attempts = append(run.Attempts, agentmodel.AgentTaskAttempt{Number: run.Attempt, StartedAt: now})
 	updatedPayload, _ := json.Marshal(run)
-	update := "UPDATE " + s.store.TableIdentifier("agent_task_runs") + " SET " + s.store.Identifier("status") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("lease_owner") + " = " + s.store.Placeholder(2) + ", " + s.store.Identifier("fencing_token") + " = " + s.store.Placeholder(3) + ", " + s.store.Identifier("lease_expires_at") + " = " + s.store.Placeholder(4) + ", " + s.store.Identifier("payload_json") + " = " + s.store.Placeholder(5) + ", " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(6) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(7) + " AND " + s.store.Identifier("run_id") + " = " + s.store.Placeholder(8) + " AND " + s.store.Identifier("fencing_token") + " = " + s.store.Placeholder(9) + " AND " + eligibleWithOffset(s.store, 9)
-	result, err := tx.ExecContext(ctx, update, string(run.Status), owner, token, expires.UnixMilli(), updatedPayload, now.UnixMilli(), workspaceID, runID, priorToken, string(agentmodel.AgentTaskRunPending), string(agentmodel.AgentTaskRunRetryScheduled), now.UnixMilli(), string(agentmodel.AgentTaskRunRunning), now.UnixMilli())
+	update, updateArgs, buildErr := agentTaskClaimUpdate(s.store, workspaceID, runID, owner, token, priorToken, expires, now, updatedPayload)
+	if buildErr != nil {
+		return agentrepository.AgentTaskClaim{}, false, buildErr
+	}
+	result, err := tx.ExecContext(ctx, update, updateArgs...)
 	if err != nil {
 		return agentrepository.AgentTaskClaim{}, false, err
 	}
@@ -339,14 +360,17 @@ func agentTaskClaimRetryable(err error) bool {
 	return false
 }
 
-func eligibleWithOffset(store *database.RuntimeStore, offset int) string {
-	return "((" + store.Identifier("status") + " IN (" + store.Placeholder(offset+1) + ", " + store.Placeholder(offset+2) + ") AND " + store.Identifier("next_attempt_at") + " <= " + store.Placeholder(offset+3) + ") OR (" + store.Identifier("status") + " = " + store.Placeholder(offset+4) + " AND " + store.Identifier("lease_expires_at") + " <= " + store.Placeholder(offset+5) + "))"
-}
-
 func (s *AgentTaskRunStore) Heartbeat(ctx context.Context, workspaceID, runID string, owner string, token int64, now time.Time, duration time.Duration) (agentrepository.AgentTaskHeartbeatResult, error) {
 	expires := now.Add(duration)
-	query := "UPDATE " + s.store.TableIdentifier("agent_task_runs") + " SET " + s.store.Identifier("lease_expires_at") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(2) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(3) + " AND " + s.store.Identifier("run_id") + " = " + s.store.Placeholder(4) + " AND " + s.store.Identifier("status") + " = " + s.store.Placeholder(5) + " AND " + s.store.Identifier("lease_owner") + " = " + s.store.Placeholder(6) + " AND " + s.store.Identifier("fencing_token") + " = " + s.store.Placeholder(7) + " AND " + s.store.Identifier("lease_expires_at") + " > " + s.store.Placeholder(8)
-	result, err := s.db.ExecContext(ctx, query, expires.UnixMilli(), now.UnixMilli(), workspaceID, runID, string(agentmodel.AgentTaskRunRunning), owner, token, now.UnixMilli())
+	statement, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "agent_task_runs", workspaceID).
+		Set("lease_expires_at", expires.UnixMilli()).Set("updated_at", now.UnixMilli()).Where(ormbuilder.And(
+		ormbuilder.Equal("run_id", runID), ormbuilder.Equal("status", string(agentmodel.AgentTaskRunRunning)),
+		ormbuilder.Equal("lease_owner", owner), ormbuilder.Equal("fencing_token", token), ormbuilder.GreaterThan("lease_expires_at", now.UnixMilli()),
+	)).Build()
+	if buildErr != nil {
+		return agentrepository.AgentTaskHeartbeatResult{}, buildErr
+	}
+	result, err := s.db.ExecContext(ctx, statement, args...)
 	if err != nil {
 		return agentrepository.AgentTaskHeartbeatResult{}, err
 	}
@@ -363,8 +387,12 @@ func (s *AgentTaskRunStore) Heartbeat(ctx context.Context, workspaceID, runID st
 	}
 	run.Lease.ExpiresAt, run.UpdatedAt, run.Revision = expires, now, run.Revision+1
 	payload, _ := json.Marshal(run)
-	persist := "UPDATE " + s.store.TableIdentifier("agent_task_runs") + " SET " + s.store.Identifier("payload_json") + " = " + s.store.Placeholder(1) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("run_id") + " = " + s.store.Placeholder(3) + " AND " + s.store.Identifier("status") + " = " + s.store.Placeholder(4) + " AND " + s.store.Identifier("lease_owner") + " = " + s.store.Placeholder(5) + " AND " + s.store.Identifier("fencing_token") + " = " + s.store.Placeholder(6)
-	if _, err := s.db.ExecContext(ctx, persist, payload, workspaceID, runID, string(agentmodel.AgentTaskRunRunning), owner, token); err != nil {
+	persist, persistArgs, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "agent_task_runs", workspaceID).
+		Set("payload_json", payload).Where(agentTaskLeasePredicate(runID, owner, token)).Build()
+	if buildErr != nil {
+		return agentrepository.AgentTaskHeartbeatResult{}, buildErr
+	}
+	if _, err := s.db.ExecContext(ctx, persist, persistArgs...); err != nil {
 		return agentrepository.AgentTaskHeartbeatResult{}, err
 	}
 	return agentrepository.AgentTaskHeartbeatResult{Lease: agentmodel.AgentTaskLease{Owner: owner, FencingToken: token, ExpiresAt: expires}}, nil
@@ -376,9 +404,13 @@ func (s *AgentTaskRunStore) SaveRunning(ctx context.Context, run agentmodel.Agen
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	read := "SELECT " + s.store.Identifier("payload_json") + " FROM " + s.store.TableIdentifier("agent_task_runs") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("run_id") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("lease_owner") + " = " + s.store.Placeholder(3) + " AND " + s.store.Identifier("fencing_token") + " = " + s.store.Placeholder(4) + " AND " + s.store.Identifier("status") + " = " + s.store.Placeholder(5)
+	read, readArgs, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "agent_task_runs", run.WorkspaceID).
+		Columns("payload_json").Where(agentTaskLeasePredicate(run.ID, owner, token)).Limit(1).Build()
+	if buildErr != nil {
+		return buildErr
+	}
 	var currentPayload []byte
-	if err := tx.QueryRowContext(ctx, read, run.WorkspaceID, run.ID, owner, token, string(agentmodel.AgentTaskRunRunning)).Scan(&currentPayload); err == sql.ErrNoRows {
+	if err := tx.QueryRowContext(ctx, read, readArgs...).Scan(&currentPayload); err == sql.ErrNoRows {
 		return apperror.New(apperror.KindConflict, "agent.task.terminal_fence_rejected", nil, nil)
 	} else if err != nil {
 		return err
@@ -402,8 +434,13 @@ func (s *AgentTaskRunStore) SaveRunning(ctx context.Context, run agentmodel.Agen
 		return err
 	}
 	next := timeMillis(run.NextAttemptAt)
-	query := "UPDATE " + s.store.TableIdentifier("agent_task_runs") + " SET " + s.store.Identifier("status") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("next_attempt_at") + " = " + s.store.Placeholder(2) + ", " + s.store.Identifier("payload_json") + " = " + s.store.Placeholder(3) + ", " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(4) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(5) + " AND " + s.store.Identifier("run_id") + " = " + s.store.Placeholder(6) + " AND " + s.store.Identifier("lease_owner") + " = " + s.store.Placeholder(7) + " AND " + s.store.Identifier("fencing_token") + " = " + s.store.Placeholder(8) + " AND " + s.store.Identifier("status") + " = " + s.store.Placeholder(9)
-	result, err := tx.ExecContext(ctx, query, string(run.Status), next, payload, run.UpdatedAt.UnixMilli(), run.WorkspaceID, run.ID, owner, token, string(agentmodel.AgentTaskRunRunning))
+	statement, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "agent_task_runs", run.WorkspaceID).
+		Set("status", string(run.Status)).Set("next_attempt_at", next).Set("payload_json", payload).Set("updated_at", run.UpdatedAt.UnixMilli()).
+		Where(agentTaskLeasePredicate(run.ID, owner, token)).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	result, err := tx.ExecContext(ctx, statement, args...)
 	if err != nil {
 		return err
 	}
@@ -423,9 +460,12 @@ func (s *AgentTaskRunStore) SaveWaitingApproval(ctx context.Context, run agentmo
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	read := "SELECT " + s.store.Identifier("payload_json") + " FROM " + s.store.TableIdentifier("agent_task_runs") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("run_id") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("status") + " = " + s.store.Placeholder(3)
+	read, readArgs, buildErr := agentTaskPayloadSelect(s.store, run.WorkspaceID, run.ID, string(agentmodel.AgentTaskRunWaitingApproval))
+	if buildErr != nil {
+		return buildErr
+	}
 	var payload []byte
-	if err := tx.QueryRowContext(ctx, read, run.WorkspaceID, run.ID, string(agentmodel.AgentTaskRunWaitingApproval)).Scan(&payload); err == sql.ErrNoRows {
+	if err := tx.QueryRowContext(ctx, read, readArgs...).Scan(&payload); err == sql.ErrNoRows {
 		return apperror.New(apperror.KindConflict, "agent.task.approval_state_conflict", nil, nil)
 	} else if err != nil {
 		return err
@@ -450,8 +490,11 @@ func (s *AgentTaskRunStore) SaveWaitingApproval(ctx context.Context, run agentmo
 	if err != nil {
 		return err
 	}
-	query := "UPDATE " + s.store.TableIdentifier("agent_task_runs") + " SET " + s.store.Identifier("status") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("payload_json") + " = " + s.store.Placeholder(2) + ", " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(3) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(4) + " AND " + s.store.Identifier("run_id") + " = " + s.store.Placeholder(5) + " AND " + s.store.Identifier("status") + " = " + s.store.Placeholder(6)
-	result, err := tx.ExecContext(ctx, query, string(run.Status), payload, run.UpdatedAt.UnixMilli(), run.WorkspaceID, run.ID, string(agentmodel.AgentTaskRunWaitingApproval))
+	statement, args, buildErr := agentTaskStatusUpdate(s.store, run, payload, agentmodel.AgentTaskRunWaitingApproval)
+	if buildErr != nil {
+		return buildErr
+	}
+	result, err := tx.ExecContext(ctx, statement, args...)
 	if err != nil {
 		return err
 	}
@@ -474,9 +517,12 @@ func (s *AgentTaskRunStore) SaveTerminalOverride(ctx context.Context, run agentm
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	read := "SELECT " + s.store.Identifier("payload_json") + " FROM " + s.store.TableIdentifier("agent_task_runs") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("run_id") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("status") + " = " + s.store.Placeholder(3)
+	read, readArgs, buildErr := agentTaskPayloadSelect(s.store, run.WorkspaceID, run.ID, string(run.Status))
+	if buildErr != nil {
+		return buildErr
+	}
 	var payload []byte
-	if err := tx.QueryRowContext(ctx, read, run.WorkspaceID, run.ID, string(run.Status)).Scan(&payload); err == sql.ErrNoRows {
+	if err := tx.QueryRowContext(ctx, read, readArgs...).Scan(&payload); err == sql.ErrNoRows {
 		return apperror.New(apperror.KindConflict, "agent.task.override_state_conflict", nil, nil)
 	} else if err != nil {
 		return err
@@ -492,8 +538,12 @@ func (s *AgentTaskRunStore) SaveTerminalOverride(ctx context.Context, run agentm
 	if err != nil {
 		return err
 	}
-	query := "UPDATE " + s.store.TableIdentifier("agent_task_runs") + " SET " + s.store.Identifier("payload_json") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(2) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(3) + " AND " + s.store.Identifier("run_id") + " = " + s.store.Placeholder(4) + " AND " + s.store.Identifier("status") + " = " + s.store.Placeholder(5)
-	result, err := tx.ExecContext(ctx, query, payload, run.UpdatedAt.UnixMilli(), run.WorkspaceID, run.ID, string(run.Status))
+	statement, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "agent_task_runs", run.WorkspaceID).
+		Set("payload_json", payload).Set("updated_at", run.UpdatedAt.UnixMilli()).Where(agentTaskStatusPredicate(run.ID, run.Status)).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	result, err := tx.ExecContext(ctx, statement, args...)
 	if err != nil {
 		return err
 	}
@@ -521,8 +571,14 @@ func (s *AgentTaskRunStore) RequestCancel(ctx context.Context, workspaceID, runI
 		run.Status, run.CompletedAt = agentmodel.AgentTaskRunCancelled, &now
 	}
 	payload, _ := json.Marshal(run)
-	query := "UPDATE " + s.store.TableIdentifier("agent_task_runs") + " SET " + s.store.Identifier("status") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("payload_json") + " = " + s.store.Placeholder(2) + ", " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(3) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(4) + " AND " + s.store.Identifier("run_id") + " = " + s.store.Placeholder(5) + " AND " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(6)
-	result, err := s.db.ExecContext(ctx, query, string(run.Status), payload, now.UnixMilli(), workspaceID, runID, previousUpdatedAt.UnixMilli())
+	statement, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "agent_task_runs", workspaceID).
+		Set("status", string(run.Status)).Set("payload_json", payload).Set("updated_at", now.UnixMilli()).Where(ormbuilder.And(
+		ormbuilder.Equal("run_id", runID), ormbuilder.Equal("updated_at", previousUpdatedAt.UnixMilli()),
+	)).Build()
+	if buildErr != nil {
+		return agentmodel.AgentTaskRun{}, false, buildErr
+	}
+	result, err := s.db.ExecContext(ctx, statement, args...)
 	if err != nil {
 		return agentmodel.AgentTaskRun{}, false, err
 	}
@@ -543,9 +599,12 @@ func (s *AgentTaskRunStore) SaveOperationalTransition(ctx context.Context, run a
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	read := "SELECT " + s.store.Identifier("payload_json") + " FROM " + s.store.TableIdentifier("agent_task_runs") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("run_id") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("status") + " = " + s.store.Placeholder(3)
+	read, readArgs, buildErr := agentTaskPayloadSelect(s.store, run.WorkspaceID, run.ID, string(expectedStatus))
+	if buildErr != nil {
+		return buildErr
+	}
 	var currentPayload []byte
-	if err := tx.QueryRowContext(ctx, read, run.WorkspaceID, run.ID, string(expectedStatus)).Scan(&currentPayload); err == sql.ErrNoRows {
+	if err := tx.QueryRowContext(ctx, read, readArgs...).Scan(&currentPayload); err == sql.ErrNoRows {
 		return apperror.New(apperror.KindConflict, "agent.task.operation_state_conflict", nil, nil)
 	} else if err != nil {
 		return err
@@ -558,8 +617,11 @@ func (s *AgentTaskRunStore) SaveOperationalTransition(ctx context.Context, run a
 	if err != nil {
 		return err
 	}
-	query := "UPDATE " + s.store.TableIdentifier("agent_task_runs") + " SET " + s.store.Identifier("status") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("payload_json") + " = " + s.store.Placeholder(2) + ", " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(3) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(4) + " AND " + s.store.Identifier("run_id") + " = " + s.store.Placeholder(5) + " AND " + s.store.Identifier("status") + " = " + s.store.Placeholder(6)
-	result, err := tx.ExecContext(ctx, query, string(run.Status), payload, run.UpdatedAt.UnixMilli(), run.WorkspaceID, run.ID, string(expectedStatus))
+	statement, args, buildErr := agentTaskStatusUpdate(s.store, run, payload, expectedStatus)
+	if buildErr != nil {
+		return buildErr
+	}
+	result, err := tx.ExecContext(ctx, statement, args...)
 	if err != nil {
 		return err
 	}
@@ -575,6 +637,53 @@ func (s *AgentTaskRunStore) SaveOperationalTransition(ctx context.Context, run a
 
 func agentTaskRunColumns() []string {
 	return []string{"run_id", "idempotency_key", "task_key", "process_id", "status", "lease_owner", "fencing_token", "lease_expires_at", "next_attempt_at", "payload_json", "created_at", "updated_at"}
+}
+
+func agentTaskStatusPredicate(runID string, status agentmodel.AgentTaskRunStatus) ormbuilder.Predicate {
+	return ormbuilder.And(ormbuilder.Equal("run_id", runID), ormbuilder.Equal("status", string(status)))
+}
+
+func agentTaskLeasePredicate(runID, owner string, token int64) ormbuilder.Predicate {
+	return ormbuilder.And(
+		agentTaskStatusPredicate(runID, agentmodel.AgentTaskRunRunning),
+		ormbuilder.Equal("lease_owner", owner),
+		ormbuilder.Equal("fencing_token", token),
+	)
+}
+
+func agentTaskEligiblePredicate(now time.Time) ormbuilder.Predicate {
+	return ormbuilder.Or(
+		ormbuilder.And(
+			ormbuilder.In("status", string(agentmodel.AgentTaskRunPending), string(agentmodel.AgentTaskRunRetryScheduled)),
+			ormbuilder.LessThanOrEqual("next_attempt_at", now.UnixMilli()),
+		),
+		ormbuilder.And(
+			ormbuilder.Equal("status", string(agentmodel.AgentTaskRunRunning)),
+			ormbuilder.LessThanOrEqual("lease_expires_at", now.UnixMilli()),
+		),
+	)
+}
+
+func agentTaskClaimUpdate(store *database.RuntimeStore, workspaceID, runID, owner string, token, priorToken int64, expires, now time.Time, payload []byte) (string, []any, error) {
+	return ormbuilder.NewWorkspaceUpdateBuilder(store.SQLRenderer, "agent_task_runs", workspaceID).
+		Set("status", string(agentmodel.AgentTaskRunRunning)).Set("lease_owner", owner).Set("fencing_token", token).
+		Set("lease_expires_at", expires.UnixMilli()).Set("payload_json", payload).Set("updated_at", now.UnixMilli()).
+		Where(ormbuilder.And(
+			ormbuilder.Equal("run_id", runID), ormbuilder.Equal("fencing_token", priorToken), agentTaskEligiblePredicate(now),
+		)).Build()
+}
+
+func agentTaskPayloadSelect(store *database.RuntimeStore, workspaceID, runID, status string) (string, []any, error) {
+	return ormbuilder.NewWorkspaceSelectBuilder(store.SQLRenderer, "agent_task_runs", workspaceID).
+		Columns("payload_json").Where(ormbuilder.And(
+		ormbuilder.Equal("run_id", runID), ormbuilder.Equal("status", status),
+	)).Limit(1).Build()
+}
+
+func agentTaskStatusUpdate(store *database.RuntimeStore, run agentmodel.AgentTaskRun, payload []byte, expectedStatus agentmodel.AgentTaskRunStatus) (string, []any, error) {
+	return ormbuilder.NewWorkspaceUpdateBuilder(store.SQLRenderer, "agent_task_runs", run.WorkspaceID).
+		Set("status", string(run.Status)).Set("payload_json", payload).Set("updated_at", run.UpdatedAt.UnixMilli()).
+		Where(agentTaskStatusPredicate(run.ID, expectedStatus)).Build()
 }
 
 func timeMillis(value *time.Time) int64 {
@@ -601,11 +710,15 @@ func (s *AgentTaskRunStore) BeginAgentToolCall(ctx context.Context, start agentr
 		return "", 0, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	query := "SELECT " + s.store.Identifier("payload_json") + ", " + s.store.Identifier("status") + ", " + s.store.Identifier("lease_owner") + ", " + s.store.Identifier("fencing_token") + " FROM " + s.store.TableIdentifier("agent_task_runs") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("run_id") + " = " + s.store.Placeholder(2)
+	query, queryArgs, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "agent_task_runs", start.WorkspaceID).
+		Columns("payload_json", "status", "lease_owner", "fencing_token").Where(ormbuilder.Equal("run_id", start.TaskRunID)).Limit(1).Build()
+	if buildErr != nil {
+		return "", 0, buildErr
+	}
 	var payload []byte
 	var status, owner string
 	var token int64
-	if err := tx.QueryRowContext(ctx, query, start.WorkspaceID, start.TaskRunID).Scan(&payload, &status, &owner, &token); err != nil {
+	if err := tx.QueryRowContext(ctx, query, queryArgs...).Scan(&payload, &status, &owner, &token); err != nil {
 		return "", 0, err
 	}
 	if status != string(agentmodel.AgentTaskRunRunning) || owner != start.Owner || token != start.FencingToken {
@@ -633,8 +746,12 @@ func (s *AgentTaskRunStore) BeginAgentToolCall(ctx context.Context, start agentr
 	run.Evidence.ToolInvocationRefs = append(run.Evidence.ToolInvocationRefs, ref)
 	run.Evidence.ToolInvocations = append(run.Evidence.ToolInvocations, agentmodel.AgentTaskToolInvocationEvidence{Ref: ref, Tool: start.Tool, InputHash: start.InputHash, Status: "running", Authorization: start.Authorization, StartedAt: run.UpdatedAt, CostUnits: start.CostUnits})
 	updated, _ := json.Marshal(run)
-	update := "UPDATE " + s.store.TableIdentifier("agent_task_runs") + " SET " + s.store.Identifier("payload_json") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(2) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(3) + " AND " + s.store.Identifier("run_id") + " = " + s.store.Placeholder(4) + " AND " + s.store.Identifier("status") + " = " + s.store.Placeholder(5) + " AND " + s.store.Identifier("lease_owner") + " = " + s.store.Placeholder(6) + " AND " + s.store.Identifier("fencing_token") + " = " + s.store.Placeholder(7)
-	result, err := tx.ExecContext(ctx, update, updated, run.UpdatedAt.UnixMilli(), start.WorkspaceID, start.TaskRunID, string(agentmodel.AgentTaskRunRunning), start.Owner, start.FencingToken)
+	update, updateArgs, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "agent_task_runs", start.WorkspaceID).
+		Set("payload_json", updated).Set("updated_at", run.UpdatedAt.UnixMilli()).Where(agentTaskLeasePredicate(start.TaskRunID, start.Owner, start.FencingToken)).Build()
+	if buildErr != nil {
+		return "", 0, buildErr
+	}
+	result, err := tx.ExecContext(ctx, update, updateArgs...)
 	if err != nil {
 		return "", 0, err
 	}
@@ -657,11 +774,15 @@ func (s *AgentTaskRunStore) FinishAgentToolCall(ctx context.Context, finish agen
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	query := "SELECT " + s.store.Identifier("payload_json") + ", " + s.store.Identifier("status") + ", " + s.store.Identifier("lease_owner") + ", " + s.store.Identifier("fencing_token") + " FROM " + s.store.TableIdentifier("agent_task_runs") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("run_id") + " = " + s.store.Placeholder(2)
+	query, queryArgs, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "agent_task_runs", finish.WorkspaceID).
+		Columns("payload_json", "status", "lease_owner", "fencing_token").Where(ormbuilder.Equal("run_id", finish.TaskRunID)).Limit(1).Build()
+	if buildErr != nil {
+		return buildErr
+	}
 	var payload []byte
 	var status, owner string
 	var token int64
-	if err := tx.QueryRowContext(ctx, query, finish.WorkspaceID, finish.TaskRunID).Scan(&payload, &status, &owner, &token); err != nil {
+	if err := tx.QueryRowContext(ctx, query, queryArgs...).Scan(&payload, &status, &owner, &token); err != nil {
 		return err
 	}
 	if status != string(agentmodel.AgentTaskRunRunning) || owner != finish.Owner || token != finish.FencingToken {
@@ -693,8 +814,12 @@ func (s *AgentTaskRunStore) FinishAgentToolCall(ctx context.Context, finish agen
 	run.UpdatedAt = now
 	run.Revision++
 	updated, _ := json.Marshal(run)
-	update := "UPDATE " + s.store.TableIdentifier("agent_task_runs") + " SET " + s.store.Identifier("payload_json") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(2) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(3) + " AND " + s.store.Identifier("run_id") + " = " + s.store.Placeholder(4) + " AND " + s.store.Identifier("status") + " = " + s.store.Placeholder(5) + " AND " + s.store.Identifier("lease_owner") + " = " + s.store.Placeholder(6) + " AND " + s.store.Identifier("fencing_token") + " = " + s.store.Placeholder(7)
-	result, err := tx.ExecContext(ctx, update, updated, now.UnixMilli(), finish.WorkspaceID, finish.TaskRunID, string(agentmodel.AgentTaskRunRunning), finish.Owner, finish.FencingToken)
+	update, updateArgs, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "agent_task_runs", finish.WorkspaceID).
+		Set("payload_json", updated).Set("updated_at", now.UnixMilli()).Where(agentTaskLeasePredicate(finish.TaskRunID, finish.Owner, finish.FencingToken)).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	result, err := tx.ExecContext(ctx, update, updateArgs...)
 	if err != nil {
 		return err
 	}

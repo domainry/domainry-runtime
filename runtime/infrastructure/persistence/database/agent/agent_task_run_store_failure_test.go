@@ -156,9 +156,6 @@ func TestAgentTaskRunStoreClaimFailureMatrix(t *testing.T) {
 			}
 		})
 	}
-	if !strings.Contains(eligibleWithOffset(base, 9), base.Placeholder(10)) {
-		t.Fatal("eligible placeholders")
-	}
 	if timeMillis(nil) != 0 {
 		t.Fatal("nil time")
 	}

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/requestcontext"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -19,8 +20,13 @@ func (s *AgentTaskRunStore) ListAgentTaskRunsForWorker(ctx context.Context, scop
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	query := "SELECT " + s.store.Identifier("scope_key") + " FROM " + s.store.TableIdentifier("runtime_worker_queue_scopes") + " WHERE " + s.store.Identifier("queue_kind") + " = " + s.store.Placeholder(1) + " ORDER BY " + s.store.Identifier("updated_at") + " DESC LIMIT " + s.store.Placeholder(2)
-	rows, err := s.db.QueryContext(ctx, query, agentTaskWorkerQueueKind, min(256, max(32, limit*2)))
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "runtime_worker_queue_scopes").
+		Columns("scope_key").Where(ormbuilder.Equal("queue_kind", agentTaskWorkerQueueKind)).
+		OrderBy(ormbuilder.Descending("updated_at")).Limit(min(256, max(32, limit*2))).Build()
+	if buildErr != nil {
+		return nil, buildErr
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
