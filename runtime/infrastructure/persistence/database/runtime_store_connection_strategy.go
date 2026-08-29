@@ -28,7 +28,7 @@ var runtimeConnectionStrategies = map[string]runtimeConnectionStrategy{
 
 func openRuntimeConnection(ctx context.Context, selected dialect, cfg config.Config, dependencies runtimeOpenDependencies, metrics *telemetry.SQLMetrics) (runtimeConnectionResult, error) {
 	strategy := openRuntimeStandardConnection
-	if registered, found := runtimeConnectionStrategies[selected.Name()]; found {
+	if registered, found := runtimeConnectionStrategies[string(selected.Name())]; found {
 		strategy = registered
 	}
 	return strategy(ctx, selected, cfg, dependencies, metrics)

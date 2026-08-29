@@ -34,10 +34,10 @@ func (schemaHelperStore) RuntimeColumnDefinition(value string) string {
 	return "normalized:" + value
 }
 func (schemaHelperStore) RuntimeProfile() persistencedriver.EngineProfile {
-	return sqlite.Dialect{}.EngineProfile()
+	return sqlite.NewEngine()
 }
 func (schemaHelperStore) RuntimeRenderer() ormdialect.Renderer {
-	return sqlite.Dialect{}.SQLDialect().WithSchema("")
+	return sqlite.NewEngine().SQLDialect().WithSchema("")
 }
 
 func TestSchemaHelperValueShapes(t *testing.T) {

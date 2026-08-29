@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 
-	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -14,5 +13,5 @@ func EnsureProjectDatabase(ctx context.Context, cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	return persistencedriver.ProfileFor(dialect).EnsureProjectDatabase(ctx, cfg)
+	return dialect.EnsureProjectDatabase(ctx, cfg)
 }

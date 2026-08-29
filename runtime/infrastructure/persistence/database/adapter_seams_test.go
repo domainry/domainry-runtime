@@ -73,7 +73,7 @@ func TestAdapterMigrationSeams(t *testing.T) {
 		t.Fatal("missing backup evidence accepted")
 	}
 	explicit := filepath.Join(t.TempDir(), "explicit.sql")
-	paths, err := MigrationPathsForDialect(config.Config{MigrationSQL: explicit}, sqlite.Dialect{})
+	paths, err := MigrationPathsForDialect(config.Config{MigrationSQL: explicit}, sqlite.NewEngine())
 	if err != nil || len(paths) != 1 || paths[0] != explicit {
 		t.Fatalf("paths=%#v err=%v", paths, err)
 	}

@@ -15,7 +15,7 @@ import (
 func TestFileMigrationsUseDedicatedManagementConnection(t *testing.T) {
 	queryDB := openMigrationOwnerSQLite(t, "query")
 	migrationDB := openMigrationOwnerSQLite(t, "migration")
-	store := &RuntimeStore{db: queryDB, migrationDB: migrationDB, dialect: sqlite.Dialect{}}
+	store := &RuntimeStore{db: queryDB, migrationDB: migrationDB, dialect: sqlite.NewEngine()}
 
 	migrationPath := filepath.Join(t.TempDir(), "001_management_owner.sql")
 	if err := os.WriteFile(migrationPath, []byte(`CREATE TABLE management_owned (id TEXT PRIMARY KEY);`), 0o600); err != nil {
@@ -35,7 +35,7 @@ func TestFileMigrationsUseDedicatedManagementConnection(t *testing.T) {
 func TestRuntimeSchemaUsesDedicatedManagementConnection(t *testing.T) {
 	queryDB := openMigrationOwnerSQLite(t, "runtime-query")
 	migrationDB := openMigrationOwnerSQLite(t, "runtime-migration")
-	store := &RuntimeStore{db: queryDB, migrationDB: migrationDB, dialect: sqlite.Dialect{}, config: config.Config{MigrationBackupDir: t.TempDir()}}
+	store := &RuntimeStore{db: queryDB, migrationDB: migrationDB, dialect: sqlite.NewEngine(), config: config.Config{MigrationBackupDir: t.TempDir()}}
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}

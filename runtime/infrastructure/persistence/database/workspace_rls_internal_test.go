@@ -133,7 +133,7 @@ func TestWorkspaceTablesScanAndRowsErrors(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			db := sql.OpenDB(workspaceRLSConnector{script: test.script})
 			defer db.Close()
-			profile := postgrespersistence.Dialect{}.EngineProfile()
+			profile := postgrespersistence.NewEngine()
 			renderer := postgrespersistence.Dialect{}.SQLDialect().WithSchema("public")
 			if _, err := profile.InspectWorkspaceRLS(t.Context(), db, renderer, "public", "runtime_user", CurrentWorkspaceRLSPolicyVersion); err == nil {
 				t.Fatal("expected workspace table error")

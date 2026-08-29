@@ -141,8 +141,8 @@ func (scriptedSchemaStore) MetadataIDColumnType() string                { return
 func (scriptedSchemaStore) LocalizedTextKeyColumnType() string          { return "TEXT" }
 func (scriptedSchemaStore) RuntimeColumnDefinition(value string) string { return value }
 func (scriptedSchemaStore) RuntimeProfile() persistencedriver.EngineProfile {
-	return sqlite.Dialect{}.EngineProfile()
+	return sqlite.NewEngine()
 }
 func (scriptedSchemaStore) RuntimeRenderer() ormdialect.Renderer {
-	return sqlite.Dialect{}.SQLDialect().WithSchema("")
+	return sqlite.NewEngine().SQLDialect().WithSchema("")
 }

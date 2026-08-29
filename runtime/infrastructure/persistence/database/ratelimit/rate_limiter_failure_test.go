@@ -41,7 +41,7 @@ func TestRateLimiterInputSchemaAndRetryBoundaries(t *testing.T) {
 		candidate, closeDB := scriptedRateLimiter(t, base, state)
 		defer closeDB()
 		candidate.store.Engine = ormmysql.NewProfile()
-		candidate.store.SQLRenderer = mysql.Dialect{}.SQLDialect().WithSchema(candidate.store.SQLDatabase.DatabaseSchema)
+		candidate.store.SQLRenderer = mysql.NewEngine().SQLDialect().WithSchema(candidate.store.SQLDatabase.DatabaseSchema)
 		if err := candidate.EnsureSchema(t.Context()); err != nil {
 			t.Fatal(err)
 		}
@@ -121,7 +121,7 @@ func TestRateLimiterAllowOnceDatabaseStages(t *testing.T) {
 			defer closeDB()
 			if test.driverName == "postgres" {
 				candidate.store.Engine = ormpostgres.NewProfile()
-				candidate.store.SQLRenderer = postgres.Dialect{}.SQLDialect().WithSchema(candidate.store.SQLDatabase.DatabaseSchema)
+				candidate.store.SQLRenderer = postgres.NewEngine().SQLDialect().WithSchema(candidate.store.SQLDatabase.DatabaseSchema)
 			}
 			decision, retry, err := candidate.allowOnce(t.Context(), "key", test.limit, test.window, now)
 			if test.wantErr == errAny {

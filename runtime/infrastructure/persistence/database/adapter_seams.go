@@ -104,7 +104,7 @@ func ValidateExternalMigrationBackup(driverName, evidencePath string) error {
 	return err
 }
 
-func MigrationPathsForDialect(cfg config.Config, dialect driver.Dialect) ([]string, error) {
+func MigrationPathsForDialect(cfg config.Config, dialect driver.Engine) ([]string, error) {
 	return (&RuntimeStore{dialect: dialect}).migrationPaths(cfg)
 }
 

@@ -14,6 +14,7 @@ import (
 
 	ormdialect "github.com/domainry/domainry-orm/dialect"
 
+	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite"
@@ -25,9 +26,9 @@ func TestApplicationTablesDialectAndFailureEdges(t *testing.T) {
 		name    string
 		dialect dialect
 	}{
-		{"sqlite", sqlite.Dialect{}},
-		{"mysql", mysql.Dialect{}},
-		{"postgres", postgres.Dialect{}},
+		{"sqlite", sqlite.NewEngine()},
+		{"mysql", mysql.NewEngine()},
+		{"postgres", postgres.NewEngine()},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -42,7 +43,7 @@ func TestApplicationTablesDialectAndFailureEdges(t *testing.T) {
 		})
 	}
 	store := runtimeSchemaStore(t, &databaseSQLState{})
-	store.dialect = namedTestDialect("oracle")
+	store.dialect = namedTestDialect{Engine: sqlite.NewEngine(), name: "oracle"}
 	if _, err := store.applicationTables(t.Context()); err == nil {
 		t.Fatal("unsupported dialect accepted")
 	}
@@ -113,7 +114,7 @@ func TestEnsureMigrationBackupShortCircuitsAndFailures(t *testing.T) {
 		{columns: []string{"name"}, rows: [][]driver.Value{{"records"}}},
 		{columns: []string{"count"}, rows: [][]driver.Value{{int64(1)}}},
 	}})
-	store.dialect = postgres.Dialect{}
+	store.dialect = postgres.NewEngine()
 	if err := store.ensureMigrationBackupForExistingData(t.Context(), config.Config{}); err == nil || !strings.Contains(err.Error(), "MIGRATION_BACKUP_EVIDENCE_PATH") {
 		t.Fatalf("external evidence error=%v", err)
 	}
@@ -150,7 +151,7 @@ func TestSQLiteMigrationBackupChecksumAndStatFailures(t *testing.T) {
 	if _, err := db.ExecContext(t.Context(), `CREATE TABLE records(id TEXT); INSERT INTO records VALUES ('one')`); err != nil {
 		t.Fatal(err)
 	}
-	store := &RuntimeStore{db: db, dialect: sqlite.Dialect{}, backupChecksum: func(string) (string, error) { return "", errDatabaseSQL }}
+	store := &RuntimeStore{db: db, dialect: sqlite.NewEngine(), backupChecksum: func(string) (string, error) { return "", errDatabaseSQL }}
 	if err := store.ensureMigrationBackupForExistingData(t.Context(), config.Config{DBPath: dbPath, MigrationBackupDir: filepath.Join(dir, "checksum")}); !errors.Is(err, errDatabaseSQL) {
 		t.Fatalf("checksum error=%v", err)
 	}
@@ -181,10 +182,13 @@ func TestSQLiteMigrationBackupChecksumAndStatFailures(t *testing.T) {
 	assertStatFailure(t, true, "inspect sqlite migration backup")
 }
 
-type namedTestDialect string
+type namedTestDialect struct {
+	sqlite.Engine
+	name string
+}
 
-func (dialect namedTestDialect) Name() string { return string(dialect) }
-func (namedTestDialect) SQLDriver() string    { return "sqlite" }
+func (dialect namedTestDialect) Name() ormdialect.Name { return ormdialect.Name(dialect.name) }
+func (namedTestDialect) SQLDriver() string             { return "sqlite" }
 func (namedTestDialect) DSN(config.Config) (string, error) {
 	return "", nil
 }
@@ -194,3 +198,6 @@ func (namedTestDialect) SQLDialect() ormdialect.Dialect {
 	return value
 }
 func (namedTestDialect) SchemaMigrationSQL() string { return "" }
+func (namedTestDialect) ApplicationTablesQuery(ormdialect.Renderer, string) persistencedriver.SchemaQuery {
+	return persistencedriver.SchemaQuery{}
+}

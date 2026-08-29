@@ -20,7 +20,7 @@ func runtimeSchemaStore(t *testing.T, state *databaseSQLState) *RuntimeStore {
 	t.Helper()
 	db := openDatabaseScriptedDB(state)
 	t.Cleanup(func() { _ = db.Close() })
-	return &RuntimeStore{db: db, dialect: sqlite.Dialect{}}
+	return &RuntimeStore{db: db, dialect: sqlite.NewEngine()}
 }
 
 func runtimeSchemaLedgerQueries(count int64, checksum string, dirty bool) []databaseSQLQueryStep {
@@ -60,7 +60,7 @@ func TestRuntimeSchemaHelpersAndDatabaseSelection(t *testing.T) {
 		t.Fatal("migration connection not selected")
 	}
 
-	store = &RuntimeStore{dialect: sqlite.Dialect{}, config: config.Config{DBPath: filepath.Join("tmp", "runtime.db")}}
+	store = &RuntimeStore{dialect: sqlite.NewEngine(), config: config.Config{DBPath: filepath.Join("tmp", "runtime.db")}}
 	if got := store.runtimeMigrationConfig().MigrationBackupDir; got != filepath.Join("tmp", "migration-backups") {
 		t.Fatalf("backup dir=%q", got)
 	}
@@ -76,7 +76,7 @@ func TestRuntimeSchemaHelpersAndDatabaseSelection(t *testing.T) {
 	if got := store.runtimeMigrationConfig().MigrationBackupDir; got != "" {
 		t.Fatalf("memory backup dir=%q", got)
 	}
-	store = &RuntimeStore{dialect: mysql.Dialect{}}
+	store = &RuntimeStore{dialect: mysql.NewEngine()}
 	if got := store.runtimeMigrationConfig().MigrationBackupDir; got != "" {
 		t.Fatalf("mysql backup dir=%q", got)
 	}
@@ -176,7 +176,7 @@ func TestRuntimeSchemaMutationFailuresAndDefinitions(t *testing.T) {
 	if err := store.ensureRuntimeColumn(t.Context(), "table", "column", "TEXT"); err != nil {
 		t.Fatal(err)
 	}
-	mysqlStore := &RuntimeStore{dialect: mysql.Dialect{}}
+	mysqlStore := &RuntimeStore{dialect: mysql.NewEngine()}
 	definition := "TEXT NOT NULL DEFAULT '[]', TEXT NOT NULL DEFAULT '{}', TEXT NOT NULL DEFAULT ''"
 	got := mysqlStore.runtimeColumnDefinition(definition)
 	for _, expected := range []string{"DEFAULT ('[]')", "DEFAULT ('{}')", "DEFAULT ('')"} {
@@ -184,7 +184,7 @@ func TestRuntimeSchemaMutationFailuresAndDefinitions(t *testing.T) {
 			t.Fatalf("definition=%q", got)
 		}
 	}
-	if got := (&RuntimeStore{dialect: sqlite.Dialect{}}).runtimeColumnDefinition(definition); got != definition {
+	if got := (&RuntimeStore{dialect: sqlite.NewEngine()}).runtimeColumnDefinition(definition); got != definition {
 		t.Fatalf("sqlite definition=%q", got)
 	}
 }

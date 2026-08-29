@@ -9,17 +9,20 @@ import (
 	"github.com/domainry/domainry-foundation/secrets"
 	"github.com/domainry/domainry-foundation/telemetry"
 	ormdialect "github.com/domainry/domainry-orm/dialect"
+	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
 type runtimeOpenDialectStub struct {
+	persistencedriver.Engine
 	name                 string
 	dsnErr, configureErr error
 }
 
-func (stub runtimeOpenDialectStub) Name() string      { return stub.name }
-func (stub runtimeOpenDialectStub) SQLDriver() string { return "scripted" }
+func (stub runtimeOpenDialectStub) Name() ormdialect.Name { return ormdialect.Name(stub.name) }
+func (stub runtimeOpenDialectStub) SQLDriver() string     { return "scripted" }
 func (stub runtimeOpenDialectStub) DSN(config.Config) (string, error) {
 	return "scripted", stub.dsnErr
 }
@@ -71,6 +74,14 @@ func runtimeOpenTestDB(t *testing.T) *sql.DB {
 }
 
 func runtimeOpenTestDependencies(selectedDialect dialect, profile runtimePostgresProfile) runtimeOpenDependencies {
+	if stub, ok := selectedDialect.(runtimeOpenDialectStub); ok && stub.Engine == nil {
+		if stub.name == "postgres" {
+			stub.Engine = postgres.NewEngine()
+		} else {
+			stub.Engine = sqlite.NewEngine()
+		}
+		selectedDialect = stub
+	}
 	return runtimeOpenDependencies{
 		dialect: func(string) (dialect, error) { return selectedDialect, nil },
 		postgresProfile: func(config.Config) (runtimePostgresProfile, error) {

@@ -14,6 +14,7 @@ import (
 	ormdialect "github.com/domainry/domainry-orm/dialect"
 
 	migrationcontract "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/migration"
+	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite"
@@ -28,24 +29,24 @@ func TestMigrationHelpersCoverDialectAndFilesystemEdges(t *testing.T) {
 		t.Fatalf("migrationIdentity=%q,%q", version, name)
 	}
 
-	mysqlStore := &RuntimeStore{dialect: mysql.Dialect{}}
+	mysqlStore := &RuntimeStore{dialect: mysql.NewEngine()}
 	if sql := mysqlStore.schemaMigrationSQL(); !strings.Contains(sql, "VARCHAR(255)") || !strings.Contains(sql, "VARCHAR(64)") {
 		t.Fatalf("mysql ledger SQL=%q", sql)
 	}
-	postgresStore := &RuntimeStore{dialect: postgres.Dialect{}, databaseSchema: "runtime"}
+	postgresStore := &RuntimeStore{dialect: postgres.NewEngine(), databaseSchema: "runtime"}
 	if sql := postgresStore.schemaMigrationSQL(); strings.Contains(sql, "VARCHAR(255)") || !strings.Contains(sql, `"_schema_migrations"`) {
 		t.Fatalf("postgres ledger SQL=%q", sql)
 	}
 
 	dir := t.TempDir()
-	if paths, err := (&RuntimeStore{dialect: sqlite.Dialect{}}).migrationPaths(config.Config{MigrationDir: filepath.Join(dir, "missing")}); err != nil || paths != nil {
+	if paths, err := (&RuntimeStore{dialect: sqlite.NewEngine()}).migrationPaths(config.Config{MigrationDir: filepath.Join(dir, "missing")}); err != nil || paths != nil {
 		t.Fatalf("missing migration directory paths=%v err=%v", paths, err)
 	}
 	blocked := filepath.Join(dir, "not-a-directory")
 	if err := os.WriteFile(blocked, []byte("file"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := (&RuntimeStore{dialect: sqlite.Dialect{}}).migrationPaths(config.Config{MigrationDir: blocked}); err == nil {
+	if _, err := (&RuntimeStore{dialect: sqlite.NewEngine()}).migrationPaths(config.Config{MigrationDir: blocked}); err == nil {
 		t.Fatal("file used as migration directory was accepted")
 	}
 	entriesDir := filepath.Join(dir, "entries")
@@ -81,7 +82,7 @@ func TestMigrationBackupAndTableDiscoveryRejectInvalidInputs(t *testing.T) {
 		}
 	}
 
-	store := &RuntimeStore{dialect: sqlite.Dialect{}}
+	store := &RuntimeStore{dialect: sqlite.NewEngine()}
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 	if _, err := store.createSQLiteMigrationBackup(cancelled, config.Config{}); err == nil || !strings.Contains(err.Error(), "context canceled") {
@@ -91,7 +92,7 @@ func TestMigrationBackupAndTableDiscoveryRejectInvalidInputs(t *testing.T) {
 		t.Fatalf("memory backup error=%v", err)
 	}
 
-	unsupported := &RuntimeStore{dialect: unsupportedMigrationDialect{}}
+	unsupported := &RuntimeStore{dialect: unsupportedMigrationDialect{Engine: sqlite.NewEngine()}}
 	if _, err := unsupported.applicationTables(t.Context()); err == nil || !strings.Contains(err.Error(), "unsupported database driver") {
 		t.Fatalf("applicationTables error=%v", err)
 	}
@@ -131,7 +132,7 @@ func TestValidateExternalMigrationBackupAcceptsMatchingEvidence(t *testing.T) {
 		{columns: []string{"count"}, rows: [][]driver.Value{{int64(1)}}},
 	}}
 	store := runtimeSchemaStore(t, state)
-	store.dialect = postgres.Dialect{}
+	store.dialect = postgres.NewEngine()
 	store.operationalMetrics = NewRuntimeOperationalMetrics("", "")
 	if err := store.ensureMigrationBackupForExistingData(t.Context(), config.Config{MigrationBackupEvidencePath: path}); err != nil {
 		t.Fatal(err)
@@ -143,7 +144,7 @@ func TestValidateExternalMigrationBackupAcceptsMatchingEvidence(t *testing.T) {
 		{columns: []string{"name"}, rows: [][]driver.Value{{"records"}}},
 		{columns: []string{"count"}, rows: [][]driver.Value{{int64(1)}}},
 	}})
-	store.dialect = postgres.Dialect{}
+	store.dialect = postgres.NewEngine()
 	if err := store.ensureMigrationBackupForExistingData(t.Context(), config.Config{MigrationBackupEvidencePath: path}); err != nil {
 		t.Fatalf("external backup without metrics=%v", err)
 	}
@@ -155,7 +156,7 @@ func TestEnsureMigrationBackupCoversEmptyAndExistingSQLiteDatabases(t *testing.T
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = emptyDB.Close() })
-	emptyStore := &RuntimeStore{db: emptyDB, dialect: sqlite.Dialect{}}
+	emptyStore := &RuntimeStore{db: emptyDB, dialect: sqlite.NewEngine()}
 	if err := emptyStore.ensureMigrationBackupForExistingData(t.Context(), config.Config{}); err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +177,7 @@ func TestEnsureMigrationBackupCoversEmptyAndExistingSQLiteDatabases(t *testing.T
 	if _, err := db.ExecContext(t.Context(), `CREATE TABLE customer (id TEXT PRIMARY KEY); INSERT INTO customer (id) VALUES ('one')`); err != nil {
 		t.Fatal(err)
 	}
-	store := &RuntimeStore{db: db, dialect: sqlite.Dialect{}, operationalMetrics: NewRuntimeOperationalMetrics("", "")}
+	store := &RuntimeStore{db: db, dialect: sqlite.NewEngine(), operationalMetrics: NewRuntimeOperationalMetrics("", "")}
 	if err := store.ensureMigrationBackupForExistingData(t.Context(), config.Config{DBPath: dbPath, MigrationBackupDir: filepath.Join(dir, "backups")}); err != nil {
 		t.Fatal(err)
 	}
@@ -187,15 +188,15 @@ func TestEnsureMigrationBackupCoversEmptyAndExistingSQLiteDatabases(t *testing.T
 	if err != nil || len(entries) != 1 || !strings.HasSuffix(entries[0].Name(), ".bak.enc") {
 		t.Fatalf("backup entries=%v err=%v", entries, err)
 	}
-	store = &RuntimeStore{db: db, dialect: sqlite.Dialect{}}
+	store = &RuntimeStore{db: db, dialect: sqlite.NewEngine()}
 	if err := store.ensureMigrationBackupForExistingData(t.Context(), config.Config{DBPath: dbPath, MigrationBackupDir: filepath.Join(dir, "backups-without-metrics")}); err != nil {
 		t.Fatalf("sqlite backup without metrics=%v", err)
 	}
 }
 
-type unsupportedMigrationDialect struct{}
+type unsupportedMigrationDialect struct{ sqlite.Engine }
 
-func (unsupportedMigrationDialect) Name() string                                     { return "unsupported" }
+func (unsupportedMigrationDialect) Name() ormdialect.Name                            { return ormdialect.Name("unsupported") }
 func (unsupportedMigrationDialect) SQLDriver() string                                { return "" }
 func (unsupportedMigrationDialect) DSN(config.Config) (string, error)                { return "", nil }
 func (unsupportedMigrationDialect) Configure(context.Context, *sql.DB, string) error { return nil }
@@ -204,3 +205,6 @@ func (unsupportedMigrationDialect) SQLDialect() ormdialect.Dialect {
 	return value
 }
 func (unsupportedMigrationDialect) SchemaMigrationSQL() string { return "" }
+func (unsupportedMigrationDialect) ApplicationTablesQuery(ormdialect.Renderer, string) persistencedriver.SchemaQuery {
+	return persistencedriver.SchemaQuery{}
+}

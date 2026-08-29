@@ -23,10 +23,9 @@ type SQLDatabase struct {
 	RuntimeEngine  driver.EngineProfile
 }
 
-func NewSQLDatabase(database *sql.DB, engine driver.Dialect, schema string) *SQLDatabase {
+func NewSQLDatabase(database *sql.DB, engine driver.Engine, schema string) *SQLDatabase {
 	schema = strings.TrimSpace(schema)
-	profile := driver.ProfileFor(engine)
-	return &SQLDatabase{DB: database, SQLRenderer: engine.SQLDialect().WithSchema(schema), DatabaseSchema: schema, Engine: profile, RuntimeEngine: profile}
+	return &SQLDatabase{DB: database, SQLRenderer: engine.SQLDialect().WithSchema(schema), DatabaseSchema: schema, Engine: engine, RuntimeEngine: engine}
 }
 
 // IsTransientError applies the engine Profile's stable error taxonomy. Owners

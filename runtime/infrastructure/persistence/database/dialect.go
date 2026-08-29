@@ -12,16 +12,16 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite"
 )
 
-type dialect = driver.Dialect
+type dialect = driver.Engine
 
 func dialectFor(driver string) (dialect, error) {
 	switch strings.ToLower(strings.TrimSpace(driver)) {
 	case "", "sqlite", "sqlite3":
-		return sqlite.Dialect{}, nil
+		return sqlite.NewEngine(), nil
 	case "mysql":
-		return mysql.Dialect{}, nil
+		return mysql.NewEngine(), nil
 	case "postgres", "postgresql", "pgx":
-		return postgres.Dialect{}, nil
+		return postgres.NewEngine(), nil
 	default:
 		return nil, fmt.Errorf("unsupported database driver %q", driver)
 	}

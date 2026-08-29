@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	ormdialect "github.com/domainry/domainry-orm/dialect"
-	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -15,8 +14,7 @@ type Dialect struct{}
 
 func (Dialect) Name() string { return "postgres" }
 
-func (Dialect) SQLDriver() string                              { return "pgx" }
-func (Dialect) EngineProfile() persistencedriver.EngineProfile { return newEngineProfile() }
+func (Dialect) SQLDriver() string { return "pgx" }
 
 func (Dialect) DSN(cfg config.Config) (string, error) {
 	if strings.TrimSpace(cfg.DatabaseDSN) == "" {

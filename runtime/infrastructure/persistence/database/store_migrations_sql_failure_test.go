@@ -23,13 +23,13 @@ func TestApplyMigrationFileSQLFailures(t *testing.T) {
 		{"statement", databaseSQLState{execSteps: []databaseSQLExecStep{{rows: 1}, {err: errDatabaseSQL}}}, nil, "migration.failed"},
 		{"complete", databaseSQLState{execSteps: []databaseSQLExecStep{{rows: 1}, {rows: 1}, {err: errDatabaseSQL}}}, nil, "record migration"},
 		{"commit", databaseSQLState{execSteps: []databaseSQLExecStep{{rows: 1}, {rows: 1}, {rows: 1}}, commitErr: errDatabaseSQL}, nil, "commit transaction"},
-		{"postgres search path", databaseSQLState{execSteps: []databaseSQLExecStep{{rows: 1}, {err: errDatabaseSQL}}}, func(store *RuntimeStore) { store.dialect = postgres.Dialect{} }, "search path"},
+		{"postgres search path", databaseSQLState{execSteps: []databaseSQLExecStep{{rows: 1}, {err: errDatabaseSQL}}}, func(store *RuntimeStore) { store.dialect = postgres.NewEngine() }, "search path"},
 		{"postgres lock timeout", databaseSQLState{execSteps: []databaseSQLExecStep{{rows: 1}, {rows: 1}, {err: errDatabaseSQL}}}, func(store *RuntimeStore) {
-			store.dialect = postgres.Dialect{}
+			store.dialect = postgres.NewEngine()
 			store.config.DatabaseLockTimeout = time.Second
 		}, "lock timeout"},
 		{"postgres statement timeout", databaseSQLState{execSteps: []databaseSQLExecStep{{rows: 1}, {rows: 1}, {err: errDatabaseSQL}}}, func(store *RuntimeStore) {
-			store.dialect = postgres.Dialect{}
+			store.dialect = postgres.NewEngine()
 			store.config.DatabaseStatementTimeout = time.Second
 		}, "statement timeout"},
 	}
@@ -53,7 +53,7 @@ func TestApplyMigrationFilePostgresTimeoutSuccess(t *testing.T) {
 		{DatabaseStatementTimeout: time.Second},
 	} {
 		store := runtimeSchemaStore(t, &databaseSQLState{})
-		store.dialect = postgres.Dialect{}
+		store.dialect = postgres.NewEngine()
 		store.config = cfg
 		if err := store.applyMigrationFile(t.Context(), path); err != nil {
 			t.Fatalf("config=%+v error=%v", cfg, err)
@@ -63,7 +63,7 @@ func TestApplyMigrationFilePostgresTimeoutSuccess(t *testing.T) {
 
 func TestEnsureMigrationLedgerSQLFailures(t *testing.T) {
 	store := runtimeSchemaStore(t, &databaseSQLState{execSteps: []databaseSQLExecStep{{err: errDatabaseSQL}}})
-	store.dialect, store.databaseSchema = postgres.Dialect{}, "runtime"
+	store.dialect, store.databaseSchema = postgres.NewEngine(), "runtime"
 	if err := store.ensureMigrationLedger(t.Context()); !errors.Is(err, errDatabaseSQL) {
 		t.Fatalf("schema error=%v", err)
 	}
@@ -83,7 +83,7 @@ func TestEnsureMigrationLedgerSQLFailures(t *testing.T) {
 func TestEnsureMigrationLedgerPostgresConditionOutcomes(t *testing.T) {
 	for _, schema := range []string{"", "public", "runtime"} {
 		store := runtimeSchemaStore(t, &databaseSQLState{querySteps: make([]databaseSQLQueryStep, 10)})
-		store.dialect, store.databaseSchema = postgres.Dialect{}, schema
+		store.dialect, store.databaseSchema = postgres.NewEngine(), schema
 		if err := store.ensureMigrationLedger(t.Context()); err != nil {
 			t.Fatalf("schema=%q error=%v", schema, err)
 		}

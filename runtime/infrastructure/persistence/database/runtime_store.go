@@ -387,7 +387,7 @@ func (s *RuntimeStore) OperationalMetrics() *RuntimeOperationalMetrics {
 }
 
 func (s *RuntimeStore) Driver() string {
-	return s.dialect.Name()
+	return string(s.dialect.Name())
 }
 
 func (s *RuntimeStore) DatabaseSchema() string {

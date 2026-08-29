@@ -10,10 +10,10 @@ import (
 func reportTestEngineProfile(name string) persistencedriver.EngineProfile {
 	switch name {
 	case "mysql":
-		return mysql.Dialect{}.EngineProfile()
+		return mysql.NewEngine()
 	case "postgres":
-		return postgres.Dialect{}.EngineProfile()
+		return postgres.NewEngine()
 	default:
-		return sqlite.Dialect{}.EngineProfile()
+		return sqlite.NewEngine()
 	}
 }

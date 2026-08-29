@@ -17,7 +17,8 @@ import (
 	mysqlschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/schema"
 )
 
-type engineProfile struct {
+type Engine struct {
+	Dialect
 	ormdriver.Profile
 	persistencedriver.MigrationProfile
 	persistencedriver.ProjectDatabaseProfile
@@ -28,8 +29,8 @@ type engineProfile struct {
 	report   persistencedriver.ReportProfile
 }
 
-func newEngineProfile() engineProfile {
-	return engineProfile{
+func NewEngine() Engine {
+	return Engine{Dialect: Dialect{},
 		Profile: ormmysql.NewProfile(), MigrationProfile: mysqlmigration.NewProfile(),
 		ProjectDatabaseProfile: mysqlprojectdatabase.NewProfile(),
 		SchemaProfile:          mysqlschema.NewProfile(), WorkspaceRLSProfile: mysqlrls.NewProfile(),
@@ -37,18 +38,20 @@ func newEngineProfile() engineProfile {
 	}
 }
 
-func (profile engineProfile) EvidenceSchemaTypes(text string) persistencedriver.EvidenceSchemaTypes {
+func (profile Engine) Name() ormdialect.Name { return profile.Profile.Name() }
+
+func (profile Engine) EvidenceSchemaTypes(text string) persistencedriver.EvidenceSchemaTypes {
 	return profile.evidence.Types(text)
 }
-func (profile engineProfile) NormalizeEvidenceSchema(ctx context.Context, database persistencedriver.SchemaDatabase, renderer ormdialect.Renderer) error {
+func (profile Engine) NormalizeEvidenceSchema(ctx context.Context, database persistencedriver.SchemaDatabase, renderer ormdialect.Renderer) error {
 	return profile.evidence.Normalize(ctx, database, renderer)
 }
-func (profile engineProfile) OrderedDecimalTextStorage() bool {
+func (profile Engine) OrderedDecimalTextStorage() bool {
 	return profile.record.OrderedDecimalTextStorage()
 }
-func (profile engineProfile) RecordReadIsolation() sql.IsolationLevel {
+func (profile Engine) RecordReadIsolation() sql.IsolationLevel {
 	return profile.record.ReadIsolation()
 }
-func (profile engineProfile) ReportDateBucket(value, grain string, date bool) (string, error) {
+func (profile Engine) ReportDateBucket(value, grain string, date bool) (string, error) {
 	return profile.report.DateBucket(value, grain, date)
 }

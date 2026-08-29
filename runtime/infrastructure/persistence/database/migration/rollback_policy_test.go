@@ -22,9 +22,9 @@ func TestMigrationRollbackPolicyCoversEveryRuntimeDatabase(t *testing.T) {
 		profile driver.EngineProfile
 		mode    string
 	}{
-		{name: "sqlite", profile: sqlite.Dialect{}.EngineProfile(), mode: "restore_sqlite_backup"},
-		{name: "postgres", profile: postgres.Dialect{}.EngineProfile(), mode: "restore_external_backup_or_pitr"},
-		{name: "mysql", profile: mysql.Dialect{}.EngineProfile(), mode: "restore_external_backup"},
+		{name: "sqlite", profile: sqlite.NewEngine(), mode: "restore_sqlite_backup"},
+		{name: "postgres", profile: postgres.NewEngine(), mode: "restore_external_backup_or_pitr"},
+		{name: "mysql", profile: mysql.NewEngine(), mode: "restore_external_backup"},
 	}
 	wantProcedure := []string{"stop_runtime", "restart_runtime", "verify_migration_status"}
 	for _, test := range tests {
@@ -58,11 +58,11 @@ func TestMigrationDiscoveryUsesDatabaseSpecificDirectory(t *testing.T) {
 	root := t.TempDir()
 	tests := []struct {
 		name    string
-		dialect driver.Dialect
+		dialect driver.Engine
 	}{
-		{name: "sqlite", dialect: sqlite.Dialect{}},
-		{name: "postgres", dialect: postgres.Dialect{}},
-		{name: "mysql", dialect: mysql.Dialect{}},
+		{name: "sqlite", dialect: sqlite.NewEngine()},
+		{name: "postgres", dialect: postgres.NewEngine()},
+		{name: "mysql", dialect: mysql.NewEngine()},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

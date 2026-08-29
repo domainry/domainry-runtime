@@ -3,14 +3,10 @@ package driver
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"time"
 
 	ormdialect "github.com/domainry/domainry-orm/dialect"
 	ormdriver "github.com/domainry/domainry-orm/driver"
-	ormmysql "github.com/domainry/domainry-orm/mysql"
-	ormpostgres "github.com/domainry/domainry-orm/postgres"
-	ormsqlite "github.com/domainry/domainry-orm/sqlite"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -49,6 +45,15 @@ type EngineProfile interface {
 	OrderedDecimalTextStorage() bool
 	RecordReadIsolation() sql.IsolationLevel
 	ReportDateBucket(string, string, bool) (string, error)
+}
+
+type Engine interface {
+	EngineProfile
+	SQLDriver() string
+	DSN(config.Config) (string, error)
+	Configure(context.Context, *sql.DB, string) error
+	SQLDialect() ormdialect.Dialect
+	SchemaMigrationSQL() string
 }
 
 type EvidenceSchemaProfile interface {
@@ -153,80 +158,4 @@ type WorkspaceRLSStatus struct {
 type SchemaDatabase interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
-}
-
-type engineProfileProvider interface{ EngineProfile() EngineProfile }
-
-type portableEngineProfile struct{ ormdriver.Profile }
-
-func (portableEngineProfile) EnsureProjectDatabase(context.Context, config.Config) error { return nil }
-func (portableEngineProfile) MigrationDatabasePath(config.Config) string                 { return "" }
-func (portableEngineProfile) ManagedDatabaseMarkerEnabled() bool                         { return true }
-func (portableEngineProfile) ColumnDefinition(value string) string                       { return value }
-func (portableEngineProfile) ApplicationTablesQuery(ormdialect.Renderer, string) SchemaQuery {
-	return SchemaQuery{}
-}
-func (portableEngineProfile) WorkspaceTablesQuery(ormdialect.Renderer, string) SchemaQuery {
-	return SchemaQuery{}
-}
-func (portableEngineProfile) TableExistsQuery(ormdialect.Renderer, string, string) SchemaQuery {
-	return SchemaQuery{}
-}
-func (portableEngineProfile) IndexesQuery(ormdialect.Renderer, string, string) SchemaQuery {
-	return SchemaQuery{}
-}
-func (portableEngineProfile) EvidenceSchemaTypes(text string) EvidenceSchemaTypes {
-	return EvidenceSchemaTypes{LargeText: "TEXT", IdempotencyScope: text, AuditCursor: text, RetirementEngine: text, RetirementNamespace: text, RetirementKind: text, RetirementObject: text}
-}
-func (portableEngineProfile) NormalizeEvidenceSchema(context.Context, SchemaDatabase, ormdialect.Renderer) error {
-	return nil
-}
-func (portableEngineProfile) MigrationLedgerTypes() MigrationLedgerTypes {
-	return MigrationLedgerTypes{Key: "TEXT", Timestamp: "TEXT"}
-}
-func (portableEngineProfile) EnsureMigrationNamespace(context.Context, SchemaDatabase, ormdialect.Renderer, string) error {
-	return nil
-}
-func (portableEngineProfile) ConfigureMigrationTransaction(context.Context, *sql.Tx, ormdialect.Renderer, string, time.Duration, time.Duration) error {
-	return nil
-}
-func (portableEngineProfile) MigrationBackupPolicy() MigrationBackupPolicy {
-	return MigrationBackupPolicy{}
-}
-func (portableEngineProfile) MigrationRollbackPolicy() MigrationRollbackPolicy {
-	return MigrationRollbackPolicy{Mode: "unsupported", RequiresVerifiedBackup: true}
-}
-func (portableEngineProfile) AcquireMigrationLock(context.Context, *sql.DB, ormdialect.Renderer, MigrationLockOptions) (MigrationLock, error) {
-	return MigrationLock{}, fmt.Errorf("database engine does not support migration locking")
-}
-func (portableEngineProfile) WorkspaceRLSSupported() bool { return false }
-func (portableEngineProfile) ApplyWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) error {
-	return nil
-}
-func (portableEngineProfile) InspectWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) (WorkspaceRLSStatus, error) {
-	return WorkspaceRLSStatus{}, nil
-}
-func (portableEngineProfile) OrderedDecimalTextStorage() bool         { return false }
-func (portableEngineProfile) RecordReadIsolation() sql.IsolationLevel { return sql.LevelSerializable }
-func (portableEngineProfile) ReportDateBucket(string, string, bool) (string, error) {
-	return "", fmt.Errorf("database engine does not support report date buckets")
-}
-
-var portableProfileRegistry = map[ormdialect.Name]func() EngineProfile{
-	ormdialect.SQLite: func() EngineProfile { return portableEngineProfile{Profile: ormsqlite.NewProfile()} },
-	ormdialect.MySQL:  func() EngineProfile { return portableEngineProfile{Profile: ormmysql.NewProfile()} },
-	ormdialect.Postgres: func() EngineProfile {
-		return portableEngineProfile{Profile: ormpostgres.NewProfile()}
-	},
-}
-
-func ProfileFor(value Dialect) EngineProfile {
-	if provider, ok := value.(engineProfileProvider); ok {
-		return provider.EngineProfile()
-	}
-	factory, found := portableProfileRegistry[value.SQLDialect().Name()]
-	if !found {
-		panic(fmt.Sprintf("unsupported database profile %q", value.Name()))
-	}
-	return factory()
 }
