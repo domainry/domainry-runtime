@@ -31,6 +31,13 @@ Registered schema tables:
   explicit system purpose and does not accept a tenant workspace discriminator
 - `runtime_worker_queue_scopes` — `runtime_global`; it enumerates explicit
   workspace scope keys for governed cross-workspace worker queue discovery
+- `runtime_rate_limit_bucket` — `runtime_global` technical storage; the bucket
+  key supplied by each tenant-facing caller includes its explicit workspace or
+  tenant-owned credential scope, while the shared limiter itself does not infer
+  or substitute a workspace
+- `agent_runtime_state`, `agent_task_runs`, `agent_interactive_runs` —
+  `workspace_scoped`; each persisted state/run row has a mandatory
+  `workspace_id`, and repository reads and mutations use workspace builders
 - `runtime_break_glass_grants` — `workspace_scoped`; every grant names one
   target workspace and its audited approval/revocation lifecycle cannot be
   queried through a wildcard tenant scope

@@ -204,7 +204,7 @@
       "object_kind": "table",
       "database": "runtime",
       "schema": "configured_runtime_schema",
-      "object_names": ["runtime_rate_limit_bucket", "runtime_worker_queue_scopes", "agent_runtime_state", "runtime_operations", "runtime_operation_controls", "runtime_break_glass_grants", "runtime_database_retirements", "runtime_release_cohorts", "runtime_release_instances", "lifecycle_archive_entries", "lifecycle_audit_evidence", "lifecycle_cleanup_jobs", "lifecycle_deletion_registry", "lifecycle_external_erasures", "lifecycle_file_artifacts", "lifecycle_legal_holds", "lifecycle_policy_versions", "lifecycle_subject_requests"],
+      "object_names": ["runtime_rate_limit_bucket", "runtime_worker_queue_scopes", "agent_runtime_state", "agent_task_runs", "agent_interactive_runs", "runtime_operations", "runtime_operation_controls", "runtime_break_glass_grants", "runtime_database_retirements", "runtime_release_cohorts", "runtime_release_instances", "lifecycle_archive_entries", "lifecycle_audit_evidence", "lifecycle_cleanup_jobs", "lifecycle_deletion_registry", "lifecycle_external_erasures", "lifecycle_file_artifacts", "lifecycle_legal_holds", "lifecycle_policy_versions", "lifecycle_subject_requests"],
       "owner": "lazy-runtime-capabilities",
       "replacement": "",
 	  "read_paths": ["runtime/infrastructure/persistence/database/ratelimit", "runtime/infrastructure/persistence/database/agent", "runtime/infrastructure/persistence/database/integration", "runtime/infrastructure/persistence/database/operations", "runtime/infrastructure/persistence/database/deployment", "runtime/infrastructure/persistence/database/lifecycle"],
