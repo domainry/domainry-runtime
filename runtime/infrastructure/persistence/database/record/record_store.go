@@ -173,6 +173,8 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 	if err != nil {
 		return recordmodel.RecordPageResult{}, err
 	}
+	countWhereSQL := whereSQL
+	countArgs := append([]any(nil), args...)
 	if afterID := strings.TrimSpace(query.AfterID); afterID != "" {
 		if !recordQueryUsesAscendingIDOrder(query.Sort) {
 			return recordmodel.RecordPageResult{}, fmt.Errorf("record keyset cursor requires ascending id sort")
@@ -180,27 +182,24 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 		args = append(args, afterID)
 		whereSQL += " AND " + s.TableIdentifier(object.Key) + "." + s.Identifier("id") + " > " + s.Placeholder(len(args))
 	}
+	if query.Page > 1 && strings.TrimSpace(query.AfterID) == "" {
+		return recordmodel.RecordPageResult{}, fmt.Errorf("record deep pagination requires an id cursor")
+	}
 	orderSQL, orderArgs := recordLocalizedOrder(s, workspaceID, object, query, len(args))
-	offset := (query.Page - 1) * query.PageSize
-	if strings.TrimSpace(query.AfterID) != "" {
-		offset = 0
-	}
-	if offset < 0 {
-		offset = 0
-	}
 	var total int
 	if !query.SkipTotal {
-		if err := executor.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+s.TableIdentifier(object.Key)+whereSQL, args...).Scan(&total); err != nil {
+		if err := executor.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+s.TableIdentifier(object.Key)+countWhereSQL, countArgs...).Scan(&total); err != nil {
 			return recordmodel.RecordPageResult{}, fmt.Errorf("count records: %w", err)
 		}
 	}
 	fetchLimit := query.PageSize
-	if query.SkipTotal {
+	if query.SkipTotal || strings.TrimSpace(query.AfterID) != "" {
 		fetchLimit++
 	}
-	listArgs := append(append(append([]any{}, args...), orderArgs...), fetchLimit, offset)
+	listArgs := append(append([]any{}, args...), orderArgs...)
+	listArgs = append(listArgs, fetchLimit)
 	lockSQL := recordQueryLockSQL(s.RuntimeEngine, lockIntent)
-	rows, err := executor.QueryContext(ctx, "SELECT "+recordListProjection(s, query.SelectFields)+" FROM "+s.TableIdentifier(object.Key)+whereSQL+orderSQL+" LIMIT "+s.Placeholder(len(args)+len(orderArgs)+1)+" OFFSET "+s.Placeholder(len(args)+len(orderArgs)+2)+lockSQL, listArgs...)
+	rows, err := executor.QueryContext(ctx, "SELECT "+recordListProjection(s, query.SelectFields)+" FROM "+s.TableIdentifier(object.Key)+whereSQL+orderSQL+" LIMIT "+s.Placeholder(len(args)+len(orderArgs)+1)+lockSQL, listArgs...)
 	if err != nil {
 		return recordmodel.RecordPageResult{}, fmt.Errorf("list records: %w", err)
 	}
@@ -210,8 +209,8 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 		return recordmodel.RecordPageResult{}, err
 	}
 	_ = rows.Close()
-	hasNext := query.Page*query.PageSize < total
-	if query.SkipTotal {
+	hasNext := len(records) < total
+	if query.SkipTotal || strings.TrimSpace(query.AfterID) != "" {
 		hasNext = len(records) > query.PageSize
 		if hasNext {
 			records = records[:query.PageSize]

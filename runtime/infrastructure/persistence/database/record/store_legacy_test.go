@@ -57,10 +57,11 @@ func TestListRecordsComposesDepartmentScopeWithSearchFiltersPaginationAndSorting
 	page, err := recordStore(store).ListRecords(t.Context(), "default", object, recordmodel.RecordListQuery{
 		Page:                    2,
 		PageSize:                1,
+		AfterID:                 "r1",
 		Search:                  "North",
 		SearchFields:            []string{"name"},
 		Filters:                 map[string]any{"status": "active"},
-		Sort:                    []recordmodel.RecordSortRule{{Field: "name", Direction: "asc"}},
+		Sort:                    []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}},
 		Scope:                   "department_and_children",
 		PrincipalDepartmentPath: "/company/sales",
 		DepartmentPathField:     "owner_department_path",
@@ -123,7 +124,7 @@ func TestListRecordsComposesDepartmentScopeWithSearchFiltersPaginationAndSorting
 		t.Fatal("expected non-id keyset sort to be rejected")
 	}
 	lastWithoutTotal, err := recordStore(store).ListRecords(t.Context(), "default", object, recordmodel.RecordListQuery{
-		Page: 5, PageSize: 2, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}, SkipTotal: true,
+		Page: 5, PageSize: 2, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}, SkipTotal: true, AfterID: "r7",
 	})
 	if err != nil || lastWithoutTotal.Total != 0 || lastWithoutTotal.HasNext || len(lastWithoutTotal.Items) != 2 {
 		t.Fatalf("expected count-free final page, got %#v err=%v", lastWithoutTotal, err)
