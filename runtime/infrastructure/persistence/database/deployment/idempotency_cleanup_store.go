@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/idempotency"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 )
 
@@ -31,8 +32,11 @@ func (r RuntimeStatusStore) RunIdempotencyCleanup(ctx context.Context, request d
 	if err := r.ensureIdempotencyCleanupLease(ctx, nowText); err != nil {
 		return deploymentmodel.IdempotencyCleanupResult{}, err
 	}
-	claim := "UPDATE " + r.store.TableIdentifier("idempotency_cleanup_leases") + " SET " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("lease_expires_at") + " = " + r.store.Placeholder(2) + ", " + r.store.Identifier("fencing_token") + " = " + r.store.Identifier("fencing_token") + " + 1, " + r.store.Identifier("last_started_at") + " = " + r.store.Placeholder(3) + ", " + r.store.Identifier("last_error") + " = '', " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(4) + " WHERE " + r.store.Identifier("id") + " = " + r.store.Placeholder(5) + " AND (" + r.store.Identifier("lease_owner") + " = '' OR " + r.store.Identifier("lease_expires_at") + " <= " + r.store.Placeholder(6) + ")"
-	claimResult, err := r.db.ExecContext(ctx, claim, request.LeaseOwner, leaseExpiresAt, nowText, nowText, idempotencyCleanupLeaseID, nowText)
+	claim, claimArgs, err := ormbuilder.NewUpdateBuilder(r.store.SQLRenderer, "idempotency_cleanup_leases").Set("lease_owner", request.LeaseOwner).Set("lease_expires_at", leaseExpiresAt).SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).Set("last_started_at", nowText).Set("last_error", "").Set("updated_at", nowText).Where(ormbuilder.And(ormbuilder.Equal("id", idempotencyCleanupLeaseID), ormbuilder.Or(ormbuilder.Equal("lease_owner", ""), ormbuilder.LessThanOrEqual("lease_expires_at", nowText)))).Build()
+	if err != nil {
+		return deploymentmodel.IdempotencyCleanupResult{}, fmt.Errorf("build idempotency cleanup lease claim: %w", err)
+	}
+	claimResult, err := r.db.ExecContext(ctx, claim, claimArgs...)
 	if err != nil {
 		return deploymentmodel.IdempotencyCleanupResult{}, fmt.Errorf("claim idempotency cleanup lease: %w", err)
 	}
@@ -41,7 +45,11 @@ func (r RuntimeStatusStore) RunIdempotencyCleanup(ctx context.Context, request d
 		return deploymentmodel.IdempotencyCleanupResult{Acquired: false}, err
 	}
 	result := deploymentmodel.IdempotencyCleanupResult{Acquired: true, LeaseOwner: request.LeaseOwner, StartedAt: nowText}
-	if err := r.db.QueryRowContext(ctx, "SELECT "+r.store.Identifier("fencing_token")+" FROM "+r.store.TableIdentifier("idempotency_cleanup_leases")+" WHERE "+r.store.Identifier("id")+" = "+r.store.Placeholder(1), idempotencyCleanupLeaseID).Scan(&result.FencingToken); err != nil {
+	lookup, lookupArgs, err := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "idempotency_cleanup_leases").Columns("fencing_token").Where(ormbuilder.Equal("id", idempotencyCleanupLeaseID)).Build()
+	if err != nil {
+		return result, err
+	}
+	if err := r.db.QueryRowContext(ctx, lookup, lookupArgs...).Scan(&result.FencingToken); err != nil {
 		return result, err
 	}
 	for _, spec := range idempotencyReceiptTables {
@@ -56,8 +64,11 @@ func (r RuntimeStatusStore) RunIdempotencyCleanup(ctx context.Context, request d
 		result.Deleted += deleted
 	}
 	result.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	complete := "UPDATE " + r.store.TableIdentifier("idempotency_cleanup_leases") + " SET " + r.store.Identifier("lease_owner") + " = '', " + r.store.Identifier("lease_expires_at") + " = '', " + r.store.Identifier("last_completed_at") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("last_deleted") + " = " + r.store.Placeholder(2) + ", " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(3) + " WHERE " + r.store.Identifier("id") + " = " + r.store.Placeholder(4) + " AND " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(5) + " AND " + r.store.Identifier("fencing_token") + " = " + r.store.Placeholder(6)
-	completed, err := r.db.ExecContext(ctx, complete, result.CompletedAt, result.Deleted, result.CompletedAt, idempotencyCleanupLeaseID, request.LeaseOwner, result.FencingToken)
+	complete, completeArgs, err := ormbuilder.NewUpdateBuilder(r.store.SQLRenderer, "idempotency_cleanup_leases").Set("lease_owner", "").Set("lease_expires_at", "").Set("last_completed_at", result.CompletedAt).Set("last_deleted", result.Deleted).Set("updated_at", result.CompletedAt).Where(cleanupLeasePredicate(request.LeaseOwner, result.FencingToken)).Build()
+	if err != nil {
+		return result, err
+	}
+	completed, err := r.db.ExecContext(ctx, complete, completeArgs...)
 	if err != nil {
 		return result, err
 	}
@@ -69,10 +80,17 @@ func (r RuntimeStatusStore) RunIdempotencyCleanup(ctx context.Context, request d
 }
 
 func (r RuntimeStatusStore) ensureIdempotencyCleanupLease(ctx context.Context, now string) error {
-	query := r.store.InsertStatement("idempotency_cleanup_leases", []string{"id", "lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "last_deleted", "last_error", "updated_at"})
-	if _, err := r.db.ExecContext(ctx, query, idempotencyCleanupLeaseID, "", "", 0, "", "", 0, "", now); err != nil {
+	query, args, buildErr := ormbuilder.NewInsertBuilder(r.store.SQLRenderer, "idempotency_cleanup_leases").Columns("id", "lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "last_deleted", "last_error", "updated_at").Values(idempotencyCleanupLeaseID, "", "", 0, "", "", 0, "", now).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	if _, err := r.db.ExecContext(ctx, query, args...); err != nil {
 		var count int
-		if checkErr := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+r.store.TableIdentifier("idempotency_cleanup_leases")+" WHERE "+r.store.Identifier("id")+" = "+r.store.Placeholder(1), idempotencyCleanupLeaseID).Scan(&count); checkErr != nil || count != 1 {
+		check, checkArgs, checkErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "idempotency_cleanup_leases").Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(ormbuilder.Equal("id", idempotencyCleanupLeaseID)).Build()
+		if checkErr != nil {
+			return checkErr
+		}
+		if checkErr = r.db.QueryRowContext(ctx, check, checkArgs...).Scan(&count); checkErr != nil || count != 1 {
 			return fmt.Errorf("initialize idempotency cleanup lease: %w", err)
 		}
 	}
@@ -80,9 +98,12 @@ func (r RuntimeStatusStore) ensureIdempotencyCleanupLease(ctx context.Context, n
 }
 
 func (r RuntimeStatusStore) deleteExpiredReceiptBatch(ctx context.Context, table, owner string, fencingToken int64, now string, limit int) (int, error) {
-	leaseGuard := "EXISTS (SELECT 1 FROM " + r.store.TableIdentifier("idempotency_cleanup_leases") + " WHERE " + r.store.Identifier("id") + " = " + r.store.Placeholder(1) + " AND " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(2) + " AND " + r.store.Identifier("fencing_token") + " = " + r.store.Placeholder(3) + " AND " + r.store.Identifier("lease_expires_at") + " > " + r.store.Placeholder(4) + ")"
-	selectQuery := "SELECT " + r.store.Identifier("id") + " FROM " + r.store.TableIdentifier(table) + " WHERE " + leaseGuard + " AND " + r.store.Identifier("expires_at") + " <> '' AND " + r.store.Identifier("expires_at") + " <= " + r.store.Placeholder(5) + " AND " + r.store.Identifier("status") + " <> " + r.store.Placeholder(6) + " ORDER BY " + r.store.Identifier("expires_at") + " ASC LIMIT " + r.store.Placeholder(7)
-	rows, err := r.db.QueryContext(ctx, selectQuery, idempotencyCleanupLeaseID, owner, fencingToken, now, now, string(idempotency.StatusProcessing), limit)
+	lease := cleanupLeaseGuard(r.store.SQLRenderer, owner, fencingToken, now)
+	selectQuery, selectArgs, err := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, table).Columns("id").Where(ormbuilder.And(ormbuilder.ExistsSubquery(lease), ormbuilder.NotEqual("expires_at", ""), ormbuilder.LessThanOrEqual("expires_at", now), ormbuilder.NotEqual("status", string(idempotency.StatusProcessing)))).OrderBy(ormbuilder.Ascending("expires_at"), ormbuilder.Ascending("id")).Limit(limit).Build()
+	if err != nil {
+		return 0, err
+	}
+	rows, err := r.db.QueryContext(ctx, selectQuery, selectArgs...)
 	if err != nil {
 		return 0, err
 	}
@@ -103,14 +124,15 @@ func (r RuntimeStatusStore) deleteExpiredReceiptBatch(ctx context.Context, table
 	if len(ids) == 0 {
 		return 0, nil
 	}
-	args := []any{idempotencyCleanupLeaseID, owner, fencingToken, now}
-	idPlaceholders := make([]string, 0, len(ids))
+	idValues := make([]any, 0, len(ids))
 	for _, id := range ids {
-		args = append(args, id)
-		idPlaceholders = append(idPlaceholders, r.store.Placeholder(len(args)))
+		idValues = append(idValues, id)
 	}
-	deleteQuery := "DELETE FROM " + r.store.TableIdentifier(table) + " WHERE " + leaseGuard + " AND " + r.store.Identifier("id") + " IN (" + strings.Join(idPlaceholders, ", ") + ")"
-	deleted, err := r.db.ExecContext(ctx, deleteQuery, args...)
+	deleteQuery, deleteArgs, err := ormbuilder.NewDeleteBuilder(r.store.SQLRenderer, table).Where(ormbuilder.And(ormbuilder.ExistsSubquery(cleanupLeaseGuard(r.store.SQLRenderer, owner, fencingToken, now)), ormbuilder.In("id", idValues...))).Build()
+	if err != nil {
+		return 0, err
+	}
+	deleted, err := r.db.ExecContext(ctx, deleteQuery, deleteArgs...)
 	if err != nil {
 		return 0, err
 	}
@@ -119,6 +141,16 @@ func (r RuntimeStatusStore) deleteExpiredReceiptBatch(ctx context.Context, table
 }
 
 func (r RuntimeStatusStore) failIdempotencyCleanup(ctx context.Context, owner string, fencingToken int64, now string, cause error) {
-	query := "UPDATE " + r.store.TableIdentifier("idempotency_cleanup_leases") + " SET " + r.store.Identifier("lease_owner") + " = '', " + r.store.Identifier("lease_expires_at") + " = '', " + r.store.Identifier("last_error") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(2) + " WHERE " + r.store.Identifier("id") + " = " + r.store.Placeholder(3) + " AND " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(4) + " AND " + r.store.Identifier("fencing_token") + " = " + r.store.Placeholder(5)
-	_, _ = r.db.ExecContext(ctx, query, cause.Error(), now, idempotencyCleanupLeaseID, owner, fencingToken)
+	query, args, err := ormbuilder.NewUpdateBuilder(r.store.SQLRenderer, "idempotency_cleanup_leases").Set("lease_owner", "").Set("lease_expires_at", "").Set("last_error", cause.Error()).Set("updated_at", now).Where(cleanupLeasePredicate(owner, fencingToken)).Build()
+	if err == nil {
+		_, _ = r.db.ExecContext(ctx, query, args...)
+	}
+}
+
+func cleanupLeasePredicate(owner string, fencingToken int64) ormbuilder.Predicate {
+	return ormbuilder.And(ormbuilder.Equal("id", idempotencyCleanupLeaseID), ormbuilder.Equal("lease_owner", owner), ormbuilder.Equal("fencing_token", fencingToken))
+}
+
+func cleanupLeaseGuard(renderer ormbuilder.Renderer, owner string, fencingToken int64, now string) *ormbuilder.SelectBuilder {
+	return ormbuilder.NewSelectBuilder(renderer, "idempotency_cleanup_leases").Columns("id").Where(ormbuilder.And(cleanupLeasePredicate(owner, fencingToken), ormbuilder.GreaterThan("lease_expires_at", now)))
 }
