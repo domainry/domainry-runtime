@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
@@ -28,11 +29,18 @@ func (r BusinessEvidenceStore) UpsertSeedProvenance(ctx context.Context, value b
 		return fmt.Errorf("begin seed provenance upsert: %w", err)
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, "DELETE FROM "+r.store.TableIdentifier("_business_seed_provenance")+" WHERE "+r.store.Identifier("seed_key")+" = "+r.store.Placeholder(1), value.SeedKey); err != nil {
+	deleteStatement, deleteArgs, buildErr := ormbuilder.NewDeleteBuilder(r.store.SQLRenderer, "_business_seed_provenance").Where(ormbuilder.Equal("seed_key", value.SeedKey)).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	if _, err := tx.ExecContext(ctx, deleteStatement, deleteArgs...); err != nil {
 		return fmt.Errorf("replace seed provenance %s: %w", value.SeedKey, err)
 	}
-	query := "INSERT INTO " + r.store.TableIdentifier("_business_seed_provenance") + " (" + joinIdentifiers(r.store, columns...) + ") VALUES (" + joinPlaceholders(r.store, len(columns)) + ")"
-	if _, err := tx.ExecContext(ctx, query, values...); err != nil {
+	query, args, buildErr := ormbuilder.NewInsertBuilder(r.store.SQLRenderer, "_business_seed_provenance").Columns(columns...).Values(values...).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 		return fmt.Errorf("insert seed provenance %s: %w", value.SeedKey, err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -43,7 +51,11 @@ func (r BusinessEvidenceStore) UpsertSeedProvenance(ctx context.Context, value b
 
 func (r BusinessEvidenceStore) GetSeedProvenance(ctx context.Context, seedKey string) (businessseedmodel.BusinessSeedProvenance, bool, error) {
 	columns := []string{"seed_key", "object_key", "record_id", "source_kind", "source_id", "template_id", "template_version", "content_hash", "materialized_at"}
-	row := r.db.QueryRowContext(ctx, "SELECT "+joinIdentifiers(r.store, columns...)+" FROM "+r.store.TableIdentifier("_business_seed_provenance")+" WHERE "+r.store.Identifier("seed_key")+" = "+r.store.Placeholder(1), strings.TrimSpace(seedKey))
+	query, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "_business_seed_provenance").Columns(columns...).Where(ormbuilder.Equal("seed_key", strings.TrimSpace(seedKey))).Build()
+	if buildErr != nil {
+		return businessseedmodel.BusinessSeedProvenance{}, false, buildErr
+	}
+	row := r.db.QueryRowContext(ctx, query, args...)
 	var value businessseedmodel.BusinessSeedProvenance
 	if err := row.Scan(&value.SeedKey, &value.ObjectKey, &value.RecordID, &value.SourceKind, &value.SourceID, &value.TemplateID, &value.TemplateVersion, &value.ContentHash, &value.MaterializedAt); errors.Is(err, sql.ErrNoRows) {
 		return businessseedmodel.BusinessSeedProvenance{}, false, nil
@@ -54,7 +66,11 @@ func (r BusinessEvidenceStore) GetSeedProvenance(ctx context.Context, seedKey st
 }
 func (r BusinessEvidenceStore) ListSeedProvenance(ctx context.Context) ([]businessseedmodel.BusinessSeedProvenance, error) {
 	columns := []string{"seed_key", "object_key", "record_id", "source_kind", "source_id", "template_id", "template_version", "content_hash", "materialized_at"}
-	rows, err := r.db.QueryContext(ctx, "SELECT "+joinIdentifiers(r.store, columns...)+" FROM "+r.store.TableIdentifier("_business_seed_provenance")+" ORDER BY "+r.store.Identifier("object_key")+", "+r.store.Identifier("seed_key"))
+	query, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "_business_seed_provenance").Columns(columns...).OrderBy(ormbuilder.Ascending("object_key"), ormbuilder.Ascending("seed_key")).Build()
+	if buildErr != nil {
+		return nil, buildErr
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list domain seed provenance: %w", err)
 	}

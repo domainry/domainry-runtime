@@ -14,6 +14,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -26,22 +27,6 @@ type BusinessChangePlanStore struct {
 
 func NewBusinessChangePlanStore(store *database.RuntimeStore) BusinessChangePlanStore {
 	return BusinessChangePlanStore{store: store, db: store.DB()}
-}
-
-func joinIdentifiers(store *database.RuntimeStore, columns ...string) string {
-	values := make([]string, 0, len(columns))
-	for _, column := range columns {
-		values = append(values, store.Identifier(column))
-	}
-	return strings.Join(values, ", ")
-}
-
-func joinPlaceholders(store *database.RuntimeStore, count int) string {
-	values := make([]string, 0, count)
-	for index := 0; index < count; index++ {
-		values = append(values, store.Placeholder(index+1))
-	}
-	return strings.Join(values, ", ")
 }
 
 func transactionOptions() *sql.TxOptions {
@@ -61,10 +46,13 @@ func (r BusinessChangePlanStore) GetDraft(ctx context.Context, workspaceID, id s
 	if err != nil {
 		return changeplanmodel.BusinessChangePlanDraft{}, false, err
 	}
-	query := "SELECT " + joinIdentifiers(r.store, "workspace_id", "plan_id", "revision", "status", "payload_json", "created_by", "updated_by", "created_at", "updated_at") + " FROM " + r.store.TableIdentifier("business_change_plan_drafts") + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1) + " AND " + r.store.Identifier("plan_id") + " = " + r.store.Placeholder(2)
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "business_change_plan_drafts", workspaceID).Columns("workspace_id", "plan_id", "revision", "status", "payload_json", "created_by", "updated_by", "created_at", "updated_at").Where(ormbuilder.Equal("plan_id", id)).Build()
+	if buildErr != nil {
+		return changeplanmodel.BusinessChangePlanDraft{}, false, buildErr
+	}
 	var value changeplanmodel.BusinessChangePlanDraft
 	var payload string
-	err = r.db.QueryRowContext(ctx, query, workspaceID, id).Scan(&value.WorkspaceID, &value.PlanID, &value.Revision, &value.Status, &payload, &value.CreatedBy, &value.UpdatedBy, &value.CreatedAt, &value.UpdatedAt)
+	err = r.db.QueryRowContext(ctx, query, args...).Scan(&value.WorkspaceID, &value.PlanID, &value.Revision, &value.Status, &payload, &value.CreatedBy, &value.UpdatedBy, &value.CreatedAt, &value.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return changeplanmodel.BusinessChangePlanDraft{}, false, nil
 	}
@@ -85,15 +73,20 @@ func (r BusinessChangePlanStore) SaveDraft(ctx context.Context, workspaceID stri
 	}
 	value.WorkspaceID = workspaceID
 	if expected == 0 {
-		columns := []string{"workspace_id", "plan_id", "revision", "status", "payload_json", "created_by", "updated_by", "created_at", "updated_at"}
-		args := []any{workspaceID, value.PlanID, 1, "draft", string(value.Payload), value.CreatedBy, value.UpdatedBy, value.CreatedAt, value.UpdatedAt}
-		if _, err := r.db.ExecContext(ctx, "INSERT INTO "+r.store.TableIdentifier("business_change_plan_drafts")+" ("+joinIdentifiers(r.store, columns...)+") VALUES ("+joinPlaceholders(r.store, len(args))+")", args...); err != nil {
+		query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "business_change_plan_drafts", workspaceID).Columns("plan_id", "revision", "status", "payload_json", "created_by", "updated_by", "created_at", "updated_at").Values(value.PlanID, 1, "draft", string(value.Payload), value.CreatedBy, value.UpdatedBy, value.CreatedAt, value.UpdatedAt).Build()
+		if buildErr != nil {
+			return changeplanmodel.BusinessChangePlanDraft{}, false, buildErr
+		}
+		if _, err := r.db.ExecContext(ctx, query, args...); err != nil {
 			return changeplanmodel.BusinessChangePlanDraft{}, false, fmt.Errorf("create domain change plan draft: %w", err)
 		}
 		return r.GetDraft(ctx, workspaceID, value.PlanID)
 	}
-	query := "UPDATE " + r.store.TableIdentifier("business_change_plan_drafts") + " SET " + r.store.Identifier("payload_json") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("updated_by") + " = " + r.store.Placeholder(2) + ", " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(3) + ", " + r.store.Identifier("revision") + " = " + r.store.Identifier("revision") + " + 1 WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(4) + " AND " + r.store.Identifier("plan_id") + " = " + r.store.Placeholder(5) + " AND " + r.store.Identifier("revision") + " = " + r.store.Placeholder(6) + " AND " + r.store.Identifier("status") + " = 'draft'"
-	result, err := r.db.ExecContext(ctx, query, string(value.Payload), value.UpdatedBy, value.UpdatedAt, workspaceID, value.PlanID, expected)
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "business_change_plan_drafts", workspaceID).Set("payload_json", string(value.Payload)).Set("updated_by", value.UpdatedBy).Set("updated_at", value.UpdatedAt).SetExpression("revision", ormbuilder.Add(ormbuilder.Column("revision"), ormbuilder.Value(1))).Where(ormbuilder.And(ormbuilder.Equal("plan_id", value.PlanID), ormbuilder.Equal("revision", expected), ormbuilder.Equal("status", "draft"))).Build()
+	if buildErr != nil {
+		return changeplanmodel.BusinessChangePlanDraft{}, false, buildErr
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return changeplanmodel.BusinessChangePlanDraft{}, false, fmt.Errorf("save domain change plan draft: %w", err)
 	}
@@ -112,8 +105,11 @@ func (r BusinessChangePlanStore) TransitionDraft(ctx context.Context, workspaceI
 	if err != nil {
 		return changeplanmodel.BusinessChangePlanDraft{}, false, err
 	}
-	query := "UPDATE " + r.store.TableIdentifier("business_change_plan_drafts") + " SET " + r.store.Identifier("status") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("updated_by") + " = " + r.store.Placeholder(2) + ", " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(3) + ", " + r.store.Identifier("revision") + " = " + r.store.Identifier("revision") + " + 1 WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(4) + " AND " + r.store.Identifier("plan_id") + " = " + r.store.Placeholder(5) + " AND " + r.store.Identifier("revision") + " = " + r.store.Placeholder(6) + " AND " + r.store.Identifier("status") + " = " + r.store.Placeholder(7)
-	result, err := r.db.ExecContext(ctx, query, strings.TrimSpace(toStatus), strings.TrimSpace(by), strings.TrimSpace(at), workspaceID, strings.TrimSpace(id), expected, strings.TrimSpace(fromStatus))
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "business_change_plan_drafts", workspaceID).Set("status", strings.TrimSpace(toStatus)).Set("updated_by", strings.TrimSpace(by)).Set("updated_at", strings.TrimSpace(at)).SetExpression("revision", ormbuilder.Add(ormbuilder.Column("revision"), ormbuilder.Value(1))).Where(ormbuilder.And(ormbuilder.Equal("plan_id", strings.TrimSpace(id)), ormbuilder.Equal("revision", expected), ormbuilder.Equal("status", strings.TrimSpace(fromStatus)))).Build()
+	if buildErr != nil {
+		return changeplanmodel.BusinessChangePlanDraft{}, false, buildErr
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return changeplanmodel.BusinessChangePlanDraft{}, false, fmt.Errorf("transition domain change plan draft: %w", err)
 	}
@@ -132,8 +128,11 @@ func (r BusinessChangePlanStore) PublishDraft(ctx context.Context, workspaceID, 
 	if err != nil {
 		return changeplanmodel.BusinessChangePlanDraft{}, false, err
 	}
-	query := "UPDATE " + r.store.TableIdentifier("business_change_plan_drafts") + " SET " + r.store.Identifier("status") + " = 'published', " + r.store.Identifier("updated_by") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(2) + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(3) + " AND " + r.store.Identifier("plan_id") + " = " + r.store.Placeholder(4) + " AND " + r.store.Identifier("revision") + " = " + r.store.Placeholder(5) + " AND " + r.store.Identifier("status") + " = 'applying'"
-	result, err := r.db.ExecContext(ctx, query, by, at, workspaceID, id, expected)
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "business_change_plan_drafts", workspaceID).Set("status", "published").Set("updated_by", by).Set("updated_at", at).Where(ormbuilder.And(ormbuilder.Equal("plan_id", id), ormbuilder.Equal("revision", expected), ormbuilder.Equal("status", "applying"))).Build()
+	if buildErr != nil {
+		return changeplanmodel.BusinessChangePlanDraft{}, false, buildErr
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return changeplanmodel.BusinessChangePlanDraft{}, false, fmt.Errorf("publish domain change plan draft: %w", err)
 	}
@@ -170,7 +169,14 @@ func (r BusinessChangePlanStore) TryBeginOperation(ctx context.Context, workspac
 	value.LeaseOwner, value.LeaseExpiresAt, value.FencingToken = strings.TrimSpace(request.LeaseOwner), now.Add(request.LeaseTTL).Format(time.RFC3339Nano), 1
 	value.CreatedAt, value.UpdatedAt = now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)
 	columns := changePlanOperationColumns()
-	_, insertErr := r.db.ExecContext(ctx, "INSERT INTO "+r.store.TableIdentifier("business_change_plan_operations")+" ("+joinIdentifiers(r.store, columns...)+") VALUES ("+joinPlaceholders(r.store, len(columns))+")", changePlanOperationValues(value, "{}")...)
+	values := changePlanOperationValues(value, "{}")
+	insertColumns := append(append([]string{}, columns[:1]...), columns[2:]...)
+	insertValues := append(append([]any{}, values[:1]...), values[2:]...)
+	insert, insertArgs, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "business_change_plan_operations", workspaceID).Columns(insertColumns...).Values(insertValues...).Build()
+	if buildErr != nil {
+		return changeplanmodel.ChangePlanOperationClaimResult{}, buildErr
+	}
+	_, insertErr := r.db.ExecContext(ctx, insert, insertArgs...)
 	if insertErr == nil {
 		r.store.ObserveIdempotency(ctx, value.WorkspaceID, "change_plan."+value.Operation, idempotency.OutcomeAcquired)
 		return changeplanmodel.ChangePlanOperationClaimResult{Decision: idempotency.DecisionAcquired, Execution: value}, nil
@@ -187,8 +193,11 @@ func (r BusinessChangePlanStore) TryBeginOperation(ctx context.Context, workspac
 		r.store.ObserveIdempotency(ctx, value.WorkspaceID, "change_plan."+value.Operation, idempotency.OutcomeForDecision(decision, false))
 		return changeplanmodel.ChangePlanOperationClaimResult{Decision: decision, Execution: current}, nil
 	}
-	query := "UPDATE " + r.store.TableIdentifier("business_change_plan_operations") + " SET " + r.store.Identifier("status") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(2) + ", " + r.store.Identifier("lease_expires_at") + " = " + r.store.Placeholder(3) + ", " + r.store.Identifier("fencing_token") + " = " + r.store.Identifier("fencing_token") + " + 1, " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(4) + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(5) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(6) + " AND " + r.store.Identifier("request_fingerprint") + " = " + r.store.Placeholder(7) + " AND ((" + r.store.Identifier("status") + " = " + r.store.Placeholder(8) + " AND " + r.store.Identifier("lease_expires_at") + " <= " + r.store.Placeholder(9) + ") OR " + r.store.Identifier("status") + " = " + r.store.Placeholder(10) + ")"
-	result, err := r.db.ExecContext(ctx, query, string(idempotency.StatusProcessing), value.LeaseOwner, value.LeaseExpiresAt, value.UpdatedAt, workspaceID, value.ID, value.RequestFingerprint, string(idempotency.StatusProcessing), now.Format(time.RFC3339Nano), string(idempotency.StatusFailedRetryable))
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "business_change_plan_operations", workspaceID).Set("status", string(idempotency.StatusProcessing)).Set("lease_owner", value.LeaseOwner).Set("lease_expires_at", value.LeaseExpiresAt).SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).Set("updated_at", value.UpdatedAt).Where(ormbuilder.And(ormbuilder.Equal("id", value.ID), ormbuilder.Equal("request_fingerprint", value.RequestFingerprint), ormbuilder.Or(ormbuilder.And(ormbuilder.Equal("status", string(idempotency.StatusProcessing)), ormbuilder.LessThanOrEqual("lease_expires_at", now.Format(time.RFC3339Nano))), ormbuilder.Equal("status", string(idempotency.StatusFailedRetryable))))).Build()
+	if buildErr != nil {
+		return changeplanmodel.ChangePlanOperationClaimResult{}, buildErr
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return changeplanmodel.ChangePlanOperationClaimResult{}, err
 	}
@@ -221,8 +230,11 @@ func (r BusinessChangePlanStore) CompleteOperation(ctx context.Context, workspac
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	query := "UPDATE " + r.store.TableIdentifier("business_change_plan_operations") + " SET " + r.store.Identifier("status") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("result_json") + " = " + r.store.Placeholder(2) + ", " + r.store.Identifier("expires_at") + " = " + r.store.Placeholder(3) + ", " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(4) + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(5) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(6) + " AND " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(7) + " AND " + r.store.Identifier("fencing_token") + " = " + r.store.Placeholder(8) + " AND " + r.store.Identifier("status") + " = " + r.store.Placeholder(9)
-	result, err := r.db.ExecContext(ctx, query, string(idempotency.StatusSucceeded), string(resultJSON), completion.ExpiresAt.UTC().Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), workspaceID, completion.ExecutionID, strings.TrimSpace(completion.LeaseOwner), completion.FencingToken, string(idempotency.StatusProcessing))
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "business_change_plan_operations", workspaceID).Set("status", string(idempotency.StatusSucceeded)).Set("result_json", string(resultJSON)).Set("expires_at", completion.ExpiresAt.UTC().Format(time.RFC3339Nano)).Set("updated_at", now.Format(time.RFC3339Nano)).Where(changePlanLeasePredicate(completion.ExecutionID, completion.LeaseOwner, completion.FencingToken)).Build()
+	if buildErr != nil {
+		return changeplanmodel.ChangePlanOperationExecution{}, buildErr
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return changeplanmodel.ChangePlanOperationExecution{}, err
 	}
@@ -254,8 +266,11 @@ func (r BusinessChangePlanStore) FailOperation(ctx context.Context, workspaceID 
 	if failure.Retryable {
 		status = idempotency.StatusFailedRetryable
 	}
-	query := "UPDATE " + r.store.TableIdentifier("business_change_plan_operations") + " SET " + r.store.Identifier("status") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("result_json") + " = " + r.store.Placeholder(2) + ", " + r.store.Identifier("error_code") + " = " + r.store.Placeholder(3) + ", " + r.store.Identifier("expires_at") + " = " + r.store.Placeholder(4) + ", " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(5) + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(6) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(7) + " AND " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(8) + " AND " + r.store.Identifier("fencing_token") + " = " + r.store.Placeholder(9) + " AND " + r.store.Identifier("status") + " = " + r.store.Placeholder(10)
-	result, err := r.db.ExecContext(ctx, query, string(status), string(resultJSON), strings.TrimSpace(failure.ErrorCode), failure.ExpiresAt.UTC().Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), workspaceID, failure.ExecutionID, strings.TrimSpace(failure.LeaseOwner), failure.FencingToken, string(idempotency.StatusProcessing))
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "business_change_plan_operations", workspaceID).Set("status", string(status)).Set("result_json", string(resultJSON)).Set("error_code", strings.TrimSpace(failure.ErrorCode)).Set("expires_at", failure.ExpiresAt.UTC().Format(time.RFC3339Nano)).Set("updated_at", now.Format(time.RFC3339Nano)).Where(changePlanLeasePredicate(failure.ExecutionID, failure.LeaseOwner, failure.FencingToken)).Build()
+	if buildErr != nil {
+		return changeplanmodel.ChangePlanOperationExecution{}, buildErr
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return changeplanmodel.ChangePlanOperationExecution{}, err
 	}
@@ -277,8 +292,11 @@ func (r BusinessChangePlanStore) observeChangePlanLeaseLost(ctx context.Context,
 }
 
 func (r BusinessChangePlanStore) findOperation(ctx context.Context, scope changeplanmodel.ChangePlanOperationExecution) (changeplanmodel.ChangePlanOperationExecution, bool, error) {
-	query := "SELECT " + joinIdentifiers(r.store, changePlanOperationColumns()...) + " FROM " + r.store.TableIdentifier("business_change_plan_operations") + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1) + " AND " + r.store.Identifier("plan_id") + " = " + r.store.Placeholder(2) + " AND " + r.store.Identifier("plan_revision") + " = " + r.store.Placeholder(3) + " AND " + r.store.Identifier("operation") + " = " + r.store.Placeholder(4) + " AND " + r.store.Identifier("idempotency_key") + " = " + r.store.Placeholder(5)
-	value, err := scanChangePlanOperation(r.db.QueryRowContext(ctx, query, scope.WorkspaceID, scope.PlanID, scope.PlanRevision, scope.Operation, scope.IdempotencyKey))
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "business_change_plan_operations", scope.WorkspaceID).Columns(changePlanOperationColumns()...).Where(ormbuilder.And(ormbuilder.Equal("plan_id", scope.PlanID), ormbuilder.Equal("plan_revision", scope.PlanRevision), ormbuilder.Equal("operation", scope.Operation), ormbuilder.Equal("idempotency_key", scope.IdempotencyKey))).Build()
+	if buildErr != nil {
+		return changeplanmodel.ChangePlanOperationExecution{}, false, buildErr
+	}
+	value, err := scanChangePlanOperation(r.db.QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return changeplanmodel.ChangePlanOperationExecution{}, false, nil
 	}
@@ -286,8 +304,15 @@ func (r BusinessChangePlanStore) findOperation(ctx context.Context, scope change
 }
 
 func (r BusinessChangePlanStore) findOperationByID(ctx context.Context, workspaceID, id string) (changeplanmodel.ChangePlanOperationExecution, error) {
-	query := "SELECT " + joinIdentifiers(r.store, changePlanOperationColumns()...) + " FROM " + r.store.TableIdentifier("business_change_plan_operations") + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(2)
-	return scanChangePlanOperation(r.db.QueryRowContext(ctx, query, workspaceID, id))
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "business_change_plan_operations", workspaceID).Columns(changePlanOperationColumns()...).Where(ormbuilder.Equal("id", id)).Build()
+	if err != nil {
+		return changeplanmodel.ChangePlanOperationExecution{}, err
+	}
+	return scanChangePlanOperation(r.db.QueryRowContext(ctx, query, args...))
+}
+
+func changePlanLeasePredicate(id, owner string, token int64) ormbuilder.Predicate {
+	return ormbuilder.And(ormbuilder.Equal("id", strings.TrimSpace(id)), ormbuilder.Equal("lease_owner", strings.TrimSpace(owner)), ormbuilder.Equal("fencing_token", token), ormbuilder.Equal("status", string(idempotency.StatusProcessing)))
 }
 
 func changePlanOperationColumns() []string {
