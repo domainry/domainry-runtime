@@ -31,9 +31,9 @@ func (s ReportSnapshotNotificationCommitter) CompleteReportSnapshotWithNotificat
 	})
 }
 
-func (s ReportSnapshotNotificationCommitter) FailReportSnapshotWithNotification(ctx context.Context, id, expectedStatus, code string, event notificationmodel.NotificationEvent) error {
+func (s ReportSnapshotNotificationCommitter) FailReportSnapshotWithNotification(ctx context.Context, request reportcontract.ReportSnapshotFailRequest, event notificationmodel.NotificationEvent) error {
 	return s.commit(ctx, event, func(txCtx context.Context) error {
-		return s.reports.FailReportSnapshot(txCtx, id, expectedStatus, code)
+		return s.reports.FailReportSnapshot(txCtx, request)
 	})
 }
 

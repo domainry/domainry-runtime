@@ -51,7 +51,7 @@ func TestReportSnapshotStorePersistsIdempotentFencedScopedResults(t *testing.T) 
 	if err != nil || !execute {
 		t.Fatalf("failed begin=%#v execute=%v err=%v", failed, execute, err)
 	}
-	if err := repository.FailReportSnapshot(t.Context(), failed.ID, "refreshing", "backend.report.snapshot_source_changed"); err != nil {
+	if err := repository.FailReportSnapshot(t.Context(), reportcontract.ReportSnapshotFailRequest{WorkspaceID: failed.WorkspaceID, ID: failed.ID, ExpectedStatus: "refreshing", ErrorCode: "backend.report.snapshot_source_changed"}); err != nil {
 		t.Fatal(err)
 	}
 	recovered, execute, err := repository.BeginReportSnapshot(t.Context(), reportcontract.ReportSnapshotBeginRequest{WorkspaceID: "workspace-a", ReportKey: "operations", AccessScopeHash: "scope-a", IdempotencyKey: "window-2", StartedAt: "2026-07-21T11:01:00Z"})

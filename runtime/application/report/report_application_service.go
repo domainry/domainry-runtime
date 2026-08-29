@@ -210,7 +210,7 @@ type ReportApplicationDependencies struct {
 
 type ReportSnapshotNotificationCommitter interface {
 	CompleteReportSnapshotWithNotification(context.Context, reportcontract.ReportSnapshotCompleteRequest, notificationmodel.NotificationEvent) error
-	FailReportSnapshotWithNotification(context.Context, string, string, string, notificationmodel.NotificationEvent) error
+	FailReportSnapshotWithNotification(context.Context, reportcontract.ReportSnapshotFailRequest, notificationmodel.NotificationEvent) error
 }
 
 // ReportApplicationService owns Report use-case sequencing across Record and Audit.
@@ -310,7 +310,7 @@ func (s *ReportApplicationService) RefreshSnapshot(ctx context.Context, reportKe
 		if refresh.TerminalStatus == "succeeded" {
 			err = s.commitNotification.CompleteReportSnapshotWithNotification(ctx, reportcontract.ReportSnapshotCompleteRequest{Snapshot: refresh.Snapshot, ExpectedStatus: "refreshing"}, event)
 		} else {
-			err = s.commitNotification.FailReportSnapshotWithNotification(ctx, refresh.Snapshot.ID, "refreshing", refresh.ErrorCode, event)
+			err = s.commitNotification.FailReportSnapshotWithNotification(ctx, reportcontract.ReportSnapshotFailRequest{WorkspaceID: refresh.Snapshot.WorkspaceID, ID: refresh.Snapshot.ID, ExpectedStatus: "refreshing", ErrorCode: refresh.ErrorCode}, event)
 		}
 	} else {
 		err = s.domain.CommitSnapshotRefresh(ctx, refresh)

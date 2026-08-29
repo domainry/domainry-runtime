@@ -99,7 +99,7 @@ func TestReportSnapshotCompleteFailAndScanFailureConditions(t *testing.T) {
 			return repository.CompleteReportSnapshot(t.Context(), request)
 		},
 		func(repository *ReportSnapshotStore) error {
-			return repository.FailReportSnapshot(t.Context(), "snapshot", "refreshing", "failed")
+			return repository.FailReportSnapshot(t.Context(), reportcontract.ReportSnapshotFailRequest{WorkspaceID: "workspace", ID: "snapshot", ExpectedStatus: "refreshing", ErrorCode: "failed"})
 		},
 	} {
 		repository := reportSnapshotScriptedRepository(t, &reportDatasetSQLState{execSteps: []reportDatasetSQLExecStep{{err: wantErr}}})

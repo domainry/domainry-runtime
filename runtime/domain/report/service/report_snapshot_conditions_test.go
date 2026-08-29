@@ -33,8 +33,8 @@ func (s *reportSnapshotFaultStore) BeginReportSnapshot(context.Context, reportco
 func (s *reportSnapshotFaultStore) CompleteReportSnapshot(context.Context, reportcontract.ReportSnapshotCompleteRequest) error {
 	return s.completeErr
 }
-func (s *reportSnapshotFaultStore) FailReportSnapshot(_ context.Context, _, _, code string) error {
-	s.failCodes = append(s.failCodes, code)
+func (s *reportSnapshotFaultStore) FailReportSnapshot(_ context.Context, request reportcontract.ReportSnapshotFailRequest) error {
+	s.failCodes = append(s.failCodes, request.ErrorCode)
 	return nil
 }
 func (s *reportSnapshotFaultStore) LatestReportSnapshot(context.Context, string, string, string) (reportmodel.ReportSnapshot, bool, error) {

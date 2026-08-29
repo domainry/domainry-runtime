@@ -167,7 +167,7 @@ func (s reportsSnapshotReplayStore) BeginReportSnapshot(context.Context, reportc
 func (reportsSnapshotReplayStore) CompleteReportSnapshot(context.Context, reportcontract.ReportSnapshotCompleteRequest) error {
 	return nil
 }
-func (reportsSnapshotReplayStore) FailReportSnapshot(context.Context, string, string, string) error {
+func (reportsSnapshotReplayStore) FailReportSnapshot(context.Context, reportcontract.ReportSnapshotFailRequest) error {
 	return nil
 }
 func (reportsSnapshotReplayStore) LatestReportSnapshot(context.Context, string, string, string) (reportmodel.ReportSnapshot, bool, error) {

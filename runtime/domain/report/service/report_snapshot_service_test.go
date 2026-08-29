@@ -88,11 +88,11 @@ func (s *reportSnapshotMemoryStore) CompleteReportSnapshot(_ context.Context, re
 	return errors.New("snapshot missing")
 }
 
-func (s *reportSnapshotMemoryStore) FailReportSnapshot(_ context.Context, id, expectedStatus, code string) error {
+func (s *reportSnapshotMemoryStore) FailReportSnapshot(_ context.Context, request reportcontract.ReportSnapshotFailRequest) error {
 	s.fails++
 	for key, current := range s.byKey {
-		if current.ID == id && current.Status == expectedStatus {
-			current.Status, current.ErrorCode = "failed", code
+		if current.WorkspaceID == request.WorkspaceID && current.ID == request.ID && current.Status == request.ExpectedStatus {
+			current.Status, current.ErrorCode = "failed", request.ErrorCode
 			s.byKey[key] = current
 			return nil
 		}

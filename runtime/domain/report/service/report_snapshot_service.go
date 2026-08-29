@@ -138,7 +138,7 @@ func (s *ReportDomainService) CommitSnapshotRefresh(ctx context.Context, refresh
 	case "succeeded":
 		return s.dependencies.Snapshots.CompleteReportSnapshot(ctx, reportcontract.ReportSnapshotCompleteRequest{Snapshot: refresh.Snapshot, ExpectedStatus: "refreshing"})
 	case "failed":
-		return s.dependencies.Snapshots.FailReportSnapshot(ctx, refresh.Snapshot.ID, "refreshing", refresh.ErrorCode)
+		return s.dependencies.Snapshots.FailReportSnapshot(ctx, reportcontract.ReportSnapshotFailRequest{WorkspaceID: refresh.Snapshot.WorkspaceID, ID: refresh.Snapshot.ID, ExpectedStatus: "refreshing", ErrorCode: refresh.ErrorCode})
 	default:
 		return nil
 	}

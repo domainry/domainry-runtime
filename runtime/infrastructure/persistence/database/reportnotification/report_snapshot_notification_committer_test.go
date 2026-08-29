@@ -50,14 +50,14 @@ func TestReportSnapshotFailureAndNotificationAreAtomic(t *testing.T) {
 
 	seed := beginReportSnapshot(t, reports, "seed")
 	event := reportNotificationEvent("report-failed-seed", "report-snapshot:shared:failed")
-	if err := committer.FailReportSnapshotWithNotification(t.Context(), seed.ID, "refreshing", "backend.report.snapshot_refresh_failed", event); err != nil {
+	if err := committer.FailReportSnapshotWithNotification(t.Context(), reportcontract.ReportSnapshotFailRequest{WorkspaceID: seed.WorkspaceID, ID: seed.ID, ExpectedStatus: "refreshing", ErrorCode: "backend.report.snapshot_refresh_failed"}, event); err != nil {
 		t.Fatal(err)
 	}
 	assertReportSnapshotStatus(t, store, seed.ID, "failed")
 
 	rollback := beginReportSnapshot(t, reports, "failed-rollback")
 	duplicate := reportNotificationEvent("report-failed-duplicate", event.SourceEventID)
-	if err := committer.FailReportSnapshotWithNotification(t.Context(), rollback.ID, "refreshing", "backend.report.snapshot_refresh_failed", duplicate); err == nil {
+	if err := committer.FailReportSnapshotWithNotification(t.Context(), reportcontract.ReportSnapshotFailRequest{WorkspaceID: rollback.WorkspaceID, ID: rollback.ID, ExpectedStatus: "refreshing", ErrorCode: "backend.report.snapshot_refresh_failed"}, duplicate); err == nil {
 		t.Fatal("expected duplicate notification identity to roll failure back")
 	}
 	assertReportSnapshotStatus(t, store, rollback.ID, "refreshing")

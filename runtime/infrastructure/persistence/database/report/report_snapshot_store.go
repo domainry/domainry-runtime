@@ -80,11 +80,11 @@ func (s *ReportSnapshotStore) CompleteReportSnapshot(ctx context.Context, reques
 	return reportSnapshotRequireAffected(result)
 }
 
-func (s *ReportSnapshotStore) FailReportSnapshot(ctx context.Context, id, expectedStatus, code string) error {
-	// The snapshot id is globally deterministic, but the workspace is not part
-	// of this legacy method signature; use a system update constrained by id and
-	// expected state rather than inventing a workspace scope.
-	query, args, buildErr := ormbuilder.NewUpdateBuilder(s.store.SQLRenderer, "report_snapshots").Set("status", "failed").Set("error_code", code).Where(ormbuilder.And(ormbuilder.Equal("id", id), ormbuilder.Equal("status", expectedStatus))).Build()
+func (s *ReportSnapshotStore) FailReportSnapshot(ctx context.Context, request reportcontract.ReportSnapshotFailRequest) error {
+	if strings.TrimSpace(request.WorkspaceID) == "" {
+		return fmt.Errorf("report snapshot workspace is required")
+	}
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "report_snapshots", request.WorkspaceID).Set("status", "failed").Set("error_code", request.ErrorCode).Where(ormbuilder.And(ormbuilder.Equal("id", request.ID), ormbuilder.Equal("status", request.ExpectedStatus))).Build()
 	if buildErr != nil {
 		return buildErr
 	}

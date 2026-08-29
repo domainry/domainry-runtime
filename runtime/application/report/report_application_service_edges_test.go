@@ -53,8 +53,8 @@ func (s *reportSnapshotStoreStub) CompleteReportSnapshot(_ context.Context, requ
 	s.completed = request.Snapshot
 	return s.completeErr
 }
-func (s *reportSnapshotStoreStub) FailReportSnapshot(_ context.Context, _, _, code string) error {
-	s.failed = code
+func (s *reportSnapshotStoreStub) FailReportSnapshot(_ context.Context, request reportcontract.ReportSnapshotFailRequest) error {
+	s.failed = request.ErrorCode
 	return s.failErr
 }
 func (s *reportSnapshotStoreStub) LatestReportSnapshot(context.Context, string, string, string) (reportmodel.ReportSnapshot, bool, error) {
@@ -76,12 +76,12 @@ func (s *reportNotificationCommitterStub) CompleteReportSnapshotWithNotification
 	return s.store.CompleteReportSnapshot(ctx, request)
 }
 
-func (s *reportNotificationCommitterStub) FailReportSnapshotWithNotification(ctx context.Context, id, expectedStatus, code string, event notificationmodel.NotificationEvent) error {
+func (s *reportNotificationCommitterStub) FailReportSnapshotWithNotification(ctx context.Context, request reportcontract.ReportSnapshotFailRequest, event notificationmodel.NotificationEvent) error {
 	s.event = event
 	if s.err != nil {
 		return s.err
 	}
-	return s.store.FailReportSnapshot(ctx, id, expectedStatus, code)
+	return s.store.FailReportSnapshot(ctx, request)
 }
 
 type reportSnapshotSourceStub struct{ err error }

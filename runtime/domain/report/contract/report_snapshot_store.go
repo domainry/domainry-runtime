@@ -21,10 +21,17 @@ type ReportSnapshotCompleteRequest struct {
 	ExpectedStatus string
 }
 
+type ReportSnapshotFailRequest struct {
+	WorkspaceID    string
+	ID             string
+	ExpectedStatus string
+	ErrorCode      string
+}
+
 type ReportSnapshotStore interface {
 	BeginReportSnapshot(context.Context, ReportSnapshotBeginRequest) (reportmodel.ReportSnapshot, bool, error)
 	CompleteReportSnapshot(context.Context, ReportSnapshotCompleteRequest) error
-	FailReportSnapshot(context.Context, string, string, string) error
+	FailReportSnapshot(context.Context, ReportSnapshotFailRequest) error
 	LatestReportSnapshot(context.Context, string, string, string) (reportmodel.ReportSnapshot, bool, error)
 }
 
