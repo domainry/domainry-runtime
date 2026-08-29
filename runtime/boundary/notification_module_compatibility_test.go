@@ -6,32 +6,32 @@ import (
 	"reflect"
 	"testing"
 
-	notificationsql "github.com/domainry/domainry-notification/sqlstore"
+	notificationmodule "github.com/domainry/domainry-notification/module"
 )
 
 // TestNotificationModuleSchemaOwnershipMatchesPlane proves that the source
 // module owns the complete durable boundary and Runtime does not recreate any
 // of those tables in its technical schema metadata.
 func TestNotificationModuleSchemaOwnershipMatchesPlane(t *testing.T) {
-	want := []notificationsql.TableOwnership{
-		{Name: "notification_alert_groups", Scope: notificationsql.WorkspaceData},
-		{Name: "notification_channel_plans", Scope: notificationsql.WorkspaceData},
-		{Name: "notification_delivery_policy", Scope: notificationsql.SystemData},
-		{Name: "notification_delivery_reservations", Scope: notificationsql.WorkspaceData},
-		{Name: "notification_event_failures", Scope: notificationsql.WorkspaceData},
-		{Name: "notification_events", Scope: notificationsql.WorkspaceData},
-		{Name: "notification_inbox_delegations", Scope: notificationsql.WorkspaceData},
-		{Name: "notification_inbox_items", Scope: notificationsql.WorkspaceData},
-		{Name: "notification_inbox_saved_views", Scope: notificationsql.WorkspaceData},
-		{Name: "notification_migration_controls", Scope: notificationsql.WorkspaceData},
-		{Name: "notification_recipient_preferences", Scope: notificationsql.WorkspaceData},
-		{Name: "notification_retention_archive", Scope: notificationsql.WorkspaceData},
-		{Name: "notification_template_publication_locks", Scope: notificationsql.SystemData},
-		{Name: "notification_template_publication_requests", Scope: notificationsql.SystemData},
-		{Name: "notification_template_records", Scope: notificationsql.SystemData},
-		{Name: "notification_template_versions", Scope: notificationsql.SystemData},
+	want := []notificationmodule.TableOwnership{
+		{Name: "notification_alert_groups", Scope: notificationmodule.WorkspaceData},
+		{Name: "notification_channel_plans", Scope: notificationmodule.WorkspaceData},
+		{Name: "notification_delivery_policy", Scope: notificationmodule.SystemData},
+		{Name: "notification_delivery_reservations", Scope: notificationmodule.WorkspaceData},
+		{Name: "notification_event_failures", Scope: notificationmodule.WorkspaceData},
+		{Name: "notification_events", Scope: notificationmodule.WorkspaceData},
+		{Name: "notification_inbox_delegations", Scope: notificationmodule.WorkspaceData},
+		{Name: "notification_inbox_items", Scope: notificationmodule.WorkspaceData},
+		{Name: "notification_inbox_saved_views", Scope: notificationmodule.WorkspaceData},
+		{Name: "notification_migration_controls", Scope: notificationmodule.WorkspaceData},
+		{Name: "notification_recipient_preferences", Scope: notificationmodule.WorkspaceData},
+		{Name: "notification_retention_archive", Scope: notificationmodule.WorkspaceData},
+		{Name: "notification_template_publication_locks", Scope: notificationmodule.SystemData},
+		{Name: "notification_template_publication_requests", Scope: notificationmodule.SystemData},
+		{Name: "notification_template_records", Scope: notificationmodule.SystemData},
+		{Name: "notification_template_versions", Scope: notificationmodule.SystemData},
 	}
-	got := notificationsql.SchemaOwnership()
+	got := notificationmodule.SchemaOwnership()
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("notification module schema ownership drifted\ngot:  %+v\nwant: %+v", got, want)
 	}
