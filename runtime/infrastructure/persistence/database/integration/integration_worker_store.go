@@ -5,14 +5,14 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"sort"
-
-	"github.com/domainry/domainry-foundation/mutation"
-	"github.com/domainry/domainry-runtime/runtime/platform/capacity"
-
 	"strings"
 	"time"
+
+	"github.com/domainry/domainry-foundation/mutation"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	"github.com/domainry/domainry-runtime/runtime/platform/capacity"
 
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 
@@ -32,7 +32,6 @@ func (r IntegrationWorkerStore) ListDueEvents(ctx context.Context, scope princip
 	if _, err := principalmodel.NewSystemQueryScope(scope); err != nil {
 		return nil, err
 	}
-	s := r.store
 	if limit <= 0 || limit > 200 {
 		limit = 100
 	}
@@ -46,7 +45,14 @@ func (r IntegrationWorkerStore) ListDueEvents(ctx context.Context, scope princip
 	}
 	for _, workspaceID := range workspaces {
 		workspaceCtx := integrationWorkerWorkspaceContext(ctx, workspaceID, "integration-event-worker")
-		rows, queryErr := r.db.QueryContext(workspaceCtx, "SELECT "+integrationEventColumnsSQL(s)+" FROM "+s.TableIdentifier("integration_events")+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(1)+" AND ("+s.Identifier("status")+" = "+s.Placeholder(2)+" OR ("+s.Identifier("status")+" = "+s.Placeholder(3)+" AND "+s.Identifier("next_retry_at")+" <> "+s.Placeholder(4)+" AND "+s.Identifier("next_retry_at")+" <= "+s.Placeholder(5)+") OR ("+s.Identifier("status")+" = "+s.Placeholder(6)+" AND "+s.Identifier("lease_expires_at")+" <= "+s.Placeholder(7)+")) ORDER BY CASE WHEN "+s.Identifier("status")+" = "+s.Placeholder(8)+" THEN 0 ELSE 1 END ASC, "+s.Identifier("next_retry_at")+" ASC, "+s.Identifier("received_at")+" ASC LIMIT "+s.Placeholder(9), workspaceID, "received", "failed", "", now, "processing", now, "failed", limit)
+		predicate := integrationDueEventPredicate(now)
+		priority := ormbuilder.CaseWhen(ormbuilder.Equal("status", "failed"), 0).Else(1)
+		query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_events", workspaceID).Columns(integrationEventColumns...).Where(predicate).
+			OrderBy(ormbuilder.AscendingExpression(priority), ormbuilder.Ascending("next_retry_at"), ormbuilder.Ascending("received_at"), ormbuilder.Ascending("id")).Limit(limit).Build()
+		if buildErr != nil {
+			return nil, fmt.Errorf("build due integration events for workspace %s: %w", workspaceID, buildErr)
+		}
+		rows, queryErr := r.db.QueryContext(workspaceCtx, query, args...)
 		if queryErr != nil {
 			return nil, fmt.Errorf("list due integration events for workspace %s: %w", workspaceID, queryErr)
 		}
@@ -87,7 +93,6 @@ func (r IntegrationWorkerStore) ListDueEvents(ctx context.Context, scope princip
 }
 
 func (r IntegrationWorkerStore) ClaimEvent(ctx context.Context, workspaceID, eventID, owner, now string) (integrationmodel.IntegrationEvent, bool, error) {
-	s := r.store
 	workspaceID, err := requireIntegrationWorkspaceID(workspaceID)
 	if err != nil {
 		return integrationmodel.IntegrationEvent{}, false, err
@@ -106,7 +111,14 @@ func (r IntegrationWorkerStore) ClaimEvent(ctx context.Context, workspaceID, eve
 	}
 	ctx = integrationWorkerWorkspaceContext(ctx, workspaceID, owner)
 	expires := integrationWorkerLeaseExpiry(now)
-	result, err := r.db.ExecContext(ctx, "UPDATE "+s.TableIdentifier("integration_events")+" SET "+s.Identifier("status")+" = "+s.Placeholder(1)+", "+s.Identifier("error")+" = "+s.Placeholder(2)+", "+s.Identifier("next_retry_at")+" = "+s.Placeholder(3)+", "+s.Identifier("lease_owner")+" = "+s.Placeholder(4)+", "+s.Identifier("lease_expires_at")+" = "+s.Placeholder(5)+", "+s.Identifier("fencing_token")+" = "+s.Identifier("fencing_token")+" + 1, "+s.Identifier("updated_at")+" = "+s.Placeholder(6)+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(7)+" AND "+s.Identifier("id")+" = "+s.Placeholder(8)+" AND (("+s.Identifier("status")+" = 'failed' AND "+s.Identifier("next_retry_at")+" <> '' AND "+s.Identifier("next_retry_at")+" <= "+s.Placeholder(9)+") OR "+s.Identifier("status")+" = 'received' OR ("+s.Identifier("status")+" = 'processing' AND "+s.Identifier("lease_expires_at")+" <= "+s.Placeholder(10)+"))", "processing", "", "", owner, expires, now, workspaceID, eventID, now, now)
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_events", workspaceID).
+		Set("status", "processing").Set("error", "").Set("next_retry_at", "").Set("lease_owner", owner).Set("lease_expires_at", expires).
+		SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).Set("updated_at", now).
+		Where(ormbuilder.And(ormbuilder.Equal("id", eventID), integrationDueEventPredicate(now))).Build()
+	if err != nil {
+		return integrationmodel.IntegrationEvent{}, false, fmt.Errorf("build integration event claim: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return integrationmodel.IntegrationEvent{}, false, fmt.Errorf("claim integration event: %w", err)
 	}
@@ -129,7 +141,6 @@ func (r IntegrationWorkerStore) ClaimEvent(ctx context.Context, workspaceID, eve
 }
 
 func (r IntegrationWorkerStore) UpdateEventStatus(ctx context.Context, workspaceID, eventID, expectedLeaseOwner string, expectedFencingToken int64, status, errorText, now string) (integrationmodel.IntegrationEvent, error) {
-	s := r.store
 	workspaceID, err := requireIntegrationWorkspaceID(workspaceID)
 	if err != nil {
 		return integrationmodel.IntegrationEvent{}, err
@@ -143,7 +154,13 @@ func (r IntegrationWorkerStore) UpdateEventStatus(ctx context.Context, workspace
 		return integrationmodel.IntegrationEvent{}, fmt.Errorf("integration event update time is required")
 	}
 	ctx = integrationWorkerWorkspaceContext(ctx, workspaceID, expectedLeaseOwner)
-	result, err := r.db.ExecContext(ctx, "UPDATE "+s.TableIdentifier("integration_events")+" SET "+s.Identifier("status")+" = "+s.Placeholder(1)+", "+s.Identifier("error")+" = "+s.Placeholder(2)+", "+s.Identifier("next_retry_at")+" = "+s.Placeholder(3)+", "+s.Identifier("lease_owner")+" = '', "+s.Identifier("lease_expires_at")+" = '', "+s.Identifier("updated_at")+" = "+s.Placeholder(4)+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(5)+" AND "+s.Identifier("id")+" = "+s.Placeholder(6)+" AND "+s.Identifier("status")+" = 'processing' AND "+s.Identifier("lease_owner")+" = "+s.Placeholder(7)+" AND "+s.Identifier("fencing_token")+" = "+s.Placeholder(8), status, errorText, "", now, workspaceID, eventID, strings.TrimSpace(expectedLeaseOwner), expectedFencingToken)
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_events", workspaceID).
+		Set("status", status).Set("error", errorText).Set("next_retry_at", "").Set("lease_owner", "").Set("lease_expires_at", "").Set("updated_at", now).
+		Where(integrationLeasePredicate(eventID, "processing", expectedLeaseOwner, expectedFencingToken)).Build()
+	if err != nil {
+		return integrationmodel.IntegrationEvent{}, fmt.Errorf("build integration event status update: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return integrationmodel.IntegrationEvent{}, fmt.Errorf("update integration event status: %w", err)
 	}
@@ -177,7 +194,13 @@ func (r IntegrationWorkerStore) heartbeatEvent(ctx context.Context, workspaceID,
 		now = time.Now().UTC().Format(time.RFC3339)
 	}
 	ctx = integrationWorkerWorkspaceContext(ctx, workspaceID, expectedLeaseOwner)
-	result, err := r.db.ExecContext(ctx, "UPDATE "+r.store.TableIdentifier("integration_events")+" SET "+r.store.Identifier("lease_expires_at")+" = "+r.store.Placeholder(1)+", "+r.store.Identifier("updated_at")+" = "+r.store.Placeholder(2)+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(3)+" AND "+r.store.Identifier("id")+" = "+r.store.Placeholder(4)+" AND "+r.store.Identifier("status")+" = 'processing' AND "+r.store.Identifier("lease_owner")+" <> '' AND "+r.store.Identifier("lease_owner")+" = "+r.store.Placeholder(5)+" AND "+r.store.Identifier("fencing_token")+" = "+r.store.Placeholder(6), integrationWorkerLeaseExpiry(now), now, workspaceID, strings.TrimSpace(eventID), strings.TrimSpace(expectedLeaseOwner), expectedFencingToken)
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_events", workspaceID).
+		Set("lease_expires_at", integrationWorkerLeaseExpiry(now)).Set("updated_at", now).
+		Where(integrationLeasePredicate(strings.TrimSpace(eventID), "processing", expectedLeaseOwner, expectedFencingToken)).Build()
+	if err != nil {
+		return integrationmodel.IntegrationEvent{}, fmt.Errorf("build integration event heartbeat: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return integrationmodel.IntegrationEvent{}, err
 	}
@@ -193,7 +216,6 @@ func (r IntegrationWorkerStore) heartbeatEvent(ctx context.Context, workspaceID,
 }
 
 func (r IntegrationWorkerStore) ScheduleEventRetry(ctx context.Context, workspaceID, eventID, expectedLeaseOwner string, expectedFencingToken int64, delaySeconds int, errorText, nowText string) (integrationmodel.IntegrationEvent, error) {
-	s := r.store
 	workspaceID, err := requireIntegrationWorkspaceID(workspaceID)
 	if err != nil {
 		return integrationmodel.IntegrationEvent{}, err
@@ -215,7 +237,14 @@ func (r IntegrationWorkerStore) ScheduleEventRetry(ctx context.Context, workspac
 	nowText = now.UTC().Format(time.RFC3339)
 	ctx = integrationWorkerWorkspaceContext(ctx, workspaceID, expectedLeaseOwner)
 	next := now.Add(time.Duration(delaySeconds) * time.Second).Format(time.RFC3339)
-	result, err := r.db.ExecContext(ctx, "UPDATE "+s.TableIdentifier("integration_events")+" SET "+s.Identifier("status")+" = "+s.Placeholder(1)+", "+s.Identifier("error")+" = "+s.Placeholder(2)+", "+s.Identifier("attempt_count")+" = "+s.Identifier("attempt_count")+" + 1, "+s.Identifier("next_retry_at")+" = "+s.Placeholder(3)+", "+s.Identifier("last_attempt_at")+" = "+s.Placeholder(4)+", "+s.Identifier("lease_owner")+" = '', "+s.Identifier("lease_expires_at")+" = '', "+s.Identifier("updated_at")+" = "+s.Placeholder(5)+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(6)+" AND "+s.Identifier("id")+" = "+s.Placeholder(7)+" AND "+s.Identifier("status")+" = 'processing' AND "+s.Identifier("lease_owner")+" = "+s.Placeholder(8)+" AND "+s.Identifier("fencing_token")+" = "+s.Placeholder(9), "failed", errorText, next, nowText, nowText, workspaceID, eventID, strings.TrimSpace(expectedLeaseOwner), expectedFencingToken)
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_events", workspaceID).
+		Set("status", "failed").Set("error", errorText).SetExpression("attempt_count", ormbuilder.Add(ormbuilder.Column("attempt_count"), ormbuilder.Value(1))).
+		Set("next_retry_at", next).Set("last_attempt_at", nowText).Set("lease_owner", "").Set("lease_expires_at", "").Set("updated_at", nowText).
+		Where(integrationLeasePredicate(eventID, "processing", expectedLeaseOwner, expectedFencingToken)).Build()
+	if err != nil {
+		return integrationmodel.IntegrationEvent{}, fmt.Errorf("build integration event retry: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return integrationmodel.IntegrationEvent{}, fmt.Errorf("schedule integration event retry: %w", err)
 	}
@@ -243,7 +272,6 @@ func (r IntegrationWorkerStore) ListDueOutbox(ctx context.Context, scope princip
 		}
 		return nil, err
 	}
-	s := r.store
 	if limit <= 0 || limit > 200 {
 		limit = 100
 	}
@@ -257,8 +285,11 @@ func (r IntegrationWorkerStore) ListDueOutbox(ctx context.Context, scope princip
 	}
 	for _, workspaceID := range workspaces {
 		workspaceCtx := integrationWorkerWorkspaceContext(ctx, workspaceID, "integration-outbox-worker")
-		query := "SELECT " + integrationOutboxColumnsSQL(s) + " FROM " + s.TableIdentifier("integration_outbox_messages") + " WHERE " + s.Identifier("workspace_id") + " = " + s.Placeholder(1) + " AND ((" + s.Identifier("status") + " = 'queued' AND (" + s.Identifier("next_attempt_at") + " = '' OR " + s.Identifier("next_attempt_at") + " <= " + s.Placeholder(2) + ")) OR (" + s.Identifier("status") + " = 'sending' AND " + s.Identifier("lease_expires_at") + " <= " + s.Placeholder(3) + ")) ORDER BY " + s.Identifier("created_at") + " ASC LIMIT " + s.Placeholder(4)
-		rows, queryErr := r.db.QueryContext(workspaceCtx, query, workspaceID, now, now, limit)
+		query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).Columns(integrationOutboxColumns...).Where(integrationDueOutboxPredicate(now)).OrderBy(ormbuilder.Ascending("created_at"), ormbuilder.Ascending("id")).Limit(limit).Build()
+		if buildErr != nil {
+			return nil, fmt.Errorf("build due integration outbox for workspace %s: %w", workspaceID, buildErr)
+		}
+		rows, queryErr := r.db.QueryContext(workspaceCtx, query, args...)
 		if queryErr != nil {
 			return nil, fmt.Errorf("list due integration outbox for workspace %s: %w", workspaceID, queryErr)
 		}
@@ -284,7 +315,6 @@ func integrationWorkspaceScanLimit(itemLimit int) int {
 }
 
 func (r IntegrationWorkerStore) ClaimOutbox(ctx context.Context, workspaceID, messageID, owner, now string) (integrationmodel.IntegrationOutboxMessage, bool, error) {
-	s := r.store
 	workspaceID, err := requireIntegrationWorkspaceID(workspaceID)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, false, err
@@ -307,7 +337,14 @@ func (r IntegrationWorkerStore) ClaimOutbox(ctx context.Context, workspaceID, me
 	// adapter-resolution safety policy uses that evidence to distinguish a
 	// provider's explicit no-effect rejection (for example HTTP 429) from an
 	// uncertain write outcome. Completion or the next failure replaces it.
-	result, err := r.db.ExecContext(ctx, "UPDATE "+s.TableIdentifier("integration_outbox_messages")+" SET "+s.Identifier("status")+" = 'sending', "+s.Identifier("next_attempt_at")+" = '', "+s.Identifier("last_attempt_at")+" = "+s.Placeholder(1)+", "+s.Identifier("lease_owner")+" = "+s.Placeholder(2)+", "+s.Identifier("lease_expires_at")+" = "+s.Placeholder(3)+", "+s.Identifier("fencing_token")+" = "+s.Identifier("fencing_token")+" + 1, "+s.Identifier("updated_at")+" = "+s.Placeholder(4)+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(5)+" AND "+s.Identifier("id")+" = "+s.Placeholder(6)+" AND (("+s.Identifier("status")+" = 'queued' AND ("+s.Identifier("next_attempt_at")+" = '' OR "+s.Identifier("next_attempt_at")+" <= "+s.Placeholder(7)+")) OR ("+s.Identifier("status")+" = 'sending' AND "+s.Identifier("lease_expires_at")+" <= "+s.Placeholder(8)+"))", now, owner, expires, now, workspaceID, messageID, now, now)
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).
+		Set("status", "sending").Set("next_attempt_at", "").Set("last_attempt_at", now).Set("lease_owner", owner).Set("lease_expires_at", expires).
+		SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).Set("updated_at", now).
+		Where(ormbuilder.And(ormbuilder.Equal("id", messageID), integrationDueOutboxPredicate(now))).Build()
+	if err != nil {
+		return integrationmodel.IntegrationOutboxMessage{}, false, fmt.Errorf("build integration outbox claim: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, false, fmt.Errorf("claim integration outbox message: %w", err)
 	}
@@ -330,7 +367,6 @@ func (r IntegrationWorkerStore) ClaimOutbox(ctx context.Context, workspaceID, me
 }
 
 func (r IntegrationWorkerStore) UpdateOutboxStatus(ctx context.Context, workspaceID, messageID, expectedLeaseOwner string, expectedFencingToken int64, status, responseRef, errorText, ackDeadlineAt, now string) (integrationmodel.IntegrationOutboxMessage, error) {
-	s := r.store
 	workspaceID, err := requireIntegrationWorkspaceID(workspaceID)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, err
@@ -344,7 +380,13 @@ func (r IntegrationWorkerStore) UpdateOutboxStatus(ctx context.Context, workspac
 		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("integration outbox update time is required")
 	}
 	ctx = integrationWorkerWorkspaceContext(ctx, workspaceID, expectedLeaseOwner)
-	result, err := r.db.ExecContext(ctx, "UPDATE "+s.TableIdentifier("integration_outbox_messages")+" SET "+s.Identifier("status")+" = "+s.Placeholder(1)+", "+s.Identifier("response_ref")+" = "+s.Placeholder(2)+", "+s.Identifier("error")+" = "+s.Placeholder(3)+", "+s.Identifier("next_attempt_at")+" = "+s.Placeholder(4)+", "+s.Identifier("ack_deadline_at")+" = "+s.Placeholder(5)+", "+s.Identifier("lease_owner")+" = '', "+s.Identifier("lease_expires_at")+" = '', "+s.Identifier("updated_at")+" = "+s.Placeholder(6)+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(7)+" AND "+s.Identifier("id")+" = "+s.Placeholder(8)+" AND "+s.Identifier("status")+" = 'sending' AND "+s.Identifier("lease_owner")+" = "+s.Placeholder(9)+" AND "+s.Identifier("fencing_token")+" = "+s.Placeholder(10), status, responseRef, errorText, "", strings.TrimSpace(ackDeadlineAt), now, workspaceID, messageID, strings.TrimSpace(expectedLeaseOwner), expectedFencingToken)
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).
+		Set("status", status).Set("response_ref", responseRef).Set("error", errorText).Set("next_attempt_at", "").Set("ack_deadline_at", strings.TrimSpace(ackDeadlineAt)).Set("lease_owner", "").Set("lease_expires_at", "").Set("updated_at", now).
+		Where(integrationLeasePredicate(messageID, "sending", expectedLeaseOwner, expectedFencingToken)).Build()
+	if err != nil {
+		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("build integration outbox status update: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("update integration outbox status: %w", err)
 	}
@@ -375,7 +417,13 @@ func (r IntegrationWorkerStore) HeartbeatOutbox(ctx context.Context, workspaceID
 	}
 	ctx = integrationWorkerWorkspaceContext(ctx, workspaceID, expectedLeaseOwner)
 	expires := integrationWorkerLeaseExpiry(now)
-	result, err := r.db.ExecContext(ctx, "UPDATE "+r.store.TableIdentifier("integration_outbox_messages")+" SET "+r.store.Identifier("lease_expires_at")+" = "+r.store.Placeholder(1)+", "+r.store.Identifier("updated_at")+" = "+r.store.Placeholder(2)+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(3)+" AND "+r.store.Identifier("id")+" = "+r.store.Placeholder(4)+" AND "+r.store.Identifier("status")+" = 'sending' AND "+r.store.Identifier("lease_owner")+" <> '' AND "+r.store.Identifier("lease_owner")+" = "+r.store.Placeholder(5)+" AND "+r.store.Identifier("fencing_token")+" = "+r.store.Placeholder(6), expires, now, workspaceID, strings.TrimSpace(messageID), strings.TrimSpace(expectedLeaseOwner), expectedFencingToken)
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).
+		Set("lease_expires_at", expires).Set("updated_at", now).
+		Where(integrationLeasePredicate(strings.TrimSpace(messageID), "sending", expectedLeaseOwner, expectedFencingToken)).Build()
+	if err != nil {
+		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("build integration outbox heartbeat: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, err
 	}
@@ -391,7 +439,6 @@ func (r IntegrationWorkerStore) HeartbeatOutbox(ctx context.Context, workspaceID
 }
 
 func (r IntegrationWorkerStore) ScheduleOutboxRetry(ctx context.Context, workspaceID, messageID, expectedLeaseOwner string, expectedFencingToken int64, delaySeconds int, errorText, nowText string) (integrationmodel.IntegrationOutboxMessage, error) {
-	s := r.store
 	workspaceID, err := requireIntegrationWorkspaceID(workspaceID)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, err
@@ -410,7 +457,14 @@ func (r IntegrationWorkerStore) ScheduleOutboxRetry(ctx context.Context, workspa
 	nowText = now.UTC().Format(time.RFC3339)
 	ctx = integrationWorkerWorkspaceContext(ctx, workspaceID, expectedLeaseOwner)
 	next := now.Add(time.Duration(delaySeconds) * time.Second).Format(time.RFC3339)
-	result, err := r.db.ExecContext(ctx, "UPDATE "+s.TableIdentifier("integration_outbox_messages")+" SET "+s.Identifier("status")+" = "+s.Placeholder(1)+", "+s.Identifier("error")+" = "+s.Placeholder(2)+", "+s.Identifier("attempt_count")+" = "+s.Identifier("attempt_count")+" + 1, "+s.Identifier("next_attempt_at")+" = "+s.Placeholder(3)+", "+s.Identifier("last_attempt_at")+" = "+s.Placeholder(4)+", "+s.Identifier("lease_owner")+" = '', "+s.Identifier("lease_expires_at")+" = '', "+s.Identifier("updated_at")+" = "+s.Placeholder(5)+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(6)+" AND "+s.Identifier("id")+" = "+s.Placeholder(7)+" AND "+s.Identifier("status")+" = 'sending' AND "+s.Identifier("lease_owner")+" = "+s.Placeholder(8)+" AND "+s.Identifier("fencing_token")+" = "+s.Placeholder(9), "queued", errorText, next, nowText, nowText, workspaceID, messageID, strings.TrimSpace(expectedLeaseOwner), expectedFencingToken)
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).
+		Set("status", "queued").Set("error", errorText).SetExpression("attempt_count", ormbuilder.Add(ormbuilder.Column("attempt_count"), ormbuilder.Value(1))).
+		Set("next_attempt_at", next).Set("last_attempt_at", nowText).Set("lease_owner", "").Set("lease_expires_at", "").Set("updated_at", nowText).
+		Where(integrationLeasePredicate(messageID, "sending", expectedLeaseOwner, expectedFencingToken)).Build()
+	if err != nil {
+		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("build integration outbox retry: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("schedule integration outbox retry: %w", err)
 	}
@@ -432,9 +486,12 @@ func (r IntegrationWorkerStore) ScheduleOutboxRetry(ctx context.Context, workspa
 }
 
 func (r IntegrationWorkerStore) findEvent(ctx context.Context, workspaceID, eventID string) (integrationmodel.IntegrationEvent, bool, error) {
-	s := r.store
 	ctx = integrationWorkerWorkspaceContext(ctx, workspaceID, "")
-	row := r.db.QueryRowContext(ctx, "SELECT "+integrationEventColumnsSQL(s)+" FROM "+s.TableIdentifier("integration_events")+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(1)+" AND "+s.Identifier("id")+" = "+s.Placeholder(2), workspaceID, strings.TrimSpace(eventID))
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_events", workspaceID).Columns(integrationEventColumns...).Where(ormbuilder.Equal("id", strings.TrimSpace(eventID))).Build()
+	if err != nil {
+		return integrationmodel.IntegrationEvent{}, false, err
+	}
+	row := r.db.QueryRowContext(ctx, query, args...)
 	event, err := scanIntegrationEvent(row)
 	if err == sql.ErrNoRows {
 		return integrationmodel.IntegrationEvent{}, false, nil
@@ -445,9 +502,12 @@ func (r IntegrationWorkerStore) findEvent(ctx context.Context, workspaceID, even
 	return event, true, nil
 }
 func (r IntegrationWorkerStore) findOutbox(ctx context.Context, workspaceID, messageID string) (integrationmodel.IntegrationOutboxMessage, bool, error) {
-	s := r.store
 	ctx = integrationWorkerWorkspaceContext(ctx, workspaceID, "")
-	row := r.db.QueryRowContext(ctx, "SELECT "+integrationOutboxColumnsSQL(s)+" FROM "+s.TableIdentifier("integration_outbox_messages")+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(1)+" AND "+s.Identifier("id")+" = "+s.Placeholder(2), workspaceID, strings.TrimSpace(messageID))
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).Columns(integrationOutboxColumns...).Where(ormbuilder.Equal("id", strings.TrimSpace(messageID))).Build()
+	if err != nil {
+		return integrationmodel.IntegrationOutboxMessage{}, false, err
+	}
+	row := r.db.QueryRowContext(ctx, query, args...)
 	message, err := scanIntegrationOutboxMessage(row)
 	if err == sql.ErrNoRows {
 		return integrationmodel.IntegrationOutboxMessage{}, false, nil
@@ -456,6 +516,25 @@ func (r IntegrationWorkerStore) findOutbox(ctx context.Context, workspaceID, mes
 		return integrationmodel.IntegrationOutboxMessage{}, false, err
 	}
 	return message, true, nil
+}
+
+func integrationDueEventPredicate(now string) ormbuilder.Predicate {
+	return ormbuilder.Or(
+		ormbuilder.Equal("status", "received"),
+		ormbuilder.And(ormbuilder.Equal("status", "failed"), ormbuilder.NotEqual("next_retry_at", ""), ormbuilder.LessThanOrEqual("next_retry_at", now)),
+		ormbuilder.And(ormbuilder.Equal("status", "processing"), ormbuilder.LessThanOrEqual("lease_expires_at", now)),
+	)
+}
+
+func integrationDueOutboxPredicate(now string) ormbuilder.Predicate {
+	return ormbuilder.Or(
+		ormbuilder.And(ormbuilder.Equal("status", "queued"), ormbuilder.Or(ormbuilder.Equal("next_attempt_at", ""), ormbuilder.LessThanOrEqual("next_attempt_at", now))),
+		ormbuilder.And(ormbuilder.Equal("status", "sending"), ormbuilder.LessThanOrEqual("lease_expires_at", now)),
+	)
+}
+
+func integrationLeasePredicate(id, status, owner string, token int64) ormbuilder.Predicate {
+	return ormbuilder.And(ormbuilder.Equal("id", strings.TrimSpace(id)), ormbuilder.Equal("status", status), ormbuilder.Equal("lease_owner", strings.TrimSpace(owner)), ormbuilder.Equal("fencing_token", token))
 }
 
 const integrationWorkerLeaseTTL = 5 * time.Minute
