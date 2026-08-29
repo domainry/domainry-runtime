@@ -8,36 +8,47 @@ import (
 	"encoding/json"
 	"time"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
-type lifecycleSQLStore interface {
-	DB() *sql.DB
-	Identifier(string) string
-	TableIdentifier(string) string
-	Placeholder(int) string
+type AuditSubjectLifecycleStore struct {
+	db       *sql.DB
+	renderer ormbuilder.Renderer
 }
 
-type AuditSubjectLifecycleStore struct{ store lifecycleSQLStore }
-
-func NewAuditSubjectLifecycleStore(store lifecycleSQLStore) *AuditSubjectLifecycleStore {
-	return &AuditSubjectLifecycleStore{store: store}
+func NewAuditSubjectLifecycleStore(store *database.RuntimeStore) *AuditSubjectLifecycleStore {
+	return &AuditSubjectLifecycleStore{db: store.DB(), renderer: store.SQLRenderer}
 }
 
 func (s *AuditSubjectLifecycleStore) Owner(context.Context) string { return "audit" }
 
 func (s *AuditSubjectLifecycleStore) PreviewSubject(ctx context.Context, workspaceID, identity string) (json.RawMessage, error) {
 	var count int64
-	query := "SELECT COUNT(*) FROM " + s.store.TableIdentifier("_audit_events") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("actor_id") + " = " + s.store.Placeholder(2)
-	if err := s.store.DB().QueryRowContext(ctx, query, workspaceID, identity).Scan(&count); err != nil {
+	statement, args, err := ormbuilder.NewWorkspaceSelectBuilder(s.renderer, "_audit_events", workspaceID).
+		Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(ormbuilder.Equal("actor_id", identity)).Build()
+	if err != nil {
+		return nil, err
+	}
+	if err := s.db.QueryRowContext(ctx, statement, args...).Scan(&count); err != nil {
 		return nil, err
 	}
 	return json.Marshal(map[string]int64{"audit_references": count})
 }
 
 func (s *AuditSubjectLifecycleStore) ExportSubject(ctx context.Context, workspaceID, identity string) (json.RawMessage, error) {
-	query := "SELECT " + auditLifecycleColumns(s.store, "id", "event", "object_key", "record_id", "summary", "created_at") + " FROM " + s.store.TableIdentifier("_audit_events") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("actor_id") + " = " + s.store.Placeholder(2) + " ORDER BY " + s.store.Identifier("created_at")
-	rows, err := s.store.DB().QueryContext(ctx, query, workspaceID, identity)
+	columns := []string{"id", "event", "object_key", "record_id", "summary", "created_at"}
+	projections := make([]ormbuilder.Projection, len(columns))
+	for index, column := range columns {
+		projections[index] = ormbuilder.Project(ormbuilder.Coalesce(ormbuilder.Column(column), ormbuilder.Value("")))
+	}
+	statement, args, err := ormbuilder.NewWorkspaceSelectBuilder(s.renderer, "_audit_events", workspaceID).
+		Projections(projections...).Where(ormbuilder.Equal("actor_id", identity)).OrderBy(ormbuilder.Ascending("created_at")).Build()
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx, statement, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -59,8 +70,12 @@ func (s *AuditSubjectLifecycleStore) ExportSubject(ctx context.Context, workspac
 func (s *AuditSubjectLifecycleStore) EraseSubject(ctx context.Context, workspaceID, identity string, _ []lifecyclemodel.LegalHold) (json.RawMessage, error) {
 	sum := sha256.Sum256([]byte(workspaceID + "\x00" + identity))
 	anonymous := "erased-" + hex.EncodeToString(sum[:12])
-	query := "UPDATE " + s.store.TableIdentifier("_audit_events") + " SET " + s.store.Identifier("actor_id") + " = " + s.store.Placeholder(1) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("actor_id") + " = " + s.store.Placeholder(3)
-	result, err := s.store.DB().ExecContext(ctx, query, anonymous, workspaceID, identity)
+	statement, args, err := ormbuilder.NewWorkspaceUpdateBuilder(s.renderer, "_audit_events", workspaceID).
+		Set("actor_id", anonymous).Where(ormbuilder.Equal("actor_id", identity)).Build()
+	if err != nil {
+		return nil, err
+	}
+	result, err := s.db.ExecContext(ctx, statement, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -69,15 +84,4 @@ func (s *AuditSubjectLifecycleStore) EraseSubject(ctx context.Context, workspace
 		return nil, err
 	}
 	return json.Marshal(map[string]any{"anonymized_audit_references": changed, "event_integrity_preserved": true, "at": time.Now().UTC()})
-}
-
-func auditLifecycleColumns(store lifecycleSQLStore, columns ...string) string {
-	result := ""
-	for index, column := range columns {
-		if index > 0 {
-			result += ", "
-		}
-		result += "COALESCE(" + store.Identifier(column) + ", '')"
-	}
-	return result
 }

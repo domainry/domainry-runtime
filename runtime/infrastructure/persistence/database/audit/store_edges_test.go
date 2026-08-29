@@ -148,9 +148,6 @@ func TestAuditSubjectLifecycleContractAndCancellation(t *testing.T) {
 	if _, err := lifecycle.EraseSubject(cancelled, "default", "subject", nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("erase cancellation=%v", err)
 	}
-	if auditLifecycleColumns(store) != "" || !strings.Contains(auditLifecycleColumns(store, "id", "event"), ", ") {
-		t.Fatal("lifecycle columns malformed")
-	}
 }
 
 func openAuditEdgeStore(t *testing.T) *database.RuntimeStore {

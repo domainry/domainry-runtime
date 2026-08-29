@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strings"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -40,14 +41,18 @@ func (s *AuditBusinessExportStore) CreateOrGetBusinessAuditExport(ctx context.Co
 	}
 	artifact.ID = businessAuditExportID(artifact)
 	filtersJSON, _ := json.Marshal(artifact.Filters)
-	columns := businessAuditExportColumns()
-	query := "INSERT INTO " + s.store.TableIdentifier("business_audit_export_artifacts") + " (" + strings.Join(quotedColumns(s.store, columns), ", ") + ") VALUES (" + strings.Join(placeholders(s.store, len(columns)), ", ") + ")"
-	_, err := s.db.ExecContext(ctx, query,
-		artifact.ID, artifact.WorkspaceID, artifact.RequesterUserID, artifact.RoleKey, artifact.IdempotencyKey,
+	columns := businessAuditExportWorkspaceColumns()
+	statement, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "business_audit_export_artifacts", artifact.WorkspaceID).
+		Columns(columns...).Values(
+		artifact.ID, artifact.RequesterUserID, artifact.RoleKey, artifact.IdempotencyKey,
 		string(filtersJSON), artifact.ScopeSHA256, artifact.AuthorizationScopeSHA256, artifact.TokenSHA256,
 		artifact.Filename, artifact.ContentSHA256, artifact.RowCount, base64.StdEncoding.EncodeToString(artifact.Content),
 		artifact.AuditIdentity, artifact.Status, artifact.CreatedAt, artifact.ExpiresAt, artifact.DownloadCount, artifact.LastDownloadedAt,
-	)
+	).Build()
+	if buildErr != nil {
+		return auditmodel.AuditBusinessExportArtifact{}, false, fmt.Errorf("build business audit export insert: %w", buildErr)
+	}
+	_, err := s.db.ExecContext(ctx, statement, args...)
 	if err != nil {
 		if current, found, readErr := s.byIdempotency(ctx, artifact); readErr == nil && found {
 			if sameBusinessAuditExportRequest(current, artifact) {
@@ -61,18 +66,22 @@ func (s *AuditBusinessExportStore) CreateOrGetBusinessAuditExport(ctx context.Co
 }
 
 func (s *AuditBusinessExportStore) BusinessAuditExportByTokenHash(ctx context.Context, workspaceID, tokenHash string) (auditmodel.AuditBusinessExportArtifact, bool, error) {
-	query := businessAuditExportSelect(s.store) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("token_sha256") + " = " + s.store.Placeholder(2)
-	return scanBusinessAuditExport(s.db.QueryRowContext(ctx, query, strings.TrimSpace(workspaceID), strings.TrimSpace(tokenHash)))
+	statement, args, err := businessAuditExportSelect(s.store, workspaceID).Where(ormbuilder.Equal("token_sha256", strings.TrimSpace(tokenHash))).Limit(1).Build()
+	if err != nil {
+		return auditmodel.AuditBusinessExportArtifact{}, false, err
+	}
+	return scanBusinessAuditExport(s.db.QueryRowContext(ctx, statement, args...))
 }
 
 func (s *AuditBusinessExportStore) RecordBusinessAuditExportDownload(ctx context.Context, workspaceID, artifactID, downloadedAt string) (bool, error) {
-	query := "UPDATE " + s.store.TableIdentifier("business_audit_export_artifacts") + " SET " +
-		s.store.Identifier("download_count") + " = 1, " +
-		s.store.Identifier("last_downloaded_at") + " = " + s.store.Placeholder(1) + ", " +
-		s.store.Identifier("status") + " = " + s.store.Placeholder(2) + " WHERE " +
-		s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(3) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(4) +
-		" AND " + s.store.Identifier("download_count") + " = 0"
-	result, err := s.db.ExecContext(ctx, query, strings.TrimSpace(downloadedAt), "downloaded", strings.TrimSpace(workspaceID), strings.TrimSpace(artifactID))
+	workspaceID = strings.TrimSpace(workspaceID)
+	statement, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "business_audit_export_artifacts", workspaceID).
+		Set("download_count", 1).Set("last_downloaded_at", strings.TrimSpace(downloadedAt)).Set("status", "downloaded").
+		Where(ormbuilder.And(ormbuilder.Equal("id", strings.TrimSpace(artifactID)), ormbuilder.Equal("download_count", 0))).Build()
+	if buildErr != nil {
+		return false, buildErr
+	}
+	result, err := s.db.ExecContext(ctx, statement, args...)
 	if err != nil {
 		return false, err
 	}
@@ -81,8 +90,12 @@ func (s *AuditBusinessExportStore) RecordBusinessAuditExportDownload(ctx context
 		return true, nil
 	}
 	var count int
-	lookup := "SELECT COUNT(*) FROM " + s.store.TableIdentifier("business_audit_export_artifacts") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(2)
-	if err := s.db.QueryRowContext(ctx, lookup, strings.TrimSpace(workspaceID), strings.TrimSpace(artifactID)).Scan(&count); err != nil {
+	lookup, lookupArgs, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "business_audit_export_artifacts", workspaceID).
+		Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(ormbuilder.Equal("id", strings.TrimSpace(artifactID))).Build()
+	if buildErr != nil {
+		return false, buildErr
+	}
+	if err := s.db.QueryRowContext(ctx, lookup, lookupArgs...).Scan(&count); err != nil {
 		return false, err
 	}
 	if count != 1 {
@@ -92,16 +105,26 @@ func (s *AuditBusinessExportStore) RecordBusinessAuditExportDownload(ctx context
 }
 
 func (s *AuditBusinessExportStore) byIdempotency(ctx context.Context, artifact auditmodel.AuditBusinessExportArtifact) (auditmodel.AuditBusinessExportArtifact, bool, error) {
-	query := businessAuditExportSelect(s.store) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("requester_user_id") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("idempotency_key") + " = " + s.store.Placeholder(3)
-	return scanBusinessAuditExport(s.db.QueryRowContext(ctx, query, artifact.WorkspaceID, artifact.RequesterUserID, artifact.IdempotencyKey))
+	statement, args, err := businessAuditExportSelect(s.store, artifact.WorkspaceID).Where(ormbuilder.And(
+		ormbuilder.Equal("requester_user_id", artifact.RequesterUserID),
+		ormbuilder.Equal("idempotency_key", artifact.IdempotencyKey),
+	)).Limit(1).Build()
+	if err != nil {
+		return auditmodel.AuditBusinessExportArtifact{}, false, err
+	}
+	return scanBusinessAuditExport(s.db.QueryRowContext(ctx, statement, args...))
 }
 
 func businessAuditExportColumns() []string {
 	return []string{"id", "workspace_id", "requester_user_id", "role_key", "idempotency_key", "filters_json", "scope_sha256", "authorization_scope_sha256", "token_sha256", "filename", "content_sha256", "row_count", "content_base64", "audit_identity", "status", "created_at", "expires_at", "download_count", "last_downloaded_at"}
 }
 
-func businessAuditExportSelect(store *database.RuntimeStore) string {
-	return "SELECT " + strings.Join(quotedColumns(store, businessAuditExportColumns()), ", ") + " FROM " + store.TableIdentifier("business_audit_export_artifacts")
+func businessAuditExportWorkspaceColumns() []string {
+	return []string{"id", "requester_user_id", "role_key", "idempotency_key", "filters_json", "scope_sha256", "authorization_scope_sha256", "token_sha256", "filename", "content_sha256", "row_count", "content_base64", "audit_identity", "status", "created_at", "expires_at", "download_count", "last_downloaded_at"}
+}
+
+func businessAuditExportSelect(store *database.RuntimeStore, workspaceID string) *ormbuilder.SelectBuilder {
+	return ormbuilder.NewWorkspaceSelectBuilder(store.SQLRenderer, "business_audit_export_artifacts", strings.TrimSpace(workspaceID)).Columns(businessAuditExportColumns()...)
 }
 
 func scanBusinessAuditExport(row *sql.Row) (auditmodel.AuditBusinessExportArtifact, bool, error) {

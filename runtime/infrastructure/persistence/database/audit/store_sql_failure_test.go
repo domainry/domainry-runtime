@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
-	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
 func TestAuditListAndOptionStagedSQLFailures(t *testing.T) {
@@ -98,12 +97,12 @@ func TestAuditCursorSQLMatchesExactIndexPrefixAndStableOrder(t *testing.T) {
 func TestAuditFilterSQLUsesDialectConcatAndPortableLikeEscape(t *testing.T) {
 	for _, test := range []struct {
 		driver       string
-		classValue   string
+		requiredSQL  []string
 		forbiddenSQL string
 	}{
-		{driver: "mysql", classValue: "LOWER(CONCAT(COALESCE(`event`, ''), ' ', COALESCE(`object_key`, '')))", forbiddenSQL: " || "},
-		{driver: "sqlite", classValue: "LOWER(COALESCE(\"event\", '') || ' ' || COALESCE(\"object_key\", ''))", forbiddenSQL: "CONCAT("},
-		{driver: "postgres", classValue: "LOWER(COALESCE(\"event\", '') || ' ' || COALESCE(\"object_key\", ''))", forbiddenSQL: "CONCAT("},
+		{driver: "mysql", requiredSQL: []string{"LOWER(CONCAT(COALESCE(`event`, ?), ?, COALESCE(`object_key`, ?)))", "ESCAPE '~'"}, forbiddenSQL: " || "},
+		{driver: "sqlite", requiredSQL: []string{"LOWER((COALESCE(\"event\", ?)", " || ", "ESCAPE '~'"}, forbiddenSQL: "CONCAT("},
+		{driver: "postgres", requiredSQL: []string{"LOWER((COALESCE(\"event\", $", " || ", "ESCAPE '~'"}, forbiddenSQL: "CONCAT("},
 	} {
 		t.Run(test.driver, func(t *testing.T) {
 			base := openAuditEdgeStore(t)
@@ -124,8 +123,10 @@ func TestAuditFilterSQLUsesDialectConcatAndPortableLikeEscape(t *testing.T) {
 				t.Fatalf("queries=%v", state.queries)
 			}
 			generated := state.queries[0]
-			if !strings.Contains(generated, test.classValue) || !strings.Contains(generated, "ESCAPE '~'") {
-				t.Fatalf("dialect-safe audit filters missing from query: %s", generated)
+			for _, required := range test.requiredSQL {
+				if !strings.Contains(generated, required) {
+					t.Fatalf("dialect-safe audit filter %q missing from query: %s", required, generated)
+				}
 			}
 			if strings.Contains(generated, test.forbiddenSQL) || strings.Contains(generated, "ESCAPE '\\\\'") {
 				t.Fatalf("query contains incompatible SQL: %s", generated)
@@ -143,32 +144,18 @@ func TestAuditSubjectLifecycleStagedRowFailures(t *testing.T) {
 		{columns: columns, nextErr: wantErr},
 	} {
 		db := sql.OpenDB(auditConnector{state: &auditDBState{querySteps: []auditQueryStep{step}}})
-		lifecycle := NewAuditSubjectLifecycleStore(auditLifecycleTestStore{base: base, db: db})
+		lifecycle := &AuditSubjectLifecycleStore{db: db, renderer: base.SQLRenderer}
 		if _, err := lifecycle.ExportSubject(t.Context(), "default", "subject"); err == nil {
 			t.Fatal("lifecycle row failure ignored")
 		}
 		_ = db.Close()
 	}
 	db := sql.OpenDB(auditConnector{state: &auditDBState{execStep: auditExecStep{rowsErr: wantErr}}})
-	lifecycle := NewAuditSubjectLifecycleStore(auditLifecycleTestStore{base: base, db: db})
+	lifecycle := &AuditSubjectLifecycleStore{db: db, renderer: base.SQLRenderer}
 	if _, err := lifecycle.EraseSubject(t.Context(), "default", "subject", nil); !errors.Is(err, wantErr) {
 		t.Fatalf("rows affected error=%v", err)
 	}
 	_ = db.Close()
-}
-
-type auditLifecycleTestStore struct {
-	base *database.RuntimeStore
-	db   *sql.DB
-}
-
-func (s auditLifecycleTestStore) DB() *sql.DB                    { return s.db }
-func (s auditLifecycleTestStore) Identifier(value string) string { return s.base.Identifier(value) }
-func (s auditLifecycleTestStore) TableIdentifier(value string) string {
-	return s.base.TableIdentifier(value)
-}
-func (s auditLifecycleTestStore) Placeholder(position int) string {
-	return s.base.Placeholder(position)
 }
 
 type auditQueryStep struct {

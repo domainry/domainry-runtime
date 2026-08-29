@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -34,9 +35,9 @@ func TestAuditStoreContractAndCancellation(t *testing.T) {
 	if escaped := escapeSQLLike(`a~b%c_d\e`); escaped != `a~~b~%c~_d\e` {
 		t.Fatalf("portable LIKE escaping=%q", escaped)
 	}
-	args := []any{}
-	if expression := repository.classMarkerExpression("event", nil, &args); expression != "0 = 1" || len(args) != 0 {
-		t.Fatalf("empty class expression=%q args=%v", expression, args)
+	expression, args, err := ormbuilder.PreparePredicate(store.SQLRenderer, auditClassMarkerPredicate(auditEventClassExpression(), nil), 0)
+	if err != nil || expression != "1 = 0" || len(args) != 0 {
+		t.Fatalf("empty class expression=%q args=%v err=%v", expression, args, err)
 	}
 	event := auditmodel.AuditEvent{ID: "audit-context-1", WorkspaceID: "default", Event: "record.updated", ObjectKey: "customer", RecordID: "customer-1", ActorID: "admin", RoleKey: "admin", Summary: "Updated", Metadata: map[string]any{"request_id": "req-audit-1"}, Before: map[string]any{"status": "new", "amount": "0.10"}, After: map[string]any{"status": "active", "amount": "0.30"}, CreatedAt: "2026-07-12T00:00:00Z"}
 	if err := repository.InsertAuditEvent(t.Context(), "default", event); err != nil {

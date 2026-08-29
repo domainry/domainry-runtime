@@ -36,12 +36,17 @@ func TestAutomationExecutionEncodingScanAndFilterEdges(t *testing.T) {
 	if _, err := repository.InsertExecutionSeed(t.Context(), "default", automationmodel.AutomationRuleExecution{ID: "fixed-time", CreatedAt: "created", UpdatedAt: "updated"}); err != nil {
 		t.Fatal(err)
 	}
-	mysql := repository
-	mysql.driver = "mysql"
+	if err := store.SetDialectForTesting("mysql"); err != nil {
+		t.Fatal(err)
+	}
+	mysql := NewAutomationExecutionStore(store)
 	mysqlDB := sql.OpenDB(automationConnector{state: &automationDBState{}})
 	defer mysqlDB.Close()
 	mysql.db = mysqlDB
 	if _, err := mysql.InsertExecutionSeed(t.Context(), "default", automationmodel.AutomationRuleExecution{ID: "mysql-seed"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetDialectForTesting("sqlite"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := repository.ListExecutions(t.Context(), "default", automationmodel.AutomationExecutionFilter{RuleKey: "x", ObjectKey: "x", RecordID: "x", Phase: "x", Status: "x", ConnectorKey: "x", From: "a", To: "z", Limit: 501}); err != nil {
