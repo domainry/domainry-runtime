@@ -5,9 +5,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -33,7 +33,11 @@ func (r FrontendCapabilityStore) Get(ctx context.Context, workspaceID string) (d
 	workspaceID = workspace.String()
 	var record deploymentmodel.DeploymentFrontendCapabilityState
 	var payload string
-	err = r.db.QueryRowContext(ctx, "SELECT "+stringsJoinIdentifiers(r.store, "workspace_id", "revision", "manifest_json", "updated_at")+" FROM "+r.store.TableIdentifier("frontend_capability_manifests")+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(1), workspaceID).Scan(&record.WorkspaceID, &record.Revision, &payload, &record.UpdatedAt)
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "frontend_capability_manifests", workspaceID).Columns("workspace_id", "revision", "manifest_json", "updated_at").Build()
+	if err != nil {
+		return deploymentmodel.DeploymentFrontendCapabilityState{}, false, fmt.Errorf("build frontend capability manifest lookup: %w", err)
+	}
+	err = r.db.QueryRowContext(ctx, query, args...).Scan(&record.WorkspaceID, &record.Revision, &payload, &record.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return deploymentmodel.DeploymentFrontendCapabilityState{}, false, nil
 	}
@@ -54,16 +58,24 @@ func (r FrontendCapabilityStore) Put(ctx context.Context, workspaceID string, pa
 	}
 	workspaceID = workspace.String()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	result, err := r.db.ExecContext(ctx, "UPDATE "+r.store.TableIdentifier("frontend_capability_manifests")+" SET "+r.store.Identifier("revision")+" = "+r.store.Identifier("revision")+" + 1, "+r.store.Identifier("manifest_json")+" = "+r.store.Placeholder(1)+", "+r.store.Identifier("updated_at")+" = "+r.store.Placeholder(2)+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(3), string(payload), now, workspaceID)
+	updateStatement, updateArgs, err := frontendCapabilityUpdate(r.store, workspaceID, payload, now)
+	if err != nil {
+		return deploymentmodel.DeploymentFrontendCapabilityState{}, err
+	}
+	result, err := r.db.ExecContext(ctx, updateStatement, updateArgs...)
 	if err != nil {
 		return deploymentmodel.DeploymentFrontendCapabilityState{}, fmt.Errorf("update frontend capability manifest: %w", err)
 	}
 	if n, _ := result.RowsAffected(); n == 0 {
-		_, err = r.db.ExecContext(ctx, "INSERT INTO "+r.store.TableIdentifier("frontend_capability_manifests")+" ("+stringsJoinIdentifiers(r.store, "workspace_id", "revision", "manifest_json", "updated_at")+") VALUES ("+stringsJoinPlaceholders(r.store, 4)+")", workspaceID, int64(1), string(payload), now)
+		insertStatement, insertArgs, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "frontend_capability_manifests", workspaceID).Columns("revision", "manifest_json", "updated_at").Values(int64(1), string(payload), now).Build()
+		if buildErr != nil {
+			return deploymentmodel.DeploymentFrontendCapabilityState{}, fmt.Errorf("build frontend capability manifest insert: %w", buildErr)
+		}
+		_, err = r.db.ExecContext(ctx, insertStatement, insertArgs...)
 		if err != nil {
 			// A concurrent first writer won the insert. Apply this write as the
 			// next revision rather than losing it.
-			if _, updateErr := r.db.ExecContext(ctx, "UPDATE "+r.store.TableIdentifier("frontend_capability_manifests")+" SET "+r.store.Identifier("revision")+" = "+r.store.Identifier("revision")+" + 1, "+r.store.Identifier("manifest_json")+" = "+r.store.Placeholder(1)+", "+r.store.Identifier("updated_at")+" = "+r.store.Placeholder(2)+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(3), string(payload), now, workspaceID); updateErr != nil {
+			if _, updateErr := r.db.ExecContext(ctx, updateStatement, updateArgs...); updateErr != nil {
 				return deploymentmodel.DeploymentFrontendCapabilityState{}, fmt.Errorf("persist frontend capability manifest: %w", updateErr)
 			}
 		}
@@ -78,18 +90,7 @@ func (r FrontendCapabilityStore) Put(ctx context.Context, workspaceID string, pa
 	return record, nil
 }
 
-func stringsJoinIdentifiers(store *database.RuntimeStore, columns ...string) string {
-	values := make([]string, 0, len(columns))
-	for _, column := range columns {
-		values = append(values, store.Identifier(column))
-	}
-	return strings.Join(values, ", ")
-}
-
-func stringsJoinPlaceholders(store *database.RuntimeStore, count int) string {
-	values := make([]string, 0, count)
-	for index := 0; index < count; index++ {
-		values = append(values, store.Placeholder(index+1))
-	}
-	return strings.Join(values, ", ")
+func frontendCapabilityUpdate(store *database.RuntimeStore, workspaceID string, payload []byte, now string) (string, []any, error) {
+	return ormbuilder.NewWorkspaceUpdateBuilder(store.SQLRenderer, "frontend_capability_manifests", workspaceID).
+		SetExpression("revision", ormbuilder.Add(ormbuilder.Column("revision"), ormbuilder.Value(1))).Set("manifest_json", string(payload)).Set("updated_at", now).Build()
 }

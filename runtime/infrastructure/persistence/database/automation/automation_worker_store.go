@@ -13,20 +13,20 @@ import (
 
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
 type AutomationWorkerStore struct {
-	store  *database.RuntimeStore
-	db     *sql.DB
-	driver string
-	wait   func(context.Context, time.Duration) error
+	store *database.RuntimeStore
+	db    *sql.DB
+	wait  func(context.Context, time.Duration) error
 }
 
 func NewAutomationWorkerStore(s *database.RuntimeStore) AutomationWorkerStore {
-	return AutomationWorkerStore{store: s, db: s.DB(), driver: s.Driver(), wait: waitAutomationClaimRetry}
+	return AutomationWorkerStore{store: s, db: s.DB(), wait: waitAutomationClaimRetry}
 }
 
 func waitAutomationClaimRetry(ctx context.Context, delay time.Duration) error {
@@ -54,7 +54,6 @@ func (r AutomationWorkerStore) ClaimInstruction(ctx context.Context, workspaceID
 }
 
 func (r AutomationWorkerStore) claimOnce(ctx context.Context, workspaceID string, execution automationmodel.AutomationInstructionExecution, owner, now, leaseExpiresAt string) (automationmodel.AutomationInstructionExecution, bool, error) {
-	s := r.store
 	workspaceID, err := automationExecutionWorkspaceID(workspaceID, execution.WorkspaceID)
 	if err != nil {
 		return automationmodel.AutomationInstructionExecution{}, false, err
@@ -88,7 +87,11 @@ func (r AutomationWorkerStore) claimOnce(ctx context.Context, workspaceID string
 	}
 	columns := automationInstructionExecutionColumns()
 	values := []any{execution.ID, execution.WorkspaceID, execution.IdempotencyKey, execution.RuleKey, execution.ObjectKey, execution.RecordID, execution.RecordVersion, execution.Operation, execution.InstructionKey, execution.Status, string(resultJSON), execution.ErrorCode, execution.LeaseOwner, execution.LeaseExpiresAt, execution.FencingToken, execution.CreatedAt, execution.UpdatedAt}
-	_, insertErr := r.db.ExecContext(ctx, "INSERT INTO "+s.TableIdentifier("automation_instruction_executions")+" ("+stringsJoinIdentifiers(s, columns...)+") VALUES ("+stringsJoinPlaceholders(s, len(columns))+")", values...)
+	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "automation_instruction_executions", workspaceID).Columns(append(columns[:1], columns[2:]...)...).Values(append(values[:1], values[2:]...)...).Build()
+	if buildErr != nil {
+		return automationmodel.AutomationInstructionExecution{}, false, fmt.Errorf("build automation instruction execution insert: %w", buildErr)
+	}
+	_, insertErr := r.db.ExecContext(ctx, query, args...)
 	if insertErr == nil {
 		return execution, true, nil
 	}
@@ -102,7 +105,11 @@ func (r AutomationWorkerStore) claimOnce(ctx context.Context, workspaceID string
 	if existing.Status == "succeeded" {
 		return existing, false, nil
 	}
-	result, err := r.db.ExecContext(ctx, "UPDATE "+s.TableIdentifier("automation_instruction_executions")+" SET "+s.Identifier("status")+" = "+s.Placeholder(1)+", "+s.Identifier("result_json")+" = "+s.Placeholder(2)+", "+s.Identifier("error_code")+" = "+s.Placeholder(3)+", "+s.Identifier("lease_owner")+" = "+s.Placeholder(4)+", "+s.Identifier("lease_expires_at")+" = "+s.Placeholder(5)+", "+s.Identifier("fencing_token")+" = "+s.Identifier("fencing_token")+" + 1, "+s.Identifier("updated_at")+" = "+s.Placeholder(6)+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(7)+" AND "+s.Identifier("idempotency_key")+" = "+s.Placeholder(8)+" AND ("+s.Identifier("status")+" <> "+s.Placeholder(9)+" OR "+s.Identifier("lease_expires_at")+" <= "+s.Placeholder(10)+")", string(idempotency.StatusProcessing), "{}", "", execution.LeaseOwner, leaseExpiresAt, now, execution.WorkspaceID, execution.IdempotencyKey, string(idempotency.StatusProcessing), now)
+	query, args, err = ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "automation_instruction_executions", workspaceID).Set("status", string(idempotency.StatusProcessing)).Set("result_json", "{}").Set("error_code", "").Set("lease_owner", execution.LeaseOwner).Set("lease_expires_at", leaseExpiresAt).SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).Set("updated_at", now).Where(ormbuilder.And(ormbuilder.Equal("idempotency_key", execution.IdempotencyKey), ormbuilder.Or(ormbuilder.NotEqual("status", string(idempotency.StatusProcessing)), ormbuilder.LessThanOrEqual("lease_expires_at", now)))).Build()
+	if err != nil {
+		return automationmodel.AutomationInstructionExecution{}, false, fmt.Errorf("build automation instruction reclaim: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return automationmodel.AutomationInstructionExecution{}, false, fmt.Errorf("reclaim automation instruction execution: %w", err)
 	}
@@ -124,7 +131,6 @@ func (r AutomationWorkerStore) claimOnce(ctx context.Context, workspaceID string
 }
 
 func (r AutomationWorkerStore) CompleteInstruction(ctx context.Context, workspaceID, idempotencyKey, expectedLeaseOwner string, expectedFencingToken int64, status string, result map[string]any, errorCode, now string) (automationmodel.AutomationInstructionExecution, error) {
-	s := r.store
 	workspaceID, err := automationWorkspaceID(workspaceID)
 	if err != nil {
 		return automationmodel.AutomationInstructionExecution{}, err
@@ -138,7 +144,11 @@ func (r AutomationWorkerStore) CompleteInstruction(ctx context.Context, workspac
 	if now == "" {
 		return automationmodel.AutomationInstructionExecution{}, fmt.Errorf("automation instruction completion time is required")
 	}
-	update, err := r.db.ExecContext(ctx, "UPDATE "+s.TableIdentifier("automation_instruction_executions")+" SET "+s.Identifier("status")+" = "+s.Placeholder(1)+", "+s.Identifier("result_json")+" = "+s.Placeholder(2)+", "+s.Identifier("error_code")+" = "+s.Placeholder(3)+", "+s.Identifier("lease_owner")+" = '', "+s.Identifier("lease_expires_at")+" = '', "+s.Identifier("updated_at")+" = "+s.Placeholder(4)+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(5)+" AND "+s.Identifier("idempotency_key")+" = "+s.Placeholder(6)+" AND "+s.Identifier("status")+" = "+s.Placeholder(7)+" AND "+s.Identifier("lease_owner")+" = "+s.Placeholder(8)+" AND "+s.Identifier("fencing_token")+" = "+s.Placeholder(9), strings.TrimSpace(status), string(resultJSON), strings.TrimSpace(errorCode), now, workspaceID, idempotencyKey, string(idempotency.StatusProcessing), strings.TrimSpace(expectedLeaseOwner), expectedFencingToken)
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "automation_instruction_executions", workspaceID).Set("status", strings.TrimSpace(status)).Set("result_json", string(resultJSON)).Set("error_code", strings.TrimSpace(errorCode)).Set("lease_owner", "").Set("lease_expires_at", "").Set("updated_at", now).Where(automationInstructionLeasePredicate(idempotencyKey, expectedLeaseOwner, expectedFencingToken)).Build()
+	if err != nil {
+		return automationmodel.AutomationInstructionExecution{}, fmt.Errorf("build automation instruction completion: %w", err)
+	}
+	update, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return automationmodel.AutomationInstructionExecution{}, fmt.Errorf("complete automation instruction execution: %w", err)
 	}
@@ -160,7 +170,6 @@ func (r AutomationWorkerStore) CompleteInstruction(ctx context.Context, workspac
 }
 
 func (r AutomationWorkerStore) HeartbeatInstruction(ctx context.Context, workspaceID, idempotencyKey, expectedLeaseOwner string, expectedFencingToken int64, leaseExpiresAt, now string) (automationmodel.AutomationInstructionExecution, error) {
-	s := r.store
 	workspaceID, err := automationWorkspaceID(workspaceID)
 	if err != nil {
 		return automationmodel.AutomationInstructionExecution{}, err
@@ -169,7 +178,11 @@ func (r AutomationWorkerStore) HeartbeatInstruction(ctx context.Context, workspa
 	if now == "" {
 		return automationmodel.AutomationInstructionExecution{}, fmt.Errorf("automation instruction heartbeat time is required")
 	}
-	update, err := r.db.ExecContext(ctx, "UPDATE "+s.TableIdentifier("automation_instruction_executions")+" SET "+s.Identifier("lease_expires_at")+" = "+s.Placeholder(1)+", "+s.Identifier("updated_at")+" = "+s.Placeholder(2)+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(3)+" AND "+s.Identifier("idempotency_key")+" = "+s.Placeholder(4)+" AND "+s.Identifier("status")+" = "+s.Placeholder(5)+" AND "+s.Identifier("lease_owner")+" = "+s.Placeholder(6)+" AND "+s.Identifier("fencing_token")+" = "+s.Placeholder(7), strings.TrimSpace(leaseExpiresAt), now, workspaceID, strings.TrimSpace(idempotencyKey), string(idempotency.StatusProcessing), strings.TrimSpace(expectedLeaseOwner), expectedFencingToken)
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "automation_instruction_executions", workspaceID).Set("lease_expires_at", strings.TrimSpace(leaseExpiresAt)).Set("updated_at", now).Where(automationInstructionLeasePredicate(idempotencyKey, expectedLeaseOwner, expectedFencingToken)).Build()
+	if err != nil {
+		return automationmodel.AutomationInstructionExecution{}, fmt.Errorf("build automation instruction heartbeat: %w", err)
+	}
+	update, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return automationmodel.AutomationInstructionExecution{}, err
 	}
@@ -185,12 +198,15 @@ func (r AutomationWorkerStore) HeartbeatInstruction(ctx context.Context, workspa
 }
 
 func (r AutomationWorkerStore) find(ctx context.Context, workspaceID, idempotencyKey string) (automationmodel.AutomationInstructionExecution, bool, error) {
-	s := r.store
 	workspaceID, err := automationWorkspaceID(workspaceID)
 	if err != nil {
 		return automationmodel.AutomationInstructionExecution{}, false, err
 	}
-	row := r.db.QueryRowContext(ctx, "SELECT "+stringsJoinIdentifiers(s, automationInstructionExecutionColumns()...)+" FROM "+s.TableIdentifier("automation_instruction_executions")+" WHERE "+s.Identifier("workspace_id")+" = "+s.Placeholder(1)+" AND "+s.Identifier("idempotency_key")+" = "+s.Placeholder(2)+" LIMIT 1", workspaceID, strings.TrimSpace(idempotencyKey))
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "automation_instruction_executions", workspaceID).Columns(automationInstructionExecutionColumns()...).Where(ormbuilder.Equal("idempotency_key", strings.TrimSpace(idempotencyKey))).Limit(1).Build()
+	if err != nil {
+		return automationmodel.AutomationInstructionExecution{}, false, err
+	}
+	row := r.db.QueryRowContext(ctx, query, args...)
 	execution, err := scanAutomationInstructionExecution(row)
 	if err == sql.ErrNoRows {
 		return automationmodel.AutomationInstructionExecution{}, false, nil
@@ -199,6 +215,10 @@ func (r AutomationWorkerStore) find(ctx context.Context, workspaceID, idempotenc
 		return automationmodel.AutomationInstructionExecution{}, false, err
 	}
 	return execution, true, nil
+}
+
+func automationInstructionLeasePredicate(idempotencyKey, owner string, token int64) ormbuilder.Predicate {
+	return ormbuilder.And(ormbuilder.Equal("idempotency_key", strings.TrimSpace(idempotencyKey)), ormbuilder.Equal("status", string(idempotency.StatusProcessing)), ormbuilder.Equal("lease_owner", strings.TrimSpace(owner)), ormbuilder.Equal("fencing_token", token))
 }
 
 func automationInstructionExecutionColumns() []string {
