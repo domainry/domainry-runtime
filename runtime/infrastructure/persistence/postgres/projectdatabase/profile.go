@@ -1,4 +1,4 @@
-package postgres
+package projectdatabase
 
 import (
 	"context"
@@ -13,7 +13,11 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 )
 
-func (Dialect) EnsureProjectDatabase(ctx context.Context, cfg config.Config) error {
+type Profile struct{}
+
+func NewProfile() Profile { return Profile{} }
+
+func (Profile) EnsureProjectDatabase(ctx context.Context, cfg config.Config) error {
 	target, err := pgx.ParseConfig(strings.TrimSpace(cfg.DatabaseDSN))
 	if err != nil {
 		return fmt.Errorf("parse PostgreSQL project database DSN: %w", err)

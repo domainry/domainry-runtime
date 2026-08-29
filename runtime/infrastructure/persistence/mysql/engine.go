@@ -10,6 +10,7 @@ import (
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	mysqlevidence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/evidence"
 	mysqlmigration "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/migration"
+	mysqlprojectdatabase "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/projectdatabase"
 	mysqlrecord "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/record"
 	mysqlreport "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/report"
 	mysqlrls "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/rls"
@@ -19,6 +20,7 @@ import (
 type engineProfile struct {
 	ormdriver.Profile
 	persistencedriver.MigrationProfile
+	persistencedriver.ProjectDatabaseProfile
 	persistencedriver.SchemaProfile
 	persistencedriver.WorkspaceRLSProfile
 	evidence persistencedriver.EvidenceSchemaProfile
@@ -29,7 +31,8 @@ type engineProfile struct {
 func newEngineProfile() engineProfile {
 	return engineProfile{
 		Profile: ormmysql.NewProfile(), MigrationProfile: mysqlmigration.NewProfile(),
-		SchemaProfile: mysqlschema.NewProfile(), WorkspaceRLSProfile: mysqlrls.NewProfile(),
+		ProjectDatabaseProfile: mysqlprojectdatabase.NewProfile(),
+		SchemaProfile:          mysqlschema.NewProfile(), WorkspaceRLSProfile: mysqlrls.NewProfile(),
 		evidence: mysqlevidence.NewProfile(), record: mysqlrecord.NewProfile(), report: mysqlreport.NewProfile(),
 	}
 }

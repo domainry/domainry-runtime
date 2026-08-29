@@ -25,12 +25,9 @@ type Dialect interface {
 	SchemaMigrationSQL() string
 }
 
-type ProjectDatabaseEnsurer interface {
-	EnsureProjectDatabase(context.Context, config.Config) error
-}
-
 type EngineProfile interface {
 	ormdriver.Profile
+	EnsureProjectDatabase(context.Context, config.Config) error
 	MigrationDatabasePath(config.Config) string
 	ManagedDatabaseMarkerEnabled() bool
 	ColumnDefinition(string) string
@@ -91,6 +88,10 @@ type WorkspaceRLSProfile interface {
 	WorkspaceRLSSupported() bool
 	ApplyWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) error
 	InspectWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) (WorkspaceRLSStatus, error)
+}
+
+type ProjectDatabaseProfile interface {
+	EnsureProjectDatabase(context.Context, config.Config) error
 }
 
 type SchemaQuery struct {
@@ -158,9 +159,10 @@ type engineProfileProvider interface{ EngineProfile() EngineProfile }
 
 type portableEngineProfile struct{ ormdriver.Profile }
 
-func (portableEngineProfile) MigrationDatabasePath(config.Config) string { return "" }
-func (portableEngineProfile) ManagedDatabaseMarkerEnabled() bool         { return true }
-func (portableEngineProfile) ColumnDefinition(value string) string       { return value }
+func (portableEngineProfile) EnsureProjectDatabase(context.Context, config.Config) error { return nil }
+func (portableEngineProfile) MigrationDatabasePath(config.Config) string                 { return "" }
+func (portableEngineProfile) ManagedDatabaseMarkerEnabled() bool                         { return true }
+func (portableEngineProfile) ColumnDefinition(value string) string                       { return value }
 func (portableEngineProfile) ApplicationTablesQuery(ormdialect.Renderer, string) SchemaQuery {
 	return SchemaQuery{}
 }

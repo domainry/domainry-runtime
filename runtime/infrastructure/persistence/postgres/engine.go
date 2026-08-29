@@ -10,6 +10,7 @@ import (
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	postgresevidence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/evidence"
 	postgresmigration "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/migration"
+	postgresprojectdatabase "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/projectdatabase"
 	postgresrecord "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/record"
 	postgresreport "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/report"
 	postgresrls "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/rls"
@@ -19,6 +20,7 @@ import (
 type engineProfile struct {
 	ormdriver.Profile
 	persistencedriver.MigrationProfile
+	persistencedriver.ProjectDatabaseProfile
 	persistencedriver.SchemaProfile
 	persistencedriver.WorkspaceRLSProfile
 	evidence persistencedriver.EvidenceSchemaProfile
@@ -29,7 +31,8 @@ type engineProfile struct {
 func newEngineProfile() engineProfile {
 	return engineProfile{
 		Profile: ormpostgres.NewProfile(), MigrationProfile: postgresmigration.NewProfile(),
-		SchemaProfile: postgresschema.NewProfile(), WorkspaceRLSProfile: postgresrls.NewProfile(),
+		ProjectDatabaseProfile: postgresprojectdatabase.NewProfile(),
+		SchemaProfile:          postgresschema.NewProfile(), WorkspaceRLSProfile: postgresrls.NewProfile(),
 		evidence: postgresevidence.NewProfile(), record: postgresrecord.NewProfile(), report: postgresreport.NewProfile(),
 	}
 }

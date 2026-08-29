@@ -1,4 +1,4 @@
-package mysql
+package projectdatabase
 
 import (
 	"context"
@@ -10,7 +10,11 @@ import (
 	mysqldriver "github.com/go-sql-driver/mysql"
 )
 
-func (Dialect) EnsureProjectDatabase(ctx context.Context, cfg config.Config) error {
+type Profile struct{}
+
+func NewProfile() Profile { return Profile{} }
+
+func (Profile) EnsureProjectDatabase(ctx context.Context, cfg config.Config) error {
 	target, err := mysqldriver.ParseDSN(strings.TrimSpace(cfg.DatabaseDSN))
 	if err != nil {
 		return fmt.Errorf("parse MySQL project database DSN: %w", err)
