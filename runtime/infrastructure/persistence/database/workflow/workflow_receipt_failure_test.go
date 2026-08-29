@@ -136,15 +136,7 @@ func TestWorkflowExecutionReceiptCompletionFailures(t *testing.T) {
 	}
 }
 
-func TestWorkflowReceiptBusyAndBackoffConditions(t *testing.T) {
-	if workflowSQLiteBusyError("postgres", errors.New("SQLITE_BUSY")) || workflowSQLiteBusyError("sqlite", nil) {
-		t.Fatal("non-SQLite and nil errors must not classify busy")
-	}
-	for _, message := range []string{"SQLITE_BUSY", "database is locked", "database table is locked"} {
-		if !workflowSQLiteBusyError("sqlite", errors.New(message)) {
-			t.Fatalf("message %q was not classified", message)
-		}
-	}
+func TestWorkflowReceiptBackoffConditions(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	if err := workflowClaimBackoff(ctx, 0); !errors.Is(err, context.Canceled) {

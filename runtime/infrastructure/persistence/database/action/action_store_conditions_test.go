@@ -72,7 +72,7 @@ func TestActionExecutionClaimRetryWaitAndDatabaseStages(t *testing.T) {
 
 	for _, message := range []string{"SQLITE_BUSY", "database is locked", "database table is locked"} {
 		store := NewActionBusinessExecutionStore(base)
-		if !store.isSQLiteBusyError(errors.New(message)) {
+		if !store.store.IsTransientError(errors.New(message)) {
 			t.Fatalf("busy marker %q not recognized", message)
 		}
 	}
@@ -80,12 +80,17 @@ func TestActionExecutionClaimRetryWaitAndDatabaseStages(t *testing.T) {
 	if store.claimDelay(0) != time.Millisecond {
 		t.Fatalf("default claim delay=%v", store.claimDelay(0))
 	}
-	if store.isSQLiteBusyError(nil) || store.isSQLiteBusyError(errors.New("other")) {
+	if store.store.IsTransientError(nil) || store.store.IsTransientError(errors.New("other")) {
 		t.Fatal("non-busy error classified as busy")
 	}
-	store.driver = "postgres"
-	if store.isSQLiteBusyError(errors.New("SQLITE_BUSY")) {
+	if err := store.store.SetDialectForTesting("postgres"); err != nil {
+		t.Fatal(err)
+	}
+	if store.store.IsTransientError(errors.New("SQLITE_BUSY")) {
 		t.Fatal("PostgreSQL error classified as SQLite busy")
+	}
+	if err := store.store.SetDialectForTesting("sqlite"); err != nil {
+		t.Fatal(err)
 	}
 	nonBusyState := &actionDBState{execSteps: []actionExecStep{{err: wantErr}}, querySteps: []actionQueryStep{{err: wantErr}}}
 	store, closeDB = scriptedActionStore(base, nonBusyState)

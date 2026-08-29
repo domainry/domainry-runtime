@@ -43,7 +43,7 @@ func NewActionBusinessExecutionStore(store *database.RuntimeStore) ActionBusines
 func (r ActionBusinessExecutionStore) TryBeginExecution(ctx context.Context, request actionmodel.ActionExecutionClaimRequest) (actionmodel.ActionExecutionClaimResult, error) {
 	for attempt := 0; attempt < r.claimAttempts; attempt++ {
 		claim, err := r.tryBeginExecutionOnce(ctx, request)
-		if err == nil || !r.isSQLiteBusyError(err) {
+		if err == nil || !r.store.IsTransientError(err) {
 			return claim, err
 		}
 		timer := time.NewTimer(r.claimDelay(attempt))
@@ -126,14 +126,6 @@ func (r ActionBusinessExecutionStore) tryBeginExecutionOnce(ctx context.Context,
 	}
 	r.store.ObserveIdempotency(ctx, value.WorkspaceID, "action.execute", idempotency.OutcomeInProgress)
 	return actionmodel.ActionExecutionClaimResult{Decision: idempotency.DecisionInProgress, Execution: current}, nil
-}
-
-func (r ActionBusinessExecutionStore) isSQLiteBusyError(err error) bool {
-	if err == nil || r.driver != "sqlite" {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "sqlite_busy") || strings.Contains(message, "database is locked") || strings.Contains(message, "database table is locked")
 }
 
 func (r ActionBusinessExecutionStore) waitForExecutionByScope(ctx context.Context, workspaceID, objectKey, recordID, actionKey, idempotencyKey string) (actionmodel.ActionBusinessExecution, bool, error) {

@@ -69,13 +69,13 @@ func TestRecordMutationClaimSQLFailureAndRetryEdges(t *testing.T) {
 		t.Fatalf("lost reclaim claim=%+v err=%v", claim, err)
 	}
 
-	if store.recordMutationSQLiteBusy(nil) || store.recordMutationSQLiteBusy(errors.New("ordinary")) || !store.recordMutationSQLiteBusy(errors.New("database is locked")) {
+	if store.store.IsTransientError(nil) || store.store.IsTransientError(errors.New("ordinary")) || !store.store.IsTransientError(errors.New("database is locked")) {
 		t.Fatal("SQLite busy classification changed")
 	}
 	if err := store.store.SetDialectForTesting("mysql"); err != nil {
 		t.Fatal(err)
 	}
-	if store.recordMutationSQLiteBusy(errors.New("database is locked")) {
+	if store.store.IsTransientError(errors.New("database is locked")) {
 		t.Fatal("non-SQLite busy error was retried")
 	}
 	if err := store.store.SetDialectForTesting("sqlite"); err != nil {

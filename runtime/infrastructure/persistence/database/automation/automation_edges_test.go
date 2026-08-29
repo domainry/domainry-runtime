@@ -126,13 +126,18 @@ func TestAutomationWorkerInputRetryAndCodecEdges(t *testing.T) {
 	if _, _, err := repository.find(t.Context(), "", "missing"); err == nil {
 		t.Fatal("invalid find workspace accepted")
 	}
-	if !repository.isSQLiteBusyError(errors.New("SQLITE_BUSY")) || !repository.isSQLiteBusyError(errors.New("database is locked")) || !repository.isSQLiteBusyError(errors.New("database table is locked")) || repository.isSQLiteBusyError(errors.New("other")) || repository.isSQLiteBusyError(nil) {
+	if !repository.store.IsTransientError(errors.New("SQLITE_BUSY")) || !repository.store.IsTransientError(errors.New("database is locked")) || !repository.store.IsTransientError(errors.New("database table is locked")) || repository.store.IsTransientError(errors.New("other")) || repository.store.IsTransientError(nil) {
 		t.Fatal("busy classification mismatch")
 	}
 	nonSQLite := repository
-	nonSQLite.driver = "mysql"
-	if nonSQLite.isSQLiteBusyError(errors.New("database is locked")) {
+	if err := nonSQLite.store.SetDialectForTesting("mysql"); err != nil {
+		t.Fatal(err)
+	}
+	if nonSQLite.store.IsTransientError(errors.New("database is locked")) {
 		t.Fatal("non-SQLite error classified as busy")
+	}
+	if err := nonSQLite.store.SetDialectForTesting("sqlite"); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := scanAutomationInstructionExecution(automationScanner{values: automationInstructionRow("{")}); err == nil {
 		t.Fatal("bad instruction JSON accepted")

@@ -25,3 +25,17 @@ func NewSQLStore(database *sql.DB, engine driver.Dialect, schema string) *SQLSto
 	schema = strings.TrimSpace(schema)
 	return &SQLStore{DB: database, SQLRenderer: engine.SQLDialect().WithSchema(schema), DatabaseSchema: schema, Engine: driver.ProfileFor(engine)}
 }
+
+// IsTransientError applies the engine Profile's stable error taxonomy. Owners
+// use this retry decision without inspecting driver names or error strings.
+func (s *SQLStore) IsTransientError(err error) bool {
+	if s == nil || s.Engine == nil || err == nil {
+		return false
+	}
+	switch s.Engine.ClassifyError(err) {
+	case ormdriver.ErrorSerialization, ormdriver.ErrorDeadlock, ormdriver.ErrorUnavailable, ormdriver.ErrorTimeout:
+		return true
+	default:
+		return false
+	}
+}

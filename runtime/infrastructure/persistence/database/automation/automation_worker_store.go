@@ -43,7 +43,7 @@ func waitAutomationClaimRetry(ctx context.Context, delay time.Duration) error {
 func (r AutomationWorkerStore) ClaimInstruction(ctx context.Context, workspaceID string, execution automationmodel.AutomationInstructionExecution, owner, now, leaseExpiresAt string) (automationmodel.AutomationInstructionExecution, bool, error) {
 	for attempt := 0; attempt < 50; attempt++ {
 		claimed, ok, err := r.claimOnce(ctx, workspaceID, execution, owner, now, leaseExpiresAt)
-		if err == nil || !r.isSQLiteBusyError(err) {
+		if err == nil || !r.store.IsTransientError(err) {
 			return claimed, ok, err
 		}
 		if waitErr := r.wait(ctx, time.Duration(attempt+1)*time.Millisecond); waitErr != nil {
@@ -199,14 +199,6 @@ func (r AutomationWorkerStore) find(ctx context.Context, workspaceID, idempotenc
 		return automationmodel.AutomationInstructionExecution{}, false, err
 	}
 	return execution, true, nil
-}
-
-func (r AutomationWorkerStore) isSQLiteBusyError(err error) bool {
-	if err == nil || r.driver != "sqlite" {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "sqlite_busy") || strings.Contains(message, "database is locked") || strings.Contains(message, "database table is locked")
 }
 
 func automationInstructionExecutionColumns() []string {

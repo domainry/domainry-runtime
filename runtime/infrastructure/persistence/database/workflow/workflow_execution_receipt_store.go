@@ -19,7 +19,7 @@ import (
 func (r WorkflowWorkerStore) TryBeginExecution(ctx context.Context, request workflowmodel.WorkflowExecutionClaimRequest) (workflowmodel.WorkflowExecutionClaimResult, error) {
 	for attempt := 0; attempt < 50; attempt++ {
 		claim, err := r.tryBeginExecutionOnce(ctx, request)
-		if err == nil || !workflowSQLiteBusyError(r.store.Driver(), err) {
+		if err == nil || !r.store.IsTransientError(err) {
 			return claim, err
 		}
 		if err := r.waitForClaimRetry(ctx, attempt); err != nil {
@@ -163,11 +163,6 @@ func workflowReceiptWorkspace(value string) string {
 		return value
 	}
 	return "default"
-}
-
-func workflowSQLiteBusyError(driver string, err error) bool {
-	message := strings.ToLower(fmt.Sprint(err))
-	return driver == "sqlite" && (strings.Contains(message, "sqlite_busy") || strings.Contains(message, "database is locked") || strings.Contains(message, "database table is locked"))
 }
 
 func workflowClaimBackoff(ctx context.Context, attempt int) error {

@@ -21,7 +21,7 @@ import (
 func (r RecordStore) TryBeginRecordMutation(ctx context.Context, request recordmodel.RecordMutationClaimRequest) (recordmodel.RecordMutationClaimResult, error) {
 	for attempt := 0; attempt < 50; attempt++ {
 		claim, err := r.tryBeginRecordMutationOnce(ctx, request)
-		if err == nil || !r.recordMutationSQLiteBusy(err) {
+		if err == nil || !r.store.IsTransientError(err) {
 			return claim, err
 		}
 		timer := time.NewTimer(time.Duration(attempt+1) * time.Millisecond)
@@ -94,14 +94,6 @@ func (r RecordStore) tryBeginRecordMutationOnce(ctx context.Context, request rec
 	}
 	r.store.ObserveIdempotency(ctx, value.WorkspaceID, "record."+value.Operation, idempotency.OutcomeInProgress)
 	return recordmodel.RecordMutationClaimResult{Decision: idempotency.DecisionInProgress, Execution: current}, nil
-}
-
-func (r RecordStore) recordMutationSQLiteBusy(err error) bool {
-	if err == nil || r.store.Driver() != "sqlite" {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "sqlite_busy") || strings.Contains(message, "database is locked") || strings.Contains(message, "database table is locked")
 }
 
 func (r RecordStore) CommitRecordMutationExecution(ctx context.Context, commit transactionmodel.RecordMutationCommit, completion recordmodel.RecordMutationCompletion) (recordmodel.RecordMutationExecution, error) {
