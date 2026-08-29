@@ -41,11 +41,11 @@ func TestDialectContract(t *testing.T) {
 	if dsn, err := dialect.DSN(config.Config{DatabaseDSN: " mysql://runtime "}); err != nil || dsn != "mysql://runtime" {
 		t.Fatalf("dsn=%q err=%v", dsn, err)
 	}
-	if got := dialect.Identifier("order_item"); got != "`order_item`" {
+	if got := dialect.SQLDialect().Identifier("order_item"); got != "`order_item`" {
 		t.Fatalf("identifier=%q", got)
 	}
-	assertMySQLIdentifierPanics(t, func() { dialect.Identifier("order`item") })
-	if got := dialect.Placeholder(7); got != "?" {
+	assertMySQLIdentifierPanics(t, func() { dialect.SQLDialect().Identifier("order`item") })
+	if got := dialect.SQLDialect().Placeholder(7); got != "?" {
 		t.Fatalf("placeholder=%q", got)
 	}
 	if sql := dialect.SchemaMigrationSQL(); !strings.Contains(sql, "`_schema_migrations`") || !strings.Contains(sql, "PRIMARY KEY") {

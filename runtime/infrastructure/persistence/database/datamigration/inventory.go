@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	drivercontract "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
+	ormdialect "github.com/domainry/domainry-orm/dialect"
 )
 
 func Inspect(ctx context.Context, db *sql.DB, engine Engine, schema string) (Inventory, error) {
@@ -124,7 +124,7 @@ func inspectSQLiteSequences(ctx context.Context, db *sql.DB, inventory *Inventor
 }
 
 func inspectSQLiteTable(ctx context.Context, db *sql.DB, name string) (TableInventory, error) {
-	if !drivercontract.ValidSQLIdentifier(name) {
+	if !ormdialect.ValidIdentifier(name) {
 		return TableInventory{}, fmt.Errorf("unsafe SQLite table identifier %q", name)
 	}
 	quoted := quote(name)
@@ -217,7 +217,7 @@ func inspectSQLiteIndexes(ctx context.Context, db *sql.DB, table *TableInventory
 		if err := rows.Scan(&sequence, &name, &unique, &origin, &partial); err != nil {
 			return err
 		}
-		if !drivercontract.ValidSQLIdentifier(name) {
+		if !ormdialect.ValidIdentifier(name) {
 			return fmt.Errorf("unsafe SQLite index identifier %q", name)
 		}
 		indexes = append(indexes, IndexInventory{Name: name, Unique: unique == 1})

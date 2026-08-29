@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/requestcontext"
+	ormdialect "github.com/domainry/domainry-orm/dialect"
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationspolicy "github.com/domainry/domainry-runtime/runtime/domain/operations/policy"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/datamigration"
-	drivercontract "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 )
 
 var _ operationscontract.DatabaseRetirementExecutor = DatabaseRetirementSQLExecutor{}
@@ -169,7 +169,7 @@ func databaseQuarantineObjectName(name, retirementID string) string {
 }
 
 func databaseWriteProtectionStatements(engine datamigration.Engine, object operationsmodel.DatabaseObjectIdentity, retirementID string) ([]string, error) {
-	if object.Kind != "table" || !drivercontract.ValidSQLIdentifier(object.Name) {
+	if object.Kind != "table" || !ormdialect.ValidIdentifier(object.Name) {
 		return nil, fmt.Errorf("write protection currently requires a typed table retirement")
 	}
 	table := qualifyRetirementIdentifier(engine, object.Schema, object.Name)
@@ -201,7 +201,7 @@ func databaseWriteProtectionStatements(engine datamigration.Engine, object opera
 }
 
 func databaseQuarantineStatements(engine datamigration.Engine, object operationsmodel.DatabaseObjectIdentity, quarantineName string) ([]string, error) {
-	if object.Kind != "table" || !drivercontract.ValidSQLIdentifier(object.Name) || !drivercontract.ValidSQLIdentifier(quarantineName) {
+	if object.Kind != "table" || !ormdialect.ValidIdentifier(object.Name) || !ormdialect.ValidIdentifier(quarantineName) {
 		return nil, fmt.Errorf("quarantine currently requires a typed table retirement")
 	}
 	oldName, newName := qualifyRetirementIdentifier(engine, object.Schema, object.Name), quoteRetirementIdentifier(engine, quarantineName)
@@ -212,7 +212,7 @@ func databaseQuarantineStatements(engine datamigration.Engine, object operations
 }
 
 func databaseRestoreStatements(engine datamigration.Engine, object operationsmodel.DatabaseObjectIdentity, quarantineName string) ([]string, error) {
-	if object.Kind != "table" || !drivercontract.ValidSQLIdentifier(object.Name) || !drivercontract.ValidSQLIdentifier(quarantineName) {
+	if object.Kind != "table" || !ormdialect.ValidIdentifier(object.Name) || !ormdialect.ValidIdentifier(quarantineName) {
 		return nil, fmt.Errorf("restore currently requires a typed quarantined table")
 	}
 	quarantined := qualifyRetirementIdentifier(engine, object.Schema, quarantineName)
@@ -380,7 +380,7 @@ func retirementDependencies(inventory datamigration.Inventory, object operations
 }
 
 func databaseDropStatement(engine datamigration.Engine, object operationsmodel.DatabaseObjectIdentity) (string, error) {
-	if !drivercontract.ValidSQLIdentifier(object.Name) || (object.ParentName != "" && !drivercontract.ValidSQLIdentifier(object.ParentName)) || (object.Schema != "" && !drivercontract.ValidSQLIdentifier(object.Schema)) {
+	if !ormdialect.ValidIdentifier(object.Name) || (object.ParentName != "" && !ormdialect.ValidIdentifier(object.ParentName)) || (object.Schema != "" && !ormdialect.ValidIdentifier(object.Schema)) {
 		return "", fmt.Errorf("unsafe database retirement identifier")
 	}
 	quote := func(value string) string { return `"` + strings.ReplaceAll(value, `"`, `""`) + `"` }

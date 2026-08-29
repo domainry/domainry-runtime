@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	ormdialect "github.com/domainry/domainry-orm/dialect"
+
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite"
@@ -187,6 +189,8 @@ func (namedTestDialect) DSN(config.Config) (string, error) {
 	return "", nil
 }
 func (namedTestDialect) Configure(context.Context, *sql.DB, string) error { return nil }
-func (namedTestDialect) Identifier(value string) string                   { return value }
-func (namedTestDialect) Placeholder(int) string                           { return "?" }
-func (namedTestDialect) SchemaMigrationSQL() string                       { return "" }
+func (namedTestDialect) SQLDialect() ormdialect.Dialect {
+	value, _ := ormdialect.New(ormdialect.SQLite)
+	return value
+}
+func (namedTestDialect) SchemaMigrationSQL() string { return "" }

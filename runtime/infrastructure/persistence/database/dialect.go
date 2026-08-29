@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	ormdialect "github.com/domainry/domainry-orm/dialect"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
@@ -26,11 +27,12 @@ func dialectFor(driver string) (dialect, error) {
 }
 
 func validSQLIdentifier(value string) bool {
-	return driver.ValidSQLIdentifier(value)
+	return ormdialect.ValidIdentifier(value)
 }
 
 func SQLIdentifier(value string) string {
-	return sqlite.Dialect{}.Identifier(value)
+	dialect, _ := ormdialect.New(ormdialect.SQLite)
+	return dialect.Identifier(value)
 }
 
 func (s *RuntimeStore) metadataIDColumnType() string {

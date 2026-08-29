@@ -30,12 +30,9 @@ func (Dialect) Configure(ctx context.Context, db *sql.DB, _ string) error {
 	return nil
 }
 
-func (Dialect) Identifier(value string) string {
-	return ormdialect.QuoteIdentifier(value, `"`)
-}
-
-func (Dialect) Placeholder(position int) string {
-	return fmt.Sprintf("$%d", position)
+func (Dialect) SQLDialect() ormdialect.Dialect {
+	value, _ := ormdialect.New(ormdialect.Postgres)
+	return value
 }
 
 func (Dialect) SchemaMigrationSQL() string {

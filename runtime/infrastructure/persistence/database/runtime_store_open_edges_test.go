@@ -8,6 +8,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/secrets"
 	"github.com/domainry/domainry-foundation/telemetry"
+	ormdialect "github.com/domainry/domainry-orm/dialect"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -25,9 +26,11 @@ func (stub runtimeOpenDialectStub) DSN(config.Config) (string, error) {
 func (stub runtimeOpenDialectStub) Configure(context.Context, *sql.DB, string) error {
 	return stub.configureErr
 }
-func (stub runtimeOpenDialectStub) Identifier(value string) string { return value }
-func (stub runtimeOpenDialectStub) Placeholder(int) string         { return "?" }
-func (stub runtimeOpenDialectStub) SchemaMigrationSQL() string     { return "" }
+func (stub runtimeOpenDialectStub) SQLDialect() ormdialect.Dialect {
+	value, _ := ormdialect.New(ormdialect.SQLite)
+	return value
+}
+func (stub runtimeOpenDialectStub) SchemaMigrationSQL() string { return "" }
 
 type runtimePostgresProfileStub struct {
 	profile               postgres.ConnectionProfile

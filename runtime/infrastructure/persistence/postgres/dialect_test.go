@@ -41,11 +41,11 @@ func TestDialectContract(t *testing.T) {
 	if dsn, err := dialect.DSN(config.Config{DatabaseDSN: " postgres://runtime "}); err != nil || dsn != "postgres://runtime" {
 		t.Fatalf("dsn=%q err=%v", dsn, err)
 	}
-	if got := dialect.Identifier("order_item"); got != `"order_item"` {
+	if got := dialect.SQLDialect().Identifier("order_item"); got != `"order_item"` {
 		t.Fatalf("identifier=%q", got)
 	}
-	assertPostgresIdentifierPanics(t, func() { dialect.Identifier(`order"item`) })
-	if got := dialect.Placeholder(7); got != "$7" {
+	assertPostgresIdentifierPanics(t, func() { dialect.SQLDialect().Identifier(`order"item`) })
+	if got := dialect.SQLDialect().Placeholder(7); got != "$7" {
 		t.Fatalf("placeholder=%q", got)
 	}
 	if sql := dialect.SchemaMigrationSQL(); !strings.Contains(sql, `"_schema_migrations"`) || !strings.Contains(sql, "PRIMARY KEY") {

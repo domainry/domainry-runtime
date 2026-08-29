@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	drivercontract "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
+	ormdialect "github.com/domainry/domainry-orm/dialect"
 )
 
 type CopyOptions struct {
@@ -68,7 +68,7 @@ func (c Copier) Run(ctx context.Context) (Checkpoint, error) {
 	if len(c.Plan.Blockers) > 0 {
 		return Checkpoint{}, fmt.Errorf("data migration plan has blockers: %s", strings.Join(c.Plan.Blockers, "; "))
 	}
-	if !drivercontract.ValidSQLIdentifier(c.TargetSchema) {
+	if !ormdialect.ValidIdentifier(c.TargetSchema) {
 		return Checkpoint{}, fmt.Errorf("unsafe target schema identifier")
 	}
 	fingerprint := PlanFingerprint(c.Plan)
@@ -163,7 +163,7 @@ func (c Copier) Run(ctx context.Context) (Checkpoint, error) {
 		return checkpoint, err
 	}
 	for _, sequence := range c.Plan.Sequences {
-		if sequence.Blocked || !drivercontract.ValidSQLIdentifier(sequence.TargetName) {
+		if sequence.Blocked || !ormdialect.ValidIdentifier(sequence.TargetName) {
 			return checkpoint, fmt.Errorf("sequence %s does not have a safe target mapping", sequence.SourceName)
 		}
 		if _, err := c.Target.ExecContext(ctx, "SELECT setval($1::regclass, $2, true)", c.TargetSchema+"."+sequence.TargetName, sequence.CurrentValue); err != nil {
@@ -199,7 +199,7 @@ func (c Copier) copyBatch(ctx context.Context, tablePlan TablePlan, checkpoint T
 	}
 	columns := make([]string, 0, len(sourceTable.Columns))
 	for _, column := range sourceTable.Columns {
-		if !drivercontract.ValidSQLIdentifier(column.Name) {
+		if !ormdialect.ValidIdentifier(column.Name) {
 			return 0, checkpoint, fmt.Errorf("unsafe source column identifier")
 		}
 		columns = append(columns, column.Name)

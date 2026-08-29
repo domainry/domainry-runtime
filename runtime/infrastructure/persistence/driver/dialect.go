@@ -15,11 +15,6 @@ type Dialect interface {
 	SQLDriver() string
 	DSN(config.Config) (string, error)
 	Configure(context.Context, *sql.DB, string) error
-	Identifier(string) string
-	Placeholder(int) string
+	SQLDialect() ormdialect.Dialect
 	SchemaMigrationSQL() string
 }
-
-var QuoteIdentifier = ormdialect.QuoteIdentifier
-var ValidSQLIdentifier = ormdialect.ValidIdentifier
-var QuestionPlaceholder = ormdialect.QuestionPlaceholder

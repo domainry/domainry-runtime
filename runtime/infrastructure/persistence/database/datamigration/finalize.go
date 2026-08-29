@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	drivercontract "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
+	ormdialect "github.com/domainry/domainry-orm/dialect"
 )
 
 type FinalizeReport struct {
@@ -25,15 +25,15 @@ func (c Copier) Finalize(ctx context.Context) (FinalizeReport, error) {
 	}
 	report := FinalizeReport{}
 	for _, table := range c.Plan.Tables {
-		if !drivercontract.ValidSQLIdentifier(table.Name) {
+		if !ormdialect.ValidIdentifier(table.Name) {
 			return report, fmt.Errorf("unsafe deferred table identifier %q", table.Name)
 		}
 		for _, index := range table.DeferredIndexes {
-			if !drivercontract.ValidSQLIdentifier(index.Name) {
+			if !ormdialect.ValidIdentifier(index.Name) {
 				return report, fmt.Errorf("unsafe deferred index identifier %q", index.Name)
 			}
 			for _, column := range index.Columns {
-				if !drivercontract.ValidSQLIdentifier(column) {
+				if !ormdialect.ValidIdentifier(column) {
 					return report, fmt.Errorf("unsafe deferred index column identifier")
 				}
 			}
@@ -48,11 +48,11 @@ func (c Copier) Finalize(ctx context.Context) (FinalizeReport, error) {
 			report.IndexesCreated = append(report.IndexesCreated, table.Name+"."+index.Name)
 		}
 		for position, foreign := range table.DeferredForeignKeys {
-			if !drivercontract.ValidSQLIdentifier(foreign.ReferencedTable) {
+			if !ormdialect.ValidIdentifier(foreign.ReferencedTable) {
 				return report, fmt.Errorf("unsafe deferred referenced table identifier %q", foreign.ReferencedTable)
 			}
 			for _, column := range append(append([]string(nil), foreign.Columns...), foreign.ReferencedColumns...) {
-				if !drivercontract.ValidSQLIdentifier(column) {
+				if !ormdialect.ValidIdentifier(column) {
 					return report, fmt.Errorf("unsafe deferred foreign-key column identifier")
 				}
 			}

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	drivercontract "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
+	ormdialect "github.com/domainry/domainry-orm/dialect"
 )
 
 func inspectMySQL(ctx context.Context, db *sql.DB, schema string) (Inventory, error) {
@@ -17,7 +17,7 @@ func inspectMySQL(ctx context.Context, db *sql.DB, schema string) (Inventory, er
 			return Inventory{}, fmt.Errorf("resolve MySQL schema: %w", err)
 		}
 	}
-	if !drivercontract.ValidSQLIdentifier(schema) {
+	if !ormdialect.ValidIdentifier(schema) {
 		return Inventory{}, fmt.Errorf("unsafe MySQL schema identifier %q", schema)
 	}
 	result := Inventory{Engine: EngineMySQL, Schema: schema, CapturedAt: time.Now().UTC()}
@@ -61,7 +61,7 @@ func inspectMySQL(ctx context.Context, db *sql.DB, schema string) (Inventory, er
 }
 
 func inspectMySQLTable(ctx context.Context, db *sql.DB, schema, name string) (TableInventory, error) {
-	if !drivercontract.ValidSQLIdentifier(name) {
+	if !ormdialect.ValidIdentifier(name) {
 		return TableInventory{}, fmt.Errorf("unsafe MySQL table identifier %q", name)
 	}
 	table := TableInventory{Name: name}

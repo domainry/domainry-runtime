@@ -13,7 +13,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/requestcontext"
 	"github.com/domainry/domainry-foundation/telemetry"
-	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
+	ormdialect "github.com/domainry/domainry-orm/dialect"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -86,7 +86,7 @@ func NewConnectionProfile(cfg config.Config) (ConnectionProfile, error) {
 	if schema == "" {
 		schema = "public"
 	}
-	if !database.ValidSQLIdentifier(schema) {
+	if !ormdialect.ValidIdentifier(schema) {
 		return ConnectionProfile{}, fmt.Errorf("DATABASE_SCHEMA must be a safe SQL identifier")
 	}
 	if cfg.DatabaseConnectTimeout > 0 {

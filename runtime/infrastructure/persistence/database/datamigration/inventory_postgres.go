@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	drivercontract "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
+	ormdialect "github.com/domainry/domainry-orm/dialect"
 )
 
 func inspectPostgres(ctx context.Context, db *sql.DB, schema string) (Inventory, error) {
@@ -16,7 +16,7 @@ func inspectPostgres(ctx context.Context, db *sql.DB, schema string) (Inventory,
 	if schema == "" {
 		schema = "public"
 	}
-	if !drivercontract.ValidSQLIdentifier(schema) {
+	if !ormdialect.ValidIdentifier(schema) {
 		return Inventory{}, fmt.Errorf("unsafe PostgreSQL schema identifier %q", schema)
 	}
 	result := Inventory{Engine: EnginePostgres, Schema: schema, CapturedAt: time.Now().UTC()}
@@ -106,7 +106,7 @@ ORDER BY sequence_class.relname`, schema)
 		if err := rows.Scan(&sequence.Name, &sequence.OwnedTable, &sequence.OwnedColumn); err != nil {
 			return err
 		}
-		if !drivercontract.ValidSQLIdentifier(sequence.Name) {
+		if !ormdialect.ValidIdentifier(sequence.Name) {
 			return fmt.Errorf("unsafe PostgreSQL sequence identifier %q", sequence.Name)
 		}
 		if err := db.QueryRowContext(ctx, "SELECT last_value FROM "+quote(schema)+"."+quote(sequence.Name)).Scan(&sequence.CurrentValue); err != nil {
@@ -118,7 +118,7 @@ ORDER BY sequence_class.relname`, schema)
 }
 
 func inspectPostgresTable(ctx context.Context, db *sql.DB, schema, name string) (TableInventory, error) {
-	if !drivercontract.ValidSQLIdentifier(name) {
+	if !ormdialect.ValidIdentifier(name) {
 		return TableInventory{}, fmt.Errorf("unsafe PostgreSQL table identifier %q", name)
 	}
 	relation := quote(schema) + "." + quote(name)
