@@ -24,6 +24,21 @@ var recordBatchJobColumns = []string{
 	"attempt_count", "next_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "actor_id", "role_key", "created_at", "updated_at",
 }
 
+func recordBatchJobSelect(store *database.RuntimeStore, workspaceID string) *ormbuilder.SelectBuilder {
+	return ormbuilder.NewWorkspaceSelectBuilder(store.SQLRenderer, "record_batch_jobs", strings.TrimSpace(workspaceID)).Columns(recordBatchJobColumns...)
+}
+
+func recordBatchDuePredicate(now string) ormbuilder.Predicate {
+	return ormbuilder.Or(
+		ormbuilder.And(ormbuilder.Equal("status", "queued"), ormbuilder.Or(ormbuilder.Equal("next_attempt_at", ""), ormbuilder.LessThanOrEqual("next_attempt_at", now))),
+		ormbuilder.And(ormbuilder.Equal("status", "running"), ormbuilder.LessThanOrEqual("lease_expires_at", now)),
+	)
+}
+
+func recordBatchLeasePredicate(job recordmodel.RecordBatchJob) ormbuilder.Predicate {
+	return ormbuilder.And(ormbuilder.Equal("id", job.ID), ormbuilder.Equal("status", "running"), ormbuilder.Equal("lease_owner", job.LeaseOwner), ormbuilder.Equal("fencing_token", job.FencingToken))
+}
+
 func (r RecordStore) EnqueueRecordBatchJob(ctx context.Context, job recordmodel.RecordBatchJob) (recordmodel.RecordBatchJob, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return recordmodel.RecordBatchJob{}, false, err
@@ -48,9 +63,14 @@ func (r RecordStore) EnqueueRecordBatchJob(ctx context.Context, job recordmodel.
 		return recordmodel.RecordBatchJob{}, false, err
 	}
 	ctx = recordBatchWorkspaceContext(ctx, job.WorkspaceID, job.ActorID)
-	columns := stringsJoinIdentifiers(r.store, recordBatchJobColumns...)
-	query := "INSERT INTO " + r.store.TableIdentifier("record_batch_jobs") + " (" + columns + ") VALUES (" + stringsJoinPlaceholders(r.store, len(recordBatchJobColumns)) + ")"
-	if _, err := r.database().ExecContext(ctx, query, recordBatchJobValues(job)...); err != nil {
+	columns := append(append([]string{}, recordBatchJobColumns[:1]...), recordBatchJobColumns[2:]...)
+	values := recordBatchJobValues(job)
+	values = append(append([]any{}, values[:1]...), values[2:]...)
+	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "record_batch_jobs", job.WorkspaceID).Columns(columns...).Values(values...).Build()
+	if buildErr != nil {
+		return recordmodel.RecordBatchJob{}, false, buildErr
+	}
+	if _, err := r.database().ExecContext(ctx, query, args...); err != nil {
 		existing, found, findErr := r.findRecordBatchJobByScope(ctx, job.WorkspaceID, job.Kind, job.ObjectKey, job.IdempotencyKey)
 		if findErr != nil {
 			return recordmodel.RecordBatchJob{}, false, fmt.Errorf("resolve record batch enqueue conflict: %w", findErr)
@@ -68,8 +88,11 @@ func (r RecordStore) EnqueueRecordBatchJob(ctx context.Context, job recordmodel.
 
 func (r RecordStore) GetRecordBatchJob(ctx context.Context, workspaceID, jobID string) (recordmodel.RecordBatchJob, bool, error) {
 	ctx = recordBatchWorkspaceContext(ctx, workspaceID, "")
-	query := "SELECT " + stringsJoinIdentifiers(r.store, recordBatchJobColumns...) + " FROM " + r.store.TableIdentifier("record_batch_jobs") + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(2) + " LIMIT 1"
-	job, err := scanRecordBatchJob(r.queryExecutor(ctx).QueryRowContext(ctx, query, strings.TrimSpace(workspaceID), strings.TrimSpace(jobID)))
+	query, args, buildErr := recordBatchJobSelect(r.store, workspaceID).Where(ormbuilder.Equal("id", strings.TrimSpace(jobID))).Limit(1).Build()
+	if buildErr != nil {
+		return recordmodel.RecordBatchJob{}, false, buildErr
+	}
+	job, err := scanRecordBatchJob(r.queryExecutor(ctx).QueryRowContext(ctx, query, args...))
 	if err != nil {
 		if errorsIsNoRows(err) {
 			return recordmodel.RecordBatchJob{}, false, nil
@@ -85,8 +108,11 @@ func (r RecordStore) FindRecordBatchJobByIdempotency(ctx context.Context, worksp
 
 func (r RecordStore) FindLatestRecordBatchJobByFingerprint(ctx context.Context, workspaceID, kind, objectKey, fingerprint string) (recordmodel.RecordBatchJob, bool, error) {
 	ctx = recordBatchWorkspaceContext(ctx, workspaceID, "")
-	query := "SELECT " + stringsJoinIdentifiers(r.store, recordBatchJobColumns...) + " FROM " + r.store.TableIdentifier("record_batch_jobs") + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1) + " AND " + r.store.Identifier("kind") + " = " + r.store.Placeholder(2) + " AND " + r.store.Identifier("object_key") + " = " + r.store.Placeholder(3) + " AND " + r.store.Identifier("request_fingerprint") + " = " + r.store.Placeholder(4) + " ORDER BY " + r.store.Identifier("created_at") + " DESC LIMIT 1"
-	job, err := scanRecordBatchJob(r.queryExecutor(ctx).QueryRowContext(ctx, query, strings.TrimSpace(workspaceID), strings.TrimSpace(kind), strings.TrimSpace(objectKey), strings.TrimSpace(fingerprint)))
+	query, args, buildErr := recordBatchJobSelect(r.store, workspaceID).Where(ormbuilder.And(ormbuilder.Equal("kind", strings.TrimSpace(kind)), ormbuilder.Equal("object_key", strings.TrimSpace(objectKey)), ormbuilder.Equal("request_fingerprint", strings.TrimSpace(fingerprint)))).OrderBy(ormbuilder.Descending("created_at"), ormbuilder.Descending("id")).Limit(1).Build()
+	if buildErr != nil {
+		return recordmodel.RecordBatchJob{}, false, buildErr
+	}
+	job, err := scanRecordBatchJob(r.queryExecutor(ctx).QueryRowContext(ctx, query, args...))
 	if errorsIsNoRows(err) {
 		return recordmodel.RecordBatchJob{}, false, nil
 	}
@@ -116,8 +142,11 @@ func (r RecordStore) ClaimRecordBatchJobs(ctx context.Context, limit int, owner 
 	}
 	for _, workspaceID := range workspaces {
 		workspaceCtx := recordBatchWorkspaceContext(ctx, workspaceID, owner)
-		query := "SELECT " + stringsJoinIdentifiers(r.store, recordBatchJobColumns...) + " FROM " + r.store.TableIdentifier("record_batch_jobs") + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1) + " AND ((" + r.store.Identifier("status") + " = 'queued' AND (" + r.store.Identifier("next_attempt_at") + " = '' OR " + r.store.Identifier("next_attempt_at") + " <= " + r.store.Placeholder(2) + ")) OR (" + r.store.Identifier("status") + " = 'running' AND " + r.store.Identifier("lease_expires_at") + " <= " + r.store.Placeholder(3) + ")) ORDER BY " + r.store.Identifier("created_at") + " ASC LIMIT " + r.store.Placeholder(4)
-		rows, queryErr := r.database().QueryContext(workspaceCtx, query, workspaceID, nowText, nowText, limit*4)
+		query, args, buildErr := recordBatchJobSelect(r.store, workspaceID).Where(recordBatchDuePredicate(nowText)).OrderBy(ormbuilder.Ascending("created_at"), ormbuilder.Ascending("id")).Limit(limit * 4).Build()
+		if buildErr != nil {
+			return nil, buildErr
+		}
+		rows, queryErr := r.database().QueryContext(workspaceCtx, query, args...)
 		if queryErr != nil {
 			return nil, queryErr
 		}
@@ -139,8 +168,11 @@ func (r RecordStore) ClaimRecordBatchJobs(ctx context.Context, limit int, owner 
 	claimed := make([]recordmodel.RecordBatchJob, 0, limit)
 	for _, candidate := range candidates {
 		candidateCtx := recordBatchWorkspaceContext(ctx, candidate.WorkspaceID, owner)
-		update := "UPDATE " + r.store.TableIdentifier("record_batch_jobs") + " SET " + r.store.Identifier("status") + " = 'running', " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("lease_expires_at") + " = " + r.store.Placeholder(2) + ", " + r.store.Identifier("fencing_token") + " = " + r.store.Identifier("fencing_token") + " + 1, " + r.store.Identifier("attempt_count") + " = " + r.store.Identifier("attempt_count") + " + 1, " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(3) + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(4) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(5) + " AND ((" + r.store.Identifier("status") + " = 'queued' AND (" + r.store.Identifier("next_attempt_at") + " = '' OR " + r.store.Identifier("next_attempt_at") + " <= " + r.store.Placeholder(6) + ")) OR (" + r.store.Identifier("status") + " = 'running' AND " + r.store.Identifier("lease_expires_at") + " <= " + r.store.Placeholder(7) + "))"
-		result, updateErr := r.database().ExecContext(candidateCtx, update, owner, expires, nowText, candidate.WorkspaceID, candidate.ID, nowText, nowText)
+		update, updateArgs, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "record_batch_jobs", candidate.WorkspaceID).Set("status", "running").Set("lease_owner", owner).Set("lease_expires_at", expires).SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).SetExpression("attempt_count", ormbuilder.Add(ormbuilder.Column("attempt_count"), ormbuilder.Value(1))).Set("updated_at", nowText).Where(ormbuilder.And(ormbuilder.Equal("id", candidate.ID), recordBatchDuePredicate(nowText))).Build()
+		if buildErr != nil {
+			return claimed, buildErr
+		}
+		result, updateErr := r.database().ExecContext(candidateCtx, update, updateArgs...)
 		if updateErr != nil {
 			return claimed, updateErr
 		}
@@ -184,14 +216,20 @@ func (r RecordStore) CommitRecordBatchJobPage(ctx context.Context, job recordmod
 	}
 	defer tx.Rollback()
 	txCtx := database.WithActionExecutionTransaction(ctx, tx)
-	guard := "SELECT " + r.store.Identifier("id") + " FROM " + r.store.TableIdentifier("record_batch_jobs") + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(2) + " AND " + r.store.Identifier("status") + " = 'running' AND " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(3) + " AND " + r.store.Identifier("fencing_token") + " = " + r.store.Placeholder(4) + " AND " + r.store.Identifier("checkpoint_cursor") + " = " + r.store.Placeholder(5)
+	guard, guardArgs, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "record_batch_jobs", job.WorkspaceID).Columns("id").Where(ormbuilder.And(recordBatchLeasePredicate(job), ormbuilder.Equal("checkpoint_cursor", expectedCursor))).Build()
+	if buildErr != nil {
+		return buildErr
+	}
 	var guarded string
-	if err := tx.QueryRowContext(ctx, guard, job.WorkspaceID, job.ID, job.LeaseOwner, job.FencingToken, expectedCursor).Scan(&guarded); err != nil {
+	if err := tx.QueryRowContext(ctx, guard, guardArgs...).Scan(&guarded); err != nil {
 		return fmt.Errorf("record batch page lease or cursor lost: %w", err)
 	}
 	sequence := job.ResultChunks
-	insert := "INSERT INTO " + r.store.TableIdentifier("record_batch_job_chunks") + " (" + stringsJoinIdentifiers(r.store, "workspace_id", "job_id", "sequence_no", "content", "created_at") + ") VALUES (" + stringsJoinPlaceholders(r.store, 5) + ")"
-	if _, err := tx.ExecContext(ctx, insert, job.WorkspaceID, job.ID, sequence, chunk.Content, now.UTC().Format(time.RFC3339Nano)); err != nil {
+	insert, insertArgs, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "record_batch_job_chunks", job.WorkspaceID).Columns("job_id", "sequence_no", "content", "created_at").Values(job.ID, sequence, chunk.Content, now.UTC().Format(time.RFC3339Nano)).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	if _, err := tx.ExecContext(ctx, insert, insertArgs...); err != nil {
 		return err
 	}
 	job.Checkpoint, job.Total, job.CheckpointCursor, job.ResultChunks = processed, total, nextCursor, sequence+1
@@ -207,8 +245,11 @@ func (r RecordStore) HeartbeatRecordBatchJob(ctx context.Context, job recordmode
 		leaseTTL = time.Minute
 	}
 	now = now.UTC()
-	query := "UPDATE " + r.store.TableIdentifier("record_batch_jobs") + " SET " + r.store.Identifier("lease_expires_at") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(2) + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(3) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(4) + " AND " + r.store.Identifier("status") + " = 'running' AND " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(5) + " AND " + r.store.Identifier("fencing_token") + " = " + r.store.Placeholder(6)
-	result, err := r.database().ExecContext(ctx, query, now.Add(leaseTTL).Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), job.WorkspaceID, job.ID, job.LeaseOwner, job.FencingToken)
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "record_batch_jobs", job.WorkspaceID).Set("lease_expires_at", now.Add(leaseTTL).Format(time.RFC3339Nano)).Set("updated_at", now.Format(time.RFC3339Nano)).Where(recordBatchLeasePredicate(job)).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	result, err := r.database().ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -225,8 +266,11 @@ func (r RecordStore) HeartbeatRecordBatchJob(ctx context.Context, job recordmode
 func (r RecordStore) RetryRecordBatchJob(ctx context.Context, job recordmodel.RecordBatchJob, next, now time.Time) error {
 	ctx = recordBatchWorkspaceContext(ctx, job.WorkspaceID, job.ActorID)
 	nowText := now.UTC().Format(time.RFC3339Nano)
-	query := "UPDATE " + r.store.TableIdentifier("record_batch_jobs") + " SET " + r.store.Identifier("status") + " = 'queued', " + r.store.Identifier("next_attempt_at") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("error_code") + " = " + r.store.Placeholder(2) + ", " + r.store.Identifier("lease_owner") + " = '', " + r.store.Identifier("lease_expires_at") + " = '', " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(3) + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(4) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(5) + " AND " + r.store.Identifier("status") + " = 'running' AND " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(6) + " AND " + r.store.Identifier("fencing_token") + " = " + r.store.Placeholder(7)
-	result, err := r.database().ExecContext(ctx, query, next.UTC().Format(time.RFC3339Nano), job.ErrorCode, nowText, job.WorkspaceID, job.ID, job.LeaseOwner, job.FencingToken)
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "record_batch_jobs", job.WorkspaceID).Set("status", "queued").Set("next_attempt_at", next.UTC().Format(time.RFC3339Nano)).Set("error_code", job.ErrorCode).Set("lease_owner", "").Set("lease_expires_at", "").Set("updated_at", nowText).Where(recordBatchLeasePredicate(job)).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	result, err := r.database().ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -259,8 +303,11 @@ func (r RecordStore) RequeueRecordBatchJob(ctx context.Context, workspaceID, id 
 	}
 	ctx = recordBatchWorkspaceContext(ctx, workspaceID, "")
 	nowText := now.UTC().Format(time.RFC3339Nano)
-	query := "UPDATE " + r.store.TableIdentifier("record_batch_jobs") + " SET " + r.store.Identifier("status") + " = 'queued', " + r.store.Identifier("next_attempt_at") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("lease_owner") + " = '', " + r.store.Identifier("lease_expires_at") + " = '', " + r.store.Identifier("fencing_token") + " = " + r.store.Identifier("fencing_token") + " + 1, " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(2) + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(3) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(4) + " AND " + r.store.Identifier("status") + " IN ('failed','quarantined')"
-	result, err := r.database().ExecContext(ctx, query, nowText, nowText, workspaceID, id)
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "record_batch_jobs", workspaceID).Set("status", "queued").Set("next_attempt_at", nowText).Set("lease_owner", "").Set("lease_expires_at", "").SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).Set("updated_at", nowText).Where(ormbuilder.And(ormbuilder.Equal("id", id), ormbuilder.In("status", "failed", "quarantined"))).Build()
+	if buildErr != nil {
+		return recordmodel.RecordBatchJob{}, false, buildErr
+	}
+	result, err := r.database().ExecContext(ctx, query, args...)
 	if err != nil {
 		return recordmodel.RecordBatchJob{}, false, err
 	}
@@ -279,8 +326,11 @@ func (r RecordStore) updateClaimedRecordBatchJob(ctx context.Context, job record
 	if status != "running" {
 		leaseOwner, leaseExpires = "", ""
 	}
-	query := "UPDATE " + r.store.TableIdentifier("record_batch_jobs") + " SET " + r.store.Identifier("status") + " = " + r.store.Placeholder(1) + ", " + r.store.Identifier("checkpoint_value") + " = " + r.store.Placeholder(2) + ", " + r.store.Identifier("total_value") + " = " + r.store.Placeholder(3) + ", " + r.store.Identifier("result_filename") + " = " + r.store.Placeholder(4) + ", " + r.store.Identifier("result_content_type") + " = " + r.store.Placeholder(5) + ", " + r.store.Identifier("result_chunks") + " = " + r.store.Placeholder(6) + ", " + r.store.Identifier("error_code") + " = " + r.store.Placeholder(7) + ", " + r.store.Identifier("checkpoint_cursor") + " = " + r.store.Placeholder(8) + ", " + r.store.Identifier("audit_id") + " = " + r.store.Placeholder(9) + ", " + r.store.Identifier("result_artifact_id") + " = " + r.store.Placeholder(10) + ", " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(11) + ", " + r.store.Identifier("lease_expires_at") + " = " + r.store.Placeholder(12) + ", " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(13) + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(14) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(15) + " AND " + r.store.Identifier("status") + " = 'running' AND " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(16) + " AND " + r.store.Identifier("fencing_token") + " = " + r.store.Placeholder(17)
-	result, err := r.queryExecutor(ctx).ExecContext(ctx, query, status, job.Checkpoint, job.Total, job.ResultFilename, job.ResultType, job.ResultChunks, job.ErrorCode, job.CheckpointCursor, job.AuditID, job.ResultArtifactID, leaseOwner, leaseExpires, nowText, job.WorkspaceID, job.ID, job.LeaseOwner, job.FencingToken)
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "record_batch_jobs", job.WorkspaceID).Set("status", status).Set("checkpoint_value", job.Checkpoint).Set("total_value", job.Total).Set("result_filename", job.ResultFilename).Set("result_content_type", job.ResultType).Set("result_chunks", job.ResultChunks).Set("error_code", job.ErrorCode).Set("checkpoint_cursor", job.CheckpointCursor).Set("audit_id", job.AuditID).Set("result_artifact_id", job.ResultArtifactID).Set("lease_owner", leaseOwner).Set("lease_expires_at", leaseExpires).Set("updated_at", nowText).Where(recordBatchLeasePredicate(job)).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	result, err := r.queryExecutor(ctx).ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -297,8 +347,11 @@ func (r RecordStore) updateClaimedRecordBatchJob(ctx context.Context, job record
 func (r RecordStore) CancelRecordBatchJob(ctx context.Context, workspaceID, jobID string) (recordmodel.RecordBatchJob, bool, error) {
 	ctx = recordBatchWorkspaceContext(ctx, workspaceID, "")
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	query := "UPDATE " + r.store.TableIdentifier("record_batch_jobs") + " SET " + r.store.Identifier("status") + " = 'cancelled', " + r.store.Identifier("lease_owner") + " = '', " + r.store.Identifier("lease_expires_at") + " = '', " + r.store.Identifier("fencing_token") + " = " + r.store.Identifier("fencing_token") + " + 1, " + r.store.Identifier("updated_at") + " = " + r.store.Placeholder(1) + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(2) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(3) + " AND " + r.store.Identifier("status") + " IN ('queued','running','failed','quarantined')"
-	if _, err := r.queryExecutor(ctx).ExecContext(ctx, query, now, strings.TrimSpace(workspaceID), strings.TrimSpace(jobID)); err != nil {
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "record_batch_jobs", workspaceID).Set("status", "cancelled").Set("lease_owner", "").Set("lease_expires_at", "").SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).Set("updated_at", now).Where(ormbuilder.And(ormbuilder.Equal("id", strings.TrimSpace(jobID)), ormbuilder.In("status", "queued", "running", "failed", "quarantined"))).Build()
+	if buildErr != nil {
+		return recordmodel.RecordBatchJob{}, false, buildErr
+	}
+	if _, err := r.queryExecutor(ctx).ExecContext(ctx, query, args...); err != nil {
 		return recordmodel.RecordBatchJob{}, false, err
 	}
 	return r.GetRecordBatchJob(ctx, workspaceID, jobID)
@@ -311,17 +364,28 @@ func (r RecordStore) ReplaceRecordBatchJobChunks(ctx context.Context, job record
 		return err
 	}
 	defer tx.Rollback()
-	guard := "SELECT " + r.store.Identifier("id") + " FROM " + r.store.TableIdentifier("record_batch_jobs") + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(2) + " AND " + r.store.Identifier("status") + " = 'running' AND " + r.store.Identifier("lease_owner") + " = " + r.store.Placeholder(3) + " AND " + r.store.Identifier("fencing_token") + " = " + r.store.Placeholder(4)
+	guard, guardArgs, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "record_batch_jobs", job.WorkspaceID).Columns("id").Where(recordBatchLeasePredicate(job)).Build()
+	if buildErr != nil {
+		return buildErr
+	}
 	var guarded string
-	if err := tx.QueryRowContext(ctx, guard, job.WorkspaceID, job.ID, job.LeaseOwner, job.FencingToken).Scan(&guarded); err != nil {
+	if err := tx.QueryRowContext(ctx, guard, guardArgs...).Scan(&guarded); err != nil {
 		return fmt.Errorf("record batch job chunk lease lost: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM "+r.store.TableIdentifier("record_batch_job_chunks")+" WHERE "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(1)+" AND "+r.store.Identifier("job_id")+" = "+r.store.Placeholder(2), job.WorkspaceID, job.ID); err != nil {
+	deleteQuery, deleteArgs, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, "record_batch_job_chunks", job.WorkspaceID).Where(ormbuilder.Equal("job_id", job.ID)).Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	if _, err := tx.ExecContext(ctx, deleteQuery, deleteArgs...); err != nil {
 		return err
 	}
 	nowText := now.UTC().Format(time.RFC3339Nano)
 	for sequence, chunk := range chunks {
-		if _, err := tx.ExecContext(ctx, "INSERT INTO "+r.store.TableIdentifier("record_batch_job_chunks")+" ("+stringsJoinIdentifiers(r.store, "workspace_id", "job_id", "sequence_no", "content", "created_at")+") VALUES ("+stringsJoinPlaceholders(r.store, 5)+")", job.WorkspaceID, job.ID, sequence, chunk.Content, nowText); err != nil {
+		insert, insertArgs, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "record_batch_job_chunks", job.WorkspaceID).Columns("job_id", "sequence_no", "content", "created_at").Values(job.ID, sequence, chunk.Content, nowText).Build()
+		if buildErr != nil {
+			return buildErr
+		}
+		if _, err := tx.ExecContext(ctx, insert, insertArgs...); err != nil {
 			return err
 		}
 	}
@@ -330,8 +394,11 @@ func (r RecordStore) ReplaceRecordBatchJobChunks(ctx context.Context, job record
 
 func (r RecordStore) ListRecordBatchJobChunks(ctx context.Context, workspaceID, jobID string) ([]recordmodel.RecordBatchJobChunk, error) {
 	ctx = recordBatchWorkspaceContext(ctx, workspaceID, "")
-	query := "SELECT " + stringsJoinIdentifiers(r.store, "workspace_id", "job_id", "sequence_no", "content") + " FROM " + r.store.TableIdentifier("record_batch_job_chunks") + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1) + " AND " + r.store.Identifier("job_id") + " = " + r.store.Placeholder(2) + " ORDER BY " + r.store.Identifier("sequence_no") + " ASC"
-	rows, err := r.database().QueryContext(ctx, query, strings.TrimSpace(workspaceID), strings.TrimSpace(jobID))
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "record_batch_job_chunks", workspaceID).Columns("workspace_id", "job_id", "sequence_no", "content").Where(ormbuilder.Equal("job_id", strings.TrimSpace(jobID))).OrderBy(ormbuilder.Ascending("sequence_no")).Build()
+	if buildErr != nil {
+		return nil, buildErr
+	}
+	rows, err := r.database().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -349,8 +416,11 @@ func (r RecordStore) ListRecordBatchJobChunks(ctx context.Context, workspaceID, 
 
 func (r RecordStore) findRecordBatchJobByScope(ctx context.Context, workspaceID, kind, objectKey, key string) (recordmodel.RecordBatchJob, bool, error) {
 	ctx = recordBatchWorkspaceContext(ctx, workspaceID, "")
-	query := "SELECT " + stringsJoinIdentifiers(r.store, recordBatchJobColumns...) + " FROM " + r.store.TableIdentifier("record_batch_jobs") + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1) + " AND " + r.store.Identifier("kind") + " = " + r.store.Placeholder(2) + " AND " + r.store.Identifier("object_key") + " = " + r.store.Placeholder(3) + " AND " + r.store.Identifier("idempotency_key") + " = " + r.store.Placeholder(4) + " LIMIT 1"
-	job, err := scanRecordBatchJob(r.database().QueryRowContext(ctx, query, workspaceID, kind, objectKey, key))
+	query, args, buildErr := recordBatchJobSelect(r.store, workspaceID).Where(ormbuilder.And(ormbuilder.Equal("kind", kind), ormbuilder.Equal("object_key", objectKey), ormbuilder.Equal("idempotency_key", key))).Limit(1).Build()
+	if buildErr != nil {
+		return recordmodel.RecordBatchJob{}, false, buildErr
+	}
+	job, err := scanRecordBatchJob(r.database().QueryRowContext(ctx, query, args...))
 	if err != nil {
 		if errorsIsNoRows(err) {
 			return recordmodel.RecordBatchJob{}, false, nil
@@ -459,8 +529,11 @@ func (r RecordStore) registerRecordBatchWorkerQueueScope(ctx context.Context, wo
 }
 
 func (r RecordStore) recordBatchWorkerQueueScopes(ctx context.Context) ([]string, error) {
-	query := "SELECT " + r.store.Identifier("scope_key") + " FROM " + r.store.TableIdentifier("runtime_worker_queue_scopes") + " WHERE " + r.store.Identifier("queue_kind") + " = " + r.store.Placeholder(1) + " ORDER BY " + r.store.Identifier("scope_key") + " ASC"
-	rows, err := r.database().QueryContext(ctx, query, "record_batch")
+	query, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "runtime_worker_queue_scopes").Columns("scope_key").Where(ormbuilder.Equal("queue_kind", "record_batch")).OrderBy(ormbuilder.Ascending("scope_key")).Build()
+	if buildErr != nil {
+		return nil, buildErr
+	}
+	rows, err := r.database().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
