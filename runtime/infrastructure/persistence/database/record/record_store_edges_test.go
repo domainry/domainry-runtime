@@ -25,55 +25,55 @@ func TestCurrencyDatabaseCodecIsExactAndSQLiteSortable(t *testing.T) {
 	values := []string{"-2.00", "0.00", "2.00", "10.00"}
 	encoded := make([]string, 0, len(values))
 	for _, value := range values {
-		stored, ok := dbFieldValue("sqlite", field, value).(string)
+		stored, ok := dbFieldValue(testEngineProfile("sqlite"), field, value).(string)
 		if !ok {
 			t.Fatalf("stored %s has type %T", value, stored)
 		}
 		encoded = append(encoded, stored)
-		if decoded := normalizeDBValue("sqlite", field, stored); decoded != value {
+		if decoded := normalizeDBValue(testEngineProfile("sqlite"), field, stored); decoded != value {
 			t.Fatalf("round trip %s -> %s -> %v", value, stored, decoded)
 		}
 	}
 	if !sort.StringsAreSorted(encoded) {
 		t.Fatalf("SQLite encoding is not numerically sortable: %v", encoded)
 	}
-	if stored := dbFieldValue("postgres", field, "1.2"); stored != "1.20" {
+	if stored := dbFieldValue(testEngineProfile("postgres"), field, "1.2"); stored != "1.20" {
 		t.Fatalf("postgres decimal=%v", stored)
 	}
 	invalidConfig := definitionmodel.FieldSchema{Type: "currency", Config: map[string]any{"scale": -1}}
-	if got := dbFieldValue("sqlite", invalidConfig, "1"); got != "1" {
+	if got := dbFieldValue(testEngineProfile("sqlite"), invalidConfig, "1"); got != "1" {
 		t.Fatalf("invalid config value=%v", got)
 	}
-	if got := dbFieldValue("sqlite", field, 1.5); got != 1.5 {
+	if got := dbFieldValue(testEngineProfile("sqlite"), field, 1.5); got != 1.5 {
 		t.Fatalf("binary float should remain rejected, got=%v", got)
 	}
-	if got := normalizeDBValue("sqlite", invalidConfig, "1"); got != "1" {
+	if got := normalizeDBValue(testEngineProfile("sqlite"), invalidConfig, "1"); got != "1" {
 		t.Fatalf("invalid read config=%v", got)
 	}
 	malformed := strings.Repeat("x", 9)
-	if got := normalizeDBValue("sqlite", field, malformed); got != malformed {
+	if got := normalizeDBValue(testEngineProfile("sqlite"), field, malformed); got != malformed {
 		t.Fatalf("malformed storage=%v", got)
 	}
-	if got := normalizeDBValue("postgres", field, "1.2"); got != "1.20" {
+	if got := normalizeDBValue(testEngineProfile("postgres"), field, "1.2"); got != "1.20" {
 		t.Fatalf("postgres read=%v", got)
 	}
-	if got := normalizeDBValue("sqlite", field, "1.2"); got != "1.20" {
+	if got := normalizeDBValue(testEngineProfile("sqlite"), field, "1.2"); got != "1.20" {
 		t.Fatalf("legacy SQLite read=%v", got)
 	}
 	object := definitionmodel.ObjectSchema{Fields: []definitionmodel.FieldSchema{field}}
-	if got := recordConditionDBValue("sqlite", object, "amount", "1.2"); got != dbFieldValue("sqlite", field, "1.2") {
+	if got := recordConditionDBValue(testEngineProfile("sqlite"), object, "amount", "1.2"); got != dbFieldValue(testEngineProfile("sqlite"), field, "1.2") {
 		t.Fatalf("condition value=%v", got)
 	}
-	if got := recordConditionDBValue("sqlite", object, "status", 1); got != float64(1) {
+	if got := recordConditionDBValue(testEngineProfile("sqlite"), object, "status", 1); got != float64(1) {
 		t.Fatalf("fallback condition=%v", got)
 	}
-	if got := recordQueryDBValues("postgres", object, recordmodel.RecordListQuery{Filters: map[string]any{"amount": "1.2"}}); got.Filters["amount"] != "1.2" {
+	if got := recordQueryDBValues(testEngineProfile("postgres"), object, recordmodel.RecordListQuery{Filters: map[string]any{"amount": "1.2"}}); got.Filters["amount"] != "1.2" {
 		t.Fatalf("postgres query=%v", got.Filters)
 	}
 	query := recordmodel.RecordListQuery{Filters: map[string]any{
 		"amount__gte": "1.2", "amount__in": []any{"1.2", "2.3"}, "amount__in_strings": []string{"1.2"}, "status": "open",
 	}}
-	got := recordQueryDBValues("sqlite", object, query)
+	got := recordQueryDBValues(testEngineProfile("sqlite"), object, query)
 	if got.Filters["amount__gte"] == "1.2" || got.Filters["status"] != "open" {
 		t.Fatalf("sqlite query=%v", got.Filters)
 	}
@@ -200,15 +200,15 @@ func TestRecordStoreSQLFailureAndProjectionEdges(t *testing.T) {
 	}
 	boolField := definitionmodel.FieldSchema{Type: "boolean"}
 	for _, test := range []struct{ input, want any }{{true, true}, {int64(1), true}, {int(0), false}, {float64(1), true}, {" YES ", true}, {[]byte("on"), true}, {time.Time{}, time.Time{}}} {
-		if got := normalizeDBValue("sqlite", boolField, test.input); got != test.want {
+		if got := normalizeDBValue(testEngineProfile("sqlite"), boolField, test.input); got != test.want {
 			t.Fatalf("boolean normalize(%T)=%v want=%v", test.input, got, test.want)
 		}
 	}
 	numberField := definitionmodel.FieldSchema{Type: "number"}
 	for _, input := range []any{int64(1), int(2), float32(3), "4", "invalid", float64(5)} {
-		_ = normalizeDBValue("sqlite", numberField, input)
+		_ = normalizeDBValue(testEngineProfile("sqlite"), numberField, input)
 	}
-	if got := normalizeDBValue("sqlite", definitionmodel.FieldSchema{Type: "text"}, "text"); got != "text" {
+	if got := normalizeDBValue(testEngineProfile("sqlite"), definitionmodel.FieldSchema{Type: "text"}, "text"); got != "text" {
 		t.Fatalf("text=%v", got)
 	}
 	timestamp := time.Date(2026, 8, 29, 8, 30, 0, 123456000, time.FixedZone("UTC+8", 8*60*60))
@@ -223,7 +223,7 @@ func TestRecordStoreSQLFailureAndProjectionEdges(t *testing.T) {
 		"scan":     fakeRecordRows{columns: []string{"id"}, next: true, scanErr: errRecordSQL},
 		"terminal": fakeRecordRows{columns: []string{"id"}, terminalErr: errRecordSQL},
 	} {
-		if _, err := recordsFromRows("sqlite", object, rows); !errors.Is(err, errRecordSQL) {
+		if _, err := recordsFromRows(testEngineProfile("sqlite"), object, rows); !errors.Is(err, errRecordSQL) {
 			t.Fatalf("%s row error=%v", name, err)
 		}
 	}

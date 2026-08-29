@@ -91,7 +91,7 @@ func (s *ReportDatasetStore) ReadReportDatasetRows(ctx context.Context, request 
 			}
 			query.ScopeExpression = &resolved
 		}
-		query = recordpersistence.RecordQueryDatabaseValues(s.store.Driver(), object, query)
+		query = recordpersistence.RecordQueryDatabaseValues(s.store.RuntimeEngine, object, query)
 		whereSQL, whereArgs, whereErr := querypersistence.BuildTenantWhere(reportQueryDialect{store: s.store, offset: len(args)}, request.WorkspaceID, query)
 		if whereErr != nil {
 			return nil, fmt.Errorf("build report source %s scope: %w", alias, whereErr)
@@ -162,7 +162,7 @@ func (s *ReportDatasetStore) ReadReportDatasetRows(ctx context.Context, request 
 				if record.Data == nil {
 					record.Data = map[string]any{}
 				}
-				record.Data[column.field.Key] = recordpersistence.NormalizeRecordDatabaseValue(s.store.Driver(), column.field, raw[index])
+				record.Data[column.field.Key] = recordpersistence.NormalizeRecordDatabaseValue(s.store.RuntimeEngine, column.field, raw[index])
 			}
 			records[column.alias] = record
 		}
@@ -219,7 +219,7 @@ func (s *ReportDatasetStore) ReadReportSnapshotSourceVersion(ctx context.Context
 			}
 			query.ScopeExpression = &resolved
 		}
-		query = recordpersistence.RecordQueryDatabaseValues(s.store.Driver(), object, query)
+		query = recordpersistence.RecordQueryDatabaseValues(s.store.RuntimeEngine, object, query)
 		whereSQL, args, whereErr := querypersistence.BuildTenantWhere(reportQueryDialect{store: s.store}, request.WorkspaceID, query)
 		if whereErr != nil {
 			return reportmodel.ReportSnapshotSourceVersion{}, whereErr
@@ -304,7 +304,7 @@ func reportStoreGlobalFilter(store *database.RuntimeStore, dataset reportmodel.R
 		field := reportStoreField(objects[strings.TrimSpace(filter.Field.SourceAlias)], filter.Field.FieldKey)
 		reference := reportStoreReference(store, filter.Field.SourceAlias, filter.Field.FieldKey)
 		placeholder := func(value any) string {
-			args = append(args, recordpersistence.RecordDatabaseFieldValue(store.Driver(), field, value))
+			args = append(args, recordpersistence.RecordDatabaseFieldValue(store.RuntimeEngine, field, value))
 			return store.Placeholder(offset + len(args))
 		}
 		switch operator {

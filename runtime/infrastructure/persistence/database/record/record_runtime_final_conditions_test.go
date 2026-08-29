@@ -26,7 +26,7 @@ func TestRecordActionTransactionContextAndLockSQLMatrix(t *testing.T) {
 		{"postgres", recordmodel.RecordQueryLockForUpdateSkipLocked, " FOR UPDATE SKIP LOCKED"},
 		{"postgres", recordmodel.RecordQueryLockNone, ""},
 	} {
-		if got := recordQueryLockSQL(test.driver, test.intent); got != test.want {
+		if got := recordQueryLockSQL(testEngineProfile(test.driver), test.intent); got != test.want {
 			t.Fatalf("driver=%s intent=%s lock=%q", test.driver, test.intent, got)
 		}
 	}
@@ -114,11 +114,11 @@ func TestRecordListWithActionTransactionCoversLockAndRelationSnapshotBypass(t *t
 func TestRecordRowCodecIntegerAndPublicWrapperMatrix(t *testing.T) {
 	field := definitionmodel.FieldSchema{Key: "count", Type: "integer"}
 	for input, want := range map[any]any{int64(1): int64(1), int(2): int64(2), float64(3): int64(3), "4": int64(4), "bad": "bad", true: true} {
-		if got := NormalizeRecordDatabaseValue("sqlite", field, input); got != want {
+		if got := NormalizeRecordDatabaseValue(testEngineProfile("sqlite"), field, input); got != want {
 			t.Fatalf("integer %T=%v want=%v", input, got, want)
 		}
 	}
-	if got := RecordDatabaseFieldValue("sqlite", definitionmodel.FieldSchema{Type: "text"}, "value"); got != "value" {
+	if got := RecordDatabaseFieldValue(testEngineProfile("sqlite"), definitionmodel.FieldSchema{Type: "text"}, "value"); got != "value" {
 		t.Fatalf("database field value=%v", got)
 	}
 }

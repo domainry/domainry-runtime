@@ -28,7 +28,9 @@ func (engineProfile) WorkspaceTablesQuery(renderer ormdialect.Renderer, database
 	return persistencedriver.SchemaQuery{Statement: "SELECT DISTINCT table_name FROM information_schema.columns WHERE table_schema = " + renderer.Placeholder(1) + " AND column_name = 'workspace_id' ORDER BY table_name", Arguments: []any{databaseSchema}}
 }
 
-func (engineProfile) WorkspaceRLSSupported() bool { return true }
+func (engineProfile) WorkspaceRLSSupported() bool             { return true }
+func (engineProfile) OrderedDecimalTextStorage() bool         { return false }
+func (engineProfile) RecordReadIsolation() sql.IsolationLevel { return sql.LevelRepeatableRead }
 
 func (engineProfile) ApplyWorkspaceRLS(ctx context.Context, database *sql.DB, renderer ormdialect.Renderer, databaseSchema, runtimeRole, policyVersion string) error {
 	tables, err := postgresWorkspaceTables(ctx, database, renderer, databaseSchema)

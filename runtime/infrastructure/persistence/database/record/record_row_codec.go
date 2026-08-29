@@ -9,6 +9,7 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
+	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 )
 
 type recordRows interface {
@@ -18,7 +19,7 @@ type recordRows interface {
 	Err() error
 }
 
-func recordsFromRows(driver string, object definitionmodel.ObjectSchema, rows recordRows) ([]recordmodel.Record, error) {
+func recordsFromRows(profile persistencedriver.EngineProfile, object definitionmodel.ObjectSchema, rows recordRows) ([]recordmodel.Record, error) {
 	columns, err := rows.Columns()
 	if err != nil {
 		return nil, fmt.Errorf("inspect rows: %w", err)
@@ -39,7 +40,7 @@ func recordsFromRows(driver string, object definitionmodel.ObjectSchema, rows re
 		}
 		record := recordmodel.Record{Data: map[string]any{}}
 		for i, column := range columns {
-			value := normalizeDBValue(driver, fields[column], values[i])
+			value := normalizeDBValue(profile, fields[column], values[i])
 			switch column {
 			case "id":
 				record.ID = fmt.Sprint(value)
@@ -127,7 +128,7 @@ func dbValue(value any) any {
 	}
 }
 
-func dbFieldValue(driver string, field definitionmodel.FieldSchema, value any) any {
+func dbFieldValue(profile persistencedriver.EngineProfile, field definitionmodel.FieldSchema, value any) any {
 	if strings.TrimSpace(field.Type) != "currency" && strings.TrimSpace(field.Type) != "percent" {
 		return dbValue(value)
 	}
@@ -139,7 +140,7 @@ func dbFieldValue(driver string, field definitionmodel.FieldSchema, value any) a
 	if err != nil {
 		return value
 	}
-	if driver != "sqlite" {
+	if !profile.OrderedDecimalTextStorage() {
 		return normalized
 	}
 	encoded, err := recordmodel.RecordEncodeSQLiteDecimal(normalized, config)
@@ -149,7 +150,7 @@ func dbFieldValue(driver string, field definitionmodel.FieldSchema, value any) a
 	return encoded
 }
 
-func normalizeDBValue(driver string, field definitionmodel.FieldSchema, value any) any {
+func normalizeDBValue(profile persistencedriver.EngineProfile, field definitionmodel.FieldSchema, value any) any {
 	switch typed := value.(type) {
 	case []byte:
 		value = string(typed)
@@ -179,7 +180,7 @@ func normalizeDBValue(driver string, field definitionmodel.FieldSchema, value an
 			return value
 		}
 		text := strings.TrimSpace(fmt.Sprint(value))
-		if driver == "sqlite" {
+		if profile.OrderedDecimalTextStorage() {
 			if decoded, err := recordmodel.RecordDecodeSQLiteDecimal(text, config); err == nil {
 				return decoded
 			}
@@ -229,12 +230,12 @@ func normalizeDBValue(driver string, field definitionmodel.FieldSchema, value an
 
 // NormalizeRecordDatabaseValue is shared by persistence adapters that read
 // Runtime object columns without going through RecordStore row scanning.
-func NormalizeRecordDatabaseValue(driver string, field definitionmodel.FieldSchema, value any) any {
-	return normalizeDBValue(driver, field, value)
+func NormalizeRecordDatabaseValue(profile persistencedriver.EngineProfile, field definitionmodel.FieldSchema, value any) any {
+	return normalizeDBValue(profile, field, value)
 }
 
 // RecordDatabaseFieldValue encodes a normalized field value for the active
 // database representation, including SQLite exact-decimal text ordering.
-func RecordDatabaseFieldValue(driver string, field definitionmodel.FieldSchema, value any) any {
-	return dbFieldValue(driver, field, value)
+func RecordDatabaseFieldValue(profile persistencedriver.EngineProfile, field definitionmodel.FieldSchema, value any) any {
+	return dbFieldValue(profile, field, value)
 }

@@ -134,7 +134,7 @@ func (s *ReportDatasetStore) reportObjectSQLSources(ctx context.Context, tx *sql
 			}
 			query.ScopeExpression = &resolved
 		}
-		query = recordpersistence.RecordQueryDatabaseValues(s.store.Driver(), object, query)
+		query = recordpersistence.RecordQueryDatabaseValues(s.store.RuntimeEngine, object, query)
 		whereSQL, whereArgs, err := querypersistence.BuildTenantWhere(reportQueryDialect{store: s.store, offset: len(args)}, request.WorkspaceID, query)
 		if err != nil {
 			return nil, nil, fmt.Errorf("build report object SQL source %s scope: %w", source.Alias, err)

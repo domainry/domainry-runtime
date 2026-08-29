@@ -45,6 +45,8 @@ type EngineProfile interface {
 	WorkspaceRLSSupported() bool
 	ApplyWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) error
 	InspectWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) (WorkspaceRLSStatus, error)
+	OrderedDecimalTextStorage() bool
+	RecordReadIsolation() sql.IsolationLevel
 }
 
 type SchemaQuery struct {
@@ -136,6 +138,8 @@ func (portableEngineProfile) ApplyWorkspaceRLS(context.Context, *sql.DB, ormdial
 func (portableEngineProfile) InspectWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) (WorkspaceRLSStatus, error) {
 	return WorkspaceRLSStatus{}, nil
 }
+func (portableEngineProfile) OrderedDecimalTextStorage() bool         { return false }
+func (portableEngineProfile) RecordReadIsolation() sql.IsolationLevel { return sql.LevelSerializable }
 
 var portableProfileRegistry = map[ormdialect.Name]func() EngineProfile{
 	ormdialect.SQLite: func() EngineProfile { return portableEngineProfile{Profile: ormsqlite.NewProfile()} },

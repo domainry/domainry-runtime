@@ -18,6 +18,8 @@ func (engineProfile) ApplyWorkspaceRLS(context.Context, *sql.DB, ormdialect.Rend
 func (engineProfile) InspectWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) (persistencedriver.WorkspaceRLSStatus, error) {
 	return persistencedriver.WorkspaceRLSStatus{}, nil
 }
+func (engineProfile) OrderedDecimalTextStorage() bool         { return false }
+func (engineProfile) RecordReadIsolation() sql.IsolationLevel { return sql.LevelSerializable }
 
 type engineProfile struct{ ormdriver.Profile }
 

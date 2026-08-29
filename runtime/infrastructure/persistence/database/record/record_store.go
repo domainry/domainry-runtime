@@ -35,6 +35,7 @@ import (
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	querypersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/query"
+	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 
 	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
 	notificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notification"
@@ -135,12 +136,12 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 	if query.ScopeDiagnostic != nil {
 		return recordmodel.RecordPageResult{}, &apperror.AppError{Kind: apperror.KindForbidden, Code: query.ScopeDiagnostic.Code, Params: map[string]string{"object_key": query.ScopeDiagnostic.ObjectKey, "detail": query.ScopeDiagnostic.Detail}}
 	}
-	query = recordQueryDBValues(s.Driver(), object, query)
+	query = recordQueryDBValues(s.RuntimeEngine, object, query)
 	executor := r.queryExecutor(ctx)
 	var readTx *sql.Tx
 	if query.ScopeExpression != nil && querypersistence.ScopeExpressionHasRelation(*query.ScopeExpression) {
 		if actionTx == nil {
-			readTx, err = r.database().BeginTx(ctx, recordScopeReadTxOptions(s.Driver()))
+			readTx, err = r.database().BeginTx(ctx, recordScopeReadTxOptions(s.RuntimeEngine))
 			if err != nil {
 				return recordmodel.RecordPageResult{}, fmt.Errorf("begin record scope snapshot: %w", err)
 			}
@@ -198,12 +199,12 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 		fetchLimit++
 	}
 	listArgs := append(append(append([]any{}, args...), orderArgs...), fetchLimit, offset)
-	lockSQL := recordQueryLockSQL(s.Driver(), lockIntent)
+	lockSQL := recordQueryLockSQL(s.RuntimeEngine, lockIntent)
 	rows, err := executor.QueryContext(ctx, "SELECT "+recordListProjection(s, query.SelectFields)+" FROM "+s.TableIdentifier(object.Key)+whereSQL+orderSQL+" LIMIT "+s.Placeholder(len(args)+len(orderArgs)+1)+" OFFSET "+s.Placeholder(len(args)+len(orderArgs)+2)+lockSQL, listArgs...)
 	if err != nil {
 		return recordmodel.RecordPageResult{}, fmt.Errorf("list records: %w", err)
 	}
-	records, err := recordsFromRows(s.Driver(), object, rows)
+	records, err := recordsFromRows(s.RuntimeEngine, object, rows)
 	if err != nil {
 		_ = rows.Close()
 		return recordmodel.RecordPageResult{}, err
@@ -249,8 +250,8 @@ type recordQueryExecutor interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
 
-func recordQueryLockSQL(driver, intent string) string {
-	if driver != "mysql" && driver != "postgres" {
+func recordQueryLockSQL(profile persistencedriver.EngineProfile, intent string) string {
+	if !profile.Capabilities().RowLock {
 		return ""
 	}
 	switch intent {
@@ -263,11 +264,8 @@ func recordQueryLockSQL(driver, intent string) string {
 	}
 }
 
-func recordScopeReadTxOptions(driver string) *sql.TxOptions {
-	if driver == "postgres" {
-		return &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true}
-	}
-	return &sql.TxOptions{Isolation: sql.LevelSerializable, ReadOnly: true}
+func recordScopeReadTxOptions(profile persistencedriver.EngineProfile) *sql.TxOptions {
+	return &sql.TxOptions{Isolation: profile.RecordReadIsolation(), ReadOnly: true}
 }
 
 func (r RecordStore) GetRecord(ctx context.Context, workspaceID string, object definitionmodel.ObjectSchema, recordID string) (recordmodel.Record, bool, error) {
@@ -282,7 +280,7 @@ func (r RecordStore) GetRecord(ctx context.Context, workspaceID string, object d
 		return recordmodel.Record{}, false, fmt.Errorf("get record: %w", err)
 	}
 	defer rows.Close()
-	records, err := recordsFromRows(s.Driver(), object, rows)
+	records, err := recordsFromRows(s.RuntimeEngine, object, rows)
 	if err != nil {
 		return recordmodel.Record{}, false, err
 	}
@@ -310,7 +308,7 @@ func (r RecordStore) InsertRecord(ctx context.Context, workspaceID string, objec
 		}
 		if value, ok := record.Data[field.Key]; ok {
 			columns = append(columns, field.Key)
-			values = append(values, dbFieldValue(s.Driver(), field, value))
+			values = append(values, dbFieldValue(s.RuntimeEngine, field, value))
 		}
 	}
 	query := "INSERT INTO " + s.TableIdentifier(object.Key) + " (" + stringsJoinIdentifiers(s, columns...) + ") VALUES (" + stringsJoinPlaceholders(s, len(columns)) + ")"
@@ -338,7 +336,7 @@ func (r RecordStore) UpdateRecord(ctx context.Context, workspaceID string, objec
 		}
 		if value, ok := record.Data[field.Key]; ok {
 			assignments = append(assignments, s.Identifier(field.Key)+" = "+s.Placeholder(len(values)+1))
-			values = append(values, dbFieldValue(s.Driver(), field, value))
+			values = append(values, dbFieldValue(s.RuntimeEngine, field, value))
 		}
 	}
 	values = append(values, workspaceID, record.ID)
@@ -367,7 +365,7 @@ func (r RecordStore) UpdateRecordWhere(ctx context.Context, workspaceID string, 
 		}
 		if value, ok := record.Data[field.Key]; ok {
 			assignments = append(assignments, s.Identifier(field.Key)+" = "+s.Placeholder(len(values)+1))
-			values = append(values, dbFieldValue(s.Driver(), field, value))
+			values = append(values, dbFieldValue(s.RuntimeEngine, field, value))
 		}
 	}
 	where := []string{s.Identifier("workspace_id") + " = " + s.Placeholder(len(values)+1), s.Identifier("id") + " = " + s.Placeholder(len(values)+2)}
@@ -379,7 +377,7 @@ func (r RecordStore) UpdateRecordWhere(ctx context.Context, workspaceID string, 
 	sort.Strings(keys)
 	for _, key := range keys {
 		where = append(where, s.Identifier(key)+" = "+s.Placeholder(len(values)+1))
-		values = append(values, recordConditionDBValue(s.Driver(), object, key, conditions[key]))
+		values = append(values, recordConditionDBValue(s.RuntimeEngine, object, key, conditions[key]))
 	}
 	result, err := r.database().ExecContext(ctx, "UPDATE "+s.TableIdentifier(object.Key)+" SET "+strings.Join(assignments, ", ")+" WHERE "+strings.Join(where, " AND "), values...)
 	if err != nil {
@@ -515,7 +513,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 			}
 			if value, ok := commit.Record.Data[field.Key]; ok {
 				columns = append(columns, field.Key)
-				values = append(values, dbFieldValue(s.Driver(), field, value))
+				values = append(values, dbFieldValue(s.RuntimeEngine, field, value))
 			}
 		}
 		if _, err := tx.ExecContext(ctx, "INSERT INTO "+s.TableIdentifier(commit.Object.Key)+" ("+stringsJoinIdentifiers(s, columns...)+") VALUES ("+stringsJoinPlaceholders(s, len(columns))+")", values...); err != nil {
@@ -534,7 +532,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 			}
 			if value, ok := commit.Record.Data[field.Key]; ok {
 				assignments = append(assignments, s.Identifier(field.Key)+" = "+s.Placeholder(len(values)+1))
-				values = append(values, dbFieldValue(s.Driver(), field, value))
+				values = append(values, dbFieldValue(s.RuntimeEngine, field, value))
 			}
 		}
 		values = append(values, workspaceID, commit.Record.ID)
@@ -547,7 +545,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 		}
 		sort.Strings(conditionKeys)
 		for _, key := range conditionKeys {
-			values = append(values, recordConditionDBValue(s.Driver(), commit.Object, key, commit.Conditions[key]))
+			values = append(values, recordConditionDBValue(s.RuntimeEngine, commit.Object, key, commit.Conditions[key]))
 			where += " AND " + s.Identifier(key) + " = " + s.Placeholder(len(values))
 		}
 		for _, predicate := range commit.Predicates {
@@ -670,7 +668,7 @@ func (r RecordStore) validateRelatedAggregateInvariantsTx(ctx context.Context, t
 		}
 		relationID := strings.TrimSpace(fmt.Sprint(commit.Record.Data[policy.RelationField]))
 		limitQuery := "SELECT " + r.store.Identifier(policy.LimitField) + " FROM " + r.store.TableIdentifier(policy.TargetObjectKey) + " WHERE " + r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1) + " AND " + r.store.Identifier("id") + " = " + r.store.Placeholder(2) + " LIMIT 1"
-		limitQuery += recordConstraintLockClause(r.store.Driver())
+		limitQuery += recordConstraintLockClause(r.store.RuntimeEngine)
 		var rawLimit any
 		if err := tx.QueryRowContext(ctx, limitQuery, workspaceID, relationID).Scan(&rawLimit); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
@@ -694,13 +692,13 @@ func (r RecordStore) validateRelatedAggregateInvariantsTx(ctx context.Context, t
 		if policy.StatusField != "" && len(policy.IncludedStatuses) > 0 {
 			placeholders := make([]string, 0, len(policy.IncludedStatuses))
 			for _, status := range policy.IncludedStatuses {
-				values = append(values, recordConditionDBValue(r.store.Driver(), commit.Object, policy.StatusField, status))
+				values = append(values, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, policy.StatusField, status))
 				placeholders = append(placeholders, r.store.Placeholder(len(values)))
 			}
 			clauses = append(clauses, r.store.Identifier(policy.StatusField)+" IN ("+strings.Join(placeholders, ", ")+")")
 		}
 		query := "SELECT " + stringsJoinIdentifiers(r.store, columns...) + " FROM " + r.store.TableIdentifier(commit.Object.Key) + " WHERE " + strings.Join(clauses, " AND ")
-		query += recordConstraintLockClause(r.store.Driver())
+		query += recordConstraintLockClause(r.store.RuntimeEngine)
 		rows, err := tx.QueryContext(ctx, query, values...)
 		if err != nil {
 			return fmt.Errorf("read related aggregate %s: %w", policy.Key, err)
@@ -727,7 +725,7 @@ func (r RecordStore) validateRelatedAggregateInvariantsTx(ctx context.Context, t
 			}
 			operand := any(1)
 			if policy.Aggregate == "sum" {
-				operand = normalizeDBValue(r.store.Driver(), valueField, rawValue)
+				operand = normalizeDBValue(r.store.RuntimeEngine, valueField, rawValue)
 			}
 			total, err = recordAggregateAdd(total, operand, valueField, policy.Aggregate)
 			if err != nil {
@@ -748,7 +746,7 @@ func (r RecordStore) validateRelatedAggregateInvariantsTx(ctx context.Context, t
 		if err != nil {
 			return err
 		}
-		limit := normalizeDBValue(r.store.Driver(), valueField, rawLimit)
+		limit := normalizeDBValue(r.store.RuntimeEngine, valueField, rawLimit)
 		matched, err := recordAggregateCompare(total, limit, valueField, policy.Operator)
 		if err != nil {
 			return err
@@ -881,24 +879,24 @@ func (r RecordStore) validateTemporalExclusionTx(ctx context.Context, tx Transac
 		clauses := []string{r.store.Identifier("workspace_id") + " = " + r.store.Placeholder(1), r.store.Identifier("id") + " <> " + r.store.Placeholder(2)}
 		values := []any{workspaceID, commit.Record.ID}
 		for _, field := range policy.ScopeFields {
-			values = append(values, recordConditionDBValue(r.store.Driver(), commit.Object, field, commit.Record.Data[field]))
+			values = append(values, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, field, commit.Record.Data[field]))
 			clauses = append(clauses, r.store.Identifier(field)+" = "+r.store.Placeholder(len(values)))
 		}
-		values = append(values, recordConditionDBValue(r.store.Driver(), commit.Object, policy.StartField, commit.Record.Data[policy.EndField]))
+		values = append(values, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, policy.StartField, commit.Record.Data[policy.EndField]))
 		clauses = append(clauses, r.store.Identifier(policy.StartField)+" < "+r.store.Placeholder(len(values)))
-		values = append(values, recordConditionDBValue(r.store.Driver(), commit.Object, policy.EndField, commit.Record.Data[policy.StartField]))
+		values = append(values, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, policy.EndField, commit.Record.Data[policy.StartField]))
 		clauses = append(clauses, r.store.Identifier(policy.EndField)+" > "+r.store.Placeholder(len(values)))
 		if policy.StatusField != "" && len(policy.ExcludedStatuses) > 0 {
 			placeholders := make([]string, 0, len(policy.ExcludedStatuses))
 			for _, status := range policy.ExcludedStatuses {
-				values = append(values, recordConditionDBValue(r.store.Driver(), commit.Object, policy.StatusField, status))
+				values = append(values, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, policy.StatusField, status))
 				placeholders = append(placeholders, r.store.Placeholder(len(values)))
 			}
 			statusColumn := r.store.Identifier(policy.StatusField)
 			clauses = append(clauses, "("+statusColumn+" IS NULL OR "+statusColumn+" NOT IN ("+strings.Join(placeholders, ", ")+"))")
 		}
 		query := "SELECT " + r.store.Identifier("id") + " FROM " + r.store.TableIdentifier(commit.Object.Key) + " WHERE " + strings.Join(clauses, " AND ") + " LIMIT 1"
-		query += recordConstraintLockClause(r.store.Driver())
+		query += recordConstraintLockClause(r.store.RuntimeEngine)
 		var conflictingID string
 		err = tx.QueryRowContext(ctx, query, values...).Scan(&conflictingID)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -912,15 +910,11 @@ func (r RecordStore) validateTemporalExclusionTx(ctx context.Context, tx Transac
 	return nil
 }
 
-func recordConstraintLockClause(driver string) string {
-	switch strings.TrimSpace(driver) {
-	case "mysql", "postgres":
+func recordConstraintLockClause(profile persistencedriver.EngineProfile) string {
+	if profile.Capabilities().RowLock {
 		return " FOR UPDATE"
-	default:
-		// SQLite serializes writers at the database transaction boundary and does
-		// not accept SELECT ... FOR UPDATE.
-		return ""
 	}
+	return ""
 }
 
 func recordMutationPredicateSQL(store *database.RuntimeStore, object definitionmodel.ObjectSchema, predicate transactionmodel.MutationPredicate, placeholder int) (string, []any, error) {
@@ -948,20 +942,20 @@ func recordMutationPredicateSQL(store *database.RuntimeStore, object definitionm
 			return "", nil, fmt.Errorf("nil predicate only supports eq/ne for field %q", field)
 		}
 	}
-	return identifier + " " + sqlOperator + " " + store.Placeholder(placeholder), []any{recordConditionDBValue(store.Driver(), object, field, predicate.Value)}, nil
+	return identifier + " " + sqlOperator + " " + store.Placeholder(placeholder), []any{recordConditionDBValue(store.RuntimeEngine, object, field, predicate.Value)}, nil
 }
 
-func recordConditionDBValue(driver string, object definitionmodel.ObjectSchema, key string, value any) any {
+func recordConditionDBValue(profile persistencedriver.EngineProfile, object definitionmodel.ObjectSchema, key string, value any) any {
 	for _, field := range object.Fields {
 		if field.Key == key {
-			return dbFieldValue(driver, field, value)
+			return dbFieldValue(profile, field, value)
 		}
 	}
 	return dbValue(value)
 }
 
-func recordQueryDBValues(driver string, object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) recordmodel.RecordListQuery {
-	if driver != "sqlite" {
+func recordQueryDBValues(profile persistencedriver.EngineProfile, object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) recordmodel.RecordListQuery {
+	if !profile.OrderedDecimalTextStorage() {
 		return query
 	}
 	fields := make(map[string]definitionmodel.FieldSchema, len(object.Fields))
@@ -983,22 +977,22 @@ func recordQueryDBValues(driver string, object definitionmodel.ObjectSchema, que
 		case []any:
 			encoded := make([]any, 0, len(typed))
 			for _, item := range typed {
-				encoded = append(encoded, dbFieldValue(driver, field, item))
+				encoded = append(encoded, dbFieldValue(profile, field, item))
 			}
 			filters[key] = encoded
 		case []string:
 			encoded := make([]string, 0, len(typed))
 			for _, item := range typed {
-				encoded = append(encoded, fmt.Sprint(dbFieldValue(driver, field, item)))
+				encoded = append(encoded, fmt.Sprint(dbFieldValue(profile, field, item)))
 			}
 			filters[key] = encoded
 		default:
-			filters[key] = dbFieldValue(driver, field, value)
+			filters[key] = dbFieldValue(profile, field, value)
 		}
 	}
 	query.Filters = filters
 	if query.FilterExpression != nil {
-		encoded := recordFilterDBValues(driver, fields, *query.FilterExpression)
+		encoded := recordFilterDBValues(profile, fields, *query.FilterExpression)
 		query.FilterExpression = &encoded
 	}
 	return query
@@ -1006,23 +1000,23 @@ func recordQueryDBValues(driver string, object definitionmodel.ObjectSchema, que
 
 // RecordQueryDatabaseValues converts canonical query values to the physical
 // representation used by a database-backed Record table.
-func RecordQueryDatabaseValues(driver string, object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) recordmodel.RecordListQuery {
-	return recordQueryDBValues(driver, object, query)
+func RecordQueryDatabaseValues(profile persistencedriver.EngineProfile, object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) recordmodel.RecordListQuery {
+	return recordQueryDBValues(profile, object, query)
 }
 
-func recordFilterDBValues(driver string, fields map[string]definitionmodel.FieldSchema, expression recordmodel.RecordFilterExpression) recordmodel.RecordFilterExpression {
+func recordFilterDBValues(profile persistencedriver.EngineProfile, fields map[string]definitionmodel.FieldSchema, expression recordmodel.RecordFilterExpression) recordmodel.RecordFilterExpression {
 	field, isCurrency := fields[expression.Field]
 	isCurrency = isCurrency && field.Type == "currency"
 	if isCurrency && expression.Value != nil {
-		expression.Value = dbFieldValue(driver, field, expression.Value)
+		expression.Value = dbFieldValue(profile, field, expression.Value)
 	}
 	if isCurrency {
 		for index, value := range expression.Values {
-			expression.Values[index] = dbFieldValue(driver, field, value)
+			expression.Values[index] = dbFieldValue(profile, field, value)
 		}
 	}
 	for index := range expression.Children {
-		expression.Children[index] = recordFilterDBValues(driver, fields, expression.Children[index])
+		expression.Children[index] = recordFilterDBValues(profile, fields, expression.Children[index])
 	}
 	return expression
 }

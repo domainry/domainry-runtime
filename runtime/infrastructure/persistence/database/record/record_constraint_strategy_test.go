@@ -11,7 +11,7 @@ func TestRecordConstraintLockClauseIsDialectSafe(t *testing.T) {
 		{driver: "mysql", want: " FOR UPDATE"},
 		{driver: "postgres", want: " FOR UPDATE"},
 	} {
-		if got := recordConstraintLockClause(test.driver); got != test.want {
+		if got := recordConstraintLockClause(testEngineProfile(test.driver)); got != test.want {
 			t.Fatalf("driver=%s clause=%q want=%q", test.driver, got, test.want)
 		}
 	}

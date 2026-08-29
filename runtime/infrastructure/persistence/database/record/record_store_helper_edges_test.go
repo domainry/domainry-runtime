@@ -169,11 +169,11 @@ func TestRecordMutationPredicateAndQueryProjectionBoundaries(t *testing.T) {
 		{Operator: "eq", Field: "amount", Value: "1.20", Values: []any{"2.30"}},
 		{Operator: "eq", Field: "status", Value: "open"},
 	}}
-	query := RecordQueryDatabaseValues("sqlite", object, recordmodel.RecordListQuery{FilterExpression: &expression})
+	query := RecordQueryDatabaseValues(testEngineProfile("sqlite"), object, recordmodel.RecordListQuery{FilterExpression: &expression})
 	if query.FilterExpression == nil || query.FilterExpression.Children[0].Value == "1.20" || query.FilterExpression.Children[0].Values[0] == "2.30" || query.FilterExpression.Children[1].Value != "open" {
 		t.Fatalf("encoded expression=%#v", query.FilterExpression)
 	}
-	nilValue := recordFilterDBValues("sqlite", map[string]definitionmodel.FieldSchema{"amount": currency}, recordmodel.RecordFilterExpression{Field: "amount", Value: nil, Values: []any{"1.00"}})
+	nilValue := recordFilterDBValues(testEngineProfile("sqlite"), map[string]definitionmodel.FieldSchema{"amount": currency}, recordmodel.RecordFilterExpression{Field: "amount", Value: nil, Values: []any{"1.00"}})
 	if nilValue.Value != nil || nilValue.Values[0] == "1.00" {
 		t.Fatalf("nil currency expression=%#v", nilValue)
 	}
@@ -190,10 +190,10 @@ func TestRecordMutationPredicateAndQueryProjectionBoundaries(t *testing.T) {
 			t.Fatalf("Record system projection %s missing or duplicated: %q", column, projection)
 		}
 	}
-	if options := recordScopeReadTxOptions("postgres"); options == nil || options.Isolation.String() == "Default" {
+	if options := recordScopeReadTxOptions(testEngineProfile("postgres")); options == nil || options.Isolation.String() == "Default" {
 		t.Fatalf("postgres read tx options=%#v", options)
 	}
-	if options := recordScopeReadTxOptions("sqlite"); options == nil {
+	if options := recordScopeReadTxOptions(testEngineProfile("sqlite")); options == nil {
 		t.Fatal("sqlite read tx options missing")
 	}
 }
