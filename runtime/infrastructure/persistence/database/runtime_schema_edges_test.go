@@ -37,7 +37,7 @@ func runtimeSchemaLedgerQueries(count int64, checksum string, dirty bool) []data
 
 func TestRuntimeSchemaHelpersAndDatabaseSelection(t *testing.T) {
 	versions := SupportedRuntimeSchemaUpgradeVersions()
-	if len(versions) != 10 || versions[0] != "001_connector_runtime_lifecycle" || versions[9] != "010_external_identity_ownership" {
+	if len(versions) != 11 || versions[0] != "001_connector_runtime_lifecycle" || versions[10] != "011_notification_service_publication_outbox" {
 		t.Fatalf("versions=%#v", versions)
 	}
 	store := runtimeSchemaStore(t, &databaseSQLState{})
@@ -206,12 +206,15 @@ func (stub runtimeSchemaAssemblerStub) EnsureEvidenceSchema(context.Context, run
 func (stub runtimeSchemaAssemblerStub) EnsureWorkflowProcessSchema(context.Context, runtimeschema.Store) error {
 	return stub.result("workflow")
 }
+func (stub runtimeSchemaAssemblerStub) EnsureRateLimitSchema(context.Context, runtimeschema.Store) error {
+	return stub.result("ratelimit")
+}
 func (stub runtimeSchemaAssemblerStub) EnsureLifecycleSchema(context.Context, runtimeschema.Store) error {
 	return stub.result("lifecycle")
 }
 
 func TestEnsureRuntimeSchemaAssemblerFailures(t *testing.T) {
-	for _, stage := range []string{"metadata", "evidence", "workflow", "lifecycle"} {
+	for _, stage := range []string{"metadata", "evidence", "workflow", "ratelimit", "lifecycle"} {
 		t.Run(stage, func(t *testing.T) {
 			state := &databaseSQLState{querySteps: runtimeSchemaLedgerQueries(1, currentRuntimeSchemaChecksum(), false)}
 			store := runtimeSchemaStore(t, state)
@@ -324,6 +327,9 @@ func TestSchemaAssemblerSeamMethods(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := store.EnsureWorkflowProcessSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.EnsureRateLimitSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.EnsureLifecycleSchema(t.Context()); err != nil {

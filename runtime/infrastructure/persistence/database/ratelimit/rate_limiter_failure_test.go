@@ -11,10 +11,8 @@ import (
 	"testing"
 	"time"
 
-	ormmysql "github.com/domainry/domainry-orm/mysql"
 	ormpostgres "github.com/domainry/domainry-orm/postgres"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -36,31 +34,13 @@ func TestRateLimiterInputSchemaAndRetryBoundaries(t *testing.T) {
 	}
 
 	wantErr := errors.New("injected rate limit failure")
-	t.Run("mysql schema", func(t *testing.T) {
-		state := &rateLimitDBState{execSteps: []rateLimitExecStep{{rows: 1}}}
-		candidate, closeDB := scriptedRateLimiter(t, base, state)
-		defer closeDB()
-		candidate.store.Engine = ormmysql.NewProfile()
-		candidate.store.SQLRenderer = mysql.NewEngine().SQLDialect().WithSchema(candidate.store.SQLDatabase.DatabaseSchema)
-		if err := candidate.EnsureSchema(t.Context()); err != nil {
-			t.Fatal(err)
-		}
-		if len(state.queries) != 1 || !strings.Contains(state.queries[0], "VARCHAR(255)") {
-			t.Fatalf("schema query=%v", state.queries)
-		}
-	})
-
-	t.Run("schema failure", func(t *testing.T) {
-		candidate, closeDB := scriptedRateLimiter(t, base, &rateLimitDBState{execSteps: []rateLimitExecStep{{err: wantErr}}})
-		defer closeDB()
-		if _, err := candidate.Allow(t.Context(), "key", 1, time.Second); err == nil || !strings.Contains(err.Error(), "ensure rate limit table") {
-			t.Fatalf("schema error=%v", err)
-		}
-	})
+	if err := limiter.EnsureSchema(t.Context()); err != nil {
+		t.Fatalf("verify materialized schema: %v", err)
+	}
 
 	t.Run("bounded conflicts", func(t *testing.T) {
 		state := &rateLimitDBState{
-			execSteps:   []rateLimitExecStep{{rows: 1}, {rows: 1}, {rows: 1}, {rows: 1}},
+			execSteps:   []rateLimitExecStep{{rows: 1}, {rows: 1}, {rows: 1}},
 			querySteps:  []rateLimitQueryStep{{err: sql.ErrNoRows}, {err: sql.ErrNoRows}, {err: sql.ErrNoRows}},
 			commitSteps: []rateLimitCommitStep{{err: wantErr}, {err: wantErr}, {err: wantErr}},
 		}
@@ -75,7 +55,7 @@ func TestRateLimiterInputSchemaAndRetryBoundaries(t *testing.T) {
 	t.Run("cancel between retries", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		state := &rateLimitDBState{
-			execSteps:   []rateLimitExecStep{{rows: 1}, {rows: 1}},
+			execSteps:   []rateLimitExecStep{{rows: 1}},
 			querySteps:  []rateLimitQueryStep{{err: sql.ErrNoRows}},
 			commitSteps: []rateLimitCommitStep{{err: wantErr, hook: cancel}},
 		}
@@ -149,6 +129,10 @@ func openRateLimitStore(t *testing.T) *database.RuntimeStore {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
 	t.Cleanup(func() { _ = store.Close() })
 	return store
 }
@@ -158,7 +142,6 @@ func scriptedRateLimiter(t *testing.T, store *database.RuntimeStore, state *rate
 	db := sql.OpenDB(rateLimitConnector{state: state})
 	limiter := NewRateLimiter(store)
 	limiter.db = db
-	limiter.schema = db
 	return limiter, func() { _ = db.Close() }
 }
 

@@ -5,48 +5,33 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	ormbuilder "github.com/domainry/domainry-orm/builder"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	runtimeschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/schema"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 )
 
 // RateLimiter persists shared rate-limit decisions.
 type RateLimiter struct {
-	store  *database.RuntimeStore
-	db     *sql.DB
-	schema runtimeschema.SQLDatabase
-	now    func() time.Time
-	ready  atomic.Bool
+	store *database.RuntimeStore
+	db    *sql.DB
+	now   func() time.Time
 }
 
 func NewRateLimiter(store *database.RuntimeStore) *RateLimiter {
-	return &RateLimiter{store: store, db: store.DB(), schema: store.SchemaDB(), now: time.Now}
+	return &RateLimiter{store: store, db: store.DB(), now: time.Now}
 }
 
 func (l *RateLimiter) EnsureSchema(ctx context.Context) error {
-	if l.ready.Load() {
-		return nil
+	exists, err := l.store.RuntimeTableExists(ctx, "runtime_rate_limit_bucket")
+	if err != nil {
+		return fmt.Errorf("inspect runtime rate-limit schema: %w", err)
 	}
-	if err := l.ensureTable(ctx); err != nil {
-		return err
+	if !exists {
+		return fmt.Errorf("runtime rate-limit schema is not materialized")
 	}
-	l.ready.Store(true)
 	return nil
-}
-
-func (l *RateLimiter) ensureTable(ctx context.Context) error {
-	keyType := l.store.Engine.TextKeyColumnType(255)
-	query := "CREATE TABLE IF NOT EXISTS " + l.store.TableIdentifier("runtime_rate_limit_bucket") + " (" +
-		l.store.Identifier("bucket_key") + " " + keyType + " PRIMARY KEY, " +
-		l.store.Identifier("window_start_ns") + " BIGINT NOT NULL, " +
-		l.store.Identifier("request_count") + " BIGINT NOT NULL, " +
-		l.store.Identifier("updated_at_ns") + " BIGINT NOT NULL)"
-	_, err := l.schema.ExecContext(ctx, query)
-	return err
 }
 
 func (l *RateLimiter) Allow(ctx context.Context, key string, limit int, window time.Duration) (ratelimit.Decision, error) {
@@ -55,9 +40,6 @@ func (l *RateLimiter) Allow(ctx context.Context, key string, limit int, window t
 	}
 	if limit <= 0 || window <= 0 {
 		return ratelimit.Decision{Allowed: true, Limit: limit}, nil
-	}
-	if err := l.EnsureSchema(ctx); err != nil {
-		return ratelimit.Decision{}, fmt.Errorf("ensure rate limit table: %w", err)
 	}
 	key = strings.TrimSpace(key)
 	now := l.now().UTC()
