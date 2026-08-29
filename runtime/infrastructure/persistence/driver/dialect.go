@@ -24,15 +24,36 @@ type Dialect interface {
 	SchemaMigrationSQL() string
 }
 
-func ProfileFor(value Dialect) ormdriver.Profile {
-	switch value.Name() {
-	case "sqlite":
-		return ormsqlite.NewProfile()
-	case "mysql":
-		return ormmysql.NewProfile()
-	case "postgres":
-		return ormpostgres.NewProfile()
-	default:
+type EngineProfile interface {
+	ormdriver.Profile
+	MigrationDatabasePath(config.Config) string
+	ManagedDatabaseMarkerEnabled() bool
+	ColumnDefinition(string) string
+}
+
+type engineProfileProvider interface{ EngineProfile() EngineProfile }
+
+type portableEngineProfile struct{ ormdriver.Profile }
+
+func (portableEngineProfile) MigrationDatabasePath(config.Config) string { return "" }
+func (portableEngineProfile) ManagedDatabaseMarkerEnabled() bool         { return true }
+func (portableEngineProfile) ColumnDefinition(value string) string       { return value }
+
+var portableProfileRegistry = map[ormdialect.Name]func() EngineProfile{
+	ormdialect.SQLite: func() EngineProfile { return portableEngineProfile{Profile: ormsqlite.NewProfile()} },
+	ormdialect.MySQL:  func() EngineProfile { return portableEngineProfile{Profile: ormmysql.NewProfile()} },
+	ormdialect.Postgres: func() EngineProfile {
+		return portableEngineProfile{Profile: ormpostgres.NewProfile()}
+	},
+}
+
+func ProfileFor(value Dialect) EngineProfile {
+	if provider, ok := value.(engineProfileProvider); ok {
+		return provider.EngineProfile()
+	}
+	factory, found := portableProfileRegistry[value.SQLDialect().Name()]
+	if !found {
 		panic(fmt.Sprintf("unsupported database profile %q", value.Name()))
 	}
+	return factory()
 }

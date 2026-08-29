@@ -20,11 +20,13 @@ type SQLDatabase struct {
 	SQLRenderer    ormdialect.Renderer
 	DatabaseSchema string
 	Engine         ormdriver.Profile
+	RuntimeEngine  driver.EngineProfile
 }
 
 func NewSQLDatabase(database *sql.DB, engine driver.Dialect, schema string) *SQLDatabase {
 	schema = strings.TrimSpace(schema)
-	return &SQLDatabase{DB: database, SQLRenderer: engine.SQLDialect().WithSchema(schema), DatabaseSchema: schema, Engine: driver.ProfileFor(engine)}
+	profile := driver.ProfileFor(engine)
+	return &SQLDatabase{DB: database, SQLRenderer: engine.SQLDialect().WithSchema(schema), DatabaseSchema: schema, Engine: profile, RuntimeEngine: profile}
 }
 
 // IsTransientError applies the engine Profile's stable error taxonomy. Owners
