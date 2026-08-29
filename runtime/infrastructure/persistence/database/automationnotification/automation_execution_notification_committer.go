@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	automationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automation"
@@ -105,8 +106,13 @@ func (s AutomationExecutionNotificationCommitter) executionCommitted(ctx context
 		return s.inspectExecution(ctx, execution)
 	}
 	var count int
-	query := "SELECT COUNT(*) FROM " + s.store.TableIdentifier("automation_rule_executions") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(2)
-	if err := s.store.DB().QueryRowContext(ctx, query, execution.WorkspaceID, execution.ID).Scan(&count); err != nil {
+	query, args, err := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "automation_rule_executions").
+		Projections(ormbuilder.Project(ormbuilder.CountAll())).
+		Where(ormbuilder.And(ormbuilder.Equal("workspace_id", execution.WorkspaceID), ormbuilder.Equal("id", execution.ID))).Build()
+	if err != nil {
+		return false, fmt.Errorf("build automation execution replay inspection: %w", err)
+	}
+	if err := s.store.DB().QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
 		return false, fmt.Errorf("inspect automation execution replay: %w", err)
 	}
 	return count == 1, nil
