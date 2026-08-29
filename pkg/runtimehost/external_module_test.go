@@ -101,6 +101,7 @@ import (
 	partyremote "github.com/domainry/domainry-party-sdk/remote"
 	monitoringremote "github.com/domainry/domainry-monitoring-sdk/remote"
 	schedulerremote "github.com/domainry/domainry-scheduler/remote"
+	schedulerhttp "github.com/domainry/domainry-scheduler-sdk/saashost/httptransport"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/pkg/runtimehost"
 )
@@ -118,7 +119,7 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 		NotificationFactory: notificationremote.NewFactory(notificationremote.ConfigFromEnvironment()),
 		PartyFactory: partyremote.NewFactory(partyremote.Config{}),
 		MonitoringFactory: monitoringremote.NewFactory(monitoringremote.ConfigFromEnvironment()),
-		SchedulerFactory: schedulerremote.NewFactory(),
+		SchedulerFactory: schedulerremote.NewHTTPFactory(schedulerhttp.ConfigFromEnvironment()),
 	}
 }
 
