@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	"sort"
@@ -131,28 +132,29 @@ func (r WorkflowWorkerStore) UpdateExecutionWhere(ctx context.Context, workspace
 	if err != nil {
 		return false, err
 	}
-	s := r.store
 	columns := workflowExecutionMutableColumns()
 	values, err := workflowExecutionMutableValues(execution)
 	if err != nil {
 		return false, err
 	}
-	assignments := make([]string, 0, len(columns))
+	builder := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_executions", workspaceID)
 	for i, column := range columns {
-		assignments = append(assignments, s.Identifier(column)+" = "+s.Placeholder(i+1))
+		builder.Set(column, values[i])
 	}
-	where := []string{s.Identifier("workspace_id") + " = " + s.Placeholder(len(values)+1), s.Identifier("id") + " = " + s.Placeholder(len(values)+2)}
-	values = append(values, workspaceID, execution.ID)
+	predicates := []ormbuilder.Predicate{ormbuilder.Equal("id", execution.ID)}
 	keys := make([]string, 0, len(conditions))
 	for key := range conditions {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		where = append(where, s.Identifier(key)+" = "+s.Placeholder(len(values)+1))
-		values = append(values, workflowExecutionConditionValue(key, conditions[key]))
+		predicates = append(predicates, ormbuilder.Equal(key, workflowExecutionConditionValue(key, conditions[key])))
 	}
-	result, err := r.database().ExecContext(ctx, "UPDATE "+s.TableIdentifier("_workflow_executions")+" SET "+strings.Join(assignments, ", ")+" WHERE "+strings.Join(where, " AND "), values...)
+	statement, args, buildErr := builder.Where(ormbuilder.And(predicates...)).Build()
+	if buildErr != nil {
+		return false, fmt.Errorf("build conditional workflow execution update: %w", buildErr)
+	}
+	result, err := r.database().ExecContext(ctx, statement, args...)
 	if err != nil {
 		return false, fmt.Errorf("update workflow execution with conditions: %w", err)
 	}
