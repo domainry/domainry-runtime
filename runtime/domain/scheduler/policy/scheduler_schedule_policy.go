@@ -7,7 +7,7 @@ import (
 	"time"
 
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	schedulerschedule "github.com/domainry/domainry-scheduler/schedule"
+	schedulerschedule "github.com/domainry/domainry-scheduler-sdk/schedule"
 	"github.com/robfig/cron/v3"
 )
 
