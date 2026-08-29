@@ -181,7 +181,9 @@ func TestMetadataCatalogTransactionBranches(t *testing.T) {
 		{event: auditmodel.AuditEvent{}, step: metadataSQLExecStep{rows: 1}},
 	} {
 		err := run(t, metadataSQLState{execSteps: []metadataSQLExecStep{testCase.step}}, func(repository MetadataStore, tx *sql.Tx) error {
-			return repository.insertMetadataChangeAudit(t.Context(), tx, testCase.event)
+			event := testCase.event
+			event.WorkspaceID = "workspace"
+			return repository.insertMetadataChangeAudit(t.Context(), tx, event)
 		})
 		if (err != nil) != testCase.err {
 			t.Fatalf("audit err=%v", err)

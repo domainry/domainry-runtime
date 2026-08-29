@@ -34,6 +34,20 @@ type MetadataStore struct {
 	exactDecimalMigrator metadataExactDecimalMigrator
 }
 
+type metadataProfileFactory func() (metadatastorage.Profile, metadataExactDecimalMigrator)
+
+var metadataProfileFactories = map[ormdialect.Name]metadataProfileFactory{
+	ormdialect.SQLite: func() (metadatastorage.Profile, metadataExactDecimalMigrator) {
+		return metadatasqlite.NewMetadataStorageProfile(), sqliteExactDecimalMigrator{}
+	},
+	ormdialect.MySQL: func() (metadatastorage.Profile, metadataExactDecimalMigrator) {
+		return metadatamysql.NewMetadataStorageProfile(), mysqlExactDecimalMigrator{}
+	},
+	ormdialect.Postgres: func() (metadatastorage.Profile, metadataExactDecimalMigrator) {
+		return metadatapostgres.NewMetadataStorageProfile(), postgresExactDecimalMigrator{}
+	},
+}
+
 var _ metadatarepository.MetadataRepository = MetadataStore{}
 
 func (r MetadataStore) SnapshotRevision(ctx context.Context, scope principalmodel.SystemScope) (string, error) {
@@ -59,21 +73,11 @@ func (r MetadataStore) SnapshotRevision(ctx context.Context, scope principalmode
 }
 
 func NewMetadataStore(store *database.RuntimeStore) MetadataStore {
-	var profile metadatastorage.Profile
-	var migrator metadataExactDecimalMigrator
-	switch store.Engine.Name() {
-	case ormdialect.SQLite:
-		profile = metadatasqlite.NewMetadataStorageProfile()
-		migrator = sqliteExactDecimalMigrator{}
-	case ormdialect.MySQL:
-		profile = metadatamysql.NewMetadataStorageProfile()
-		migrator = mysqlExactDecimalMigrator{}
-	case ormdialect.Postgres:
-		profile = metadatapostgres.NewMetadataStorageProfile()
-		migrator = postgresExactDecimalMigrator{}
-	default:
+	factory := metadataProfileFactories[store.Engine.Name()]
+	if factory == nil {
 		panic(fmt.Sprintf("unsupported Metadata storage profile %q", store.Engine.Name()))
 	}
+	profile, migrator := factory()
 	return MetadataStore{store: store, db: store.DB(), storage: profile, exactDecimalMigrator: migrator}
 }
 

@@ -99,20 +99,22 @@ func buildMetadataCatalogUpsert(store MetadataStore, key, value, now string) (st
 }
 
 func (s MetadataStore) insertMetadataCatalog(ctx context.Context, tx *sql.Tx, key string, value string, now string) error {
-	columns := []string{"key", "value", "updated_at"}
-	query := "INSERT INTO " + s.store.TableIdentifier("metadata_catalog") + " (" + strings.Join(quotedColumns(s.store, columns), ", ") + ") VALUES (" + strings.Join(placeholders(s.store, len(columns)), ", ") + ")"
-	if _, err := tx.ExecContext(ctx, query, strings.TrimSpace(key), strings.TrimSpace(value), now); err != nil {
+	query, args, buildErr := ormbuilder.NewInsertBuilder(s.store.SQLRenderer, "metadata_catalog").Columns("key", "value", "updated_at").Values(strings.TrimSpace(key), strings.TrimSpace(value), now).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build metadata catalog insert: %w", buildErr)
+	}
+	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 		return fmt.Errorf("insert metadata catalog %s: %w", key, err)
 	}
 	return nil
 }
 
 func (s MetadataStore) upsertMetadataCatalog(ctx context.Context, tx *sql.Tx, key string, value string, now string) error {
-	updateQuery := "UPDATE " + s.store.TableIdentifier("metadata_catalog") +
-		" SET " + s.store.Identifier("value") + " = " + s.store.Placeholder(1) +
-		", " + s.store.Identifier("updated_at") + " = " + s.store.Placeholder(2) +
-		" WHERE " + s.store.Identifier("key") + " = " + s.store.Placeholder(3)
-	result, err := tx.ExecContext(ctx, updateQuery, strings.TrimSpace(value), now, strings.TrimSpace(key))
+	updateQuery, args, buildErr := ormbuilder.NewUpdateBuilder(s.store.SQLRenderer, "metadata_catalog").Set("value", strings.TrimSpace(value)).Set("updated_at", now).Where(ormbuilder.Equal("key", strings.TrimSpace(key))).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build metadata catalog update: %w", buildErr)
+	}
+	result, err := tx.ExecContext(ctx, updateQuery, args...)
 	if err != nil {
 		return fmt.Errorf("update metadata catalog %s: %w", key, err)
 	}
