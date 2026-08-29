@@ -10,7 +10,7 @@ require (
 	github.com/domainry/domainry-identity-sdk v0.1.0-dev8
 	github.com/domainry/domainry-monitoring v0.0.0
 	github.com/domainry/domainry-monitoring-sdk v0.0.0
-	github.com/domainry/domainry-notification v0.1.0-dev.7
+	github.com/domainry/domainry-notification v0.1.0-dev.8
 	github.com/domainry/domainry-notification-sdk v0.1.0-dev.3
 	github.com/domainry/domainry-scheduler v0.0.0
 	github.com/domainry/domainry-scheduler-sdk v0.0.0-00010101000000-000000000000
@@ -33,7 +33,7 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/domainry/domainry-orm v0.1.24
-	github.com/domainry/domainry-party v0.1.0-dev.1
+	github.com/domainry/domainry-party v0.1.0-dev.2
 	github.com/domainry/domainry-party-sdk v0.1.0-dev.1
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
