@@ -26,8 +26,13 @@ func NewLifecycleStore(store *database.RuntimeStore) LifecycleStore {
 
 func (s LifecycleStore) SavePolicy(ctx context.Context, version lifecyclemodel.PolicyVersion) error {
 	payload, _ := json.Marshal(version)
-	columns := []string{"workspace_id", "policy_key", "version", "revision", "status", "payload_json", "published_at"}
-	_, err := s.db.ExecContext(ctx, s.store.InsertStatement("lifecycle_policy_versions", columns), version.WorkspaceID, version.Policy.Key, version.Policy.Version, version.Revision, version.Status, string(payload), lifecycleTime(version.PublishedAt))
+	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "lifecycle_policy_versions", version.WorkspaceID).
+		Columns("policy_key", "version", "revision", "status", "payload_json", "published_at").
+		Values(version.Policy.Key, version.Policy.Version, version.Revision, version.Status, string(payload), lifecycleTime(version.PublishedAt)).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build lifecycle policy insert: %w", buildErr)
+	}
+	_, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("save lifecycle policy: %w", err)
 	}
@@ -43,9 +48,14 @@ func (s LifecycleStore) LatestPolicy(ctx context.Context, workspaceID, policyKey
 }
 
 func (s LifecycleStore) latestPolicyForWorkspace(ctx context.Context, workspaceID, policyKey string) (lifecyclemodel.PolicyVersion, bool, error) {
-	query := "SELECT " + s.store.Identifier("payload_json") + " FROM " + s.store.TableIdentifier("lifecycle_policy_versions") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("policy_key") + " = " + s.store.Placeholder(2) + " AND " + s.store.Identifier("status") + " = " + s.store.Placeholder(3) + " ORDER BY " + s.store.Identifier("revision") + " DESC LIMIT 1"
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "lifecycle_policy_versions", workspaceID).Columns("payload_json").
+		Where(ormbuilder.And(ormbuilder.Equal("policy_key", policyKey), ormbuilder.Equal("status", lifecyclemodel.PolicyStatusPublished))).
+		OrderBy(ormbuilder.Descending("revision")).Limit(1).Build()
+	if buildErr != nil {
+		return lifecyclemodel.PolicyVersion{}, false, fmt.Errorf("build lifecycle policy query: %w", buildErr)
+	}
 	var payload string
-	err := s.db.QueryRowContext(ctx, query, workspaceID, policyKey, lifecyclemodel.PolicyStatusPublished).Scan(&payload)
+	err := s.db.QueryRowContext(ctx, query, args...).Scan(&payload)
 	if errors.Is(err, sql.ErrNoRows) {
 		return lifecyclemodel.PolicyVersion{}, false, nil
 	}
@@ -60,8 +70,12 @@ func (s LifecycleStore) latestPolicyForWorkspace(ctx context.Context, workspaceI
 }
 
 func (s LifecycleStore) ListPolicies(ctx context.Context, workspaceID string) ([]lifecyclemodel.PolicyVersion, error) {
-	query := "SELECT " + s.store.Identifier("payload_json") + " FROM " + s.store.TableIdentifier("lifecycle_policy_versions") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " ORDER BY " + s.store.Identifier("policy_key") + ", " + s.store.Identifier("revision") + " DESC"
-	rows, err := s.db.QueryContext(ctx, query, workspaceID)
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "lifecycle_policy_versions", workspaceID).Columns("payload_json").
+		OrderBy(ormbuilder.Ascending("policy_key"), ormbuilder.Descending("revision")).Build()
+	if buildErr != nil {
+		return nil, fmt.Errorf("build lifecycle policy list: %w", buildErr)
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -87,8 +101,14 @@ func (s LifecycleStore) SaveLegalHold(ctx context.Context, hold lifecyclemodel.L
 	if hold.EndsAt != nil {
 		ends = lifecycleTime(*hold.EndsAt)
 	}
-	query := "UPDATE " + s.store.TableIdentifier("lifecycle_legal_holds") + " SET " + s.store.Identifier("owner") + " = " + s.store.Placeholder(1) + ", " + s.store.Identifier("resource_type") + " = " + s.store.Placeholder(2) + ", " + s.store.Identifier("resource_id") + " = " + s.store.Placeholder(3) + ", " + s.store.Identifier("starts_at") + " = " + s.store.Placeholder(4) + ", " + s.store.Identifier("ends_at") + " = " + s.store.Placeholder(5) + ", " + s.store.Identifier("review_at") + " = " + s.store.Placeholder(6) + ", " + s.store.Identifier("payload_json") + " = " + s.store.Placeholder(7) + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(8) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(9)
-	result, err := s.db.ExecContext(ctx, query, hold.Owner, hold.ResourceType, hold.ResourceID, lifecycleTime(hold.StartsAt), ends, lifecycleTime(hold.ReviewAt), string(payload), hold.WorkspaceID, hold.ID)
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "lifecycle_legal_holds", hold.WorkspaceID).
+		Set("owner", hold.Owner).Set("resource_type", hold.ResourceType).Set("resource_id", hold.ResourceID).
+		Set("starts_at", lifecycleTime(hold.StartsAt)).Set("ends_at", ends).Set("review_at", lifecycleTime(hold.ReviewAt)).Set("payload_json", string(payload)).
+		Where(ormbuilder.Equal("id", hold.ID)).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build lifecycle legal hold update: %w", buildErr)
+	}
+	result, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -99,8 +119,13 @@ func (s LifecycleStore) SaveLegalHold(ctx context.Context, hold lifecyclemodel.L
 	if changed > 0 {
 		return nil
 	}
-	columns := []string{"id", "workspace_id", "owner", "resource_type", "resource_id", "starts_at", "ends_at", "review_at", "payload_json"}
-	_, err = s.db.ExecContext(ctx, s.store.InsertStatement("lifecycle_legal_holds", columns), hold.ID, hold.WorkspaceID, hold.Owner, hold.ResourceType, hold.ResourceID, lifecycleTime(hold.StartsAt), ends, lifecycleTime(hold.ReviewAt), string(payload))
+	query, args, buildErr = ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "lifecycle_legal_holds", hold.WorkspaceID).
+		Columns("id", "owner", "resource_type", "resource_id", "starts_at", "ends_at", "review_at", "payload_json").
+		Values(hold.ID, hold.Owner, hold.ResourceType, hold.ResourceID, lifecycleTime(hold.StartsAt), ends, lifecycleTime(hold.ReviewAt), string(payload)).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build lifecycle legal hold insert: %w", buildErr)
+	}
+	_, err = s.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("save lifecycle legal hold: %w", err)
 	}
@@ -108,9 +133,12 @@ func (s LifecycleStore) SaveLegalHold(ctx context.Context, hold lifecyclemodel.L
 }
 
 func (s LifecycleStore) GetLegalHold(ctx context.Context, workspaceID, holdID string) (lifecyclemodel.LegalHold, bool, error) {
-	query := "SELECT " + s.store.Identifier("payload_json") + " FROM " + s.store.TableIdentifier("lifecycle_legal_holds") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(2)
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "lifecycle_legal_holds", workspaceID).Columns("payload_json").Where(ormbuilder.Equal("id", holdID)).Build()
+	if buildErr != nil {
+		return lifecyclemodel.LegalHold{}, false, fmt.Errorf("build lifecycle legal hold query: %w", buildErr)
+	}
 	var payload string
-	if err := s.db.QueryRowContext(ctx, query, workspaceID, holdID).Scan(&payload); errors.Is(err, sql.ErrNoRows) {
+	if err := s.db.QueryRowContext(ctx, query, args...).Scan(&payload); errors.Is(err, sql.ErrNoRows) {
 		return lifecyclemodel.LegalHold{}, false, nil
 	} else if err != nil {
 		return lifecyclemodel.LegalHold{}, false, err
@@ -124,8 +152,13 @@ func (s LifecycleStore) GetLegalHold(ctx context.Context, workspaceID, holdID st
 
 func (s LifecycleStore) ActiveLegalHolds(ctx context.Context, target lifecyclemodel.ResourceTarget, now time.Time) ([]lifecyclemodel.LegalHold, error) {
 	nowText := lifecycleTime(now)
-	query := "SELECT " + s.store.Identifier("payload_json") + " FROM " + s.store.TableIdentifier("lifecycle_legal_holds") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("starts_at") + " <= " + s.store.Placeholder(2) + " AND (" + s.store.Identifier("ends_at") + " = '' OR " + s.store.Identifier("ends_at") + " > " + s.store.Placeholder(3) + ")"
-	rows, err := s.db.QueryContext(ctx, query, target.WorkspaceID, nowText, nowText)
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "lifecycle_legal_holds", target.WorkspaceID).Columns("payload_json").Where(ormbuilder.And(
+		ormbuilder.LessThanOrEqual("starts_at", nowText), ormbuilder.Or(ormbuilder.Equal("ends_at", ""), ormbuilder.GreaterThan("ends_at", nowText)),
+	)).Build()
+	if buildErr != nil {
+		return nil, fmt.Errorf("build active lifecycle legal holds query: %w", buildErr)
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -149,8 +182,13 @@ func (s LifecycleStore) ActiveLegalHolds(ctx context.Context, target lifecyclemo
 
 func (s LifecycleStore) SaveCleanupJob(ctx context.Context, job lifecyclemodel.CleanupJob) error {
 	payload, _ := json.Marshal(job)
-	columns := []string{"id", "workspace_id", "policy_key", "policy_version", "status", "checkpoint_value", "lease_owner", "lease_expires_at", "fencing_token", "updated_at", "payload_json"}
-	_, err := s.db.ExecContext(ctx, s.store.InsertStatement("lifecycle_cleanup_jobs", columns), job.ID, job.WorkspaceID, job.PolicyKey, job.PolicyVersion, job.Status, job.Checkpoint, job.LeaseOwner, lifecycleTime(job.LeaseExpiresAt), job.FencingToken, lifecycleTime(job.UpdatedAt), string(payload))
+	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "lifecycle_cleanup_jobs", job.WorkspaceID).
+		Columns("id", "policy_key", "policy_version", "status", "checkpoint_value", "lease_owner", "lease_expires_at", "fencing_token", "updated_at", "payload_json").
+		Values(job.ID, job.PolicyKey, job.PolicyVersion, job.Status, job.Checkpoint, job.LeaseOwner, lifecycleTime(job.LeaseExpiresAt), job.FencingToken, lifecycleTime(job.UpdatedAt), string(payload)).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build lifecycle cleanup job insert: %w", buildErr)
+	}
+	_, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("save lifecycle cleanup job: %w", err)
 	}
@@ -158,10 +196,14 @@ func (s LifecycleStore) SaveCleanupJob(ctx context.Context, job lifecyclemodel.C
 }
 
 func (s LifecycleStore) GetCleanupJob(ctx context.Context, workspaceID, id string) (lifecyclemodel.CleanupJob, bool, error) {
-	query := "SELECT " + lifecycleColumns(s.store, "status", "checkpoint_value", "lease_owner", "lease_expires_at", "fencing_token", "updated_at", "payload_json") + " FROM " + s.store.TableIdentifier("lifecycle_cleanup_jobs") + " WHERE " + s.store.Identifier("workspace_id") + " = " + s.store.Placeholder(1) + " AND " + s.store.Identifier("id") + " = " + s.store.Placeholder(2)
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "lifecycle_cleanup_jobs", workspaceID).
+		Columns("status", "checkpoint_value", "lease_owner", "lease_expires_at", "fencing_token", "updated_at", "payload_json").Where(ormbuilder.Equal("id", id)).Build()
+	if buildErr != nil {
+		return lifecyclemodel.CleanupJob{}, false, fmt.Errorf("build lifecycle cleanup job query: %w", buildErr)
+	}
 	var status, checkpoint, leaseOwner, leaseExpiresAt, updatedAt, payload string
 	var fencingToken int64
-	err := s.db.QueryRowContext(ctx, query, workspaceID, id).Scan(&status, &checkpoint, &leaseOwner, &leaseExpiresAt, &fencingToken, &updatedAt, &payload)
+	err := s.db.QueryRowContext(ctx, query, args...).Scan(&status, &checkpoint, &leaseOwner, &leaseExpiresAt, &fencingToken, &updatedAt, &payload)
 	if errors.Is(err, sql.ErrNoRows) {
 		return lifecyclemodel.CleanupJob{}, false, nil
 	}
