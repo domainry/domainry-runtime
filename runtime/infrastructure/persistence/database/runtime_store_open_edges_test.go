@@ -26,7 +26,7 @@ func (stub runtimeOpenDialectStub) SQLDriver() string     { return "scripted" }
 func (stub runtimeOpenDialectStub) DSN(config.Config) (string, error) {
 	return "scripted", stub.dsnErr
 }
-func (stub runtimeOpenDialectStub) Configure(context.Context, *sql.DB, string) error {
+func (stub runtimeOpenDialectStub) Configure(context.Context, *sql.DB, config.Config) error {
 	return stub.configureErr
 }
 func (stub runtimeOpenDialectStub) SQLDialect() ormdialect.Dialect {

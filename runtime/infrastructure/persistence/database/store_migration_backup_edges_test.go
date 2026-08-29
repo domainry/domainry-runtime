@@ -192,7 +192,7 @@ func (namedTestDialect) SQLDriver() string             { return "sqlite" }
 func (namedTestDialect) DSN(config.Config) (string, error) {
 	return "", nil
 }
-func (namedTestDialect) Configure(context.Context, *sql.DB, string) error { return nil }
+func (namedTestDialect) Configure(context.Context, *sql.DB, config.Config) error { return nil }
 func (namedTestDialect) SQLDialect() ormdialect.Dialect {
 	value, _ := ormdialect.New(ormdialect.SQLite)
 	return value

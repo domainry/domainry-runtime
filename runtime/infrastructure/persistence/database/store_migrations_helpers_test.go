@@ -196,10 +196,12 @@ func TestEnsureMigrationBackupCoversEmptyAndExistingSQLiteDatabases(t *testing.T
 
 type unsupportedMigrationDialect struct{ sqlite.Engine }
 
-func (unsupportedMigrationDialect) Name() ormdialect.Name                            { return ormdialect.Name("unsupported") }
-func (unsupportedMigrationDialect) SQLDriver() string                                { return "" }
-func (unsupportedMigrationDialect) DSN(config.Config) (string, error)                { return "", nil }
-func (unsupportedMigrationDialect) Configure(context.Context, *sql.DB, string) error { return nil }
+func (unsupportedMigrationDialect) Name() ormdialect.Name             { return ormdialect.Name("unsupported") }
+func (unsupportedMigrationDialect) SQLDriver() string                 { return "" }
+func (unsupportedMigrationDialect) DSN(config.Config) (string, error) { return "", nil }
+func (unsupportedMigrationDialect) Configure(context.Context, *sql.DB, config.Config) error {
+	return nil
+}
 func (unsupportedMigrationDialect) SQLDialect() ormdialect.Dialect {
 	value, _ := ormdialect.New(ormdialect.SQLite)
 	return value

@@ -23,7 +23,7 @@ func (Dialect) DSN(cfg config.Config) (string, error) {
 	return strings.TrimSpace(cfg.DatabaseDSN), nil
 }
 
-func (Dialect) Configure(ctx context.Context, db *sql.DB, _ string) error {
+func (Dialect) Configure(ctx context.Context, db *sql.DB, _ config.Config) error {
 	if err := db.PingContext(ctx); err != nil {
 		return fmt.Errorf("connect postgres database (%s)", ClassifyConnectionFailure(err))
 	}

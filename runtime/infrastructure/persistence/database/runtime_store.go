@@ -267,7 +267,7 @@ func openContextWithDependencies(ctx context.Context, cfg config.Config, depende
 	}
 	db := connection.database
 	migrationDB := connection.migrationDatabase
-	if err := engine.Configure(ctx, db, connection.dsn); err != nil {
+	if err := engine.Configure(ctx, db, cfg); err != nil {
 		connection.close()
 		return nil, err
 	}
