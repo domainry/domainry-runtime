@@ -21,6 +21,33 @@ import (
 
 var _ reportcontract.ReportObjectSQLExecutor = (*ReportDatasetStore)(nil)
 
+// reportQueryDialect is retained only for the legacy report-object SQL
+// compiler. Dataset execution uses ORM predicates, CTEs, and joins directly.
+type reportQueryDialect struct {
+	store interface {
+		Identifier(string) string
+		TableIdentifier(string) string
+		Placeholder(int) string
+	}
+	offset int
+}
+
+func (s reportQueryDialect) Identifier(value string) string { return s.store.Identifier(value) }
+func (s reportQueryDialect) TableIdentifier(value string) string {
+	return s.store.TableIdentifier(value)
+}
+func (s reportQueryDialect) Placeholder(index int) string {
+	return s.store.Placeholder(s.offset + index)
+}
+
+func reportStoreColumnList(store interface{ Identifier(string) string }, columns []string) string {
+	quoted := make([]string, len(columns))
+	for index, column := range columns {
+		quoted[index] = store.Identifier(column)
+	}
+	return strings.Join(quoted, ", ")
+}
+
 func (s *ReportDatasetStore) ExecuteReportObjectSQL(ctx context.Context, request reportcontract.ReportObjectSQLExecutionRequest) (reportcontract.ReportObjectSQLExecutionResult, error) {
 	if s == nil || s.store == nil || s.store.DB() == nil {
 		return reportcontract.ReportObjectSQLExecutionResult{}, fmt.Errorf("report object SQL store is unavailable")

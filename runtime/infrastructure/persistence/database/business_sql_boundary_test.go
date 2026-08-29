@@ -63,3 +63,26 @@ func TestWorkflowAndIntegrationRepositoriesUseStructuredBuilders(t *testing.T) {
 		}
 	}
 }
+
+func TestReportDatasetStoreUsesStructuredCTEAndJoinBuilders(t *testing.T) {
+	_, source, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve persistence boundary path")
+	}
+	path := filepath.Join(filepath.Dir(source), "report", "report_dataset_store.go")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	for _, forbidden := range []string{"BuildTenantWhere", `"WITH "`, `"SELECT COUNT`, "reportQueryDialect", "reportStoreColumnList"} {
+		if strings.Contains(text, forbidden) {
+			t.Errorf("Report Dataset persistence reintroduced hand-built SQL token %q", forbidden)
+		}
+	}
+	for _, required := range []string{"NewSelectFromCTE", "InnerJoinCTE", "LeftJoinCTE", "BuildTenantPredicate", "QualifiedColumn"} {
+		if !strings.Contains(text, required) {
+			t.Errorf("Report Dataset persistence lost structured builder %q", required)
+		}
+	}
+}

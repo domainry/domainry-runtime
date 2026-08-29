@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
@@ -34,19 +35,6 @@ func NewReportDatasetStore(store *database.RuntimeStore) *ReportDatasetStore {
 	return result
 }
 
-type reportQueryDialect struct {
-	store  *database.RuntimeStore
-	offset int
-}
-
-func (s reportQueryDialect) Identifier(value string) string { return s.store.Identifier(value) }
-func (s reportQueryDialect) TableIdentifier(value string) string {
-	return s.store.TableIdentifier(value)
-}
-func (s reportQueryDialect) Placeholder(index int) string {
-	return s.store.Placeholder(s.offset + index)
-}
-
 type reportSelectedColumn struct {
 	alias string
 	field definitionmodel.FieldSchema
@@ -63,10 +51,9 @@ func (s *ReportDatasetStore) ReadReportDatasetRows(ctx context.Context, request 
 	defer tx.Rollback()
 
 	aliases := reportStoreAliasOrder(request.Plan.Dataset)
-	cteParts := make([]string, 0, len(aliases))
-	args := []any{}
+	cteQueries := make([]*ormbuilder.SelectBuilder, 0, len(aliases))
 	queries := make(map[string]recordmodel.RecordListQuery, len(request.Queries))
-	for index, alias := range aliases {
+	for _, alias := range aliases {
 		object := request.Objects[alias]
 		query := request.Queries[alias]
 		if query.ScopeExpression != nil && querypersistence.ScopeExpressionHasRelation(*query.ScopeExpression) {
@@ -92,40 +79,49 @@ func (s *ReportDatasetStore) ReadReportDatasetRows(ctx context.Context, request 
 			query.ScopeExpression = &resolved
 		}
 		query = recordpersistence.RecordQueryDatabaseValues(s.store.RuntimeEngine, object, query)
-		whereSQL, whereArgs, whereErr := querypersistence.BuildTenantWhere(reportQueryDialect{store: s.store, offset: len(args)}, request.WorkspaceID, query)
-		if whereErr != nil {
-			return nil, fmt.Errorf("build report source %s scope: %w", alias, whereErr)
+		predicate, predicateErr := querypersistence.BuildTenantPredicate(s.store, request.WorkspaceID, query)
+		if predicateErr != nil {
+			return nil, fmt.Errorf("build report source %s scope: %w", alias, predicateErr)
 		}
-		args = append(args, whereArgs...)
 		columns := reportStoreSourceColumns(query.SelectFields)
-		cteParts = append(cteParts, fmt.Sprintf("%s AS (SELECT %s FROM %s%s)", s.store.Identifier(reportStoreCTE(index)), reportStoreColumnList(s.store, columns), s.store.TableIdentifier(object.Key), whereSQL))
+		cteQueries = append(cteQueries, ormbuilder.NewSelectBuilder(s.store.SQLRenderer, object.Key).Columns(columns...).Where(predicate))
 		queries[alias] = query
 	}
 
 	selected := reportStoreSelectedColumns(aliases, request.Objects, queries)
-	selectSQL := make([]string, 0, len(selected))
+	projections := make([]ormbuilder.Projection, 0, len(selected))
 	for _, column := range selected {
-		selectSQL = append(selectSQL, reportStoreReference(s.store, column.alias, column.field.Key))
+		projections = append(projections, ormbuilder.Project(ormbuilder.QualifiedColumn(column.alias, column.field.Key)))
 	}
-	fromSQL := s.store.Identifier(reportStoreCTE(0)) + " " + s.store.Identifier(aliases[0])
+	selectBuilder := ormbuilder.NewSelectFromCTE(s.store.SQLRenderer, reportStoreCTE(0), aliases[0]).Projections(projections...)
+	joins := make([]ormbuilder.Join, 0, len(request.Plan.Dataset.Joins))
 	for joinIndex, join := range request.Plan.Dataset.Joins {
-		joinKeyword := " JOIN "
-		if strings.TrimSpace(join.Type) == "left" {
-			joinKeyword = " LEFT JOIN "
-		}
 		alias := strings.TrimSpace(join.Alias)
-		equalities := make([]string, 0, len(join.Equalities()))
+		equalities := make([]ormbuilder.Predicate, 0, len(join.Equalities()))
 		for _, equality := range join.Equalities() {
-			equalities = append(equalities, reportStoreReference(s.store, join.LeftAlias, equality.LeftField)+" = "+reportStoreReference(s.store, alias, equality.RightField))
+			equalities = append(equalities, ormbuilder.EqualExpressions(ormbuilder.QualifiedColumn(join.LeftAlias, equality.LeftField), ormbuilder.QualifiedColumn(alias, equality.RightField)))
 		}
-		fromSQL += joinKeyword + s.store.Identifier(reportStoreCTE(joinIndex+1)) + " " + s.store.Identifier(alias) + " ON " + strings.Join(equalities, " AND ")
+		if strings.TrimSpace(join.Type) == "left" {
+			joins = append(joins, ormbuilder.LeftJoinCTE(reportStoreCTE(joinIndex+1), alias, ormbuilder.And(equalities...)))
+		} else {
+			joins = append(joins, ormbuilder.InnerJoinCTE(reportStoreCTE(joinIndex+1), alias, ormbuilder.And(equalities...)))
+		}
 	}
-	globalWhere, globalArgs, err := reportStoreGlobalFilter(s.store, request.Plan.Dataset, request.Objects, len(args))
+	selectBuilder.Join(joins...)
+	globalPredicate, err := reportStoreGlobalPredicate(s.store, request.Plan.Dataset, request.Objects)
 	if err != nil {
 		return nil, err
 	}
-	args = append(args, globalArgs...)
-	statement := "WITH " + strings.Join(cteParts, ", ") + " SELECT " + strings.Join(selectSQL, ", ") + " FROM " + fromSQL + globalWhere
+	if globalPredicate != nil {
+		selectBuilder.Where(globalPredicate)
+	}
+	for index, cteQuery := range cteQueries {
+		selectBuilder.With(reportStoreCTE(index), cteQuery)
+	}
+	statement, args, err := selectBuilder.Build()
+	if err != nil {
+		return nil, fmt.Errorf("build report dataset query: %w", err)
+	}
 	rows, err := tx.QueryContext(ctx, statement, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query report dataset rows: %w", err)
@@ -220,11 +216,16 @@ func (s *ReportDatasetStore) ReadReportSnapshotSourceVersion(ctx context.Context
 			query.ScopeExpression = &resolved
 		}
 		query = recordpersistence.RecordQueryDatabaseValues(s.store.RuntimeEngine, object, query)
-		whereSQL, args, whereErr := querypersistence.BuildTenantWhere(reportQueryDialect{store: s.store}, request.WorkspaceID, query)
-		if whereErr != nil {
-			return reportmodel.ReportSnapshotSourceVersion{}, whereErr
+		predicate, predicateErr := querypersistence.BuildTenantPredicate(s.store, request.WorkspaceID, query)
+		if predicateErr != nil {
+			return reportmodel.ReportSnapshotSourceVersion{}, predicateErr
 		}
-		statement := "SELECT COUNT(*), COALESCE(MAX(" + s.store.Identifier("updated_at") + "), '') FROM " + s.store.TableIdentifier(object.Key) + whereSQL
+		statement, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, object.Key).
+			Projections(ormbuilder.Project(ormbuilder.CountAll()), ormbuilder.Project(ormbuilder.Coalesce(ormbuilder.Max(ormbuilder.Column("updated_at")), ormbuilder.Value("")))).
+			Where(predicate).Build()
+		if buildErr != nil {
+			return reportmodel.ReportSnapshotSourceVersion{}, buildErr
+		}
 		var count int64
 		var watermark string
 		if err := tx.QueryRowContext(ctx, statement, args...).Scan(&count, &watermark); err != nil {
@@ -265,14 +266,6 @@ func reportStoreSourceColumns(selected []string) []string {
 	return columns
 }
 
-func reportStoreColumnList(store *database.RuntimeStore, columns []string) string {
-	quoted := make([]string, len(columns))
-	for index, column := range columns {
-		quoted[index] = store.Identifier(column)
-	}
-	return strings.Join(quoted, ", ")
-}
-
 func reportStoreSelectedColumns(aliases []string, objects map[string]definitionmodel.ObjectSchema, queries map[string]recordmodel.RecordListQuery) []reportSelectedColumn {
 	selected := []reportSelectedColumn{}
 	for _, alias := range aliases {
@@ -289,58 +282,59 @@ func reportStoreSelectedColumns(aliases []string, objects map[string]definitionm
 	return selected
 }
 
-func reportStoreReference(store *database.RuntimeStore, alias, field string) string {
-	return store.Identifier(strings.TrimSpace(alias)) + "." + store.Identifier(strings.TrimSpace(field))
-}
-
-func reportStoreGlobalFilter(store *database.RuntimeStore, dataset reportmodel.ReportDatasetSchema, objects map[string]definitionmodel.ObjectSchema, offset int) (string, []any, error) {
-	clauses := []string{}
-	args := []any{}
+func reportStoreGlobalPredicate(store *database.RuntimeStore, dataset reportmodel.ReportDatasetSchema, objects map[string]definitionmodel.ObjectSchema) (ormbuilder.Predicate, error) {
+	predicates := []ormbuilder.Predicate{}
 	for _, filter := range dataset.Filters {
 		operator := strings.TrimSpace(filter.Operator)
 		if operator == "contains" || operator == "starts_with" || operator == "ends_with" {
 			continue
 		}
 		field := reportStoreField(objects[strings.TrimSpace(filter.Field.SourceAlias)], filter.Field.FieldKey)
-		reference := reportStoreReference(store, filter.Field.SourceAlias, filter.Field.FieldKey)
-		placeholder := func(value any) string {
-			args = append(args, recordpersistence.RecordDatabaseFieldValue(store.RuntimeEngine, field, value))
-			return store.Placeholder(offset + len(args))
-		}
+		reference := ormbuilder.QualifiedColumn(strings.TrimSpace(filter.Field.SourceAlias), strings.TrimSpace(filter.Field.FieldKey))
+		value := func(raw any) any { return recordpersistence.RecordDatabaseFieldValue(store.RuntimeEngine, field, raw) }
 		switch operator {
-		case "eq", "ne", "gt", "gte", "lt", "lte":
-			comparison := map[string]string{"eq": "=", "ne": "<>", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}[operator]
-			clauses = append(clauses, reference+" "+comparison+" "+placeholder(filter.Value))
+		case "eq":
+			predicates = append(predicates, ormbuilder.EqualValue(reference, value(filter.Value)))
+		case "ne":
+			predicates = append(predicates, ormbuilder.NotEqualValue(reference, value(filter.Value)))
+		case "gt":
+			predicates = append(predicates, ormbuilder.GreaterThanExpression(reference, value(filter.Value)))
+		case "gte":
+			predicates = append(predicates, ormbuilder.GreaterThanOrEqualValue(reference, value(filter.Value)))
+		case "lt":
+			predicates = append(predicates, ormbuilder.LessThanValue(reference, value(filter.Value)))
+		case "lte":
+			predicates = append(predicates, ormbuilder.LessThanOrEqualValue(reference, value(filter.Value)))
 		case "in", "not_in":
-			values := make([]string, 0, len(filter.Values))
-			for _, value := range filter.Values {
-				values = append(values, placeholder(value))
+			values := make([]any, 0, len(filter.Values))
+			for _, raw := range filter.Values {
+				values = append(values, value(raw))
 			}
 			if len(values) == 0 {
-				return "", nil, fmt.Errorf("report filter %s requires values", operator)
+				return nil, fmt.Errorf("report filter %s requires values", operator)
 			}
-			keyword := "IN"
 			if operator == "not_in" {
-				keyword = "NOT IN"
+				predicates = append(predicates, ormbuilder.NotInExpression(reference, values...))
+			} else {
+				predicates = append(predicates, ormbuilder.InExpression(reference, values...))
 			}
-			clauses = append(clauses, reference+" "+keyword+" ("+strings.Join(values, ", ")+")")
 		case "between":
 			if len(filter.Values) != 2 {
-				return "", nil, fmt.Errorf("report filter between requires two values")
+				return nil, fmt.Errorf("report filter between requires two values")
 			}
-			clauses = append(clauses, "("+reference+" >= "+placeholder(filter.Values[0])+" AND "+reference+" <= "+placeholder(filter.Values[1])+")")
+			predicates = append(predicates, ormbuilder.And(ormbuilder.GreaterThanOrEqualValue(reference, value(filter.Values[0])), ormbuilder.LessThanOrEqualValue(reference, value(filter.Values[1]))))
 		case "is_null":
-			clauses = append(clauses, reference+" IS NULL")
+			predicates = append(predicates, ormbuilder.IsNullExpression(reference))
 		case "not_null":
-			clauses = append(clauses, reference+" IS NOT NULL")
+			predicates = append(predicates, ormbuilder.IsNotNullExpression(reference))
 		default:
-			return "", nil, fmt.Errorf("unsupported report filter operator %q", operator)
+			return nil, fmt.Errorf("unsupported report filter operator %q", operator)
 		}
 	}
-	if len(clauses) == 0 {
-		return "", args, nil
+	if len(predicates) == 0 {
+		return nil, nil
 	}
-	return " WHERE " + strings.Join(clauses, " AND "), args, nil
+	return ormbuilder.And(predicates...), nil
 }
 
 func reportStoreField(object definitionmodel.ObjectSchema, fieldKey string) definitionmodel.FieldSchema {

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
@@ -340,21 +341,18 @@ func TestReportDatasetStoreScriptedDriverFailures(t *testing.T) {
 
 func TestReportDatasetStoreHelperEdges(t *testing.T) {
 	store := reportDatasetEdgeStore(t)
-	if got := (reportQueryDialect{store: store, offset: 2}).Placeholder(1); got == "" {
-		t.Fatal("empty placeholder")
-	}
 	dataset := reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{Alias: " root "}, Joins: []reportmodel.ReportDatasetJoin{{Alias: " child "}}}
 	if got := reportStoreAliasOrder(dataset); len(got) != 2 || got[0] != "root" || got[1] != "child" || reportStoreCTE(2) != "report_source_2" {
 		t.Fatalf("aliases=%#v", got)
 	}
 	columns := reportStoreSourceColumns([]string{"", "id", " amount ", "amount", "created_at"})
-	if len(columns) != 4 || columns[3] != "amount" || reportStoreColumnList(store, columns) == "" {
+	if len(columns) != 4 || columns[3] != "amount" {
 		t.Fatalf("columns=%#v", columns)
 	}
 	objects := map[string]definitionmodel.ObjectSchema{"root": {Fields: []definitionmodel.FieldSchema{{Key: "amount", Type: "currency"}}}}
 	queries := map[string]recordmodel.RecordListQuery{"root": {SelectFields: []string{"amount"}}}
 	selected := reportStoreSelectedColumns([]string{"root"}, objects, queries)
-	if len(selected) != 4 || selected[3].field.Type != "currency" || reportStoreReference(store, " root ", " id ") == "" {
+	if len(selected) != 4 || selected[3].field.Type != "currency" {
 		t.Fatalf("selected=%#v", selected)
 	}
 	filters := []reportmodel.ReportDatasetFilter{
@@ -362,19 +360,27 @@ func TestReportDatasetStoreHelperEdges(t *testing.T) {
 		{Field: reportmodel.ReportDatasetField{SourceAlias: "root", FieldKey: "amount"}, Operator: "starts_with"},
 		{Field: reportmodel.ReportDatasetField{SourceAlias: "root", FieldKey: "amount"}, Operator: "ends_with"},
 	}
-	if where, args, err := reportStoreGlobalFilter(store, reportmodel.ReportDatasetSchema{Filters: filters}, objects, 0); err != nil || where != "" || len(args) != 0 {
-		t.Fatalf("skipped where=%q args=%#v err=%v", where, args, err)
+	if predicate, err := reportStoreGlobalPredicate(store, reportmodel.ReportDatasetSchema{Filters: filters}, objects); err != nil || predicate != nil {
+		t.Fatalf("skipped predicate=%#v err=%v", predicate, err)
 	}
 	for _, operator := range []string{"eq", "ne", "gt", "gte", "lt", "lte", "is_null", "not_null"} {
 		filter := reportmodel.ReportDatasetFilter{Field: reportmodel.ReportDatasetField{SourceAlias: "root", FieldKey: "amount"}, Operator: operator, Value: "1"}
-		if where, _, err := reportStoreGlobalFilter(store, reportmodel.ReportDatasetSchema{Filters: []reportmodel.ReportDatasetFilter{filter}}, objects, 2); err != nil || where == "" {
-			t.Fatalf("operator %s where=%q err=%v", operator, where, err)
+		predicate, err := reportStoreGlobalPredicate(store, reportmodel.ReportDatasetSchema{Filters: []reportmodel.ReportDatasetFilter{filter}}, objects)
+		if err != nil || predicate == nil {
+			t.Fatalf("operator %s predicate=%#v err=%v", operator, predicate, err)
+		}
+		if _, _, err := ormbuilder.PreparePredicate(store.SQLRenderer, predicate, 2); err != nil {
+			t.Fatalf("operator %s compile err=%v", operator, err)
 		}
 	}
 	for _, operator := range []string{"in", "not_in"} {
 		filter := reportmodel.ReportDatasetFilter{Field: reportmodel.ReportDatasetField{SourceAlias: "root", FieldKey: "amount"}, Operator: operator, Values: []any{"1", "2"}}
-		if where, args, err := reportStoreGlobalFilter(store, reportmodel.ReportDatasetSchema{Filters: []reportmodel.ReportDatasetFilter{filter}}, objects, 0); err != nil || where == "" || len(args) != 2 {
-			t.Fatalf("operator %s where=%q args=%#v err=%v", operator, where, args, err)
+		predicate, err := reportStoreGlobalPredicate(store, reportmodel.ReportDatasetSchema{Filters: []reportmodel.ReportDatasetFilter{filter}}, objects)
+		if err != nil || predicate == nil {
+			t.Fatalf("operator %s predicate=%#v err=%v", operator, predicate, err)
+		}
+		if _, args, err := ormbuilder.PreparePredicate(store.SQLRenderer, predicate, 0); err != nil || len(args) != 2 {
+			t.Fatalf("operator %s args=%#v err=%v", operator, args, err)
 		}
 	}
 	for _, filter := range []reportmodel.ReportDatasetFilter{
@@ -382,13 +388,17 @@ func TestReportDatasetStoreHelperEdges(t *testing.T) {
 		{Field: reportmodel.ReportDatasetField{SourceAlias: "root", FieldKey: "amount"}, Operator: "between", Values: []any{"1"}},
 		{Field: reportmodel.ReportDatasetField{SourceAlias: "root", FieldKey: "amount"}, Operator: "unknown"},
 	} {
-		if _, _, err := reportStoreGlobalFilter(store, reportmodel.ReportDatasetSchema{Filters: []reportmodel.ReportDatasetFilter{filter}}, objects, 0); err == nil {
+		if _, err := reportStoreGlobalPredicate(store, reportmodel.ReportDatasetSchema{Filters: []reportmodel.ReportDatasetFilter{filter}}, objects); err == nil {
 			t.Fatalf("invalid filter accepted: %#v", filter)
 		}
 	}
 	between := reportmodel.ReportDatasetFilter{Field: reportmodel.ReportDatasetField{SourceAlias: "root", FieldKey: "amount"}, Operator: "between", Values: []any{"1", "2"}}
-	if where, args, err := reportStoreGlobalFilter(store, reportmodel.ReportDatasetSchema{Filters: []reportmodel.ReportDatasetFilter{between}}, objects, 0); err != nil || where == "" || len(args) != 2 {
-		t.Fatalf("between where=%q args=%#v err=%v", where, args, err)
+	predicate, err := reportStoreGlobalPredicate(store, reportmodel.ReportDatasetSchema{Filters: []reportmodel.ReportDatasetFilter{between}}, objects)
+	if err != nil || predicate == nil {
+		t.Fatalf("between predicate=%#v err=%v", predicate, err)
+	}
+	if _, args, err := ormbuilder.PreparePredicate(store.SQLRenderer, predicate, 0); err != nil || len(args) != 2 {
+		t.Fatalf("between args=%#v err=%v", args, err)
 	}
 	for _, key := range []string{"id", "created_at", "updated_at", "amount", "missing"} {
 		if field := reportStoreField(objects["root"], key); field.Key == "" {
