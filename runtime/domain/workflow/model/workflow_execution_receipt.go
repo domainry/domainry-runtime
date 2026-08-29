@@ -36,6 +36,7 @@ type WorkflowExecutionClaimResult struct {
 }
 
 type WorkflowExecutionReceiptCompletion struct {
+	WorkspaceID  string
 	ReceiptID    string
 	ExecutionID  string
 	LeaseOwner   string

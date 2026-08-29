@@ -114,7 +114,7 @@ func TestWorkflowExecutionReceiptClaimFailures(t *testing.T) {
 
 func TestWorkflowExecutionReceiptCompletionFailures(t *testing.T) {
 	now := time.Date(2026, time.July, 20, 12, 0, 0, 0, time.UTC)
-	completion := workflowmodel.WorkflowExecutionReceiptCompletion{ReceiptID: "receipt", ExecutionID: "execution", LeaseOwner: "owner", FencingToken: 1, Now: now, ExpiresAt: now.Add(time.Hour)}
+	completion := workflowmodel.WorkflowExecutionReceiptCompletion{WorkspaceID: "workspace-a", ReceiptID: "receipt", ExecutionID: "execution", LeaseOwner: "owner", FencingToken: 1, Now: now, ExpiresAt: now.Add(time.Hour)}
 	tests := []workflowSQLState{
 		{execSteps: []workflowSQLExecStep{{err: errWorkflowSQL}}},
 		{execSteps: []workflowSQLExecStep{{rowsErr: errWorkflowSQL}}},

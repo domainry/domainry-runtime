@@ -38,7 +38,7 @@ func TestWorkflowExecutionReceiptStoreIsAtomicReplayableAndFenced(t *testing.T) 
 	if err != nil || conflict.Decision != idempotency.DecisionFingerprintConflict {
 		t.Fatalf("conflict=%#v err=%v", conflict, err)
 	}
-	wrong := workflowmodel.WorkflowExecutionReceiptCompletion{ReceiptID: first.Receipt.ID, ExecutionID: "execution-a", LeaseOwner: "runtime-a", FencingToken: 99, Now: now, ExpiresAt: now.Add(time.Hour)}
+	wrong := workflowmodel.WorkflowExecutionReceiptCompletion{WorkspaceID: first.Receipt.WorkspaceID, ReceiptID: first.Receipt.ID, ExecutionID: "execution-a", LeaseOwner: "runtime-a", FencingToken: 99, Now: now, ExpiresAt: now.Add(time.Hour)}
 	if err := repository.CompleteExecutionReceipt(t.Context(), wrong); !mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
 		t.Fatalf("wrong completion=%v", err)
 	}

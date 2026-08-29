@@ -12,6 +12,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
@@ -62,7 +63,22 @@ func (r WorkflowWorkerStore) tryBeginExecutionOnce(ctx context.Context, request 
 		r.store.ObserveIdempotency(ctx, receipt.WorkspaceID, "workflow.execute", idempotency.OutcomeForDecision(decision, false))
 		return workflowmodel.WorkflowExecutionClaimResult{Decision: decision, Receipt: current}, nil
 	}
-	result, err := r.database().ExecContext(ctx, "UPDATE "+r.store.TableIdentifier("workflow_execution_receipts")+" SET "+r.store.Identifier("status")+" = "+r.store.Placeholder(1)+", "+r.store.Identifier("lease_owner")+" = "+r.store.Placeholder(2)+", "+r.store.Identifier("lease_expires_at")+" = "+r.store.Placeholder(3)+", "+r.store.Identifier("fencing_token")+" = "+r.store.Identifier("fencing_token")+" + 1, "+r.store.Identifier("updated_at")+" = "+r.store.Placeholder(4)+" WHERE "+r.store.Identifier("id")+" = "+r.store.Placeholder(5)+" AND "+r.store.Identifier("request_fingerprint")+" = "+r.store.Placeholder(6)+" AND "+r.store.Identifier("status")+" = "+r.store.Placeholder(7)+" AND "+r.store.Identifier("lease_expires_at")+" <= "+r.store.Placeholder(8), string(idempotency.StatusProcessing), receipt.LeaseOwner, receipt.LeaseExpiresAt, receipt.UpdatedAt, receipt.ID, receipt.RequestFingerprint, string(idempotency.StatusProcessing), now.Format(time.RFC3339Nano))
+	statement, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "workflow_execution_receipts", receipt.WorkspaceID).
+		Set("status", string(idempotency.StatusProcessing)).
+		Set("lease_owner", receipt.LeaseOwner).
+		Set("lease_expires_at", receipt.LeaseExpiresAt).
+		SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).
+		Set("updated_at", receipt.UpdatedAt).
+		Where(ormbuilder.And(
+			ormbuilder.Equal("id", receipt.ID),
+			ormbuilder.Equal("request_fingerprint", receipt.RequestFingerprint),
+			ormbuilder.Equal("status", string(idempotency.StatusProcessing)),
+			ormbuilder.LessThanOrEqual("lease_expires_at", now.Format(time.RFC3339Nano)),
+		)).Build()
+	if buildErr != nil {
+		return workflowmodel.WorkflowExecutionClaimResult{}, fmt.Errorf("build workflow execution receipt reclaim: %w", buildErr)
+	}
+	result, err := r.database().ExecContext(ctx, statement, args...)
 	if err != nil {
 		return workflowmodel.WorkflowExecutionClaimResult{}, err
 	}
@@ -83,11 +99,29 @@ func (r WorkflowWorkerStore) tryBeginExecutionOnce(ctx context.Context, request 
 }
 
 func (r WorkflowWorkerStore) CompleteExecutionReceipt(ctx context.Context, completion workflowmodel.WorkflowExecutionReceiptCompletion) error {
+	workspaceID, err := requireWorkflowWorkspaceID(completion.WorkspaceID)
+	if err != nil {
+		return err
+	}
 	now := completion.Now.UTC()
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	result, err := r.database().ExecContext(ctx, "UPDATE "+r.store.TableIdentifier("workflow_execution_receipts")+" SET "+r.store.Identifier("status")+" = "+r.store.Placeholder(1)+", "+r.store.Identifier("execution_id")+" = "+r.store.Placeholder(2)+", "+r.store.Identifier("expires_at")+" = "+r.store.Placeholder(3)+", "+r.store.Identifier("updated_at")+" = "+r.store.Placeholder(4)+" WHERE "+r.store.Identifier("id")+" = "+r.store.Placeholder(5)+" AND "+r.store.Identifier("lease_owner")+" = "+r.store.Placeholder(6)+" AND "+r.store.Identifier("fencing_token")+" = "+r.store.Placeholder(7)+" AND "+r.store.Identifier("status")+" = "+r.store.Placeholder(8), string(idempotency.StatusSucceeded), strings.TrimSpace(completion.ExecutionID), completion.ExpiresAt.UTC().Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), completion.ReceiptID, strings.TrimSpace(completion.LeaseOwner), completion.FencingToken, string(idempotency.StatusProcessing))
+	statement, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "workflow_execution_receipts", workspaceID).
+		Set("status", string(idempotency.StatusSucceeded)).
+		Set("execution_id", strings.TrimSpace(completion.ExecutionID)).
+		Set("expires_at", completion.ExpiresAt.UTC().Format(time.RFC3339Nano)).
+		Set("updated_at", now.Format(time.RFC3339Nano)).
+		Where(ormbuilder.And(
+			ormbuilder.Equal("id", completion.ReceiptID),
+			ormbuilder.Equal("lease_owner", strings.TrimSpace(completion.LeaseOwner)),
+			ormbuilder.Equal("fencing_token", completion.FencingToken),
+			ormbuilder.Equal("status", string(idempotency.StatusProcessing)),
+		)).Build()
+	if buildErr != nil {
+		return fmt.Errorf("build workflow execution receipt completion: %w", buildErr)
+	}
+	result, err := r.database().ExecContext(ctx, statement, args...)
 	if err != nil {
 		return err
 	}
@@ -96,18 +130,10 @@ func (r WorkflowWorkerStore) CompleteExecutionReceipt(ctx context.Context, compl
 		return err
 	}
 	if rows != 1 {
-		if workspaceID, loadErr := r.workflowReceiptWorkspaceByID(ctx, completion.ReceiptID); loadErr == nil {
-			r.store.ObserveIdempotency(ctx, workspaceID, "workflow.execute", idempotency.OutcomeLeaseLost)
-		}
+		r.store.ObserveIdempotency(ctx, workspaceID, "workflow.execute", idempotency.OutcomeLeaseLost)
 		return mutation.MutationConflict("workflow_execution_receipt", completion.ReceiptID, mutation.MutationConflictLeaseLost, nil)
 	}
 	return nil
-}
-
-func (r WorkflowWorkerStore) workflowReceiptWorkspaceByID(ctx context.Context, receiptID string) (string, error) {
-	var workspaceID string
-	err := r.database().QueryRowContext(ctx, "SELECT "+r.store.Identifier("workspace_id")+" FROM "+r.store.TableIdentifier("workflow_execution_receipts")+" WHERE "+r.store.Identifier("id")+" = "+r.store.Placeholder(1), receiptID).Scan(&workspaceID)
-	return workspaceID, err
 }
 
 func (r WorkflowWorkerStore) findExecutionReceipt(ctx context.Context, workspaceID, workflowKey, key string) (workflowmodel.WorkflowExecutionReceipt, bool, error) {

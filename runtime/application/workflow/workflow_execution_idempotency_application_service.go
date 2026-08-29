@@ -68,7 +68,7 @@ func (s *WorkflowApplicationService) completeWorkflowExecutionReceipt(ctx contex
 		return nil
 	}
 	if err := s.workerRepo.CompleteExecutionReceipt(ctx, workflowmodel.WorkflowExecutionReceiptCompletion{
-		ReceiptID: claim.Receipt.ID, ExecutionID: execution.ID, LeaseOwner: claim.Receipt.LeaseOwner,
+		WorkspaceID: claim.Receipt.WorkspaceID, ReceiptID: claim.Receipt.ID, ExecutionID: execution.ID, LeaseOwner: claim.Receipt.LeaseOwner,
 		FencingToken: claim.Receipt.FencingToken, Now: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(90 * 24 * time.Hour),
 	}); err != nil {
 		return err
