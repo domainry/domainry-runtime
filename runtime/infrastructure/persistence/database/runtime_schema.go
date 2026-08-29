@@ -16,7 +16,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-const CurrentRuntimeSchemaVersion = "012_rate_limit_schema_owner"
+const CurrentRuntimeSchemaVersion = "013_agent_schema_owner"
 
 const (
 	managedDatabaseCohortTable           = "_domainry_managed_runtime_database_cohort"
@@ -24,7 +24,7 @@ const (
 )
 
 func SupportedRuntimeSchemaUpgradeVersions() []string {
-	return []string{"001_connector_runtime_lifecycle", "002_data_lifecycle_governance", "003_operations_reliability", "004_runtime_release_cohort", "005_identity_workforce_separation", "006_party_foundation", "007_identity_global_names", "008_identity_account_directory", "009_managed_database_cohort", "010_external_identity_ownership", "011_notification_service_publication_outbox"}
+	return []string{"001_connector_runtime_lifecycle", "002_data_lifecycle_governance", "003_operations_reliability", "004_runtime_release_cohort", "005_identity_workforce_separation", "006_party_foundation", "007_identity_global_names", "008_identity_account_directory", "009_managed_database_cohort", "010_external_identity_ownership", "011_notification_service_publication_outbox", "012_rate_limit_schema_owner"}
 }
 
 func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
@@ -76,6 +76,9 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 		return err
 	}
 	if err := s.EnsureWorkflowProcessSchema(ctx); err != nil {
+		return err
+	}
+	if err := s.EnsureAgentSchema(ctx); err != nil {
 		return err
 	}
 	if err := s.EnsureRateLimitSchema(ctx); err != nil {
@@ -148,6 +151,7 @@ type runtimeSchemaAssembler interface {
 	EnsureMetadataSchema(context.Context, runtimeschema.Store) error
 	EnsureEvidenceSchema(context.Context, runtimeschema.Store) error
 	EnsureWorkflowProcessSchema(context.Context, runtimeschema.Store) error
+	EnsureAgentSchema(context.Context, runtimeschema.Store) error
 	EnsureRateLimitSchema(context.Context, runtimeschema.Store) error
 	EnsureLifecycleSchema(context.Context, runtimeschema.Store) error
 }
@@ -187,6 +191,13 @@ func (s *RuntimeStore) EnsureWorkflowProcessSchema(ctx context.Context) error {
 		return s.schemaAssembler.EnsureWorkflowProcessSchema(ctx, s)
 	}
 	return runtimeschema.EnsureWorkflowProcessSchema(ctx, s)
+}
+
+func (s *RuntimeStore) EnsureAgentSchema(ctx context.Context) error {
+	if s.schemaAssembler != nil {
+		return s.schemaAssembler.EnsureAgentSchema(ctx, s)
+	}
+	return runtimeschema.EnsureAgentSchema(ctx, s)
 }
 
 func (s *RuntimeStore) EnsureRateLimitSchema(ctx context.Context) error {
@@ -272,7 +283,7 @@ func (s *RuntimeStore) recordRuntimeSchemaMigration(ctx context.Context, version
 }
 
 func currentRuntimeSchemaChecksum() string {
-	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":metadata,object_fields,record_data,evidence,party,lifecycle,operations,indexes,report_snapshots,runtime_release_cohorts,runtime_release_instances,managed_database_cohort,external_identity_ownership,rate_limit"))
+	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":metadata,object_fields,record_data,evidence,party,lifecycle,operations,indexes,report_snapshots,runtime_release_cohorts,runtime_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,agent"))
 	return hex.EncodeToString(sum[:])
 }
 
