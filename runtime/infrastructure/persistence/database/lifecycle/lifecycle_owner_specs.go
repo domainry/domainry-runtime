@@ -1,6 +1,7 @@
 package lifecycle
 
 import (
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
@@ -8,9 +9,17 @@ import (
 )
 
 func DefaultOwnerExecutors(store *database.RuntimeStore, objects ...definitionmodel.ObjectSchema) []lifecyclecontract.OwnerLifecycleExecutor {
-	metadataVersions := store.TableIdentifier("metadata_definition_versions")
-	metadataNewer := "newer"
-	metadataHasNewer := "EXISTS (SELECT 1 FROM " + metadataVersions + " " + metadataNewer + " WHERE " + metadataNewer + "." + store.Identifier("resource_type") + " = " + metadataVersions + "." + store.Identifier("resource_type") + " AND " + metadataNewer + "." + store.Identifier("resource_key") + " = " + metadataVersions + "." + store.Identifier("resource_key") + " AND (" + metadataNewer + "." + store.Identifier("created_at") + " > " + metadataVersions + "." + store.Identifier("created_at") + " OR (" + metadataNewer + "." + store.Identifier("created_at") + " = " + metadataVersions + "." + store.Identifier("created_at") + " AND " + metadataNewer + "." + store.Identifier("id") + " > " + metadataVersions + "." + store.Identifier("id") + ")) )"
+	metadataHasNewer := func(outer string) ormbuilder.Predicate {
+		newer := ormbuilder.NewSelectBuilder(store.SQLRenderer, "metadata_definition_versions").Alias("newer").Columns("id").Where(ormbuilder.And(
+			ormbuilder.EqualExpressions(ormbuilder.QualifiedColumn("newer", "resource_type"), ormbuilder.QualifiedColumn(outer, "resource_type")),
+			ormbuilder.EqualExpressions(ormbuilder.QualifiedColumn("newer", "resource_key"), ormbuilder.QualifiedColumn(outer, "resource_key")),
+			ormbuilder.Or(
+				ormbuilder.GreaterThanExpressions(ormbuilder.QualifiedColumn("newer", "created_at"), ormbuilder.QualifiedColumn(outer, "created_at")),
+				ormbuilder.And(ormbuilder.EqualExpressions(ormbuilder.QualifiedColumn("newer", "created_at"), ormbuilder.QualifiedColumn(outer, "created_at")), ormbuilder.GreaterThanExpressions(ormbuilder.QualifiedColumn("newer", "id"), ormbuilder.QualifiedColumn(outer, "id"))),
+			),
+		))
+		return ormbuilder.ExistsSubquery(newer)
+	}
 	baseExecutors := []OwnerExecutor{
 		{store: store, owner: "runtime_security", specs: []cleanupSpec{
 			{policyKey: "ratelimit.bucket.v1", table: "runtime_rate_limit_bucket", idColumn: "bucket_key", timeColumn: "updated_at_ns", unixNanoTime: true},
@@ -49,7 +58,7 @@ func DefaultOwnerExecutors(store *database.RuntimeStore, objects ...definitionmo
 			{policyKey: "automation.execution.v1", table: "automation_instruction_executions", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "updated_at", statusColumn: "status", eligibleStatuses: []string{"failed", "dead_letter", "cancelled"}, retentionGroup: "failed"},
 		}},
 		{store: store, owner: "metadata", specs: []cleanupSpec{
-			{policyKey: "metadata.definition_history.v1", table: "metadata_definition_versions", idColumn: "id", timeColumn: "created_at", additionalWhere: metadataHasNewer},
+			{policyKey: "metadata.definition_history.v1", table: "metadata_definition_versions", idColumn: "id", timeColumn: "created_at", additionalPredicate: metadataHasNewer},
 		}},
 		{store: store, owner: "audit", specs: []cleanupSpec{
 			{policyKey: "audit.evidence.v1", table: "_audit_events", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "created_at"},

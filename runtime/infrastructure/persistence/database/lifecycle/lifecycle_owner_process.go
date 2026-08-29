@@ -5,17 +5,29 @@ import (
 	"fmt"
 	"time"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 )
 
 func (e OwnerExecutor) processSpec(ctx context.Context, job lifecyclemodel.CleanupJob, policy lifecyclemodel.PolicyVersion, spec cleanupSpec, holds []lifecyclemodel.LegalHold, cutoff time.Time, limit int) (lifecyclemodel.CleanupBatchResult, error) {
-	where, args := cleanupWhere(e.store, spec, job.WorkspaceID, cutoff, 1)
+	const candidateAlias = "candidate"
+	predicate := cleanupPredicate(spec, cutoff, candidateAlias)
 	if job.Operation == lifecyclemodel.OperationArchive {
-		where += " AND NOT EXISTS (SELECT 1 FROM " + e.store.TableIdentifier("lifecycle_archive_entries") + " WHERE " + e.store.Identifier("workspace_id") + " = " + e.store.Placeholder(len(args)+1) + " AND " + e.store.Identifier("source_table") + " = " + e.store.Placeholder(len(args)+2) + " AND " + e.store.Identifier("resource_id") + " = " + e.store.Identifier(spec.table) + "." + e.store.Identifier(spec.idColumn) + " AND " + e.store.Identifier("policy_key") + " = " + e.store.Placeholder(len(args)+3) + ")"
-		args = append(args, job.WorkspaceID, spec.table, policy.Policy.Key)
+		archive := ormbuilder.NewWorkspaceSelectBuilder(e.store.SQLRenderer, "lifecycle_archive_entries", job.WorkspaceID).Alias("archive").Columns("id").Where(ormbuilder.And(
+			ormbuilder.Equal("source_table", spec.table),
+			ormbuilder.EqualExpressions(ormbuilder.QualifiedColumn("archive", "resource_id"), ormbuilder.QualifiedColumn(candidateAlias, spec.idColumn)),
+			ormbuilder.Equal("policy_key", policy.Policy.Key),
+		))
+		predicate = ormbuilder.And(predicate, ormbuilder.NotExistsSubquery(archive))
 	}
-	args = append(args, limit)
-	query := "SELECT " + e.store.Identifier(spec.idColumn) + ", " + e.store.Identifier(spec.timeColumn) + " FROM " + e.store.TableIdentifier(spec.table) + " WHERE " + where + " ORDER BY " + e.store.Identifier(spec.timeColumn) + ", " + e.store.Identifier(spec.idColumn) + " LIMIT " + e.store.Placeholder(len(args))
+	builder := ormbuilder.NewSelectBuilder(e.store.SQLRenderer, spec.table).Alias(candidateAlias).Columns(spec.idColumn, spec.timeColumn)
+	if spec.tenantColumn != "" {
+		builder = ormbuilder.NewWorkspaceSelectBuilder(e.store.SQLRenderer, spec.table, job.WorkspaceID).Alias(candidateAlias).Columns(spec.idColumn, spec.timeColumn)
+	}
+	query, args, buildErr := builder.Where(predicate).OrderBy(ormbuilder.Ascending(spec.timeColumn), ormbuilder.Ascending(spec.idColumn)).Limit(limit).Build()
+	if buildErr != nil {
+		return lifecyclemodel.CleanupBatchResult{}, buildErr
+	}
 	rows, err := e.database().QueryContext(ctx, query, args...)
 	if err != nil {
 		return lifecyclemodel.CleanupBatchResult{}, err
@@ -125,15 +137,20 @@ func (e OwnerExecutor) processSpec(ctx context.Context, job lifecyclemodel.Clean
 		if job.Operation == lifecyclemodel.OperationArchive {
 			continue
 		}
-		deleteWhere := e.store.Identifier(spec.idColumn) + " = " + e.store.Placeholder(1)
-		deleteArgs := []any{candidate.id}
+		archive := ormbuilder.NewWorkspaceSelectBuilder(e.store.SQLRenderer, "lifecycle_archive_entries", job.WorkspaceID).Columns("id").Where(ormbuilder.And(ormbuilder.Equal("source_table", spec.table), ormbuilder.Equal("resource_id", candidate.id)))
+		deletePredicate := ormbuilder.And(ormbuilder.Equal(spec.idColumn, candidate.id), ormbuilder.ExistsSubquery(archive))
+		var deleteQuery string
+		var deleteArgs []any
+		var buildErr error
 		if spec.tenantColumn != "" {
-			deleteWhere = e.store.Identifier(spec.tenantColumn) + " = " + e.store.Placeholder(1) + " AND " + e.store.Identifier(spec.idColumn) + " = " + e.store.Placeholder(2)
-			deleteArgs = []any{job.WorkspaceID, candidate.id}
+			deleteQuery, deleteArgs, buildErr = ormbuilder.NewWorkspaceDeleteBuilder(e.store.SQLRenderer, spec.table, job.WorkspaceID).Where(deletePredicate).Build()
+		} else {
+			deleteQuery, deleteArgs, buildErr = ormbuilder.NewDeleteBuilder(e.store.SQLRenderer, spec.table).Where(deletePredicate).Build()
 		}
-		deleteArgs = append(deleteArgs, job.WorkspaceID, spec.table, candidate.id)
-		archiveStart := len(deleteArgs) - 2
-		deleteQuery := "DELETE FROM " + e.store.TableIdentifier(spec.table) + " WHERE " + deleteWhere + " AND EXISTS (SELECT 1 FROM " + e.store.TableIdentifier("lifecycle_archive_entries") + " WHERE " + e.store.Identifier("workspace_id") + " = " + e.store.Placeholder(archiveStart) + " AND " + e.store.Identifier("source_table") + " = " + e.store.Placeholder(archiveStart+1) + " AND " + e.store.Identifier("resource_id") + " = " + e.store.Placeholder(archiveStart+2) + ")"
+		if buildErr != nil {
+			result.Failed++
+			return result, buildErr
+		}
 		deleted, deleteErr := e.database().ExecContext(ctx, deleteQuery, deleteArgs...)
 		if deleteErr != nil {
 			result.Failed++
@@ -151,15 +168,18 @@ func (e OwnerExecutor) processSpec(ctx context.Context, job lifecyclemodel.Clean
 
 func (e OwnerExecutor) cleanupCandidateReferenced(ctx context.Context, workspaceID, resourceID string, checks []cleanupReferenceCheck) (bool, error) {
 	for _, check := range checks {
-		where, args := e.store.Identifier(check.referenceColumn)+" = "+e.store.Placeholder(1), []any{resourceID}
+		predicate := ormbuilder.Predicate(ormbuilder.Equal(check.referenceColumn, resourceID))
+		builder := ormbuilder.NewSelectBuilder(e.store.SQLRenderer, check.table).Projections(ormbuilder.Project(ormbuilder.CountAll()))
 		if check.tenantColumn != "" {
-			where, args = e.store.Identifier(check.tenantColumn)+" = "+e.store.Placeholder(1)+" AND "+e.store.Identifier(check.referenceColumn)+" = "+e.store.Placeholder(2), []any{workspaceID, resourceID}
+			builder = ormbuilder.NewWorkspaceSelectBuilder(e.store.SQLRenderer, check.table, workspaceID).Projections(ormbuilder.Project(ormbuilder.CountAll()))
 		}
 		if check.fixedColumn != "" {
-			args = append(args, check.fixedValue)
-			where += " AND " + e.store.Identifier(check.fixedColumn) + " = " + e.store.Placeholder(len(args))
+			predicate = ormbuilder.And(predicate, ormbuilder.Equal(check.fixedColumn, check.fixedValue))
 		}
-		query := "SELECT COUNT(*) FROM " + e.store.TableIdentifier(check.table) + " WHERE " + where
+		query, args, buildErr := builder.Where(predicate).Build()
+		if buildErr != nil {
+			return false, buildErr
+		}
 		var count int
 		if err := e.database().QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
 			return false, err

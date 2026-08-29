@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
 	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -27,7 +27,7 @@ type cleanupSpec struct {
 	schedulerEventTable      string
 	schedulerDeadLetterTable string
 	workflowProcessChildren  bool
-	additionalWhere          string
+	additionalPredicate      func(string) ormbuilder.Predicate
 	unixNanoTime             bool
 }
 
@@ -125,46 +125,33 @@ func (e OwnerExecutor) policySpecs(policyKey string) []cleanupSpec {
 	return result
 }
 
-func cleanupWhere(store *database.RuntimeStore, spec cleanupSpec, workspaceID string, cutoff time.Time, start int) (string, []any) {
-	args := []any{}
-	where := []string{}
-	position := start
-	if spec.tenantColumn != "" {
-		args = append(args, workspaceID)
-		where = append(where, store.Identifier(spec.tenantColumn)+" = "+store.Placeholder(position))
-		position++
-	}
+func cleanupPredicate(spec cleanupSpec, cutoff time.Time, outerAlias string) ormbuilder.Predicate {
+	predicates := []ormbuilder.Predicate{}
 	cutoffValue := any(lifecycleTime(cutoff))
 	if spec.unixNanoTime {
 		cutoffValue = cutoff.UTC().UnixNano()
 	} else {
-		where = append(where, store.Identifier(spec.timeColumn)+" <> ''")
+		predicates = append(predicates, ormbuilder.NotEqual(spec.timeColumn, ""))
 	}
-	args = append(args, cutoffValue)
-	where = append(where, store.Identifier(spec.timeColumn)+" <= "+store.Placeholder(position))
-	position++
+	predicates = append(predicates, ormbuilder.LessThanOrEqual(spec.timeColumn, cutoffValue))
 	if spec.statusColumn != "" && len(spec.ineligibleStatuses) > 0 {
-		placeholders := []string{}
+		values := make([]any, 0, len(spec.ineligibleStatuses))
 		for _, status := range spec.ineligibleStatuses {
-			args = append(args, status)
-			placeholders = append(placeholders, store.Placeholder(position))
-			position++
+			values = append(values, status)
 		}
-		where = append(where, store.Identifier(spec.statusColumn)+" NOT IN ("+strings.Join(placeholders, ", ")+")")
+		predicates = append(predicates, ormbuilder.NotIn(spec.statusColumn, values...))
 	}
 	if spec.statusColumn != "" && len(spec.eligibleStatuses) > 0 {
-		placeholders := []string{}
+		values := make([]any, 0, len(spec.eligibleStatuses))
 		for _, status := range spec.eligibleStatuses {
-			args = append(args, status)
-			placeholders = append(placeholders, store.Placeholder(position))
-			position++
+			values = append(values, status)
 		}
-		where = append(where, store.Identifier(spec.statusColumn)+" IN ("+strings.Join(placeholders, ", ")+")")
+		predicates = append(predicates, ormbuilder.In(spec.statusColumn, values...))
 	}
-	if spec.additionalWhere != "" {
-		where = append(where, spec.additionalWhere)
+	if spec.additionalPredicate != nil {
+		predicates = append(predicates, spec.additionalPredicate(outerAlias))
 	}
-	return strings.Join(where, " AND "), args
+	return ormbuilder.And(predicates...)
 }
 
 func lifecycleSpecRetention(policy lifecyclemodel.RetentionPolicy, spec cleanupSpec) time.Duration {

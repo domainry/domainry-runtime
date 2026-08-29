@@ -4,20 +4,33 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 )
 
 func (e OwnerExecutor) previewSpec(ctx context.Context, workspaceID string, spec cleanupSpec, policyKey string, cutoff time.Time) (int64, time.Time, error) {
-	where, args := cleanupWhere(e.store, spec, workspaceID, cutoff, 1)
-	archiveWorkspace := ""
+	const candidateAlias = "candidate"
+	predicate := cleanupPredicate(spec, cutoff, candidateAlias)
+	archivePredicate := ormbuilder.And(
+		ormbuilder.Equal("source_table", spec.table),
+		ormbuilder.EqualExpressions(ormbuilder.QualifiedColumn("archive", "resource_id"), ormbuilder.QualifiedColumn(candidateAlias, spec.idColumn)),
+		ormbuilder.Equal("policy_key", policyKey),
+	)
 	if spec.tenantColumn != "" {
-		archiveWorkspace = e.store.Identifier(spec.table) + "." + e.store.Identifier(spec.tenantColumn)
+		archivePredicate = ormbuilder.And(archivePredicate, ormbuilder.EqualExpressions(ormbuilder.QualifiedColumn("archive", "workspace_id"), ormbuilder.QualifiedColumn(candidateAlias, spec.tenantColumn)))
 	} else {
-		archiveWorkspace = e.store.Placeholder(len(args) + 1)
-		args = append(args, workspaceID)
+		archivePredicate = ormbuilder.And(archivePredicate, ormbuilder.Equal("workspace_id", workspaceID))
 	}
-	where += " AND NOT EXISTS (SELECT 1 FROM " + e.store.TableIdentifier("lifecycle_archive_entries") + " a WHERE a." + e.store.Identifier("workspace_id") + " = " + archiveWorkspace + " AND a." + e.store.Identifier("source_table") + " = " + e.store.Placeholder(len(args)+1) + " AND a." + e.store.Identifier("resource_id") + " = " + e.store.Identifier(spec.table) + "." + e.store.Identifier(spec.idColumn) + " AND a." + e.store.Identifier("policy_key") + " = " + e.store.Placeholder(len(args)+2) + ")"
-	args = append(args, spec.table, policyKey)
-	query := "SELECT COUNT(*), MIN(" + e.store.Identifier(spec.timeColumn) + ") FROM " + e.store.TableIdentifier(spec.table) + " WHERE " + where
+	archive := ormbuilder.NewSelectBuilder(e.store.SQLRenderer, "lifecycle_archive_entries").Alias("archive").Columns("id").Where(archivePredicate)
+	predicate = ormbuilder.And(predicate, ormbuilder.NotExistsSubquery(archive))
+	builder := ormbuilder.NewSelectBuilder(e.store.SQLRenderer, spec.table).Alias(candidateAlias).Projections(ormbuilder.Project(ormbuilder.CountAll()), ormbuilder.Project(ormbuilder.Min(ormbuilder.Column(spec.timeColumn))))
+	if spec.tenantColumn != "" {
+		builder = ormbuilder.NewWorkspaceSelectBuilder(e.store.SQLRenderer, spec.table, workspaceID).Alias(candidateAlias).Projections(ormbuilder.Project(ormbuilder.CountAll()), ormbuilder.Project(ormbuilder.Min(ormbuilder.Column(spec.timeColumn))))
+	}
+	query, args, buildErr := builder.Where(predicate).Build()
+	if buildErr != nil {
+		return 0, time.Time{}, buildErr
+	}
 	var count int64
 	parsed := time.Time{}
 	if spec.unixNanoTime {

@@ -9,24 +9,33 @@ import (
 	"time"
 
 	requestcontext "github.com/domainry/domainry-foundation/requestcontext"
+	ormbuilder "github.com/domainry/domainry-orm/builder"
 	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
+	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
 func (e OwnerExecutor) archiveCandidate(ctx context.Context, job lifecyclemodel.CleanupJob, policy lifecyclemodel.PolicyVersion, spec cleanupSpec, resourceID string) (bool, error) {
 	var exists int
-	check := "SELECT COUNT(*) FROM " + e.store.TableIdentifier("lifecycle_archive_entries") + " WHERE " + e.store.Identifier("workspace_id") + " = " + e.store.Placeholder(1) + " AND " + e.store.Identifier("source_table") + " = " + e.store.Placeholder(2) + " AND " + e.store.Identifier("resource_id") + " = " + e.store.Placeholder(3) + " AND " + e.store.Identifier("policy_key") + " = " + e.store.Placeholder(4)
-	if err := e.database().QueryRowContext(ctx, check, job.WorkspaceID, spec.table, resourceID, policy.Policy.Key).Scan(&exists); err != nil {
+	check, checkArgs, buildErr := lifecycleArchiveExistsQuery(e.store, job.WorkspaceID, spec.table, resourceID, policy.Policy.Key)
+	if buildErr != nil {
+		return false, buildErr
+	}
+	if err := e.database().QueryRowContext(ctx, check, checkArgs...).Scan(&exists); err != nil {
 		return false, err
 	}
 	if exists > 0 {
 		return false, nil
 	}
-	where, args := e.store.Identifier(spec.idColumn)+" = "+e.store.Placeholder(1), []any{resourceID}
+	predicate := ormbuilder.Predicate(ormbuilder.Equal(spec.idColumn, resourceID))
+	builder := ormbuilder.NewSelectBuilder(e.store.SQLRenderer, spec.table).Projections(ormbuilder.Project(ormbuilder.Star()))
 	if spec.tenantColumn != "" {
-		where = e.store.Identifier(spec.tenantColumn) + " = " + e.store.Placeholder(1) + " AND " + e.store.Identifier(spec.idColumn) + " = " + e.store.Placeholder(2)
-		args = []any{job.WorkspaceID, resourceID}
+		builder = ormbuilder.NewWorkspaceSelectBuilder(e.store.SQLRenderer, spec.table, job.WorkspaceID).Projections(ormbuilder.Project(ormbuilder.Star()))
 	}
-	rows, err := e.database().QueryContext(ctx, "SELECT * FROM "+e.store.TableIdentifier(spec.table)+" WHERE "+where, args...)
+	query, args, buildErr := builder.Where(predicate).Build()
+	if buildErr != nil {
+		return false, buildErr
+	}
+	rows, err := e.database().QueryContext(ctx, query, args...)
 	if err != nil {
 		return false, err
 	}
@@ -58,18 +67,30 @@ func (e OwnerExecutor) archiveCandidate(ctx context.Context, job lifecyclemodel.
 
 func (e OwnerExecutor) archivePayload(ctx context.Context, job lifecyclemodel.CleanupJob, policy lifecyclemodel.PolicyVersion, sourceTable, resourceID string, raw []byte) (bool, error) {
 	var exists int
-	check := "SELECT COUNT(*) FROM " + e.store.TableIdentifier("lifecycle_archive_entries") + " WHERE " + e.store.Identifier("workspace_id") + " = " + e.store.Placeholder(1) + " AND " + e.store.Identifier("source_table") + " = " + e.store.Placeholder(2) + " AND " + e.store.Identifier("resource_id") + " = " + e.store.Placeholder(3) + " AND " + e.store.Identifier("policy_key") + " = " + e.store.Placeholder(4)
-	if err := e.database().QueryRowContext(ctx, check, job.WorkspaceID, sourceTable, resourceID, policy.Policy.Key).Scan(&exists); err != nil {
+	check, checkArgs, buildErr := lifecycleArchiveExistsQuery(e.store, job.WorkspaceID, sourceTable, resourceID, policy.Policy.Key)
+	if buildErr != nil {
+		return false, buildErr
+	}
+	if err := e.database().QueryRowContext(ctx, check, checkArgs...).Scan(&exists); err != nil {
 		return false, err
 	}
 	if exists > 0 {
 		return false, nil
 	}
 	digest := sha256.Sum256(raw)
-	columnsToInsert := []string{"id", "workspace_id", "owner", "source_table", "resource_id", "policy_key", "policy_version", "job_id", "payload_hash", "payload_json", "archived_at"}
-	_, err := e.database().ExecContext(ctx, e.store.InsertStatement("lifecycle_archive_entries", columnsToInsert), requestcontext.NewRequestID(), job.WorkspaceID, e.owner, sourceTable, resourceID, policy.Policy.Key, policy.Policy.Version, job.ID, hex.EncodeToString(digest[:]), string(raw), time.Now().UTC().Format(time.RFC3339Nano))
+	insert, insertArgs, buildErr := ormbuilder.NewWorkspaceInsertBuilder(e.store.SQLRenderer, "lifecycle_archive_entries", job.WorkspaceID).Columns("id", "owner", "source_table", "resource_id", "policy_key", "policy_version", "job_id", "payload_hash", "payload_json", "archived_at").Values(requestcontext.NewRequestID(), e.owner, sourceTable, resourceID, policy.Policy.Key, policy.Policy.Version, job.ID, hex.EncodeToString(digest[:]), string(raw), time.Now().UTC().Format(time.RFC3339Nano)).Build()
+	if buildErr != nil {
+		return false, buildErr
+	}
+	_, err := e.database().ExecContext(ctx, insert, insertArgs...)
 	if err != nil {
 		return false, fmt.Errorf("archive %s %s: %w", sourceTable, resourceID, err)
 	}
 	return true, nil
+}
+
+func lifecycleArchiveExistsQuery(store *database.RuntimeStore, workspaceID, sourceTable, resourceID, policyKey string) (string, []any, error) {
+	return ormbuilder.NewWorkspaceSelectBuilder(store.SQLRenderer, "lifecycle_archive_entries", workspaceID).
+		Projections(ormbuilder.Project(ormbuilder.CountAll())).
+		Where(ormbuilder.And(ormbuilder.Equal("source_table", sourceTable), ormbuilder.Equal("resource_id", resourceID), ormbuilder.Equal("policy_key", policyKey))).Build()
 }
