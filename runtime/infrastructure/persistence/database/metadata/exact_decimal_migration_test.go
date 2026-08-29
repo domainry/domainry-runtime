@@ -224,14 +224,14 @@ func TestSQLiteExactDecimalMigrationRollsBackOnScaleLoss(t *testing.T) {
 
 func TestExactDecimalMigrationDialectStrategies(t *testing.T) {
 	field := definitionmodel.FieldSchema{Key: "amount", Type: "currency"}
-	if !metadataExactDecimalUpgradeAllowed("sqlite", "REAL", field) ||
-		!metadataExactDecimalUpgradeAllowed("postgres", "double precision", field) ||
-		!metadataExactDecimalUpgradeAllowed("postgres", "numeric(19,2)", field) ||
-		!metadataExactDecimalUpgradeAllowed("mysql", "double", field) ||
-		!metadataExactDecimalUpgradeAllowed("mysql", "decimal(19,2)", field) {
+	if !metadataTestStorageProfile("sqlite").ExactDecimalUpgradeAllowed("REAL", field) ||
+		!metadataTestStorageProfile("postgres").ExactDecimalUpgradeAllowed("double precision", field) ||
+		!metadataTestStorageProfile("postgres").ExactDecimalUpgradeAllowed("numeric(19,2)", field) ||
+		!metadataTestStorageProfile("mysql").ExactDecimalUpgradeAllowed("double", field) ||
+		!metadataTestStorageProfile("mysql").ExactDecimalUpgradeAllowed("decimal(19,2)", field) {
 		t.Fatal("supported legacy floating types were not recognized")
 	}
-	if metadataExactDecimalUpgradeAllowed("sqlite", "TEXT", field) || metadataExactDecimalUpgradeAllowed("postgres", "text", field) || metadataExactDecimalUpgradeAllowed("mysql", "varchar(20)", field) {
+	if metadataTestStorageProfile("sqlite").ExactDecimalUpgradeAllowed("TEXT", field) || metadataTestStorageProfile("postgres").ExactDecimalUpgradeAllowed("text", field) || metadataTestStorageProfile("mysql").ExactDecimalUpgradeAllowed("varchar(20)", field) {
 		t.Fatal("unrelated physical types were accepted")
 	}
 	if got := postgresExactDecimalPreflightSQL(`"ledger"`, `"amount"`, 2); got != `SELECT COUNT(*) FROM "ledger" WHERE "amount" IS NOT NULL AND "amount"::numeric <> ROUND("amount"::numeric, 2)` {

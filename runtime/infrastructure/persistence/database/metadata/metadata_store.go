@@ -26,11 +26,12 @@ import (
 
 // MetadataStore is the request-aware storage boundary for metadata.
 type MetadataStore struct {
-	store       *database.RuntimeStore
-	db          *sql.DB
-	schemaDB    runtimeschema.SQLDatabase
-	createIndex func(context.Context, string, string, bool, ...string) error
-	storage     metadatastorage.Profile
+	store                *database.RuntimeStore
+	db                   *sql.DB
+	schemaDB             runtimeschema.SQLDatabase
+	createIndex          func(context.Context, string, string, bool, ...string) error
+	storage              metadatastorage.Profile
+	exactDecimalMigrator metadataExactDecimalMigrator
 }
 
 var _ metadatarepository.MetadataRepository = MetadataStore{}
@@ -59,17 +60,21 @@ func (r MetadataStore) SnapshotRevision(ctx context.Context, scope principalmode
 
 func NewMetadataStore(store *database.RuntimeStore) MetadataStore {
 	var profile metadatastorage.Profile
+	var migrator metadataExactDecimalMigrator
 	switch store.Engine.Name() {
 	case ormdialect.SQLite:
 		profile = metadatasqlite.NewMetadataStorageProfile()
+		migrator = sqliteExactDecimalMigrator{}
 	case ormdialect.MySQL:
 		profile = metadatamysql.NewMetadataStorageProfile()
+		migrator = mysqlExactDecimalMigrator{}
 	case ormdialect.Postgres:
 		profile = metadatapostgres.NewMetadataStorageProfile()
+		migrator = postgresExactDecimalMigrator{}
 	default:
 		panic(fmt.Sprintf("unsupported Metadata storage profile %q", store.Engine.Name()))
 	}
-	return MetadataStore{store: store, db: store.DB(), storage: profile}
+	return MetadataStore{store: store, db: store.DB(), storage: profile, exactDecimalMigrator: migrator}
 }
 
 func (r MetadataStore) database() *sql.DB {
@@ -150,7 +155,7 @@ func (r MetadataStore) MigrationPlan(ctx context.Context, scope principalmodel.S
 			if currentType, ok := existingTypes[column]; ok {
 				targetType := r.metadataSQLTypeForField(field)
 				if metadataRequiresExactPhysicalType(field) && !metadataColumnTypeMatches(currentType, targetType) {
-					if metadataExactDecimalUpgradeAllowed(r.store.Driver(), currentType, field) {
+					if r.storage.ExactDecimalUpgradeAllowed(currentType, field) {
 						steps = append(steps, metadatamodel.MetadataMigrationStep{ObjectKey: object.Key, Table: table, Operation: "alter_column_exact_decimal", ColumnKey: column, ColumnType: targetType, Reversible: false, Description: "backend.metadata.migration.exactDecimal"})
 						continue
 					}

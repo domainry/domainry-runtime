@@ -93,6 +93,11 @@ type Profile interface {
 	ConditionalUniquePlan(ormbuilder.Renderer, string, string, recordvalidation.RecordConditionalUniquePolicy) ConditionalUniquePlan
 	ConditionalUniqueGuard(string) string
 	DropColumn(context.Context, Executor, ormbuilder.Renderer, string, string) error
+	ExactDecimalUpgradeAllowed(string, definitionmodel.FieldSchema) bool
+}
+
+func NormalizePhysicalType(value string) string {
+	return strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(value), " ", ""))
 }
 
 type ConditionalUniquePlan struct {

@@ -83,3 +83,14 @@ func (MetadataStorageProfile) DropColumn(ctx context.Context, executor metadatas
 	_, err := executor.ExecContext(ctx, "ALTER TABLE "+renderer.Table(table)+" DROP COLUMN "+renderer.Identifier(column))
 	return err
 }
+func (MetadataStorageProfile) ExactDecimalUpgradeAllowed(current string, field definitionmodel.FieldSchema) bool {
+	if kind := strings.TrimSpace(field.Type); kind != "currency" && kind != "percent" {
+		return false
+	}
+	switch metadatastorage.NormalizePhysicalType(current) {
+	case "REAL", "DOUBLE", "FLOAT", "NUMERIC":
+		return true
+	default:
+		return false
+	}
+}

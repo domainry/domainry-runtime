@@ -34,27 +34,36 @@ type metadataExactDecimalTableMigration struct {
 	columns []metadataExactDecimalColumn
 }
 
-func metadataExactDecimalUpgradeAllowed(driver, current string, field definitionmodel.FieldSchema) bool {
-	if strings.TrimSpace(field.Type) != "currency" && strings.TrimSpace(field.Type) != "percent" {
-		return false
+type metadataExactDecimalMigrator interface {
+	Migrate(context.Context, MetadataStore, []metadataExactDecimalTableMigration) error
+}
+
+type sqliteExactDecimalMigrator struct{}
+type postgresExactDecimalMigrator struct{}
+type mysqlExactDecimalMigrator struct{}
+
+func (sqliteExactDecimalMigrator) Migrate(ctx context.Context, store MetadataStore, migrations []metadataExactDecimalTableMigration) error {
+	return store.migrateSQLiteExactDecimalTables(ctx, migrations)
+}
+func (postgresExactDecimalMigrator) Migrate(ctx context.Context, store MetadataStore, migrations []metadataExactDecimalTableMigration) error {
+	return store.migratePostgresExactDecimalTables(ctx, migrations)
+}
+func (mysqlExactDecimalMigrator) Migrate(ctx context.Context, store MetadataStore, migrations []metadataExactDecimalTableMigration) error {
+	for _, migration := range migrations {
+		if err := store.preflightMySQLExactDecimalTable(ctx, migration.table, migration.columns); err != nil {
+			return err
+		}
 	}
-	normalized := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(current), " ", ""))
-	switch driver {
-	case "sqlite":
-		return normalized == "REAL" || normalized == "DOUBLE" || normalized == "FLOAT" || normalized == "NUMERIC"
-	case "postgres":
-		return normalized == "REAL" || normalized == "DOUBLEPRECISION" || strings.HasPrefix(normalized, "NUMERIC(") || strings.HasPrefix(normalized, "DECIMAL(")
-	case "mysql":
-		return strings.HasPrefix(normalized, "FLOAT") || strings.HasPrefix(normalized, "DOUBLE") || strings.HasPrefix(normalized, "DECIMAL(") || strings.HasPrefix(normalized, "NUMERIC(")
-	default:
-		return false
+	for _, migration := range migrations {
+		if err := store.migrateMySQLExactDecimalTable(ctx, migration.table, migration.columns); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func (r MetadataStore) migrateExactDecimalStorage(ctx context.Context, manifest manifestmodel.ManifestSchema) error {
-	sqliteMigrations := []metadataExactDecimalTableMigration{}
-	postgresMigrations := []metadataExactDecimalTableMigration{}
-	mysqlMigrations := []metadataExactDecimalTableMigration{}
+	migrations := []metadataExactDecimalTableMigration{}
 	for _, object := range manifest.Objects {
 		table := strings.TrimSpace(object.Key)
 		if table == "" {
@@ -74,7 +83,7 @@ func (r MetadataStore) migrateExactDecimalStorage(ctx context.Context, manifest 
 			if metadataColumnTypeMatches(current, target) {
 				continue
 			}
-			if !metadataExactDecimalUpgradeAllowed(r.store.Driver(), current, field) {
+			if !r.storage.ExactDecimalUpgradeAllowed(current, field) {
 				continue
 			}
 			config, configErr := recordmodel.RecordNormalizeDecimalConfig(field.Config)
@@ -87,37 +96,15 @@ func (r MetadataStore) migrateExactDecimalStorage(ctx context.Context, manifest 
 			continue
 		}
 		sort.Slice(columns, func(i, j int) bool { return columns[i].field.Key < columns[j].field.Key })
-		switch r.store.Driver() {
-		case "sqlite":
-			sqliteMigrations = append(sqliteMigrations, metadataExactDecimalTableMigration{table: object.Key, columns: columns})
-		case "postgres":
-			postgresMigrations = append(postgresMigrations, metadataExactDecimalTableMigration{table: object.Key, columns: columns})
-		case "mysql":
-			mysqlMigrations = append(mysqlMigrations, metadataExactDecimalTableMigration{table: object.Key, columns: columns})
-		}
+		migrations = append(migrations, metadataExactDecimalTableMigration{table: object.Key, columns: columns})
 	}
-	if len(sqliteMigrations) > 0 {
-		return r.migrateSQLiteExactDecimalTables(ctx, sqliteMigrations)
+	if len(migrations) == 0 {
+		return nil
 	}
-	if len(postgresMigrations) > 0 {
-		return r.migratePostgresExactDecimalTables(ctx, postgresMigrations)
+	if r.exactDecimalMigrator == nil {
+		return fmt.Errorf("exact decimal migrator is required")
 	}
-	if len(mysqlMigrations) > 0 {
-		// MySQL DDL is atomic per ALTER TABLE but commits implicitly. Validate
-		// every affected table before the first ALTER so deterministic data
-		// incompatibilities can never leave a partially upgraded manifest.
-		for _, migration := range mysqlMigrations {
-			if err := r.preflightMySQLExactDecimalTable(ctx, migration.table, migration.columns); err != nil {
-				return err
-			}
-		}
-		for _, migration := range mysqlMigrations {
-			if err := r.migrateMySQLExactDecimalTable(ctx, migration.table, migration.columns); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	return r.exactDecimalMigrator.Migrate(ctx, r, migrations)
 }
 
 func (r MetadataStore) migrateSQLiteExactDecimalTables(ctx context.Context, migrations []metadataExactDecimalTableMigration) error {
