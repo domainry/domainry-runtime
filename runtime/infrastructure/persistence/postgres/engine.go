@@ -52,6 +52,9 @@ func (profile Engine) OrderedDecimalTextStorage() bool {
 func (profile Engine) RecordReadIsolation() sql.IsolationLevel {
 	return profile.record.ReadIsolation()
 }
+func (profile Engine) DatabaseCurrentTimeQuery() persistencedriver.SchemaQuery {
+	return persistencedriver.SchemaQuery{Statement: "SELECT EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)"}
+}
 func (profile Engine) ReportDateBucket(value, grain string, date bool) (string, error) {
 	return profile.report.DateBucket(value, grain, date)
 }

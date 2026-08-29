@@ -45,6 +45,7 @@ type EngineProfile interface {
 	InspectWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) (WorkspaceRLSStatus, error)
 	OrderedDecimalTextStorage() bool
 	RecordReadIsolation() sql.IsolationLevel
+	DatabaseCurrentTimeQuery() SchemaQuery
 	ReportDateBucket(string, string, bool) (string, error)
 }
 

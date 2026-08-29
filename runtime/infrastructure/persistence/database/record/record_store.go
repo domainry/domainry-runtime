@@ -74,19 +74,12 @@ func (r RecordStore) SchedulerNow(ctx context.Context) (time.Time, error) {
 	if database == nil {
 		return time.Time{}, fmt.Errorf("record database is unavailable")
 	}
-	query := "SELECT CURRENT_TIMESTAMP"
-	if r.store != nil {
-		switch string(r.store.RuntimeProfile().Name()) {
-		case "sqlite":
-			query = "SELECT CAST(strftime('%s','now') AS INTEGER)"
-		case "mysql":
-			query = "SELECT UNIX_TIMESTAMP(UTC_TIMESTAMP(6))"
-		case "postgres":
-			query = "SELECT EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)"
-		}
+	if r.store == nil {
+		return time.Time{}, fmt.Errorf("record database profile is unavailable")
 	}
+	query := r.store.RuntimeProfile().DatabaseCurrentTimeQuery()
 	var raw any
-	if err := database.QueryRowContext(ctx, query).Scan(&raw); err != nil {
+	if err := database.QueryRowContext(ctx, query.Statement, query.Arguments...).Scan(&raw); err != nil {
 		return time.Time{}, fmt.Errorf("read database current timestamp: %w", err)
 	}
 	switch value := raw.(type) {
