@@ -9,6 +9,7 @@ import (
 	ormdriver "github.com/domainry/domainry-orm/driver"
 	ormsqlite "github.com/domainry/domainry-orm/sqlite"
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
+	sqliteevidence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite/evidence"
 )
 
 func (engineProfile) WorkspaceRLSSupported() bool { return false }
@@ -31,9 +32,14 @@ func (engineProfile) ReportDateBucket(value, grain string, _ bool) (string, erro
 	return "strftime('" + formats[grain] + "', " + value + ")", nil
 }
 
-type engineProfile struct{ ormdriver.Profile }
+type engineProfile struct {
+	ormdriver.Profile
+	evidence persistencedriver.EvidenceSchemaProfile
+}
 
-func newEngineProfile() engineProfile { return engineProfile{Profile: ormsqlite.NewProfile()} }
+func newEngineProfile() engineProfile {
+	return engineProfile{Profile: ormsqlite.NewProfile(), evidence: sqliteevidence.NewProfile()}
+}
 
 func (engineProfile) ManagedDatabaseMarkerEnabled() bool        { return false }
 func (engineProfile) ColumnDefinition(definition string) string { return strings.TrimSpace(definition) }
@@ -48,4 +54,10 @@ func (engineProfile) TableExistsQuery(renderer ormdialect.Renderer, _, table str
 }
 func (engineProfile) IndexesQuery(renderer ormdialect.Renderer, _ string, table string) persistencedriver.SchemaQuery {
 	return persistencedriver.SchemaQuery{Statement: "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = " + renderer.Placeholder(1), Arguments: []any{table}}
+}
+func (profile engineProfile) EvidenceSchemaTypes(text string) persistencedriver.EvidenceSchemaTypes {
+	return profile.evidence.Types(text)
+}
+func (profile engineProfile) NormalizeEvidenceSchema(ctx context.Context, database persistencedriver.SchemaDatabase, renderer ormdialect.Renderer) error {
+	return profile.evidence.Normalize(ctx, database, renderer)
 }

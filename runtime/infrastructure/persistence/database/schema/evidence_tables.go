@@ -18,10 +18,7 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 			return fmt.Errorf("create %s: %w", table, err)
 		}
 	}
-	if err := ensureMySQLAuditCursorColumns(ctx, s); err != nil {
-		return err
-	}
-	if err := ensureMySQLLargeEvidenceColumns(ctx, s); err != nil {
+	if err := s.RuntimeProfile().NormalizeEvidenceSchema(ctx, s.SchemaDB(), s.RuntimeRenderer()); err != nil {
 		return err
 	}
 	if err := s.EnsureRuntimeColumn(ctx, "_audit_events", "workspace_id", text); err != nil {
@@ -215,115 +212,12 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 	return nil
 }
 
-func ensureMySQLLargeEvidenceColumns(ctx context.Context, s Store) error {
-	if s.Driver() != "mysql" {
-		return nil
-	}
-	specs := map[string][]string{
-		"report_export_artifacts":         {"content_base64"},
-		"business_audit_export_artifacts": {"content_base64"},
-		"record_batch_job_chunks":         {"content"},
-	}
-	query := "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND ((TABLE_NAME = " + s.Placeholder(1) + " AND COLUMN_NAME = " + s.Placeholder(2) + ") OR (TABLE_NAME = " + s.Placeholder(3) + " AND COLUMN_NAME = " + s.Placeholder(4) + ") OR (TABLE_NAME = " + s.Placeholder(5) + " AND COLUMN_NAME = " + s.Placeholder(6) + "))"
-	rows, err := s.SchemaDB().QueryContext(ctx, query,
-		"report_export_artifacts", "content_base64",
-		"business_audit_export_artifacts", "content_base64",
-		"record_batch_job_chunks", "content",
-	)
-	if err != nil {
-		return fmt.Errorf("inspect MySQL large evidence columns: %w", err)
-	}
-	modifications := map[string][]string{}
-	for rows.Next() {
-		var table, column, dataType string
-		if err := rows.Scan(&table, &column, &dataType); err != nil {
-			_ = rows.Close()
-			return fmt.Errorf("scan MySQL large evidence column: %w", err)
-		}
-		if !strings.EqualFold(dataType, "longtext") {
-			modifications[table] = append(modifications[table], column)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return fmt.Errorf("iterate MySQL large evidence columns: %w", err)
-	}
-	_ = rows.Close()
-	for table, columns := range modifications {
-		allowed := specs[table]
-		for _, column := range columns {
-			valid := false
-			for _, candidate := range allowed {
-				valid = valid || column == candidate
-			}
-			if !valid {
-				return fmt.Errorf("inspect MySQL large evidence columns: unexpected %s.%s", table, column)
-			}
-			statement := "ALTER TABLE " + s.TableIdentifier(table) + " MODIFY COLUMN " + s.Identifier(column) + " LONGTEXT NOT NULL"
-			if _, err := s.SchemaDB().ExecContext(ctx, statement); err != nil {
-				return fmt.Errorf("normalize MySQL large evidence column %s.%s: %w", table, column, err)
-			}
-		}
-	}
-	return nil
-}
-
 func auditEventActorCursorColumns() []string {
 	return []string{"workspace_id", "actor_id", "created_at", "id"}
 }
 
 func auditEventRecordCursorColumns() []string {
 	return []string{"workspace_id", "object_key", "record_id", "created_at", "id"}
-}
-
-func ensureMySQLAuditCursorColumns(ctx context.Context, s Store) error {
-	if s.Driver() != "mysql" {
-		return nil
-	}
-	type columnSpec struct {
-		name        string
-		nullability string
-	}
-	specs := []columnSpec{{name: "id", nullability: "NOT NULL"}, {name: "created_at", nullability: "NOT NULL"}}
-	query := "SELECT COLUMN_NAME, COLUMN_TYPE, CHARACTER_SET_NAME, COLLATION_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = " + s.Placeholder(1) + " AND COLUMN_NAME IN (" + s.Placeholder(2) + ", " + s.Placeholder(3) + ")"
-	rows, err := s.SchemaDB().QueryContext(ctx, query, "_audit_events", specs[0].name, specs[1].name)
-	if err != nil {
-		return fmt.Errorf("inspect MySQL audit cursor columns: %w", err)
-	}
-	type columnState struct{ columnType, characterSet, collation string }
-	states := map[string]columnState{}
-	for rows.Next() {
-		var name string
-		var state columnState
-		if err := rows.Scan(&name, &state.columnType, &state.characterSet, &state.collation); err != nil {
-			_ = rows.Close()
-			return fmt.Errorf("scan MySQL audit cursor column: %w", err)
-		}
-		states[name] = state
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return fmt.Errorf("iterate MySQL audit cursor columns: %w", err)
-	}
-	_ = rows.Close()
-	modifications := make([]string, 0, len(specs))
-	for _, spec := range specs {
-		state, exists := states[spec.name]
-		if !exists {
-			return fmt.Errorf("inspect MySQL audit cursor columns: %s is missing", spec.name)
-		}
-		if strings.EqualFold(state.columnType, "varchar(191)") && strings.EqualFold(state.characterSet, "ascii") && strings.EqualFold(state.collation, "ascii_bin") {
-			continue
-		}
-		modifications = append(modifications, "MODIFY COLUMN "+s.Identifier(spec.name)+" "+mysqlAuditCursorColumnType+" "+spec.nullability)
-	}
-	if len(modifications) == 0 {
-		return nil
-	}
-	if _, err := s.SchemaDB().ExecContext(ctx, "ALTER TABLE "+s.TableIdentifier("_audit_events")+" "+strings.Join(modifications, ", ")); err != nil {
-		return fmt.Errorf("normalize MySQL audit cursor columns: %w", err)
-	}
-	return nil
 }
 
 func backfillWorkerQueueScopes(ctx context.Context, s Store, queueKind, table string) error {

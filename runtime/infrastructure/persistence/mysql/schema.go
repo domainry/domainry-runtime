@@ -9,6 +9,7 @@ import (
 	ormdriver "github.com/domainry/domainry-orm/driver"
 	ormmysql "github.com/domainry/domainry-orm/mysql"
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
+	mysqlevidence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/evidence"
 )
 
 func (engineProfile) WorkspaceRLSSupported() bool { return false }
@@ -28,9 +29,14 @@ func (engineProfile) ReportDateBucket(value, grain string, _ bool) (string, erro
 	return "DATE_FORMAT(" + value + ", '" + formats[grain] + "')", nil
 }
 
-type engineProfile struct{ ormdriver.Profile }
+type engineProfile struct {
+	ormdriver.Profile
+	evidence persistencedriver.EvidenceSchemaProfile
+}
 
-func newEngineProfile() engineProfile { return engineProfile{Profile: ormmysql.NewProfile()} }
+func newEngineProfile() engineProfile {
+	return engineProfile{Profile: ormmysql.NewProfile(), evidence: mysqlevidence.NewProfile()}
+}
 
 func (engineProfile) ManagedDatabaseMarkerEnabled() bool { return true }
 func (engineProfile) ColumnDefinition(definition string) string {
@@ -51,4 +57,10 @@ func (engineProfile) TableExistsQuery(renderer ormdialect.Renderer, _ string, ta
 }
 func (engineProfile) IndexesQuery(renderer ormdialect.Renderer, _ string, table string) persistencedriver.SchemaQuery {
 	return persistencedriver.SchemaQuery{Statement: "SELECT DISTINCT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = " + renderer.Placeholder(1), Arguments: []any{table}}
+}
+func (profile engineProfile) EvidenceSchemaTypes(text string) persistencedriver.EvidenceSchemaTypes {
+	return profile.evidence.Types(text)
+}
+func (profile engineProfile) NormalizeEvidenceSchema(ctx context.Context, database persistencedriver.SchemaDatabase, renderer ormdialect.Renderer) error {
+	return profile.evidence.Normalize(ctx, database, renderer)
 }

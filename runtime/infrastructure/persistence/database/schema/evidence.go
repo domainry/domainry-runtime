@@ -2,27 +2,11 @@ package schema
 
 import "context"
 
-const mysqlAuditCursorColumnType = "VARCHAR(191) CHARACTER SET ascii COLLATE ascii_bin"
-
 func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 	text := s.MetadataIDColumnType()
-	largeText := "TEXT"
-	idempotencyScopeText := text
-	auditCursorText := text
-	retirementEngineText, retirementNamespaceText, retirementKindText, retirementObjectText := text, text, text, text
-	if s.Driver() == "mysql" {
-		largeText = "LONGTEXT"
-		idempotencyScopeText = "VARCHAR(191) CHARACTER SET ascii COLLATE ascii_bin"
-		// Audit IDs and timestamps are Runtime-owned cursor components. Keeping
-		// those ASCII/binary leaves the user-facing filter identifiers on
-		// utf8mb4 while keeping the exact five-column record cursor below
-		// InnoDB's 3072-byte key limit without lossy prefix indexes.
-		auditCursorText = mysqlAuditCursorColumnType
-		retirementEngineText = "VARCHAR(32)"
-		retirementNamespaceText = "VARCHAR(128)"
-		retirementKindText = "VARCHAR(64)"
-		retirementObjectText = "VARCHAR(191)"
-	}
+	types := s.RuntimeProfile().EvidenceSchemaTypes(text)
+	largeText, idempotencyScopeText, auditCursorText := types.LargeText, types.IdempotencyScope, types.AuditCursor
+	retirementEngineText, retirementNamespaceText, retirementKindText, retirementObjectText := types.RetirementEngine, types.RetirementNamespace, types.RetirementKind, types.RetirementObject
 	tables := map[string][]string{
 		"runtime_release_cohorts": {
 			"cohort_key " + text + " PRIMARY KEY",

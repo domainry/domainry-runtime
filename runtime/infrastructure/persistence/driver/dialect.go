@@ -38,6 +38,8 @@ type EngineProfile interface {
 	WorkspaceTablesQuery(ormdialect.Renderer, string) SchemaQuery
 	TableExistsQuery(ormdialect.Renderer, string, string) SchemaQuery
 	IndexesQuery(ormdialect.Renderer, string, string) SchemaQuery
+	EvidenceSchemaTypes(string) EvidenceSchemaTypes
+	NormalizeEvidenceSchema(context.Context, SchemaDatabase, ormdialect.Renderer) error
 	MigrationLedgerTypes() MigrationLedgerTypes
 	EnsureMigrationNamespace(context.Context, SchemaDatabase, ormdialect.Renderer, string) error
 	ConfigureMigrationTransaction(context.Context, *sql.Tx, ormdialect.Renderer, string, time.Duration, time.Duration) error
@@ -52,6 +54,11 @@ type EngineProfile interface {
 	ReportDateBucket(string, string, bool) (string, error)
 }
 
+type EvidenceSchemaProfile interface {
+	Types(string) EvidenceSchemaTypes
+	Normalize(context.Context, SchemaDatabase, ormdialect.Renderer) error
+}
+
 type SchemaQuery struct {
 	Statement string
 	Arguments []any
@@ -60,6 +67,16 @@ type SchemaQuery struct {
 type MigrationLedgerTypes struct {
 	Key       string
 	Timestamp string
+}
+
+type EvidenceSchemaTypes struct {
+	LargeText           string
+	IdempotencyScope    string
+	AuditCursor         string
+	RetirementEngine    string
+	RetirementNamespace string
+	RetirementKind      string
+	RetirementObject    string
 }
 
 type MigrationBackupPolicy struct {
@@ -121,6 +138,12 @@ func (portableEngineProfile) TableExistsQuery(ormdialect.Renderer, string, strin
 }
 func (portableEngineProfile) IndexesQuery(ormdialect.Renderer, string, string) SchemaQuery {
 	return SchemaQuery{}
+}
+func (portableEngineProfile) EvidenceSchemaTypes(text string) EvidenceSchemaTypes {
+	return EvidenceSchemaTypes{LargeText: "TEXT", IdempotencyScope: text, AuditCursor: text, RetirementEngine: text, RetirementNamespace: text, RetirementKind: text, RetirementObject: text}
+}
+func (portableEngineProfile) NormalizeEvidenceSchema(context.Context, SchemaDatabase, ormdialect.Renderer) error {
+	return nil
 }
 func (portableEngineProfile) MigrationLedgerTypes() MigrationLedgerTypes {
 	return MigrationLedgerTypes{Key: "TEXT", Timestamp: "TEXT"}

@@ -13,11 +13,17 @@ import (
 	ormdriver "github.com/domainry/domainry-orm/driver"
 	ormpostgres "github.com/domainry/domainry-orm/postgres"
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
+	postgresevidence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/evidence"
 )
 
-type engineProfile struct{ ormdriver.Profile }
+type engineProfile struct {
+	ormdriver.Profile
+	evidence persistencedriver.EvidenceSchemaProfile
+}
 
-func newEngineProfile() engineProfile { return engineProfile{Profile: ormpostgres.NewProfile()} }
+func newEngineProfile() engineProfile {
+	return engineProfile{Profile: ormpostgres.NewProfile(), evidence: postgresevidence.NewProfile()}
+}
 
 func (engineProfile) ManagedDatabaseMarkerEnabled() bool        { return true }
 func (engineProfile) ColumnDefinition(definition string) string { return strings.TrimSpace(definition) }
@@ -32,6 +38,12 @@ func (engineProfile) TableExistsQuery(renderer ormdialect.Renderer, databaseSche
 }
 func (engineProfile) IndexesQuery(renderer ormdialect.Renderer, databaseSchema, table string) persistencedriver.SchemaQuery {
 	return persistencedriver.SchemaQuery{Statement: "SELECT indexname FROM pg_indexes WHERE schemaname = " + renderer.Placeholder(1) + " AND tablename = " + renderer.Placeholder(2), Arguments: []any{databaseSchema, table}}
+}
+func (profile engineProfile) EvidenceSchemaTypes(text string) persistencedriver.EvidenceSchemaTypes {
+	return profile.evidence.Types(text)
+}
+func (profile engineProfile) NormalizeEvidenceSchema(ctx context.Context, database persistencedriver.SchemaDatabase, renderer ormdialect.Renderer) error {
+	return profile.evidence.Normalize(ctx, database, renderer)
 }
 
 func (engineProfile) WorkspaceRLSSupported() bool             { return true }

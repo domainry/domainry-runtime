@@ -7,9 +7,12 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	mysqlevidence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/evidence"
 )
 
 const mysqlInnoDBMaxIndexBytes = 3072
+const mysqlAuditCursorColumnType = "VARCHAR(191) CHARACTER SET ascii COLLATE ascii_bin"
 
 var mysqlVarcharLengthPattern = regexp.MustCompile(`(?i)VARCHAR\(([0-9]+)\)`)
 
@@ -41,18 +44,20 @@ func TestAuditEventMySQLCursorIndexesStayWithinInnoDBKeyLimit(t *testing.T) {
 }
 
 func TestMySQLAuditCursorColumnNormalizationRepairsPartialBootstrap(t *testing.T) {
-	state := &schemaSQLState{querySteps: []schemaSQLQueryStep{{
-		columns: []string{"COLUMN_NAME", "COLUMN_TYPE", "CHARACTER_SET_NAME", "COLLATION_NAME"},
-		rows: [][]driver.Value{
-			{"id", "varchar(191)", "utf8mb4", "utf8mb4_unicode_ci"},
-			{"created_at", "varchar(191)", "utf8mb4", "utf8mb4_unicode_ci"},
+	state := &schemaSQLState{querySteps: []schemaSQLQueryStep{
+		{columns: []string{"TABLE_NAME", "COLUMN_NAME", "DATA_TYPE"}},
+		{
+			columns: []string{"COLUMN_NAME", "COLUMN_TYPE", "CHARACTER_SET_NAME", "COLLATION_NAME"},
+			rows: [][]driver.Value{
+				{"id", "varchar(191)", "utf8mb4", "utf8mb4_unicode_ci"},
+				{"created_at", "varchar(191)", "utf8mb4", "utf8mb4_unicode_ci"},
+			},
 		},
-	}}}
+	}}
 	database := openSchemaScriptedDB(state)
 	t.Cleanup(func() { _ = database.Close() })
 	store := scriptedSchemaStore{db: database, driver: "mysql"}
-
-	if err := ensureMySQLAuditCursorColumns(t.Context(), store); err != nil {
+	if err := mysqlevidence.NewProfile().Normalize(t.Context(), database, store.RuntimeRenderer()); err != nil {
 		t.Fatal(err)
 	}
 	if len(state.execQueries) != 1 {
