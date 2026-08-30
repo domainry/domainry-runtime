@@ -188,9 +188,7 @@ func TestWorkspaceFallbackInventoryIsAnExactNonGrowingBaseline(t *testing.T) {
 				}
 				// These conditions reject missing workspace identity or discard an
 				// invalid persisted scope; none supplies a replacement workspace.
-				if (relativePath == "runtime/infrastructure/persistence/database/record/record_batch_job_metrics_store.go" ||
-					relativePath == "runtime/infrastructure/persistence/database/record/record_batch_job_transition_store.go" ||
-					relativePath == "runtime/infrastructure/persistence/postgres/rls/profile.go" ||
+				if (relativePath == "runtime/infrastructure/persistence/postgres/rls/profile.go" ||
 					relativePath == "runtime/infrastructure/persistence/database/metadata/change_plan_store.go" ||
 					relativePath == "runtime/infrastructure/persistence/database/metadata/definition_context_store.go" ||
 					relativePath == "runtime/infrastructure/persistence/database/report/report_snapshot_store.go") &&

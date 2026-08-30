@@ -23,10 +23,6 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/productbrand"
 )
 
-type ReportRecordExporter interface {
-	ExportReportRecords(context.Context, string, principalmodel.Principal) ([]byte, string, error)
-}
-
 var _ reportcontract.ReportRecordAccess = (*ReportRecordAdapter)(nil)
 var _ reportcontract.ReportRecordReader = (*ReportRecordAdapter)(nil)
 var _ reportcontract.ReportDatasetPushdownAuthorizer = (*ReportRecordAdapter)(nil)
@@ -130,10 +126,6 @@ func (a *ReportRecordAdapter) AuthorizeReportObjectSQLField(_ context.Context, p
 	return nil
 }
 
-func (a *ReportRecordAdapter) ExportReportRecords(ctx context.Context, objectKey string, principal principalmodel.Principal) ([]byte, string, error) {
-	return a.application.ExportRecords(ctx, objectKey, principal)
-}
-
 func (a *ReportRecordAdapter) GetReportRecord(ctx context.Context, objectKey, recordID string, principal principalmodel.Principal) (recordmodel.Record, error) {
 	return a.application.GetRecord(ctx, objectKey, recordID, principal)
 }
@@ -198,7 +190,6 @@ type ReportExportRecordStore interface {
 type ReportApplicationDependencies struct {
 	ProductBrandName      string
 	Domain                *reportservice.ReportDomainService
-	Records               ReportRecordExporter
 	ExportRecords         ReportExportRecordStore
 	Audit                 auditcontract.AuditAppender
 	NotificationCompiler  func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
@@ -219,9 +210,7 @@ type ReportSnapshotNotificationCommitter interface {
 type ReportApplicationService struct {
 	productBrandName     string
 	domain               *reportservice.ReportDomainService
-	records              ReportRecordExporter
 	exportRecords        ReportExportRecordStore
-	audit                auditcontract.AuditAppender
 	compileNotification  func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	commitNotification   ReportSnapshotNotificationCommitter
 	exportControls       func(context.Context, principalmodel.Principal) []reportmodel.ReportExportControlSchema
@@ -240,7 +229,7 @@ func NewReportApplicationService(dependencies ReportApplicationDependencies) *Re
 	if len(cursorKey) == 0 {
 		cursorKey = []byte("report-pagination-test-key")
 	}
-	service := &ReportApplicationService{productBrandName: productbrand.ResolveName(dependencies.ProductBrandName), domain: dependencies.Domain, records: dependencies.Records, exportRecords: dependencies.ExportRecords, audit: dependencies.Audit, compileNotification: dependencies.NotificationCompiler, commitNotification: dependencies.NotificationCommitter, exportControls: dependencies.ExportControls, clock: clock, dataExchange: dependencies.DataExchange, cursorKey: cursorKey}
+	service := &ReportApplicationService{productBrandName: productbrand.ResolveName(dependencies.ProductBrandName), domain: dependencies.Domain, exportRecords: dependencies.ExportRecords, compileNotification: dependencies.NotificationCompiler, commitNotification: dependencies.NotificationCommitter, exportControls: dependencies.ExportControls, clock: clock, dataExchange: dependencies.DataExchange, cursorKey: cursorKey}
 	if dependencies.DataExchangeProviders != nil {
 		service.dataExchangeProvider = reportexport.NewDataExchangeProvider(reportexport.DataExchangeDependencies{Binding: dependencies.DataExchange, Domain: dependencies.Domain, Records: dependencies.ExportRecords, Audit: dependencies.Audit, ResolvePrincipal: dependencies.DataExchangeProviders.ResolvePrincipal, ExportControl: service.exportControl, Watermark: service.reportExportWatermark, Clock: clock})
 		dependencies.DataExchangeProviders.RegisterExportProvider(reportexport.DataExchangeProviderKey, service.dataExchangeProvider)
@@ -350,32 +339,4 @@ func reportSnapshotOccurredAt(snapshot reportmodel.ReportSnapshot) string {
 		return value
 	}
 	return time.Now().UTC().Format(time.RFC3339Nano)
-}
-
-func (s *ReportApplicationService) ExportObject(ctx context.Context, reportKey, objectKey string, principal principalmodel.Principal) ([]byte, string, error) {
-	if _, err := principalmodel.CommandScopeForPrincipal(principal); err != nil {
-		return nil, "", reportWorkspaceError(err)
-	}
-	report, err := s.domain.ReportForExport(ctx, reportKey, objectKey, principal)
-	if err != nil {
-		return nil, "", err
-	}
-	if control, ok := s.exportControl(ctx, report.Key, objectKey, principal); ok && control.ApprovalRequired {
-		return nil, "", &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.report.export_approval_required"}
-	}
-	content, filename, err := s.records.ExportReportRecords(ctx, objectKey, principal)
-	if err != nil {
-		return nil, "", err
-	}
-	if s.audit == nil {
-		return nil, "", reportApplicationError(nil)
-	}
-	if err := s.audit.AppendAudit(ctx, auditcontract.AuditAppendRequest{
-		Event: "report_object_exported", ObjectKey: objectKey, Principal: principal,
-		Summary:  fmt.Sprintf("Exported %s from report %s", objectKey, report.Key),
-		Metadata: map[string]any{"report_key": report.Key, "object_key": objectKey},
-	}); err != nil {
-		return nil, "", reportApplicationError(err)
-	}
-	return content, report.Key + "-" + filename, nil
 }

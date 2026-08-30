@@ -78,7 +78,7 @@ func initializeRecordApplications(s *runtimeAssembly) {
 	})
 	s.reportsService = reportapplication.NewReportApplicationService(reportapplication.ReportApplicationDependencies{
 		ProductBrandName: s.productBrandName,
-		Domain:           reportDomain, Records: reportRecords, ExportRecords: reportRecords, Audit: s.auditApplicationService,
+		Domain:           reportDomain, ExportRecords: reportRecords, Audit: s.auditApplicationService,
 		DataExchange:          s.dataExchange,
 		DataExchangeProviders: s.dataExchangeProviders,
 		CursorKey:             s.auditExportTokenKey,

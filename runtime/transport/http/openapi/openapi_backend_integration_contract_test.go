@@ -69,6 +69,26 @@ func TestBackendIntegrationRoutesPublishTypedRuntimeClientContracts(t *testing.T
 	if !openAPITestRequiredParameter(download, "query", "object_key") || !openAPITestRequiredParameter(download, "query", "field_key") || !openAPITestResponseContentType(download, "application/octet-stream") {
 		t.Fatalf("authorized file download contract=%#v", download)
 	}
+
+	reportExport := openAPITestOperation(t, paths, "/reports/{reportKey}/exports/{objectKey}/prepare", "post")
+	responses := reportExport["responses"].(map[string]any)
+	if responses["200"] != nil || responses["202"] == nil {
+		t.Fatalf("Report export must always submit a Data Exchange job: responses=%#v", responses)
+	}
+	requestSchema := reportExport["requestBody"].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)
+	required, _ := requestSchema["required"].([]string)
+	if !containsString(required, "audit_id") || !containsString(required, "scope") {
+		t.Fatalf("Report export request must require governed scope: required=%v", required)
+	}
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func TestPersonalInboxAndWorkforcePublishDurableIntegrationContracts(t *testing.T) {

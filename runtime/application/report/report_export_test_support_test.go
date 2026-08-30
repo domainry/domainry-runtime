@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -13,7 +12,6 @@ import (
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
-	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/service"
 )
 
 type reportExportDatasetAccessStub struct {
@@ -157,14 +155,4 @@ func reportExportTestRecordMapping() reportmodel.ReportExportRecordMappingSchema
 
 func reportExportEdgeControl() reportmodel.ReportExportControlSchema {
 	return reportmodel.ReportExportControlSchema{ReportKey: "revenue", SourceObjects: []string{"customer"}, AuditObject: "report_export_audit", DownloadObject: "report_export_download", MaxRows: 1000, RecordMapping: reportExportTestRecordMapping()}
-}
-
-func reportExportEdgeService(store ReportExportRecordStore, records ReportRecordExporter, controls []reportmodel.ReportExportControlSchema, now time.Time) *ReportApplicationService {
-	reportDefinition := reportmodel.ReportSchema{Key: "revenue", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "customer", Alias: "customer"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "id", Field: reportmodel.ReportDatasetField{SourceAlias: "customer", FieldKey: "id"}}}}}
-	domain := reportservice.NewReportDomainService(reportservice.ReportDependencies{Reports: func(context.Context, principalmodel.Principal) []reportmodel.ReportSchema {
-		return []reportmodel.ReportSchema{reportDefinition}
-	}, Access: reportExportDatasetAccessStub{}})
-	return NewReportApplicationService(ReportApplicationDependencies{Domain: domain, Records: records, ExportRecords: store, Audit: &reportAuditAppenderStub{}, ExportControls: func(context.Context, principalmodel.Principal) []reportmodel.ReportExportControlSchema {
-		return controls
-	}, Clock: func() time.Time { return now }})
 }

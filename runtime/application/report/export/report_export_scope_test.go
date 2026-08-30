@@ -155,7 +155,7 @@ func TestExportHelpersCoverClosedInputs(t *testing.T) {
 	}
 }
 
-func TestExportRowsAndCSV(t *testing.T) {
+func TestExportRowsAndDataExchangePreflightCSV(t *testing.T) {
 	row := reportmodel.ReportResultRow{Dimensions: map[string]string{"status": "paid", "empty": ""}, Measures: map[string]string{"orders": "2"}}
 	summary := reportmodel.ReportSummary{Rows: []reportmodel.ReportResultRow{row}, Analyses: []reportmodel.ReportAnalysisResult{{Key: "funnel", Rows: []reportmodel.ReportResultRow{row}}}}
 	if rows, err := Rows(summary, ""); err != nil || len(rows) != 1 {
@@ -167,18 +167,9 @@ func TestExportRowsAndCSV(t *testing.T) {
 	if _, err := Rows(summary, "missing"); apperror.CodeOf(err) != "backend.report.export_analysis_not_allowed" {
 		t.Fatalf("missing analysis err=%v", err)
 	}
-	content, err := EncodeCSV([]reportmodel.ReportResultRow{row}, []string{"status", "orders", "empty"}, map[string]bool{"status": true, "empty": true})
+	content, err := EncodePreflightCSV([]reportmodel.ReportResultRow{row}, []string{"status", "orders", "empty"}, map[string]bool{"status": true, "empty": true})
 	if err != nil || string(content) != "status,orders,empty\n******,2,\n" {
 		t.Fatalf("csv=%q err=%v", content, err)
-	}
-	if content, err = ApplyWatermark(nil, "mark", "expires"); err != nil || len(content) != 0 {
-		t.Fatalf("empty watermark=%q err=%v", content, err)
-	}
-	if _, err = ApplyWatermark([]byte("\"unterminated"), "mark", "expires"); err == nil {
-		t.Fatal("invalid CSV watermark accepted")
-	}
-	if content, err = ApplyWatermark([]byte("status\npaid\n"), "mark", "expires"); err != nil || !strings.Contains(string(content), "mark,expires") {
-		t.Fatalf("watermark=%q err=%v", content, err)
 	}
 }
 

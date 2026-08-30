@@ -211,7 +211,7 @@ func TestRuntimeAPIContractPublishesGovernedReportDataExchangeJob(t *testing.T) 
 		}
 		return false
 	}
-	if !contains(document.Schemas["report_export_prepare_request"].Optional, "scope") {
+	if !contains(document.Schemas["report_export_prepare_request"].Required, "scope") || contains(document.Schemas["report_export_prepare_request"].Optional, "scope") {
 		t.Fatalf("prepare schema=%+v", document.Schemas["report_export_prepare_request"])
 	}
 	for _, key := range []string{"page_size", "truncated", "total", "total_semantics"} {

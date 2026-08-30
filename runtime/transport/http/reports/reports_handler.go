@@ -99,15 +99,6 @@ func (h *ReportsHandler) refreshReportSnapshot(w http.ResponseWriter, r *http.Re
 	h.writeJSON(w, http.StatusOK, snapshot)
 }
 
-func (h *ReportsHandler) exportReportObject(w http.ResponseWriter, r *http.Request) {
-	content, filename, err := h.service.ExportObject(r.Context(), strings.TrimSpace(r.PathValue("reportKey")), strings.TrimSpace(r.PathValue("objectKey")), h.principal(r))
-	if err != nil {
-		h.writeServiceError(w, r, err)
-		return
-	}
-	h.writeExportFile(w, r, content, filename)
-}
-
 func (h *ReportsHandler) prepareReportExport(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		AuditID string                               `json:"audit_id"`
@@ -119,9 +110,6 @@ func (h *ReportsHandler) prepareReportExport(w http.ResponseWriter, r *http.Requ
 	if err := decoder.Decode(&request); err != nil {
 		h.writeServiceError(w, r, err)
 		return
-	}
-	if strings.TrimSpace(request.Scope.Purpose) == "" {
-		request.Scope = reportmodel.ReportExportScopeRequest{Purpose: "legacy governed report export", Freshness: reportmodel.ReportExportFreshness{Mode: "realtime"}}
 	}
 	result, err := h.service.PrepareExportRouted(
 		r.Context(), strings.TrimSpace(r.PathValue("reportKey")), strings.TrimSpace(r.PathValue("objectKey")),

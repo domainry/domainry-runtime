@@ -111,7 +111,7 @@ func (s *ReportApplicationService) prepareReportExportPayload(ctx context.Contex
 		if err != nil {
 			return reportexport.ExportPayload{}, err
 		}
-		csvContent, encodeErr := reportexport.EncodeCSV(rows, normalizedScope.FieldProjection, maskedDimensions)
+		csvContent, encodeErr := reportexport.EncodePreflightCSV(rows, normalizedScope.FieldProjection, maskedDimensions)
 		if encodeErr != nil {
 			return reportexport.ExportPayload{}, encodeErr
 		}

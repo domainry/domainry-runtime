@@ -38,9 +38,8 @@ func TestReportDirectKeyEntrypointsConcealDefinitionWithoutRequiredPermission(t 
 			return metadataservice.SnapshotForPrincipal(snapshot, candidate).Reports
 		},
 	})
-	records := &reportRecordExporterStub{}
 	service := NewReportApplicationService(ReportApplicationDependencies{
-		Domain: domain, Records: records,
+		Domain:        domain,
 		ExportRecords: &reportExportStoreStub{},
 	})
 
@@ -50,13 +49,7 @@ func TestReportDirectKeyEntrypointsConcealDefinitionWithoutRequiredPermission(t 
 	if _, err := service.Summary(t.Context(), reportDefinition.Key, principal); apperror.CodeOf(err) != "backend.report.not_found" {
 		t.Fatalf("summary error=%v", err)
 	}
-	if _, _, err := service.ExportObject(t.Context(), reportDefinition.Key, "order_line", principal); apperror.CodeOf(err) != "backend.report.not_found" {
-		t.Fatalf("export error=%v", err)
-	}
 	if _, err := service.PrepareExportRouted(t.Context(), reportDefinition.Key, "order_line", "audit-1", "export-1", reportmodel.ReportExportScopeRequest{Purpose: "test", Freshness: reportmodel.ReportExportFreshness{Mode: "realtime"}}, principal); apperror.CodeOf(err) != "backend.report.not_found" {
 		t.Fatalf("prepare export error=%v", err)
-	}
-	if records.calls != 0 {
-		t.Fatalf("concealed report reached export record port: calls=%d", records.calls)
 	}
 }

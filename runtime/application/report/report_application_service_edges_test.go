@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
@@ -91,7 +90,7 @@ func (s reportSnapshotSourceStub) ReadReportSnapshotSourceVersion(context.Contex
 }
 
 func TestReportApplicationSummaryRejectsMissingWorkspaceBeforeDomain(t *testing.T) {
-	service := reportApplicationFixture(&reportRecordExporterStub{}, &reportAuditAppenderStub{})
+	service := reportApplicationFixture(&reportAuditAppenderStub{})
 
 	_, err := service.Summary(t.Context(), "revenue", principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator-1"}})
 	if err == nil || apperror.KindOf(err) != apperror.KindForbidden || apperror.CodeOf(err) != "backend.workspace_scope_required" {
@@ -114,25 +113,8 @@ func TestReportApplicationSummaryDelegatesWithAuthorizedWorkspace(t *testing.T) 
 	}
 }
 
-func TestReportApplicationExportRequiresAuditDependency(t *testing.T) {
-	records := &reportRecordExporterStub{}
-	_, _, err := reportApplicationFixture(records, nil).ExportObject(t.Context(), "revenue", "customer", reportPrincipal())
-	if err == nil || apperror.KindOf(err) != apperror.KindInternal || apperror.CodeOf(err) != "backend.internal_error" || records.calls != 1 {
-		t.Fatalf("missing audit error=%v record_calls=%d", err, records.calls)
-	}
-}
-
-func TestReportApplicationExportRejectsUnknownReportBeforeRecordPort(t *testing.T) {
-	records := &reportRecordExporterStub{}
-	audit := &reportAuditAppenderStub{}
-	_, _, err := reportApplicationFixture(records, audit).ExportObject(t.Context(), "missing", "customer", reportPrincipal())
-	if err == nil || apperror.KindOf(err) != apperror.KindNotFound || apperror.CodeOf(err) != "backend.report.not_found" || records.calls != 0 || audit.calls != 0 {
-		t.Fatalf("unknown report error=%v record_calls=%d audit_calls=%d", err, records.calls, audit.calls)
-	}
-}
-
 func TestReportApplicationRefreshDelegatesAfterWorkspaceAuthorization(t *testing.T) {
-	service := reportApplicationFixture(&reportRecordExporterStub{}, &reportAuditAppenderStub{})
+	service := reportApplicationFixture(&reportAuditAppenderStub{})
 	if _, err := service.RefreshSnapshot(t.Context(), "missing", "refresh-1", principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("workspace refresh error=%v", err)
 	}
@@ -252,14 +234,5 @@ func TestReportRefreshRemainingNotificationCommitBoundaries(t *testing.T) {
 	}
 	if got := reportSnapshotOccurredAt(reportmodel.ReportSnapshot{RefreshedAt: " refreshed "}); got != "refreshed" {
 		t.Fatalf("occurred at=%q", got)
-	}
-}
-
-func TestReportExportObjectAllowsNonApprovalControl(t *testing.T) {
-	control := reportExportEdgeControl()
-	service := reportExportEdgeService(&reportExportStoreStub{}, &reportRecordExporterStub{}, []reportmodel.ReportExportControlSchema{control}, time.Now())
-	content, filename, err := service.ExportObject(t.Context(), "revenue", "customer", reportPrincipal())
-	if err != nil || len(content) == 0 || filename == "" {
-		t.Fatalf("content=%q filename=%q err=%v", content, filename, err)
 	}
 }

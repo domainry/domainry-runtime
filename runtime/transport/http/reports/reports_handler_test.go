@@ -29,16 +29,6 @@ import (
 	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/service"
 )
 
-type reportsExporterStub struct {
-	content  []byte
-	filename string
-	err      error
-}
-
-func (s *reportsExporterStub) ExportReportRecords(context.Context, string, principalmodel.Principal) ([]byte, string, error) {
-	return append([]byte(nil), s.content...), s.filename, s.err
-}
-
 type reportsAuditStub struct{ err error }
 
 func (s *reportsAuditStub) AppendAudit(context.Context, auditcontract.AuditAppendRequest) error {
@@ -183,29 +173,6 @@ func (reportsSnapshotReplayStore) LatestReportSnapshot(context.Context, string, 
 }
 func (reportsSnapshotReplayStore) ReadReportSnapshotSourceVersion(context.Context, reportcontract.ReportSnapshotSourceVersionRequest) (reportmodel.ReportSnapshotSourceVersion, error) {
 	return reportmodel.ReportSnapshotSourceVersion{}, nil
-}
-
-func newReportsHandler(exporter *reportsExporterStub, audit auditcontract.AuditAppender, capture *reportsHandlerCapture) *ReportsHandler {
-	domain := reportservice.NewReportDomainService(reportservice.ReportDependencies{
-		Reports: func(context.Context, principalmodel.Principal) []reportmodel.ReportSchema {
-			return []reportmodel.ReportSchema{{Key: "revenue", Name: "Revenue", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "customer", Alias: "customer"}}}}
-		},
-	})
-	service := reportapplication.NewReportApplicationService(reportapplication.ReportApplicationDependencies{Domain: domain, Records: exporter, Audit: audit})
-	return NewReportsHandler(ReportsDependencies{
-		Service: service,
-		Principal: func(*http.Request) principalmodel.Principal {
-			return principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator-1", WorkspaceID: "workspace-a"}}
-		},
-		WriteJSON: func(w http.ResponseWriter, status int, value any) {
-			w.WriteHeader(status)
-			_ = json.NewEncoder(w).Encode(value)
-		},
-		WriteServiceError: func(w http.ResponseWriter, _ *http.Request, err error) {
-			capture.serviceErr = err
-			w.WriteHeader(http.StatusUnprocessableEntity)
-		},
-	})
 }
 
 func TestReportsObjectSQLQueryRouteBindsTypedParameters(t *testing.T) {
@@ -418,62 +385,6 @@ func TestReportsRefreshSnapshotWritesReplayAndMapsStoreFailure(t *testing.T) {
 	}
 }
 
-func reportsExportRequest(reportKey, objectKey string) *http.Request {
-	request := httptest.NewRequest(http.MethodGet, "/reports/report/exports/object", nil)
-	request.SetPathValue("reportKey", reportKey)
-	request.SetPathValue("objectKey", objectKey)
-	return request
-}
-
-func TestReportsExportHandlerWritesCSVHeadersAndBody(t *testing.T) {
-	capture := &reportsHandlerCapture{}
-	handler := newReportsHandler(&reportsExporterStub{content: []byte("id\ncustomer-1\n"), filename: "customer.csv"}, &reportsAuditStub{}, capture)
-	response := httptest.NewRecorder()
-
-	handler.exportReportObject(response, reportsExportRequest(" revenue ", " customer "))
-
-	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "text/csv; charset=utf-8" || response.Header().Get("Content-Disposition") != "attachment; filename=revenue-customer.csv" || response.Body.String() != "id\ncustomer-1\n" || capture.serviceErr != nil {
-		t.Fatalf("status=%d headers=%v error=%v body=%q", response.Code, response.Header(), capture.serviceErr, response.Body.String())
-	}
-}
-
-func TestReportsExportHandlerMapsServiceFailure(t *testing.T) {
-	capture := &reportsHandlerCapture{}
-	exportFailure := errors.New("export failed")
-	handler := newReportsHandler(&reportsExporterStub{err: exportFailure}, &reportsAuditStub{}, capture)
-	response := httptest.NewRecorder()
-
-	handler.exportReportObject(response, reportsExportRequest("revenue", "customer"))
-
-	if response.Code != http.StatusUnprocessableEntity || !errors.Is(capture.serviceErr, exportFailure) || response.Body.Len() != 0 {
-		t.Fatalf("status=%d error=%v body=%q", response.Code, capture.serviceErr, response.Body.String())
-	}
-}
-
-type failingReportsResponseWriter struct {
-	header http.Header
-	status int
-	err    error
-}
-
-func (w *failingReportsResponseWriter) Header() http.Header { return w.header }
-func (w *failingReportsResponseWriter) WriteHeader(status int) {
-	w.status = status
-}
-func (w *failingReportsResponseWriter) Write([]byte) (int, error) { return 0, w.err }
-
-func TestReportsExportHandlerToleratesClientWriteFailure(t *testing.T) {
-	capture := &reportsHandlerCapture{}
-	handler := newReportsHandler(&reportsExporterStub{content: []byte("id\ncustomer-1\n"), filename: "customer.csv"}, &reportsAuditStub{}, capture)
-	writer := &failingReportsResponseWriter{header: http.Header{}, err: errors.New("client disconnected")}
-
-	handler.exportReportObject(writer, reportsExportRequest("revenue", "customer"))
-
-	if writer.status != http.StatusOK || writer.header.Get("Content-Disposition") != "attachment; filename=revenue-customer.csv" || capture.serviceErr != nil {
-		t.Fatalf("status=%d headers=%v service_error=%v", writer.status, writer.header, capture.serviceErr)
-	}
-}
-
 func TestReportsGovernedPrepareAndDownloadHandlers(t *testing.T) {
 	now := time.Date(2026, 8, 4, 12, 0, 0, 0, time.UTC)
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator-1"}}, accessfixture.Bundle{Key: "admin", Permissions: []string{"workspace.admin", "*"}})
@@ -484,7 +395,7 @@ func TestReportsGovernedPrepareAndDownloadHandlers(t *testing.T) {
 		return []reportmodel.ReportSchema{{Key: "revenue", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "customer", Alias: "customer"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "id", Field: reportmodel.ReportDatasetField{SourceAlias: "customer", FieldKey: "id"}}}}}}
 	}, Access: reportsEmptyAccess{}, Records: reportsOneRecords{}, SnapshotSources: reportsSnapshotReplayStore{}})
 	service := reportapplication.NewReportApplicationService(reportapplication.ReportApplicationDependencies{
-		Domain: domain, Records: &reportsExporterStub{content: []byte("id\ncustomer-1\n"), filename: "customer.csv"}, ExportRecords: store,
+		Domain: domain, ExportRecords: store,
 		Audit: &reportsAuditStub{}, DataExchange: exchange, DataExchangeProviders: providers,
 		ExportControls: func(context.Context, principalmodel.Principal) []reportmodel.ReportExportControlSchema {
 			return []reportmodel.ReportExportControlSchema{{ReportKey: "revenue", SourceObjects: []string{"customer"}, AuditObject: "report_export_audit", DownloadObject: "report_export_download", MaxRows: 1000, RecordMapping: reportmodel.ReportExportRecordMappingSchema{AuditReportKeyField: "report_key", AuditRequesterField: "requested_by_identity_user_id", AuditStatusField: "status", AuditPreparedStatuses: []string{"completed"}, AuditPreparedStatus: "completed", AuditDownloadedStatus: "completed", AuditDeniedStatus: "denied", AuditExpiredStatus: "expired", AuditRowCountField: "row_count", AuditScopeHashField: "filters_hash", DownloadAuditField: "audit_id", DownloadFilenameField: "file_name", DownloadContentHashField: "content_hash", DownloadExpiresAtField: "expires_at", DownloadTokenField: "file_reference"}}}
@@ -517,6 +428,15 @@ func TestReportsGovernedPrepareAndDownloadHandlers(t *testing.T) {
 	handler.prepareReportExport(httptest.NewRecorder(), missingAudit)
 	if capture.serviceErr == nil {
 		t.Fatal("missing governed export idempotency key was accepted")
+	}
+	capture.serviceErr = nil
+	missingScope := httptest.NewRequest(http.MethodPost, "/reports/revenue/exports/customer", strings.NewReader(`{"audit_id":"audit-1"}`))
+	missingScope.SetPathValue("reportKey", "revenue")
+	missingScope.SetPathValue("objectKey", "customer")
+	missingScope.Header.Set("Idempotency-Key", "prepare-without-scope")
+	handler.prepareReportExport(httptest.NewRecorder(), missingScope)
+	if apperror.CodeOf(capture.serviceErr) != "backend.report.export_scope_invalid" {
+		t.Fatalf("missing governed export scope error=%v", capture.serviceErr)
 	}
 	capture.serviceErr = nil
 	valid := httptest.NewRequest(http.MethodPost, "/reports/revenue/exports/customer", strings.NewReader(`{"audit_id":"audit-1","scope":{"tag_match":"all","field_projection":["id"],"purpose":"browser export","freshness":{"mode":"realtime"}}}`))

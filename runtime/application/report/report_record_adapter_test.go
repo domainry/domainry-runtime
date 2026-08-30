@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
-	"strings"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -141,10 +140,6 @@ func TestReportRecordAdapterDelegatesRecordBoundaries(t *testing.T) {
 	}
 	if _, err := adapter.AuthorizeReportExportField(t.Context(), principal, "missing", "id"); err == nil {
 		t.Fatal("missing export object accepted")
-	}
-	content, filename, err := adapter.ExportReportRecords(t.Context(), "customer", principal)
-	if err != nil || filename != "customer.csv" || !strings.Contains(string(content), "Acme") {
-		t.Fatalf("filename=%q content=%q err=%v", filename, content, err)
 	}
 	page, err := adapter.ListReportRecords(t.Context(), "workspace-a", object, recordmodel.RecordListQuery{})
 	if err != nil || len(page.Items) != 1 {

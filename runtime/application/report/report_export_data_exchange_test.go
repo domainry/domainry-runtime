@@ -95,7 +95,7 @@ func TestReportDataExchangeProviderPagesAndFinalizesBusinessProjection(t *testin
 	exchange := &reportDataExchangeBindingProbe{}
 	providers := recordapplication.NewDataExchangeProviders(func(context.Context, string, string) principalmodel.Principal { return principal })
 	service := NewReportApplicationService(ReportApplicationDependencies{
-		Domain: domain, Records: &reportRecordExporterStub{}, ExportRecords: store, Audit: &reportAuditAppenderStub{}, DataExchange: exchange, DataExchangeProviders: providers,
+		Domain: domain, ExportRecords: store, Audit: &reportAuditAppenderStub{}, DataExchange: exchange, DataExchangeProviders: providers,
 		ExportControls: func(context.Context, principalmodel.Principal) []reportmodel.ReportExportControlSchema {
 			return []reportmodel.ReportExportControlSchema{control}
 		},
