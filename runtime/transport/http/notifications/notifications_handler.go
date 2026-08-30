@@ -11,8 +11,6 @@ import (
 	"time"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
-
-	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
 )
 
 type NotificationsHandler struct {
@@ -61,7 +59,7 @@ type NotificationDeliveryLedger interface {
 }
 
 func (h *NotificationsHandler) listPublications(w http.ResponseWriter, r *http.Request) {
-	if !h.require(w, r, notificationcontract.PermissionTemplateRead) {
+	if !h.require(w, r, PermissionTemplateRead) {
 		return
 	}
 	values, err := h.management.ListPublicationRequests(r.Context(), r.URL.Query().Get("template_key"), h.principal(r))
@@ -78,7 +76,7 @@ type publicationRequestInput struct {
 }
 
 func (h *NotificationsHandler) requestPublication(w http.ResponseWriter, r *http.Request) {
-	if !h.require(w, r, notificationcontract.PermissionTemplatePublish) {
+	if !h.require(w, r, PermissionTemplatePublish) {
 		return
 	}
 	var request publicationRequestInput
@@ -94,7 +92,7 @@ func (h *NotificationsHandler) requestPublication(w http.ResponseWriter, r *http
 }
 
 func (h *NotificationsHandler) approvePublication(w http.ResponseWriter, r *http.Request) {
-	if !h.require(w, r, notificationcontract.PermissionTemplateApprove) {
+	if !h.require(w, r, PermissionTemplateApprove) {
 		return
 	}
 	value, err := h.management.ApprovePublication(r.Context(), r.PathValue("publicationID"), h.principal(r))
@@ -110,7 +108,7 @@ type publicationReviewInput struct {
 }
 
 func (h *NotificationsHandler) rejectPublication(w http.ResponseWriter, r *http.Request) {
-	if !h.require(w, r, notificationcontract.PermissionTemplateApprove) {
+	if !h.require(w, r, PermissionTemplateApprove) {
 		return
 	}
 	var request publicationReviewInput
@@ -126,7 +124,7 @@ func (h *NotificationsHandler) rejectPublication(w http.ResponseWriter, r *http.
 }
 
 func (h *NotificationsHandler) cancelPublication(w http.ResponseWriter, r *http.Request) {
-	if !h.requireAny(w, r, notificationcontract.PermissionTemplatePublish, notificationcontract.PermissionTemplateApprove) {
+	if !h.requireAny(w, r, PermissionTemplatePublish, PermissionTemplateApprove) {
 		return
 	}
 	value, err := h.management.CancelPublication(r.Context(), r.PathValue("publicationID"), h.principal(r))
@@ -138,7 +136,7 @@ func (h *NotificationsHandler) cancelPublication(w http.ResponseWriter, r *http.
 }
 
 func (h *NotificationsHandler) capabilities(w http.ResponseWriter, r *http.Request) {
-	if !h.require(w, r, notificationcontract.PermissionTemplateRead) {
+	if !h.require(w, r, PermissionTemplateRead) {
 		return
 	}
 	values, err := h.management.Capabilities(r.Context(), h.principal(r))
@@ -150,7 +148,7 @@ func (h *NotificationsHandler) capabilities(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *NotificationsHandler) list(w http.ResponseWriter, r *http.Request) {
-	if !h.require(w, r, notificationcontract.PermissionTemplateRead) {
+	if !h.require(w, r, PermissionTemplateRead) {
 		return
 	}
 	values, err := h.management.List(r.Context(), h.principal(r))
@@ -162,7 +160,7 @@ func (h *NotificationsHandler) list(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *NotificationsHandler) get(w http.ResponseWriter, r *http.Request) {
-	if !h.require(w, r, notificationcontract.PermissionTemplateRead) {
+	if !h.require(w, r, PermissionTemplateRead) {
 		return
 	}
 	value, found, err := h.management.Get(r.Context(), r.PathValue("templateKey"), h.principal(r))
@@ -178,7 +176,7 @@ func (h *NotificationsHandler) get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *NotificationsHandler) listVersions(w http.ResponseWriter, r *http.Request) {
-	if !h.require(w, r, notificationcontract.PermissionTemplateRead) {
+	if !h.require(w, r, PermissionTemplateRead) {
 		return
 	}
 	values, err := h.management.ListVersions(r.Context(), r.PathValue("templateKey"), h.principal(r))
@@ -190,7 +188,7 @@ func (h *NotificationsHandler) listVersions(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *NotificationsHandler) restoreVersionDraft(w http.ResponseWriter, r *http.Request) {
-	if !h.require(w, r, notificationcontract.PermissionTemplateManage) {
+	if !h.require(w, r, PermissionTemplateManage) {
 		return
 	}
 	var request lifecycleRequest
@@ -216,7 +214,7 @@ type draftRequest struct {
 }
 
 func (h *NotificationsHandler) saveDraft(w http.ResponseWriter, r *http.Request) {
-	if !h.require(w, r, notificationcontract.PermissionTemplateManage) {
+	if !h.require(w, r, PermissionTemplateManage) {
 		return
 	}
 	var request draftRequest
@@ -236,7 +234,7 @@ type lifecycleRequest struct {
 }
 
 func (h *NotificationsHandler) publish(w http.ResponseWriter, r *http.Request) {
-	if !h.require(w, r, notificationcontract.PermissionTemplateApprove) {
+	if !h.require(w, r, PermissionTemplateApprove) {
 		return
 	}
 	// Keep the legacy endpoint registered so older clients receive a precise
@@ -246,7 +244,7 @@ func (h *NotificationsHandler) publish(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *NotificationsHandler) disable(w http.ResponseWriter, r *http.Request) {
-	if !h.require(w, r, notificationcontract.PermissionTemplatePublish) {
+	if !h.require(w, r, PermissionTemplatePublish) {
 		return
 	}
 	var request lifecycleRequest
@@ -275,7 +273,7 @@ type templatePreviewRequest struct {
 }
 
 func (h *NotificationsHandler) previewTemplate(w http.ResponseWriter, r *http.Request) {
-	if !h.requireAny(w, r, notificationcontract.PermissionTemplateManage, notificationcontract.PermissionTemplateTest) {
+	if !h.requireAny(w, r, PermissionTemplateManage, PermissionTemplateTest) {
 		return
 	}
 	var request templatePreviewRequest
@@ -294,7 +292,7 @@ func (h *NotificationsHandler) previewTemplate(w http.ResponseWriter, r *http.Re
 }
 
 func (h *NotificationsHandler) preview(w http.ResponseWriter, r *http.Request) {
-	if !h.requireAny(w, r, notificationcontract.PermissionTemplateRead, notificationcontract.PermissionTemplateTest) {
+	if !h.requireAny(w, r, PermissionTemplateRead, PermissionTemplateTest) {
 		return
 	}
 	var request previewRequest

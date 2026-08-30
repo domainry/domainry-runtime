@@ -1,7 +1,7 @@
-package contract
+package notifications
 
-// Notification administration permissions are host authorization contracts;
-// they are intentionally not part of the extracted notification domain.
+// Runtime owns BFF authorization for the Notification HTTP facade. These are
+// host route permissions, not Notification domain contracts.
 const (
 	PermissionTemplateRead    = "notification.template.read"
 	PermissionTemplateManage  = "notification.template.manage"

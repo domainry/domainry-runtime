@@ -15,9 +15,9 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
-	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
+	notificationbinding "github.com/domainry/domainry-runtime/runtime/platform/notificationbinding"
 )
 
 type notificationHTTPClock struct{}
@@ -242,7 +242,7 @@ func (a *notificationHTTPApplication) Capabilities(_ context.Context, p principa
 	if err := notificationHTTPAuthorize(p); err != nil {
 		return nil, err
 	}
-	return notificationcontract.NotificationProviderCapabilities(), nil
+	return notificationbinding.ProviderCapabilities(), nil
 }
 func (a *notificationHTTPApplication) RestoreVersionDraft(ctx context.Context, key string, version int, _ string, p principalmodel.Principal) (notificationmodel.NotificationTemplateRecord, error) {
 	if err := notificationHTTPAuthorize(p); err != nil {
@@ -272,7 +272,7 @@ func (a *notificationHTTPApplication) SaveDraft(ctx context.Context, key string,
 }
 
 func validateNotificationHTTPEditableTemplate(value notificationmodel.NotificationTemplate) error {
-	capabilities, err := notificationcontract.NotificationTemplateCapabilityCatalog()
+	capabilities, err := notificationbinding.TemplateCapabilityCatalog()
 	if err != nil {
 		return err
 	}
@@ -564,9 +564,9 @@ func newNotificationHTTPHandler(repo *notificationHTTPRepository) (*Notification
 	application := &notificationHTTPApplication{repo: repo, catalog: catalog}
 	response := &notificationHTTPResponse{}
 	principal := accessfixture.AttachPointer(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "reviewer", WorkspaceID: "workspace-1"}}, accessfixture.Bundle{Permissions: []string{
-		notificationcontract.PermissionTemplateRead, notificationcontract.PermissionTemplateManage,
-		notificationcontract.PermissionTemplatePublish, notificationcontract.PermissionTemplateApprove, notificationcontract.PermissionTemplateTest,
-		notificationcontract.PermissionPolicyRead, notificationcontract.PermissionPolicyManage,
+		PermissionTemplateRead, PermissionTemplateManage,
+		PermissionTemplatePublish, PermissionTemplateApprove, PermissionTemplateTest,
+		PermissionPolicyRead, PermissionPolicyManage,
 	}},
 	)
 	if repo.record.Key == "" {

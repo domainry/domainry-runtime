@@ -35,5 +35,5 @@ func newIntegrationCompositionApp(t *testing.T, name string, extraProviders ...c
 		}
 	}
 	providers.Freeze()
-	return NewProjectWithIdentity(t.Context(), cfg, handlers, providers, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory()), cfg
+	return NewProjectWithIdentity(t.Context(), cfg, handlers, providers, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory()), cfg
 }

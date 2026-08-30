@@ -40,7 +40,6 @@ import (
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -442,7 +441,7 @@ func (*runtimeServicesWorkflowWorkerRepository) GetExecution(context.Context, st
 	return workflowmodel.WorkflowExecution{}, false, nil
 }
 
-func (r runtimeServicesNotificationRenderer) Render(context.Context, notificationcontract.NotificationRenderRequest) (notificationmodel.RenderedNotification, error) {
+func (r runtimeServicesNotificationRenderer) Render(context.Context, NotificationRenderRequest) (notificationmodel.RenderedNotification, error) {
 	return r.rendered, r.err
 }
 

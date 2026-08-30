@@ -19,9 +19,9 @@ import (
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	runtimecontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	notificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notification"
+	integrationnotification "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integrationnotification"
+	notificationbinding "github.com/domainry/domainry-runtime/runtime/platform/notificationbinding"
 )
 
 type notificationSDKModuleHost struct {
@@ -50,7 +50,7 @@ func notificationSDKCatalog(defaultLocale string, manifest manifestmodel.Manifes
 	if err != nil {
 		return modulehost.Catalog{}, fmt.Errorf("convert Notification rules to SDK catalog: %w", err)
 	}
-	capabilities, err := notificationSDKConvert[[]contract.NotificationTemplateCapability](runtimecontract.NotificationProviderCapabilities())
+	capabilities, err := notificationSDKConvert[[]contract.NotificationTemplateCapability](notificationbinding.ProviderCapabilities())
 	if err != nil {
 		return modulehost.Catalog{}, fmt.Errorf("convert Notification provider capabilities to SDK catalog: %w", err)
 	}
@@ -153,7 +153,7 @@ func (a notificationSDKWorkflowAudience) ResolveAudience(ctx context.Context, ke
 }
 
 type notificationSDKDeliveryMetrics struct {
-	store notificationpersistence.DeliveryMetricsStore
+	store integrationnotification.DeliveryMetricsStore
 }
 
 func (m notificationSDKDeliveryMetrics) Metrics(ctx context.Context, workspaceID, since string) (contract.NotificationDeliveryMetrics, error) {

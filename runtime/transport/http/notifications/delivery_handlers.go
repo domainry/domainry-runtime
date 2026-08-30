@@ -6,12 +6,10 @@ import (
 	"net/http"
 	"strconv"
 	"time"
-
-	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
 )
 
 func (h *NotificationsHandler) metrics(w http.ResponseWriter, r *http.Request) {
-	if !h.requireAny(w, r, "integration.audit.view", notificationcontract.PermissionPolicyRead) {
+	if !h.requireAny(w, r, "integration.audit.view", PermissionPolicyRead) {
 		return
 	}
 	hours, _ := strconv.Atoi(r.URL.Query().Get("hours"))
@@ -31,7 +29,7 @@ func (h *NotificationsHandler) metrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *NotificationsHandler) governanceCatalog(w http.ResponseWriter, r *http.Request) {
-	if !h.require(w, r, notificationcontract.PermissionTemplateRead) {
+	if !h.require(w, r, PermissionTemplateRead) {
 		return
 	}
 	value, err := h.management.GovernanceCatalog(r.Context(), h.principal(r))
@@ -43,7 +41,7 @@ func (h *NotificationsHandler) governanceCatalog(w http.ResponseWriter, r *http.
 }
 
 func (h *NotificationsHandler) inboxGovernanceMetrics(w http.ResponseWriter, r *http.Request) {
-	if !h.requireAny(w, r, "integration.audit.view", notificationcontract.PermissionPolicyRead) {
+	if !h.requireAny(w, r, "integration.audit.view", PermissionPolicyRead) {
 		return
 	}
 	hours, _ := strconv.Atoi(r.URL.Query().Get("hours"))
@@ -63,7 +61,7 @@ func (h *NotificationsHandler) inboxGovernanceMetrics(w http.ResponseWriter, r *
 }
 
 func (h *NotificationsHandler) getPolicy(w http.ResponseWriter, r *http.Request) {
-	if !h.requireAny(w, r, notificationcontract.PermissionPolicyRead, notificationcontract.PermissionPolicyManage) {
+	if !h.requireAny(w, r, PermissionPolicyRead, PermissionPolicyManage) {
 		return
 	}
 	value, err := h.delivery.GetDeliveryPolicy(r.Context(), h.principal(r))
@@ -75,7 +73,7 @@ func (h *NotificationsHandler) getPolicy(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *NotificationsHandler) savePolicy(w http.ResponseWriter, r *http.Request) {
-	if !h.require(w, r, notificationcontract.PermissionPolicyManage) {
+	if !h.require(w, r, PermissionPolicyManage) {
 		return
 	}
 	var value notificationmodel.NotificationDeliveryPolicy
@@ -91,7 +89,7 @@ func (h *NotificationsHandler) savePolicy(w http.ResponseWriter, r *http.Request
 }
 
 func (h *NotificationsHandler) listPreferences(w http.ResponseWriter, r *http.Request) {
-	if !h.requireAny(w, r, notificationcontract.PermissionPolicyRead, notificationcontract.PermissionPolicyManage) {
+	if !h.requireAny(w, r, PermissionPolicyRead, PermissionPolicyManage) {
 		return
 	}
 	values, err := h.delivery.ListRecipientPreferences(r.Context(), h.principal(r))
@@ -103,7 +101,7 @@ func (h *NotificationsHandler) listPreferences(w http.ResponseWriter, r *http.Re
 }
 
 func (h *NotificationsHandler) savePreference(w http.ResponseWriter, r *http.Request) {
-	if !h.require(w, r, notificationcontract.PermissionPolicyManage) {
+	if !h.require(w, r, PermissionPolicyManage) {
 		return
 	}
 	var value notificationmodel.NotificationRecipientPreference

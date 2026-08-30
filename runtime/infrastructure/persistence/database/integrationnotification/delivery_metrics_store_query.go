@@ -1,18 +1,20 @@
-package notification
+package integrationnotification
 
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	ormbuilder "github.com/domainry/domainry-orm/builder"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 func (r DeliveryMetricsStore) DeliveryMetrics(ctx context.Context, workspaceID, since string) (notificationmodel.NotificationDeliveryMetrics, error) {
-	workspaceID, err := requireNotificationWorkspaceID(workspaceID)
+	workspaceID, err := requireDeliveryMetricsWorkspaceID(workspaceID)
 	if err != nil {
 		return notificationmodel.NotificationDeliveryMetrics{}, err
 	}
@@ -89,6 +91,14 @@ func (r DeliveryMetricsStore) DeliveryMetrics(ctx context.Context, workspaceID, 
 		result.Failures = result.Failures[:10]
 	}
 	return result, rows.Err()
+}
+
+func requireDeliveryMetricsWorkspaceID(value string) (string, error) {
+	workspaceID, err := principalmodel.NewWorkspaceID(value)
+	if err != nil {
+		return "", fmt.Errorf("Integration delivery metrics workspace: %w", err)
+	}
+	return workspaceID.String(), nil
 }
 
 func addDeliveryMetric(bucket *notificationmodel.NotificationDeliveryMetricBucket, status string, fallback bool) {

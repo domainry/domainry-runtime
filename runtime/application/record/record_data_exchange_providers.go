@@ -11,7 +11,6 @@ import (
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-data-exchange-sdk/modulehost"
-	"github.com/domainry/domainry-data-exchange/fileengine"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -150,7 +149,7 @@ func (p dataExchangeExportProvider) ReadExportPage(ctx context.Context, r dataex
 	}
 	var columns []string
 	rows := make([][]string, 0, encoded.rows)
-	columns, err = fileengine.DecodeCSV(ctx, bytes.NewReader(encoded.content), fileengine.CSVDecodeLimits{MaxBytes: int64(len(encoded.content)), MaxRows: recordExportBatchSize, MaxColumns: recordImportMaxColumns}, func(_ []string, row fileengine.CSVRecord) error {
+	columns, err = dataexchange.DecodeCSV(ctx, bytes.NewReader(encoded.content), dataexchange.CSVDecodeLimits{MaxBytes: int64(len(encoded.content)), MaxRows: recordExportBatchSize, MaxColumns: recordImportMaxColumns}, func(_ []string, row dataexchange.CSVRecord) error {
 		rows = append(rows, row.Values)
 		return nil
 	})

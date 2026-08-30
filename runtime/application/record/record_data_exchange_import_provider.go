@@ -8,7 +8,6 @@ import (
 
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-data-exchange-sdk/modulehost"
-	fileexchange "github.com/domainry/domainry-data-exchange/fileengine"
 	"github.com/domainry/domainry-foundation/apperror"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
@@ -98,7 +97,7 @@ func (p *recordDataExchangeImportProvider) validateScope(scope dataexchangesdk.S
 
 func recordDataExchangeCSV(batch dataexchangesdk.ImportBatch) ([]byte, error) {
 	var output bytes.Buffer
-	encoder := fileexchange.NewCSVEncoder(&output, recordImportMaxBytes)
+	encoder := dataexchangesdk.NewCSVEncoder(&output, recordImportMaxBytes)
 	if err := encoder.Write(batch.Headers); err != nil {
 		return nil, err
 	}

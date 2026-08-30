@@ -148,7 +148,7 @@ var reviewedVagueProductionFiles = technicalLayoutStringSet()
 
 var runtimeTopLevelDirectories = technicalLayoutStringSet("application", "domain", "cmd", "bootstrap", "boundary", "infrastructure", "platform", "transport")
 var infrastructureTopLevelDirectories = technicalLayoutStringSet("agentrunner", "broadcast", "connectors", "lifecycleartifact", "persistence")
-var platformTopLevelDirectories = technicalLayoutStringSet("apperror", "capacity", "collection", "config", "filelock", "health", "idempotency", "localization", "logging", "mutation", "productbrand", "ratelimit", "requestcontext", "resilience", "safehttp", "secrets", "telemetry", "webhooksignature", "worker")
+var platformTopLevelDirectories = technicalLayoutStringSet("apperror", "capacity", "collection", "config", "filelock", "health", "idempotency", "localization", "logging", "mutation", "notificationbinding", "productbrand", "ratelimit", "requestcontext", "resilience", "safehttp", "secrets", "telemetry", "webhooksignature", "worker")
 var transportTopLevelDirectories = technicalLayoutStringSet("http", "provision")
 
 var reviewedPackageNameExceptions = map[string]string{

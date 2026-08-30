@@ -1,4 +1,4 @@
-package notification
+package integrationnotification
 
 import (
 	"database/sql"
@@ -6,8 +6,9 @@ import (
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
-// DeliveryMetricsStore adapts module-owned delivery tables to Plane's metrics
-// response model. It owns no notification lifecycle or mutation behavior.
+// DeliveryMetricsStore projects Runtime-owned Integration Outbox delivery
+// evidence into the Notification SDK metrics response. It owns no Notification
+// tables or lifecycle behavior.
 type DeliveryMetricsStore struct {
 	store *database.RuntimeStore
 	db    *sql.DB

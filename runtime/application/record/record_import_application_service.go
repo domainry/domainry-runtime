@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	dataexchange "github.com/domainry/domainry-data-exchange/fileengine"
+	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/logging"

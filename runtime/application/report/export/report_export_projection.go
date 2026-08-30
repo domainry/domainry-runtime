@@ -3,7 +3,7 @@ package export
 import (
 	"bytes"
 
-	"github.com/domainry/domainry-data-exchange/fileengine"
+	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
@@ -24,7 +24,7 @@ func Rows(summary reportmodel.ReportSummary, analysisKey string) ([]reportmodel.
 // it does not carry a second CSV or artifact implementation.
 func EncodePreflightCSV(rows []reportmodel.ReportResultRow, projection []string, maskedDimensions map[string]bool) ([]byte, error) {
 	var output bytes.Buffer
-	encoder := fileengine.NewCSVEncoder(&output, 0)
+	encoder := dataexchange.NewCSVEncoder(&output, 0)
 	if err := encoder.Write(projection); err != nil {
 		return nil, err
 	}

@@ -31,7 +31,6 @@ import (
 	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
 	lifecyclerepository "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/repository"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
@@ -56,7 +55,17 @@ type runtimeSchemaReader interface {
 }
 
 type NotificationRenderer interface {
-	Render(context.Context, notificationcontract.NotificationRenderRequest) (notificationmodel.RenderedNotification, error)
+	Render(context.Context, NotificationRenderRequest) (notificationmodel.RenderedNotification, error)
+}
+
+// NotificationRenderRequest is a Runtime source-owner input projected into
+// the Notification SDK renderer. It carries no Notification domain behavior.
+type NotificationRenderRequest struct {
+	TemplateKey string
+	Locale      string
+	Recipients  []string
+	Variables   map[string]any
+	Metadata    map[string]any
 }
 
 // RuntimeServicesDependencies declares every explicit repository and external

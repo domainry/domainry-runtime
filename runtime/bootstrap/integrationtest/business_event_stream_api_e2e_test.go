@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	dataexchangemodule "github.com/domainry/domainry-data-exchange/module"
 	notificationmodule "github.com/domainry/domainry-notification/module"
 	partymodule "github.com/domainry/domainry-party/module"
 	. "github.com/domainry/domainry-runtime/runtime/bootstrap"
@@ -29,7 +30,7 @@ func TestRuntimeBusinessEventStreamConnectsReplaysAndRejectsCrossTenant(t *testi
 		BusinessEventGlobalConnections: 8, BusinessEventWorkspaceConnections: 4, BusinessEventPrincipalConnections: 2,
 		BusinessEventHeartbeatInterval: time.Second, BusinessEventRetryInterval: 250 * time.Millisecond,
 	}
-	application := New(t.Context(), cfg, newIntegrationIdentityBinding(t, cfg), notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}))
+	application := New(t.Context(), cfg, newIntegrationIdentityBinding(t, cfg), notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangemodule.NewFactory(dataexchangemodule.Options{}))
 	defer application.CloseContext(t.Context())
 	server := httptest.NewServer(application.Routes())
 	defer server.Close()

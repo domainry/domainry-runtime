@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	dataexchange "github.com/domainry/domainry-data-exchange/fileengine"
+	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )

@@ -10,7 +10,6 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
-	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
 
@@ -103,7 +102,7 @@ func TestNotificationGovernanceHandlers(t *testing.T) {
 		t.Run("inbox metrics "+test.name, func(t *testing.T) {
 			repo := &notificationHTTPRepository{inboxMetrics: notificationmodel.NotificationInboxGovernanceMetrics{Summary: notificationmodel.NotificationInboxAggregate{Items: 9}}}
 			handler, response, principal := newNotificationHTTPHandler(repo)
-			accessfixture.Set(principal, accessfixture.Bundle{Permissions: []string{notificationcontract.PermissionPolicyRead}})
+			accessfixture.Set(principal, accessfixture.Bundle{Permissions: []string{PermissionPolicyRead}})
 			before := time.Now().UTC().Add(-time.Duration(test.wantHours) * time.Hour)
 			handler.inboxGovernanceMetrics(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/notifications/governance/inbox-metrics"+test.query, nil))
 			after := time.Now().UTC().Add(-time.Duration(test.wantHours) * time.Hour)
@@ -123,7 +122,7 @@ func TestNotificationGovernanceHandlers(t *testing.T) {
 		}
 		failure := errors.New("inbox metrics unavailable")
 		handler, response, principal = newNotificationHTTPHandler(&notificationHTTPRepository{err: failure})
-		accessfixture.Set(principal, accessfixture.Bundle{Permissions: []string{notificationcontract.PermissionPolicyRead}})
+		accessfixture.Set(principal, accessfixture.Bundle{Permissions: []string{PermissionPolicyRead}})
 		handler.inboxGovernanceMetrics(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/notifications/governance/inbox-metrics", nil))
 		if !errors.Is(response.err, failure) {
 			t.Fatalf("error=%v", response.err)
@@ -164,7 +163,7 @@ func TestNotificationDeliveryPolicyHandlers(t *testing.T) {
 
 	t.Run("save permission and decode", func(t *testing.T) {
 		handler, response, principal := newNotificationHTTPHandler(&notificationHTTPRepository{})
-		accessfixture.Set(principal, accessfixture.Bundle{Permissions: []string{notificationcontract.PermissionPolicyRead}})
+		accessfixture.Set(principal, accessfixture.Bundle{Permissions: []string{PermissionPolicyRead}})
 		handler.savePolicy(httptest.NewRecorder(), httptest.NewRequest(http.MethodPut, "/notifications/policy", strings.NewReader(`{}`)))
 		if response.status != http.StatusForbidden {
 			t.Fatalf("permission response=%+v", response)
@@ -229,7 +228,7 @@ func TestNotificationRecipientPreferenceHandlers(t *testing.T) {
 
 	t.Run("save permission decode validation success and error", func(t *testing.T) {
 		handler, response, principal := newNotificationHTTPHandler(&notificationHTTPRepository{})
-		accessfixture.Set(principal, accessfixture.Bundle{Permissions: []string{notificationcontract.PermissionPolicyRead}})
+		accessfixture.Set(principal, accessfixture.Bundle{Permissions: []string{PermissionPolicyRead}})
 		handler.savePreference(httptest.NewRecorder(), preferenceRequest(`{}`, "user-1"))
 		if response.status != http.StatusForbidden {
 			t.Fatalf("permission response=%+v", response)

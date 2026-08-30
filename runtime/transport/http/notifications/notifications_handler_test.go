@@ -10,8 +10,6 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-
-	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
 )
 
 func TestLegacyPublishEndpointCannotBypassPublicationApproval(t *testing.T) {
@@ -19,7 +17,7 @@ func TestLegacyPublishEndpointCannotBypassPublicationApproval(t *testing.T) {
 	var code string
 	handler := NewNotificationsHandler(NotificationsDependencies{
 		Principal: func(*http.Request) principalmodel.Principal {
-			return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "reviewer"}}, accessfixture.Bundle{Permissions: []string{notificationcontract.PermissionTemplateApprove}})
+			return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "reviewer"}}, accessfixture.Bundle{Permissions: []string{PermissionTemplateApprove}})
 		},
 		WriteError: func(_ http.ResponseWriter, _ *http.Request, value int, valueCode string, _ ...string) {
 			status, code = value, valueCode

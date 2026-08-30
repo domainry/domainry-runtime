@@ -1,4 +1,4 @@
-package notification
+package integrationnotification
 
 import (
 	"path/filepath"
