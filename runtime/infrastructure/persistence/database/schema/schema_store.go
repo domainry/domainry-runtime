@@ -31,7 +31,7 @@ type Store interface {
 	CreateIndexIfMissing(context.Context, string, string, bool, ...string) error
 	EnsureRuntimeColumn(context.Context, string, string, string) error
 	RuntimeTableExists(context.Context, string) (bool, error)
-	MetadataIDColumnType() string
+	ApplicationSchemaIDColumnType() string
 	LocalizedTextKeyColumnType() string
 	RuntimeColumnDefinition(string) string
 	RuntimeProfile() persistencedriver.EngineProfile

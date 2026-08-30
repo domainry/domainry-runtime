@@ -7,7 +7,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	schedulerprojection "github.com/domainry/domainry-runtime/runtime/domain/scheduler/projection"
 
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 	"github.com/domainry/domainry-foundation/requestcontext"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -42,8 +42,8 @@ func MergeSystemObjects(existing []definitionmodel.ObjectSchema, generated []def
 	return append(out, generated...)
 }
 
-func MergeDictionaries(existing []metadatamodel.DictionarySchema, generated []metadatamodel.DictionarySchema) []metadatamodel.DictionarySchema {
-	out := append([]metadatamodel.DictionarySchema(nil), existing...)
+func MergeDictionaries(existing []appschemamodel.DictionarySchema, generated []appschemamodel.DictionarySchema) []appschemamodel.DictionarySchema {
+	out := append([]appschemamodel.DictionarySchema(nil), existing...)
 	seen := map[string]struct{}{}
 	for _, dictionary := range out {
 		if key := strings.TrimSpace(dictionary.Key); key != "" {
@@ -86,14 +86,14 @@ func MergeWorkflows(existing []definitionmodel.WorkflowSchema, generated []defin
 	return out
 }
 
-func generatedGlobalDictionaries() []metadatamodel.DictionarySchema {
-	return []metadatamodel.DictionarySchema{
+func generatedGlobalDictionaries() []appschemamodel.DictionarySchema {
+	return []appschemamodel.DictionarySchema{
 		{
 			Key:         "platform_operation_status",
 			Name:        "Platform operation status",
 			Description: "Default status values used by global system capability pages.",
 			Source:      "platform",
-			Items: []metadatamodel.DictionaryItemSchema{
+			Items: []appschemamodel.DictionaryItemSchema{
 				{Key: "enabled", Value: "enabled", Label: "Enabled", SortOrder: 10, Status: "active", Color: "green"},
 				{Key: "disabled", Value: "disabled", Label: "Disabled", SortOrder: 20, Status: "active", Color: "slate"},
 				{Key: "warning", Value: "warning", Label: "Warning", SortOrder: 30, Status: "active", Color: "amber"},
@@ -105,7 +105,7 @@ func generatedGlobalDictionaries() []metadatamodel.DictionarySchema {
 			Name:        "Workflow execution status",
 			Description: "Default workflow execution lifecycle values for the global workflow console.",
 			Source:      "platform",
-			Items: []metadatamodel.DictionaryItemSchema{
+			Items: []appschemamodel.DictionaryItemSchema{
 				{Key: "queued", Value: "queued", Label: "Queued", SortOrder: 10, Status: "active"},
 				{Key: "running", Value: "running", Label: "Running", SortOrder: 20, Status: "active"},
 				{Key: "completed", Value: "completed", Label: "Completed", SortOrder: 30, Status: "active"},
@@ -118,7 +118,7 @@ func generatedGlobalDictionaries() []metadatamodel.DictionarySchema {
 			Name:        "Audit event category",
 			Description: "Default categories shown by audit and operations surfaces.",
 			Source:      "platform",
-			Items: []metadatamodel.DictionaryItemSchema{
+			Items: []appschemamodel.DictionaryItemSchema{
 				{Key: "access", Value: "access", Label: "Access", SortOrder: 10, Status: "active"},
 				{Key: "metadata", Value: "metadata", Label: "Metadata", SortOrder: 20, Status: "active"},
 				{Key: "workflow", Value: "workflow", Label: "Workflow", SortOrder: 30, Status: "active"},

@@ -9,22 +9,22 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
-	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
+	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 type discoverySchemaProvider struct{}
 
-func (discoverySchemaProvider) SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
-	return metadatamodel.ApplicationSchemaSnapshot{TemplateID: "discovery", SchemaHash: "schema-hash"}
+func (discoverySchemaProvider) SchemaForPrincipal(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
+	return appschemamodel.ApplicationSchemaSnapshot{TemplateID: "discovery", SchemaHash: "schema-hash"}
 }
 
 func discoveryTestHandler() *DiscoveryHandler {
 	return NewDiscoveryHandler(DiscoveryDependencies{
-		Schema: metadataapplication.NewMetadataSchemaApplicationService(discoverySchemaProvider{}, nil),
+		Schema: appschemaapplication.NewApplicationSchemaQueryApplicationService(discoverySchemaProvider{}, nil),
 		Principal: func(*http.Request) principalmodel.Principal {
 			return principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}
 		},

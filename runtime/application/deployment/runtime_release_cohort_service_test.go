@@ -47,7 +47,7 @@ func validRuntimeReleaseIdentity(t *testing.T, marker string) deploymentmodel.Ru
 		RuntimeextContractVersion: "runtimeext-v1", RuntimeextContractSHA256: hash("a"),
 		ConnectorContractVersion: "connector-v1", ConnectorContractSHA256: hash("b"),
 		DomainSDKContractVersion: "domain-sdk-v1", DomainSDKContractSHA256: hash("c"), DomainSDKGeneratorVersion: "generator-v1", DomainSDKBuildConstraint: "sdk-build-" + marker,
-		MetadataSnapshotSHA256: hash(marker), GeneratedSDKSHA256: hash("d"), HandlerRegistrySHA256: hash("e"), ConnectorRegistrySHA256: hash("f"),
+		ApplicationSchemaSnapshotSHA256: hash(marker), GeneratedSDKSHA256: hash("d"), HandlerRegistrySHA256: hash("e"), ConnectorRegistrySHA256: hash("f"),
 	}
 	combination, err := RuntimeReleaseCombinationSHA256(identity)
 	if err != nil {
@@ -80,7 +80,7 @@ func TestRuntimeReleaseCohortServiceValidatesAndDelegatesLifecycle(t *testing.T)
 		t.Fatalf("generic diagnostics lease=%+v claim=%+v error=%v", lease, repository.claim, err)
 	}
 	partialProject := genericDiagnostics
-	partialProject.MetadataSnapshotSHA256 = strings.Repeat("8", 64)
+	partialProject.ApplicationSchemaSnapshotSHA256 = strings.Repeat("8", 64)
 	if _, err := service.Join(t.Context(), "runtime-partial-project", partialProject, now); !errors.Is(err, deploymentmodel.ErrRuntimeReleaseAdmission) {
 		t.Fatalf("partial project identity error=%v", err)
 	}
@@ -92,7 +92,7 @@ func TestRuntimeReleaseIdentityValidationRejectsComponentAndCombinationDrift(t *
 		t.Fatal(err)
 	}
 	componentDrift := identity
-	componentDrift.MetadataSnapshotSHA256 = strings.Repeat("9", 64)
+	componentDrift.ApplicationSchemaSnapshotSHA256 = strings.Repeat("9", 64)
 	if err := ValidateRuntimeReleaseIdentity(componentDrift); !errors.Is(err, deploymentmodel.ErrRuntimeReleaseAdmission) || !strings.Contains(err.Error(), "combination") {
 		t.Fatalf("component drift error=%v", err)
 	}

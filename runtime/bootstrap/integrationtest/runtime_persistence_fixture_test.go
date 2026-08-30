@@ -6,7 +6,7 @@ import (
 	"time"
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -38,7 +38,7 @@ func publishSchedulerDefinitionStoreFixture(t *testing.T, store *persistence.Run
 	}
 	expectedHash := ""
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err = metadataStore(store).PublishDefinition(t.Context(), principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "publish scheduler integration fixture"), "scheduler", key, metadatamodel.MetadataDefinitionUpsertRequest{ExpectedSchemaHash: &expectedHash, Payload: raw}, auditmodel.AuditEvent{ID: "audit_scheduler_" + key, WorkspaceID: principalmodel.InstallationWorkspaceID, Event: "metadata_definition.saved", ObjectKey: "scheduler", RecordID: key, ActorID: "integration-test", CreatedAt: now})
+	_, err = metadataStore(store).PublishDefinition(t.Context(), principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "publish scheduler integration fixture"), "scheduler", key, appschemamodel.ApplicationDefinitionUpsertRequest{ExpectedSchemaHash: &expectedHash, Payload: raw}, auditmodel.AuditEvent{ID: "audit_scheduler_" + key, WorkspaceID: principalmodel.InstallationWorkspaceID, Event: "metadata_definition.saved", ObjectKey: "scheduler", RecordID: key, ActorID: "integration-test", CreatedAt: now})
 	if err != nil {
 		t.Fatalf("publish scheduler definition %s: %v", key, err)
 	}

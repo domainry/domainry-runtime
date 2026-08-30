@@ -2,8 +2,8 @@ package composition
 
 import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	changeplanapplication "github.com/domainry/domainry-runtime/runtime/application/changeplan"
-	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 )
@@ -16,7 +16,7 @@ var (
 	_ workflowapplication.WorkflowRegistry       = runtimeWorkflowRegistry{}
 	_ workflowapplication.WorkflowSchemaProvider = runtimeWorkflowSchemaProvider{}
 
-	_ metadataapplication.LifecycleRuntime = applicationSchemaLifecycleRuntimeAdapter{}
+	_ appschemaapplication.LifecycleRuntime = applicationSchemaLifecycleRuntimeAdapter{}
 
 	_ changeplanapplication.ReferenceRuntime       = businessReferenceRuntimePortAdapter{}
 	_ changeplanapplication.FrontendSnapshotSource = businessReferenceFrontendPortAdapter{}

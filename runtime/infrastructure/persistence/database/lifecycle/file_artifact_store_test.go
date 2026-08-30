@@ -13,7 +13,7 @@ import (
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	metadatapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata"
+	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 )
 
@@ -24,7 +24,7 @@ func TestFileArtifactStoreReconcilesReferencesAndDeletesOnlyMatureOrphans(t *tes
 	exportAudit := definitionmodel.ObjectSchema{Key: "report_export_audit", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}
 	objects := []definitionmodel.ObjectSchema{object, downloadTask, exportAudit}
 	manifest := manifestmodel.ManifestSchema{TemplateID: "file-lifecycle", Version: "1", Name: "File lifecycle", Objects: objects}
-	if err := metadatapersistence.NewMetadataStore(store).SyncManifest(t.Context(), principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "file lifecycle test"), manifest); err != nil {
+	if err := appschemapersistence.NewApplicationSchemaStore(store).SyncManifest(t.Context(), principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "file lifecycle test"), manifest); err != nil {
 		t.Fatal(err)
 	}
 	root := t.TempDir()

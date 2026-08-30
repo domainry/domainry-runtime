@@ -22,7 +22,7 @@ empty workspace comparisons, workspace/default proximity, and literal
 | 1 | `runtime/application/integration/integration_application_execution_evidence.go` |
 | 3 | `runtime/application/integration/integration_application_failure_alerts.go` |
 | 2 | `runtime/application/integration/integration_application_inbound_webhooks.go` |
-| 1 | `runtime/application/metadata/metadata_localized_text_coverage_application_service.go` |
+| 1 | `runtime/application/appschema/appschema_localized_text_coverage_application_service.go` |
 | 1 | `runtime/application/seed/deployment/frontend_capability.go` |
 | 1 | `runtime/application/workflow/workflow_execution_idempotency_application_service.go` |
 | 3 | `runtime/infrastructure/connectors/delivery_operations/asana/asana_delivery_operations_adapter.go` |
@@ -31,8 +31,8 @@ empty workspace comparisons, workspace/default proximity, and literal
 | 1 | `runtime/infrastructure/persistence/database/automation/sql_values.go` |
 | 3 | `runtime/infrastructure/persistence/database/deployment/runtime_status_store.go` |
 | 1 | `runtime/infrastructure/persistence/database/integration/integration_worker_scope.go` |
-| 1 | `runtime/infrastructure/persistence/database/metadata/manifest_store.go` |
-| 1 | `runtime/infrastructure/persistence/database/metadata/definition_store.go` |
+| 1 | `runtime/infrastructure/persistence/database/appschema/manifest_store.go` |
+| 1 | `runtime/infrastructure/persistence/database/appschema/definition_store.go` |
 | 1 | `runtime/infrastructure/persistence/database/schema/idempotency_receipt_migration.go` |
 | 1 | `runtime/infrastructure/persistence/database/schema/evidence_tables.go` |
 | 1 | `runtime/infrastructure/persistence/database/transaction/boundary_intent_store.go` |

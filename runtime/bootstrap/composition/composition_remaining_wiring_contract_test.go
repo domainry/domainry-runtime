@@ -25,13 +25,13 @@ import (
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	actionservice "github.com/domainry/domainry-runtime/runtime/domain/action/service"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
@@ -618,7 +618,7 @@ type actionWiringAssuranceStore struct {
 }
 
 type actionWiringMetadataRepository struct {
-	metadatarepository.MetadataRepository
+	appschemarepository.ApplicationSchemaRepository
 	revision string
 	err      error
 }
@@ -852,7 +852,7 @@ func TestAssembledBusinessHandlerCoversRevisionAndDurableIntentFallbacks(t *test
 		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "notification_job", Scope: "all_records", Read: true, Write: true}},
 	}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "user-a"}}, role)
-	newService := func(t *testing.T, repository metadatarepository.MetadataRepository, withIntent bool) *runtimeAssembly {
+	newService := func(t *testing.T, repository appschemarepository.ApplicationSchemaRepository, withIntent bool) *runtimeAssembly {
 		t.Helper()
 		registry := runtimeext.NewBusinessHandlerRegistry()
 		if err := registry.Register(actionWiringBusinessHandler{descriptor: descriptor, intent: withIntent}); err != nil {
@@ -866,7 +866,7 @@ func TestAssembledBusinessHandlerCoversRevisionAndDurableIntentFallbacks(t *test
 			},
 			Dependencies: RuntimeServicesDependencies{
 				ActionRuntimeRevision: "runtime-1", ActionProjectRevision: "project-1", ActionMetadataRevision: "metadata-fallback",
-				Metadata: repository, BusinessHandlers: registry,
+				ApplicationSchema: repository, BusinessHandlers: registry,
 				ActionExecutions: &runtimeServicesActionExecutionRepository{records: &runtimeServicesRecordActionRepository{}},
 			},
 		})
@@ -989,8 +989,8 @@ func TestRecordQueryPolicyCompositionCandidateEvaluatorAvailability(t *testing.T
 }
 
 type recordPolicyMetadataRepository struct {
-	metadatarepository.MetadataRepository
-	definitions map[string][]metadatamodel.MetadataDefinition
+	appschemarepository.ApplicationSchemaRepository
+	definitions map[string][]appschemamodel.ApplicationDefinition
 	err         error
 	resource    string
 	reason      string
@@ -1000,17 +1000,17 @@ func (r *recordPolicyMetadataRepository) ListDefinitions(
 	_ context.Context,
 	scope principalmodel.SystemScope,
 	resourceType string,
-) ([]metadatamodel.MetadataDefinition, error) {
+) ([]appschemamodel.ApplicationDefinition, error) {
 	r.resource = resourceType
 	r.reason = scope.Purpose
 	if r.err != nil {
 		return nil, r.err
 	}
-	return append([]metadatamodel.MetadataDefinition(nil), r.definitions[resourceType]...), nil
+	return append([]appschemamodel.ApplicationDefinition(nil), r.definitions[resourceType]...), nil
 }
 
-func TestMetadataDefinitionReferenceSourcesFilterDisabledAndPropagateErrors(t *testing.T) {
-	repository := &recordPolicyMetadataRepository{definitions: map[string][]metadatamodel.MetadataDefinition{
+func TestApplicationDefinitionReferenceSourcesFilterDisabledAndPropagateErrors(t *testing.T) {
+	repository := &recordPolicyMetadataRepository{definitions: map[string][]appschemamodel.ApplicationDefinition{
 		"preference": {
 			{ResourceKey: " preference.active "},
 			{ResourceKey: "preference.disabled", DisabledAt: "2026-07-27T00:00:00Z"},
@@ -1020,13 +1020,13 @@ func TestMetadataDefinitionReferenceSourcesFilterDisabledAndPropagateErrors(t *t
 			{ResourceKey: "rule.disabled", DisabledAt: "2026-07-27T00:00:00Z"},
 		},
 	}}
-	preferences := metadataDefinitionReferenceSource(repository, "preference", "discover preference references")
+	preferences := applicationDefinitionReferenceSource(repository, "preference", "discover preference references")
 	keys, err := preferences(t.Context(), principalmodel.Principal{})
 	if err != nil || len(keys) != 1 || keys[0] != "preference.active" ||
 		repository.resource != "preference" || repository.reason != "discover preference references" {
 		t.Fatalf("preference keys=%v resource=%q reason=%q err=%v", keys, repository.resource, repository.reason, err)
 	}
-	rules := metadataDefinitionReferenceSource(repository, "rule_set", "discover rule set references")
+	rules := applicationDefinitionReferenceSource(repository, "rule_set", "discover rule set references")
 	keys, err = rules(t.Context(), principalmodel.Principal{})
 	if err != nil || len(keys) != 1 || keys[0] != "rule.active" ||
 		repository.resource != "rule_set" || repository.reason != "discover rule set references" {

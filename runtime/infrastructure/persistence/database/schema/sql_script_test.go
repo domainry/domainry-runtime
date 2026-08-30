@@ -137,7 +137,7 @@ func (s scriptedSchemaStore) RuntimeTableExists(ctx context.Context, table strin
 	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?", table).Scan(&count)
 	return count > 0, err
 }
-func (scriptedSchemaStore) MetadataIDColumnType() string                { return "TEXT" }
+func (scriptedSchemaStore) ApplicationSchemaIDColumnType() string       { return "TEXT" }
 func (scriptedSchemaStore) LocalizedTextKeyColumnType() string          { return "TEXT" }
 func (scriptedSchemaStore) RuntimeColumnDefinition(value string) string { return value }
 func (scriptedSchemaStore) RuntimeProfile() persistencedriver.EngineProfile {

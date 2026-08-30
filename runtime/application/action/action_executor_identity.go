@@ -22,14 +22,14 @@ func (e *BusinessHandlerExecutor) ValidationErrors() []error {
 	if e.dependencies.ProjectRevision == "" {
 		errors = append(errors, fmt.Errorf("business handler Project revision is required"))
 	}
-	if e.dependencies.MetadataRevision == "" && e.dependencies.ResolveMetadataRevision == nil {
+	if e.dependencies.ApplicationSchemaRevision == "" && e.dependencies.ResolveMetadataRevision == nil {
 		errors = append(errors, fmt.Errorf("business handler Metadata revision resolver is required"))
 	}
 	return errors
 }
 
 func (e *BusinessHandlerExecutor) executionIdentity(ctx context.Context, invocation actionmodel.ActionInvocation, action definitionmodel.ActionSchema, descriptor runtimeext.HandlerDescriptor, executionID string) (runtimeext.ExecutionIdentity, error) {
-	metadataRevision := e.dependencies.MetadataRevision
+	metadataRevision := e.dependencies.ApplicationSchemaRevision
 	if e.dependencies.ResolveMetadataRevision != nil {
 		resolved, err := e.dependencies.ResolveMetadataRevision(ctx, invocation.Principal)
 		if err != nil {
@@ -42,7 +42,7 @@ func (e *BusinessHandlerExecutor) executionIdentity(ctx context.Context, invocat
 	}
 	return runtimeext.ExecutionIdentity{
 		ExecutionID: executionID, ReceiptID: executionID, ActionKey: action.Key, ObjectKey: action.ObjectKey, RecordID: invocation.RecordID,
-		IdempotencyKey: invocation.IdempotencyKey, RuntimeRevision: e.dependencies.RuntimeRevision, MetadataRevision: metadataRevision,
+		IdempotencyKey: invocation.IdempotencyKey, RuntimeRevision: e.dependencies.RuntimeRevision, ApplicationSchemaRevision: metadataRevision,
 		ProjectRevision: e.dependencies.ProjectRevision, HandlerRevision: descriptor.HandlerRevision,
 	}, nil
 }

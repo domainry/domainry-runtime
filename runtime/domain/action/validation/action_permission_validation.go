@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 )
 
 var actionPermissionKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$`)
@@ -17,26 +17,26 @@ func ActionPermissionKeyWellFormed(permission string) bool {
 	return actionPermissionKeyPattern.MatchString(strings.TrimSpace(permission))
 }
 
-func actionValidatePermissionPolicy(action definitionmodel.ActionSchema) []metadatamodel.MetadataDefinitionValidationIssue {
+func actionValidatePermissionPolicy(action definitionmodel.ActionSchema) []appschemamodel.ApplicationDefinitionValidationIssue {
 	permission := strings.TrimSpace(action.RequiresPermission)
 	if permission == "" {
 		return nil
 	}
-	issue := func(code string, params map[string]string) metadatamodel.MetadataDefinitionValidationIssue {
+	issue := func(code string, params map[string]string) appschemamodel.ApplicationDefinitionValidationIssue {
 		return actionDefinitionValidationIssue(code, "requires_permission", params)
 	}
 	if !actionPermissionKeyPattern.MatchString(permission) {
-		return []metadatamodel.MetadataDefinitionValidationIssue{issue("backend.action.permission_format_invalid", map[string]string{
+		return []appschemamodel.ApplicationDefinitionValidationIssue{issue("backend.action.permission_format_invalid", map[string]string{
 			"field": "requires_permission", "actual": permission, "expected": "<object_key>.<permission_name>",
 		})}
 	}
 	objectKey := strings.TrimSpace(action.ObjectKey)
 	if objectKey != "" && !strings.HasPrefix(permission, objectKey+".") {
-		return []metadatamodel.MetadataDefinitionValidationIssue{issue("backend.action.permission_object_mismatch", map[string]string{
+		return []appschemamodel.ApplicationDefinitionValidationIssue{issue("backend.action.permission_object_mismatch", map[string]string{
 			"field": "requires_permission", "actual": permission, "object_key": objectKey,
 		})}
 	}
-	issues := make([]metadatamodel.MetadataDefinitionValidationIssue, 0, 2)
+	issues := make([]appschemamodel.ApplicationDefinitionValidationIssue, 0, 2)
 	declaredRisk := strings.TrimSpace(action.RiskLevel)
 	if declaredRisk != "" && actionmodel.ActionRiskLevelRank(declaredRisk) == 0 {
 		issues = append(issues, actionDefinitionValidationIssue("backend.action.risk_level_invalid", "risk_level", map[string]string{

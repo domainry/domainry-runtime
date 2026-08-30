@@ -1,8 +1,8 @@
 package contract
 
 import (
+	appschemacontract "github.com/domainry/domainry-runtime/runtime/domain/appschema/contract"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
-	metadatacontract "github.com/domainry/domainry-runtime/runtime/domain/metadata/contract"
 )
 
 // ReportAuthoringDomain publishes the Report-owned shape while Metadata owns
@@ -35,12 +35,12 @@ func ReportAuthoringDomain() capabilitycontract.CapabilityAuthoringDomain {
 			{Kind: "object_key", InputJSONPointer: "/payload/export_scope/tags/family_join/object_key", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/object_key"},
 			{Kind: "permission_key", InputJSONPointer: "/payload/required_permissions/*", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/permission_key"},
 		},
-		Execution: metadatacontract.VersionedMetadataDefinitionExecution("report.definition"),
+		Execution: appschemacontract.VersionedApplicationDefinitionExecution("report.definition"),
 		Errors:    reportAuthoringErrors(), Examples: reportAuthoringExamples(),
 		Sources: []capabilitycontract.CapabilityAuthoringSource{
 			{Kind: "model", Path: "runtime/domain/report/model/report_schema.go", Symbol: "ReportSchema"},
-			{Kind: "validation", Path: "runtime/domain/metadata/validation/metadata_report_validation.go", Symbol: "MetadataValidateReportDefinitionContract"},
-			{Kind: "service", Path: "runtime/application/metadata/metadata_definition_orchestration_application_service.go", Symbol: "ApplicationSchemaService.UpsertMetadataDefinition"},
+			{Kind: "validation", Path: "runtime/domain/appschema/validation/appschema_report_validation.go", Symbol: "ApplicationSchemaValidateReportDefinitionContract"},
+			{Kind: "service", Path: "runtime/application/appschema/appschema_definition_orchestration_application_service.go", Symbol: "ApplicationSchemaApplicationService.UpsertApplicationDefinition"},
 		},
 	}}}
 }
@@ -167,7 +167,7 @@ func reportAuthoringOutputSchema(payload capabilitycontract.CapabilityAuthoringS
 }
 
 func reportConfigurationRoutes() []string {
-	return metadatacontract.VersionedMetadataDefinitionRoutes("report")
+	return appschemacontract.VersionedApplicationDefinitionRoutes("report")
 }
 
 func reportResourceOperations() *capabilitycontract.CapabilityAuthoringResourceOperations {

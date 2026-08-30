@@ -9,7 +9,7 @@ import (
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 	"fmt"
 	"regexp"
@@ -374,7 +374,7 @@ type validationState struct {
 	objects    map[string]definitionmodel.ObjectSchema
 	actions    map[string]definitionmodel.ActionSchema
 	fields     map[string]map[string]definitionmodel.FieldSchema
-	dicts      map[string]metadatamodel.DictionarySchema
+	dicts      map[string]appschemamodel.DictionarySchema
 	connectors map[string]integrationmodel.ConnectorSchema
 	seeds      map[string]string
 	seeded     map[string]bool
@@ -386,7 +386,7 @@ func newValidationState(manifest manifestmodel.ManifestSchema, connectorCatalog 
 		objects:    map[string]definitionmodel.ObjectSchema{},
 		actions:    map[string]definitionmodel.ActionSchema{},
 		fields:     map[string]map[string]definitionmodel.FieldSchema{},
-		dicts:      map[string]metadatamodel.DictionarySchema{},
+		dicts:      map[string]appschemamodel.DictionarySchema{},
 		connectors: map[string]integrationmodel.ConnectorSchema{},
 		seeds:      map[string]string{},
 		seeded:     map[string]bool{},

@@ -15,6 +15,7 @@ import (
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	agentdialoghttp "github.com/domainry/domainry-runtime/runtime/transport/http/agentdialog"
+	appschemahttp "github.com/domainry/domainry-runtime/runtime/transport/http/appschema"
 	automationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/automation"
 	businesseventhttp "github.com/domainry/domainry-runtime/runtime/transport/http/businessevents"
 	businessreferencehttp "github.com/domainry/domainry-runtime/runtime/transport/http/businessreferences"
@@ -25,7 +26,6 @@ import (
 	discoveryhttp "github.com/domainry/domainry-runtime/runtime/transport/http/discovery"
 	frontendcapabilityhttp "github.com/domainry/domainry-runtime/runtime/transport/http/frontendcapability"
 	integrationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/integrations"
-	metadatahttp "github.com/domainry/domainry-runtime/runtime/transport/http/metadata"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 	openapihttp "github.com/domainry/domainry-runtime/runtime/transport/http/openapi"
 	operationshttp "github.com/domainry/domainry-runtime/runtime/transport/http/operations"
@@ -165,7 +165,7 @@ type HTTPRouterHandlers struct {
 	Capabilities         *capabilityhttp.CapabilitiesHandler
 	ChangePlans          *changeplanhttp.ChangePlansHandler
 	Integrations         *integrationhttp.IntegrationsHandler
-	Metadata             *metadatahttp.MetadataHandler
+	ApplicationSchema    *appschemahttp.ApplicationSchemaHandler
 	Notifications        *notificationhttp.NotificationsHandler
 	Party                *partyhttp.PartyHandler
 	AgentDialog          *agentdialoghttp.AgentDialogHandler

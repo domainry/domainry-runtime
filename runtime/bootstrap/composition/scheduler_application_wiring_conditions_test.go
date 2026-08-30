@@ -9,11 +9,11 @@ import (
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -28,58 +28,58 @@ func (schedulerMetadataFunction) LoadManifest(context.Context, principalmodel.Sy
 func (schedulerMetadataFunction) SyncManifest(context.Context, principalmodel.SystemScope, manifestmodel.ManifestSchema) error {
 	return nil
 }
-func (schedulerMetadataFunction) MigrationPlan(context.Context, principalmodel.SystemScope, manifestmodel.ManifestSchema) ([]metadatamodel.MetadataMigrationStep, error) {
+func (schedulerMetadataFunction) MigrationPlan(context.Context, principalmodel.SystemScope, manifestmodel.ManifestSchema) ([]appschemamodel.ApplicationSchemaMigrationStep, error) {
 	return nil, nil
 }
-func (schedulerMetadataFunction) PublishDefinition(context.Context, principalmodel.SystemScope, string, string, metadatamodel.MetadataDefinitionUpsertRequest, auditmodel.AuditEvent) (metadatamodel.MetadataDefinition, error) {
-	return metadatamodel.MetadataDefinition{}, nil
+func (schedulerMetadataFunction) PublishDefinition(context.Context, principalmodel.SystemScope, string, string, appschemamodel.ApplicationDefinitionUpsertRequest, auditmodel.AuditEvent) (appschemamodel.ApplicationDefinition, error) {
+	return appschemamodel.ApplicationDefinition{}, nil
 }
 func (schedulerMetadataFunction) CompleteDefinitionRefresh(context.Context, principalmodel.SystemScope, string, string, string, string) error {
 	return nil
 }
-func (schedulerMetadataFunction) ApplyDefinitionMutations(context.Context, principalmodel.SystemScope, []metadatamodel.MetadataDefinitionMutation, []auditmodel.AuditEvent, *changeplanmodel.BusinessChangePlanPublication) ([]metadatamodel.MetadataDefinition, error) {
+func (schedulerMetadataFunction) ApplyDefinitionMutations(context.Context, principalmodel.SystemScope, []appschemamodel.ApplicationDefinitionMutation, []auditmodel.AuditEvent, *changeplanmodel.BusinessChangePlanPublication) ([]appschemamodel.ApplicationDefinition, error) {
 	return nil, nil
 }
 func (schedulerMetadataFunction) DisableDefinition(context.Context, principalmodel.SystemScope, string, string) error {
 	return nil
 }
-func (schedulerMetadataFunction) ListDefinitions(context.Context, principalmodel.SystemScope, string) ([]metadatamodel.MetadataDefinition, error) {
+func (schedulerMetadataFunction) ListDefinitions(context.Context, principalmodel.SystemScope, string) ([]appschemamodel.ApplicationDefinition, error) {
 	return nil, nil
 }
-func (schedulerMetadataFunction) GetDefinition(context.Context, principalmodel.SystemScope, string, string) (metadatamodel.MetadataDefinition, bool, error) {
-	return metadatamodel.MetadataDefinition{}, false, nil
+func (schedulerMetadataFunction) GetDefinition(context.Context, principalmodel.SystemScope, string, string) (appschemamodel.ApplicationDefinition, bool, error) {
+	return appschemamodel.ApplicationDefinition{}, false, nil
 }
-func (schedulerMetadataFunction) ListDefinitionVersions(context.Context, principalmodel.SystemScope, string, string) ([]metadatamodel.MetadataDefinitionVersion, error) {
+func (schedulerMetadataFunction) ListDefinitionVersions(context.Context, principalmodel.SystemScope, string, string) ([]appschemamodel.ApplicationDefinitionVersion, error) {
 	return nil, nil
 }
-func (schedulerMetadataFunction) RollbackDefinition(context.Context, principalmodel.SystemScope, string, string, metadatamodel.MetadataDefinitionRollbackRequest, auditmodel.AuditEvent) (metadatamodel.MetadataDefinition, error) {
-	return metadatamodel.MetadataDefinition{}, nil
+func (schedulerMetadataFunction) RollbackDefinition(context.Context, principalmodel.SystemScope, string, string, appschemamodel.ApplicationDefinitionRollbackRequest, auditmodel.AuditEvent) (appschemamodel.ApplicationDefinition, error) {
+	return appschemamodel.ApplicationDefinition{}, nil
 }
-func (schedulerMetadataFunction) ListLocalizedTexts(context.Context, string, metadatamodel.LocalizedTextQuery) ([]metadatamodel.LocalizedText, error) {
+func (schedulerMetadataFunction) ListLocalizedTexts(context.Context, string, appschemamodel.LocalizedTextQuery) ([]appschemamodel.LocalizedText, error) {
 	return nil, nil
 }
-func (schedulerMetadataFunction) UpsertLocalizedText(context.Context, string, metadatamodel.LocalizedTextUpsertRequest) (metadatamodel.LocalizedText, error) {
-	return metadatamodel.LocalizedText{}, nil
+func (schedulerMetadataFunction) UpsertLocalizedText(context.Context, string, appschemamodel.LocalizedTextUpsertRequest) (appschemamodel.LocalizedText, error) {
+	return appschemamodel.LocalizedText{}, nil
 }
 
 type schedulerMetadataSourceRepository struct {
-	metadatarepository.MetadataRepository
-	definitions []metadatamodel.MetadataDefinition
-	definition  metadatamodel.MetadataDefinition
+	appschemarepository.ApplicationSchemaRepository
+	definitions []appschemamodel.ApplicationDefinition
+	definition  appschemamodel.ApplicationDefinition
 	found       bool
-	versions    []metadatamodel.MetadataDefinitionVersion
+	versions    []appschemamodel.ApplicationDefinitionVersion
 	listErr     error
 	getErr      error
 	versionsErr error
 }
 
-func (r schedulerMetadataSourceRepository) ListDefinitions(context.Context, principalmodel.SystemScope, string) ([]metadatamodel.MetadataDefinition, error) {
+func (r schedulerMetadataSourceRepository) ListDefinitions(context.Context, principalmodel.SystemScope, string) ([]appschemamodel.ApplicationDefinition, error) {
 	return r.definitions, r.listErr
 }
-func (r schedulerMetadataSourceRepository) GetDefinition(context.Context, principalmodel.SystemScope, string, string) (metadatamodel.MetadataDefinition, bool, error) {
+func (r schedulerMetadataSourceRepository) GetDefinition(context.Context, principalmodel.SystemScope, string, string) (appschemamodel.ApplicationDefinition, bool, error) {
 	return r.definition, r.found, r.getErr
 }
-func (r schedulerMetadataSourceRepository) ListDefinitionVersions(context.Context, principalmodel.SystemScope, string, string) ([]metadatamodel.MetadataDefinitionVersion, error) {
+func (r schedulerMetadataSourceRepository) ListDefinitionVersions(context.Context, principalmodel.SystemScope, string, string) ([]appschemamodel.ApplicationDefinitionVersion, error) {
 	return r.versions, r.versionsErr
 }
 
@@ -88,19 +88,19 @@ type schedulerMetadataMarker string
 type schedulerMetadataDecoratedRepository struct {
 	label string
 	schedulerMetadataMarker
-	metadatarepository.MetadataRepository
+	appschemarepository.ApplicationSchemaRepository
 }
 
 type schedulerMetadataPointerRepository struct {
 	*schedulerMetadataSourceRepository
 }
 
-func TestSchedulerMetadataDefinitionSourceConditions(t *testing.T) {
+func TestSchedulerApplicationDefinitionSourceConditions(t *testing.T) {
 	wantErr := errors.New("metadata failure")
 	base := schedulerMetadataFunction(nil)
-	valid := metadatamodel.MetadataDefinition{ResourceKey: "nightly", Payload: json.RawMessage(`{"enabled":true}`), CreatedAt: "created", UpdatedAt: "updated"}
+	valid := appschemamodel.ApplicationDefinition{ResourceKey: "nightly", Payload: json.RawMessage(`{"enabled":true}`), CreatedAt: "created", UpdatedAt: "updated"}
 
-	for _, source := range []schedulerMetadataDefinitionSource{{}, {repository: schedulerMetadataSourceRepository{}}} {
+	for _, source := range []schedulerApplicationDefinitionSource{{}, {repository: schedulerMetadataSourceRepository{}}} {
 		if records, err := source.ListSchedulerDefinitions(t.Context()); err != nil || records != nil {
 			t.Fatalf("unavailable list records=%#v err=%v", records, err)
 		}
@@ -115,49 +115,49 @@ func TestSchedulerMetadataDefinitionSourceConditions(t *testing.T) {
 	cases := []struct {
 		name string
 		repo schedulerMetadataSourceRepository
-		call func(schedulerMetadataDefinitionSource) error
+		call func(schedulerApplicationDefinitionSource) error
 	}{
-		{"list error", schedulerMetadataSourceRepository{MetadataRepository: base, listErr: wantErr}, func(source schedulerMetadataDefinitionSource) error {
+		{"list error", schedulerMetadataSourceRepository{ApplicationSchemaRepository: base, listErr: wantErr}, func(source schedulerApplicationDefinitionSource) error {
 			_, err := source.ListSchedulerDefinitions(t.Context())
 			return err
 		}},
-		{"list decode", schedulerMetadataSourceRepository{MetadataRepository: base, definitions: []metadatamodel.MetadataDefinition{{ResourceKey: "bad", Payload: []byte("{")}}}, func(source schedulerMetadataDefinitionSource) error {
+		{"list decode", schedulerMetadataSourceRepository{ApplicationSchemaRepository: base, definitions: []appschemamodel.ApplicationDefinition{{ResourceKey: "bad", Payload: []byte("{")}}}, func(source schedulerApplicationDefinitionSource) error {
 			_, err := source.ListSchedulerDefinitions(t.Context())
 			return err
 		}},
-		{"get error", schedulerMetadataSourceRepository{MetadataRepository: base, getErr: wantErr}, func(source schedulerMetadataDefinitionSource) error {
+		{"get error", schedulerMetadataSourceRepository{ApplicationSchemaRepository: base, getErr: wantErr}, func(source schedulerApplicationDefinitionSource) error {
 			_, _, err := source.GetSchedulerDefinition(t.Context(), "nightly")
 			return err
 		}},
-		{"get decode", schedulerMetadataSourceRepository{MetadataRepository: base, found: true, definition: metadatamodel.MetadataDefinition{ResourceKey: "bad", Payload: []byte("{")}}, func(source schedulerMetadataDefinitionSource) error {
+		{"get decode", schedulerMetadataSourceRepository{ApplicationSchemaRepository: base, found: true, definition: appschemamodel.ApplicationDefinition{ResourceKey: "bad", Payload: []byte("{")}}, func(source schedulerApplicationDefinitionSource) error {
 			_, _, err := source.GetSchedulerDefinition(t.Context(), "nightly")
 			return err
 		}},
-		{"versions error", schedulerMetadataSourceRepository{MetadataRepository: base, versionsErr: wantErr}, func(source schedulerMetadataDefinitionSource) error {
+		{"versions error", schedulerMetadataSourceRepository{ApplicationSchemaRepository: base, versionsErr: wantErr}, func(source schedulerApplicationDefinitionSource) error {
 			_, err := source.ListSchedulerDefinitionVersions(t.Context(), "nightly")
 			return err
 		}},
-		{"versions decode", schedulerMetadataSourceRepository{MetadataRepository: base, versions: []metadatamodel.MetadataDefinitionVersion{{SchemaVersion: "v1", Payload: []byte("{")}}}, func(source schedulerMetadataDefinitionSource) error {
+		{"versions decode", schedulerMetadataSourceRepository{ApplicationSchemaRepository: base, versions: []appschemamodel.ApplicationDefinitionVersion{{SchemaVersion: "v1", Payload: []byte("{")}}}, func(source schedulerApplicationDefinitionSource) error {
 			_, err := source.ListSchedulerDefinitionVersions(t.Context(), "nightly")
 			return err
 		}},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
-			if err := test.call(schedulerMetadataDefinitionSource{repository: test.repo}); err == nil {
+			if err := test.call(schedulerApplicationDefinitionSource{repository: test.repo}); err == nil {
 				t.Fatal("expected error")
 			}
 		})
 	}
 
 	repo := schedulerMetadataSourceRepository{
-		MetadataRepository: base,
-		definitions:        []metadatamodel.MetadataDefinition{valid},
-		definition:         valid,
-		found:              true,
-		versions:           []metadatamodel.MetadataDefinitionVersion{{SchemaVersion: "v1", Payload: json.RawMessage(`{"enabled":false}`), CreatedAt: "created"}},
+		ApplicationSchemaRepository: base,
+		definitions:                 []appschemamodel.ApplicationDefinition{valid},
+		definition:                  valid,
+		found:                       true,
+		versions:                    []appschemamodel.ApplicationDefinitionVersion{{SchemaVersion: "v1", Payload: json.RawMessage(`{"enabled":false}`), CreatedAt: "created"}},
 	}
-	source := schedulerMetadataDefinitionSource{repository: repo}
+	source := schedulerApplicationDefinitionSource{repository: repo}
 	if records, err := source.ListSchedulerDefinitions(t.Context()); err != nil || len(records) != 1 || records[0].Data["key"] != "nightly" {
 		t.Fatalf("records=%#v err=%v", records, err)
 	}
@@ -166,7 +166,7 @@ func TestSchedulerMetadataDefinitionSourceConditions(t *testing.T) {
 	}
 	missing := repo
 	missing.found = false
-	if _, found, err := (schedulerMetadataDefinitionSource{repository: missing}).GetSchedulerDefinition(t.Context(), "missing"); err != nil || found {
+	if _, found, err := (schedulerApplicationDefinitionSource{repository: missing}).GetSchedulerDefinition(t.Context(), "missing"); err != nil || found {
 		t.Fatalf("missing found=%v err=%v", found, err)
 	}
 	if versions, err := source.ListSchedulerDefinitionVersions(t.Context(), "nightly"); err != nil || len(versions) != 1 || versions[0].Data["enabled"] != false {
@@ -183,11 +183,11 @@ func TestSchedulerWiringAvailabilityAndSmallHelpers(t *testing.T) {
 	if !schedulerMetadataRepositoryAvailable(base) {
 		t.Fatal("function metadata repository reported unavailable")
 	}
-	decorated := schedulerMetadataDecoratedRepository{MetadataRepository: base}
+	decorated := schedulerMetadataDecoratedRepository{ApplicationSchemaRepository: base}
 	if !schedulerMetadataRepositoryAvailable(decorated) {
 		t.Fatal("decorated metadata repository reported unavailable")
 	}
-	repo := schedulerMetadataSourceRepository{MetadataRepository: base}
+	repo := schedulerMetadataSourceRepository{ApplicationSchemaRepository: base}
 	if !schedulerMetadataRepositoryAvailable(&repo) {
 		t.Fatal("non-nil pointer metadata repository reported unavailable")
 	}

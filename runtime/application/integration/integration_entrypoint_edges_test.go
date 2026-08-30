@@ -12,8 +12,8 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -171,7 +171,7 @@ func TestInvokeIntegrationAgentToolEdges(t *testing.T) {
 	repository := integrationEntrypointIdentityRepository()
 	records := &integrationEntrypointRecords{}
 	delivery := &independentDeliveryRepository{}
-	snapshot := metadatamodel.ApplicationSchemaSnapshot{
+	snapshot := appschemamodel.ApplicationSchemaSnapshot{
 		Agents:       []agentmodel.AgentSchema{{Key: "agent", Tools: []string{"readRecord", "createRecord", "callConnector"}}},
 		Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "connector"}}},
 	}
@@ -179,7 +179,7 @@ func TestInvokeIntegrationAgentToolEdges(t *testing.T) {
 		ConfigRepository:   repository,
 		DeliveryRepository: delivery,
 		Records:            records,
-		Schema: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+		Schema: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 			return snapshot
 		},
 		PrincipalResolver: func(_ context.Context, actorID, roleKey, _ string) principalmodel.Principal {
@@ -213,14 +213,14 @@ func TestInvokeIntegrationAgentToolEdges(t *testing.T) {
 		t.Fatalf("disallowed tool error=%v", err)
 	}
 	guarded := snapshot
-	guarded.GuardedWrites = []metadatamodel.MetadataGuardedWriteContract{{ObjectKey: "customer", Operation: "create", ActionKey: "create_customer", Endpoint: "/customers"}}
-	service.schema = func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+	guarded.GuardedWrites = []appschemamodel.ApplicationSchemaGuardedWriteContract{{ObjectKey: "customer", Operation: "create", ActionKey: "create_customer", Endpoint: "/customers"}}
+	service.schema = func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 		return guarded
 	}
 	if _, err := service.InvokeIntegrationAgentTool(t.Context(), "agent", "createRecord", request, caller); apperror.CodeOf(err) != "backend.integration.agent_tool.guarded_action_required" {
 		t.Fatalf("guarded write error=%v", err)
 	}
-	service.schema = func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+	service.schema = func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 		return snapshot
 	}
 	if result, err := service.InvokeIntegrationAgentTool(t.Context(), "agent", "createRecord", request, caller); err != nil || result.Status != "approval_required" || result.ApprovalPlan == nil {

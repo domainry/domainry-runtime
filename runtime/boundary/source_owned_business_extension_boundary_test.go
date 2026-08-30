@@ -654,7 +654,7 @@ func TestRuntimeValidatesActionRegistryCatalogBeforeSeedsAndHTTPReadiness(t *tes
 
 func TestBusinessHandlerExecutionIdentityTracesRuntimeProjectSnapshotHandlerAndReceipt(t *testing.T) {
 	identity := reflect.TypeOf(runtimeext.ExecutionIdentity{})
-	for _, fieldName := range []string{"RuntimeRevision", "ProjectRevision", "MetadataRevision", "HandlerRevision", "ReceiptID"} {
+	for _, fieldName := range []string{"RuntimeRevision", "ProjectRevision", "ApplicationSchemaRevision", "HandlerRevision", "ReceiptID"} {
 		field, exists := identity.FieldByName(fieldName)
 		if !exists || field.Type.Kind() != reflect.String {
 			t.Fatalf("ExecutionIdentity %s type=%v exists=%v", fieldName, field.Type, exists)
@@ -666,13 +666,13 @@ func TestBusinessHandlerExecutionIdentityTracesRuntimeProjectSnapshotHandlerAndR
 			"ActionRuntimeRevision:", "cfg.RuntimeVersion", "ActionProjectRevision:", "projectRevision", "ActionMetadataRevision:", "metadataRevision",
 		},
 		"runtime/bootstrap/runtime/notification_startup_bindings.go": {
-			"manifest.GeneratedDomainSDK.ArtifactSHA256", "manifest.GeneratedDomainSDK.MetadataSnapshotSHA256",
+			"manifest.GeneratedDomainSDK.ArtifactSHA256", "manifest.GeneratedDomainSDK.ApplicationSchemaSnapshotSHA256",
 		},
 		"runtime/bootstrap/composition/action_application_wiring.go": {
 			"ResolveMetadataRevision:", "SnapshotRevision(ctx", "resolve Action execution identity",
 		},
 		"runtime/application/action/action_executor_identity.go": {
-			"ReceiptID: executionID", "RuntimeRevision: e.dependencies.RuntimeRevision", "MetadataRevision: metadataRevision",
+			"ReceiptID: executionID", "RuntimeRevision: e.dependencies.RuntimeRevision", "ApplicationSchemaRevision: metadataRevision",
 			"ProjectRevision: e.dependencies.ProjectRevision", "HandlerRevision: descriptor.HandlerRevision", "backend.action.execution_identity_incomplete",
 		},
 	}

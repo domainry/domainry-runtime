@@ -9,9 +9,9 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	metadataservice "github.com/domainry/domainry-runtime/runtime/domain/metadata/service"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/service"
@@ -25,7 +25,7 @@ func TestReportDirectKeyEntrypointsConcealDefinitionWithoutRequiredPermission(t 
 			Source: reportmodel.ReportDatasetSource{ObjectKey: "order_line", Alias: "order_line"},
 		},
 	}
-	snapshot := metadatamodel.ApplicationSchemaSnapshot{
+	snapshot := appschemamodel.ApplicationSchemaSnapshot{
 		Objects: []definitionmodel.ObjectSchema{{Key: "order_line"}},
 		Reports: []reportmodel.ReportSchema{reportDefinition},
 	}
@@ -35,7 +35,7 @@ func TestReportDirectKeyEntrypointsConcealDefinitionWithoutRequiredPermission(t 
 	)
 	domain := reportservice.NewReportDomainService(reportservice.ReportDependencies{
 		Reports: func(_ context.Context, candidate principalmodel.Principal) []reportmodel.ReportSchema {
-			return metadataservice.SnapshotForPrincipal(snapshot, candidate).Reports
+			return appschemaservice.SnapshotForPrincipal(snapshot, candidate).Reports
 		},
 	})
 	service := NewReportApplicationService(ReportApplicationDependencies{

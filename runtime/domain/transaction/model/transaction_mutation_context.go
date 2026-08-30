@@ -20,23 +20,23 @@ const (
 )
 
 type MutationContextInput struct {
-	WorkspaceID       string
-	ActorID           string
-	RoleKey           string
-	Permissions       []string
-	DataScope         string
-	IdentityVersion   string
-	Source            MutationSource
-	ActionKey         string
-	WorkflowKey       string
-	AutomationKey     string
-	RequestID         string
-	IdempotencyKey    string
-	CorrelationID     string
-	CausationID       string
-	MetadataRevision  string
-	EffectAuthority   map[string][]string
-	AssuranceEvidence map[string]string
+	WorkspaceID               string
+	ActorID                   string
+	RoleKey                   string
+	Permissions               []string
+	DataScope                 string
+	IdentityVersion           string
+	Source                    MutationSource
+	ActionKey                 string
+	WorkflowKey               string
+	AutomationKey             string
+	RequestID                 string
+	IdempotencyKey            string
+	CorrelationID             string
+	CausationID               string
+	ApplicationSchemaRevision string
+	EffectAuthority           map[string][]string
+	AssuranceEvidence         map[string]string
 }
 
 type MutationContext struct {
@@ -81,7 +81,7 @@ func NewMutationContext(input MutationContextInput) (MutationContext, error) {
 	input.IdempotencyKey = strings.TrimSpace(input.IdempotencyKey)
 	input.CorrelationID = strings.TrimSpace(input.CorrelationID)
 	input.CausationID = strings.TrimSpace(input.CausationID)
-	input.MetadataRevision = strings.TrimSpace(input.MetadataRevision)
+	input.ApplicationSchemaRevision = strings.TrimSpace(input.ApplicationSchemaRevision)
 	if input.WorkspaceID == "" {
 		return MutationContext{}, mutationContextError("workspace_id")
 	}
@@ -91,7 +91,7 @@ func NewMutationContext(input MutationContextInput) (MutationContext, error) {
 	if input.CorrelationID == "" {
 		return MutationContext{}, mutationContextError("correlation_id")
 	}
-	if input.MetadataRevision == "" {
+	if input.ApplicationSchemaRevision == "" {
 		return MutationContext{}, mutationContextError("metadata_revision")
 	}
 	for source, key := range map[MutationSource]string{
@@ -106,26 +106,26 @@ func NewMutationContext(input MutationContextInput) (MutationContext, error) {
 		permissions: mutationNormalizedStrings(input.Permissions), dataScope: input.DataScope, identityVersion: input.IdentityVersion,
 		source: input.Source, actionKey: input.ActionKey, workflowKey: input.WorkflowKey, automationKey: input.AutomationKey,
 		requestID: input.RequestID, idempotencyKey: input.IdempotencyKey, correlationID: input.CorrelationID,
-		causationID: input.CausationID, metadataRevision: input.MetadataRevision,
+		causationID: input.CausationID, metadataRevision: input.ApplicationSchemaRevision,
 		effectAuthority: mutationCloneAuthority(input.EffectAuthority), assuranceEvidence: mutationCloneEvidence(input.AssuranceEvidence),
 	}, nil
 }
 
-func (c MutationContext) WorkspaceID() string      { return c.workspaceID }
-func (c MutationContext) ActorID() string          { return c.actorID }
-func (c MutationContext) RoleKey() string          { return c.roleKey }
-func (c MutationContext) Permissions() []string    { return slices.Clone(c.permissions) }
-func (c MutationContext) DataScope() string        { return c.dataScope }
-func (c MutationContext) IdentityVersion() string  { return c.identityVersion }
-func (c MutationContext) Source() MutationSource   { return c.source }
-func (c MutationContext) ActionKey() string        { return c.actionKey }
-func (c MutationContext) WorkflowKey() string      { return c.workflowKey }
-func (c MutationContext) AutomationKey() string    { return c.automationKey }
-func (c MutationContext) RequestID() string        { return c.requestID }
-func (c MutationContext) IdempotencyKey() string   { return c.idempotencyKey }
-func (c MutationContext) CorrelationID() string    { return c.correlationID }
-func (c MutationContext) CausationID() string      { return c.causationID }
-func (c MutationContext) MetadataRevision() string { return c.metadataRevision }
+func (c MutationContext) WorkspaceID() string               { return c.workspaceID }
+func (c MutationContext) ActorID() string                   { return c.actorID }
+func (c MutationContext) RoleKey() string                   { return c.roleKey }
+func (c MutationContext) Permissions() []string             { return slices.Clone(c.permissions) }
+func (c MutationContext) DataScope() string                 { return c.dataScope }
+func (c MutationContext) IdentityVersion() string           { return c.identityVersion }
+func (c MutationContext) Source() MutationSource            { return c.source }
+func (c MutationContext) ActionKey() string                 { return c.actionKey }
+func (c MutationContext) WorkflowKey() string               { return c.workflowKey }
+func (c MutationContext) AutomationKey() string             { return c.automationKey }
+func (c MutationContext) RequestID() string                 { return c.requestID }
+func (c MutationContext) IdempotencyKey() string            { return c.idempotencyKey }
+func (c MutationContext) CorrelationID() string             { return c.correlationID }
+func (c MutationContext) CausationID() string               { return c.causationID }
+func (c MutationContext) ApplicationSchemaRevision() string { return c.metadataRevision }
 
 func (c MutationContext) EffectAuthority() map[string][]string {
 	return mutationCloneAuthority(c.effectAuthority)

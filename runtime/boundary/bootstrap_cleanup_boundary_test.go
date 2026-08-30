@@ -51,7 +51,7 @@ func TestBootstrapCompositionBusinessBehaviorCannotReturn(t *testing.T) {
 		"changeplan_application_wiring.go":             true,
 		"integration_dependency_application_wiring.go": true,
 		"record_query_policy_domain_wiring.go":         true,
-		"runtime_services_metadata_projection.go":      true,
+		"runtime_services_appschema_projection.go":      true,
 	}
 	forbiddenTemplates := []string{"lead", "opportunity", "restaurant_" + "order", "kitchen_" + "ticket"}
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {

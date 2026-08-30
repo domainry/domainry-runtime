@@ -30,12 +30,11 @@ func (h *AgentDialogHandler) agentDialogDiagnostics(w http.ResponseWriter, r *ht
 	events, eventError := h.agentDialogDiagnosticEvents(r.Context(), principal, values.Get("object_key"))
 	h.writeJSON(w, http.StatusOK, map[string]any{
 		"runtime_context_preview": agentDialogRuntimeContext(runtimeInput, principal),
-		"agent_http": map[string]any{
-			"configured": h.config.AgentID > 0 && strings.TrimSpace(h.config.APIKey) != "",
-			"base_url":   h.config.BaseURL,
-			"agent_id":   h.config.AgentID,
-			"api_key":    "redacted",
-			"timeout_ms": h.config.Timeout.Milliseconds(),
+		"agent_runner": map[string]any{
+			"configured":       h.interactive != nil,
+			"context_resolver": h.contextResolver != nil,
+			"run_store":        h.interactiveRuns != nil,
+			"transport":        "domainry-agent-sdk",
 		},
 		"skill_bindings": []map[string]any{
 			{"family": "domain-flow", "skill": "agents/skills/domain-flow", "default_run_mode": "suggested_write"},

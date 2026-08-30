@@ -7,7 +7,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -108,7 +108,7 @@ func findInteractiveAgent(agents []agentmodel.AgentSchema, key string) (agentmod
 	return agentmodel.AgentSchema{}, false
 }
 
-func agentToolsForInteractiveAgent(snapshot metadatamodel.ApplicationSchemaSnapshot, agent agentmodel.AgentSchema) []string {
+func agentToolsForInteractiveAgent(snapshot appschemamodel.ApplicationSchemaSnapshot, agent agentmodel.AgentSchema) []string {
 	tools := append([]string(nil), agent.Tools...)
 	skills := agentStringSet(agent.SkillKeys)
 	for _, skill := range snapshot.Skills {

@@ -1,8 +1,8 @@
 package policy
 
 import (
+	appschemacontract "github.com/domainry/domainry-runtime/runtime/domain/appschema/contract"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
-	metadatacontract "github.com/domainry/domainry-runtime/runtime/domain/metadata/contract"
 )
 
 // AutomationAuthoringDomain publishes Automation-owned authoring contracts.
@@ -15,7 +15,7 @@ func AutomationAuthoringDomain() capabilitycontract.CapabilityAuthoringDomain {
 			{Key: "conditions", Type: "automation_condition_group"}, {Key: "instructions", Type: "array", ItemSchema: "automation_instruction", Required: true},
 			{Key: "execution", Type: "automation_execution_policy"}, {Key: "audit_event", Type: "event_key"}, {Key: "i18n", Type: "object"}, {Key: "layout", Type: "automation_layout"},
 		}, Permissions: []string{"automation.rule.read", "automation.rule.write"}, AuditEvents: []string{"automation_rule_saved"},
-		ValidationEndpoint: "POST /automation-rules/validate", SimulationEndpoint: "POST /automation-rules/simulate", ConfigurationRoutes: append([]string{"POST /automation-rules/validate", "POST /automation-rules/simulate"}, metadatacontract.VersionedMetadataDefinitionRoutes("automation_rule")...), FrontendSupportKey: "automation.rule.workbench.v1",
+		ValidationEndpoint: "POST /automation-rules/validate", SimulationEndpoint: "POST /automation-rules/simulate", ConfigurationRoutes: append([]string{"POST /automation-rules/validate", "POST /automation-rules/simulate"}, appschemacontract.VersionedApplicationDefinitionRoutes("automation_rule")...), FrontendSupportKey: "automation.rule.workbench.v1",
 		Errors: []capabilitycontract.CapabilityAuthoringError{{Code: "backend.automation.instruction_type_invalid", FieldPath: "instructions[].type", ParameterKeys: []string{"instruction", "type"}, MessageKey: "backend.automation.instruction_type_invalid"}},
 		Sources: []capabilitycontract.CapabilityAuthoringSource{
 			{Kind: "discovery", Path: "runtime/domain/capability/contract/capability_automation_contract.go", Symbol: "RuntimeAutomationCapabilities"},

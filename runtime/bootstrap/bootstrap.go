@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"net/http"
 
 	"github.com/domainry/domainry-connector-sdk"
@@ -67,8 +68,8 @@ func NewVerifiedProjectWithAllFactoriesAndDatabase(ctx context.Context, cfg conf
 	return runtimebootstrap.NewProjectWithAllFactoriesAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, notification, party, database, monitoring...)
 }
 
-func NewVerifiedProjectWithOwnerFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, database *ProjectDatabase) *Runtime {
-	return runtimebootstrap.NewProjectWithOwnerFactoriesAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, notification, party, monitoring, scheduler, dataExchange, database)
+func NewVerifiedProjectWithOwnerFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, database *ProjectDatabase, agent ...agentsdk.Factory) *Runtime {
+	return runtimebootstrap.NewProjectWithOwnerFactoriesAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, notification, party, monitoring, scheduler, dataExchange, database, agent...)
 }
 
 func PartyOrganizationScopes(runtime *Runtime) partysdk.OrganizationScopes {
@@ -93,6 +94,6 @@ func ActionConnectorGateway(runtime *Runtime) *integrationapplication.ActionConn
 	return runtimebootstrap.ActionConnectorGateway(runtime)
 }
 
-func AssembleHTTPServer(ctx context.Context, records *composition.RuntimeServices, identity identitysdk.Binding, uploadDir string, corsAllowedOrigins []string, allowDevAuthHeaders bool, agentHTTP runtimehttp.AgentHTTPConfig) *runtimehttp.HTTPRouter {
-	return transportbootstrap.AssembleHTTPServer(ctx, records, identity, uploadDir, corsAllowedOrigins, allowDevAuthHeaders, agentHTTP)
+func AssembleHTTPServer(ctx context.Context, records *composition.RuntimeServices, identity identitysdk.Binding, uploadDir string, corsAllowedOrigins []string, allowDevAuthHeaders bool) *runtimehttp.HTTPRouter {
+	return transportbootstrap.AssembleHTTPServer(ctx, records, identity, uploadDir, corsAllowedOrigins, allowDevAuthHeaders)
 }

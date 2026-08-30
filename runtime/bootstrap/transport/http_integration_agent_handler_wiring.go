@@ -8,7 +8,6 @@ import (
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	agentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/agent"
-	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	agentdialoghttp "github.com/domainry/domainry-runtime/runtime/transport/http/agentdialog"
 	integrationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/integrations"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
@@ -25,7 +24,7 @@ func (a agentRecordVisibilityAdapter) CanReadAgentRecord(ctx context.Context, ob
 	return a.records.RecordScopeAllows(ctx, objectKey, recordID, principal)
 }
 
-func (a *httpServerAssembly) wireIntegrationAndAgentHandlers(agentConfig runtimehttp.AgentHTTPConfig) {
+func (a *httpServerAssembly) wireIntegrationAndAgentHandlers(agentDialogRateLimitPerMinute int) {
 	a.handlers.Integrations = integrationhttp.NewIntegrationsHandler(integrationhttp.IntegrationsDependencies{
 		Connections: a.integrations, Bindings: a.integrations,
 		RuntimeExecution: a.integrations, Webhooks: a.integrations, Operations: a.operations,
@@ -66,11 +65,8 @@ func (a *httpServerAssembly) wireIntegrationAndAgentHandlers(agentConfig runtime
 			Operations:      a.operations,
 			InteractiveRuns: a.dependencies.Records.Applications().AgentInteractiveRuns,
 			Interactive:     interactive,
-			Config: agentdialoghttp.Config{
-				BaseURL: agentConfig.BaseURL, APIKey: agentConfig.APIKey, AgentID: agentConfig.AgentID,
-				Timeout: agentConfig.Timeout, RateLimitPerMinute: agentConfig.RateLimitPerMinute,
-			},
-			RateLimiter: a.dependencies.RateLimiter, Principal: a.callbacks.Principal,
+			Config:          agentdialoghttp.Config{RateLimitPerMinute: agentDialogRateLimitPerMinute},
+			RateLimiter:     a.dependencies.RateLimiter, Principal: a.callbacks.Principal,
 			WriteJSON: a.callbacks.WriteJSON, WriteError: a.callbacks.WriteError,
 			WriteServiceError: a.callbacks.WriteServiceError, DecodeJSON: a.callbacks.DecodeJSON,
 			Admin: a.identityHTTP.PermissionFunc("workspace.admin"), SecurityAudit: a.callbacks.SecurityAudit,

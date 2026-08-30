@@ -14,7 +14,7 @@ import (
 
 	localizationmodel "github.com/domainry/domainry-runtime/runtime/domain/localization/model"
 
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 
@@ -47,7 +47,7 @@ type ManifestSchema struct {
 	NotificationTemplates     []notificationmodel.NotificationTemplate        `json:"notification_templates,omitempty"`
 	NotificationEventTypes    []notificationmodel.NotificationEventType       `json:"notification_event_types,omitempty"`
 	NotificationRules         []notificationmodel.NotificationRule            `json:"notification_rules,omitempty"`
-	Dictionaries              []metadatamodel.DictionarySchema                `json:"dictionaries,omitempty"`
+	Dictionaries              []appschemamodel.DictionarySchema               `json:"dictionaries,omitempty"`
 	Integrations              integrationmodel.IntegrationSchema              `json:"integrations,omitempty"`
 	Reports                   []reportmodel.ReportSchema                      `json:"reports,omitempty"`
 	IdentityProfileExtensions []profilebindingmodel.Binding                   `json:"identity_profile_extensions,omitempty"`

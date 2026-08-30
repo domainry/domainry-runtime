@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	openapihttp "github.com/domainry/domainry-runtime/runtime/transport/http/openapi"
 )
 
@@ -21,7 +21,7 @@ func TestEveryAdminBusinessReuseRouteHasOpenAPIOperation(t *testing.T) {
 	if err := json.Unmarshal(capabilitycontract.RuntimeAPIContractDocument(), &contract); err != nil {
 		t.Fatal(err)
 	}
-	paths := openapihttp.Build(metadatamodel.ApplicationSchemaSnapshot{})["paths"].(map[string]any)
+	paths := openapihttp.Build(appschemamodel.ApplicationSchemaSnapshot{})["paths"].(map[string]any)
 	for _, route := range contract.AdminBusinessReuse.Routes {
 		method, path, ok := strings.Cut(route.EndpointIdentity, " ")
 		if !ok {

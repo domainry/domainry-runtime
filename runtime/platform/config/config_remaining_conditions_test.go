@@ -169,9 +169,6 @@ func TestConfigValidateEveryShortCircuitOperand(t *testing.T) {
 		{"database statement zero", func(c *Config) { c.DatabaseStatementTimeout = 0 }},
 		{"manifest path empty", func(c *Config) { c.ManifestPath = " " }},
 		{"migration path empty", func(c *Config) { c.MigrationDir = " " }},
-		{"agent URL syntax", func(c *Config) { c.AgentHTTPBaseURL = "://bad" }},
-		{"agent URL host", func(c *Config) { c.AgentHTTPBaseURL = "http:/missing-host" }},
-		{"agent URL scheme", func(c *Config) { c.AgentHTTPBaseURL = "ftp://agent.example.com" }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -181,13 +178,6 @@ func TestConfigValidateEveryShortCircuitOperand(t *testing.T) {
 				t.Fatalf("invalid config accepted: %+v", cfg)
 			}
 		})
-	}
-	for _, endpoint := range []string{"http://agent.example.com", "https://agent.example.com"} {
-		cfg := valid
-		cfg.AgentHTTPBaseURL = endpoint
-		if err := cfg.Validate(); err != nil {
-			t.Fatalf("valid endpoint %q: %v", endpoint, err)
-		}
 	}
 }
 

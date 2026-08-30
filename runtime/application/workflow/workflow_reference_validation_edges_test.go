@@ -7,9 +7,9 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -88,7 +88,7 @@ func workflowReferenceValidatorFixture(identity identitysdk.Directory) *Workflow
 	}
 	schema := workflowReferenceSchemaEdgeStub{snapshot: WorkflowSchemaSnapshot{
 		Actions:      actions,
-		Dictionaries: []metadatamodel.DictionarySchema{{Key: "states"}},
+		Dictionaries: []appschemamodel.DictionarySchema{{Key: "states"}},
 		Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "erp", Operations: []integrationmodel.ConnectorOperationSchema{{Key: "send"}}}}},
 	}, adapters: map[string]bool{"email": true, "webhook": true, "custom": true}}
 	return NewWorkflowReferenceValidator(schema, func(context.Context) map[string]definitionmodel.ObjectSchema {

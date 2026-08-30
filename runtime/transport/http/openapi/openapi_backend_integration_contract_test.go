@@ -3,11 +3,11 @@ package openapi
 import (
 	"testing"
 
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )
 
 func TestBackendIntegrationRoutesPublishTypedRuntimeClientContracts(t *testing.T) {
-	paths := Build(metadatamodel.ApplicationSchemaSnapshot{})["paths"].(map[string]any)
+	paths := Build(appschemamodel.ApplicationSchemaSnapshot{})["paths"].(map[string]any)
 	for _, item := range []struct {
 		path   string
 		method string
@@ -92,7 +92,7 @@ func containsString(values []string, target string) bool {
 }
 
 func TestPersonalInboxAndWorkforcePublishDurableIntegrationContracts(t *testing.T) {
-	paths := Build(metadatamodel.ApplicationSchemaSnapshot{})["paths"].(map[string]any)
+	paths := Build(appschemamodel.ApplicationSchemaSnapshot{})["paths"].(map[string]any)
 	inbox := map[string]map[string]string{
 		"/notifications":                                              {"get": "listNotifications"},
 		"/notifications/facets":                                       {"get": "notificationFacets"},

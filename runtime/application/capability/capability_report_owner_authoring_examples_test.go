@@ -4,16 +4,16 @@ import (
 	"encoding/json"
 	"testing"
 
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	appschemavalidation "github.com/domainry/domainry-runtime/runtime/domain/appschema/validation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	metadatavalidation "github.com/domainry/domainry-runtime/runtime/domain/metadata/validation"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 func TestReportAuthoringExamplesExecuteRuntimeReportValidator(t *testing.T) {
 	capability := reportcontract.ReportAuthoringDomain().Capabilities[0]
-	snapshot := metadatamodel.ApplicationSchemaSnapshot{
+	snapshot := appschemamodel.ApplicationSchemaSnapshot{
 		Objects: []definitionmodel.ObjectSchema{{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}},
 	}
 	for _, example := range capability.Examples {
@@ -25,7 +25,7 @@ func TestReportAuthoringExamplesExecuteRuntimeReportValidator(t *testing.T) {
 		if err := json.Unmarshal(payload, &report); err != nil {
 			t.Fatal(err)
 		}
-		issues := metadatavalidation.MetadataValidateReportDefinitionContract(t.Context(), snapshot, report)
+		issues := appschemavalidation.ApplicationSchemaValidateReportDefinitionContract(t.Context(), snapshot, report)
 		if len(example.ExpectedErrorCodes) == 0 {
 			if len(issues) != 0 {
 				t.Fatalf("example=%s value=%#v issues=%#v", example.Name, example.Value, issues)

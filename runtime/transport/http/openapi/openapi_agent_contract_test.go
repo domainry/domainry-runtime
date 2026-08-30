@@ -3,11 +3,11 @@ package openapi
 import (
 	"testing"
 
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )
 
 func TestOpenAPIPublishesVersionedAgentContracts(t *testing.T) {
-	document := Build(metadatamodel.ApplicationSchemaSnapshot{})
+	document := Build(appschemamodel.ApplicationSchemaSnapshot{})
 	schemas := document["components"].(map[string]any)["schemas"].(map[string]any)
 	for _, name := range []string{"AgentTaskDefinition", "AgentEntrypointAssignment", "GlobalAgentContextContract", "AgentRoutingContract", "WorkflowAgentTaskNodeContract", "InteractiveAgentHandoff"} {
 		if schemas[name] == nil {

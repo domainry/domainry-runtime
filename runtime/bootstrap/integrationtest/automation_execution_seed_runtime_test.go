@@ -276,7 +276,7 @@ func TestAutomationRuleEditSurvivesRuntimeRestart(t *testing.T) {
 
 	first := newIntegrationRuntime(t, cfg)
 	rule := runtimeFixtureRequest[automationmodel.AutomationRuleSchema](t, first.Routes(), "sales_manager", http.MethodGet, "/automation-rules/"+ruleKey, nil)
-	current := loadMetadataDefinitionFixture(t, first.Routes(), "sales_manager", "automation_rule", ruleKey)
+	current := loadApplicationDefinitionFixture(t, first.Routes(), "sales_manager", "automation_rule", ruleKey)
 	rule.Name = "Customer License Gate - Edited"
 	rule.Priority = 42
 	rule.Layout.Nodes = map[string]automationmodel.AutomationNodePosition{"ocr": {X: 420, Y: 180}}

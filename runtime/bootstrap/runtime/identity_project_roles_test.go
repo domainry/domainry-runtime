@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 )
 
 func TestRuntimeProjectRoleCatalogPreservesExternalAssignmentSafetyFacts(t *testing.T) {
@@ -77,7 +77,7 @@ func TestRuntimeRolePermissionsMapsLegacyNotificationAdministration(t *testing.T
 }
 
 func TestRuntimeIdentityCatalogIncludesEmbeddedNotificationAuthorization(t *testing.T) {
-	catalog := runtimeIdentityCatalog(metadatamodel.ApplicationSchemaSnapshot{}, "workspace", "runtime", nil)
+	catalog := runtimeIdentityCatalog(appschemamodel.ApplicationSchemaSnapshot{}, "workspace", "runtime", nil)
 	resources := map[string]identitysdk.ResourceDefinition{}
 	for _, resource := range catalog.Resources {
 		resources[string(resource.Key)] = resource

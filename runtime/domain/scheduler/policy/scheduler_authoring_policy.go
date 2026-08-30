@@ -1,8 +1,8 @@
 package policy
 
 import (
+	appschemacontract "github.com/domainry/domainry-runtime/runtime/domain/appschema/contract"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
-	metadatacontract "github.com/domainry/domainry-runtime/runtime/domain/metadata/contract"
 )
 
 // SchedulerAuthoringDomain publishes Scheduler-owned definition and command contracts.
@@ -27,15 +27,15 @@ func schedulerBusinessJobAuthoringCapability() capabilitycontract.CapabilityAuth
 		SystemDraftResourceType: "scheduler",
 		Parameters:              parameters, Requires: []string{"scheduler.schedule"}, Permissions: []string{"scheduler.definition.read", "scheduler.definition.write"},
 		AuditEvents: []string{"business_change_plan.item_applied"}, ValidationEndpoint: "POST /tenant-admin/change-plans/validate", PreviewEndpoint: "POST /scheduler/jobs/preview",
-		ConfigurationRoutes: append(metadatacontract.VersionedMetadataDefinitionRoutes("scheduler"), "POST /metadata/definitions/scheduler/{resourceKey}/validate", "GET /scheduler/job-definitions/{definitionID}", "GET /scheduler/job-definitions/{definitionID}/versions", "GET /tenant-admin/change-plans/{planID}", "PUT /tenant-admin/change-plans/{planID}", "POST /tenant-admin/change-plans/validate", "POST /tenant-admin/change-plans/apply"), ResourceKeyPathParameter: "definitionID",
-		ResourceOperations: metadatacontract.VersionedMetadataDefinitionOperations("scheduler"),
+		ConfigurationRoutes: append(appschemacontract.VersionedApplicationDefinitionRoutes("scheduler"), "POST /metadata/definitions/scheduler/{resourceKey}/validate", "GET /scheduler/job-definitions/{definitionID}", "GET /scheduler/job-definitions/{definitionID}/versions", "GET /tenant-admin/change-plans/{planID}", "PUT /tenant-admin/change-plans/{planID}", "POST /tenant-admin/change-plans/validate", "POST /tenant-admin/change-plans/apply"), ResourceKeyPathParameter: "definitionID",
+		ResourceOperations: appschemacontract.VersionedApplicationDefinitionOperations("scheduler"),
 		FrontendSupportKey: "scheduler.job.editor.v1", InputSchema: schedulerObjectSchema(parameters), OutputSchema: schedulerJobRecordOutputSchema(),
 		OutputVariables:    []capabilitycontract.CapabilityAuthoringOutput{{Name: "definition_id", JSONPointer: "/id", Type: "record_id", VisibleTo: "subsequent_capability_calls"}, {Name: "job_key", JSONPointer: "/data/key", Type: "scheduler_job_key", VisibleTo: "subsequent_capability_calls"}},
 		ReferenceContracts: []capabilitycontract.CapabilityAuthoringReference{{Kind: "scheduler_target_key", InputJSONPointer: "/target_key", ScopeFrom: "/target_type", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/scheduler_target_key"}, {Kind: "object_key", InputJSONPointer: "/target_object", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/object_key"}, {Kind: "role_key", InputJSONPointer: "/run_as_role", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/role_key"}},
 		Execution:          &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"metadata.scheduler_definition", "workflow.definition", "report.definition", "changeplan.reference_graph"}, WriteSet: []string{"metadata.definition_version", "changeplan.publication"}, Transaction: "reviewed_change_plan_transaction", Idempotency: "idempotency_key_and_plan_revision", SideEffects: []string{"audit:business_change_plan.item_applied", "schema_snapshot_rebuild"}, SideEffectLevel: "internal", Compensation: "append_new_version_restoring_previous_head", PermissionModel: "scheduler.definition.write", ChangeControl: "reviewed_system_draft_change_plan"},
 		Errors:             schedulerDefinitionAuthoringErrors(), Examples: schedulerBusinessJobExamples(),
 		Sources: []capabilitycontract.CapabilityAuthoringSource{
-			{Kind: "model", Path: "runtime/infrastructure/persistence/database/metadata/definition_shape.go", Symbol: "metadataDefinitionShape"},
+			{Kind: "model", Path: "runtime/infrastructure/persistence/database/appschema/definition_shape.go", Symbol: "metadataDefinitionShape"},
 			{Kind: "validation", Path: "runtime/domain/scheduler/validation/scheduler_definition_validation.go", Symbol: "SchedulerValidateDefinitionContract"},
 			{Kind: "service", Path: "runtime/application/scheduler/scheduler_application_service.go", Symbol: "SchedulerApplicationService.PreviewDefinition"},
 		},

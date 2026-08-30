@@ -3,7 +3,7 @@ package runtime
 import (
 	"context"
 
-	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
+	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	manifest "github.com/domainry/domainry-runtime/runtime/domain/manifest/validation"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -29,5 +29,5 @@ func prepareRuntimeManifestWithCatalog(ctx context.Context, cfg config.Config, a
 			return manifestmodel.ManifestSchema{}, validationErr
 		}
 	}
-	return metadataapplication.PrepareInstalledManifest(seedManifest), nil
+	return appschemaapplication.PrepareInstalledManifest(seedManifest), nil
 }

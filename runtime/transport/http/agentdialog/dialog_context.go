@@ -1,7 +1,6 @@
 package agentdialog
 
 import (
-	"encoding/json"
 	"strings"
 	"unicode/utf8"
 
@@ -47,15 +46,6 @@ func agentDialogRuntimeContext(input map[string]any, principal principalmodel.Pr
 	out["role"] = principal.RoleKey
 	out["permission_scope"] = "server_principal_scoped"
 	return out
-}
-
-func agentDialogMessageWithRuntimeContext(message string, runtimeContext map[string]any) string {
-	text := strings.TrimSpace(message)
-	contextJSON, err := json.Marshal(runtimeContext)
-	if err != nil {
-		return text
-	}
-	return text + "\n\nServer-scoped runtime context:\n" + string(contextJSON)
 }
 
 func agentDialogSafeString(value any) string {

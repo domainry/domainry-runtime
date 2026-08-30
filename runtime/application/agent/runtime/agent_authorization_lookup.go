@@ -6,8 +6,8 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -19,7 +19,7 @@ func agentPrincipalReference(principal principalmodel.Principal) agentmodel.Agen
 	return agentmodel.AgentPrincipalReference{UserID: principal.UserID, RoleKey: principal.RoleKey, WorkspaceID: principal.WorkspaceID, AuthorizationRevision: principal.AuthorizationRevision}
 }
 
-func findAgentServicePrincipal(snapshot metadatamodel.ApplicationSchemaSnapshot, key string) (agentmodel.AgentServicePrincipalBinding, bool) {
+func findAgentServicePrincipal(snapshot appschemamodel.ApplicationSchemaSnapshot, key string) (agentmodel.AgentServicePrincipalBinding, bool) {
 	key = strings.TrimSpace(key)
 	for _, binding := range snapshot.AgentServicePrincipals {
 		if strings.TrimSpace(binding.Key) == key {

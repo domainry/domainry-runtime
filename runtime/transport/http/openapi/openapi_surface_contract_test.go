@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
 )
 
 func TestOpenAPIOperationsPublishSurfaceAndAudience(t *testing.T) {
-	spec := Build(metadatamodel.ApplicationSchemaSnapshot{})
+	spec := Build(appschemamodel.ApplicationSchemaSnapshot{})
 	paths, ok := spec["paths"].(map[string]any)
 	if !ok {
 		t.Fatal("OpenAPI paths are missing")

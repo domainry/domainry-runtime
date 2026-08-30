@@ -1,6 +1,6 @@
 package openapi
 
-import metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+import appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 )
 
 func TestOpenAPIOperationsShareSecurityResponseAndOperationIDContract(t *testing.T) {
-	spec := Build(metadatamodel.ApplicationSchemaSnapshot{})
+	spec := Build(appschemamodel.ApplicationSchemaSnapshot{})
 	components, _ := spec["components"].(map[string]any)
 	schemas, _ := components["schemas"].(map[string]any)
 	walkOpenAPIRefs(t, spec, schemas)

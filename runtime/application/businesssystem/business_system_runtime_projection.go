@@ -1,6 +1,6 @@
 package businesssystem
 
-import metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+import appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 import deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 
 // This file projects Runtime execution state into the business-system snapshot.
@@ -36,7 +36,7 @@ type businessRuntimeProjectionPorts struct {
 	integrationConnections func(context.Context, principalmodel.Principal) ([]integrationmodel.IntegrationConnection, error)
 	integrationOutbox      func(context.Context, string, string, int, principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error)
 	schedulerDefinitions   func(context.Context, principalmodel.Principal) ([]recordmodel.Record, error)
-	schemaForPrincipal     func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
+	schemaForPrincipal     func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
 	schemaObjectMap        func(context.Context) map[string]definitionmodel.ObjectSchema
 	listRecords            func(context.Context, string, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error)
 	idempotencyStatus      func(context.Context, string) (deploymentmodel.IdempotencyOperationalStatus, error)
@@ -50,7 +50,7 @@ type BusinessSystemRuntimeProjectionDependencies struct {
 	IntegrationConnections func(context.Context, principalmodel.Principal) ([]integrationmodel.IntegrationConnection, error)
 	IntegrationOutbox      func(context.Context, string, string, int, principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error)
 	SchedulerDefinitions   func(context.Context, principalmodel.Principal) ([]recordmodel.Record, error)
-	SchemaForPrincipal     func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
+	SchemaForPrincipal     func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
 	SchemaObjectMap        func(context.Context) map[string]definitionmodel.ObjectSchema
 	ListRecords            func(context.Context, string, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error)
 	IdempotencyStatus      func(context.Context, string) (deploymentmodel.IdempotencyOperationalStatus, error)

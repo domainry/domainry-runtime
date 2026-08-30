@@ -10,11 +10,11 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
 	"github.com/domainry/domainry-runtime/runtime/platform/resilience"
@@ -262,8 +262,8 @@ func TestIntegrationRuntimeOrchestrationAndMetricsHelpers(t *testing.T) {
 	if references, err := service.IntegrationConnectionReferences(t.Context(), "connection", principal); err != nil || references != nil {
 		t.Fatalf("nil schema references=%#v err=%v", references, err)
 	}
-	service.schema = func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
-		return metadatamodel.ApplicationSchemaSnapshot{
+	service.schema = func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
+		return appschemamodel.ApplicationSchemaSnapshot{
 			Actions:         []definitionmodel.ActionSchema{{Key: "action"}},
 			AutomationRules: []automationmodel.AutomationRuleSchema{{Key: "automation", Instructions: []automationmodel.AutomationInstructionSchema{{ConnectionKey: "connection"}}}},
 			Workflows:       []definitionmodel.WorkflowSchema{{Key: "workflow", Action: map[string]any{"connection_key": "connection"}}},

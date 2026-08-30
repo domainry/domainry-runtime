@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -76,7 +76,7 @@ func TestRecordTimerRetryPolicyDefaultsValidationAndBackoff(t *testing.T) {
 func TestFailRecordTimerReleasesLeaseRetriesAndFencesStaleWorker(t *testing.T) {
 	now := time.Date(2026, 7, 21, 9, 0, 0, 0, time.UTC)
 	object := definitionmodel.ObjectSchema{Key: "record_timer"}
-	schema := schedulerSchemaStub{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{object, {Key: "record_timer_event"}}}}
+	schema := schedulerSchemaStub{snapshot: appschemamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{object, {Key: "record_timer_event"}}}}
 	var saved recordmodel.Record
 	var conditions map[string]any
 	repository := &schedulerRepositoryFake{commit: func(_ context.Context, workspaceID string, commits []transactionmodel.RecordMutationCommit) error {

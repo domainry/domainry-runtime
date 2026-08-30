@@ -6,6 +6,7 @@ import (
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
+	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
@@ -14,14 +15,13 @@ import (
 	deployment "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	businessintegration "github.com/domainry/domainry-runtime/runtime/application/integration"
 	lifecycleapplication "github.com/domainry/domainry-runtime/runtime/application/lifecycle"
-	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	reportapplication "github.com/domainry/domainry-runtime/runtime/application/report"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	surfacecontextbusiness "github.com/domainry/domainry-runtime/runtime/application/surfacecontext"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -32,7 +32,7 @@ type RuntimeApplications struct {
 	AgentTaskWorker       *agentapplication.AgentTaskWorker
 	Records               *recordapplication.RecordApplicationService
 	Workflows             *workflowapplication.WorkflowApplicationService
-	ApplicationSchema     *metadataapplication.ApplicationSchemaService
+	ApplicationSchema     *appschemaapplication.ApplicationSchemaApplicationService
 	Automations           *automationapplication.AutomationApplicationService
 	Audit                 *auditapplication.AuditApplicationService
 	Actions               *actionapplication.ActionApplicationService
@@ -41,7 +41,7 @@ type RuntimeApplications struct {
 	BusinessSystem        *businesssystemapplication.BusinessSystemApplicationService
 	Integrations          *businessintegration.IntegrationApplicationService
 	Lifecycle             *lifecycleapplication.LifecycleApplicationService
-	Schema                *metadataapplication.MetadataSchemaApplicationService
+	Schema                *appschemaapplication.ApplicationSchemaQueryApplicationService
 	FrontendCapabilities  *deployment.DeploymentFrontendCapabilityApplicationService
 	AuthoringCapabilities *capabilityapplication.CapabilityAuthoringApplicationService
 	BusinessReferences    *changeplanapplication.ChangePlanReferenceApplicationService
@@ -101,16 +101,16 @@ func (s *RuntimeServices) Applications() RuntimeApplications {
 	return s.applications
 }
 
-func (s *RuntimeServices) Schema() metadatamodel.ApplicationSchemaSnapshot {
+func (s *RuntimeServices) Schema() appschemamodel.ApplicationSchemaSnapshot {
 	if s == nil || s.schema == nil {
-		return metadatamodel.ApplicationSchemaSnapshot{}
+		return appschemamodel.ApplicationSchemaSnapshot{}
 	}
 	return s.schema.Schema()
 }
 
-func (s *RuntimeServices) SchemaForPrincipal(ctx context.Context, principal principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+func (s *RuntimeServices) SchemaForPrincipal(ctx context.Context, principal principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 	if s == nil || s.schema == nil {
-		return metadatamodel.ApplicationSchemaSnapshot{}
+		return appschemamodel.ApplicationSchemaSnapshot{}
 	}
 	return s.schema.SchemaForPrincipal(ctx, principal)
 }

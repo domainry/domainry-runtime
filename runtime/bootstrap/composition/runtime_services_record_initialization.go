@@ -9,8 +9,8 @@ import (
 	recordruntime "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	reportapplication "github.com/domainry/domainry-runtime/runtime/application/report"
 	surfacecontextbusiness "github.com/domainry/domainry-runtime/runtime/application/surfacecontext"
+	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatabusiness "github.com/domainry/domainry-runtime/runtime/domain/metadata/service"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordexecutionruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
@@ -71,7 +71,7 @@ func initializeRecordApplications(s *runtimeAssembly) {
 	reportRecords := reportapplication.NewReportRecordAdapter(s.recordApplicationService, s.recordRepo, s.reportRecordSchemaMap)
 	reportDomain := reportbusiness.NewReportDomainService(reportbusiness.ReportDependencies{
 		Reports: func(_ context.Context, principal principalmodel.Principal) []reportmodel.ReportSchema {
-			return metadatabusiness.SnapshotForPrincipal(s.Schema(), principal).Reports
+			return appschemaservice.SnapshotForPrincipal(s.Schema(), principal).Reports
 		},
 		Access: reportRecords, Records: reportRecords, DatasetRows: s.reportDatasetRows, ObjectSQL: s.reportObjectSQL,
 		Snapshots: s.reportSnapshots, SnapshotSources: s.reportSnapshotSources,

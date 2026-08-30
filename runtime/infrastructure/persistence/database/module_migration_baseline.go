@@ -33,7 +33,7 @@ func (s *RuntimeStore) proveModuleMigrationBaseline(ctx context.Context, baselin
 	}
 	found := 0
 	for _, expected := range baseline.Tables {
-		if !moduleMigrationIdentityPattern.MatchString(expected.Name) || len(expected.Columns) == 0 {
+		if !moduleSchemaIdentityPattern.MatchString(expected.Name) || len(expected.Columns) == 0 {
 			return false, fmt.Errorf("invalid baseline table %q", expected.Name)
 		}
 		actual, exists, err := s.inspectModuleSchemaTable(ctx, expected.Name)
@@ -61,13 +61,20 @@ func compareModuleSchemaTable(expected modulehost.SchemaTable, actual moduleSche
 	if len(actual.columns) != len(expected.Columns) {
 		return fmt.Errorf("columns=%d want=%d", len(actual.columns), len(expected.Columns))
 	}
-	for position, want := range expected.Columns {
-		if !moduleMigrationIdentityPattern.MatchString(want.Name) {
+	columns := make(map[string]moduleSchemaColumn, len(actual.columns))
+	for _, column := range actual.columns {
+		columns[column.name] = column
+	}
+	for _, want := range expected.Columns {
+		if !moduleSchemaIdentityPattern.MatchString(want.Name) {
 			return fmt.Errorf("invalid expected column %q", want.Name)
 		}
-		got := actual.columns[position]
+		got, found := columns[want.Name]
+		if !found {
+			return fmt.Errorf("column %s is missing", want.Name)
+		}
 		if got.name != want.Name || normalizeModuleColumnType(got.physical) != normalizeModuleColumnType(want.Type) || got.nullable != want.Nullable || got.primaryKey != want.PrimaryKey {
-			return fmt.Errorf("column[%d]=%s %s nullable=%t primary=%t, want %s %s nullable=%t primary=%t", position, got.name, got.physical, got.nullable, got.primaryKey, want.Name, want.Type, want.Nullable, want.PrimaryKey)
+			return fmt.Errorf("column %s=%s nullable=%t primary=%t, want %s nullable=%t primary=%t", got.name, got.physical, got.nullable, got.primaryKey, want.Type, want.Nullable, want.PrimaryKey)
 		}
 	}
 	if len(actual.indexes) != len(expected.Indexes) {

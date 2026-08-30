@@ -9,9 +9,9 @@ import (
 
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	schedulerprojection "github.com/domainry/domainry-runtime/runtime/domain/scheduler/projection"
@@ -20,10 +20,10 @@ import (
 )
 
 type gymTimerFixtureSchema struct {
-	snapshot metadatamodel.ApplicationSchemaSnapshot
+	snapshot appschemamodel.ApplicationSchemaSnapshot
 }
 
-func (s gymTimerFixtureSchema) SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+func (s gymTimerFixtureSchema) SchemaForPrincipal(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 	return s.snapshot
 }
 
@@ -116,7 +116,7 @@ func gymTimerFixtureService(t *testing.T) (*schedulerapplication.SchedulerApplic
 		objectMap[object.Key] = object
 	}
 	runtime := &gymTimerFixtureRuntime{repository: repository, objects: objectMap, alerts: map[string]int{}}
-	service := schedulerapplication.NewSchedulerApplicationServiceWithWorker(gymTimerFixtureSchema{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: objects}}, runtime, repository, nil, workerplatform.Dependencies{WorkerID: workerplatform.WorkerID("gym-timer-fixture")})
+	service := schedulerapplication.NewSchedulerApplicationServiceWithWorker(gymTimerFixtureSchema{snapshot: appschemamodel.ApplicationSchemaSnapshot{Objects: objects}}, runtime, repository, nil, workerplatform.Dependencies{WorkerID: workerplatform.WorkerID("gym-timer-fixture")})
 	service.ConfigureWorker(schedulerapplication.WorkerConfig{Enabled: true, BatchSize: 100, LeaseTTL: time.Minute})
 	return service, repository, runtime, objects
 }

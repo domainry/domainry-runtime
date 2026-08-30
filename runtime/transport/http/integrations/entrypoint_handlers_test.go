@@ -14,8 +14,8 @@ import (
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -96,8 +96,8 @@ func newIntegrationEntrypointHTTPApplication(t *testing.T) (*database.RuntimeSto
 			}
 			return principalmodel.Principal{}
 		},
-		Schema: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
-			return metadatamodel.ApplicationSchemaSnapshot{Agents: []agentmodel.AgentSchema{{Key: "assistant", Name: "Assistant", Tools: []string{"readRecord"}}}}
+		Schema: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
+			return appschemamodel.ApplicationSchemaSnapshot{Agents: []agentmodel.AgentSchema{{Key: "assistant", Name: "Assistant", Tools: []string{"readRecord"}}}}
 		},
 		InvokeAction: func(_ context.Context, invocation actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error) {
 			return actionmodel.ActionInvocationResult{Record: &actionmodel.ActionResult{ActionKey: invocation.ActionKey, ObjectKey: invocation.ObjectKey, RecordID: invocation.RecordID, Message: "ok"}}, nil

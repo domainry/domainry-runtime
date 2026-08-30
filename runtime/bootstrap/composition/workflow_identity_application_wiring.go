@@ -9,8 +9,8 @@ import (
 
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
+	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatabusiness "github.com/domainry/domainry-runtime/runtime/domain/metadata/service"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
@@ -21,7 +21,7 @@ func (p runtimeWorkflowSchemaProvider) WorkflowSchemaSnapshot(ctx context.Contex
 	}
 	snapshot := p.records.Schema()
 	if principal.Known {
-		snapshot = metadatabusiness.SnapshotForPrincipal(snapshot, principal)
+		snapshot = appschemaservice.SnapshotForPrincipal(snapshot, principal)
 	}
 	if p.records.actionService != nil {
 		executable := make(map[string]definitionmodel.ActionSchema)

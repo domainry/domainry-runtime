@@ -13,15 +13,15 @@ import (
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	actionservice "github.com/domainry/domainry-runtime/runtime/domain/action/service"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 )
 
 func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthoringSchemaProvider, policy recordQueryPolicy, metadata interface {
-	ValidateMetadataDefinition(context.Context, string, string, metadatamodel.MetadataDefinitionUpsertRequest, principalmodel.Principal) (metadatamodel.MetadataDefinitionValidationResult, error)
+	ValidateApplicationDefinition(context.Context, string, string, appschemamodel.ApplicationDefinitionUpsertRequest, principalmodel.Principal) (appschemamodel.ApplicationDefinitionValidationResult, error)
 }, handlers *runtimeext.BusinessHandlerRegistry, audit func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any)) *actionapplication.ActionApplicationService {
 	_ = metadata
 	pipelineTransitions := newPipelineTransitionApplicationService(records)
@@ -61,14 +61,14 @@ func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthor
 		Catalog:          catalog,
 		SystemOperations: systemExecutor,
 		BusinessHandlers: actionapplication.NewBusinessHandlerExecutor(actionapplication.BusinessHandlerExecutionDependencies{
-			RuntimeRevision:  records.actionRuntimeRevision,
-			ProjectRevision:  records.actionProjectRevision,
-			MetadataRevision: records.actionMetadataRevision,
+			RuntimeRevision:           records.actionRuntimeRevision,
+			ProjectRevision:           records.actionProjectRevision,
+			ApplicationSchemaRevision: records.actionMetadataRevision,
 			ResolveMetadataRevision: func(ctx context.Context, _ principalmodel.Principal) (string, error) {
-				if records.metadataRepo == nil {
+				if records.applicationSchemaRepo == nil {
 					return records.actionMetadataRevision, nil
 				}
-				return records.metadataRepo.SnapshotRevision(ctx, principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "resolve Action execution identity"))
+				return records.applicationSchemaRepo.SnapshotRevision(ctx, principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "resolve Action execution identity"))
 			},
 			GetRecord:             records.recordApplicationService.GetRecordForAction,
 			GetRecordForUpdate:    records.recordApplicationService.GetRecordForUpdateForAction,

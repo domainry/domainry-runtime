@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"net/http"
 	"os"
 	"os/signal"
@@ -85,7 +86,7 @@ type serverRunDependencies struct {
 	stat                 func(string) (os.FileInfo, error)
 	readFile             func(string) ([]byte, error)
 	prepareDatabase      func(context.Context, config.Config) (*bootstrap.ProjectDatabase, error)
-	newRuntime           func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, partysdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, *bootstrap.ProjectDatabase) runtimeProcess
+	newRuntime           func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, partysdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, *bootstrap.ProjectDatabase) runtimeProcess
 	listenAndServe       func(*http.Server) error
 	shutdown             func(context.Context, *http.Server) error
 }
@@ -101,8 +102,8 @@ func defaultServerRunDependencies() serverRunDependencies {
 		stat:                 os.Stat,
 		readFile:             os.ReadFile,
 		prepareDatabase:      bootstrap.PrepareProjectDatabase,
-		newRuntime: func(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, monitoringFactory monitoringsdk.Factory, schedulerFactory schedulersdk.Factory, dataExchangeFactory dataexchangesdk.Factory, database *bootstrap.ProjectDatabase) runtimeProcess {
-			return bootstrapRuntimeProcess{Runtime: bootstrap.NewVerifiedProjectWithOwnerFactoriesAndDatabase(ctx, cfg, handlers, connectors, identity, evidence, binding, notificationFactory, partyFactory, monitoringFactory, schedulerFactory, dataExchangeFactory, database)}
+		newRuntime: func(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, monitoringFactory monitoringsdk.Factory, schedulerFactory schedulersdk.Factory, dataExchangeFactory dataexchangesdk.Factory, agentFactory agentsdk.Factory, database *bootstrap.ProjectDatabase) runtimeProcess {
+			return bootstrapRuntimeProcess{Runtime: bootstrap.NewVerifiedProjectWithOwnerFactoriesAndDatabase(ctx, cfg, handlers, connectors, identity, evidence, binding, notificationFactory, partyFactory, monitoringFactory, schedulerFactory, dataExchangeFactory, database, agentFactory)}
 		},
 		listenAndServe: func(server *http.Server) error { return server.ListenAndServe() },
 		shutdown:       func(ctx context.Context, server *http.Server) error { return server.Shutdown(ctx) },
@@ -339,6 +340,10 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	if dataExchangeFactory == nil {
 		return fmt.Errorf("configure Data Exchange factory: generated project composition did not supply an SDK Factory")
 	}
+	agentFactory := options.AgentFactory
+	if agentFactory == nil {
+		return fmt.Errorf("configure Agent factory: generated project composition did not supply an SDK Factory")
+	}
 	for _, entry := range configSnapshot.StartupReport() {
 		zap.L().Info("Runtime configuration", zap.String("name", entry.Name), zap.String("source", entry.Source), zap.String("version", entry.Version), zap.Bool("redacted", entry.Redacted))
 	}
@@ -418,7 +423,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 			if manifest.SourceBlueprintID == provision.DirectAuthoringSourceID && len(manifest.Objects) == 0 {
 				runtimeConfig.AllowEmptyAuthoringManifest = true
 			}
-			runtime := dependencies.newRuntime(lifecycleCtx, runtimeConfig, businessHandlers, connectorProviders, releaseIdentity, artifactEvidence, identityBinding, notificationFactory, partyFactory, monitoringFactory, schedulerFactory, dataExchangeFactory, projectDatabase)
+			runtime := dependencies.newRuntime(lifecycleCtx, runtimeConfig, businessHandlers, connectorProviders, releaseIdentity, artifactEvidence, identityBinding, notificationFactory, partyFactory, monitoringFactory, schedulerFactory, dataExchangeFactory, agentFactory, projectDatabase)
 			if runtime == nil {
 				return nil, errors.New("Runtime bootstrap returned no process")
 			}
@@ -550,7 +555,7 @@ func validateDomainSDKTarget(compiled DomainSDKIdentity, target *manifestmodel.G
 		{"contract_version", compiled.ContractVersion, target.ContractVersion},
 		{"contract_sha256", compiled.ContractSHA256, target.ContractSHA256},
 		{"generator_version", compiled.GeneratorVersion, target.GeneratorVersion},
-		{"metadata_snapshot_sha256", compiled.MetadataSnapshotSHA256, target.MetadataSnapshotSHA256},
+		{"metadata_snapshot_sha256", compiled.ApplicationSchemaSnapshotSHA256, target.ApplicationSchemaSnapshotSHA256},
 		{"runtimeext_contract_sha256", compiled.RuntimeextContractSHA256, target.RuntimeextContractSHA256},
 		{"build_constraint", compiled.BuildConstraint, target.BuildConstraint},
 		{"artifact_sha256", compiled.ArtifactSHA256, target.ArtifactSHA256},

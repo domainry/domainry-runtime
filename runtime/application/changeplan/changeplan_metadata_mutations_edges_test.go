@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -16,25 +16,25 @@ type changePlanRuntimeFake struct {
 	reloadHash  string
 	reloadErr   error
 	validated   []string
-	candidate   []metadatamodel.MetadataDefinitionMutation
+	candidate   []appschemamodel.ApplicationDefinitionMutation
 }
 
-func (f *changePlanRuntimeFake) ValidateMetadataDefinitionPayload(_ context.Context, resourceType, resourceKey string, request metadatamodel.MetadataDefinitionUpsertRequest) (metadatamodel.MetadataDefinitionUpsertRequest, error) {
+func (f *changePlanRuntimeFake) ValidateApplicationDefinitionPayload(_ context.Context, resourceType, resourceKey string, request appschemamodel.ApplicationDefinitionUpsertRequest) (appschemamodel.ApplicationDefinitionUpsertRequest, error) {
 	f.validated = append(f.validated, resourceType+":"+resourceKey)
 	request.Name = "normalized-" + request.Name
 	return request, f.validateErr
 }
 
-func (f *changePlanRuntimeFake) CanonicalizeMetadataCandidate(_ context.Context, mutations []metadatamodel.MetadataDefinitionMutation) ([]metadatamodel.MetadataDefinitionMutation, error) {
+func (f *changePlanRuntimeFake) CanonicalizeMetadataCandidate(_ context.Context, mutations []appschemamodel.ApplicationDefinitionMutation) ([]appschemamodel.ApplicationDefinitionMutation, error) {
 	f.validated = append(f.validated, "candidate")
-	f.candidate = append([]metadatamodel.MetadataDefinitionMutation(nil), mutations...)
+	f.candidate = append([]appschemamodel.ApplicationDefinitionMutation(nil), mutations...)
 	if f.validateErr != nil {
 		return nil, f.validateErr
 	}
 	return mutations, nil
 }
 
-func (f *changePlanRuntimeFake) ReloadMetadata(context.Context, principalmodel.Principal) (string, error) {
+func (f *changePlanRuntimeFake) ReloadApplicationSchema(context.Context, principalmodel.Principal) (string, error) {
 	return f.reloadHash, f.reloadErr
 }
 

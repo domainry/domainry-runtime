@@ -3,12 +3,12 @@ package runtime
 import (
 	"testing"
 
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 )
 
 func TestRuntimeIdentityCatalogPublishesUniversalFactForPermissionOnlyResource(t *testing.T) {
-	snapshot := metadatamodel.ApplicationSchemaSnapshot{
+	snapshot := appschemamodel.ApplicationSchemaSnapshot{
 		EntryPoints: []definitionmodel.EntryPointSchema{{RequiredPermissions: []string{"workflow.task.act"}}},
 	}
 	catalog := runtimeIdentityCatalog(snapshot, "default", "runtime", nil)

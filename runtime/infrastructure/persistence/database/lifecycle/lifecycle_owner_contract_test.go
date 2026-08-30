@@ -12,7 +12,7 @@ import (
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	agentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/agent"
-	metadatapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata"
+	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 )
 
 func TestDefaultOwnerExecutorPoliciesHaveContractCoverage(t *testing.T) {
@@ -142,7 +142,7 @@ func TestReportOwnerCleanupExpiresThenPurgesInReferenceOrder(t *testing.T) {
 		{Key: "download_task", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}, {Key: "report_export_audit", Type: "text"}}},
 	}
 	manifest := manifestmodel.ManifestSchema{TemplateID: "report-lifecycle", Version: "1", Name: "Report lifecycle", Objects: objects}
-	if err := metadatapersistence.NewMetadataStore(store).SyncManifest(t.Context(), principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "report lifecycle test"), manifest); err != nil {
+	if err := appschemapersistence.NewApplicationSchemaStore(store).SyncManifest(t.Context(), principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "report lifecycle test"), manifest); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)

@@ -3,7 +3,7 @@ package schema
 import "context"
 
 func EnsureEvidenceSchema(ctx context.Context, s Store) error {
-	text := s.MetadataIDColumnType()
+	text := s.ApplicationSchemaIDColumnType()
 	types := s.RuntimeProfile().EvidenceSchemaTypes(text)
 	largeText, idempotencyScopeText := types.LargeText, types.IdempotencyScope
 	retirementEngineText, retirementNamespaceText, retirementKindText, retirementObjectText := types.RetirementEngine, types.RetirementNamespace, types.RetirementKind, types.RetirementObject

@@ -9,7 +9,7 @@ import (
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent"
 	agentruntime "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -73,7 +73,7 @@ func TestAgentProposalLifecycleResolverHandlesMissingTaskContextAndOwner(t *test
 }
 
 func TestAgentGuardedWriteContractsProjectAllFields(t *testing.T) {
-	contracts := agentGuardedWriteContracts([]metadatamodel.MetadataGuardedWriteContract{{ObjectKey: "customer", Operation: "update", ActionKey: "update_customer", Endpoint: "/actions/update", RequiresRecord: true}})
+	contracts := agentGuardedWriteContracts([]appschemamodel.ApplicationSchemaGuardedWriteContract{{ObjectKey: "customer", Operation: "update", ActionKey: "update_customer", Endpoint: "/actions/update", RequiresRecord: true}})
 	if len(contracts) != 1 || contracts[0].ObjectKey != "customer" || contracts[0].Operation != "update" || contracts[0].ActionKey != "update_customer" || contracts[0].Endpoint != "/actions/update" || !contracts[0].RequiresRecord {
 		t.Fatalf("contracts=%+v", contracts)
 	}

@@ -30,14 +30,6 @@ func BusinessRuntimeAPIContractHash() string {
 	return capabilitybusiness.RuntimeAPIContractHash()
 }
 
-type AgentHTTPConfig struct {
-	BaseURL            string
-	APIKey             string
-	AgentID            int
-	Timeout            time.Duration
-	RateLimitPerMinute int
-}
-
 type httpRouteRegistrar interface {
 	RegisterRoutes(*http.ServeMux)
 }
@@ -60,7 +52,7 @@ type HTTPRouter struct {
 	capabilityHTTP          httpRouteRegistrar
 	changePlanHTTP          httpRouteRegistrar
 	integrationHTTP         httpRouteRegistrar
-	metadataHTTP            httpRouteRegistrar
+	applicationSchemaHTTP   httpRouteRegistrar
 	notificationHTTP        httpRouteRegistrar
 	partyHTTP               httpRouteRegistrar
 	identityAuthorization   identitysdk.PrincipalResolver
@@ -207,7 +199,7 @@ func (s *HTTPRouter) Routes() http.Handler {
 	s.reportHTTP.RegisterRoutes(mux)
 	runOptionalRouteRegistrar(s.businessEventHTTP != nil, func() { s.businessEventHTTP.RegisterRoutes(mux) })
 	runOptionalRouteRegistrar(s.agentDialogHTTP != nil, func() { s.agentDialogHTTP.RegisterRoutes(mux) })
-	s.metadataHTTP.RegisterRoutes(mux)
+	s.applicationSchemaHTTP.RegisterRoutes(mux)
 	s.capabilityHTTP.RegisterRoutes(mux)
 	s.frontendCapabilityHTTP.RegisterRoutes(mux)
 	s.businessSystemHTTP.RegisterRoutes(mux)

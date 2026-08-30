@@ -1,7 +1,6 @@
 package record
 
 import (
-	auditsdk "github.com/domainry/domainry-audit-sdk"
 	auditmoduleimpl "github.com/domainry/domainry-audit/module"
 	ormbuilder "github.com/domainry/domainry-orm/builder"
 
@@ -73,7 +72,7 @@ func (r RecordStore) insertAuditEventTx(ctx context.Context, tx TransactionExecu
 	if strings.TrimSpace(event.ID) == "" {
 		return fmt.Errorf("mutation audit requires deterministic id")
 	}
-	err := auditmoduleimpl.AppendPreparedWithin(ctx, auditsdk.DatabaseHandle{Pool: r.store.DB(), Driver: r.store.Driver(), Schema: r.store.DatabaseSchema()}, runtimeauditmodule.NewTransaction(tx), event)
+	err := auditmoduleimpl.AppendPreparedWithin(ctx, r.store.RuntimeRenderer(), runtimeauditmodule.NewTransaction(tx), event)
 	if err != nil {
 		return fmt.Errorf("insert mutation audit: %w", database.MutationConstraintError(err, "audit_event", event.ID, mutation.MutationConflictIdempotency))
 	}

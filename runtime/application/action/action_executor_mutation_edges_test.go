@@ -20,7 +20,7 @@ func actionMutationEdgePlan(t *testing.T, operation, objectKey, recordID string)
 	t.Helper()
 	mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{
 		WorkspaceID: "workspace", Source: transactionmodel.MutationSourceAction,
-		ActionKey: "action", CorrelationID: "correlation", MetadataRevision: "metadata",
+		ActionKey: "action", CorrelationID: "correlation", ApplicationSchemaRevision: "metadata",
 	})
 	if err != nil {
 		t.Fatal(err)

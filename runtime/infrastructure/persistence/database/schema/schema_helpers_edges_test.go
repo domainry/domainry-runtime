@@ -28,8 +28,8 @@ func (schemaHelperStore) EnsureRuntimeColumn(context.Context, string, string, st
 func (schemaHelperStore) RuntimeTableExists(context.Context, string) (bool, error) {
 	return false, nil
 }
-func (schemaHelperStore) MetadataIDColumnType() string       { return "TEXT" }
-func (schemaHelperStore) LocalizedTextKeyColumnType() string { return "TEXT" }
+func (schemaHelperStore) ApplicationSchemaIDColumnType() string { return "TEXT" }
+func (schemaHelperStore) LocalizedTextKeyColumnType() string    { return "TEXT" }
 func (schemaHelperStore) RuntimeColumnDefinition(value string) string {
 	return "normalized:" + value
 }

@@ -7,19 +7,19 @@ import (
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 type changePlanMetadataFake struct {
-	definitions []metadatamodel.MetadataDefinition
+	definitions []appschemamodel.ApplicationDefinition
 	err         error
-	mutations   []metadatamodel.MetadataDefinitionMutation
+	mutations   []appschemamodel.ApplicationDefinitionMutation
 	publication *changeplanmodel.BusinessChangePlanPublication
 }
 
-func (f *changePlanMetadataFake) ApplyDefinitionMutations(_ context.Context, _ principalmodel.SystemScope, mutations []metadatamodel.MetadataDefinitionMutation, _ []auditmodel.AuditEvent, publication *changeplanmodel.BusinessChangePlanPublication) ([]metadatamodel.MetadataDefinition, error) {
+func (f *changePlanMetadataFake) ApplyDefinitionMutations(_ context.Context, _ principalmodel.SystemScope, mutations []appschemamodel.ApplicationDefinitionMutation, _ []auditmodel.AuditEvent, publication *changeplanmodel.BusinessChangePlanPublication) ([]appschemamodel.ApplicationDefinition, error) {
 	f.mutations, f.publication = mutations, publication
 	return f.definitions, f.err
 }
@@ -28,7 +28,7 @@ func TestChangePlanApplySuccessAndPersistenceFailures(t *testing.T) {
 	snapshot := changePlanTestSnapshot()
 	graph := ReferenceGraph{Version: BusinessReferenceGraphVersion, Hash: "graph-hash"}
 	plan := changePlanTestPlan(snapshot, graph)
-	metadata := &changePlanMetadataFake{definitions: []metadatamodel.MetadataDefinition{{ResourceType: "field", ResourceKey: "customer.segment"}}}
+	metadata := &changePlanMetadataFake{definitions: []appschemamodel.ApplicationDefinition{{ResourceType: "field", ResourceKey: "customer.segment"}}}
 	runtime := &changePlanRuntimeFake{reloadHash: "schema-hash"}
 	repository := &changePlanDraftRepositoryFake{}
 	audit := &changePlanAuditFake{}
@@ -43,7 +43,7 @@ func TestChangePlanApplySuccessAndPersistenceFailures(t *testing.T) {
 	}
 
 	wantErr := errors.New("persistence failed")
-	metadata.err = &metadatamodel.MetadataDefinitionConflictError{ResourceType: "field", ResourceKey: "customer.segment"}
+	metadata.err = &appschemamodel.ApplicationDefinitionConflictError{ResourceType: "field", ResourceKey: "customer.segment"}
 	if _, err := service.Apply(t.Context(), plan, plan.PlanID, snapshot, graph, changePlanAdmin()); apperror.CodeOf(err) != "backend.metadata.definition_version_conflict" {
 		t.Fatalf("metadata version conflict = %v", err)
 	}
@@ -109,7 +109,7 @@ func TestChangePlanApplicationErrorAndAuditHelpers(t *testing.T) {
 	if wrapMetadataError(appErr) != appErr || ErrorCodeOf(appErr) != "denied" {
 		t.Fatal("app error was not preserved")
 	}
-	version := &metadatamodel.MetadataDefinitionConflictError{ResourceType: "field", ResourceKey: "order.status", ExpectedHash: "old", CurrentHash: "new"}
+	version := &appschemamodel.ApplicationDefinitionConflictError{ResourceType: "field", ResourceKey: "order.status", ExpectedHash: "old", CurrentHash: "new"}
 	if apperror.CodeOf(wrapMetadataError(version)) != "backend.metadata.definition_version_conflict" {
 		t.Fatalf("version conflict = %v", wrapMetadataError(version))
 	}

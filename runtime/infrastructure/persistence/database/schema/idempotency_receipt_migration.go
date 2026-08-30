@@ -47,7 +47,7 @@ func prepareIdempotencyReceiptMigrations(ctx context.Context, store Store, specs
 }
 
 func ensureIdempotencyMigrationColumns(ctx context.Context, store Store, spec idempotencyReceiptMigrationSpec) error {
-	text := store.MetadataIDColumnType() + " NOT NULL DEFAULT ''"
+	text := store.ApplicationSchemaIDColumnType() + " NOT NULL DEFAULT ''"
 	for _, column := range []string{"workspace_id", "idempotency_key", "request_fingerprint", "status"} {
 		if err := store.EnsureRuntimeColumn(ctx, spec.table, column, text); err != nil {
 			return fmt.Errorf("prepare idempotency migration column %s.%s: %w", spec.table, column, err)

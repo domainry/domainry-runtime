@@ -4,12 +4,12 @@ import (
 	"strings"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 )
 
 func MergeInstalledEnvelope(persisted, installed manifestmodel.ManifestSchema, publishedTemplates []notificationmodel.NotificationTemplate) manifestmodel.ManifestSchema {
@@ -39,8 +39,8 @@ func MergeInstalledEnvelope(persisted, installed manifestmodel.ManifestSchema, p
 	return persisted
 }
 
-func MergeDictionaries(existing, installed []metadatamodel.DictionarySchema) []metadatamodel.DictionarySchema {
-	result := append([]metadatamodel.DictionarySchema(nil), existing...)
+func MergeDictionaries(existing, installed []appschemamodel.DictionarySchema) []appschemamodel.DictionarySchema {
+	result := append([]appschemamodel.DictionarySchema(nil), existing...)
 	seen := map[string]bool{}
 	for _, value := range result {
 		seen[strings.TrimSpace(value.Key)] = true

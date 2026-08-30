@@ -17,15 +17,15 @@ import (
 
 	"strings"
 
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )
 
-func (s *ChangePlanApplicationService) metadataChangePlanMutations(ctx context.Context, plan changeplanmodel.BusinessSystemChangePlan, principal principalmodel.Principal) ([]metadatamodel.MetadataDefinitionMutation, []auditmodel.AuditEvent, error) {
+func (s *ChangePlanApplicationService) metadataChangePlanMutations(ctx context.Context, plan changeplanmodel.BusinessSystemChangePlan, principal principalmodel.Principal) ([]appschemamodel.ApplicationDefinitionMutation, []auditmodel.AuditEvent, error) {
 	items := map[string]changeplanmodel.BusinessSystemChangeItem{}
 	for _, item := range plan.Items {
 		items[item.ItemID] = item
 	}
-	mutations := []metadatamodel.MetadataDefinitionMutation{}
+	mutations := []appschemamodel.ApplicationDefinitionMutation{}
 	audits := []auditmodel.AuditEvent{}
 	for _, itemID := range plan.ReleaseOrder {
 		item := items[itemID]
@@ -37,7 +37,7 @@ func (s *ChangePlanApplicationService) metadataChangePlanMutations(ctx context.C
 			return nil, nil, badRequest("backend.change_plan.apply_resource_unsupported", "item_id", item.ItemID, "resource_type", resourceType, "resource_key", item.ResourceKey)
 		}
 		request := metadataChangePlanRequest(plan, item)
-		mutations = append(mutations, metadatamodel.MetadataDefinitionMutation{Operation: item.Operation, ResourceType: resourceType, ResourceKey: item.ResourceKey, Request: request})
+		mutations = append(mutations, appschemamodel.ApplicationDefinitionMutation{Operation: item.Operation, ResourceType: resourceType, ResourceKey: item.ResourceKey, Request: request})
 		audits = append(audits, buildBusinessChangePlanAudit(plan, item, principal))
 	}
 	if s.runtime == nil {
@@ -50,7 +50,7 @@ func (s *ChangePlanApplicationService) metadataChangePlanMutations(ctx context.C
 	return mutations, audits, nil
 }
 
-func metadataChangePlanRequest(plan changeplanmodel.BusinessSystemChangePlan, item changeplanmodel.BusinessSystemChangeItem) metadatamodel.MetadataDefinitionUpsertRequest {
+func metadataChangePlanRequest(plan changeplanmodel.BusinessSystemChangePlan, item changeplanmodel.BusinessSystemChangeItem) appschemamodel.ApplicationDefinitionUpsertRequest {
 	expected := item.ExpectedResourceHash
 	if item.Operation == "create" {
 		expected = ""
@@ -61,7 +61,7 @@ func metadataChangePlanRequest(plan changeplanmodel.BusinessSystemChangePlan, it
 		objectKey = strings.SplitN(item.ResourceKey, ".", 2)[0]
 	}
 	name := strings.TrimSpace(stringValue(after["name"]))
-	return metadatamodel.MetadataDefinitionUpsertRequest{ObjectKey: objectKey, Name: name, SourceKind: "builder", SourceID: plan.PlanID, ExpectedSchemaHash: &expected, Payload: append(json.RawMessage(nil), item.After...)}
+	return appschemamodel.ApplicationDefinitionUpsertRequest{ObjectKey: objectKey, Name: name, SourceKind: "builder", SourceID: plan.PlanID, ExpectedSchemaHash: &expected, Payload: append(json.RawMessage(nil), item.After...)}
 }
 
 func businessChangePlanMetadataResourceType(resourceType string) bool {

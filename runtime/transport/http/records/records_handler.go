@@ -2,8 +2,8 @@ package records
 
 import (
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
+	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
-	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	actionpolicy "github.com/domainry/domainry-runtime/runtime/domain/action/policy"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -27,7 +27,7 @@ type RecordsHandler struct {
 	queries            *recordapplication.RecordApplicationService
 	actions            *actionapplication.ActionApplicationService
 	audit              *auditapplication.AuditApplicationService
-	permissions        *metadataapplication.MetadataSchemaApplicationService
+	permissions        *appschemaapplication.ApplicationSchemaQueryApplicationService
 	principal          func(*http.Request) principalmodel.Principal
 	writeJSON          func(http.ResponseWriter, int, any)
 	writeError         func(http.ResponseWriter, *http.Request, int, string, ...string)
@@ -41,7 +41,7 @@ type RecordsDependencies struct {
 	Queries           *recordapplication.RecordApplicationService
 	Actions           *actionapplication.ActionApplicationService
 	Audit             *auditapplication.AuditApplicationService
-	Permissions       *metadataapplication.MetadataSchemaApplicationService
+	Permissions       *appschemaapplication.ApplicationSchemaQueryApplicationService
 	Principal         func(*http.Request) principalmodel.Principal
 	WriteJSON         func(http.ResponseWriter, int, any)
 	WriteError        func(http.ResponseWriter, *http.Request, int, string, ...string)

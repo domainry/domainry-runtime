@@ -76,7 +76,7 @@ func TestDialectConfigurePingsDatabase(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			db := sql.OpenDB(postgresDialectConnector{pingErr: test.pingErr})
 			t.Cleanup(func() { _ = db.Close() })
-			err := dialect.Configure(t.Context(), db, "ignored")
+			err := dialect.Configure(t.Context(), db, config.Config{})
 			if (err != nil) != test.wantErr || test.wantErr && !strings.Contains(err.Error(), "connect postgres database (authentication)") {
 				t.Fatalf("error=%v", err)
 			}

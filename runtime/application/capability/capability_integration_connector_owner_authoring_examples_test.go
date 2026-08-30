@@ -4,17 +4,17 @@ import (
 	"encoding/json"
 	"testing"
 
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	appschemavalidation "github.com/domainry/domainry-runtime/runtime/domain/appschema/validation"
 	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	metadatavalidation "github.com/domainry/domainry-runtime/runtime/domain/metadata/validation"
 )
 
 func TestIntegrationConnectorAuthoringExamplesExecuteRuntimeValidator(t *testing.T) {
 	capability := integrationcontract.IntegrationConnectorDefinitionAuthoringCapability()
 	for _, example := range capability.Examples {
 		connector := integrationConnectorExample(t, example.Value["payload"])
-		assertIntegrationConnectorExampleIssues(t, capability.Key, example.Name, example.ExpectedErrorCodes, metadatavalidation.MetadataValidateConnectorDefinitionIssues(connector))
+		assertIntegrationConnectorExampleIssues(t, capability.Key, example.Name, example.ExpectedErrorCodes, appschemavalidation.ApplicationSchemaValidateConnectorDefinitionIssues(connector))
 	}
 }
 
@@ -30,7 +30,7 @@ func TestIntegrationConnectorOperationExamplesExecuteRuntimeValidator(t *testing
 			t.Fatal(err)
 		}
 		connector := integrationmodel.ConnectorSchema{Key: "example", Type: "http", Provider: "default", Operations: []integrationmodel.ConnectorOperationSchema{operation}}
-		assertIntegrationConnectorExampleIssues(t, capability.Key, example.Name, example.ExpectedErrorCodes, metadatavalidation.MetadataValidateConnectorDefinitionIssues(connector))
+		assertIntegrationConnectorExampleIssues(t, capability.Key, example.Name, example.ExpectedErrorCodes, appschemavalidation.ApplicationSchemaValidateConnectorDefinitionIssues(connector))
 	}
 }
 
@@ -47,7 +47,7 @@ func integrationConnectorExample(t *testing.T, value any) integrationmodel.Conne
 	return connector
 }
 
-func assertIntegrationConnectorExampleIssues(t *testing.T, capabilityKey, exampleName string, expected []string, issues []metadatamodel.MetadataDefinitionValidationIssue) {
+func assertIntegrationConnectorExampleIssues(t *testing.T, capabilityKey, exampleName string, expected []string, issues []appschemamodel.ApplicationDefinitionValidationIssue) {
 	t.Helper()
 	if len(expected) == 0 {
 		if len(issues) != 0 {

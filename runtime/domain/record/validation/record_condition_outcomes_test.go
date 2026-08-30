@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
@@ -186,9 +186,9 @@ func TestRecordNormalizationAndSegmentConditionOutcomes(t *testing.T) {
 	} {
 		_ = selectFieldOptions(field)
 	}
-	_ = dictionaryItemOptionKeys([]metadatamodel.DictionaryItemSchema{{}})
+	_ = dictionaryItemOptionKeys([]appschemamodel.DictionaryItemSchema{{}})
 	_ = dictionaryItemOptionKeys([]map[string]any{{}})
-	_ = dictionaryItemOptionKeys([]any{metadatamodel.DictionaryItemSchema{}, map[string]any{}, ""})
+	_ = dictionaryItemOptionKeys([]any{appschemamodel.DictionaryItemSchema{}, map[string]any{}, ""})
 	if dictionaryItemOptionKey("", "") != "" {
 		t.Fatal("empty option")
 	}
@@ -248,7 +248,7 @@ func TestRecordTimePolicyAndUtilityConditionOutcomes(t *testing.T) {
 func TestRecordImportContextAndErrorConditionOutcomes(t *testing.T) {
 	_ = RecordImportFieldHeaderAliases(definitionmodel.ObjectSchema{Fields: []definitionmodel.FieldSchema{{Key: "", Name: "", Config: map[string]any{"label": ""}}}})
 	_, _ = RecordCoerceImportValue("o", definitionmodel.FieldSchema{Type: "percent"}, "12.5")
-	_ = importValueDomainAliases(metadatamodel.DictionaryItemSchema{Config: map[string]any{"alias": ""}})
+	_ = importValueDomainAliases(appschemamodel.DictionaryItemSchema{Config: map[string]any{"alias": ""}})
 	_ = importStringListFromAny("")
 	field := definitionmodel.FieldSchema{Key: "status", Type: "select", Config: map[string]any{"options": []string{"open"}}}
 	_, _ = importValueDomainValue("order", field, "not-localized")

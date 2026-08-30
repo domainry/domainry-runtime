@@ -6,7 +6,7 @@ import (
 )
 
 func EnsureLifecycleSchema(ctx context.Context, s Store) error {
-	text := s.MetadataIDColumnType()
+	text := s.ApplicationSchemaIDColumnType()
 	tables := map[string][]string{
 		"lifecycle_policy_versions": {
 			"workspace_id " + text + " NOT NULL", "policy_key " + text + " NOT NULL", "version " + text + " NOT NULL", "revision BIGINT NOT NULL", "status " + text + " NOT NULL", "payload_json TEXT NOT NULL", "published_at " + text + " NOT NULL",

@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -15,14 +15,14 @@ type changePlanScenarioRuntimeFake struct {
 	result      AcceptanceScenarioRuntimeResult
 	results     []AcceptanceScenarioRuntimeResult
 	resourceKey string
-	request     metadatamodel.MetadataDefinitionUpsertRequest
+	request     appschemamodel.ApplicationDefinitionUpsertRequest
 	input       map[string]any
 	record      map[string]any
 	calls       int
 	err         error
 }
 
-func (f *changePlanScenarioRuntimeFake) SimulateActionCandidate(_ context.Context, resourceKey string, request metadatamodel.MetadataDefinitionUpsertRequest, input, record map[string]any, _ principalmodel.Principal) (AcceptanceScenarioRuntimeResult, error) {
+func (f *changePlanScenarioRuntimeFake) SimulateActionCandidate(_ context.Context, resourceKey string, request appschemamodel.ApplicationDefinitionUpsertRequest, input, record map[string]any, _ principalmodel.Principal) (AcceptanceScenarioRuntimeResult, error) {
 	f.calls++
 	f.resourceKey, f.request, f.input, f.record = resourceKey, request, input, record
 	if len(f.results) > 0 {

@@ -12,9 +12,9 @@ import (
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
 	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	metadatabusiness "github.com/domainry/domainry-runtime/runtime/domain/metadata/service"
 	recordruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	resilience "github.com/domainry/domainry-runtime/runtime/platform/resilience"
@@ -74,7 +74,7 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 		reportSnapshotNotificationCommitter: deps.ReportSnapshotNotificationCommitter,
 		automationNotificationCompiler:      deps.AutomationNotificationCompiler,
 		automationNotificationCommitter:     deps.AutomationNotificationCommitter,
-		metadataRepo:                        deps.Metadata,
+		applicationSchemaRepo:               deps.ApplicationSchema,
 		automationWorkerRepo:                deps.AutomationWorker,
 		automationExecutionRepo:             deps.AutomationExecutions,
 		businessChangePlanRepo:              deps.BusinessChangePlans,
@@ -98,8 +98,8 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 	services.frontendCapabilities = newDeploymentFrontendCapabilityApplicationService(deps.FrontendCapabilities, func(ctx context.Context) deployment.FrontendBusinessBindings {
 		return frontendBusinessBindings(services)
 	})
-	services.dictionaryRuntime = metadatabusiness.NewMetadataDictionaryDomainService(manifest.Dictionaries)
-	services.RecordSchemaSnapshotProvider = &RecordSchemaSnapshotProvider{snapshot: func() metadatamodel.ApplicationSchemaSnapshot { return recordSchemaSnapshot(services) }}
+	services.dictionaryRuntime = appschemaservice.NewApplicationSchemaDictionaryDomainService(manifest.Dictionaries)
+	services.RecordSchemaSnapshotProvider = &RecordSchemaSnapshotProvider{snapshot: func() appschemamodel.ApplicationSchemaSnapshot { return recordSchemaSnapshot(services) }}
 	services.ActionExecutionRuntime = actionruntime.NewActionExecutionRuntime(deps.ActionExecutions)
 	services.agentTaskRunService = agentapplication.NewAgentTaskRunApplicationServiceWithAudit(deps.AgentTaskRuns, services.workerDependencies.Clock, runtimeAgentTaskTerminalCommitter{records: services}, auditApplicationService)
 	if interactiveRuns, ok := deps.AgentTaskRuns.(agentrepository.AgentInteractiveRunRepository); ok {

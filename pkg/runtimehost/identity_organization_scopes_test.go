@@ -12,7 +12,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	metadatapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata"
+	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -43,7 +43,7 @@ func TestRuntimeBusinessProfileProjectionUsesActiveManifestWhenMetadataBindingTa
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.EnsureMetadataSchema(t.Context()); err != nil {
+	if err := store.EnsureApplicationSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	member := definitionmodel.ObjectSchema{Key: "member", UX: map[string]any{"kind": "identity_profile_extension"}, Fields: []definitionmodel.FieldSchema{
@@ -54,7 +54,7 @@ func TestRuntimeBusinessProfileProjectionUsesActiveManifestWhenMetadataBindingTa
 			Key: "member", StatusField: "risk", ActiveStatusValues: []string{"stable", "attention", "renewal"},
 		},
 	}
-	metadata := metadatapersistence.NewMetadataStore(store)
+	metadata := appschemapersistence.NewApplicationSchemaStore(store)
 	if err := metadata.SyncManifest(t.Context(), principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "test Gym profile storage"), manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{member}}); err != nil {
 		t.Fatal(err)
 	}

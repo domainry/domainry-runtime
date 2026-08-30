@@ -13,7 +13,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	schedulerprojection "github.com/domainry/domainry-runtime/runtime/domain/scheduler/projection"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	metadatapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata"
+	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
@@ -46,8 +46,8 @@ func openSchedulerRuntimeTestStore(t *testing.T) *persistence.RuntimeStore {
 	return store
 }
 
-func metadataStore(store *persistence.RuntimeStore) metadatapersistence.MetadataStore {
-	return metadatapersistence.NewMetadataStore(store)
+func metadataStore(store *persistence.RuntimeStore) appschemapersistence.ApplicationSchemaStore {
+	return appschemapersistence.NewApplicationSchemaStore(store)
 }
 
 func schedulerRuntimeTestObjects() []definitionmodel.ObjectSchema {

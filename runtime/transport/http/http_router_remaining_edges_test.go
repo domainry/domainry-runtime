@@ -142,7 +142,7 @@ func completeRouterForSurfaceGroupTests(config HTTPRouterConfig) *HTTPRouter {
 	router.recordHTTP, router.surfaceContextHTTP, router.uploadHTTP, router.discoveryHTTP, router.openAPIHTTP = registrar, registrar, registrar, registrar, registrar
 	router.workflowHTTP, router.automationHTTP, router.schedulerHTTP, router.reportHTTP, router.frontendCapabilityHTTP = registrar, registrar, registrar, registrar, registrar
 	router.businessReferenceHTTP, router.businessSystemHTTP, router.capabilityHTTP, router.changePlanHTTP, router.integrationHTTP = registrar, registrar, registrar, registrar, registrar
-	router.metadataHTTP, router.operationsHTTP = registrar, registrar
+	router.applicationSchemaHTTP, router.operationsHTTP = registrar, registrar
 	router.partyHTTP = registrar
 	return router
 }
@@ -714,7 +714,7 @@ func TestCompleteRouterCompositionSmokeAndCallbacks(t *testing.T) {
 	router.recordHTTP, router.surfaceContextHTTP, router.uploadHTTP, router.discoveryHTTP, router.openAPIHTTP = registrar, registrar, registrar, registrar, registrar
 	router.workflowHTTP, router.automationHTTP, router.schedulerHTTP, router.reportHTTP, router.frontendCapabilityHTTP = registrar, registrar, registrar, registrar, registrar
 	router.businessReferenceHTTP, router.businessSystemHTTP, router.capabilityHTTP, router.changePlanHTTP, router.integrationHTTP = registrar, registrar, registrar, registrar, registrar
-	router.metadataHTTP, router.notificationHTTP, router.agentDialogHTTP, router.operationsHTTP = registrar, registrar, registrar, registrar
+	router.applicationSchemaHTTP, router.notificationHTTP, router.agentDialogHTTP, router.operationsHTTP = registrar, registrar, registrar, registrar
 	handler := router.Routes()
 	if calls != 19 {
 		t.Fatalf("registrar calls=%d", calls)

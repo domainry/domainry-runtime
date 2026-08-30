@@ -14,9 +14,9 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationrepository "github.com/domainry/domainry-runtime/runtime/domain/automation/repository"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -60,8 +60,8 @@ func (r *automationExecutionRepositoryStub) InsertExecution(_ context.Context, _
 
 type automationMetadataStub struct{ err error }
 
-func (s *automationMetadataStub) ListMetadataDefinitionVersions(_ context.Context, _, resourceKey string, _ principalmodel.Principal) ([]metadatamodel.MetadataDefinitionVersion, error) {
-	return []metadatamodel.MetadataDefinitionVersion{{ResourceType: "automation_rule", ResourceKey: resourceKey, SchemaVersion: "1"}}, s.err
+func (s *automationMetadataStub) ListApplicationDefinitionVersions(_ context.Context, _, resourceKey string, _ principalmodel.Principal) ([]appschemamodel.ApplicationDefinitionVersion, error) {
+	return []appschemamodel.ApplicationDefinitionVersion{{ResourceType: "automation_rule", ResourceKey: resourceKey, SchemaVersion: "1"}}, s.err
 }
 
 type automationHandlerCapture struct {
@@ -92,8 +92,8 @@ func newAutomationHandlerFixture() *automationHandlerFixture {
 	fixture := &automationHandlerFixture{registry: registry, executions: executions, metadata: metadata, capture: capture, principal: principal}
 	service := automationapplication.NewAutomationApplicationService(automationapplication.AutomationApplicationDependencies{
 		Rules: registry, ExecutionRepository: executions, Metadata: metadata,
-		Schema: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
-			return metadatamodel.ApplicationSchemaSnapshot{}
+		Schema: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
+			return appschemamodel.ApplicationSchemaSnapshot{}
 		},
 		ValidateRule: func(context.Context, automationmodel.AutomationRuleSchema) error { return fixture.validateErr },
 	})

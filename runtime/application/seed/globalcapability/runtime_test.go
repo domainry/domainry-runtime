@@ -7,9 +7,9 @@ import (
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/requestcontext"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
@@ -55,11 +55,11 @@ func (repository *globalCapabilityWorkflowRepository) InsertExecution(_ context.
 }
 
 func TestGeneratedGlobalCapabilitySchemaAndMerges(t *testing.T) {
-	existingDictionary := metadatamodel.DictionarySchema{Key: "platform_operation_status", Name: "Custom status"}
+	existingDictionary := appschemamodel.DictionarySchema{Key: "platform_operation_status", Name: "Custom status"}
 	existingWorkflow := definitionmodel.WorkflowSchema{Key: "platform.audit_retention_check", Name: "Custom retention"}
 	manifest := WithGeneratedSchema(manifestmodel.ManifestSchema{
 		Objects:      []definitionmodel.ObjectSchema{{Key: "customer"}, {Key: "record_timer", Name: "Custom timer"}},
-		Dictionaries: []metadatamodel.DictionarySchema{existingDictionary},
+		Dictionaries: []appschemamodel.DictionarySchema{existingDictionary},
 		Workflows:    []definitionmodel.WorkflowSchema{existingWorkflow},
 	})
 	if len(manifest.Dictionaries) != 3 || manifest.Dictionaries[0].Name != "Custom status" {
@@ -74,10 +74,10 @@ func TestGeneratedGlobalCapabilitySchemaAndMerges(t *testing.T) {
 	if len(manifest.Dictionaries[1].Items) == 0 || manifest.Workflows[1].Graph == nil {
 		t.Fatalf("generated definitions incomplete: dictionaries=%+v workflows=%+v", manifest.Dictionaries, manifest.Workflows)
 	}
-	existingDictionaries := []metadatamodel.DictionarySchema{{Key: " ", Name: "Blank existing"}, {Key: "custom", Name: "Custom"}}
+	existingDictionaries := []appschemamodel.DictionarySchema{{Key: " ", Name: "Blank existing"}, {Key: "custom", Name: "Custom"}}
 	dictionaries := MergeDictionaries(
 		existingDictionaries,
-		[]metadatamodel.DictionarySchema{{Key: ""}, {Key: " custom ", Name: "Duplicate"}, {Key: "new", Name: "New"}, {Key: "new", Name: "Duplicate new"}},
+		[]appschemamodel.DictionarySchema{{Key: ""}, {Key: " custom ", Name: "Duplicate"}, {Key: "new", Name: "New"}, {Key: "new", Name: "Duplicate new"}},
 	)
 	if len(dictionaries) != 3 || dictionaries[2].Name != "New" {
 		t.Fatalf("merged dictionaries=%+v", dictionaries)

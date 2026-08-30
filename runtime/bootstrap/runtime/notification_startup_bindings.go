@@ -10,16 +10,16 @@ import (
 	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
 
 type workflowTaskLookup func(context.Context, string, string) (workflowmodel.WorkflowTask, bool, error)
-type schedulerDefinitionLookup func(context.Context, principalmodel.SystemScope, string, string) (metadatamodel.MetadataDefinition, bool, error)
+type schedulerDefinitionLookup func(context.Context, principalmodel.SystemScope, string, string) (appschemamodel.ApplicationDefinition, bool, error)
 type reportCatalogLookup func(context.Context, principalmodel.Principal) []reportmodel.ReportSchema
 type automationRuleLookup func(context.Context, string, principalmodel.Principal) (automationmodel.AutomationRuleSchema, error)
 type notificationIntentPublisher func(context.Context, notificationmodel.NotificationIntent, principalmodel.SystemScope) (notificationmodel.NotificationEvent, bool, error)
@@ -31,8 +31,8 @@ func runtimeActionRevisions(manifest manifestmodel.ManifestSchema) (string, stri
 		if manifest.GeneratedDomainSDK.ArtifactSHA256 != "" {
 			projectRevision = manifest.GeneratedDomainSDK.ArtifactSHA256
 		}
-		if manifest.GeneratedDomainSDK.MetadataSnapshotSHA256 != "" {
-			metadataRevision = manifest.GeneratedDomainSDK.MetadataSnapshotSHA256
+		if manifest.GeneratedDomainSDK.ApplicationSchemaSnapshotSHA256 != "" {
+			metadataRevision = manifest.GeneratedDomainSDK.ApplicationSchemaSnapshotSHA256
 		}
 	}
 	return projectRevision, metadataRevision

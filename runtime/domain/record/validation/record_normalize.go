@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )
 
 func RecordNormalizeData(object definitionmodel.ObjectSchema, data map[string]any, partial bool) (map[string]any, error) {
@@ -238,7 +238,7 @@ func selectFieldOptions(field definitionmodel.FieldSchema) []string {
 
 func dictionaryItemOptionKeys(value any) []string {
 	switch typed := value.(type) {
-	case []metadatamodel.DictionaryItemSchema:
+	case []appschemamodel.DictionaryItemSchema:
 		out := make([]string, 0, len(typed))
 		for _, item := range typed {
 			if option := dictionaryItemOptionKey(item.Key, item.Value); option != "" {
@@ -258,7 +258,7 @@ func dictionaryItemOptionKeys(value any) []string {
 		out := make([]string, 0, len(typed))
 		for _, item := range typed {
 			switch next := item.(type) {
-			case metadatamodel.DictionaryItemSchema:
+			case appschemamodel.DictionaryItemSchema:
 				if option := dictionaryItemOptionKey(next.Key, next.Value); option != "" {
 					out = append(out, option)
 				}

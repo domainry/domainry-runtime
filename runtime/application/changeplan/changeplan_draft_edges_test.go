@@ -8,8 +8,8 @@ import (
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -68,20 +68,20 @@ type changePlanAuditFake struct {
 }
 
 type changePlanCloneMetadataFake struct {
-	definitions map[string][]metadatamodel.MetadataDefinition
+	definitions map[string][]appschemamodel.ApplicationDefinition
 	listed      []string
 	err         error
 }
 
-func (f *changePlanCloneMetadataFake) ListDefinitions(_ context.Context, _ principalmodel.SystemScope, resourceType string) ([]metadatamodel.MetadataDefinition, error) {
+func (f *changePlanCloneMetadataFake) ListDefinitions(_ context.Context, _ principalmodel.SystemScope, resourceType string) ([]appschemamodel.ApplicationDefinition, error) {
 	f.listed = append(f.listed, resourceType)
 	if f.err != nil {
 		return nil, f.err
 	}
-	return append([]metadatamodel.MetadataDefinition(nil), f.definitions[resourceType]...), nil
+	return append([]appschemamodel.ApplicationDefinition(nil), f.definitions[resourceType]...), nil
 }
 
-func (*changePlanCloneMetadataFake) ApplyDefinitionMutations(context.Context, principalmodel.SystemScope, []metadatamodel.MetadataDefinitionMutation, []auditmodel.AuditEvent, *changeplanmodel.BusinessChangePlanPublication) ([]metadatamodel.MetadataDefinition, error) {
+func (*changePlanCloneMetadataFake) ApplyDefinitionMutations(context.Context, principalmodel.SystemScope, []appschemamodel.ApplicationDefinitionMutation, []auditmodel.AuditEvent, *changeplanmodel.BusinessChangePlanPublication) ([]appschemamodel.ApplicationDefinition, error) {
 	return nil, nil
 }
 
@@ -393,7 +393,7 @@ func TestChangePlanPackageImportRejectsTamperingContractDriftAndNonEmptyTarget(t
 
 func TestChangePlanCloneCurrentCreatesPinnedEditableSnapshotDraft(t *testing.T) {
 	repository := &changePlanDraftRepositoryFake{saveOK: true}
-	metadata := &changePlanCloneMetadataFake{definitions: map[string][]metadatamodel.MetadataDefinition{
+	metadata := &changePlanCloneMetadataFake{definitions: map[string][]appschemamodel.ApplicationDefinition{
 		"object": {
 			{ResourceType: "object", ResourceKey: "order", SchemaHash: "object-hash", SourceKind: "generated", Payload: json.RawMessage(`{"key":"order"}`)},
 			{ResourceType: "object", ResourceKey: "retired", SchemaHash: "retired-hash", SourceKind: "builder", DisabledAt: "2026-01-01", Payload: json.RawMessage(`{"key":"retired"}`)},

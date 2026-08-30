@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func EnsureMetadataSchema(ctx context.Context, s Store) error {
+func EnsureApplicationSchema(ctx context.Context, s Store) error {
 	documentText := "TEXT"
 	if s.Driver() == "mysql" {
 		// Change Plans and canonical resource definitions are complete system
@@ -14,65 +14,65 @@ func EnsureMetadataSchema(ctx context.Context, s Store) error {
 		documentText = "LONGTEXT"
 	}
 	if _, err := s.SchemaDB().ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.TableIdentifier("metadata_catalog")+" ("+
-		s.Identifier("key")+" "+s.MetadataIDColumnType()+" PRIMARY KEY, "+
+		s.Identifier("key")+" "+s.ApplicationSchemaIDColumnType()+" PRIMARY KEY, "+
 		s.Identifier("value")+" "+documentText+" NOT NULL, "+
-		s.Identifier("updated_at")+" "+s.MetadataIDColumnType()+" NOT NULL)"); err != nil {
+		s.Identifier("updated_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL)"); err != nil {
 		return fmt.Errorf("create metadata_catalog: %w", err)
 	}
 	if _, err := s.SchemaDB().ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.TableIdentifier("metadata_exact_decimal_migrations")+" ("+
-		s.Identifier("id")+" "+s.MetadataIDColumnType()+" PRIMARY KEY, "+
-		s.Identifier("contract_version")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("object_key")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
+		s.Identifier("id")+" "+s.ApplicationSchemaIDColumnType()+" PRIMARY KEY, "+
+		s.Identifier("contract_version")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("object_key")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
 		s.Identifier("column_keys")+" "+documentText+" NOT NULL, "+
 		s.Identifier("from_types")+" "+documentText+" NOT NULL, "+
 		s.Identifier("to_types")+" "+documentText+" NOT NULL, "+
 		s.Identifier("row_count")+" BIGINT NOT NULL, "+
-		s.Identifier("before_hash")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("after_hash")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("applied_at")+" "+s.MetadataIDColumnType()+" NOT NULL)"); err != nil {
+		s.Identifier("before_hash")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("after_hash")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("applied_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL)"); err != nil {
 		return fmt.Errorf("create metadata_exact_decimal_migrations: %w", err)
 	}
 	if _, err := s.SchemaDB().ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.TableIdentifier("metadata_definition_versions")+" ("+
-		s.Identifier("id")+" "+s.MetadataIDColumnType()+" PRIMARY KEY, "+
-		s.Identifier("resource_type")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("resource_key")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("schema_version")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("schema_hash")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
+		s.Identifier("id")+" "+s.ApplicationSchemaIDColumnType()+" PRIMARY KEY, "+
+		s.Identifier("resource_type")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("resource_key")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("schema_version")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("schema_hash")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
 		s.Identifier("payload_json")+" "+documentText+" NOT NULL, "+
-		s.Identifier("created_at")+" "+s.MetadataIDColumnType()+" NOT NULL)"); err != nil {
+		s.Identifier("created_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL)"); err != nil {
 		return fmt.Errorf("create metadata_definition_versions: %w", err)
 	}
 	if _, err := s.SchemaDB().ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.TableIdentifier("business_change_plan_drafts")+" ("+
-		s.Identifier("workspace_id")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("plan_id")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
+		s.Identifier("workspace_id")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("plan_id")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
 		s.Identifier("revision")+" INTEGER NOT NULL, "+
-		s.Identifier("status")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
+		s.Identifier("status")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
 		s.Identifier("payload_json")+" "+documentText+" NOT NULL, "+
-		s.Identifier("created_by")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("updated_by")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("created_at")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("updated_at")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
+		s.Identifier("created_by")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("updated_by")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("created_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("updated_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
 		"PRIMARY KEY ("+s.Identifier("workspace_id")+", "+s.Identifier("plan_id")+"))"); err != nil {
 		return fmt.Errorf("create business_change_plan_drafts: %w", err)
 	}
 	if _, err := s.SchemaDB().ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.TableIdentifier("business_change_plan_operations")+" ("+
-		s.Identifier("id")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("workspace_id")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("plan_id")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
+		s.Identifier("id")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("workspace_id")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("plan_id")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
 		s.Identifier("plan_revision")+" INTEGER NOT NULL, "+
-		s.Identifier("operation")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("idempotency_key")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("request_fingerprint")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("status")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
+		s.Identifier("operation")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("idempotency_key")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("request_fingerprint")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("status")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
 		s.Identifier("result_json")+" "+documentText+" NOT NULL, "+
-		s.Identifier("lease_owner")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("lease_expires_at")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
+		s.Identifier("lease_owner")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("lease_expires_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
 		s.Identifier("fencing_token")+" BIGINT NOT NULL, "+
-		s.Identifier("error_code")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("expires_at")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("actor_id")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("created_at")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("updated_at")+" "+s.MetadataIDColumnType()+" NOT NULL)"); err != nil {
+		s.Identifier("error_code")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("expires_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("actor_id")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("created_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("updated_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL)"); err != nil {
 		return fmt.Errorf("create business_change_plan_operations: %w", err)
 	}
 	if err := prepareIdempotencyReceiptMigrations(ctx, s, idempotencyReceiptMigrationSpec{table: "business_change_plan_operations", scopeColumns: []string{"plan_id", "plan_revision", "operation"}, backfillColumns: []string{"plan_id", "operation"}}); err != nil {
@@ -89,33 +89,33 @@ func EnsureMetadataSchema(ctx context.Context, s Store) error {
 	}
 	for _, table := range metadataDefinitionTables() {
 		if _, err := s.SchemaDB().ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.TableIdentifier(table)+" ("+
-			s.Identifier("id")+" "+s.MetadataIDColumnType()+" PRIMARY KEY, "+
-			s.Identifier("resource_key")+" "+s.MetadataIDColumnType()+" NOT NULL UNIQUE, "+
-			s.Identifier("object_key")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
+			s.Identifier("id")+" "+s.ApplicationSchemaIDColumnType()+" PRIMARY KEY, "+
+			s.Identifier("resource_key")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL UNIQUE, "+
+			s.Identifier("object_key")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
 			s.Identifier("name")+" TEXT NOT NULL, "+
 			s.Identifier("payload_json")+" "+documentText+" NOT NULL, "+
-			s.Identifier("schema_version")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-			s.Identifier("schema_hash")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-			s.Identifier("source_kind")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-			s.Identifier("source_id")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-			s.Identifier("disabled_at")+" "+s.MetadataIDColumnType()+", "+
-			s.Identifier("created_at")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-			s.Identifier("updated_at")+" "+s.MetadataIDColumnType()+" NOT NULL)"); err != nil {
+			s.Identifier("schema_version")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+			s.Identifier("schema_hash")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+			s.Identifier("source_kind")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+			s.Identifier("source_id")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+			s.Identifier("disabled_at")+" "+s.ApplicationSchemaIDColumnType()+", "+
+			s.Identifier("created_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+			s.Identifier("updated_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL)"); err != nil {
 			return fmt.Errorf("create %s: %w", table, err)
 		}
 	}
 	if _, err := s.SchemaDB().ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.TableIdentifier("business_localized_text")+" ("+
-		s.Identifier("id")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
+		s.Identifier("id")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
 		s.Identifier("workspace_id")+" "+s.LocalizedTextKeyColumnType()+" NOT NULL, "+
 		s.Identifier("entity_type")+" "+s.LocalizedTextKeyColumnType()+" NOT NULL, "+
 		s.Identifier("entity_key")+" "+s.LocalizedTextKeyColumnType()+" NOT NULL, "+
 		s.Identifier("property")+" "+s.LocalizedTextKeyColumnType()+" NOT NULL, "+
 		s.Identifier("locale")+" "+s.LocalizedTextKeyColumnType()+" NOT NULL, "+
 		s.Identifier("text")+" TEXT NOT NULL, "+
-		s.Identifier("source_kind")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("source_id")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("created_at")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("updated_at")+" "+s.MetadataIDColumnType()+" NOT NULL)"); err != nil {
+		s.Identifier("source_kind")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("source_id")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("created_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("updated_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL)"); err != nil {
 		return fmt.Errorf("create business_localized_text: %w", err)
 	}
 	if err := s.CreateIndexIfMissing(ctx, "business_localized_text", "uniq_business_localized_text_key", true,
@@ -136,8 +136,8 @@ func EnsureMetadataSchema(ctx context.Context, s Store) error {
 		s.Identifier("field_key")+" "+s.LocalizedTextKeyColumnType()+" NOT NULL, "+
 		s.Identifier("locale")+" "+s.LocalizedTextKeyColumnType()+" NOT NULL, "+
 		s.Identifier("text_value")+" TEXT NOT NULL, "+
-		s.Identifier("created_at")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("updated_at")+" "+s.MetadataIDColumnType()+" NOT NULL)"); err != nil {
+		s.Identifier("created_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("updated_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL)"); err != nil {
 		return fmt.Errorf("create business_record_localized_value: %w", err)
 	}
 	if err := s.CreateIndexIfMissing(ctx, "business_record_localized_value", "uniq_business_record_localized_value", true,
@@ -149,18 +149,18 @@ func EnsureMetadataSchema(ctx context.Context, s Store) error {
 		return fmt.Errorf("create business record localized search index: %w", err)
 	}
 	if _, err := s.SchemaDB().ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.TableIdentifier("web_push_subscriptions")+" ("+
-		s.Identifier("id")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("workspace_id")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("user_id")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("endpoint_hash")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
+		s.Identifier("id")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("workspace_id")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("user_id")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("endpoint_hash")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
 		s.Identifier("endpoint")+" TEXT NOT NULL, "+
 		s.Identifier("p256dh")+" TEXT NOT NULL, "+
 		s.Identifier("auth_secret")+" TEXT NOT NULL, "+
-		s.Identifier("status")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("expires_at")+" "+s.MetadataIDColumnType()+" NOT NULL DEFAULT '', "+
-		s.Identifier("created_at")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("updated_at")+" "+s.MetadataIDColumnType()+" NOT NULL, "+
-		s.Identifier("revoked_at")+" "+s.MetadataIDColumnType()+" NOT NULL DEFAULT '')"); err != nil {
+		s.Identifier("status")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("expires_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '', "+
+		s.Identifier("created_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("updated_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		s.Identifier("revoked_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '')"); err != nil {
 		return fmt.Errorf("create web_push_subscriptions: %w", err)
 	}
 	if err := s.CreateIndexIfMissing(ctx, "web_push_subscriptions", "uniq_web_push_subscription_workspace_identity", true, "workspace_id", "id"); err != nil {

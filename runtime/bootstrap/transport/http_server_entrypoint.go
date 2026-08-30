@@ -12,7 +12,7 @@ import (
 
 // AssembleHTTPServer exposes the Bootstrap composition root for integration
 // tests and embedders that already own an assembled RuntimeServices graph.
-func AssembleHTTPServer(ctx context.Context, records *composition.RuntimeServices, identity identitysdk.Binding, uploadDir string, corsAllowedOrigins []string, allowDevAuthHeaders bool, agentHTTP runtimehttp.AgentHTTPConfig) *runtimehttp.HTTPRouter {
+func AssembleHTTPServer(ctx context.Context, records *composition.RuntimeServices, identity identitysdk.Binding, uploadDir string, corsAllowedOrigins []string, allowDevAuthHeaders bool) *runtimehttp.HTTPRouter {
 	if identity == nil {
 		panic("transport.AssembleHTTPServer requires an Identity SDK Binding")
 	}
@@ -23,9 +23,7 @@ func AssembleHTTPServer(ctx context.Context, records *composition.RuntimeService
 			UploadDir: uploadDir, CORSAllowedOrigins: append([]string(nil), corsAllowedOrigins...),
 			RuntimeAllowDevIdentityHeaders: allowDevAuthHeaders,
 			IdentityWorkspaceID:            "default", IdentityAudience: "domainry-runtime",
-			AgentHTTPBaseURL: agentHTTP.BaseURL, AgentHTTPAPIKey: agentHTTP.APIKey,
-			AgentHTTPAgentID: agentHTTP.AgentID, AgentHTTPTimeout: agentHTTP.Timeout,
-			AgentHTTPRateLimitPerMinute: agentHTTP.RateLimitPerMinute,
+			AgentDialogRateLimitPerMinute: 60,
 		},
 	})
 }

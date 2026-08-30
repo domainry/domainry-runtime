@@ -23,7 +23,7 @@ var businessOwnerRootProductionBaselines = map[string]int{
 	"deployment": 0, "integration": 0,
 	"party":      0,
 	"expression": 0,
-	"lifecycle":  0, "localization": 0, "manifest": 0, "metadata": 0,
+	"lifecycle":  0, "localization": 0, "manifest": 0, "appschema": 0,
 	"notification": 0, "operations": 0, "pipeline": 0, "principal": 0, "profilebinding": 0, "record": 0, "report": 0,
 	"preference": 0, "ruleset": 0, "scheduler": 0, "surfacecontext": 0, "transaction": 0, "workflow": 0,
 	"surface": 0,
@@ -36,14 +36,14 @@ var businessTechnicalDirectories = technicalLayoutStringSet(
 
 var applicationTopLevelDirectories = technicalLayoutStringSet(
 	"action", "agent", "audit", "automation", "businessevent", "businesssystem", "capability", "changeplan", "contractcheck",
-	"deployment", "integration", "lifecycle", "metadata", "notificationfacade", "operations", "pipeline", "preference", "principal", "record", "report", "ruleset", "scheduler",
+	"deployment", "integration", "lifecycle", "appschema", "notificationfacade", "operations", "pipeline", "preference", "principal", "record", "report", "ruleset", "scheduler",
 	"party",
 	"recordmutation", "recordtimer", "seed", "surfacecontext", "upload", "workflow",
 )
 
 var applicationProductionBaselines = map[string]int{
 	".": 0, "action": 43, "agent": 6, "audit": 3, "automation": 8, "businesssystem": 4, "capability": 17,
-	"businessevent": 1, "changeplan": 14, "deployment": 8, "integration": 70, "lifecycle": 5, "metadata": 14, "notificationfacade": 4, "operations": 9,
+	"businessevent": 1, "changeplan": 14, "deployment": 8, "integration": 70, "lifecycle": 5, "appschema": 14, "notificationfacade": 4, "operations": 9,
 	"pipeline": 4, "preference": 1, "record": 20, "recordmutation": 4, "recordtimer": 1, "report": 5, "ruleset": 1, "scheduler": 12, "surfacecontext": 2, "workflow": 26,
 	"party": 3, "principal": 1,
 	"upload": 4,
@@ -60,17 +60,18 @@ var bootstrapTopLevelDirectories = technicalLayoutStringSet("composition", "inte
 var bootstrapRuntimeProductionFiles = technicalLayoutStringSet(
 	"config.go", "construction.go", "http_server.go", "identity_catalog.go",
 	"manifest_loader.go", "manifest_preparation.go",
-	"manifest_validation_catalog.go", "metadata_restoration.go", "repository_bindings.go",
+	"manifest_validation_catalog.go", "appschema_restoration.go", "repository_bindings.go",
 	"notification_event_types.go", "notification_startup_bindings.go", "runtime.go", "seed_synchronization.go", "service_assembly.go", "startup.go",
 	"identity_project_roles.go", "notification_sdk_module_host.go", "party_sdk_module_host.go", "notification_system_retention.go", "notification_system_subjects.go",
 	"monitoring_module_host.go",
 	"data_exchange_module_host.go",
+	"agent_sdk_binding.go",
 	"startup_errors.go", "store_preparation.go", "worker_dependencies.go", "worker_lifecycle.go", "worker_lifecycle_cleanup.go", "worker_registry.go", "operations_control_worker.go",
 )
 
 var bootstrapTransportProductionFiles = technicalLayoutStringSet(
 	"agent_application_assembly.go", "agent_task_tool_adapters.go", "entrypoint_mux.go", "http_identity_handler_wiring.go",
-	"http_integration_agent_handler_wiring.go", "http_metadata_business_handler_wiring.go",
+	"http_integration_agent_handler_wiring.go", "http_appschema_business_handler_wiring.go",
 	"http_record_process_handler_wiring.go", "http_server_assembly.go", "http_server_entrypoint.go",
 	"http_technical_metrics.go",
 	"operations_break_glass_alert.go", "operations_dead_letter_adapters.go",
@@ -80,7 +81,7 @@ var httpOwnerDirectories = technicalLayoutStringSet(
 	"agentdialog", "automation", "businessevents", "businessreferences", "businessseeds", "businesssystem",
 	"capabilities", "changeplans", "discovery", "frontendcapability",
 	"party",
-	"integrations", "metadata", "notifications", "openapi", "records", "reports",
+	"integrations", "appschema", "notifications", "openapi", "records", "reports",
 	"scheduler", "surfacecontext", "uploads", "workflows",
 	"operations",
 )
@@ -102,7 +103,7 @@ var httpOwnerExportNames = map[string]string{
 	"frontendcapability": "FrontendCapability",
 	"party":              "Party",
 	"integrations":       "Integrations",
-	"metadata":           "Metadata",
+	"appschema":          "ApplicationSchema",
 	"notifications":      "Notifications",
 	"openapi":            "OpenAPI",
 	"operations":         "Operations",
@@ -219,7 +220,9 @@ func TestRuntimeDomainDependencyMatrixIsClosed(t *testing.T) {
 		file := parseFile(t, path)
 		ast.Inspect(file, func(node ast.Node) bool {
 			identifier, ok := node.(*ast.Ident)
-			if ok && strings.Contains(identifier.Name, "Application") {
+			if ok && strings.Contains(identifier.Name, "Application") &&
+				!strings.Contains(identifier.Name, "ApplicationSchema") &&
+				!strings.Contains(identifier.Name, "ApplicationDefinition") {
 				t.Errorf("Domain identifiers must not retain Application-layer ownership: %s declares or uses %s", path, identifier.Name)
 			}
 			return true
@@ -1165,7 +1168,7 @@ func TestActionExecutionRepositoryBoundaryIsClosed(t *testing.T) {
 		}
 		for _, spec := range file.Imports {
 			importPath, err := strconv.Unquote(spec.Path.Value)
-			if err == nil && importPath == "github.com/domainry/domainry-runtime/runtime/domain/metadata" {
+			if err == nil && importPath == "github.com/domainry/domainry-runtime/runtime/domain/appschema" {
 				t.Errorf("Action validation may consume Metadata model only, not Metadata behavior: %s", path)
 			}
 		}
@@ -1648,14 +1651,19 @@ func assertBusinessTechnicalLayout(t *testing.T, runtimeRoot string) {
 		ownerRoot := filepath.Join(businessRoot, owner)
 		assertAtMost(t, "domain/"+owner+" root production files", technicalLayoutCountImmediateProductionGoFiles(t, ownerRoot), baseline)
 		ownerPrefix := owner + "_"
+		alternateOwnerPrefix := ""
 		if owner == "surfacecontext" {
 			ownerPrefix = "surface_context_"
+		} else if owner == "appschema" {
+			alternateOwnerPrefix = "application_schema_"
 		}
 		if walkErr := filepath.WalkDir(ownerRoot, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
-			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") && !strings.HasPrefix(entry.Name(), ownerPrefix) {
+			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") &&
+				!strings.HasPrefix(entry.Name(), ownerPrefix) &&
+				(alternateOwnerPrefix == "" || !strings.HasPrefix(entry.Name(), alternateOwnerPrefix)) {
 				t.Errorf("Domain owner file must retain the owner prefix for global searchability: %s", path)
 			}
 			return nil

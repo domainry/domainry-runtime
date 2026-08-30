@@ -28,7 +28,7 @@ func TestMutationPlannerBuildsCanonicalContextFromPrincipalAndInvocation(t *test
 		t.Fatal(err)
 	}
 	got := plan.Context()
-	if got.Source() != transactionmodel.MutationSourceAction || got.ActionKey() != "order.pay" || got.MetadataRevision() != "published-17" || got.CorrelationID() != "correlation-1" || got.IdempotencyKey() != "idem-1" || got.RoleKey() != "cashier" || !got.AllowsEffect("order", "status") || got.AssuranceEvidence()["mfa"] != "verified" {
+	if got.Source() != transactionmodel.MutationSourceAction || got.ActionKey() != "order.pay" || got.ApplicationSchemaRevision() != "published-17" || got.CorrelationID() != "correlation-1" || got.IdempotencyKey() != "idem-1" || got.RoleKey() != "cashier" || !got.AllowsEffect("order", "status") || got.AssuranceEvidence()["mfa"] != "verified" {
 		t.Fatalf("context=%+v", got)
 	}
 }
@@ -42,7 +42,7 @@ func TestMutationPlannerUsesDeterministicObjectRevisionWithoutRepositoryResolver
 		t.Fatal(err)
 	}
 	second, err := planner.Plan(t.Context(), principal, commit, nil)
-	if err != nil || first.Context().MetadataRevision() != second.Context().MetadataRevision() || !strings.HasPrefix(first.Context().MetadataRevision(), "object:") || first.Context().Source() != transactionmodel.MutationSourceHTTP || first.Context().CorrelationID() == "" {
+	if err != nil || first.Context().ApplicationSchemaRevision() != second.Context().ApplicationSchemaRevision() || !strings.HasPrefix(first.Context().ApplicationSchemaRevision(), "object:") || first.Context().Source() != transactionmodel.MutationSourceHTTP || first.Context().CorrelationID() == "" {
 		t.Fatalf("first=%+v second=%+v err=%v", first.Context(), second.Context(), err)
 	}
 }
@@ -158,8 +158,8 @@ func TestMutationPlannerRemainingRevisionAndErrorBranches(t *testing.T) {
 
 	var nilPlanner *MutationPlannerApplicationService
 	plan, err := nilPlanner.Plan(t.Context(), principal, commit, nil)
-	if err != nil || !strings.HasPrefix(plan.Context().MetadataRevision(), "object:") {
-		t.Fatalf("nil planner fallback revision=%q err=%v", plan.Context().MetadataRevision(), err)
+	if err != nil || !strings.HasPrefix(plan.Context().ApplicationSchemaRevision(), "object:") {
+		t.Fatalf("nil planner fallback revision=%q err=%v", plan.Context().ApplicationSchemaRevision(), err)
 	}
 	unencodable := commit
 	unencodable.Object.Config = map[string]any{"unsupported": func() {}}

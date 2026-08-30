@@ -2,6 +2,7 @@ package runtime
 
 import (
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
+	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationrepository "github.com/domainry/domainry-runtime/runtime/domain/automation/repository"
@@ -10,18 +11,17 @@ import (
 	deploymentrepository "github.com/domainry/domainry-runtime/runtime/domain/deployment/repository"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	lifecyclerepository "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/repository"
-	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 	workflowrepository "github.com/domainry/domainry-runtime/runtime/domain/workflow/repository"
 	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	actionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/action"
+	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	automationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automation"
 	changeplanpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/changeplan"
 	deploymentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/deployment"
 	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
 	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/lifecycle"
-	metadatapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
 )
@@ -35,8 +35,8 @@ var (
 	_ auditrepository.AuditRepository                        = (*auditpersistence.Repository)(nil)
 	_ auditrepository.AuditEventWriterRepository             = (*auditpersistence.Repository)(nil)
 	_ auditrepository.AuditEventRepository                   = (*auditpersistence.Repository)(nil)
-	_ metadatarepository.MetadataRepository                  = metadatapersistence.MetadataStore{}
-	_ metadatarepository.DefinitionMutationRepository        = metadatapersistence.MetadataStore{}
+	_ appschemarepository.ApplicationSchemaRepository        = appschemapersistence.ApplicationSchemaStore{}
+	_ appschemarepository.DefinitionMutationRepository       = appschemapersistence.ApplicationSchemaStore{}
 	_ integrationrepository.IntegrationConfigRepository      = integrationpersistence.IntegrationConfigStore{}
 	_ integrationrepository.IntegrationConnectionRepository  = integrationpersistence.IntegrationConfigStore{}
 	_ integrationrepository.IntegrationEventRepository       = integrationpersistence.IntegrationEventStore{}

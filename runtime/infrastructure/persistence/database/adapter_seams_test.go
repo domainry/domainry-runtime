@@ -51,7 +51,7 @@ func TestAdapterSeamsDelegateAndNormalize(t *testing.T) {
 	if store.SecretMaterialKey()[0] != 7 || store.SecretKeyProvider() != nil {
 		t.Fatal("secret seams changed values")
 	}
-	if store.MetadataIDColumnType() != "TEXT" || store.LocalizedTextKeyColumnType() != "TEXT" || store.RuntimeColumnDefinition("TEXT") != "TEXT" {
+	if store.ApplicationSchemaIDColumnType() != "TEXT" || store.LocalizedTextKeyColumnType() != "TEXT" || store.RuntimeColumnDefinition("TEXT") != "TEXT" {
 		t.Fatal("sqlite type seams failed")
 	}
 	if err := store.SetEngineForTesting("mysql"); err != nil {

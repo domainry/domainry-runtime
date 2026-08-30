@@ -5,24 +5,24 @@ import (
 	"fmt"
 	"strings"
 
-	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
+	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	rulesetmodel "github.com/domainry/domainry-runtime/runtime/domain/ruleset/model"
 	rulesetrepository "github.com/domainry/domainry-runtime/runtime/domain/ruleset/repository"
 	rulesetvalidation "github.com/domainry/domainry-runtime/runtime/domain/ruleset/validation"
 )
 
-type MetadataWorkspaceRuleSetRepository struct {
-	metadata metadatarepository.MetadataRepository
+type ApplicationSchemaWorkspaceRuleSetRepository struct {
+	metadata appschemarepository.ApplicationSchemaRepository
 }
 
-var _ rulesetrepository.WorkspaceRuleSetRepository = (*MetadataWorkspaceRuleSetRepository)(nil)
+var _ rulesetrepository.WorkspaceRuleSetRepository = (*ApplicationSchemaWorkspaceRuleSetRepository)(nil)
 
-func NewMetadataWorkspaceRuleSetRepository(metadata metadatarepository.MetadataRepository) *MetadataWorkspaceRuleSetRepository {
-	return &MetadataWorkspaceRuleSetRepository{metadata: metadata}
+func NewApplicationSchemaWorkspaceRuleSetRepository(metadata appschemarepository.ApplicationSchemaRepository) *ApplicationSchemaWorkspaceRuleSetRepository {
+	return &ApplicationSchemaWorkspaceRuleSetRepository{metadata: metadata}
 }
 
-func (r *MetadataWorkspaceRuleSetRepository) ListWorkspaceRuleSetVersions(ctx context.Context, scope principalmodel.QueryScope, ruleSetKey string) ([]rulesetmodel.RuleSetVersion, error) {
+func (r *ApplicationSchemaWorkspaceRuleSetRepository) ListWorkspaceRuleSetVersions(ctx context.Context, scope principalmodel.QueryScope, ruleSetKey string) ([]rulesetmodel.RuleSetVersion, error) {
 	if !scope.Valid() || !scope.WorkspaceID().Valid() {
 		return nil, fmt.Errorf("workspace rule set query scope is required")
 	}

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,12 +36,12 @@ import (
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
-	agenthttp "github.com/domainry/domainry-runtime/runtime/infrastructure/agentrunner/http"
 	localartifact "github.com/domainry/domainry-runtime/runtime/infrastructure/lifecycleartifact/filesystem"
 	runtimeauditmodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	actionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/action"
 	agentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/agent"
+	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	automationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automation"
 	automationnotification "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automationnotification"
 	changeplanpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/changeplan"
@@ -48,7 +49,6 @@ import (
 	frontendcapabilitypersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/frontendcapability"
 	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
 	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/lifecycle"
-	metadatapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
 	reportnotification "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/reportnotification"
@@ -78,6 +78,7 @@ type runtimeExtensionRegistries struct {
 	auditRepository                    auditrepository.AuditRepository
 	auditSubjectLifecycle              lifecyclecontract.SubjectDataHandler
 	dataExchangeFactory                dataexchangesdk.Factory
+	agentBinding                       agentsdk.Binding
 }
 
 func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest manifestmodel.ManifestSchema, notifications composition.NotificationRenderer, store *persistence.RuntimeStore, identityDirectory identitysdk.Directory, identityPrincipals identitysdk.PrincipalResolver, partyDirectory partysdk.Directory, auditApplication *auditapplication.AuditApplicationService, apiLimiter ratelimit.Limiter, workerDependencies workerplatform.Dependencies, extensionRegistries ...runtimeExtensionRegistries) (runtimeServiceAssembly, error) {
@@ -93,6 +94,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	var auditRepository auditrepository.AuditRepository
 	var auditSubjectLifecycle lifecyclecontract.SubjectDataHandler
 	var dataExchangeFactory dataexchangesdk.Factory
+	var agentBinding agentsdk.Binding
 	if len(extensionRegistries) > 0 && extensionRegistries[0].businessHandlers != nil {
 		businessHandlers = extensionRegistries[0].businessHandlers
 	} else {
@@ -117,13 +119,12 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		if extensionRegistries[0].auditSubjectLifecycle != nil {
 			auditSubjectLifecycle = extensionRegistries[0].auditSubjectLifecycle
 			dataExchangeFactory = extensionRegistries[0].dataExchangeFactory
+			agentBinding = extensionRegistries[0].agentBinding
 		}
 	}
 	if auditRepository == nil || auditSubjectLifecycle == nil {
-		binding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenWithDatabase(ctx,
-			auditsdk.ApplicationRef{InstallationID: valueOrDefault(manifest.TemplateID, "domainry-runtime")},
-			auditsdk.DatabaseHandle{Pool: store.DB(), Driver: store.Driver(), Schema: store.DatabaseSchema()},
-		)
+		binding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(ctx,
+			auditsdk.ApplicationRef{InstallationID: valueOrDefault(manifest.TemplateID, "domainry-runtime")}, runtimeauditmodule.NewHost(store))
 		if err != nil {
 			return runtimeServiceAssembly{}, fmt.Errorf("open Audit module: %w", err)
 		}
@@ -164,7 +165,12 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	fileScans := uploadapplication.NewFileScanReceiptVerifier(lifecycleFileArtifacts, fileScanKey[:])
 	recordSubjectLifecycle := recordapplication.NewRecordSubjectLifecycleApplicationService(records, manifest.Objects, lifecycleArtifacts, manifest.IdentityProfileExtensions)
 	reportDatasetStore := reportpersistence.NewReportDatasetStore(store)
-	agentTaskRunner, interactiveAgentRunner := configuredAgentRunners(cfg)
+	var agentTaskRunner agentapplication.AgentTaskRunner
+	var interactiveAgentRunner agentapplication.InteractiveAgentRunner
+	if agentBinding != nil {
+		agentTaskRunner = runtimeAgentTaskRunner{runner: agentBinding.TaskRunner()}
+		interactiveAgentRunner = runtimeInteractiveAgentRunner{runner: agentBinding.InteractiveRunner()}
+	}
 	agentTaskCredentialKey := sha256.Sum256([]byte("domainry-agent-task-credential-v1:" + cfg.IntegrationSecretKey))
 	projectRevision, metadataRevision := runtimeActionRevisions(manifest)
 	subjectHandlers := []lifecyclecontract.SubjectDataHandler{recordSubjectLifecycle, integrationSubjectLifecycle, auditSubjectLifecycle}
@@ -195,7 +201,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			Audit:                               auditRepository,
 			AuditApplication:                    auditApplication,
 			AuditExportTokenKey:                 []byte(cfg.AuditExportTokenKey),
-			Metadata:                            metadatapersistence.NewMetadataStore(store),
+			ApplicationSchema:                   appschemapersistence.NewApplicationSchemaStore(store),
 			IntegrationConfig:                   integrationpersistence.NewIntegrationConfigStore(store),
 			IntegrationEvents:                   integrationpersistence.NewIntegrationEventStore(store),
 			IntegrationDelivery:                 integrationpersistence.NewIntegrationDeliveryStore(store),
@@ -312,14 +318,6 @@ func ensureAgentRuntimeSchemas(ctx context.Context, migration agentSchemaOwner, 
 		return fmt.Errorf("backfill agent task worker scopes: %w", err)
 	}
 	return nil
-}
-
-func configuredAgentRunners(cfg config.Config) (agentapplication.AgentTaskRunner, agentapplication.InteractiveAgentRunner) {
-	if strings.TrimSpace(cfg.AgentHTTPAPIKey) == "" || cfg.AgentHTTPAgentID <= 0 {
-		return nil, nil
-	}
-	runnerConfig := agenthttp.Config{BaseURL: cfg.AgentHTTPBaseURL, APIKey: cfg.AgentHTTPAPIKey, AgentID: cfg.AgentHTTPAgentID, Timeout: cfg.AgentHTTPTimeout}
-	return agenthttp.NewAgentTaskRunner(runnerConfig), agenthttp.NewInteractiveAgentRunner(runnerConfig)
 }
 
 func completeRuntimeServiceAssembly(result runtimeServiceAssembly, installLifecycle, installFrontend func() error, configure func(), initializeWorkflows func() error) (runtimeServiceAssembly, error) {

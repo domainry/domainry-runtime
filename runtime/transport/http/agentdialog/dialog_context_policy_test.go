@@ -54,68 +54,20 @@ func TestAgentDialogRuntimeContextSanitizesAndScopesInput(t *testing.T) {
 	if label := context["record_label"].(string); len(label) > 512 || !utf8.ValidString(label) {
 		t.Fatalf("record label bytes=%d validUTF8=%v", len(label), utf8.ValidString(label))
 	}
-	message := agentDialogMessageWithRuntimeContext(" hello ", context)
-	if !strings.HasPrefix(message, "hello\n\nServer-scoped runtime context:\n") || !strings.Contains(message, `"workspace_id":"workspace-1"`) {
-		t.Fatalf("message=%q", message)
-	}
-	if got := agentDialogMessageWithRuntimeContext(" hello ", map[string]any{"bad": make(chan int)}); got != "hello" {
-		t.Fatalf("marshal fallback=%q", got)
-	}
 }
 
-func TestAgentDialogResolvedContextUsesOnlyServerValidatedProjection(t *testing.T) {
+func TestAgentDialogGlobalContextRequestCarriesOnlyTypedHints(t *testing.T) {
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user-1", WorkspaceID: "workspace-1"}}, accessfixture.Bundle{Key: "operator"})
-	var received agentruntime.GlobalAgentContextRequest
-	handler := NewAgentDialogHandler(AgentDialogDependencies{
-		Principal: func(*http.Request) principalmodel.Principal { return principal },
-		ContextResolver: agentDialogContextResolverFunc(func(_ context.Context, request agentruntime.GlobalAgentContextRequest) (agentmodel.GlobalAgentContext, error) {
-			received = request
-			return agentmodel.GlobalAgentContext{
-				ContractVersion: agentmodel.GlobalAgentContextContractVersion, ContextRevision: "context-rev", EntrypointKey: "sales-agent", AgentKey: "sales-agent-definition", Surface: "business_workspace", RouteKey: "customers",
-				ObjectKey: "customer", RecordID: "customer-1", SelectedRecordIDs: []string{"customer-1"}, Principal: agentmodel.AgentPrincipalReference{UserID: "user-1", RoleKey: "operator", WorkspaceID: "workspace-1", AuthorizationRevision: "auth-rev"},
-				AllowedTaskKeys: []string{"customer-review"}, AvailableOperations: []string{"task:customer-review"},
-			}, nil
-		}),
-	})
 	request := httptest.NewRequest(http.MethodPost, "/agent-dialog/run", nil)
 	request.Header.Set("X-Agent-Entrypoint-Key", "sales-agent")
 	request.Header.Set("X-Surface-Key", "business_workspace")
 	request.Header.Set("X-Route-Key", "customers")
-	payload, err := handler.agentDialogResolvedUpstreamPayload(request, agentDialogRunRequest{Message: "review", Context: map[string]any{
+	received := agentApplicationGlobalContextRequest(request, map[string]any{
 		"object_key": "customer", "record_id": "customer-1", "selected_record_ids": []any{"customer-1"},
 		"available_operation_ids": []any{"task:customer-review", "action:forged"}, "record_label": "untrusted label", "reports": []any{"forged"},
-	}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	}, principal)
 	if received.EntrypointKey != "sales-agent" || received.RouteKey != "customers" || len(received.AvailableOperationIDs) != 2 {
 		t.Fatalf("resolver request=%#v", received)
-	}
-	metadata := payload["metadata"].(map[string]any)
-	runtimeContext := metadata["runtime_context"].(map[string]any)
-	if runtimeContext["context_revision"] != "context-rev" || runtimeContext["record_id"] != "customer-1" {
-		t.Fatalf("trusted runtime context=%#v", runtimeContext)
-	}
-	if _, leaked := runtimeContext["record_label"]; leaked {
-		t.Fatalf("untrusted hint leaked: %#v", runtimeContext)
-	}
-	if operations := runtimeContext["available_operations"].([]string); len(operations) != 1 || operations[0] != "task:customer-review" {
-		t.Fatalf("validated operations=%v", operations)
-	}
-}
-
-func TestAgentDialogResolvedContextFailsClosed(t *testing.T) {
-	want := errors.New("context denied")
-	handler := NewAgentDialogHandler(AgentDialogDependencies{
-		Principal: func(*http.Request) principalmodel.Principal {
-			return principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}
-		},
-		ContextResolver: agentDialogContextResolverFunc(func(context.Context, agentruntime.GlobalAgentContextRequest) (agentmodel.GlobalAgentContext, error) {
-			return agentmodel.GlobalAgentContext{}, want
-		}),
-	})
-	if _, err := handler.agentDialogResolvedUpstreamPayload(httptest.NewRequest(http.MethodPost, "/agent-dialog/run", nil), agentDialogRunRequest{}); !errors.Is(err, want) {
-		t.Fatalf("resolve error=%v", err)
 	}
 }
 

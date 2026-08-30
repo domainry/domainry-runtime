@@ -1,8 +1,8 @@
 package composition
 
 import (
+	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
-	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 )
@@ -18,7 +18,7 @@ func initializeSchemaAndRecordFoundation(s *runtimeAssembly, deps RuntimeService
 		Repository: deps.Records,
 		Audit:      s.auditApplicationService.AppendWithMetadata,
 	})
-	s.schemaService = metadataapplication.NewMetadataSchemaApplicationService(s, deps.Metadata)
+	s.schemaService = appschemaapplication.NewApplicationSchemaQueryApplicationService(s, deps.ApplicationSchema)
 	s.RecordQueryPolicyDomainService = newRecordQueryPolicyService(s)
 	queryPolicy := recordQueryPolicyAdapter{service: s.RecordQueryPolicyDomainService}
 	s.recordStateMachineEffects = newRecordStateMachineEffects()

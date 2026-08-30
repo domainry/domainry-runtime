@@ -10,10 +10,9 @@ import (
 	"strings"
 	"time"
 
-	auditsdk "github.com/domainry/domainry-audit-sdk"
 	auditmodule "github.com/domainry/domainry-audit/module"
+	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	ormbuilder "github.com/domainry/domainry-orm/builder"
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/base"
 	runtimeschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/schema"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -72,10 +71,13 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 	if err := s.ensureManagedDatabaseCohortMarker(ctx); err != nil {
 		return err
 	}
-	if err := s.EnsureMetadataSchema(ctx); err != nil {
+	if err := s.EnsureApplicationSchema(ctx); err != nil {
 		return err
 	}
 	if err := s.EnsureEvidenceSchema(ctx); err != nil {
+		return err
+	}
+	if err := s.ensureAuditModuleSchemaLocked(ctx); err != nil {
 		return err
 	}
 	if err := s.EnsureWorkflowProcessSchema(ctx); err != nil {
@@ -94,6 +96,40 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 		return err
 	}
 	return s.EnsureWorkspaceRLS(ctx)
+}
+
+func (s *RuntimeStore) ensureAuditModuleSchemaLocked(ctx context.Context) error {
+	exists, err := s.RuntimeTableExists(ctx, "_audit_events")
+	if err != nil {
+		return fmt.Errorf("inspect legacy Audit schema: %w", err)
+	}
+	if exists {
+		if err := s.EnsureRuntimeColumn(ctx, "_audit_events", "workspace_id", s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT 'default'"); err != nil {
+			return fmt.Errorf("prepare legacy Audit workspace ownership: %w", err)
+		}
+	}
+	migrations, err := auditmodule.SchemaMigrations(s.RuntimeRenderer(), s.Driver())
+	if err != nil {
+		return err
+	}
+	values := make([]notificationmodulehost.SchemaMigration, len(migrations))
+	for index, migration := range migrations {
+		values[index] = notificationmodulehost.SchemaMigration{Version: migration.Version, Name: migration.Name, Statements: append([]string(nil), migration.Statements...)}
+		if migration.Baseline != nil {
+			baseline := notificationmodulehost.SchemaBaseline{Tables: make([]notificationmodulehost.SchemaTable, len(migration.Baseline.Tables))}
+			for tableIndex, table := range migration.Baseline.Tables {
+				baseline.Tables[tableIndex] = notificationmodulehost.SchemaTable{Name: table.Name, Columns: make([]notificationmodulehost.SchemaColumn, len(table.Columns)), Indexes: make([]notificationmodulehost.SchemaIndex, len(table.Indexes))}
+				for columnIndex, column := range table.Columns {
+					baseline.Tables[tableIndex].Columns[columnIndex] = notificationmodulehost.SchemaColumn{Name: column.Name, Type: column.Type, Nullable: column.Nullable, PrimaryKey: column.PrimaryKey}
+				}
+				for indexIndex, item := range table.Indexes {
+					baseline.Tables[tableIndex].Indexes[indexIndex] = notificationmodulehost.SchemaIndex{Name: item.Name, Unique: item.Unique, Columns: append([]string(nil), item.Columns...)}
+				}
+			}
+			values[index].Baseline = &baseline
+		}
+	}
+	return s.applyOwnedMigrationsLocked(ctx, "audit", values)
 }
 
 func (s *RuntimeStore) runtimeMigrationStore() *RuntimeStore {
@@ -151,7 +187,7 @@ func (s *RuntimeStore) verifyRuntimeSchema(ctx context.Context) error {
 type schemaDatabase = runtimeschema.SQLDatabase
 
 type runtimeSchemaAssembler interface {
-	EnsureMetadataSchema(context.Context, runtimeschema.Store) error
+	EnsureApplicationSchema(context.Context, runtimeschema.Store) error
 	EnsureEvidenceSchema(context.Context, runtimeschema.Store) error
 	EnsureWorkflowProcessSchema(context.Context, runtimeschema.Store) error
 	EnsureAgentSchema(context.Context, runtimeschema.Store) error
@@ -175,25 +211,17 @@ func (s *RuntimeStore) SchemaDB() runtimeschema.SQLDatabase {
 	return s.schemaDatabase()
 }
 
-func (s *RuntimeStore) EnsureMetadataSchema(ctx context.Context) error {
+func (s *RuntimeStore) EnsureApplicationSchema(ctx context.Context) error {
 	if s.schemaAssembler != nil {
-		return s.schemaAssembler.EnsureMetadataSchema(ctx, s)
+		return s.schemaAssembler.EnsureApplicationSchema(ctx, s)
 	}
-	return runtimeschema.EnsureMetadataSchema(ctx, s)
+	return runtimeschema.EnsureApplicationSchema(ctx, s)
 }
 
 func (s *RuntimeStore) EnsureEvidenceSchema(ctx context.Context) error {
 	if s.schemaAssembler != nil {
 		return s.schemaAssembler.EnsureEvidenceSchema(ctx, s)
 	}
-	binding, err := auditmodule.NewFactory(auditmodule.Options{}).OpenWithDatabase(ctx,
-		auditsdk.ApplicationRef{InstallationID: "domainry-runtime"},
-		auditsdk.DatabaseHandle{Pool: s.DB(), Driver: s.Driver(), Schema: s.DatabaseSchema(), SchemaManager: s, InstallationWorkspaceID: principalmodel.InstallationWorkspaceID},
-	)
-	if err != nil {
-		return fmt.Errorf("prepare Audit module schema: %w", err)
-	}
-	defer binding.Close(ctx)
 	return runtimeschema.EnsureEvidenceSchema(ctx, s)
 }
 

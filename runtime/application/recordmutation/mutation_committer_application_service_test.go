@@ -233,7 +233,7 @@ func TestMutationCommitterCancellationDuringAndBetweenRetries(t *testing.T) {
 
 func mutationCommitterTestPlan(t *testing.T, workspace, recordID string) transactionmodel.MutationPlan {
 	t.Helper()
-	mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: workspace, Source: transactionmodel.MutationSourceHTTP, CorrelationID: "correlation-1", MetadataRevision: "revision-1"})
+	mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: workspace, Source: transactionmodel.MutationSourceHTTP, CorrelationID: "correlation-1", ApplicationSchemaRevision: "revision-1"})
 	if err != nil {
 		t.Fatal(err)
 	}

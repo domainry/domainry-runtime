@@ -277,7 +277,9 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 		path, rootEnvironment, label string
 		patterns                     []string
 	}{
+		{path: "github.com/domainry/domainry-orm", rootEnvironment: "DOMAINRY_ORM_REPO_ROOT", label: "ORM", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-foundation", rootEnvironment: "DOMAINRY_FOUNDATION_REPO_ROOT", label: "Foundation", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-agent-sdk", rootEnvironment: "DOMAINRY_AGENT_SDK_REPO_ROOT", label: "Agent SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-audit-sdk", rootEnvironment: "DOMAINRY_AUDIT_SDK_REPO_ROOT", label: "Audit SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-audit", rootEnvironment: "DOMAINRY_AUDIT_REPO_ROOT", label: "Audit", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-notification-sdk", rootEnvironment: "DOMAINRY_NOTIFICATION_SDK_REPO_ROOT", label: "Notification SDK", patterns: []string{"./..."}},
@@ -374,7 +376,9 @@ func dependencyModule(repository, path, version string) (downloadedModule, error
 		patterns                     []string
 	}
 	for _, candidate := range []localModule{
+		{path: "github.com/domainry/domainry-orm", rootEnvironment: "DOMAINRY_ORM_REPO_ROOT", label: "ORM", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-foundation", rootEnvironment: "DOMAINRY_FOUNDATION_REPO_ROOT", label: "Foundation", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-agent-sdk", rootEnvironment: "DOMAINRY_AGENT_SDK_REPO_ROOT", label: "Agent SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-audit-sdk", rootEnvironment: "DOMAINRY_AUDIT_SDK_REPO_ROOT", label: "Audit SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-audit", rootEnvironment: "DOMAINRY_AUDIT_REPO_ROOT", label: "Audit", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-identity", rootEnvironment: "DOMAINRY_IDENTITY_REPO_ROOT", label: "Identity", patterns: []string{"./module"}},

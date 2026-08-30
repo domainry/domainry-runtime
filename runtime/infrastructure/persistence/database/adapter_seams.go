@@ -82,25 +82,7 @@ func (s *RuntimeStore) EnsureRuntimeColumn(ctx context.Context, table, column, d
 	return s.ensureRuntimeColumn(ctx, table, column, definition)
 }
 
-// EnsureColumn implements the Audit module's dialect seam. Audit supplies the
-// logical definition; Runtime translates it to its configured database type.
-func (s *RuntimeStore) EnsureColumn(ctx context.Context, table, column, definition string) error {
-	if definition == "TEXT_KEY_255" {
-		definition = s.metadataIDColumnType()
-	}
-	return s.ensureRuntimeColumn(ctx, table, column, definition)
-}
-
-func (s *RuntimeStore) BackfillWorkspace(ctx context.Context, table, workspaceID string) error {
-	_, err := s.SchemaDB().ExecContext(ctx, "UPDATE "+s.TableIdentifier(table)+" SET "+s.Identifier("workspace_id")+" = COALESCE(NULLIF("+s.Identifier("workspace_id")+", ''), "+s.Placeholder(1)+")", workspaceID)
-	return err
-}
-
-func (s *RuntimeStore) NormalizeCursorColumns(ctx context.Context, _ string, _ ...string) error {
-	return s.RuntimeProfile().NormalizeEvidenceSchema(ctx, s.SchemaDB(), s.RuntimeRenderer())
-}
-
-func (s *RuntimeStore) MetadataIDColumnType() string { return s.metadataIDColumnType() }
+func (s *RuntimeStore) ApplicationSchemaIDColumnType() string { return s.metadataIDColumnType() }
 func (s *RuntimeStore) RuntimeTableExists(ctx context.Context, table string) (bool, error) {
 	base := s.sqlBase()
 	query := base.RuntimeEngine.TableExistsQuery(base.SQLRenderer, base.DatabaseSchema, strings.TrimSpace(table))

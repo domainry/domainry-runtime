@@ -19,13 +19,13 @@ import (
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
+	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
-	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -67,7 +67,7 @@ func (r *recordsAuditRepository) ListAuditOptions(_ context.Context, _ string, q
 }
 
 type recordsSchemaProvider struct {
-	snapshot metadatamodel.ApplicationSchemaSnapshot
+	snapshot appschemamodel.ApplicationSchemaSnapshot
 }
 
 type recordsActionExecutionStore struct{}
@@ -104,7 +104,7 @@ func (recordsActionExecutionTransaction) Commit(_ context.Context, _ []transacti
 
 func (recordsActionExecutionTransaction) RollBack(context.Context) error { return nil }
 
-func (p recordsSchemaProvider) SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+func (p recordsSchemaProvider) SchemaForPrincipal(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 	return p.snapshot
 }
 
@@ -262,7 +262,7 @@ func TestRecordsActionAndPermissionHandlersForwardApplicationErrors(t *testing.T
 	}
 
 	unknownHandler, unknownErr := recordsHandlerForTest(principalmodel.Principal{})
-	unknownHandler.permissions = metadataapplication.NewMetadataSchemaApplicationService(recordsSchemaProvider{}, nil)
+	unknownHandler.permissions = appschemaapplication.NewApplicationSchemaQueryApplicationService(recordsSchemaProvider{}, nil)
 	w := httptest.NewRecorder()
 	unknownHandler.effectivePermissions(w, recordsRequest("GET", "/permissions", "", nil))
 	if w.Code != 599 || *unknownErr == nil {
@@ -278,7 +278,7 @@ func TestRecordsAuditAndPermissionHandlersProjectQueries(t *testing.T) {
 	principal := recordsHTTPPrincipal()
 	handler, serviceErr := recordsHandlerForTest(principal)
 	handler.audit = auditapplication.NewAuditApplicationService(repository)
-	handler.permissions = metadataapplication.NewMetadataSchemaApplicationService(recordsSchemaProvider{snapshot: metadatamodel.ApplicationSchemaSnapshot{
+	handler.permissions = appschemaapplication.NewApplicationSchemaQueryApplicationService(recordsSchemaProvider{snapshot: appschemamodel.ApplicationSchemaSnapshot{
 		Objects: []definitionmodel.ObjectSchema{{Key: "customer"}},
 	}}, nil)
 
@@ -336,7 +336,7 @@ func TestEffectivePermissionsAppliesRecordRLSOnceForEveryRecordAction(t *testing
 			repository := &recordsHTTPRepository{record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"owner": test.owner}}, found: true}
 			handler, serviceErr := recordsHandlerForTest(principal)
 			handler.UseQueries(recordsHTTPApplication(repository))
-			handler.permissions = metadataapplication.NewMetadataSchemaApplicationService(recordsSchemaProvider{snapshot: metadatamodel.ApplicationSchemaSnapshot{
+			handler.permissions = appschemaapplication.NewApplicationSchemaQueryApplicationService(recordsSchemaProvider{snapshot: appschemamodel.ApplicationSchemaSnapshot{
 				Objects: []definitionmodel.ObjectSchema{{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "owner", Type: "user"}}}}, Actions: actions,
 			}}, nil)
 			w := httptest.NewRecorder()
@@ -371,7 +371,7 @@ func TestEffectivePermissionsAppliesRecordRLSOnceForEveryRecordAction(t *testing
 
 func TestEffectivePermissionsRequiresCompleteRecordContext(t *testing.T) {
 	handler, serviceErr := recordsHandlerForTest(recordsHTTPPrincipal())
-	handler.permissions = metadataapplication.NewMetadataSchemaApplicationService(recordsSchemaProvider{}, nil)
+	handler.permissions = appschemaapplication.NewApplicationSchemaQueryApplicationService(recordsSchemaProvider{}, nil)
 	w := httptest.NewRecorder()
 	handler.effectivePermissions(w, recordsRequest("GET", "/permissions/effective?object_key=customer", "", nil))
 	if w.Code != http.StatusBadRequest || *serviceErr == nil || (*serviceErr).Error() != "backend.permissions.record_context_required" {
@@ -380,8 +380,8 @@ func TestEffectivePermissionsRequiresCompleteRecordContext(t *testing.T) {
 }
 
 func TestEffectivePermissionsRecordDecisionEdgePaths(t *testing.T) {
-	permissionService := func(principal principalmodel.Principal, actions []definitionmodel.ActionSchema) *metadataapplication.MetadataSchemaApplicationService {
-		return metadataapplication.NewMetadataSchemaApplicationService(recordsSchemaProvider{snapshot: metadatamodel.ApplicationSchemaSnapshot{
+	permissionService := func(principal principalmodel.Principal, actions []definitionmodel.ActionSchema) *appschemaapplication.ApplicationSchemaQueryApplicationService {
+		return appschemaapplication.NewApplicationSchemaQueryApplicationService(recordsSchemaProvider{snapshot: appschemamodel.ApplicationSchemaSnapshot{
 			Objects: []definitionmodel.ObjectSchema{
 				{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "owner", Type: "user"}}},
 				{Key: "order"},

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -45,6 +46,12 @@ type serverRuntimeFake struct {
 type identityFactoryStub struct {
 	binding identitysdk.Binding
 	err     error
+}
+
+type agentFactoryStub struct{}
+
+func (agentFactoryStub) Open(context.Context, agentsdk.ApplicationRef) (agentsdk.Binding, error) {
+	return nil, errors.New("unused Agent factory")
 }
 
 func (factory identityFactoryStub) Open(context.Context, identitysdk.ApplicationRef) (identitysdk.Binding, error) {
@@ -123,7 +130,7 @@ func (f *serverRuntimeFake) CloseContext(context.Context) error { f.closed++; re
 func validOptions() Options {
 	domainSDK := DomainSDKIdentity{
 		ContractVersion: "runtime-domain-sdk-v1", ContractSHA256: strings.Repeat("a", 64), GeneratorVersion: "domaincodegen-v1",
-		MetadataSnapshotSHA256: strings.Repeat("b", 64), RuntimeextContractSHA256: runtimeext.ContractSHA256, ArtifactSHA256: strings.Repeat("c", 64),
+		ApplicationSchemaSnapshotSHA256: strings.Repeat("b", 64), RuntimeextContractSHA256: runtimeext.ContractSHA256, ArtifactSHA256: strings.Repeat("c", 64),
 	}
 	domainSDK.BuildConstraint = domainSDKBuildConstraint(domainSDK)
 	return Options{Identity: BuildIdentity{
@@ -133,7 +140,7 @@ func validOptions() Options {
 		ConnectorContractVersion:  connector.ContractVersion,
 		ConnectorContractSHA256:   connector.ContractSHA256,
 		DomainSDK:                 domainSDK,
-	}, IdentityFactory: identityFactoryStub{}, NotificationFactory: notificationFactoryStub{}, PartyFactory: partyFactoryStub{}, MonitoringFactory: monitoringFactoryStub{}, SchedulerFactory: schedulerFactoryStub{}, DataExchangeFactory: dataExchangeFactoryStub{}}
+	}, IdentityFactory: identityFactoryStub{}, NotificationFactory: notificationFactoryStub{}, PartyFactory: partyFactoryStub{}, MonitoringFactory: monitoringFactoryStub{}, SchedulerFactory: schedulerFactoryStub{}, DataExchangeFactory: dataExchangeFactoryStub{}, AgentFactory: agentFactoryStub{}}
 }
 
 func serverManifestJSON(t *testing.T, target *manifestmodel.GeneratedDomainSDKIdentity) []byte {
@@ -152,7 +159,7 @@ func serverManifestJSON(t *testing.T, target *manifestmodel.GeneratedDomainSDKId
 func manifestDomainSDKTarget(identity DomainSDKIdentity) *manifestmodel.GeneratedDomainSDKIdentity {
 	return &manifestmodel.GeneratedDomainSDKIdentity{
 		ContractVersion: identity.ContractVersion, ContractSHA256: identity.ContractSHA256, GeneratorVersion: identity.GeneratorVersion,
-		MetadataSnapshotSHA256: identity.MetadataSnapshotSHA256, RuntimeextContractSHA256: identity.RuntimeextContractSHA256,
+		ApplicationSchemaSnapshotSHA256: identity.ApplicationSchemaSnapshotSHA256, RuntimeextContractSHA256: identity.RuntimeextContractSHA256,
 		BuildConstraint: identity.BuildConstraint, ArtifactSHA256: identity.ArtifactSHA256,
 	}
 }
@@ -191,7 +198,7 @@ func serverTestDependencies(t *testing.T, cfg config.Config, runtime runtimeProc
 			databaseConfig.DBPath = databasePath
 			return bootstrap.PrepareProjectDatabase(ctx, databaseConfig)
 		},
-		newRuntime: func(_ context.Context, _ config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, _ identitysdk.Binding, _ notificationsdk.Factory, _ partysdk.Factory, _ monitoringsdk.Factory, _ schedulersdk.Factory, _ dataexchangesdk.Factory, _ *bootstrap.ProjectDatabase) runtimeProcess {
+		newRuntime: func(_ context.Context, _ config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, _ identitysdk.Binding, _ notificationsdk.Factory, _ partysdk.Factory, _ monitoringsdk.Factory, _ schedulersdk.Factory, _ dataexchangesdk.Factory, _ agentsdk.Factory, _ *bootstrap.ProjectDatabase) runtimeProcess {
 			if handlers == nil || !handlers.Frozen() {
 				panic("host passed an unfrozen registry")
 			}
@@ -287,7 +294,7 @@ func TestValidateDomainSDKTargetRequiresExactIdentity(t *testing.T) {
 		},
 		"generator_version": func(target *manifestmodel.GeneratedDomainSDKIdentity) { target.GeneratorVersion = "stale" },
 		"metadata_snapshot_sha256": func(target *manifestmodel.GeneratedDomainSDKIdentity) {
-			target.MetadataSnapshotSHA256 = strings.Repeat("d", 64)
+			target.ApplicationSchemaSnapshotSHA256 = strings.Repeat("d", 64)
 		},
 		"runtimeext_contract_sha256": func(target *manifestmodel.GeneratedDomainSDKIdentity) {
 			target.RuntimeextContractSHA256 = strings.Repeat("d", 64)
@@ -400,7 +407,7 @@ func TestRunWithDependenciesRejectsManifestSDKTargetBeforeRuntimeCreation(t *tes
 			created := 0
 			deps := serverTestDependencies(t, serverTestConfig(), &serverRuntimeFake{})
 			deps.readFile = func(string) ([]byte, error) { return serverManifestJSON(t, test.target), nil }
-			deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, partysdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, *bootstrap.ProjectDatabase) runtimeProcess {
+			deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, partysdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, *bootstrap.ProjectDatabase) runtimeProcess {
 				created++
 				return &serverRuntimeFake{}
 			}
@@ -505,7 +512,7 @@ func TestRunWithDependenciesCoversConfigurationActivationAndServeOutcomes(t *tes
 		return runtimeext.ExtensionSet{}, nil
 	}
 	deps = serverTestDependencies(t, cfg, &serverRuntimeFake{})
-	deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, partysdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, *bootstrap.ProjectDatabase) runtimeProcess {
+	deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, partysdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, *bootstrap.ProjectDatabase) runtimeProcess {
 		return nil
 	}
 	if err := runWithDependencies(options, deps); err == nil || !strings.Contains(err.Error(), "returned no process") {

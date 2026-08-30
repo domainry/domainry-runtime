@@ -9,13 +9,13 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationprojection "github.com/domainry/domainry-runtime/runtime/domain/automation/projection"
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -32,13 +32,15 @@ func (stub businessSystemEvidenceStub) ListSeedProvenance(context.Context) ([]bu
 }
 
 func businessSystemTestDependencies() BusinessSystemApplicationDependencies {
-	schema := metadatamodel.ApplicationSchemaSnapshot{SchemaHash: "schema-hash", Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}, Workflows: []definitionmodel.WorkflowSchema{{Key: "approval"}}}
+	schema := appschemamodel.ApplicationSchemaSnapshot{SchemaHash: "schema-hash", Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}, Workflows: []definitionmodel.WorkflowSchema{{Key: "approval"}}}
 	return BusinessSystemApplicationDependencies{
 		FeaturePermissions: func(context.Context, principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error) {
 			return recordcontract.RecordFeaturePermissionSnapshot{}, nil
 		},
-		SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot { return schema },
-		MetadataDefinitions: func(context.Context, string, string, principalmodel.Principal) ([]metadatamodel.MetadataDefinition, error) {
+		SchemaForPrincipal: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
+			return schema
+		},
+		ApplicationDefinitions: func(context.Context, string, string, principalmodel.Principal) ([]appschemamodel.ApplicationDefinition, error) {
 			return nil, nil
 		},
 		FrontendSnapshot: func(context.Context, principalmodel.Principal) (deploymentmodel.FrontendCapabilitySnapshot, error) {
@@ -66,7 +68,9 @@ func businessSystemTestDependencies() BusinessSystemApplicationDependencies {
 			SchedulerDefinitions: func(context.Context, principalmodel.Principal) ([]recordmodel.Record, error) {
 				return []recordmodel.Record{{ID: "nightly"}}, nil
 			},
-			SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot { return schema },
+			SchemaForPrincipal: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
+				return schema
+			},
 			SchemaObjectMap: func(context.Context) map[string]definitionmodel.ObjectSchema {
 				return map[string]definitionmodel.ObjectSchema{}
 			},
@@ -209,12 +213,12 @@ func TestBusinessSystemRuntimeStatePropagatesEveryOwnerFailure(t *testing.T) {
 func TestBusinessSystemResourceAndFrontendProjectionPreservesEvidence(t *testing.T) {
 	dependencies := businessSystemTestDependencies()
 	returned := false
-	dependencies.MetadataDefinitions = func(context.Context, string, string, principalmodel.Principal) ([]metadatamodel.MetadataDefinition, error) {
+	dependencies.ApplicationDefinitions = func(context.Context, string, string, principalmodel.Principal) ([]appschemamodel.ApplicationDefinition, error) {
 		if returned {
 			return nil, nil
 		}
 		returned = true
-		return []metadatamodel.MetadataDefinition{{ResourceType: "object", ResourceKey: "customer", Name: "Customer", DisabledAt: "now"}}, nil
+		return []appschemamodel.ApplicationDefinition{{ResourceType: "object", ResourceKey: "customer", Name: "Customer", DisabledAt: "now"}}, nil
 	}
 	service := NewBusinessSystemApplicationService(dependencies)
 	sources, err := service.businessResourceSources(t.Context(), principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
@@ -248,7 +252,7 @@ func TestBusinessSystemResourceAndFrontendProjectionPreservesEvidence(t *testing
 func TestBusinessSystemResourceProjectionPropagatesMetadataFailure(t *testing.T) {
 	want := errors.New("metadata unavailable")
 	dependencies := businessSystemTestDependencies()
-	dependencies.MetadataDefinitions = func(context.Context, string, string, principalmodel.Principal) ([]metadatamodel.MetadataDefinition, error) {
+	dependencies.ApplicationDefinitions = func(context.Context, string, string, principalmodel.Principal) ([]appschemamodel.ApplicationDefinition, error) {
 		return nil, want
 	}
 	service := NewBusinessSystemApplicationService(dependencies)
@@ -264,7 +268,7 @@ func TestBusinessSystemAdministratorSnapshotPropagatesEveryProjectionFailure(t *
 		mutate func(*BusinessSystemApplicationDependencies)
 	}{
 		{name: "resource sources", mutate: func(deps *BusinessSystemApplicationDependencies) {
-			deps.MetadataDefinitions = func(context.Context, string, string, principalmodel.Principal) ([]metadatamodel.MetadataDefinition, error) {
+			deps.ApplicationDefinitions = func(context.Context, string, string, principalmodel.Principal) ([]appschemamodel.ApplicationDefinition, error) {
 				return nil, want
 			}
 		}},

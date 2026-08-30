@@ -3,8 +3,8 @@ package validation
 import (
 	"testing"
 
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 )
 
 func TestActionDefinitionValidationOwnsMetadataContract(t *testing.T) {
@@ -68,7 +68,7 @@ func TestActionPermissionPolicyCoversFormatObjectAndDeclaredRiskMatrix(t *testin
 	}
 }
 
-func actionIssuesContainCode(issues []metadatamodel.MetadataDefinitionValidationIssue, code string) bool {
+func actionIssuesContainCode(issues []appschemamodel.ApplicationDefinitionValidationIssue, code string) bool {
 	for _, issue := range issues {
 		if issue.ErrorCode == code {
 			return true

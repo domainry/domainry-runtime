@@ -11,8 +11,8 @@ import (
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
+	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
@@ -124,9 +124,9 @@ func newSchedulerOperationRuntimeAdapter(s *runtimeAssembly) schedulerOperationR
 	}
 }
 
-func activeMetadataDefinitionKeys(
+func activeApplicationDefinitionKeys(
 	ctx context.Context,
-	repository metadatarepository.MetadataRepository,
+	repository appschemarepository.ApplicationSchemaRepository,
 	resourceType string,
 	reason string,
 ) ([]string, error) {
@@ -147,13 +147,13 @@ func activeMetadataDefinitionKeys(
 	return keys, nil
 }
 
-func metadataDefinitionReferenceSource(
-	repository metadatarepository.MetadataRepository,
+func applicationDefinitionReferenceSource(
+	repository appschemarepository.ApplicationSchemaRepository,
 	resourceType string,
 	reason string,
 ) func(context.Context, principalmodel.Principal) ([]string, error) {
 	return func(ctx context.Context, _ principalmodel.Principal) ([]string, error) {
-		return activeMetadataDefinitionKeys(ctx, repository, resourceType, reason)
+		return activeApplicationDefinitionKeys(ctx, repository, resourceType, reason)
 	}
 }
 
@@ -162,8 +162,8 @@ func initializeWorkflowAutomationAndGovernance(s *runtimeAssembly, deps RuntimeS
 	s.schedulerService = newSchedulerApplicationService(s, schedulerRuntime, s.recordRepo, s.auditApplicationService, s.workerDependencies)
 	s.recordTimerService = recordtimerapplication.NewRecordTimerApplicationService(s.schedulerService)
 	s.schedulerService.UseNotificationCompiler(s.workflowNotificationCompiler)
-	if s.metadataRepo != nil {
-		s.schedulerService.UseDefinitionSource(schedulerMetadataDefinitionSource{repository: s.metadataRepo})
+	if s.applicationSchemaRepo != nil {
+		s.schedulerService.UseDefinitionSource(schedulerApplicationDefinitionSource{repository: s.applicationSchemaRepo})
 	}
 	s.workflowApplicationService = assembleWorkflowApplication(s)
 	if s.agentInteractiveRunService != nil && deps.AgentInteractiveRunner != nil {
@@ -175,9 +175,9 @@ func initializeWorkflowAutomationAndGovernance(s *runtimeAssembly, deps RuntimeS
 		}
 	}
 	s.authoringCapabilities = newCapabilityAuthoringApplicationService(s)
-	if s.metadataRepo != nil {
-		s.authoringCapabilities.UsePreferenceReferenceSource(metadataDefinitionReferenceSource(s.metadataRepo, "preference", "discover preference references"))
-		s.authoringCapabilities.UseRuleSetReferenceSource(metadataDefinitionReferenceSource(s.metadataRepo, "rule_set", "discover rule set references"))
+	if s.applicationSchemaRepo != nil {
+		s.authoringCapabilities.UsePreferenceReferenceSource(applicationDefinitionReferenceSource(s.applicationSchemaRepo, "preference", "discover preference references"))
+		s.authoringCapabilities.UseRuleSetReferenceSource(applicationDefinitionReferenceSource(s.applicationSchemaRepo, "rule_set", "discover rule set references"))
 	}
 	s.businessReferences = assembleChangePlanReferenceApplication(s, businessReferenceRuntimeAdapter{records: s, workflows: s.workflowApplicationService}, s.businessEvidenceRepo, s.frontendCapabilities)
 	s.applicationSchemaService = assembleApplicationSchema(s)

@@ -35,7 +35,7 @@ func persistenceRuntimeReleaseIdentity(t *testing.T, marker byte) deploymentmode
 		ContractVersion: deploymentmodel.RuntimeReleaseIdentityVersion, BuildMode: "development", RuntimeVersion: "runtime-" + string(marker),
 		RuntimeextContractVersion: "runtimeext-v1", RuntimeextContractSHA256: hash('a'), ConnectorContractVersion: "connector-v1", ConnectorContractSHA256: hash('b'),
 		DomainSDKContractVersion: "sdk-v1", DomainSDKContractSHA256: hash('c'), DomainSDKGeneratorVersion: "generator-v1", DomainSDKBuildConstraint: "constraint-" + string(marker),
-		MetadataSnapshotSHA256: hash(marker), GeneratedSDKSHA256: hash('d'), HandlerRegistrySHA256: hash('e'), ConnectorRegistrySHA256: hash('f'),
+		ApplicationSchemaSnapshotSHA256: hash(marker), GeneratedSDKSHA256: hash('d'), HandlerRegistrySHA256: hash('e'), ConnectorRegistrySHA256: hash('f'),
 	}
 	combination, err := deploymentapplication.RuntimeReleaseCombinationSHA256(identity)
 	if err != nil {

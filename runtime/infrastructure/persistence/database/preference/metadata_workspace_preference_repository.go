@@ -5,24 +5,24 @@ import (
 	"fmt"
 	"strings"
 
-	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
+	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	preferencemodel "github.com/domainry/domainry-runtime/runtime/domain/preference/model"
 	preferencerepository "github.com/domainry/domainry-runtime/runtime/domain/preference/repository"
 	preferencevalidation "github.com/domainry/domainry-runtime/runtime/domain/preference/validation"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-type MetadataWorkspacePreferenceRepository struct {
-	metadata metadatarepository.MetadataRepository
+type ApplicationSchemaWorkspacePreferenceRepository struct {
+	metadata appschemarepository.ApplicationSchemaRepository
 }
 
-var _ preferencerepository.WorkspacePreferenceRepository = (*MetadataWorkspacePreferenceRepository)(nil)
+var _ preferencerepository.WorkspacePreferenceRepository = (*ApplicationSchemaWorkspacePreferenceRepository)(nil)
 
-func NewMetadataWorkspacePreferenceRepository(metadata metadatarepository.MetadataRepository) *MetadataWorkspacePreferenceRepository {
-	return &MetadataWorkspacePreferenceRepository{metadata: metadata}
+func NewApplicationSchemaWorkspacePreferenceRepository(metadata appschemarepository.ApplicationSchemaRepository) *ApplicationSchemaWorkspacePreferenceRepository {
+	return &ApplicationSchemaWorkspacePreferenceRepository{metadata: metadata}
 }
 
-func (r *MetadataWorkspacePreferenceRepository) ListWorkspacePreferenceVersions(ctx context.Context, scope principalmodel.QueryScope, preferenceKey string) ([]preferencemodel.WorkspacePreferenceVersion, error) {
+func (r *ApplicationSchemaWorkspacePreferenceRepository) ListWorkspacePreferenceVersions(ctx context.Context, scope principalmodel.QueryScope, preferenceKey string) ([]preferencemodel.WorkspacePreferenceVersion, error) {
 	if !scope.Valid() || !scope.WorkspaceID().Valid() {
 		return nil, fmt.Errorf("workspace preference query scope is required")
 	}

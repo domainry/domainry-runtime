@@ -19,7 +19,7 @@ func TestRecordLocalizationCreateSearchSortFallbackAndDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.EnsureMetadataSchema(t.Context()); err != nil {
+	if err := store.EnsureApplicationSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.DB().Exec(`CREATE TABLE product (

@@ -9,20 +9,20 @@ import (
 
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
+	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	schedulercontract "github.com/domainry/domainry-runtime/runtime/domain/scheduler/contract"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
 
-type schedulerMetadataDefinitionSource struct {
-	repository metadatarepository.MetadataRepository
+type schedulerApplicationDefinitionSource struct {
+	repository appschemarepository.ApplicationSchemaRepository
 }
 
-func (s schedulerMetadataDefinitionSource) ListSchedulerDefinitions(ctx context.Context) ([]recordmodel.Record, error) {
+func (s schedulerApplicationDefinitionSource) ListSchedulerDefinitions(ctx context.Context) ([]recordmodel.Record, error) {
 	if !schedulerMetadataRepositoryAvailable(s.repository) {
 		return nil, nil
 	}
@@ -41,7 +41,7 @@ func (s schedulerMetadataDefinitionSource) ListSchedulerDefinitions(ctx context.
 	return records, nil
 }
 
-func (s schedulerMetadataDefinitionSource) GetSchedulerDefinition(ctx context.Context, key string) (recordmodel.Record, bool, error) {
+func (s schedulerApplicationDefinitionSource) GetSchedulerDefinition(ctx context.Context, key string) (recordmodel.Record, bool, error) {
 	if !schedulerMetadataRepositoryAvailable(s.repository) {
 		return recordmodel.Record{}, false, nil
 	}
@@ -53,7 +53,7 @@ func (s schedulerMetadataDefinitionSource) GetSchedulerDefinition(ctx context.Co
 	return record, err == nil, err
 }
 
-func (s schedulerMetadataDefinitionSource) ListSchedulerDefinitionVersions(ctx context.Context, key string) ([]schedulerapplication.SchedulerDefinitionVersion, error) {
+func (s schedulerApplicationDefinitionSource) ListSchedulerDefinitionVersions(ctx context.Context, key string) ([]schedulerapplication.SchedulerDefinitionVersion, error) {
 	if !schedulerMetadataRepositoryAvailable(s.repository) {
 		return nil, nil
 	}
@@ -72,7 +72,7 @@ func (s schedulerMetadataDefinitionSource) ListSchedulerDefinitionVersions(ctx c
 	return out, nil
 }
 
-func schedulerMetadataRepositoryAvailable(repository metadatarepository.MetadataRepository) bool {
+func schedulerMetadataRepositoryAvailable(repository appschemarepository.ApplicationSchemaRepository) bool {
 	if repository == nil {
 		return false
 	}
@@ -86,7 +86,7 @@ func schedulerMetadataRepositoryAvailable(repository metadatarepository.Metadata
 	if value.Kind() != reflect.Struct {
 		return true
 	}
-	contract := reflect.TypeOf((*metadatarepository.MetadataRepository)(nil)).Elem()
+	contract := reflect.TypeOf((*appschemarepository.ApplicationSchemaRepository)(nil)).Elem()
 	for index := 0; index < value.NumField(); index++ {
 		fieldType := value.Type().Field(index)
 		field := value.Field(index)

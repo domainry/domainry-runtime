@@ -17,7 +17,7 @@ func UseHandlers(router *HTTPRouter, handlers HTTPRouterHandlers) *HTTPRouter {
 	router.capabilityHTTP = handlers.Capabilities
 	router.changePlanHTTP = handlers.ChangePlans
 	router.integrationHTTP = handlers.Integrations
-	router.metadataHTTP = handlers.Metadata
+	router.applicationSchemaHTTP = handlers.ApplicationSchema
 	router.notificationHTTP = nil
 	if handlers.Notifications != nil {
 		router.notificationHTTP = handlers.Notifications

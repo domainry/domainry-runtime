@@ -27,6 +27,8 @@ func TestProjectMainCompilesUsingOnlyGeneratedCompositionAndRuntimehost(t *testi
 	schedulerModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-scheduler")
 	dataExchangeSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-data-exchange-sdk")
 	dataExchangeModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-data-exchange")
+	agentSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-agent-sdk")
+	agentModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-agent")
 	partySDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-party-sdk")
 	partyModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-party")
 	foundationRoot := siblingModuleRoot(t, repositoryRoot, "domainry-foundation")
@@ -34,6 +36,7 @@ func TestProjectMainCompilesUsingOnlyGeneratedCompositionAndRuntimehost(t *testi
 	externalRoot := t.TempDir()
 	goMod := []byte("module example.com/domainry-project\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/domainry/domainry-runtime v0.0.0\n\tgithub.com/domainry/domainry-identity v0.0.0\n\tgithub.com/domainry/domainry-notification v0.0.0\n\tgithub.com/domainry/domainry-party v0.0.0\n\tgithub.com/domainry/domainry-monitoring v0.0.0\n\tgithub.com/domainry/domainry-scheduler v0.0.0\n)\n\nreplace github.com/domainry/domainry-runtime => " + repositoryRoot + "\nreplace github.com/domainry/domainry-foundation => " + foundationRoot + "\nreplace github.com/domainry/domainry-orm => " + ormRoot + "\nreplace github.com/domainry/domainry-audit-sdk => " + auditSDKRoot + "\nreplace github.com/domainry/domainry-audit => " + auditModuleRoot + "\nreplace github.com/domainry/domainry-identity-sdk => " + identitySDKRoot + "\nreplace github.com/domainry/domainry-identity => " + identityModuleRoot + "\nreplace github.com/domainry/domainry-notification-sdk => " + notificationSDKRoot + "\nreplace github.com/domainry/domainry-notification => " + notificationModuleRoot + "\nreplace github.com/domainry/domainry-party-sdk => " + partySDKRoot + "\nreplace github.com/domainry/domainry-party => " + partyModuleRoot + "\nreplace github.com/domainry/domainry-monitoring-sdk => " + monitoringSDKRoot + "\nreplace github.com/domainry/domainry-monitoring => " + monitoringModuleRoot + "\nreplace github.com/domainry/domainry-scheduler-sdk => " + schedulerSDKRoot + "\nreplace github.com/domainry/domainry-scheduler => " + schedulerModuleRoot + "\n")
 	goMod = append(goMod, []byte("replace github.com/domainry/domainry-data-exchange-sdk => "+dataExchangeSDKRoot+"\nreplace github.com/domainry/domainry-data-exchange => "+dataExchangeModuleRoot+"\n")...)
+	goMod = append(goMod, []byte("replace github.com/domainry/domainry-agent-sdk => "+agentSDKRoot+"\nreplace github.com/domainry/domainry-agent => "+agentModuleRoot+"\n")...)
 	if err := os.WriteFile(filepath.Join(externalRoot, "go.mod"), goMod, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -44,6 +47,7 @@ func TestProjectMainCompilesUsingOnlyGeneratedCompositionAndRuntimehost(t *testi
 	compositionSource := []byte(`package composition
 
 import (
+	agentmodule "github.com/domainry/domainry-agent/module"
 	"github.com/domainry/domainry-connector-sdk"
 	dataexchangemodule "github.com/domainry/domainry-data-exchange/module"
 	identitymodule "github.com/domainry/domainry-identity/module"
@@ -70,6 +74,7 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 		MonitoringFactory: monitoringmodule.NewFactory(monitoringmodule.OptionsFromEnvironment()),
 		SchedulerFactory: schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()),
 		DataExchangeFactory: dataexchangemodule.NewFactory(dataexchangemodule.Options{}),
+		AgentFactory: agentmodule.NewFactory(agentmodule.OptionsFromEnvironment()),
 	}
 }
 `)
@@ -96,11 +101,14 @@ func TestProjectMainCompilesUsingSaaSFactoryWithoutIdentityModule(t *testing.T) 
 	schedulerModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-scheduler")
 	dataExchangeSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-data-exchange-sdk")
 	dataExchangeModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-data-exchange")
+	agentSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-agent-sdk")
+	agentModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-agent")
 	foundationRoot := siblingModuleRoot(t, repositoryRoot, "domainry-foundation")
 	ormRoot := siblingModuleRoot(t, repositoryRoot, "domainry-orm")
 	externalRoot := t.TempDir()
 	goMod := []byte("module example.com/domainry-saas-project\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/domainry/domainry-runtime v0.0.0\n\tgithub.com/domainry/domainry-identity-sdk v0.0.0\n\tgithub.com/domainry/domainry-notification-sdk v0.0.0\n\tgithub.com/domainry/domainry-party-sdk v0.0.0\n\tgithub.com/domainry/domainry-monitoring-sdk v0.0.0\n\tgithub.com/domainry/domainry-scheduler v0.0.0\n)\n\nreplace github.com/domainry/domainry-runtime => " + repositoryRoot + "\nreplace github.com/domainry/domainry-foundation => " + foundationRoot + "\nreplace github.com/domainry/domainry-orm => " + ormRoot + "\nreplace github.com/domainry/domainry-audit-sdk => " + auditSDKRoot + "\nreplace github.com/domainry/domainry-audit => " + auditModuleRoot + "\nreplace github.com/domainry/domainry-identity-sdk => " + identitySDKRoot + "\nreplace github.com/domainry/domainry-notification-sdk => " + notificationSDKRoot + "\nreplace github.com/domainry/domainry-party-sdk => " + partySDKRoot + "\nreplace github.com/domainry/domainry-monitoring-sdk => " + monitoringSDKRoot + "\nreplace github.com/domainry/domainry-scheduler-sdk => " + schedulerSDKRoot + "\nreplace github.com/domainry/domainry-scheduler => " + schedulerModuleRoot + "\n")
 	goMod = append(goMod, []byte("replace github.com/domainry/domainry-data-exchange-sdk => "+dataExchangeSDKRoot+"\nreplace github.com/domainry/domainry-data-exchange => "+dataExchangeModuleRoot+"\n")...)
+	goMod = append(goMod, []byte("replace github.com/domainry/domainry-agent-sdk => "+agentSDKRoot+"\nreplace github.com/domainry/domainry-agent => "+agentModuleRoot+"\n")...)
 	if err := os.WriteFile(filepath.Join(externalRoot, "go.mod"), goMod, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -111,6 +119,7 @@ func TestProjectMainCompilesUsingSaaSFactoryWithoutIdentityModule(t *testing.T) 
 	compositionSource := []byte(`package composition
 
 import (
+	agentremote "github.com/domainry/domainry-agent/remote"
 	"github.com/domainry/domainry-connector-sdk"
 	dataexchangeremote "github.com/domainry/domainry-data-exchange/remote"
 	identityremote "github.com/domainry/domainry-identity-sdk/remote"
@@ -138,6 +147,7 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 		MonitoringFactory: monitoringremote.NewFactory(monitoringremote.ConfigFromEnvironment()),
 		SchedulerFactory: schedulerremote.NewHTTPFactory(schedulerhttp.ConfigFromEnvironment()),
 		DataExchangeFactory: dataexchangeremote.NewFactory(nil),
+		AgentFactory: agentremote.NewFactory(agentremote.OptionsFromEnvironment()),
 	}
 }
 

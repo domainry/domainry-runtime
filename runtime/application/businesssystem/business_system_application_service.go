@@ -11,15 +11,15 @@ import (
 	"encoding/json"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
+	appschemavalidation "github.com/domainry/domainry-runtime/runtime/domain/appschema/validation"
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
 	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
 	changeplanvalidation "github.com/domainry/domainry-runtime/runtime/domain/changeplan/validation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	metadataservice "github.com/domainry/domainry-runtime/runtime/domain/metadata/service"
-	metadatavalidation "github.com/domainry/domainry-runtime/runtime/domain/metadata/validation"
 
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
@@ -34,20 +34,20 @@ import (
 )
 
 type BusinessSystemApplicationDependencies struct {
-	FeaturePermissions  func(context.Context, principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error)
-	SchemaForPrincipal  func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
-	MetadataDefinitions func(context.Context, string, string, principalmodel.Principal) ([]metadatamodel.MetadataDefinition, error)
-	FrontendSnapshot    func(context.Context, principalmodel.Principal) (deploymentmodel.FrontendCapabilitySnapshot, error)
-	Evidence            changeplanrepository.ChangePlanEvidenceRepository
-	Runtime             BusinessSystemRuntimeProjectionDependencies
+	FeaturePermissions     func(context.Context, principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error)
+	SchemaForPrincipal     func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
+	ApplicationDefinitions func(context.Context, string, string, principalmodel.Principal) ([]appschemamodel.ApplicationDefinition, error)
+	FrontendSnapshot       func(context.Context, principalmodel.Principal) (deploymentmodel.FrontendCapabilitySnapshot, error)
+	Evidence               changeplanrepository.ChangePlanEvidenceRepository
+	Runtime                BusinessSystemRuntimeProjectionDependencies
 }
 
 // businessSystemSnapshotPorts contains only the owner reads required to build
 // the governed business-system snapshot.
 type businessSystemSnapshotPorts struct {
 	featurePermissions  func(context.Context, principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error)
-	schemaForPrincipal  func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
-	metadataDefinitions func(context.Context, string, string, principalmodel.Principal) ([]metadatamodel.MetadataDefinition, error)
+	schemaForPrincipal  func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
+	metadataDefinitions func(context.Context, string, string, principalmodel.Principal) ([]appschemamodel.ApplicationDefinition, error)
 	frontendSnapshot    func(context.Context, principalmodel.Principal) (deploymentmodel.FrontendCapabilitySnapshot, error)
 }
 
@@ -64,7 +64,7 @@ func NewBusinessSystemApplicationService(dependencies BusinessSystemApplicationD
 		snapshotProjection: businessSystemSnapshotPorts{
 			featurePermissions:  dependencies.FeaturePermissions,
 			schemaForPrincipal:  dependencies.SchemaForPrincipal,
-			metadataDefinitions: dependencies.MetadataDefinitions,
+			metadataDefinitions: dependencies.ApplicationDefinitions,
 			frontendSnapshot:    dependencies.FrontendSnapshot,
 		},
 		evidence:          dependencies.Evidence,
@@ -116,7 +116,7 @@ func (s *BusinessSystemApplicationService) Snapshot(ctx context.Context, princip
 	// Other snapshot projections can traverse shared runtime schema values while
 	// this aggregate is assembled. Seal the nested schema hash from the exact
 	// projection that will be returned before calculating the system hash.
-	snapshot.Schema.SchemaHash = metadataservice.SchemaSnapshotHash(snapshot.Schema)
+	snapshot.Schema.SchemaHash = appschemaservice.SchemaSnapshotHash(snapshot.Schema)
 	snapshot.Schema.SnapshotVersion = snapshot.Schema.SchemaHash
 	snapshot.SchemaHash = snapshot.Schema.SchemaHash
 	snapshot.Finalize()
@@ -125,7 +125,7 @@ func (s *BusinessSystemApplicationService) Snapshot(ctx context.Context, princip
 
 func (s *BusinessSystemApplicationService) businessResourceSources(ctx context.Context, principal principalmodel.Principal) ([]changeplanprojection.SystemResourceSource, error) {
 	items := []changeplanprojection.SystemResourceSource{}
-	for _, resourceType := range metadatavalidation.MetadataBusinessResourceTypes() {
+	for _, resourceType := range appschemavalidation.ApplicationSchemaBusinessResourceTypes() {
 		definitions, err := s.snapshotProjection.metadataDefinitions(ctx, resourceType, businessSystemPrincipalWorkspaceID(principal), principal)
 		if err != nil {
 			return nil, err

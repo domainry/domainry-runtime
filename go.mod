@@ -9,6 +9,7 @@ replace github.com/domainry/domainry-orm => ../domainry-orm
 toolchain go1.26.6
 
 require (
+	github.com/domainry/domainry-agent-sdk v0.0.0
 	github.com/domainry/domainry-audit v0.0.0-00010101000000-000000000000
 	github.com/domainry/domainry-audit-sdk v0.0.0
 	github.com/domainry/domainry-connector-sdk v0.1.0-dev.12
@@ -39,6 +40,8 @@ require (
 replace github.com/domainry/domainry-audit => ../domainry-audit
 
 replace github.com/domainry/domainry-audit-sdk => ../domainry-audit-sdk
+
+replace github.com/domainry/domainry-agent-sdk => ../domainry-agent-sdk
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect

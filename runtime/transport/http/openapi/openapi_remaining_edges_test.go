@@ -6,19 +6,19 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
+	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/productbrand"
 )
 
 type openAPISchemaProvider struct {
-	snapshot metadatamodel.ApplicationSchemaSnapshot
+	snapshot appschemamodel.ApplicationSchemaSnapshot
 }
 
-func (p openAPISchemaProvider) SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+func (p openAPISchemaProvider) SchemaForPrincipal(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 	return p.snapshot
 }
 
@@ -97,7 +97,7 @@ func TestObjectActionPathsAndConnectorWebhookPathCannotChangeRuntimeRoute(t *tes
 		t.Fatalf("record paths=%v", paths)
 	}
 
-	spec := Build(metadatamodel.ApplicationSchemaSnapshot{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{
+	spec := Build(appschemamodel.ApplicationSchemaSnapshot{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{
 		{Key: "empty", Config: nil},
 		{Key: "webhook", Name: "Webhook", Config: map[string]any{"webhook_path": " /hooks/provider "}},
 	}}})
@@ -173,8 +173,8 @@ func TestOpenAPIFieldValidationOptionsAreIndependentlyOptional(t *testing.T) {
 }
 
 func TestOpenAPIHandlerPublishesSnapshotHeadersAndRouteContract(t *testing.T) {
-	snapshot := metadatamodel.ApplicationSchemaSnapshot{TemplateID: "runtime", SchemaHash: "schema-hash"}
-	service := metadataapplication.NewMetadataSchemaApplicationService(openAPISchemaProvider{snapshot: snapshot}, nil)
+	snapshot := appschemamodel.ApplicationSchemaSnapshot{TemplateID: "runtime", SchemaHash: "schema-hash"}
+	service := appschemaapplication.NewApplicationSchemaQueryApplicationService(openAPISchemaProvider{snapshot: snapshot}, nil)
 	var status int
 	var value any
 	handler := NewOpenAPIHandler(OpenAPIDependencies{Schema: service, ProductBrandName: "Acme", WriteJSON: func(_ http.ResponseWriter, gotStatus int, gotValue any) {
@@ -203,11 +203,11 @@ func TestOpenAPIHandlerPublishesSnapshotHeadersAndRouteContract(t *testing.T) {
 }
 
 func TestOpenAPIDefaultTitleUsesProductBrand(t *testing.T) {
-	defaultSpec := Build(metadatamodel.ApplicationSchemaSnapshot{})
+	defaultSpec := Build(appschemamodel.ApplicationSchemaSnapshot{})
 	if got := defaultSpec["info"].(map[string]any)["title"]; got != "Generated Domainry API" {
 		t.Fatalf("default title=%v", got)
 	}
-	overridden := BuildWithProductBrand(metadatamodel.ApplicationSchemaSnapshot{}, " Acme ")
+	overridden := BuildWithProductBrand(appschemamodel.ApplicationSchemaSnapshot{}, " Acme ")
 	if got := overridden["info"].(map[string]any)["title"]; got != "Generated Acme API" {
 		t.Fatalf("overridden title=%v", got)
 	}

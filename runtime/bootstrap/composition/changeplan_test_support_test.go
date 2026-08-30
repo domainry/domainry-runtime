@@ -1,13 +1,13 @@
 package composition
 
 import (
+	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	changeplanapplication "github.com/domainry/domainry-runtime/runtime/application/changeplan"
-	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
+	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
 	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
-	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
 )
 
 type BusinessChangePlanRepository = changeplanrepository.ChangePlanRepository
@@ -20,6 +20,6 @@ type BusinessReferenceImpact = changeplanmodel.ReferenceImpact
 
 const BusinessReferenceGraphVersion = changeplanprojection.ChangePlanReferenceGraphVersion
 
-func NewBusinessChangePlanApplicationService(repository changeplanrepository.ChangePlanRepository, metadata metadatarepository.MetadataRepository, audit auditrepository.AuditRepository, runtime *metadataapplication.ApplicationSchemaService) *changeplanapplication.ChangePlanApplicationService {
+func NewBusinessChangePlanApplicationService(repository changeplanrepository.ChangePlanRepository, metadata appschemarepository.ApplicationSchemaRepository, audit auditrepository.AuditRepository, runtime *appschemaapplication.ApplicationSchemaApplicationService) *changeplanapplication.ChangePlanApplicationService {
 	return newChangePlanApplicationService(repository, metadata, audit, runtime)
 }

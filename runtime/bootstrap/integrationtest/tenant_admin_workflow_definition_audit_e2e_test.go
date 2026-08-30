@@ -21,7 +21,7 @@ func TestTenantAdminPublishesWorkflowDefinitionWithAuditEvidence(t *testing.T) {
 	handler := runtime.Routes()
 
 	const workflowKey = "sales_order.credit_discount_approval"
-	current := loadMetadataDefinitionFixture(t, handler, "admin", "workflow", workflowKey)
+	current := loadApplicationDefinitionFixture(t, handler, "admin", "workflow", workflowKey)
 	var candidate map[string]any
 	if err := json.Unmarshal(current.Payload, &candidate); err != nil {
 		t.Fatal(err)

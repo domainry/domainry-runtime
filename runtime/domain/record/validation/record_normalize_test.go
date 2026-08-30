@@ -6,8 +6,8 @@ import (
 	"math"
 	"testing"
 
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 )
 
 func TestNormalizeDataAndFieldTypes(t *testing.T) {
@@ -123,9 +123,9 @@ func TestSelectFieldOptionsSources(t *testing.T) {
 		want  string
 	}{
 		{name: "validation", field: definitionmodel.FieldSchema{Validation: definitionmodel.FieldValidation{Options: []string{"", " validation "}}}, want: "validation"},
-		{name: "typed dictionary", field: definitionmodel.FieldSchema{Options: []metadatamodel.DictionaryItemSchema{{Key: "k", Value: "value"}}}, want: "value"},
+		{name: "typed dictionary", field: definitionmodel.FieldSchema{Options: []appschemamodel.DictionaryItemSchema{{Key: "k", Value: "value"}}}, want: "value"},
 		{name: "map dictionary", field: definitionmodel.FieldSchema{Options: []map[string]any{{"key": "map-key"}}}, want: "map-key"},
-		{name: "mixed dictionary", field: definitionmodel.FieldSchema{Options: []any{metadatamodel.DictionaryItemSchema{Key: "typed"}, map[string]any{"value": "mapped"}, "direct", 1}}, want: "typed"},
+		{name: "mixed dictionary", field: definitionmodel.FieldSchema{Options: []any{appschemamodel.DictionaryItemSchema{Key: "typed"}, map[string]any{"value": "mapped"}, "direct", 1}}, want: "typed"},
 		{name: "config options", field: definitionmodel.FieldSchema{Config: map[string]any{"options": []any{"configured"}}}, want: "configured"},
 		{name: "snake value domain", field: definitionmodel.FieldSchema{Config: map[string]any{"value_domain": map[string]any{"items": []any{"snake"}}}}, want: "snake"},
 		{name: "camel value domain", field: definitionmodel.FieldSchema{Config: map[string]any{"valueDomain": map[string]any{"items": []any{"camel"}}}}, want: "camel"},

@@ -48,7 +48,7 @@ func runtimeReleaseIdentity(build BuildIdentity, handlers *runtimeext.BusinessHa
 		ConnectorContractVersion: build.ConnectorContractVersion, ConnectorContractSHA256: build.ConnectorContractSHA256,
 		DomainSDKContractVersion: build.DomainSDK.ContractVersion, DomainSDKContractSHA256: build.DomainSDK.ContractSHA256,
 		DomainSDKGeneratorVersion: build.DomainSDK.GeneratorVersion, DomainSDKBuildConstraint: build.DomainSDK.BuildConstraint,
-		MetadataSnapshotSHA256: build.DomainSDK.MetadataSnapshotSHA256, GeneratedSDKSHA256: build.DomainSDK.ArtifactSHA256,
+		ApplicationSchemaSnapshotSHA256: build.DomainSDK.ApplicationSchemaSnapshotSHA256, GeneratedSDKSHA256: build.DomainSDK.ArtifactSHA256,
 		HandlerRegistrySHA256: handlerHash, ConnectorRegistrySHA256: connectorHash,
 	}
 	packaged := []string{

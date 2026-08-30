@@ -1,6 +1,6 @@
 package openapi
 
-import metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+import appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 import (
 	"testing"
@@ -9,7 +9,7 @@ import (
 )
 
 func TestOpenAPISpecCoversFrontendRuntimeContract(t *testing.T) {
-	spec := Build(metadatamodel.ApplicationSchemaSnapshot{
+	spec := Build(appschemamodel.ApplicationSchemaSnapshot{
 		TemplateID:      "domain-only",
 		TemplateVersion: "0.1.0",
 		Objects: []definitionmodel.ObjectSchema{

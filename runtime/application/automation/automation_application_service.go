@@ -29,7 +29,7 @@ import (
 	"strings"
 	"time"
 
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 
 	apperror "github.com/domainry/domainry-foundation/apperror"
@@ -47,8 +47,8 @@ type AutomationWorkflowRunner interface {
 	RunAutomationWorkflow(context.Context, string, map[string]any, principalmodel.Principal) (workflowmodel.WorkflowRunResult, error)
 }
 
-type AutomationMetadataDefinitionPort interface {
-	ListMetadataDefinitionVersions(context.Context, string, string, principalmodel.Principal) ([]metadatamodel.MetadataDefinitionVersion, error)
+type AutomationApplicationDefinitionPort interface {
+	ListApplicationDefinitionVersions(context.Context, string, string, principalmodel.Principal) ([]appschemamodel.ApplicationDefinitionVersion, error)
 }
 
 type AutomationApplicationDependencies struct {
@@ -61,10 +61,10 @@ type AutomationApplicationDependencies struct {
 	ConfigRepository      integrationrepository.IntegrationConfigRepository
 	Audit                 func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
 	Principal             func(context.Context, string, string, string) principalmodel.Principal
-	Schema                func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
+	Schema                func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
 	InvokeAction          func(context.Context, actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error)
 	Workflows             AutomationWorkflowRunner
-	Metadata              AutomationMetadataDefinitionPort
+	Metadata              AutomationApplicationDefinitionPort
 	CanAccess             func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool
 	ValidateRule          func(context.Context, automationmodel.AutomationRuleSchema) error
 	AuthoringProjection   func() capability.CapabilityAuthoringProjection
@@ -92,10 +92,10 @@ type AutomationApplicationService struct {
 	configRepo          integrationrepository.IntegrationConfigRepository
 	audit               func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
 	principal           func(context.Context, string, string, string) principalmodel.Principal
-	schema              func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
+	schema              func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
 	invokeAction        func(context.Context, actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error)
 	workflows           AutomationWorkflowRunner
-	metadata            AutomationMetadataDefinitionPort
+	metadata            AutomationApplicationDefinitionPort
 	canAccess           func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool
 	validateRule        func(context.Context, automationmodel.AutomationRuleSchema) error
 	management          *AutomationManagementApplicationService
@@ -297,8 +297,8 @@ func (s *AutomationApplicationService) ValidateAutomationAuthoringFragment(_ con
 	return result, nil
 }
 
-func (s *AutomationApplicationService) AutomationRuleVersions(ctx context.Context, ruleKey string, principal principalmodel.Principal) ([]metadatamodel.MetadataDefinitionVersion, error) {
-	return s.metadata.ListMetadataDefinitionVersions(ctx, "automation_rule", strings.TrimSpace(ruleKey), principal)
+func (s *AutomationApplicationService) AutomationRuleVersions(ctx context.Context, ruleKey string, principal principalmodel.Principal) ([]appschemamodel.ApplicationDefinitionVersion, error) {
+	return s.metadata.ListApplicationDefinitionVersions(ctx, "automation_rule", strings.TrimSpace(ruleKey), principal)
 }
 
 func (s *AutomationApplicationService) SimulateAutomationRule(ctx context.Context, ruleKey string, request automationcontract.AutomationSimulationRequest, principal principalmodel.Principal) (automationprojection.AutomationSimulationResult, error) {

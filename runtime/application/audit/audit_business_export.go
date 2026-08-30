@@ -39,7 +39,7 @@ func (service *AuditApplicationService) PrepareBusinessEventExport(ctx context.C
 	if err != nil {
 		return BusinessAuditExportPrepared{}, runtimeExportError(err)
 	}
-	return BusinessAuditExportPrepared{ID: prepared.ID, ReportSource: prepared.ReportSource, Filename: prepared.Filename, ContentSHA256: prepared.ContentSHA256, RowCount: prepared.RowCount, AuditIdentity: prepared.AuditIdentity, ScopeSHA256: prepared.ScopeSHA256, Filters: prepared.Filters, DownloadToken: prepared.DownloadToken, ExpiresAt: prepared.ExpiresAt}, nil
+	return BusinessAuditExportPrepared{ID: prepared.ID, ReportSource: "business_audit_events", Filename: prepared.Filename, ContentSHA256: prepared.ContentSHA256, RowCount: prepared.RowCount, AuditIdentity: prepared.AuditIdentity, ScopeSHA256: prepared.ScopeSHA256, Filters: prepared.Filters, DownloadToken: prepared.DownloadToken, ExpiresAt: prepared.ExpiresAt}, nil
 }
 
 func (service *AuditApplicationService) DownloadBusinessEventExport(ctx context.Context, token string, principal principalmodel.Principal) ([]byte, string, error) {

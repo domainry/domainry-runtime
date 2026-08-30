@@ -43,7 +43,7 @@ func TestBootstrapEntrypointsAssembleRunnableGraphs(t *testing.T) {
 		t.Fatalf("repeated close: %v", err)
 	}
 
-	server := AssembleHTTPServer(t.Context(), composition.NewRuntimeServices(t.Context(), composition.RuntimeServicesConfig{}), bootstrapIdentityBindingStub{}, t.TempDir(), nil, true, runtimehttp.AgentHTTPConfig{})
+	server := AssembleHTTPServer(t.Context(), composition.NewRuntimeServices(t.Context(), composition.RuntimeServicesConfig{}), bootstrapIdentityBindingStub{}, t.TempDir(), nil, true)
 	if server == nil {
 		t.Fatal("HTTP composition entrypoint returned nil")
 	}

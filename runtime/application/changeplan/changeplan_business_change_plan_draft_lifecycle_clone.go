@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	changeplancontract "github.com/domainry/domainry-runtime/runtime/domain/changeplan/contract"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 )
 
 func (s *ChangePlanApplicationService) Draft(ctx context.Context, planID string, principal principalmodel.Principal) (changeplanmodel.BusinessChangePlanDraft, error) {
@@ -265,7 +265,7 @@ func (s *ChangePlanApplicationService) auditDraftLifecycle(ctx context.Context, 
 }
 
 type changePlanDefinitionLister interface {
-	ListDefinitions(context.Context, principalmodel.SystemScope, string) ([]metadatamodel.MetadataDefinition, error)
+	ListDefinitions(context.Context, principalmodel.SystemScope, string) ([]appschemamodel.ApplicationDefinition, error)
 }
 
 func (s *ChangePlanApplicationService) CloneCurrentDraft(ctx context.Context, planID, businessReason string, expectedRevision int, snapshot changeplancontract.SnapshotSource, graph changeplancontract.ReferenceGraphSource, principal principalmodel.Principal) (changeplanmodel.BusinessChangePlanDraft, error) {

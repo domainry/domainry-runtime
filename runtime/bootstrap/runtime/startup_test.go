@@ -260,7 +260,7 @@ func TestProjectRuntimeJoinsSharedReleaseCohortBeforeServingTraffic(t *testing.T
 	}
 
 	conflicting := identity
-	conflicting.MetadataSnapshotSHA256 = strings.Repeat("2", 64)
+	conflicting.ApplicationSchemaSnapshotSHA256 = strings.Repeat("2", 64)
 	combination, err := deploymentapplication.RuntimeReleaseCombinationSHA256(conflicting)
 	if err != nil {
 		t.Fatal(err)
@@ -285,7 +285,7 @@ func bootstrapRuntimeReleaseIdentity(t *testing.T, marker byte) deploymentmodel.
 		ContractVersion: deploymentmodel.RuntimeReleaseIdentityVersion, BuildMode: "development", RuntimeVersion: "runtime-test",
 		RuntimeextContractVersion: "runtimeext-test", RuntimeextContractSHA256: hash('a'), ConnectorContractVersion: "connector-test", ConnectorContractSHA256: hash('b'),
 		DomainSDKContractVersion: "sdk-test", DomainSDKContractSHA256: hash('c'), DomainSDKGeneratorVersion: "generator-test", DomainSDKBuildConstraint: "constraint-test",
-		MetadataSnapshotSHA256: hash(marker), GeneratedSDKSHA256: hash('d'), HandlerRegistrySHA256: hash('e'), ConnectorRegistrySHA256: hash('f'),
+		ApplicationSchemaSnapshotSHA256: hash(marker), GeneratedSDKSHA256: hash('d'), HandlerRegistrySHA256: hash('e'), ConnectorRegistrySHA256: hash('f'),
 	}
 	combination, err := deploymentapplication.RuntimeReleaseCombinationSHA256(identity)
 	if err != nil {

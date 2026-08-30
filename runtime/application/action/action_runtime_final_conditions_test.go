@@ -41,7 +41,7 @@ func TestBusinessHandlerIdentityRemainingConditions(t *testing.T) {
 	invocation := actionmodel.ActionInvocation{Principal: principal}
 	action := definitionmodel.ActionSchema{Key: "booking.reserve", ObjectKey: "booking"}
 	descriptor := runtimeext.HandlerDescriptor{HandlerRevision: "handler"}
-	static := NewBusinessHandlerExecutor(BusinessHandlerExecutionDependencies{RuntimeRevision: "runtime", ProjectRevision: "project", MetadataRevision: "metadata"})
+	static := NewBusinessHandlerExecutor(BusinessHandlerExecutionDependencies{RuntimeRevision: "runtime", ProjectRevision: "project", ApplicationSchemaRevision: "metadata"})
 	if _, err := static.executionIdentity(t.Context(), invocation, action, descriptor, "execution"); err != nil {
 		t.Fatalf("static identity: %v", err)
 	}
@@ -57,8 +57,8 @@ func TestBusinessHandlerIdentityRemainingConditions(t *testing.T) {
 		t.Fatal("revision error ignored")
 	}
 	for _, dependencies := range []BusinessHandlerExecutionDependencies{
-		{ProjectRevision: "project", MetadataRevision: "metadata"},
-		{RuntimeRevision: "runtime", MetadataRevision: "metadata"},
+		{ProjectRevision: "project", ApplicationSchemaRevision: "metadata"},
+		{RuntimeRevision: "runtime", ApplicationSchemaRevision: "metadata"},
 		{RuntimeRevision: "runtime", ProjectRevision: "project"},
 	} {
 		if _, err := NewBusinessHandlerExecutor(dependencies).executionIdentity(t.Context(), invocation, action, descriptor, "execution"); err == nil {

@@ -16,7 +16,7 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	metadatapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata"
+	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -91,7 +91,7 @@ func runConstraintStrategyFixture(t *testing.T, cfg config.Config) {
 		"relation_field": "parent_id", "aggregate": "sum", "value_field": "amount", "limit_field": "refund_limit", "operator": "lte",
 	}}}}
 	manifest := manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{parent, unique, booking, groupClass, temporal, aggregate}}
-	metadata := metadatapersistence.NewMetadataStore(store)
+	metadata := appschemapersistence.NewApplicationSchemaStore(store)
 	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "verify cross-dialect constraint compiler")
 	if err := metadata.SyncManifest(t.Context(), scope, manifest); err != nil {
 		t.Fatal(err)

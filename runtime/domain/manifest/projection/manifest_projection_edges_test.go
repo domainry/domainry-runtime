@@ -6,12 +6,12 @@ import (
 	"testing"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 )
 
 func TestRenderManifestReviewMarkdownEmptyAndFallbackTitles(t *testing.T) {
@@ -83,11 +83,11 @@ func TestManifestArtifactHelpers(t *testing.T) {
 
 func TestManifestRestorationProjection(t *testing.T) {
 	persisted := manifestmodel.ManifestSchema{
-		Dictionaries: []metadatamodel.DictionarySchema{{Key: "existing"}}, AutomationRules: []automationmodel.AutomationRuleSchema{{Key: "existing"}}, Workflows: []definitionmodel.WorkflowSchema{{Key: "existing"}},
+		Dictionaries: []appschemamodel.DictionarySchema{{Key: "existing"}}, AutomationRules: []automationmodel.AutomationRuleSchema{{Key: "existing"}}, Workflows: []definitionmodel.WorkflowSchema{{Key: "existing"}},
 		Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "existing"}}},
 	}
 	installed := manifestmodel.ManifestSchema{
-		ManifestHash: "hash", Description: "description", Dictionaries: []metadatamodel.DictionarySchema{{Key: ""}, {Key: " existing "}, {Key: "new"}, {Key: "new"}},
+		ManifestHash: "hash", Description: "description", Dictionaries: []appschemamodel.DictionarySchema{{Key: ""}, {Key: " existing "}, {Key: "new"}, {Key: "new"}},
 		AutomationRules: []automationmodel.AutomationRuleSchema{{Key: ""}, {Key: " existing "}, {Key: "new"}, {Key: "new"}},
 		Workflows:       []definitionmodel.WorkflowSchema{{Key: ""}, {Key: " existing "}, {Key: "new"}, {Key: "new"}},
 		Integrations: integrationmodel.IntegrationSchema{

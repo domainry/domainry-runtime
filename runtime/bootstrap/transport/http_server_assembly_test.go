@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
@@ -144,23 +143,6 @@ func TestSurfaceRouteGroupsRegisterOnlyTheirCompiledEndpointInventory(t *testing
 	}
 }
 
-func TestNormalizeAgentHTTPConfigDefaultsAndPreservesExplicitValues(t *testing.T) {
-	defaults := normalizeAgentHTTPConfig(config.Config{})
-	if defaults.BaseURL != "https://integration.domainry.ai" || defaults.Timeout != 120*time.Second || defaults.RateLimitPerMinute != 60 {
-		t.Fatalf("defaults=%+v", defaults)
-	}
-	explicit := normalizeAgentHTTPConfig(config.Config{
-		AgentHTTPBaseURL:            " https://agent.example.test/root/ ",
-		AgentHTTPAPIKey:             "secret",
-		AgentHTTPAgentID:            17,
-		AgentHTTPTimeout:            time.Second,
-		AgentHTTPRateLimitPerMinute: 7,
-	})
-	if explicit.BaseURL != "https://agent.example.test/root" || explicit.Timeout != time.Second || explicit.RateLimitPerMinute != 7 || explicit.APIKey != "secret" || explicit.AgentID != 17 {
-		t.Fatalf("explicit=%+v", explicit)
-	}
-}
-
 func TestAgentOptionalTransportOwnersHandleAbsentDependencies(t *testing.T) {
 	allowed, err := (agentRecordVisibilityAdapter{}).CanReadAgentRecord(t.Context(), "customer", "record-1", principalmodel.Principal{})
 	if allowed || err != nil {
@@ -187,7 +169,7 @@ func TestAgentOptionalTransportOwnersHandleAbsentDependencies(t *testing.T) {
 func TestAssembleHTTPServerEntrypointCopiesCallerConfiguration(t *testing.T) {
 	services := composition.NewRuntimeServices(context.Background(), composition.RuntimeServicesConfig{})
 	origins := []string{"https://app.example.test"}
-	server := AssembleHTTPServer(context.Background(), services, transportIdentityBindingStub{}, t.TempDir(), origins, true, runtimehttp.AgentHTTPConfig{})
+	server := AssembleHTTPServer(context.Background(), services, transportIdentityBindingStub{}, t.TempDir(), origins, true)
 	origins[0] = "mutated"
 	if server == nil {
 		t.Fatal("entrypoint server is nil")

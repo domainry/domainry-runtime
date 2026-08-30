@@ -1,6 +1,6 @@
 package http
 
-import metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+import appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 // These tests guard composition and route/OpenAPI drift across HTTP owner packages.
 
@@ -64,7 +64,7 @@ func TestRoutePolicyUsesRegisteredPatternInsteadOfUserPathSegments(t *testing.T)
 
 func TestRuntimeRoutesAndOpenAPIDoNotDrift(t *testing.T) {
 	routes := declaredRuntimeRoutes(t)
-	spec := runtimeopenapi.Build(metadatamodel.ApplicationSchemaSnapshot{})
+	spec := runtimeopenapi.Build(appschemamodel.ApplicationSchemaSnapshot{})
 	paths, ok := spec["paths"].(map[string]any)
 	if !ok {
 		t.Fatal("OpenAPI paths missing")
@@ -143,7 +143,7 @@ func TestRuntimePublishesOneInboundWebhookRoute(t *testing.T) {
 		t.Fatalf("inbound webhook routes=%v want=[%s]", webhookRoutes, want)
 	}
 
-	spec := runtimeopenapi.Build(metadatamodel.ApplicationSchemaSnapshot{})
+	spec := runtimeopenapi.Build(appschemamodel.ApplicationSchemaSnapshot{})
 	paths := spec["paths"].(map[string]any)
 	webhookPaths := make([]string, 0)
 	for path := range paths {
@@ -165,7 +165,7 @@ func TestRoutesOnlyComposesDomainRegistrarsAndGlobalMiddleware(t *testing.T) {
 	}
 	expected := map[string]bool{
 		"discoveryHTTP": false, "openAPIHTTP": false,
-		"reportHTTP": false, "agentDialogHTTP": false, "metadataHTTP": false,
+		"reportHTTP": false, "agentDialogHTTP": false, "applicationSchemaHTTP": false,
 		"capabilityHTTP": false, "frontendCapabilityHTTP": false, "businessSystemHTTP": false,
 		"businessReferenceHTTP": false, "changePlanHTTP": false, "integrationHTTP": false,
 		"uploadHTTP": false, "surfaceContextHTTP": false, "recordHTTP": false, "workflowHTTP": false,
@@ -235,7 +235,7 @@ func declaredRuntimeRoutes(t *testing.T) map[string]bool {
 	files = append(files, filepath.Join(filepath.Dir(current), "scheduler", "scheduler_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "reports", "reports_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "frontendcapability", "frontendcapability_routes.go"))
-	files = append(files, filepath.Join(filepath.Dir(current), "metadata", "metadata_routes.go"))
+	files = append(files, filepath.Join(filepath.Dir(current), "appschema", "appschema_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "businessreferences", "businessreferences_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "businessseeds", "businessseeds_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "businesssystem", "businesssystem_routes.go"))

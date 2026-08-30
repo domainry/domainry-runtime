@@ -3,7 +3,6 @@ package transport
 import (
 	"context"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
-	"strings"
 	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -14,8 +13,8 @@ import (
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
+	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
-	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	principalapplication "github.com/domainry/domainry-runtime/runtime/application/principal"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
@@ -64,7 +63,7 @@ type httpServerAssembly struct {
 	handlers      runtimehttp.HTTPRouterHandlers
 	recordQueries *recordapplication.RecordApplicationService
 	integrations  *integrationapplication.IntegrationApplicationService
-	metadata      *metadataapplication.ApplicationSchemaService
+	metadata      *appschemaapplication.ApplicationSchemaApplicationService
 	operations    *operationsapplication.OperationsApplicationService
 	identityHTTP  *identityhttpmiddleware.Middleware
 	principals    identitysdk.PrincipalResolver
@@ -161,7 +160,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	assembly.wirePartyAndIdentityReferences(ctx)
 	assembly.wireRecordAndProcessHandlers()
 	assembly.wireMetadataAndBusinessHandlers()
-	assembly.wireIntegrationAndAgentHandlers(normalizeAgentHTTPConfig(dependencies.Config))
+	assembly.wireIntegrationAndAgentHandlers(dependencies.Config.AgentDialogRateLimitPerMinute)
 	server = runtimehttp.UseHandlers(server, assembly.handlers)
 	server = runtimehttp.UseServiceIdentity(server, dependencies.Config.RuntimeVersion)
 	server = runtimehttp.UseRuntimeReleaseIdentity(server, dependencies.ReleaseIdentity)
@@ -199,23 +198,4 @@ func runtimeOperationsControlState(store *persistence.RuntimeStore) func(context
 		control, found, err := operationspersistence.NewOperationsStore(store).GetOperationsControl(ctx, operationsmodel.OperationsSystemPurposeRuntimeControl, operationsmodel.OperationsControlKind(kind), owner)
 		return control.Active(), found, err
 	}
-}
-
-func normalizeAgentHTTPConfig(runtimeConfig config.Config) runtimehttp.AgentHTTPConfig {
-	config := runtimehttp.AgentHTTPConfig{
-		BaseURL: runtimeConfig.AgentHTTPBaseURL, APIKey: runtimeConfig.AgentHTTPAPIKey,
-		AgentID: runtimeConfig.AgentHTTPAgentID, Timeout: runtimeConfig.AgentHTTPTimeout,
-		RateLimitPerMinute: runtimeConfig.AgentHTTPRateLimitPerMinute,
-	}
-	config.BaseURL = strings.TrimRight(strings.TrimSpace(config.BaseURL), "/")
-	if config.BaseURL == "" {
-		config.BaseURL = "https://integration.domainry.ai"
-	}
-	if config.Timeout <= 0 {
-		config.Timeout = 120 * time.Second
-	}
-	if config.RateLimitPerMinute <= 0 {
-		config.RateLimitPerMinute = 60
-	}
-	return config
 }

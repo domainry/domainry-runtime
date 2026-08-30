@@ -6,7 +6,7 @@ import (
 )
 
 func EnsureWorkflowProcessSchema(ctx context.Context, s Store) error {
-	text := s.MetadataIDColumnType()
+	text := s.ApplicationSchemaIDColumnType()
 	tables := map[string][]string{
 		"workflow_process_instances": {
 			"workspace_id " + text + " NOT NULL", "id " + text + " NOT NULL", "workflow_key " + text + " NOT NULL", "workflow_name TEXT NOT NULL",

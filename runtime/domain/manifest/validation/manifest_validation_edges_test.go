@@ -7,18 +7,18 @@ import (
 	"testing"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 func TestManifestDictionaryAndStructuredOptionEdges(t *testing.T) {
-	manifest := manifestmodel.ManifestSchema{Dictionaries: []metadatamodel.DictionarySchema{
-		{Key: "", Items: []metadatamodel.DictionaryItemSchema{{Key: ""}, {Key: "same"}, {Key: "same"}, {Key: "valid", Value: "中文"}}},
+	manifest := manifestmodel.ManifestSchema{Dictionaries: []appschemamodel.DictionarySchema{
+		{Key: "", Items: []appschemamodel.DictionaryItemSchema{{Key: ""}, {Key: "same"}, {Key: "same"}, {Key: "valid", Value: "中文"}}},
 		{Key: "known"},
 	}}
 	state := newValidationState(manifest, nil)

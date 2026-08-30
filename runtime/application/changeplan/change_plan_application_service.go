@@ -1,11 +1,11 @@
 package changeplan
 
 import (
+	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	changeplanpolicy "github.com/domainry/domainry-runtime/runtime/domain/changeplan/policy"
 	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
-	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )
 
 func businessReferenceResourceType(resourceType string) string {
@@ -29,12 +29,12 @@ func businessReferenceResourceType(resourceType string) string {
 }
 
 type Runtime interface {
-	CanonicalizeMetadataCandidate(context.Context, []metadatamodel.MetadataDefinitionMutation) ([]metadatamodel.MetadataDefinitionMutation, error)
-	ReloadMetadata(context.Context, principalmodel.Principal) (string, error)
+	CanonicalizeMetadataCandidate(context.Context, []appschemamodel.ApplicationDefinitionMutation) ([]appschemamodel.ApplicationDefinitionMutation, error)
+	ReloadApplicationSchema(context.Context, principalmodel.Principal) (string, error)
 }
 
 type AcceptanceScenarioRuntime interface {
-	SimulateActionCandidate(context.Context, string, metadatamodel.MetadataDefinitionUpsertRequest, map[string]any, map[string]any, principalmodel.Principal) (AcceptanceScenarioRuntimeResult, error)
+	SimulateActionCandidate(context.Context, string, appschemamodel.ApplicationDefinitionUpsertRequest, map[string]any, map[string]any, principalmodel.Principal) (AcceptanceScenarioRuntimeResult, error)
 }
 
 type AcceptanceScenarioRuntimeResult struct {
@@ -49,13 +49,13 @@ type AcceptanceScenarioRuntimeResult struct {
 type ChangePlanApplicationService struct {
 	repository changeplanrepository.ChangePlanRepository
 	operations changeplanrepository.ChangePlanOperationRepository
-	metadata   metadatarepository.DefinitionMutationRepository
+	metadata   appschemarepository.DefinitionMutationRepository
 	audit      auditrepository.AuditEventWriterRepository
 	runtime    Runtime
 	scenarios  AcceptanceScenarioRuntime
 }
 
-func NewChangePlanApplicationService(repository changeplanrepository.ChangePlanRepository, metadataRepository metadatarepository.DefinitionMutationRepository, auditRepository auditrepository.AuditEventWriterRepository, runtime Runtime, scenarioRuntime ...AcceptanceScenarioRuntime) *ChangePlanApplicationService {
+func NewChangePlanApplicationService(repository changeplanrepository.ChangePlanRepository, metadataRepository appschemarepository.DefinitionMutationRepository, auditRepository auditrepository.AuditEventWriterRepository, runtime Runtime, scenarioRuntime ...AcceptanceScenarioRuntime) *ChangePlanApplicationService {
 	operations, _ := repository.(changeplanrepository.ChangePlanOperationRepository)
 	service := &ChangePlanApplicationService{repository: repository, operations: operations, metadata: metadataRepository, audit: auditRepository, runtime: runtime}
 	if len(scenarioRuntime) > 0 {
@@ -127,7 +127,7 @@ func wrapMetadataError(err error) error {
 	if errors.As(err, &appErr) {
 		return err
 	}
-	var versionConflict *metadatamodel.MetadataDefinitionConflictError
+	var versionConflict *appschemamodel.ApplicationDefinitionConflictError
 	if errors.As(err, &versionConflict) {
 		return conflict("backend.metadata.definition_version_conflict", "resource_type", versionConflict.ResourceType, "resource_key", versionConflict.ResourceKey, "expected_hash", versionConflict.ExpectedHash, "current_hash", versionConflict.CurrentHash)
 	}
@@ -199,7 +199,7 @@ func (s *ChangePlanApplicationService) draftForScenarioSimulation(ctx context.Co
 	return draft, plan, nil
 }
 
-func (s *ChangePlanApplicationService) simulateAcceptanceScenarios(ctx context.Context, plan changeplanmodel.BusinessSystemChangePlan, mutations []metadatamodel.MetadataDefinitionMutation, principal principalmodel.Principal) (changeplanmodel.BusinessAcceptanceScenarioSimulation, error) {
+func (s *ChangePlanApplicationService) simulateAcceptanceScenarios(ctx context.Context, plan changeplanmodel.BusinessSystemChangePlan, mutations []appschemamodel.ApplicationDefinitionMutation, principal principalmodel.Principal) (changeplanmodel.BusinessAcceptanceScenarioSimulation, error) {
 	result := changeplanmodel.BusinessAcceptanceScenarioSimulation{PlanID: plan.PlanID, DraftRevision: plan.DraftRevision, SideEffectFree: true, Passed: true, Results: []changeplanmodel.BusinessAcceptanceScenarioResult{}}
 	if len(plan.AcceptanceScenarios) == 0 {
 		return result, nil
@@ -207,7 +207,7 @@ func (s *ChangePlanApplicationService) simulateAcceptanceScenarios(ctx context.C
 	if s.scenarios == nil {
 		return result, internalError("simulate domain change plan acceptance scenarios", nil)
 	}
-	actions := map[string]metadatamodel.MetadataDefinitionMutation{}
+	actions := map[string]appschemamodel.ApplicationDefinitionMutation{}
 	for _, mutation := range mutations {
 		if mutation.ResourceType == "action" && (mutation.Operation == "create" || mutation.Operation == "update") {
 			actions[strings.TrimSpace(mutation.ResourceKey)] = mutation

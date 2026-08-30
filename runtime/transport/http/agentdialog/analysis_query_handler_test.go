@@ -13,10 +13,10 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent"
-	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
+	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
@@ -37,10 +37,10 @@ func (repository *agentAnalysisRecordRepository) ListRecords(_ context.Context, 
 }
 
 type agentAnalysisSchemaProvider struct {
-	snapshot metadatamodel.ApplicationSchemaSnapshot
+	snapshot appschemamodel.ApplicationSchemaSnapshot
 }
 
-func (provider agentAnalysisSchemaProvider) SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+func (provider agentAnalysisSchemaProvider) SchemaForPrincipal(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 	return provider.snapshot
 }
 
@@ -51,11 +51,11 @@ type agentAnalysisHTTPResult struct {
 }
 
 func agentAnalysisHandler(repository *agentDialogStateRepository, principal principalmodel.Principal) (*AgentDialogHandler, *agentAnalysisHTTPResult) {
-	snapshot := metadatamodel.ApplicationSchemaSnapshot{
+	snapshot := appschemamodel.ApplicationSchemaSnapshot{
 		Objects: []definitionmodel.ObjectSchema{{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}, {Key: "secret", Type: "text"}}}},
 		Reports: []reportmodel.ReportSchema{{Key: "customer.summary"}},
 	}
-	catalog := metadataapplication.NewMetadataSchemaApplicationService(agentAnalysisSchemaProvider{snapshot: snapshot}, nil)
+	catalog := appschemaapplication.NewApplicationSchemaQueryApplicationService(agentAnalysisSchemaProvider{snapshot: snapshot}, nil)
 	result := &agentAnalysisHTTPResult{}
 	return NewAgentDialogHandler(AgentDialogDependencies{
 		AnalysisCatalog: catalog, ReportGovernance: agentapplication.NewAgentApplicationService(repository),
@@ -181,7 +181,7 @@ func TestAgentDialogAnalysisMaskedFieldsAndResultErrors(t *testing.T) {
 	accessfixture.Mutate(&principal, func(role *accessfixture.Bundle) {
 		role.FieldPolicies = append(role.FieldPolicies, accessfixture.FieldPolicyFixture{ObjectKey: "order", FieldKey: "secret", Read: true, Masked: true})
 	})
-	handler.analysisCatalog = metadataapplication.NewMetadataSchemaApplicationService(agentAnalysisSchemaProvider{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{
+	handler.analysisCatalog = appschemaapplication.NewApplicationSchemaQueryApplicationService(agentAnalysisSchemaProvider{snapshot: appschemamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{
 		{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "secret", Type: "text"}}},
 		{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "secret", Type: "text"}}},
 	}}}, nil)

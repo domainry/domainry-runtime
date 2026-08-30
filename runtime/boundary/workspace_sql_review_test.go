@@ -18,7 +18,7 @@ var workspaceSQLTablePattern = regexp.MustCompile(`TableIdentifier\("([^"]+)"\)`
 var reviewedWorkspaceSQLTables = map[string]bool{
 	"_audit_events": true, "_workflow_executions": true,
 	"automation_instruction_executions": true, "automation_rule_executions": true, "business_action_executions": true,
-	"business_audit_export_artifacts": true,
+	"audit_export_artifacts":          true,
 	"business_change_plan_operations": true, "business_localized_text": true, "business_record_localized_value": true, "frontend_capability_manifests": true,
 	"integration_api_keys": true, "integration_connections": true, "integration_credential_refresh_leases": true,
 	"integration_event_mapping_intents": true, "integration_events": true, "integration_external_identities": true,

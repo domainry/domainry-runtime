@@ -274,6 +274,9 @@ func TestAgentDialogLocalStatusAndResolverFailureBranches(t *testing.T) {
 	wantErr := errors.New("status failure")
 	principal := taskPrincipal("agent.task.read")
 	base := agentTaskHTTPHandler(principal, nil, nil)
+	base.interactive = interactiveExecutorFunc(func(context.Context, agentruntime.AgentInteractiveExecutionRequest) (agentruntime.AgentInteractiveExecutionResult, error) {
+		return agentruntime.AgentInteractiveExecutionResult{}, nil
+	})
 	base.contextResolver = agentDialogContextResolverFunc(func(context.Context, agentruntime.GlobalAgentContextRequest) (agentmodel.GlobalAgentContext, error) {
 		return agentmodel.GlobalAgentContext{}, wantErr
 	})
@@ -281,11 +284,6 @@ func TestAgentDialogLocalStatusAndResolverFailureBranches(t *testing.T) {
 	base.agentDialogRunStream(response, httptest.NewRequest(http.MethodPost, "/agent-dialog/runs/stream", strings.NewReader(`{"message":"hello"}`)))
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("stream resolver status=%d", response.Code)
-	}
-	response = httptest.NewRecorder()
-	base.proxyAgentDialogJSON(response, httptest.NewRequest(http.MethodPost, "/agent-dialog/runs", nil), "/upstream", agentDialogRunRequest{Message: "hello"})
-	if response.Code != http.StatusInternalServerError {
-		t.Fatalf("proxy resolver status=%d", response.Code)
 	}
 
 	statusHandler := agentTaskHTTPHandler(principal, nil, nil)

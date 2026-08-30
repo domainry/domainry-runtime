@@ -29,13 +29,13 @@ var (
 // DomainSDKIdentity binds one compiled generated SDK to its generator,
 // published Metadata Snapshot, public Runtime contract and generated content.
 type DomainSDKIdentity struct {
-	ContractVersion          string
-	ContractSHA256           string
-	GeneratorVersion         string
-	MetadataSnapshotSHA256   string
-	RuntimeextContractSHA256 string
-	BuildConstraint          string
-	ArtifactSHA256           string
+	ContractVersion                 string
+	ContractSHA256                  string
+	GeneratorVersion                string
+	ApplicationSchemaSnapshotSHA256 string
+	RuntimeextContractSHA256        string
+	BuildConstraint                 string
+	ArtifactSHA256                  string
 }
 
 // BuildIdentity is emitted by generated project composition and checked before
@@ -87,7 +87,7 @@ func (i DomainSDKIdentity) Validate() error {
 		return ErrDomainSDKGeneratorRequired
 	}
 	for name, value := range map[string]string{
-		"contract": i.ContractSHA256, "metadata_snapshot": i.MetadataSnapshotSHA256,
+		"contract": i.ContractSHA256, "metadata_snapshot": i.ApplicationSchemaSnapshotSHA256,
 		"runtimeext": i.RuntimeextContractSHA256, "artifact": i.ArtifactSHA256,
 	} {
 		if !lowerSHA256(value) {
@@ -105,7 +105,7 @@ func (i DomainSDKIdentity) Validate() error {
 }
 
 func domainSDKBuildConstraint(identity DomainSDKIdentity) string {
-	payload := identity.ContractVersion + "\x00" + identity.ContractSHA256 + "\x00" + identity.GeneratorVersion + "\x00" + identity.MetadataSnapshotSHA256 + "\x00" + identity.RuntimeextContractSHA256 + "\x00" + identity.ArtifactSHA256
+	payload := identity.ContractVersion + "\x00" + identity.ContractSHA256 + "\x00" + identity.GeneratorVersion + "\x00" + identity.ApplicationSchemaSnapshotSHA256 + "\x00" + identity.RuntimeextContractSHA256 + "\x00" + identity.ArtifactSHA256
 	digest := sha256.Sum256([]byte(payload))
 	return "domainry_domain_sdk_" + hex.EncodeToString(digest[:])
 }

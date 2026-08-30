@@ -25,7 +25,6 @@ import (
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/webhooksignature"
-	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	integrationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/integrations"
 )
 
@@ -188,7 +187,7 @@ func newWebhookHTTPTestRuntime(t *testing.T) (*persistence.RuntimeStore, http.Ha
 	}
 	providers.Freeze()
 	records := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "webhook", TemplateVersion: "1", Name: "Webhook", Objects: nil, Views: nil, Actions: nil, Workflows: nil, AutomationRules: nil, Dictionaries: nil, Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "collaboration", Providers: []integrationmodel.ConnectorProviderSchema{{Key: "slack"}, {Key: "teams"}}}, mockSchema}}, Reports: nil, Entrypoints: nil, Skills: nil, Agents: nil, Store: store, ConnectorProviders: providers})
-	return store, runtimebootstrap.AssembleHTTPServer(t.Context(), records, runtimetestkit.IdentityBindingStub{}, t.TempDir(), nil, true, runtimehttp.AgentHTTPConfig{}).Routes()
+	return store, runtimebootstrap.AssembleHTTPServer(t.Context(), records, runtimetestkit.IdentityBindingStub{}, t.TempDir(), nil, true).Routes()
 }
 
 type webhookHTTPFixtureAdapter struct {

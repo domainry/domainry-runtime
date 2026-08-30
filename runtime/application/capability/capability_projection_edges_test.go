@@ -153,7 +153,7 @@ func TestCapabilityAuthoringProjectionAndServices(t *testing.T) {
 			return err
 		},
 		"metadata": func(principal principalmodel.Principal) error {
-			_, err := service.MetadataProjection(t.Context(), principal)
+			_, err := service.ApplicationSchemaProjection(t.Context(), principal)
 			return err
 		},
 	} {
@@ -169,7 +169,7 @@ func TestCapabilityAuthoringProjectionAndServices(t *testing.T) {
 	if err != nil || execution.AuthoringProjection == nil || !reflect.DeepEqual(execution.AuthoringProjection.Domains, []string{"action", "automation", "workflow"}) {
 		t.Fatalf("execution projection=%#v err=%v", execution.AuthoringProjection, err)
 	}
-	metadata, err := service.MetadataProjection(t.Context(), admin)
+	metadata, err := service.ApplicationSchemaProjection(t.Context(), admin)
 	if err != nil || len(metadata.AuthoringCapabilities) == 0 || !reflect.DeepEqual(metadata.Capabilities, wantKinds) || !reflect.DeepEqual(metadata.AuthoringProjection.Domains, []string{"schema"}) {
 		t.Fatalf("metadata projection=%#v err=%v", metadata, err)
 	}

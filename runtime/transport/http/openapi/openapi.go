@@ -1,6 +1,6 @@
 package openapi
 
-import metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+import appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 import (
 	"fmt"
@@ -10,11 +10,11 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/productbrand"
 )
 
-func Build(snapshot metadatamodel.ApplicationSchemaSnapshot) map[string]any {
+func Build(snapshot appschemamodel.ApplicationSchemaSnapshot) map[string]any {
 	return BuildWithProductBrand(snapshot, productbrand.DefaultName)
 }
 
-func BuildWithProductBrand(snapshot metadatamodel.ApplicationSchemaSnapshot, productBrandName string) map[string]any {
+func BuildWithProductBrand(snapshot appschemamodel.ApplicationSchemaSnapshot, productBrandName string) map[string]any {
 	productBrandName = productbrand.ResolveName(productBrandName)
 	paths := map[string]any{}
 	components := map[string]any{

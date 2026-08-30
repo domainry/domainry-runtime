@@ -141,7 +141,7 @@ func TestConditionalMutationResultUsesCanonicalCommitVersionForNotification(t *t
 	const revision = "2026-08-22T10:11:12.123456789Z"
 	mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{
 		WorkspaceID: "workspace-a", Source: transactionmodel.MutationSourceAction,
-		ActionKey: "business_task.assign", CorrelationID: "request-1", MetadataRevision: "metadata-1",
+		ActionKey: "business_task.assign", CorrelationID: "request-1", ApplicationSchemaRevision: "metadata-1",
 	})
 	if err != nil {
 		t.Fatal(err)

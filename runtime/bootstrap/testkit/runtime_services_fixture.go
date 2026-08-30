@@ -6,13 +6,13 @@ import (
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	actionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/action"
+	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	automationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automation"
 	changeplanpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/changeplan"
 	deploymentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/deployment"
 	frontendcapabilitypersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/frontendcapability"
 	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
 	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/lifecycle"
-	metadatapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
@@ -22,8 +22,8 @@ import (
 // always enters production composition through the typed dependency contract.
 func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *composition.RuntimeServices {
 	dependencies := focusedPersistenceDependencies(config)
-	if config.MetadataRepository != nil {
-		dependencies.Metadata = config.MetadataRepository
+	if config.ApplicationSchemaRepository != nil {
+		dependencies.ApplicationSchema = config.ApplicationSchemaRepository
 	}
 	if config.WorkflowWorker != nil {
 		dependencies.WorkflowWorker = config.WorkflowWorker
@@ -75,7 +75,7 @@ func focusedPersistenceDependencies(config RuntimeServicesConfig) composition.Ru
 		WorkflowDefinitions:   workflowpersistence.NewWorkflowDefinitionStore(config.Store),
 		WorkflowProcesses:     workflowpersistence.NewWorkflowProcessStore(config.Store),
 		WorkflowDecisions:     workflowpersistence.NewWorkflowDecisionStore(config.Store),
-		Metadata:              metadatapersistence.NewMetadataStore(config.Store),
+		ApplicationSchema:     appschemapersistence.NewApplicationSchemaStore(config.Store),
 		AutomationWorker:      automationpersistence.NewAutomationWorkerStore(config.Store),
 		AutomationExecutions:  automationpersistence.NewAutomationExecutionStore(config.Store),
 		BusinessChangePlans:   changeplanpersistence.NewBusinessChangePlanStore(config.Store),

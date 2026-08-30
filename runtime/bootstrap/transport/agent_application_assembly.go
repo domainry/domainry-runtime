@@ -12,7 +12,7 @@ import (
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	agentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/agent"
 )
@@ -95,7 +95,7 @@ func agentProposalLifecycleResolver(taskRuns *agentruntime.AgentTaskRunApplicati
 	}
 }
 
-func agentGuardedWriteContracts(contracts []metadatamodel.MetadataGuardedWriteContract) []agent.AgentGuardedWriteContract {
+func agentGuardedWriteContracts(contracts []appschemamodel.ApplicationSchemaGuardedWriteContract) []agent.AgentGuardedWriteContract {
 	out := make([]agent.AgentGuardedWriteContract, 0, len(contracts))
 	for _, contract := range contracts {
 		out = append(out, agent.AgentGuardedWriteContract{ObjectKey: contract.ObjectKey, Operation: contract.Operation, ActionKey: contract.ActionKey, Endpoint: contract.Endpoint, RequiresRecord: contract.RequiresRecord})

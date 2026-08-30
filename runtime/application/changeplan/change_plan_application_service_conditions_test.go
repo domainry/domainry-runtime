@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -90,17 +90,17 @@ func TestSimulateAcceptanceScenariosCoversContractAndRuntimeEdges(t *testing.T) 
 		t.Fatalf("empty result=%#v err=%v", result, err)
 	}
 	plan := changePlanScenarioConditionPlan()
-	mutation := metadatamodel.MetadataDefinitionMutation{Operation: "update", ResourceType: "action", ResourceKey: "order.approve", Request: metadatamodel.MetadataDefinitionUpsertRequest{Payload: json.RawMessage(`{}`)}}
-	ignored := metadatamodel.MetadataDefinitionMutation{Operation: "delete", ResourceType: "object", ResourceKey: "ignored"}
-	ignoredAction := metadatamodel.MetadataDefinitionMutation{Operation: "delete", ResourceType: "action", ResourceKey: "ignored-action"}
-	if _, err := service.simulateAcceptanceScenarios(t.Context(), plan, []metadatamodel.MetadataDefinitionMutation{ignored, mutation}, principal); err == nil {
+	mutation := appschemamodel.ApplicationDefinitionMutation{Operation: "update", ResourceType: "action", ResourceKey: "order.approve", Request: appschemamodel.ApplicationDefinitionUpsertRequest{Payload: json.RawMessage(`{}`)}}
+	ignored := appschemamodel.ApplicationDefinitionMutation{Operation: "delete", ResourceType: "object", ResourceKey: "ignored"}
+	ignoredAction := appschemamodel.ApplicationDefinitionMutation{Operation: "delete", ResourceType: "action", ResourceKey: "ignored-action"}
+	if _, err := service.simulateAcceptanceScenarios(t.Context(), plan, []appschemamodel.ApplicationDefinitionMutation{ignored, mutation}, principal); err == nil {
 		t.Fatal("missing scenario runtime accepted")
 	}
 	runtime := &changePlanScenarioRuntimeFake{result: AcceptanceScenarioRuntimeResult{Valid: true, SideEffectFree: true}}
 	service.scenarios = runtime
 	createMutation := mutation
 	createMutation.Operation = "create"
-	if result, err := service.simulateAcceptanceScenarios(t.Context(), plan, []metadatamodel.MetadataDefinitionMutation{ignored, ignoredAction, createMutation}, principal); err != nil || !result.Passed {
+	if result, err := service.simulateAcceptanceScenarios(t.Context(), plan, []appschemamodel.ApplicationDefinitionMutation{ignored, ignoredAction, createMutation}, principal); err != nil || !result.Passed {
 		t.Fatalf("create action candidate result=%#v err=%v", result, err)
 	}
 	for _, scenarios := range [][]changeplanmodel.BusinessAcceptanceScenario{
@@ -108,13 +108,13 @@ func TestSimulateAcceptanceScenariosCoversContractAndRuntimeEdges(t *testing.T) 
 		{{Key: "same", Kind: changeplanmodel.BusinessAcceptanceScenarioKindActionDefinition, ResourceKey: "order.approve"}, {Key: "same", Kind: changeplanmodel.BusinessAcceptanceScenarioKindActionDefinition, ResourceKey: "order.approve"}},
 	} {
 		plan.AcceptanceScenarios = scenarios
-		if _, err := service.simulateAcceptanceScenarios(t.Context(), plan, []metadatamodel.MetadataDefinitionMutation{mutation}, principal); err == nil {
+		if _, err := service.simulateAcceptanceScenarios(t.Context(), plan, []appschemamodel.ApplicationDefinitionMutation{mutation}, principal); err == nil {
 			t.Fatal("invalid scenario contract accepted")
 		}
 	}
 	plan = changePlanScenarioConditionPlan()
 	runtime.err = errors.New("simulate")
-	if _, err := service.simulateAcceptanceScenarios(t.Context(), plan, []metadatamodel.MetadataDefinitionMutation{mutation}, principal); err == nil {
+	if _, err := service.simulateAcceptanceScenarios(t.Context(), plan, []appschemamodel.ApplicationDefinitionMutation{mutation}, principal); err == nil {
 		t.Fatal("runtime error ignored")
 	}
 }

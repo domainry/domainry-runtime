@@ -27,10 +27,10 @@ func NewRepository(binding auditsdk.Binding) *Repository { return &Repository{bi
 // NewRepositoryFromStore is the embedded-host convenience constructor used by
 // tests and narrow integrations that do not own the full Runtime assembly.
 func NewRepositoryFromStore(store *persistence.RuntimeStore) *Repository {
-	binding := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).MustOpenBorrowedDatabase(
-		auditsdk.ApplicationRef{InstallationID: "domainry-runtime"},
-		auditsdk.DatabaseHandle{Pool: store.DB(), Driver: store.Driver(), Schema: store.DatabaseSchema(), SchemaManager: store, InstallationWorkspaceID: principalmodel.InstallationWorkspaceID},
-	)
+	binding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(context.Background(), auditsdk.ApplicationRef{InstallationID: "domainry-runtime"}, NewHost(store))
+	if err != nil {
+		panic(err)
+	}
 	return NewRepository(binding)
 }
 

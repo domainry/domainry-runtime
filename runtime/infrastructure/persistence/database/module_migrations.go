@@ -15,6 +15,7 @@ import (
 )
 
 var moduleMigrationIdentityPattern = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+var moduleSchemaIdentityPattern = regexp.MustCompile(`^_?[a-z][a-z0-9_]*$`)
 
 // Schema exposes the trusted physical schema to source-owned Module migration
 // renderers. It is empty for SQLite and MySQL.
@@ -41,6 +42,12 @@ func (s *RuntimeStore) ApplyOwnedMigrations(ctx context.Context, owner string, m
 		return err
 	}
 	defer release()
+	return s.applyOwnedMigrationsLocked(ctx, owner, migrations)
+}
+
+// applyOwnedMigrationsLocked is used by the Runtime schema coordinator while
+// it already owns the project migration lock.
+func (s *RuntimeStore) applyOwnedMigrationsLocked(ctx context.Context, owner string, migrations []modulehost.SchemaMigration) error {
 	if err := s.ensureMigrationLedger(ctx); err != nil {
 		return fmt.Errorf("prepare module migration ledger: %w", err)
 	}

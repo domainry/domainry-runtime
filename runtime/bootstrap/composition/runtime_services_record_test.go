@@ -18,15 +18,18 @@ import (
 	"github.com/domainry/domainry-foundation/idempotency"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
+	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	businessintegration "github.com/domainry/domainry-runtime/runtime/application/integration"
-	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
+	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationprojection "github.com/domainry/domainry-runtime/runtime/domain/automation/projection"
@@ -37,9 +40,6 @@ import (
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
-	metadatabusiness "github.com/domainry/domainry-runtime/runtime/domain/metadata/service"
 	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
@@ -241,20 +241,20 @@ func (r *runtimeServicesIntegrationConfigRepository) UpsertConnection(_ context.
 }
 
 type runtimeServicesAutomationMetadataRepository struct {
-	metadatarepository.MetadataRepository
+	appschemarepository.ApplicationSchemaRepository
 	manifest  manifestmodel.ManifestSchema
 	persist   bool
 	getErr    error
 	upsertErr error
 }
 
-func (r *runtimeServicesAutomationMetadataRepository) GetDefinition(context.Context, principalmodel.SystemScope, string, string) (metadatamodel.MetadataDefinition, bool, error) {
-	return metadatamodel.MetadataDefinition{}, false, r.getErr
+func (r *runtimeServicesAutomationMetadataRepository) GetDefinition(context.Context, principalmodel.SystemScope, string, string) (appschemamodel.ApplicationDefinition, bool, error) {
+	return appschemamodel.ApplicationDefinition{}, false, r.getErr
 }
 
-func (r *runtimeServicesAutomationMetadataRepository) UpsertDefinition(_ context.Context, _ principalmodel.SystemScope, resourceType, resourceKey string, request metadatamodel.MetadataDefinitionUpsertRequest) (metadatamodel.MetadataDefinition, error) {
+func (r *runtimeServicesAutomationMetadataRepository) UpsertDefinition(_ context.Context, _ principalmodel.SystemScope, resourceType, resourceKey string, request appschemamodel.ApplicationDefinitionUpsertRequest) (appschemamodel.ApplicationDefinition, error) {
 	if r.upsertErr != nil {
-		return metadatamodel.MetadataDefinition{}, r.upsertErr
+		return appschemamodel.ApplicationDefinition{}, r.upsertErr
 	}
 	if r.persist && resourceType == "automation_rule" {
 		var rule automationmodel.AutomationRuleSchema
@@ -262,10 +262,10 @@ func (r *runtimeServicesAutomationMetadataRepository) UpsertDefinition(_ context
 			r.manifest.AutomationRules = []automationmodel.AutomationRuleSchema{rule}
 		}
 	}
-	return metadatamodel.MetadataDefinition{ResourceType: resourceType, ResourceKey: resourceKey, ObjectKey: request.ObjectKey, Name: request.Name, Payload: request.Payload}, nil
+	return appschemamodel.ApplicationDefinition{ResourceType: resourceType, ResourceKey: resourceKey, ObjectKey: request.ObjectKey, Name: request.Name, Payload: request.Payload}, nil
 }
 
-func (r *runtimeServicesAutomationMetadataRepository) PublishDefinition(ctx context.Context, scope principalmodel.SystemScope, resourceType, resourceKey string, request metadatamodel.MetadataDefinitionUpsertRequest, _ auditmodel.AuditEvent) (metadatamodel.MetadataDefinition, error) {
+func (r *runtimeServicesAutomationMetadataRepository) PublishDefinition(ctx context.Context, scope principalmodel.SystemScope, resourceType, resourceKey string, request appschemamodel.ApplicationDefinitionUpsertRequest, _ auditmodel.AuditEvent) (appschemamodel.ApplicationDefinition, error) {
 	return r.UpsertDefinition(ctx, scope, resourceType, resourceKey, request)
 }
 
@@ -451,12 +451,12 @@ type runtimeServicesAutomationWorkerRepository struct {
 }
 
 type runtimeServicesMetadataRepository struct {
-	metadatarepository.MetadataRepository
+	appschemarepository.ApplicationSchemaRepository
 	getDefinitionErr error
 }
 
-func (r runtimeServicesMetadataRepository) GetDefinition(context.Context, principalmodel.SystemScope, string, string) (metadatamodel.MetadataDefinition, bool, error) {
-	return metadatamodel.MetadataDefinition{}, false, r.getDefinitionErr
+func (r runtimeServicesMetadataRepository) GetDefinition(context.Context, principalmodel.SystemScope, string, string) (appschemamodel.ApplicationDefinition, bool, error) {
+	return appschemamodel.ApplicationDefinition{}, false, r.getDefinitionErr
 }
 
 type runtimeServicesAuditRepository struct {
@@ -557,9 +557,9 @@ func TestRuntimeInitializationSupportsOptionalFrontendAndSurfacePorts(t *testing
 func TestMetadataSnapshotWatcherSupportsCanonicalAndFallbackOwners(t *testing.T) {
 	records := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{})
 	canonical := assembleApplicationSchema(records)
-	fallback := metadataapplication.NewApplicationSchemaService(metadataapplication.ApplicationSchemaDependencies{Runtime: applicationSchemaLifecycleRuntimeAdapter{runtime: records}, Workflows: assembleWorkflowApplication(records)})
+	fallback := appschemaapplication.NewApplicationSchemaApplicationService(appschemaapplication.ApplicationSchemaDependencies{Runtime: applicationSchemaLifecycleRuntimeAdapter{runtime: records}, Workflows: assembleWorkflowApplication(records)})
 
-	for _, service := range []*metadataapplication.ApplicationSchemaService{canonical, fallback} {
+	for _, service := range []*appschemaapplication.ApplicationSchemaApplicationService{canonical, fallback} {
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
 		select {
@@ -697,63 +697,63 @@ func TestAuthoringCapabilityHelpersCoverAbsentSchemaAndLookupFallbacks(t *testin
 	}
 }
 
-func TestStructuredMetadataDefinitionDispatchesAndRejectsInvalidJSON(t *testing.T) {
+func TestStructuredApplicationDefinitionDispatchesAndRejectsInvalidJSON(t *testing.T) {
 	for _, resourceType := range []string{"action", "connector"} {
-		issues, handled := metadataapplication.ValidateStructuredMetadataDefinition(resourceType, json.RawMessage(`{`))
+		issues, handled := appschemaapplication.ValidateStructuredApplicationDefinition(resourceType, json.RawMessage(`{`))
 		if !handled || len(issues) != 1 {
 			t.Fatalf("resource=%s issues=%#v handled=%t", resourceType, issues, handled)
 		}
-		if issues, handled = metadataapplication.ValidateStructuredMetadataDefinition(resourceType, json.RawMessage(`{}`)); !handled || issues == nil {
+		if issues, handled = appschemaapplication.ValidateStructuredApplicationDefinition(resourceType, json.RawMessage(`{}`)); !handled || issues == nil {
 			t.Fatalf("valid resource=%s issues=%#v handled=%t", resourceType, issues, handled)
 		}
 	}
-	if issues, handled := metadataapplication.ValidateStructuredMetadataDefinition("object", json.RawMessage(`{}`)); handled || issues != nil {
+	if issues, handled := appschemaapplication.ValidateStructuredApplicationDefinition("object", json.RawMessage(`{}`)); handled || issues != nil {
 		t.Fatalf("unhandled issues=%#v handled=%t", issues, handled)
 	}
 }
 
-func TestMetadataDefinitionValidationRoutesOwnerContracts(t *testing.T) {
+func TestApplicationDefinitionValidationRoutesOwnerContracts(t *testing.T) {
 	repository := &compositionRecordRepository{}
 	runtime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
 		Manifest:     manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}}},
 		Dependencies: RuntimeServicesDependencies{Records: repository},
 	})
 	service := assembleApplicationSchema(runtime)
-	request := func(payload string) metadatamodel.MetadataDefinitionUpsertRequest {
-		return metadatamodel.MetadataDefinitionUpsertRequest{Payload: json.RawMessage(payload)}
+	request := func(payload string) appschemamodel.ApplicationDefinitionUpsertRequest {
+		return appschemamodel.ApplicationDefinitionUpsertRequest{Payload: json.RawMessage(payload)}
 	}
 
-	if _, _, err := service.ValidateMetadataDefinitionRequestPayload(t.Context(), "dictionary", "status", request(`{"key":"status","items":[{"key":"active","value":"active"},{"key":"active","value":"duplicate"}]}`)); err == nil {
+	if _, _, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "dictionary", "status", request(`{"key":"status","items":[{"key":"active","value":"active"},{"key":"active","value":"duplicate"}]}`)); err == nil {
 		t.Fatal("invalid dictionary must fail its owner contract")
 	}
-	if payload, issues, err := service.ValidateMetadataDefinitionRequestPayload(t.Context(), "dictionary", "status", request(`{"key":"status","items":[{"key":"active","value":"active"}]}`)); err != nil || len(issues) != 0 || len(payload) == 0 {
+	if payload, issues, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "dictionary", "status", request(`{"key":"status","items":[{"key":"active","value":"active"}]}`)); err != nil || len(issues) != 0 || len(payload) == 0 {
 		t.Fatalf("dictionary payload=%s issues=%#v error=%v", payload, issues, err)
 	}
 
-	if _, issues, err := service.ValidateMetadataDefinitionRequestPayload(t.Context(), "action", "customer.activate", request(`{`)); err != nil || len(issues) == 0 {
+	if _, issues, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "action", "customer.activate", request(`{`)); err != nil || len(issues) == 0 {
 		t.Fatalf("invalid structured action issues=%#v error=%v", issues, err)
 	}
 	validAction := `{"key":"customer.activate","object_key":"customer","kind":"record_operation","requires_permission":"customer.update","audit_event":"customer_activated"}`
-	if payload, issues, err := service.ValidateMetadataDefinitionRequestPayload(t.Context(), "action", "customer.activate", request(validAction)); err != nil || len(issues) != 0 || len(payload) == 0 {
+	if payload, issues, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "action", "customer.activate", request(validAction)); err != nil || len(issues) != 0 || len(payload) == 0 {
 		t.Fatalf("action payload=%s issues=%#v error=%v", payload, issues, err)
 	}
 
-	if _, _, err := service.ValidateMetadataDefinitionRequestPayload(t.Context(), "report", "customer.summary", request(`{`)); err == nil {
+	if _, _, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "report", "customer.summary", request(`{`)); err == nil {
 		t.Fatal("invalid report JSON must fail")
 	}
-	if _, issues, err := service.ValidateMetadataDefinitionRequestPayload(t.Context(), "report", "customer.summary", request(`{}`)); err != nil || len(issues) == 0 {
+	if _, issues, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "report", "customer.summary", request(`{}`)); err != nil || len(issues) == 0 {
 		t.Fatalf("invalid report issues=%#v error=%v", issues, err)
 	}
 	validReport := `{"key":"customer.summary","dataset":{"source":{"object_key":"customer","alias":"customers"},"dimensions":[{"key":"name","field":{"source_alias":"customers","field_key":"name"}}]}}`
-	if payload, issues, err := service.ValidateMetadataDefinitionRequestPayload(t.Context(), "report", "customer.summary", request(validReport)); err != nil || len(issues) != 0 || len(payload) == 0 {
+	if payload, issues, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "report", "customer.summary", request(validReport)); err != nil || len(issues) != 0 || len(payload) == 0 {
 		t.Fatalf("report payload=%s issues=%#v error=%v", payload, issues, err)
 	}
-	if _, _, err := service.ValidateMetadataDefinitionRequestPayload(t.Context(), "automation_rule", "invalid", request(`{}`)); err == nil {
+	if _, _, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "automation_rule", "invalid", request(`{}`)); err == nil {
 		t.Fatal("Automation owner validation error must propagate through Metadata validation")
 	}
 
 	for _, resourceType := range []string{"automation_rule", "connector", "action", "report"} {
-		if _, err := service.ValidateMetadataDefinitionPayload(t.Context(), resourceType, request(`{`)); err == nil {
+		if _, err := service.ValidateApplicationDefinitionPayload(t.Context(), resourceType, request(`{`)); err == nil {
 			t.Fatalf("resource=%q invalid JSON must fail", resourceType)
 		}
 		payload := `{}`
@@ -763,9 +763,9 @@ func TestMetadataDefinitionValidationRoutesOwnerContracts(t *testing.T) {
 		if resourceType == "report" {
 			payload = validReport
 		}
-		service.ValidateMetadataDefinitionPayload(t.Context(), resourceType, request(payload))
+		service.ValidateApplicationDefinitionPayload(t.Context(), resourceType, request(payload))
 	}
-	if normalized, err := service.ValidateMetadataDefinitionPayload(t.Context(), "view", request(`{"key":"customer_list","name":"Customers","object_key":"customer","type":"table","config":{"columns":["name"]}}`)); err != nil || len(normalized.Payload) == 0 {
+	if normalized, err := service.ValidateApplicationDefinitionPayload(t.Context(), "view", request(`{"key":"customer_list","name":"Customers","object_key":"customer","type":"table","config":{"columns":["name"]}}`)); err != nil || len(normalized.Payload) == 0 {
 		t.Fatalf("unhandled normalized=%s error=%v", normalized.Payload, err)
 	}
 }
@@ -896,13 +896,15 @@ func TestIntegrationApplicationWiringUsesOwnerPortsAndCanonicalService(t *testin
 		{Key: "smtp-main", WorkspaceID: "default", ConnectorKey: "email", ProviderKey: "smtp"},
 		{Key: "wrong-main", WorkspaceID: "default", ConnectorKey: "webhook", ProviderKey: "webhook"},
 	}}
-	var schema metadatamodel.ApplicationSchemaSnapshot
-	service := newIntegrationApplicationServiceWithDependencies(IntegrationRuntimeWiringDependencies{ConnectorRegistry: registry, ConfigRepository: config, Schema: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot { return schema }})
+	var schema appschemamodel.ApplicationSchemaSnapshot
+	service := newIntegrationApplicationServiceWithDependencies(IntegrationRuntimeWiringDependencies{ConnectorRegistry: registry, ConfigRepository: config, Schema: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
+		return schema
+	}})
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}
 	if references, err := service.IntegrationConnectionReferences(t.Context(), "smtp-main", principal); err != nil || len(references) != 0 {
 		t.Fatalf("nil-schema references=%#v error=%v", references, err)
 	}
-	schema = metadatamodel.ApplicationSchemaSnapshot{
+	schema = appschemamodel.ApplicationSchemaSnapshot{
 		Actions:         []definitionmodel.ActionSchema{{Key: "customer.notify"}},
 		AutomationRules: []automationmodel.AutomationRuleSchema{{Key: "customer.created"}},
 		Workflows:       []definitionmodel.WorkflowSchema{{Key: "customer.follow_up"}},
@@ -964,8 +966,8 @@ func TestIntegrationEntrypointsUseNarrowActionWorkflowAndRecordPorts(t *testing.
 		InvokeAction: func(ctx context.Context, invocation actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error) {
 			return invokeAction(ctx, invocation)
 		},
-		Schema: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
-			return metadatamodel.ApplicationSchemaSnapshot{Agents: agents, Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "email"}}}}
+		Schema: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
+			return appschemamodel.ApplicationSchemaSnapshot{Agents: agents, Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "email"}}}}
 		},
 	})
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
@@ -1126,8 +1128,8 @@ func TestBusinessRuntimeProjectionPropagatesOwnerFailures(t *testing.T) {
 				}
 				return []recordmodel.Record{{ID: "scheduler-1"}}, nil
 			},
-			SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
-				return metadatamodel.ApplicationSchemaSnapshot{Reports: []reportmodel.ReportSchema{{Key: "pipeline"}}}
+			SchemaForPrincipal: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
+				return appschemamodel.ApplicationSchemaSnapshot{Reports: []reportmodel.ReportSchema{{Key: "pipeline"}}}
 			},
 			SchemaObjectMap: func(context.Context) map[string]definitionmodel.ObjectSchema { return objects },
 			ListRecords: func(_ context.Context, objectKey string, _ recordmodel.RecordListQuery, _ principalmodel.Principal) (recordmodel.RecordPageResult, error) {
@@ -1166,7 +1168,7 @@ func TestBusinessSystemSnapshotUsesNarrowOwnerPorts(t *testing.T) {
 	reader := accessfixture.Attach(limited, accessfixture.Bundle{Permissions: []string{"workflow.definition.read"}})
 
 	newService := func(failAt string, evidence BusinessEvidenceRepository) *businesssystemapplication.BusinessSystemApplicationService {
-		schema := metadatamodel.ApplicationSchemaSnapshot{SchemaHash: "schema-1", Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}, Workflows: []definitionmodel.WorkflowSchema{{Key: "customer.approval"}}}
+		schema := appschemamodel.ApplicationSchemaSnapshot{SchemaHash: "schema-1", Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}, Workflows: []definitionmodel.WorkflowSchema{{Key: "customer.approval"}}}
 		service := businesssystemapplication.NewBusinessSystemApplicationService(businesssystemapplication.BusinessSystemApplicationDependencies{
 			FeaturePermissions: func(context.Context, principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error) {
 				if failAt == "permissions" {
@@ -1174,15 +1176,17 @@ func TestBusinessSystemSnapshotUsesNarrowOwnerPorts(t *testing.T) {
 				}
 				return recordcontract.RecordFeaturePermissionSnapshot{RoleKey: "admin"}, nil
 			},
-			SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot { return schema },
-			MetadataDefinitions: func(_ context.Context, resourceType, _ string, _ principalmodel.Principal) ([]metadatamodel.MetadataDefinition, error) {
+			SchemaForPrincipal: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
+				return schema
+			},
+			ApplicationDefinitions: func(_ context.Context, resourceType, _ string, _ principalmodel.Principal) ([]appschemamodel.ApplicationDefinition, error) {
 				if failAt == "metadata" {
 					return nil, failure
 				}
 				if resourceType != "action" {
 					return nil, nil
 				}
-				return []metadatamodel.MetadataDefinition{{ResourceType: resourceType, ResourceKey: "customer.activate", SourceKind: "manifest"}}, nil
+				return []appschemamodel.ApplicationDefinition{{ResourceType: resourceType, ResourceKey: "customer.activate", SourceKind: "manifest"}}, nil
 			},
 			FrontendSnapshot: func(context.Context, principalmodel.Principal) (FrontendCapabilitySnapshot, error) {
 				if failAt == "frontend" {
@@ -1213,8 +1217,10 @@ func TestBusinessSystemSnapshotUsesNarrowOwnerPorts(t *testing.T) {
 				IntegrationOutbox: func(context.Context, string, string, int, principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error) {
 					return nil, nil
 				},
-				SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot { return schema },
-				SchemaObjectMap:    func(context.Context) map[string]definitionmodel.ObjectSchema { return nil },
+				SchemaForPrincipal: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
+					return schema
+				},
+				SchemaObjectMap: func(context.Context) map[string]definitionmodel.ObjectSchema { return nil },
 				ListRecords: func(context.Context, string, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error) {
 					if failAt == "records" {
 						return recordmodel.RecordPageResult{}, failure
@@ -1265,8 +1271,8 @@ func TestMetadataProjectionReplacesRuntimeOwnedSchemaState(t *testing.T) {
 	if len(runtime.schema) != 1 || len(runtime.actions) != 1 || len(runtime.workflows) != 1 || len(runtime.automationRules) != 1 {
 		t.Fatalf("projection objects=%d actions=%d workflows=%d rules=%d", len(runtime.schema), len(runtime.actions), len(runtime.workflows), len(runtime.automationRules))
 	}
-	runtime.dictionaryRuntime = metadatabusiness.NewMetadataDictionaryDomainService(nil)
-	runtime.applyManifestMetadata("template", "2", "Runtime", objects[1:], nil, actions[1:], workflows[1:], rules[1:], []metadatamodel.DictionarySchema{{Key: "status"}}, integrationmodel.IntegrationSchema{}, nil, nil, nil, nil, nil)
+	runtime.dictionaryRuntime = appschemaservice.NewApplicationSchemaDictionaryDomainService(nil)
+	runtime.applyManifestMetadata("template", "2", "Runtime", objects[1:], nil, actions[1:], workflows[1:], rules[1:], []appschemamodel.DictionarySchema{{Key: "status"}}, integrationmodel.IntegrationSchema{}, nil, nil, nil, nil, nil)
 	if runtime.templateVersion != "2" || len(runtime.dictionaries) != 1 {
 		t.Fatalf("replacement version=%q dictionaries=%#v", runtime.templateVersion, runtime.dictionaries)
 	}
@@ -1365,15 +1371,15 @@ func TestBusinessChangePlanCompositionBuildsOwnerServiceWithOptionalRuntime(t *t
 
 	metadata := assembleApplicationSchema(newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{}))
 	runtime := businessChangePlanMetadataRuntimeAdapter{metadata: metadata}
-	invalidDictionary := metadatamodel.MetadataDefinitionUpsertRequest{Payload: json.RawMessage(`{"key":"status","items":[{"key":"active","value":"active"},{"key":"active","value":"duplicate"}]}`)}
-	if _, err := runtime.ValidateMetadataDefinitionPayload(t.Context(), "dictionary", "status", invalidDictionary); err == nil {
+	invalidDictionary := appschemamodel.ApplicationDefinitionUpsertRequest{Payload: json.RawMessage(`{"key":"status","items":[{"key":"active","value":"active"},{"key":"active","value":"duplicate"}]}`)}
+	if _, err := runtime.ValidateApplicationDefinitionPayload(t.Context(), "dictionary", "status", invalidDictionary); err == nil {
 		t.Fatal("invalid Change Plan dictionary payload must be rejected")
 	}
-	validDictionary := metadatamodel.MetadataDefinitionUpsertRequest{Payload: json.RawMessage(`{"key":"status","items":[{"key":"active","value":"active"}]}`)}
-	if _, err := runtime.ValidateMetadataDefinitionPayload(t.Context(), "dictionary", "status", validDictionary); err != nil {
+	validDictionary := appschemamodel.ApplicationDefinitionUpsertRequest{Payload: json.RawMessage(`{"key":"status","items":[{"key":"active","value":"active"}]}`)}
+	if _, err := runtime.ValidateApplicationDefinitionPayload(t.Context(), "dictionary", "status", validDictionary); err != nil {
 		t.Fatalf("valid Change Plan dictionary payload error=%v", err)
 	}
-	if _, err := runtime.ValidateMetadataDefinitionPayload(t.Context(), "action", "customer.activate", metadatamodel.MetadataDefinitionUpsertRequest{Payload: json.RawMessage(`{`)}); err == nil {
+	if _, err := runtime.ValidateApplicationDefinitionPayload(t.Context(), "action", "customer.activate", appschemamodel.ApplicationDefinitionUpsertRequest{Payload: json.RawMessage(`{`)}); err == nil {
 		t.Fatal("invalid Change Plan action payload must be rejected")
 	}
 }

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
@@ -37,7 +37,7 @@ func TestRecordImportHeaderAliasesAndSummary(t *testing.T) {
 
 func TestRecordImportValueDomains(t *testing.T) {
 	items := []any{
-		metadatamodel.DictionaryItemSchema{Key: "open", Value: "OPEN", Label: "Open", Config: map[string]any{"aliases": []string{"Active"}}},
+		appschemamodel.DictionaryItemSchema{Key: "open", Value: "OPEN", Label: "Open", Config: map[string]any{"aliases": []string{"Active"}}},
 		map[string]any{"key": "closed", "value": "CLOSED", "label": "Closed", "description": "Finished", "ui": map[string]any{"zh": "关闭"}},
 		"pending", " ", 123,
 	}
@@ -78,7 +78,7 @@ func TestRecordImportValueDomains(t *testing.T) {
 	}
 
 	for _, value := range []any{
-		[]metadatamodel.DictionaryItemSchema{{Key: "a"}},
+		[]appschemamodel.DictionaryItemSchema{{Key: "a"}},
 		[]string{" a ", ""},
 		[]any{map[string]any{"key": "a"}, "b"},
 		"invalid",

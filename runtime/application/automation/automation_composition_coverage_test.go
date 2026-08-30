@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -35,8 +35,8 @@ func TestAutomationCompositionRepositoriesForwardToManagement(t *testing.T) {
 	registry := &automationFacadeRegistry{rules: map[string]automationmodel.AutomationRuleSchema{}}
 	service := NewAutomationApplicationService(AutomationApplicationDependencies{
 		Rules: registry, DeliveryRepository: automationDeliveryRepositoryProbe{}, ConfigRepository: automationConfigRepositoryProbe{},
-		Schema: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
-			return metadatamodel.ApplicationSchemaSnapshot{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "email"}}}}
+		Schema: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
+			return appschemamodel.ApplicationSchemaSnapshot{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "email"}}}}
 		},
 	})
 	principal := automationFacadePrincipal()

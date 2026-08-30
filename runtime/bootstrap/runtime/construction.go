@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	connector "github.com/domainry/domainry-connector-sdk"
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
@@ -40,6 +41,7 @@ type runtimeConstructionInput struct {
 	notificationBinding notificationsdk.Binding
 	monitoringBinding   monitoringsdk.Binding
 	schedulerBinding    schedulersdk.Binding
+	agentBinding        agentsdk.Binding
 	notificationWorkers notificationsdk.LocalWorkers
 	notificationRelay   *notificationpublication.Relay
 	worker              workerplatform.Dependencies
@@ -70,6 +72,7 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		notificationBinding: input.notificationBinding,
 		monitoringBinding:   input.monitoringBinding,
 		schedulerBinding:    input.schedulerBinding,
+		agentBinding:        input.agentBinding,
 		notificationWorkers: input.notificationWorkers,
 		notificationRelay:   input.notificationRelay,
 		worker:              workerplatform.NormalizeDependencies(input.worker),

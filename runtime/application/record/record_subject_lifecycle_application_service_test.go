@@ -16,7 +16,7 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	localartifact "github.com/domainry/domainry-runtime/runtime/infrastructure/lifecycleartifact/filesystem"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	metadatapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata"
+	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -34,7 +34,7 @@ func TestRecordSubjectLifecycleExportsRecordsAndFilesThenErasesDeclaredFields(t 
 		{Key: "attachment", Type: "text", Config: map[string]any{"lifecycle_subject_file": true, "lifecycle_erase": "delete"}},
 	}}
 	manifest := manifestmodel.ManifestSchema{TemplateID: "record-subject", Version: "1", Name: "Record Subject", Objects: []definitionmodel.ObjectSchema{object}}
-	if err := metadatapersistence.NewMetadataStore(store).SyncManifest(t.Context(), principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "test record subject schema"), manifest); err != nil {
+	if err := appschemapersistence.NewApplicationSchemaStore(store).SyncManifest(t.Context(), principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "test record subject schema"), manifest); err != nil {
 		t.Fatal(err)
 	}
 	repository := recordpersistence.NewRecordStore(store)

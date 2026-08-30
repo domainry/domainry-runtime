@@ -11,7 +11,7 @@ import (
 func TestConfigContractTypedSettersAndCollectionParsers(t *testing.T) {
 	for field, want := range map[string]string{
 		"AuditExportTokenKey": "AUDIT_EXPORT_TOKEN_KEY", "HTTPReadTimeout": "HTTP_READ_TIMEOUT", "WorkerPollInterval": "WORKER_POLL_INTERVAL",
-		"AgentHTTPAPIKey": "AGENT_HTTP_API_KEY", "CORSAllowedOrigins": "CORS_ALLOWED_ORIGINS", "DatabaseRLSEnabled": "DATABASE_RLS_ENABLED",
+		"AgentDialogRateLimitPerMinute": "AGENT_DIALOG_RATE_LIMIT_PER_MINUTE", "CORSAllowedOrigins": "CORS_ALLOWED_ORIGINS", "DatabaseRLSEnabled": "DATABASE_RLS_ENABLED",
 		"MigrationRestoreDrillSuccessAt": "MIGRATION_RESTORE_DRILL_LAST_SUCCESS_AT",
 	} {
 		if got := configEnvName(field); got != want {
@@ -153,7 +153,6 @@ func TestConfigValidationRejectsEachRuntimeBoundary(t *testing.T) {
 		{"database pool", func(cfg *Config) { cfg.DatabaseMaxIdleConns = cfg.DatabaseMaxOpenConns + 1 }, "database pool"},
 		{"database timeout", func(cfg *Config) { cfg.DatabaseLockTimeout = 0 }, "database timeouts"},
 		{"required paths", func(cfg *Config) { cfg.UploadDir = "" }, "paths are required"},
-		{"agent URL", func(cfg *Config) { cfg.AgentHTTPBaseURL = "file:///tmp/socket" }, "AGENT_HTTP_BASE_URL"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

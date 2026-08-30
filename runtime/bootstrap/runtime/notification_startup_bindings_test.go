@@ -12,9 +12,9 @@ import (
 	"github.com/domainry/domainry-foundation/requestcontext"
 	notificationcontract "github.com/domainry/domainry-notification-sdk/contract"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -36,7 +36,7 @@ func TestNotificationStartupRevisionAndPublisherBoundaries(t *testing.T) {
 		t.Fatalf("empty SDK revisions=%q,%q", project, metadata)
 	}
 	manifest.GeneratedDomainSDK.ArtifactSHA256 = "artifact"
-	manifest.GeneratedDomainSDK.MetadataSnapshotSHA256 = "metadata"
+	manifest.GeneratedDomainSDK.ApplicationSchemaSnapshotSHA256 = "metadata"
 	if project, metadata := runtimeActionRevisions(manifest); project != "artifact" || metadata != "metadata" {
 		t.Fatalf("SDK revisions=%q,%q", project, metadata)
 	}
@@ -163,8 +163,8 @@ func TestSchedulerNotificationAuthorizerBoundaries(t *testing.T) {
 		{name: "reader found after unrelated", permissions: []string{"other", "scheduler.definition.read"}, found: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			authorize := newSchedulerNotificationActionAuthorizer(func(context.Context, principalmodel.SystemScope, string, string) (metadatamodel.MetadataDefinition, bool, error) {
-				return metadatamodel.MetadataDefinition{}, test.found, test.err
+			authorize := newSchedulerNotificationActionAuthorizer(func(context.Context, principalmodel.SystemScope, string, string) (appschemamodel.ApplicationDefinition, bool, error) {
+				return appschemamodel.ApplicationDefinition{}, test.found, test.err
 			})
 			err := authorize(t.Context(), "job", accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{Permissions: test.permissions}))
 			if test.err != nil && !errors.Is(err, test.err) {

@@ -1,7 +1,7 @@
 package discovery
 
 import (
-	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
+	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	"net/http"
 	"strings"
 
@@ -11,14 +11,14 @@ import (
 )
 
 type DiscoveryHandler struct {
-	schema     *metadataapplication.MetadataSchemaApplicationService
+	schema     *appschemaapplication.ApplicationSchemaQueryApplicationService
 	principal  func(*http.Request) principalmodel.Principal
 	writeJSON  func(http.ResponseWriter, int, any)
 	writeError func(http.ResponseWriter, *http.Request, int, string, ...string)
 }
 
 type DiscoveryDependencies struct {
-	Schema     *metadataapplication.MetadataSchemaApplicationService
+	Schema     *appschemaapplication.ApplicationSchemaQueryApplicationService
 	Principal  func(*http.Request) principalmodel.Principal
 	WriteJSON  func(http.ResponseWriter, int, any)
 	WriteError func(http.ResponseWriter, *http.Request, int, string, ...string)

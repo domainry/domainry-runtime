@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 	localization "github.com/domainry/domainry-runtime/runtime/platform/localization"
 )
@@ -116,7 +116,7 @@ func RecordImportValueDomainCandidates(field definitionmodel.FieldSchema) []stri
 	return importValueDomainCandidates(field)
 }
 
-func importValueDomainItems(field definitionmodel.FieldSchema) []metadatamodel.DictionaryItemSchema {
+func importValueDomainItems(field definitionmodel.FieldSchema) []appschemamodel.DictionaryItemSchema {
 	config := field.Config
 	if config == nil {
 		return nil
@@ -135,11 +135,11 @@ func importValueDomainItems(field definitionmodel.FieldSchema) []metadatamodel.D
 		}
 	}
 	if len(field.Validation.Options) > 0 {
-		items := make([]metadatamodel.DictionaryItemSchema, 0, len(field.Validation.Options))
+		items := make([]appschemamodel.DictionaryItemSchema, 0, len(field.Validation.Options))
 		for index, option := range field.Validation.Options {
 			option = strings.TrimSpace(option)
 			if option != "" {
-				items = append(items, metadatamodel.DictionaryItemSchema{Key: option, Value: option, Label: option, SortOrder: index})
+				items = append(items, appschemamodel.DictionaryItemSchema{Key: option, Value: option, Label: option, SortOrder: index})
 			}
 		}
 		return items
@@ -147,18 +147,18 @@ func importValueDomainItems(field definitionmodel.FieldSchema) []metadatamodel.D
 	return nil
 }
 
-func dictionaryItemsFromAny(value any) []metadatamodel.DictionaryItemSchema {
+func dictionaryItemsFromAny(value any) []appschemamodel.DictionaryItemSchema {
 	switch typed := value.(type) {
-	case []metadatamodel.DictionaryItemSchema:
-		return append([]metadatamodel.DictionaryItemSchema(nil), typed...)
+	case []appschemamodel.DictionaryItemSchema:
+		return append([]appschemamodel.DictionaryItemSchema(nil), typed...)
 	case []any:
-		items := make([]metadatamodel.DictionaryItemSchema, 0, len(typed))
+		items := make([]appschemamodel.DictionaryItemSchema, 0, len(typed))
 		for index, item := range typed {
 			switch record := item.(type) {
-			case metadatamodel.DictionaryItemSchema:
+			case appschemamodel.DictionaryItemSchema:
 				items = append(items, record)
 			case map[string]any:
-				items = append(items, metadatamodel.DictionaryItemSchema{
+				items = append(items, appschemamodel.DictionaryItemSchema{
 					Key:         importValueDomainString(record["key"]),
 					Value:       importValueDomainString(record["value"]),
 					Label:       importValueDomainString(record["label"]),
@@ -171,17 +171,17 @@ func dictionaryItemsFromAny(value any) []metadatamodel.DictionaryItemSchema {
 			case string:
 				text := strings.TrimSpace(record)
 				if text != "" {
-					items = append(items, metadatamodel.DictionaryItemSchema{Key: text, Value: text, Label: text, SortOrder: index})
+					items = append(items, appschemamodel.DictionaryItemSchema{Key: text, Value: text, Label: text, SortOrder: index})
 				}
 			}
 		}
 		return items
 	case []string:
-		items := make([]metadatamodel.DictionaryItemSchema, 0, len(typed))
+		items := make([]appschemamodel.DictionaryItemSchema, 0, len(typed))
 		for index, item := range typed {
 			item = strings.TrimSpace(item)
 			if item != "" {
-				items = append(items, metadatamodel.DictionaryItemSchema{Key: item, Value: item, Label: item, SortOrder: index})
+				items = append(items, appschemamodel.DictionaryItemSchema{Key: item, Value: item, Label: item, SortOrder: index})
 			}
 		}
 		return items
@@ -201,7 +201,7 @@ func importValueDomainString(value any) string {
 	return text
 }
 
-func importValueDomainAliases(item metadatamodel.DictionaryItemSchema) []string {
+func importValueDomainAliases(item appschemamodel.DictionaryItemSchema) []string {
 	aliases := []string{}
 	for _, record := range []map[string]any{item.Config, item.UI, item.Metadata} {
 		for _, key := range []string{"alias", "aliases", "name", "label", "zh", "zh-CN", "en", "en-US"} {

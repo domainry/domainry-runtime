@@ -17,10 +17,10 @@ import (
 	"github.com/domainry/domainry-foundation/idempotency"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	changeplanapplication "github.com/domainry/domainry-runtime/runtime/application/changeplan"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	changeplancontract "github.com/domainry/domainry-runtime/runtime/domain/changeplan/contract"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -87,23 +87,23 @@ type changePlansAuditStub struct{ events []auditmodel.AuditEvent }
 
 type changePlansRuntimeStub struct{}
 
-func (changePlansRuntimeStub) ListDefinitions(context.Context, principalmodel.SystemScope, string) ([]metadatamodel.MetadataDefinition, error) {
+func (changePlansRuntimeStub) ListDefinitions(context.Context, principalmodel.SystemScope, string) ([]appschemamodel.ApplicationDefinition, error) {
 	return nil, nil
 }
-func (changePlansRuntimeStub) ApplyDefinitionMutations(context.Context, principalmodel.SystemScope, []metadatamodel.MetadataDefinitionMutation, []auditmodel.AuditEvent, *changeplanmodel.BusinessChangePlanPublication) ([]metadatamodel.MetadataDefinition, error) {
+func (changePlansRuntimeStub) ApplyDefinitionMutations(context.Context, principalmodel.SystemScope, []appschemamodel.ApplicationDefinitionMutation, []auditmodel.AuditEvent, *changeplanmodel.BusinessChangePlanPublication) ([]appschemamodel.ApplicationDefinition, error) {
 	return nil, nil
 }
 
-func (changePlansRuntimeStub) CanonicalizeMetadataCandidate(_ context.Context, mutations []metadatamodel.MetadataDefinitionMutation) ([]metadatamodel.MetadataDefinitionMutation, error) {
+func (changePlansRuntimeStub) CanonicalizeMetadataCandidate(_ context.Context, mutations []appschemamodel.ApplicationDefinitionMutation) ([]appschemamodel.ApplicationDefinitionMutation, error) {
 	return mutations, nil
 }
-func (changePlansRuntimeStub) ReloadMetadata(context.Context, principalmodel.Principal) (string, error) {
+func (changePlansRuntimeStub) ReloadApplicationSchema(context.Context, principalmodel.Principal) (string, error) {
 	return "schema", nil
 }
 
 type changePlansScenarioRuntimeStub struct{}
 
-func (changePlansScenarioRuntimeStub) SimulateActionCandidate(context.Context, string, metadatamodel.MetadataDefinitionUpsertRequest, map[string]any, map[string]any, principalmodel.Principal) (changeplanapplication.AcceptanceScenarioRuntimeResult, error) {
+func (changePlansScenarioRuntimeStub) SimulateActionCandidate(context.Context, string, appschemamodel.ApplicationDefinitionUpsertRequest, map[string]any, map[string]any, principalmodel.Principal) (changeplanapplication.AcceptanceScenarioRuntimeResult, error) {
 	return changeplanapplication.AcceptanceScenarioRuntimeResult{Valid: true, SideEffectFree: true, Payload: []byte(`{"valid":true}`)}, nil
 }
 

@@ -23,13 +23,13 @@ import (
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/logging"
 	"github.com/domainry/domainry-foundation/requestcontext"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )
 
 type BusinessChangePlanApplyResult struct {
 	PlanID             string                                       `json:"plan_id"`
 	Status             string                                       `json:"status"`
-	AppliedDefinitions []metadatamodel.MetadataDefinition           `json:"applied_definitions"`
+	AppliedDefinitions []appschemamodel.ApplicationDefinition       `json:"applied_definitions"`
 	SchemaHash         string                                       `json:"schema_hash"`
 	Validation         changeplanmodel.BusinessChangePlanValidation `json:"validation"`
 }
@@ -198,7 +198,7 @@ func (s *ChangePlanApplicationService) Apply(ctx context.Context, plan changepla
 		s.auditBusinessChangePlanResult(ctx, plan, principal, "failed", ErrorCodeOf(wrapMetadataError(err)), &validation)
 		return BusinessChangePlanApplyResult{}, wrapMetadataError(err)
 	}
-	schemaHash, err := s.runtime.ReloadMetadata(ctx, principal)
+	schemaHash, err := s.runtime.ReloadApplicationSchema(ctx, principal)
 	if err != nil {
 		s.auditBusinessChangePlanResult(ctx, plan, principal, "failed", ErrorCodeOf(err), &validation)
 		return BusinessChangePlanApplyResult{}, err

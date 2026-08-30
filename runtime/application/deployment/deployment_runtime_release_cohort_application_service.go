@@ -92,7 +92,7 @@ func ValidateRuntimeReleaseIdentity(identity deploymentmodel.RuntimeReleaseIdent
 		"runtimeext contract": identity.RuntimeextContractSHA256,
 		"connector contract":  identity.ConnectorContractSHA256,
 		"domain SDK contract": identity.DomainSDKContractSHA256,
-		"metadata snapshot":   identity.MetadataSnapshotSHA256,
+		"metadata snapshot":   identity.ApplicationSchemaSnapshotSHA256,
 		"generated SDK":       identity.GeneratedSDKSHA256,
 		"handler registry":    identity.HandlerRegistrySHA256,
 		"connector registry":  identity.ConnectorRegistrySHA256,

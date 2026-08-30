@@ -11,8 +11,8 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -43,20 +43,20 @@ func agentPrincipalResolution(principal principalmodel.Principal) identitysdk.Pr
 }
 
 type agentSchemaProviderStub struct {
-	full     metadatamodel.ApplicationSchemaSnapshot
-	filtered map[string]metadatamodel.ApplicationSchemaSnapshot
+	full     appschemamodel.ApplicationSchemaSnapshot
+	filtered map[string]appschemamodel.ApplicationSchemaSnapshot
 }
 
 type agentInternalSchemaProviderStub struct {
 	agentSchemaProviderStub
-	internal metadatamodel.ApplicationSchemaSnapshot
+	internal appschemamodel.ApplicationSchemaSnapshot
 }
 
-func (s agentInternalSchemaProviderStub) Schema() metadatamodel.ApplicationSchemaSnapshot {
+func (s agentInternalSchemaProviderStub) Schema() appschemamodel.ApplicationSchemaSnapshot {
 	return s.internal
 }
 
-func (s agentSchemaProviderStub) SchemaForPrincipal(_ context.Context, principal principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+func (s agentSchemaProviderStub) SchemaForPrincipal(_ context.Context, principal principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 	if !principal.Known {
 		return s.full
 	}
@@ -65,8 +65,8 @@ func (s agentSchemaProviderStub) SchemaForPrincipal(_ context.Context, principal
 
 func TestFullAgentSchemaUsesInternalSnapshotWithoutChangingAnonymousProjection(t *testing.T) {
 	provider := agentInternalSchemaProviderStub{
-		agentSchemaProviderStub: agentSchemaProviderStub{full: metadatamodel.ApplicationSchemaSnapshot{}},
-		internal:                metadatamodel.ApplicationSchemaSnapshot{AgentServicePrincipals: []agentmodel.AgentServicePrincipalBinding{{Key: "service", Enabled: true}}},
+		agentSchemaProviderStub: agentSchemaProviderStub{full: appschemamodel.ApplicationSchemaSnapshot{}},
+		internal:                appschemamodel.ApplicationSchemaSnapshot{AgentServicePrincipals: []agentmodel.AgentServicePrincipalBinding{{Key: "service", Enabled: true}}},
 	}
 	snapshot := fullAgentSchema(t.Context(), provider)
 	if len(snapshot.AgentServicePrincipals) != 1 || snapshot.AgentServicePrincipals[0].Key != "service" {
@@ -97,10 +97,10 @@ func (s *sequencedAgentPrincipalDirectory) Resolve(ctx context.Context, request 
 type sequencedAgentSchemaProvider struct {
 	base       *agentSchemaProviderStub
 	fullCalls  int
-	secondFull metadatamodel.ApplicationSchemaSnapshot
+	secondFull appschemamodel.ApplicationSchemaSnapshot
 }
 
-func (s *sequencedAgentSchemaProvider) SchemaForPrincipal(ctx context.Context, principal principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+func (s *sequencedAgentSchemaProvider) SchemaForPrincipal(ctx context.Context, principal principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 	if !principal.Known {
 		s.fullCalls++
 		if s.fullCalls == 2 {
@@ -212,7 +212,7 @@ func TestAgentTaskAuthorizationIntersectsEveryCapabilityLayer(t *testing.T) {
 		t.Fatalf("unpublished task error = %v", err)
 	}
 	request.TaskVersion = "1.0.0"
-	schema.filtered["operator:operator"] = metadatamodel.ApplicationSchemaSnapshot{SchemaHash: "revoked", AgentTasks: schema.full.AgentTasks}
+	schema.filtered["operator:operator"] = appschemamodel.ApplicationSchemaSnapshot{SchemaHash: "revoked", AgentTasks: schema.full.AgentTasks}
 	if _, err := service.AuthorizeTask(t.Context(), request); apperror.CodeOf(err) != "agent.authorization.capability_revoked" {
 		t.Fatalf("revoked capability error = %v", err)
 	}
@@ -341,7 +341,7 @@ func TestAgentTaskAuthorizationBoundaryMatrix(t *testing.T) {
 			t.Fatalf("task %s=%v", name, err)
 		}
 	}
-	for name, visible := range map[string]metadatamodel.ApplicationSchemaSnapshot{
+	for name, visible := range map[string]appschemamodel.ApplicationSchemaSnapshot{
 		"objects": {AgentTasks: schema.full.AgentTasks, Actions: schema.full.Actions, Agents: schema.full.Agents, Skills: schema.full.Skills},
 		"actions": {AgentTasks: schema.full.AgentTasks, Objects: schema.full.Objects, Agents: schema.full.Agents, Skills: schema.full.Skills},
 	} {
@@ -362,7 +362,7 @@ func TestAgentTaskAuthorizationBoundaryMatrix(t *testing.T) {
 	if _, err := local.AuthorizeTask(t.Context(), baseRequest(localInitiator)); err != nil {
 		t.Fatalf("analysis-only without actions=%v", err)
 	}
-	if tools := agentToolsForTask(metadatamodel.ApplicationSchemaSnapshot{Agents: []agentmodel.AgentSchema{{Key: "other"}}, Skills: []agentmodel.SkillSchema{{Key: "unused", AllowedTools: []string{"x"}}}}, task); len(tools) != 0 {
+	if tools := agentToolsForTask(appschemamodel.ApplicationSchemaSnapshot{Agents: []agentmodel.AgentSchema{{Key: "other"}}, Skills: []agentmodel.SkillSchema{{Key: "unused", AllowedTools: []string{"x"}}}}, task); len(tools) != 0 {
 		t.Fatalf("unmatched tools=%v", tools)
 	}
 	local, localInitiator, localSchema, _ = agentAuthorizationFixture()
@@ -469,7 +469,7 @@ func TestGlobalAgentContextBoundaryMatrix(t *testing.T) {
 }
 
 func TestAgentAuthorizationLookupAndCollectionHelpers(t *testing.T) {
-	if _, found := findAgentServicePrincipal(metadatamodel.ApplicationSchemaSnapshot{}, "x"); found {
+	if _, found := findAgentServicePrincipal(appschemamodel.ApplicationSchemaSnapshot{}, "x"); found {
 		t.Fatal("service found")
 	}
 	if _, found := findAgentTask(nil, "x", "1"); found {
@@ -599,7 +599,7 @@ func TestAgentInteractiveAuthorizationBoundaryMatrix(t *testing.T) {
 	if _, found := findInteractiveAgent([]agentmodel.AgentSchema{{Key: "other"}}, "missing"); found {
 		t.Fatal("unexpected agent")
 	}
-	if tools := agentToolsForInteractiveAgent(metadatamodel.ApplicationSchemaSnapshot{Skills: []agentmodel.SkillSchema{{Key: "other", AllowedTools: []string{"x"}}}}, agentmodel.AgentSchema{SkillKeys: []string{"wanted"}}); len(tools) != 0 {
+	if tools := agentToolsForInteractiveAgent(appschemamodel.ApplicationSchemaSnapshot{Skills: []agentmodel.SkillSchema{{Key: "other", AllowedTools: []string{"x"}}}}, agentmodel.AgentSchema{SkillKeys: []string{"wanted"}}); len(tools) != 0 {
 		t.Fatalf("tools=%v", tools)
 	}
 	localSchema.full.AgentEntrypoints[0].RoutingContract.AllowedRouteTypes = []string{agentmodel.AgentRouteWorkflow}
@@ -639,9 +639,9 @@ func TestAgentInteractiveAuthorizationDetectsMidRequestIdentityAndSchemaChanges(
 			}
 		})
 	}
-	for name, mutate := range map[string]func(*metadatamodel.ApplicationSchemaSnapshot){
-		"missing":  func(full *metadatamodel.ApplicationSchemaSnapshot) { full.AgentEntrypoints = nil },
-		"mismatch": func(full *metadatamodel.ApplicationSchemaSnapshot) { full.AgentEntrypoints[0].AgentKey = "other" },
+	for name, mutate := range map[string]func(*appschemamodel.ApplicationSchemaSnapshot){
+		"missing":  func(full *appschemamodel.ApplicationSchemaSnapshot) { full.AgentEntrypoints = nil },
+		"mismatch": func(full *appschemamodel.ApplicationSchemaSnapshot) { full.AgentEntrypoints[0].AgentKey = "other" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, initiator, schema, directory := agentAuthorizationFixture()
@@ -669,15 +669,15 @@ func agentAuthorizationFixture() (*AgentAuthorizationApplicationService, princip
 	directory := &agentPrincipalDirectoryStub{principals: map[string]principalmodel.Principal{"operator:operator": fresh, "agent_customer:agent_service": servicePrincipal}}
 	task := agentmodel.AgentTaskDefinition{ContractVersion: agentmodel.AgentTaskContractVersion, Key: "customer.review", Version: "1.0.0", AgentKey: "customer_agent", AllowedObjects: []string{"customer"}, AllowedActions: []string{"customer.update"}, AllowedOutcomes: []string{"success", "manual_review", "error"}, SideEffectMode: agentmodel.AgentTaskSideEffectActionAllowed, Enabled: true}
 	entrypoint := agentmodel.AgentEntrypointAssignment{ContractVersion: agentmodel.AgentEntrypointContractVersion, Key: "assistant.global", AgentKey: "customer_agent", Surface: "business_workspace", RequiredPermissions: []string{"customer.read"}, RoutePatterns: []string{"workspace.*"}, AllowedTaskKeys: []string{"customer.review"}, AllowedWorkflowKeys: []string{"customer.flow"}, Enabled: true, ContextContract: agentmodel.GlobalAgentContextContract{ContractVersion: agentmodel.GlobalAgentContextContractVersion, MaxSelectedRecord: 20, MaxContextBytes: 65536}, RoutingContract: agentmodel.AgentRoutingContract{ContractVersion: agentmodel.AgentRoutingContractVersion, AllowedRouteTypes: []string{agentmodel.AgentRouteTask, agentmodel.AgentRouteWorkflow}}}
-	full := metadatamodel.ApplicationSchemaSnapshot{
+	full := appschemamodel.ApplicationSchemaSnapshot{
 		SchemaHash: "schema-full", Objects: []definitionmodel.ObjectSchema{{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name"}, {Key: "secret"}}}, {Key: "invoice"}},
 		Actions:   []definitionmodel.ActionSchema{{Key: "customer.update", ObjectKey: "customer"}, {Key: "invoice.pay", ObjectKey: "invoice"}},
 		Workflows: []definitionmodel.WorkflowSchema{{Key: "customer.flow", Enabled: true}}, EntryPoints: []definitionmodel.EntryPointSchema{{Key: "workspace.customer", RequiredPermissions: []string{"customer.read"}, Config: map[string]any{"kind": "backoffice", "primary_object": "customer", "read_objects": []string{"customer"}}}},
 		Skills: []agentmodel.SkillSchema{{Key: "customer_reader", Version: "1.0.0", Name: "Reader", AllowedObjects: []string{"customer"}, AllowedTools: []string{"query_records"}}}, Agents: []agentmodel.AgentSchema{{Key: "customer_agent", Version: "1.0.0", Name: "Agent", SkillKeys: []string{"customer_reader"}, Tools: []string{"invoke_action"}}},
 		AgentTasks: []agentmodel.AgentTaskDefinition{task}, AgentEntrypoints: []agentmodel.AgentEntrypointAssignment{entrypoint}, AgentServicePrincipals: []agentmodel.AgentServicePrincipalBinding{{ContractVersion: agentmodel.AgentServicePrincipalContractVersion, Key: "customer_service", UserID: "agent_customer", RoleKey: "agent_service", Enabled: true, RotationVersion: 3}},
 	}
-	filtered := metadatamodel.ApplicationSchemaSnapshot{SchemaHash: "schema-operator", Objects: []definitionmodel.ObjectSchema{{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name"}}}}, Actions: []definitionmodel.ActionSchema{{Key: "customer.update", ObjectKey: "customer"}}, Workflows: full.Workflows, EntryPoints: full.EntryPoints, Skills: full.Skills, Agents: full.Agents, AgentTasks: full.AgentTasks, AgentEntrypoints: full.AgentEntrypoints}
-	schema := &agentSchemaProviderStub{full: full, filtered: map[string]metadatamodel.ApplicationSchemaSnapshot{"operator:operator": filtered, "agent_customer:agent_service": filtered}}
+	filtered := appschemamodel.ApplicationSchemaSnapshot{SchemaHash: "schema-operator", Objects: []definitionmodel.ObjectSchema{{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name"}}}}, Actions: []definitionmodel.ActionSchema{{Key: "customer.update", ObjectKey: "customer"}}, Workflows: full.Workflows, EntryPoints: full.EntryPoints, Skills: full.Skills, Agents: full.Agents, AgentTasks: full.AgentTasks, AgentEntrypoints: full.AgentEntrypoints}
+	schema := &agentSchemaProviderStub{full: full, filtered: map[string]appschemamodel.ApplicationSchemaSnapshot{"operator:operator": filtered, "agent_customer:agent_service": filtered}}
 	service := NewAgentAuthorizationApplicationService(AgentAuthorizationDependencies{Principals: directory, Schema: schema, Records: agentRecordVisibilityStub{denied: map[string]bool{}}})
 	return service, initiator, schema, directory
 }

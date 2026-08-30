@@ -6,7 +6,7 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
@@ -21,10 +21,10 @@ import (
 )
 
 type schedulerSchemaStub struct {
-	snapshot metadatamodel.ApplicationSchemaSnapshot
+	snapshot appschemamodel.ApplicationSchemaSnapshot
 }
 
-func (s schedulerSchemaStub) SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+func (s schedulerSchemaStub) SchemaForPrincipal(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 	return s.snapshot
 }
 
@@ -48,7 +48,7 @@ func TestSchedulerOperationRuntimeMethodBudget(t *testing.T) {
 }
 
 func TestSchedulerServicePreviewDoesNotRequireRuntimeServices(t *testing.T) {
-	schema := schedulerSchemaStub{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "job_definition"}}}}
+	schema := schedulerSchemaStub{snapshot: appschemamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "job_definition"}}}}
 	service := NewSchedulerApplicationService(schema, nil, nil, nil)
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	preview, err := service.PreviewDefinition(t.Context(), map[string]any{"target_type": "workflow", "target_key": "scheduled:*", "schedule_type": "interval", "interval_seconds": 60}, principal)

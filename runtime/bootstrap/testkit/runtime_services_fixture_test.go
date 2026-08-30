@@ -3,13 +3,13 @@ package testkit
 import (
 	"testing"
 
+	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
-	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 )
 
 type runtimeServicesMetadataOverride struct {
-	metadatarepository.MetadataRepository
+	appschemarepository.ApplicationSchemaRepository
 }
 type runtimeServicesEvidenceOverride struct {
 	changeplanrepository.ChangePlanEvidenceRepository
@@ -20,9 +20,9 @@ type runtimeServicesWorkflowDefinitionsOverride struct {
 
 func TestNewRuntimeServicesAcceptsExplicitMetadataAndEvidenceOverrides(t *testing.T) {
 	services := NewRuntimeServices(t.Context(), RuntimeServicesConfig{
-		MetadataRepository:  &runtimeServicesMetadataOverride{},
-		BusinessEvidence:    &runtimeServicesEvidenceOverride{},
-		WorkflowDefinitions: &runtimeServicesWorkflowDefinitionsOverride{},
+		ApplicationSchemaRepository: &runtimeServicesMetadataOverride{},
+		BusinessEvidence:            &runtimeServicesEvidenceOverride{},
+		WorkflowDefinitions:         &runtimeServicesWorkflowDefinitionsOverride{},
 	})
 	if services == nil {
 		t.Fatal("runtime services were nil")

@@ -1,8 +1,8 @@
 package policy
 
 import (
+	appschemacontract "github.com/domainry/domainry-runtime/runtime/domain/appschema/contract"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
-	metadatacontract "github.com/domainry/domainry-runtime/runtime/domain/metadata/contract"
 )
 
 func automationCompleteRuleAuthoringContract(capability *capabilitycontract.CapabilityAuthoringDefinition) {
@@ -10,7 +10,7 @@ func automationCompleteRuleAuthoringContract(capability *capabilitycontract.Capa
 	capability.InputSchema = automationRuleInputSchema()
 	capability.OutputSchema = automationFragmentValidationOutputSchema()
 	capability.OutputVariables = automationFragmentValidationOutputVariables()
-	capability.Execution = metadatacontract.VersionedMetadataDefinitionExecution("automation.rule")
+	capability.Execution = appschemacontract.VersionedApplicationDefinitionExecution("automation.rule")
 	capability.ReferenceContracts = []capabilitycontract.CapabilityAuthoringReference{
 		{Kind: "object_key", InputJSONPointer: "/object_key", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/object_key"},
 		{Kind: "field_key", InputJSONPointer: "/trigger/changed_fields/*", ScopeFrom: "/object_key", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/field_key"},

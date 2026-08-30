@@ -25,9 +25,10 @@
 
 1. 本文 `B*` 规定全仓产品、进程和共同依赖边界；
 2. 本文 `R*` 规定 Runtime DDD、目录、命名、依赖和开发细则；
-3. Control Plane 专项指导规定 pipeline 内部细则；
-4. architecture tests 是可执行门禁，必须与本文一致；
-5. reviewed legacy baseline 只是只减不增的迁移清单，不是新代码范例。
+3. [`module-saas-development-standard.md`](module-saas-development-standard.md) 规定独立能力仓库、SDK、Module/SaaS 双形态与 Runtime 接入细则；各能力现状登记在 [`../modules`](../modules/README.md)；
+4. Control Plane 专项指导规定 pipeline 内部细则；
+5. architecture tests 是可执行门禁，必须与本文一致；
+6. reviewed legacy baseline 只是只减不增的迁移清单，不是新代码范例。
 
 ## B2. Runtime 与 Control Plane 职责边界
 

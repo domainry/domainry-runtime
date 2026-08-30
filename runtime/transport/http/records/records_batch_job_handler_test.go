@@ -29,7 +29,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	metadatapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata"
+	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -54,7 +54,7 @@ func newRecordBatchHTTPFixture(t *testing.T) recordBatchHTTPFixture {
 		t.Fatal(err)
 	}
 	object := definitionmodel.ObjectSchema{Key: "customer", Name: "Customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Name: "Name", Type: "text", Required: true}}}
-	if err := metadatapersistence.NewMetadataStore(store).SyncManifestStorage(t.Context(), manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{object}}); err != nil {
+	if err := appschemapersistence.NewApplicationSchemaStore(store).SyncManifestStorage(t.Context(), manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{object}}); err != nil {
 		t.Fatal(err)
 	}
 	role := accessfixture.Bundle{

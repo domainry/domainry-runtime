@@ -23,7 +23,7 @@ import (
 	"github.com/domainry/domainry-foundation/requestcontext"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	schedulercontract "github.com/domainry/domainry-runtime/runtime/domain/scheduler/contract"
 )
 
@@ -92,7 +92,7 @@ func schedulerDefinitionReadAllowed(principal principalmodel.Principal) error {
 }
 
 type SchemaProvider interface {
-	SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
+	SchemaForPrincipal(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
 }
 
 type WorkerConfig struct {

@@ -3,11 +3,11 @@ package openapi
 import (
 	"testing"
 
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )
 
 func TestBusinessAuditOpenAPIPublishesBoundedCursorPage(t *testing.T) {
-	document := Build(metadatamodel.ApplicationSchemaSnapshot{})
+	document := Build(appschemamodel.ApplicationSchemaSnapshot{})
 	paths, _ := document["paths"].(map[string]any)
 	operation := openAPITestOperation(t, paths, "/business/audit-events", "get")
 	if operation["operationId"] != "listBusinessAuditEventPage" || operation["x-domainry-runtime-client-method"] != "listBusinessAuditEventPage" {

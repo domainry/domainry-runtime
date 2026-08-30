@@ -15,6 +15,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/requestcontext"
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationprojection "github.com/domainry/domainry-runtime/runtime/domain/automation/projection"
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
@@ -22,7 +23,6 @@ import (
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -30,14 +30,16 @@ import (
 )
 
 func businessSystemHandlerApplication(featureErr error) *businesssystemapplication.BusinessSystemApplicationService {
-	schema := metadatamodel.ApplicationSchemaSnapshot{SchemaHash: "schema-hash"}
+	schema := appschemamodel.ApplicationSchemaSnapshot{SchemaHash: "schema-hash"}
 	return businesssystemapplication.NewBusinessSystemApplicationService(businesssystemapplication.BusinessSystemApplicationDependencies{
 		FeaturePermissions: func(context.Context, principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error) {
 			return recordcontract.RecordFeaturePermissionSnapshot{}, featureErr
 		},
-		SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot { return schema },
-		MetadataDefinitions: func(context.Context, string, string, principalmodel.Principal) ([]metadatamodel.MetadataDefinition, error) {
-			return []metadatamodel.MetadataDefinition{}, nil
+		SchemaForPrincipal: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
+			return schema
+		},
+		ApplicationDefinitions: func(context.Context, string, string, principalmodel.Principal) ([]appschemamodel.ApplicationDefinition, error) {
+			return []appschemamodel.ApplicationDefinition{}, nil
 		},
 		FrontendSnapshot: func(context.Context, principalmodel.Principal) (deploymentmodel.FrontendCapabilitySnapshot, error) {
 			return deploymentmodel.FrontendCapabilitySnapshot{Status: "ready"}, nil
@@ -61,7 +63,9 @@ func businessSystemHandlerApplication(featureErr error) *businesssystemapplicati
 			IntegrationOutbox: func(context.Context, string, string, int, principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error) {
 				return []integrationmodel.IntegrationOutboxMessage{}, nil
 			},
-			SchemaForPrincipal: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot { return schema },
+			SchemaForPrincipal: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
+				return schema
+			},
 			SchemaObjectMap: func(context.Context) map[string]definitionmodel.ObjectSchema {
 				return map[string]definitionmodel.ObjectSchema{}
 			},

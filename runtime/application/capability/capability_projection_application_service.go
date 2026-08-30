@@ -19,7 +19,7 @@ func (s *CapabilityAuthoringApplicationService) ExecutionCapabilities(_ context.
 	return catalog, nil
 }
 
-func (s *CapabilityAuthoringApplicationService) MetadataProjection(_ context.Context, principal principalmodel.Principal) (CapabilityMetadataAuthoringProjection, error) {
+func (s *CapabilityAuthoringApplicationService) ApplicationSchemaProjection(_ context.Context, principal principalmodel.Principal) (CapabilityMetadataAuthoringProjection, error) {
 	if err := capabilityAuthorizeAdmin(principal); err != nil {
 		return CapabilityMetadataAuthoringProjection{}, err
 	}

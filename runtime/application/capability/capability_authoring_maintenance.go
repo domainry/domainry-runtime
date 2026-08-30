@@ -1,10 +1,10 @@
 package capability
 
 import (
+	appschemacontract "github.com/domainry/domainry-runtime/runtime/domain/appschema/contract"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	changeplancontract "github.com/domainry/domainry-runtime/runtime/domain/changeplan/contract"
 	deploymentcontract "github.com/domainry/domainry-runtime/runtime/domain/deployment/contract"
-	metadatacontract "github.com/domainry/domainry-runtime/runtime/domain/metadata/contract"
 )
 
 // authoringMaintenanceDomain is an aggregation boundary only. Each capability
@@ -16,7 +16,7 @@ func authoringMaintenanceDomain() capabilitycontract.CapabilityAuthoringDomain {
 		changeplancontract.ChangePlanValidationAuthoringCapability(),
 		deploymentcontract.DeploymentFrontendSupportObservationAuthoringCapability(),
 		changeplancontract.ChangePlanApplyAuthoringCapability(),
-		metadatacontract.MetadataRollbackAuthoringCapability(),
+		appschemacontract.ApplicationSchemaRollbackAuthoringCapability(),
 		changeplancontract.ChangePlanRollbackPolicyAuthoringCapability(),
 	}}
 }

@@ -12,10 +12,10 @@ import (
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -24,7 +24,7 @@ import (
 var errDeploymentStatus = errors.New("deployment status failed")
 
 type deploymentStatusFixture struct {
-	snapshot          metadatamodel.ApplicationSchemaSnapshot
+	snapshot          appschemamodel.ApplicationSchemaSnapshot
 	schedulerStatus   map[string]any
 	schedulerErr      error
 	pingErr           error
@@ -51,7 +51,7 @@ type deploymentStatusFixture struct {
 	idempotencyMetric idempotency.MetricsSnapshot
 }
 
-func (f *deploymentStatusFixture) SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+func (f *deploymentStatusFixture) SchemaForPrincipal(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 	return f.snapshot
 }
 func (f *deploymentStatusFixture) Status(context.Context, principalmodel.SystemScope) (map[string]any, error) {
@@ -271,7 +271,7 @@ func TestDeploymentMetricOwnersSuccessAndFailure(t *testing.T) {
 
 	objects := []definitionmodel.ObjectSchema{{Key: "z"}, {Key: "a"}}
 	fixture := &deploymentStatusFixture{
-		snapshot:       metadatamodel.ApplicationSchemaSnapshot{Objects: objects, Actions: []definitionmodel.ActionSchema{{Key: "action"}}, Workflows: []definitionmodel.WorkflowSchema{{Key: "workflow"}}},
+		snapshot:       appschemamodel.ApplicationSchemaSnapshot{Objects: objects, Actions: []definitionmodel.ActionSchema{{Key: "action"}}, Workflows: []definitionmodel.WorkflowSchema{{Key: "workflow"}}},
 		workflowValues: []workflowmodel.WorkflowExecution{{}}, invocationValues: []integrationmodel.IntegrationInvocation{{}}, auditValues: []auditmodel.AuditEvent{{}},
 		recordTotals: map[string]int{"a": 1, "z": 2}, recordErrors: map[string]error{}, migration: deploymentmodel.MigrationStatus{Current: true}, schedulerStatus: map[string]any{},
 	}
@@ -356,7 +356,7 @@ func TestDeploymentMetricsAggregatesSuccessAndErrors(t *testing.T) {
 	t.Parallel()
 
 	fixture := &deploymentStatusFixture{
-		snapshot:     metadatamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "object"}}},
+		snapshot:     appschemamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "object"}}},
 		recordTotals: map[string]int{"object": 1}, recordErrors: map[string]error{}, migration: deploymentmodel.MigrationStatus{Current: true}, schedulerStatus: nil,
 		operational: deploymentmodel.IdempotencyOperationalStatus{Backlog: map[string]int{}},
 	}

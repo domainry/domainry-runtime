@@ -1,9 +1,9 @@
 package integrationcontract
 
 import (
+	appschemacontract "github.com/domainry/domainry-runtime/runtime/domain/appschema/contract"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	metadatacontract "github.com/domainry/domainry-runtime/runtime/domain/metadata/contract"
 )
 
 func RuntimeConnectorTypes() []string   { return integrationmodel.RuntimeConnectorTypes() }
@@ -31,9 +31,9 @@ func IntegrationConnectorDefinitionAuthoringCapability() capabilitycontract.Capa
 		ResourceOperations: integrationConnectorResourceOperations(),
 		InputSchema:        integrationMetadataRequestSchema(payload), OutputSchema: integrationMetadataOutputSchema(payload),
 		OutputVariables: []capabilitycontract.CapabilityAuthoringOutput{{Name: "connector_key", JSONPointer: "/definition/resource_key", Type: "connector_key", VisibleTo: "subsequent_capability_calls"}, {Name: "schema_hash", JSONPointer: "/definition/schema_hash", Type: "schema_hash", VisibleTo: "subsequent_capability_calls"}},
-		Execution:       metadatacontract.VersionedMetadataDefinitionExecution("integration.connector_definition"),
+		Execution:       appschemacontract.VersionedApplicationDefinitionExecution("integration.connector_definition"),
 		Errors:          integrationConnectorAuthoringErrors(), Examples: integrationConnectorDefinitionExamples(),
-		Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "model", Path: "runtime/domain/integration/model/integration_definition.go", Symbol: "ConnectorSchema"}, {Kind: "validation", Path: "runtime/domain/metadata/validation/metadata_connector_validation.go", Symbol: "MetadataValidateConnectorDefinitionIssues"}, {Kind: "service", Path: "runtime/application/metadata/metadata_definition_orchestration_application_service.go", Symbol: "ApplicationSchemaService.UpsertMetadataDefinition"}},
+		Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "model", Path: "runtime/domain/integration/model/integration_definition.go", Symbol: "ConnectorSchema"}, {Kind: "validation", Path: "runtime/domain/appschema/validation/appschema_connector_validation.go", Symbol: "ApplicationSchemaValidateConnectorDefinitionIssues"}, {Kind: "service", Path: "runtime/application/appschema/appschema_definition_orchestration_application_service.go", Symbol: "ApplicationSchemaApplicationService.UpsertApplicationDefinition"}},
 	}
 }
 
@@ -56,7 +56,7 @@ func IntegrationConnectorOperationAuthoringCapability() capabilitycontract.Capab
 		ReferenceContracts: []capabilitycontract.CapabilityAuthoringReference{{Kind: "operation_key", InputJSONPointer: "/compensation_operation", ScopeFrom: "/connector_key", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/operation_key"}},
 		Execution:          &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"integration.connector_definition"}, Transaction: "read_only_validation", Idempotency: "naturally_idempotent", SideEffectLevel: "none", PermissionModel: "workspace.admin"},
 		Errors:             integrationConnectorAuthoringErrors(), Examples: integrationConnectorOperationExamples(),
-		Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "model", Path: "runtime/domain/integration/model/integration_definition.go", Symbol: "ConnectorOperationSchema"}, {Kind: "validation", Path: "runtime/domain/metadata/validation/metadata_connector_validation.go", Symbol: "MetadataValidateConnectorDefinitionIssues"}},
+		Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "model", Path: "runtime/domain/integration/model/integration_definition.go", Symbol: "ConnectorOperationSchema"}, {Kind: "validation", Path: "runtime/domain/appschema/validation/appschema_connector_validation.go", Symbol: "ApplicationSchemaValidateConnectorDefinitionIssues"}},
 	}
 }
 
@@ -153,7 +153,7 @@ func integrationConnectorOperationExamples() []capabilitycontract.CapabilityAuth
 }
 
 func integrationConnectorConfigurationRoutes() []string {
-	return metadatacontract.VersionedMetadataDefinitionRoutes("connector")
+	return appschemacontract.VersionedApplicationDefinitionRoutes("connector")
 }
 func integrationStringArraySchema() capabilitycontract.CapabilityAuthoringSchema {
 	return capabilitycontract.CapabilityAuthoringSchema{Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Type: "string"}}

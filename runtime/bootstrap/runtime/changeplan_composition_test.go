@@ -49,7 +49,7 @@ func TestBusinessChangePlanCompositionPublishesSchedulerAsTheOnlyRuntimeDefiniti
 	if err != nil || result.Status != "applied" || len(result.AppliedDefinitions) != 2 {
 		t.Fatalf("result=%#v err=%v params=%#v", result, err, apperror.ParamsOf(err))
 	}
-	definition, found, err := application.records.Applications().ApplicationSchema.GetMetadataDefinition(t.Context(), "scheduler", "customer.refresh", admin)
+	definition, found, err := application.records.Applications().ApplicationSchema.GetApplicationDefinition(t.Context(), "scheduler", "customer.refresh", admin)
 	if err != nil || !found || definition.SourceID != plan.PlanID {
 		t.Fatalf("metadata definition=%#v found=%v err=%v", definition, found, err)
 	}
@@ -120,7 +120,7 @@ func TestBusinessChangePlanCompositionRejectsInvalidCandidateBeforeAnyWrite(t *t
 	if apperror.CodeOf(err) != "backend.change_plan.candidate_invalid" {
 		t.Fatalf("error=%v params=%#v", err, apperror.ParamsOf(err))
 	}
-	if _, found, getErr := application.records.Applications().ApplicationSchema.GetMetadataDefinition(t.Context(), "field", "missing.segment", admin); getErr != nil || found {
+	if _, found, getErr := application.records.Applications().ApplicationSchema.GetApplicationDefinition(t.Context(), "field", "missing.segment", admin); getErr != nil || found {
 		t.Fatalf("invalid candidate leaked definition: found=%v err=%v", found, getErr)
 	}
 	after := application.records.SchemaForPrincipal(t.Context(), admin)
@@ -156,7 +156,7 @@ func TestBusinessChangePlanCompositionPublishesIdentityProfileBindingIntoRegistr
 	if err != nil || result.Status != "applied" || len(result.AppliedDefinitions) != 1 {
 		t.Fatalf("result=%#v err=%v params=%#v", result, err, apperror.ParamsOf(err))
 	}
-	definition, found, err := application.records.Applications().ApplicationSchema.GetMetadataDefinition(t.Context(), "identity_profile_binding", binding.ObjectKey, admin)
+	definition, found, err := application.records.Applications().ApplicationSchema.GetApplicationDefinition(t.Context(), "identity_profile_binding", binding.ObjectKey, admin)
 	if err != nil || !found || definition.SourceID != plan.PlanID {
 		t.Fatalf("definition=%#v found=%v err=%v", definition, found, err)
 	}
@@ -216,7 +216,7 @@ func TestBusinessChangePlanCompositionAppliesMetadataAndFreezesDraft(t *testing.
 	if err != nil || frozen.Status != "published" || frozen.Revision != 4 {
 		t.Fatalf("frozen=%#v err=%v", frozen, err)
 	}
-	definition, found, err := application.records.Applications().ApplicationSchema.GetMetadataDefinition(t.Context(), "field", "customer.segment", admin)
+	definition, found, err := application.records.Applications().ApplicationSchema.GetApplicationDefinition(t.Context(), "field", "customer.segment", admin)
 	if err != nil || !found || definition.SourceKind != "builder" || definition.SourceID != plan.PlanID {
 		t.Fatalf("definition=%#v found=%v err=%v", definition, found, err)
 	}
@@ -259,11 +259,11 @@ func TestIndustryMaintenancePlanCompositionPublishesThroughSystemDraft(t *testin
 				t.Fatal(err)
 			}
 			metadata := application.records.Applications().ApplicationSchema
-			definition, found, err := metadata.GetMetadataDefinition(t.Context(), "field", plan.Items[0].ResourceKey, admin)
+			definition, found, err := metadata.GetApplicationDefinition(t.Context(), "field", plan.Items[0].ResourceKey, admin)
 			if err != nil || !found {
 				t.Fatalf("definition=%#v found=%v err=%v", definition, found, err)
 			}
-			versions, err := metadata.ListMetadataDefinitionVersions(t.Context(), "field", plan.Items[0].ResourceKey, admin)
+			versions, err := metadata.ListApplicationDefinitionVersions(t.Context(), "field", plan.Items[0].ResourceKey, admin)
 			if err != nil || len(versions) != 1 {
 				t.Fatalf("versions=%#v err=%v", versions, err)
 			}

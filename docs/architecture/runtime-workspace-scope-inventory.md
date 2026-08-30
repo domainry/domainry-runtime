@@ -44,7 +44,7 @@ Registered schema tables:
 - `runtime_database_retirements` — `runtime_global`; object retirement, access
   observations, approvals and backup evidence never inherit tenant scope
 - `_business_seed_provenance` — `installation_scoped`
-- `_audit_events`, `business_audit_export_artifacts`, `transaction_boundary_intents` — `workspace_scoped`
+- `_audit_events`, `audit_export_artifacts`, `transaction_boundary_intents` — `workspace_scoped`
 - record/action/idempotency: `business_action_executions`,
   `action_assurance_grants`, `record_mutation_executions`
   — `workspace_scoped`

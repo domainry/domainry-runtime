@@ -12,7 +12,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"sort"
 )
 
@@ -58,7 +58,7 @@ type BusinessSystemSnapshot struct {
 	AuthoringContractVersion string                                         `json:"authoring_contract_version"`
 	AuthoringContractHash    string                                         `json:"authoring_contract_hash"`
 	SchemaHash               string                                         `json:"schema_hash"`
-	Schema                   metadatamodel.ApplicationSchemaSnapshot        `json:"schema"`
+	Schema                   appschemamodel.ApplicationSchemaSnapshot       `json:"schema"`
 	EffectivePermissions     recordcontract.RecordFeaturePermissionSnapshot `json:"effective_permissions"`
 	RuntimeState             BusinessRuntimeStateSnapshot                   `json:"runtime_state"`
 	FrontendCapabilities     changeplanmodel.FrontendCapabilities           `json:"frontend_capabilities"`

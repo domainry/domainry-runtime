@@ -9,10 +9,10 @@ import (
 	"testing"
 
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationprojection "github.com/domainry/domainry-runtime/runtime/domain/automation/projection"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -101,7 +101,7 @@ func TestGovernedAfterAutomationExecutesSourceActionWorkflowAndEventForBusinessI
 		t.Fatalf("published rule is not queryable with all three after instructions: %#v", actualRule)
 	}
 
-	schema := runtimeFixtureRequest[metadatamodel.ApplicationSchemaSnapshot](t, handler, "sales_manager", http.MethodGet, "/tenant-admin/runtime-schema", nil)
+	schema := runtimeFixtureRequest[appschemamodel.ApplicationSchemaSnapshot](t, handler, "sales_manager", http.MethodGet, "/tenant-admin/runtime-schema", nil)
 	foundAction := false
 	for _, action := range schema.Actions {
 		if action.Key != actionKey {

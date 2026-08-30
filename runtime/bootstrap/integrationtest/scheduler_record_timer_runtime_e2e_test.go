@@ -10,9 +10,9 @@ import (
 	"github.com/domainry/domainry-foundation/mutation"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -20,10 +20,10 @@ import (
 )
 
 type recordTimerWorkspaceSchema struct {
-	snapshot metadatamodel.ApplicationSchemaSnapshot
+	snapshot appschemamodel.ApplicationSchemaSnapshot
 }
 
-func (s recordTimerWorkspaceSchema) SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
+func (s recordTimerWorkspaceSchema) SchemaForPrincipal(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 	return s.snapshot
 }
 
@@ -271,7 +271,7 @@ func TestRecordTimerWorkerProcessesEveryWorkspace(t *testing.T) {
 	now := time.Date(2026, 7, 21, 8, 0, 0, 0, time.UTC)
 	runtime := &recordTimerWorkspaceRuntime{}
 	service := schedulerapplication.NewSchedulerApplicationServiceWithWorker(
-		recordTimerWorkspaceSchema{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: objects}}, runtime, recordLegacyStore(store), nil,
+		recordTimerWorkspaceSchema{snapshot: appschemamodel.ApplicationSchemaSnapshot{Objects: objects}}, runtime, recordLegacyStore(store), nil,
 		workerplatform.Dependencies{WorkerID: workerplatform.WorkerID("record-timer-workspace-worker")},
 	)
 	for _, workspaceID := range []string{"tenant-a", "tenant-b"} {
@@ -304,7 +304,7 @@ func TestRecordTimerWorkspaceFailureDoesNotStarveOtherTenantOrExceedGlobalBatch(
 	now := time.Date(2026, 7, 21, 8, 0, 0, 0, time.UTC)
 	runtime := &recordTimerWorkspaceRuntime{failures: map[string]error{"tenant-a": fmt.Errorf("tenant-a injected failure")}}
 	service := schedulerapplication.NewSchedulerApplicationServiceWithWorker(
-		recordTimerWorkspaceSchema{snapshot: metadatamodel.ApplicationSchemaSnapshot{Objects: objects}}, runtime, recordLegacyStore(store), nil,
+		recordTimerWorkspaceSchema{snapshot: appschemamodel.ApplicationSchemaSnapshot{Objects: objects}}, runtime, recordLegacyStore(store), nil,
 		workerplatform.Dependencies{WorkerID: workerplatform.WorkerID("record-timer-fair-worker")},
 	)
 	for _, workspaceID := range []string{"tenant-a", "tenant-b"} {

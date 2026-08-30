@@ -52,7 +52,7 @@ func TestCRMAutomationRuleLifecycleThroughPublicAPI(t *testing.T) {
 	if rule.Key == "" {
 		t.Fatalf("expected customer.verify_business_license in seeded rules, got %#v", rules.Items)
 	}
-	current := loadMetadataDefinitionFixture(t, handler, "sales_manager", "automation_rule", rule.Key)
+	current := loadApplicationDefinitionFixture(t, handler, "sales_manager", "automation_rule", rule.Key)
 	rule.Enabled = false
 	disabledDefinition := publishSystemDefinitionUpdateFixture(t, handler, "sales_manager", "automation-author", "automation-approver", "automation-lifecycle-disable", current, rule, "automation.rule")
 	disabled := runtimeFixtureRequest[automationmodel.AutomationRuleSchema](t, handler, "sales_manager", http.MethodGet, "/automation-rules/customer.verify_business_license", nil)

@@ -5,13 +5,13 @@ import (
 	"net/http"
 	"testing"
 
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	changeplanpolicy "github.com/domainry/domainry-runtime/runtime/domain/changeplan/policy"
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 )
 
-func publishSystemDefinitionUpdateFixture(t *testing.T, handler http.Handler, role, authorID, approverID, planID string, current metadatamodel.MetadataDefinition, after any, capabilityKey string) metadatamodel.MetadataDefinition {
+func publishSystemDefinitionUpdateFixture(t *testing.T, handler http.Handler, role, authorID, approverID, planID string, current appschemamodel.ApplicationDefinition, after any, capabilityKey string) appschemamodel.ApplicationDefinition {
 	t.Helper()
 	afterPayload, err := json.Marshal(after)
 	if err != nil {
@@ -39,10 +39,10 @@ func publishSystemDefinitionUpdateFixture(t *testing.T, handler http.Handler, ro
 	inReview := runtimeFixtureRequestWithHeaders[transitionResponse](t, handler, role, http.MethodPost, "/tenant-admin/change-plans/"+planID+"/review", map[string]any{"expected_revision": draft.Revision}, headers)
 	approved := runtimeFixtureRequestWithHeaders[transitionResponse](t, handler, role, http.MethodPost, "/tenant-admin/change-plans/"+planID+"/approve", map[string]any{"expected_revision": inReview.Draft.Revision}, map[string]string{"Authorization": "Bearer " + integrationIdentityAccessTokenFor(approverID, role)})
 	runtimeFixtureRequestWithHeaders[map[string]any](t, handler, role, http.MethodPost, "/tenant-admin/change-plans/apply", map[string]any{"plan_id": planID, "expected_revision": approved.Draft.Revision, "confirmation": planID}, map[string]string{"Authorization": "Bearer " + integrationIdentityAccessTokenFor(authorID, role), "Idempotency-Key": "apply:" + planID})
-	return loadMetadataDefinitionFixture(t, handler, role, current.ResourceType, current.ResourceKey)
+	return loadApplicationDefinitionFixture(t, handler, role, current.ResourceType, current.ResourceKey)
 }
 
-func publishSystemDefinitionCreateFixture(t *testing.T, handler http.Handler, role, authorID, approverID, planID, resourceType, resourceKey string, after any, capabilityKey string) (metadatamodel.MetadataDefinition, changeplanmodel.BusinessChangePlanDraft) {
+func publishSystemDefinitionCreateFixture(t *testing.T, handler http.Handler, role, authorID, approverID, planID, resourceType, resourceKey string, after any, capabilityKey string) (appschemamodel.ApplicationDefinition, changeplanmodel.BusinessChangePlanDraft) {
 	t.Helper()
 	afterPayload, err := json.Marshal(after)
 	if err != nil {
@@ -77,13 +77,13 @@ func publishSystemDefinitionCreateFixture(t *testing.T, handler http.Handler, ro
 	inReview := runtimeFixtureRequestWithHeaders[transitionResponse](t, handler, role, http.MethodPost, "/tenant-admin/change-plans/"+planID+"/review", map[string]any{"expected_revision": draft.Revision}, headers)
 	approved := runtimeFixtureRequestWithHeaders[transitionResponse](t, handler, role, http.MethodPost, "/tenant-admin/change-plans/"+planID+"/approve", map[string]any{"expected_revision": inReview.Draft.Revision}, map[string]string{"Authorization": "Bearer " + integrationIdentityAccessTokenFor(approverID, role)})
 	runtimeFixtureRequestWithHeaders[map[string]any](t, handler, role, http.MethodPost, "/tenant-admin/change-plans/apply", map[string]any{"plan_id": planID, "expected_revision": approved.Draft.Revision, "confirmation": planID}, map[string]string{"Authorization": "Bearer " + integrationIdentityAccessTokenFor(authorID, role), "Idempotency-Key": "apply:" + planID})
-	return loadMetadataDefinitionFixture(t, handler, role, resourceType, resourceKey), approved.Draft
+	return loadApplicationDefinitionFixture(t, handler, role, resourceType, resourceKey), approved.Draft
 }
 
-func loadMetadataDefinitionFixture(t *testing.T, handler http.Handler, role, resourceType, resourceKey string) metadatamodel.MetadataDefinition {
+func loadApplicationDefinitionFixture(t *testing.T, handler http.Handler, role, resourceType, resourceKey string) appschemamodel.ApplicationDefinition {
 	t.Helper()
 	response := runtimeFixtureRequest[struct {
-		Definition metadatamodel.MetadataDefinition `json:"definition"`
+		Definition appschemamodel.ApplicationDefinition `json:"definition"`
 	}](t, handler, role, http.MethodGet, "/tenant-admin/metadata/definitions/"+resourceType+"/"+resourceKey, nil)
 	if response.Definition.ResourceType == "" || response.Definition.ResourceKey == "" || response.Definition.SchemaHash == "" {
 		t.Fatalf("metadata definition envelope is incomplete: %#v", response)

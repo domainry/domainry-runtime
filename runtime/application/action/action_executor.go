@@ -25,21 +25,21 @@ type ActionExecutionResult struct {
 }
 
 type BusinessHandlerExecutionDependencies struct {
-	RuntimeRevision         string
-	ProjectRevision         string
-	MetadataRevision        string
-	ResolveMetadataRevision func(context.Context, principalmodel.Principal) (string, error)
-	GetRecord               func(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error)
-	GetRecordForUpdate      func(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error)
-	ListRecords             func(context.Context, string, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error)
-	PlanCreateMutation      func(context.Context, string, map[string]any, string, principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error)
-	PlanUpdateMutation      func(context.Context, string, string, map[string]any, principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error)
-	PlanConditionalUpdate   func(context.Context, string, string, transactionmodel.ConditionalUpdateInput, principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error)
-	PlanDeleteMutation      func(context.Context, string, string, string, principalmodel.Principal) ([]transactionmodel.MutationPlan, error)
-	PlanRestoreMutation     func(context.Context, string, string, string, principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error)
-	ValidateDurableIntent   func(context.Context, runtimeext.DurableIntent, principalmodel.Principal) error
-	CompileNotification     func(context.Context, string, runtimeext.NotificationIntent, principalmodel.Principal) (notificationmodel.NotificationEvent, error)
-	VerifyFileClean         func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
+	RuntimeRevision           string
+	ProjectRevision           string
+	ApplicationSchemaRevision string
+	ResolveMetadataRevision   func(context.Context, principalmodel.Principal) (string, error)
+	GetRecord                 func(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error)
+	GetRecordForUpdate        func(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error)
+	ListRecords               func(context.Context, string, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error)
+	PlanCreateMutation        func(context.Context, string, map[string]any, string, principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error)
+	PlanUpdateMutation        func(context.Context, string, string, map[string]any, principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error)
+	PlanConditionalUpdate     func(context.Context, string, string, transactionmodel.ConditionalUpdateInput, principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error)
+	PlanDeleteMutation        func(context.Context, string, string, string, principalmodel.Principal) ([]transactionmodel.MutationPlan, error)
+	PlanRestoreMutation       func(context.Context, string, string, string, principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error)
+	ValidateDurableIntent     func(context.Context, runtimeext.DurableIntent, principalmodel.Principal) error
+	CompileNotification       func(context.Context, string, runtimeext.NotificationIntent, principalmodel.Principal) (notificationmodel.NotificationEvent, error)
+	VerifyFileClean           func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
 }
 
 type BusinessHandlerExecutor struct {
@@ -49,7 +49,7 @@ type BusinessHandlerExecutor struct {
 func NewBusinessHandlerExecutor(dependencies BusinessHandlerExecutionDependencies) *BusinessHandlerExecutor {
 	dependencies.RuntimeRevision = strings.TrimSpace(dependencies.RuntimeRevision)
 	dependencies.ProjectRevision = strings.TrimSpace(dependencies.ProjectRevision)
-	dependencies.MetadataRevision = strings.TrimSpace(dependencies.MetadataRevision)
+	dependencies.ApplicationSchemaRevision = strings.TrimSpace(dependencies.ApplicationSchemaRevision)
 	return &BusinessHandlerExecutor{dependencies: dependencies}
 }
 

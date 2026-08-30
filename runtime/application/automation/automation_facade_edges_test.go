@@ -12,12 +12,12 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationbusiness "github.com/domainry/domainry-runtime/runtime/domain/automation/service"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -63,8 +63,8 @@ func (c automationFacadeConnectorCatalog) Schema() integrationmodel.IntegrationS
 type automationFacadeMetadataProbe struct {
 }
 
-func (p *automationFacadeMetadataProbe) ListMetadataDefinitionVersions(_ context.Context, _ string, resourceKey string, _ principalmodel.Principal) ([]metadatamodel.MetadataDefinitionVersion, error) {
-	return []metadatamodel.MetadataDefinitionVersion{{ResourceType: "automation_rule", ResourceKey: resourceKey, SchemaVersion: "1"}}, nil
+func (p *automationFacadeMetadataProbe) ListApplicationDefinitionVersions(_ context.Context, _ string, resourceKey string, _ principalmodel.Principal) ([]appschemamodel.ApplicationDefinitionVersion, error) {
+	return []appschemamodel.ApplicationDefinitionVersion{{ResourceType: "automation_rule", ResourceKey: resourceKey, SchemaVersion: "1"}}, nil
 }
 
 type automationFacadeWorkflowProbe struct {
@@ -85,8 +85,8 @@ func newAutomationFacade(registry *automationFacadeRegistry, metadata *automatio
 		Rules:      registry,
 		Connectors: automationFacadeConnectorCatalog{schema: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "erp"}}}},
 		Metadata:   metadata,
-		Schema: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
-			return metadatamodel.ApplicationSchemaSnapshot{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "erp"}}}}
+		Schema: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
+			return appschemamodel.ApplicationSchemaSnapshot{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "erp"}}}}
 		},
 		Principal: func(_ context.Context, userID, roleKey, _ string) principalmodel.Principal {
 			return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: userID}}, accessfixture.Bundle{Key: roleKey, Permissions: []string{"workspace.admin"}})
@@ -361,8 +361,8 @@ func TestAutomationFacadeExecutesPureBeforeConditionAndDerivationWithoutIO(t *te
 	audits := []string{}
 	service := NewAutomationApplicationService(AutomationApplicationDependencies{
 		Rules: registry, Connectors: automationFacadeConnectorCatalog{},
-		Schema: func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot {
-			return metadatamodel.ApplicationSchemaSnapshot{}
+		Schema: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
+			return appschemamodel.ApplicationSchemaSnapshot{}
 		},
 		Audit: func(_ context.Context, event, _, _ string, _ principalmodel.Principal, _ string, _, _, _ map[string]any) {
 			audits = append(audits, event)

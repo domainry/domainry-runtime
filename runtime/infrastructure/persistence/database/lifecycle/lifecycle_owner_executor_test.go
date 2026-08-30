@@ -11,7 +11,7 @@ import (
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	agentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/agent"
-	metadatapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata"
+	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	ratelimitpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/ratelimit"
 )
 
@@ -131,7 +131,7 @@ func TestSoftDeletedBusinessRecordCleanupBlocksWorkflowReference(t *testing.T) {
 	store := openLifecycleStore(t)
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}, {Key: "deleted_at", Type: "datetime"}, {Key: "deleted_by", Type: "text"}, {Key: "name", Type: "text"}}}
 	manifest := manifestmodel.ManifestSchema{TemplateID: "record-lifecycle", Version: "1", Name: "Record lifecycle", Objects: []definitionmodel.ObjectSchema{object}}
-	if err := metadatapersistence.NewMetadataStore(store).SyncManifest(t.Context(), principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "record lifecycle test"), manifest); err != nil {
+	if err := appschemapersistence.NewApplicationSchemaStore(store).SyncManifest(t.Context(), principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "record lifecycle test"), manifest); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)

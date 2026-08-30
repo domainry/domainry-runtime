@@ -202,7 +202,7 @@ func TestMutationObjectWritePolicyAndRestoreOperation(t *testing.T) {
 
 func mutationPlanTestContext(t *testing.T, authority map[string][]string) MutationContext {
 	t.Helper()
-	context, err := NewMutationContext(MutationContextInput{WorkspaceID: "workspace-a", Source: MutationSourceHTTP, CorrelationID: "correlation-1", MetadataRevision: "revision-1", EffectAuthority: authority})
+	context, err := NewMutationContext(MutationContextInput{WorkspaceID: "workspace-a", Source: MutationSourceHTTP, CorrelationID: "correlation-1", ApplicationSchemaRevision: "revision-1", EffectAuthority: authority})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3,11 +3,11 @@ package openapi
 import (
 	"testing"
 
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )
 
 func TestOpenAPIExposesLifecycleManagementWithoutPublicSecurity(t *testing.T) {
-	paths := Build(metadatamodel.ApplicationSchemaSnapshot{})["paths"].(map[string]any)
+	paths := Build(appschemamodel.ApplicationSchemaSnapshot{})["paths"].(map[string]any)
 	for _, path := range []string{"/operations/lifecycle/policies", "/operations/lifecycle/legal-holds", "/operations/lifecycle/legal-holds/{holdID}/end", "/operations/lifecycle/cleanup/preview", "/operations/lifecycle/cleanup/jobs/{jobID}/run", "/operations/lifecycle/metrics", "/operations/lifecycle/archive", "/operations/lifecycle/subjects/{requestID}/download", "/operations/lifecycle/external-erasures", "/operations/lifecycle/external-erasures/{erasureID}/reconcile", "/operations/lifecycle/deletions/replay"} {
 		methods, ok := paths[path].(map[string]any)
 		if !ok || len(methods) == 0 {

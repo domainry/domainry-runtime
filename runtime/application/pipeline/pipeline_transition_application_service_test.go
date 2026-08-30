@@ -98,7 +98,7 @@ func pipelineTransitionFixture(t *testing.T, commitErr error) (*PipelineTransiti
 	}, Now: func() time.Time { return time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC) }})
 	commits := []transactionmodel.RecordMutationCommit{}
 	newPlan := func(principal principalmodel.Principal, commit transactionmodel.RecordMutationCommit, before map[string]any) (transactionmodel.MutationPlan, error) {
-		context, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID, Source: transactionmodel.MutationSourceAction, ActionKey: "pipeline_item.advance", CorrelationID: "correlation-1", MetadataRevision: "test"})
+		context, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID, Source: transactionmodel.MutationSourceAction, ActionKey: "pipeline_item.advance", CorrelationID: "correlation-1", ApplicationSchemaRevision: "test"})
 		if err != nil {
 			return transactionmodel.MutationPlan{}, err
 		}

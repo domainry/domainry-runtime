@@ -6,43 +6,43 @@ import (
 	"errors"
 	"testing"
 
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 type metadataPreferenceSourceStub struct {
-	metadatarepository.MetadataRepository
-	current  metadatamodel.MetadataDefinition
+	appschemarepository.ApplicationSchemaRepository
+	current  appschemamodel.ApplicationDefinition
 	found    bool
 	getErr   error
-	versions []metadatamodel.MetadataDefinitionVersion
+	versions []appschemamodel.ApplicationDefinitionVersion
 	listErr  error
 	getScope principalmodel.SystemScope
 	key      string
 }
 
-func (s *metadataPreferenceSourceStub) GetDefinition(_ context.Context, scope principalmodel.SystemScope, resourceType, resourceKey string) (metadatamodel.MetadataDefinition, bool, error) {
+func (s *metadataPreferenceSourceStub) GetDefinition(_ context.Context, scope principalmodel.SystemScope, resourceType, resourceKey string) (appschemamodel.ApplicationDefinition, bool, error) {
 	s.getScope, s.key = scope, resourceType+":"+resourceKey
 	return s.current, s.found, s.getErr
 }
 
-func (s *metadataPreferenceSourceStub) ListDefinitionVersions(_ context.Context, scope principalmodel.SystemScope, resourceType, resourceKey string) ([]metadatamodel.MetadataDefinitionVersion, error) {
+func (s *metadataPreferenceSourceStub) ListDefinitionVersions(_ context.Context, scope principalmodel.SystemScope, resourceType, resourceKey string) ([]appschemamodel.ApplicationDefinitionVersion, error) {
 	s.getScope, s.key = scope, resourceType+":"+resourceKey
-	return append([]metadatamodel.MetadataDefinitionVersion(nil), s.versions...), s.listErr
+	return append([]appschemamodel.ApplicationDefinitionVersion(nil), s.versions...), s.listErr
 }
 
 func TestMetadataWorkspacePreferenceRepositoryMapsValidatedVersionsToExplicitWorkspace(t *testing.T) {
 	t.Parallel()
 
 	source := &metadataPreferenceSourceStub{
-		found: true, current: metadatamodel.MetadataDefinition{ResourceKey: "policy.limit"},
-		versions: []metadatamodel.MetadataDefinitionVersion{
+		found: true, current: appschemamodel.ApplicationDefinition{ResourceKey: "policy.limit"},
+		versions: []appschemamodel.ApplicationDefinitionVersion{
 			{SchemaVersion: "2", SchemaHash: "hash-2", Payload: preferenceMetadataPayload(`20`, "2026-07-01")},
 			{SchemaVersion: "1", SchemaHash: "hash-1", Payload: preferenceMetadataPayload(`10`, "2026-01-01")},
 		},
 	}
-	repository := NewMetadataWorkspacePreferenceRepository(source)
+	repository := NewApplicationSchemaWorkspacePreferenceRepository(source)
 	scope, _ := principalmodel.NewWorkspaceQueryScope("workspace-a")
 	versions, err := repository.ListWorkspacePreferenceVersions(t.Context(), scope, " policy.limit ")
 	if err != nil {
@@ -63,21 +63,21 @@ func TestMetadataWorkspacePreferenceRepositoryRejectsDisabledMalformedAndFailure
 	systemScope, _ := principalmodel.NewSystemQueryScope(principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "test"))
 	tests := []struct {
 		name   string
-		repo   *MetadataWorkspacePreferenceRepository
+		repo   *ApplicationSchemaWorkspacePreferenceRepository
 		scope  principalmodel.QueryScope
 		key    string
 		length int
 	}{
-		{name: "zero scope", repo: NewMetadataWorkspacePreferenceRepository(&metadataPreferenceSourceStub{}), scope: principalmodel.QueryScope{}, key: "policy", length: -1},
-		{name: "invalid scope", repo: NewMetadataWorkspacePreferenceRepository(&metadataPreferenceSourceStub{}), scope: systemScope, key: "policy", length: -1},
+		{name: "zero scope", repo: NewApplicationSchemaWorkspacePreferenceRepository(&metadataPreferenceSourceStub{}), scope: principalmodel.QueryScope{}, key: "policy", length: -1},
+		{name: "invalid scope", repo: NewApplicationSchemaWorkspacePreferenceRepository(&metadataPreferenceSourceStub{}), scope: systemScope, key: "policy", length: -1},
 		{name: "nil repository", repo: nil, scope: scope, key: "policy", length: -1},
-		{name: "source required", repo: NewMetadataWorkspacePreferenceRepository(nil), scope: scope, key: "policy", length: -1},
-		{name: "key required", repo: NewMetadataWorkspacePreferenceRepository(&metadataPreferenceSourceStub{}), scope: scope, length: -1},
-		{name: "get failure", repo: NewMetadataWorkspacePreferenceRepository(&metadataPreferenceSourceStub{getErr: errors.New("get")}), scope: scope, key: "policy", length: -1},
-		{name: "missing", repo: NewMetadataWorkspacePreferenceRepository(&metadataPreferenceSourceStub{}), scope: scope, key: "policy", length: 0},
-		{name: "disabled", repo: NewMetadataWorkspacePreferenceRepository(&metadataPreferenceSourceStub{found: true, current: metadatamodel.MetadataDefinition{DisabledAt: "now"}}), scope: scope, key: "policy", length: 0},
-		{name: "list failure", repo: NewMetadataWorkspacePreferenceRepository(&metadataPreferenceSourceStub{found: true, listErr: errors.New("list")}), scope: scope, key: "policy", length: -1},
-		{name: "malformed stored version", repo: NewMetadataWorkspacePreferenceRepository(&metadataPreferenceSourceStub{found: true, versions: []metadatamodel.MetadataDefinitionVersion{{SchemaVersion: "1", Payload: json.RawMessage(`{"key":"policy"}`)}}}), scope: scope, key: "policy", length: -1},
+		{name: "source required", repo: NewApplicationSchemaWorkspacePreferenceRepository(nil), scope: scope, key: "policy", length: -1},
+		{name: "key required", repo: NewApplicationSchemaWorkspacePreferenceRepository(&metadataPreferenceSourceStub{}), scope: scope, length: -1},
+		{name: "get failure", repo: NewApplicationSchemaWorkspacePreferenceRepository(&metadataPreferenceSourceStub{getErr: errors.New("get")}), scope: scope, key: "policy", length: -1},
+		{name: "missing", repo: NewApplicationSchemaWorkspacePreferenceRepository(&metadataPreferenceSourceStub{}), scope: scope, key: "policy", length: 0},
+		{name: "disabled", repo: NewApplicationSchemaWorkspacePreferenceRepository(&metadataPreferenceSourceStub{found: true, current: appschemamodel.ApplicationDefinition{DisabledAt: "now"}}), scope: scope, key: "policy", length: 0},
+		{name: "list failure", repo: NewApplicationSchemaWorkspacePreferenceRepository(&metadataPreferenceSourceStub{found: true, listErr: errors.New("list")}), scope: scope, key: "policy", length: -1},
+		{name: "malformed stored version", repo: NewApplicationSchemaWorkspacePreferenceRepository(&metadataPreferenceSourceStub{found: true, versions: []appschemamodel.ApplicationDefinitionVersion{{SchemaVersion: "1", Payload: json.RawMessage(`{"key":"policy"}`)}}}), scope: scope, key: "policy", length: -1},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

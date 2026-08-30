@@ -197,7 +197,7 @@ func (stub runtimeSchemaAssemblerStub) result(stage string) error {
 	}
 	return nil
 }
-func (stub runtimeSchemaAssemblerStub) EnsureMetadataSchema(context.Context, runtimeschema.Store) error {
+func (stub runtimeSchemaAssemblerStub) EnsureApplicationSchema(context.Context, runtimeschema.Store) error {
 	return stub.result("metadata")
 }
 func (stub runtimeSchemaAssemblerStub) EnsureEvidenceSchema(context.Context, runtimeschema.Store) error {
@@ -323,7 +323,7 @@ func TestRuntimeSchemaMigrationChecksumQueryFailure(t *testing.T) {
 
 func TestSchemaAssemblerSeamMethods(t *testing.T) {
 	store := &RuntimeStore{schemaAssembler: runtimeSchemaAssemblerStub{}}
-	if err := store.EnsureMetadataSchema(t.Context()); err != nil {
+	if err := store.EnsureApplicationSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.EnsureEvidenceSchema(t.Context()); err != nil {

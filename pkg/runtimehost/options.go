@@ -3,6 +3,7 @@
 package runtimehost
 
 import (
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-connector-sdk"
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -35,8 +36,11 @@ type Options struct {
 	// DataExchangeFactory selects the in-process large-file engine or its SaaS
 	// Remote binding. Generated composition owns this topology decision.
 	DataExchangeFactory dataexchangesdk.Factory
-	BusinessHandlers    BusinessHandlerFactory
-	Connectors          connector.ProviderSetFactory
+	// AgentFactory selects the in-process domainry-agent Module or its SaaS
+	// Remote Binding. Runtime receives the topology only through this factory.
+	AgentFactory     agentsdk.Factory
+	BusinessHandlers BusinessHandlerFactory
+	Connectors       connector.ProviderSetFactory
 	// ConnectorProcesses is an explicit host policy for optional Provider
 	// subprocesses. The zero value denies every executable.
 	ConnectorProcesses ConnectorProcessPolicy

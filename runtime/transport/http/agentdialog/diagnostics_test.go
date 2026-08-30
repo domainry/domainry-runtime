@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent"
@@ -39,7 +38,7 @@ func agentDialogDiagnosticsHandler(stateRepository *agentDialogStateRepository, 
 	state := agentapplication.NewAgentApplicationService(stateRepository)
 	return NewAgentDialogHandler(AgentDialogDependencies{
 		ProposalState: state, DiagnosticAudit: auditapplication.NewAuditApplicationService(auditRepository),
-		Config:    Config{BaseURL: "https://agent.example", APIKey: "secret", AgentID: 42, Timeout: 2 * time.Second},
+		Config:    Config{},
 		Principal: func(*http.Request) principalmodel.Principal { return principal },
 		WriteJSON: func(w http.ResponseWriter, status int, value any) {
 			w.WriteHeader(status)
@@ -79,9 +78,9 @@ func TestAgentDialogDiagnosticsProjectsContextToolsEventsAndProposalQueue(t *tes
 	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 		t.Fatal(err)
 	}
-	agentHTTP := payload["agent_http"].(map[string]any)
-	if agentHTTP["configured"] != true || agentHTTP["api_key"] != "redacted" || agentHTTP["base_url"] != "https://agent.example" {
-		t.Fatalf("agent HTTP diagnostics=%#v", agentHTTP)
+	agentRunner := payload["agent_runner"].(map[string]any)
+	if agentRunner["configured"] != false || agentRunner["transport"] != "domainry-agent-sdk" {
+		t.Fatalf("agent runner diagnostics=%#v", agentRunner)
 	}
 	if queue := payload["proposal_queue"].([]any); len(queue) != 1 || !strings.Contains(response.Body.String(), "customer-proposal") || strings.Contains(response.Body.String(), "order-proposal") {
 		t.Fatalf("proposal queue=%#v body=%s", queue, response.Body.String())

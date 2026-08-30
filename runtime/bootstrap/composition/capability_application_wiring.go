@@ -4,13 +4,13 @@ import (
 	"context"
 
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 type CapabilityAuthoringSchemaProvider interface {
-	SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
+	SchemaForPrincipal(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
 }
 
 // CanonicalSchemaProvider exposes Runtime-owned schema facts to internal
@@ -18,7 +18,7 @@ type CapabilityAuthoringSchemaProvider interface {
 // projection: authorization filters are applied only at the consuming
 // application boundary.
 type CanonicalSchemaProvider interface {
-	Schema() metadatamodel.ApplicationSchemaSnapshot
+	Schema() appschemamodel.ApplicationSchemaSnapshot
 }
 
 func newCapabilityAuthoringApplicationService(schema CapabilityAuthoringSchemaProvider) *capabilityapplication.CapabilityAuthoringApplicationService {

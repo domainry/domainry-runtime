@@ -39,16 +39,16 @@ func (w Workspace) Valid() bool { return strings.TrimSpace(w.ID) != "" }
 // ExecutionIdentity is the immutable trace and contract identity for one
 // Action invocation.
 type ExecutionIdentity struct {
-	ExecutionID      string
-	ReceiptID        string
-	ActionKey        string
-	ObjectKey        string
-	RecordID         string
-	IdempotencyKey   string
-	RuntimeRevision  string
-	MetadataRevision string
-	ProjectRevision  string
-	HandlerRevision  string
+	ExecutionID               string
+	ReceiptID                 string
+	ActionKey                 string
+	ObjectKey                 string
+	RecordID                  string
+	IdempotencyKey            string
+	RuntimeRevision           string
+	ApplicationSchemaRevision string
+	ProjectRevision           string
+	HandlerRevision           string
 }
 
 func (i ExecutionIdentity) Valid() bool {

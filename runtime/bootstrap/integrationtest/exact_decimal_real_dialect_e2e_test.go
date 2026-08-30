@@ -15,7 +15,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	metadatapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata"
+	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -68,7 +68,7 @@ func runExactDecimalPersistenceFixture(t *testing.T, cfg config.Config) []byte {
 		t.Fatal(err)
 	}
 	object := definitionmodel.ObjectSchema{Key: "exact_decimal_fixture", Fields: []definitionmodel.FieldSchema{{Key: "amount", Type: "currency", Config: map[string]any{"precision": 19, "scale": 2, "rounding_mode": "half_even", "currency_code": "CNY"}}}}
-	metadata := metadatapersistence.NewMetadataStore(store)
+	metadata := appschemapersistence.NewApplicationSchemaStore(store)
 	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "install exact decimal cross-dialect fixture")
 	if err := metadata.SyncManifest(t.Context(), scope, manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{object}}); err != nil {
 		t.Fatal(err)

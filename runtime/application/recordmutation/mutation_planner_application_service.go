@@ -133,7 +133,7 @@ func (s *MutationPlannerApplicationService) planCanonical(ctx context.Context, p
 		Permissions: principal.PermissionKeys(), DataScope: recordpolicy.RecordDataScopeForPrincipal(principal, commit.Object.Key, commit.Operation),
 		Source: invocation.Source, ActionKey: invocation.ActionKey, WorkflowKey: invocation.WorkflowKey,
 		AutomationKey: invocation.AutomationKey, RequestID: requestID, IdempotencyKey: invocation.IdempotencyKey,
-		CorrelationID: correlationID, CausationID: invocation.CausationID, MetadataRevision: revision,
+		CorrelationID: correlationID, CausationID: invocation.CausationID, ApplicationSchemaRevision: revision,
 		EffectAuthority: invocation.EffectAuthority, AssuranceEvidence: invocation.AssuranceEvidence,
 	})
 	if err != nil {

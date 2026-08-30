@@ -20,6 +20,8 @@ import (
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationrepository "github.com/domainry/domainry-runtime/runtime/domain/automation/repository"
@@ -29,8 +31,6 @@ import (
 	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
 	lifecyclerepository "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/repository"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
 	notificationcontract "github.com/domainry/domainry-runtime/runtime/domain/notification/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
@@ -51,8 +51,8 @@ type RuntimeServices struct {
 }
 
 type runtimeSchemaReader interface {
-	Schema() metadatamodel.ApplicationSchemaSnapshot
-	SchemaForPrincipal(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
+	Schema() appschemamodel.ApplicationSchemaSnapshot
+	SchemaForPrincipal(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
 }
 
 type NotificationRenderer interface {
@@ -94,7 +94,7 @@ type RuntimeServicesDependencies struct {
 	AutomationNotificationCompiler      func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	AutomationNotificationCommitter     automationapplication.AutomationExecutionNotificationCommitter
 	NotificationIntentPublisher         func(context.Context, notificationmodel.NotificationIntent) error
-	Metadata                            metadatarepository.MetadataRepository
+	ApplicationSchema                   appschemarepository.ApplicationSchemaRepository
 	AutomationWorker                    automationcontract.AutomationWorkerStore
 	AutomationExecutions                automationrepository.AutomationExecutionRepository
 	BusinessChangePlans                 changeplanrepository.ChangePlanRepository

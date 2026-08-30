@@ -3,18 +3,18 @@ package openapi
 import (
 	"net/http"
 
-	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
+	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	"github.com/domainry/domainry-runtime/runtime/platform/productbrand"
 )
 
 type OpenAPIHandler struct {
-	schema           *metadataapplication.MetadataSchemaApplicationService
+	schema           *appschemaapplication.ApplicationSchemaQueryApplicationService
 	writeJSON        func(http.ResponseWriter, int, any)
 	productBrandName string
 }
 
 type OpenAPIDependencies struct {
-	Schema           *metadataapplication.MetadataSchemaApplicationService
+	Schema           *appschemaapplication.ApplicationSchemaQueryApplicationService
 	WriteJSON        func(http.ResponseWriter, int, any)
 	ProductBrandName string
 }

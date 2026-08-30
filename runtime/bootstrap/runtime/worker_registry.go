@@ -65,6 +65,13 @@ func (a *Runtime) close(ctx context.Context) error {
 		cancel()
 		a.dataExchangeBinding = nil
 	}
+	var agentErr error
+	if a.agentBinding != nil {
+		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), a.cfg.HTTPShutdownTimeout)
+		agentErr = a.agentBinding.Close(closeCtx)
+		cancel()
+		a.agentBinding = nil
+	}
 	var partyErr error
 	if a.partyBinding != nil {
 		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), a.cfg.HTTPShutdownTimeout)
@@ -73,9 +80,9 @@ func (a *Runtime) close(ctx context.Context) error {
 		a.partyBinding = nil
 	}
 	if a.borrowedStore {
-		return errors.Join(releaseErr, notificationErr, monitoringErr, schedulerErr, dataExchangeErr, partyErr)
+		return errors.Join(releaseErr, notificationErr, monitoringErr, schedulerErr, dataExchangeErr, agentErr, partyErr)
 	}
-	return errors.Join(releaseErr, notificationErr, monitoringErr, schedulerErr, dataExchangeErr, partyErr, a.store.Close())
+	return errors.Join(releaseErr, notificationErr, monitoringErr, schedulerErr, dataExchangeErr, agentErr, partyErr, a.store.Close())
 }
 
 func (a *Runtime) startTrackedWorker(parent context.Context, start func(context.Context) <-chan struct{}) {

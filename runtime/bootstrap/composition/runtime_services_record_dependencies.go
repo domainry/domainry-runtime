@@ -37,9 +37,9 @@ func buildRecordApplicationDependencies(s *runtimeAssembly) recordapplication.Re
 		},
 	})
 	var revisionResolver recordmutation.MutationMetadataRevisionResolver
-	if s.metadataRepo != nil {
+	if s.applicationSchemaRepo != nil {
 		revisionResolver = func(ctx context.Context, _ principalmodel.Principal) (string, error) {
-			return s.metadataRepo.SnapshotRevision(ctx, principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "plan canonical record mutation"))
+			return s.applicationSchemaRepo.SnapshotRevision(ctx, principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "plan canonical record mutation"))
 		}
 	}
 	return recordapplication.RecordApplicationDependencies{
@@ -154,7 +154,7 @@ func initializeIntegrationAndBusinessSystem(ctx context.Context, s *runtimeAssem
 	})
 	// Change Plan scenario simulation depends on the canonical Action planner,
 	// so construct the Change Plan service only after Action wiring is complete.
-	s.businessChangePlans = newChangePlanApplicationService(s.businessChangePlanRepo, s.metadataRepo, s.auditRepo, s.applicationSchemaService, s.actionService)
+	s.businessChangePlans = newChangePlanApplicationService(s.businessChangePlanRepo, s.applicationSchemaRepo, s.auditRepo, s.applicationSchemaService, s.actionService)
 	s.runtimeStatusService = deployment.NewDeploymentRuntimeStatusApplicationServiceWithWorker(manifest.TemplateID, manifest.Version, s, s.schedulerService, deps.RuntimeStatus, deps.Records, s.auditApplicationService, deps.WorkflowWorker, deps.IntegrationDelivery, s.workerDependencies)
 	s.runtimeStatusService.ConfigureLifecycleHealth(ctx, s.lifecycleService)
 	s.workflowProcesses = assembleWorkflowProcessEngine(s)

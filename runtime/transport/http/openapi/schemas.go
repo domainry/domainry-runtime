@@ -2,7 +2,7 @@ package openapi
 
 import deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 
-import metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+import appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 import (
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-func openAPISchemas(snapshot metadatamodel.ApplicationSchemaSnapshot) map[string]any {
+func openAPISchemas(snapshot appschemamodel.ApplicationSchemaSnapshot) map[string]any {
 	schemas := map[string]any{
 		"Error": map[string]any{
 			"type":       "object",

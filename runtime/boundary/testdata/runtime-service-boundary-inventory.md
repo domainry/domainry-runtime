@@ -6,7 +6,7 @@
 
 | Domain | Method | Definition | Call-entry hints |
 |---|---|---|---|
-| records | `Applications` | `bootstrap/composition/runtime_services_application_access.go` | `bootstrap/composition/automation_application_wiring.go`, `bootstrap/composition/integration_runtime_application_wiring.go`, `bootstrap/composition/metadata_application_wiring.go`, `bootstrap/composition/runtime_services.go`, +13 more |
+| records | `Applications` | `bootstrap/composition/runtime_services_application_access.go` | `bootstrap/composition/automation_application_wiring.go`, `bootstrap/composition/integration_runtime_application_wiring.go`, `bootstrap/composition/appschema_application_wiring.go`, `bootstrap/composition/runtime_services.go`, +13 more |
 | records | `Schema` | `bootstrap/composition/runtime_services_application_access.go` | `application/agent/runtime/agent_authorization_application_service.go`, `application/automation/automation_application_service.go`, `application/integration/integration_connection_validation.go`, `application/integration/integration_event_mapping.go`, +19 more |
 | records | `SchemaForPrincipal` | `bootstrap/composition/runtime_services_application_access.go` | `application/agent/runtime/agent_authorization_application_service.go`, `application/agent/runtime/agent_interactive_authorization_application_service.go`, `application/deployment/deployment_runtime_status_metrics.go`, `application/deployment/deployment_runtime_status_public.go`, +12 more |
 

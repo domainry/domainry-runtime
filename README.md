@@ -9,3 +9,6 @@ business-extension APIs.
 
 Runtime architecture and contribution rules are defined in
 [`docs/architecture/backend-development-guide.md`](docs/architecture/backend-development-guide.md).
+External capability extraction and Module/SaaS dual-topology rules are defined
+in [`docs/architecture/module-saas-development-standard.md`](docs/architecture/module-saas-development-standard.md),
+with the current capability inventory under [`docs/modules`](docs/modules/README.md).

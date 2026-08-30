@@ -134,11 +134,7 @@ type Config struct {
 	IntegrationSecretKey           string
 	IntegrationActiveKeyID         string
 	IntegrationDecryptOnlyKeys     map[string]string
-	AgentHTTPBaseURL               string
-	AgentHTTPAPIKey                string
-	AgentHTTPAgentID               int
-	AgentHTTPTimeout               time.Duration
-	AgentHTTPRateLimitPerMinute    int
+	AgentDialogRateLimitPerMinute  int
 	WorkerPollInterval             time.Duration
 	WorkerBatchSize                int
 	SchedulerEnabled               bool
@@ -272,11 +268,7 @@ func FromEnv() Config {
 		IntegrationSecretKey:                    env("INTEGRATION_SECRET_KEY", DevIntegrationSecret),
 		IntegrationActiveKeyID:                  env("INTEGRATION_ACTIVE_KEY_ID", "dev-v1"),
 		IntegrationDecryptOnlyKeys:              keyMapEnv("INTEGRATION_DECRYPT_ONLY_KEYS"),
-		AgentHTTPBaseURL:                        env("AGENT_HTTP_BASE_URL", "https://integration.domainry.ai"),
-		AgentHTTPAPIKey:                         strings.TrimSpace(os.Getenv("AGENT_HTTP_API_KEY")),
-		AgentHTTPAgentID:                        intEnv("AGENT_HTTP_AGENT_ID", 0),
-		AgentHTTPTimeout:                        durationEnv("AGENT_HTTP_TIMEOUT", 120*time.Second),
-		AgentHTTPRateLimitPerMinute:             intEnv("AGENT_HTTP_RATE_LIMIT_PER_MINUTE", 60),
+		AgentDialogRateLimitPerMinute:           intEnv("AGENT_DIALOG_RATE_LIMIT_PER_MINUTE", 60),
 		WorkerPollInterval:                      durationEnv("WORKER_POLL_INTERVAL", durationEnv("SCHEDULER_POLL_INTERVAL", schedulerPollDefault)),
 		WorkerBatchSize:                         intEnv("WORKER_BATCH_SIZE", intEnv("SCHEDULER_BATCH_SIZE", 25)),
 		SchedulerEnabled:                        boolEnv("SCHEDULER_ENABLED", true),

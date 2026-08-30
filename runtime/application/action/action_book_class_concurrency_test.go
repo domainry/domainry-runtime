@@ -174,7 +174,7 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 		mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{
 			WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID, RoleKey: principal.RoleKey,
 			Source: transactionmodel.MutationSourceAction, ActionKey: action.Key,
-			CorrelationID: principal.RequestID, MetadataRevision: "snapshot-1",
+			CorrelationID: principal.RequestID, ApplicationSchemaRevision: "snapshot-1",
 		})
 		if err != nil {
 			return transactionmodel.MutationPlan{}, err

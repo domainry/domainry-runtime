@@ -13,6 +13,7 @@ import (
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
+	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
@@ -21,7 +22,6 @@ import (
 	deploymentbusiness "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	businessintegration "github.com/domainry/domainry-runtime/runtime/application/integration"
 	lifecycleapplication "github.com/domainry/domainry-runtime/runtime/application/lifecycle"
-	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
 	pipelineapplication "github.com/domainry/domainry-runtime/runtime/application/pipeline"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
@@ -32,6 +32,9 @@ import (
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
+	metadata "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
@@ -41,9 +44,6 @@ import (
 	deploymentrepository "github.com/domainry/domainry-runtime/runtime/domain/deployment/repository"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
-	metadata "github.com/domainry/domainry-runtime/runtime/domain/metadata/service"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
@@ -65,7 +65,7 @@ type runtimeAssembly struct {
 	actions                           map[string]definitionmodel.ActionSchema
 	workflows                         map[string]definitionmodel.WorkflowSchema
 	automationRules                   map[string]automationmodel.AutomationRuleSchema
-	dictionaries                      []metadatamodel.DictionarySchema
+	dictionaries                      []appschemamodel.DictionarySchema
 	integrations                      integrationmodel.IntegrationSchema
 	reports                           []reportmodel.ReportSchema
 	reportObjects                     map[string]struct{}
@@ -86,7 +86,7 @@ type runtimeAssembly struct {
 	auditRepo                         auditrepository.AuditRepository
 	auditApplicationService           *auditapplication.AuditApplicationService
 	auditExportTokenKey               []byte
-	schemaService                     *metadataapplication.MetadataSchemaApplicationService
+	schemaService                     *appschemaapplication.ApplicationSchemaQueryApplicationService
 	actionService                     *actionapplication.ActionApplicationService
 	runtimeStatusService              *deploymentbusiness.DeploymentRuntimeStatusApplicationService
 	surfaceContextService             *surfacecontextbusiness.SurfaceContextApplicationService
@@ -115,7 +115,7 @@ type runtimeAssembly struct {
 	integrationCredentialExpirySource   businessintegration.IntegrationCredentialExpirySource
 	workflowWorkerRepo                  workflowcontract.WorkflowWorkerStore
 	workflowApplicationService          *workflowapplication.WorkflowApplicationService
-	applicationSchemaService            *metadataapplication.ApplicationSchemaService
+	applicationSchemaService            *appschemaapplication.ApplicationSchemaApplicationService
 	automationApplicationService        *automationapplication.AutomationApplicationService
 	workflowDecisionRepo                workflowcontract.WorkflowDecisionStore
 	workflowDefinitionRepo              workflowcontract.WorkflowDefinitionStore
@@ -128,7 +128,7 @@ type runtimeAssembly struct {
 	reportSnapshotNotificationCommitter reportapplication.ReportSnapshotNotificationCommitter
 	automationNotificationCompiler      func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	automationNotificationCommitter     automationapplication.AutomationExecutionNotificationCommitter
-	metadataRepo                        metadatarepository.MetadataRepository
+	applicationSchemaRepo               appschemarepository.ApplicationSchemaRepository
 	automationWorkerRepo                automationcontract.AutomationWorkerStore
 	automationExecutionRepo             automationrepository.AutomationExecutionRepository
 	businessChangePlanRepo              changeplanrepository.ChangePlanRepository
@@ -142,7 +142,7 @@ type runtimeAssembly struct {
 	prepareOutboxPayload                businessintegration.OutboxPayloadPreparer
 	integrationPolicyStore              resilience.Store
 	apiKeyRateLimiter                   ratelimit.Limiter
-	dictionaryRuntime                   *metadata.MetadataDictionaryDomainService
+	dictionaryRuntime                   *metadata.ApplicationSchemaDictionaryDomainService
 	frontendCapabilities                *deploymentbusiness.DeploymentFrontendCapabilityApplicationService
 	authoringCapabilities               *capabilityapplication.CapabilityAuthoringApplicationService
 	businessReferences                  *changeplanapplication.ChangePlanReferenceApplicationService

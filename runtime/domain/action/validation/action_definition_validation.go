@@ -4,20 +4,20 @@ import (
 	"fmt"
 	"strings"
 
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 )
 
-func ActionValidateDefinitionIssues(action definitionmodel.ActionSchema) []metadatamodel.MetadataDefinitionValidationIssue {
+func ActionValidateDefinitionIssues(action definitionmodel.ActionSchema) []appschemamodel.ApplicationDefinitionValidationIssue {
 	return ActionValidateDefinitionIssuesWithObjects(action, nil)
 }
 
 // ActionValidateDefinitionIssuesWithObjects validates only the published Action
 // metadata contract. Runtime JSON execution config was retired in favor of
 // generated source-owned Business Handlers.
-func ActionValidateDefinitionIssuesWithObjects(action definitionmodel.ActionSchema, objects []definitionmodel.ObjectSchema) []metadatamodel.MetadataDefinitionValidationIssue {
-	issues := make([]metadatamodel.MetadataDefinitionValidationIssue, 0)
+func ActionValidateDefinitionIssuesWithObjects(action definitionmodel.ActionSchema, objects []definitionmodel.ObjectSchema) []appschemamodel.ApplicationDefinitionValidationIssue {
+	issues := make([]appschemamodel.ApplicationDefinitionValidationIssue, 0)
 	for _, identity := range []struct{ path, value string }{
 		{"key", action.Key}, {"object_key", action.ObjectKey}, {"requires_permission", action.RequiresPermission}, {"audit_event", action.AuditEvent},
 	} {
@@ -35,15 +35,15 @@ func ActionValidateDefinitionIssuesWithObjects(action definitionmodel.ActionSche
 	return issues
 }
 
-func actionValidateAssurancePolicy(action definitionmodel.ActionSchema, objects []definitionmodel.ObjectSchema) []metadatamodel.MetadataDefinitionValidationIssue {
+func actionValidateAssurancePolicy(action definitionmodel.ActionSchema, objects []definitionmodel.ObjectSchema) []appschemamodel.ApplicationDefinitionValidationIssue {
 	policy := action.AssurancePolicy
 	if policy == nil {
 		return nil
 	}
-	issue := func(path string, params map[string]string) metadatamodel.MetadataDefinitionValidationIssue {
+	issue := func(path string, params map[string]string) appschemamodel.ApplicationDefinitionValidationIssue {
 		return actionDefinitionValidationIssue("backend.action.definition_invalid", "assurance_policy."+path, params)
 	}
-	issues := make([]metadatamodel.MetadataDefinitionValidationIssue, 0)
+	issues := make([]appschemamodel.ApplicationDefinitionValidationIssue, 0)
 	if len(policy.RequiredMethods) == 0 {
 		issues = append(issues, issue("required_methods", map[string]string{"field": "assurance_policy.required_methods", "reason": "at least one assurance method is required"}))
 	}
@@ -105,12 +105,12 @@ func actionValidateAssurancePolicy(action definitionmodel.ActionSchema, objects 
 	return issues
 }
 
-func actionDefinitionValidationIssue(code, fieldPath string, params map[string]string) metadatamodel.MetadataDefinitionValidationIssue {
+func actionDefinitionValidationIssue(code, fieldPath string, params map[string]string) appschemamodel.ApplicationDefinitionValidationIssue {
 	contract := capabilitycontract.RuntimeAuthoringErrorContract(code, params)
 	if strings.TrimSpace(fieldPath) == "" {
 		fieldPath = contract.FieldPath
 	}
-	return metadatamodel.MetadataDefinitionValidationIssue{FieldPath: fieldPath, ErrorCode: code, MessageKey: code, CapabilityKey: contract.CapabilityKey, ContractVersion: contract.ContractVersion, Params: params}
+	return appschemamodel.ApplicationDefinitionValidationIssue{FieldPath: fieldPath, ErrorCode: code, MessageKey: code, CapabilityKey: contract.CapabilityKey, ContractVersion: contract.ContractVersion, Params: params}
 }
 
 func actionSupportedKind(kind string) bool {

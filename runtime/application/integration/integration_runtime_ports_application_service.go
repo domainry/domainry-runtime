@@ -4,10 +4,10 @@ import (
 	"context"
 
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -33,7 +33,7 @@ type IntegrationAutomationApplication interface {
 	ExecuteOutboxMessage(context.Context, integrationmodel.IntegrationOutboxMessage) error
 }
 
-type IntegrationSchemaProvider func(context.Context, principalmodel.Principal) metadatamodel.ApplicationSchemaSnapshot
+type IntegrationSchemaProvider func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
 type IntegrationSchemaObjectMapProvider func(context.Context) map[string]definitionmodel.ObjectSchema
 type IntegrationActionInvoker func(context.Context, actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error)
 type IntegrationEventWorkflowExecutor func(context.Context, string, integrationmodel.IntegrationEntrypointWorkflowRequest, principalmodel.Principal) (IntegrationWorkflowRunResult, error)

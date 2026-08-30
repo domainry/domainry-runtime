@@ -7,12 +7,12 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
 )
 
-func publishRuntimeIdentityCatalog(ctx context.Context, binding identitysdk.Binding, snapshot metadatamodel.ApplicationSchemaSnapshot, workspaceID, applicationKey string, redirectURLs []string) error {
+func publishRuntimeIdentityCatalog(ctx context.Context, binding identitysdk.Binding, snapshot appschemamodel.ApplicationSchemaSnapshot, workspaceID, applicationKey string, redirectURLs []string) error {
 	if binding == nil {
 		return nil
 	}
@@ -24,7 +24,7 @@ func publishRuntimeIdentityCatalog(ctx context.Context, binding identitysdk.Bind
 	return err
 }
 
-func runtimeIdentityCatalog(snapshot metadatamodel.ApplicationSchemaSnapshot, workspaceID, applicationKey string, redirectURLs []string) identitysdk.AuthorizationCatalog {
+func runtimeIdentityCatalog(snapshot appschemamodel.ApplicationSchemaSnapshot, workspaceID, applicationKey string, redirectURLs []string) identitysdk.AuthorizationCatalog {
 	catalog := identitysdk.AuthorizationCatalog{ContractVersion: identitysdk.CatalogVersionV1, Application: identitysdk.ApplicationRef{WorkspaceID: identitysdk.WorkspaceID(strings.TrimSpace(workspaceID)), ApplicationKey: identitysdk.ApplicationKey(applicationKey), RedirectURLs: append([]string(nil), redirectURLs...)}}
 	resources := make(map[string]identitysdk.ResourceDefinition, len(snapshot.Objects))
 	for _, object := range snapshot.Objects {

@@ -23,8 +23,8 @@ import (
 
 	changeplanpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/changeplan"
 
+	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
-	metadatapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata"
 
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 
@@ -104,7 +104,7 @@ func objectActionTestDependencies(store *persistence.RuntimeStore) RuntimeServic
 		IntegrationEvents:    integrationpersistence.NewIntegrationEventStore(store),
 		IntegrationDelivery:  integrationpersistence.NewIntegrationDeliveryStore(store),
 		IntegrationWorker:    integrationpersistence.NewIntegrationWorkerStore(store),
-		Metadata:             metadatapersistence.NewMetadataStore(store),
+		ApplicationSchema:    appschemapersistence.NewApplicationSchemaStore(store),
 		WorkflowWorker:       workflowpersistence.NewWorkflowWorkerStore(store),
 		WorkflowDefinitions:  workflowpersistence.NewWorkflowDefinitionStore(store),
 		WorkflowProcesses:    workflowpersistence.NewWorkflowProcessStore(store),

@@ -13,7 +13,7 @@ import (
 
 	changeplanpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/changeplan"
 
-	metadatapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata"
+	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -28,7 +28,7 @@ func TestManifestBusinessSeedRecordsPersistSourceProvenance(t *testing.T) {
 		t.Fatal(err)
 	}
 	manifest := manifestmodel.ManifestSchema{TemplateID: "crm", Version: "2.1.0", Name: "CRM", Objects: []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Name: "Name", Type: "text"}}}}, SeedRecords: []businessseedmodel.SeedRecordSchema{{ObjectKey: "customer", SourceKind: "plugin", SourceID: "crm-baseline", Data: map[string]any{"__seed_key": "customer_acme", "name": "Acme"}}}}
-	metadataStore := metadatapersistence.NewMetadataStore(store)
+	metadataStore := appschemapersistence.NewApplicationSchemaStore(store)
 	if err := metadataStore.EnsureManifestMetadata(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}

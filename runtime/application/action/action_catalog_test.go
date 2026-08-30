@@ -63,7 +63,7 @@ func actionTestHandlerDescriptor(key string, objects []runtimeext.ActionObjectCa
 func newActionTestBusinessHandlerExecutor(dependencies BusinessHandlerExecutionDependencies) *BusinessHandlerExecutor {
 	dependencies.RuntimeRevision = "runtime-test"
 	dependencies.ProjectRevision = "project-test"
-	dependencies.MetadataRevision = "snapshot-test"
+	dependencies.ApplicationSchemaRevision = "snapshot-test"
 	return NewBusinessHandlerExecutor(dependencies)
 }
 
@@ -485,14 +485,14 @@ func TestActionApplicationInvokesFrozenBusinessHandlerRegistry(t *testing.T) {
 	})
 	handler.descriptor = runtimeext.HandlerDescriptor{ActionKey: "booking.mutated", InputContractSHA256: "mutated", OutputContractSHA256: "mutated", HandlerRevision: "mutated"}
 	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: action.Key, ObjectKey: action.ObjectKey, Input: map[string]any{"booking_id": "booking-1"}, Principal: actionTestPrincipal("booking.reserve")})
-	if err != nil || !handler.invoked || handler.identity.ActionKey != action.Key || handler.identity.ExecutionID != "execution-1" || handler.identity.ReceiptID != "execution-1" || handler.identity.RuntimeRevision != "runtime-test" || handler.identity.ProjectRevision != "project-test" || handler.identity.MetadataRevision != "snapshot-test" || handler.identity.HandlerRevision != "handler-v1" || result.Object == nil || result.Object.Output["accepted"] != true {
+	if err != nil || !handler.invoked || handler.identity.ActionKey != action.Key || handler.identity.ExecutionID != "execution-1" || handler.identity.ReceiptID != "execution-1" || handler.identity.RuntimeRevision != "runtime-test" || handler.identity.ProjectRevision != "project-test" || handler.identity.ApplicationSchemaRevision != "snapshot-test" || handler.identity.HandlerRevision != "handler-v1" || result.Object == nil || result.Object.Output["accepted"] != true {
 		t.Fatalf("result=%+v invoked=%v identity=%+v error=%v", result, handler.invoked, handler.identity, err)
 	}
 }
 
 func TestBusinessHandlerExecutorReturnsOneAtomicMutationBatchAndDurableIntent(t *testing.T) {
 	newPlan := func(operation, objectKey, recordID string, fields map[string]any) (transactionmodel.MutationPlan, recordmodel.Record, error) {
-		mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: "workspace-a", ActorID: "user-a", RoleKey: "operator", Source: transactionmodel.MutationSourceAction, ActionKey: "booking.reserve", CorrelationID: "correlation-1", MetadataRevision: "snapshot-1"})
+		mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: "workspace-a", ActorID: "user-a", RoleKey: "operator", Source: transactionmodel.MutationSourceAction, ActionKey: "booking.reserve", CorrelationID: "correlation-1", ApplicationSchemaRevision: "snapshot-1"})
 		if err != nil {
 			return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 		}
@@ -536,7 +536,7 @@ func TestBusinessActionPlansConditionalDeleteAndRestoreInOneCommitBoundary(t *te
 	newPlan := func(operation, objectKey, recordID string) transactionmodel.MutationPlan {
 		t.Helper()
 		mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{
-			WorkspaceID: "workspace-a", Source: transactionmodel.MutationSourceAction, ActionKey: "booking.change", CorrelationID: "correlation-1", MetadataRevision: "snapshot-1",
+			WorkspaceID: "workspace-a", Source: transactionmodel.MutationSourceAction, ActionKey: "booking.change", CorrelationID: "correlation-1", ApplicationSchemaRevision: "snapshot-1",
 		})
 		if err != nil {
 			t.Fatal(err)

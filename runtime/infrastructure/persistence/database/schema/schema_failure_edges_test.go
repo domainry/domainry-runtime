@@ -86,7 +86,7 @@ func TestSchemaAssemblersPropagateEveryOrderedMutationFailure(t *testing.T) {
 		name   string
 		ensure func(context.Context, runtimeschema.Store) error
 	}{
-		{name: "metadata", ensure: runtimeschema.EnsureMetadataSchema},
+		{name: "metadata", ensure: runtimeschema.EnsureApplicationSchema},
 		{name: "lifecycle", ensure: runtimeschema.EnsureLifecycleSchema},
 		{name: "workflow-process", ensure: runtimeschema.EnsureWorkflowProcessSchema},
 		{name: "evidence", ensure: runtimeschema.EnsureEvidenceSchema},
@@ -129,7 +129,7 @@ func TestSchemaAssemblersPreserveCancellation(t *testing.T) {
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 	for _, ensure := range []func(context.Context, runtimeschema.Store) error{
-		runtimeschema.EnsureMetadataSchema,
+		runtimeschema.EnsureApplicationSchema,
 		runtimeschema.EnsureLifecycleSchema,
 		runtimeschema.EnsureWorkflowProcessSchema,
 		runtimeschema.EnsureEvidenceSchema,
@@ -147,7 +147,7 @@ func TestSchemaAssemblersReachMySQLTypeBranchesBeforeMutation(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	for name, ensure := range map[string]func(context.Context, runtimeschema.Store) error{
-		"metadata": runtimeschema.EnsureMetadataSchema,
+		"metadata": runtimeschema.EnsureApplicationSchema,
 		"evidence": runtimeschema.EnsureEvidenceSchema,
 	} {
 		t.Run(name, func(t *testing.T) {

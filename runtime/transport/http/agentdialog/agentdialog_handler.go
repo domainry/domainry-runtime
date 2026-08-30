@@ -4,13 +4,12 @@ import (
 	"context"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent"
 	agentruntime "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
+	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
-	metadataapplication "github.com/domainry/domainry-runtime/runtime/application/metadata"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	"net/http"
 	"strings"
-	"time"
 
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
@@ -43,10 +42,6 @@ type agentTaskToolService interface {
 }
 
 type Config struct {
-	BaseURL            string
-	APIKey             string
-	AgentID            int
-	Timeout            time.Duration
 	RateLimitPerMinute int
 }
 
@@ -54,7 +49,7 @@ type AgentDialogHandler struct {
 	sessions                  *agentapplication.AgentApplicationService
 	proposalState             *agentapplication.AgentApplicationService
 	proposalDecisions         *agentapplication.AgentProposalApplicationService
-	analysisCatalog           *metadataapplication.MetadataSchemaApplicationService
+	analysisCatalog           *appschemaapplication.ApplicationSchemaQueryApplicationService
 	analysisRecords           *recordapplication.RecordApplicationService
 	diagnosticAudit           *auditapplication.AuditApplicationService
 	reportGovernance          *agentapplication.AgentApplicationService
@@ -80,7 +75,7 @@ type AgentDialogDependencies struct {
 	Sessions                  *agentapplication.AgentApplicationService
 	ProposalState             *agentapplication.AgentApplicationService
 	ProposalDecisions         *agentapplication.AgentProposalApplicationService
-	AnalysisCatalog           *metadataapplication.MetadataSchemaApplicationService
+	AnalysisCatalog           *appschemaapplication.ApplicationSchemaQueryApplicationService
 	AnalysisRecords           *recordapplication.RecordApplicationService
 	DiagnosticAudit           *auditapplication.AuditApplicationService
 	ReportGovernance          *agentapplication.AgentApplicationService

@@ -6,41 +6,41 @@ import (
 	"errors"
 	"testing"
 
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
-	metadatarepository "github.com/domainry/domainry-runtime/runtime/domain/metadata/repository"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 type metadataRuleSetSourceStub struct {
-	metadatarepository.MetadataRepository
-	current  metadatamodel.MetadataDefinition
+	appschemarepository.ApplicationSchemaRepository
+	current  appschemamodel.ApplicationDefinition
 	found    bool
-	versions []metadatamodel.MetadataDefinitionVersion
+	versions []appschemamodel.ApplicationDefinitionVersion
 	scope    principalmodel.SystemScope
 	key      string
 	getErr   error
 	listErr  error
 }
 
-func (s *metadataRuleSetSourceStub) GetDefinition(_ context.Context, scope principalmodel.SystemScope, resourceType, resourceKey string) (metadatamodel.MetadataDefinition, bool, error) {
+func (s *metadataRuleSetSourceStub) GetDefinition(_ context.Context, scope principalmodel.SystemScope, resourceType, resourceKey string) (appschemamodel.ApplicationDefinition, bool, error) {
 	s.scope, s.key = scope, resourceType+":"+resourceKey
 	if s.getErr != nil {
-		return metadatamodel.MetadataDefinition{}, false, s.getErr
+		return appschemamodel.ApplicationDefinition{}, false, s.getErr
 	}
 	return s.current, s.found, nil
 }
 
-func (s *metadataRuleSetSourceStub) ListDefinitionVersions(_ context.Context, scope principalmodel.SystemScope, resourceType, resourceKey string) ([]metadatamodel.MetadataDefinitionVersion, error) {
+func (s *metadataRuleSetSourceStub) ListDefinitionVersions(_ context.Context, scope principalmodel.SystemScope, resourceType, resourceKey string) ([]appschemamodel.ApplicationDefinitionVersion, error) {
 	s.scope, s.key = scope, resourceType+":"+resourceKey
 	if s.listErr != nil {
 		return nil, s.listErr
 	}
-	return append([]metadatamodel.MetadataDefinitionVersion(nil), s.versions...), nil
+	return append([]appschemamodel.ApplicationDefinitionVersion(nil), s.versions...), nil
 }
 
 func TestMetadataWorkspaceRuleSetRepositoryMapsValidatedVersionsToExplicitWorkspace(t *testing.T) {
-	source := &metadataRuleSetSourceStub{found: true, current: metadatamodel.MetadataDefinition{ResourceKey: "policy.limit"}, versions: []metadatamodel.MetadataDefinitionVersion{{SchemaVersion: "2", SchemaHash: "hash-2", Payload: ruleSetMetadataPayload("2026-07-01")}, {SchemaVersion: "1", SchemaHash: "hash-1", Payload: ruleSetMetadataPayload("2026-01-01")}}}
-	repository := NewMetadataWorkspaceRuleSetRepository(source)
+	source := &metadataRuleSetSourceStub{found: true, current: appschemamodel.ApplicationDefinition{ResourceKey: "policy.limit"}, versions: []appschemamodel.ApplicationDefinitionVersion{{SchemaVersion: "2", SchemaHash: "hash-2", Payload: ruleSetMetadataPayload("2026-07-01")}, {SchemaVersion: "1", SchemaHash: "hash-1", Payload: ruleSetMetadataPayload("2026-01-01")}}}
+	repository := NewApplicationSchemaWorkspaceRuleSetRepository(source)
 	scope, _ := principalmodel.NewWorkspaceQueryScope("workspace-a")
 	versions, err := repository.ListWorkspaceRuleSetVersions(t.Context(), scope, " policy.limit ")
 	if err != nil {
@@ -57,47 +57,47 @@ func TestMetadataWorkspaceRuleSetRepositoryRejectsInvalidInputsAndSourceFailures
 	validSource := func() *metadataRuleSetSourceStub {
 		return &metadataRuleSetSourceStub{
 			found: true,
-			current: metadatamodel.MetadataDefinition{
+			current: appschemamodel.ApplicationDefinition{
 				ResourceKey: "policy.limit",
 			},
-			versions: []metadatamodel.MetadataDefinitionVersion{{
+			versions: []appschemamodel.ApplicationDefinitionVersion{{
 				SchemaVersion: "1", SchemaHash: "hash-1", Payload: ruleSetMetadataPayload("2026-01-01"),
 			}},
 		}
 	}
-	assertError := func(t *testing.T, repository *MetadataWorkspaceRuleSetRepository, scope principalmodel.QueryScope, key string) {
+	assertError := func(t *testing.T, repository *ApplicationSchemaWorkspaceRuleSetRepository, scope principalmodel.QueryScope, key string) {
 		t.Helper()
 		if _, err := repository.ListWorkspaceRuleSetVersions(t.Context(), scope, key); err == nil {
 			t.Fatal("expected repository error")
 		}
 	}
 
-	assertError(t, NewMetadataWorkspaceRuleSetRepository(validSource()), principalmodel.QueryScope{}, "policy.limit")
-	assertError(t, NewMetadataWorkspaceRuleSetRepository(validSource()), systemScope, "policy.limit")
+	assertError(t, NewApplicationSchemaWorkspaceRuleSetRepository(validSource()), principalmodel.QueryScope{}, "policy.limit")
+	assertError(t, NewApplicationSchemaWorkspaceRuleSetRepository(validSource()), systemScope, "policy.limit")
 	assertError(t, nil, workspaceScope, "policy.limit")
-	assertError(t, NewMetadataWorkspaceRuleSetRepository(nil), workspaceScope, "policy.limit")
-	assertError(t, NewMetadataWorkspaceRuleSetRepository(validSource()), workspaceScope, " ")
+	assertError(t, NewApplicationSchemaWorkspaceRuleSetRepository(nil), workspaceScope, "policy.limit")
+	assertError(t, NewApplicationSchemaWorkspaceRuleSetRepository(validSource()), workspaceScope, " ")
 
 	source := validSource()
 	source.getErr = errors.New("get failed")
-	assertError(t, NewMetadataWorkspaceRuleSetRepository(source), workspaceScope, "policy.limit")
+	assertError(t, NewApplicationSchemaWorkspaceRuleSetRepository(source), workspaceScope, "policy.limit")
 
 	source = validSource()
 	source.listErr = errors.New("list failed")
-	assertError(t, NewMetadataWorkspaceRuleSetRepository(source), workspaceScope, "policy.limit")
+	assertError(t, NewApplicationSchemaWorkspaceRuleSetRepository(source), workspaceScope, "policy.limit")
 
 	source = validSource()
 	source.versions[0].Payload = json.RawMessage(`{`)
-	assertError(t, NewMetadataWorkspaceRuleSetRepository(source), workspaceScope, "policy.limit")
+	assertError(t, NewApplicationSchemaWorkspaceRuleSetRepository(source), workspaceScope, "policy.limit")
 }
 
 func TestMetadataWorkspaceRuleSetRepositoryReturnsEmptyForMissingOrDisabledDefinition(t *testing.T) {
 	scope, _ := principalmodel.NewWorkspaceQueryScope("workspace-a")
 	for _, source := range []*metadataRuleSetSourceStub{
 		{found: false},
-		{found: true, current: metadatamodel.MetadataDefinition{ResourceKey: "policy.limit", DisabledAt: "2026-07-27T00:00:00Z"}},
+		{found: true, current: appschemamodel.ApplicationDefinition{ResourceKey: "policy.limit", DisabledAt: "2026-07-27T00:00:00Z"}},
 	} {
-		versions, err := NewMetadataWorkspaceRuleSetRepository(source).ListWorkspaceRuleSetVersions(t.Context(), scope, "policy.limit")
+		versions, err := NewApplicationSchemaWorkspaceRuleSetRepository(source).ListWorkspaceRuleSetVersions(t.Context(), scope, "policy.limit")
 		if err != nil || len(versions) != 0 {
 			t.Fatalf("versions=%#v err=%v", versions, err)
 		}

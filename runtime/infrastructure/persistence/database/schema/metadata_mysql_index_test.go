@@ -5,12 +5,12 @@ import (
 	"testing"
 )
 
-func TestMetadataSchemaDoesNotEmitNotificationOwnedDDL(t *testing.T) {
+func TestApplicationSchemaDoesNotEmitNotificationOwnedDDL(t *testing.T) {
 	state := &schemaSQLState{}
 	database := openSchemaScriptedDB(state)
 	t.Cleanup(func() { _ = database.Close() })
 
-	if err := EnsureMetadataSchema(t.Context(), scriptedSchemaStore{db: database, driver: "mysql"}); err != nil {
+	if err := EnsureApplicationSchema(t.Context(), scriptedSchemaStore{db: database, driver: "mysql"}); err != nil {
 		t.Fatal(err)
 	}
 

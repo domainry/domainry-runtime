@@ -3,11 +3,11 @@ package openapi
 import (
 	"testing"
 
-	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )
 
 func TestHighRiskOwnerRoutesPublishIdempotencyAndReceiptHeaders(t *testing.T) {
-	document := Build(metadatamodel.ApplicationSchemaSnapshot{})
+	document := Build(appschemamodel.ApplicationSchemaSnapshot{})
 	paths := document["paths"].(map[string]any)
 	for _, item := range []struct{ path, method string }{
 		{path: "/operations/scheduler/runs/{runID}/retry", method: "post"},
