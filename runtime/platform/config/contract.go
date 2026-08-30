@@ -402,7 +402,7 @@ func setConfigField(cfg *Config, definition Definition, raw string) error {
 }
 
 func configEnvName(field string) string {
-	overrides := map[string]string{"RuntimeVersion": "DOMAINRY_RUNTIME_VERSION", "Environment": "APP_ENV", "AppLocale": "APP_LOCALE", "DatabaseDSN": "DATABASE_DSN", "DBPath": "APP_DB_PATH", "ManifestPath": "TEMPLATE_MANIFEST", "FrontendCapabilityManifestPath": "FRONTEND_CAPABILITY_MANIFEST", "MigrationSQL": "MIGRATION_SQL", "MigrationRestoreDrillSuccessAt": "MIGRATION_RESTORE_DRILL_LAST_SUCCESS_AT", "SkipManifestValidation": "SKIP_MANIFEST_VALIDATION", "BusinessSeedSyncDisabled": "BUSINESS_SEED_SYNC_ENABLED", "Port": "PORT"}
+	overrides := map[string]string{"RuntimeVersion": "DOMAINRY_RUNTIME_VERSION", "Environment": "APP_ENV", "AppLocale": "APP_LOCALE", "DatabaseDSN": "DATABASE_DSN", "DBPath": "APP_DB_PATH", "ManifestPath": "TEMPLATE_MANIFEST", "MigrationSQL": "MIGRATION_SQL", "MigrationRestoreDrillSuccessAt": "MIGRATION_RESTORE_DRILL_LAST_SUCCESS_AT", "SkipManifestValidation": "SKIP_MANIFEST_VALIDATION", "BusinessSeedSyncDisabled": "BUSINESS_SEED_SYNC_ENABLED", "Port": "PORT"}
 	if value := overrides[field]; value != "" {
 		return value
 	}
@@ -486,7 +486,7 @@ func managedConfigName(name string) bool {
 	if name == "PORT" {
 		return true
 	}
-	for _, prefix := range []string{"APP_", "AUTH_", "AUDIT_", "IDENTITY_", "NOTIFICATION_", "HTTP_", "HEALTH_", "CAPACITY_", "TELEMETRY_", "DATABASE_", "RUNTIME_", "MIGRATION_", "SCHEDULER_", "BUSINESS_", "AGENT_DIALOG_", "CORS_", "INTEGRATION_", "TEMPLATE_", "FRONTEND_CAPABILITY_", "SKIP_MANIFEST_", "UPLOAD_", "DOMAINRY_RUNTIME_"} {
+	for _, prefix := range []string{"APP_", "AUTH_", "AUDIT_", "IDENTITY_", "NOTIFICATION_", "HTTP_", "HEALTH_", "CAPACITY_", "TELEMETRY_", "DATABASE_", "RUNTIME_", "MIGRATION_", "SCHEDULER_", "BUSINESS_", "AGENT_DIALOG_", "CORS_", "INTEGRATION_", "TEMPLATE_", "SKIP_MANIFEST_", "UPLOAD_", "DOMAINRY_RUNTIME_"} {
 		if strings.HasPrefix(name, prefix) {
 			return true
 		}

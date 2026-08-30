@@ -44,7 +44,6 @@ type RuntimeApplications struct {
 	PublicationHandoff    *publicationhandoff.PublicationHandoffApplicationService
 	Lifecycle             *lifecycleapplication.LifecycleApplicationService
 	Schema                *appschemaapplication.ApplicationSchemaQueryApplicationService
-	FrontendCapabilities  *deployment.DeploymentFrontendCapabilityApplicationService
 	AuthoringCapabilities *capabilityapplication.CapabilityAuthoringApplicationService
 	BusinessReferences    *changeplanapplication.ChangePlanReferenceApplicationService
 	ReportSnapshots       *reportsnapshot.ReportSnapshotApplicationService
@@ -86,7 +85,6 @@ func (s *runtimeAssembly) Applications() RuntimeApplications {
 		PublicationHandoff:    s.integrationService,
 		Lifecycle:             s.lifecycleService,
 		Schema:                s.schemaService,
-		FrontendCapabilities:  s.frontendCapabilities,
 		AuthoringCapabilities: s.authoringCapabilities,
 		BusinessReferences:    s.businessReferences,
 		ReportSnapshots:       s.reportSnapshotsService,

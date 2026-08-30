@@ -14,7 +14,7 @@ func TestIntegrationOwnershipContractKeepsOnlyRuntimeOutbox(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(content)
-	for _, required := range []string{"runtime_publication_outbox", "domainry-integration", "_schema_migrations", "SaaS Binding"} {
+	for _, required := range []string{"_publication_outbox", "domainry-integration", "_schema_migrations", "SaaS Binding"} {
 		if !strings.Contains(text, required) {
 			t.Fatalf("Integration ownership contract is missing %q", required)
 		}
@@ -64,7 +64,7 @@ func TestRuntimeCompositionDoesNotReattachIntegrationOwnerState(t *testing.T) {
 		t.Fatal(err)
 	}
 	handoff := append(publicationStore, workerStore...)
-	for _, forbidden := range []string{"database/integration\"", "IntegrationDeliveryStore", "IntegrationWorkerStore", "integration_invocations", "integration_events"} {
+	for _, forbidden := range []string{"database/integration\"", "IntegrationDeliveryStore", "IntegrationWorkerStore", "_integration_invocations", "_integration_events"} {
 		if strings.Contains(string(handoff), forbidden) {
 			t.Fatalf("Runtime publication handoff still depends on legacy Integration owner implementation %q", forbidden)
 		}

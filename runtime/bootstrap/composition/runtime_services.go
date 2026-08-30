@@ -127,7 +127,6 @@ type RuntimeServicesDependencies struct {
 	PrepareOutboxPayload                publicationhandoff.PayloadPreparer
 	ConnectorProviders                  *connector.Registry
 	RuntimeStatus                       deploymentrepository.DeploymentRuntimeStatusRepository
-	FrontendCapabilities                deploymentrepository.DeploymentFrontendCapabilityRepository
 	Notifications                       NotificationRenderer
 	IdentityDirectory                   identitysdk.Directory
 	PartyDirectory                      partysdk.Directory

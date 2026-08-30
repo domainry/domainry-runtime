@@ -31,7 +31,7 @@ func (s ApplicationSchemaStore) syncMetadataLocalizedTextTx(ctx context.Context,
 	projections := metadataLocalizedProjections(rawI18n)
 	workspaceID := principalmodel.InstallationWorkspaceID
 	entityType, entityKey := strings.TrimSpace(resourceType), strings.TrimSpace(resourceKey)
-	deleteQuery, deleteArgs, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(s.store.SQLRenderer, "business_localized_text", workspaceID).Where(ormbuilder.And(ormbuilder.Equal("entity_type", entityType), ormbuilder.Equal("entity_key", entityKey), ormbuilder.Equal("source_kind", "metadata_definition"))).Build()
+	deleteQuery, deleteArgs, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(s.store.SQLRenderer, "_application_schema_localized_texts", workspaceID).Where(ormbuilder.And(ormbuilder.Equal("entity_type", entityType), ormbuilder.Equal("entity_key", entityKey), ormbuilder.Equal("source_kind", "metadata_definition"))).Build()
 	if buildErr != nil {
 		return fmt.Errorf("build metadata localized text projection clear: %w", buildErr)
 	}
@@ -39,7 +39,7 @@ func (s ApplicationSchemaStore) syncMetadataLocalizedTextTx(ctx context.Context,
 		return fmt.Errorf("clear metadata localized text projection: %w", err)
 	}
 	for _, projection := range projections {
-		update, updateArgs, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "business_localized_text", workspaceID).
+		update, updateArgs, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_application_schema_localized_texts", workspaceID).
 			Set("text", projection.Text).Set("source_kind", "metadata_definition").Set("source_id", sourceID).Set("updated_at", now).
 			Where(ormbuilder.And(ormbuilder.Equal("entity_type", entityType), ormbuilder.Equal("entity_key", entityKey), ormbuilder.Equal("property", projection.Property), ormbuilder.Equal("locale", projection.Locale))).Build()
 		if buildErr != nil {
@@ -57,7 +57,7 @@ func (s ApplicationSchemaStore) syncMetadataLocalizedTextTx(ctx context.Context,
 			continue
 		}
 		localized := appschemamodel.LocalizedText{WorkspaceID: workspaceID, EntityType: entityType, EntityKey: entityKey, Property: projection.Property, Locale: projection.Locale, Text: projection.Text}
-		insert, insertArgs, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "business_localized_text", workspaceID).
+		insert, insertArgs, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "_application_schema_localized_texts", workspaceID).
 			Columns("id", "entity_type", "entity_key", "property", "locale", "text", "source_kind", "source_id", "created_at", "updated_at").
 			Values(localizedTextID(localized), entityType, entityKey, projection.Property, projection.Locale, projection.Text, "metadata_definition", sourceID, now, now).Build()
 		if buildErr != nil {

@@ -31,7 +31,7 @@ func (s IntegrationCredentialExpiryStore) ListIntegrationCredentialExpiryCandida
 		limit = 500
 	}
 	columns := []string{"secret_key", "workspace_id", "kind", "status", "description", "value_ref", "fingerprint", "created_by", "created_at", "updated_at", "disabled_at", "expires_at", "rotated_at", "revoked_at", "last_tested_at", "last_test_status", "last_test_error"}
-	query, args, err := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "integration_secrets").Columns(columns...).Where(ormbuilder.And(ormbuilder.NotEqual("expires_at", ""), ormbuilder.LessThanOrEqual("expires_at", expiresBefore), ormbuilder.In("status", "active", "expired"))).OrderBy(ormbuilder.Ascending("expires_at"), ormbuilder.Ascending("workspace_id"), ormbuilder.Ascending("secret_key")).Limit(limit).Build()
+	query, args, err := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_integration_secrets").Columns(columns...).Where(ormbuilder.And(ormbuilder.NotEqual("expires_at", ""), ormbuilder.LessThanOrEqual("expires_at", expiresBefore), ormbuilder.In("status", "active", "expired"))).OrderBy(ormbuilder.Ascending("expires_at"), ormbuilder.Ascending("workspace_id"), ormbuilder.Ascending("secret_key")).Limit(limit).Build()
 	if err != nil {
 		return nil, fmt.Errorf("build integration credential expiry candidates: %w", err)
 	}

@@ -9,7 +9,7 @@ import (
 
 func LifecycleExecutor(store *database.RuntimeStore, archives lifecyclecontract.ArchiveStore) lifecyclecontract.OwnerLifecycleExecutor {
 	return lifecyclepersistence.NewRelationalOwnerExecutor(store, archives, "runtime_handoff", lifecyclepersistence.RelationalCleanupSpec{
-		PolicyKey: "runtime.publication_handoff.v1", Table: "runtime_publication_outbox", IDColumn: "id", TenantColumn: "workspace_id", TimeColumn: "updated_at", StatusColumn: "status",
+		PolicyKey: "runtime.publication_handoff.v1", Table: "_publication_outbox", IDColumn: "id", TenantColumn: "workspace_id", TimeColumn: "updated_at", StatusColumn: "status",
 		IneligibleStatuses: []string{"pending", "processing", "retrying"},
 		AdditionalPredicate: func(string) ormbuilder.Predicate {
 			return ormbuilder.Equal("publication_type", "integration.connector")

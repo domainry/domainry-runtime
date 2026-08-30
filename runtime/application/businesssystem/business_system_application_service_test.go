@@ -43,9 +43,6 @@ func businessSystemTestDependencies() BusinessSystemApplicationDependencies {
 		ApplicationDefinitions: func(context.Context, string, string, principalmodel.Principal) ([]appschemamodel.ApplicationDefinition, error) {
 			return nil, nil
 		},
-		FrontendSnapshot: func(context.Context, principalmodel.Principal) (deploymentmodel.FrontendCapabilitySnapshot, error) {
-			return deploymentmodel.FrontendCapabilitySnapshot{Status: "ready"}, nil
-		},
 		Runtime: BusinessSystemRuntimeProjectionDependencies{
 			WorkflowProcesses: func(context.Context, principalmodel.Principal, workflowmodel.WorkflowProcessFilter) ([]workflowmodel.WorkflowProcessInstance, error) {
 				return nil, nil
@@ -91,7 +88,7 @@ func TestBusinessSystemSnapshotSeparatesAdministratorAndLimitedVisibility(t *tes
 	if snapshot.SchemaHash == "" || snapshot.SchemaHash != snapshot.Schema.SchemaHash || snapshot.Schema.SnapshotVersion != snapshot.SchemaHash || snapshot.ObjectRecordCounts["customer"] != 7 || len(snapshot.Schema.Workflows) != 1 || snapshot.Schema.Workflows[0].Key != "approval" {
 		t.Fatalf("administrator snapshot=%#v", snapshot)
 	}
-	if snapshot.ResourceVisibility["runtime_state.integrations"] != "visible" || snapshot.FrontendCapabilities.Status != "ready" || snapshot.AuthoringContractHash == "" {
+	if snapshot.ResourceVisibility["runtime_state.integrations"] != "visible" || snapshot.AuthoringContractHash == "" {
 		t.Fatalf("administrator governance projection=%#v", snapshot)
 	}
 
@@ -210,7 +207,7 @@ func TestBusinessSystemRuntimeStatePropagatesEveryOwnerFailure(t *testing.T) {
 	}
 }
 
-func TestBusinessSystemResourceAndFrontendProjectionPreservesEvidence(t *testing.T) {
+func TestBusinessSystemResourceProjectionPreservesEvidence(t *testing.T) {
 	dependencies := businessSystemTestDependencies()
 	returned := false
 	dependencies.ApplicationDefinitions = func(context.Context, string, string, principalmodel.Principal) ([]appschemamodel.ApplicationDefinition, error) {
@@ -232,19 +229,6 @@ func TestBusinessSystemResourceAndFrontendProjectionPreservesEvidence(t *testing
 		t.Fatalf("valueOrDefault()=%q", got)
 	}
 
-	frontend := businessSystemFrontendCapabilities(deploymentmodel.FrontendCapabilitySnapshot{
-		Revision: 3, Status: "ready",
-		MissingFrontendSupport: []deploymentmodel.FrontendCapabilityRequirement{{CapabilityKey: "record.list", SupportKey: "record.table"}},
-		StaleFrontendSupport:   []deploymentmodel.FrontendCapabilitySupportEntry{{SupportKey: "legacy"}},
-		Manifest: &deploymentmodel.FrontendCapabilityManifest{
-			ManifestVersion: "v1", FrontendVersion: "frontend-1", RuntimeContractVersions: []string{"runtime-1"},
-			Entries:            []deploymentmodel.FrontendCapabilitySupportEntry{{SupportKey: "record.table", CapabilityKeys: []string{"record.list"}, RequiredPermissions: []string{"customer.read"}}},
-			DeploymentEvidence: &deploymentmodel.FrontendDeploymentEvidence{AuditContractVersion: "audit-v1", DesignContractHash: "design", RouteRegistryHash: "routes", FrontendSourceHash: "source", AuditArtifactHash: "artifact"},
-		},
-	})
-	if frontend.Manifest == nil || frontend.Manifest.DeploymentEvidence == nil || frontend.Manifest.DeploymentEvidence.FrontendSourceHash != "source" || len(frontend.MissingFrontendSupport) != 1 || len(frontend.StaleFrontendSupport) != 1 {
-		t.Fatalf("frontend=%#v", frontend)
-	}
 	service.SetEvidenceRepository(nil)
 	(*BusinessSystemApplicationService)(nil).SetEvidenceRepository(nil)
 }
@@ -282,11 +266,6 @@ func TestBusinessSystemAdministratorSnapshotPropagatesEveryProjectionFailure(t *
 				return recordmodel.RecordPageResult{}, want
 			}
 		}},
-		{name: "frontend", mutate: func(deps *BusinessSystemApplicationDependencies) {
-			deps.FrontendSnapshot = func(context.Context, principalmodel.Principal) (deploymentmodel.FrontendCapabilitySnapshot, error) {
-				return deploymentmodel.FrontendCapabilitySnapshot{}, want
-			}
-		}},
 		{name: "seed evidence", mutate: func(deps *BusinessSystemApplicationDependencies) {
 			deps.Evidence = businessSystemEvidenceStub{err: want}
 		}},
@@ -317,11 +296,6 @@ func TestBusinessSystemRemainingProjectionOutcomes(t *testing.T) {
 	service := NewBusinessSystemApplicationService(dependencies)
 	if snapshot, err := service.Snapshot(t.Context(), principal); err != nil || len(snapshot.SeedRecords) != 1 || snapshot.RuntimeState.Idempotency.Backlog["ready"] != 1 {
 		t.Fatalf("snapshot=%+v err=%v", snapshot, err)
-	}
-
-	frontend := businessSystemFrontendCapabilities(deploymentmodel.FrontendCapabilitySnapshot{Manifest: &deploymentmodel.FrontendCapabilityManifest{ManifestVersion: "v1"}})
-	if frontend.Manifest == nil || frontend.Manifest.DeploymentEvidence != nil {
-		t.Fatalf("frontend=%+v", frontend)
 	}
 
 }

@@ -8,6 +8,6 @@ import (
 
 func LifecycleExecutor(store *database.RuntimeStore, archives lifecyclecontract.ArchiveStore) lifecyclecontract.OwnerLifecycleExecutor {
 	return lifecyclepersistence.NewRelationalOwnerExecutor(store, archives, "runtime_security", lifecyclepersistence.RelationalCleanupSpec{
-		PolicyKey: "ratelimit.bucket.v1", Table: "runtime_rate_limit_bucket", IDColumn: "bucket_key", TimeColumn: "updated_at_ns", UnixNanoTime: true,
+		PolicyKey: "ratelimit.bucket.v1", Table: "_rate_limit_buckets", IDColumn: "bucket_key", TimeColumn: "updated_at_ns", UnixNanoTime: true,
 	})
 }

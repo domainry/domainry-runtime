@@ -91,7 +91,7 @@ type operationsQueueSpec struct {
 }
 
 func (s OperationsStore) operationsQueueDiagnostics(ctx context.Context, request operationsmodel.OperationsDiagnosticsRequest) operationsmodel.OperationsDiagnosticsSection {
-	specs := []operationsQueueSpec{{"integration_outbox", "runtime_publication_outbox", "created_at", []any{"queued", "sending", "failed"}}, {"workflow_execution", "_workflow_executions", "created_at", []any{"pending", "running", "failed"}}}
+	specs := []operationsQueueSpec{{"integration_outbox", "_publication_outbox", "created_at", []any{"queued", "sending", "failed"}}, {"workflow_execution", "_workflow_executions", "created_at", []any{"pending", "running", "failed"}}}
 	items := []map[string]any{}
 	for _, spec := range specs {
 		count, oldest, err := s.operationsQueueCount(ctx, spec, request.WorkspaceID)
@@ -105,7 +105,7 @@ func (s OperationsStore) operationsQueueDiagnostics(ctx context.Context, request
 }
 
 func (s OperationsStore) operationsDLQDiagnostics(ctx context.Context, request operationsmodel.OperationsDiagnosticsRequest) operationsmodel.OperationsDiagnosticsSection {
-	specs := []operationsQueueSpec{{"integration_outbox", "runtime_publication_outbox", "updated_at", []any{"dead_letter", "quarantined"}}, {"workflow_execution", "_workflow_executions", "updated_at", []any{"dead_letter"}}}
+	specs := []operationsQueueSpec{{"integration_outbox", "_publication_outbox", "updated_at", []any{"dead_letter", "quarantined"}}, {"workflow_execution", "_workflow_executions", "updated_at", []any{"dead_letter"}}}
 	items := []map[string]any{}
 	for _, spec := range specs {
 		count, oldest, err := s.operationsQueueCount(ctx, spec, request.WorkspaceID)

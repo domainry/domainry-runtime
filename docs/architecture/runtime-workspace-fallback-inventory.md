@@ -22,7 +22,6 @@ empty workspace comparisons, workspace/default proximity, and literal
 | 3 | `runtime/application/integration/integration_application_failure_alerts.go` |
 | 2 | `runtime/application/integration/integration_application_inbound_webhooks.go` |
 | 1 | `runtime/application/appschema/appschema_localized_text_coverage_application_service.go` |
-| 1 | `runtime/application/seed/deployment/frontend_capability.go` |
 | 1 | `runtime/application/workflow/workflow_execution_idempotency_application_service.go` |
 | 3 | `runtime/infrastructure/connectors/delivery_operations/asana/asana_delivery_operations_adapter.go` |
 | 1 | `runtime/infrastructure/connectors/delivery_operations/asana/asana_delivery_operations_schema_adapter.go` |

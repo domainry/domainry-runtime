@@ -21,12 +21,12 @@ INSERT INTO _workflow_executions (
   workspace_id,id,workflow_key,name,trigger,status,action_json,payload_json,result_json,created_at,updated_at
 ) VALUES ('default','workflow-006','fixture','Fixture','manual','completed','{}','{}','{}','2026-07-25T00:00:00Z','2026-07-25T00:00:00Z');
 
-CREATE TABLE identity_users (
+CREATE TABLE _identity_users (
   id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, name TEXT NOT NULL, email TEXT NOT NULL,
   phone TEXT NOT NULL DEFAULT '', status TEXT NOT NULL,
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL
 );
-INSERT INTO identity_users VALUES (
+INSERT INTO _identity_users VALUES (
   'fixture-user-006', 'default', '单名', 'account-006@example.com', '',
   'active', '2026-07-25T00:00:00Z', '2026-07-25T00:00:00Z'
 );

@@ -18,7 +18,6 @@ func WorkflowAuthoringDomain() capabilitycontract.CapabilityAuthoringDomain {
 			{Key: "edges", Type: "array", Required: true, ItemSchema: "workflow_graph_edge"},
 			{Key: "viewport", Type: "object"},
 		},
-		FrontendSupportKey: "workflow.graph-v2.designer.v1",
 		Errors: []capabilitycontract.CapabilityAuthoringError{
 			{Code: "backend.workflow.graph_node_invalid", FieldPath: "graph.nodes", ParameterKeys: []string{"node"}, MessageKey: "backend.workflow.graph_node_invalid"},
 			{Code: "backend.workflow.graph_approval_mode_invalid", FieldPath: "graph.nodes[].contract.approval.mode", ParameterKeys: []string{"node"}, MessageKey: "backend.workflow.graph_approval_mode_invalid"},
@@ -42,7 +41,7 @@ func workflowAuthoringComponentCapabilities() []capabilitycontract.CapabilityAut
 				{Key: "field_key", Type: "field_key", RequiredWhen: map[string]any{"type": "field_changed"}},
 				{Key: "event", Type: "event_key", RequiredWhen: map[string]any{"type": "action_completed"}}, {Key: "offset", Type: "string"},
 			}, Requires: []string{"workflow.graph_v2"}, ValidationEndpoint: "POST /metadata/definitions/workflow/{workflowKey}/validate",
-			FrontendSupportKey: "workflow.trigger.editor.v1", Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "validation", Path: "runtime/application/workflow/workflow_reference_validation_application_service.go", Symbol: "validateWorkflowTriggerContract"}},
+			Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "validation", Path: "runtime/application/workflow/workflow_reference_validation_application_service.go", Symbol: "validateWorkflowTriggerContract"}},
 		},
 		{
 			Key: "workflow.condition_contract", Status: "supported", Lifecycle: "workflow_definition",
@@ -53,7 +52,7 @@ func workflowAuthoringComponentCapabilities() []capabilitycontract.CapabilityAut
 				{Key: "conditions", Type: "array", ItemSchema: "workflow_condition", RequiredWhen: map[string]any{"type": []string{"all", "and", "any", "or"}}},
 				{Key: "condition", Type: "workflow_condition", RequiredWhen: map[string]any{"type": "not"}},
 			}, Requires: []string{"workflow.graph_v2"}, ValidationEndpoint: "POST /metadata/definitions/workflow/{workflowKey}/validate",
-			FrontendSupportKey: "workflow.condition.editor.v1", Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "validation", Path: "runtime/domain/workflow/policy/workflow_graph_policy.go", Symbol: "WorkflowConditionContractIsValid"}},
+			Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "validation", Path: "runtime/domain/workflow/policy/workflow_graph_policy.go", Symbol: "WorkflowConditionContractIsValid"}},
 		},
 		{
 			Key: "workflow.assignee_resolver", Status: "supported", Lifecycle: "workflow_node",
@@ -62,8 +61,7 @@ func workflowAuthoringComponentCapabilities() []capabilitycontract.CapabilityAut
 				{Key: "priority", Type: "integer", Minimum: workflowAuthoringFloatPointer(1)}, {Key: "user_ids", Type: "array", ItemSchema: "user_id", RequiredWhen: map[string]any{"type": "users"}},
 				{Key: "role_key", Type: "role_key", RequiredWhen: map[string]any{"type": "role"}}, {Key: "field", Type: "field_key", RequiredWhen: map[string]any{"type": "record_field"}},
 				{Key: "user_field", Type: "field_key", RequiredWhen: map[string]any{"type": []string{"manager", "manager_of"}}},
-			}, Requires: []string{"workflow.graph_v2"}, FrontendSupportKey: "workflow.assignee-resolver.editor.v1",
-			Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "validation", Path: "runtime/domain/workflow/policy/workflow_node_contract_policy.go", Symbol: "WorkflowAssigneeResolverIsValid"}},
+			}, Requires: []string{"workflow.graph_v2"}, Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "validation", Path: "runtime/domain/workflow/policy/workflow_node_contract_policy.go", Symbol: "WorkflowAssigneeResolverIsValid"}},
 		},
 		{
 			Key: "workflow.node.approval", Status: "supported", Lifecycle: "workflow_node",
@@ -74,7 +72,7 @@ func workflowAuthoringComponentCapabilities() []capabilitycontract.CapabilityAut
 				{Key: "due_seconds", Type: "integer", Minimum: workflowAuthoringFloatPointer(0)}, {Key: "reminder_action_key", Type: "action_key"}, {Key: "reminder_input", Type: "object"},
 				{Key: "escalation_seconds", Type: "integer", Minimum: workflowAuthoringFloatPointer(0)}, {Key: "escalation_resolvers", Type: "array", ItemSchema: "workflow_assignee_resolver"},
 			}, Requires: []string{"workflow.assignee_resolver", "workflow.graph_v2"}, ValidationEndpoint: "POST /metadata/definitions/workflow/{workflowKey}/validate",
-			FrontendSupportKey: "workflow.approval-node.editor.v1", Sources: []capabilitycontract.CapabilityAuthoringSource{workflowSource},
+			Sources: []capabilitycontract.CapabilityAuthoringSource{workflowSource},
 		},
 		{
 			Key: "workflow.node.action", Status: "supported", Lifecycle: "workflow_node",
@@ -84,13 +82,13 @@ func workflowAuthoringComponentCapabilities() []capabilitycontract.CapabilityAut
 				{Key: "retry", Type: "workflow_retry_policy"},
 				{Key: "on_error", Type: "string", Default: "fail", Enum: []string{"continue", "error_branch", "fail"}},
 			}, Requires: []string{"action.definition", "workflow.graph_v2"}, Permissions: []string{"workflow.definition.read", "workflow.advanced.configure"}, ValidationEndpoint: "POST /metadata/definitions/workflow/{workflowKey}/validate",
-			FrontendSupportKey: "workflow.action-node.editor.v1", Sources: []capabilitycontract.CapabilityAuthoringSource{workflowSource},
+			Sources: []capabilitycontract.CapabilityAuthoringSource{workflowSource},
 		},
 		{
 			Key: "workflow.node.cc", Status: "supported", Lifecycle: "workflow_node",
 			Parameters: []capabilitycontract.CapabilityAuthoringParameter{{Key: "notification_action_key", Type: "action_key", Required: true}, {Key: "resolvers", Type: "array", Required: true, ItemSchema: "workflow_assignee_resolver"}, {Key: "input", Type: "object"}},
 			Requires:   []string{"workflow.assignee_resolver", "workflow.graph_v2"}, ValidationEndpoint: "POST /metadata/definitions/workflow/{workflowKey}/validate",
-			FrontendSupportKey: "workflow.cc-node.editor.v1", Sources: []capabilitycontract.CapabilityAuthoringSource{workflowSource},
+			Sources: []capabilitycontract.CapabilityAuthoringSource{workflowSource},
 		},
 		{
 			Key: "workflow.node.timer", Status: "supported", Lifecycle: "workflow_node",
@@ -100,13 +98,12 @@ func workflowAuthoringComponentCapabilities() []capabilitycontract.CapabilityAut
 				{Key: "duration_seconds", Type: "integer", Minimum: workflowAuthoringFloatPointer(1)}, {Key: "source_field", Type: "field_key"},
 				{Key: "offset_seconds", Type: "integer"}, {Key: "timezone", Type: "string", Default: "UTC"}, {Key: "business_calendar_key", Type: "string"},
 			}, Requires: []string{"workflow.graph_v2"}, ValidationEndpoint: "POST /metadata/definitions/workflow/{workflowKey}/validate",
-			FrontendSupportKey: "workflow.timer-node.editor.v1", Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "validation", Path: "runtime/domain/workflow/policy/workflow_graph_policy.go", Symbol: "WorkflowTimerNodeContract"}},
+			Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "validation", Path: "runtime/domain/workflow/policy/workflow_graph_policy.go", Symbol: "WorkflowTimerNodeContract"}},
 		},
 		{
 			Key: "workflow.graph_edge", Status: "supported", Lifecycle: "workflow_graph",
 			Parameters: []capabilitycontract.CapabilityAuthoringParameter{{Key: "id", Type: "string", Required: true}, {Key: "source", Type: "node_id", Required: true}, {Key: "target", Type: "node_id", Required: true}, {Key: "branch", Type: "string"}, {Key: "label", Type: "string"}},
-			Requires:   []string{"workflow.graph_v2"}, ValidationEndpoint: "POST /metadata/definitions/workflow/{workflowKey}/validate", FrontendSupportKey: "workflow.edge.editor.v1",
-			Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "validation", Path: "runtime/domain/workflow/policy/workflow_graph_policy.go", Symbol: "WorkflowValidateGraph"}},
+			Requires:   []string{"workflow.graph_v2"}, ValidationEndpoint: "POST /metadata/definitions/workflow/{workflowKey}/validate", Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "validation", Path: "runtime/domain/workflow/policy/workflow_graph_policy.go", Symbol: "WorkflowValidateGraph"}},
 		},
 	}
 	for index := range capabilities {

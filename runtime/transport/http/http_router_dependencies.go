@@ -23,7 +23,6 @@ import (
 	businesssystemhttp "github.com/domainry/domainry-runtime/runtime/transport/http/businesssystem"
 	capabilityhttp "github.com/domainry/domainry-runtime/runtime/transport/http/capabilities"
 	discoveryhttp "github.com/domainry/domainry-runtime/runtime/transport/http/discovery"
-	frontendcapabilityhttp "github.com/domainry/domainry-runtime/runtime/transport/http/frontendcapability"
 	integrationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/integrations"
 	lifecyclehttp "github.com/domainry/domainry-runtime/runtime/transport/http/lifecycle"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
@@ -150,27 +149,26 @@ type HTTPRouterDependencies struct {
 }
 
 type HTTPRouterHandlers struct {
-	Records              *recordhttp.RecordsHandler
-	SurfaceContext       *surfacecontexthttp.SurfaceContextHandler
-	Uploads              *uploadhttp.UploadsHandler
-	Discovery            *discoveryhttp.DiscoveryHandler
-	OpenAPI              *openapihttp.OpenAPIHandler
-	Workflows            *workflowhttp.WorkflowsHandler
-	Automation           *automationhttp.AutomationHandler
-	Scheduler            *schedulerhttp.SchedulerHandler
-	Reports              *reporthttp.ReportsHandler
-	FrontendCapabilities *frontendcapabilityhttp.FrontendCapabilityHandler
-	BusinessReferences   *businessreferencehttp.BusinessReferencesHandler
-	Integrations         *integrationhttp.IntegrationsHandler
-	BusinessSystem       *businesssystemhttp.BusinessSystemHandler
-	Capabilities         *capabilityhttp.CapabilitiesHandler
-	ApplicationSchema    *appschemahttp.ApplicationSchemaHandler
-	Notifications        *notificationhttp.NotificationsHandler
-	Party                *partyhttp.PartyHandler
-	AgentDialog          *agentdialoghttp.AgentDialogHandler
-	Operations           *operationshttp.OperationsHandler
-	Lifecycle            *lifecyclehttp.LifecycleHandler
-	BusinessEvents       *businesseventhttp.BusinessEventsHandler
+	Records            *recordhttp.RecordsHandler
+	SurfaceContext     *surfacecontexthttp.SurfaceContextHandler
+	Uploads            *uploadhttp.UploadsHandler
+	Discovery          *discoveryhttp.DiscoveryHandler
+	OpenAPI            *openapihttp.OpenAPIHandler
+	Workflows          *workflowhttp.WorkflowsHandler
+	Automation         *automationhttp.AutomationHandler
+	Scheduler          *schedulerhttp.SchedulerHandler
+	Reports            *reporthttp.ReportsHandler
+	BusinessReferences *businessreferencehttp.BusinessReferencesHandler
+	Integrations       *integrationhttp.IntegrationsHandler
+	BusinessSystem     *businesssystemhttp.BusinessSystemHandler
+	Capabilities       *capabilityhttp.CapabilitiesHandler
+	ApplicationSchema  *appschemahttp.ApplicationSchemaHandler
+	Notifications      *notificationhttp.NotificationsHandler
+	Party              *partyhttp.PartyHandler
+	AgentDialog        *agentdialoghttp.AgentDialogHandler
+	Operations         *operationshttp.OperationsHandler
+	Lifecycle          *lifecyclehttp.LifecycleHandler
+	BusinessEvents     *businesseventhttp.BusinessEventsHandler
 }
 
 type HandlerCallbacks struct {

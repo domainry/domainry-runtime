@@ -18,10 +18,10 @@ func TestFreshRuntimeSchemaDoesNotCreateIntegrationOwnedWebPushSubscriptions(t *
 		t.Fatal(err)
 	}
 	var count int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'web_push_subscriptions'`).Scan(&count); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_integration_web_push_subscriptions'`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 0 {
-		t.Fatal("Runtime schema still creates Integration-owned web_push_subscriptions")
+		t.Fatal("Runtime schema still creates Integration-owned _integration_web_push_subscriptions")
 	}
 }

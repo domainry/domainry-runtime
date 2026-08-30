@@ -17,7 +17,6 @@ import (
 	businesssystemhttp "github.com/domainry/domainry-runtime/runtime/transport/http/businesssystem"
 	capabilityhttp "github.com/domainry/domainry-runtime/runtime/transport/http/capabilities"
 	discoveryhttp "github.com/domainry/domainry-runtime/runtime/transport/http/discovery"
-	frontendcapabilityhttp "github.com/domainry/domainry-runtime/runtime/transport/http/frontendcapability"
 	lifecyclehttp "github.com/domainry/domainry-runtime/runtime/transport/http/lifecycle"
 	openapihttp "github.com/domainry/domainry-runtime/runtime/transport/http/openapi"
 	operationshttp "github.com/domainry/domainry-runtime/runtime/transport/http/operations"
@@ -64,12 +63,6 @@ func (a *httpServerAssembly) wireMetadataAndBusinessHandlers() {
 		Service: records.Applications().Lifecycle, Operations: operationsService,
 		Principal: a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
 		WriteServiceError: a.callbacks.WriteServiceError, DecodeJSON: a.callbacks.DecodeJSON,
-		Authenticated: a.identityHTTP.AuthenticatedFunc,
-	})
-	a.handlers.FrontendCapabilities = frontendcapabilityhttp.NewFrontendCapabilityHandler(frontendcapabilityhttp.FrontendCapabilityDependencies{
-		Service: records.Applications().FrontendCapabilities, Principal: a.callbacks.Principal,
-		WriteJSON: a.callbacks.WriteJSON, WriteError: a.callbacks.WriteError,
-		WriteServiceError: a.callbacks.WriteServiceError, DecodeJSON: a.callbacks.DecodeJSON, Admin: a.identityHTTP.PermissionFunc("workspace.admin"),
 		Authenticated: a.identityHTTP.AuthenticatedFunc,
 	})
 	a.handlers.ApplicationSchema = appschemahttp.NewApplicationSchemaHandler(appschemahttp.ApplicationSchemaDependencies{

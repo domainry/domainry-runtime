@@ -114,7 +114,7 @@ import (
 	for path, wantVersion := range map[string]string{
 		"github.com/domainry/domainry-identity-sdk":     "v0.1.0-dev9",
 		"github.com/domainry/domainry-notification-sdk": "v0.1.0-dev.5",
-		"github.com/domainry/domainry-notification":     "v0.1.0-dev.11",
+		"github.com/domainry/domainry-notification":     "v0.1.0-dev.12",
 	} {
 		if version := dependencyVersions[path]; version != wantVersion {
 			t.Fatalf("released dependency %s version=%q, want %q", path, version, wantVersion)

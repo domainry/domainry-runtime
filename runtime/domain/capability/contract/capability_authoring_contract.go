@@ -18,7 +18,7 @@ const (
 	RuntimeAuthoringContractVersion = "runtime-authoring-v1"
 	// RuntimeAuthoringContractHash identifies the published, canonical authoring catalog.
 	// The Application catalog test fails whenever catalog content changes without updating it.
-	RuntimeAuthoringContractHash = "5b213367bcb8d348f49ac5cc7dc6682ae397646e0ffb3c2f6b09406896f7b3e0"
+	RuntimeAuthoringContractHash = "1aa953b51dcd34f6ed398c7c77397cbbd9789b02147c74d81d7a15ca5043881b"
 )
 
 type CapabilityRuntimeAuthoringContract struct {
@@ -57,8 +57,6 @@ type CapabilityAuthoringDefinition struct {
 	ResourceKeyPathParameter                string                                 `json:"resource_key_path_parameter,omitempty"`
 	SystemDraftResourceType                 string                                 `json:"system_draft_resource_type,omitempty"`
 	SystemDraftResourceTypeInputJSONPointer string                                 `json:"system_draft_resource_type_input_json_pointer,omitempty"`
-	FrontendSupportKey                      string                                 `json:"frontend_support_key,omitempty"`
-	MinimumFrontendVersion                  string                                 `json:"minimum_frontend_version,omitempty"`
 	Errors                                  []CapabilityAuthoringError             `json:"errors,omitempty"`
 	Examples                                []CapabilityAuthoringExample           `json:"examples,omitempty"`
 	InputSchema                             *CapabilityAuthoringSchema             `json:"input_schema,omitempty"`

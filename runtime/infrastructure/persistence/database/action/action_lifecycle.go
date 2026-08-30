@@ -8,7 +8,7 @@ import (
 
 func LifecycleExecutor(store *database.RuntimeStore, archives lifecyclecontract.ArchiveStore) lifecyclecontract.OwnerLifecycleExecutor {
 	return lifecyclepersistence.NewRelationalOwnerExecutor(store, archives, "action", lifecyclepersistence.RelationalCleanupSpec{
-		PolicyKey: "execution.idempotency_receipt.v1", Table: "business_action_executions", IDColumn: "id",
+		PolicyKey: "execution.idempotency_receipt.v1", Table: "_action_executions", IDColumn: "id",
 		TenantColumn: "workspace_id", TimeColumn: "expires_at", StatusColumn: "status",
 		IneligibleStatuses: []string{"pending", "processing"},
 	})

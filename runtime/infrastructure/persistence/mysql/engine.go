@@ -13,7 +13,6 @@ import (
 	mysqlprojectdatabase "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/projectdatabase"
 	mysqlrecord "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/record"
 	mysqlreport "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/report"
-	mysqlrls "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/rls"
 	mysqlschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql/schema"
 )
 
@@ -23,7 +22,6 @@ type Engine struct {
 	persistencedriver.MigrationProfile
 	persistencedriver.ProjectDatabaseProfile
 	persistencedriver.SchemaProfile
-	persistencedriver.WorkspaceRLSProfile
 	evidence persistencedriver.EvidenceSchemaProfile
 	record   persistencedriver.RecordProfile
 	report   persistencedriver.ReportProfile
@@ -33,8 +31,8 @@ func NewEngine() Engine {
 	return Engine{Dialect: Dialect{},
 		Profile: ormmysql.NewProfile(), MigrationProfile: mysqlmigration.NewProfile(),
 		ProjectDatabaseProfile: mysqlprojectdatabase.NewProfile(),
-		SchemaProfile:          mysqlschema.NewProfile(), WorkspaceRLSProfile: mysqlrls.NewProfile(),
-		evidence: mysqlevidence.NewProfile(), record: mysqlrecord.NewProfile(), report: mysqlreport.NewProfile(),
+		SchemaProfile:          mysqlschema.NewProfile(),
+		evidence:               mysqlevidence.NewProfile(), record: mysqlrecord.NewProfile(), report: mysqlreport.NewProfile(),
 	}
 }
 

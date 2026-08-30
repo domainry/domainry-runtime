@@ -29,7 +29,7 @@ func TestIntegrationSecretMaterialIsEncryptedScopedAndContextAware(t *testing.T)
 		t.Fatalf("resolved=%q error=%v", resolved, err)
 	}
 	var ciphertext string
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT ciphertext FROM integration_secret_materials WHERE workspace_id = ? AND secret_key = ?", "workspace-a", "api-key").Scan(&ciphertext); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT ciphertext FROM _integration_secret_materials WHERE workspace_id = ? AND secret_key = ?", "workspace-a", "api-key").Scan(&ciphertext); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(ciphertext, "plain-secret-value") || !strings.HasPrefix(ciphertext, "v2:") {
@@ -73,7 +73,7 @@ func TestIntegrationSecretMaterialOnlineKeyRotation(t *testing.T) {
 		t.Fatal(err)
 	}
 	var ciphertext string
-	if err := second.DB().QueryRowContext(t.Context(), "SELECT ciphertext FROM integration_secret_materials WHERE workspace_id = ? AND secret_key = ?", "workspace-a", "new-credential").Scan(&ciphertext); err != nil {
+	if err := second.DB().QueryRowContext(t.Context(), "SELECT ciphertext FROM _integration_secret_materials WHERE workspace_id = ? AND secret_key = ?", "workspace-a", "new-credential").Scan(&ciphertext); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasPrefix(ciphertext, "v2:") {

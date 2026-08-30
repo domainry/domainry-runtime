@@ -45,7 +45,7 @@ disclosed.
   `backup_age`) with page size 50 and cost 300 hard limits; every section is
   redacted and links a machine-readable runbook;
 - `POST /operations/break-glass`, `GET /operations/break-glass`, and the revision-fenced disable route use
-  `runtime_break_glass_grants`; grants require two approvers distinct from the
+  `_operation_break_glass_grants`; grants require two approvers distinct from the
   actor, an incident, an alert target, durable audit, and expire within one hour;
 - the same key/fingerprint returns the original receipt with
   `Idempotency-Replayed: true`; a changed fingerprint returns conflict;
@@ -53,7 +53,7 @@ disclosed.
   transitions for process-owned executors using explicit system scope.
 
 The HTTP mutation gate reads maintenance and current-instance drain state from
-`runtime_operation_controls` on every non-exempt mutation. Reads and recovery
+`_operation_controls` on every non-exempt mutation. Reads and recovery
 under `/operations/*` remain reachable; a control-store failure rejects the
 mutation. Bootstrap owner supervisors poll the same rows, stop only the named
 owner, and reconstruct desired state after restart. Readiness consumes the same

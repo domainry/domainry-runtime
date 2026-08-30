@@ -40,7 +40,7 @@ func (s *ReportSnapshotStore) BeginReportSnapshot(ctx context.Context, request r
 			return reportSnapshotClaim(current, reportcontract.ReportSnapshotClaimRunning), nil
 		}
 		claimable := ormbuilder.Or(ormbuilder.Equal("status", "failed"), ormbuilder.And(ormbuilder.Equal("status", "refreshing"), ormbuilder.LessThanOrEqual("lease_expires_at", request.StartedAt)))
-		query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "report_snapshots", request.WorkspaceID).Set("status", "refreshing").Set("started_at", request.StartedAt).Set("error_code", "").Set("lease_owner", request.LeaseOwner).Set("lease_expires_at", request.LeaseExpiresAt).SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).Where(ormbuilder.And(ormbuilder.Equal("id", current.ID), claimable)).Build()
+		query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_report_snapshots", request.WorkspaceID).Set("status", "refreshing").Set("started_at", request.StartedAt).Set("error_code", "").Set("lease_owner", request.LeaseOwner).Set("lease_expires_at", request.LeaseExpiresAt).SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).Where(ormbuilder.And(ormbuilder.Equal("id", current.ID), claimable)).Build()
 		if buildErr != nil {
 			return reportcontract.ReportSnapshotClaim{}, buildErr
 		}
@@ -71,7 +71,7 @@ func (s *ReportSnapshotStore) BeginReportSnapshot(ctx context.Context, request r
 		return reportSnapshotInactiveClaim(claimed), nil
 	}
 	id := reportSnapshotID(request)
-	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "report_snapshots", request.WorkspaceID).Columns("id", "report_key", "access_scope_hash", "idempotency_key", "status", "summary_json", "watermark", "source_versions_json", "row_count", "source_row_count", "started_at", "refreshed_at", "error_code", "lease_owner", "lease_expires_at", "fencing_token").Values(id, request.ReportKey, request.AccessScopeHash, request.IdempotencyKey, "refreshing", "{}", "", "{}", 0, 0, request.StartedAt, "", "", request.LeaseOwner, request.LeaseExpiresAt, 1).Build()
+	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "_report_snapshots", request.WorkspaceID).Columns("id", "report_key", "access_scope_hash", "idempotency_key", "status", "summary_json", "watermark", "source_versions_json", "row_count", "source_row_count", "started_at", "refreshed_at", "error_code", "lease_owner", "lease_expires_at", "fencing_token").Values(id, request.ReportKey, request.AccessScopeHash, request.IdempotencyKey, "refreshing", "{}", "", "{}", 0, 0, request.StartedAt, "", "", request.LeaseOwner, request.LeaseExpiresAt, 1).Build()
 	if buildErr != nil {
 		return reportcontract.ReportSnapshotClaim{}, buildErr
 	}
@@ -104,7 +104,7 @@ func (s *ReportSnapshotStore) CompleteReportSnapshot(ctx context.Context, reques
 	// ReportSummary and SourceVersions contain only JSON-safe concrete fields.
 	summaryJSON, _ := json.Marshal(request.Snapshot.Summary)
 	versionsJSON, _ := json.Marshal(request.Snapshot.SourceVersions)
-	builder := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "report_snapshots", request.Snapshot.WorkspaceID)
+	builder := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_report_snapshots", request.Snapshot.WorkspaceID)
 	query, args, buildErr := builder.Set("status", "succeeded").Set("summary_json", string(summaryJSON)).Set("watermark", request.Snapshot.Watermark).Set("source_versions_json", string(versionsJSON)).Set("row_count", request.Snapshot.Summary.RowCount).Set("source_row_count", request.Snapshot.Summary.SourceRowCount).Set("refreshed_at", request.Snapshot.RefreshedAt).Set("error_code", "").Set("lease_owner", "").Set("lease_expires_at", "").Where(reportSnapshotFencePredicate(request.Snapshot.ID, request.ExpectedStatus, request.LeaseOwner, request.FencingToken)).Build()
 	if buildErr != nil {
 		return buildErr
@@ -120,7 +120,7 @@ func (s *ReportSnapshotStore) FailReportSnapshot(ctx context.Context, request re
 	if strings.TrimSpace(request.WorkspaceID) == "" {
 		return fmt.Errorf("report snapshot workspace is required")
 	}
-	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "report_snapshots", request.WorkspaceID).Set("status", "failed").Set("error_code", request.ErrorCode).Set("lease_owner", "").Set("lease_expires_at", "").Where(reportSnapshotFencePredicate(request.ID, request.ExpectedStatus, request.LeaseOwner, request.FencingToken)).Build()
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_report_snapshots", request.WorkspaceID).Set("status", "failed").Set("error_code", request.ErrorCode).Set("lease_owner", "").Set("lease_expires_at", "").Where(reportSnapshotFencePredicate(request.ID, request.ExpectedStatus, request.LeaseOwner, request.FencingToken)).Build()
 	if buildErr != nil {
 		return buildErr
 	}
@@ -143,7 +143,7 @@ func (s *ReportSnapshotStore) executor(ctx context.Context) reportSnapshotExecut
 }
 
 func (s *ReportSnapshotStore) LatestReportSnapshot(ctx context.Context, workspaceID, reportKey, scopeHash string) (reportmodel.ReportSnapshot, bool, error) {
-	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "report_snapshots", workspaceID).Columns(reportSnapshotStoreColumns()...).Where(ormbuilder.And(ormbuilder.Equal("report_key", reportKey), ormbuilder.Equal("access_scope_hash", scopeHash), ormbuilder.Equal("status", "succeeded"))).OrderBy(ormbuilder.Descending("refreshed_at"), ormbuilder.Descending("id")).Limit(1).Build()
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_report_snapshots", workspaceID).Columns(reportSnapshotStoreColumns()...).Where(ormbuilder.And(ormbuilder.Equal("report_key", reportKey), ormbuilder.Equal("access_scope_hash", scopeHash), ormbuilder.Equal("status", "succeeded"))).OrderBy(ormbuilder.Descending("refreshed_at"), ormbuilder.Descending("id")).Limit(1).Build()
 	if buildErr != nil {
 		return reportmodel.ReportSnapshot{}, false, buildErr
 	}
@@ -151,7 +151,7 @@ func (s *ReportSnapshotStore) LatestReportSnapshot(ctx context.Context, workspac
 }
 
 func (s *ReportSnapshotStore) reportSnapshotByIdempotency(ctx context.Context, request reportcontract.ReportSnapshotBeginRequest) (reportmodel.ReportSnapshot, bool, error) {
-	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "report_snapshots", request.WorkspaceID).Columns(reportSnapshotStoreColumns()...).Where(ormbuilder.And(ormbuilder.Equal("report_key", request.ReportKey), ormbuilder.Equal("access_scope_hash", request.AccessScopeHash), ormbuilder.Equal("idempotency_key", request.IdempotencyKey))).Limit(1).Build()
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_report_snapshots", request.WorkspaceID).Columns(reportSnapshotStoreColumns()...).Where(ormbuilder.And(ormbuilder.Equal("report_key", request.ReportKey), ormbuilder.Equal("access_scope_hash", request.AccessScopeHash), ormbuilder.Equal("idempotency_key", request.IdempotencyKey))).Limit(1).Build()
 	if buildErr != nil {
 		return reportmodel.ReportSnapshot{}, false, buildErr
 	}

@@ -131,7 +131,7 @@ func assertConcurrentOperationsReplayAndIsolation(t *testing.T, first, second Op
 func deleteOperationsDialectRows(t *testing.T, store *database.RuntimeStore, workspaceIDs ...string) {
 	t.Helper()
 	for _, workspaceID := range workspaceIDs {
-		if _, err := store.DB().ExecContext(t.Context(), "DELETE FROM "+store.TableIdentifier("runtime_operations")+" WHERE "+store.Identifier("workspace_id")+" = "+store.Placeholder(1), workspaceID); err != nil {
+		if _, err := store.DB().ExecContext(t.Context(), "DELETE FROM "+store.TableIdentifier("_operation_requests")+" WHERE "+store.Identifier("workspace_id")+" = "+store.Placeholder(1), workspaceID); err != nil {
 			t.Errorf("delete dialect evidence for %s: %v", workspaceID, err)
 		}
 	}

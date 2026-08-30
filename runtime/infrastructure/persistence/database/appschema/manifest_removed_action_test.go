@@ -18,7 +18,7 @@ func TestSyncManifestDeletesRemovedGeneratedActionsOnly(t *testing.T) {
 	if err := store.EnsureManifestMetadata(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.raw.DB().ExecContext(t.Context(), "INSERT INTO action_definitions (id, resource_key, object_key, name, payload_json, schema_version, schema_hash, source_kind, source_id, disabled_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)", "action:user_action", "candidate.user_action", "candidate", "User Action", `{}`, "1", "user-hash", "user", "user", "now", "now"); err != nil {
+	if _, err := store.raw.DB().ExecContext(t.Context(), "INSERT INTO _metadata_action_definitions (id, resource_key, object_key, name, payload_json, schema_version, schema_hash, source_kind, source_id, disabled_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)", "action:user_action", "candidate.user_action", "candidate", "User Action", `{}`, "1", "user-hash", "user", "user", "now", "now"); err != nil {
 		t.Fatal(err)
 	}
 	manifest.Actions = nil
@@ -27,7 +27,7 @@ func TestSyncManifestDeletesRemovedGeneratedActionsOnly(t *testing.T) {
 	}
 	for key, wantCount := range map[string]int{"candidate.fake_agent": 0, "candidate.user_action": 1} {
 		var count int
-		if err := store.raw.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM action_definitions WHERE resource_key = ?", key).Scan(&count); err != nil {
+		if err := store.raw.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM _metadata_action_definitions WHERE resource_key = ?", key).Scan(&count); err != nil {
 			t.Fatal(err)
 		}
 		if count != wantCount {
@@ -49,7 +49,7 @@ func TestSyncManifestDeletesRemovedGeneratedAutomationRules(t *testing.T) {
 	if err := store.EnsureManifestMetadata(t.Context(), manifest); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.raw.DB().ExecContext(t.Context(), "INSERT INTO automation_rule_definitions (id, resource_key, object_key, name, payload_json, schema_version, schema_hash, source_kind, source_id, disabled_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)", "automation_rule:user_rule", "candidate.user_rule", "candidate", "User Rule", `{"key":"candidate.user_rule"}`, "1", "user-hash", "user", "user", "now", "now"); err != nil {
+	if _, err := store.raw.DB().ExecContext(t.Context(), "INSERT INTO _application_schema_automation_rule_definitions (id, resource_key, object_key, name, payload_json, schema_version, schema_hash, source_kind, source_id, disabled_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)", "automation_rule:user_rule", "candidate.user_rule", "candidate", "User Rule", `{"key":"candidate.user_rule"}`, "1", "user-hash", "user", "user", "now", "now"); err != nil {
 		t.Fatal(err)
 	}
 	// Evolution removes candidate.archive from the model, then the repackaged
@@ -60,14 +60,14 @@ func TestSyncManifestDeletesRemovedGeneratedAutomationRules(t *testing.T) {
 	}
 	for key, wantCount := range map[string]int{"candidate.archive": 0, "candidate.notify": 1, "candidate.user_rule": 1} {
 		var count int
-		if err := store.raw.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM automation_rule_definitions WHERE resource_key = ?", key).Scan(&count); err != nil {
+		if err := store.raw.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM _application_schema_automation_rule_definitions WHERE resource_key = ?", key).Scan(&count); err != nil {
 			t.Fatal(err)
 		}
 		if count != wantCount {
 			t.Fatalf("automation rule %s rows=%d, want %d", key, count, wantCount)
 		}
 	}
-	loaded, err := loadMetadataSlice[automationmodel.AutomationRuleSchema](t.Context(), store.ApplicationSchemaStore, "automation_rule_definitions")
+	loaded, err := loadMetadataSlice[automationmodel.AutomationRuleSchema](t.Context(), store.ApplicationSchemaStore, "_application_schema_automation_rule_definitions")
 	if err != nil {
 		t.Fatal(err)
 	}

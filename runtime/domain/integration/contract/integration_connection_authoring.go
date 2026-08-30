@@ -49,8 +49,7 @@ func integrationConnectionMutationCapability(key, lifecycle, route, auditEvent s
 	}
 	capability := capabilitycontract.CapabilityAuthoringDefinition{
 		Key: key, Status: "supported", Lifecycle: lifecycle, Parameters: parameters, Requires: []string{"integration.connector_definition"}, Permissions: []string{"integration.connection.manage"},
-		AuditEvents: []string{auditEvent}, ValidationEndpoint: "POST /integrations/bindings/validate", ConfigurationRoutes: []string{route}, ResourceKeyPathParameter: "connectionKey", FrontendSupportKey: "integration.connection-management.v1",
-		InputSchema: integrationConnectionInputSchema(nil), OutputSchema: integrationConnectionOutputSchema(),
+		AuditEvents: []string{auditEvent}, ValidationEndpoint: "POST /integrations/bindings/validate", ConfigurationRoutes: []string{route}, ResourceKeyPathParameter: "connectionKey", InputSchema: integrationConnectionInputSchema(nil), OutputSchema: integrationConnectionOutputSchema(),
 		OutputVariables:    []capabilitycontract.CapabilityAuthoringOutput{{Name: "connection_key", JSONPointer: "/key", Type: "connection_key", VisibleTo: "subsequent_capability_calls"}},
 		ReferenceContracts: []capabilitycontract.CapabilityAuthoringReference{{Kind: "connector_key", InputJSONPointer: "/connector_key", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/connector_key"}, {Kind: "provider_key", InputJSONPointer: "/provider_key", ScopeFrom: "/connector_key", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/provider_key"}},
 		Execution:          &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"integration.connector_definition", "integration.secret"}, WriteSet: []string{"integration.connection"}, Transaction: "integration_connection_transaction", Idempotency: "connection_key", SideEffects: []string{auditEvent}, SideEffectLevel: "internal", PermissionModel: "integration.connection.manage", ChangeControl: "direct_on_configuring_runtime_change_plan_on_existing_runtime"},
@@ -68,7 +67,7 @@ func integrationConnectionCommandCapability(key, route, auditEvent, sourcePath, 
 	parameters := []capabilitycontract.CapabilityAuthoringParameter{{Key: "connection_key", Type: "connection_key", Required: true}}
 	return capabilitycontract.CapabilityAuthoringDefinition{
 		Key: key, Status: "supported", Lifecycle: "audited_connection_command", Parameters: parameters, Requires: []string{"integration.connection"}, Permissions: []string{"integration.connection.manage"}, AuditEvents: []string{auditEvent},
-		ConfigurationRoutes: []string{route}, ResourceKeyPathParameter: "connectionKey", FrontendSupportKey: "integration.connection-management.v1", InputSchema: integrationClosedObjectSchema(parameters), OutputSchema: integrationConnectionOutputSchema(),
+		ConfigurationRoutes: []string{route}, ResourceKeyPathParameter: "connectionKey", InputSchema: integrationClosedObjectSchema(parameters), OutputSchema: integrationConnectionOutputSchema(),
 		OutputVariables:    []capabilitycontract.CapabilityAuthoringOutput{{Name: "connection_key", JSONPointer: "/key", Type: "connection_key", VisibleTo: "subsequent_capability_calls"}},
 		ReferenceContracts: []capabilitycontract.CapabilityAuthoringReference{{Kind: "connection_key", InputJSONPointer: "/connection_key", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/connection_key"}},
 		Execution:          &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"integration.connection"}, WriteSet: []string{"integration.connection"}, Transaction: "integration_connection_transaction", Idempotency: "connection_state_transition", SideEffects: []string{auditEvent}, SideEffectLevel: "internal", PermissionModel: "integration.connection.manage"},

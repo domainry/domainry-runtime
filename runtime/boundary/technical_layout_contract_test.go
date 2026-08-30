@@ -44,13 +44,13 @@ var applicationTopLevelDirectories = technicalLayoutStringSet(
 
 var applicationProductionBaselines = map[string]int{
 	".": 0, "action": 43, "agent": 6, "auditbinding": 1, "automation": 8, "businesssystem": 4, "capability": 17,
-	"businessevent": 1, "changeplan": 14, "deployment": 8, "integration": 70, "lifecycle": 5, "appschema": 14, "notificationfacade": 4, "operations": 9,
+	"businessevent": 1, "changeplan": 14, "deployment": 5, "integration": 70, "lifecycle": 5, "appschema": 14, "notificationfacade": 4, "operations": 9,
 	"pipeline": 4, "record": 20, "recordmutation": 4, "recordtimer": 1, "report": 5, "scheduler": 12, "surfacecontext": 2, "workflow": 26,
 	"party": 3, "principal": 1,
 	"publicationhandoff": 1,
 	"upload":             4,
 	"seed":               0, "seed/automation": 2, "seed/business": 2,
-	"seed/deployment": 1, "seed/globalcapability": 2,
+	"seed/globalcapability": 2,
 }
 
 var bootstrapProductionFiles = technicalLayoutStringSet(
@@ -82,7 +82,7 @@ var bootstrapTransportProductionFiles = technicalLayoutStringSet(
 
 var httpOwnerDirectories = technicalLayoutStringSet(
 	"agentdialog", "automation", "businessevents", "businessreferences", "businesssystem",
-	"capabilities", "discovery", "frontendcapability", "lifecycle",
+	"capabilities", "discovery", "lifecycle",
 	"party",
 	"integrations", "appschema", "notifications", "openapi", "records", "reports",
 	"scheduler", "surfacecontext", "uploads", "workflows",
@@ -101,7 +101,6 @@ var httpOwnerExportNames = map[string]string{
 	"businesssystem":     "BusinessSystem",
 	"capabilities":       "Capabilities",
 	"discovery":          "Discovery",
-	"frontendcapability": "FrontendCapability",
 	"party":              "Party",
 	"integrations":       "Integrations",
 	"lifecycle":          "Lifecycle",

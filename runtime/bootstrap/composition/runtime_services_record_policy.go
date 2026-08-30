@@ -132,7 +132,7 @@ func initializeWorkflowAutomationAndGovernance(s *runtimeAssembly, deps RuntimeS
 		}
 	}
 	s.authoringCapabilities = newCapabilityAuthoringApplicationService(s)
-	s.businessReferences = assembleChangePlanReferenceApplication(s, businessReferenceRuntimeAdapter{records: s, workflows: s.workflowApplicationService}, s.businessEvidenceRepo, s.frontendCapabilities)
+	s.businessReferences = assembleChangePlanReferenceApplication(s, businessReferenceRuntimeAdapter{records: s, workflows: s.workflowApplicationService}, s.businessEvidenceRepo)
 	s.applicationSchemaService = assembleApplicationSchema(s)
 	s.automationApplicationService = assembleAutomationApplication(s)
 }

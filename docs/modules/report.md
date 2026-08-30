@@ -18,5 +18,5 @@ Runtime 从 Manifest 投影 Report、operation state example、sensitive-field p
 ## 已知缺口
 
 - `runtimehost.Options` 尚无 Report Factory，当前只支持固定 Module 组装。
-- Runtime 旧 `report_snapshots` store/tests 必须清退或改为通过 Report Module fixture 验证，不能要求 Runtime schema 重建 owner 表。
+- Runtime 旧 `_report_snapshots` store/tests 必须清退或改为通过 Report Module fixture 验证，不能要求 Runtime schema 重建 owner 表。
 - SaaS 化前必须定义数据读取授权、large result/artifact 交接、snapshot fencing、Notification receipt 与失败 reconciliation。

@@ -6,27 +6,27 @@ toolchain go1.26.6
 
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
-	github.com/domainry/domainry-agent v0.1.2
+	github.com/domainry/domainry-agent v0.1.3
 	github.com/domainry/domainry-agent-sdk v0.1.0
-	github.com/domainry/domainry-audit v0.1.2
+	github.com/domainry/domainry-audit v0.1.3
 	github.com/domainry/domainry-audit-sdk v0.1.0
 	github.com/domainry/domainry-connector-sdk v0.1.0-dev.12
 	github.com/domainry/domainry-data-exchange-sdk v0.3.1
 	github.com/domainry/domainry-foundation v0.1.0-dev.6
 	github.com/domainry/domainry-identity-sdk v0.1.0-dev9
-	github.com/domainry/domainry-integration v0.1.2
+	github.com/domainry/domainry-integration v0.1.3
 	github.com/domainry/domainry-integration-sdk v0.1.0
-	github.com/domainry/domainry-lifecycle v0.1.5
+	github.com/domainry/domainry-lifecycle v0.1.6
 	github.com/domainry/domainry-lifecycle-sdk v0.1.5
-	github.com/domainry/domainry-metadata v0.1.2
+	github.com/domainry/domainry-metadata v0.1.3
 	github.com/domainry/domainry-metadata-sdk v0.1.0
 	github.com/domainry/domainry-monitoring v0.1.0
 	github.com/domainry/domainry-monitoring-sdk v0.1.0
-	github.com/domainry/domainry-notification v0.1.0-dev.11
+	github.com/domainry/domainry-notification v0.1.0-dev.12
 	github.com/domainry/domainry-notification-sdk v0.1.0-dev.5
-	github.com/domainry/domainry-report v0.1.2
+	github.com/domainry/domainry-report v0.1.3
 	github.com/domainry/domainry-report-sdk v0.1.0
-	github.com/domainry/domainry-scheduler v0.1.2
+	github.com/domainry/domainry-scheduler v0.1.3
 	github.com/domainry/domainry-scheduler-sdk v0.1.0
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/jackc/pgx/v5 v5.10.0
@@ -53,7 +53,7 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/domainry/domainry-orm v0.1.29
-	github.com/domainry/domainry-party v0.1.0-dev.5
+	github.com/domainry/domainry-party v0.1.0-dev.6
 	github.com/domainry/domainry-party-sdk v0.1.0-dev.3
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
@@ -77,8 +77,8 @@ require (
 	go.opentelemetry.io/otel/metric v1.44.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.53.0 // indirect
-	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect

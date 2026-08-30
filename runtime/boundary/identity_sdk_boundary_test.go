@@ -34,7 +34,7 @@ func TestRuntimeIdentityBoundaryIsSDKOnly(t *testing.T) {
 		"type Role struct", "type DataPermission struct", "type FieldPermission struct", "type ReferencePermission struct",
 		"CommitIdentityRoleAuthorization", "SetIdentityRolePermissions",
 		"identity_role_permission_assignments", "identity_data_scope_policies", "identity_field_permissions",
-		"AuthProviderCredential", "auth_provider_credentials", "WriteSSOExternalIdentity", "backend.integration.sso",
+		"AuthProviderCredential", "_identity_auth_provider_credentials", "WriteSSOExternalIdentity", "backend.integration.sso",
 	}
 	usedSDK := false
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {

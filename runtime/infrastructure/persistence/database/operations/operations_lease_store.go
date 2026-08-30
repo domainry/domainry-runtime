@@ -20,15 +20,15 @@ type operationsLeaseSpec struct {
 }
 
 var operationsLeaseSpecs = []operationsLeaseSpec{
-	{owner: "workflow", table: "workflow_execution_receipts"},
+	{owner: "workflow", table: "_workflow_execution_receipts"},
 	{owner: "workflow_execution", table: "_workflow_executions"},
-	{owner: "workflow_deadline", table: "workflow_tasks"},
-	{owner: "business_action", table: "business_action_executions"},
-	{owner: "record_mutation", table: "record_mutation_executions"},
-	{owner: "idempotency_cleanup", table: "idempotency_cleanup_leases"},
-	{owner: "automation", table: "automation_instruction_executions"},
-	{owner: "integration_outbox", table: "runtime_publication_outbox"},
-	{owner: "transaction_boundary", table: "transaction_boundary_intents"},
+	{owner: "workflow_deadline", table: "_workflow_tasks"},
+	{owner: "business_action", table: "_action_executions"},
+	{owner: "record_mutation", table: "_record_mutation_executions"},
+	{owner: "idempotency_cleanup", table: "_idempotency_cleanup_leases"},
+	{owner: "automation", table: "_automation_instruction_executions"},
+	{owner: "integration_outbox", table: "_publication_outbox"},
+	{owner: "transaction_boundary", table: "_transaction_boundary_intents"},
 }
 
 func (s OperationsStore) OperationsLeaseSnapshot(ctx context.Context, instanceID string, now time.Time) (operationsmodel.OperationsLeaseSnapshot, error) {

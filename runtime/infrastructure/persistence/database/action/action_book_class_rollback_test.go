@@ -171,8 +171,8 @@ func testBookClassAtomicStageRollback(t *testing.T, stage string) {
 		t.Fatalf("%s booking found=%v error=%v", stage, found, err)
 	}
 	for table, ids := range map[string][]string{
-		"_audit_events":               {classAuditID, bookingAuditID, actionAuditID},
-		"runtime_publication_outbox": {outboxID},
+		"_audit_events":       {classAuditID, bookingAuditID, actionAuditID},
+		"_publication_outbox": {outboxID},
 	} {
 		for _, id := range ids {
 			var count int
@@ -212,11 +212,11 @@ func bookClassFailureTriggerSQL(stage, groupClass, classBooking, classAuditID, b
 	case "booking_audit":
 		return bookClassIDFailureTrigger("p8_fail_booking_audit", "_audit_events", bookingAuditID)
 	case "outbox":
-		return bookClassIDFailureTrigger("p8_fail_outbox", "runtime_publication_outbox", outboxID)
+		return bookClassIDFailureTrigger("p8_fail_outbox", "_publication_outbox", outboxID)
 	case "action_audit":
 		return bookClassIDFailureTrigger("p8_fail_action_audit", "_audit_events", actionAuditID)
 	case "receipt":
-		return `CREATE TRIGGER p8_fail_receipt BEFORE UPDATE OF status ON business_action_executions
+		return `CREATE TRIGGER p8_fail_receipt BEFORE UPDATE OF status ON _action_executions
 			WHEN NEW.status = 'succeeded'
 			BEGIN SELECT RAISE(ABORT, 'injected receipt failure'); END`
 	default:

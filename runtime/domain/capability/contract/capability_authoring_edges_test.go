@@ -22,7 +22,6 @@ func TestRuntimeAuthoringErrorContractMappings(t *testing.T) {
 		"backend.workflow.invalid":                                  "workflow.graph_v2",
 		"backend.scheduler.invalid":                                 "scheduler.business_job",
 		"backend.report.invalid":                                    "report.definition",
-		"backend.frontend.invalid":                                  "maintenance.frontend_support_observation",
 		"backend.change_plan.invalid":                               "",
 		"backend.integration.binding.invalid":                       "integration.binding_validation",
 		"backend.integration.connector.operation_invalid":           "integration.connector_operation",

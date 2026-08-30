@@ -34,7 +34,7 @@ func TestDataExchangeEngineeringOwnershipDoesNotLeakBackIntoRuntime(t *testing.T
 		if strings.Contains(text, "github.com/domainry/domainry-data-exchange/") {
 			t.Errorf("Runtime production code imports Data Exchange implementation: %s", path)
 		}
-		for _, table := range []string{"data_exchange_jobs", "data_exchange_chunks", "data_exchange_artifacts", "data_exchange_queue_scopes"} {
+		for _, table := range []string{"_data_exchange_jobs", "_data_exchange_job_chunks", "_data_exchange_artifacts", "_data_exchange_queue_scopes"} {
 			if strings.Contains(text, table) {
 				t.Errorf("Runtime production code contains Data Exchange-owned table %q: %s", table, path)
 			}

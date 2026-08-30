@@ -119,13 +119,13 @@ func TestUpsertConnectionReusesActionExecutionTransaction(t *testing.T) {
 func TestEnsureEvidenceSchemaDoesNotMutateIntegrationOwnedConnectionTable(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	_, err := store.DB().Exec(`CREATE TABLE integration_connections (
+	_, err := store.DB().Exec(`CREATE TABLE _integration_connections (
         id TEXT PRIMARY KEY, connection_key TEXT NOT NULL, workspace_id TEXT NOT NULL,
         connector_key TEXT NOT NULL, name TEXT, status TEXT NOT NULL, config_json TEXT NOT NULL,
         secret_refs_json TEXT NOT NULL, created_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     )`)
 	if err != nil {
-		t.Fatalf("create legacy integration_connections: %v", err)
+		t.Fatalf("create legacy _integration_connections: %v", err)
 	}
 	if err := store.EnsureEvidenceSchema(t.Context()); err != nil {
 		t.Fatalf("migrate evidence schema: %v", err)
@@ -140,7 +140,7 @@ func TestEnsureEvidenceSchemaDoesNotMutateIntegrationOwnedConnectionTable(t *tes
 func TestEnsureEvidenceSchemaDoesNotMutateIntegrationOwnedCredentialTable(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	_, err := store.DB().Exec(`CREATE TABLE integration_secrets (
+	_, err := store.DB().Exec(`CREATE TABLE _integration_secrets (
         id TEXT PRIMARY KEY, secret_key TEXT NOT NULL, workspace_id TEXT NOT NULL,
         kind TEXT NOT NULL, status TEXT NOT NULL, description TEXT, value_ref TEXT,
         fingerprint TEXT, created_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,

@@ -2,8 +2,6 @@ package contract
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -24,29 +22,6 @@ func TestRuntimeAPIContractIdentityIsStable(t *testing.T) {
 	}
 	if document.ContractHash != RuntimeAPIContractHash() {
 		t.Fatalf("published Runtime API hash=%q, generated identity=%q", document.ContractHash, RuntimeAPIContractHash())
-	}
-}
-
-func TestRuntimeAPIContractMatchesPublishedFrontendContract(t *testing.T) {
-	frontendPath := filepath.Join(
-		"..", "..", "..", "..", "..",
-		"domainry-plane",
-		"frontend", "packages", "runtime-client", "runtime-domain-api-v1.json",
-	)
-	frontend, err := os.ReadFile(frontendPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var runtimeDocument, frontendDocument map[string]any
-	if err := json.Unmarshal(RuntimeAPIContractDocument(), &runtimeDocument); err != nil {
-		t.Fatal(err)
-	}
-	projectedFrontend, _ := projectRuntimeAPIContract(frontend)
-	if err := json.Unmarshal(projectedFrontend, &frontendDocument); err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(runtimeDocument, frontendDocument) {
-		t.Fatal("Runtime and frontend API contract documents differ")
 	}
 }
 

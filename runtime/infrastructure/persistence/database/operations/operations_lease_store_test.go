@@ -20,7 +20,7 @@ func TestOperationsLeaseSnapshotReportsOnlyTargetInstance(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
-	insert := store.InsertStatement("idempotency_cleanup_leases", []string{"id", "lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "last_deleted", "last_error", "updated_at"})
+	insert := store.InsertStatement("_idempotency_cleanup_leases", []string{"id", "lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "last_deleted", "last_error", "updated_at"})
 	for _, row := range [][]any{
 		{"live", "instance-a", now.Add(time.Minute).Format(time.RFC3339Nano), 1, "", "", 0, "", now.Format(time.RFC3339Nano)},
 		{"expired", "instance-a:cleanup", now.Add(-time.Minute).Format(time.RFC3339Nano), 2, "", "", 0, "", now.Format(time.RFC3339Nano)},
@@ -49,7 +49,7 @@ func TestOperationsLeaseSnapshotReportsOnlyTargetInstance(t *testing.T) {
 	if err != nil || !changed || released.Eligibility != "verified_stuck" || released.NextFencingToken != 2 {
 		t.Fatalf("stuck release=%#v changed=%v err=%v", released, changed, err)
 	}
-	result, err := store.DB().ExecContext(t.Context(), "UPDATE idempotency_cleanup_leases SET last_error = 'stale' WHERE id = ? AND lease_owner = ? AND fencing_token = ?", "live", "instance-a", 1)
+	result, err := store.DB().ExecContext(t.Context(), "UPDATE _idempotency_cleanup_leases SET last_error = 'stale' WHERE id = ? AND lease_owner = ? AND fencing_token = ?", "live", "instance-a", 1)
 	if err != nil {
 		t.Fatal(err)
 	}

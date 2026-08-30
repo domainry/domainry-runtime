@@ -63,7 +63,7 @@ func TestLifecycleGovernanceHandlersExecuteThroughHTTP(t *testing.T) {
 	if metrics["purged_total"].(float64) != 0 {
 		t.Fatalf("metrics=%#v", metrics)
 	}
-	archiveRequest := httptest.NewRequest(http.MethodGet, "/operations/lifecycle/archive?source_table=runtime_publication_outbox&limit=5", nil)
+	archiveRequest := httptest.NewRequest(http.MethodGet, "/operations/lifecycle/archive?source_table=_publication_outbox&limit=5", nil)
 	archiveResponse := httptest.NewRecorder()
 	mux.ServeHTTP(archiveResponse, archiveRequest)
 	var archive []lifecyclemodel.ArchiveEntry
@@ -72,7 +72,7 @@ func TestLifecycleGovernanceHandlersExecuteThroughHTTP(t *testing.T) {
 	}
 
 	hold := lifecyclemodel.LegalHold{
-		Owner: "runtime_handoff", ResourceType: "runtime_publication_outbox", ResourceID: "nonce-1",
+		Owner: "runtime_handoff", ResourceType: "_publication_outbox", ResourceID: "nonce-1",
 		Reason: "legal case", Authority: "legal", StartsAt: now.Add(-time.Hour), ReviewAt: now.Add(time.Hour), AuditEvidence: "case-1",
 	}
 	createdHold := operationsRequest(t, mux, http.MethodPost, "/operations/lifecycle/legal-holds", "", hold, http.StatusCreated)
@@ -122,7 +122,7 @@ func TestLifecycleGovernanceHandlersRejectMalformedJSON(t *testing.T) {
 		"/operations/lifecycle/policies",
 		"/operations/lifecycle/cleanup/preview?policy_key=runtime.publication_handoff.v1",
 		"/operations/lifecycle/metrics",
-		"/operations/lifecycle/archive?source_table=runtime_publication_outbox",
+		"/operations/lifecycle/archive?source_table=_publication_outbox",
 		"/operations/lifecycle/external-erasures",
 	} {
 		request := httptest.NewRequest(http.MethodGet, path, nil)

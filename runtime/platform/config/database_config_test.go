@@ -22,7 +22,6 @@ func TestFromEnvLoadsTypedDatabaseConnectionConfig(t *testing.T) {
 	t.Setenv("DATABASE_STATEMENT_TIMEOUT", "23s")
 	t.Setenv("DATABASE_LOCK_TIMEOUT", "4s")
 	t.Setenv("DATABASE_SSL_ROOT_CERT", "/run/secrets/postgres-ca.pem")
-	t.Setenv("DATABASE_RLS_ENABLED", "true")
 	t.Setenv("MIGRATION_BACKUP_EVIDENCE_PATH", "/run/evidence/postgres-backup.json")
 
 	cfg := FromEnv()
@@ -43,9 +42,6 @@ func TestFromEnvLoadsTypedDatabaseConnectionConfig(t *testing.T) {
 	}
 	if cfg.DatabaseSSLRootCert != "/run/secrets/postgres-ca.pem" || cfg.DatabaseMigrationDSN == "" || cfg.DatabaseMigrationMode != "apply" {
 		t.Fatalf("TLS or migration connection config not loaded")
-	}
-	if !cfg.DatabaseRLSEnabled {
-		t.Fatal("DATABASE_RLS_ENABLED was not loaded")
 	}
 	if cfg.MigrationBackupEvidencePath != "/run/evidence/postgres-backup.json" {
 		t.Fatal("MIGRATION_BACKUP_EVIDENCE_PATH was not loaded")

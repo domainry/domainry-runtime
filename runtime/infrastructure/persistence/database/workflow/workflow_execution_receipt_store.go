@@ -51,7 +51,7 @@ func (r WorkflowWorkerStore) tryBeginExecutionOnce(ctx context.Context, request 
 	receipt.LeaseExpiresAt = now.Add(request.LeaseTTL).Format(time.RFC3339Nano)
 	receipt.CreatedAt, receipt.UpdatedAt = now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)
 	columns, values := workflowReceiptColumns(), workflowReceiptValues(receipt)
-	statement, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "workflow_execution_receipts", workspaceID).
+	statement, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_execution_receipts", workspaceID).
 		Columns(append(columns[:1], columns[2:]...)...).Values(append(values[:1], values[2:]...)...).Build()
 	if buildErr != nil {
 		return workflowmodel.WorkflowExecutionClaimResult{}, fmt.Errorf("build workflow execution receipt insert: %w", buildErr)
@@ -73,7 +73,7 @@ func (r WorkflowWorkerStore) tryBeginExecutionOnce(ctx context.Context, request 
 		r.store.ObserveIdempotency(ctx, receipt.WorkspaceID, "workflow.execute", idempotency.OutcomeForDecision(decision, false))
 		return workflowmodel.WorkflowExecutionClaimResult{Decision: decision, Receipt: current}, nil
 	}
-	statement, args, buildErr = ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "workflow_execution_receipts", receipt.WorkspaceID).
+	statement, args, buildErr = ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_execution_receipts", receipt.WorkspaceID).
 		Set("status", string(idempotency.StatusProcessing)).
 		Set("lease_owner", receipt.LeaseOwner).
 		Set("lease_expires_at", receipt.LeaseExpiresAt).
@@ -117,7 +117,7 @@ func (r WorkflowWorkerStore) CompleteExecutionReceipt(ctx context.Context, compl
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	statement, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "workflow_execution_receipts", workspaceID).
+	statement, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_execution_receipts", workspaceID).
 		Set("status", string(idempotency.StatusSucceeded)).
 		Set("execution_id", strings.TrimSpace(completion.ExecutionID)).
 		Set("expires_at", completion.ExpiresAt.UTC().Format(time.RFC3339Nano)).
@@ -151,7 +151,7 @@ func (r WorkflowWorkerStore) findExecutionReceipt(ctx context.Context, workspace
 	if err != nil {
 		return workflowmodel.WorkflowExecutionReceipt{}, false, err
 	}
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "workflow_execution_receipts", workspaceID).
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_execution_receipts", workspaceID).
 		Columns(workflowReceiptColumns()...).Where(ormbuilder.And(ormbuilder.Equal("workflow_key", strings.TrimSpace(workflowKey)), ormbuilder.Equal("idempotency_key", strings.TrimSpace(key)))).Limit(1).Build()
 	if err != nil {
 		return workflowmodel.WorkflowExecutionReceipt{}, false, fmt.Errorf("build workflow execution receipt lookup: %w", err)

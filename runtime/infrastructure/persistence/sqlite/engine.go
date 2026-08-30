@@ -13,7 +13,6 @@ import (
 	sqliteprojectdatabase "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite/projectdatabase"
 	sqliterecord "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite/record"
 	sqlitereport "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite/report"
-	sqliterls "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite/rls"
 	sqliteschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite/schema"
 )
 
@@ -23,7 +22,6 @@ type Engine struct {
 	persistencedriver.MigrationProfile
 	persistencedriver.ProjectDatabaseProfile
 	persistencedriver.SchemaProfile
-	persistencedriver.WorkspaceRLSProfile
 	evidence persistencedriver.EvidenceSchemaProfile
 	record   persistencedriver.RecordProfile
 	report   persistencedriver.ReportProfile
@@ -33,8 +31,8 @@ func NewEngine() Engine {
 	return Engine{Dialect: Dialect{},
 		Profile: ormsqlite.NewProfile(), MigrationProfile: sqlitemigration.NewProfile(),
 		ProjectDatabaseProfile: sqliteprojectdatabase.NewProfile(),
-		SchemaProfile:          sqliteschema.NewProfile(), WorkspaceRLSProfile: sqliterls.NewProfile(),
-		evidence: sqliteevidence.NewProfile(), record: sqliterecord.NewProfile(), report: sqlitereport.NewProfile(),
+		SchemaProfile:          sqliteschema.NewProfile(),
+		evidence:               sqliteevidence.NewProfile(), record: sqliterecord.NewProfile(), report: sqlitereport.NewProfile(),
 	}
 }
 

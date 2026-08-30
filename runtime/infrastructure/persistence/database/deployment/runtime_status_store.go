@@ -112,7 +112,7 @@ func (r RuntimeStatusStore) idempotencyOperationalStatus(ctx context.Context, wo
 	status.LeaseLost = metricTotal(idempotency.OutcomeLeaseLost)
 	status.DuplicateSideEffects = metricTotal(idempotency.OutcomeDuplicateSideEffect)
 
-	cleanupQuery, cleanupArgs, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "idempotency_cleanup_leases").Columns("lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "last_deleted", "last_error").Where(ormbuilder.Equal("id", idempotencyCleanupLeaseID)).Build()
+	cleanupQuery, cleanupArgs, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "_idempotency_cleanup_leases").Columns("lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "last_deleted", "last_error").Where(ormbuilder.Equal("id", idempotencyCleanupLeaseID)).Build()
 	if buildErr != nil {
 		return status, fmt.Errorf("build idempotency cleanup status: %w", buildErr)
 	}
@@ -143,9 +143,9 @@ type idempotencyReceiptTable struct {
 }
 
 var idempotencyReceiptTables = []idempotencyReceiptTable{
-	{owner: "record", table: "record_mutation_executions", scopeColumn: "operation"},
-	{owner: "action", table: "business_action_executions", targetColumn: "record_id"},
-	{owner: "workflow", table: "workflow_execution_receipts"},
+	{owner: "record", table: "_record_mutation_executions", scopeColumn: "operation"},
+	{owner: "action", table: "_action_executions", targetColumn: "record_id"},
+	{owner: "workflow", table: "_workflow_execution_receipts"},
 }
 
 func (r RuntimeStatusStore) ListIdempotencyReceipts(ctx context.Context, workspaceID, status string, limit int) ([]idempotency.ReceiptSummary, error) {

@@ -280,7 +280,7 @@ func TestBuilderV1ProvisionReviewApplyRollbackReturnsReceiptIdentities(t *testin
 	if applied.Status != "applied" || activations != 1 {
 		t.Fatalf("unexpected v1 apply: %#v activations=%d", applied, activations)
 	}
-	for _, key := range []string{"request_hash", "foundation_hash", "blueprint_hash", "runtime_manifest_hash", "authoring_contract_hash", "target_api_contract_hash", "application_lock_hash", "release_manifest_hash", "runtime_package_hash", "runtime_instance_config_hash", "frontend_evidence_hash", "frontend_capability_manifest_hash", "frontend_design_contract_hash", "frontend_route_registry_hash", "frontend_source_hash"} {
+	for _, key := range []string{"request_hash", "foundation_hash", "blueprint_hash", "runtime_manifest_hash", "authoring_contract_hash", "target_api_contract_hash", "application_lock_hash", "release_manifest_hash", "runtime_package_hash", "runtime_instance_config_hash"} {
 		if applied.Receipt[key] != request[key] {
 			t.Fatalf("receipt %s=%#v, want request value %#v", key, applied.Receipt[key], request[key])
 		}
@@ -362,24 +362,19 @@ func provisionTestManifest(t *testing.T) manifestmodel.ManifestSchema {
 func builderV1ProvisionRequest(t *testing.T, manifest manifestmodel.ManifestSchema, runtimeVersion string) map[string]any {
 	t.Helper()
 	request := map[string]any{
-		"foundation_hash":                   "foundation",
-		"blueprint_hash":                    "blueprint",
-		"blueprint_review_hash":             "review",
-		"runtime_manifest_hash":             manifest.ManifestHash,
-		"authoring_contract_hash":           manifest.AuthoringContractHash,
-		"target_api_contract_hash":          manifest.TargetAPIContractHash,
-		"application_lock_hash":             "application-lock",
-		"release_manifest_hash":             "release",
-		"runtime_version":                   runtimeVersion,
-		"runtime_package_hash":              "runtime-package",
-		"runtime_instance_config_hash":      "runtime-instance",
-		"frontend_evidence_hash":            "frontend-evidence",
-		"frontend_capability_manifest_hash": "frontend-capabilities",
-		"frontend_design_contract_hash":     "frontend-design",
-		"frontend_route_registry_hash":      "frontend-routes",
-		"frontend_source_hash":              "frontend-source",
-		"route_registry":                    map[string]any{"routes": []any{}},
-		"manifest":                          manifest,
+		"foundation_hash":              "foundation",
+		"blueprint_hash":               "blueprint",
+		"blueprint_review_hash":        "review",
+		"runtime_manifest_hash":        manifest.ManifestHash,
+		"authoring_contract_hash":      manifest.AuthoringContractHash,
+		"target_api_contract_hash":     manifest.TargetAPIContractHash,
+		"application_lock_hash":        "application-lock",
+		"release_manifest_hash":        "release",
+		"runtime_version":              runtimeVersion,
+		"runtime_package_hash":         "runtime-package",
+		"runtime_instance_config_hash": "runtime-instance",
+		"route_registry":               map[string]any{"routes": []any{}},
+		"manifest":                     manifest,
 	}
 	request["request_hash"] = hashProvisionTestValue(t, request)
 	return request

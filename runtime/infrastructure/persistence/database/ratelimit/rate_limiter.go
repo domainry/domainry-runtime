@@ -29,7 +29,7 @@ func NewRateLimiter(store *database.RuntimeStore) *RateLimiter {
 }
 
 func (l *RateLimiter) EnsureSchema(ctx context.Context) error {
-	exists, err := l.store.RuntimeTableExists(ctx, "runtime_rate_limit_bucket")
+	exists, err := l.store.RuntimeTableExists(ctx, "_rate_limit_buckets")
 	if err != nil {
 		return fmt.Errorf("inspect runtime rate-limit schema: %w", err)
 	}
@@ -83,7 +83,7 @@ func (l *RateLimiter) allowOnce(ctx context.Context, key string, limit int, wind
 		return ratelimit.Decision{}, l.retryable(err), err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	selectBuilder := ormbuilder.NewSelectBuilder(l.store.SQLRenderer, "runtime_rate_limit_bucket").
+	selectBuilder := ormbuilder.NewSelectBuilder(l.store.SQLRenderer, "_rate_limit_buckets").
 		Columns("window_start_ns", "request_count").Where(ormbuilder.Equal("bucket_key", key))
 	selectBuilder, err = l.store.Engine.ApplyClaimLock(selectBuilder, false)
 	if err != nil {
@@ -110,7 +110,7 @@ func (l *RateLimiter) allowOnce(ctx context.Context, key string, limit int, wind
 	}
 	count++
 	if err == sql.ErrNoRows {
-		insert, insertArgs, buildErr := ormbuilder.NewInsertBuilder(l.store.SQLRenderer, "runtime_rate_limit_bucket").
+		insert, insertArgs, buildErr := ormbuilder.NewInsertBuilder(l.store.SQLRenderer, "_rate_limit_buckets").
 			Columns("bucket_key", "window_start_ns", "request_count", "updated_at_ns").
 			Values(key, windowStart.UnixNano(), count, now.UnixNano()).Build()
 		if buildErr != nil {
@@ -120,7 +120,7 @@ func (l *RateLimiter) allowOnce(ctx context.Context, key string, limit int, wind
 			return ratelimit.Decision{}, l.retryable(insertErr), insertErr
 		}
 	} else {
-		update, updateArgs, buildErr := ormbuilder.NewUpdateBuilder(l.store.SQLRenderer, "runtime_rate_limit_bucket").
+		update, updateArgs, buildErr := ormbuilder.NewUpdateBuilder(l.store.SQLRenderer, "_rate_limit_buckets").
 			Set("window_start_ns", windowStart.UnixNano()).Set("request_count", count).Set("updated_at_ns", now.UnixNano()).
 			Where(ormbuilder.And(
 				ormbuilder.Equal("bucket_key", key),

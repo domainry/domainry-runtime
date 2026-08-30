@@ -3,7 +3,6 @@ package capability
 import (
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	changeplancontract "github.com/domainry/domainry-runtime/runtime/domain/changeplan/contract"
-	deploymentcontract "github.com/domainry/domainry-runtime/runtime/domain/deployment/contract"
 )
 
 // authoringMaintenanceDomain is an aggregation boundary only. Each capability
@@ -12,6 +11,5 @@ func authoringMaintenanceDomain() capabilitycontract.CapabilityAuthoringDomain {
 	return capabilitycontract.CapabilityAuthoringDomain{Key: "maintenance", Capabilities: []capabilitycontract.CapabilityAuthoringDefinition{
 		changeplancontract.ChangePlanCurrentStateSnapshotAuthoringCapability(),
 		changeplancontract.ChangePlanReferenceImpactAuthoringCapability(),
-		deploymentcontract.DeploymentFrontendSupportObservationAuthoringCapability(),
 	}}
 }

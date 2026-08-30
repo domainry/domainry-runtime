@@ -17,7 +17,7 @@ type metadataSQLDialect interface {
 }
 
 func (s ApplicationSchemaStore) manifestMetadataSeeded(ctx context.Context) (bool, error) {
-	query, args, err := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_runtime_metadata_projection").
+	query, args, err := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_application_schema_projection").
 		Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(ormbuilder.Equal("id", "current")).Build()
 	if err != nil {
 		return false, fmt.Errorf("build metadata projection seed query: %w", err)
@@ -30,7 +30,7 @@ func (s ApplicationSchemaStore) manifestMetadataSeeded(ctx context.Context) (boo
 }
 
 func (s ApplicationSchemaStore) ManifestIdentitySeedSyncedVersion(ctx context.Context) (string, error) {
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_runtime_seed_checkpoints").
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_application_schema_seed_checkpoints").
 		Columns("value").Where(ormbuilder.Equal("key", "identity_seed_synced_version")).Build()
 	if buildErr != nil {
 		return "", fmt.Errorf("build identity seed version query: %w", buildErr)
@@ -58,7 +58,7 @@ func (s ApplicationSchemaStore) SetManifestIdentitySeedSyncedVersion(ctx context
 }
 
 func (s ApplicationSchemaStore) ManifestOrganizationScopeSeedState(ctx context.Context) (string, error) {
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_runtime_seed_checkpoints").
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_application_schema_seed_checkpoints").
 		Columns("value").Where(ormbuilder.Equal("key", "organization_scope_seed_state")).Build()
 	if buildErr != nil {
 		return "", fmt.Errorf("build organization scope seed query: %w", buildErr)
@@ -86,7 +86,7 @@ func (s ApplicationSchemaStore) SetManifestOrganizationScopeSeedState(ctx contex
 }
 
 func buildSeedCheckpointUpsert(store ApplicationSchemaStore, key, value, now string) (string, []any, error) {
-	insert := ormbuilder.NewInsertBuilder(store.store.SQLRenderer, "_runtime_seed_checkpoints").
+	insert := ormbuilder.NewInsertBuilder(store.store.SQLRenderer, "_application_schema_seed_checkpoints").
 		Columns("key", "value", "updated_at").Values(key, value, now)
 	insert, err := store.store.Engine.ApplyUpsert(insert, []string{"key"},
 		ormbuilder.AssignExpression("value", ormbuilder.InsertedValue("value")),

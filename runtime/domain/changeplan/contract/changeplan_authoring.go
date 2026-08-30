@@ -19,7 +19,6 @@ func ChangePlanReferenceImpactAuthoringCapability() capabilitycontract.Capabilit
 		Key: "maintenance.reference_impact", Status: "supported", Lifecycle: "read_only_impact_analysis",
 		Parameters:  []capabilitycontract.CapabilityAuthoringParameter{{Key: "resource_type", Type: "string", Required: true}, {Key: "resource_key", Type: "string", Required: true}},
 		Permissions: []string{"platform_admin.domain_impact.read"}, ConfigurationRoutes: []string{"GET /domain-reference-graph", "GET /domain-references/{resourceType}/{resourceKey}"},
-		FrontendSupportKey: "maintenance.reference-impact.v1", MinimumFrontendVersion: "domainry-admin-0.1.0",
 		InputSchema:  changePlanReferenceImpactInputSchema(),
 		OutputSchema: changePlanReferenceImpactOutputSchema(), OutputVariables: []capabilitycontract.CapabilityAuthoringOutput{{Name: "reference_graph_hash", JSONPointer: "/graph_hash", Type: "reference_graph_hash", VisibleTo: "subsequent_capability_calls"}},
 		Execution: &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"changeplan.reference_graph"}, Transaction: "read_only_graph_projection", Idempotency: "naturally_idempotent_at_graph_hash", SideEffectLevel: "none", PermissionModel: "platform_admin.domain_impact.read"},
@@ -41,7 +40,7 @@ func changePlanReferenceImpactInputSchema() *capabilitycontract.CapabilityAuthor
 func changePlanSnapshotOutputSchema() *capabilitycontract.CapabilityAuthoringSchema {
 	closed, open := false, true
 	properties := map[string]capabilitycontract.CapabilityAuthoringSchema{}
-	for _, key := range []string{"runtime_metadata", "schema", "effective_permissions", "runtime_state", "identity_governance", "frontend_capabilities", "object_record_counts", "resource_visibility"} {
+	for _, key := range []string{"runtime_metadata", "schema", "effective_permissions", "runtime_state", "identity_governance", "object_record_counts", "resource_visibility"} {
 		properties[key] = capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: &open}
 	}
 	objectItem := capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: &open}

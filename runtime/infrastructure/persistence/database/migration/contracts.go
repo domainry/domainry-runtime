@@ -228,12 +228,12 @@ type ReconciliationAction struct {
 
 func RestoreReconciliationPlan() []ReconciliationAction {
 	return []ReconciliationAction{
-		{Table: "automation_instruction_executions", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
-		{Table: "workflow_execution_receipts", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
-		{Table: "business_action_executions", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
-		{Table: "record_mutation_executions", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
-		{Table: "runtime_publication_outbox", Action: "requeue_expired_delivery", Guard: "lease_expires_at <= restored_at AND terminal_at IS NULL"},
-		{Table: "transaction_boundary_intents", Action: "requeue_expired_intent", Guard: "lease_expires_at <= restored_at"},
+		{Table: "_automation_instruction_executions", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
+		{Table: "_workflow_execution_receipts", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
+		{Table: "_action_executions", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
+		{Table: "_record_mutation_executions", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
+		{Table: "_publication_outbox", Action: "requeue_expired_delivery", Guard: "lease_expires_at <= restored_at AND terminal_at IS NULL"},
+		{Table: "_transaction_boundary_intents", Action: "requeue_expired_intent", Guard: "lease_expires_at <= restored_at"},
 	}
 }
 

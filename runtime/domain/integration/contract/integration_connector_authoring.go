@@ -27,9 +27,8 @@ func IntegrationConnectorDefinitionAuthoringCapability() capabilitycontract.Capa
 			{Key: "required", Type: "boolean"}, {Key: "config_fields", Type: "array", ItemSchema: "field_key"}, {Key: "secret_refs", Type: "array", ItemSchema: "secret_ref_name"}, {Key: "expected_schema_hash", Type: "schema_hash", Required: true},
 		},
 		Permissions: []string{"workspace.admin"}, AuditEvents: []string{"metadata_definition_upserted"}, ValidationEndpoint: "POST /metadata/definitions/connector/{resourceKey}/validate",
-		ConfigurationRoutes: integrationConnectorConfigurationRoutes(), ResourceKeyPathParameter: "resourceKey", FrontendSupportKey: "integration.connector-definition.v1",
-		ResourceOperations: integrationConnectorResourceOperations(),
-		InputSchema:        integrationMetadataRequestSchema(payload), OutputSchema: integrationMetadataOutputSchema(payload),
+		ConfigurationRoutes: integrationConnectorConfigurationRoutes(), ResourceKeyPathParameter: "resourceKey", ResourceOperations: integrationConnectorResourceOperations(),
+		InputSchema: integrationMetadataRequestSchema(payload), OutputSchema: integrationMetadataOutputSchema(payload),
 		OutputVariables: []capabilitycontract.CapabilityAuthoringOutput{{Name: "connector_key", JSONPointer: "/definition/resource_key", Type: "connector_key", VisibleTo: "subsequent_capability_calls"}, {Name: "schema_hash", JSONPointer: "/definition/schema_hash", Type: "schema_hash", VisibleTo: "subsequent_capability_calls"}},
 		Execution:       appschemacontract.VersionedApplicationDefinitionExecution("integration.connector_definition"),
 		Errors:          integrationConnectorAuthoringErrors(), Examples: integrationConnectorDefinitionExamples(),
@@ -50,8 +49,7 @@ func IntegrationConnectorOperationAuthoringCapability() capabilitycontract.Capab
 	}
 	return capabilitycontract.CapabilityAuthoringDefinition{
 		Key: "integration.connector_operation", Status: "supported", Lifecycle: "definition_fragment", Requires: []string{"integration.connector_definition"}, Permissions: []string{"workspace.admin"},
-		Parameters: parameters, ValidationEndpoint: "POST /metadata/definitions/connector/{resourceKey}/validate", FrontendSupportKey: "integration.connector-operation.v1",
-		InputSchema: integrationConnectorOperationSchema(), OutputSchema: integrationValidationOutputSchema(),
+		Parameters: parameters, ValidationEndpoint: "POST /metadata/definitions/connector/{resourceKey}/validate", InputSchema: integrationConnectorOperationSchema(), OutputSchema: integrationValidationOutputSchema(),
 		OutputVariables:    []capabilitycontract.CapabilityAuthoringOutput{{Name: "valid", JSONPointer: "/valid", Type: "boolean", VisibleTo: "subsequent_capability_calls"}},
 		ReferenceContracts: []capabilitycontract.CapabilityAuthoringReference{{Kind: "operation_key", InputJSONPointer: "/compensation_operation", ScopeFrom: "/connector_key", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/operation_key"}},
 		Execution:          &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"integration.connector_definition"}, Transaction: "read_only_validation", Idempotency: "naturally_idempotent", SideEffectLevel: "none", PermissionModel: "workspace.admin"},

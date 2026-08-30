@@ -13,14 +13,14 @@ func TestIdempotencyReceiptMigrationBackfillsBeforeCreatingUniqueIndex(t *testin
 	store := openIdempotencyMigrationStore(t, "backfill.db")
 	defer store.Close()
 	createLegacyActionExecutionTable(t, store)
-	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO business_action_executions (id, workspace_id, object_key, record_id, action_key, idempotency_key, status, result_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, "legacy-one", "", "", "", "", "", "", `{}`, "2026-07-19T00:00:00Z", "2026-07-19T00:00:00Z"); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _action_executions (id, workspace_id, object_key, record_id, action_key, idempotency_key, status, result_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, "legacy-one", "", "", "", "", "", "", `{}`, "2026-07-19T00:00:00Z", "2026-07-19T00:00:00Z"); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.EnsureEvidenceSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	var workspaceID, objectKey, recordID, actionKey, idempotencyKey, fingerprint, status string
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT workspace_id, object_key, record_id, action_key, idempotency_key, request_fingerprint, status FROM business_action_executions WHERE id = ?`, "legacy-one").Scan(&workspaceID, &objectKey, &recordID, &actionKey, &idempotencyKey, &fingerprint, &status); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT workspace_id, object_key, record_id, action_key, idempotency_key, request_fingerprint, status FROM _action_executions WHERE id = ?`, "legacy-one").Scan(&workspaceID, &objectKey, &recordID, &actionKey, &idempotencyKey, &fingerprint, &status); err != nil {
 		t.Fatal(err)
 	}
 	if workspaceID != "default" || !strings.HasPrefix(objectKey, "legacy:object_key:") || !strings.HasPrefix(actionKey, "legacy:action_key:") || !strings.HasPrefix(idempotencyKey, "legacy:idempotency_key:") || !strings.HasPrefix(fingerprint, "legacy:request_fingerprint:") || status != "succeeded" {
@@ -43,7 +43,7 @@ func TestIdempotencyReceiptMigrationReportsDuplicatesAndNeverDeletesRows(t *test
 	store := openIdempotencyMigrationStore(t, "duplicates.db")
 	defer store.Close()
 	createLegacyActionExecutionTable(t, store)
-	insert := `INSERT INTO business_action_executions (id, workspace_id, object_key, record_id, action_key, idempotency_key, status, result_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	insert := `INSERT INTO _action_executions (id, workspace_id, object_key, record_id, action_key, idempotency_key, status, result_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	for _, id := range []string{"duplicate-a", "duplicate-b"} {
 		if _, err := store.DB().ExecContext(t.Context(), insert, id, "workspace-a", "customer", "", "customer.notify", "same-key", "", `{}`, "2026-07-19T00:00:00Z", "2026-07-19T00:00:00Z"); err != nil {
 			t.Fatal(err)
@@ -56,7 +56,7 @@ func TestIdempotencyReceiptMigrationReportsDuplicatesAndNeverDeletesRows(t *test
 		}
 	}
 	var receiptCount, reportTableCount, indexCount int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM business_action_executions`).Scan(&receiptCount); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _action_executions`).Scan(&receiptCount); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_idempotency_migration_reports'`).Scan(&reportTableCount); err != nil {
@@ -81,7 +81,7 @@ func openIdempotencyMigrationStore(t *testing.T, name string) *database.RuntimeS
 
 func createLegacyActionExecutionTable(t *testing.T, store *database.RuntimeStore) {
 	t.Helper()
-	query := `CREATE TABLE business_action_executions (
+	query := `CREATE TABLE _action_executions (
 id TEXT PRIMARY KEY,
 workspace_id TEXT NOT NULL DEFAULT '',
 object_key TEXT NOT NULL DEFAULT '',

@@ -24,7 +24,6 @@ var reviewedWorkspaceFallbackBaseline = map[string]int{
 	"runtime/application/integration/integration_application_failure_alerts.go":              3,
 	"runtime/application/integration/integration_application_inbound_webhooks.go":            2,
 	"runtime/application/appschema/appschema_localized_text_coverage_application_service.go": 1,
-	"runtime/application/seed/deployment/frontend_capability.go":                             1,
 	"runtime/application/workflow/workflow_execution_idempotency_application_service.go":     1,
 	"runtime/infrastructure/persistence/database/action/action_business_execution_store.go":  1,
 	"runtime/infrastructure/persistence/database/automation/sql_values.go":                   1,

@@ -136,7 +136,7 @@ func TestLifecycleSubjectExportHTTPFlowEnforcesWorkspaceExpiryAndAudit(t *testin
 		t.Fatal("expired download succeeded")
 	}
 	var audits int
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM lifecycle_audit_evidence WHERE workspace_id = ? AND event = ?", "workspace-a", "lifecycle.subject.export_downloaded").Scan(&audits); err != nil || audits != 1 {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM _lifecycle_audit_evidence WHERE workspace_id = ? AND event = ?", "workspace-a", "lifecycle.subject.export_downloaded").Scan(&audits); err != nil || audits != 1 {
 		t.Fatalf("audits=%d err=%v", audits, err)
 	}
 	eraseCreated := call(http.MethodPost, "/operations/lifecycle/subjects", "erase-requester", "workspace-a", lifecyclemodel.SubjectRequest{Kind: lifecyclemodel.SubjectRequestErase, SubjectType: "user", SubjectID: "user-1", Reason: "erase request"})

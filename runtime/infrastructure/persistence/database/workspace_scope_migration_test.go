@@ -20,7 +20,7 @@ func TestFreshRuntimeDoesNotInitializeHistoricalMigrationReportTables(t *testing
 			t.Fatal(err)
 		}
 	}
-	for _, table := range []string{"_workspace_scope_migration_reports", "_idempotency_migration_reports", "view_definitions", "surface_definitions", "component_definitions", "entrypoint_definitions"} {
+	for _, table := range []string{"_workspace_scope_migration_reports", "_idempotency_migration_reports"} {
 		var count int
 		if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&count); err != nil {
 			t.Fatal(err)
@@ -30,29 +30,6 @@ func TestFreshRuntimeDoesNotInitializeHistoricalMigrationReportTables(t *testing
 		}
 	}
 }
-
-func TestRuntimeSchemaUpgradeDropsRetiredGeneratedViewDefinitionTables(t *testing.T) {
-	store, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "retired-generated-views.db"), IntegrationSecretKey: "retired-generated-views-key"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer store.Close()
-	for _, table := range []string{"view_definitions", "surface_definitions", "component_definitions", "entrypoint_definitions"} {
-		if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE `+table+` (id TEXT PRIMARY KEY)`); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	for _, table := range []string{"view_definitions", "surface_definitions", "component_definitions", "entrypoint_definitions"} {
-		var count int
-		if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&count); err != nil || count != 0 {
-			t.Fatalf("retired generated-view table %s remains: count=%d err=%v", table, count, err)
-		}
-	}
-}
-
 func TestWorkspaceScopeMigrationReportsLegacyRowsWithoutBackfill(t *testing.T) {
 	store, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "workspace-migration.db"), IntegrationSecretKey: "workspace-migration-key"})
 	if err != nil {

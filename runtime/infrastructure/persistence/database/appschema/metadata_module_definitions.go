@@ -82,7 +82,7 @@ func (s ApplicationSchemaStore) syncMetadataModuleDefinitions(ctx context.Contex
 }
 
 func (s ApplicationSchemaStore) purgeRetiredMetadataProjectionRows(ctx context.Context, sourceKind, sourceID string) error {
-	for _, table := range []string{"object_definitions", "field_definitions", "validation_definitions", "action_definitions", "dictionary_definitions"} {
+	for _, table := range []string{"_metadata_object_definitions", "_metadata_field_definitions", "_metadata_validation_definitions", "_metadata_action_definitions", "_metadata_dictionary_definitions"} {
 		statement, args, err := ormbuilder.NewDeleteBuilder(s.store.SQLRenderer, table).Where(ormbuilder.And(
 			ormbuilder.Equal("source_kind", sourceKind), ormbuilder.Equal("source_id", sourceID), ormbuilder.IsNotNull("disabled_at"),
 		)).Build()

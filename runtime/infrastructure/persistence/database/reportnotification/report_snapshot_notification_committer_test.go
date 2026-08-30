@@ -130,7 +130,7 @@ func reportNotificationEvent(id, sourceID string) notificationmodel.Notification
 func assertReportSnapshotStatus(t *testing.T, store *database.RuntimeStore, id, want string) {
 	t.Helper()
 	var status string
-	query := "SELECT status FROM " + store.TableIdentifier("report_snapshots") + " WHERE id = " + store.Placeholder(1)
+	query := "SELECT status FROM " + store.TableIdentifier("_report_snapshots") + " WHERE id = " + store.Placeholder(1)
 	if err := store.DB().QueryRowContext(t.Context(), query, id).Scan(&status); err != nil || status != want {
 		t.Fatalf("snapshot=%s status=%s want=%s err=%v", id, status, want, err)
 	}

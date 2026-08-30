@@ -28,7 +28,7 @@ func TestDeploymentStoreWorkspaceIsolationContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 7, 19, 18, 0, 0, 0, time.UTC)
-	insert := `INSERT INTO record_mutation_executions (id, workspace_id, operation, object_key, target_id, idempotency_key, request_fingerprint, status, result_json, lease_owner, lease_expires_at, fencing_token, response_status, error_code, expires_at, actor_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	insert := `INSERT INTO _record_mutation_executions (id, workspace_id, operation, object_key, target_id, idempotency_key, request_fingerprint, status, result_json, lease_owner, lease_expires_at, fencing_token, response_status, error_code, expires_at, actor_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	insertReceipt := func(id, workspaceID string) {
 		t.Helper()
 		if _, err := store.DB().ExecContext(t.Context(), insert, id, workspaceID, "create", "customer", "", "key-"+id, "fingerprint-"+id, string(idempotency.StatusFailedTerminal), "{}", "", "", 1, 409, "failed", now.Add(time.Hour).Format(time.RFC3339Nano), "admin", now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)); err != nil {
@@ -82,7 +82,7 @@ func TestIdempotencyOperationalStatusAggregatesWorkspaceBacklogConflictsAndClean
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 7, 19, 16, 0, 0, 0, time.UTC)
-	insert := `INSERT INTO record_mutation_executions (id, workspace_id, operation, object_key, target_id, idempotency_key, request_fingerprint, status, result_json, lease_owner, lease_expires_at, fencing_token, response_status, error_code, expires_at, actor_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	insert := `INSERT INTO _record_mutation_executions (id, workspace_id, operation, object_key, target_id, idempotency_key, request_fingerprint, status, result_json, lease_owner, lease_expires_at, fencing_token, response_status, error_code, expires_at, actor_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	insertReceipt := func(id, workspace, receiptStatus, leaseExpiresAt string) {
 		t.Helper()
 		if _, err := store.DB().ExecContext(t.Context(), insert, id, workspace, "create", "customer", "", "key-"+id, "fingerprint-"+id, receiptStatus, "{}", "worker", leaseExpiresAt, 1, 0, "", now.Add(time.Hour).Format(time.RFC3339Nano), "admin", now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)); err != nil {
@@ -104,7 +104,7 @@ func TestIdempotencyOperationalStatusAggregatesWorkspaceBacklogConflictsAndClean
 	for index := 0; index < 100; index++ {
 		store.ObserveIdempotency(t.Context(), "workspace-a", "record.create", idempotency.OutcomeReplayed)
 	}
-	leaseInsert := store.InsertStatement("idempotency_cleanup_leases", []string{"id", "lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "last_deleted", "last_error", "updated_at"})
+	leaseInsert := store.InsertStatement("_idempotency_cleanup_leases", []string{"id", "lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "last_deleted", "last_error", "updated_at"})
 	if _, err := store.DB().ExecContext(t.Context(), leaseInsert, idempotencyCleanupLeaseID, "runtime-a", now.Add(time.Minute).Format(time.RFC3339Nano), 9, now.Format(time.RFC3339Nano), "", 3, "", now.Format(time.RFC3339Nano)); err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestIdempotencyCleanupLeasePreventsConcurrentDeletionAndFencesReclaim(t *te
 	now := time.Date(2026, 7, 19, 14, 0, 0, 0, time.UTC)
 	insertReceipt := func(id, status string, expiresAt time.Time) {
 		t.Helper()
-		query := `INSERT INTO record_mutation_executions (id, workspace_id, operation, object_key, target_id, idempotency_key, request_fingerprint, status, result_json, lease_owner, lease_expires_at, fencing_token, response_status, error_code, expires_at, actor_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		query := `INSERT INTO _record_mutation_executions (id, workspace_id, operation, object_key, target_id, idempotency_key, request_fingerprint, status, result_json, lease_owner, lease_expires_at, fencing_token, response_status, error_code, expires_at, actor_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		if _, err := store.DB().ExecContext(t.Context(), query, id, "workspace-a", "create", "customer", "", "key-"+id, "fingerprint-"+id, status, "{}", "", "", 1, 200, "", expiresAt.Format(time.RFC3339Nano), "admin", now.Add(-time.Hour).Format(time.RFC3339Nano), now.Add(-time.Hour).Format(time.RFC3339Nano)); err != nil {
 			t.Fatal(err)
 		}
@@ -150,7 +150,7 @@ func TestIdempotencyCleanupLeasePreventsConcurrentDeletionAndFencesReclaim(t *te
 	insertReceipt("expired-success", "succeeded", now.Add(-time.Minute))
 	insertReceipt("expired-processing", "processing", now.Add(-time.Minute))
 	insertReceipt("future-success", "succeeded", now.Add(time.Hour))
-	leaseInsert := store.InsertStatement("idempotency_cleanup_leases", []string{"id", "lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "last_deleted", "last_error", "updated_at"})
+	leaseInsert := store.InsertStatement("_idempotency_cleanup_leases", []string{"id", "lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "last_deleted", "last_error", "updated_at"})
 	if _, err := store.DB().ExecContext(t.Context(), leaseInsert, idempotencyCleanupLeaseID, "runtime-a", now.Add(time.Minute).Format(time.RFC3339Nano), 7, now.Format(time.RFC3339Nano), "", 0, "", now.Format(time.RFC3339Nano)); err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestIdempotencyCleanupLeasePreventsConcurrentDeletionAndFencesReclaim(t *te
 	if err != nil || blocked.Acquired || blocked.Deleted != 0 {
 		t.Fatalf("live lease cleanup=%#v err=%v", blocked, err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `UPDATE idempotency_cleanup_leases SET lease_expires_at = ? WHERE id = ?`, now.Add(-time.Second).Format(time.RFC3339Nano), idempotencyCleanupLeaseID); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `UPDATE _idempotency_cleanup_leases SET lease_expires_at = ? WHERE id = ?`, now.Add(-time.Second).Format(time.RFC3339Nano), idempotencyCleanupLeaseID); err != nil {
 		t.Fatal(err)
 	}
 	cleaned, err := repository.RunIdempotencyCleanup(t.Context(), deploymentmodel.IdempotencyCleanupRequest{LeaseOwner: "runtime-b", LeaseTTL: time.Minute, BatchSize: 10, Now: now})
@@ -167,7 +167,7 @@ func TestIdempotencyCleanupLeasePreventsConcurrentDeletionAndFencesReclaim(t *te
 		t.Fatalf("reclaimed cleanup=%#v err=%v", cleaned, err)
 	}
 	var remaining int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM record_mutation_executions`).Scan(&remaining); err != nil || remaining != 2 {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _record_mutation_executions`).Scan(&remaining); err != nil || remaining != 2 {
 		t.Fatalf("remaining=%d err=%v", remaining, err)
 	}
 }
@@ -179,7 +179,7 @@ func TestRuntimeStatusStoreListsSanitizedReceiptsAndGuardsTransitions(t *testing
 		t.Fatal(err)
 	}
 	now := "2026-07-19T12:00:00Z"
-	insert := `INSERT INTO record_mutation_executions (id, workspace_id, operation, object_key, target_id, idempotency_key, request_fingerprint, status, result_json, lease_owner, lease_expires_at, fencing_token, response_status, error_code, expires_at, actor_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	insert := `INSERT INTO _record_mutation_executions (id, workspace_id, operation, object_key, target_id, idempotency_key, request_fingerprint, status, result_json, lease_owner, lease_expires_at, fencing_token, response_status, error_code, expires_at, actor_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	if _, err := store.DB().ExecContext(t.Context(), insert, "receipt-1", "workspace-a", "create", "customer", "", "raw-private-key", "raw-fingerprint", "failed_terminal", "{}", "owner-a", now, 4, 409, "failed", now, "admin", now, now); err != nil {
 		t.Fatal(err)
 	}

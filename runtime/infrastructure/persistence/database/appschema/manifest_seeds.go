@@ -48,22 +48,22 @@ func manifestMetadataSeeds(seed manifestmodel.ManifestSchema) ([]metadataResourc
 		return nil
 	}
 	for _, workflow := range seed.Workflows {
-		if err := appendSeed("workflow", "workflow_definitions", workflow.Key, metadataMapString(workflow.Trigger, "object_key", "object"), workflow.Name, workflow); err != nil {
+		if err := appendSeed("workflow", "_application_schema_workflow_definitions", workflow.Key, metadataMapString(workflow.Trigger, "object_key", "object"), workflow.Name, workflow); err != nil {
 			return nil, err
 		}
 	}
 	for _, rule := range seed.AutomationRules {
-		if err := appendSeed("automation_rule", "automation_rule_definitions", rule.Key, rule.ObjectKey, rule.Name, rule); err != nil {
+		if err := appendSeed("automation_rule", "_application_schema_automation_rule_definitions", rule.Key, rule.ObjectKey, rule.Name, rule); err != nil {
 			return nil, err
 		}
 	}
 	for _, connector := range seed.Integrations.Connectors {
-		if err := appendSeed("connector", "application_connector_requirements", connector.Key, "", connector.Name, connector); err != nil {
+		if err := appendSeed("connector", "_application_schema_connector_requirements", connector.Key, "", connector.Name, connector); err != nil {
 			return nil, err
 		}
 	}
 	for _, mapping := range seed.Integrations.EventMappings {
-		if err := appendSeed("integration_event_mapping", "application_integration_event_mapping_requirements", mapping.Key, "", mapping.Provider, mapping); err != nil {
+		if err := appendSeed("integration_event_mapping", "_application_schema_integration_event_mapping_requirements", mapping.Key, "", mapping.Provider, mapping); err != nil {
 			return nil, err
 		}
 	}

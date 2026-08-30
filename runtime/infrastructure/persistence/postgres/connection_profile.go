@@ -1,17 +1,14 @@
 package postgres
 
 import (
-	"context"
 	"crypto/x509"
 	"database/sql"
-	"database/sql/driver"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/domainry/domainry-foundation/requestcontext"
 	"github.com/domainry/domainry-foundation/telemetry"
 	ormdialect "github.com/domainry/domainry-orm/dialect"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -48,7 +45,6 @@ type ConnectionProfile struct {
 	PreparedStatements  bool
 	MigrationConfigured bool
 	MigrationMode       string
-	RLSEnabled          bool
 
 	connConfig      *pgx.ConnConfig
 	migrationConfig *pgx.ConnConfig
@@ -160,7 +156,6 @@ func NewConnectionProfile(cfg config.Config) (ConnectionProfile, error) {
 		PreparedStatements:  preparedStatements,
 		MigrationConfigured: migrationConfig != nil,
 		MigrationMode:       migrationMode,
-		RLSEnabled:          cfg.DatabaseRLSEnabled,
 		connConfig:          connConfig,
 		migrationConfig:     migrationConfig,
 	}, nil
@@ -176,31 +171,12 @@ func (p ConnectionProfile) Open(metrics ...*telemetry.SQLMetrics) (*sql.DB, erro
 	if len(metrics) > 0 {
 		observer = metrics[0]
 	}
-	var initializer telemetry.TransactionInitializer
-	if p.RLSEnabled {
-		initializer = postgresWorkspaceTransactionInitializer
-	}
-	db := sql.OpenDB(telemetry.WrapSQLConnector(stdlib.GetConnector(*p.connConfig.Copy()), "runtime", observer, initializer))
+	db := sql.OpenDB(telemetry.WrapSQLConnector(stdlib.GetConnector(*p.connConfig.Copy()), "runtime", observer, nil))
 	db.SetMaxOpenConns(p.MaxOpenConns)
 	db.SetMaxIdleConns(p.MaxIdleConns)
 	db.SetConnMaxLifetime(p.ConnMaxLifetime)
 	db.SetConnMaxIdleTime(p.ConnMaxIdleTime)
 	return db, nil
-}
-
-func postgresWorkspaceTransactionInitializer(ctx context.Context, execer driver.ExecerContext) error {
-	workspaceID := requestcontext.WorkspaceID(ctx)
-	if len(workspaceID) == 0 {
-		return nil
-	}
-	_, err := execer.ExecContext(ctx, `SELECT set_config('domainry.workspace_id', $1, true), set_config('domainry.actor_id', $2, true)`, []driver.NamedValue{
-		{Ordinal: 1, Value: workspaceID},
-		{Ordinal: 2, Value: requestcontext.ActorID(ctx)},
-	})
-	if err != nil {
-		return fmt.Errorf("set transaction-local workspace RLS context: %w", err)
-	}
-	return nil
 }
 
 // OpenMigration returns the separately authenticated management connection.

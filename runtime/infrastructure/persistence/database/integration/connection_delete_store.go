@@ -22,8 +22,8 @@ func (r IntegrationConfigStore) DeleteConnection(ctx context.Context, workspaceI
 		return false, fmt.Errorf("begin integration connection delete: %w", err)
 	}
 	defer tx.Rollback()
-	references := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_webhook_subscriptions", workspaceID).Columns("id").Where(ormbuilder.Equal("connection_key", connectionKey))
-	query, args, err := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, "integration_connections", workspaceID).Where(ormbuilder.And(ormbuilder.Equal("connection_key", connectionKey), ormbuilder.NotExistsSubquery(references))).Build()
+	references := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_webhook_subscriptions", workspaceID).Columns("id").Where(ormbuilder.Equal("connection_key", connectionKey))
+	query, args, err := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, "_integration_connections", workspaceID).Where(ormbuilder.And(ormbuilder.Equal("connection_key", connectionKey), ormbuilder.NotExistsSubquery(references))).Build()
 	if err != nil {
 		return false, fmt.Errorf("build integration connection delete: %w", err)
 	}
@@ -38,7 +38,7 @@ func (r IntegrationConfigStore) DeleteConnection(ctx context.Context, workspaceI
 	if count != 1 {
 		return false, nil
 	}
-	stateDelete, stateArgs, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, "connector_provider_states", workspaceID).Where(ormbuilder.Equal("connection_key", connectionKey)).Build()
+	stateDelete, stateArgs, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, "_integration_connector_provider_states", workspaceID).Where(ormbuilder.Equal("connection_key", connectionKey)).Build()
 	if buildErr != nil {
 		return false, fmt.Errorf("build connector provider state delete: %w", buildErr)
 	}

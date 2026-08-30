@@ -58,9 +58,6 @@ func BuildWithProductBrand(snapshot appschemamodel.ApplicationSchemaSnapshot, pr
 	paths["/operations/catalog"] = map[string]any{
 		"get": openAPIOperation("listRuntimeOperationDefinitions", "Operations", "List registered operation permission, scope, precondition, idempotency, audit, and receipt contracts", openAPIAdminSecurity(), openAPIJSONResponse("Operation definitions", openAPIObject(nil))),
 	}
-	paths["/operations/capability-status"] = map[string]any{
-		"get": openAPIOperation("getRuntimeCapabilityStatus", "Operations", "Get the backend-authoritative Runtime and frontend capability compatibility snapshot", openAPIAdminSecurity(), openAPIJSONResponse("Capability compatibility snapshot", openAPIObject(nil))),
-	}
 	paths["/operations/controls"] = map[string]any{
 		"get": openAPIOperation("listRuntimeOperationControls", "Operations", "List durable maintenance, owner-pause, and instance-drain desired state", openAPIAdminSecurity(), openAPIJSONResponse("Operation controls", openAPIObject(nil))),
 	}

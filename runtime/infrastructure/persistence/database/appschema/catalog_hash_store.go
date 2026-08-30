@@ -77,7 +77,7 @@ func (r ApplicationSchemaStore) refreshCatalogHashWithExecutorAt(
 		rows.Close()
 	}
 	value := hex.EncodeToString(hash.Sum(nil))
-	insert := ormbuilder.NewInsertBuilder(r.store.SQLRenderer, "_runtime_metadata_projection").
+	insert := ormbuilder.NewInsertBuilder(r.store.SQLRenderer, "_application_schema_projection").
 		Columns("id", "schema_hash", "materialized_at").Values("current", value, now)
 	insert, err = r.store.Engine.ApplyUpsert(insert, []string{"id"},
 		ormbuilder.AssignExpression("schema_hash", ormbuilder.InsertedValue("schema_hash")),
@@ -99,5 +99,5 @@ func (r ApplicationSchemaStore) refreshCatalogHash(ctx context.Context) error {
 }
 
 func metadataCatalogDefinitionTables() []string {
-	return []string{"workflow_definitions", "automation_rule_definitions", "application_connector_requirements", "application_integration_event_mapping_requirements"}
+	return []string{"_application_schema_workflow_definitions", "_application_schema_automation_rule_definitions", "_application_schema_connector_requirements", "_application_schema_integration_event_mapping_requirements"}
 }

@@ -38,7 +38,7 @@ func TestRateLimiterConcurrentContractAcrossRealDialects(t *testing.T) {
 			}
 			key := fmt.Sprintf("rate-limit-real-%s-%d", test.name, time.Now().UTC().UnixNano())
 			defer func() {
-				_, _ = store.DB().ExecContext(t.Context(), "DELETE FROM "+store.TableIdentifier("runtime_rate_limit_bucket")+" WHERE "+store.Identifier("bucket_key")+" = "+store.Placeholder(1), key)
+				_, _ = store.DB().ExecContext(t.Context(), "DELETE FROM "+store.TableIdentifier("_rate_limit_buckets")+" WHERE "+store.Identifier("bucket_key")+" = "+store.Placeholder(1), key)
 			}()
 			assertConcurrentRateLimitCounts(t, store, key)
 		})

@@ -32,13 +32,13 @@ type metadataDefinitionPayloadShape struct {
 func metadataDefinitionTable(resourceType string) (string, error) {
 	switch strings.TrimSpace(resourceType) {
 	case "workflow":
-		return "workflow_definitions", nil
+		return "_application_schema_workflow_definitions", nil
 	case "automation_rule":
-		return "automation_rule_definitions", nil
+		return "_application_schema_automation_rule_definitions", nil
 	case "connector":
-		return "application_connector_requirements", nil
+		return "_application_schema_connector_requirements", nil
 	case "integration_event_mapping":
-		return "application_integration_event_mapping_requirements", nil
+		return "_application_schema_integration_event_mapping_requirements", nil
 	default:
 		return "", fmt.Errorf("unsupported metadata resource type %q", resourceType)
 	}

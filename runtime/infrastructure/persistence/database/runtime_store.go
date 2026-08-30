@@ -45,7 +45,6 @@ type RuntimeStore struct {
 	idempotencyMetrics   *idempotency.MemoryMetricsCollector
 	sqlMetrics           *telemetry.SQLMetrics
 	operationalMetrics   *RuntimeOperationalMetrics
-	workspaceRLS         WorkspaceRLSStatus
 	workerScopeCursor    *runtimeWorkerScopeCursor
 	workerWakeupsMu      sync.Mutex
 	workerWakeups        *workerplatform.WakeupBroker
@@ -169,7 +168,7 @@ func (s *RuntimeStore) RegisterWorkerQueueScope(ctx context.Context, executor Wo
 	}
 	digest := sha256.Sum256([]byte(queueKind + "\x00" + workspaceID))
 	id := "worker_scope:" + hex.EncodeToString(digest[:12])
-	insert := ormbuilder.NewInsertBuilder(s.SQLRenderer, "runtime_worker_queue_scopes").
+	insert := ormbuilder.NewInsertBuilder(s.SQLRenderer, "_worker_queue_scopes").
 		Columns("id", "queue_kind", "scope_key", "updated_at").Values(id, queueKind, workspaceID, updatedAt)
 	insert, err := s.Engine.ApplyUpsert(insert, []string{"id"},
 		ormbuilder.AssignExpression("updated_at", ormbuilder.InsertedValue("updated_at")),
@@ -220,7 +219,7 @@ func (s *RuntimeStore) WorkerQueueScopePage(ctx context.Context, queryer WorkerS
 	cursor.mu.Lock()
 	defer cursor.mu.Unlock()
 	after := cursor.after
-	selectBuilder := ormbuilder.NewSelectBuilder(s.SQLRenderer, "runtime_worker_queue_scopes").
+	selectBuilder := ormbuilder.NewSelectBuilder(s.SQLRenderer, "_worker_queue_scopes").
 		Columns("scope_key").
 		Where(ormbuilder.And(ormbuilder.Equal("queue_kind", queueKind), ormbuilder.GreaterThan("scope_key", after))).
 		OrderBy(ormbuilder.Ascending("scope_key")).Limit(limit + 1)
@@ -422,10 +421,6 @@ type DatabaseReadiness struct {
 	ReadOnly                 bool   `json:"read_only"`
 	TLSVerified              bool   `json:"tls_verified"`
 	MigrationConnectionReady bool   `json:"migration_connection_ready"`
-	RLSEnabled               bool   `json:"rls_enabled"`
-	RLSPolicyVersion         string `json:"rls_policy_version,omitempty"`
-	RLSCoveredTables         int    `json:"rls_covered_tables"`
-	RLSMissingTables         int    `json:"rls_missing_tables"`
 }
 
 func (s *RuntimeStore) DatabaseReadiness() DatabaseReadiness {
@@ -441,10 +436,6 @@ func (s *RuntimeStore) DatabaseReadiness() DatabaseReadiness {
 		ReadOnly:                 capability.ReadOnly || capability.InRecovery,
 		TLSVerified:              capability.TLS == s.postgresProfile.TLS,
 		MigrationConnectionReady: !s.postgresProfile.MigrationConfigured || s.migratorCapabilities.Database != "",
-		RLSEnabled:               s.workspaceRLS.Enabled,
-		RLSPolicyVersion:         s.workspaceRLS.PolicyVersion,
-		RLSCoveredTables:         len(s.workspaceRLS.CoveredTables),
-		RLSMissingTables:         len(s.workspaceRLS.MissingTables),
 		ReadReady:                capability.SchemaExists && capability.SchemaUsage,
 		WriteReady:               capability.SchemaExists && capability.SchemaUsage && !capability.ReadOnly && !capability.InRecovery,
 		MigrationCompatible:      s.migrationCompatible,
@@ -463,8 +454,6 @@ func (s *RuntimeStore) DatabaseReadiness() DatabaseReadiness {
 		result.Failure = "migration_incompatible"
 	case result.PoolDegraded:
 		result.Failure = "pool_degraded"
-	case s.postgresProfile.RLSEnabled && (!result.RLSEnabled || result.RLSMissingTables > 0):
-		result.Failure = "rls_incompatible"
 	default:
 		result.Ready = true
 	}

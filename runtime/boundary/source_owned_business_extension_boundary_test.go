@@ -299,7 +299,7 @@ func TestActionMutationAuditDurableIntentAndReceiptShareOneTransaction(t *testin
 			"AuditEvents []auditmodel.AuditEvent",
 		},
 		"runtime/infrastructure/persistence/database/action/action_business_execution_store.go": {
-			"ApplyRecordMutationTx", "for _, evidence := range completion.AuditEvents", "ApplyAuditTx", "business_action_executions", "commitSQL(ctx)",
+			"ApplyRecordMutationTx", "for _, evidence := range completion.AuditEvents", "ApplyAuditTx", "_action_executions", "commitSQL(ctx)",
 		},
 	}
 	for relative, required := range requiredByFile {
@@ -349,7 +349,7 @@ func TestBookClassAtomicFailureProofCoversEveryCommittedFactStage(t *testing.T) 
 		`storedClass.Data["remaining_capacity"] != int64(1)`,
 		`records.GetRecord(t.Context(), "workspace-a", classBooking, "booking-1")`,
 		`"_audit_events":`,
-		`"runtime_publication_outbox":`,
+		`"_publication_outbox":`,
 		`receipt.Status != string(idempotency.StatusProcessing)`,
 	} {
 		if !strings.Contains(content, required) {

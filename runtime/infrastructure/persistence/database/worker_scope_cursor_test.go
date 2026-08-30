@@ -7,12 +7,12 @@ import (
 
 func TestWorkerQueueScopePageRotatesThroughBoundedWindows(t *testing.T) {
 	store := openMigrationEdgeStore(t)
-	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE runtime_worker_queue_scopes (id TEXT PRIMARY KEY, queue_kind TEXT NOT NULL, scope_key TEXT NOT NULL, updated_at TEXT NOT NULL)`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE _worker_queue_scopes (id TEXT PRIMARY KEY, queue_kind TEXT NOT NULL, scope_key TEXT NOT NULL, updated_at TEXT NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
 	for index := 0; index < 70; index++ {
 		key := fmt.Sprintf("workspace-%03d", index)
-		if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO runtime_worker_queue_scopes (id, queue_kind, scope_key, updated_at) VALUES (?, ?, ?, ?)`, key, "queue", key, "now"); err != nil {
+		if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _worker_queue_scopes (id, queue_kind, scope_key, updated_at) VALUES (?, ?, ?, ?)`, key, "queue", key, "now"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -36,12 +36,12 @@ func TestWorkerQueueScopePageRotatesThroughBoundedWindows(t *testing.T) {
 
 func TestWorkerQueueScopePageWrapsWithoutEmptyPollAtExactWindow(t *testing.T) {
 	store := openMigrationEdgeStore(t)
-	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE runtime_worker_queue_scopes (id TEXT PRIMARY KEY, queue_kind TEXT NOT NULL, scope_key TEXT NOT NULL, updated_at TEXT NOT NULL)`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE _worker_queue_scopes (id TEXT PRIMARY KEY, queue_kind TEXT NOT NULL, scope_key TEXT NOT NULL, updated_at TEXT NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
 	for index := 0; index < 32; index++ {
 		key := fmt.Sprintf("workspace-%03d", index)
-		if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO runtime_worker_queue_scopes (id, queue_kind, scope_key, updated_at) VALUES (?, ?, ?, ?)`, key, "queue", key, "now"); err != nil {
+		if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _worker_queue_scopes (id, queue_kind, scope_key, updated_at) VALUES (?, ?, ?, ?)`, key, "queue", key, "now"); err != nil {
 			t.Fatal(err)
 		}
 	}

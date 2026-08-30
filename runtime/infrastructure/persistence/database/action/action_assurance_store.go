@@ -25,7 +25,7 @@ func (s ActionAssuranceStore) SaveActionAssuranceGrant(ctx context.Context, gran
 	methods, _ := json.Marshal(grant.Methods)
 	columns := []string{"id", "token_hash", "user_id", "action_key", "object_key", "record_id", "payload_digest", "methods_json", "approval_version", "approval_hash", "issued_at", "expires_at", "consumed_at"}
 	values := []any{grant.ID, grant.TokenHash, grant.UserID, grant.ActionKey, grant.ObjectKey, grant.RecordID, grant.PayloadDigest, string(methods), grant.ApprovalVersion, grant.ApprovalHash, grant.IssuedAt, grant.ExpiresAt, grant.ConsumedAt}
-	query, args, err := ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "action_assurance_grants", grant.WorkspaceID).Columns(columns...).Values(values...).Build()
+	query, args, err := ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "_action_assurance_grants", grant.WorkspaceID).Columns(columns...).Values(values...).Build()
 	if err == nil {
 		_, err = s.db.ExecContext(ctx, query, args...)
 	}
@@ -37,7 +37,7 @@ func (s ActionAssuranceStore) SaveActionAssuranceGrant(ctx context.Context, gran
 
 func (s ActionAssuranceStore) GetActionAssuranceGrant(ctx context.Context, id string) (actionmodel.ActionAssuranceGrant, bool, error) {
 	columns := []string{"id", "token_hash", "workspace_id", "user_id", "action_key", "object_key", "record_id", "payload_digest", "methods_json", "approval_version", "approval_hash", "issued_at", "expires_at", "consumed_at"}
-	query, args, err := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "action_assurance_grants").Columns(columns...).Where(ormbuilder.Equal("id", id)).Build()
+	query, args, err := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_action_assurance_grants").Columns(columns...).Where(ormbuilder.Equal("id", id)).Build()
 	if err != nil {
 		return actionmodel.ActionAssuranceGrant{}, false, fmt.Errorf("build action assurance lookup: %w", err)
 	}
@@ -58,7 +58,7 @@ func (s ActionAssuranceStore) GetActionAssuranceGrant(ctx context.Context, id st
 
 func (s ActionAssuranceStore) ConsumeActionAssuranceGrant(ctx context.Context, workspaceID, id string, now time.Time) (bool, error) {
 	value := now.UTC().Format(time.RFC3339Nano)
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "action_assurance_grants", workspaceID).Set("consumed_at", value).Where(ormbuilder.And(
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_action_assurance_grants", workspaceID).Set("consumed_at", value).Where(ormbuilder.And(
 		ormbuilder.Equal("id", id), ormbuilder.Equal("consumed_at", ""), ormbuilder.GreaterThan("expires_at", value),
 	)).Build()
 	if err != nil {

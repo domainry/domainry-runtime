@@ -33,7 +33,6 @@ import (
 	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
-	deploymentseed "github.com/domainry/domainry-runtime/runtime/application/seed/deployment"
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
@@ -49,7 +48,6 @@ import (
 	automationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automation"
 	automationnotification "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automationnotification"
 	deploymentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/deployment"
-	frontendcapabilitypersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/frontendcapability"
 	notificationpublicationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
 	operationspersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
 	publicationhandoffpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
@@ -344,7 +342,6 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			},
 			ConnectorProviders:       connectorProviders,
 			RuntimeStatus:            deploymentpersistence.NewRuntimeStatusStore(store),
-			FrontendCapabilities:     frontendcapabilitypersistence.NewFrontendCapabilityStore(store),
 			Notifications:            notifications,
 			IdentityDirectory:        identityDirectory,
 			PartyDirectory:           partyDirectory,
@@ -366,9 +363,6 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		runtimeServiceAssembly{services: services, records: records, worker: workerDependencies, dataExchangeBinding: dataExchangeBinding, lifecycleBinding: lifecycleBinding},
 		func() error {
 			return services.Applications().Lifecycle.InstallDefaultPolicies(ctx, principalmodel.InstallationWorkspaceID, lifecyclePrincipal, time.Now().UTC())
-		},
-		func() error {
-			return deploymentseed.InstallFrontendCapabilityManifest(ctx, services.Applications().FrontendCapabilities, cfg.FrontendCapabilityManifestPath)
 		},
 		func() {
 			services.Applications().Scheduler.ConfigureWorker(schedulerapplication.WorkerConfig{Enabled: cfg.SchedulerEnabled, PollInterval: cfg.SchedulerPollInterval, BatchSize: cfg.SchedulerBatchSize, LeaseTTL: cfg.SchedulerLeaseTTL, MaxCatchupWindows: cfg.SchedulerMaxCatchupWindows})
@@ -393,12 +387,9 @@ func ensureAgentRuntimeSchemas(ctx context.Context, migration agentSchemaOwner, 
 	return nil
 }
 
-func completeRuntimeServiceAssembly(result runtimeServiceAssembly, installLifecycle, installFrontend func() error, configure func(), initializeWorkflows func() error) (runtimeServiceAssembly, error) {
+func completeRuntimeServiceAssembly(result runtimeServiceAssembly, installLifecycle func() error, configure func(), initializeWorkflows func() error) (runtimeServiceAssembly, error) {
 	if err := installLifecycle(); err != nil {
 		return runtimeServiceAssembly{}, fmt.Errorf("install lifecycle policies: %w", err)
-	}
-	if err := installFrontend(); err != nil {
-		return runtimeServiceAssembly{}, fmt.Errorf("install frontend capability manifest: %w", err)
 	}
 	configure()
 	if err := initializeWorkflows(); err != nil {

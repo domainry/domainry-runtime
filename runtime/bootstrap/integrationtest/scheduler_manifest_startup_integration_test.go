@@ -173,9 +173,9 @@ func waitForSchedulerPersistence(t *testing.T, db *sql.DB, definitionID string, 
 	var cursors, runs, actions int
 	var cursorErr, runErr, actionErr error
 	for time.Now().Before(deadline) {
-		cursorErr = db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM scheduler_schedule_state WHERE definition_key = ?`, definitionID).Scan(&cursors)
-		runErr = db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM scheduler_runs WHERE definition_key = ? AND status = 'succeeded'`, definitionID).Scan(&runs)
-		actionErr = db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM business_action_executions WHERE action_key = 'payment.record_overdue_escalation' AND status = 'succeeded'`).Scan(&actions)
+		cursorErr = db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _scheduler_definition_states WHERE definition_key = ?`, definitionID).Scan(&cursors)
+		runErr = db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _scheduler_runs WHERE definition_key = ? AND status = 'succeeded'`, definitionID).Scan(&runs)
+		actionErr = db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _action_executions WHERE action_key = 'payment.record_overdue_escalation' AND status = 'succeeded'`).Scan(&actions)
 		if cursorErr == nil && runErr == nil && actionErr == nil && cursors == 1 && runs == 1 && actions == wantActions {
 			return
 		}
@@ -187,7 +187,7 @@ func waitForSchedulerPersistence(t *testing.T, db *sql.DB, definitionID string, 
 func assertSchedulerActionCount(t *testing.T, db *sql.DB, want int) {
 	t.Helper()
 	var got int
-	if err := db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM business_action_executions WHERE action_key = 'payment.record_overdue_escalation' AND status = 'succeeded'`).Scan(&got); err != nil || got != want {
+	if err := db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _action_executions WHERE action_key = 'payment.record_overdue_escalation' AND status = 'succeeded'`).Scan(&got); err != nil || got != want {
 		t.Fatalf("scheduler workflow action count=%d want=%d err=%v", got, want, err)
 	}
 }

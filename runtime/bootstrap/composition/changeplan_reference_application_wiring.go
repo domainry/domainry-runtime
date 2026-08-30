@@ -3,10 +3,9 @@ package composition
 import (
 	"context"
 
-	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
+	changeplanbusiness "github.com/domainry/domainry-runtime/runtime/application/changeplan"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
-	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
-	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
+	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -54,37 +53,37 @@ type businessReferenceRuntimePortAdapter struct {
 	source BusinessReferenceRuntimeProvider
 }
 
-type businessReferenceFrontendPortAdapter struct {
-	source *deploymentapplication.DeploymentFrontendCapabilityApplicationService
+func (runtime businessReferenceRuntimePortAdapter) WorkflowProcesses(ctx context.Context, principal principalmodel.Principal, filter workflowmodel.WorkflowProcessFilter) ([]workflowmodel.WorkflowProcessInstance, error) {
+	return runtime.source.WorkflowProcesses(ctx, principal, filter)
 }
 
-func (frontend businessReferenceFrontendPortAdapter) FrontendReferenceSnapshot(ctx context.Context, principal principalmodel.Principal) (changeplanmodel.FrontendCapabilities, error) {
-	snapshot, err := frontend.source.Snapshot(ctx, principal)
-	if err != nil {
-		return changeplanmodel.FrontendCapabilities{}, err
-	}
-	return changePlanFrontendCapabilities(snapshot), nil
+func (runtime businessReferenceRuntimePortAdapter) PublishedSchedulerDefinitions(ctx context.Context, principal principalmodel.Principal) ([]recordmodel.Record, error) {
+	return runtime.source.PublishedSchedulerDefinitions(ctx, principal)
 }
 
-func changePlanFrontendCapabilities(snapshot deploymentmodel.FrontendCapabilitySnapshot) changeplanmodel.FrontendCapabilities {
-	result := changeplanmodel.FrontendCapabilities{Revision: snapshot.Revision, UpdatedAt: snapshot.UpdatedAt, Status: snapshot.Status, ManifestHash: snapshot.ManifestHash}
-	for _, requirement := range snapshot.MissingFrontendSupport {
-		result.MissingFrontendSupport = append(result.MissingFrontendSupport, changeplanmodel.FrontendRequirement{CapabilityKey: requirement.CapabilityKey, SupportKey: requirement.SupportKey})
+func (runtime businessReferenceRuntimePortAdapter) SnapshotObjectRecords(ctx context.Context, objectKey string, principal principalmodel.Principal, limit int) ([]recordmodel.Record, error) {
+	return runtime.source.snapshotObjectRecords(ctx, objectKey, principal, limit)
+}
+
+func (runtime businessReferenceRuntimePortAdapter) ListIntegrationOutboxMessages(ctx context.Context, status, connectorKey string, limit int, principal principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error) {
+	return runtime.source.ListIntegrationOutboxMessages(ctx, status, connectorKey, limit, principal)
+}
+
+func assembleChangePlanReferenceApplication(schema CapabilityAuthoringSchemaProvider, runtime BusinessReferenceRuntimeProvider, evidence changeplanrepository.ChangePlanEvidenceRepository) *changeplanbusiness.ChangePlanReferenceApplicationService {
+	var runtimePort changeplanbusiness.ReferenceRuntime
+	if runtime != nil {
+		runtimePort = businessReferenceRuntimePortAdapter{source: runtime}
 	}
-	result.StaleFrontendSupport = changePlanFrontendEntries(snapshot.StaleFrontendSupport)
-	if snapshot.Manifest == nil {
-		return result
-	}
-	manifest := &changeplanmodel.FrontendManifest{
-		ManifestVersion: snapshot.Manifest.ManifestVersion, FrontendVersion: snapshot.Manifest.FrontendVersion,
-		RuntimeContractVersions: append([]string(nil), snapshot.Manifest.RuntimeContractVersions...), Entries: changePlanFrontendEntries(snapshot.Manifest.Entries),
-	}
-	if evidence := snapshot.Manifest.DeploymentEvidence; evidence != nil {
-		manifest.DeploymentEvidence = &changeplanmodel.FrontendDeploymentEvidence{
-			AuditContractVersion: evidence.AuditContractVersion, DesignContractHash: evidence.DesignContractHash,
-			RouteRegistryHash: evidence.RouteRegistryHash, FrontendSourceHash: evidence.FrontendSourceHash, AuditArtifactHash: evidence.AuditArtifactHash,
+	return changeplanbusiness.NewChangePlanReferenceApplicationService(func(ctx context.Context, principal principalmodel.Principal) changeplanbusiness.ReferenceSchema {
+		if schema == nil {
+			return changeplanbusiness.ReferenceSchema{}
 		}
-	}
-	result.Manifest = manifest
-	return result
+		snapshot := schema.SchemaForPrincipal(ctx, principal)
+		return changeplanbusiness.ReferenceSchema{
+			Objects: snapshot.Objects, Actions: snapshot.Actions, Workflows: snapshot.Workflows,
+			AutomationRules: snapshot.AutomationRules, Reports: snapshot.Reports, Integrations: snapshot.Integrations,
+			Agents:          snapshot.Agents,
+			ProfileBindings: snapshot.IdentityProfileExtensions,
+		}
+	}, runtimePort, evidence)
 }

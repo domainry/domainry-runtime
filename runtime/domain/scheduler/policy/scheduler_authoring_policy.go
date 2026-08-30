@@ -29,7 +29,7 @@ func schedulerBusinessJobAuthoringCapability() capabilitycontract.CapabilityAuth
 		ValidationEndpoint: "POST /tenant-admin/scheduler/definitions/validate", PreviewEndpoint: "POST /tenant-admin/scheduler/definitions/validate",
 		ConfigurationRoutes: append(appschemacontract.VersionedApplicationDefinitionRoutes("scheduler"), "POST /tenant-admin/scheduler/definitions/validate", "GET /tenant-admin/scheduler/definitions/{definitionID}"), ResourceKeyPathParameter: "definitionID",
 		ResourceOperations: appschemacontract.VersionedApplicationDefinitionOperations("scheduler"),
-		FrontendSupportKey: "scheduler.job.editor.v1", InputSchema: schedulerObjectSchema(parameters), OutputSchema: schedulerJobRecordOutputSchema(),
+		InputSchema:        schedulerObjectSchema(parameters), OutputSchema: schedulerJobRecordOutputSchema(),
 		OutputVariables:    []capabilitycontract.CapabilityAuthoringOutput{{Name: "definition_id", JSONPointer: "/id", Type: "record_id", VisibleTo: "subsequent_capability_calls"}, {Name: "job_key", JSONPointer: "/data/key", Type: "scheduler_job_key", VisibleTo: "subsequent_capability_calls"}},
 		ReferenceContracts: []capabilitycontract.CapabilityAuthoringReference{{Kind: "scheduler_target_key", InputJSONPointer: "/target_key", ScopeFrom: "/target_type", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/scheduler_target_key"}, {Kind: "object_key", InputJSONPointer: "/target_object", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/object_key"}, {Kind: "role_key", InputJSONPointer: "/run_as_role", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/role_key"}},
 		Execution:          &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"metadata.scheduler_definition", "workflow.definition", "report.definition"}, Transaction: "read_only_candidate_validation", Idempotency: "naturally_idempotent_at_candidate_hash", SideEffectLevel: "none", PermissionModel: "scheduler.definition.read", ChangeControl: "source_controlled_json"},
@@ -46,8 +46,7 @@ func schedulerScheduleAuthoringCapability() capabilitycontract.CapabilityAuthori
 	parameters := schedulerScheduleParameters()
 	return capabilitycontract.CapabilityAuthoringDefinition{
 		Key: "scheduler.schedule", Status: "supported", Lifecycle: "definition_fragment", Permissions: []string{"scheduler.definition.read", "scheduler.definition.write"},
-		Parameters: parameters, ValidationEndpoint: "POST /scheduler/schedules/preview", PreviewEndpoint: "POST /scheduler/schedules/preview", FrontendSupportKey: "scheduler.schedule.editor.v1",
-		InputSchema: schedulerObjectSchema(parameters), OutputSchema: schedulerPreviewOutputSchema(),
+		Parameters: parameters, ValidationEndpoint: "POST /scheduler/schedules/preview", PreviewEndpoint: "POST /scheduler/schedules/preview", InputSchema: schedulerObjectSchema(parameters), OutputSchema: schedulerPreviewOutputSchema(),
 		OutputVariables: []capabilitycontract.CapabilityAuthoringOutput{{Name: "next_runs", JSONPointer: "/next_runs", Type: "date_time_list", VisibleTo: "subsequent_capability_calls"}},
 		Execution:       &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"metadata.scheduler_definition"}, Transaction: "read_only_preview", Idempotency: "naturally_idempotent", SideEffectLevel: "none", PermissionModel: "scheduler.definition.write"},
 		Errors:          schedulerDefinitionAuthoringErrors(), Examples: schedulerScheduleExamples(),
@@ -66,7 +65,7 @@ func schedulerCommandAuthoringCapability(key, lifecycle, resourceParameter, rout
 	}
 	capability := capabilitycontract.CapabilityAuthoringDefinition{
 		Key: key, Status: "supported", Lifecycle: lifecycle, Parameters: parameters, Requires: []string{"scheduler.business_job"}, Permissions: []string{"scheduler.command"},
-		ConfigurationRoutes: []string{route}, FrontendSupportKey: "scheduler.command.v1", InputSchema: schedulerObjectSchema(parameters), OutputSchema: schedulerOperationOutputSchema(),
+		ConfigurationRoutes: []string{route}, InputSchema: schedulerObjectSchema(parameters), OutputSchema: schedulerOperationOutputSchema(),
 		OutputVariables: []capabilitycontract.CapabilityAuthoringOutput{{Name: "status", JSONPointer: "/status", Type: "string", VisibleTo: "subsequent_capability_calls"}, {Name: "run", JSONPointer: "/run", Type: "scheduler_run", VisibleTo: "subsequent_capability_calls"}},
 		Execution:       &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"metadata.scheduler_definition", "scheduler_service.schedule", "scheduler_service.run"}, WriteSet: []string{"scheduler_service.run", "scheduler_service.dead_letter"}, Transaction: "scheduler_owner_operation", Idempotency: "idempotency_key", SideEffects: []string{"scheduler_operation_audit"}, SideEffectLevel: "external", Compensation: "issue an explicit owner retry, cancel, resolve, or reschedule command; never roll back Scheduler evidence", PermissionModel: "scheduler.command"},
 		Examples:        schedulerCommandExamples(resourceParameter, idempotencyRequired),

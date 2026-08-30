@@ -174,7 +174,6 @@ var runtimeAuthoringRequiredConfigurationCategories = []string{
 	"runtime_state.integrations",
 	"runtime_state.reports",
 	"runtime_state.scheduler",
-	"frontend_capabilities",
 }
 
 func runtimeAuthoringConfigurationCoverage(snapshot changeplanprojection.BusinessSystemSnapshot, diagnostics *[]RuntimeAuthoringValidationDiagnostic) map[string]string {
@@ -298,21 +297,4 @@ func runtimeAuthoringApplyGlobalChecks(report *RuntimeAuthoringValidationReport,
 		}
 	}
 
-	report.Checks["frontend_support"] = "ok"
-	frontend := snapshot.FrontendCapabilities
-	if len(frontend.MissingFrontendSupport) > 0 || len(frontend.StaleFrontendSupport) > 0 {
-		report.Checks["frontend_support"] = "invalid"
-		for _, missing := range frontend.MissingFrontendSupport {
-			report.Diagnostics = append(report.Diagnostics, RuntimeAuthoringValidationDiagnostic{
-				Code: "backend.frontend.support_missing", Owner: "deployment", CapabilityKey: missing.CapabilityKey,
-				ResourcePath: "frontend_capabilities." + missing.SupportKey, Message: "required frontend support is missing",
-			})
-		}
-		for _, stale := range frontend.StaleFrontendSupport {
-			report.Diagnostics = append(report.Diagnostics, RuntimeAuthoringValidationDiagnostic{
-				Code: "backend.frontend.manifest_stale", Owner: "deployment", ResourcePath: "frontend_capabilities." + stale.SupportKey,
-				Message: "frontend support is stale for the current Runtime contract",
-			})
-		}
-	}
 }

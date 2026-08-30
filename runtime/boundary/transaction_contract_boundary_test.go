@@ -295,7 +295,7 @@ func TestHundredConcurrentRecordUpdatesProveNoLostUpdateOrPartialCommit(t *testi
 		"TestRecordMutationHundredConcurrentUpdatesHaveNoLostUpdateOrPartialCommit",
 		"index < 100", "ExpectedUpdatedAt: initial.UpdatedAt", "succeeded.Load() != 1",
 		"conflicted.Load()+transientlyRejected.Load() != 99", "winnerCount != 1",
-		"_audit_events", "runtime_publication_outbox", "_workflow_executions",
+		"_audit_events", "_publication_outbox", "_workflow_executions",
 	} {
 		if !strings.Contains(string(raw), required) {
 			t.Errorf("100-concurrent-update proof missing %q", required)
@@ -440,7 +440,7 @@ func TestCrossBoundaryConsistencyContractHasDurableIntentBeforeSideEffect(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, required := range []string{"transaction_boundary_intents", "reconciliation_required", "compensating", "compensated", "manual_review", "fencing token", "integration_invocations(status=prepared)"} {
+	for _, required := range []string{"_transaction_boundary_intents", "reconciliation_required", "compensating", "compensated", "manual_review", "fencing token", "_integration_invocations(status=prepared)"} {
 		if !strings.Contains(string(document), required) {
 			t.Errorf("cross-boundary contract missing %q", required)
 		}

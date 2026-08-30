@@ -70,7 +70,7 @@ func (r AutomationExecutionStore) InsertExecution(ctx context.Context, workspace
 	}
 	columns := []string{"id", "rule_key", "object_key", "record_id", "phase", "operation", "status", "actor_id", "role_key", "request_id", "correlation_id", "event_id", "duration_ms", "error_code", "candidate_json", "trace_json", "created_at", "updated_at"}
 	values := []any{value.ID, value.RuleKey, value.ObjectKey, value.RecordID, value.Phase, value.Operation, value.Status, value.ActorID, value.RoleKey, value.RequestID, value.CorrelationID, value.EventID, value.DurationMS, value.ErrorCode, string(candidateJSON), string(traceJSON), value.CreatedAt, value.UpdatedAt}
-	statement, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "automation_rule_executions", workspaceID).Columns(columns...).Values(values...).Build()
+	statement, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_automation_rule_executions", workspaceID).Columns(columns...).Values(values...).Build()
 	if buildErr != nil {
 		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("build automation rule execution insert: %w", buildErr)
 	}
@@ -118,7 +118,7 @@ func (r AutomationExecutionStore) InsertExecutionSeed(ctx context.Context, works
 	}
 	columns := []string{"id", "rule_key", "object_key", "record_id", "phase", "operation", "status", "actor_id", "role_key", "request_id", "correlation_id", "event_id", "duration_ms", "error_code", "candidate_json", "trace_json", "created_at", "updated_at"}
 	values := []any{value.ID, value.RuleKey, value.ObjectKey, value.RecordID, value.Phase, value.Operation, value.Status, value.ActorID, value.RoleKey, value.RequestID, value.CorrelationID, value.EventID, value.DurationMS, value.ErrorCode, string(candidateJSON), string(traceJSON), value.CreatedAt, value.UpdatedAt}
-	statement, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "automation_rule_executions", workspaceID).
+	statement, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_automation_rule_executions", workspaceID).
 		Columns(columns...).Values(values...).OnConflictDoNothing("workspace_id", "id").Build()
 	if buildErr != nil {
 		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("build automation execution seed insert: %w", buildErr)
@@ -158,7 +158,7 @@ func (r AutomationExecutionStore) ListExecutions(ctx context.Context, workspaceI
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	builder := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "automation_rule_executions", workspaceID).
+	builder := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_automation_rule_executions", workspaceID).
 		Columns("id", "workspace_id", "rule_key", "object_key", "record_id", "phase", "operation", "status", "actor_id", "role_key", "request_id", "correlation_id", "event_id", "duration_ms", "error_code", "candidate_json", "trace_json", "created_at", "updated_at").
 		OrderBy(ormbuilder.Descending("created_at")).Limit(limit)
 	if len(predicates) > 0 {

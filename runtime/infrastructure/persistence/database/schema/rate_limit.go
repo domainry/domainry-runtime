@@ -7,7 +7,7 @@ import (
 )
 
 func EnsureRateLimitSchema(ctx context.Context, store Store) error {
-	statement, arguments, err := ormschema.NewTable(store.RuntimeRenderer(), "runtime_rate_limit_bucket").
+	statement, arguments, err := ormschema.NewTable(store.RuntimeRenderer(), "_rate_limit_buckets").
 		IfNotExists().Columns(
 		ormschema.Column("bucket_key", ormschema.TextKey(255)).NotNull(),
 		ormschema.Column("window_start_ns", ormschema.BigInt()).NotNull(),

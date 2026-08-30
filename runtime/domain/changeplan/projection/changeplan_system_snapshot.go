@@ -61,7 +61,6 @@ type BusinessSystemSnapshot struct {
 	Schema                   appschemamodel.ApplicationSchemaSnapshot       `json:"schema"`
 	EffectivePermissions     recordcontract.RecordFeaturePermissionSnapshot `json:"effective_permissions"`
 	RuntimeState             BusinessRuntimeStateSnapshot                   `json:"runtime_state"`
-	FrontendCapabilities     changeplanmodel.FrontendCapabilities           `json:"frontend_capabilities"`
 	ResourceSources          []SystemResourceSource                         `json:"resource_sources"`
 	SeedRecords              []businessseedmodel.BusinessSeedProvenance     `json:"seed_records,omitempty"`
 	ObjectRecordCounts       map[string]int                                 `json:"object_record_counts"`
@@ -87,8 +86,8 @@ func (snapshot BusinessSystemSnapshot) ChangePlanSnapshot() changeplanmodel.Snap
 	return changeplanmodel.Snapshot{
 		SnapshotHash: snapshot.SnapshotHash, RuntimeVersion: snapshot.RuntimeVersion,
 		AuthoringContractVersion: snapshot.AuthoringContractVersion, AuthoringContractHash: snapshot.AuthoringContractHash,
-		FrontendCapabilities: snapshot.FrontendCapabilities, HiddenResourceCategories: append([]string(nil), snapshot.HiddenResourceCategories...),
-		ResourceSources: resources, ObjectRecordCounts: snapshot.ObjectRecordCounts, CapabilityKeys: capabilityKeys,
+		HiddenResourceCategories: append([]string(nil), snapshot.HiddenResourceCategories...),
+		ResourceSources:          resources, ObjectRecordCounts: snapshot.ObjectRecordCounts, CapabilityKeys: capabilityKeys,
 		RuntimeState: changeplanmodel.RuntimeState{RunningWorkflowProcesses: processes, Connectors: snapshot.RuntimeState.Connectors, Connections: connections},
 	}
 }

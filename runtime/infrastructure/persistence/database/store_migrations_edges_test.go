@@ -282,7 +282,7 @@ func TestMigrationScriptedSQLFailureEdges(t *testing.T) {
 
 func TestMigrationBackupDiscoveryAndFailureEdges(t *testing.T) {
 	store := openMigrationEdgeStore(t)
-	if _, err := store.db.ExecContext(t.Context(), `CREATE TABLE _schema_materializations(id TEXT); CREATE TABLE customer(id TEXT); INSERT INTO customer(id) VALUES ('one')`); err != nil {
+	if _, err := store.db.ExecContext(t.Context(), `CREATE TABLE customer(id TEXT); INSERT INTO customer(id) VALUES ('one')`); err != nil {
 		t.Fatal(err)
 	}
 	tables, err := store.applicationTables(t.Context())

@@ -18,7 +18,7 @@ var _ operationsrepository.DatabaseRetirementRepository = OperationsStore{}
 func (s OperationsStore) RegisterDatabaseRetirement(ctx context.Context, retirement operationsmodel.DatabaseRetirement) (bool, error) {
 	payload, _ := json.Marshal(retirement)
 	observation := retirement.Evidence.Observation
-	query, args, buildErr := ormbuilder.NewInsertBuilder(s.store.SQLRenderer, "runtime_database_retirements").Columns("id", "engine", "database_name", "schema_name", "object_kind", "object_name", "parent_name", "owner", "state", "blocked_reason", "read_count", "write_count", "last_read_at", "last_write_at", "source_counts_json", "retirement_json", "updated_at").Values(
+	query, args, buildErr := ormbuilder.NewInsertBuilder(s.store.SQLRenderer, "_operation_database_retirements").Columns("id", "engine", "database_name", "schema_name", "object_kind", "object_name", "parent_name", "owner", "state", "blocked_reason", "read_count", "write_count", "last_read_at", "last_write_at", "source_counts_json", "retirement_json", "updated_at").Values(
 		retirement.ID, retirement.Object.Engine, retirement.Object.Database, retirement.Object.Schema, retirement.Object.Kind, retirement.Object.Name, retirement.Object.ParentName,
 		retirement.Evidence.Owner, string(retirement.State), retirement.BlockedReason, observation.ReadCount, observation.WriteCount, retirementTime(observation.LastReadAt), retirementTime(observation.LastWriteAt), retirementSources(observation.SourceCounts), string(payload), retirement.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	).Build()
@@ -34,7 +34,7 @@ func (s OperationsStore) RegisterDatabaseRetirement(ctx context.Context, retirem
 }
 
 func (s OperationsStore) GetDatabaseRetirement(ctx context.Context, id string) (operationsmodel.DatabaseRetirement, bool, error) {
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "runtime_database_retirements").Columns("retirement_json").Where(ormbuilder.Equal("id", strings.TrimSpace(id))).Build()
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_operation_database_retirements").Columns("retirement_json").Where(ormbuilder.Equal("id", strings.TrimSpace(id))).Build()
 	if buildErr != nil {
 		return operationsmodel.DatabaseRetirement{}, false, buildErr
 	}
@@ -56,7 +56,7 @@ func (s OperationsStore) ListDatabaseRetirements(ctx context.Context, state oper
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	builder := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "runtime_database_retirements").Columns("retirement_json")
+	builder := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_operation_database_retirements").Columns("retirement_json")
 	if state != "" {
 		builder.Where(ormbuilder.Equal("state", string(state)))
 	}
@@ -87,7 +87,7 @@ func (s OperationsStore) ListDatabaseRetirements(ctx context.Context, state oper
 func (s OperationsStore) TransitionDatabaseRetirement(ctx context.Context, retirement operationsmodel.DatabaseRetirement, expected operationsmodel.DatabaseRetirementState) (bool, error) {
 	payload, _ := json.Marshal(retirement)
 	observation := retirement.Evidence.Observation
-	query, args, buildErr := ormbuilder.NewUpdateBuilder(s.store.SQLRenderer, "runtime_database_retirements").Set("state", string(retirement.State)).Set("blocked_reason", retirement.BlockedReason).Set("read_count", observation.ReadCount).Set("write_count", observation.WriteCount).Set("last_read_at", retirementTime(observation.LastReadAt)).Set("last_write_at", retirementTime(observation.LastWriteAt)).Set("source_counts_json", retirementSources(observation.SourceCounts)).Set("retirement_json", string(payload)).Set("updated_at", retirement.UpdatedAt.UTC().Format(time.RFC3339Nano)).Where(ormbuilder.And(ormbuilder.Equal("id", retirement.ID), ormbuilder.Equal("state", string(expected)))).Build()
+	query, args, buildErr := ormbuilder.NewUpdateBuilder(s.store.SQLRenderer, "_operation_database_retirements").Set("state", string(retirement.State)).Set("blocked_reason", retirement.BlockedReason).Set("read_count", observation.ReadCount).Set("write_count", observation.WriteCount).Set("last_read_at", retirementTime(observation.LastReadAt)).Set("last_write_at", retirementTime(observation.LastWriteAt)).Set("source_counts_json", retirementSources(observation.SourceCounts)).Set("retirement_json", string(payload)).Set("updated_at", retirement.UpdatedAt.UTC().Format(time.RFC3339Nano)).Where(ormbuilder.And(ormbuilder.Equal("id", retirement.ID), ormbuilder.Equal("state", string(expected)))).Build()
 	if buildErr != nil {
 		return false, buildErr
 	}
@@ -113,7 +113,7 @@ func (s OperationsStore) RecordDatabaseRetirementAccess(ctx context.Context, id,
 	}
 	defer func() { _ = tx.Rollback() }()
 	var payload string
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "runtime_database_retirements").Columns("retirement_json").Where(ormbuilder.Equal("id", strings.TrimSpace(id))).Build()
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_operation_database_retirements").Columns("retirement_json").Where(ormbuilder.Equal("id", strings.TrimSpace(id))).Build()
 	if buildErr != nil {
 		return buildErr
 	}
@@ -139,7 +139,7 @@ func (s OperationsStore) RecordDatabaseRetirementAccess(ctx context.Context, id,
 	}
 	retirement.UpdatedAt = accessedAt
 	updatedPayload, _ := json.Marshal(retirement)
-	update, updateArgs, buildErr := ormbuilder.NewUpdateBuilder(s.store.SQLRenderer, "runtime_database_retirements").Set("read_count", observation.ReadCount).Set("write_count", observation.WriteCount).Set("last_read_at", retirementTime(observation.LastReadAt)).Set("last_write_at", retirementTime(observation.LastWriteAt)).Set("source_counts_json", retirementSources(observation.SourceCounts)).Set("retirement_json", string(updatedPayload)).Set("updated_at", accessedAt.Format(time.RFC3339Nano)).Where(ormbuilder.Equal("id", retirement.ID)).Build()
+	update, updateArgs, buildErr := ormbuilder.NewUpdateBuilder(s.store.SQLRenderer, "_operation_database_retirements").Set("read_count", observation.ReadCount).Set("write_count", observation.WriteCount).Set("last_read_at", retirementTime(observation.LastReadAt)).Set("last_write_at", retirementTime(observation.LastWriteAt)).Set("source_counts_json", retirementSources(observation.SourceCounts)).Set("retirement_json", string(updatedPayload)).Set("updated_at", accessedAt.Format(time.RFC3339Nano)).Where(ormbuilder.Equal("id", retirement.ID)).Build()
 	if buildErr != nil {
 		return buildErr
 	}

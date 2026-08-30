@@ -18,9 +18,8 @@ var (
 
 	_ appschemaapplication.LifecycleRuntime = applicationSchemaLifecycleRuntimeAdapter{}
 
-	_ changeplanapplication.ReferenceRuntime       = businessReferenceRuntimePortAdapter{}
-	_ changeplanapplication.FrontendSnapshotSource = businessReferenceFrontendPortAdapter{}
-	_ BusinessReferenceRuntimeProvider             = businessReferenceRuntimeAdapter{}
+	_ changeplanapplication.ReferenceRuntime = businessReferenceRuntimePortAdapter{}
+	_ BusinessReferenceRuntimeProvider       = businessReferenceRuntimeAdapter{}
 
 	_ schedulerapplication.SchedulerOperationRuntime = schedulerOperationRuntimeAdapter{}
 	_ schedulerapplication.RecordMutationRuntime     = schedulerOperationRuntimeAdapter{}

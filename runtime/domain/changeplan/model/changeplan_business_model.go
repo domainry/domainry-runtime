@@ -101,7 +101,6 @@ type Snapshot struct {
 	RuntimeVersion           string
 	AuthoringContractVersion string
 	AuthoringContractHash    string
-	FrontendCapabilities     FrontendCapabilities
 	HiddenResourceCategories []string
 	ResourceSources          []ResourceSource
 	ObjectRecordCounts       map[string]int
@@ -110,52 +109,6 @@ type Snapshot struct {
 }
 
 func (snapshot Snapshot) ChangePlanSnapshot() Snapshot { return snapshot }
-
-type FrontendCapabilities struct {
-	Revision               int64                  `json:"revision"`
-	UpdatedAt              string                 `json:"updated_at,omitempty"`
-	Status                 string                 `json:"status"`
-	ManifestHash           string                 `json:"manifest_hash,omitempty"`
-	Manifest               *FrontendManifest      `json:"manifest,omitempty"`
-	MissingFrontendSupport []FrontendRequirement  `json:"missing_frontend_support"`
-	StaleFrontendSupport   []FrontendSupportEntry `json:"stale_frontend_support"`
-}
-
-type FrontendManifest struct {
-	ManifestVersion         string                      `json:"manifest_version"`
-	FrontendVersion         string                      `json:"frontend_version"`
-	RuntimeContractVersions []string                    `json:"runtime_contract_versions"`
-	DeploymentEvidence      *FrontendDeploymentEvidence `json:"deployment_evidence,omitempty"`
-	Entries                 []FrontendSupportEntry      `json:"entries"`
-}
-
-type FrontendDeploymentEvidence struct {
-	AuditContractVersion string `json:"audit_contract_version"`
-	DesignContractHash   string `json:"design_contract_hash"`
-	RouteRegistryHash    string `json:"route_registry_hash"`
-	FrontendSourceHash   string `json:"frontend_source_hash"`
-	AuditArtifactHash    string `json:"audit_artifact_hash"`
-}
-
-type FrontendRequirement struct {
-	CapabilityKey string `json:"capability_key"`
-	SupportKey    string `json:"support_key"`
-}
-
-type FrontendSupportEntry struct {
-	SupportKey          string   `json:"support_key"`
-	CapabilityKeys      []string `json:"capability_keys"`
-	Route               string   `json:"route"`
-	RequiredPermissions []string `json:"required_permissions"`
-	FeatureModule       string   `json:"feature_module"`
-	AcceptanceTests     []string `json:"acceptance_tests"`
-	ActorRoles          []string `json:"actor_roles,omitempty"`
-	BusinessObjects     []string `json:"business_objects,omitempty"`
-	ImplementedActions  []string `json:"implemented_actions,omitempty"`
-	ReportKeys          []string `json:"report_keys,omitempty"`
-	FieldKeys           []string `json:"field_keys,omitempty"`
-	AcceptanceClaims    []string `json:"acceptance_claims,omitempty"`
-}
 
 type ResourceSource struct {
 	ResourceType string

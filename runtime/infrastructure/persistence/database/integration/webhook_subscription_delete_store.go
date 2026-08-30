@@ -17,7 +17,7 @@ func (r IntegrationConfigStore) DeleteWebhookSubscription(ctx context.Context, w
 	if subscriptionKey == "" {
 		return false, fmt.Errorf("integration webhook subscription key is required")
 	}
-	statement, args, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, "integration_webhook_subscriptions", workspaceID).
+	statement, args, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, "_integration_webhook_subscriptions", workspaceID).
 		Where(ormbuilder.Equal("subscription_key", subscriptionKey)).Build()
 	if buildErr != nil {
 		return false, fmt.Errorf("build integration webhook subscription delete: %w", buildErr)

@@ -18,7 +18,7 @@ func (s OperationsStore) GetOperationsControl(ctx context.Context, purpose strin
 	if s.database() == nil {
 		return operationsmodel.OperationsControl{}, false, fmt.Errorf("operations store unavailable")
 	}
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "runtime_operation_controls").Columns(operationsControlColumns()...).Where(ormbuilder.And(ormbuilder.Equal("system_purpose", strings.TrimSpace(purpose)), ormbuilder.Equal("control_kind", string(kind)), ormbuilder.Equal("owner", strings.TrimSpace(owner)))).Build()
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_operation_controls").Columns(operationsControlColumns()...).Where(ormbuilder.And(ormbuilder.Equal("system_purpose", strings.TrimSpace(purpose)), ormbuilder.Equal("control_kind", string(kind)), ormbuilder.Equal("owner", strings.TrimSpace(owner)))).Build()
 	if buildErr != nil {
 		return operationsmodel.OperationsControl{}, false, buildErr
 	}
@@ -40,7 +40,7 @@ func (s OperationsStore) ListOperationsControls(ctx context.Context, purpose str
 	if kind != "" {
 		predicate = ormbuilder.And(predicate, ormbuilder.Equal("control_kind", string(kind)))
 	}
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "runtime_operation_controls").Columns(operationsControlColumns()...).Where(predicate).OrderBy(ormbuilder.Ascending("control_kind"), ormbuilder.Ascending("owner")).Limit(limit).Build()
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_operation_controls").Columns(operationsControlColumns()...).Where(predicate).OrderBy(ormbuilder.Ascending("control_kind"), ormbuilder.Ascending("owner")).Limit(limit).Build()
 	if buildErr != nil {
 		return nil, buildErr
 	}
@@ -68,7 +68,7 @@ func (s OperationsStore) PutOperationsControl(ctx context.Context, control opera
 		return false, fmt.Errorf("operations.control_revision_invalid")
 	}
 	if expectedRevision == 0 {
-		query, args, buildErr := ormbuilder.NewInsertBuilder(s.store.SQLRenderer, "runtime_operation_controls").Columns(operationsControlColumns()...).Values(control.SystemPurpose, string(control.Kind), control.Owner, string(control.State), control.Reason, control.Reference, control.UpdatedBy, control.Revision, control.UpdatedAt.UTC().Format(time.RFC3339Nano)).Build()
+		query, args, buildErr := ormbuilder.NewInsertBuilder(s.store.SQLRenderer, "_operation_controls").Columns(operationsControlColumns()...).Values(control.SystemPurpose, string(control.Kind), control.Owner, string(control.State), control.Reason, control.Reference, control.UpdatedBy, control.Revision, control.UpdatedAt.UTC().Format(time.RFC3339Nano)).Build()
 		if buildErr != nil {
 			return false, buildErr
 		}
@@ -82,7 +82,7 @@ func (s OperationsStore) PutOperationsControl(ctx context.Context, control opera
 		}
 		return true, nil
 	}
-	query, args, buildErr := ormbuilder.NewUpdateBuilder(s.store.SQLRenderer, "runtime_operation_controls").Set("state", string(control.State)).Set("reason", control.Reason).Set("reference", control.Reference).Set("updated_by", control.UpdatedBy).Set("revision", control.Revision).Set("updated_at", control.UpdatedAt.UTC().Format(time.RFC3339Nano)).Where(ormbuilder.And(ormbuilder.Equal("system_purpose", control.SystemPurpose), ormbuilder.Equal("control_kind", string(control.Kind)), ormbuilder.Equal("owner", control.Owner), ormbuilder.Equal("revision", expectedRevision))).Build()
+	query, args, buildErr := ormbuilder.NewUpdateBuilder(s.store.SQLRenderer, "_operation_controls").Set("state", string(control.State)).Set("reason", control.Reason).Set("reference", control.Reference).Set("updated_by", control.UpdatedBy).Set("revision", control.Revision).Set("updated_at", control.UpdatedAt.UTC().Format(time.RFC3339Nano)).Where(ormbuilder.And(ormbuilder.Equal("system_purpose", control.SystemPurpose), ormbuilder.Equal("control_kind", string(control.Kind)), ormbuilder.Equal("owner", control.Owner), ormbuilder.Equal("revision", expectedRevision))).Build()
 	if buildErr != nil {
 		return false, buildErr
 	}

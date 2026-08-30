@@ -99,7 +99,7 @@ P8 的调用者业务身份不得来自普通请求字段。Runtime 将已经解
 
 Project package build 通过固定 linker symbol 把 receipt、Project input/source、Generated SDK、Handler catalog、signing key ID/public-key hash 与 canonical public key 写入目标 binary，绝不写入私钥。`runtimehost` 在 Handler/Connector registry freeze 后按公开 descriptor 计算两项 registry hash，并与 Runtime/public contract、Domain SDK/Snapshot 和 package linker facts 规范编码为 `domainry-runtime-release-identity-v2` 的 `combination_sha256`。该只读身份沿 `runtimehost -> bootstrap/runtime -> bootstrap/transport -> HTTPRouter` 单向传递，由匿名 `/ready` 和管理员 `/health` diagnostics 同时发布；未 package 的本地进程明确发布 `build_mode=development` 和空 package facts，不能伪装成已签名 release。
 
-项目 Runtime 打开并验证共享数据库后、执行任何 Metadata restore/seed 或 HTTP binding 前，必须通过 installation-scoped `runtime_release_cohorts`/`runtime_release_instances` 原子加入 active release cohort。live instance 存在时 Runtime、Project、Snapshot、Generated SDK 和冻结后的 Handler/Connector Registry 完整 identity 必须逐字段相同；没有 live lease 时才能递增 generation 并切换 cohort。租约使用 serializable transaction、45 秒 TTL 和 15 秒 heartbeat，heartbeat 同时 fence instance ID、combination hash 与 generation。clean host shutdown 使用 caller lifecycle context 立即释放，crash 等待 expiry；heartbeat 丢失会不可逆关闭本进程业务流量 admission 并使 `/ready` 的 `release_cohort` critical check 失败，不能在数据库恢复后自行重新开放。
+项目 Runtime 打开并验证共享数据库后、执行任何 Metadata restore/seed 或 HTTP binding 前，必须通过 installation-scoped `_release_cohorts`/`_release_instances` 原子加入 active release cohort。live instance 存在时 Runtime、Project、Snapshot、Generated SDK 和冻结后的 Handler/Connector Registry 完整 identity 必须逐字段相同；没有 live lease 时才能递增 generation 并切换 cohort。租约使用 serializable transaction、45 秒 TTL 和 15 秒 heartbeat，heartbeat 同时 fence instance ID、combination hash 与 generation。clean host shutdown 使用 caller lifecycle context 立即释放，crash 等待 expiry；heartbeat 丢失会不可逆关闭本进程业务流量 admission 并使 `/ready` 的 `release_cohort` critical check 失败，不能在数据库恢复后自行重新开放。
 
 Packaged Runtime 在加载配置和打开数据库前，必须从 executable 同目录读取 `*.attestation.json`，重算当前 executable checksum/size，逐项比较编译期 Project identity，并用编译期 canonical public key 验证 Ed25519 signature；缺失、格式错误、binary 漂移、identity 漂移或 signature 漂移直接终止启动。进入 Runtime 后，`/ready` 以四个独立 critical check 发布 `release_build`、`release_signature`、`release_schema`、`release_registry`：前两项保留启动时不可变证据，Schema 将 Metadata restore 后建立的持久 schema revision 与每次探测时数据库当前 revision 比较，Registry 从同一冻结 Handler/Connector descriptor inventory 重新计算 hash。任一不一致都不得 ready。开发模式明确不声称 package/signature 验证，Generic Runtime 没有 project Snapshot 时不错误启用项目 Schema/Registry 门禁。
 
@@ -549,7 +549,7 @@ Runtime、Identity **MUST NOT** 再声明自己的 `domain/audit`、`application
 - Audit 模块使用宿主 Database、Dialect、Transaction、Migration lock 和全局 `_schema_migrations`。
 - Audit source module 提交自己拥有的 migration；宿主不得复制 Audit DDL/DML。
 - 持久化 DDL/DML 使用 `github.com/domainry/domainry-orm`；没有 ORM 等价能力时才允许带本地理由和方言测试的原生 SQL。
-- 当前 source-owned 表为 `_audit_events` 与 `audit_export_artifacts`，不得恢复 `business_audit_export_artifacts` 或模块私有迁移账本。
+- 当前 source-owned 表为 `_audit_events` 与 `_audit_export_artifacts`，不得恢复 `business_audit_export_artifacts` 或模块私有迁移账本。
 
 完成态门禁必须同时证明：
 

@@ -51,7 +51,7 @@ func TestWorkflowDefinitionMissingRowsCorruptScansAndWriteFailures(t *testing.T)
 		t.Fatal("duplicate version inserted")
 	}
 
-	if _, err := store.DB().ExecContext(t.Context(), `UPDATE workflow_definition_identities SET enabled = 'invalid' WHERE id = ?`, definition.ID); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `UPDATE _workflow_definitions SET enabled = 'invalid' WHERE id = ?`, definition.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := repository.GetDefinitionByKey(t.Context(), definition.Key); err == nil {
@@ -60,7 +60,7 @@ func TestWorkflowDefinitionMissingRowsCorruptScansAndWriteFailures(t *testing.T)
 	if _, err := repository.ListDefinitions(t.Context()); err == nil {
 		t.Fatal("corrupt definition listed")
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `UPDATE workflow_definition_versions SET version_no = 'invalid' WHERE id = ?`, draft.ID); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `UPDATE _workflow_definition_versions SET version_no = 'invalid' WHERE id = ?`, draft.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := repository.GetVersion(t.Context(), draft.ID); err == nil {
@@ -125,7 +125,7 @@ func TestWorkflowDefinitionDraftAndPublishSecondWriteFailuresRollback(t *testing
 	})
 	t.Run("delete draft identity update", func(t *testing.T) {
 		store, repository, definition, draft := workflowDefinitionEdgeFixture(t)
-		if _, err := store.DB().ExecContext(t.Context(), `DROP TABLE workflow_definition_identities`); err != nil {
+		if _, err := store.DB().ExecContext(t.Context(), `DROP TABLE _workflow_definitions`); err != nil {
 			t.Fatal(err)
 		}
 		if deleted, err := repository.DeleteDraft(t.Context(), definition.ID, draft.ID); err == nil || deleted {
@@ -135,7 +135,7 @@ func TestWorkflowDefinitionDraftAndPublishSecondWriteFailuresRollback(t *testing
 	t.Run("publish identity update", func(t *testing.T) {
 		store, repository, definition, draft := workflowDefinitionEdgeFixture(t)
 		draft.ContentHash, draft.PublishedBy, draft.PublishedAt = "hash", "admin", "v2"
-		if _, err := store.DB().ExecContext(t.Context(), `DROP TABLE workflow_definition_identities`); err != nil {
+		if _, err := store.DB().ExecContext(t.Context(), `DROP TABLE _workflow_definitions`); err != nil {
 			t.Fatal(err)
 		}
 		if published, err := repository.PublishDraft(t.Context(), definition, draft, "publish"); err == nil || published {

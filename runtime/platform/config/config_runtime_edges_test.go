@@ -21,7 +21,6 @@ func TestValidateSecurityRemainingProductionGates(t *testing.T) {
 	}{
 		{name: "missing audit export key", mutate: func(c *Config) { c.AuditExportTokenKey = " " }, want: "AUDIT_EXPORT_TOKEN_KEY"},
 		{name: "default audit export key", mutate: func(c *Config) { c.AuditExportTokenKey = DevAuditExportTokenKey }, want: "AUDIT_EXPORT_TOKEN_KEY"},
-		{name: "postgres without rls", mutate: func(c *Config) { c.DatabaseDriver = "postgres"; c.DatabaseRLSEnabled = false }, want: "DATABASE_RLS_ENABLED"},
 		{name: "missing integration key", mutate: func(c *Config) { c.IntegrationSecretKey = " " }, want: "INTEGRATION_SECRET_KEY"},
 		{name: "missing integration kid", mutate: func(c *Config) { c.IntegrationActiveKeyID = " " }, want: "INTEGRATION_ACTIVE_KEY_ID"},
 		{name: "scheduler interval", mutate: func(c *Config) { c.SchedulerEnabled = true; c.SchedulerPollInterval = time.Millisecond }, want: "SCHEDULER_POLL_INTERVAL"},

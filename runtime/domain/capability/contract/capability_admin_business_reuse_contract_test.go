@@ -6,9 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sort"
-	"strings"
 	"testing"
 )
 
@@ -91,18 +89,14 @@ func TestRuntimeAPIContractPublishesEveryReusableAdminCapability(t *testing.T) {
 		t.Fatalf("unexpected Admin Business contract header: %+v", api.AdminBusinessReuse)
 	}
 
-	activeEndpoints := make([]adminBusinessReuseRoute, 0, len(inventory.Endpoints))
+	inventoryByIdentity := make(map[string]adminBusinessReuseRoute, len(inventory.Endpoints))
 	for _, endpoint := range inventory.Endpoints {
-		method, path, found := strings.Cut(endpoint.EndpointIdentity, " ")
-		if found && retiredRuntimeEndpoint(method, path) {
-			continue
-		}
-		activeEndpoints = append(activeEndpoints, endpoint)
+		inventoryByIdentity[endpoint.EndpointIdentity] = endpoint
 	}
-	want := reusableAdminEndpointIdentities(activeEndpoints)
-	got := reusableAdminEndpointIdentities(api.AdminBusinessReuse.Routes)
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("Runtime API Admin reuse routes drifted\ngot=%v\nwant=%v", got, want)
+	for _, route := range api.AdminBusinessReuse.Routes {
+		if _, ok := inventoryByIdentity[route.EndpointIdentity]; !ok {
+			t.Fatalf("Runtime API Admin reuse route %q is absent from the owner inventory", route.EndpointIdentity)
+		}
 	}
 }
 

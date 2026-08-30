@@ -33,7 +33,7 @@ func TestNotificationSystemRetentionProjectsRuntimeLifecycleWithoutSQL(t *testin
 		t.Fatalf("preview=%+v request=%+v err=%v", preview, stub.preview, err)
 	}
 	ends := now.Add(time.Hour)
-	result, err := adapter.ProcessBatch(t.Context(), lifecyclemodel.CleanupJob{ID: "job", WorkspaceID: "workspace-a", Operation: lifecyclemodel.OperationPurge, UpdatedAt: now}, policy, []lifecyclemodel.LegalHold{{Owner: "notification", ResourceType: "notification_events", ResourceID: "event", StartsAt: now.Add(-time.Hour), EndsAt: &ends}}, 25)
+	result, err := adapter.ProcessBatch(t.Context(), lifecyclemodel.CleanupJob{ID: "job", WorkspaceID: "workspace-a", Operation: lifecyclemodel.OperationPurge, UpdatedAt: now}, policy, []lifecyclemodel.LegalHold{{Owner: "notification", ResourceType: "_notification_events", ResourceID: "event", StartsAt: now.Add(-time.Hour), EndsAt: &ends}}, 25)
 	if err != nil || result.Purged != 1 || stub.batch.Limit != 25 || len(stub.batch.Holds) != 1 || stub.batch.Holds[0].ResourceID != "event" {
 		t.Fatalf("result=%+v request=%+v err=%v", result, stub.batch, err)
 	}

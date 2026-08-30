@@ -26,14 +26,14 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		return err
 	}
 	// Backfill uses an engine-native upsert on this business key.
-	if err := s.CreateIndexIfMissing(ctx, "runtime_worker_queue_scopes", "uniq_runtime_worker_queue_scope", true, "queue_kind", "scope_key"); err != nil {
+	if err := s.CreateIndexIfMissing(ctx, "_worker_queue_scopes", "uniq_runtime_worker_queue_scope", true, "queue_kind", "scope_key"); err != nil {
 		return fmt.Errorf("create uniq_runtime_worker_queue_scope: %w", err)
 	}
 	for _, queue := range []struct {
 		kind  string
 		table string
 	}{
-		{kind: "integration_outbox", table: "runtime_publication_outbox"},
+		{kind: "integration_outbox", table: "_publication_outbox"},
 		{kind: "workflow_continuation", table: "_workflow_executions"},
 	} {
 		exists, existsErr := runtimeSchemaTableExists(ctx, s, queue.table)
@@ -46,15 +46,15 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 			}
 		}
 	}
-	if _, err := s.SchemaDB().ExecContext(ctx, "DELETE FROM "+s.TableIdentifier("runtime_worker_queue_scopes")+" WHERE "+s.Identifier("queue_kind")+" = "+s.Placeholder(1), "integration_outbox_task"); err != nil {
+	if _, err := s.SchemaDB().ExecContext(ctx, "DELETE FROM "+s.TableIdentifier("_worker_queue_scopes")+" WHERE "+s.Identifier("queue_kind")+" = "+s.Placeholder(1), "integration_outbox_task"); err != nil {
 		return fmt.Errorf("remove legacy integration outbox worker tasks: %w", err)
 	}
-	for _, table := range []string{"automation_instruction_executions", "runtime_publication_outbox"} {
+	for _, table := range []string{"_automation_instruction_executions", "_publication_outbox"} {
 		if err := s.EnsureRuntimeColumn(ctx, table, "lease_owner", text+" NOT NULL DEFAULT ''"); err != nil {
 			return err
 		}
 	}
-	if err := s.EnsureRuntimeColumn(ctx, "automation_instruction_executions", "fencing_token", "BIGINT NOT NULL DEFAULT 1"); err != nil {
+	if err := s.EnsureRuntimeColumn(ctx, "_automation_instruction_executions", "fencing_token", "BIGINT NOT NULL DEFAULT 1"); err != nil {
 		return err
 	}
 	for column, definition := range map[string]string{
@@ -66,11 +66,11 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		"error_code":          text + " NOT NULL DEFAULT ''",
 		"expires_at":          text + " NOT NULL DEFAULT ''",
 	} {
-		if err := s.EnsureRuntimeColumn(ctx, "business_action_executions", column, definition); err != nil {
+		if err := s.EnsureRuntimeColumn(ctx, "_action_executions", column, definition); err != nil {
 			return err
 		}
 	}
-	if err := s.EnsureRuntimeColumn(ctx, "runtime_publication_outbox", "lease_expires_at", text+" NOT NULL DEFAULT ''"); err != nil {
+	if err := s.EnsureRuntimeColumn(ctx, "_publication_outbox", "lease_expires_at", text+" NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
 	for column, definition := range map[string]string{
@@ -98,11 +98,11 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		"terminal_at":         text + " NOT NULL DEFAULT ''",
 		"created_by":          text + " NOT NULL DEFAULT ''",
 	} {
-		if err := s.EnsureRuntimeColumn(ctx, "runtime_publication_outbox", column, definition); err != nil {
+		if err := s.EnsureRuntimeColumn(ctx, "_publication_outbox", column, definition); err != nil {
 			return err
 		}
 	}
-	if _, err := s.SchemaDB().ExecContext(ctx, "UPDATE "+s.TableIdentifier("runtime_publication_outbox")+" SET "+s.Identifier("dedup_key")+" = "+s.Identifier("id")+" WHERE "+s.Identifier("dedup_key")+" = ''"); err != nil {
+	if _, err := s.SchemaDB().ExecContext(ctx, "UPDATE "+s.TableIdentifier("_publication_outbox")+" SET "+s.Identifier("dedup_key")+" = "+s.Identifier("id")+" WHERE "+s.Identifier("dedup_key")+" = ''"); err != nil {
 		return fmt.Errorf("backfill integration outbox dedup key: %w", err)
 	}
 	for column, definition := range map[string]string{
@@ -114,9 +114,9 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		}
 	}
 	if err := prepareIdempotencyReceiptMigrations(ctx, s,
-		idempotencyReceiptMigrationSpec{table: "business_action_executions", scopeColumns: []string{"object_key", "record_id", "action_key"}, backfillColumns: []string{"object_key", "action_key"}},
-		idempotencyReceiptMigrationSpec{table: "record_mutation_executions", scopeColumns: []string{"operation", "object_key", "target_id"}, backfillColumns: []string{"operation", "object_key"}},
-		idempotencyReceiptMigrationSpec{table: "workflow_execution_receipts", scopeColumns: []string{"workflow_key"}, backfillColumns: []string{"workflow_key"}},
+		idempotencyReceiptMigrationSpec{table: "_action_executions", scopeColumns: []string{"object_key", "record_id", "action_key"}, backfillColumns: []string{"object_key", "action_key"}},
+		idempotencyReceiptMigrationSpec{table: "_record_mutation_executions", scopeColumns: []string{"operation", "object_key", "target_id"}, backfillColumns: []string{"operation", "object_key"}},
+		idempotencyReceiptMigrationSpec{table: "_workflow_execution_receipts", scopeColumns: []string{"workflow_key"}, backfillColumns: []string{"workflow_key"}},
 	); err != nil {
 		return err
 	}
@@ -126,44 +126,44 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		columns []string
 		unique  bool
 	}{
-		{name: "uniq_transaction_boundary_intent", table: "transaction_boundary_intents", columns: []string{"workspace_id", "owner", "operation", "idempotency_key"}, unique: true},
-		{name: "idx_transaction_boundary_intent_due", table: "transaction_boundary_intents", columns: []string{"status", "next_attempt_at", "lease_expires_at"}},
-		{name: "idx_runtime_publication_destination", table: "runtime_publication_outbox", columns: []string{"publication_type", "workspace_id", "connector_key", "status"}},
-		{name: "idx_runtime_publication_due", table: "runtime_publication_outbox", columns: []string{"publication_type", "status", "next_attempt_at", "lease_expires_at", "created_at"}},
-		{name: "idx_runtime_publication_ack_due", table: "runtime_publication_outbox", columns: []string{"publication_type", "status", "ack_deadline_at"}},
-		{name: "uniq_runtime_publication_dedup", table: "runtime_publication_outbox", columns: []string{"workspace_id", "publication_type", "connector_key", "connection_key", "operation", "dedup_key"}, unique: true},
+		{name: "uniq_transaction_boundary_intent", table: "_transaction_boundary_intents", columns: []string{"workspace_id", "owner", "operation", "idempotency_key"}, unique: true},
+		{name: "idx_transaction_boundary_intent_due", table: "_transaction_boundary_intents", columns: []string{"status", "next_attempt_at", "lease_expires_at"}},
+		{name: "idx_runtime_publication_destination", table: "_publication_outbox", columns: []string{"publication_type", "workspace_id", "connector_key", "status"}},
+		{name: "idx_runtime_publication_due", table: "_publication_outbox", columns: []string{"publication_type", "status", "next_attempt_at", "lease_expires_at", "created_at"}},
+		{name: "idx_runtime_publication_ack_due", table: "_publication_outbox", columns: []string{"publication_type", "status", "ack_deadline_at"}},
+		{name: "uniq_runtime_publication_dedup", table: "_publication_outbox", columns: []string{"workspace_id", "publication_type", "connector_key", "connection_key", "operation", "dedup_key"}, unique: true},
 		// Keep the notification source identity unique without collapsing every
 		// non-notification publication onto the same all-empty notification
 		// columns. The destination identity is empty for notifications, so the
 		// extended key preserves their original source uniqueness; Connector
 		// publications vary by their existing destination/dedup identity.
-		{name: "uniq_runtime_notification_publication_source", table: "runtime_publication_outbox", columns: []string{"publication_type", "tenant_id", "workspace_id", "application_key", "source_event_id", "connector_key", "connection_key", "operation", "dedup_key"}, unique: true},
-		{name: "idx_automation_execution_rule", table: "automation_rule_executions", columns: []string{"workspace_id", "rule_key", "created_at"}},
-		{name: "idx_automation_execution_record", table: "automation_rule_executions", columns: []string{"workspace_id", "object_key", "record_id", "created_at"}},
-		{name: "idx_automation_execution_status", table: "automation_rule_executions", columns: []string{"workspace_id", "status", "created_at"}},
-		{name: "idx_automation_instruction_idempotency", table: "automation_instruction_executions", columns: []string{"workspace_id", "idempotency_key"}, unique: true},
-		{name: "idx_automation_instruction_status", table: "automation_instruction_executions", columns: []string{"workspace_id", "status", "lease_expires_at"}},
-		{name: "uniq_business_action_execution_scope", table: "business_action_executions", columns: []string{"workspace_id", "object_key", "record_id", "action_key", "idempotency_key"}, unique: true},
-		{name: "idx_business_action_execution_lease", table: "business_action_executions", columns: []string{"status", "lease_expires_at"}},
-		{name: "uniq_action_assurance_token_hash", table: "action_assurance_grants", columns: []string{"token_hash"}, unique: true},
-		{name: "idx_action_assurance_binding", table: "action_assurance_grants", columns: []string{"workspace_id", "user_id", "action_key", "object_key", "record_id"}},
-		{name: "idx_action_assurance_expiry", table: "action_assurance_grants", columns: []string{"expires_at", "consumed_at"}},
-		{name: "uniq_record_mutation_execution_scope", table: "record_mutation_executions", columns: []string{"workspace_id", "operation", "object_key", "target_id", "idempotency_key"}, unique: true},
-		{name: "idx_record_mutation_execution_lease", table: "record_mutation_executions", columns: []string{"status", "lease_expires_at"}},
+		{name: "uniq_runtime_notification_publication_source", table: "_publication_outbox", columns: []string{"publication_type", "tenant_id", "workspace_id", "application_key", "source_event_id", "connector_key", "connection_key", "operation", "dedup_key"}, unique: true},
+		{name: "idx_automation_execution_rule", table: "_automation_rule_executions", columns: []string{"workspace_id", "rule_key", "created_at"}},
+		{name: "idx_automation_execution_record", table: "_automation_rule_executions", columns: []string{"workspace_id", "object_key", "record_id", "created_at"}},
+		{name: "idx_automation_execution_status", table: "_automation_rule_executions", columns: []string{"workspace_id", "status", "created_at"}},
+		{name: "idx_automation_instruction_idempotency", table: "_automation_instruction_executions", columns: []string{"workspace_id", "idempotency_key"}, unique: true},
+		{name: "idx_automation_instruction_status", table: "_automation_instruction_executions", columns: []string{"workspace_id", "status", "lease_expires_at"}},
+		{name: "uniq_business_action_execution_scope", table: "_action_executions", columns: []string{"workspace_id", "object_key", "record_id", "action_key", "idempotency_key"}, unique: true},
+		{name: "idx_business_action_execution_lease", table: "_action_executions", columns: []string{"status", "lease_expires_at"}},
+		{name: "uniq_action_assurance_token_hash", table: "_action_assurance_grants", columns: []string{"token_hash"}, unique: true},
+		{name: "idx_action_assurance_binding", table: "_action_assurance_grants", columns: []string{"workspace_id", "user_id", "action_key", "object_key", "record_id"}},
+		{name: "idx_action_assurance_expiry", table: "_action_assurance_grants", columns: []string{"expires_at", "consumed_at"}},
+		{name: "uniq_record_mutation_execution_scope", table: "_record_mutation_executions", columns: []string{"workspace_id", "operation", "object_key", "target_id", "idempotency_key"}, unique: true},
+		{name: "idx_record_mutation_execution_lease", table: "_record_mutation_executions", columns: []string{"status", "lease_expires_at"}},
 		{name: "uniq_workflow_execution_workspace_id", table: "_workflow_executions", columns: []string{"workspace_id", "id"}, unique: true},
 		{name: "idx_workflow_execution_process", table: "_workflow_executions", columns: []string{"workspace_id", "process_id", "node_id", "status"}},
-		{name: "uniq_workflow_execution_receipt_scope", table: "workflow_execution_receipts", columns: []string{"workspace_id", "workflow_key", "idempotency_key"}, unique: true},
-		{name: "idx_workflow_execution_receipt_lease", table: "workflow_execution_receipts", columns: []string{"status", "lease_expires_at"}},
-		{name: "uniq_runtime_operation_key", table: "runtime_operations", columns: []string{"workspace_id", "system_purpose", "kind", "idempotency_key"}, unique: true},
-		{name: "idx_runtime_operation_status", table: "runtime_operations", columns: []string{"workspace_id", "status", "created_at"}},
-		{name: "uniq_runtime_operation_control", table: "runtime_operation_controls", columns: []string{"system_purpose", "control_kind", "owner"}, unique: true},
-		{name: "idx_runtime_operation_control_state", table: "runtime_operation_controls", columns: []string{"system_purpose", "control_kind", "state"}},
-		{name: "idx_runtime_release_instance_expiry", table: "runtime_release_instances", columns: []string{"lease_expires_at"}},
-		{name: "idx_runtime_release_instance_cohort", table: "runtime_release_instances", columns: []string{"generation", "combination_sha256"}},
-		{name: "idx_runtime_break_glass_active", table: "runtime_break_glass_grants", columns: []string{"workspace_id", "state", "expires_at"}},
-		{name: "uniq_runtime_break_glass_audit", table: "runtime_break_glass_grants", columns: []string{"workspace_id", "audit_event_id"}, unique: true},
-		{name: "uniq_runtime_database_retirement_object", table: "runtime_database_retirements", columns: []string{"engine", "database_name", "schema_name", "object_kind", "object_name", "parent_name"}, unique: true},
-		{name: "idx_runtime_database_retirement_status", table: "runtime_database_retirements", columns: []string{"state", "updated_at"}},
+		{name: "uniq_workflow_execution_receipt_scope", table: "_workflow_execution_receipts", columns: []string{"workspace_id", "workflow_key", "idempotency_key"}, unique: true},
+		{name: "idx_workflow_execution_receipt_lease", table: "_workflow_execution_receipts", columns: []string{"status", "lease_expires_at"}},
+		{name: "uniq_runtime_operation_key", table: "_operation_requests", columns: []string{"workspace_id", "system_purpose", "kind", "idempotency_key"}, unique: true},
+		{name: "idx_runtime_operation_status", table: "_operation_requests", columns: []string{"workspace_id", "status", "created_at"}},
+		{name: "uniq_runtime_operation_control", table: "_operation_controls", columns: []string{"system_purpose", "control_kind", "owner"}, unique: true},
+		{name: "idx_runtime_operation_control_state", table: "_operation_controls", columns: []string{"system_purpose", "control_kind", "state"}},
+		{name: "idx_runtime_release_instance_expiry", table: "_release_instances", columns: []string{"lease_expires_at"}},
+		{name: "idx_runtime_release_instance_cohort", table: "_release_instances", columns: []string{"generation", "combination_sha256"}},
+		{name: "idx_runtime_break_glass_active", table: "_operation_break_glass_grants", columns: []string{"workspace_id", "state", "expires_at"}},
+		{name: "uniq_runtime_break_glass_audit", table: "_operation_break_glass_grants", columns: []string{"workspace_id", "audit_event_id"}, unique: true},
+		{name: "uniq_runtime_database_retirement_object", table: "_operation_database_retirements", columns: []string{"engine", "database_name", "schema_name", "object_kind", "object_name", "parent_name"}, unique: true},
+		{name: "idx_runtime_database_retirement_status", table: "_operation_database_retirements", columns: []string{"state", "updated_at"}},
 	}
 	for _, index := range indexes {
 		if err := s.CreateIndexIfMissing(ctx, index.table, index.name, index.unique, index.columns...); err != nil {
@@ -201,7 +201,7 @@ func backfillWorkerQueueScopes(ctx context.Context, s Store, queueKind, table st
 	for _, value := range values {
 		digest := sha256.Sum256([]byte(queueKind + "\x00" + value.workspaceID))
 		id := "worker_scope:" + hex.EncodeToString(digest[:12])
-		insert := ormbuilder.NewInsertBuilder(s.RuntimeRenderer(), "runtime_worker_queue_scopes").
+		insert := ormbuilder.NewInsertBuilder(s.RuntimeRenderer(), "_worker_queue_scopes").
 			Columns("id", "queue_kind", "scope_key", "updated_at").
 			Values(id, queueKind, value.workspaceID, value.updatedAt)
 		insert, err = s.RuntimeProfile().ApplyUpsert(insert, []string{"queue_kind", "scope_key"}, ormbuilder.Assign("updated_at", value.updatedAt))

@@ -55,7 +55,7 @@ func TestInsertIntentParticipatesInCallerTransaction(t *testing.T) {
 	}
 	assertPublicationCount(t, store, 1)
 	var tenant, workspace, application, source, payload, fingerprint, status string
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT tenant_id,workspace_id,application_key,source_event_id,intent_json,request_fingerprint,status FROM runtime_publication_outbox WHERE id=?", intent.ID).Scan(&tenant, &workspace, &application, &source, &payload, &fingerprint, &status); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT tenant_id,workspace_id,application_key,source_event_id,intent_json,request_fingerprint,status FROM _publication_outbox WHERE id=?", intent.ID).Scan(&tenant, &workspace, &application, &source, &payload, &fingerprint, &status); err != nil {
 		t.Fatal(err)
 	}
 	if tenant != "tenant-a" || workspace != intent.WorkspaceID || application != "runtime-a" || source != intent.SourceEventID || fingerprint == "" || status != "queued" || payload == "" {
@@ -125,7 +125,7 @@ func TestRelayRetriesUnknownOutcomeWithStableIntentIdentity(t *testing.T) {
 	}
 	var status, next string
 	var attempts int
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,next_attempt_at,attempt_count FROM runtime_publication_outbox WHERE id=?", intent.ID).Scan(&status, &next, &attempts); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,next_attempt_at,attempt_count FROM _publication_outbox WHERE id=?", intent.ID).Scan(&status, &next, &attempts); err != nil {
 		t.Fatal(err)
 	}
 	if status != "queued" || next == "" || attempts != 1 {
@@ -136,7 +136,7 @@ func TestRelayRetriesUnknownOutcomeWithStableIntentIdentity(t *testing.T) {
 		t.Fatalf("second relay worked=%v err=%v", worked, err)
 	}
 	var remote string
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,remote_event_id,attempt_count FROM runtime_publication_outbox WHERE id=?", intent.ID).Scan(&status, &remote, &attempts); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,remote_event_id,attempt_count FROM _publication_outbox WHERE id=?", intent.ID).Scan(&status, &remote, &attempts); err != nil {
 		t.Fatal(err)
 	}
 	if status != "delivered" || remote != "remote-"+intent.ID || attempts != 2 || len(publisher.calls) != 2 || publisher.calls[0] != intent.ID || publisher.calls[1] != intent.ID {
@@ -165,7 +165,7 @@ func TestRelaySchedulesTimeoutAsUnknownOutcome(t *testing.T) {
 		t.Fatalf("timeout worked=%v err=%v", worked, err)
 	}
 	var status, code, next string
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,last_error_code,next_attempt_at FROM runtime_publication_outbox WHERE id=?", intent.ID).Scan(&status, &code, &next); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,last_error_code,next_attempt_at FROM _publication_outbox WHERE id=?", intent.ID).Scan(&status, &code, &next); err != nil {
 		t.Fatal(err)
 	}
 	if status != "queued" || code != "notification.remote_outcome_unknown" || next == "" {
@@ -240,7 +240,7 @@ func TestRelayRejectsLateCompletionFromExpiredLease(t *testing.T) {
 	}
 	var remote string
 	var fencing int64
-	if err := publication.runtime.DB().QueryRowContext(t.Context(), "SELECT remote_event_id,fencing_token FROM runtime_publication_outbox WHERE id=?", intent.ID).Scan(&remote, &fencing); err != nil {
+	if err := publication.runtime.DB().QueryRowContext(t.Context(), "SELECT remote_event_id,fencing_token FROM _publication_outbox WHERE id=?", intent.ID).Scan(&remote, &fencing); err != nil {
 		t.Fatal(err)
 	}
 	if remote != "remote-"+intent.ID || fencing != stale.FencingToken+1 {
@@ -264,7 +264,7 @@ func TestRelayDeadLettersNonRetryableRemoteRejection(t *testing.T) {
 		t.Fatal(err)
 	}
 	var status, code, terminal string
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,last_error_code,terminal_at FROM runtime_publication_outbox WHERE id=?", intent.ID).Scan(&status, &code, &terminal); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,last_error_code,terminal_at FROM _publication_outbox WHERE id=?", intent.ID).Scan(&status, &code, &terminal); err != nil {
 		t.Fatal(err)
 	}
 	if status != "dead_letter" || code != "notification.intent_invalid" || terminal == "" {
@@ -330,7 +330,7 @@ func TestRelayRecoversExpiredLeaseAfterProcessRestart(t *testing.T) {
 	}
 	var status, owner, remote string
 	var fencing int64
-	if err := restarted.DB().QueryRowContext(t.Context(), "SELECT status,lease_owner,remote_event_id,fencing_token FROM runtime_publication_outbox WHERE id=?", intent.ID).Scan(&status, &owner, &remote, &fencing); err != nil {
+	if err := restarted.DB().QueryRowContext(t.Context(), "SELECT status,lease_owner,remote_event_id,fencing_token FROM _publication_outbox WHERE id=?", intent.ID).Scan(&status, &owner, &remote, &fencing); err != nil {
 		t.Fatal(err)
 	}
 	if status != "delivered" || owner != "" || remote != "remote-"+intent.ID || fencing != 2 || len(publisher.calls) != 1 {
@@ -350,7 +350,7 @@ func TestRelayDeadLettersAfterBoundedUnknownOutcomeRetries(t *testing.T) {
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), "UPDATE runtime_publication_outbox SET attempt_count=?,next_attempt_at='' WHERE id=?", publicationMaxAttempt-1, intent.ID); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), "UPDATE _publication_outbox SET attempt_count=?,next_attempt_at='' WHERE id=?", publicationMaxAttempt-1, intent.ID); err != nil {
 		t.Fatal(err)
 	}
 	clock := &relayClock{now: time.Date(2026, 8, 28, 1, 0, 0, 0, time.UTC)}
@@ -363,7 +363,7 @@ func TestRelayDeadLettersAfterBoundedUnknownOutcomeRetries(t *testing.T) {
 	}
 	var status, code, terminal string
 	var attempts int
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,last_error_code,terminal_at,attempt_count FROM runtime_publication_outbox WHERE id=?", intent.ID).Scan(&status, &code, &terminal, &attempts); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,last_error_code,terminal_at,attempt_count FROM _publication_outbox WHERE id=?", intent.ID).Scan(&status, &code, &terminal, &attempts); err != nil {
 		t.Fatal(err)
 	}
 	if status != "dead_letter" || code != "notification.remote_outcome_unknown" || terminal == "" || attempts != publicationMaxAttempt {
@@ -390,7 +390,7 @@ func openPublicationStore(t *testing.T) (*database.RuntimeStore, PublicationOutb
 func assertPublicationCount(t *testing.T, store *database.RuntimeStore, want int) {
 	t.Helper()
 	var count int
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM runtime_publication_outbox").Scan(&count); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM _publication_outbox").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != want {

@@ -23,13 +23,12 @@ func assembleBusinessSystemApplication(
 	publications *publicationhandoff.PublicationHandoffApplicationService,
 	records *recordapplication.RecordApplicationService,
 	scheduler *schedulerapplication.SchedulerApplicationService,
-	frontend *deploymentapplication.DeploymentFrontendCapabilityApplicationService,
 	runtimeStatus *deploymentapplication.DeploymentRuntimeStatusApplicationService,
 	evidence changeplanrepository.ChangePlanEvidenceRepository,
 ) *businesssystemapplication.BusinessSystemApplicationService {
 	return businesssystemapplication.NewBusinessSystemApplicationService(businesssystemapplication.BusinessSystemApplicationDependencies{
 		FeaturePermissions: schema.FeaturePermissions, SchemaForPrincipal: schema.ForPrincipal,
-		ApplicationDefinitions: metadata.ListApplicationDefinitions, FrontendSnapshot: frontend.Snapshot, Evidence: evidence,
+		ApplicationDefinitions: metadata.ListApplicationDefinitions, Evidence: evidence,
 		Runtime: businesssystemapplication.BusinessSystemRuntimeProjectionDependencies{
 			WorkflowProcesses: workflows.WorkflowProcesses, AutomationRules: automations.AutomationRules,
 			AutomationExecutions: automations.AutomationExecutions,

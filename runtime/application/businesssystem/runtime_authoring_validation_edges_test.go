@@ -11,7 +11,6 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
-	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
@@ -231,17 +230,16 @@ func TestRuntimeAuthoringGlobalCheckConditionOutcomes(t *testing.T) {
 			{SeedKey: "missing-object", RecordID: "record-2", ContentHash: "hash", ObjectKey: "missing"},
 			{SeedKey: "valid", RecordID: "record-3", ContentHash: "hash", ObjectKey: "order"},
 		},
-		FrontendCapabilities: changeplanmodel.FrontendCapabilities{StaleFrontendSupport: []changeplanmodel.FrontendSupportEntry{{SupportKey: "stale"}}},
 	}
 	runtimeAuthoringApplyGlobalChecks(&report, snapshot)
-	if report.Checks["connector_readiness"] != "invalid" || report.Checks["frontend_support"] != "invalid" {
+	if report.Checks["connector_readiness"] != "invalid" {
 		t.Fatalf("global checks=%#v diagnostics=%#v", report.Checks, report.Diagnostics)
 	}
 
 	report = RuntimeAuthoringValidationReport{Checks: map[string]string{"definition_graph": "invalid", "manifest": "ok"}}
-	snapshot = changeplanprojection.BusinessSystemSnapshot{FrontendCapabilities: changeplanmodel.FrontendCapabilities{MissingFrontendSupport: []changeplanmodel.FrontendRequirement{{CapabilityKey: "schema.object", SupportKey: "objects"}}}}
+	snapshot = changeplanprojection.BusinessSystemSnapshot{}
 	runtimeAuthoringApplyGlobalChecks(&report, snapshot)
-	if report.Checks["cross_resource_references"] != "invalid" || report.Checks["frontend_support"] != "invalid" {
+	if report.Checks["cross_resource_references"] != "invalid" {
 		t.Fatalf("invalid semantic checks=%#v", report.Checks)
 	}
 

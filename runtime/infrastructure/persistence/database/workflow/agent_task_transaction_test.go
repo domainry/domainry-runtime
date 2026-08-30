@@ -15,7 +15,7 @@ type workflowAgentTransactionTestStore struct{ store *database.RuntimeStore }
 
 func (s workflowAgentTransactionTestStore) InsertAgentTask(ctx context.Context, executor modulehost.Executor, run agentrepository.AgentTaskMutation) error {
 	columns := []string{"run_id", "idempotency_key", "task_key", "process_id", "status", "lease_owner", "fencing_token", "lease_expires_at", "next_attempt_at", "payload_json", "created_at", "updated_at"}
-	statement, args, err := ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "agent_task_runs", run.WorkspaceID).Columns(columns...).Values(run.RunID, run.IdempotencyKey, run.TaskKey, run.ProcessID, run.Status, run.LeaseOwner, run.FencingToken, run.LeaseExpiresAt, run.NextAttemptAt, run.Payload, run.CreatedAtMillis, run.UpdatedAtMillis).Build()
+	statement, args, err := ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "_agent_task_runs", run.WorkspaceID).Columns(columns...).Values(run.RunID, run.IdempotencyKey, run.TaskKey, run.ProcessID, run.Status, run.LeaseOwner, run.FencingToken, run.LeaseExpiresAt, run.NextAttemptAt, run.Payload, run.CreatedAtMillis, run.UpdatedAtMillis).Build()
 	if err != nil {
 		return err
 	}
@@ -34,7 +34,7 @@ func (s workflowAgentTransactionTestStore) UpdateAgentTask(ctx context.Context, 
 	if expected == "running" {
 		predicate = ormbuilder.And(predicate, ormbuilder.Equal("lease_owner", run.LeaseOwner), ormbuilder.Equal("fencing_token", run.FencingToken))
 	}
-	statement, args, err := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "agent_task_runs", run.WorkspaceID).Set("status", run.Status).Set("payload_json", run.Payload).Set("updated_at", run.UpdatedAtMillis).Where(predicate).Build()
+	statement, args, err := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_agent_task_runs", run.WorkspaceID).Set("status", run.Status).Set("payload_json", run.Payload).Set("updated_at", run.UpdatedAtMillis).Where(predicate).Build()
 	if err != nil {
 		return err
 	}

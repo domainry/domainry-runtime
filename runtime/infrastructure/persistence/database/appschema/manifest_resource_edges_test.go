@@ -66,7 +66,7 @@ func runMetadataTransaction(t *testing.T, base ApplicationSchemaStore, state met
 }
 
 func metadataResourceTestSeed(payload any) metadataResourceSeed {
-	return metadataResourceSeed{ResourceType: "object", Table: "object_definitions", Key: "account", ObjectKey: "account", Name: "Account", SchemaVersion: "1", SourceKind: "generated", SourceID: "template", Payload: payload}
+	return metadataResourceSeed{ResourceType: "object", Table: "_metadata_object_definitions", Key: "account", ObjectKey: "account", Name: "Account", SchemaVersion: "1", SourceKind: "generated", SourceID: "template", Payload: payload}
 }
 
 func TestInsertMetadataResourceBranches(t *testing.T) {
@@ -175,7 +175,7 @@ func TestSyncMetadataResourceReplacesCurrentGeneratedProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	var currentHash string
-	if err := baseDB.DB().QueryRowContext(t.Context(), "SELECT schema_hash FROM object_definitions WHERE resource_key = ?", seed.Key).Scan(&currentHash); err != nil {
+	if err := baseDB.DB().QueryRowContext(t.Context(), "SELECT schema_hash FROM _metadata_object_definitions WHERE resource_key = ?", seed.Key).Scan(&currentHash); err != nil {
 		t.Fatal(err)
 	}
 	if currentHash != expectedHash {

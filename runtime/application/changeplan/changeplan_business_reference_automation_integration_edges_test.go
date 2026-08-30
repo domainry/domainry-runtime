@@ -90,7 +90,7 @@ func TestSchedulerReferencesTreatSnapshotRefreshAsReportTarget(t *testing.T) {
 		},
 		recordErrors: map[string]error{},
 	}
-	service := NewChangePlanReferenceApplicationService(nil, runtime, nil, nil)
+	service := NewChangePlanReferenceApplicationService(nil, runtime, nil)
 	builder := NewReferenceGraphBuilder()
 	if err := service.addSchedulerReferences(t.Context(), builder, changePlanAdmin()); err != nil {
 		t.Fatal(err)

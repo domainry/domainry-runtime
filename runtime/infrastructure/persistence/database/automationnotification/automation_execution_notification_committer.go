@@ -106,7 +106,7 @@ func (s AutomationExecutionNotificationCommitter) executionCommitted(ctx context
 		return s.inspectExecution(ctx, execution)
 	}
 	var count int
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "automation_rule_executions", execution.WorkspaceID).
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_automation_rule_executions", execution.WorkspaceID).
 		Projections(ormbuilder.Project(ormbuilder.CountAll())).
 		Where(ormbuilder.Equal("id", execution.ID)).Build()
 	if err != nil {

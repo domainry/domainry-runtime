@@ -150,7 +150,6 @@ func TestRuntimeAuthoringGlobalChecksRejectLiveReadinessAndProvenanceGaps(t *tes
 	snapshot := runtimeAuthoringCompleteConfigurationSnapshot(nil)
 	snapshot.Schema.Objects = []definitionmodel.ObjectSchema{{Key: "order"}}
 	snapshot.RuntimeState.Connections = []changeplanprojection.IntegrationConnectionSummary{{Key: "crm", Status: "active", Ready: false}}
-	snapshot.FrontendCapabilities.MissingFrontendSupport = []changeplanmodel.FrontendRequirement{{CapabilityKey: "schema.object", SupportKey: "metadata.object.editor.v1"}}
 	report := RuntimeAuthoringValidationReport{Checks: map[string]string{"definition_graph": "ok", "manifest": "ok"}, Diagnostics: []RuntimeAuthoringValidationDiagnostic{}}
 	runtimeAuthoringApplyGlobalChecks(&report, snapshot)
 	for _, key := range []string{"cross_resource_references", "cycles", "permission_closure", "foundation_usage"} {
@@ -158,12 +157,12 @@ func TestRuntimeAuthoringGlobalChecksRejectLiveReadinessAndProvenanceGaps(t *tes
 			t.Fatalf("semantic check %s=%q", key, report.Checks[key])
 		}
 	}
-	for _, key := range []string{"connector_readiness", "frontend_support"} {
+	for _, key := range []string{"connector_readiness"} {
 		if report.Checks[key] != "invalid" {
 			t.Fatalf("live check %s=%q report=%#v", key, report.Checks[key], report)
 		}
 	}
-	if len(report.Diagnostics) != 2 {
+	if len(report.Diagnostics) != 1 {
 		t.Fatalf("diagnostics=%#v", report.Diagnostics)
 	}
 }

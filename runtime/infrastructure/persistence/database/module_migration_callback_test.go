@@ -35,8 +35,8 @@ func TestOwnedMigrationCallbackUsesHostLedgerExactlyOnce(t *testing.T) {
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_migrations WHERE path='module_identity_000001_identity_foundation' AND kind='module:identity' AND dirty=FALSE`).Scan(&clean); err != nil || clean != 1 {
 		t.Fatalf("host ledger clean rows=%d err=%v", clean, err)
 	}
-	var privateLedger int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='_schema_materializations'`).Scan(&privateLedger); err != nil || privateLedger != 0 {
-		t.Fatalf("private Identity ledger count=%d err=%v", privateLedger, err)
+	var migrationLedgers int
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name LIKE '%schema_migrations'`).Scan(&migrationLedgers); err != nil || migrationLedgers != 1 {
+		t.Fatalf("migration ledger count=%d err=%v", migrationLedgers, err)
 	}
 }

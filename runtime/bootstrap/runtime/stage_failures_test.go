@@ -3,7 +3,6 @@ package runtime
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"testing"
 
 	"github.com/domainry/domainry-foundation/requestcontext"
@@ -27,7 +26,7 @@ func TestRuntimeSeedSynchronizationBindsInstallationWorkspace(t *testing.T) {
 	}
 }
 
-func TestAssembleRuntimeServicesReportsFrontendManifestAndWorkflowFailures(t *testing.T) {
+func TestAssembleRuntimeServicesReportsWorkflowFailures(t *testing.T) {
 	cfg := bootstrapTestConfig(t)
 	manifest, err := prepareRuntimeManifest(t.Context(), cfg)
 	if err != nil {
@@ -38,16 +37,6 @@ func TestAssembleRuntimeServicesReportsFrontendManifestAndWorkflowFailures(t *te
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-
-	missingFrontend := cfg
-	missingFrontend.UploadDir = ""
-	missingFrontend.FrontendCapabilityManifestPath = filepath.Join(t.TempDir(), "missing-frontend-capability.json")
-	if _, err := assembleRuntimeServices(t.Context(), missingFrontend, manifest, nil, store, runtimeIdentityDirectoryStub{}, nil, nil, nil, nil, worker.Dependencies{}); err == nil {
-		t.Fatal("missing frontend capability manifest must fail assembly")
-	}
-	if _, err := assembleRuntimeServices(t.Context(), missingFrontend, manifest, nil, store, runtimeIdentityDirectoryStub{}, nil, nil, nil, nil, worker.Dependencies{}, runtimeExtensionRegistries{}); err == nil {
-		t.Fatal("missing frontend capability manifest with empty extension registries must fail assembly")
-	}
 
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -62,16 +51,14 @@ func TestCompleteRuntimeServiceAssemblyPropagatesEveryCompletionStage(t *testing
 	for _, test := range []struct {
 		name                string
 		installLifecycle    func() error
-		installFrontend     func() error
 		initializeWorkflows func() error
 	}{
-		{name: "lifecycle", installLifecycle: func() error { return failure }, installFrontend: success, initializeWorkflows: success},
-		{name: "frontend", installLifecycle: success, installFrontend: func() error { return failure }, initializeWorkflows: success},
-		{name: "workflows", installLifecycle: success, installFrontend: success, initializeWorkflows: func() error { return failure }},
+		{name: "lifecycle", installLifecycle: func() error { return failure }, initializeWorkflows: success},
+		{name: "workflows", installLifecycle: success, initializeWorkflows: func() error { return failure }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			configured := false
-			if _, err := completeRuntimeServiceAssembly(runtimeServiceAssembly{}, test.installLifecycle, test.installFrontend, func() { configured = true }, test.initializeWorkflows); !errors.Is(err, failure) {
+			if _, err := completeRuntimeServiceAssembly(runtimeServiceAssembly{}, test.installLifecycle, func() { configured = true }, test.initializeWorkflows); !errors.Is(err, failure) {
 				t.Fatalf("completion error=%v", err)
 			}
 			if configured != (test.name == "workflows") {
@@ -81,7 +68,7 @@ func TestCompleteRuntimeServiceAssemblyPropagatesEveryCompletionStage(t *testing
 	}
 	want := runtimeServiceAssembly{}
 	configured := false
-	if got, err := completeRuntimeServiceAssembly(want, success, success, func() { configured = true }, success); err != nil || !configured || got.services != want.services {
+	if got, err := completeRuntimeServiceAssembly(want, success, func() { configured = true }, success); err != nil || !configured || got.services != want.services {
 		t.Fatalf("successful completion=%#v configured=%t error=%v", got, configured, err)
 	}
 }

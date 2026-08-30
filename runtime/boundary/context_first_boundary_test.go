@@ -154,7 +154,6 @@ func TestRuntimeApplicationContextFreeMethodsMatchReviewedPureOrConstructionExce
 		"ActionApplicationService.ReplaceDefinitions",
 		"AutomationApplicationService.AfterOutbox", "AutomationApplicationService.ValidateIntegrationOutput",
 		"BusinessSystemApplicationService.RuntimeProjectionConfigured", "BusinessSystemApplicationService.SetEvidenceRepository",
-		"DeploymentFrontendCapabilityApplicationService.Configured", "DeploymentFrontendCapabilityApplicationService.SnapshotManifest", "DeploymentFrontendCapabilityApplicationService.ValidateManifestDefinition",
 		"DeploymentRuntimeReleaseCohortApplicationService.HeartbeatInterval",
 		"IntegrationApplicationService.AdapterForConnection",
 		"IntegrationApplicationService.AuthorizeIntegrationConnectionUpsert",

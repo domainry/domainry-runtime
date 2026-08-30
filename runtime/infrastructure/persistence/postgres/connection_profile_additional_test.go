@@ -1,14 +1,11 @@
 package postgres
 
 import (
-	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"database/sql/driver"
 	"encoding/pem"
-	"errors"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -16,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/domainry/domainry-foundation/requestcontext"
 	"github.com/domainry/domainry-foundation/telemetry"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/jackc/pgx/v5"
@@ -50,8 +46,8 @@ func TestPostgresProfileValidationMatrix(t *testing.T) {
 		})
 	}
 
-	profile, err := NewConnectionProfile(config.Config{DatabaseDSN: "postgres://user:secret@localhost/runtime?sslmode=verify-full", DatabaseConnectTimeout: 3 * time.Second, DatabaseMaxConnections: 50, DatabaseReservedConnections: 5, DatabaseMaxOpenConns: 10, RuntimeReplicaCount: 2, Environment: "production", DatabaseRLSEnabled: true})
-	if err != nil || profile.ConnectTimeout != 3*time.Second || profile.MaxOpenConns != 10 || profile.RuntimeReplicaCount != 2 || !profile.TLSVerified || !profile.RLSEnabled {
+	profile, err := NewConnectionProfile(config.Config{DatabaseDSN: "postgres://user:secret@localhost/runtime?sslmode=verify-full", DatabaseConnectTimeout: 3 * time.Second, DatabaseMaxConnections: 50, DatabaseReservedConnections: 5, DatabaseMaxOpenConns: 10, RuntimeReplicaCount: 2, Environment: "production"})
+	if err != nil || profile.ConnectTimeout != 3*time.Second || profile.MaxOpenConns != 10 || profile.RuntimeReplicaCount != 2 || !profile.TLSVerified {
 		t.Fatalf("profile=%#v err=%v", profile, err)
 	}
 	defaults, err := NewConnectionProfile(base)
@@ -123,11 +119,11 @@ func TestPostgresMigrationProfileValidationAndOpen(t *testing.T) {
 	}
 }
 
-func TestPostgresProfileOpenAndWorkspaceInitializer(t *testing.T) {
+func TestPostgresProfileOpen(t *testing.T) {
 	if _, err := (ConnectionProfile{}).Open(); err == nil {
 		t.Fatal("expected uninitialized profile error")
 	}
-	profile, err := NewConnectionProfile(config.Config{DatabaseDSN: "postgres://user:secret@localhost/runtime?sslmode=disable", DatabaseMaxOpenConns: 7, DatabaseMaxIdleConns: 3, DatabaseConnMaxLifetime: time.Minute, DatabaseConnMaxIdleTime: 30 * time.Second, DatabaseRLSEnabled: true})
+	profile, err := NewConnectionProfile(config.Config{DatabaseDSN: "postgres://user:secret@localhost/runtime?sslmode=disable", DatabaseMaxOpenConns: 7, DatabaseMaxIdleConns: 3, DatabaseConnMaxLifetime: time.Minute, DatabaseConnMaxIdleTime: 30 * time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,25 +137,12 @@ func TestPostgresProfileOpenAndWorkspaceInitializer(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = db.Close()
-	profile.RLSEnabled = false
 	db, err = profile.Open()
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = db.Close()
 
-	execer := &profileExecer{}
-	if err := postgresWorkspaceTransactionInitializer(t.Context(), execer); err != nil || execer.calls != 0 {
-		t.Fatalf("empty workspace calls=%d err=%v", execer.calls, err)
-	}
-	ctx := requestcontext.WithActorID(requestcontext.WithWorkspaceID(t.Context(), "workspace-1"), "actor-1")
-	if err := postgresWorkspaceTransactionInitializer(ctx, execer); err != nil || execer.calls != 1 || len(execer.args) != 2 || execer.args[0].Value != "workspace-1" || execer.args[1].Value != "actor-1" {
-		t.Fatalf("calls=%d args=%#v err=%v", execer.calls, execer.args, err)
-	}
-	execer.err = errors.New("connection lost")
-	if err := postgresWorkspaceTransactionInitializer(ctx, execer); err == nil || !strings.Contains(err.Error(), "workspace RLS context") {
-		t.Fatalf("initializer error=%v", err)
-	}
 }
 
 func TestPostgresRootCertificateAndTLSHelpers(t *testing.T) {
@@ -226,16 +209,4 @@ func createPostgresTestCertificate(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return path
-}
-
-type profileExecer struct {
-	calls int
-	args  []driver.NamedValue
-	err   error
-}
-
-func (e *profileExecer) ExecContext(_ context.Context, _ string, args []driver.NamedValue) (driver.Result, error) {
-	e.calls++
-	e.args = append([]driver.NamedValue(nil), args...)
-	return driver.RowsAffected(1), e.err
 }

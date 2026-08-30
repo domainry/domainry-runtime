@@ -14,22 +14,22 @@ import (
 // of those tables in its technical schema metadata.
 func TestNotificationModuleSchemaOwnershipMatchesPlane(t *testing.T) {
 	want := []notificationmodule.TableOwnership{
-		{Name: "notification_alert_groups", Scope: notificationmodule.WorkspaceData},
-		{Name: "notification_channel_plans", Scope: notificationmodule.WorkspaceData},
-		{Name: "notification_delivery_policy", Scope: notificationmodule.SystemData},
-		{Name: "notification_delivery_reservations", Scope: notificationmodule.WorkspaceData},
-		{Name: "notification_event_failures", Scope: notificationmodule.WorkspaceData},
-		{Name: "notification_events", Scope: notificationmodule.WorkspaceData},
-		{Name: "notification_inbox_delegations", Scope: notificationmodule.WorkspaceData},
-		{Name: "notification_inbox_items", Scope: notificationmodule.WorkspaceData},
-		{Name: "notification_inbox_saved_views", Scope: notificationmodule.WorkspaceData},
-		{Name: "notification_migration_controls", Scope: notificationmodule.WorkspaceData},
-		{Name: "notification_recipient_preferences", Scope: notificationmodule.WorkspaceData},
-		{Name: "notification_retention_archive", Scope: notificationmodule.WorkspaceData},
-		{Name: "notification_template_publication_locks", Scope: notificationmodule.SystemData},
-		{Name: "notification_template_publication_requests", Scope: notificationmodule.SystemData},
-		{Name: "notification_template_records", Scope: notificationmodule.SystemData},
-		{Name: "notification_template_versions", Scope: notificationmodule.SystemData},
+		{Name: "_notification_alert_groups", Scope: notificationmodule.WorkspaceData},
+		{Name: "_notification_channel_plans", Scope: notificationmodule.WorkspaceData},
+		{Name: "_notification_delivery_policies", Scope: notificationmodule.SystemData},
+		{Name: "_notification_delivery_reservations", Scope: notificationmodule.WorkspaceData},
+		{Name: "_notification_event_failures", Scope: notificationmodule.WorkspaceData},
+		{Name: "_notification_events", Scope: notificationmodule.WorkspaceData},
+		{Name: "_notification_inbox_delegations", Scope: notificationmodule.WorkspaceData},
+		{Name: "_notification_inbox_items", Scope: notificationmodule.WorkspaceData},
+		{Name: "_notification_inbox_saved_views", Scope: notificationmodule.WorkspaceData},
+		{Name: "_notification_migration_controls", Scope: notificationmodule.WorkspaceData},
+		{Name: "_notification_recipient_preferences", Scope: notificationmodule.WorkspaceData},
+		{Name: "_notification_retention_archive_entries", Scope: notificationmodule.WorkspaceData},
+		{Name: "_notification_template_publication_locks", Scope: notificationmodule.SystemData},
+		{Name: "_notification_template_publication_requests", Scope: notificationmodule.SystemData},
+		{Name: "_notification_template_versions", Scope: notificationmodule.SystemData},
+		{Name: "_notification_templates", Scope: notificationmodule.SystemData},
 	}
 	got := notificationmodule.SchemaOwnership()
 	if !reflect.DeepEqual(got, want) {

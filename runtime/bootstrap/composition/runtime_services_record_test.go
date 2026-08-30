@@ -530,13 +530,11 @@ func TestAuditAppendHandlesNilAndConfiguredServices(t *testing.T) {
 	}
 }
 
-func TestRuntimeInitializationSupportsOptionalFrontendAndSurfacePorts(t *testing.T) {
+func TestRuntimeInitializationSupportsOptionalSurfacePorts(t *testing.T) {
 	repository := &compositionRecordRepository{page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "record-1"}}, Total: 1}}
 	directory := compositionIdentityDirectory{}
 	services := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{Dependencies: RuntimeServicesDependencies{
-		Records:              repository,
-		FrontendCapabilities: newCompositionFrontendCapabilityTestStore(),
-		IdentityDirectory:    directory,
+		Records: repository, IdentityDirectory: directory,
 	}})
 
 	page, err := listRuntimeSurfaceContextStoredRecords(t.Context(), services, "default", definitionmodel.ObjectSchema{Key: "customer"}, recordmodel.RecordListQuery{Page: 1, PageSize: 10})
@@ -1190,12 +1188,6 @@ func TestBusinessSystemSnapshotUsesNarrowOwnerPorts(t *testing.T) {
 				}
 				return []appschemamodel.ApplicationDefinition{{ResourceType: resourceType, ResourceKey: "customer.activate", SourceKind: "manifest"}}, nil
 			},
-			FrontendSnapshot: func(context.Context, principalmodel.Principal) (FrontendCapabilitySnapshot, error) {
-				if failAt == "frontend" {
-					return FrontendCapabilitySnapshot{}, failure
-				}
-				return FrontendCapabilitySnapshot{}, nil
-			},
 			Evidence: evidence,
 			Runtime: businesssystemapplication.BusinessSystemRuntimeProjectionDependencies{
 				WorkflowProcesses: func(context.Context, principalmodel.Principal, workflowmodel.WorkflowProcessFilter) ([]workflowmodel.WorkflowProcessInstance, error) {
@@ -1237,7 +1229,7 @@ func TestBusinessSystemSnapshotUsesNarrowOwnerPorts(t *testing.T) {
 	if _, err := newService("", nil).Snapshot(t.Context(), principalmodel.Principal{}); err == nil {
 		t.Fatal("unknown principal must be rejected")
 	}
-	for _, failAt := range []string{"permissions", "metadata", "runtime", "records", "frontend"} {
+	for _, failAt := range []string{"permissions", "metadata", "runtime", "records"} {
 		if _, err := newService(failAt, nil).Snapshot(t.Context(), admin); !errors.Is(err, failure) {
 			t.Fatalf("failure=%q error=%v", failAt, err)
 		}
@@ -1365,73 +1357,15 @@ func TestRecordActionApplicationWiringCoversRoutingAndCoreValidationBoundaries(t
 	}
 }
 
-func TestFrontendBusinessBindingsSupportsAbsentAndPopulatedSchema(t *testing.T) {
-	if bindings := frontendBusinessBindings(nil); len(bindings.Objects) != 0 || len(bindings.Fields) != 0 {
-		t.Fatalf("nil bindings=%#v", bindings)
-	}
-	records := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{Manifest: manifestmodel.ManifestSchema{
-		Objects: []definitionmodel.ObjectSchema{{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name"}}}},
-		Actions: []definitionmodel.ActionSchema{{Key: "customer.create"}},
-		Reports: []reportmodel.ReportSchema{{Key: "customer.summary"}},
-	}})
-	bindings := frontendBusinessBindings(records)
-	if !bindings.Objects["customer"] || !bindings.Fields["customer.name"] || !bindings.Actions["customer.create"] || !bindings.Reports["customer.summary"] ||
-		bindings.SchemaHash == "" || bindings.SchemaSnapshotVersion == "" {
-		t.Fatalf("bindings=%#v", bindings)
-	}
-	if len(frontendCapabilityDefinitions()) == 0 {
-		t.Fatal("frontend capability helpers changed")
-	}
-}
-
-func TestBusinessReferenceFrontendProjectionSupportsOptionalPortsAndEvidence(t *testing.T) {
-	service := assembleChangePlanReferenceApplication(nil, nil, nil, nil)
+func TestBusinessReferenceProjectionSupportsOptionalPorts(t *testing.T) {
+	service := assembleChangePlanReferenceApplication(nil, nil, nil)
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
 	if graph, err := service.Graph(t.Context(), principal); err != nil || len(graph.Nodes) != 0 {
 		t.Fatalf("empty reference graph=%#v error=%v", graph, err)
 	}
 
-	empty := changePlanFrontendCapabilities(FrontendCapabilitySnapshot{
-		Revision: 7, Status: "unknown",
-		MissingFrontendSupport: []FrontendCapabilityRequirement{{CapabilityKey: "record.list", SupportKey: "record-table"}},
-	})
-	if empty.Manifest != nil || len(empty.MissingFrontendSupport) != 1 {
-		t.Fatalf("empty frontend projection=%#v", empty)
-	}
-
-	entry := FrontendCapabilitySupportEntry{
-		SupportKey: "record-table", CapabilityKeys: []string{"record.list"}, Route: "/records", RequiredPermissions: []string{"record.read"},
-		FeatureModule: "records", AcceptanceTests: []string{"lists records"}, ActorRoles: []string{"admin"}, BusinessObjects: []string{"customer"},
-		ImplementedActions: []string{"customer.create"}, ReportKeys: []string{"customer.summary"},
-		FieldKeys: []string{"customer.name"}, AcceptanceClaims: []string{"customer-list-visible"},
-	}
-	withoutEvidence := changePlanFrontendCapabilities(FrontendCapabilitySnapshot{
-		Manifest:             &FrontendCapabilityManifest{ManifestVersion: "v1", FrontendVersion: "1", RuntimeContractVersions: []string{"runtime-v1"}, Entries: []FrontendCapabilitySupportEntry{entry}},
-		StaleFrontendSupport: []FrontendCapabilitySupportEntry{entry},
-	})
-	if withoutEvidence.Manifest == nil || withoutEvidence.Manifest.DeploymentEvidence != nil || len(withoutEvidence.Manifest.Entries) != 1 || len(withoutEvidence.StaleFrontendSupport) != 1 {
-		t.Fatalf("frontend projection without evidence=%#v", withoutEvidence)
-	}
-
-	withEvidence := changePlanFrontendCapabilities(FrontendCapabilitySnapshot{Manifest: &FrontendCapabilityManifest{
-		DeploymentEvidence: &FrontendDeploymentEvidence{AuditContractVersion: "audit-v1", DesignContractHash: "design", RouteRegistryHash: "routes", FrontendSourceHash: "source", AuditArtifactHash: "artifact"},
-	}})
-	if withEvidence.Manifest == nil || withEvidence.Manifest.DeploymentEvidence == nil || withEvidence.Manifest.DeploymentEvidence.FrontendSourceHash != "source" {
-		t.Fatalf("frontend projection with evidence=%#v", withEvidence)
-	}
-
-	frontend := NewFrontendCapabilityApplicationService()
-	if snapshot, err := (businessReferenceFrontendPortAdapter{source: frontend}).FrontendReferenceSnapshot(t.Context(), principal); err != nil || snapshot.Status != "unknown" {
-		t.Fatalf("frontend reference snapshot=%#v error=%v", snapshot, err)
-	}
-	canceled, cancel := context.WithCancel(t.Context())
-	cancel()
-	if _, err := (businessReferenceFrontendPortAdapter{source: frontend}).FrontendReferenceSnapshot(canceled, principal); err == nil {
-		t.Fatal("canceled frontend snapshot must return an error")
-	}
-
 	records := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{Manifest: manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}}})
-	if graph, err := assembleChangePlanReferenceApplication(records, nil, nil, nil).Graph(t.Context(), principal); err != nil || len(graph.Nodes) == 0 {
+	if graph, err := assembleChangePlanReferenceApplication(records, nil, nil).Graph(t.Context(), principal); err != nil || len(graph.Nodes) == 0 {
 		t.Fatalf("schema-backed reference graph=%#v error=%v", graph, err)
 	}
 }

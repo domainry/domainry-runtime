@@ -10,10 +10,10 @@ import (
 func TestLifecyclePersistenceDoesNotKnowSourceOwnedBusinessTables(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "domainry-lifecycle", "internal", "infrastructure", "persistence", "database", "lifecycle")
 	foreignTables := []string{
-		"business_action_executions", "record_mutation_executions", "runtime_operations", "runtime_break_glass_grants",
-		"workflow_definition_versions", "workflow_process_instances", "workflow_process_events", "workflow_tasks", "workflow_node_instances",
-		"automation_rule_executions", "automation_instruction_executions", "_audit_events", "runtime_rate_limit_bucket",
-		"runtime_publication_outbox", "download_task", "report_export_audit", "report_query_run",
+		"_action_executions", "_record_mutation_executions", "_operation_requests", "_operation_break_glass_grants",
+		"_workflow_definition_versions", "_workflow_process_instances", "_workflow_process_events", "_workflow_tasks", "_workflow_node_instances",
+		"_automation_rule_executions", "_automation_instruction_executions", "_audit_events", "_rate_limit_buckets",
+		"_publication_outbox", "download_task", "report_export_audit", "report_query_run",
 	}
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {

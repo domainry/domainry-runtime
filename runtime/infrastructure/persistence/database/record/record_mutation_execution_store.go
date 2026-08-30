@@ -57,7 +57,7 @@ func (r RecordStore) tryBeginRecordMutationOnce(ctx context.Context, request rec
 	value.CreatedAt, value.UpdatedAt = now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)
 	columns := recordMutationExecutionColumns()
 	values := recordMutationExecutionValues(value, "{}")
-	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "record_mutation_executions", workspaceID).
+	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_record_mutation_executions", workspaceID).
 		Columns(append(columns[:1], columns[2:]...)...).Values(append(values[:1], values[2:]...)...).Build()
 	if buildErr != nil {
 		return recordmodel.RecordMutationClaimResult{}, buildErr
@@ -79,7 +79,7 @@ func (r RecordStore) tryBeginRecordMutationOnce(ctx context.Context, request rec
 		r.store.ObserveIdempotency(ctx, value.WorkspaceID, "record."+value.Operation, idempotency.OutcomeForDecision(decision, false))
 		return recordmodel.RecordMutationClaimResult{Decision: decision, Execution: current}, nil
 	}
-	query, args, err = ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "record_mutation_executions", workspaceID).
+	query, args, err = ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_record_mutation_executions", workspaceID).
 		Set("status", string(idempotency.StatusProcessing)).Set("lease_owner", value.LeaseOwner).
 		Set("lease_expires_at", value.LeaseExpiresAt).
 		SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).
@@ -193,7 +193,7 @@ func (r RecordStore) observeRecordMutationLeaseLost(ctx context.Context, workspa
 }
 
 func (r RecordStore) findRecordMutationExecution(ctx context.Context, scope recordmodel.RecordMutationExecution) (recordmodel.RecordMutationExecution, bool, error) {
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "record_mutation_executions", scope.WorkspaceID).Columns(recordMutationExecutionColumns()...).Where(ormbuilder.And(
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_record_mutation_executions", scope.WorkspaceID).Columns(recordMutationExecutionColumns()...).Where(ormbuilder.And(
 		ormbuilder.Equal("operation", scope.Operation), ormbuilder.Equal("object_key", scope.ObjectKey), ormbuilder.Equal("target_id", scope.TargetID), ormbuilder.Equal("idempotency_key", scope.IdempotencyKey),
 	)).Limit(1).Build()
 	if err != nil {
@@ -217,7 +217,7 @@ func (r RecordStore) findRecordMutationExecutionByID(ctx context.Context, worksp
 	if err != nil {
 		return recordmodel.RecordMutationExecution{}, err
 	}
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "record_mutation_executions", workspaceID).Columns(recordMutationExecutionColumns()...).Where(ormbuilder.Equal("id", id)).Build()
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_record_mutation_executions", workspaceID).Columns(recordMutationExecutionColumns()...).Where(ormbuilder.Equal("id", id)).Build()
 	if err != nil {
 		return recordmodel.RecordMutationExecution{}, err
 	}
@@ -225,7 +225,7 @@ func (r RecordStore) findRecordMutationExecutionByID(ctx context.Context, worksp
 }
 
 func recordMutationCompletionUpdate(store *database.RuntimeStore, workspaceID string, completion recordmodel.RecordMutationCompletion, resultJSON string, responseStatus int, now time.Time) (string, []any, error) {
-	return ormbuilder.NewWorkspaceUpdateBuilder(store.SQLRenderer, "record_mutation_executions", workspaceID).
+	return ormbuilder.NewWorkspaceUpdateBuilder(store.SQLRenderer, "_record_mutation_executions", workspaceID).
 		Set("status", string(idempotency.StatusSucceeded)).Set("result_json", resultJSON).Set("response_status", responseStatus).
 		Set("expires_at", completion.ExpiresAt.UTC().Format(time.RFC3339Nano)).Set("updated_at", now.Format(time.RFC3339Nano)).
 		Where(ormbuilder.And(ormbuilder.Equal("id", completion.ExecutionID), ormbuilder.Equal("lease_owner", strings.TrimSpace(completion.LeaseOwner)), ormbuilder.Equal("fencing_token", completion.FencingToken), ormbuilder.Equal("status", string(idempotency.StatusProcessing)))).Build()

@@ -258,7 +258,7 @@ func (r WorkflowDecisionStore) decideTaskTx(ctx context.Context, tx *sql.Tx, com
 	if status == "" {
 		status = "open"
 	}
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "workflow_tasks", commit.WorkspaceID).
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_tasks", commit.WorkspaceID).
 		Set("status", task.Status).Set("decision", task.Decision).Set("comment", task.Comment).Set("completed_by", task.CompletedBy).
 		Set("completed_at", database.NullableText(task.CompletedAt)).Set("updated_at", task.UpdatedAt).
 		Where(ormbuilder.And(ormbuilder.Equal("id", task.ID), ormbuilder.Equal("assignee_user_id", commit.ExpectedAssigneeID), ormbuilder.Equal("status", status))).Build()
@@ -278,26 +278,26 @@ func (r WorkflowDecisionStore) insertNodeTx(ctx context.Context, tx *sql.Tx, nod
 	output, _ := json.Marshal(database.NonNilMap(node.Output))
 	columns := workflowNodeColumns
 	values := []any{node.WorkspaceID, node.ID, node.ProcessID, node.NodeID, node.NodeType, node.Iteration, node.Status, string(input), string(output), node.ErrorCode, node.StartedAt, database.NullableText(node.CompletedAt)}
-	return r.insertTx(ctx, tx, "workflow_node_instances", columns, values)
+	return r.insertTx(ctx, tx, "_workflow_node_instances", columns, values)
 }
 
 func (r WorkflowDecisionStore) updateNodeTx(ctx context.Context, tx *sql.Tx, node workflowmodel.WorkflowNodeInstance) error {
 	input, _ := json.Marshal(database.NonNilMap(node.Input))
 	output, _ := json.Marshal(database.NonNilMap(node.Output))
-	return r.updateTx(ctx, tx, "workflow_node_instances", node.WorkspaceID, node.ID, []string{"status", "input_json", "output_json", "error_code", "completed_at"}, []any{node.Status, string(input), string(output), node.ErrorCode, database.NullableText(node.CompletedAt)})
+	return r.updateTx(ctx, tx, "_workflow_node_instances", node.WorkspaceID, node.ID, []string{"status", "input_json", "output_json", "error_code", "completed_at"}, []any{node.Status, string(input), string(output), node.ErrorCode, database.NullableText(node.CompletedAt)})
 }
 
 func (r WorkflowDecisionStore) insertTaskTx(ctx context.Context, tx *sql.Tx, task workflowmodel.WorkflowTask) error {
 	resolver, _ := json.Marshal(task.ResolverSnapshot)
 	columns := workflowTaskColumns()
 	values := []any{task.WorkspaceID, task.ID, task.ProcessID, task.NodeInstanceID, task.NodeID, task.Title, task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, string(resolver), task.CandidateSource, task.NodeDefinitionVersion, task.Sequence, task.Status, task.Decision, task.Comment, database.NullableText(task.DueAt), task.CompletedBy, database.NullableText(task.CompletedAt), task.CreatedAt, task.UpdatedAt}
-	return r.insertTx(ctx, tx, "workflow_tasks", columns, values)
+	return r.insertTx(ctx, tx, "_workflow_tasks", columns, values)
 }
 
 func (r WorkflowDecisionStore) updateTaskTx(ctx context.Context, tx *sql.Tx, task workflowmodel.WorkflowTask) error {
 	columns := []string{"assignee_user_id", "assignee_name", "assignee_role_key", "status", "decision", "comment", "due_at", "completed_by", "completed_at", "updated_at"}
 	values := []any{task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.Status, task.Decision, task.Comment, database.NullableText(task.DueAt), task.CompletedBy, database.NullableText(task.CompletedAt), task.UpdatedAt}
-	return r.updateTx(ctx, tx, "workflow_tasks", task.WorkspaceID, task.ID, columns, values)
+	return r.updateTx(ctx, tx, "_workflow_tasks", task.WorkspaceID, task.ID, columns, values)
 }
 
 func (r WorkflowDecisionStore) updateProcessTx(ctx context.Context, tx *sql.Tx, process workflowmodel.WorkflowProcessInstance) error {
@@ -307,12 +307,12 @@ func (r WorkflowDecisionStore) updateProcessTx(ctx context.Context, tx *sql.Tx, 
 	result, _ := json.Marshal(database.NonNilMap(process.Result))
 	columns := []string{"workflow_key", "workflow_name", "workflow_definition_version_id", "definition_version", "definition_hash", "definition_json", "object_key", "record_id", "initiator_id", "initiator_role_key", "status", "current_node_ids_json", "variables_json", "result_json", "error_code", "created_at", "updated_at", "completed_at"}
 	values := []any{process.WorkflowKey, process.WorkflowName, process.DefinitionVersionID, process.DefinitionVersion, process.DefinitionHash, string(definition), process.ObjectKey, process.RecordID, process.InitiatorID, process.InitiatorRoleKey, process.Status, string(currentNodes), string(variables), string(result), process.ErrorCode, process.CreatedAt, process.UpdatedAt, database.NullableText(process.CompletedAt)}
-	return r.updateTx(ctx, tx, "workflow_process_instances", process.WorkspaceID, process.ID, columns, values)
+	return r.updateTx(ctx, tx, "_workflow_process_instances", process.WorkspaceID, process.ID, columns, values)
 }
 
 func (r WorkflowDecisionStore) insertEventTx(ctx context.Context, tx *sql.Tx, event workflowmodel.WorkflowProcessEvent) error {
 	metadata, _ := json.Marshal(database.NonNilMap(event.Metadata))
-	return r.insertTx(ctx, tx, "workflow_process_events", workflowEventColumns, []any{event.WorkspaceID, event.ID, event.ProcessID, event.NodeID, event.TaskID, event.Event, event.ActorID, event.Summary, string(metadata), event.CreatedAt})
+	return r.insertTx(ctx, tx, "_workflow_process_events", workflowEventColumns, []any{event.WorkspaceID, event.ID, event.ProcessID, event.NodeID, event.TaskID, event.Event, event.ActorID, event.Summary, string(metadata), event.CreatedAt})
 }
 
 func (r WorkflowDecisionStore) updateExecutionTx(ctx context.Context, tx *sql.Tx, execution workflowmodel.WorkflowExecution) error {

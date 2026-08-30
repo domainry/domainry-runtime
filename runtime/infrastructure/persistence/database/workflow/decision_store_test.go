@@ -133,7 +133,7 @@ func TestWorkflowStateCommitAtomicallyCreatesAgentNodeAndTask(t *testing.T) {
 		if duplicateEvent {
 			want = 0
 		}
-		for table, target := range map[string][2]string{"workflow_node_instances": {"id", "agent-node"}, "agent_task_runs": {"run_id", "agent-run"}} {
+		for table, target := range map[string][2]string{"_workflow_node_instances": {"id", "agent-node"}, "_agent_task_runs": {"run_id", "agent-run"}} {
 			var count int
 			query := "SELECT COUNT(*) FROM " + store.TableIdentifier(table) + " WHERE " + store.Identifier(target[0]) + " = " + store.Placeholder(1)
 			if err := store.DB().QueryRowContext(t.Context(), query, target[1]).Scan(&count); err != nil || count != want {
@@ -172,10 +172,10 @@ func TestWorkflowStateCommitAtomicallyFencesAgentTerminalAndResumeIntent(t *test
 		}
 		var taskStatus, nodeStatus string
 		var executions int
-		if err := store.DB().QueryRowContext(t.Context(), "SELECT status FROM "+store.TableIdentifier("agent_task_runs")+" WHERE run_id = "+store.Placeholder(1), "run-1").Scan(&taskStatus); err != nil {
+		if err := store.DB().QueryRowContext(t.Context(), "SELECT status FROM "+store.TableIdentifier("_agent_task_runs")+" WHERE run_id = "+store.Placeholder(1), "run-1").Scan(&taskStatus); err != nil {
 			t.Fatal(err)
 		}
-		if err := store.DB().QueryRowContext(t.Context(), "SELECT status FROM "+store.TableIdentifier("workflow_node_instances")+" WHERE id = "+store.Placeholder(1), node.ID).Scan(&nodeStatus); err != nil {
+		if err := store.DB().QueryRowContext(t.Context(), "SELECT status FROM "+store.TableIdentifier("_workflow_node_instances")+" WHERE id = "+store.Placeholder(1), node.ID).Scan(&nodeStatus); err != nil {
 			t.Fatal(err)
 		}
 		if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.TableIdentifier("_workflow_executions")+" WHERE id = "+store.Placeholder(1), resume.ID).Scan(&executions); err != nil {
@@ -208,7 +208,7 @@ func TestWorkflowStateCommitAtomicallyResolvesWaitingAgentApproval(t *testing.T)
 	}
 	var taskStatus string
 	var executions int
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT status FROM "+store.TableIdentifier("agent_task_runs")+" WHERE run_id = "+store.Placeholder(1), "run-approval").Scan(&taskStatus); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT status FROM "+store.TableIdentifier("_agent_task_runs")+" WHERE run_id = "+store.Placeholder(1), "run-approval").Scan(&taskStatus); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.TableIdentifier("_workflow_executions")+" WHERE id = "+store.Placeholder(1), resume.ID).Scan(&executions); err != nil {
@@ -302,7 +302,7 @@ func TestWorkflowDecisionNotificationEventCommitsAndRollsBackWithTask(t *testing
 				t.Fatalf("commit decision notification: committed=%v err=%v", committed, err)
 			}
 			var count int
-			if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.TableIdentifier("notification_events")+" WHERE "+store.Identifier("workspace_id")+" = ?", "default").Scan(&count); err != nil || count != 1 {
+			if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.TableIdentifier("_notification_events")+" WHERE "+store.Identifier("workspace_id")+" = ?", "default").Scan(&count); err != nil || count != 1 {
 				t.Fatalf("notification event count=%d err=%v", count, err)
 			}
 		})

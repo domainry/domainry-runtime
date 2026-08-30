@@ -24,20 +24,15 @@ type ReferenceRuntime interface {
 	ListIntegrationOutboxMessages(context.Context, string, string, int, principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error)
 }
 
-type FrontendSnapshotSource interface {
-	FrontendReferenceSnapshot(context.Context, principalmodel.Principal) (changeplanmodel.FrontendCapabilities, error)
-}
-
 // ChangePlanReferenceApplicationService resolves change-plan dependency graphs.
 type ChangePlanReferenceApplicationService struct {
 	schema   func(context.Context, principalmodel.Principal) ReferenceSchema
 	runtime  ReferenceRuntime
 	evidence changeplanrepository.ChangePlanEvidenceRepository
-	frontend FrontendSnapshotSource
 }
 
-func NewChangePlanReferenceApplicationService(schema func(context.Context, principalmodel.Principal) ReferenceSchema, runtime ReferenceRuntime, evidence changeplanrepository.ChangePlanEvidenceRepository, frontend FrontendSnapshotSource) *ChangePlanReferenceApplicationService {
-	return &ChangePlanReferenceApplicationService{schema: schema, runtime: runtime, evidence: evidence, frontend: frontend}
+func NewChangePlanReferenceApplicationService(schema func(context.Context, principalmodel.Principal) ReferenceSchema, runtime ReferenceRuntime, evidence changeplanrepository.ChangePlanEvidenceRepository) *ChangePlanReferenceApplicationService {
+	return &ChangePlanReferenceApplicationService{schema: schema, runtime: runtime, evidence: evidence}
 }
 
 func (s *ChangePlanReferenceApplicationService) Graph(ctx context.Context, principal principalmodel.Principal) (changeplanmodel.ReferenceGraph, error) {
@@ -59,9 +54,6 @@ func (s *ChangePlanReferenceApplicationService) Graph(ctx context.Context, princ
 	AddAutomationReferences(builder, snapshot)
 	AddReportIntegrationReferences(builder, snapshot)
 	AddPresentationReferences(builder, snapshot)
-	if err := s.addFrontendCapabilityReferences(ctx, builder, principal); err != nil {
-		return changeplanmodel.ReferenceGraph{}, err
-	}
 	if err := s.addSeedProvenanceReferences(ctx, builder); err != nil {
 		return changeplanmodel.ReferenceGraph{}, err
 	}

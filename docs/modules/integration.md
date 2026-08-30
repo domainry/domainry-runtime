@@ -4,18 +4,18 @@
 均已接入。Runtime 生产依赖图不再包含 Integration 管理面、Webhook inbox、
 Provider、Invocation reconciliation、Credential worker 或旧 Integration persistence。
 
-Runtime 只永久拥有 `runtime_publication_outbox`。该表是 Record、Action、
+Runtime 只永久拥有 `_publication_outbox`。该表是 Record、Action、
 Workflow 本地事务提交外部副作用的 durable handoff。Connector catalog、
 connection、credential、webhook inbox、event mapping、Provider task state 和
 invocation evidence 归 `domainry-integration`。Web Push 的 readiness、浏览器
 subscription、endpoint、`p256dh` 与 auth material 同样归 Integration；Runtime
-只在 `runtime_publication_outbox` 保存公开的 `subscription_id` 和通知 payload。
+只在 `_publication_outbox` 保存公开的 `subscription_id` 和通知 payload。
 
 应用 Manifest 的连接声明通过 Binding `Requirements.SynchronizeConnections`
-交给 owner。Module 写入自己的 `integration_connections`，SaaS 调用远端
+交给 owner。Module 写入自己的 `_integration_connections`，SaaS 调用远端
 `/v1/application-requirements/connections`；Runtime 不再直接写该表。应用需求
-定义使用 `application_connector_requirements`，与 owner 的
-`connector_definitions` 明确分离。
+定义使用 `_application_schema_connector_requirements`，与 owner 的
+`_integration_connector_definitions` 明确分离。
 
 Module 通过窄 Host 借用数据库、SQL dialect 和 migration registrar，owner
 `integration` 的 migrations 写入宿主唯一 `_schema_migrations`。SaaS Binding

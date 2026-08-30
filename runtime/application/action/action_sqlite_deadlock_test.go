@@ -68,10 +68,10 @@ func TestCreatePlanningDoesNotSelfDeadlockSharedSingleConnectionSQLitePool(t *te
 	}
 	defer db.Close()
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec("CREATE TABLE identity_users (id TEXT PRIMARY KEY)"); err != nil {
+	if _, err := db.Exec("CREATE TABLE _identity_users (id TEXT PRIMARY KEY)"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec("INSERT INTO identity_users(id) VALUES ('identity-user-1')"); err != nil {
+	if _, err := db.Exec("INSERT INTO _identity_users(id) VALUES ('identity-user-1')"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -93,7 +93,7 @@ func TestCreatePlanningDoesNotSelfDeadlockSharedSingleConnectionSQLitePool(t *te
 				// Models Identity Directory relation validation using the same DB pool
 				// but outside Runtime's Action transaction composition.
 				var id string
-				if err := db.QueryRowContext(ctx, "SELECT id FROM identity_users WHERE id = ?", "identity-user-1").Scan(&id); err != nil {
+				if err := db.QueryRowContext(ctx, "SELECT id FROM _identity_users WHERE id = ?", "identity-user-1").Scan(&id); err != nil {
 					return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 				}
 				return transactionmodel.MutationPlan{}, recordmodel.Record{ID: "member-1", Data: map[string]any{"identity_user_id": id}}, nil

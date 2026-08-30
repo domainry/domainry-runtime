@@ -29,7 +29,7 @@ return {count, ttl}
 `)
 
 // RateLimiter uses one Redis key per fixed-window bucket. Redis owns expiry,
-// so this backend does not write runtime_rate_limit_bucket.
+// so this backend does not write _rate_limit_buckets.
 type RateLimiter struct {
 	client redis.UniversalClient
 	prefix string

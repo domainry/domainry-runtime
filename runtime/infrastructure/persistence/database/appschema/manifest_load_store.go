@@ -62,19 +62,19 @@ func (s ApplicationSchemaStore) LoadManifestMetadata(ctx context.Context) (manif
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
-	workflows, err := loadMetadataSlice[definitionmodel.WorkflowSchema](ctx, s, "workflow_definitions")
+	workflows, err := loadMetadataSlice[definitionmodel.WorkflowSchema](ctx, s, "_application_schema_workflow_definitions")
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
-	automationRules, err := loadMetadataSlice[automationmodel.AutomationRuleSchema](ctx, s, "automation_rule_definitions")
+	automationRules, err := loadMetadataSlice[automationmodel.AutomationRuleSchema](ctx, s, "_application_schema_automation_rule_definitions")
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
-	connectors, err := loadMetadataSlice[integrationmodel.ConnectorSchema](ctx, s, "application_connector_requirements")
+	connectors, err := loadMetadataSlice[integrationmodel.ConnectorSchema](ctx, s, "_application_schema_connector_requirements")
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
-	eventMappings, err := loadMetadataSlice[integrationmodel.IntegrationEventMappingSchema](ctx, s, "application_integration_event_mapping_requirements")
+	eventMappings, err := loadMetadataSlice[integrationmodel.IntegrationEventMappingSchema](ctx, s, "_application_schema_integration_event_mapping_requirements")
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
@@ -109,7 +109,7 @@ func (s ApplicationSchemaStore) LoadManifestMetadata(ctx context.Context) (manif
 }
 
 func (s ApplicationSchemaStore) loadMetadataCatalog(ctx context.Context) (map[string]string, error) {
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_runtime_metadata_projection").Columns("template_id", "artifact_version", "default_locale", "name", "contract_version", "schema_hash", "source_hash").Where(ormbuilder.Equal("id", "current")).Build()
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_application_schema_projection").Columns("template_id", "artifact_version", "default_locale", "name", "contract_version", "schema_hash", "source_hash").Where(ormbuilder.Equal("id", "current")).Build()
 	if buildErr != nil {
 		return nil, fmt.Errorf("build metadata catalog load: %w", buildErr)
 	}

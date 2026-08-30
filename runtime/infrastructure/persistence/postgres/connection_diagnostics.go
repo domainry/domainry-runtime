@@ -37,11 +37,10 @@ type SafeStatus struct {
 	PreparedStatements  bool   `json:"prepared_statements"`
 	MigrationConfigured bool   `json:"migration_configured"`
 	MigrationMode       string `json:"migration_mode"`
-	RLSEnabled          bool   `json:"rls_enabled"`
 }
 
 func (p ConnectionProfile) SafeStatus() SafeStatus {
-	return SafeStatus{Backend: p.Backend, Mode: p.Mode, Schema: p.Schema, MaxOpenConns: p.MaxOpenConns, MaxIdleConns: p.MaxIdleConns, ServerMaxConns: p.ServerMaxConns, ReservedConns: p.ReservedConns, RuntimeReplicaCount: p.RuntimeReplicaCount, TLS: p.TLS, TLSVerified: p.TLSVerified, PreparedStatements: p.PreparedStatements, MigrationConfigured: p.MigrationConfigured, MigrationMode: p.MigrationMode, RLSEnabled: p.RLSEnabled}
+	return SafeStatus{Backend: p.Backend, Mode: p.Mode, Schema: p.Schema, MaxOpenConns: p.MaxOpenConns, MaxIdleConns: p.MaxIdleConns, ServerMaxConns: p.ServerMaxConns, ReservedConns: p.ReservedConns, RuntimeReplicaCount: p.RuntimeReplicaCount, TLS: p.TLS, TLSVerified: p.TLSVerified, PreparedStatements: p.PreparedStatements, MigrationConfigured: p.MigrationConfigured, MigrationMode: p.MigrationMode}
 }
 
 func (p ConnectionProfile) Probe(ctx context.Context, db *sql.DB) (Capabilities, error) {

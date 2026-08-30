@@ -12,6 +12,7 @@ import (
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
+	identitysdk "github.com/domainry/domainry-identity-sdk"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
@@ -146,7 +147,7 @@ func TestDeploymentIdempotencyStatusAndMutationEdges(t *testing.T) {
 		t.Fatalf("unsupported cleanup error=%v", err)
 	}
 
-	admin := frontendCapabilityAdmin("workspace-a")
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	nonAdmin := admin
 	accessfixture.Set(&nonAdmin, accessfixture.Bundle{})
 	if _, err := service.IdempotencyReceipts(t.Context(), nonAdmin, "", 1); apperror.CodeOf(err) != "auth.permission_denied" {

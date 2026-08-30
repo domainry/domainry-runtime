@@ -52,7 +52,7 @@ func registerIntegrationWorkerQueueScope(ctx context.Context, store *database.Ru
 	}
 	digest := sha256.Sum256([]byte(queueKind + "\x00" + workspaceID))
 	id := "worker_scope:" + hex.EncodeToString(digest[:12])
-	update, updateArgs, buildErr := ormbuilder.NewUpdateBuilder(store.SQLRenderer, "runtime_worker_queue_scopes").
+	update, updateArgs, buildErr := ormbuilder.NewUpdateBuilder(store.SQLRenderer, "_worker_queue_scopes").
 		Set("updated_at", updatedAt).Where(ormbuilder.Equal("id", id)).Build()
 	if buildErr != nil {
 		return fmt.Errorf("build %s worker queue scope refresh: %w", queueKind, buildErr)
@@ -66,7 +66,7 @@ func registerIntegrationWorkerQueueScope(ctx context.Context, store *database.Ru
 	} else if affected > 0 {
 		return nil
 	}
-	insert, insertArgs, buildErr := ormbuilder.NewInsertBuilder(store.SQLRenderer, "runtime_worker_queue_scopes").
+	insert, insertArgs, buildErr := ormbuilder.NewInsertBuilder(store.SQLRenderer, "_worker_queue_scopes").
 		Columns("id", "queue_kind", "scope_key", "updated_at").Values(id, queueKind, workspaceID, updatedAt).Build()
 	if buildErr != nil {
 		return fmt.Errorf("build %s worker queue scope registration: %w", queueKind, buildErr)
@@ -87,7 +87,7 @@ func registerIntegrationWorkerQueueScope(ctx context.Context, store *database.Ru
 }
 
 func (r IntegrationWorkerStore) integrationWorkerQueueScopes(ctx context.Context, queueKind string) ([]string, error) {
-	query, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "runtime_worker_queue_scopes").
+	query, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "_worker_queue_scopes").
 		Columns("scope_key").Where(ormbuilder.Equal("queue_kind", queueKind)).OrderBy(ormbuilder.Ascending("scope_key")).Build()
 	if buildErr != nil {
 		return nil, fmt.Errorf("build %s worker queue scope list: %w", queueKind, buildErr)

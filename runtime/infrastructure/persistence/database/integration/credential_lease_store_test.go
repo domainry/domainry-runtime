@@ -33,7 +33,7 @@ func TestCredentialRefreshLeaseCoordinatesRepositoriesAndRecoversExpiry(t *testi
 	}
 
 	past := now.Add(-2 * time.Minute)
-	if _, err := store.DB().ExecContext(t.Context(), "UPDATE integration_credential_refresh_leases SET lease_expires_at = ? WHERE workspace_id = ? AND connection_key = ?", past.Format(time.RFC3339), "workspace", "connection"); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), "UPDATE _integration_credential_refresh_leases SET lease_expires_at = ? WHERE workspace_id = ? AND connection_key = ?", past.Format(time.RFC3339), "workspace", "connection"); err != nil {
 		t.Fatal(err)
 	}
 	acquired, err = first.TryAcquireCredentialRefreshLease(t.Context(), "workspace", "connection", "owner-c", now.Format(time.RFC3339), now.Add(time.Minute).Format(time.RFC3339))

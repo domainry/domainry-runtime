@@ -57,12 +57,12 @@ func TestIntegrationConfigReplaceRowFailureStages(t *testing.T) {
 	}
 	for index, state := range states {
 		repository := scriptedIntegrationConfig(t, state)
-		if err := repository.replaceRow(t.Context(), "integration_secrets", "secret_key", "default", "token", []string{"id"}, []any{"id"}, "integration secret"); err == nil {
+		if err := repository.replaceRow(t.Context(), "_integration_secrets", "secret_key", "default", "token", []string{"id"}, []any{"id"}, "integration secret"); err == nil {
 			t.Fatalf("replace stage %d succeeded", index)
 		}
 	}
 	repository := scriptedIntegrationConfig(t, &integrationSQLState{execSteps: []integrationSQLExecStep{{rows: 1}, {rows: 1}}, rollbackErr: wantErr})
-	if err := repository.replaceRow(t.Context(), "integration_secrets", "secret_key", "default", "token", []string{"id"}, []any{"id"}, "integration secret"); err != nil {
+	if err := repository.replaceRow(t.Context(), "_integration_secrets", "secret_key", "default", "token", []string{"id"}, []any{"id"}, "integration secret"); err != nil {
 		t.Fatalf("successful replace: %v", err)
 	}
 }
@@ -90,7 +90,7 @@ func TestIntegrationConfigActionTransactionEdges(t *testing.T) {
 			t.Fatal(err)
 		}
 		ctx = database.WithActionExecutionTransaction(t.Context(), tx)
-		if err := repository.replaceRow(ctx, "integration_secrets", "secret_key", "default", "token", []string{"id"}, []any{"id"}, "integration secret"); err == nil {
+		if err := repository.replaceRow(ctx, "_integration_secrets", "secret_key", "default", "token", []string{"id"}, []any{"id"}, "integration secret"); err == nil {
 			t.Fatalf("action transaction replace stage %d succeeded", index)
 		}
 		_ = tx.Rollback()

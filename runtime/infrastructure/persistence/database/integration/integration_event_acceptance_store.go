@@ -49,7 +49,7 @@ func (r IntegrationEventStore) AcceptEvent(ctx context.Context, workspaceID stri
 		}
 		if existingFingerprint != incomingFingerprint {
 			now := time.Now().UTC().Format(time.RFC3339)
-			query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_events", existing.WorkspaceID).Set("status", "quarantined").Set("error", "backend.integration.event.external_id_conflict").Set("next_retry_at", "").Set("updated_at", now).Where(ormbuilder.Equal("id", existing.ID)).Build()
+			query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_integration_events", existing.WorkspaceID).Set("status", "quarantined").Set("error", "backend.integration.event.external_id_conflict").Set("next_retry_at", "").Set("updated_at", now).Where(ormbuilder.Equal("id", existing.ID)).Build()
 			if buildErr != nil {
 				return integrationmodel.IntegrationEvent{}, false, fmt.Errorf("build conflicting integration event quarantine: %w", buildErr)
 			}
@@ -84,7 +84,7 @@ func (r IntegrationEventStore) AcceptEvent(ctx context.Context, workspaceID stri
 	if err != nil {
 		return integrationmodel.IntegrationEvent{}, false, err
 	}
-	query, insertArgs, err := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "integration_events", workspaceID).Columns(insertColumns...).Values(insertValues...).Build()
+	query, insertArgs, err := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_integration_events", workspaceID).Columns(insertColumns...).Values(insertValues...).Build()
 	if err != nil {
 		return integrationmodel.IntegrationEvent{}, false, fmt.Errorf("build accepted integration event insert: %w", err)
 	}
@@ -125,7 +125,7 @@ func (r IntegrationEventStore) insertMappingIntentTx(ctx context.Context, tx *sq
 	if err != nil {
 		return err
 	}
-	query, insertArgs, err := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "integration_event_mapping_intents", intent.WorkspaceID).Columns(insertColumns...).Values(insertValues...).Build()
+	query, insertArgs, err := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_integration_event_mapping_intents", intent.WorkspaceID).Columns(insertColumns...).Values(insertValues...).Build()
 	if err != nil {
 		return fmt.Errorf("build integration event mapping intent insert: %w", err)
 	}
@@ -139,7 +139,7 @@ func (r IntegrationEventStore) insertMappingIntentTx(ctx context.Context, tx *sq
 }
 
 func (r IntegrationEventStore) findByExternalIDTx(ctx context.Context, tx *sql.Tx, workspaceID, provider, externalID string) (integrationmodel.IntegrationEvent, bool, error) {
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_events", workspaceID).Columns(integrationEventColumns...).Where(ormbuilder.And(ormbuilder.Equal("provider", strings.TrimSpace(provider)), ormbuilder.Equal("external_id", strings.TrimSpace(externalID)))).Build()
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_events", workspaceID).Columns(integrationEventColumns...).Where(ormbuilder.And(ormbuilder.Equal("provider", strings.TrimSpace(provider)), ormbuilder.Equal("external_id", strings.TrimSpace(externalID)))).Build()
 	if err != nil {
 		return integrationmodel.IntegrationEvent{}, false, err
 	}

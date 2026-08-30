@@ -82,7 +82,7 @@ func TestRuntimeGlobalWorkerDiscoveryKeepsQueueReadsWorkspaceScoped(t *testing.T
 	if len(state.queryWorkspaces) != 2 || state.queryWorkspaces[0] != "" || state.queryWorkspaces[1] != "workspace-a" {
 		t.Fatalf("expected global discovery followed by tenant-scoped queue read, got %#v", state.queryWorkspaces)
 	}
-	if !strings.Contains(state.queryStatements[0], "runtime_worker_queue_scopes") || !strings.Contains(state.queryStatements[1], "integration_events") {
+	if !strings.Contains(state.queryStatements[0], "_worker_queue_scopes") || !strings.Contains(state.queryStatements[1], "_integration_events") {
 		t.Fatalf("unexpected discovery/read statements: %#v", state.queryStatements)
 	}
 }

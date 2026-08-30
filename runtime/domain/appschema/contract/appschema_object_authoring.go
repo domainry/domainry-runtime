@@ -15,8 +15,7 @@ func ApplicationSchemaObjectAuthoringCapability() capabilitycontract.CapabilityA
 		ValidationEndpoint: "POST /metadata/definitions/object/{resourceKey}/validate", ConfigurationRoutes: metadataConfigurationRoutes("object"),
 		ResourceOperations:       metadataResourceOperations("object"),
 		ResourceKeyPathParameter: "resourceKey",
-		FrontendSupportKey:       "metadata.object.editor.v1", MinimumFrontendVersion: "0.1.0",
-		InputSchema: metadataAuthoringRequestSchema(payload, false), OutputSchema: metadataAuthoringOutputSchema(payload),
+		InputSchema:              metadataAuthoringRequestSchema(payload, false), OutputSchema: metadataAuthoringOutputSchema(payload),
 		OutputVariables: []capabilitycontract.CapabilityAuthoringOutput{
 			{Name: "resource_key", JSONPointer: "/definition/resource_key", Type: "object_key", VisibleTo: "subsequent_capability_calls"},
 			{Name: "schema_hash", JSONPointer: "/definition/schema_hash", Type: "schema_hash", VisibleTo: "subsequent_capability_calls"},

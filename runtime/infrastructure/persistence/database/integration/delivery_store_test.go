@@ -216,7 +216,7 @@ func TestIntegrationDeliveryStoreIdentifiesPreparedFactWithMissingExternalReceip
 	if _, err := repository.CompleteInvocation(t.Context(), completed.WorkspaceID, completed.ID, "succeeded", 12, "provider:43", "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), "UPDATE integration_invocations SET created_at = ? WHERE id = ?", "2020-01-01T00:00:00Z", missing.ID); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), "UPDATE _integration_invocations SET created_at = ? WHERE id = ?", "2020-01-01T00:00:00Z", missing.ID); err != nil {
 		t.Fatal(err)
 	}
 	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "test invocation reconciliation")

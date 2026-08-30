@@ -117,9 +117,9 @@ func TestWorkspaceAssociationsHaveScopedLookupIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := map[string][]string{
-		"workflow_node_instances": {"workspace_id", "process_id"},
-		"workflow_tasks":          {"workspace_id", "process_id"},
-		"workflow_process_events": {"workspace_id", "process_id"},
+		"_workflow_node_instances": {"workspace_id", "process_id"},
+		"_workflow_tasks":          {"workspace_id", "process_id"},
+		"_workflow_process_events": {"workspace_id", "process_id"},
 	}
 	for table, prefix := range expected {
 		if !sqliteTableHasIndexPrefix(t, store.DB(), store.Identifier(table), prefix) {
@@ -170,8 +170,8 @@ func globallyOwnedUniqueConstraint(table, indexName string, columns []string) bo
 	if len(columns) != 1 || columns[0] != "token_hash" {
 		return false
 	}
-	return (table == "integration_api_keys" && indexName == "uniq_integration_api_keys_token_hash") ||
-		(table == "action_assurance_grants" && indexName == "uniq_action_assurance_token_hash")
+	return (table == "_integration_api_keys" && indexName == "uniq_integration_api_keys_token_hash") ||
+		(table == "_action_assurance_grants" && indexName == "uniq_action_assurance_token_hash")
 }
 
 func sqliteIndexColumns(db *sql.DB, quotedIndex string) ([]string, error) {

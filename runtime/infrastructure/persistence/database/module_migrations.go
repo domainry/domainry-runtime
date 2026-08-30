@@ -119,9 +119,6 @@ func (s *RuntimeStore) ApplyOwnedMigration(ctx context.Context, owner string, ve
 	if _, err := s.schemaDatabase().ExecContext(ctx, complete, time.Since(started).Milliseconds(), time.Now().UTC().Format(time.RFC3339), path, ledgerChecksum); err != nil {
 		return fmt.Errorf("record module migration %s: %w", path, err)
 	}
-	if err := s.EnsureWorkspaceRLS(ctx); err != nil {
-		return fmt.Errorf("apply workspace isolation after %s migration: %w", owner, err)
-	}
 	return nil
 }
 
@@ -135,12 +132,6 @@ func (s *RuntimeStore) applyOwnedMigrationsLocked(ctx context.Context, owner str
 		if err := s.applyOwnedMigration(ctx, owner, migration); err != nil {
 			return err
 		}
-	}
-	// Module migrations run after the Runtime base schema. Re-apply/verify the
-	// host isolation policy so newly created workspace-owned module tables are
-	// covered in the same startup before any Binding begins serving work.
-	if err := s.EnsureWorkspaceRLS(ctx); err != nil {
-		return fmt.Errorf("apply workspace isolation after %s migrations: %w", owner, err)
 	}
 	return nil
 }

@@ -31,8 +31,6 @@ func fallbackAuthoringErrorCapability(code string) string {
 		return "scheduler.business_job"
 	case strings.HasPrefix(code, "backend.report."):
 		return "report.definition"
-	case strings.HasPrefix(code, "backend.frontend."):
-		return "maintenance.frontend_support_observation"
 	case strings.HasPrefix(code, "backend.integration.binding."):
 		return "integration.binding_validation"
 	case strings.HasPrefix(code, "backend.integration.connector.operation_") || strings.HasPrefix(code, "backend.integration.connector.protocol_field_") || strings.HasPrefix(code, "backend.integration.connector.compensation_") || code == "backend.integration.connector.reserve_contract_incomplete":

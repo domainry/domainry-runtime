@@ -35,7 +35,7 @@ func TestWorkflowDecisionRejectsWorkspaceBeginAndDecisionFailures(t *testing.T) 
 	if err := decisionStore.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: " "}); err == nil {
 		t.Fatal("blank state workspace accepted")
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `DROP TABLE workflow_tasks`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `DROP TABLE _workflow_tasks`); err != nil {
 		t.Fatal(err)
 	}
 	if committed, err := decisionStore.CommitWorkflowDecision(t.Context(), workflowDecisionEdgeCommit(task)); err == nil || committed {
@@ -116,7 +116,7 @@ func TestWorkflowDecisionRollsBackEachTransactionalWriteFailure(t *testing.T) {
 				t.Fatalf("committed=%v error=%v", committed, err)
 			}
 			var status string
-			if err := fixture.store.DB().QueryRowContext(t.Context(), `SELECT status FROM workflow_tasks WHERE workspace_id = ? AND id = ?`, "default", fixture.task.ID).Scan(&status); err != nil || status != "open" {
+			if err := fixture.store.DB().QueryRowContext(t.Context(), `SELECT status FROM _workflow_tasks WHERE workspace_id = ? AND id = ?`, "default", fixture.task.ID).Scan(&status); err != nil || status != "open" {
 				t.Fatalf("rolled back task status=%q error=%v", status, err)
 			}
 		})

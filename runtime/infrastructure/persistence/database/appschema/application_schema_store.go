@@ -55,7 +55,7 @@ func (r ApplicationSchemaStore) SnapshotRevision(ctx context.Context, scope prin
 		executor = actionExecutor
 	}
 	var sourceHash, schemaHash string
-	query := "SELECT " + r.store.Identifier("source_hash") + ", " + r.store.Identifier("schema_hash") + " FROM " + r.store.TableIdentifier("_runtime_metadata_projection") + " WHERE " + r.store.Identifier("id") + " = " + r.store.Placeholder(1)
+	query := "SELECT " + r.store.Identifier("source_hash") + ", " + r.store.Identifier("schema_hash") + " FROM " + r.store.TableIdentifier("_application_schema_projection") + " WHERE " + r.store.Identifier("id") + " = " + r.store.Placeholder(1)
 	err := executor.QueryRowContext(ctx, query, "current").Scan(&sourceHash, &schemaHash)
 	if err == sql.ErrNoRows {
 		if refreshErr := r.refreshCatalogHashWithExecutor(ctx, executor); refreshErr != nil {

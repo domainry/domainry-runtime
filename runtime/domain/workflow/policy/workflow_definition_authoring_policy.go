@@ -14,8 +14,7 @@ func workflowDefinitionAuthoringCapability(nodeTypes []string) capabilitycontrac
 			"GET /metadata/definitions/workflow/{workflowKey}", "POST /tenant-admin/workflows/{workflowKey}/validate", "POST /tenant-admin/workflows/{workflowKey}/simulate",
 			"GET /domain-system-snapshot", "GET /domain-reference-graph",
 		},
-		ResourceKeyPathParameter: "workflowKey", FrontendSupportKey: "workflow.definition.editor.v1",
-		InputSchema:     workflowDefinitionInputSchema(nodeTypes),
+		ResourceKeyPathParameter: "workflowKey", InputSchema: workflowDefinitionInputSchema(nodeTypes),
 		OutputSchema:    workflowValidationOutputSchema(),
 		OutputVariables: []capabilitycontract.CapabilityAuthoringOutput{{Name: "valid", JSONPointer: "/valid", Type: "boolean", VisibleTo: "subsequent_capability_calls"}},
 		ReferenceContracts: []capabilitycontract.CapabilityAuthoringReference{

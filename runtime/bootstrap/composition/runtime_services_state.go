@@ -145,7 +145,6 @@ type runtimeAssembly struct {
 	integrationPolicyStore              resilience.Store
 	apiKeyRateLimiter                   ratelimit.Limiter
 	dictionaryRuntime                   *metadata.ApplicationSchemaDictionaryDomainService
-	frontendCapabilities                *deploymentbusiness.DeploymentFrontendCapabilityApplicationService
 	authoringCapabilities               *capabilityapplication.CapabilityAuthoringApplicationService
 	businessReferences                  *changeplanapplication.ChangePlanReferenceApplicationService
 	reportSnapshotsService              *reportsnapshot.ReportSnapshotApplicationService

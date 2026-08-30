@@ -78,14 +78,6 @@ func addBusinessBuilderOpenAPIPaths(paths map[string]any) {
 	addBuilderPath(paths, "/tenant-admin/audit-events/export", "Audit Administration", "get")
 	addBuilderPath(paths, "/operations/audit-events", "Audit Operations", "get")
 	addBuilderPath(paths, "/operations/audit-events/export", "Audit Operations", "get")
-	addBuilderPath(paths, "/frontend-capability-manifest/validate", "Capabilities", "post")
-	addBuilderPath(paths, "/frontend-capability-manifest", "Capabilities", "get")
-	paths["/frontend-capability-manifest"] = map[string]any{
-		"get": openAPIOperation("getFrontendCapabilityManifest", "Capabilities", "Read deployed frontend capability evidence and compatibility gaps", openAPIAdminSecurity(), openAPIJSONResponse("Frontend capability snapshot", openAPIRef("FrontendCapabilitySnapshot"))),
-	}
-	paths["/frontend-capability-manifest/validate"] = map[string]any{
-		"post": openAPIOperation("validateFrontendCapabilityManifest", "Capabilities", "Validate deployed frontend routes, permissions, domain bindings and artifact hashes without persisting", openAPIAdminSecurity(), openAPIJSONRequest(openAPIRef("FrontendCapabilityManifest")), openAPIJSONResponse("Frontend capability validation", openAPIRef("FrontendCapabilityValidation"))),
-	}
 	addBuilderPath(paths, "/business/workflow/processes", "Workflow Business", "get")
 	addBuilderPath(paths, "/business/workflow/processes/{processID}", "Workflow Business", "get")
 	addBuilderPath(paths, "/business/workflow/team-tasks", "Workflow Business", "get")

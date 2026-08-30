@@ -32,7 +32,7 @@ func (r RuntimeStatusStore) RunIdempotencyCleanup(ctx context.Context, request d
 	if err := r.ensureIdempotencyCleanupLease(ctx, nowText); err != nil {
 		return deploymentmodel.IdempotencyCleanupResult{}, err
 	}
-	claim, claimArgs, err := ormbuilder.NewUpdateBuilder(r.store.SQLRenderer, "idempotency_cleanup_leases").Set("lease_owner", request.LeaseOwner).Set("lease_expires_at", leaseExpiresAt).SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).Set("last_started_at", nowText).Set("last_error", "").Set("updated_at", nowText).Where(ormbuilder.And(ormbuilder.Equal("id", idempotencyCleanupLeaseID), ormbuilder.Or(ormbuilder.Equal("lease_owner", ""), ormbuilder.LessThanOrEqual("lease_expires_at", nowText)))).Build()
+	claim, claimArgs, err := ormbuilder.NewUpdateBuilder(r.store.SQLRenderer, "_idempotency_cleanup_leases").Set("lease_owner", request.LeaseOwner).Set("lease_expires_at", leaseExpiresAt).SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).Set("last_started_at", nowText).Set("last_error", "").Set("updated_at", nowText).Where(ormbuilder.And(ormbuilder.Equal("id", idempotencyCleanupLeaseID), ormbuilder.Or(ormbuilder.Equal("lease_owner", ""), ormbuilder.LessThanOrEqual("lease_expires_at", nowText)))).Build()
 	if err != nil {
 		return deploymentmodel.IdempotencyCleanupResult{}, fmt.Errorf("build idempotency cleanup lease claim: %w", err)
 	}
@@ -45,7 +45,7 @@ func (r RuntimeStatusStore) RunIdempotencyCleanup(ctx context.Context, request d
 		return deploymentmodel.IdempotencyCleanupResult{Acquired: false}, err
 	}
 	result := deploymentmodel.IdempotencyCleanupResult{Acquired: true, LeaseOwner: request.LeaseOwner, StartedAt: nowText}
-	lookup, lookupArgs, err := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "idempotency_cleanup_leases").Columns("fencing_token").Where(ormbuilder.Equal("id", idempotencyCleanupLeaseID)).Build()
+	lookup, lookupArgs, err := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "_idempotency_cleanup_leases").Columns("fencing_token").Where(ormbuilder.Equal("id", idempotencyCleanupLeaseID)).Build()
 	if err != nil {
 		return result, err
 	}
@@ -64,7 +64,7 @@ func (r RuntimeStatusStore) RunIdempotencyCleanup(ctx context.Context, request d
 		result.Deleted += deleted
 	}
 	result.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	complete, completeArgs, err := ormbuilder.NewUpdateBuilder(r.store.SQLRenderer, "idempotency_cleanup_leases").Set("lease_owner", "").Set("lease_expires_at", "").Set("last_completed_at", result.CompletedAt).Set("last_deleted", result.Deleted).Set("updated_at", result.CompletedAt).Where(cleanupLeasePredicate(request.LeaseOwner, result.FencingToken)).Build()
+	complete, completeArgs, err := ormbuilder.NewUpdateBuilder(r.store.SQLRenderer, "_idempotency_cleanup_leases").Set("lease_owner", "").Set("lease_expires_at", "").Set("last_completed_at", result.CompletedAt).Set("last_deleted", result.Deleted).Set("updated_at", result.CompletedAt).Where(cleanupLeasePredicate(request.LeaseOwner, result.FencingToken)).Build()
 	if err != nil {
 		return result, err
 	}
@@ -80,13 +80,13 @@ func (r RuntimeStatusStore) RunIdempotencyCleanup(ctx context.Context, request d
 }
 
 func (r RuntimeStatusStore) ensureIdempotencyCleanupLease(ctx context.Context, now string) error {
-	query, args, buildErr := ormbuilder.NewInsertBuilder(r.store.SQLRenderer, "idempotency_cleanup_leases").Columns("id", "lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "last_deleted", "last_error", "updated_at").Values(idempotencyCleanupLeaseID, "", "", 0, "", "", 0, "", now).Build()
+	query, args, buildErr := ormbuilder.NewInsertBuilder(r.store.SQLRenderer, "_idempotency_cleanup_leases").Columns("id", "lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "last_deleted", "last_error", "updated_at").Values(idempotencyCleanupLeaseID, "", "", 0, "", "", 0, "", now).Build()
 	if buildErr != nil {
 		return buildErr
 	}
 	if _, err := r.db.ExecContext(ctx, query, args...); err != nil {
 		var count int
-		check, checkArgs, checkErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "idempotency_cleanup_leases").Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(ormbuilder.Equal("id", idempotencyCleanupLeaseID)).Build()
+		check, checkArgs, checkErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "_idempotency_cleanup_leases").Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(ormbuilder.Equal("id", idempotencyCleanupLeaseID)).Build()
 		if checkErr != nil {
 			return checkErr
 		}
@@ -141,7 +141,7 @@ func (r RuntimeStatusStore) deleteExpiredReceiptBatch(ctx context.Context, table
 }
 
 func (r RuntimeStatusStore) failIdempotencyCleanup(ctx context.Context, owner string, fencingToken int64, now string, cause error) {
-	query, args, err := ormbuilder.NewUpdateBuilder(r.store.SQLRenderer, "idempotency_cleanup_leases").Set("lease_owner", "").Set("lease_expires_at", "").Set("last_error", cause.Error()).Set("updated_at", now).Where(cleanupLeasePredicate(owner, fencingToken)).Build()
+	query, args, err := ormbuilder.NewUpdateBuilder(r.store.SQLRenderer, "_idempotency_cleanup_leases").Set("lease_owner", "").Set("lease_expires_at", "").Set("last_error", cause.Error()).Set("updated_at", now).Where(cleanupLeasePredicate(owner, fencingToken)).Build()
 	if err == nil {
 		_, _ = r.db.ExecContext(ctx, query, args...)
 	}
@@ -152,5 +152,5 @@ func cleanupLeasePredicate(owner string, fencingToken int64) ormbuilder.Predicat
 }
 
 func cleanupLeaseGuard(renderer ormbuilder.Renderer, owner string, fencingToken int64, now string) *ormbuilder.SelectBuilder {
-	return ormbuilder.NewSelectBuilder(renderer, "idempotency_cleanup_leases").Columns("id").Where(ormbuilder.And(cleanupLeasePredicate(owner, fencingToken), ormbuilder.GreaterThan("lease_expires_at", now)))
+	return ormbuilder.NewSelectBuilder(renderer, "_idempotency_cleanup_leases").Columns("id").Where(ormbuilder.And(cleanupLeasePredicate(owner, fencingToken), ormbuilder.GreaterThan("lease_expires_at", now)))
 }

@@ -26,10 +26,10 @@ If a hook fails:
 
 | Effect | Durable fact before dispatch | Post-commit behavior |
 | --- | --- | --- |
-| Email and Webhook delivery | `runtime_publication_outbox` staged as a source-owned Action durable intent or by record automation | workers claim and deliver; an inline hook may only wake the worker |
-| Other asynchronous Connector/API work | `runtime_publication_outbox` with a stable `request_ref` | workers retry from durable state with provider idempotency |
+| Email and Webhook delivery | `_publication_outbox` staged as a source-owned Action durable intent or by record automation | workers claim and deliver; an inline hook may only wake the worker |
+| Other asynchronous Connector/API work | `_publication_outbox` with a stable `request_ref` | workers retry from durable state with provider idempotency |
 | Asynchronous Workflow | `_workflow_executions(status=pending)` stored in the same record/action mutation commit | the fast path must first claim the pending execution; polling remains the recovery path |
-| Explicit synchronous source-owned Action Connector call | `integration_invocations(status=prepared)` persisted before the Provider call | terminal outcome, reconciliation, and compensation evidence are persisted; this is not an after-commit hook |
+| Explicit synchronous source-owned Action Connector call | `_integration_invocations(status=prepared)` persisted before the Provider call | terminal outcome, reconciliation, and compensation evidence are persisted; this is not an after-commit hook |
 
 Application mutation services must prepare Outbox messages and Workflow intents before `CommitRecordMutation`/`CommitRecordMutationBatch`. They may request post-commit processing only after the commit succeeds. Direct email, Webhook, Provider/API, or Workflow execution is forbidden before the durable fact commits.
 

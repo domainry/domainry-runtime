@@ -21,7 +21,7 @@ INSERT INTO _workflow_executions (
   workspace_id,id,workflow_key,name,trigger,status,action_json,payload_json,result_json,created_at,updated_at
 ) VALUES ('default','workflow-004','fixture','Fixture','manual','completed','{}','{}','{}','2026-07-25T00:00:00Z','2026-07-25T00:00:00Z');
 
-CREATE TABLE identity_users (
+CREATE TABLE _identity_users (
   id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, name TEXT NOT NULL, email TEXT NOT NULL,
   employee_no TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', gender TEXT NOT NULL DEFAULT '',
   hire_date TEXT NOT NULL DEFAULT '', job_title TEXT NOT NULL DEFAULT '', job_level TEXT NOT NULL DEFAULT '',
@@ -30,10 +30,10 @@ CREATE TABLE identity_users (
   manager_ancestor_ids TEXT NOT NULL DEFAULT '[]', manager_depth INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
 );
-CREATE INDEX idx_identity_users_department ON identity_users(workspace_id, department_id);
-CREATE INDEX idx_identity_users_manager ON identity_users(workspace_id, manager_id);
-CREATE INDEX idx_identity_users_manager_path ON identity_users(workspace_id, manager_path);
-INSERT INTO identity_users VALUES (
+CREATE INDEX idx_identity_users_department ON _identity_users(workspace_id, department_id);
+CREATE INDEX idx_identity_users_manager ON _identity_users(workspace_id, manager_id);
+CREATE INDEX idx_identity_users_manager_path ON _identity_users(workspace_id, manager_path);
+INSERT INTO _identity_users VALUES (
   'fixture-user-004', 'default', 'Fixture Worker', 'worker@example.com', 'EMP-004', '', '',
   '2026-01-01', 'Operator', 'L2', 'full_time', 'active', 'operations', '/operations',
   NULL, '', '[]', 0, 'active', '2026-07-25T00:00:00Z', '2026-07-25T00:00:00Z'

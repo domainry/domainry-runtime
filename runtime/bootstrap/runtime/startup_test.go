@@ -327,7 +327,7 @@ func TestProjectRuntimeReleaseIntegrityTracksLiveSchemaAndFrozenRegistries(t *te
 	if err := runtime.releaseIntegrity.RegistryReadiness(t.Context()); err != nil {
 		t.Fatalf("initial Registry readiness=%v", err)
 	}
-	if _, err := runtime.store.DB().ExecContext(t.Context(), "UPDATE _runtime_metadata_projection SET schema_hash = ? WHERE id = ?", "drifted-schema", "current"); err != nil {
+	if _, err := runtime.store.DB().ExecContext(t.Context(), "UPDATE _application_schema_projection SET schema_hash = ? WHERE id = ?", "drifted-schema", "current"); err != nil {
 		t.Fatal(err)
 	}
 	if err := runtime.releaseIntegrity.SchemaReadiness(t.Context()); !errors.Is(err, deploymentapplication.ErrRuntimeReleaseSchemaIntegrity) {
@@ -456,13 +456,12 @@ func TestGlobalValidationAndDeliveryGateMoveOwnedRuntimeToReady(t *testing.T) {
 	for _, category := range []string{
 		"schema", "resource_sources",
 		"runtime_state.automation", "runtime_state.integrations", "runtime_state.reports", "runtime_state.scheduler",
-		"frontend_capabilities",
 	} {
 		if checks["configuration."+category] != "ok" {
 			t.Fatalf("global validation did not cover %s: %#v", category, report)
 		}
 	}
-	for _, check := range []string{"cross_resource_references", "cycles", "permission_closure", "foundation_usage", "connector_readiness", "frontend_support"} {
+	for _, check := range []string{"cross_resource_references", "cycles", "permission_closure", "foundation_usage", "connector_readiness"} {
 		if checks[check] != "ok" {
 			t.Fatalf("global validation did not pass %s: %#v", check, report)
 		}
@@ -621,12 +620,6 @@ func TestNewPropagatesNotificationAndServiceAssemblyFailures(t *testing.T) {
 	invalidNotification.SkipManifestValidation = true
 	assertBootstrapPanic(t, func() {
 		New(t.Context(), invalidNotification, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
-	})
-
-	missingFrontend := bootstrapTestConfig(t)
-	missingFrontend.FrontendCapabilityManifestPath = filepath.Join(t.TempDir(), "missing-frontend-capability.json")
-	assertBootstrapPanic(t, func() {
-		New(t.Context(), missingFrontend, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
 	})
 
 }

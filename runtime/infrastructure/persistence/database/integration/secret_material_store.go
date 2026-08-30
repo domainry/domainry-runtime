@@ -39,7 +39,7 @@ func (r IntegrationConfigStore) PutSecretMaterial(ctx context.Context, workspace
 	if actionExecutor := database.ActionExecutionTransaction(ctx); actionExecutor != nil {
 		executor = actionExecutor
 	}
-	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_secret_materials", workspaceID).
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_secret_materials", workspaceID).
 		Columns("created_at").Where(ormbuilder.Equal("secret_key", secretKey)).Limit(1).Build()
 	if buildErr != nil {
 		return fmt.Errorf("build integration secret material read: %w", buildErr)
@@ -50,7 +50,7 @@ func (r IntegrationConfigStore) PutSecretMaterial(ctx context.Context, workspace
 	}
 	columns := []string{"id", "workspace_id", "secret_key", "ciphertext", "created_at", "updated_at"}
 	replacementValues := []any{"integration_secret_material:" + workspaceID + ":" + secretKey, workspaceID, secretKey, ciphertext, createdAt, now}
-	return r.replaceRow(ctx, "integration_secret_materials", "secret_key", workspaceID, secretKey, columns, replacementValues, "integration secret material")
+	return r.replaceRow(ctx, "_integration_secret_materials", "secret_key", workspaceID, secretKey, columns, replacementValues, "integration secret material")
 }
 
 func (r IntegrationConfigStore) ResolveSecretMaterial(ctx context.Context, workspaceID, secretKey string) (string, error) {
@@ -64,7 +64,7 @@ func (r IntegrationConfigStore) ResolveSecretMaterial(ctx context.Context, works
 	}
 	secretKey = strings.TrimSpace(secretKey)
 	var ciphertext string
-	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_secret_materials", workspaceID).
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_secret_materials", workspaceID).
 		Columns("ciphertext").Where(ormbuilder.Equal("secret_key", secretKey)).Limit(1).Build()
 	if buildErr != nil {
 		return "", fmt.Errorf("build integration secret material resolution: %w", buildErr)

@@ -8,7 +8,6 @@ import (
 	lifecyclecore "github.com/domainry/domainry-lifecycle-sdk/application"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
-	deployment "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	lifecycleapplication "github.com/domainry/domainry-runtime/runtime/application/lifecycle"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
@@ -109,9 +108,6 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 	services.lifecycleService = lifecycleapplication.NewLifecycleApplicationService(ctx, lifecyclecore.LifecycleApplicationDependencies{
 		Repository: deps.Lifecycle, Executors: deps.LifecycleExecutors, SubjectResolver: deps.LifecycleSubjectResolver,
 		SubjectHandlers: deps.LifecycleSubjectHandlers, ExternalErasure: deps.LifecycleExternalErasure, Artifacts: deps.LifecycleArtifacts, UploadArtifacts: deps.LifecycleUploadArtifacts,
-	})
-	services.frontendCapabilities = newDeploymentFrontendCapabilityApplicationService(deps.FrontendCapabilities, func(ctx context.Context) deployment.FrontendBusinessBindings {
-		return frontendBusinessBindings(services)
 	})
 	services.dictionaryRuntime = appschemaservice.NewApplicationSchemaDictionaryDomainService(manifest.Dictionaries)
 	services.RecordSchemaSnapshotProvider = &RecordSchemaSnapshotProvider{snapshot: func() appschemamodel.ApplicationSchemaSnapshot { return recordSchemaSnapshot(services) }}

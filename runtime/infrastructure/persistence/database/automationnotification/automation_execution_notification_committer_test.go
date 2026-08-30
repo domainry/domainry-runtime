@@ -84,7 +84,7 @@ func TestAutomationExecutionNotificationErrorAndConsistencyEdges(t *testing.T) {
 		store := openAutomationNotificationStore(t)
 		defer store.Close()
 		committer := NewAutomationExecutionNotificationCommitter(store)
-		if _, err := store.DB().ExecContext(t.Context(), `DROP TABLE notification_events`); err != nil {
+		if _, err := store.DB().ExecContext(t.Context(), `DROP TABLE _notification_events`); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := committer.committed(t.Context(), automationNotificationExecution("query-error"), automationNotificationEvent("event", "source")); err == nil {
@@ -115,7 +115,7 @@ func TestAutomationExecutionNotificationDeferredCommitFailure(t *testing.T) {
 		`PRAGMA foreign_keys = ON`,
 		`CREATE TABLE automation_gate_parent (id TEXT PRIMARY KEY)`,
 		`CREATE TABLE automation_gate_child (id TEXT PRIMARY KEY, parent_id TEXT REFERENCES automation_gate_parent(id) DEFERRABLE INITIALLY DEFERRED)`,
-		`CREATE TRIGGER fail_automation_notification_commit AFTER INSERT ON notification_events BEGIN INSERT INTO automation_gate_child VALUES (NEW.id, 'missing'); END`,
+		`CREATE TRIGGER fail_automation_notification_commit AFTER INSERT ON _notification_events BEGIN INSERT INTO automation_gate_child VALUES (NEW.id, 'missing'); END`,
 	} {
 		if _, err := store.DB().ExecContext(t.Context(), statement); err != nil {
 			t.Fatal(err)
@@ -257,10 +257,10 @@ func automationNotificationEvent(id, sourceID string) notificationmodel.Notifica
 func assertAutomationNotificationCounts(t *testing.T, store *database.RuntimeStore, executionID string, wantExecutions, wantEvents int) {
 	t.Helper()
 	var executions, events int
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.TableIdentifier("automation_rule_executions")+" WHERE "+store.Identifier("workspace_id")+" = "+store.Placeholder(1)+" AND "+store.Identifier("id")+" = "+store.Placeholder(2), "workspace-a", executionID).Scan(&executions); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.TableIdentifier("_automation_rule_executions")+" WHERE "+store.Identifier("workspace_id")+" = "+store.Placeholder(1)+" AND "+store.Identifier("id")+" = "+store.Placeholder(2), "workspace-a", executionID).Scan(&executions); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.TableIdentifier("notification_events")).Scan(&events); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.TableIdentifier("_notification_events")).Scan(&events); err != nil {
 		t.Fatal(err)
 	}
 	if executions != wantExecutions || events != wantEvents {

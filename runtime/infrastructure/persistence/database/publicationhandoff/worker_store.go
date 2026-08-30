@@ -47,7 +47,7 @@ func (s WorkerStore) ListDueOutbox(ctx context.Context, scope principalmodel.Sys
 	values := []integrationmodel.IntegrationOutboxMessage{}
 	for _, workspaceID := range workspaces {
 		workspaceCtx := publicationWorkerContext(ctx, workspaceID, "runtime-publication-worker")
-		query, args, err := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "runtime_publication_outbox", workspaceID).Columns(publicationColumns...).Where(publicationDuePredicate(now)).OrderBy(ormbuilder.Ascending("created_at"), ormbuilder.Ascending("id")).Limit(limit).Build()
+		query, args, err := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).Columns(publicationColumns...).Where(publicationDuePredicate(now)).OrderBy(ormbuilder.Ascending("created_at"), ormbuilder.Ascending("id")).Limit(limit).Build()
 		if err != nil {
 			return nil, fmt.Errorf("build due Runtime publications for workspace %s: %w", workspaceID, err)
 		}
@@ -84,7 +84,7 @@ func (s WorkerStore) ClaimOutbox(ctx context.Context, workspaceID, messageID, ow
 		now = time.Now().UTC().Format(time.RFC3339)
 	}
 	ctx = publicationWorkerContext(ctx, workspaceID, owner)
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "runtime_publication_outbox", workspaceID).
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
 		Set("status", "sending").Set("next_attempt_at", "").Set("last_attempt_at", now).Set("lease_owner", owner).Set("lease_expires_at", publicationLeaseExpiry(now)).
 		SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).Set("updated_at", now).
 		Where(ormbuilder.And(ormbuilder.Equal("id", messageID), publicationDuePredicate(now))).Build()
@@ -122,7 +122,7 @@ func (s WorkerStore) HeartbeatOutbox(ctx context.Context, workspaceID, messageID
 		now = time.Now().UTC().Format(time.RFC3339)
 	}
 	ctx = publicationWorkerContext(ctx, workspaceID, leaseOwner)
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "runtime_publication_outbox", workspaceID).
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
 		Set("lease_expires_at", publicationLeaseExpiry(now)).Set("updated_at", now).
 		Where(publicationPredicate(publicationLeasePredicate(messageID, leaseOwner, fencingToken))).Build()
 	if err != nil {
@@ -148,7 +148,7 @@ func (s WorkerStore) UpdateOutboxStatus(ctx context.Context, workspaceID, messag
 		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("Runtime publication update identity is required")
 	}
 	ctx = publicationWorkerContext(ctx, workspaceID, leaseOwner)
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "runtime_publication_outbox", workspaceID).
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
 		Set("status", strings.TrimSpace(status)).Set("response_ref", strings.TrimSpace(responseRef)).Set("error", strings.TrimSpace(errorText)).Set("next_attempt_at", "").Set("ack_deadline_at", strings.TrimSpace(ackDeadlineAt)).Set("lease_owner", "").Set("lease_expires_at", "").Set("updated_at", now).
 		Where(publicationPredicate(publicationLeasePredicate(messageID, leaseOwner, fencingToken))).Build()
 	if err != nil {
@@ -189,7 +189,7 @@ func (s WorkerStore) ScheduleOutboxRetry(ctx context.Context, workspaceID, messa
 	now = parsed.UTC().Format(time.RFC3339)
 	ctx = publicationWorkerContext(ctx, workspaceID, leaseOwner)
 	next := parsed.Add(time.Duration(delaySeconds) * time.Second).Format(time.RFC3339)
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "runtime_publication_outbox", workspaceID).
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
 		Set("status", "queued").Set("error", strings.TrimSpace(errorText)).SetExpression("attempt_count", ormbuilder.Add(ormbuilder.Column("attempt_count"), ormbuilder.Value(1))).Set("next_attempt_at", next).Set("last_attempt_at", now).Set("lease_owner", "").Set("lease_expires_at", "").Set("updated_at", now).
 		Where(publicationPredicate(publicationLeasePredicate(messageID, leaseOwner, fencingToken))).Build()
 	if err != nil {

@@ -40,7 +40,7 @@ func (r IntegrationEventStore) ListEvents(ctx context.Context, workspaceID, prov
 	if status = strings.TrimSpace(status); status != "" {
 		predicates = append(predicates, ormbuilder.Equal("status", status))
 	}
-	builder := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_events", workspaceID).
+	builder := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_events", workspaceID).
 		Columns(integrationEventColumns...).OrderBy(ormbuilder.Descending("received_at")).Limit(limit)
 	if len(predicates) != 0 {
 		builder.Where(ormbuilder.And(predicates...))
@@ -102,7 +102,7 @@ func (r IntegrationEventStore) UpsertEvent(ctx context.Context, workspaceID stri
 	if err != nil {
 		return integrationmodel.IntegrationEvent{}, false, err
 	}
-	statement, insertArgs, err := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "integration_events", workspaceID).Columns(insertColumns...).Values(insertValues...).Build()
+	statement, insertArgs, err := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_integration_events", workspaceID).Columns(insertColumns...).Values(insertValues...).Build()
 	if err != nil {
 		return integrationmodel.IntegrationEvent{}, false, fmt.Errorf("build integration event insert: %w", err)
 	}
@@ -128,7 +128,7 @@ func (r IntegrationEventStore) UpdateEventStatus(ctx context.Context, workspaceI
 		return integrationmodel.IntegrationEvent{}, fmt.Errorf("integration event id is required")
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_events", workspaceID).
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_integration_events", workspaceID).
 		Set("status", status).Set("error", errorText).Set("next_retry_at", "").Set("updated_at", now).Where(ormbuilder.Equal("id", eventID)).Build()
 	if err != nil {
 		return integrationmodel.IntegrationEvent{}, fmt.Errorf("build integration event status update: %w", err)
@@ -171,7 +171,7 @@ func (r IntegrationEventStore) ScheduleEventRetry(ctx context.Context, workspace
 	}
 	now := time.Now().UTC()
 	nowText, next := now.Format(time.RFC3339), now.Add(time.Duration(delaySeconds)*time.Second).Format(time.RFC3339)
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_events", workspaceID).
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_integration_events", workspaceID).
 		Set("status", "failed").Set("error", errorText).
 		SetExpression("attempt_count", ormbuilder.Add(ormbuilder.Column("attempt_count"), ormbuilder.Value(1))).
 		Set("next_retry_at", next).Set("last_attempt_at", nowText).Set("updated_at", nowText).Where(ormbuilder.Equal("id", eventID)).Build()
@@ -209,7 +209,7 @@ func (r IntegrationEventStore) RecordWebhookNonce(ctx context.Context, workspace
 		return false, fmt.Errorf("integration webhook nonce identity is required")
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	deleteStatement, deleteArgs, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, "integration_webhook_nonces", workspaceID).
+	deleteStatement, deleteArgs, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, "_integration_webhook_nonces", workspaceID).
 		Where(ormbuilder.LessThanOrEqual("expires_at", now)).Build()
 	if buildErr != nil {
 		return false, fmt.Errorf("build expired integration webhook nonce cleanup: %w", buildErr)
@@ -218,7 +218,7 @@ func (r IntegrationEventStore) RecordWebhookNonce(ctx context.Context, workspace
 		return false, fmt.Errorf("delete expired integration webhook nonces: %w", err)
 	}
 	var existing string
-	lookup, lookupArgs, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_webhook_nonces", workspaceID).Columns("nonce").Where(ormbuilder.And(ormbuilder.Equal("connector_key", connectorKey), ormbuilder.Equal("nonce", nonce))).Build()
+	lookup, lookupArgs, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_webhook_nonces", workspaceID).Columns("nonce").Where(ormbuilder.And(ormbuilder.Equal("connector_key", connectorKey), ormbuilder.Equal("nonce", nonce))).Build()
 	if buildErr != nil {
 		return false, fmt.Errorf("build integration webhook nonce lookup: %w", buildErr)
 	}
@@ -235,7 +235,7 @@ func (r IntegrationEventStore) RecordWebhookNonce(ctx context.Context, workspace
 	if buildErr != nil {
 		return false, buildErr
 	}
-	statement, insertArgs, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "integration_webhook_nonces", workspaceID).Columns(insertColumns...).Values(insertValues...).Build()
+	statement, insertArgs, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_integration_webhook_nonces", workspaceID).Columns(insertColumns...).Values(insertValues...).Build()
 	if buildErr != nil {
 		return false, fmt.Errorf("build integration webhook nonce insert: %w", buildErr)
 	}
@@ -256,7 +256,7 @@ func integrationEventColumnsSQL(store *database.RuntimeStore) string {
 }
 
 func (r IntegrationEventStore) findByID(ctx context.Context, workspaceID, eventID string) (integrationmodel.IntegrationEvent, bool, error) {
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_events", workspaceID).Columns(integrationEventColumns...).Where(ormbuilder.Equal("id", strings.TrimSpace(eventID))).Build()
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_events", workspaceID).Columns(integrationEventColumns...).Where(ormbuilder.Equal("id", strings.TrimSpace(eventID))).Build()
 	if err != nil {
 		return integrationmodel.IntegrationEvent{}, false, fmt.Errorf("build integration event lookup: %w", err)
 	}
@@ -269,7 +269,7 @@ func (r IntegrationEventStore) findByID(ctx context.Context, workspaceID, eventI
 }
 
 func (r IntegrationEventStore) findByExternalID(ctx context.Context, workspaceID, provider, externalID string) (integrationmodel.IntegrationEvent, bool, error) {
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_events", workspaceID).Columns(integrationEventColumns...).Where(ormbuilder.And(ormbuilder.Equal("provider", strings.TrimSpace(provider)), ormbuilder.Equal("external_id", strings.TrimSpace(externalID)))).Build()
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_events", workspaceID).Columns(integrationEventColumns...).Where(ormbuilder.And(ormbuilder.Equal("provider", strings.TrimSpace(provider)), ormbuilder.Equal("external_id", strings.TrimSpace(externalID)))).Build()
 	if err != nil {
 		return integrationmodel.IntegrationEvent{}, false, fmt.Errorf("build integration external event lookup: %w", err)
 	}

@@ -118,7 +118,7 @@ func TestBoundaryIntentDatabaseFailures(t *testing.T) {
 
 func TestBoundaryIntentInsertFailureWithoutReplay(t *testing.T) {
 	store := openBoundaryIntentStore(t)
-	_, err := store.store.DB().ExecContext(t.Context(), `CREATE TRIGGER fail_boundary_intent_insert BEFORE INSERT ON transaction_boundary_intents BEGIN SELECT RAISE(FAIL, 'injected insert failure'); END`)
+	_, err := store.store.DB().ExecContext(t.Context(), `CREATE TRIGGER fail_boundary_intent_insert BEFORE INSERT ON _transaction_boundary_intents BEGIN SELECT RAISE(FAIL, 'injected insert failure'); END`)
 	if err != nil {
 		t.Fatal(err)
 	}

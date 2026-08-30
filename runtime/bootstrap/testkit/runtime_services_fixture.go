@@ -12,7 +12,6 @@ import (
 	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	automationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automation"
 	deploymentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/deployment"
-	frontendcapabilitypersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/frontendcapability"
 	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
@@ -88,7 +87,6 @@ func focusedPersistenceDependencies(ctx context.Context, config RuntimeServicesC
 		ActionExecutions:      actionpersistence.NewActionBusinessExecutionStore(config.Store),
 		ActionAssurance:       actionpersistence.NewActionAssuranceStore(config.Store),
 		RuntimeStatus:         deploymentpersistence.NewRuntimeStatusStore(config.Store),
-		FrontendCapabilities:  frontendcapabilitypersistence.NewFrontendCapabilityStore(config.Store),
 		Lifecycle:             lifecycleBinding.Repository(),
 	}
 }

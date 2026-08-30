@@ -21,7 +21,7 @@ func (r IntegrationConfigStore) ListConnectorProviderConnections(ctx context.Con
 	if _, err := principalmodel.NewSystemQueryScope(scope); err != nil {
 		return nil, err
 	}
-	statement, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "integration_connections").Columns(
+	statement, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "_integration_connections").Columns(
 		"connection_key", "workspace_id", "connector_key", "provider_key", "name", "status", "config_json", "secret_refs_json", "created_by", "created_at", "updated_at",
 	).OrderBy(ormbuilder.Ascending("workspace_id"), ormbuilder.Ascending("connection_key")).Build()
 	if buildErr != nil {
@@ -57,7 +57,7 @@ func (r IntegrationConfigStore) SyncConnectorProviderTasks(ctx context.Context, 
 		return err
 	}
 	defer tx.Rollback()
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "connector_provider_states", connection.WorkspaceID).Columns("task_key", "state_version").Where(ormbuilder.Equal("connection_key", connection.Key)).Build()
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_connector_provider_states", connection.WorkspaceID).Columns("task_key", "state_version").Where(ormbuilder.Equal("connection_key", connection.Key)).Build()
 	if err != nil {
 		return err
 	}
@@ -82,7 +82,7 @@ func (r IntegrationConfigStore) SyncConnectorProviderTasks(ctx context.Context, 
 		if _, keep := selected[key]; keep {
 			continue
 		}
-		query, args, err := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, "connector_provider_states", connection.WorkspaceID).Where(ormbuilder.And(ormbuilder.Equal("connection_key", connection.Key), ormbuilder.Equal("task_key", key))).Build()
+		query, args, err := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, "_integration_connector_provider_states", connection.WorkspaceID).Where(ormbuilder.And(ormbuilder.Equal("connection_key", connection.Key), ormbuilder.Equal("task_key", key))).Build()
 		if err != nil {
 			return err
 		}
@@ -95,7 +95,7 @@ func (r IntegrationConfigStore) SyncConnectorProviderTasks(ctx context.Context, 
 			return fmt.Errorf("connector provider task %s state version changed from %d to %d without migration", key, version, task.StateVersion)
 		}
 		var count int
-		query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "connector_provider_states", connection.WorkspaceID).Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(ormbuilder.And(ormbuilder.Equal("connection_key", connection.Key), ormbuilder.Equal("task_key", key))).Build()
+		query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_connector_provider_states", connection.WorkspaceID).Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(ormbuilder.And(ormbuilder.Equal("connection_key", connection.Key), ormbuilder.Equal("task_key", key))).Build()
 		if err != nil {
 			return err
 		}
@@ -115,7 +115,7 @@ func (r IntegrationConfigStore) SyncConnectorProviderTasks(ctx context.Context, 
 		if err != nil {
 			return err
 		}
-		query, args, err = ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "connector_provider_states", connection.WorkspaceID).Columns(insertColumns...).Values(insertValues...).Build()
+		query, args, err = ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_integration_connector_provider_states", connection.WorkspaceID).Columns(insertColumns...).Values(insertValues...).Build()
 		if err != nil {
 			return err
 		}
@@ -142,8 +142,8 @@ func (r IntegrationConfigStore) ListDueConnectorProviderStates(ctx context.Conte
 	for _, column := range connectionColumns {
 		projections = append(projections, ormbuilder.Project(ormbuilder.QualifiedColumn("c", column)))
 	}
-	statement, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "connector_provider_states").Alias("s").Projections(projections...).Join(
-		ormbuilder.InnerJoin("integration_connections", "c", ormbuilder.And(
+	statement, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "_integration_connector_provider_states").Alias("s").Projections(projections...).Join(
+		ormbuilder.InnerJoin("_integration_connections", "c", ormbuilder.And(
 			ormbuilder.EqualExpressions(ormbuilder.QualifiedColumn("c", "workspace_id"), ormbuilder.QualifiedColumn("s", "workspace_id")),
 			ormbuilder.EqualExpressions(ormbuilder.QualifiedColumn("c", "connection_key"), ormbuilder.QualifiedColumn("s", "connection_key")),
 		)),
@@ -199,7 +199,7 @@ func (r IntegrationConfigStore) ListDueConnectorProviderStates(ctx context.Conte
 
 func (r IntegrationConfigStore) connectorProviderRelatedStates(ctx context.Context, state integrationmodel.ConnectorProviderState) (map[string]integrationmodel.ConnectorProviderState, error) {
 	columns := []string{"task_key", "state_version", "payload_json", "status", "due_at", "last_error_code", "attempt_count", "lease_owner", "lease_expires_at", "fencing_token", "updated_at"}
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "connector_provider_states", state.WorkspaceID).Columns(columns...).Where(ormbuilder.Equal("connection_key", state.ConnectionKey)).Build()
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_connector_provider_states", state.WorkspaceID).Columns(columns...).Where(ormbuilder.Equal("connection_key", state.ConnectionKey)).Build()
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +226,7 @@ func (r IntegrationConfigStore) ClaimConnectorProviderState(ctx context.Context,
 		ormbuilder.And(ormbuilder.In("status", "ready", "retry"), ormbuilder.Or(ormbuilder.Equal("due_at", ""), ormbuilder.LessThanOrEqual("due_at", now))),
 		ormbuilder.And(ormbuilder.Equal("status", "running"), ormbuilder.LessThanOrEqual("lease_expires_at", now)),
 	)
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "connector_provider_states", workspaceID).Set("status", "running").Set("lease_owner", owner).Set("lease_expires_at", expires).
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_integration_connector_provider_states", workspaceID).Set("status", "running").Set("lease_owner", owner).Set("lease_expires_at", expires).
 		SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).Set("updated_at", now).
 		Where(ormbuilder.And(ormbuilder.Equal("connection_key", connectionKey), ormbuilder.Equal("task_key", taskKey), due)).Build()
 	if err != nil {
@@ -244,7 +244,7 @@ func (r IntegrationConfigStore) CompleteConnectorProviderState(ctx context.Conte
 	if !json.Valid(payload) || len(payload) > connectorProviderStateMaxBytes {
 		return state, fmt.Errorf("connector provider state payload is invalid or exceeds %d bytes", connectorProviderStateMaxBytes)
 	}
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "connector_provider_states", state.WorkspaceID).
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_integration_connector_provider_states", state.WorkspaceID).
 		Set("payload_json", string(payload)).Set("state_version", state.StateVersion).Set("status", "ready").Set("due_at", dueAt).Set("last_error_code", "").Set("attempt_count", 0).Set("lease_owner", "").Set("lease_expires_at", "").Set("updated_at", now).
 		Where(connectorProviderLeasePredicate(state)).Build()
 	if err != nil {
@@ -262,7 +262,7 @@ func (r IntegrationConfigStore) CompleteConnectorProviderState(ctx context.Conte
 	return value, err
 }
 func (r IntegrationConfigStore) FailConnectorProviderState(ctx context.Context, state integrationmodel.ConnectorProviderState, code, dueAt, now string) (integrationmodel.ConnectorProviderState, error) {
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "connector_provider_states", state.WorkspaceID).
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_integration_connector_provider_states", state.WorkspaceID).
 		Set("status", "retry").Set("due_at", dueAt).Set("last_error_code", code).SetExpression("attempt_count", ormbuilder.Add(ormbuilder.Column("attempt_count"), ormbuilder.Value(1))).Set("lease_owner", "").Set("lease_expires_at", "").Set("updated_at", now).
 		Where(connectorProviderLeasePredicate(state)).Build()
 	if err != nil {
@@ -280,7 +280,7 @@ func (r IntegrationConfigStore) FailConnectorProviderState(ctx context.Context, 
 	return value, err
 }
 func (r IntegrationConfigStore) WakeConnectorProviderState(ctx context.Context, workspaceID, connectionKey, taskKey, now string) error {
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "connector_provider_states", workspaceID).Set("due_at", now).Set("updated_at", now).
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_integration_connector_provider_states", workspaceID).Set("due_at", now).Set("updated_at", now).
 		Where(ormbuilder.And(ormbuilder.Equal("connection_key", connectionKey), ormbuilder.Equal("task_key", taskKey), ormbuilder.NotEqual("status", "running"))).Build()
 	if err != nil {
 		return err
@@ -289,7 +289,7 @@ func (r IntegrationConfigStore) WakeConnectorProviderState(ctx context.Context, 
 	return err
 }
 func (r IntegrationConfigStore) DeleteConnectorProviderStates(ctx context.Context, workspaceID, connectionKey string) error {
-	query, args, err := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, "connector_provider_states", workspaceID).Where(ormbuilder.Equal("connection_key", connectionKey)).Build()
+	query, args, err := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, "_integration_connector_provider_states", workspaceID).Where(ormbuilder.Equal("connection_key", connectionKey)).Build()
 	if err != nil {
 		return err
 	}
@@ -297,7 +297,7 @@ func (r IntegrationConfigStore) DeleteConnectorProviderStates(ctx context.Contex
 	return err
 }
 func (r IntegrationConfigStore) getConnectorProviderState(ctx context.Context, workspaceID, connectionKey, taskKey string) (integrationmodel.ConnectorProviderState, bool, error) {
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "connector_provider_states", workspaceID).Columns(connectorProviderStateColumns...).Where(ormbuilder.And(ormbuilder.Equal("connection_key", connectionKey), ormbuilder.Equal("task_key", taskKey))).Build()
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_connector_provider_states", workspaceID).Columns(connectorProviderStateColumns...).Where(ormbuilder.And(ormbuilder.Equal("connection_key", connectionKey), ormbuilder.Equal("task_key", taskKey))).Build()
 	if err != nil {
 		return integrationmodel.ConnectorProviderState{}, false, err
 	}

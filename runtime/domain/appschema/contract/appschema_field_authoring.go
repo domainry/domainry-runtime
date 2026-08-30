@@ -23,8 +23,7 @@ func ApplicationSchemaFieldAuthoringCapability() capabilitycontract.CapabilityAu
 		ValidationEndpoint: "POST /metadata/definitions/field/{resourceKey}/validate", ConfigurationRoutes: metadataConfigurationRoutes("field"),
 		ResourceOperations:       metadataResourceOperations("field"),
 		ResourceKeyPathParameter: "resourceKey",
-		FrontendSupportKey:       "metadata.field.editor.v1", MinimumFrontendVersion: "0.1.0",
-		InputSchema: metadataAuthoringRequestSchema(payload, true), OutputSchema: metadataAuthoringOutputSchema(payload),
+		InputSchema:              metadataAuthoringRequestSchema(payload, true), OutputSchema: metadataAuthoringOutputSchema(payload),
 		OutputVariables: []capabilitycontract.CapabilityAuthoringOutput{
 			{Name: "field_key", JSONPointer: "/definition/payload/key", Type: "field_key", VisibleTo: "subsequent_capability_calls"},
 			{Name: "schema_hash", JSONPointer: "/definition/schema_hash", Type: "schema_hash", VisibleTo: "subsequent_capability_calls"},

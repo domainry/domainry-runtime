@@ -102,10 +102,8 @@ type Config struct {
 	DatabaseStatementTimeout                time.Duration
 	DatabaseLockTimeout                     time.Duration
 	DatabaseSSLRootCert                     string
-	DatabaseRLSEnabled                      bool
 	DBPath                                  string
 	ManifestPath                            string
-	FrontendCapabilityManifestPath          string
 	MigrationDir                            string
 	MigrationSQL                            string
 	MigrationBackupDir                      string
@@ -243,10 +241,8 @@ func FromEnv() Config {
 		DatabaseStatementTimeout:                durationEnv("DATABASE_STATEMENT_TIMEOUT", 30*time.Second),
 		DatabaseLockTimeout:                     durationEnv("DATABASE_LOCK_TIMEOUT", 5*time.Second),
 		DatabaseSSLRootCert:                     strings.TrimSpace(os.Getenv("DATABASE_SSL_ROOT_CERT")),
-		DatabaseRLSEnabled:                      boolEnv("DATABASE_RLS_ENABLED", false),
 		DBPath:                                  env("APP_DB_PATH", "../data/runtime.db"),
 		ManifestPath:                            env("TEMPLATE_MANIFEST", "../domainry.template.json"),
-		FrontendCapabilityManifestPath:          strings.TrimSpace(os.Getenv("FRONTEND_CAPABILITY_MANIFEST")),
 		MigrationDir:                            env("MIGRATION_DIR", "../migrations"),
 		MigrationSQL:                            strings.TrimSpace(os.Getenv("MIGRATION_SQL")),
 		MigrationBackupDir:                      env("MIGRATION_BACKUP_DIR", "../data/migration-backups"),
@@ -336,9 +332,6 @@ func (c Config) ValidateSecurity() error {
 	}
 	if strings.TrimSpace(c.AuditExportTokenKey) == "" || strings.TrimSpace(c.AuditExportTokenKey) == DevAuditExportTokenKey {
 		return fmt.Errorf("AUDIT_EXPORT_TOKEN_KEY must be set to a non-default value in production")
-	}
-	if (strings.EqualFold(strings.TrimSpace(c.DatabaseDriver), "postgres") || strings.EqualFold(strings.TrimSpace(c.DatabaseDriver), "postgresql")) && !c.DatabaseRLSEnabled {
-		return fmt.Errorf("DATABASE_RLS_ENABLED must be true for PostgreSQL in production")
 	}
 	if strings.TrimSpace(c.IntegrationSecretKey) == "" || strings.TrimSpace(c.IntegrationSecretKey) == DevIntegrationSecret || strings.TrimSpace(c.IntegrationSecretKey) == c.AuditExportTokenKey {
 		return fmt.Errorf("INTEGRATION_SECRET_KEY must be set to a non-default value in production")

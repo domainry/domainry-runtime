@@ -39,7 +39,7 @@ func TestWorkflowTaskAndNotificationCommitOrRollbackTogether(t *testing.T) {
 		t.Fatalf("task=%+v found=%v err=%v", task, found, err)
 	}
 	var eventCount int
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.TableIdentifier("notification_events")+" WHERE "+store.Identifier("workspace_id")+" = "+store.Placeholder(1), "workspace-a").Scan(&eventCount); err != nil || eventCount != 1 {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.TableIdentifier("_notification_events")+" WHERE "+store.Identifier("workspace_id")+" = "+store.Placeholder(1), "workspace-a").Scan(&eventCount); err != nil || eventCount != 1 {
 		t.Fatalf("event count=%d err=%v", eventCount, err)
 	}
 
@@ -98,10 +98,10 @@ func TestWorkflowTaskEscalationTaskEventAndBothNotificationsAreAtomic(t *testing
 		t.Fatalf("updated=%+v found=%v err=%v", updated, found, err)
 	}
 	var processEvents, notifications int
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM workflow_process_events WHERE workspace_id = ? AND task_id = ?", "workspace-a", task.ID).Scan(&processEvents); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM _workflow_process_events WHERE workspace_id = ? AND task_id = ?", "workspace-a", task.ID).Scan(&processEvents); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM notification_events WHERE workspace_id = ?", "workspace-a").Scan(&notifications); err != nil || processEvents != 1 || notifications != 2 {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM _notification_events WHERE workspace_id = ?", "workspace-a").Scan(&notifications); err != nil || processEvents != 1 || notifications != 2 {
 		t.Fatalf("process events=%d notifications=%d err=%v", processEvents, notifications, err)
 	}
 
@@ -118,7 +118,7 @@ func TestWorkflowTaskEscalationTaskEventAndBothNotificationsAreAtomic(t *testing
 	if err != nil || !found || rolledBack.AssigneeUserID != "manager" {
 		t.Fatalf("rolled back task=%+v found=%v err=%v", rolledBack, found, err)
 	}
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM workflow_process_events WHERE workspace_id = ? AND id = ?", "workspace-a", "event-rollback").Scan(&processEvents); err != nil || processEvents != 0 {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM _workflow_process_events WHERE workspace_id = ? AND id = ?", "workspace-a", "event-rollback").Scan(&processEvents); err != nil || processEvents != 0 {
 		t.Fatalf("rolled back process events=%d err=%v", processEvents, err)
 	}
 }
@@ -227,7 +227,7 @@ func TestWorkflowTaskNotificationDeferredCommitFailures(t *testing.T) {
 	task := workflowTaskNotificationTask("commit-task", "open")
 	event := workflowTaskNotificationEvent("commit-notification", "commit-task:assigned")
 
-	if _, err := store.DB().ExecContext(t.Context(), `CREATE TRIGGER fail_task_commit AFTER INSERT ON workflow_tasks BEGIN INSERT INTO gate_child VALUES (NEW.id, 'missing'); END`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `CREATE TRIGGER fail_task_commit AFTER INSERT ON _workflow_tasks BEGIN INSERT INTO gate_child VALUES (NEW.id, 'missing'); END`); err != nil {
 		t.Fatal(err)
 	}
 	if err := committer.CommitWorkflowTaskNotification(t.Context(), "workspace-a", task, event); err == nil {
@@ -237,7 +237,7 @@ func TestWorkflowTaskNotificationDeferredCommitFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := store.DB().ExecContext(t.Context(), `CREATE TRIGGER fail_event_commit AFTER INSERT ON workflow_process_events BEGIN INSERT INTO gate_child VALUES (NEW.id, 'missing'); END`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `CREATE TRIGGER fail_event_commit AFTER INSERT ON _workflow_process_events BEGIN INSERT INTO gate_child VALUES (NEW.id, 'missing'); END`); err != nil {
 		t.Fatal(err)
 	}
 	processEvent := workflowmodel.WorkflowProcessEvent{ID: "commit-reminder-event", ProcessID: task.ProcessID, TaskID: task.ID, Event: "task_reminder", CreatedAt: task.CreatedAt}

@@ -1,6 +1,5 @@
 package businesssystem
 
-import deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 import recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 
 // This file assembles the cross-owner business-system projection.
@@ -37,7 +36,6 @@ type BusinessSystemApplicationDependencies struct {
 	FeaturePermissions     func(context.Context, principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error)
 	SchemaForPrincipal     func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
 	ApplicationDefinitions func(context.Context, string, string, principalmodel.Principal) ([]appschemamodel.ApplicationDefinition, error)
-	FrontendSnapshot       func(context.Context, principalmodel.Principal) (deploymentmodel.FrontendCapabilitySnapshot, error)
 	Evidence               changeplanrepository.ChangePlanEvidenceRepository
 	Runtime                BusinessSystemRuntimeProjectionDependencies
 }
@@ -48,7 +46,6 @@ type businessSystemSnapshotPorts struct {
 	featurePermissions  func(context.Context, principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error)
 	schemaForPrincipal  func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
 	metadataDefinitions func(context.Context, string, string, principalmodel.Principal) ([]appschemamodel.ApplicationDefinition, error)
-	frontendSnapshot    func(context.Context, principalmodel.Principal) (deploymentmodel.FrontendCapabilitySnapshot, error)
 }
 
 // BusinessSystemApplicationService is the cross-domain snapshot composition
@@ -65,7 +62,6 @@ func NewBusinessSystemApplicationService(dependencies BusinessSystemApplicationD
 			featurePermissions:  dependencies.FeaturePermissions,
 			schemaForPrincipal:  dependencies.SchemaForPrincipal,
 			metadataDefinitions: dependencies.ApplicationDefinitions,
-			frontendSnapshot:    dependencies.FrontendSnapshot,
 		},
 		evidence:          dependencies.Evidence,
 		runtimeProjection: newBusinessSystemRuntimeProjectionPorts(dependencies.Runtime),
@@ -99,7 +95,6 @@ func (s *BusinessSystemApplicationService) Snapshot(ctx context.Context, princip
 		AuthoringContractVersion: authoring.ContractVersion, AuthoringContractHash: authoring.ContractHash,
 		SchemaHash: schema.SchemaHash, Schema: schema, EffectivePermissions: permissions,
 		ResourceSources: []changeplanprojection.SystemResourceSource{}, RuntimeState: changeplanprojection.BusinessRuntimeStateSnapshot{},
-		FrontendCapabilities:     changeplanmodel.FrontendCapabilities{Status: "unknown", MissingFrontendSupport: []changeplanmodel.FrontendRequirement{}, StaleFrontendSupport: []changeplanmodel.FrontendSupportEntry{}},
 		SeedRecords:              []businessseedmodel.BusinessSeedProvenance{},
 		ObjectRecordCounts:       map[string]int{},
 		HiddenResourceCategories: []string{},
@@ -142,7 +137,7 @@ func (s *BusinessSystemApplicationService) businessResourceSources(ctx context.C
 	return items, nil
 }
 
-var businessSnapshotGovernanceCategories = []string{"frontend_capabilities", "object_record_counts", "resource_sources", "runtime_state.automation", "runtime_state.integrations", "runtime_state.reports", "runtime_state.scheduler"}
+var businessSnapshotGovernanceCategories = []string{"object_record_counts", "resource_sources", "runtime_state.automation", "runtime_state.integrations", "runtime_state.reports", "runtime_state.scheduler"}
 
 func baseBusinessSnapshotVisibility() map[string]string {
 	return map[string]string{"schema": "visible"}
@@ -169,11 +164,6 @@ func (s *BusinessSystemApplicationService) addBusinessAdministratorSnapshotFacts
 		return err
 	}
 	snapshot.ResourceSources, snapshot.SeedRecords, snapshot.RuntimeState, snapshot.ObjectRecordCounts = sources, seeds, runtimeState, recordCounts
-	frontend, err := s.snapshotProjection.frontendSnapshot(ctx, principal)
-	if err != nil {
-		return err
-	}
-	snapshot.FrontendCapabilities = businessSystemFrontendCapabilities(frontend)
 	for _, category := range businessSnapshotGovernanceCategories {
 		snapshot.ResourceVisibility[category] = "visible"
 	}
@@ -279,41 +269,4 @@ func businessSystemPrincipalWorkspaceID(principal principalmodel.Principal) stri
 
 func businessSystemRuntimeAuthoringCapabilities() capabilitycontract.CapabilityRuntimeAuthoringContract {
 	return capabilityapplication.RuntimeAuthoringCapabilities()
-}
-
-func businessSystemFrontendCapabilities(snapshot deploymentmodel.FrontendCapabilitySnapshot) changeplanmodel.FrontendCapabilities {
-	result := changeplanmodel.FrontendCapabilities{Revision: snapshot.Revision, UpdatedAt: snapshot.UpdatedAt, Status: snapshot.Status, ManifestHash: snapshot.ManifestHash}
-	for _, requirement := range snapshot.MissingFrontendSupport {
-		result.MissingFrontendSupport = append(result.MissingFrontendSupport, changeplanmodel.FrontendRequirement{CapabilityKey: requirement.CapabilityKey, SupportKey: requirement.SupportKey})
-	}
-	result.StaleFrontendSupport = businessSystemFrontendEntries(snapshot.StaleFrontendSupport)
-	if snapshot.Manifest == nil {
-		return result
-	}
-	result.Manifest = &changeplanmodel.FrontendManifest{
-		ManifestVersion: snapshot.Manifest.ManifestVersion, FrontendVersion: snapshot.Manifest.FrontendVersion,
-		RuntimeContractVersions: append([]string(nil), snapshot.Manifest.RuntimeContractVersions...), Entries: businessSystemFrontendEntries(snapshot.Manifest.Entries),
-	}
-	if evidence := snapshot.Manifest.DeploymentEvidence; evidence != nil {
-		result.Manifest.DeploymentEvidence = &changeplanmodel.FrontendDeploymentEvidence{
-			AuditContractVersion: evidence.AuditContractVersion, DesignContractHash: evidence.DesignContractHash,
-			RouteRegistryHash: evidence.RouteRegistryHash, FrontendSourceHash: evidence.FrontendSourceHash, AuditArtifactHash: evidence.AuditArtifactHash,
-		}
-	}
-	return result
-}
-
-func businessSystemFrontendEntries(source []deploymentmodel.FrontendCapabilitySupportEntry) []changeplanmodel.FrontendSupportEntry {
-	entries := make([]changeplanmodel.FrontendSupportEntry, 0, len(source))
-	for _, entry := range source {
-		entries = append(entries, changeplanmodel.FrontendSupportEntry{
-			SupportKey: entry.SupportKey, CapabilityKeys: append([]string(nil), entry.CapabilityKeys...), Route: entry.Route,
-			RequiredPermissions: append([]string(nil), entry.RequiredPermissions...), FeatureModule: entry.FeatureModule,
-			AcceptanceTests: append([]string(nil), entry.AcceptanceTests...), ActorRoles: append([]string(nil), entry.ActorRoles...),
-			BusinessObjects:    append([]string(nil), entry.BusinessObjects...),
-			ImplementedActions: append([]string(nil), entry.ImplementedActions...), ReportKeys: append([]string(nil), entry.ReportKeys...),
-			FieldKeys: append([]string(nil), entry.FieldKeys...), AcceptanceClaims: append([]string(nil), entry.AcceptanceClaims...),
-		})
-	}
-	return entries
 }

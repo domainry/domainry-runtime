@@ -1,8 +1,6 @@
 package openapi
 
 import (
-	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
-
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 	"sort"
@@ -86,30 +84,6 @@ func openAPISchemas(snapshot appschemamodel.ApplicationSchemaSnapshot) map[strin
 				"metrics": openAPIObject(nil), "permissions": openAPIObject(nil), "diagnostics": openAPIObject(nil),
 			},
 		},
-		"FrontendDeploymentEvidence": map[string]any{
-			"type": "object", "additionalProperties": false,
-			"required": []string{"audit_contract_version", "design_contract_hash", "route_registry_hash", "frontend_source_hash", "audit_artifact_hash"},
-			"properties": map[string]any{
-				"audit_contract_version": map[string]any{"type": "string"},
-				"design_contract_hash":   map[string]any{"type": "string", "pattern": "^[a-f0-9]{64}$"},
-				"route_registry_hash":    map[string]any{"type": "string", "pattern": "^[a-f0-9]{64}$"},
-				"frontend_source_hash":   map[string]any{"type": "string", "pattern": "^[a-f0-9]{64}$"},
-				"audit_artifact_hash":    map[string]any{"type": "string", "pattern": "^[a-f0-9]{64}$"},
-			},
-		},
-		"FrontendCapabilityManifest": map[string]any{
-			"type": "object", "additionalProperties": false,
-			"required": []string{"manifest_version", "frontend_version", "runtime_contract_versions", "entries"},
-			"properties": map[string]any{
-				"manifest_version":          map[string]any{"type": "string", "enum": []string{deploymentmodel.FrontendCapabilityManifestVersion}},
-				"frontend_version":          map[string]any{"type": "string"},
-				"runtime_contract_versions": openAPIArray(map[string]any{"type": "string"}),
-				"deployment_evidence":       openAPIRef("FrontendDeploymentEvidence"),
-				"entries":                   openAPIArray(openAPIObject(nil)),
-			},
-		},
-		"FrontendCapabilitySnapshot":    openAPIObject(nil),
-		"FrontendCapabilityValidation":  openAPIObject(nil),
 		"AgentTaskDefinition":           openAPIAgentTaskDefinitionSchema(),
 		"AgentEntrypointAssignment":     openAPIAgentEntrypointAssignmentSchema(),
 		"GlobalAgentContextContract":    openAPIGlobalAgentContextSchema(),

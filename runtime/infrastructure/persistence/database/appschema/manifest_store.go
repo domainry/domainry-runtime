@@ -123,7 +123,7 @@ func (s ApplicationSchemaStore) upsertMetadataProjection(ctx context.Context, tx
 	}
 	columns := []string{"id", "contract_version", "source_hash", "schema_hash", "artifact_version", "materializer_version", "status", "template_id", "default_locale", "name", "materialized_at"}
 	values := []any{"current", contractVersion, sourceHash, "", strings.TrimSpace(seed.Version), "runtime-materializer-v1", "materialized", strings.TrimSpace(seed.TemplateID), manifestDefaultLocale(seed), strings.TrimSpace(seed.Name), now}
-	insert := ormbuilder.NewInsertBuilder(s.store.SQLRenderer, "_runtime_metadata_projection").Columns(columns...).Values(values...)
+	insert := ormbuilder.NewInsertBuilder(s.store.SQLRenderer, "_application_schema_projection").Columns(columns...).Values(values...)
 	assignments := make([]ormbuilder.Assignment, 0, len(columns)-1)
 	for _, column := range columns[1:] {
 		assignments = append(assignments, ormbuilder.AssignExpression(column, ormbuilder.InsertedValue(column)))
@@ -162,7 +162,7 @@ func (s ApplicationSchemaStore) removeDeletedGeneratedAutomationRules(ctx contex
 			activeKeys[key] = true
 		}
 	}
-	return s.removeDeletedGeneratedDefinitions(ctx, tx, "automation_rule_definitions", manifestGeneratedSourceID(manifest), activeKeys)
+	return s.removeDeletedGeneratedDefinitions(ctx, tx, "_application_schema_automation_rule_definitions", manifestGeneratedSourceID(manifest), activeKeys)
 }
 
 func manifestGeneratedSourceID(manifest manifestmodel.ManifestSchema) string {

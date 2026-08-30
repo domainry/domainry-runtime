@@ -22,84 +22,83 @@ SaaS mode keeps them in the remote Identity service.
 Registered schema tables:
 
 - `_schema_migrations` — `installation_scoped` and the sole host/module migration ledger
-- `runtime_release_cohorts`, `runtime_release_instances` — `installation_scoped`;
+- `_release_cohorts`, `_release_instances` — `installation_scoped`;
   they coordinate one process release identity across the whole Runtime
   installation and must never be partitioned by tenant workspace
-- `runtime_operations` — explicit discriminator: tenant commands are
+- `_operation_requests` — explicit discriminator: tenant commands are
   `workspace_scoped`; system-purpose commands are `runtime_global`
-- `runtime_operation_controls` — `runtime_global`; every row requires an
+- `_operation_controls` — `runtime_global`; every row requires an
   explicit system purpose and does not accept a tenant workspace discriminator
-- `runtime_worker_queue_scopes` — `runtime_global`; it enumerates explicit
+- `_worker_queue_scopes` — `runtime_global`; it enumerates explicit
   workspace scope keys for governed cross-workspace worker queue discovery
-- `runtime_rate_limit_bucket` — `runtime_global` technical storage used by the
+- `_rate_limit_buckets` — `runtime_global` technical storage used by the
   `database` rate-limit backend; the bucket
   key supplied by each tenant-facing caller includes its explicit workspace or
   tenant-owned credential scope, while the shared limiter itself does not infer
   or substitute a workspace
-- `agent_runtime_state`, `agent_task_runs`, `agent_interactive_runs` —
+- `_agent_runtime_states`, `_agent_task_runs`, `_agent_interactive_runs` —
   `workspace_scoped`; each persisted state/run row has a mandatory
   `workspace_id`, and repository reads and mutations use workspace builders
-- `runtime_break_glass_grants` — `workspace_scoped`; every grant names one
+- `_operation_break_glass_grants` — `workspace_scoped`; every grant names one
   target workspace and its audited approval/revocation lifecycle cannot be
   queried through a wildcard tenant scope
-- `runtime_database_retirements` — `runtime_global`; object retirement, access
+- `_operation_database_retirements` — `runtime_global`; object retirement, access
   observations, approvals and backup evidence never inherit tenant scope
-- `_audit_events`, `audit_export_artifacts`, `transaction_boundary_intents` — `workspace_scoped`
-- record/action/idempotency: `business_action_executions`,
-  `action_assurance_grants`, `record_mutation_executions`
+- `_audit_events`, `_audit_export_artifacts`, `_transaction_boundary_intents` — `workspace_scoped`
+- record/action/idempotency: `_action_executions`,
+  `_action_assurance_grants`, `_record_mutation_executions`
   — `workspace_scoped`
-- `idempotency_cleanup_leases` — `runtime_global`
-- workflow definitions: `workflow_definitions`, `workflow_definition_identities`,
-  `workflow_definition_versions` — `installation_scoped`
-- workflow execution: `_workflow_executions`, `workflow_execution_receipts`, `workflow_process_instances`,
-  `workflow_node_instances`, `workflow_tasks`, `workflow_process_events`
+- `_idempotency_cleanup_leases` — `runtime_global`
+- workflow definitions: `_application_schema_workflow_definitions`, `_workflow_definitions`,
+  `_workflow_definition_versions` — `installation_scoped`
+- workflow execution: `_workflow_executions`, `_workflow_execution_receipts`, `_workflow_process_instances`,
+  `_workflow_node_instances`, `_workflow_tasks`, `_workflow_process_events`
   — `workspace_scoped`
-- `automation_rule_definitions` — `installation_scoped`
-- `automation_rule_executions`, `automation_instruction_executions` — `workspace_scoped`
-- `metadata_catalog`, `metadata_definition_versions`, `metadata_exact_decimal_migrations`, `business_change_plan_drafts`,
-  `application_connector_requirements`, `application_integration_event_mapping_requirements`
+- `_application_schema_automation_rule_definitions` — `installation_scoped`
+- `_automation_rule_executions`, `_automation_instruction_executions` — `workspace_scoped`
+- `_metadata_definition_versions`, `_application_schema_connector_requirements`,
+  `_application_schema_integration_event_mapping_requirements`
   — `installation_scoped`
-- `_runtime_metadata_projection`, `_runtime_seed_checkpoints`, `application_schema_exact_decimal_migrations`
+- `_application_schema_projection`, `_application_schema_seed_checkpoints`, `_application_schema_exact_decimal_migration_receipts`
   — `runtime_global`
-- `business_change_plan_operations`, `business_localized_text`, `business_record_localized_value` — `workspace_scoped`
-- definition catalog: `object_definitions`, `field_definitions`,
-  `validation_definitions`, `action_definitions`,
-  `dictionary_definitions`, `connector_definitions`, `integration_event_mapping_definitions`,
-  `role_definitions` — `installation_scoped`
-- Scheduler Module-owned `scheduler_definitions` — `installation_scoped`
-- Report Module-owned `report_definitions`, `operation_state_example_definitions`,
-  `sensitive_field_policy_definitions`, `report_export_control_definitions` — `installation_scoped`;
-  `report_snapshots` — `workspace_scoped`
-- Identity-owned `identity_profile_binding_definitions` — `installation_scoped`
-- Agent Module-owned `skill_definitions`, `agent_definitions`, `agent_entrypoint_definitions`,
-  `agent_service_principal_definitions`, `agent_task_definitions` — `installation_scoped`
-- Data Exchange Module-owned `data_exchange_jobs`, `data_exchange_chunks`, `data_exchange_artifacts` — `workspace_scoped`; `data_exchange_queue_scopes` contains only payload-free workspace scheduling identities. SaaS mode keeps the same ownership boundary remotely.
-- Party Module-owned foundation tables in the borrowed Runtime database (or isolated behind Party SaaS): `party_parties`, `party_persons`,
-  `party_organizations`, `party_contact_points`, `party_addresses`,
-  `party_identifiers`, `party_communication_preferences`, `party_consents`,
-  `party_privacy_preferences`, `party_marketing_subscriptions`,
-  `party_job_catalog`, `party_positions`, `party_organization_extensions`,
-  `party_organization_extension_memberships` — `workspace_scoped`
-- Integration Module-owned tables in the borrowed Runtime database (or isolated behind Integration SaaS): `integration_connections`, `integration_api_keys`,
-  `integration_secret_materials`, `integration_secrets`,
-  `integration_external_identities`, `integration_credential_refresh_leases`,
-  `integration_webhook_subscriptions`, `integration_webhook_nonces`,
-  `web_push_subscriptions`,
-  `integration_events`, `integration_invocations`,
-  `integration_event_mapping_intents`,
-  `connector_provider_states`
+- `_application_schema_localized_texts`, `_record_localized_values` — `workspace_scoped`
+- definition catalog: `_metadata_object_definitions`, `_metadata_field_definitions`,
+  `_metadata_validation_definitions`, `_metadata_action_definitions`,
+  `_metadata_dictionary_definitions`, `_integration_connector_definitions`, `_integration_event_mapping_definitions`,
+  `_metadata_role_definitions` — `installation_scoped`
+- Scheduler Module-owned `_scheduler_definitions` — `installation_scoped`
+- Report Module-owned `_report_definitions`, `_report_operation_state_examples`,
+  `_report_sensitive_field_policies`, `_report_export_controls` — `installation_scoped`;
+  `_report_snapshots` — `workspace_scoped`
+- Identity-owned `_identity_profile_binding_definitions` — `installation_scoped`
+- Agent Module-owned `_agent_skill_definitions`, `_agent_definitions`, `_agent_entrypoint_definitions`,
+  `_agent_service_principal_definitions`, `_agent_task_definitions` — `installation_scoped`
+- Data Exchange Module-owned `_data_exchange_jobs`, `_data_exchange_job_chunks`, `_data_exchange_artifacts` — `workspace_scoped`; `_data_exchange_queue_scopes` contains only payload-free workspace scheduling identities. SaaS mode keeps the same ownership boundary remotely.
+- Party Module-owned foundation tables in the borrowed Runtime database (or isolated behind Party SaaS): `_party_parties`, `_party_persons`,
+  `_party_organizations`, `_party_contact_points`, `_party_addresses`,
+  `_party_identifiers`, `_party_communication_preferences`, `_party_consents`,
+  `_party_privacy_preferences`, `_party_marketing_subscriptions`,
+  `_party_job_catalog_items`, `_party_positions`, `_party_organization_extensions`,
+  `_party_organization_extension_memberships` — `workspace_scoped`
+- Integration Module-owned tables in the borrowed Runtime database (or isolated behind Integration SaaS): `_integration_connections`, `_integration_api_keys`,
+  `_integration_secret_materials`, `_integration_secrets`,
+  `_integration_external_identities`, `_integration_credential_refresh_leases`,
+  `_integration_webhook_subscriptions`, `_integration_webhook_nonces`,
+  `_integration_web_push_subscriptions`,
+  `_integration_events`, `_integration_invocations`,
+  `_integration_event_mapping_intents`,
+  `_integration_connector_provider_states`
   — `workspace_scoped`
-- Runtime durable publication handoff: `runtime_publication_outbox`
+- Runtime durable publication handoff: `_publication_outbox`
   — `workspace_scoped`; `publication_type` separates `integration.connector`
   from `notification.saas` while sharing lease, retry, fencing and recovery.
   Notification-owned tables remain outside the Runtime schema and are governed
   by the selected Module or SaaS Binding.
-- `frontend_capability_manifests` — `workspace_scoped`
-- lifecycle governance: `lifecycle_policy_versions`, `lifecycle_legal_holds`,
-  `lifecycle_cleanup_jobs`, `lifecycle_subject_requests`,
-  `lifecycle_external_erasures`, `lifecycle_audit_evidence`,
-  `lifecycle_archive_entries`, `lifecycle_deletion_registry`,
-  `lifecycle_file_artifacts`
+- lifecycle governance: `_lifecycle_policy_versions`, `_lifecycle_legal_holds`,
+  `_lifecycle_cleanup_jobs`, `_lifecycle_subject_requests`,
+  `_lifecycle_external_erasure_requests`, `_lifecycle_audit_evidence`,
+  `_lifecycle_archive_entries`, `_lifecycle_deletion_registry`,
+  `_lifecycle_file_artifacts`
   — `workspace_scoped`
 - Runtime health/version capability response (no persisted tenant data) — `public`
 
@@ -176,7 +175,7 @@ roadmap checkbox remains open until every owner is complete.
 | Audit | complete | `TestAuditStoreWorkspaceIsolationContract` |
 | Automation | complete | `TestAutomationStoreWorkspaceIsolationContract`; execution history and instruction lease claim/heartbeat/complete are workspace-scoped |
 | ChangePlan | complete | `TestBusinessChangePlanOperationWorkspaceIsolationContract`; tenant operation claim/complete/fail are workspace-scoped, while drafts and seed provenance remain explicitly `installation_scoped` |
-| Deployment | complete | `TestDeploymentStoreWorkspaceIsolationContract`; `TestFrontendCapabilityStoreWorkspaceIsolationContract`; tenant receipt operations and frontend manifests require workspace, while health/metrics aggregation and cleanup use explicit `runtime_global` system scope |
+| Deployment | complete | `TestDeploymentStoreWorkspaceIsolationContract`; tenant receipt operations require workspace, while health/metrics aggregation and cleanup use explicit `runtime_global` system scope |
 | Integration | complete | `TestIntegrationConfigStoreWorkspaceIsolationContract`; `TestIntegrationEventStoreWorkspaceIsolationContract`; `TestIntegrationDeliveryStoreWorkspaceIsolationContract`; `TestIntegrationWorkerStoreRejectsMissingTenantAndSystemScopes`; tenant config/event/delivery ports require explicit workspace, worker-wide scans require explicit `runtime_global` system scope, and installation seeding passes `InstallationWorkspaceID` explicitly |
 | Lifecycle | complete | `TestLifecycleStoreWorkspaceIsolationContract`; lifecycle policy, legal-hold, cleanup, subject-request, external-erasure, archive, deletion-registry, audit and metrics methods require explicit tenant workspace; cross-workspace cleanup discovery requires explicit `runtime_global` `SystemScope`; owner cleanup deletes remain constrained to the job workspace |
 | Metadata | complete | `TestMetadataStoreWorkspaceIsolationContract`; definition and manifest operations require explicit `installation` system scope, localized text reads/writes require a non-empty matching workspace, A/B workspaces remain isolated, and installation projection/seeding uses `InstallationWorkspaceID` explicitly |

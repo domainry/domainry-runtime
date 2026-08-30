@@ -31,7 +31,7 @@ func TestManifestAgentExecutionDefinitionsAreNotRuntimeOwned(t *testing.T) {
 	if len(restored.AgentTasks) != 0 || len(restored.AgentEntrypoints) != 0 || len(restored.AgentServicePrincipals) != 0 {
 		t.Fatalf("Runtime AppSchema restored Agent-owned definitions: %#v", restored)
 	}
-	for _, table := range []string{"skill_definitions", "agent_definitions", "agent_task_definitions", "agent_entrypoint_definitions", "agent_service_principal_definitions"} {
+	for _, table := range []string{"_agent_skill_definitions", "_agent_definitions", "_agent_task_definitions", "_agent_entrypoint_definitions", "_agent_service_principal_definitions"} {
 		var count int
 		if err := store.raw.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?", table).Scan(&count); err != nil {
 			t.Fatalf("inspect %s: %v", table, err)

@@ -40,9 +40,6 @@ type EngineProfile interface {
 	MigrationBackupPolicy() MigrationBackupPolicy
 	MigrationRollbackPolicy() MigrationRollbackPolicy
 	AcquireMigrationLock(context.Context, *sql.DB, ormdialect.Renderer, MigrationLockOptions) (MigrationLock, error)
-	WorkspaceRLSSupported() bool
-	ApplyWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) error
-	InspectWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) (WorkspaceRLSStatus, error)
 	OrderedDecimalTextStorage() bool
 	RecordReadIsolation() sql.IsolationLevel
 	DatabaseCurrentTimeQuery() SchemaQuery
@@ -90,12 +87,6 @@ type SchemaProfile interface {
 	TableExistsQuery(ormdialect.Renderer, string, string) SchemaQuery
 	IndexesQuery(ormdialect.Renderer, string, string) SchemaQuery
 	InspectModuleSchemaTable(context.Context, SchemaDatabase, ormdialect.Renderer, string, string) (ModuleSchemaTable, bool, error)
-}
-
-type WorkspaceRLSProfile interface {
-	WorkspaceRLSSupported() bool
-	ApplyWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) error
-	InspectWorkspaceRLS(context.Context, *sql.DB, ormdialect.Renderer, string, string, string) (WorkspaceRLSStatus, error)
 }
 
 type ProjectDatabaseProfile interface {
@@ -163,17 +154,6 @@ type MigrationLockOptions struct {
 type MigrationLock struct {
 	Connection *sql.Conn
 	Release    func()
-}
-
-type WorkspaceRLSStatus struct {
-	Enabled       bool     `json:"enabled"`
-	Forced        bool     `json:"forced"`
-	RuntimeRole   string   `json:"runtime_role,omitempty"`
-	RoleOwnsTable bool     `json:"role_owns_table"`
-	RoleBypassRLS bool     `json:"role_bypass_rls"`
-	PolicyVersion string   `json:"policy_version,omitempty"`
-	CoveredTables []string `json:"covered_tables,omitempty"`
-	MissingTables []string `json:"missing_tables,omitempty"`
 }
 
 type SchemaDatabase interface {

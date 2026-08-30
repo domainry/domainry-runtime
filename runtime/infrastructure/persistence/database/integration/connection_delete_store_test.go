@@ -24,7 +24,7 @@ func TestDeleteConnectionAtomicallyRejectsWebhookReference(t *testing.T) {
 	if err != nil || deleted {
 		t.Fatalf("referenced delete=%v error=%v", deleted, err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), "DELETE FROM integration_webhook_subscriptions WHERE workspace_id = ? AND subscription_key = ?", "workspace", "events"); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), "DELETE FROM _integration_webhook_subscriptions WHERE workspace_id = ? AND subscription_key = ?", "workspace", "events"); err != nil {
 		t.Fatal(err)
 	}
 	deleted, err = repository.DeleteConnection(t.Context(), "workspace", "hook")

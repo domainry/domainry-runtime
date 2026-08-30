@@ -5,7 +5,7 @@
 
 Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `optimistic_only`, `not_applicable`.
 
-## HTTP mutation routes (137)
+## HTTP mutation routes (136)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -31,7 +31,6 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `automation` | `POST /automation-rules/{ruleKey}/simulate` | `not_applicable` | none | `runtime/transport/http/automation/automation_routes.go` |
 | `businesssystem` | `POST /domain-system-delivery-verification` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/businesssystem/businesssystem_routes.go` |
 | `businesssystem` | `POST /domain-system-validation` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/businesssystem/businesssystem_routes.go` |
-| `frontendcapability` | `POST /frontend-capability-manifest/validate` | `not_applicable` | none | `runtime/transport/http/frontendcapability/frontendcapability_routes.go` |
 | `integrations` | `POST /business/notifications/web-push/subscriptions/{subscriptionID}/revoke` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/integrations/integrations_routes.go` |
 | `integrations` | `POST /integrations/web-push/subscriptions/cleanup-expired` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/integrations/integrations_routes.go` |
 | `integrations` | `PUT /business/notifications/web-push/subscriptions/{subscriptionID}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/integrations/integrations_routes.go` |

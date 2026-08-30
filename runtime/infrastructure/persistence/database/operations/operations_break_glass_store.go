@@ -24,7 +24,7 @@ func (s OperationsStore) CreateOperationsBreakGlass(ctx context.Context, grant o
 	}
 	defer func() { _ = tx.Rollback() }()
 	var active int64
-	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "runtime_break_glass_grants", grant.WorkspaceID).Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(ormbuilder.And(ormbuilder.Equal("state", string(operationsmodel.OperationsBreakGlassActive)), ormbuilder.GreaterThan("expires_at", grant.CreatedAt.UTC().Format(time.RFC3339Nano)))).Build()
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_operation_break_glass_grants", grant.WorkspaceID).Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(ormbuilder.And(ormbuilder.Equal("state", string(operationsmodel.OperationsBreakGlassActive)), ormbuilder.GreaterThan("expires_at", grant.CreatedAt.UTC().Format(time.RFC3339Nano)))).Build()
 	if buildErr != nil {
 		return false, buildErr
 	}
@@ -32,7 +32,7 @@ func (s OperationsStore) CreateOperationsBreakGlass(ctx context.Context, grant o
 		return false, err
 	}
 	approvers, _ := json.Marshal(grant.ApproverIDs)
-	query, args, buildErr = ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "runtime_break_glass_grants", grant.WorkspaceID).Columns("id", "state", "actor_id", "approver_ids_json", "reason", "incident_ref", "alert_target", "audit_event_id", "expires_at", "revision", "created_at", "updated_at", "revoked_at", "revoked_by", "revocation_note").Values(grant.ID, string(grant.State), grant.ActorID, string(approvers), grant.Reason, grant.IncidentRef, grant.AlertTarget, grant.AuditEventID, grant.ExpiresAt.UTC().Format(time.RFC3339Nano), grant.Revision, grant.CreatedAt.UTC().Format(time.RFC3339Nano), grant.UpdatedAt.UTC().Format(time.RFC3339Nano), "", "", "").Build()
+	query, args, buildErr = ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "_operation_break_glass_grants", grant.WorkspaceID).Columns("id", "state", "actor_id", "approver_ids_json", "reason", "incident_ref", "alert_target", "audit_event_id", "expires_at", "revision", "created_at", "updated_at", "revoked_at", "revoked_by", "revocation_note").Values(grant.ID, string(grant.State), grant.ActorID, string(approvers), grant.Reason, grant.IncidentRef, grant.AlertTarget, grant.AuditEventID, grant.ExpiresAt.UTC().Format(time.RFC3339Nano), grant.Revision, grant.CreatedAt.UTC().Format(time.RFC3339Nano), grant.UpdatedAt.UTC().Format(time.RFC3339Nano), "", "", "").Build()
 	if buildErr != nil {
 		return false, buildErr
 	}
@@ -50,7 +50,7 @@ func (s OperationsStore) GetOperationsBreakGlass(ctx context.Context, id string)
 	if s.database() == nil {
 		return operationsmodel.OperationsBreakGlassGrant{}, false, fmt.Errorf("operations store unavailable")
 	}
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "runtime_break_glass_grants").Columns(operationsBreakGlassColumns()...).Where(ormbuilder.Equal("id", id)).Build()
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_operation_break_glass_grants").Columns(operationsBreakGlassColumns()...).Where(ormbuilder.Equal("id", id)).Build()
 	if buildErr != nil {
 		return operationsmodel.OperationsBreakGlassGrant{}, false, buildErr
 	}
@@ -65,7 +65,7 @@ func (s OperationsStore) ListOperationsBreakGlass(ctx context.Context, workspace
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "runtime_break_glass_grants", workspaceID).Columns(operationsBreakGlassColumns()...).OrderBy(ormbuilder.Descending("created_at"), ormbuilder.Descending("id")).Limit(limit).Build()
+	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_operation_break_glass_grants", workspaceID).Columns(operationsBreakGlassColumns()...).OrderBy(ormbuilder.Descending("created_at"), ormbuilder.Descending("id")).Limit(limit).Build()
 	if buildErr != nil {
 		return nil, buildErr
 	}
@@ -90,7 +90,7 @@ func (s OperationsStore) RevokeOperationsBreakGlass(ctx context.Context, grant o
 	if grant.RevokedAt != nil {
 		revokedAt = grant.RevokedAt.UTC().Format(time.RFC3339Nano)
 	}
-	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "runtime_break_glass_grants", grant.WorkspaceID).Set("state", string(grant.State)).Set("revision", grant.Revision).Set("updated_at", grant.UpdatedAt.UTC().Format(time.RFC3339Nano)).Set("revoked_at", revokedAt).Set("revoked_by", grant.RevokedBy).Set("revocation_note", grant.RevocationNote).Where(ormbuilder.And(ormbuilder.Equal("id", grant.ID), ormbuilder.Equal("state", string(operationsmodel.OperationsBreakGlassActive)), ormbuilder.Equal("revision", expectedRevision))).Build()
+	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_operation_break_glass_grants", grant.WorkspaceID).Set("state", string(grant.State)).Set("revision", grant.Revision).Set("updated_at", grant.UpdatedAt.UTC().Format(time.RFC3339Nano)).Set("revoked_at", revokedAt).Set("revoked_by", grant.RevokedBy).Set("revocation_note", grant.RevocationNote).Where(ormbuilder.And(ormbuilder.Equal("id", grant.ID), ormbuilder.Equal("state", string(operationsmodel.OperationsBreakGlassActive)), ormbuilder.Equal("revision", expectedRevision))).Build()
 	if buildErr != nil {
 		return false, buildErr
 	}

@@ -98,10 +98,10 @@ func TestApplicationDefinitionFirstStringHelper(t *testing.T) {
 
 func TestApplicationDefinitionTableMatchesBusinessResourceInventory(t *testing.T) {
 	for resourceType, expectedTable := range map[string]string{
-		"workflow":                  "workflow_definitions",
-		"automation_rule":           "automation_rule_definitions",
-		"connector":                 "application_connector_requirements",
-		"integration_event_mapping": "application_integration_event_mapping_requirements",
+		"workflow":                  "_application_schema_workflow_definitions",
+		"automation_rule":           "_application_schema_automation_rule_definitions",
+		"connector":                 "_application_schema_connector_requirements",
+		"integration_event_mapping": "_application_schema_integration_event_mapping_requirements",
 	} {
 		if table, err := metadataDefinitionTable(" " + resourceType + " "); err != nil || table != expectedTable {
 			t.Fatalf("resource=%q table=%q err=%v", resourceType, table, err)

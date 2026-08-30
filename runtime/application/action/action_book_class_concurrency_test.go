@@ -356,8 +356,8 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 		t.Fatalf("stored bookings booked=%d waitlisted=%d outcomes=(%d,%d)", storedBooked, storedWaitlisted, booked, waitlisted)
 	}
 	for table, want := range map[string]int{
-		"runtime_publication_outbox": 30,
-		"_audit_events":              90,
+		"_publication_outbox": 30,
+		"_audit_events":       90,
 	} {
 		var count int
 		if err := store.DB().QueryRow("SELECT COUNT(*) FROM " + store.Identifier(table)).Scan(&count); err != nil || count != want {
@@ -370,7 +370,7 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 			SUM(CASE WHEN status = ? THEN 1 ELSE 0 END),
 			SUM(CASE WHEN status = ? THEN 1 ELSE 0 END),
 			SUM(CASE WHEN status = ? THEN 1 ELSE 0 END)
-		FROM business_action_executions`,
+		FROM _action_executions`,
 		string(idempotency.StatusSucceeded),
 		string(idempotency.StatusFailedTerminal),
 		string(idempotency.StatusProcessing),
@@ -413,7 +413,7 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 	var failureResponseStatus int
 	if err := store.DB().QueryRow(
 		`SELECT status, error_code, response_status
-		FROM business_action_executions
+		FROM _action_executions
 		WHERE idempotency_key = ?`,
 		terminalFailure.key,
 	).Scan(&failureStatus, &failureCode, &failureResponseStatus); err != nil {
@@ -427,10 +427,10 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 		)
 	}
 	for table, want := range map[string]int{
-		"concurrent_class_booking":   30,
-		"runtime_publication_outbox": 30,
-		"_audit_events":              90,
-		"business_action_executions": 100,
+		"concurrent_class_booking": 30,
+		"_publication_outbox":      30,
+		"_audit_events":            90,
+		"_action_executions":       100,
 	} {
 		var count int
 		if err := store.DB().QueryRow("SELECT COUNT(*) FROM " + store.Identifier(table)).Scan(&count); err != nil || count != want {

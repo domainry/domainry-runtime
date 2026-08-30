@@ -67,7 +67,7 @@ func (r IntegrationConfigStore) migrateLegacyProviderStateTable(ctx context.Cont
 	for _, record := range records {
 		workspace, connection := fmt.Sprint(record.values[0]), fmt.Sprint(record.values[1])
 		var count int
-		if err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+r.store.TableIdentifier("connector_provider_states")+" WHERE "+r.store.Identifier("workspace_id")+"="+r.store.Placeholder(1)+" AND connection_key="+r.store.Placeholder(2)+" AND task_key="+r.store.Placeholder(3), workspace, connection, task).Scan(&count); err != nil || count != 0 {
+		if err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+r.store.TableIdentifier("_integration_connector_provider_states")+" WHERE "+r.store.Identifier("workspace_id")+"="+r.store.Placeholder(1)+" AND connection_key="+r.store.Placeholder(2)+" AND task_key="+r.store.Placeholder(3), workspace, connection, task).Scan(&count); err != nil || count != 0 {
 			if err != nil {
 				return err
 			}
@@ -88,7 +88,7 @@ func (r IntegrationConfigStore) migrateLegacyProviderStateTable(ctx context.Cont
 		raw, _ := json.Marshal(payload)
 		values := []any{"connector_provider_state:" + workspace + ":google_workspace:google:" + connection + ":" + task, workspace, "google_workspace", "google", connection, task, 1, string(raw), "retry", due, lastError, attempt, "", "", fencing, updated}
 		columns := []string{"id", "workspace_id", "connector_key", "provider_key", "connection_key", "task_key", "state_version", "payload_json", "status", "due_at", "last_error_code", "attempt_count", "lease_owner", "lease_expires_at", "fencing_token", "updated_at"}
-		if _, err := r.db.ExecContext(ctx, "INSERT INTO "+r.store.TableIdentifier("connector_provider_states")+" ("+stringsJoinIdentifiers(r.store, columns...)+") VALUES ("+stringsJoinPlaceholders(r.store, len(values))+")", values...); err != nil {
+		if _, err := r.db.ExecContext(ctx, "INSERT INTO "+r.store.TableIdentifier("_integration_connector_provider_states")+" ("+stringsJoinIdentifiers(r.store, columns...)+") VALUES ("+stringsJoinPlaceholders(r.store, len(values))+")", values...); err != nil {
 			return fmt.Errorf("migrate legacy %s: %w", table, err)
 		}
 	}

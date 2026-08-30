@@ -165,7 +165,7 @@ func TestRoutesOnlyComposesDomainRegistrarsAndGlobalMiddleware(t *testing.T) {
 	expected := map[string]bool{
 		"discoveryHTTP": false, "openAPIHTTP": false,
 		"reportHTTP": false, "agentDialogHTTP": false, "applicationSchemaHTTP": false,
-		"capabilityHTTP": false, "frontendCapabilityHTTP": false, "businessSystemHTTP": false,
+		"capabilityHTTP": false, "businessSystemHTTP": false,
 		"businessReferenceHTTP": false, "lifecycleHTTP": false,
 		"uploadHTTP": false, "surfaceContextHTTP": false, "recordHTTP": false, "workflowHTTP": false,
 		"automationHTTP": false, "schedulerHTTP": false,
@@ -234,7 +234,6 @@ func declaredRuntimeRoutes(t *testing.T) map[string]bool {
 	files = append(files, filepath.Join(filepath.Dir(current), "automation", "automation_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "scheduler", "scheduler_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "reports", "reports_routes.go"))
-	files = append(files, filepath.Join(filepath.Dir(current), "frontendcapability", "frontendcapability_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "appschema", "appschema_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "businessreferences", "businessreferences_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "businesssystem", "businesssystem_routes.go"))

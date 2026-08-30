@@ -6,7 +6,7 @@ Owner：模型/provider 执行、协议适配、provider run、模型路由与�
 
 ## 边界与模式
 
-`domainry-agent` 拥有 Agent/Skill/Task 定义，以及 `agent_runtime_state`、`agent_task_runs`、`agent_interactive_runs`、`agent_worker_scopes` 的聚合、Repository、DDL 和 DML。Agent/Skill/Task/Context/Routing/Runner 公共合同以 `domainry-agent-sdk` 为唯一源码。Runtime 只保留 workflow 推进、workspace/principal 授权、proposal/approval、tool gateway、宿主事务编排和业务 terminal commit；provider 完成不等于 Runtime workflow 已提交。
+`domainry-agent` 拥有 Agent/Skill/Task 定义，以及 `_agent_runtime_states`、`_agent_task_runs`、`_agent_interactive_runs`、`_agent_worker_scopes` 的聚合、Repository、DDL 和 DML。Agent/Skill/Task/Context/Routing/Runner 公共合同以 `domainry-agent-sdk` 为唯一源码。Runtime 只保留 workflow 推进、workspace/principal 授权、proposal/approval、tool gateway、宿主事务编排和业务 terminal commit；provider 完成不等于 Runtime workflow 已提交。
 
 项目组合根通过 `runtimehost.Options.AgentFactory` 选择拓扑。Module Factory 在 Runtime 进程内打开 Binding；SaaS Factory 返回远程 Binding。Runtime 对 nil Binding、未知 mode 和协议不匹配 fail closed，Agent Provider 的地址、凭据和协议配置全部归 `domainry-agent` 所有。
 

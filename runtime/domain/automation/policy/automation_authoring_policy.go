@@ -15,8 +15,7 @@ func AutomationAuthoringDomain() capabilitycontract.CapabilityAuthoringDomain {
 			{Key: "conditions", Type: "automation_condition_group"}, {Key: "instructions", Type: "array", ItemSchema: "automation_instruction", Required: true},
 			{Key: "execution", Type: "automation_execution_policy"}, {Key: "audit_event", Type: "event_key"}, {Key: "i18n", Type: "object"}, {Key: "layout", Type: "automation_layout"},
 		}, Permissions: []string{"automation.rule.read", "automation.rule.write"}, AuditEvents: []string{"automation_rule_saved"},
-		ValidationEndpoint: "POST /automation-rules/validate", SimulationEndpoint: "POST /automation-rules/simulate", ConfigurationRoutes: append([]string{"POST /automation-rules/validate", "POST /automation-rules/simulate"}, appschemacontract.VersionedApplicationDefinitionRoutes("automation_rule")...), FrontendSupportKey: "automation.rule.workbench.v1",
-		Errors: []capabilitycontract.CapabilityAuthoringError{{Code: "backend.automation.instruction_type_invalid", FieldPath: "instructions[].type", ParameterKeys: []string{"instruction", "type"}, MessageKey: "backend.automation.instruction_type_invalid"}},
+		ValidationEndpoint: "POST /automation-rules/validate", SimulationEndpoint: "POST /automation-rules/simulate", ConfigurationRoutes: append([]string{"POST /automation-rules/validate", "POST /automation-rules/simulate"}, appschemacontract.VersionedApplicationDefinitionRoutes("automation_rule")...), Errors: []capabilitycontract.CapabilityAuthoringError{{Code: "backend.automation.instruction_type_invalid", FieldPath: "instructions[].type", ParameterKeys: []string{"instruction", "type"}, MessageKey: "backend.automation.instruction_type_invalid"}},
 		Sources: []capabilitycontract.CapabilityAuthoringSource{
 			{Kind: "discovery", Path: "runtime/domain/capability/contract/capability_automation_contract.go", Symbol: "RuntimeAutomationCapabilities"},
 			{Kind: "model", Path: "runtime/domain/automation/model/automation_schema.go", Symbol: "AutomationRuleSchema"},
@@ -38,16 +37,14 @@ func automationAuthoringComponentCapabilities() []capabilitycontract.CapabilityA
 				{Key: "operation", Type: "string", Required: true, Enum: capabilitycontract.RuntimeAutomationCapabilities().Operations},
 				{Key: "changed_fields", Type: "array", ItemSchema: "field_key"}, {Key: "from_state", Type: "string"},
 				{Key: "to_state", Type: "string"}, {Key: "source", Type: "string"},
-			}, Requires: []string{"automation.rule"}, ValidationEndpoint: "POST /automation-rules/authoring-fragments/{capabilityKey}/validate", FrontendSupportKey: "automation.trigger.editor.v1",
-			Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "validation", Path: "runtime/domain/automation/validation/automation_definition_validator.go", Symbol: "validateAutomationTriggerFilters"}},
+			}, Requires: []string{"automation.rule"}, ValidationEndpoint: "POST /automation-rules/authoring-fragments/{capabilityKey}/validate", Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "validation", Path: "runtime/domain/automation/validation/automation_definition_validator.go", Symbol: "validateAutomationTriggerFilters"}},
 		},
 		{
 			Key: "automation.condition_group", Status: "supported", Lifecycle: "record_lifecycle",
 			Parameters: []capabilitycontract.CapabilityAuthoringParameter{
 				{Key: "mode", Type: "string", Default: "all", Enum: []string{"all", "any"}}, {Key: "clauses", Type: "array", ItemSchema: "automation_condition_clause"},
 				{Key: "groups", Type: "array", ItemSchema: "automation_condition_group"},
-			}, Requires: []string{"automation.rule"}, ValidationEndpoint: "POST /automation-rules/authoring-fragments/{capabilityKey}/validate", FrontendSupportKey: "automation.condition.editor.v1",
-			Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "validation", Path: "runtime/domain/automation/validation/automation_definition_validator.go", Symbol: "validateAutomationConditionGroup"}},
+			}, Requires: []string{"automation.rule"}, ValidationEndpoint: "POST /automation-rules/authoring-fragments/{capabilityKey}/validate", Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "validation", Path: "runtime/domain/automation/validation/automation_definition_validator.go", Symbol: "validateAutomationConditionGroup"}},
 		},
 		{
 			Key: "automation.execution_policy", Status: "supported", Lifecycle: "record_lifecycle",
@@ -57,8 +54,7 @@ func automationAuthoringComponentCapabilities() []capabilitycontract.CapabilityA
 				{Key: "result_notification", Type: "string", Enum: capabilitycontract.RuntimeAutomationCapabilities().ResultNotificationModes},
 				{Key: "timeout_seconds", Type: "integer", Minimum: automationAuthoringFloatPointer(0)}, {Key: "max_depth", Type: "integer", Minimum: automationAuthoringFloatPointer(0)},
 				{Key: "idempotency_keys", Type: "array", ItemSchema: "field_key"},
-			}, Requires: []string{"automation.rule"}, ValidationEndpoint: "POST /automation-rules/authoring-fragments/{capabilityKey}/validate", FrontendSupportKey: "automation.execution-policy.editor.v1",
-			Sources: []capabilitycontract.CapabilityAuthoringSource{automationSource},
+			}, Requires: []string{"automation.rule"}, ValidationEndpoint: "POST /automation-rules/authoring-fragments/{capabilityKey}/validate", Sources: []capabilitycontract.CapabilityAuthoringSource{automationSource},
 		},
 	}
 	for index := range components {
@@ -67,25 +63,25 @@ func automationAuthoringComponentCapabilities() []capabilitycontract.CapabilityA
 	return append(components,
 		automationAuthoringInstruction("derive_fields", []capabilitycontract.CapabilityAuthoringParameter{
 			{Key: "fields", Type: "object", Required: true},
-		}, "automation.instruction.derive-fields.v1"),
+		}),
 		automationAuthoringInstruction("assert", []capabilitycontract.CapabilityAuthoringParameter{
 			{Key: "source", Type: "reference", Required: true}, {Key: "operator", Type: "string", Required: true, Enum: []string{"empty", "eq", "future_date", "gt", "gte", "in", "lt", "lte", "ne", "not_empty"}}, {Key: "value", Type: "any"}, {Key: "error_code", Type: "string"},
-		}, "automation.instruction.assert.v1"),
+		}),
 		automationAuthoringInstruction("invoke_business_action", []capabilitycontract.CapabilityAuthoringParameter{
 			{Key: "action_key", Type: "action_key", Required: true}, {Key: "object_key", Type: "object_key"},
 			{Key: "record_id", Type: "record_id"}, {Key: "input", Type: "object"},
-		}, "automation.instruction.invoke-domain-action.v1"),
+		}),
 		automationAuthoringInstruction("start_workflow", []capabilitycontract.CapabilityAuthoringParameter{
 			{Key: "workflow_key", Type: "workflow_key", Required: true}, {Key: "payload", Type: "object"},
-		}, "automation.instruction.start-workflow.v1"),
+		}),
 		automationAuthoringInstruction("emit_event", []capabilitycontract.CapabilityAuthoringParameter{
 			{Key: "event_type", Type: "event_key", Required: true}, {Key: "object_key", Type: "object_key"},
 			{Key: "record_id", Type: "record_id"}, {Key: "message", Type: "string"}, {Key: "metadata", Type: "object"},
-		}, "automation.instruction.emit-event.v1"),
+		}),
 	)
 }
 
-func automationAuthoringInstruction(instructionType string, configParameters []capabilitycontract.CapabilityAuthoringParameter, frontendSupportKey string) capabilitycontract.CapabilityAuthoringDefinition {
+func automationAuthoringInstruction(instructionType string, configParameters []capabilitycontract.CapabilityAuthoringParameter) capabilitycontract.CapabilityAuthoringDefinition {
 	parameters := []capabilitycontract.CapabilityAuthoringParameter{
 		{Key: "key", Type: "instruction_key", Required: true}, {Key: "type", Type: "string", Required: true, Enum: []string{instructionType}},
 		{Key: "name", Type: "string"}, {Key: "i18n", Type: "object"}, {Key: "mode", Type: "string"}, {Key: "result_alias", Type: "string"}, {Key: "on_error", Type: "string", Enum: []string{"continue", "fail"}},
@@ -93,8 +89,7 @@ func automationAuthoringInstruction(instructionType string, configParameters []c
 	}
 	capability := capabilitycontract.CapabilityAuthoringDefinition{
 		Key: "automation.instruction." + instructionType, Status: "supported", Lifecycle: "record_lifecycle",
-		Parameters: parameters, Requires: []string{"automation.rule"}, ValidationEndpoint: "POST /automation-rules/authoring-fragments/{capabilityKey}/validate", FrontendSupportKey: frontendSupportKey,
-		Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "model", Path: "runtime/domain/automation/model/automation_schema.go", Symbol: "AutomationInstructionSchema"}, {Kind: "validation", Path: "runtime/domain/automation/validation/automation_authoring_fragment_validation.go", Symbol: "AutomationValidateAuthoringFragment"}, {Kind: "runtime", Path: "runtime/application/automation/automation_instruction_dispatch_application_service.go", Symbol: "AutomationInstructionDispatchApplicationService.Execute"}},
+		Parameters: parameters, Requires: []string{"automation.rule"}, ValidationEndpoint: "POST /automation-rules/authoring-fragments/{capabilityKey}/validate", Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "model", Path: "runtime/domain/automation/model/automation_schema.go", Symbol: "AutomationInstructionSchema"}, {Kind: "validation", Path: "runtime/domain/automation/validation/automation_authoring_fragment_validation.go", Symbol: "AutomationValidateAuthoringFragment"}, {Kind: "runtime", Path: "runtime/application/automation/automation_instruction_dispatch_application_service.go", Symbol: "AutomationInstructionDispatchApplicationService.Execute"}},
 	}
 	capability.InputSchema = automationInstructionInputSchema(instructionType, parameters, configParameters)
 	capability.OutputSchema = automationFragmentValidationOutputSchema()

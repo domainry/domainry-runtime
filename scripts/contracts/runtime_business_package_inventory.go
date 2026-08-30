@@ -391,7 +391,7 @@ func candidateOwner(name string) string {
 		{"changeplan", []string{"business_change_plan", "business_reference", "business_system"}},
 		{"action", []string{"business_action", "record_action", "record_object_action"}},
 		{"pipeline", []string{"pipeline_"}},
-		{"deployment", []string{"frontend_capability", "runtime_status"}},
+		{"deployment", []string{"runtime_status"}},
 		{"metadata", []string{"metadata_", "schema_", "record_metadata", "record_schema", "record_dictionar", "record_localized"}},
 		{"record", []string{"record_", "record"}},
 		{"capability", []string{"authoring_", "execution_capability"}},

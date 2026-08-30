@@ -58,7 +58,7 @@ func TestAcceptIntegrationEventRollsBackEventWhenMappingIntentFails(t *testing.T
 	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TRIGGER fail_mapping_intent BEFORE INSERT ON integration_event_mapping_intents BEGIN SELECT RAISE(FAIL, 'injected mapping intent failure'); END`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TRIGGER fail_mapping_intent BEFORE INSERT ON _integration_event_mapping_intents BEGIN SELECT RAISE(FAIL, 'injected mapping intent failure'); END`); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationEventStore(store)
@@ -68,10 +68,10 @@ func TestAcceptIntegrationEventRollsBackEventWhenMappingIntentFails(t *testing.T
 		t.Fatal("expected injected mapping intent failure")
 	}
 	var eventCount, intentCount int
-	if err := store.DB().QueryRow(`SELECT COUNT(*) FROM integration_events WHERE external_id = ?`, event.ExternalID).Scan(&eventCount); err != nil {
+	if err := store.DB().QueryRow(`SELECT COUNT(*) FROM _integration_events WHERE external_id = ?`, event.ExternalID).Scan(&eventCount); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.DB().QueryRow(`SELECT COUNT(*) FROM integration_event_mapping_intents`).Scan(&intentCount); err != nil {
+	if err := store.DB().QueryRow(`SELECT COUNT(*) FROM _integration_event_mapping_intents`).Scan(&intentCount); err != nil {
 		t.Fatal(err)
 	}
 	if eventCount != 0 || intentCount != 0 {
@@ -93,10 +93,10 @@ func TestAcceptIntegrationEventCommitsEventAndMappingIntentTogether(t *testing.T
 		t.Fatalf("accept event=%#v duplicate=%v err=%v", saved, duplicate, err)
 	}
 	var eventCount, intentCount int
-	if err := store.DB().QueryRow(`SELECT COUNT(*) FROM integration_events WHERE id = ?`, saved.ID).Scan(&eventCount); err != nil {
+	if err := store.DB().QueryRow(`SELECT COUNT(*) FROM _integration_events WHERE id = ?`, saved.ID).Scan(&eventCount); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.DB().QueryRow(`SELECT COUNT(*) FROM integration_event_mapping_intents WHERE event_id = ? AND mapping_key = ? AND status = 'pending'`, saved.ID, intent.MappingKey).Scan(&intentCount); err != nil {
+	if err := store.DB().QueryRow(`SELECT COUNT(*) FROM _integration_event_mapping_intents WHERE event_id = ? AND mapping_key = ? AND status = 'pending'`, saved.ID, intent.MappingKey).Scan(&intentCount); err != nil {
 		t.Fatal(err)
 	}
 	if eventCount != 1 || intentCount != 1 {

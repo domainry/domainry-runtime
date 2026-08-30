@@ -2,11 +2,7 @@ package runtime
 
 import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
-
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
-
-	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 
@@ -16,7 +12,6 @@ import (
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
-	"strings"
 	"testing"
 
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
@@ -70,16 +65,6 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 	)
 	accessfixture.Set(&admin, adminAccess)
 	defer application.CloseContext(t.Context())
-	frontendManifest := deploymentmodel.FrontendCapabilityManifest{
-		ManifestVersion:         deploymentmodel.FrontendCapabilityManifestVersion,
-		FrontendVersion:         "frontend-1",
-		RuntimeContractVersions: []string{capabilitycontract.RuntimeAuthoringContractVersion},
-		DeploymentEvidence:      &deploymentmodel.FrontendDeploymentEvidence{AuditContractVersion: "domainry-frontend-verification-evidence-v1", DesignContractHash: strings.Repeat("a", 64), RouteRegistryHash: strings.Repeat("b", 64), FrontendSourceHash: strings.Repeat("c", 64), AuditArtifactHash: strings.Repeat("d", 64)},
-		Entries:                 []deploymentmodel.FrontendCapabilitySupportEntry{{SupportKey: "domain.route.customers.v1", Route: "/customers", FeatureModule: "features/customers", AcceptanceTests: []string{"tests/customers.spec.ts"}, ActorRoles: []string{"admin"}, BusinessObjects: []string{"customer"}, ImplementedActions: []string{"customer.qualify"}, FieldKeys: []string{"customer.status"}}},
-	}
-	if _, err := application.records.Applications().FrontendCapabilities.RegisterManifest(t.Context(), frontendManifest, admin); err != nil {
-		t.Fatalf("register frontend manifest: %#v", err)
-	}
 	if _, err := publicationpersistence.NewPublicationStore(application.store).InsertOutbox(t.Context(), "default", integrationmodel.IntegrationOutboxMessage{ID: "outbox-1", WorkspaceID: "default", ConnectorKey: "crm", Operation: "sync", Status: "queued", CreatedBy: admin.UserID}); err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +73,7 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 		t.Fatalf("graph=%#v err=%v", graph, err)
 	}
 	actionImpact := changeplanprojection.ChangePlanReferenceImpact(graph, "action", "customer.qualify")
-	if !actionImpact.DeletionBlocked || !referenceCompositionHasConsumer(actionImpact.DirectConsumers, "workflow", "customer.approval", "invokes_action") || !referenceCompositionHasConsumer(actionImpact.DirectConsumers, "frontend_route", "/customers", "exposes_action") {
+	if !actionImpact.DeletionBlocked || !referenceCompositionHasConsumer(actionImpact.DirectConsumers, "workflow", "customer.approval", "invokes_action") {
 		t.Fatalf("impact=%#v", actionImpact)
 	}
 	workflowImpact := changeplanprojection.ChangePlanReferenceImpact(graph, "workflow", "customer.approval")

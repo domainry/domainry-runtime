@@ -12,7 +12,7 @@ import (
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
-const recordLocalizedValueTable = "business_record_localized_value"
+const recordLocalizedValueTable = "_record_localized_values"
 
 func (r RecordStore) ListRecordLocalizedValues(ctx context.Context, workspaceID string, object definitionmodel.ObjectSchema, recordIDs, fieldKeys, locales []string) ([]recordmodel.RecordLocalizedValue, error) {
 	workspaceID, err := requireRecordWorkspaceID(workspaceID)

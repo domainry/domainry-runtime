@@ -78,12 +78,12 @@ func (s OperationsStore) RegisterOperationsCommand(ctx context.Context, receipt 
 	if workspaceID, err := principalmodel.NewWorkspaceID(receipt.Command.Scope.WorkspaceID); err == nil {
 		insertColumns := append(append([]string{}, columns[:1]...), columns[2:]...)
 		insertValues := append(append([]any{}, values[:1]...), values[2:]...)
-		query, args, err = ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "runtime_operations", workspaceID.String()).Columns(insertColumns...).Values(insertValues...).Build()
+		query, args, err = ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "_operation_requests", workspaceID.String()).Columns(insertColumns...).Values(insertValues...).Build()
 		if err != nil {
 			return operationsmodel.OperationsReceipt{}, "", err
 		}
 	} else {
-		query, args, err = ormbuilder.NewInsertBuilder(s.store.SQLRenderer, "runtime_operations").Columns(columns...).Values(values...).Build()
+		query, args, err = ormbuilder.NewInsertBuilder(s.store.SQLRenderer, "_operation_requests").Columns(columns...).Values(values...).Build()
 		if err != nil {
 			return operationsmodel.OperationsReceipt{}, "", err
 		}
@@ -273,9 +273,9 @@ func (s OperationsStore) UpdateOperationsReceipt(ctx context.Context, receipt op
 		return false, scopeErr
 	}
 	predicate := combineOperationsPredicate(scopePredicate, ormbuilder.And(ormbuilder.Equal("id", receipt.Command.ID), ormbuilder.Equal("status", string(expected))))
-	builder := ormbuilder.NewUpdateBuilder(s.store.SQLRenderer, "runtime_operations")
+	builder := ormbuilder.NewUpdateBuilder(s.store.SQLRenderer, "_operation_requests")
 	if workspaceID != "" {
-		builder = ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "runtime_operations", workspaceID)
+		builder = ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_operation_requests", workspaceID)
 	}
 	query, args, buildErr := builder.Set("status", string(receipt.Command.Status)).Set("started_at", startedAt).Set("finished_at", finishedAt).Set("updated_at", receipt.Command.UpdatedAt.UTC().Format(time.RFC3339Nano)).Set("result_json", resultJSON).Set("error_code", strings.TrimSpace(receipt.ErrorCode)).Set("failure_class", string(receipt.FailureClass)).Set("next_action", strings.TrimSpace(receipt.NextAction)).Set("related_ids_json", relatedJSON).Set("correlation", strings.TrimSpace(receipt.Correlation)).Set("evidence_json", evidenceJSON).Where(predicate).Build()
 	if buildErr != nil {
@@ -343,9 +343,9 @@ func (s OperationsStore) scopePredicate(scope operationsmodel.OperationsScope, p
 
 func operationsSelectBuilder(store *database.RuntimeStore, workspaceID string) *ormbuilder.SelectBuilder {
 	if workspaceID != "" {
-		return ormbuilder.NewWorkspaceSelectBuilder(store.SQLRenderer, "runtime_operations", workspaceID)
+		return ormbuilder.NewWorkspaceSelectBuilder(store.SQLRenderer, "_operation_requests", workspaceID)
 	}
-	return ormbuilder.NewSelectBuilder(store.SQLRenderer, "runtime_operations")
+	return ormbuilder.NewSelectBuilder(store.SQLRenderer, "_operation_requests")
 }
 
 func combineOperationsPredicate(left, right ormbuilder.Predicate) ormbuilder.Predicate {

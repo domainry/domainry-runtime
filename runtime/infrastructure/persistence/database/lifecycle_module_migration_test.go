@@ -8,9 +8,9 @@ import (
 )
 
 var lifecycleOwnedTables = []string{
-	"lifecycle_archive_entries", "lifecycle_audit_evidence", "lifecycle_cleanup_jobs",
-	"lifecycle_deletion_registry", "lifecycle_external_erasures", "lifecycle_file_artifacts",
-	"lifecycle_legal_holds", "lifecycle_policy_versions", "lifecycle_subject_requests",
+	"_lifecycle_archive_entries", "_lifecycle_audit_evidence", "_lifecycle_cleanup_jobs",
+	"_lifecycle_deletion_registry", "_lifecycle_external_erasure_requests", "_lifecycle_file_artifacts",
+	"_lifecycle_legal_holds", "_lifecycle_policy_versions", "_lifecycle_subject_requests",
 }
 
 func TestRuntimeAppliesLifecycleOwnedMigrationToSoleLedger(t *testing.T) {

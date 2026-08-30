@@ -8,7 +8,7 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 	idempotencyScopeText := types.IdempotencyScope
 	retirementEngineText, retirementNamespaceText, retirementKindText, retirementObjectText := types.RetirementEngine, types.RetirementNamespace, types.RetirementKind, types.RetirementObject
 	tables := map[string][]string{
-		"runtime_release_cohorts": {
+		"_release_cohorts": {
 			"cohort_key " + text + " PRIMARY KEY",
 			"combination_sha256 " + text + " NOT NULL DEFAULT ''",
 			"identity_json TEXT NOT NULL DEFAULT ''",
@@ -16,7 +16,7 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"revision BIGINT NOT NULL DEFAULT 0",
 			"updated_at " + text + " NOT NULL DEFAULT ''",
 		},
-		"runtime_release_instances": {
+		"_release_instances": {
 			"instance_id " + text + " PRIMARY KEY",
 			"combination_sha256 " + text + " NOT NULL",
 			"generation BIGINT NOT NULL",
@@ -53,7 +53,7 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"created_at " + text + " NOT NULL",
 			"updated_at " + text + " NOT NULL",
 		},
-		"workflow_execution_receipts": {
+		"_workflow_execution_receipts": {
 			"id " + text + " PRIMARY KEY",
 			"workspace_id " + idempotencyScopeText + " NOT NULL",
 			"workflow_key " + idempotencyScopeText + " NOT NULL",
@@ -68,7 +68,7 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"updated_at " + text + " NOT NULL",
 			"expires_at " + text + " NOT NULL DEFAULT ''",
 		},
-		"business_action_executions": {
+		"_action_executions": {
 			"id " + text + " PRIMARY KEY",
 			"workspace_id " + idempotencyScopeText + " NOT NULL",
 			"object_key " + idempotencyScopeText + " NOT NULL",
@@ -89,7 +89,7 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"created_at " + text + " NOT NULL",
 			"updated_at " + text + " NOT NULL",
 		},
-		"action_assurance_grants": {
+		"_action_assurance_grants": {
 			"id " + text + " PRIMARY KEY",
 			"token_hash " + text + " NOT NULL",
 			"workspace_id " + idempotencyScopeText + " NOT NULL",
@@ -105,7 +105,7 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"expires_at " + text + " NOT NULL",
 			"consumed_at " + text + " NOT NULL DEFAULT ''",
 		},
-		"record_mutation_executions": {
+		"_record_mutation_executions": {
 			"id " + text + " PRIMARY KEY",
 			"workspace_id " + idempotencyScopeText + " NOT NULL",
 			"operation " + idempotencyScopeText + " NOT NULL",
@@ -125,13 +125,13 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"created_at " + text + " NOT NULL",
 			"updated_at " + text + " NOT NULL",
 		},
-		"runtime_worker_queue_scopes": {
+		"_worker_queue_scopes": {
 			"id " + text + " PRIMARY KEY",
 			"queue_kind " + idempotencyScopeText + " NOT NULL",
 			"scope_key " + idempotencyScopeText + " NOT NULL",
 			"updated_at " + text + " NOT NULL",
 		},
-		"idempotency_cleanup_leases": {
+		"_idempotency_cleanup_leases": {
 			"id " + text + " PRIMARY KEY",
 			"lease_owner " + text + " NOT NULL DEFAULT ''",
 			"lease_expires_at " + text + " NOT NULL DEFAULT ''",
@@ -142,7 +142,7 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"last_error TEXT NOT NULL DEFAULT ''",
 			"updated_at " + text + " NOT NULL DEFAULT ''",
 		},
-		"runtime_operations": {
+		"_operation_requests": {
 			"id " + text + " PRIMARY KEY",
 			"workspace_id " + idempotencyScopeText + " NOT NULL",
 			"system_purpose " + idempotencyScopeText + " NOT NULL DEFAULT ''",
@@ -169,7 +169,7 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"finished_at " + text + " NOT NULL DEFAULT ''",
 			"updated_at " + text + " NOT NULL",
 		},
-		"runtime_operation_controls": {
+		"_operation_controls": {
 			"system_purpose " + idempotencyScopeText + " NOT NULL",
 			"control_kind " + idempotencyScopeText + " NOT NULL",
 			"owner " + idempotencyScopeText + " NOT NULL",
@@ -180,7 +180,7 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"revision BIGINT NOT NULL",
 			"updated_at " + text + " NOT NULL",
 		},
-		"runtime_break_glass_grants": {
+		"_operation_break_glass_grants": {
 			"id " + text + " PRIMARY KEY",
 			"workspace_id " + idempotencyScopeText + " NOT NULL",
 			"state " + text + " NOT NULL",
@@ -198,7 +198,7 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"revoked_by " + text + " NOT NULL DEFAULT ''",
 			"revocation_note TEXT NOT NULL DEFAULT ''",
 		},
-		"runtime_database_retirements": {
+		"_operation_database_retirements": {
 			"id " + text + " PRIMARY KEY",
 			"engine " + retirementEngineText + " NOT NULL",
 			"database_name " + retirementNamespaceText + " NOT NULL",
@@ -217,7 +217,7 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"retirement_json TEXT NOT NULL",
 			"updated_at " + text + " NOT NULL",
 		},
-		"automation_rule_executions": {
+		"_automation_rule_executions": {
 			"id " + text + " PRIMARY KEY",
 			"workspace_id " + text + " NOT NULL",
 			"rule_key " + text + " NOT NULL",
@@ -238,7 +238,7 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"created_at " + text + " NOT NULL",
 			"updated_at " + text + " NOT NULL",
 		},
-		"automation_instruction_executions": {
+		"_automation_instruction_executions": {
 			"id " + text + " PRIMARY KEY",
 			"workspace_id " + text + " NOT NULL",
 			"idempotency_key " + text + " NOT NULL",
@@ -257,7 +257,7 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"created_at " + text + " NOT NULL",
 			"updated_at " + text + " NOT NULL",
 		},
-		"transaction_boundary_intents": {
+		"_transaction_boundary_intents": {
 			"id " + text + " PRIMARY KEY",
 			"workspace_id " + idempotencyScopeText + " NOT NULL",
 			"owner " + idempotencyScopeText + " NOT NULL",
@@ -276,7 +276,7 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"created_at " + text + " NOT NULL",
 			"updated_at " + text + " NOT NULL",
 		},
-		"runtime_publication_outbox": {
+		"_publication_outbox": {
 			"id " + text + " PRIMARY KEY",
 			"publication_type " + idempotencyScopeText + " NOT NULL DEFAULT 'integration.connector'",
 			"tenant_id " + idempotencyScopeText + " NOT NULL DEFAULT ''",
@@ -309,12 +309,6 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"terminal_at " + text + " NOT NULL DEFAULT ''",
 			"created_by " + text + " NOT NULL DEFAULT ''",
 			"created_at " + text + " NOT NULL",
-			"updated_at " + text + " NOT NULL",
-		},
-		"frontend_capability_manifests": {
-			"workspace_id " + text + " NOT NULL PRIMARY KEY",
-			"revision BIGINT NOT NULL DEFAULT 1",
-			"manifest_json TEXT NOT NULL",
 			"updated_at " + text + " NOT NULL",
 		},
 	}

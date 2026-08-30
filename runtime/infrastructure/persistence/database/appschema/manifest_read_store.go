@@ -37,19 +37,19 @@ func (r ApplicationSchemaStore) LoadManifest(ctx context.Context, scope principa
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
-	workflows, err := loadMetadataSliceContext[definitionmodel.WorkflowSchema](ctx, r.database(), r.store, "workflow_definitions")
+	workflows, err := loadMetadataSliceContext[definitionmodel.WorkflowSchema](ctx, r.database(), r.store, "_application_schema_workflow_definitions")
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
-	automations, err := loadMetadataSliceContext[automationmodel.AutomationRuleSchema](ctx, r.database(), r.store, "automation_rule_definitions")
+	automations, err := loadMetadataSliceContext[automationmodel.AutomationRuleSchema](ctx, r.database(), r.store, "_application_schema_automation_rule_definitions")
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
-	connectors, err := loadMetadataSliceContext[integrationmodel.ConnectorSchema](ctx, r.database(), r.store, "application_connector_requirements")
+	connectors, err := loadMetadataSliceContext[integrationmodel.ConnectorSchema](ctx, r.database(), r.store, "_application_schema_connector_requirements")
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
-	eventMappings, err := loadMetadataSliceContext[integrationmodel.IntegrationEventMappingSchema](ctx, r.database(), r.store, "application_integration_event_mapping_requirements")
+	eventMappings, err := loadMetadataSliceContext[integrationmodel.IntegrationEventMappingSchema](ctx, r.database(), r.store, "_application_schema_integration_event_mapping_requirements")
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
@@ -77,7 +77,7 @@ func (r ApplicationSchemaStore) LoadManifest(ctx context.Context, scope principa
 }
 
 func (r ApplicationSchemaStore) loadCatalog(ctx context.Context) (map[string]string, error) {
-	query, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "_runtime_metadata_projection").Columns("template_id", "artifact_version", "default_locale", "name", "contract_version", "schema_hash", "source_hash").Where(ormbuilder.Equal("id", "current")).Build()
+	query, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "_application_schema_projection").Columns("template_id", "artifact_version", "default_locale", "name", "contract_version", "schema_hash", "source_hash").Where(ormbuilder.Equal("id", "current")).Build()
 	if buildErr != nil {
 		return nil, fmt.Errorf("build metadata catalog load: %w", buildErr)
 	}

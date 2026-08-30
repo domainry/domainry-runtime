@@ -157,5 +157,5 @@ func initializeIntegrationAndBusinessSystem(ctx context.Context, s *runtimeAssem
 	s.workflowProcesses = assembleWorkflowProcessEngine(s)
 	integrationsService := publicationHandoffApplication(s)
 	s.integrationService = integrationsService
-	s.businessSystemService = assembleBusinessSystemApplication(s.schemaService, s.applicationSchemaService, s.workflowApplicationService, s.automationApplicationService, integrationsService, s.recordApplicationService, s.schedulerService, s.frontendCapabilities, s.runtimeStatusService, s.businessEvidenceRepo)
+	s.businessSystemService = assembleBusinessSystemApplication(s.schemaService, s.applicationSchemaService, s.workflowApplicationService, s.automationApplicationService, integrationsService, s.recordApplicationService, s.schedulerService, s.runtimeStatusService, s.businessEvidenceRepo)
 }

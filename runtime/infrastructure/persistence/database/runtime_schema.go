@@ -25,7 +25,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-const CurrentRuntimeSchemaVersion = "018_runtime_metadata_projection"
+const CurrentRuntimeSchemaVersion = "018_application_schema_projection"
 
 const (
 	managedDatabaseCohortTable           = "_domainry_managed_runtime_database_cohort"
@@ -47,15 +47,14 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 		if err := s.EnsureLifecycleSchema(ctx); err != nil {
 			return err
 		}
-		return s.EnsureWorkspaceRLS(ctx)
+		return nil
 	}
 	if s.migrationDB != nil {
 		migrationStore := s.runtimeMigrationStore()
-		migrationStore.config.DatabaseRLSEnabled = false
 		if err := migrationStore.EnsureRuntimeSchema(ctx); err != nil {
 			return err
 		}
-		return s.EnsureWorkspaceRLS(ctx)
+		return nil
 	}
 	release, err := s.acquireMigrationLock(ctx, s.config)
 	if err != nil {
@@ -75,9 +74,6 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 			return err
 		}
 		if err := s.startRuntimeSchemaMigration(ctx, CurrentRuntimeSchemaVersion); err != nil {
-			return err
-		}
-		if err := s.retirePresentationDefinitionTables(ctx); err != nil {
 			return err
 		}
 	}
@@ -102,14 +98,6 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 	if err := s.EnsureEvidenceSchema(ctx); err != nil {
 		return err
 	}
-	// Legacy host and embedded-module migrations may still create the retired
-	// authoring tables while upgrading an older database. Drop them only after
-	// every contributing schema owner has completed its migration set.
-	if pending {
-		if err := s.retireOnlineMetadataAuthoringTables(ctx); err != nil {
-			return err
-		}
-	}
 	if err := s.ensureAuditModuleSchemaLocked(ctx); err != nil {
 		return err
 	}
@@ -129,37 +117,8 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 	if err := s.recordRuntimeSchemaMigrationIfPending(ctx, pending, startedAt); err != nil {
 		return err
 	}
-	return s.EnsureWorkspaceRLS(ctx)
-}
-
-// retireOnlineMetadataAuthoringTables removes Runtime-owned state for the
-// retired online metadata editor. Project JSON artifacts are the sole metadata
-// source; the database contains only the current materialized projection.
-// domainry-orm has no DROP TABLE builder, so this bounded migration uses
-// host-qualified identifiers.
-func (s *RuntimeStore) retireOnlineMetadataAuthoringTables(ctx context.Context) error {
-	for _, table := range []string{
-		"business_change_plan_operations",
-		"business_change_plan_drafts",
-		"application_definition_versions",
-		"preference_definitions",
-		"rule_set_definitions",
-	} {
-		if _, err := s.schemaDatabase().ExecContext(ctx, "DROP TABLE IF EXISTS "+s.TableIdentifier(table)); err != nil {
-			return fmt.Errorf("drop retired online metadata authoring table %s: %w", table, err)
-		}
-	}
-	return nil
-}
-
-// retirePresentationDefinitionTables removes the unused presentation metadata
-// stores. domainry-orm has no DROP TABLE builder, so this migration uses bounded,
-// dialect-neutral DDL with host-qualified identifiers.
-func (s *RuntimeStore) retirePresentationDefinitionTables(ctx context.Context) error {
-	for _, table := range []string{"view_definitions", "surface_definitions", "component_definitions", "entrypoint_definitions"} {
-		if _, err := s.schemaDatabase().ExecContext(ctx, "DROP TABLE IF EXISTS "+s.TableIdentifier(table)); err != nil {
-			return fmt.Errorf("drop retired presentation definition table %s: %w", table, err)
-		}
+	if err := s.removeObsoleteMigrationLedgers(ctx); err != nil {
+		return err
 	}
 	return nil
 }
@@ -312,7 +271,6 @@ func (s *RuntimeStore) runtimeMigrationStore() *RuntimeStore {
 		idempotencyMetrics:   s.idempotencyMetrics,
 		sqlMetrics:           s.sqlMetrics,
 		operationalMetrics:   s.operationalMetrics,
-		workspaceRLS:         s.workspaceRLS,
 		workerScopeCursor:    s.workerScopeCursor,
 		workerWakeups:        s.workerWakeups,
 		schemaAssembler:      s.schemaAssembler,
@@ -482,9 +440,6 @@ func (s *RuntimeStore) runtimeSchemaMigrationPending(ctx context.Context, versio
 	if err := s.ensureMigrationLedger(ctx); err != nil {
 		return false, fmt.Errorf("prepare runtime schema migration ledger: %w", err)
 	}
-	if err := s.adoptLegacyRuntimeMaterializationLedger(ctx); err != nil {
-		return false, err
-	}
 	path := runtimeSchemaMigrationPath(version)
 	var count int
 	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+s.tableIdentifier("_schema_migrations")+" WHERE "+s.identifier("path")+" = "+s.placeholder(1), path).Scan(&count); err != nil {
@@ -530,55 +485,19 @@ func runtimeSchemaMigrationPath(version string) string {
 	return "runtime_schema_" + strings.TrimSpace(version)
 }
 
-func (s *RuntimeStore) adoptLegacyRuntimeMaterializationLedger(ctx context.Context) error {
-	exists, err := s.RuntimeTableExists(ctx, "_schema_materializations")
-	if errors.Is(err, sql.ErrNoRows) || !exists {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("inspect legacy runtime materialization ledger: %w", err)
-	}
-	columns := []string{"version", "name", "kind", "checksum", "dirty", "applied_at", "runtime_version", "duration_ms", "operator", "instance_id", "backup_id"}
-	rows, err := s.schemaDatabase().QueryContext(ctx, "SELECT "+strings.Join(quotedColumns(s, columns), ", ")+" FROM "+s.tableIdentifier("_schema_materializations"))
-	if err != nil {
-		return fmt.Errorf("read legacy runtime materialization ledger: %w", err)
-	}
-	type legacyMaterialization struct {
-		version, name, kind, checksum, appliedAt, runtimeVersion, operator, instanceID, backupID string
-		dirty                                                                                    bool
-		duration                                                                                 int64
-	}
-	values := []legacyMaterialization{}
-	for rows.Next() {
-		var value legacyMaterialization
-		if err := rows.Scan(&value.version, &value.name, &value.kind, &value.checksum, &value.dirty, &value.appliedAt, &value.runtimeVersion, &value.duration, &value.operator, &value.instanceID, &value.backupID); err != nil {
-			_ = rows.Close()
-			return err
+func (s *RuntimeStore) removeObsoleteMigrationLedgers(ctx context.Context) error {
+	// domainry-orm has no DROP TABLE builder. These never-launched private
+	// ledgers carry no business data and are removed rather than adopted.
+	for _, table := range []string{"_schema_materializations", "_runtime_schema_migrations", "_party_schema_migrations"} {
+		if _, err := s.schemaDatabase().ExecContext(ctx, "DROP TABLE IF EXISTS "+s.tableIdentifier(table)); err != nil {
+			return fmt.Errorf("remove obsolete migration ledger %s: %w", table, err)
 		}
-		values = append(values, value)
-	}
-	if err := rows.Close(); err != nil {
-		return err
-	}
-	for _, value := range values {
-		query, args, buildErr := ormbuilder.NewInsertBuilder(s.RuntimeRenderer(), "_schema_migrations").Columns("path", "version", "name", "kind", "checksum", "dirty", "applied_at", "runtime_version", "duration_ms", "operator", "instance_id", "backup_id").Values(runtimeSchemaMigrationPath(value.version), value.version, value.name, "runtime_schema", value.checksum, value.dirty, value.appliedAt, value.runtimeVersion, value.duration, value.operator, value.instanceID, value.backupID).OnConflictDoNothing("path").Build()
-		if buildErr != nil {
-			return buildErr
-		}
-		if _, err := s.schemaDatabase().ExecContext(ctx, query, args...); err != nil {
-			return fmt.Errorf("adopt runtime materialization %s: %w", value.version, err)
-		}
-	}
-	// domainry-orm has no DROP TABLE builder. This bounded cleanup retires the
-	// former second migration ledger after every row has been adopted.
-	if _, err := s.schemaDatabase().ExecContext(ctx, "DROP TABLE "+s.tableIdentifier("_schema_materializations")); err != nil {
-		return fmt.Errorf("retire legacy runtime materialization ledger: %w", err)
 	}
 	return nil
 }
 
 func currentRuntimeSchemaChecksum() string {
-	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":metadata_projection,object_fields,record_data,evidence,party,lifecycle,operations,indexes,runtime_release_cohorts,runtime_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,module_migrations"))
+	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":metadata_projection,object_fields,record_data,evidence,party,lifecycle,operations,indexes,_release_cohorts,_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,module_migrations"))
 	return hex.EncodeToString(sum[:])
 }
 

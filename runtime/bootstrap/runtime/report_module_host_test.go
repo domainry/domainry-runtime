@@ -14,7 +14,7 @@ func TestReportModuleAdoptsRuntimeSnapshotTableAndOwnsDefinitions(t *testing.T) 
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	_, err := store.DB().ExecContext(t.Context(), `CREATE TABLE report_snapshots (
+	_, err := store.DB().ExecContext(t.Context(), `CREATE TABLE _report_snapshots (
 		id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, report_key TEXT NOT NULL,
 		access_scope_hash TEXT NOT NULL, idempotency_key TEXT NOT NULL, status TEXT NOT NULL,
 		summary_json TEXT NOT NULL, watermark TEXT NOT NULL, source_versions_json TEXT NOT NULL,
@@ -26,10 +26,10 @@ func TestReportModuleAdoptsRuntimeSnapshotTableAndOwnsDefinitions(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `CREATE INDEX idx_report_snapshot_latest ON report_snapshots (workspace_id, report_key, access_scope_hash, status, refreshed_at)`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `CREATE INDEX idx_report_snapshot_latest ON _report_snapshots (workspace_id, report_key, access_scope_hash, status, refreshed_at)`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO report_snapshots VALUES ('snapshot-1','default','summary','scope','request','succeeded','{}','','{}',1,1,'now','now','','','',0)`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _report_snapshots VALUES ('snapshot-1','default','summary','scope','request','succeeded','{}','','{}',1,1,'now','now','','','',0)`); err != nil {
 		t.Fatal(err)
 	}
 	binding, err := reportmodule.NewFactory().OpenModule(t.Context(), reportsdk.ApplicationRef{RuntimeID: "runtime-a"}, runtimeReportModuleHost{store: store})
@@ -41,10 +41,10 @@ func TestReportModuleAdoptsRuntimeSnapshotTableAndOwnsDefinitions(t *testing.T) 
 		t.Fatal(err)
 	}
 	var snapshots, definitions, migrations int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM report_snapshots WHERE id='snapshot-1'`).Scan(&snapshots); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _report_snapshots WHERE id='snapshot-1'`).Scan(&snapshots); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM report_definitions WHERE resource_key='summary' AND schema_version='7'`).Scan(&definitions); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _report_definitions WHERE resource_key='summary' AND schema_version='7'`).Scan(&definitions); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_migrations WHERE kind='module:report' AND dirty=FALSE`).Scan(&migrations); err != nil {

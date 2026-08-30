@@ -264,7 +264,7 @@ func TestBusinessActionExecutionStoreCommitsFactsAndReceiptInOneTransaction(t *t
 	if err != nil || completed.Status != string(idempotency.StatusSucceeded) {
 		t.Fatalf("completed=%#v err=%v", completed, err)
 	}
-	for tableAndID, expected := range map[[2]string]int{{"action_atomic_record", "record-1"}: 1, {"_audit_events", "audit-1"}: 1, {"_audit_events", "action-audit-1"}: 1, {"runtime_publication_outbox", "durable_intent:execution-1:0"}: 1, {"_workflow_executions", "workflow-1"}: 1} {
+	for tableAndID, expected := range map[[2]string]int{{"action_atomic_record", "record-1"}: 1, {"_audit_events", "audit-1"}: 1, {"_audit_events", "action-audit-1"}: 1, {"_publication_outbox", "durable_intent:execution-1:0"}: 1, {"_workflow_executions", "workflow-1"}: 1} {
 		table, id := tableAndID[0], tableAndID[1]
 		var count int
 		if err := store.DB().QueryRow("SELECT COUNT(*) FROM "+store.Identifier(table)+" WHERE id = "+store.Placeholder(1), id).Scan(&count); err != nil || count != expected {
@@ -272,7 +272,7 @@ func TestBusinessActionExecutionStoreCommitsFactsAndReceiptInOneTransaction(t *t
 		}
 	}
 	var connectorKey, connectionKey, operationKey, contractSHA256 string
-	if err := store.DB().QueryRow("SELECT connector_key, connection_key, operation, request_fingerprint FROM "+store.Identifier("runtime_publication_outbox")+" WHERE id = "+store.Placeholder(1), "durable_intent:execution-1:0").Scan(&connectorKey, &connectionKey, &operationKey, &contractSHA256); err != nil {
+	if err := store.DB().QueryRow("SELECT connector_key, connection_key, operation, request_fingerprint FROM "+store.Identifier("_publication_outbox")+" WHERE id = "+store.Placeholder(1), "durable_intent:execution-1:0").Scan(&connectorKey, &connectionKey, &operationKey, &contractSHA256); err != nil {
 		t.Fatal(err)
 	}
 	if connectorKey != "webhook" || connectionKey != "primary" || operationKey != "notify" || contractSHA256 != strings.Repeat("a", 64) {
@@ -430,7 +430,7 @@ func TestBookClassPersistsClassBookingAuditsOutboxAndReceiptInOneTransaction(t *
 	}
 	var connectorKey, connectionKey, operationKey, requestRef string
 	if err := store.DB().QueryRow(
-		"SELECT connector_key, connection_key, operation, request_ref FROM "+store.Identifier("runtime_publication_outbox")+" WHERE id = "+store.Placeholder(1),
+		"SELECT connector_key, connection_key, operation, request_ref FROM "+store.Identifier("_publication_outbox")+" WHERE id = "+store.Placeholder(1),
 		outboxID,
 	).Scan(&connectorKey, &connectionKey, &operationKey, &requestRef); err != nil {
 		t.Fatal(err)
@@ -676,7 +676,7 @@ func TestBusinessActionConditionalMutationCommitsPredicateFactsAndReceiptInOneUo
 	if err := store.DB().QueryRow(`SELECT reserved FROM action_capacity WHERE workspace_id = ? AND id = ?`, "workspace-a", "class-1").Scan(&reserved); err != nil || reserved != 20 {
 		t.Fatalf("reserved=%v err=%v", reserved, err)
 	}
-	for tableAndID := range map[[2]string]bool{{"_audit_events", "capacity-audit-conflict"}: true, {"runtime_publication_outbox", "capacity-outbox-conflict"}: true, {"_workflow_executions", "capacity-workflow-conflict"}: true} {
+	for tableAndID := range map[[2]string]bool{{"_audit_events", "capacity-audit-conflict"}: true, {"_publication_outbox", "capacity-outbox-conflict"}: true, {"_workflow_executions", "capacity-workflow-conflict"}: true} {
 		var count int
 		if err := store.DB().QueryRow("SELECT COUNT(*) FROM "+store.Identifier(tableAndID[0])+" WHERE id = ?", tableAndID[1]).Scan(&count); err != nil || count != 0 {
 			t.Fatalf("predicate conflict leaked %s/%s count=%d err=%v", tableAndID[0], tableAndID[1], count, err)
@@ -706,7 +706,7 @@ func TestBusinessActionExecutionStoreRollsBackAuditIntentOutboxAndReceiptOnCompl
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TRIGGER fail_action_receipt_completion BEFORE UPDATE OF status ON business_action_executions WHEN NEW.status = 'succeeded' BEGIN SELECT RAISE(ABORT, 'injected action receipt completion failure'); END`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TRIGGER fail_action_receipt_completion BEFORE UPDATE OF status ON _action_executions WHEN NEW.status = 'succeeded' BEGIN SELECT RAISE(ABORT, 'injected action receipt completion failure'); END`); err != nil {
 		t.Fatal(err)
 	}
 	object := definitionmodel.ObjectSchema{Key: "action_completion_rollback", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}
@@ -725,7 +725,7 @@ func TestBusinessActionExecutionStoreRollsBackAuditIntentOutboxAndReceiptOnCompl
 	}); err == nil {
 		t.Fatal("expected injected receipt completion failure")
 	}
-	for tableAndID := range map[[2]string]bool{{"action_completion_rollback", "record-rollback"}: true, {"_audit_events", "audit-rollback"}: true, {"_audit_events", "action-audit-rollback"}: true, {"runtime_publication_outbox", "outbox-rollback"}: true, {"_workflow_executions", "workflow-rollback"}: true} {
+	for tableAndID := range map[[2]string]bool{{"action_completion_rollback", "record-rollback"}: true, {"_audit_events", "audit-rollback"}: true, {"_audit_events", "action-audit-rollback"}: true, {"_publication_outbox", "outbox-rollback"}: true, {"_workflow_executions", "workflow-rollback"}: true} {
 		table, id := tableAndID[0], tableAndID[1]
 		var count int
 		if err := store.DB().QueryRow("SELECT COUNT(*) FROM "+store.Identifier(table)+" WHERE id = "+store.Placeholder(1), id).Scan(&count); err != nil || count != 0 {
@@ -775,7 +775,7 @@ func TestBusinessActionExecutionStoreRollsBackMutationAndDurableIntentWhenAction
 	}); err == nil {
 		t.Fatal("expected duplicate Action audit to fail the transaction")
 	}
-	for tableAndID := range map[[2]string]bool{{"action_audit_rollback", "record-audit-rollback"}: true, {"_audit_events", "mutation-audit-rollback"}: true, {"runtime_publication_outbox", "durable-intent-rollback"}: true} {
+	for tableAndID := range map[[2]string]bool{{"action_audit_rollback", "record-audit-rollback"}: true, {"_audit_events", "mutation-audit-rollback"}: true, {"_publication_outbox", "durable-intent-rollback"}: true} {
 		var count int
 		if err := store.DB().QueryRow("SELECT COUNT(*) FROM "+store.Identifier(tableAndID[0])+" WHERE id = "+store.Placeholder(1), tableAndID[1]).Scan(&count); err != nil || count != 0 {
 			t.Fatalf("Action audit failure leaked %s/%s count=%d err=%v", tableAndID[0], tableAndID[1], count, err)

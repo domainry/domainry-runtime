@@ -20,7 +20,6 @@ import (
 	automationprojection "github.com/domainry/domainry-runtime/runtime/domain/automation/projection"
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -40,9 +39,6 @@ func businessSystemHandlerApplication(featureErr error) *businesssystemapplicati
 		},
 		ApplicationDefinitions: func(context.Context, string, string, principalmodel.Principal) ([]appschemamodel.ApplicationDefinition, error) {
 			return []appschemamodel.ApplicationDefinition{}, nil
-		},
-		FrontendSnapshot: func(context.Context, principalmodel.Principal) (deploymentmodel.FrontendCapabilitySnapshot, error) {
-			return deploymentmodel.FrontendCapabilitySnapshot{Status: "ready"}, nil
 		},
 		Runtime: businesssystemapplication.BusinessSystemRuntimeProjectionDependencies{
 			WorkflowProcesses: func(context.Context, principalmodel.Principal, workflowmodel.WorkflowProcessFilter) ([]workflowmodel.WorkflowProcessInstance, error) {
@@ -168,7 +164,7 @@ func businessSystemCompleteValidationSnapshot() changeplanprojection.BusinessSys
 	for _, category := range []string{
 		"schema", "effective_permissions", "resource_sources",
 		"runtime_state.automation", "runtime_state.integrations", "runtime_state.reports", "runtime_state.scheduler",
-		"seed_records", "frontend_capabilities",
+		"seed_records",
 	} {
 		visibility[category] = "visible"
 	}

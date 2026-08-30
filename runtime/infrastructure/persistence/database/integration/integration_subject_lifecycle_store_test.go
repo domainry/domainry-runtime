@@ -16,7 +16,7 @@ func TestIntegrationSubjectLifecycleExportsQueuesProviderEraseAndAnonymizes(t *t
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	columns := "id, identity_key, workspace_id, provider, external_subject, external_subject_type, external_name, actor_id, role_key, status, created_by, created_at, updated_at"
-	if _, err := store.DB().ExecContext(t.Context(), "INSERT INTO integration_external_identities ("+columns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", "mapping-1", "map-1", "workspace-a", "slack", "U123", "user", "Alice", "user-1", "member", "active", "admin", now, now); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), "INSERT INTO _integration_external_identities ("+columns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", "mapping-1", "map-1", "workspace-a", "slack", "U123", "user", "Alice", "user-1", "member", "active", "admin", now, now); err != nil {
 		t.Fatal(err)
 	}
 	handler := NewIntegrationSubjectLifecycleStore(store)
@@ -36,7 +36,7 @@ func TestIntegrationSubjectLifecycleExportsQueuesProviderEraseAndAnonymizes(t *t
 		t.Fatal(err)
 	}
 	var subject, name, status string
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT external_subject, external_name, status FROM integration_external_identities WHERE workspace_id = ? AND id = ?", "workspace-a", "mapping-1").Scan(&subject, &name, &status); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT external_subject, external_name, status FROM _integration_external_identities WHERE workspace_id = ? AND id = ?", "workspace-a", "mapping-1").Scan(&subject, &name, &status); err != nil {
 		t.Fatal(err)
 	}
 	if subject == "U123" || name != "" || status != "erased" {

@@ -18,7 +18,7 @@ func (r IntegrationConfigStore) TryAcquireCredentialRefreshLease(ctx context.Con
 		return false, fmt.Errorf("credential refresh lease identity and timestamps are required")
 	}
 	s := r.store
-	statement, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.SQLRenderer, "integration_credential_refresh_leases", workspaceID).
+	statement, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.SQLRenderer, "_integration_credential_refresh_leases", workspaceID).
 		Set("lease_owner", owner).Set("lease_expires_at", expiresAt).Set("updated_at", now).Where(ormbuilder.And(
 		ormbuilder.Equal("connection_key", connectionKey),
 		ormbuilder.Or(ormbuilder.Equal("lease_owner", owner), ormbuilder.LessThanOrEqual("lease_expires_at", now)),
@@ -37,7 +37,7 @@ func (r IntegrationConfigStore) TryAcquireCredentialRefreshLease(ctx context.Con
 	if count > 0 {
 		return true, nil
 	}
-	statement, args, buildErr = ormbuilder.NewWorkspaceInsertBuilder(s.SQLRenderer, "integration_credential_refresh_leases", workspaceID).
+	statement, args, buildErr = ormbuilder.NewWorkspaceInsertBuilder(s.SQLRenderer, "_integration_credential_refresh_leases", workspaceID).
 		Columns("id", "connection_key", "lease_owner", "lease_expires_at", "updated_at").
 		Values("integration_credential_refresh_lease:"+workspaceID+":"+connectionKey, connectionKey, owner, expiresAt, now).Build()
 	if buildErr != nil {
@@ -48,7 +48,7 @@ func (r IntegrationConfigStore) TryAcquireCredentialRefreshLease(ctx context.Con
 		return true, nil
 	}
 	var existing string
-	query, queryArgs, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.SQLRenderer, "integration_credential_refresh_leases", workspaceID).
+	query, queryArgs, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.SQLRenderer, "_integration_credential_refresh_leases", workspaceID).
 		Columns("lease_owner").Where(ormbuilder.Equal("connection_key", connectionKey)).Limit(1).Build()
 	if buildErr != nil {
 		return false, fmt.Errorf("build credential refresh lease read: %w", buildErr)
@@ -66,7 +66,7 @@ func (r IntegrationConfigStore) ReleaseCredentialRefreshLease(ctx context.Contex
 		return err
 	}
 	s := r.store
-	statement, args, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(s.SQLRenderer, "integration_credential_refresh_leases", workspaceID).
+	statement, args, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(s.SQLRenderer, "_integration_credential_refresh_leases", workspaceID).
 		Where(ormbuilder.And(
 			ormbuilder.Equal("connection_key", strings.TrimSpace(connectionKey)),
 			ormbuilder.Equal("lease_owner", strings.TrimSpace(owner)),

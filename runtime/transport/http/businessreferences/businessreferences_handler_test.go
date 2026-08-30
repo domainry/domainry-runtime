@@ -16,7 +16,7 @@ import (
 
 func businessReferenceTestHandler(principal principalmodel.Principal) *BusinessReferencesHandler {
 	return NewBusinessReferencesHandler(BusinessReferencesDependencies{
-		Service:   changeplanapplication.NewChangePlanReferenceApplicationService(nil, nil, nil, nil),
+		Service:   changeplanapplication.NewChangePlanReferenceApplicationService(nil, nil, nil),
 		Principal: func(*http.Request) principalmodel.Principal { return principal },
 		WriteJSON: func(w http.ResponseWriter, status int, value any) {
 			w.WriteHeader(status)

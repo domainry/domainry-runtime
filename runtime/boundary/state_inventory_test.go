@@ -17,10 +17,10 @@ func TestRuntimeStateInventoryCoversKnownMutableState(t *testing.T) {
 	fields := []string{
 		"business-records",
 		"_audit_events",
-		"workflow_process_instances",
-		"automation_rule_executions",
-		"runtime_publication_outbox",
-		"integration_webhook_nonces",
+		"_workflow_process_instances",
+		"_automation_rule_executions",
+		"_publication_outbox",
+		"_integration_webhook_nonces",
 		"metadata.current_projection.v1",
 		"agentDialogSessions",
 		"agentDialogProposals",
@@ -28,9 +28,9 @@ func TestRuntimeStateInventoryCoversKnownMutableState(t *testing.T) {
 		"agentReportExportAudits",
 		"agentReportDownloadTasks",
 		"dictionaryCache",
-		"runtime_operations",
-		"runtime_operation_controls",
-		"runtime_break_glass_grants",
+		"_operation_requests",
+		"_operation_controls",
+		"_operation_break_glass_grants",
 	}
 	for _, field := range fields {
 		if !strings.Contains(document, "`"+field+"`") {

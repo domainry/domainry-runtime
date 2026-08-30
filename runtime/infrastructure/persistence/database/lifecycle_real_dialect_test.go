@@ -65,7 +65,7 @@ func TestLifecyclePersistenceAcrossRealDialects(t *testing.T) {
 				t.Fatalf("policies=%#v err=%v", policies, err)
 			}
 			t.Cleanup(func() {
-				_, _ = store.DB().ExecContext(context.Background(), "DELETE FROM "+store.TableIdentifier("lifecycle_policy_versions")+" WHERE "+store.Identifier("workspace_id")+"="+store.Placeholder(1), identity)
+				_, _ = store.DB().ExecContext(context.Background(), "DELETE FROM "+store.TableIdentifier("_lifecycle_policy_versions")+" WHERE "+store.Identifier("workspace_id")+"="+store.Placeholder(1), identity)
 			})
 		})
 	}

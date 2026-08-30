@@ -13,7 +13,6 @@ import (
 	postgresprojectdatabase "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/projectdatabase"
 	postgresrecord "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/record"
 	postgresreport "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/report"
-	postgresrls "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/rls"
 	postgresschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres/schema"
 )
 
@@ -23,7 +22,6 @@ type Engine struct {
 	persistencedriver.MigrationProfile
 	persistencedriver.ProjectDatabaseProfile
 	persistencedriver.SchemaProfile
-	persistencedriver.WorkspaceRLSProfile
 	evidence persistencedriver.EvidenceSchemaProfile
 	record   persistencedriver.RecordProfile
 	report   persistencedriver.ReportProfile
@@ -33,8 +31,8 @@ func NewEngine() Engine {
 	return Engine{Dialect: Dialect{},
 		Profile: ormpostgres.NewProfile(), MigrationProfile: postgresmigration.NewProfile(),
 		ProjectDatabaseProfile: postgresprojectdatabase.NewProfile(),
-		SchemaProfile:          postgresschema.NewProfile(), WorkspaceRLSProfile: postgresrls.NewProfile(),
-		evidence: postgresevidence.NewProfile(), record: postgresrecord.NewProfile(), report: postgresreport.NewProfile(),
+		SchemaProfile:          postgresschema.NewProfile(),
+		evidence:               postgresevidence.NewProfile(), record: postgresrecord.NewProfile(), report: postgresreport.NewProfile(),
 	}
 }
 
