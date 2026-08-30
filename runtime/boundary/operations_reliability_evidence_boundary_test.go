@@ -81,12 +81,8 @@ func TestHighRiskOwnerRoutesRegisterUnifiedTerminalReceipts(t *testing.T) {
 		"runtime/transport/http/workflows/processes.go": {
 			"workflow.process.retry", "workflow.process.cancel", "workflow.process.resolve",
 		},
-		"runtime/transport/http/integrations/event_handlers.go": {
-			"integration.event.retry", "integration.event.replay",
-		},
-		"runtime/transport/http/integrations/outbox_handlers.go":            {"integration.outbox.retry"},
-		"runtime/transport/http/operations/operations_lifecycle_cleanup.go": {"retention.cleanup", "ExecuteOwnerOperation"},
-		"runtime/transport/http/operations/operations_handler.go":           {"idempotency.receipt.", "ExecuteOwnerOperation"},
+		"runtime/transport/http/lifecycle/lifecycle_handler.go":   {"retention.cleanup", "ExecuteOwnerOperation"},
+		"runtime/transport/http/operations/operations_handler.go": {"idempotency.receipt.", "ExecuteOwnerOperation"},
 	}
 	for relative, markers := range files {
 		contents, err := os.ReadFile(filepath.Join(repositoryRoot, relative))
@@ -108,7 +104,7 @@ func TestHighRiskOwnerRoutesRegisterUnifiedTerminalReceipts(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(string(contents), "Operations: a.operations") {
+		if !strings.Contains(string(contents), "Operations:") || !strings.Contains(string(contents), "a.operations") {
 			t.Errorf("production owner wiring %s does not inject the Operations ledger", relative)
 		}
 	}

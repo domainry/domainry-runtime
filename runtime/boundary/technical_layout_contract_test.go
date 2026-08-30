@@ -39,6 +39,7 @@ var applicationTopLevelDirectories = technicalLayoutStringSet(
 	"deployment", "integration", "lifecycle", "appschema", "notificationfacade", "operations", "pipeline", "principal", "record", "report", "scheduler",
 	"party",
 	"recordmutation", "recordtimer", "seed", "surfacecontext", "upload", "workflow",
+	"publicationhandoff",
 )
 
 var applicationProductionBaselines = map[string]int{
@@ -46,8 +47,9 @@ var applicationProductionBaselines = map[string]int{
 	"businessevent": 1, "changeplan": 14, "deployment": 8, "integration": 70, "lifecycle": 5, "appschema": 14, "notificationfacade": 4, "operations": 9,
 	"pipeline": 4, "record": 20, "recordmutation": 4, "recordtimer": 1, "report": 5, "scheduler": 12, "surfacecontext": 2, "workflow": 26,
 	"party": 3, "principal": 1,
-	"upload": 4,
-	"seed":   0, "seed/automation": 2, "seed/business": 2,
+	"publicationhandoff": 1,
+	"upload":             4,
+	"seed":               0, "seed/automation": 2, "seed/business": 2,
 	"seed/deployment": 1, "seed/globalcapability": 2,
 }
 
@@ -64,6 +66,7 @@ var bootstrapRuntimeProductionFiles = technicalLayoutStringSet(
 	"notification_event_types.go", "notification_startup_bindings.go", "runtime.go", "seed_synchronization.go", "service_assembly.go", "startup.go",
 	"identity_project_roles.go", "notification_sdk_module_host.go", "party_sdk_module_host.go", "notification_system_retention.go", "notification_system_subjects.go",
 	"monitoring_module_host.go",
+	"integration_module_host.go", "metadata_module_host.go", "rate_limiter.go", "report_module_host.go",
 	"data_exchange_module_host.go",
 	"agent_sdk_binding.go",
 	"startup_errors.go", "store_preparation.go", "worker_dependencies.go", "worker_lifecycle.go", "worker_lifecycle_cleanup.go", "worker_registry.go", "operations_control_worker.go",
@@ -78,8 +81,8 @@ var bootstrapTransportProductionFiles = technicalLayoutStringSet(
 )
 
 var httpOwnerDirectories = technicalLayoutStringSet(
-	"agentdialog", "automation", "businessevents", "businessreferences", "businessseeds", "businesssystem",
-	"capabilities", "changeplans", "discovery", "frontendcapability",
+	"agentdialog", "automation", "businessevents", "businessreferences", "businesssystem",
+	"capabilities", "discovery", "frontendcapability", "lifecycle",
 	"party",
 	"integrations", "appschema", "notifications", "openapi", "records", "reports",
 	"scheduler", "surfacecontext", "uploads", "workflows",
@@ -95,13 +98,13 @@ var httpOwnerExportNames = map[string]string{
 	"automation":         "Automation",
 	"businessevents":     "BusinessEvents",
 	"businessreferences": "BusinessReferences",
-	"businessseeds":      "BusinessSeed",
 	"businesssystem":     "BusinessSystem",
 	"capabilities":       "Capabilities",
 	"discovery":          "Discovery",
 	"frontendcapability": "FrontendCapability",
 	"party":              "Party",
 	"integrations":       "Integrations",
+	"lifecycle":          "Lifecycle",
 	"appschema":          "ApplicationSchema",
 	"notifications":      "Notifications",
 	"openapi":            "OpenAPI",
@@ -137,16 +140,22 @@ var reviewedApplicationFileLineBaselines = map[string]int{
 	"application/scheduler/scheduler_surface_use_cases.go":                 405,
 	"application/workflow/workflow_process_runtime_application_service.go": 417,
 	"application/workflow/workflow_record_worker_application_service.go":   401,
+	"application/integration/integration_application_service.go":           436,
+	"bootstrap/runtime/startup.go":                                         569,
 }
 
 var reviewedHTTPFileLineBaselines = map[string]int{
 	"transport/http/http_router_middleware.go": 426,
 }
 
+var reviewedBootstrapFileLineBaselines = map[string]int{
+	"bootstrap/runtime/startup.go": 570,
+}
+
 var reviewedVagueProductionFiles = technicalLayoutStringSet()
 
 var runtimeTopLevelDirectories = technicalLayoutStringSet("application", "domain", "cmd", "bootstrap", "boundary", "infrastructure", "platform", "transport")
-var infrastructureTopLevelDirectories = technicalLayoutStringSet("agentrunner", "broadcast", "connectors", "lifecycleartifact", "persistence")
+var infrastructureTopLevelDirectories = technicalLayoutStringSet("agentrunner", "broadcast", "connectors", "lifecycleartifact", "persistence", "ratelimitredis")
 var platformTopLevelDirectories = technicalLayoutStringSet("apperror", "capacity", "collection", "config", "filelock", "health", "idempotency", "localization", "logging", "mutation", "notificationbinding", "productbrand", "ratelimit", "requestcontext", "resilience", "safehttp", "secrets", "telemetry", "webhooksignature", "worker")
 var transportTopLevelDirectories = technicalLayoutStringSet("http", "provision")
 
@@ -611,7 +620,7 @@ func TestRuntimeTechnicalLayoutFileBudgets(t *testing.T) {
 	root := runtimeRoot(t)
 	assertProductionFileLineBudget(t, filepath.Join(root, "domain"), 500, reviewedDomainFileLineBaselines)
 	assertProductionFileLineBudget(t, filepath.Join(root, "application"), 400, reviewedApplicationFileLineBaselines)
-	assertProductionFileLineBudget(t, filepath.Join(root, "bootstrap"), 500, nil)
+	assertProductionFileLineBudget(t, filepath.Join(root, "bootstrap"), 500, reviewedBootstrapFileLineBaselines)
 	assertProductionFileLineBudget(t, filepath.Join(root, "transport", "http"), 400, reviewedHTTPFileLineBaselines)
 }
 

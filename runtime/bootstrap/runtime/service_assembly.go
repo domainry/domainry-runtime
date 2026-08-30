@@ -22,9 +22,9 @@ import (
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
-	localartifact "github.com/domainry/domainry-lifecycle/artifact/filesystem"
-	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
-	lifecyclepersistence "github.com/domainry/domainry-lifecycle/persistence"
+	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
+	lifecyclemoduleimpl "github.com/domainry/domainry-lifecycle/module"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	partysdk "github.com/domainry/domainry-party-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
@@ -69,6 +69,7 @@ type runtimeServiceAssembly struct {
 	records             recordrepository.RecordRepository
 	worker              workerplatform.Dependencies
 	dataExchangeBinding dataexchangesdk.Binding
+	lifecycleBinding    lifecyclesdk.Binding
 }
 
 type runtimeExtensionRegistries struct {
@@ -185,35 +186,58 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding returned no transaction repository")
 		}
 	}
+	uploadDirectory := cfg.UploadDir
+	if uploadDirectory == "" {
+		uploadDirectory = "../data/uploads"
+	}
+	lifecycleBinding, err := lifecyclemoduleimpl.NewFactory().OpenModule(ctx,
+		lifecyclesdk.ApplicationRef{RuntimeID: valueOrDefault(cfg.RuntimeVersion, "domainry-runtime")}, lifecyclemodule.NewHost(store))
+	if err != nil {
+		return runtimeServiceAssembly{}, fmt.Errorf("open Lifecycle module: %w", err)
+	}
+	if err := lifecycleBinding.Descriptor().Validate(); err != nil {
+		_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
+		return runtimeServiceAssembly{}, fmt.Errorf("validate Lifecycle module: %w", err)
+	}
+	lifecycleArchives := lifecycleBinding.ArchiveStore()
+	if lifecycleBinding.Repository() == nil || lifecycleArchives == nil {
+		_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
+		return runtimeServiceAssembly{}, fmt.Errorf("Lifecycle Binding is incomplete")
+	}
+	lifecycleArtifacts, err := lifecycleBinding.SubjectArtifacts(uploadDirectory)
+	if err != nil {
+		_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
+		return runtimeServiceAssembly{}, fmt.Errorf("open Lifecycle subject artifacts: %w", err)
+	}
+	lifecycleFileArtifacts, err := lifecycleBinding.UploadArtifacts(lifecyclesdk.UploadArtifactOptions{
+		Root:              uploadDirectory,
+		Fields:            lifecyclemodule.NewUploadFieldCatalog(manifest.Objects),
+		References:        recordpersistence.NewUploadArtifactReferences(store, manifest.Objects),
+		ExpiredReferences: reportpersistence.NewUploadArtifactCleaner(store, manifest.Objects),
+	})
+	if err != nil {
+		_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
+		return runtimeServiceAssembly{}, fmt.Errorf("open Lifecycle upload artifacts: %w", err)
+	}
 	workerDependencies = workerplatform.NormalizeDependencies(workerDependencies)
 	lifecycleExecutors := []lifecyclecontract.OwnerLifecycleExecutor{
-		ratelimitpersistence.LifecycleExecutor(store),
-		actionpersistence.LifecycleExecutor(store),
-		recordpersistence.LifecycleExecutor(store, manifest.Objects...),
-		operationspersistence.LifecycleExecutor(store),
-		notificationpublicationpersistence.LifecycleExecutor(store),
-		workflowpersistence.LifecycleExecutor(store),
-		automationpersistence.LifecycleExecutor(store),
-		runtimeauditmodule.LifecycleExecutor(store),
-		reportpersistence.LifecycleExecutor(store, agentLifecycle, manifest.Objects...),
+		ratelimitpersistence.LifecycleExecutor(store, lifecycleArchives),
+		actionpersistence.LifecycleExecutor(store, lifecycleArchives),
+		recordpersistence.LifecycleExecutor(store, lifecycleArchives, manifest.Objects...),
+		operationspersistence.LifecycleExecutor(store, lifecycleArchives),
+		notificationpublicationpersistence.LifecycleExecutor(store, lifecycleArchives),
+		workflowpersistence.LifecycleExecutor(store, lifecycleArchives),
+		automationpersistence.LifecycleExecutor(store, lifecycleArchives),
+		runtimeauditmodule.LifecycleExecutor(store, lifecycleArchives),
+		reportpersistence.LifecycleExecutor(store, lifecycleArchives, agentLifecycle, manifest.Objects...),
 	}
 	if agentLifecycle != nil {
-		lifecycleExecutors = append(lifecycleExecutors, agentlifecyclepersistence.NewExecutor(store, agentLifecycle))
+		lifecycleExecutors = append(lifecycleExecutors, agentlifecyclepersistence.NewExecutor(agentLifecycle, lifecycleArchives))
 	}
 	lifecycleExecutorPorts := append([]lifecyclecontract.OwnerLifecycleExecutor(nil), lifecycleExecutors...)
 	if notificationRetention != nil {
 		lifecycleExecutorPorts = append(lifecycleExecutorPorts, notificationRetention)
 	}
-	uploadDirectory := cfg.UploadDir
-	if uploadDirectory == "" {
-		uploadDirectory = "../data/uploads"
-	}
-	lifecycleArtifacts := localartifact.NewSubjectStore(uploadDirectory)
-	lifecycleHost := lifecyclemodule.NewHost(store)
-	lifecycleFileArtifacts := lifecyclepersistence.NewFileArtifactStore(lifecycleHost, lifecyclemodule.NewUploadFieldCatalog(manifest.Objects), uploadDirectory,
-		lifecyclepersistence.WithUploadArtifactReferences(recordpersistence.NewUploadArtifactReferences(store, manifest.Objects)),
-		lifecyclepersistence.WithExpiredUploadReferenceCleaner(reportpersistence.NewUploadArtifactCleaner(store, manifest.Objects)),
-	)
 	fileScanKey := sha256.Sum256([]byte("domainry-file-scan-receipt-v1:" + cfg.IntegrationSecretKey))
 	fileScans := uploadapplication.NewFileScanReceiptVerifier(lifecycleFileArtifacts, fileScanKey[:])
 	recordSubjectLifecycle := recordapplication.NewRecordSubjectLifecycleApplicationService(records, manifest.Objects, lifecycleArtifacts, manifest.IdentityProfileExtensions)
@@ -257,7 +281,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			ApplicationSchema:                   appschemapersistence.NewApplicationSchemaStore(store),
 			IntegrationConfig:                   nil,
 			IntegrationEvents:                   nil,
-			IntegrationPublication:              publicationhandoffpersistence.NewStore(store),
+			IntegrationPublication:              publicationhandoffpersistence.NewPublicationStore(store),
 			IntegrationWorker:                   nil,
 			IntegrationPublicationWorker:        publicationhandoffpersistence.NewWorkerStore(store),
 			WorkerWakeups:                       store.WorkerWakeups(),
@@ -327,7 +351,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			IntegrationAPILimiter:    apiLimiter,
 			IntegrationOwnerDelivery: integrationOwnerDelivery,
 			IntegrationOwnerCatalog:  integrationOwnerCatalog,
-			Lifecycle:                lifecyclepersistence.NewLifecycleStore(lifecycleHost),
+			Lifecycle:                lifecycleBinding.Repository(),
 			LifecycleExecutors:       lifecycleExecutorPorts,
 			LifecycleArtifacts:       lifecycleArtifacts,
 			LifecycleUploadArtifacts: lifecycleFileArtifacts,
@@ -339,7 +363,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	lifecyclePrincipal := principalmodel.NewSystemPrincipal("runtime-lifecycle", principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "install default lifecycle policies"))
 	workflowScope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "initialize published workflow definitions")
 	return completeRuntimeServiceAssembly(
-		runtimeServiceAssembly{services: services, records: records, worker: workerDependencies, dataExchangeBinding: dataExchangeBinding},
+		runtimeServiceAssembly{services: services, records: records, worker: workerDependencies, dataExchangeBinding: dataExchangeBinding, lifecycleBinding: lifecycleBinding},
 		func() error {
 			return services.Applications().Lifecycle.InstallDefaultPolicies(ctx, principalmodel.InstallationWorkspaceID, lifecyclePrincipal, time.Now().UTC())
 		},

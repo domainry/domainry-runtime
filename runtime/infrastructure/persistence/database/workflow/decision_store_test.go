@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"context"
 	"encoding/json"
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -12,8 +13,8 @@ import (
 
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 
-	agentpersistence "github.com/domainry/domainry-agent/persistence"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	agentsdkfixture "github.com/domainry/domainry-runtime/testsupport/agentsdkfixture"
 
 	"path/filepath"
 	"testing"
@@ -235,10 +236,12 @@ func openStoreForGeneratedListTest(t *testing.T) *database.RuntimeStore {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := agentpersistence.EnsureSchema(t.Context(), store.DB(), store.Driver(), store.DatabaseSchema()); err != nil {
+	binding, err := agentsdkfixture.Open(t.Context(), store, "workflow-decision-store-test")
+	if err != nil {
 		_ = store.Close()
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = binding.Close(context.Background()) })
 	return store
 }
 

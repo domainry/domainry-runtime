@@ -12,7 +12,7 @@ import (
 func TestIntegrationEventStoreLifecycleEdges(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationEventStore(store)
@@ -61,7 +61,7 @@ func TestIntegrationEventStoreLifecycleEdges(t *testing.T) {
 func TestIntegrationDeliveryStoreLifecycleEdges(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationDeliveryStore(store)
@@ -184,7 +184,7 @@ func TestIntegrationWorkerLeaseTimeEdges(t *testing.T) {
 func TestIntegrationWorkersDiscoverRegisteredWorkspaceScopes(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	events := NewIntegrationEventStore(store)
@@ -217,7 +217,7 @@ func TestIntegrationWorkersDiscoverRegisteredWorkspaceScopes(t *testing.T) {
 func TestIntegrationWorkerRetryAndInputEdges(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	events := NewIntegrationEventStore(store)

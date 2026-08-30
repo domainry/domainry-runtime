@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
 	ormdriver "github.com/domainry/domainry-orm/driver"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 )
@@ -55,7 +55,7 @@ func (l *RateLimiter) Allow(ctx context.Context, key string, limit int, window t
 	}
 	var lastErr error
 	for attempt := 0; attempt < databaseRetryAttempts; attempt++ {
-		decision, retry, err := l.allowOnce(ctx, key, limit, window, l.now().UTC())
+		decision, retry, err := l.allowOnce(ctx, key, limit, window)
 		if !retry {
 			return decision, err
 		}
@@ -77,7 +77,7 @@ func (l *RateLimiter) Allow(ctx context.Context, key string, limit int, window t
 	return ratelimit.Decision{}, fmt.Errorf("rate limit bucket conflict after retries: %w", lastErr)
 }
 
-func (l *RateLimiter) allowOnce(ctx context.Context, key string, limit int, window time.Duration, now time.Time) (ratelimit.Decision, bool, error) {
+func (l *RateLimiter) allowOnce(ctx context.Context, key string, limit int, window time.Duration) (ratelimit.Decision, bool, error) {
 	tx, err := l.begin(ctx, l.db)
 	if err != nil {
 		return ratelimit.Decision{}, l.retryable(err), err
@@ -99,6 +99,11 @@ func (l *RateLimiter) allowOnce(ctx context.Context, key string, limit int, wind
 	if err != nil && err != sql.ErrNoRows {
 		return ratelimit.Decision{}, l.retryable(err), err
 	}
+	// Read the clock only after the claim lock is acquired. A timestamp captured
+	// before waiting for the transaction can be older than the preceding writer's
+	// window start and incorrectly reset the bucket under contention.
+	now := l.now().UTC()
+	previousStartNS, previousCount := startNS, count
 	windowStart := time.Unix(0, startNS).UTC()
 	if err == sql.ErrNoRows || startNS == 0 || now.Before(windowStart) || now.Sub(windowStart) >= window {
 		windowStart, count = now, 0
@@ -117,12 +122,24 @@ func (l *RateLimiter) allowOnce(ctx context.Context, key string, limit int, wind
 	} else {
 		update, updateArgs, buildErr := ormbuilder.NewUpdateBuilder(l.store.SQLRenderer, "runtime_rate_limit_bucket").
 			Set("window_start_ns", windowStart.UnixNano()).Set("request_count", count).Set("updated_at_ns", now.UnixNano()).
-			Where(ormbuilder.Equal("bucket_key", key)).Build()
+			Where(ormbuilder.And(
+				ormbuilder.Equal("bucket_key", key),
+				ormbuilder.Equal("window_start_ns", previousStartNS),
+				ormbuilder.Equal("request_count", previousCount),
+			)).Build()
 		if buildErr != nil {
 			return ratelimit.Decision{}, false, fmt.Errorf("build rate limit bucket update: %w", buildErr)
 		}
-		if _, err := tx.ExecContext(ctx, update, updateArgs...); err != nil {
+		result, err := tx.ExecContext(ctx, update, updateArgs...)
+		if err != nil {
 			return ratelimit.Decision{}, l.retryable(err), err
+		}
+		updated, rowsErr := result.RowsAffected()
+		if rowsErr != nil {
+			return ratelimit.Decision{}, false, fmt.Errorf("read rate limit bucket update result: %w", rowsErr)
+		}
+		if updated != 1 {
+			return ratelimit.Decision{}, true, fmt.Errorf("rate limit bucket changed concurrently")
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {

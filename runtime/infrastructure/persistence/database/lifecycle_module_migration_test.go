@@ -4,7 +4,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	lifecyclemigrations "github.com/domainry/domainry-lifecycle/migrations"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -45,14 +44,11 @@ func TestLifecycleMigrationAdoptsCompletePreExtractionSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	values, err := lifecyclemigrations.Migrations(store.RuntimeRenderer())
-	if err != nil {
+	if err := store.EnsureLifecycleSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	for _, statement := range values[0].Statements {
-		if _, err := store.DB().ExecContext(t.Context(), statement); err != nil {
-			t.Fatal(err)
-		}
+	if _, err := store.DB().ExecContext(t.Context(), `DELETE FROM _schema_migrations WHERE kind='module:lifecycle'`); err != nil {
+		t.Fatal(err)
 	}
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatalf("adopt complete pre-extraction Lifecycle schema: %v", err)

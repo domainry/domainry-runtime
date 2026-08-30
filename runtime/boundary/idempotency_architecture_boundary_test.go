@@ -121,7 +121,8 @@ func TestWorkerCompletionAndHeartbeatContractsRequireLeaseOwnerAndFencingToken(t
 	}{
 		{owner: "action", file: "domain/action/contract/action_execution_claim.go", interfaceName: "ActionExecutionClaimStore", methods: []string{"HeartbeatExecution"}},
 		{owner: "automation", file: "domain/automation/contract/automation_worker_contract.go", interfaceName: "AutomationWorkerStore", methods: []string{"HeartbeatInstruction", "CompleteInstruction"}},
-		{owner: "integration", file: "domain/integration/repository/integration_repository.go", interfaceName: "IntegrationWorkerRepository", methods: []string{"HeartbeatEvent", "UpdateEventStatus", "ScheduleEventRetry", "HeartbeatOutbox", "UpdateOutboxStatus", "ScheduleOutboxRetry"}},
+		{owner: "integration", file: "domain/integration/repository/integration_repository.go", interfaceName: "IntegrationEventWorkerRepository", methods: []string{"HeartbeatEvent", "UpdateEventStatus", "ScheduleEventRetry"}},
+		{owner: "integration", file: "domain/integration/repository/integration_repository.go", interfaceName: "RuntimePublicationWorkerRepository", methods: []string{"HeartbeatOutbox", "UpdateOutboxStatus", "ScheduleOutboxRetry"}},
 	}
 	for _, contract := range methodContracts {
 		path := filepath.Join(root, filepath.FromSlash(contract.file))
@@ -140,7 +141,6 @@ func TestWorkerCompletionAndHeartbeatContractsRequireLeaseOwnerAndFencingToken(t
 		{owner: "action", file: "domain/action/model/action_execution.go", typeName: "ActionExecutionCompletion"},
 		{owner: "workflow", file: "domain/workflow/model/workflow_execution_receipt.go", typeName: "WorkflowExecutionReceiptCompletion"},
 		{owner: "record", file: "domain/record/model/record_mutation_execution.go", typeName: "RecordMutationCompletion"},
-		{owner: "changeplan", file: "domain/changeplan/model/changeplan_model.go", typeName: "ChangePlanOperationCompletion"},
 	}
 	for _, contract := range completionContracts {
 		path := filepath.Join(root, filepath.FromSlash(contract.file))

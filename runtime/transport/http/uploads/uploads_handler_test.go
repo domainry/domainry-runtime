@@ -21,8 +21,8 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	lifecycleaccess "github.com/domainry/domainry-lifecycle/access"
-	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
+	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"

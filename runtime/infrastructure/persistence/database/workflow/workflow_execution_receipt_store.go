@@ -12,7 +12,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )

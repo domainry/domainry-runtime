@@ -12,12 +12,10 @@ var bootstrapCompositionProductionFiles = stringSet(
 	"automation_application_wiring.go",
 	"business_system_application_wiring.go",
 	"capability_application_wiring.go",
-	"changeplan_application_wiring.go",
 	"changeplan_frontend_reference_application_wiring.go",
 	"changeplan_reference_application_wiring.go",
 	"deployment_frontend_capability_application_wiring.go",
-	"integration_application_wiring.go",
-	"integration_dependency_application_wiring.go",
+	"integration_requirements_wiring.go",
 	"integration_runtime_application_wiring.go",
 	"appschema_application_wiring.go",
 	"pipeline_application_wiring.go",
@@ -34,6 +32,7 @@ var bootstrapCompositionProductionFiles = stringSet(
 	"runtime_services_record_policy.go",
 	"runtime_services_schema_initialization.go",
 	"runtime_services_state.go",
+	"runtime_connector_catalog_wiring.go",
 	"scheduler_application_wiring.go",
 	"scheduler_sdk_module_host_wiring.go",
 	"workflow_application_wiring.go",
@@ -43,7 +42,6 @@ var bootstrapCompositionProductionFiles = stringSet(
 )
 
 var bootstrapCompositionTestFiles = stringSet(
-	"changeplan_test_support_test.go",
 	"composition_remaining_wiring_contract_test.go",
 	"composition_final_pipeline_contract_test.go",
 	"composition_wiring_contract_assertions_test.go",

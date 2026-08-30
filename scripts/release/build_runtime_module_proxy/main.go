@@ -19,6 +19,7 @@ import (
 
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
+	"golang.org/x/mod/semver"
 	"golang.org/x/mod/sumdb/dirhash"
 	modzip "golang.org/x/mod/zip"
 )
@@ -73,7 +74,7 @@ type downloadedModule struct {
 	Path, Version, Info, GoMod, Zip, Error string
 }
 
-const identityModuleVersion = "v0.2.0-dev2"
+const identityModuleVersion = "v0.2.0-dev26"
 
 func main() {
 	repository := flag.String("repo", "", "Runtime repository root")
@@ -279,7 +280,9 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 	}{
 		{path: "github.com/domainry/domainry-orm", rootEnvironment: "DOMAINRY_ORM_REPO_ROOT", label: "ORM", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-foundation", rootEnvironment: "DOMAINRY_FOUNDATION_REPO_ROOT", label: "Foundation", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-identity-sdk", rootEnvironment: "DOMAINRY_IDENTITY_SDK_REPO_ROOT", label: "Identity SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-agent-sdk", rootEnvironment: "DOMAINRY_AGENT_SDK_REPO_ROOT", label: "Agent SDK", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-agent", rootEnvironment: "DOMAINRY_AGENT_REPO_ROOT", label: "Agent", patterns: []string{"./module", "./remote"}},
 		{path: "github.com/domainry/domainry-audit-sdk", rootEnvironment: "DOMAINRY_AUDIT_SDK_REPO_ROOT", label: "Audit SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-audit", rootEnvironment: "DOMAINRY_AUDIT_REPO_ROOT", label: "Audit", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-notification-sdk", rootEnvironment: "DOMAINRY_NOTIFICATION_SDK_REPO_ROOT", label: "Notification SDK", patterns: []string{"./..."}},
@@ -292,6 +295,13 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 		{path: "github.com/domainry/domainry-scheduler", rootEnvironment: "DOMAINRY_SCHEDULER_REPO_ROOT", label: "Scheduler", patterns: []string{"./module", "./remote"}},
 		{path: "github.com/domainry/domainry-data-exchange-sdk", rootEnvironment: "DOMAINRY_DATA_EXCHANGE_SDK_REPO_ROOT", label: "Data Exchange SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-data-exchange", rootEnvironment: "DOMAINRY_DATA_EXCHANGE_REPO_ROOT", label: "Data Exchange", patterns: []string{"./module", "./remote"}},
+		{path: "github.com/domainry/domainry-report-sdk", rootEnvironment: "DOMAINRY_REPORT_SDK_REPO_ROOT", label: "Report SDK", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-report", rootEnvironment: "DOMAINRY_REPORT_REPO_ROOT", label: "Report", patterns: []string{"./module"}},
+		{path: "github.com/domainry/domainry-metadata-sdk", rootEnvironment: "DOMAINRY_METADATA_SDK_REPO_ROOT", label: "Metadata SDK", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-metadata", rootEnvironment: "DOMAINRY_METADATA_REPO_ROOT", label: "Metadata", patterns: []string{"./module"}},
+		{path: "github.com/domainry/domainry-integration-sdk", rootEnvironment: "DOMAINRY_INTEGRATION_SDK_REPO_ROOT", label: "Integration SDK", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-integration", rootEnvironment: "DOMAINRY_INTEGRATION_REPO_ROOT", label: "Integration", patterns: []string{"./module"}},
+		{path: "github.com/domainry/domainry-lifecycle", rootEnvironment: "DOMAINRY_LIFECYCLE_REPO_ROOT", label: "Lifecycle", patterns: []string{"./..."}},
 	} {
 		root := strings.TrimSpace(os.Getenv(local.rootEnvironment))
 		if root == "" {
@@ -366,6 +376,20 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 		}
 		versions = next
 	}
+	// The graph walk may encounter an older transitive version after the
+	// Runtime's direct requirement. Publish only the version selected by Go's
+	// Minimal Version Selection for each module path in the closure manifest.
+	selected := make(map[string]publishedDependencyModule, len(result))
+	for _, dependency := range result {
+		current, ok := selected[dependency.Path]
+		if !ok || semver.Compare(dependency.Version, current.Version) > 0 {
+			selected[dependency.Path] = dependency
+		}
+	}
+	result = result[:0]
+	for _, dependency := range selected {
+		result = append(result, dependency)
+	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
 	return result, versionOverrides, nil
 }
@@ -378,7 +402,9 @@ func dependencyModule(repository, path, version string) (downloadedModule, error
 	for _, candidate := range []localModule{
 		{path: "github.com/domainry/domainry-orm", rootEnvironment: "DOMAINRY_ORM_REPO_ROOT", label: "ORM", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-foundation", rootEnvironment: "DOMAINRY_FOUNDATION_REPO_ROOT", label: "Foundation", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-identity-sdk", rootEnvironment: "DOMAINRY_IDENTITY_SDK_REPO_ROOT", label: "Identity SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-agent-sdk", rootEnvironment: "DOMAINRY_AGENT_SDK_REPO_ROOT", label: "Agent SDK", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-agent", rootEnvironment: "DOMAINRY_AGENT_REPO_ROOT", label: "Agent", patterns: []string{"./module", "./remote"}},
 		{path: "github.com/domainry/domainry-audit-sdk", rootEnvironment: "DOMAINRY_AUDIT_SDK_REPO_ROOT", label: "Audit SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-audit", rootEnvironment: "DOMAINRY_AUDIT_REPO_ROOT", label: "Audit", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-identity", rootEnvironment: "DOMAINRY_IDENTITY_REPO_ROOT", label: "Identity", patterns: []string{"./module"}},
@@ -390,6 +416,13 @@ func dependencyModule(repository, path, version string) (downloadedModule, error
 		{path: "github.com/domainry/domainry-scheduler", rootEnvironment: "DOMAINRY_SCHEDULER_REPO_ROOT", label: "Scheduler", patterns: []string{"./module", "./remote"}},
 		{path: "github.com/domainry/domainry-data-exchange-sdk", rootEnvironment: "DOMAINRY_DATA_EXCHANGE_SDK_REPO_ROOT", label: "Data Exchange SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-data-exchange", rootEnvironment: "DOMAINRY_DATA_EXCHANGE_REPO_ROOT", label: "Data Exchange", patterns: []string{"./module", "./remote"}},
+		{path: "github.com/domainry/domainry-report-sdk", rootEnvironment: "DOMAINRY_REPORT_SDK_REPO_ROOT", label: "Report SDK", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-report", rootEnvironment: "DOMAINRY_REPORT_REPO_ROOT", label: "Report", patterns: []string{"./module"}},
+		{path: "github.com/domainry/domainry-metadata-sdk", rootEnvironment: "DOMAINRY_METADATA_SDK_REPO_ROOT", label: "Metadata SDK", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-metadata", rootEnvironment: "DOMAINRY_METADATA_REPO_ROOT", label: "Metadata", patterns: []string{"./module"}},
+		{path: "github.com/domainry/domainry-integration-sdk", rootEnvironment: "DOMAINRY_INTEGRATION_SDK_REPO_ROOT", label: "Integration SDK", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-integration", rootEnvironment: "DOMAINRY_INTEGRATION_REPO_ROOT", label: "Integration", patterns: []string{"./module"}},
+		{path: "github.com/domainry/domainry-lifecycle", rootEnvironment: "DOMAINRY_LIFECYCLE_REPO_ROOT", label: "Lifecycle", patterns: []string{"./..."}},
 	} {
 		root := strings.TrimSpace(os.Getenv(candidate.rootEnvironment))
 		if root == "" {
@@ -471,7 +504,11 @@ func packageLocalModule(path, version, rootValue, label string, versionOverrides
 	}
 	if contentAddressed {
 		contentIdentity := strings.TrimPrefix(contentVersion(source, files), "v0.0.0-source-")
-		version = "v0.0.0-domainry." + contentIdentity[:16]
+		// Local source closures must win Minimal Version Selection over any
+		// released v0.x requirement retained by a transitive module. A v0.0.0
+		// content version can otherwise be silently replaced by an older public
+		// SDK, producing a distribution that differs from the tested checkout.
+		version = "v0.999.0-domainry." + contentIdentity[:16]
 	}
 	temporary, err := os.MkdirTemp("", "domainry-local-module-archive-*")
 	if err != nil {

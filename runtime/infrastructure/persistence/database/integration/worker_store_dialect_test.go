@@ -32,7 +32,7 @@ func TestIntegrationWorkerLeaseContractAcrossDialects(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = store.Close() })
-			if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+			if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 				t.Fatal(err)
 			}
 			id := fmt.Sprintf("integration-%s-%d", test.name, time.Now().UnixNano())

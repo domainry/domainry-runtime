@@ -5,6 +5,7 @@ import (
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
 
 type ReferenceGraph = changeplanmodel.ReferenceGraph
@@ -15,5 +16,8 @@ func NewReferenceGraphBuilder() *ReferenceGraphBuilder {
 }
 
 func changePlanAdmin() principalmodel.Principal {
-	return principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}
+	return accessfixture.Attach(
+		principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}},
+		accessfixture.Bundle{Permissions: []string{"workspace.admin"}},
+	)
 }

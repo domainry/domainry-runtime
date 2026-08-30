@@ -12,13 +12,12 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
 	agentmodel "github.com/domainry/domainry-agent-sdk/state"
-	agentpersistence "github.com/domainry/domainry-agent/persistence"
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
-	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
@@ -41,6 +40,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	"github.com/domainry/domainry-runtime/runtime/platform/resilience"
+	agentsdkfixture "github.com/domainry/domainry-runtime/testsupport/agentsdkfixture"
 )
 
 type compositionConnectorAdapterStub struct{}
@@ -233,22 +233,16 @@ func TestRuntimeCompositionWiresPersistentAgentWorkersAndInteractiveFactory(t *t
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	agentMigrations, err := agentpersistence.SchemaMigrations(store.Driver(), store.DatabaseSchema())
+	binding, err := agentsdkfixture.Open(t.Context(), store, "composition-agent-wiring-test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	hostMigrations := make([]notificationmodulehost.SchemaMigration, len(agentMigrations))
-	for index, migration := range agentMigrations {
-		hostMigrations[index] = notificationmodulehost.SchemaMigration{Version: migration.Version, Name: migration.Name, Statements: append([]string(nil), migration.Statements...)}
+	t.Cleanup(func() { _ = binding.Close(context.Background()) })
+	repositories, ok := binding.(agentrepository.Binding)
+	if !ok || repositories.AgentTaskRunRepository() == nil {
+		t.Fatal("Agent SDK Binding returned no task-run repository")
 	}
-	if err := store.ApplyOwnedMigrations(t.Context(), "agent", hostMigrations); err != nil {
-		t.Fatal(err)
-	}
-	agentStore, err := agentpersistence.NewStore(store.DB(), store.SQLRenderer, store.Driver())
-	if err != nil {
-		t.Fatal(err)
-	}
-	repository := agentpersistence.NewAgentTaskRunStore(agentStore)
+	repository := repositories.AgentTaskRunRepository()
 	withoutRunner := NewRuntimeServices(t.Context(), RuntimeServicesConfig{Dependencies: RuntimeServicesDependencies{AgentTaskRuns: repository, AgentPrincipals: agentPrincipalDirectoryStub{}}})
 	if withoutRunner.Applications().AgentInteractiveRuns == nil || withoutRunner.Applications().NewAgentInteractive != nil {
 		t.Fatalf("runnerless applications=%+v", withoutRunner.Applications())
@@ -914,7 +908,7 @@ func TestAssembledBusinessHandlerCoversRevisionAndDurableIntentFallbacks(t *test
 		t.Fatalf("missing durable intent validator error=%v", err)
 	}
 	withIntegration := newService(t, nil, true)
-	withIntegration.integrationService = publicationhandoff.New(publicationhandoff.Dependencies{})
+	withIntegration.integrationService = publicationhandoff.NewPublicationHandoffApplicationService(publicationhandoff.Dependencies{})
 	if _, err := invoke(withIntegration); err == nil || strings.Contains(err.Error(), "durable_intent_validator_required") {
 		t.Fatalf("configured durable intent validator error=%v", err)
 	}

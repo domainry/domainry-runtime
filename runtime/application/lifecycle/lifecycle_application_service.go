@@ -8,10 +8,10 @@ import (
 	"encoding/json"
 	"time"
 
-	lifecycleaccess "github.com/domainry/domainry-lifecycle/access"
-	lifecycleapplication "github.com/domainry/domainry-lifecycle/application"
-	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
-	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
+	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
+	lifecycleapplication "github.com/domainry/domainry-lifecycle-sdk/application"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -21,13 +21,11 @@ const (
 	PermissionSubjectManage = lifecycleapplication.PermissionSubjectManage
 )
 
-type LifecycleApplicationDependencies = lifecycleapplication.LifecycleApplicationDependencies
-
 type LifecycleApplicationService struct {
 	core *lifecycleapplication.LifecycleApplicationService
 }
 
-func NewLifecycleApplicationService(ctx context.Context, deps LifecycleApplicationDependencies) *LifecycleApplicationService {
+func NewLifecycleApplicationService(ctx context.Context, deps lifecycleapplication.LifecycleApplicationDependencies) *LifecycleApplicationService {
 	return &LifecycleApplicationService{core: lifecycleapplication.NewLifecycleApplicationService(ctx, deps)}
 }
 
@@ -130,7 +128,10 @@ type WorkerTick struct {
 	Now        time.Time
 	Scope      principalmodel.SystemScope
 }
-type WorkerTickResult = lifecycleapplication.WorkerTickResult
+type WorkerTickResult struct {
+	ProcessedJobs    int
+	DeletedArtifacts int
+}
 type WorkerRunner struct {
 	core *lifecycleapplication.WorkerRunner
 }
@@ -143,7 +144,9 @@ func NewWorkerRunner(service *LifecycleApplicationService) *WorkerRunner {
 }
 func (r *WorkerRunner) Tick(ctx context.Context, tick WorkerTick) (WorkerTickResult, error) {
 	if r == nil || r.core == nil {
-		return lifecycleapplication.NewWorkerRunner(nil).Tick(ctx, lifecycleapplication.WorkerTick{})
+		_, err := lifecycleapplication.NewWorkerRunner(nil).Tick(ctx, lifecycleapplication.WorkerTick{})
+		return WorkerTickResult{}, err
 	}
-	return r.core.Tick(ctx, lifecycleapplication.WorkerTick{LeaseOwner: tick.LeaseOwner, BatchSize: tick.BatchSize, JobLimit: tick.JobLimit, Now: tick.Now, Scope: runtimeSystemScope(tick.Scope)})
+	result, err := r.core.Tick(ctx, lifecycleapplication.WorkerTick{LeaseOwner: tick.LeaseOwner, BatchSize: tick.BatchSize, JobLimit: tick.JobLimit, Now: tick.Now, Scope: runtimeSystemScope(tick.Scope)})
+	return WorkerTickResult{ProcessedJobs: result.ProcessedJobs, DeletedArtifacts: result.DeletedArtifacts}, err
 }

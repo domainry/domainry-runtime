@@ -12,6 +12,7 @@ import (
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
@@ -42,8 +43,10 @@ type Runtime struct {
 	identityDirectory   identitysdk.Directory
 	identityPrincipals  identitysdk.PrincipalResolver
 	integrationMode     integrationsdk.DeploymentMode
+	integrationBinding  integrationsdk.Binding
 	partyBinding        partysdk.Binding
 	dataExchangeBinding dataexchangesdk.Binding
+	lifecycleBinding    lifecyclesdk.Binding
 	manifest            manifestmodel.ManifestSchema
 	recordRepo          recordrepository.RecordRepository
 	rateLimiter         ratelimit.Limiter

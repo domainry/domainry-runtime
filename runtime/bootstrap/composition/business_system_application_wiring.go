@@ -20,7 +20,7 @@ func assembleBusinessSystemApplication(
 	metadata *appschemaapplication.ApplicationSchemaApplicationService,
 	workflows *workflowapplication.WorkflowApplicationService,
 	automations *automationapplication.AutomationApplicationService,
-	publications *publicationhandoff.Service,
+	publications *publicationhandoff.PublicationHandoffApplicationService,
 	records *recordapplication.RecordApplicationService,
 	scheduler *schedulerapplication.SchedulerApplicationService,
 	frontend *deploymentapplication.DeploymentFrontendCapabilityApplicationService,

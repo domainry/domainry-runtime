@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 )
 
 func (r IntegrationConfigStore) DeleteWebhookSubscription(ctx context.Context, workspaceID, subscriptionKey string) (bool, error) {

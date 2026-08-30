@@ -142,6 +142,11 @@ func TestWorkspaceFallbackInventoryIsAnExactNonGrowingBaseline(t *testing.T) {
 				if strings.Contains(line, "default scheduler") || strings.Contains(line, "ensureDefaultWorkflowDefinition") {
 					continue
 				}
+				// Lifecycle policy keys use "default" as domain vocabulary; they do
+				// not select or substitute a tenant workspace.
+				if strings.Contains(line, `PolicyKey: "record.object.default.v1"`) {
+					continue
+				}
 				// Lifecycle's default policy catalog is explicit tenant policy
 				// vocabulary; it never supplies a fallback workspace.
 				if strings.Contains(line, "InstallDefaultPolicies") || strings.Contains(line, "DefaultPolicyCatalog") || strings.Contains(line, "lifecycle.policy.defaults_installed") {
@@ -177,13 +182,23 @@ func TestWorkspaceFallbackInventoryIsAnExactNonGrowingBaseline(t *testing.T) {
 					(strings.Contains(line, "strings.TrimSpace(artifact.WorkspaceID)") && strings.Contains(line, `== ""`)) ||
 					(strings.Contains(line, "strings.TrimSpace(value.WorkspaceID)") && strings.Contains(line, "workspaceID")) ||
 					(strings.Contains(line, "strings.TrimSpace(request.WorkspaceID)") && strings.Contains(line, `== ""`)) ||
+					(strings.Contains(line, "strings.TrimSpace(principal.WorkspaceID)") && strings.Contains(line, `== ""`)) ||
 					(strings.Contains(line, "strings.TrimSpace(value.WorkspaceID)") && strings.Contains(line, `== ""`)) ||
+					(strings.Contains(line, "strings.TrimSpace(value.WorkspaceID)") && strings.Contains(line, `!= ""`) && strings.Contains(line, "workspaceID")) ||
 					(strings.Contains(line, "strings.TrimSpace(intent.WorkspaceID)") && strings.Contains(line, `== ""`)) ||
 					(strings.Contains(line, "strings.TrimSpace(scope.WorkspaceID)") && strings.Contains(line, `== ""`)) ||
 					strings.Contains(line, "workspaceID = strings.TrimSpace(workspaceID)") {
 					continue
 				}
 				relativePath := filepath.ToSlash(relative)
+				// Publication handoff validates normalized workspace values before
+				// listing or registering durable work; neither guard substitutes a
+				// default workspace.
+				if (relativePath == "runtime/application/publicationhandoff/publication_handoff_application_service.go" ||
+					relativePath == "runtime/infrastructure/persistence/database/publicationhandoff/publication_store.go") &&
+					strings.Contains(line, `workspaceID == ""`) {
+					continue
+				}
 				// Operations receipts deliberately support two typed channels: a
 				// tenant workspace builder or an explicitly purposed system builder.
 				// Choosing between those already-validated scopes is not fallback.

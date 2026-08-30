@@ -41,7 +41,7 @@ type RuntimeApplications struct {
 	RuntimeStatus         *deployment.DeploymentRuntimeStatusApplicationService
 	SurfaceContext        *surfacecontextbusiness.SurfaceContextApplicationService
 	BusinessSystem        *businesssystemapplication.BusinessSystemApplicationService
-	PublicationHandoff    *publicationhandoff.Service
+	PublicationHandoff    *publicationhandoff.PublicationHandoffApplicationService
 	Lifecycle             *lifecycleapplication.LifecycleApplicationService
 	Schema                *appschemaapplication.ApplicationSchemaQueryApplicationService
 	FrontendCapabilities  *deployment.DeploymentFrontendCapabilityApplicationService

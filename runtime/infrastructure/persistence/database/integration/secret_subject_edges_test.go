@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/domainry/domainry-foundation/secrets"
-	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -35,7 +35,7 @@ func (s integrationLifecycleStoreSeam) DB() *sql.DB { return s.db }
 func TestIntegrationSecretMaterialLegacyAndInputEdges(t *testing.T) {
 	store := openRuntimeStore(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationConfigStore(store)
@@ -98,7 +98,7 @@ func TestIntegrationSecretMaterialPropagatesKeyProviderFailure(t *testing.T) {
 func TestIntegrationSubjectLifecyclePreviewAndCancellation(t *testing.T) {
 	store := openRuntimeStore(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	handler := NewIntegrationSubjectLifecycleStore(store)

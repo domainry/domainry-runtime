@@ -24,6 +24,7 @@ import (
 	capabilityhttp "github.com/domainry/domainry-runtime/runtime/transport/http/capabilities"
 	discoveryhttp "github.com/domainry/domainry-runtime/runtime/transport/http/discovery"
 	frontendcapabilityhttp "github.com/domainry/domainry-runtime/runtime/transport/http/frontendcapability"
+	integrationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/integrations"
 	lifecyclehttp "github.com/domainry/domainry-runtime/runtime/transport/http/lifecycle"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 	openapihttp "github.com/domainry/domainry-runtime/runtime/transport/http/openapi"
@@ -160,6 +161,7 @@ type HTTPRouterHandlers struct {
 	Reports              *reporthttp.ReportsHandler
 	FrontendCapabilities *frontendcapabilityhttp.FrontendCapabilityHandler
 	BusinessReferences   *businessreferencehttp.BusinessReferencesHandler
+	Integrations         *integrationhttp.IntegrationsHandler
 	BusinessSystem       *businesssystemhttp.BusinessSystemHandler
 	Capabilities         *capabilityhttp.CapabilitiesHandler
 	ApplicationSchema    *appschemahttp.ApplicationSchemaHandler
@@ -167,7 +169,7 @@ type HTTPRouterHandlers struct {
 	Party                *partyhttp.PartyHandler
 	AgentDialog          *agentdialoghttp.AgentDialogHandler
 	Operations           *operationshttp.OperationsHandler
-	Lifecycle            *lifecyclehttp.Handler
+	Lifecycle            *lifecyclehttp.LifecycleHandler
 	BusinessEvents       *businesseventhttp.BusinessEventsHandler
 }
 

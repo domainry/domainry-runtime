@@ -3,9 +3,10 @@ package appschema
 import (
 	"context"
 	"fmt"
+	recordschema "github.com/domainry/domainry-orm/recordschema"
+	ormschema "github.com/domainry/domainry-orm/schema"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -97,7 +98,7 @@ func (r ApplicationSchemaStore) ensureObjectStorage(ctx context.Context, object 
 	// actor metadata are owned by domainry-orm. Runtime only adds business
 	// fields below; redeclaring system columns here would override the ORM's
 	// canonical cross-dialect types and defaults.
-	createStatement, createArgs, buildErr := ormbuilder.NewCreateTableBuilder(r.store.SQLRenderer, object.Key).IfNotExists().Build()
+	createStatement, createArgs, buildErr := recordschema.NewTable(r.store.SQLRenderer, object.Key).IfNotExists().Build()
 	if buildErr != nil {
 		return fmt.Errorf("build object table %s: %w", object.Key, buildErr)
 	}
@@ -129,11 +130,11 @@ func (r ApplicationSchemaStore) ensureObjectStorage(ctx context.Context, object 
 		if existing[columnName] {
 			continue
 		}
-		column, ok := ormbuilder.RecordSystemColumn(columnName)
+		column, ok := recordschema.SystemColumn(columnName)
 		if !ok {
 			return fmt.Errorf("record system column %s is unavailable", columnName)
 		}
-		statement, args, buildErr := ormbuilder.NewAddColumnBuilder(r.store.SQLRenderer, object.Key, column).Build()
+		statement, args, buildErr := ormschema.NewAddColumn(r.store.SQLRenderer, object.Key, column).Build()
 		if buildErr != nil {
 			return fmt.Errorf("build record system column %s.%s: %w", object.Key, columnName, buildErr)
 		}

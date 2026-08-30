@@ -3,9 +3,11 @@ package integration
 import (
 	"context"
 	"errors"
+	"strings"
+	"testing"
+
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	"testing"
 )
 
 type contextIntegrationConfigContract interface {
@@ -30,7 +32,7 @@ var _ contextIntegrationConfigContract = IntegrationConfigStore{}
 func TestIntegrationConfigStoreContractAndCancellation(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationConfigStore(store)
@@ -55,7 +57,7 @@ func TestIntegrationConfigStoreContractAndCancellation(t *testing.T) {
 func TestListConnectionsReusesActionExecutionTransaction(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationConfigStore(store)
@@ -91,7 +93,7 @@ func TestListConnectionsReusesActionExecutionTransaction(t *testing.T) {
 func TestUpsertConnectionReusesActionExecutionTransaction(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	store.DB().SetMaxOpenConns(1)
@@ -114,7 +116,7 @@ func TestUpsertConnectionReusesActionExecutionTransaction(t *testing.T) {
 	}
 }
 
-func TestEnsureEvidenceSchemaAddsIntegrationConnectionProviderColumn(t *testing.T) {
+func TestEnsureEvidenceSchemaDoesNotMutateIntegrationOwnedConnectionTable(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
 	_, err := store.DB().Exec(`CREATE TABLE integration_connections (
@@ -129,13 +131,13 @@ func TestEnsureEvidenceSchemaAddsIntegrationConnectionProviderColumn(t *testing.
 		t.Fatalf("migrate evidence schema: %v", err)
 	}
 	repository := NewIntegrationConfigStore(store)
-	saved, err := repository.UpsertConnection(t.Context(), "default", integrationmodel.IntegrationConnection{Key: "hook", WorkspaceID: "default", ConnectorKey: "webhook", ProviderKey: "http", Status: "configured"})
-	if err != nil || saved.ProviderKey != "http" {
-		t.Fatalf("upsert migrated provider connection=%#v err=%v", saved, err)
+	_, err = repository.UpsertConnection(t.Context(), "default", integrationmodel.IntegrationConnection{Key: "hook", WorkspaceID: "default", ConnectorKey: "webhook", ProviderKey: "http", Status: "configured"})
+	if err == nil || !strings.Contains(err.Error(), "provider_key") {
+		t.Fatalf("Runtime unexpectedly migrated Integration-owned provider column: %v", err)
 	}
 }
 
-func TestEnsureEvidenceSchemaAddsCredentialLifecycleColumns(t *testing.T) {
+func TestEnsureEvidenceSchemaDoesNotMutateIntegrationOwnedCredentialTable(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
 	_, err := store.DB().Exec(`CREATE TABLE integration_secrets (
@@ -151,20 +153,16 @@ func TestEnsureEvidenceSchemaAddsCredentialLifecycleColumns(t *testing.T) {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationConfigStore(store)
-	secret, err := repository.UpsertSecret(t.Context(), "default", integrationmodel.IntegrationSecret{Key: "token", WorkspaceID: "default", Kind: "bearer_token", Status: "active", ExpiresAt: "2030-01-01T00:00:00Z", RotatedAt: "2029-01-01T00:00:00Z", LastTestedAt: "2029-01-02T00:00:00Z", LastTestStatus: "succeeded"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	values, err := repository.ListSecrets(t.Context(), "default")
-	if err != nil || len(values) != 1 || values[0].ExpiresAt != secret.ExpiresAt || values[0].LastTestStatus != "succeeded" {
-		t.Fatalf("values=%+v error=%v", values, err)
+	_, err = repository.UpsertSecret(t.Context(), "default", integrationmodel.IntegrationSecret{Key: "token", WorkspaceID: "default", Kind: "bearer_token", Status: "active", ExpiresAt: "2030-01-01T00:00:00Z", RotatedAt: "2029-01-01T00:00:00Z", LastTestedAt: "2029-01-02T00:00:00Z", LastTestStatus: "succeeded"})
+	if err == nil || !strings.Contains(err.Error(), "expires_at") {
+		t.Fatalf("Runtime unexpectedly migrated Integration-owned credential columns: %v", err)
 	}
 }
 
 func TestIntegrationConfigStoreWorkspaceIsolationContract(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationConfigStore(store)

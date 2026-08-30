@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 )
 
 func migrateLegacyIntegrationRequirements(ctx context.Context, s Store) error {

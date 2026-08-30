@@ -17,7 +17,7 @@ import (
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	metadatarepository "github.com/domainry/domainry-metadata-sdk/repository"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/base"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"

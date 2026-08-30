@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 )
 
 func EnsureApplicationSchema(ctx context.Context, s Store) error {

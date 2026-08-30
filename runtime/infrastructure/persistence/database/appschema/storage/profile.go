@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"

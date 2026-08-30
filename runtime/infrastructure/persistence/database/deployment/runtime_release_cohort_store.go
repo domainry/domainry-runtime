@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	deploymentrepository "github.com/domainry/domainry-runtime/runtime/domain/deployment/repository"
 )

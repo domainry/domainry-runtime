@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
-	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	"github.com/domainry/domainry-notification-sdk/contract"
 )

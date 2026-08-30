@@ -8,7 +8,7 @@ import (
 	"time"
 
 	requestcontext "github.com/domainry/domainry-foundation/requestcontext"
-	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	lifecycleapplication "github.com/domainry/domainry-runtime/runtime/application/lifecycle"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -18,7 +18,7 @@ type OperationRunner interface {
 	ExecuteOwnerOperation(context.Context, operationsapplication.OperationsOwnerExecutionRequest, principalmodel.Principal, func(context.Context) (any, error)) (operationsapplication.OperationsOwnerExecutionResult, error)
 }
 
-type Dependencies struct {
+type LifecycleDependencies struct {
 	Service           *lifecycleapplication.LifecycleApplicationService
 	Operations        OperationRunner
 	Principal         func(*http.Request) principalmodel.Principal
@@ -28,7 +28,7 @@ type Dependencies struct {
 	Authenticated     func(http.HandlerFunc) http.HandlerFunc
 }
 
-type Handler struct {
+type LifecycleHandler struct {
 	service           *lifecycleapplication.LifecycleApplicationService
 	operations        OperationRunner
 	principal         func(*http.Request) principalmodel.Principal
@@ -38,32 +38,11 @@ type Handler struct {
 	authenticated     func(http.HandlerFunc) http.HandlerFunc
 }
 
-func NewHandler(deps Dependencies) *Handler {
-	return &Handler{service: deps.Service, operations: deps.Operations, principal: deps.Principal, writeJSON: deps.WriteJSON, writeServiceError: deps.WriteServiceError, decodeJSON: deps.DecodeJSON, authenticated: deps.Authenticated}
+func NewLifecycleHandler(deps LifecycleDependencies) *LifecycleHandler {
+	return &LifecycleHandler{service: deps.Service, operations: deps.Operations, principal: deps.Principal, writeJSON: deps.WriteJSON, writeServiceError: deps.WriteServiceError, decodeJSON: deps.DecodeJSON, authenticated: deps.Authenticated}
 }
 
-func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /operations/lifecycle/policies", h.authenticated(h.policies))
-	mux.HandleFunc("POST /operations/lifecycle/policies", h.authenticated(h.publishPolicy))
-	mux.HandleFunc("POST /operations/lifecycle/legal-holds", h.authenticated(h.createLegalHold))
-	mux.HandleFunc("POST /operations/lifecycle/legal-holds/{holdID}/end", h.authenticated(h.endLegalHold))
-	mux.HandleFunc("GET /operations/lifecycle/cleanup/preview", h.authenticated(h.cleanupPreview))
-	mux.HandleFunc("POST /operations/lifecycle/cleanup/jobs", h.authenticated(h.createCleanupJob))
-	mux.HandleFunc("POST /operations/lifecycle/cleanup/jobs/{jobID}/run", h.authenticated(h.runCleanupJob))
-	mux.HandleFunc("GET /operations/lifecycle/metrics", h.authenticated(h.metrics))
-	mux.HandleFunc("GET /operations/lifecycle/archive", h.authenticated(h.archiveEntries))
-	mux.HandleFunc("POST /operations/lifecycle/subjects", h.authenticated(h.createSubjectRequest))
-	mux.HandleFunc("POST /operations/lifecycle/subjects/{requestID}/verify", h.authenticated(h.verifySubjectRequest))
-	mux.HandleFunc("POST /operations/lifecycle/subjects/{requestID}/preview", h.authenticated(h.previewSubjectRequest))
-	mux.HandleFunc("POST /operations/lifecycle/subjects/{requestID}/approve", h.authenticated(h.approveSubjectRequest))
-	mux.HandleFunc("POST /operations/lifecycle/subjects/{requestID}/execute", h.authenticated(h.executeSubjectRequest))
-	mux.HandleFunc("GET /operations/lifecycle/subjects/{requestID}/download", h.authenticated(h.downloadSubjectExport))
-	mux.HandleFunc("GET /operations/lifecycle/external-erasures", h.authenticated(h.externalErasures))
-	mux.HandleFunc("POST /operations/lifecycle/external-erasures/{erasureID}/reconcile", h.authenticated(h.reconcileExternalErasure))
-	mux.HandleFunc("POST /operations/lifecycle/deletions/replay", h.authenticated(h.replayDeletions))
-}
-
-func (h *Handler) policies(w http.ResponseWriter, r *http.Request) {
+func (h *LifecycleHandler) policies(w http.ResponseWriter, r *http.Request) {
 	items, err := h.service.ListPolicies(r.Context(), h.principal(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)
@@ -71,7 +50,7 @@ func (h *Handler) policies(w http.ResponseWriter, r *http.Request) {
 	}
 	h.writeJSON(w, http.StatusOK, map[string]any{"items": items, "count": len(items)})
 }
-func (h *Handler) publishPolicy(w http.ResponseWriter, r *http.Request) {
+func (h *LifecycleHandler) publishPolicy(w http.ResponseWriter, r *http.Request) {
 	var input lifecyclemodel.PolicyVersion
 	if !h.decodeJSON(w, r, &input) {
 		return
@@ -85,7 +64,7 @@ func (h *Handler) publishPolicy(w http.ResponseWriter, r *http.Request) {
 	result, err := h.service.PublishPolicy(r.Context(), input, h.principal(r))
 	h.writeResult(w, r, result, err, http.StatusCreated)
 }
-func (h *Handler) createLegalHold(w http.ResponseWriter, r *http.Request) {
+func (h *LifecycleHandler) createLegalHold(w http.ResponseWriter, r *http.Request) {
 	var input lifecyclemodel.LegalHold
 	if !h.decodeJSON(w, r, &input) {
 		return
@@ -94,7 +73,7 @@ func (h *Handler) createLegalHold(w http.ResponseWriter, r *http.Request) {
 	result, err := h.service.CreateLegalHold(r.Context(), input, h.principal(r))
 	h.writeResult(w, r, result, err, http.StatusCreated)
 }
-func (h *Handler) endLegalHold(w http.ResponseWriter, r *http.Request) {
+func (h *LifecycleHandler) endLegalHold(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Authority string    `json:"authority"`
 		Evidence  string    `json:"evidence"`
@@ -107,12 +86,12 @@ func (h *Handler) endLegalHold(w http.ResponseWriter, r *http.Request) {
 	result, err := h.service.EndLegalHold(r.Context(), p.WorkspaceID, r.PathValue("holdID"), input.Authority, input.Evidence, input.EndedAt, p)
 	h.writeResult(w, r, result, err, http.StatusOK)
 }
-func (h *Handler) cleanupPreview(w http.ResponseWriter, r *http.Request) {
+func (h *LifecycleHandler) cleanupPreview(w http.ResponseWriter, r *http.Request) {
 	p := h.principal(r)
 	result, err := h.service.PreviewCleanup(r.Context(), p.WorkspaceID, strings.TrimSpace(r.URL.Query().Get("policy_key")), p, time.Now().UTC())
 	h.writeResult(w, r, result, err, http.StatusOK)
 }
-func (h *Handler) createCleanupJob(w http.ResponseWriter, r *http.Request) {
+func (h *LifecycleHandler) createCleanupJob(w http.ResponseWriter, r *http.Request) {
 	var input lifecyclemodel.CleanupJob
 	if !h.decodeJSON(w, r, &input) {
 		return
@@ -121,7 +100,7 @@ func (h *Handler) createCleanupJob(w http.ResponseWriter, r *http.Request) {
 	result, err := h.service.CreateCleanupJob(r.Context(), input, h.principal(r))
 	h.writeResult(w, r, result, err, http.StatusAccepted)
 }
-func (h *Handler) runCleanupJob(w http.ResponseWriter, r *http.Request) {
+func (h *LifecycleHandler) runCleanupJob(w http.ResponseWriter, r *http.Request) {
 	p := h.principal(r)
 	batch, _ := strconv.Atoi(r.URL.Query().Get("batch_size"))
 	jobID := strings.TrimSpace(r.PathValue("jobID"))
@@ -141,16 +120,16 @@ func (h *Handler) runCleanupJob(w http.ResponseWriter, r *http.Request) {
 	}
 	h.writeJSON(w, http.StatusOK, result.Value)
 }
-func (h *Handler) metrics(w http.ResponseWriter, r *http.Request) {
+func (h *LifecycleHandler) metrics(w http.ResponseWriter, r *http.Request) {
 	result, err := h.service.Metrics(r.Context(), h.principal(r), time.Now().UTC())
 	h.writeResult(w, r, result, err, http.StatusOK)
 }
-func (h *Handler) archiveEntries(w http.ResponseWriter, r *http.Request) {
+func (h *LifecycleHandler) archiveEntries(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	result, err := h.service.ListArchiveEntries(r.Context(), r.URL.Query().Get("source_table"), limit, h.principal(r))
 	h.writeResult(w, r, result, err, http.StatusOK)
 }
-func (h *Handler) createSubjectRequest(w http.ResponseWriter, r *http.Request) {
+func (h *LifecycleHandler) createSubjectRequest(w http.ResponseWriter, r *http.Request) {
 	var input lifecyclemodel.SubjectRequest
 	if !h.decodeJSON(w, r, &input) {
 		return
@@ -159,13 +138,13 @@ func (h *Handler) createSubjectRequest(w http.ResponseWriter, r *http.Request) {
 	result, err := h.service.CreateSubjectRequest(r.Context(), input, h.principal(r))
 	h.writeSubject(w, r, result, err, http.StatusAccepted)
 }
-func (h *Handler) replayDeletions(w http.ResponseWriter, r *http.Request) {
+func (h *LifecycleHandler) replayDeletions(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	p := h.principal(r)
 	count, err := h.service.ReplayRegisteredDeletions(r.Context(), p.WorkspaceID, limit, p)
 	h.writeResult(w, r, map[string]any{"replayed": count}, err, http.StatusOK)
 }
-func (h *Handler) verifySubjectRequest(w http.ResponseWriter, r *http.Request) {
+func (h *LifecycleHandler) verifySubjectRequest(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		SecondFactorRef string `json:"second_factor_ref"`
 	}
@@ -176,31 +155,31 @@ func (h *Handler) verifySubjectRequest(w http.ResponseWriter, r *http.Request) {
 	result, err := h.service.VerifySubjectRequest(r.Context(), p.WorkspaceID, r.PathValue("requestID"), input.SecondFactorRef, p)
 	h.writeSubject(w, r, result, err, http.StatusOK)
 }
-func (h *Handler) previewSubjectRequest(w http.ResponseWriter, r *http.Request) {
+func (h *LifecycleHandler) previewSubjectRequest(w http.ResponseWriter, r *http.Request) {
 	p := h.principal(r)
 	result, err := h.service.PreviewSubjectRequest(r.Context(), p.WorkspaceID, r.PathValue("requestID"), p)
 	h.writeSubject(w, r, result, err, http.StatusOK)
 }
-func (h *Handler) approveSubjectRequest(w http.ResponseWriter, r *http.Request) {
+func (h *LifecycleHandler) approveSubjectRequest(w http.ResponseWriter, r *http.Request) {
 	p := h.principal(r)
 	result, err := h.service.ApproveSubjectRequest(r.Context(), p.WorkspaceID, r.PathValue("requestID"), p)
 	h.writeSubject(w, r, result, err, http.StatusOK)
 }
-func (h *Handler) executeSubjectRequest(w http.ResponseWriter, r *http.Request) {
+func (h *LifecycleHandler) executeSubjectRequest(w http.ResponseWriter, r *http.Request) {
 	p := h.principal(r)
 	result, err := h.service.ExecuteSubjectRequest(r.Context(), p.WorkspaceID, r.PathValue("requestID"), p)
 	h.writeSubject(w, r, result, err, http.StatusOK)
 }
-func (h *Handler) downloadSubjectExport(w http.ResponseWriter, r *http.Request) {
+func (h *LifecycleHandler) downloadSubjectExport(w http.ResponseWriter, r *http.Request) {
 	p := h.principal(r)
 	result, err := h.service.DownloadSubjectExport(r.Context(), p.WorkspaceID, r.PathValue("requestID"), p, time.Now().UTC())
 	h.writeResult(w, r, map[string]any{"data": result}, err, http.StatusOK)
 }
-func (h *Handler) externalErasures(w http.ResponseWriter, r *http.Request) {
+func (h *LifecycleHandler) externalErasures(w http.ResponseWriter, r *http.Request) {
 	result, err := h.service.ListExternalErasures(r.Context(), r.URL.Query().Get("request_id"), h.principal(r))
 	h.writeResult(w, r, map[string]any{"items": result, "count": len(result)}, err, http.StatusOK)
 }
-func (h *Handler) reconcileExternalErasure(w http.ResponseWriter, r *http.Request) {
+func (h *LifecycleHandler) reconcileExternalErasure(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Evidence string `json:"evidence"`
 	}
@@ -210,7 +189,7 @@ func (h *Handler) reconcileExternalErasure(w http.ResponseWriter, r *http.Reques
 	result, err := h.service.ReconcileExternalErasure(r.Context(), r.PathValue("erasureID"), input.Evidence, h.principal(r), time.Now().UTC())
 	h.writeResult(w, r, result, err, http.StatusOK)
 }
-func (h *Handler) writeSubject(w http.ResponseWriter, r *http.Request, result lifecyclemodel.SubjectRequest, err error, status int) {
+func (h *LifecycleHandler) writeSubject(w http.ResponseWriter, r *http.Request, result lifecyclemodel.SubjectRequest, err error, status int) {
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
@@ -219,7 +198,7 @@ func (h *Handler) writeSubject(w http.ResponseWriter, r *http.Request, result li
 	result.ImpactPreview = nil
 	h.writeJSON(w, status, result)
 }
-func (h *Handler) writeResult(w http.ResponseWriter, r *http.Request, result any, err error, status int) {
+func (h *LifecycleHandler) writeResult(w http.ResponseWriter, r *http.Request, result any, err error, status int) {
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return

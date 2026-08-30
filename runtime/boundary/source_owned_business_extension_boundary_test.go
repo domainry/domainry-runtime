@@ -370,28 +370,6 @@ func TestProjectConnectorDeliveryIsBoundToCommittedActionOutbox(t *testing.T) {
 			"s.registry.AdapterReady(connector)",
 			"s.RegisterIntegrationOutboxSender(connector.Key, s)",
 		},
-		filepath.Join(
-			repositoryRoot,
-			"runtime", "bootstrap", "composition",
-			"runtime_services_record_dependencies.go",
-		): {
-			"integrationsService.RegisterProviderIntegrationOutboxSenders()",
-		},
-		filepath.Join(
-			repositoryRoot,
-			"runtime", "bootstrap", "integrationtest",
-			"business_action_committed_outbox_connector_test.go",
-		): {
-			"TestProjectGateConnectorExecutesOnlyCommittedActionOutbox",
-			"worker observed rolled-back Outbox",
-			"gate Adapter ran for rolled-back Outbox",
-			"rolled-back Outbox persisted",
-			`assertP8GateBookingCount(t, store, "booking-rolled-back", 0)`,
-			"gate Adapter ran inside Action commit",
-			"committed gate Outbox result",
-			`persisted.Status != "sent"`,
-			`persisted.ResponseRef != "gate-access:booking-committed"`,
-		},
 	}
 	for path, required := range requiredByFile {
 		raw, err := os.ReadFile(path)
@@ -416,21 +394,6 @@ func TestProjectConnectorReliabilityPreservesUnknownReceiptAndWebhookConvergence
 		},
 		filepath.Join(sdkRoot, "operation.go"): {
 			"ResponseRef: result.ResponseRef, SecretUpdates: cloneStrings(result.SecretUpdates)",
-		},
-		filepath.Join(
-			repositoryRoot,
-			"runtime", "bootstrap", "integrationtest",
-			"business_action_connector_reliability_test.go",
-		): {
-			"TestProjectGateConnectorRetryUnknownAndWebhookConvergeDeterministically",
-			"provider rejected request before execution",
-			"retry ran before durable next_attempt_at",
-			`unknownMessage.Status != "quarantined"`,
-			"unknown outcome was blindly resent",
-			"manual retry accepted quarantined unknown outcome",
-			"invalid gate Webhook signature was accepted",
-			`webhook.Delivery.Status != "delivered"`,
-			"Webhook did not converge unknown Outbox",
 		},
 	}
 	for path, required := range requiredByFile {
@@ -783,8 +746,11 @@ func TestConnectorProviderRegistryRemainsOneFrozenStateSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(compositionRaw), "NewConnectorRegistryWithProviders(manifest.Integrations, deps.ConnectorProviders)") {
-		t.Fatal("composition does not pass the runtimehost-owned public Registry directly into ConnectorRegistry")
+	if !strings.Contains(string(compositionRaw), "newRuntimeConnectorCatalog(manifest.Integrations)") {
+		t.Fatal("composition does not build the Runtime-owned connector requirement catalog")
+	}
+	if strings.Contains(string(compositionRaw), "deps.ConnectorProviders") {
+		t.Fatal("composition must not copy provider adapters into the Runtime-owned connector requirement catalog")
 	}
 
 	for relative, forbidden := range map[string][]string{

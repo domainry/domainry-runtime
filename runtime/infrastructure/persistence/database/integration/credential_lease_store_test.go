@@ -10,7 +10,7 @@ import (
 func TestCredentialRefreshLeaseCoordinatesRepositoriesAndRecoversExpiry(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	first := NewIntegrationConfigStore(store)
@@ -45,7 +45,7 @@ func TestCredentialRefreshLeaseCoordinatesRepositoriesAndRecoversExpiry(t *testi
 func TestCredentialRefreshLeaseHonorsCancelledContext(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())

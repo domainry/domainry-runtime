@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"

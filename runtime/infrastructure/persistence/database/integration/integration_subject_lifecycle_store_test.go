@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
-	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 )
 
 func TestIntegrationSubjectLifecycleExportsQueuesProviderEraseAndAnonymizes(t *testing.T) {
 	store := openRuntimeStore(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)

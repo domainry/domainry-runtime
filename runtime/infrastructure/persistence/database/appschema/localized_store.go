@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )
 

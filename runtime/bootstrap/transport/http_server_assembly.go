@@ -10,12 +10,15 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityprincipal "github.com/domainry/domainry-identity-sdk/authorization/principal"
 	identityhttpmiddleware "github.com/domainry/domainry-identity-sdk/httpmiddleware"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
+	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	principalapplication "github.com/domainry/domainry-runtime/runtime/application/principal"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
@@ -32,9 +35,11 @@ import (
 	businesseventmemory "github.com/domainry/domainry-runtime/runtime/infrastructure/broadcast/memory"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	operationspersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
+	publicationhandoffpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
+	integrationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/integrations"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 )
 
@@ -46,7 +51,9 @@ type HTTPServerDependencies struct {
 	MonitoringBinding      monitoringsdk.Binding
 	SchedulerBinding       schedulersdk.Binding
 	Store                  *persistence.RuntimeStore
+	IntegrationBinding     integrationsdk.Binding
 	AgentRepositories      agentrepository.Binding
+	LifecycleBinding       lifecyclesdk.Binding
 	RateLimiter            ratelimit.Limiter
 	Notifications          notificationhttp.NotificationApplication
 	Manifest               manifestmodel.ManifestSchema
@@ -65,7 +72,7 @@ type httpServerAssembly struct {
 	callbacks     runtimehttp.HandlerCallbacks
 	handlers      runtimehttp.HTTPRouterHandlers
 	recordQueries *recordapplication.RecordApplicationService
-	publications  *publicationhandoff.Service
+	publications  *publicationhandoff.PublicationHandoffApplicationService
 	metadata      *appschemaapplication.ApplicationSchemaApplicationService
 	operations    *operationsapplication.OperationsApplicationService
 	identityHTTP  *identityhttpmiddleware.Middleware
@@ -163,11 +170,37 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	assembly.wirePartyAndIdentityReferences(ctx)
 	assembly.wireRecordAndProcessHandlers()
 	assembly.wireMetadataAndBusinessHandlers()
+	assembly.wireRuntimeIntegrationGateway()
 	assembly.wireIntegrationAndAgentHandlers(dependencies.Config.AgentDialogRateLimitPerMinute)
 	server = runtimehttp.UseHandlers(server, assembly.handlers)
 	server = runtimehttp.UseServiceIdentity(server, dependencies.Config.RuntimeVersion)
 	server = runtimehttp.UseRuntimeReleaseIdentity(server, dependencies.ReleaseIdentity)
 	return runtimehttp.UseManifest(server, dependencies.Manifest)
+}
+
+// wireRuntimeIntegrationGateway exposes only Runtime-owned handoff reads and
+// the backwards-compatible Web Push self-service proxy. Integration management,
+// provider webhooks and owner workers are exposed by the Integration deployment.
+func (a *httpServerAssembly) wireRuntimeIntegrationGateway() {
+	if a.dependencies.Store == nil || a.dependencies.IntegrationBinding == nil {
+		return
+	}
+	webPushBinding, ok := a.dependencies.IntegrationBinding.(integrationsdk.WebPushBinding)
+	if !ok || webPushBinding.WebPushSubscriptions() == nil {
+		return
+	}
+	service := integrationapplication.NewIntegrationApplicationService(integrationapplication.ApplicationDependencies{
+		PublicationRepository:     publicationhandoffpersistence.NewPublicationStore(a.dependencies.Store),
+		OwnerCatalog:              a.dependencies.IntegrationBinding.Catalog(),
+		OwnerWebPushSubscriptions: webPushBinding.WebPushSubscriptions(),
+	})
+	a.handlers.Integrations = integrationhttp.NewIntegrationsHandler(integrationhttp.IntegrationsDependencies{
+		Connections: service, RuntimeExecution: service,
+		Principal: a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
+		WriteServiceError: a.callbacks.WriteServiceError,
+		DecodeJSON:        a.callbacks.DecodeJSON, Admin: a.identityHTTP.PermissionFunc("workspace.admin"),
+		Authenticated: a.identityHTTP.AuthenticatedFunc,
+	})
 }
 
 func runtimeStatusProvider(dependencies HTTPServerDependencies) runtimehttp.DeploymentRuntimeStatusProvider {

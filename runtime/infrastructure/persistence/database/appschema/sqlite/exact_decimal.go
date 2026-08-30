@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 )
 
 func (ApplicationSchemaStorageProfile) ExactDecimalCreateShadowTableSQL(renderer ormbuilder.Renderer, table, body, suffix string) string {

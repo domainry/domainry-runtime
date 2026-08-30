@@ -19,7 +19,6 @@ type reviewedTransactionRisk struct {
 var reviewedTransactionRisks = map[string]reviewedTransactionRisk{
 	"MW01": {file: "runtime/application/action/action_bulk_application_service.go", symbols: []string{"ExecuteBulkAction", "Complete"}},
 	"MW02": {file: "runtime/application/record/record_import_application_service.go", symbols: []string{"ApplyIdempotent", "CompleteOperation"}},
-	"MW08": {file: "runtime/application/changeplan/changeplan_business_change_plan_apply_export.go", symbols: []string{"ApplyIdempotent", "PublishDraft", "InsertAuditEvent"}},
 }
 
 func TestTransactionMutationInventoryIsCurrent(t *testing.T) {

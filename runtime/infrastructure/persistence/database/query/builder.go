@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 

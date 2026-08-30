@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/idempotency"
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 )
 

@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 

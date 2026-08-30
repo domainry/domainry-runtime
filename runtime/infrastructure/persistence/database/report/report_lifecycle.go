@@ -6,8 +6,8 @@ import (
 	"time"
 
 	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
-	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
-	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/lifecyclemodule"
@@ -17,12 +17,12 @@ type lifecycleExecutor struct {
 	relational         lifecyclecontract.OwnerLifecycleExecutor
 	relationalPolicies map[string]bool
 	repository         agentrepository.AgentLifecycleRepository
-	archives           lifecyclepersistence.ArchiveWriter
+	archives           lifecyclecontract.ArchiveWriter
 }
 
 const reportStateResource = "agent.state"
 
-func LifecycleExecutor(store *database.RuntimeStore, repository agentrepository.AgentLifecycleRepository, objects ...definitionmodel.ObjectSchema) lifecyclecontract.OwnerLifecycleExecutor {
+func LifecycleExecutor(store *database.RuntimeStore, archives lifecyclecontract.ArchiveStore, repository agentrepository.AgentLifecycleRepository, objects ...definitionmodel.ObjectSchema) lifecyclecontract.OwnerLifecycleExecutor {
 	available := make(map[string]bool, len(objects))
 	for _, object := range objects {
 		available[object.Key] = true
@@ -41,7 +41,7 @@ func LifecycleExecutor(store *database.RuntimeStore, repository agentrepository.
 	for _, spec := range specs {
 		policies[spec.PolicyKey] = true
 	}
-	return lifecycleExecutor{relational: lifecyclepersistence.NewRelationalOwnerExecutor(store, "report", specs...), relationalPolicies: policies, repository: repository, archives: lifecyclepersistence.NewArchiveWriter(store)}
+	return lifecycleExecutor{relational: lifecyclepersistence.NewRelationalOwnerExecutor(store, archives, "report", specs...), relationalPolicies: policies, repository: repository, archives: archives}
 }
 
 func (lifecycleExecutor) Owner(context.Context) string { return "report" }

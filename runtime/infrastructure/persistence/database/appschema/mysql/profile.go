@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 	appschemastorage "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema/storage"

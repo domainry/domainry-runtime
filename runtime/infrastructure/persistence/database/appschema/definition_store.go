@@ -8,7 +8,7 @@ import (
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 )
 
 func (s ApplicationSchemaStore) ListApplicationDefinitions(ctx context.Context, resourceType string, workspaceID string) ([]appschemamodel.ApplicationDefinition, error) {

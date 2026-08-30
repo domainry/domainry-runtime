@@ -201,7 +201,6 @@ func TestRuntimeTargetPackageNamesMatchOwners(t *testing.T) {
 		"transport/http/businessreferences":                      "businessreferences",
 		"transport/http/businesssystem":                          "businesssystem",
 		"transport/http/capabilities":                            "capabilities",
-		"transport/http/changeplans":                             "changeplans",
 		"transport/http/discovery":                               "discovery",
 		"transport/http/frontendcapability":                      "frontendcapability",
 		"transport/http/integrations":                            "integrations",

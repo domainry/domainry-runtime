@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 )
 

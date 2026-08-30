@@ -35,7 +35,7 @@ type acknowledgementReconciliationContract interface {
 func TestIntegrationOutboxEnqueueDeduplicatesAndRejectsFingerprintConflict(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationDeliveryStore(store)
@@ -80,7 +80,7 @@ func TestIntegrationOutboxEnqueueDeduplicatesAndRejectsFingerprintConflict(t *te
 func TestIntegrationDeliveryStoreAppliesMonotonicDeliveryReceipts(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationDeliveryStore(store)
@@ -116,7 +116,7 @@ func TestIntegrationDeliveryStoreAppliesMonotonicDeliveryReceipts(t *testing.T) 
 func TestIntegrationDeliveryStoreConvergesConcurrentDuplicateAndOutOfOrderReceipts(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationDeliveryStore(store)
@@ -159,7 +159,7 @@ func TestIntegrationDeliveryStoreConvergesConcurrentDuplicateAndOutOfOrderReceip
 func TestIntegrationDeliveryStoreQuarantinesOverdueAcknowledgementOnceAndAcceptsLateAuthority(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationDeliveryStore(store)
@@ -195,7 +195,7 @@ var _ acknowledgementReconciliationContract = IntegrationDeliveryStore{}
 func TestIntegrationDeliveryStoreIdentifiesPreparedFactWithMissingExternalReceipt(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationDeliveryStore(store)
@@ -240,7 +240,7 @@ func TestIntegrationDeliveryStoreIdentifiesPreparedFactWithMissingExternalReceip
 func TestIntegrationDeliveryStoreContractAndCancellation(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationDeliveryStore(store)
@@ -265,7 +265,7 @@ func TestIntegrationDeliveryStoreContractAndCancellation(t *testing.T) {
 func TestIntegrationDeliveryStoreWorkspaceIsolationContract(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationDeliveryStore(store)

@@ -39,10 +39,10 @@ func TestRuntimeSchemaUsesDedicatedManagementConnection(t *testing.T) {
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if sqliteTableExists(t, migrationDB, "application_schema_catalog") != 1 {
+	if sqliteTableExists(t, migrationDB, "object_definitions") != 1 {
 		t.Fatal("runtime schema was not created on management connection")
 	}
-	if sqliteTableExists(t, queryDB, "application_schema_catalog") != 0 {
+	if sqliteTableExists(t, queryDB, "object_definitions") != 0 {
 		t.Fatal("runtime schema leaked onto query connection")
 	}
 }

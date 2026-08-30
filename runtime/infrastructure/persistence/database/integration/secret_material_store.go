@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/secrets"
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 

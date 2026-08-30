@@ -8,6 +8,7 @@ import (
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	"github.com/domainry/domainry-runtime/testsupport/reportmodulefixture"
 )
 
 func TestReportSnapshotStorePersistsIdempotentFencedScopedResults(t *testing.T) {
@@ -17,6 +18,9 @@ func TestReportSnapshotStorePersistsIdempotentFencedScopedResults(t *testing.T) 
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := reportmodulefixture.EnsureSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewReportSnapshotStore(store)

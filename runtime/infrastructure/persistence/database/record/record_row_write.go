@@ -1,7 +1,8 @@
 package record
 
 import (
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
+	recordschema "github.com/domainry/domainry-orm/recordschema"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
 	"strings"
@@ -18,7 +19,7 @@ func stringsJoinIdentifiers(store *database.RuntimeStore, columns ...string) str
 }
 
 func recordFieldIsSystemOwned(fieldKey string) bool {
-	_, owned := ormbuilder.RecordSystemColumn(fieldKey)
+	_, owned := recordschema.SystemColumn(fieldKey)
 	return owned
 }
 

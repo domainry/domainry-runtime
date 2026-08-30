@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )

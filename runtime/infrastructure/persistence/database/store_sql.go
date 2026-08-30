@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/base"
 )
 

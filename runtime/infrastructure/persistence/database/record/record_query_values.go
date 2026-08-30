@@ -1,7 +1,8 @@
 package record
 
 import (
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
+	recordschema "github.com/domainry/domainry-orm/recordschema"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
@@ -83,7 +84,7 @@ func recordListProjections(selectFields []string) []ormbuilder.Projection {
 	if len(selectFields) == 0 {
 		return []ormbuilder.Projection{ormbuilder.Project(ormbuilder.Star())}
 	}
-	fields := ormbuilder.RecordSystemColumnNames()
+	fields := recordschema.SystemColumnNames()
 	seen := make(map[string]bool, len(fields)+len(selectFields))
 	projections := make([]ormbuilder.Projection, 0, len(fields)+len(selectFields))
 	for _, field := range fields {

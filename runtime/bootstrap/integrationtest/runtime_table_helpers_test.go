@@ -1,20 +1,21 @@
 package integrationtest
 
 import (
+	recordschema "github.com/domainry/domainry-orm/recordschema"
+	ormschema "github.com/domainry/domainry-orm/schema"
 	"testing"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
 func planToProduceCreateTable(t *testing.T, store *persistence.RuntimeStore, object definitionmodel.ObjectSchema) {
 	t.Helper()
-	columns := make([]ormbuilder.SchemaColumn, 0, len(object.Fields))
+	columns := make([]ormschema.ColumnDefinition, 0, len(object.Fields))
 	for _, field := range object.Fields {
-		columns = append(columns, ormbuilder.DefineColumn(field.Key, ormbuilder.TextType()))
+		columns = append(columns, ormschema.Column(field.Key, ormschema.Text()))
 	}
-	statement, args, err := ormbuilder.NewCreateTableBuilder(store.SQLRenderer, object.Key).
+	statement, args, err := recordschema.NewTable(store.SQLRenderer, object.Key).
 		Columns(columns...).
 		Unique("workspace_id", "id").
 		Build()

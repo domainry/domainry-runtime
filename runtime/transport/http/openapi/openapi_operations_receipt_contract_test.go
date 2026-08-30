@@ -12,7 +12,6 @@ func TestHighRiskOwnerRoutesPublishIdempotencyAndReceiptHeaders(t *testing.T) {
 	for _, item := range []struct{ path, method string }{
 		{path: "/operations/scheduler/runs/{runID}/retry", method: "post"},
 		{path: "/operations/workflow/processes/{processID}/retry", method: "post"},
-		{path: "/operations/integrations/events/{eventID}/replay", method: "post"},
 		{path: "/operations/lifecycle/cleanup/jobs/{jobID}/run", method: "post"},
 		{path: "/operations/idempotency/receipts/{owner}/{receiptID}/retry", method: "post"},
 	} {

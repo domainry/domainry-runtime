@@ -56,7 +56,6 @@ func TestBusinessActionArchitectureHasOneInvocationAndMutationExecutor(t *testin
 		"bootstrap/composition/workflow_dependencies_application_wiring.go": {"actionService.Invoke(ctx, actionmodel.ActionSourceWorkflow", "ProcessID:", "NodeID:", "IdempotencyKey:"},
 		"bootstrap/composition/automation_application_wiring.go":            {"actionService.Invoke(ctx, actionmodel.ActionSourceAutomation"},
 		"bootstrap/composition/runtime_services_record_policy.go":           {"actionService.Invoke(ctx, actionmodel.ActionSourceScheduler", "IdempotencyKey: execution.IdempotencyKey"},
-		"bootstrap/composition/integration_runtime_application_wiring.go":   {"Actions.Invoke(ctx, actionmodel.ActionSourceIntegration"},
 		"bootstrap/transport/agent_application_assembly.go":                 {"Actions.Invoke(ctx, actionmodel.ActionSourceAgent", "RequestID: request.RequestID", "IdempotencyKey: request.IdempotencyKey"},
 		"transport/http/records/records_action_handler.go":                  {"actions.Invoke(r.Context(), actionmodel.ActionSourceHTTP", "IdempotencyKey: key"},
 		"application/action/action_application_service.go":                  {"service.Invoke(ctx, actionmodel.ActionSourceBulk"},

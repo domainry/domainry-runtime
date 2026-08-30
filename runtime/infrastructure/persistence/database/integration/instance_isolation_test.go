@@ -15,7 +15,7 @@ func TestTwoRuntimeDatabasesKeepConnectorStateAndContextIndependent(t *testing.T
 	secondStore := openStoreForGeneratedListTest(t)
 	defer secondStore.Close()
 	for _, store := range []*database.RuntimeStore{firstStore, secondStore} {
-		if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 			t.Fatal(err)
 		}
 	}

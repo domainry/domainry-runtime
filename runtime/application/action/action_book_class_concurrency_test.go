@@ -357,7 +357,7 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 	}
 	for table, want := range map[string]int{
 		"runtime_publication_outbox": 30,
-		"_audit_events":               90,
+		"_audit_events":              90,
 	} {
 		var count int
 		if err := store.DB().QueryRow("SELECT COUNT(*) FROM " + store.Identifier(table)).Scan(&count); err != nil || count != want {
@@ -427,10 +427,10 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 		)
 	}
 	for table, want := range map[string]int{
-		"concurrent_class_booking":    30,
+		"concurrent_class_booking":   30,
 		"runtime_publication_outbox": 30,
-		"_audit_events":               90,
-		"business_action_executions":  100,
+		"_audit_events":              90,
+		"business_action_executions": 100,
 	} {
 		var count int
 		if err := store.DB().QueryRow("SELECT COUNT(*) FROM " + store.Identifier(table)).Scan(&count); err != nil || count != want {

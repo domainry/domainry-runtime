@@ -10,7 +10,7 @@ import (
 func TestDeleteConnectionAtomicallyRejectsWebhookReference(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationConfigStore(store)
@@ -36,7 +36,7 @@ func TestDeleteConnectionAtomicallyRejectsWebhookReference(t *testing.T) {
 func TestDeleteConnectionHonorsCancelledContext(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())

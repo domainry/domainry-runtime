@@ -7,7 +7,7 @@ import (
 	"github.com/domainry/domainry-agent-sdk/modulehost"
 	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
 	"github.com/domainry/domainry-foundation/apperror"
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 

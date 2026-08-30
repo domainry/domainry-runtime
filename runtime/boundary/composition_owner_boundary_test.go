@@ -17,7 +17,7 @@ func TestIntegrationBootstrapCompositionContainsWiringOnly(t *testing.T) {
 		t.Fatal("resolve runtime test path")
 	}
 	compositionDir := filepath.Join(filepath.Dir(filepath.Dir(current)), "bootstrap", "composition")
-	allowedProduction := stringSet("integration_application_wiring.go", "integration_dependency_application_wiring.go", "integration_runtime_application_wiring.go")
+	allowedProduction := stringSet("integration_requirements_wiring.go", "integration_runtime_application_wiring.go")
 	entries, err := os.ReadDir(compositionDir)
 	if err != nil {
 		t.Fatal(err)

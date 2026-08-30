@@ -1,13 +1,13 @@
 package workflow
 
 import (
-	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/lifecyclemodule"
 )
 
-func LifecycleExecutor(store *database.RuntimeStore) lifecyclecontract.OwnerLifecycleExecutor {
-	return lifecyclepersistence.NewRelationalOwnerExecutor(store, "workflow",
+func LifecycleExecutor(store *database.RuntimeStore, archives lifecyclecontract.ArchiveStore) lifecyclecontract.OwnerLifecycleExecutor {
+	return lifecyclepersistence.NewRelationalOwnerExecutor(store, archives, "workflow",
 		lifecyclepersistence.RelationalCleanupSpec{
 			PolicyKey: "workflow.definition.v1", Table: "workflow_definition_versions", IDColumn: "id", TimeColumn: "updated_at", StatusColumn: "status", EligibleStatuses: []string{"archived"},
 			ReferenceChecks: []lifecyclepersistence.RelationalReferenceCheck{

@@ -60,7 +60,7 @@ func (a *httpServerAssembly) wireMetadataAndBusinessHandlers() {
 		DecodeJSON: a.callbacks.DecodeJSON, SecurityAudit: a.callbacks.SecurityAuditForPrincipal, Admin: a.identityHTTP.PermissionFunc("workspace.admin"),
 		Authenticated: a.identityHTTP.AuthenticatedFunc,
 	})
-	a.handlers.Lifecycle = lifecyclehttp.NewHandler(lifecyclehttp.Dependencies{
+	a.handlers.Lifecycle = lifecyclehttp.NewLifecycleHandler(lifecyclehttp.LifecycleDependencies{
 		Service: records.Applications().Lifecycle, Operations: operationsService,
 		Principal: a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
 		WriteServiceError: a.callbacks.WriteServiceError, DecodeJSON: a.callbacks.DecodeJSON,

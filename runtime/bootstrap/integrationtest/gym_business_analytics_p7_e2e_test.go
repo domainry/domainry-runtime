@@ -20,6 +20,7 @@ import (
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	reportmodulefixture "github.com/domainry/domainry-runtime/testsupport/reportmodulefixture"
 )
 
 func TestGymSixDashboardsUseGenericReportRuntimeWithRLSAndSnapshots(t *testing.T) {
@@ -76,6 +77,9 @@ func newGymAnalyticsP7Environment(t *testing.T) *gymAnalyticsP7Environment {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := reportmodulefixture.EnsureSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	object := gymAnalyticsP7Object()

@@ -1,13 +1,13 @@
 package action
 
 import (
-	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/lifecyclemodule"
 )
 
-func LifecycleExecutor(store *database.RuntimeStore) lifecyclecontract.OwnerLifecycleExecutor {
-	return lifecyclepersistence.NewRelationalOwnerExecutor(store, "action", lifecyclepersistence.RelationalCleanupSpec{
+func LifecycleExecutor(store *database.RuntimeStore, archives lifecyclecontract.ArchiveStore) lifecyclecontract.OwnerLifecycleExecutor {
+	return lifecyclepersistence.NewRelationalOwnerExecutor(store, archives, "action", lifecyclepersistence.RelationalCleanupSpec{
 		PolicyKey: "execution.idempotency_receipt.v1", Table: "business_action_executions", IDColumn: "id",
 		TenantColumn: "workspace_id", TimeColumn: "expires_at", StatusColumn: "status",
 		IneligibleStatuses: []string{"pending", "processing"},

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationspolicy "github.com/domainry/domainry-runtime/runtime/domain/operations/policy"
 )

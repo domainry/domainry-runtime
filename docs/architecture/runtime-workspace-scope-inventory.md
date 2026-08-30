@@ -56,8 +56,11 @@ Registered schema tables:
   — `workspace_scoped`
 - `automation_rule_definitions` — `installation_scoped`
 - `automation_rule_executions`, `automation_instruction_executions` — `workspace_scoped`
-- `metadata_catalog`, `metadata_definition_versions`, `metadata_exact_decimal_migrations`, `business_change_plan_drafts`
+- `metadata_catalog`, `metadata_definition_versions`, `metadata_exact_decimal_migrations`, `business_change_plan_drafts`,
+  `application_connector_requirements`, `application_integration_event_mapping_requirements`
   — `installation_scoped`
+- `_runtime_metadata_projection`, `_runtime_seed_checkpoints`, `application_schema_exact_decimal_migrations`
+  — `runtime_global`
 - `business_change_plan_operations`, `business_localized_text`, `business_record_localized_value` — `workspace_scoped`
 - definition catalog: `object_definitions`, `field_definitions`,
   `validation_definitions`, `action_definitions`,

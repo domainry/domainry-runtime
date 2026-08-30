@@ -20,7 +20,7 @@ func TestRuntimeWorkerInventoryCoversProductionWorkers(t *testing.T) {
 	document := string(raw)
 	for _, workerID := range []string{
 		"scheduler", "workflow_execution", "workflow_deadline", "automation_instruction",
-		"integration_event", "integration_outbox", "integration_invocation_reconciliation",
+		"integration_event", "runtime_publication_outbox", "integration_invocation_reconciliation",
 		"integration_credential_expiry", "notification_publication", "notification_inbox",
 		"notification_channel", "data_exchange", "idempotency_cleanup", "metadata_snapshot",
 		"lifecycle_cleanup",

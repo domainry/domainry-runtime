@@ -5,6 +5,7 @@ import (
 
 	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
+	lifecyclecore "github.com/domainry/domainry-lifecycle-sdk/application"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	deployment "github.com/domainry/domainry-runtime/runtime/application/deployment"
@@ -105,7 +106,7 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 		auditExportTokenKey:                 append([]byte(nil), deps.AuditExportTokenKey...),
 		workerDependencies:                  workerplatform.NormalizeDependencies(deps.Worker),
 	}
-	services.lifecycleService = lifecycleapplication.NewLifecycleApplicationService(ctx, lifecycleapplication.LifecycleApplicationDependencies{
+	services.lifecycleService = lifecycleapplication.NewLifecycleApplicationService(ctx, lifecyclecore.LifecycleApplicationDependencies{
 		Repository: deps.Lifecycle, Executors: deps.LifecycleExecutors, SubjectResolver: deps.LifecycleSubjectResolver,
 		SubjectHandlers: deps.LifecycleSubjectHandlers, ExternalErasure: deps.LifecycleExternalErasure, Artifacts: deps.LifecycleArtifacts, UploadArtifacts: deps.LifecycleUploadArtifacts,
 	})

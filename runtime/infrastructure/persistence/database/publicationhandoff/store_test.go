@@ -30,7 +30,7 @@ func TestStoreReadsOnlyIntegrationConnectorPublications(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	store := NewStore(runtimeStore)
+	store := NewPublicationStore(runtimeStore)
 	values, err := store.ListOutbox(t.Context(), "workspace-a", "", "", 10)
 	if err != nil || len(values) != 1 || values[0].ID != "connector-1" || values[0].Payload["id"] != "1" {
 		t.Fatalf("values=%#v err=%v", values, err)
@@ -49,7 +49,7 @@ func TestWorkerStoreOwnsClaimFencingAndCompletion(t *testing.T) {
 	if err := runtimeStore.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	ledger := NewStore(runtimeStore)
+	ledger := NewPublicationStore(runtimeStore)
 	message, err := ledger.InsertOutbox(t.Context(), "workspace-a", integrationmodel.IntegrationOutboxMessage{WorkspaceID: "workspace-a", ConnectorKey: "crm", Operation: "upsert", RequestRef: "record:worker", DedupKey: "record:worker", Payload: map[string]any{"id": "1"}})
 	if err != nil {
 		t.Fatal(err)
@@ -82,7 +82,7 @@ func TestStoreOwnsIdempotentPublicationMutation(t *testing.T) {
 	if err := runtimeStore.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	store := NewStore(runtimeStore)
+	store := NewPublicationStore(runtimeStore)
 	message := integrationmodel.IntegrationOutboxMessage{WorkspaceID: "workspace-a", ConnectorKey: "crm", ConnectionKey: "primary", Operation: "upsert", RequestRef: "record:1", DedupKey: "record:1", Payload: map[string]any{"id": "1"}}
 	first, err := store.InsertOutbox(t.Context(), message.WorkspaceID, message)
 	if err != nil {

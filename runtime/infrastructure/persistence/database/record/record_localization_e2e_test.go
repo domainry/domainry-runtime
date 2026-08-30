@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"

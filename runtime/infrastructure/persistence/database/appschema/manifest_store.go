@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/requestcontext"
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )

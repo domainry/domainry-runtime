@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 )
 
 func (r IntegrationConfigStore) DeleteConnection(ctx context.Context, workspaceID, connectionKey string) (bool, error) {

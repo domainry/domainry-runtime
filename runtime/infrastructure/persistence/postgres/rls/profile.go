@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/requestcontext"
-	ormbuilder "github.com/domainry/domainry-orm/builder"
 	ormdialect "github.com/domainry/domainry-orm/dialect"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 )
 

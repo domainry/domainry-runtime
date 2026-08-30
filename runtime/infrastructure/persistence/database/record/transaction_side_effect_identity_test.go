@@ -10,7 +10,7 @@ import (
 	transactioncontract "github.com/domainry/domainry-runtime/runtime/domain/transaction/contract"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
+	publicationhandoff "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -75,7 +75,7 @@ func TestTransactionalSideEffectsRequireStableIdentity(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	wantID := integrationpersistence.OutboxDedupID(message.WorkspaceID, message.ConnectorKey, message.ConnectionKey, message.Operation, message.DedupKey)
+	wantID := publicationhandoff.OutboxDedupID(message.WorkspaceID, message.ConnectorKey, message.ConnectionKey, message.Operation, message.DedupKey)
 	var stored int
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM runtime_publication_outbox WHERE id = ?`, wantID).Scan(&stored); err != nil || stored != 1 {
 		t.Fatalf("deterministic outbox id=%q stored=%d err=%v", wantID, stored, err)

@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
-	lifecyclepersistence "github.com/domainry/domainry-lifecycle/persistence"
+	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
@@ -43,12 +43,16 @@ func (a *httpServerAssembly) wireRecordAndProcessHandlers() {
 	}
 	var artifacts lifecyclecontract.UploadArtifactStore
 	var scans *uploadapplication.FileScanReceiptVerifier
-	if a.dependencies.Store != nil {
-		host := lifecyclemodule.NewHost(a.dependencies.Store)
-		fileStore := lifecyclepersistence.NewFileArtifactStore(host, lifecyclemodule.NewUploadFieldCatalog(a.dependencies.Manifest.Objects), uploadDir,
-			lifecyclepersistence.WithUploadArtifactReferences(recordpersistence.NewUploadArtifactReferences(a.dependencies.Store, a.dependencies.Manifest.Objects)),
-			lifecyclepersistence.WithExpiredUploadReferenceCleaner(reportpersistence.NewUploadArtifactCleaner(a.dependencies.Store, a.dependencies.Manifest.Objects)),
-		)
+	if a.dependencies.Store != nil && a.dependencies.LifecycleBinding != nil {
+		fileStore, err := a.dependencies.LifecycleBinding.UploadArtifacts(lifecyclesdk.UploadArtifactOptions{
+			Root:              uploadDir,
+			Fields:            lifecyclemodule.NewUploadFieldCatalog(a.dependencies.Manifest.Objects),
+			References:        recordpersistence.NewUploadArtifactReferences(a.dependencies.Store, a.dependencies.Manifest.Objects),
+			ExpiredReferences: reportpersistence.NewUploadArtifactCleaner(a.dependencies.Store, a.dependencies.Manifest.Objects),
+		})
+		if err != nil {
+			panic("open Lifecycle upload artifacts: " + err.Error())
+		}
 		artifacts = fileStore
 		key := sha256.Sum256([]byte("domainry-file-scan-receipt-v1:" + a.dependencies.Config.IntegrationSecretKey))
 		scans = uploadapplication.NewFileScanReceiptVerifier(fileStore, key[:])

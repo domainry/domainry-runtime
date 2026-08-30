@@ -3,8 +3,7 @@ package appschema
 import (
 	"context"
 	"fmt"
-
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormschema "github.com/domainry/domainry-orm/schema"
 )
 
 var legacyRecordActorColumns = []struct {
@@ -21,7 +20,7 @@ func (r ApplicationSchemaStore) migrateLegacyRecordActorColumns(ctx context.Cont
 			continue
 		}
 		if !existing[actor.current] {
-			statement, args, err := ormbuilder.NewRenameColumnBuilder(r.store.SQLRenderer, table, actor.legacy, actor.current).Build()
+			statement, args, err := ormschema.NewRenameColumn(r.store.SQLRenderer, table, actor.legacy, actor.current).Build()
 			if err != nil {
 				return fmt.Errorf("build Record actor column migration %s.%s: %w", table, actor.legacy, err)
 			}
@@ -36,7 +35,7 @@ func (r ApplicationSchemaStore) migrateLegacyRecordActorColumns(ctx context.Cont
 		if _, err := r.schemaDatabase().ExecContext(ctx, merge); err != nil {
 			return fmt.Errorf("merge Record actor column %s.%s: %w", table, actor.legacy, err)
 		}
-		statement, args, err := ormbuilder.NewDropColumnBuilder(r.store.SQLRenderer, table, actor.legacy).Build()
+		statement, args, err := ormschema.NewDropColumn(r.store.SQLRenderer, table, actor.legacy).Build()
 		if err != nil {
 			return fmt.Errorf("build obsolete Record actor column removal %s.%s: %w", table, actor.legacy, err)
 		}

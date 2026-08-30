@@ -54,18 +54,24 @@ func (r ApplicationSchemaStore) SnapshotRevision(ctx context.Context, scope prin
 	if actionExecutor := database.ActionExecutionTransaction(ctx); actionExecutor != nil {
 		executor = actionExecutor
 	}
-	var revision string
-	err := executor.QueryRowContext(ctx, "SELECT "+r.store.Identifier("schema_hash")+" FROM "+r.store.TableIdentifier("_runtime_metadata_projection")+" WHERE "+r.store.Identifier("id")+" = "+r.store.Placeholder(1), "current").Scan(&revision)
+	var sourceHash, schemaHash string
+	query := "SELECT " + r.store.Identifier("source_hash") + ", " + r.store.Identifier("schema_hash") + " FROM " + r.store.TableIdentifier("_runtime_metadata_projection") + " WHERE " + r.store.Identifier("id") + " = " + r.store.Placeholder(1)
+	err := executor.QueryRowContext(ctx, query, "current").Scan(&sourceHash, &schemaHash)
 	if err == sql.ErrNoRows {
 		if refreshErr := r.refreshCatalogHashWithExecutor(ctx, executor); refreshErr != nil {
 			return "", refreshErr
 		}
-		err = executor.QueryRowContext(ctx, "SELECT "+r.store.Identifier("schema_hash")+" FROM "+r.store.TableIdentifier("_runtime_metadata_projection")+" WHERE "+r.store.Identifier("id")+" = "+r.store.Placeholder(1), "current").Scan(&revision)
+		err = executor.QueryRowContext(ctx, query, "current").Scan(&sourceHash, &schemaHash)
 	}
 	if err != nil {
 		return "", fmt.Errorf("load metadata snapshot revision: %w", err)
 	}
-	return strings.TrimSpace(revision), nil
+	// source_hash changes when the generated manifest changes (including names
+	// and artifact metadata), while schema_hash changes when the effective
+	// catalog changes through another authoring source. A watcher must observe
+	// both; using schema_hash alone left peer Runtime instances stale after a
+	// generated-only publication.
+	return strings.TrimSpace(sourceHash) + ":" + strings.TrimSpace(schemaHash), nil
 }
 
 func NewApplicationSchemaStore(store *database.RuntimeStore) ApplicationSchemaStore {

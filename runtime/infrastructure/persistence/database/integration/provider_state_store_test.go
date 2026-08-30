@@ -14,7 +14,7 @@ import (
 func TestConnectorProviderStateLifecycleIsGenericAndFenced(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationConfigStore(store)
@@ -54,7 +54,7 @@ func TestConnectorProviderStateLifecycleIsGenericAndFenced(t *testing.T) {
 func TestLegacyGmailCursorMigratesIntoOpaqueProviderState(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	_, err := store.DB().ExecContext(t.Context(), `CREATE TABLE integration_gmail_sync_states (workspace_id TEXT, connection_key TEXT, account_email TEXT, history_id TEXT, status TEXT, next_poll_at TEXT, last_error_code TEXT, attempt_count INTEGER, fencing_token BIGINT, updated_at TEXT)`)

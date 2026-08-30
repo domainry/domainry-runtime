@@ -221,8 +221,8 @@
     {
       "key": "business_seed_records",
       "category": "business_seed",
-      "operations": ["insert_seed_record", "validate_direct_seed", "apply_direct_seed"],
-      "source_files": ["runtime/application/seed/business/records.go", "runtime/application/seed/business/business_seed_authoring_application_service.go"],
+      "operations": ["insert_seed_record"],
+      "source_files": ["runtime/application/seed/business/records.go"],
       "authorizer": "Installation bootstrap system scope or installation workspace administrator",
       "schema_defaults_owner": "Published Object schema and canonical Record default policy",
       "validation_owner": "BusinessSeed authoring plus canonical Record normalization and validation",

@@ -170,7 +170,7 @@ func TestAsyncEffectsHaveDurableFactsBeforePostCommitDispatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, required := range []string{"IntegrationOutboxMessage", "Status: \"queued\"", "deliveryRepo.InsertOutbox(ctx", "RequestRef:"} {
+	for _, required := range []string{"IntegrationOutboxMessage", "Status: \"queued\"", "publicationRepo.InsertOutbox(ctx", "RequestRef:"} {
 		if !strings.Contains(string(outbox), required) {
 			t.Errorf("Integration async delivery path missing durable Outbox evidence %q", required)
 		}

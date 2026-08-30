@@ -8,30 +8,33 @@ import (
 )
 
 func TestLifecyclePersistenceDoesNotKnowSourceOwnedBusinessTables(t *testing.T) {
-	root := filepath.Join("..", "..", "..", "domainry-lifecycle", "persistence")
+	root := filepath.Join("..", "..", "..", "domainry-lifecycle", "internal", "infrastructure", "persistence", "database", "lifecycle")
 	foreignTables := []string{
 		"business_action_executions", "record_mutation_executions", "runtime_operations", "runtime_break_glass_grants",
 		"workflow_definition_versions", "workflow_process_instances", "workflow_process_events", "workflow_tasks", "workflow_node_instances",
 		"automation_rule_executions", "automation_instruction_executions", "_audit_events", "runtime_rate_limit_bucket",
 		"runtime_publication_outbox", "download_task", "report_export_audit", "report_query_run",
 	}
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
-			continue
-		}
-		raw, err := os.ReadFile(filepath.Join(root, entry.Name()))
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
-			t.Fatal(err)
+			return err
+		}
+		if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
 		}
 		for _, table := range foreignTables {
 			if strings.Contains(string(raw), `"`+table+`"`) {
-				t.Errorf("Lifecycle persistence knows source-owned table %q in %s", table, entry.Name())
+				t.Errorf("Lifecycle persistence knows source-owned table %q in %s", table, filepath.ToSlash(path))
 			}
 		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"

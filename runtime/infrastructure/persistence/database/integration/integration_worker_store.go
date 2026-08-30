@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/mutation"
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/capacity"
 

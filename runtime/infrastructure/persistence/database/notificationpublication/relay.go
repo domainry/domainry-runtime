@@ -12,7 +12,7 @@ import (
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	sdkcontract "github.com/domainry/domainry-notification-sdk/contract"
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 )
 
 const (

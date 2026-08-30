@@ -17,7 +17,7 @@ func TestIntegrationSecretMaterialIsEncryptedScopedAndContextAware(t *testing.T)
 		t.Fatal(err)
 	}
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationConfigStore(store)
@@ -51,7 +51,7 @@ func TestIntegrationSecretMaterialOnlineKeyRotation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := first.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), first); err != nil {
 		t.Fatal(err)
 	}
 	if err := NewIntegrationConfigStore(first).PutSecretMaterial(t.Context(), "workspace-a", "credential", "old-secret"); err != nil {
@@ -87,7 +87,7 @@ func TestIntegrationSecretMaterialCannotBeOpenedWithDifferentInstanceKey(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := first.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), first); err != nil {
 		t.Fatal(err)
 	}
 	if err := NewIntegrationConfigStore(first).PutSecretMaterial(t.Context(), "default", "credential", "secret"); err != nil {

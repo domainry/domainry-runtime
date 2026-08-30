@@ -9,7 +9,7 @@ import (
 	"time"
 
 	metadatarepository "github.com/domainry/domainry-metadata-sdk/repository"
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 

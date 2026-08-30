@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
 	ormdriver "github.com/domainry/domainry-orm/driver"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"

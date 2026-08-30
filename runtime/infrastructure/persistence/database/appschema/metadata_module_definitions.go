@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	metadatarepository "github.com/domainry/domainry-metadata-sdk/repository"
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"

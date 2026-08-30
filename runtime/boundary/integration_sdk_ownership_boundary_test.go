@@ -55,10 +55,15 @@ func TestRuntimeCompositionDoesNotReattachIntegrationOwnerState(t *testing.T) {
 			t.Fatalf("Runtime composition is missing narrow handoff port %q", required)
 		}
 	}
-	handoff, err := os.ReadFile(filepath.Join(root, "runtime", "infrastructure", "persistence", "database", "publicationhandoff", "store.go"))
+	publicationStore, err := os.ReadFile(filepath.Join(root, "runtime", "infrastructure", "persistence", "database", "publicationhandoff", "publication_store.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	workerStore, err := os.ReadFile(filepath.Join(root, "runtime", "infrastructure", "persistence", "database", "publicationhandoff", "worker_store.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	handoff := append(publicationStore, workerStore...)
 	for _, forbidden := range []string{"database/integration\"", "IntegrationDeliveryStore", "IntegrationWorkerStore", "integration_invocations", "integration_events"} {
 		if strings.Contains(string(handoff), forbidden) {
 			t.Fatalf("Runtime publication handoff still depends on legacy Integration owner implementation %q", forbidden)

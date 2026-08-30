@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"

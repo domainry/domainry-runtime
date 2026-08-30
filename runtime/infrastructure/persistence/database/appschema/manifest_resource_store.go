@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 )
 
 func (s ApplicationSchemaStore) insertMetadataResource(ctx context.Context, tx *sql.Tx, seed metadataResourceSeed, now string) error {

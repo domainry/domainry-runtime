@@ -15,6 +15,7 @@ import (
 	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/testsupport/notificationsdkfixture"
+	"github.com/domainry/domainry-runtime/testsupport/reportmodulefixture"
 )
 
 var _ reportsnapshot.ReportSnapshotNotificationCommitter = ReportSnapshotNotificationCommitter{}
@@ -92,6 +93,10 @@ func openReportNotificationStore(t *testing.T) *database.RuntimeStore {
 		t.Fatal(err)
 	}
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	if err := reportmodulefixture.EnsureSchema(t.Context(), store); err != nil {
 		store.Close()
 		t.Fatal(err)
 	}

@@ -2,7 +2,7 @@ package database
 
 import (
 	"github.com/domainry/domainry-foundation/mutation"
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
 	"context"

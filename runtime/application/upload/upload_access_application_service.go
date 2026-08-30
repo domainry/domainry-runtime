@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"

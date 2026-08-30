@@ -93,7 +93,7 @@ func TestIntegrationWorkerStoreRejectsMissingTenantAndSystemScopes(t *testing.T)
 func TestOutboxPollingDiscoversCommittedMessageWithoutWakeup(t *testing.T) {
 	store := openRuntimeStore(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	committed, err := NewIntegrationDeliveryStore(store).InsertOutbox(t.Context(), "default", integrationmodel.IntegrationOutboxMessage{
@@ -125,7 +125,7 @@ func TestOutboxCrashAfterCommitIsRecoveredByReopenedWorkerProcess(t *testing.T) 
 		return store
 	}
 	producerStore := open()
-	if err := producerStore.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), producerStore); err != nil {
 		t.Fatal(err)
 	}
 	traceID, _ := trace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
@@ -169,7 +169,7 @@ func TestOutboxCrashAfterCommitIsRecoveredByReopenedWorkerProcess(t *testing.T) 
 func TestIntegrationEventAndOutboxConcurrentClaimsHaveSingleWinner(t *testing.T) {
 	store := openRuntimeStore(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationWorkerStore(store)
@@ -237,7 +237,7 @@ func assertSingleIntegrationClaimWinner(t *testing.T, claim func() (bool, error)
 func TestIntegrationWorkersReclaimExpiredLeasesAndRejectStaleCompletion(t *testing.T) {
 	store := openRuntimeStore(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationWorkerStore(store)
@@ -314,7 +314,7 @@ func TestIntegrationWorkersReclaimExpiredLeasesAndRejectStaleCompletion(t *testi
 func TestOutboxRetryPreservesProviderIdempotencyKeyAfterUnknownOutcome(t *testing.T) {
 	store := openRuntimeStore(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	delivery := NewIntegrationDeliveryStore(store)

@@ -76,6 +76,12 @@ func retiredRuntimeEndpoint(method, path string) bool {
 	if strings.HasPrefix(path, "/tenant-admin/change-plans") || path == "/domain-maintenance/rollback-policy" {
 		return true
 	}
+	// Integration management is published by the Integration owner module.
+	// Runtime retains only the durable publication handoff and Web Push proxy
+	// routes, neither of which lives under this tenant-admin namespace.
+	if strings.HasPrefix(path, "/tenant-admin/integrations") {
+		return true
+	}
 	if method == "GET" && path == "/automation-rules/{ruleKey}/versions" {
 		return true
 	}

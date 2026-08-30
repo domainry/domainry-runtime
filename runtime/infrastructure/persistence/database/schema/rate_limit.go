@@ -3,17 +3,16 @@ package schema
 import (
 	"context"
 	"fmt"
-
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormschema "github.com/domainry/domainry-orm/schema"
 )
 
 func EnsureRateLimitSchema(ctx context.Context, store Store) error {
-	statement, arguments, err := ormbuilder.NewCreateTableBuilder(store.RuntimeRenderer(), "runtime_rate_limit_bucket").
-		WithoutSystemColumns().IfNotExists().Columns(
-		ormbuilder.DefineColumn("bucket_key", ormbuilder.TextKeyType(255)).NotNull(),
-		ormbuilder.DefineColumn("window_start_ns", ormbuilder.BigIntType()).NotNull(),
-		ormbuilder.DefineColumn("request_count", ormbuilder.BigIntType()).NotNull(),
-		ormbuilder.DefineColumn("updated_at_ns", ormbuilder.BigIntType()).NotNull(),
+	statement, arguments, err := ormschema.NewTable(store.RuntimeRenderer(), "runtime_rate_limit_bucket").
+		IfNotExists().Columns(
+		ormschema.Column("bucket_key", ormschema.TextKey(255)).NotNull(),
+		ormschema.Column("window_start_ns", ormschema.BigInt()).NotNull(),
+		ormschema.Column("request_count", ormschema.BigInt()).NotNull(),
+		ormschema.Column("updated_at_ns", ormschema.BigInt()).NotNull(),
 	).PrimaryKey("bucket_key").Build()
 	if err != nil {
 		return fmt.Errorf("build runtime rate-limit schema: %w", err)

@@ -47,7 +47,10 @@ func TestMetadataSnapshotWatcherInvalidatesSecondRuntimeFromSharedDatabase(t *te
 	updated.Objects = append([]definitionmodel.ObjectSchema(nil), manifest.Objects...)
 	updated.Objects[0].Name = "Business Account"
 	updated.Version = "2"
-	if err := repository.SyncManifest(t.Context(), scope, updated); err != nil {
+	// Publish through the metadata projection owner. SyncManifest is the
+	// physical business-table materializer and intentionally does not publish
+	// definition revisions for peer Runtime instances.
+	if err := repository.SyncManifestMetadata(t.Context(), updated); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(time.Second)

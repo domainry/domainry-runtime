@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 )
 
 type fileScanStoreStub struct {

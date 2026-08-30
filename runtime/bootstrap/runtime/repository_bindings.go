@@ -1,8 +1,6 @@
 package runtime
 
 import (
-	lifecyclepersistence "github.com/domainry/domainry-lifecycle/persistence"
-	lifecyclerepository "github.com/domainry/domainry-lifecycle/repository"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
@@ -33,9 +31,8 @@ var (
 	_ auditrepository.AuditEventWriterRepository               = (*auditpersistence.AuditStore)(nil)
 	_ auditrepository.AuditEventRepository                     = (*auditpersistence.AuditStore)(nil)
 	_ appschemarepository.ApplicationSchemaRepository          = appschemapersistence.ApplicationSchemaStore{}
-	_ integrationrepository.RuntimePublicationRepository       = publicationhandoffpersistence.Store{}
+	_ integrationrepository.RuntimePublicationRepository       = publicationhandoffpersistence.PublicationStore{}
 	_ integrationrepository.RuntimePublicationWorkerRepository = publicationhandoffpersistence.WorkerStore{}
-	_ lifecyclerepository.LifecycleRepository                  = lifecyclepersistence.LifecycleStore{}
 	_ workflowcontract.WorkflowWorkerStore                     = workflowpersistence.WorkflowWorkerStore{}
 	_ workflowcontract.WorkflowDefinitionStore                 = workflowpersistence.WorkflowDefinitionStore{}
 	_ workflowcontract.WorkflowProcessStore                    = workflowpersistence.WorkflowProcessStore{}

@@ -7,6 +7,7 @@ import (
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
@@ -34,8 +35,10 @@ type runtimeConstructionInput struct {
 	identityDirectory   identitysdk.Directory
 	identityPrincipals  identitysdk.PrincipalResolver
 	integrationMode     integrationsdk.DeploymentMode
+	integrationBinding  integrationsdk.Binding
 	partyBinding        partysdk.Binding
 	dataExchangeBinding dataexchangesdk.Binding
+	lifecycleBinding    lifecyclesdk.Binding
 	manifest            manifestmodel.ManifestSchema
 	recordRepository    recordrepository.RecordRepository
 	rateLimiter         ratelimit.Limiter
@@ -66,8 +69,10 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		identityDirectory:   input.identityDirectory,
 		identityPrincipals:  input.identityPrincipals,
 		integrationMode:     input.integrationMode,
+		integrationBinding:  input.integrationBinding,
 		partyBinding:        input.partyBinding,
 		dataExchangeBinding: input.dataExchangeBinding,
+		lifecycleBinding:    input.lifecycleBinding,
 		manifest:            input.manifest,
 		recordRepo:          input.recordRepository,
 		rateLimiter:         input.rateLimiter,

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
-	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"

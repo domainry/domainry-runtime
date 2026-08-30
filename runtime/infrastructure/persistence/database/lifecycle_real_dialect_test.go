@@ -9,11 +9,10 @@ import (
 	"testing"
 	"time"
 
-	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
-	lifecyclepersistence "github.com/domainry/domainry-lifecycle/persistence"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	lifecyclemodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/lifecyclemodule"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	"github.com/domainry/domainry-runtime/testsupport/lifecyclesdkfixture"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -51,7 +50,12 @@ func TestLifecyclePersistenceAcrossRealDialects(t *testing.T) {
 			if err := store.EnsureLifecycleSchema(t.Context()); err != nil {
 				t.Fatal(err)
 			}
-			repository := lifecyclepersistence.NewLifecycleStore(lifecyclemodule.NewHost(store))
+			binding, err := lifecyclesdkfixture.Open(t.Context(), store, identity)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = binding.Close(context.Background()) })
+			repository := binding.Repository()
 			policy := lifecyclemodel.PolicyVersion{WorkspaceID: identity, Policy: lifecyclemodel.RetentionPolicy{Key: identity, Version: "1", Owner: "record"}, Status: lifecyclemodel.PolicyStatusPublished, Revision: 1, PublishedAt: time.Now().UTC()}
 			if err := repository.SavePolicy(t.Context(), policy); err != nil {
 				t.Fatal(err)

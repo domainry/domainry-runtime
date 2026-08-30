@@ -7,21 +7,19 @@ import (
 	"time"
 
 	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
-	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
-	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
-	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/lifecyclemodule"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 )
 
 type Executor struct {
 	repository agentrepository.AgentLifecycleRepository
-	archives   lifecyclepersistence.ArchiveWriter
+	archives   lifecyclecontract.ArchiveWriter
 }
 
 const lifecycleResource = "agent.state"
 
-func NewExecutor(store *database.RuntimeStore, repository agentrepository.AgentLifecycleRepository) lifecyclecontract.OwnerLifecycleExecutor {
-	return Executor{repository: repository, archives: lifecyclepersistence.NewArchiveWriter(store)}
+func NewExecutor(repository agentrepository.AgentLifecycleRepository, archives lifecyclecontract.ArchiveWriter) lifecyclecontract.OwnerLifecycleExecutor {
+	return Executor{repository: repository, archives: archives}
 }
 
 func (Executor) Owner(context.Context) string { return "agent" }

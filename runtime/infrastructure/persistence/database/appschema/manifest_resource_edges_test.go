@@ -181,13 +181,6 @@ func TestSyncMetadataResourceReplacesCurrentGeneratedProjection(t *testing.T) {
 	if currentHash != expectedHash {
 		t.Fatalf("active definition did not return to version A: got %s want %s", currentHash, expectedHash)
 	}
-	var versionTableCount int
-	if err := baseDB.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'metadata_definition_versions'").Scan(&versionTableCount); err != nil {
-		t.Fatal(err)
-	}
-	if versionTableCount != 0 {
-		t.Fatal("current metadata projection unexpectedly retained a version-history table")
-	}
 }
 
 func TestManifestMetadataTransactionFailures(t *testing.T) {

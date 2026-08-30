@@ -3,8 +3,7 @@ package schema
 import (
 	"context"
 	"fmt"
-
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormschema "github.com/domainry/domainry-orm/schema"
 )
 
 func CreateIndexIfMissing(ctx context.Context, s Store, table, index string, unique bool, columns ...string) error {
@@ -15,7 +14,7 @@ func CreateIndexIfMissing(ctx context.Context, s Store, table, index string, uni
 	if existing[index] {
 		return nil
 	}
-	builder := ormbuilder.NewCreateIndexBuilder(s.RuntimeRenderer(), index, table).Columns(columns...)
+	builder := ormschema.NewIndex(s.RuntimeRenderer(), index, table).Columns(columns...)
 	if unique {
 		builder = builder.Unique()
 	}

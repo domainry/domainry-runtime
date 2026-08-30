@@ -304,7 +304,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	{
 		catalog, catalogErr := notificationSDKCatalog(valueOrDefault(manifest.DefaultLocale, cfg.AppLocale), manifest, runtimeNotificationEventTypes)
 		mustCompleteRuntimeStartup(catalogErr)
-		sdkDeliveryGateway = &notificationSDKDeliveryGateway{repository: publicationhandoffpersistence.NewStore(store), productName: cfg.EffectiveProductBrandName()}
+		sdkDeliveryGateway = &notificationSDKDeliveryGateway{repository: publicationhandoffpersistence.NewPublicationStore(store), productName: cfg.EffectiveProductBrandName()}
 		application := notificationsdk.ApplicationRef{TenantID: cfg.NotificationTenantID, WorkspaceID: cfg.NotificationWorkspaceID, ApplicationKey: cfg.NotificationApplicationKey}
 		if moduleFactory, ok := notificationFactory.(modulehost.Factory); ok {
 			host := notificationSDKModuleHost{
@@ -428,7 +428,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	mustCompleteRuntimeStartup(publishRuntimeProjectRoles(ctx, identityBinding, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience))
 	startupCallbacks.records = records
 	notificationWakeup := func(message integrationmodel.IntegrationOutboxMessage) {
-		records.Applications().PublicationHandoff.Wake(publicationhandoff.Locator{WorkspaceID: message.WorkspaceID, MessageID: message.ID})
+		records.Applications().PublicationHandoff.Wake(ctx, publicationhandoff.Locator{WorkspaceID: message.WorkspaceID, MessageID: message.ID})
 	}
 	if sdkDeliveryGateway != nil {
 		sdkDeliveryGateway.BindWakeup(notificationWakeup)
@@ -465,8 +465,10 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		identityDirectory:   identityDirectory,
 		identityPrincipals:  identityPrincipals,
 		integrationMode:     integrationBinding.Descriptor().Mode,
+		integrationBinding:  integrationBinding,
 		partyBinding:        partyBinding,
 		dataExchangeBinding: serviceAssembly.dataExchangeBinding,
+		lifecycleBinding:    serviceAssembly.lifecycleBinding,
 		manifest:            manifest,
 		recordRepository:    recordRepository,
 		rateLimiter:         sharedRateLimiter,

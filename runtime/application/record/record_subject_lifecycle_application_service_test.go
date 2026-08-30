@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	localartifact "github.com/domainry/domainry-lifecycle/artifact/filesystem"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -19,6 +18,7 @@ import (
 	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	"github.com/domainry/domainry-runtime/testsupport/lifecyclesdkfixture"
 )
 
 func TestRecordSubjectLifecycleExportsRecordsAndFilesThenErasesDeclaredFields(t *testing.T) {
@@ -55,7 +55,15 @@ func TestRecordSubjectLifecycleExportsRecordsAndFilesThenErasesDeclaredFields(t 
 	if err := os.WriteFile(filePath, []byte("employee evidence"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	service := NewRecordSubjectLifecycleApplicationService(repository, []definitionmodel.ObjectSchema{object}, localartifact.NewSubjectStore(uploadRoot))
+	lifecycleBinding, err := lifecyclesdkfixture.Open(t.Context(), store, "record-subject-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifacts, err := lifecycleBinding.SubjectArtifacts(uploadRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewRecordSubjectLifecycleApplicationService(repository, []definitionmodel.ObjectSchema{object}, artifacts)
 
 	raw, err := service.ExportSubject(t.Context(), "workspace-a", "user-1")
 	if err != nil {

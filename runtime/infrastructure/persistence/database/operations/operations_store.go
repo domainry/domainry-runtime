@@ -9,7 +9,7 @@ import (
 	"time"
 
 	workerplatform "github.com/domainry/domainry-foundation/worker"
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationspolicy "github.com/domainry/domainry-runtime/runtime/domain/operations/policy"
 	operationsrepository "github.com/domainry/domainry-runtime/runtime/domain/operations/repository"

@@ -12,7 +12,7 @@ import (
 func TestIntegrationCredentialExpiryCandidateQueryIsSystemScopedAndMaterialFree(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	config := NewIntegrationConfigStore(store)

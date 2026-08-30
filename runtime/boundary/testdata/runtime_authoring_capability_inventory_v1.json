@@ -7,14 +7,12 @@
     {"domain": "action", "capability_count": 1, "validation_endpoint_count": 1, "simulation_endpoint_count": 0, "configuration_route_count": 1, "example_count": 1},
     {"domain": "automation", "capability_count": 9, "validation_endpoint_count": 9, "simulation_endpoint_count": 1, "configuration_route_count": 1, "example_count": 9},
     {"domain": "integration", "capability_count": 16, "validation_endpoint_count": 6, "simulation_endpoint_count": 0, "configuration_route_count": 14, "example_count": 16},
-    {"domain": "maintenance", "capability_count": 7, "validation_endpoint_count": 4, "simulation_endpoint_count": 0, "configuration_route_count": 7, "example_count": 7},
+    {"domain": "maintenance", "capability_count": 3, "validation_endpoint_count": 1, "simulation_endpoint_count": 0, "configuration_route_count": 3, "example_count": 3},
     {"domain": "principal", "capability_count": 1, "validation_endpoint_count": 1, "simulation_endpoint_count": 0, "configuration_route_count": 1, "example_count": 1},
     {"domain": "report", "capability_count": 1, "validation_endpoint_count": 1, "simulation_endpoint_count": 0, "configuration_route_count": 1, "example_count": 1},
     {"domain": "scheduler", "capability_count": 7, "validation_endpoint_count": 2, "simulation_endpoint_count": 1, "configuration_route_count": 6, "example_count": 7},
     {"domain": "schema", "capability_count": 4, "validation_endpoint_count": 4, "simulation_endpoint_count": 0, "configuration_route_count": 4, "example_count": 4},
-    {"domain": "seed", "capability_count": 1, "validation_endpoint_count": 1, "simulation_endpoint_count": 0, "configuration_route_count": 1, "example_count": 0},
-    {"domain": "view", "capability_count": 1, "validation_endpoint_count": 1, "simulation_endpoint_count": 0, "configuration_route_count": 1, "example_count": 1},
-    {"domain": "workflow", "capability_count": 10, "validation_endpoint_count": 10, "simulation_endpoint_count": 1, "configuration_route_count": 1, "example_count": 10}
+    {"domain": "workflow", "capability_count": 10, "validation_endpoint_count": 10, "simulation_endpoint_count": 0, "configuration_route_count": 1, "example_count": 10}
   ],
   "owner_groups": [
     {
@@ -24,28 +22,13 @@
       "capabilities": ["schema.dictionary", "schema.field", "schema.object", "schema.relation"],
       "current_definition_files": ["runtime/domain/appschema/contract/appschema_authoring_catalog.go", "runtime/domain/appschema/contract/appschema_object_authoring.go", "runtime/domain/appschema/contract/appschema_field_authoring.go", "runtime/domain/appschema/contract/appschema_relation_authoring.go", "runtime/domain/appschema/contract/appschema_dictionary_authoring.go"],
       "target_contract_directory": "runtime/domain/appschema/contract",
-      "validation_anchors": ["runtime/domain/appschema/validation/appschema_definition_validation_service.go", "runtime/domain/appschema/validation/appschema_field_mutation_validation.go", "runtime/domain/appschema/validation/appschema_view_validation.go"],
+      "validation_anchors": ["runtime/domain/appschema/validation/appschema_definition_validation_service.go", "runtime/domain/appschema/validation/appschema_field_mutation_validation.go"],
       "application_anchors": ["runtime/application/appschema/appschema_definition_validation_application_service.go", "runtime/application/appschema/appschema_field_mutation_application_service.go"],
       "transport_anchors": ["runtime/transport/http/appschema/appschema_routes.go", "runtime/transport/http/appschema/definition_write_handlers.go"],
       "persistence_anchors": ["runtime/infrastructure/persistence/database/appschema/application_schema_store.go"],
-      "test_anchors": ["runtime/domain/appschema/contract/appschema_authoring_contract_test.go", "runtime/domain/appschema/validation/appschema_definition_validation_service_test.go", "runtime/domain/appschema/validation/appschema_view_validation_test.go", "runtime/application/capability/capability_authoring_contract_test.go"],
+      "test_anchors": ["runtime/domain/appschema/contract/appschema_authoring_contract_test.go", "runtime/domain/appschema/validation/appschema_definition_validation_service_test.go", "runtime/application/capability/capability_authoring_contract_test.go"],
       "schema_contract_status": "closed_owner_owned_resource_contracts",
       "known_gaps": ["The current upsert response still embeds an open complete Runtime schema snapshot"]
-    },
-    {
-      "catalog_domain": "view",
-      "owner": "appschema",
-      "ownership_status": "owner_owned",
-      "capabilities": ["view.definition"],
-      "current_definition_files": ["runtime/domain/appschema/contract/appschema_view_authoring.go"],
-      "target_contract_directory": "runtime/domain/appschema/contract",
-      "validation_anchors": ["runtime/domain/appschema/validation/appschema_view_validation.go"],
-      "application_anchors": ["runtime/application/appschema/appschema_definition_validation_application_service.go", "runtime/application/appschema/appschema_definition_orchestration_application_service.go"],
-      "transport_anchors": ["runtime/transport/http/appschema/appschema_routes.go", "runtime/transport/http/appschema/definition_write_handlers.go"],
-      "persistence_anchors": ["runtime/infrastructure/persistence/database/appschema/application_schema_store.go"],
-      "test_anchors": ["runtime/domain/appschema/validation/appschema_view_validation_test.go", "runtime/domain/appschema/validation/appschema_authoring_examples_test.go", "runtime/application/appschema/appschema_validation_edges_test.go", "runtime/transport/http/appschema/definition_write_handlers_test.go"],
-      "schema_contract_status": "closed_owner_owned_view_resource_contract",
-      "known_gaps": ["View type remains an open presentation hint because Runtime currently accepts domain-specific types such as table, kanban, workbench, schedule and ledger", "The shared Metadata upsert response still embeds an open complete Runtime schema snapshot"]
     },
     {
       "catalog_domain": "action",
@@ -148,38 +131,23 @@
       "application_anchors": ["runtime/application/integration/integration_application_service.go", "runtime/application/integration/integration_connection_validation_application_service.go", "runtime/application/integration/integration_application_binding_validation.go"],
       "transport_anchors": ["runtime/transport/http/integrations/integrations_routes.go", "runtime/transport/http/integrations/integrations_handler.go"],
       "persistence_anchors": ["runtime/domain/integration/contract/integration_connector_contract.go"],
-      "test_anchors": ["runtime/domain/integration/contract/integration_catalog_test.go", "runtime/domain/integration/contract/integration_delivery_authoring_test.go", "runtime/application/capability/capability_integration_connector_owner_authoring_examples_test.go", "runtime/application/capability/capability_integration_connection_owner_authoring_examples_test.go", "runtime/application/integration/integration_binding_validation_test.go", "runtime/application/integration/integration_delivery_authoring_examples_test.go", "runtime/application/integration/integration_read_authoring_examples_test.go", "runtime/transport/http/integrations/delivery_connection_identity_handlers_test.go", "runtime/transport/http/integrations/event_handlers_test.go", "runtime/application/capability/capability_discovery_application_service_test.go", "runtime/application/capability/capability_authoring_contract_test.go"],
+      "test_anchors": ["runtime/domain/integration/contract/integration_catalog_test.go", "runtime/domain/integration/contract/integration_delivery_authoring_test.go", "runtime/application/capability/capability_integration_connector_owner_authoring_examples_test.go", "runtime/application/capability/capability_integration_connection_owner_authoring_examples_test.go", "runtime/application/integration/integration_binding_validation_test.go", "runtime/application/integration/integration_delivery_authoring_examples_test.go", "runtime/application/integration/integration_read_authoring_examples_test.go", "runtime/application/capability/capability_discovery_application_service_test.go", "runtime/application/capability/capability_authoring_contract_test.go"],
       "schema_contract_status": "published_integration_catalog_owner_owned_with_one_closed_delivery_contract_per_http_interface",
       "known_gaps": ["No known Integration owner-contract gaps; provider-specific config and operation payloads intentionally close only after live capability detail selects the connector, provider and operation"]
-    },
-    {
-      "catalog_domain": "seed",
-      "owner": "businessseed",
-      "ownership_status": "owner_owned",
-      "capabilities": ["seed.record"],
-      "current_definition_files": ["runtime/domain/businessseed/contract/businessseed_authoring.go"],
-      "target_contract_directory": "runtime/domain/businessseed/contract",
-      "validation_anchors": ["runtime/domain/businessseed/validation/businessseed_authoring_validation.go", "runtime/application/seed/business/business_seed_authoring_application_service.go"],
-      "application_anchors": ["runtime/application/seed/business/business_seed_authoring_application_service.go"],
-      "transport_anchors": ["runtime/transport/http/businessseeds/businessseeds_handler.go", "runtime/transport/http/businessseeds/businessseeds_routes.go"],
-      "persistence_anchors": ["runtime/infrastructure/persistence/database/changeplan/business_evidence_store.go", "runtime/infrastructure/persistence/database/record/record_store.go"],
-      "test_anchors": ["runtime/domain/businessseed/validation/businessseed_authoring_validation_test.go", "runtime/application/seed/business/business_seed_authoring_application_service_test.go", "runtime/transport/http/businessseeds/business_seed_handler_test.go", "runtime/application/capability/capability_discovery_application_service_test.go"],
-      "schema_contract_status": "closed_after_object_selected_from_current_instance_snapshot",
-      "known_gaps": ["Direct authoring is restricted to the installation workspace because the existing provenance table is not tenant scoped", "Record and provenance persistence use compensating record deletion rather than a shared database transaction"]
     },
     {
       "catalog_domain": "maintenance",
       "owner": "changeplan",
       "ownership_status": "owner_owned",
-      "capabilities": ["maintenance.change_plan_apply", "maintenance.change_plan_validation", "maintenance.current_state_snapshot", "maintenance.reference_impact", "maintenance.rollback_policy"],
+      "capabilities": ["maintenance.current_state_snapshot", "maintenance.reference_impact"],
       "current_definition_files": ["runtime/domain/changeplan/contract/changeplan_authoring.go"],
       "target_contract_directory": "runtime/domain/changeplan/contract",
-      "validation_anchors": ["runtime/domain/changeplan/validation/changeplan_validation.go", "runtime/domain/changeplan/policy/changeplan_rollback_policy.go"],
-      "application_anchors": ["runtime/application/changeplan/change_plan_application_service.go", "runtime/application/changeplan/change_plan_reference_application_service.go"],
-      "transport_anchors": ["runtime/transport/http/changeplans/changeplans_routes.go"],
+      "validation_anchors": ["runtime/domain/changeplan/validation/changeplan_runtime_authoring_coverage_validation.go", "runtime/domain/changeplan/policy/changeplan_reference_impact_policy.go"],
+      "application_anchors": ["runtime/application/changeplan/change_plan_reference_application_service.go"],
+      "transport_anchors": ["runtime/transport/http/capabilities/capabilities_routes.go", "runtime/transport/http/capabilities/capabilities_handler.go"],
       "persistence_anchors": ["runtime/domain/changeplan/repository/changeplan_repository.go"],
-      "test_anchors": ["runtime/domain/changeplan/validation/changeplan_authoring_validation_test.go", "runtime/domain/changeplan/validation/changeplan_validation_test.go", "runtime/application/changeplan/changeplan_application_service_test.go"],
-      "schema_contract_status": "closed_change_plan_read_apply_and_rollback_policy_inputs",
+      "test_anchors": ["runtime/domain/changeplan/validation/changeplan_runtime_authoring_coverage_validation_test.go", "runtime/domain/changeplan/policy/changeplan_reference_impact_policy_test.go", "runtime/application/changeplan/changeplan_system_snapshot_test.go"],
+      "schema_contract_status": "closed_current_state_snapshot_and_reference_impact_contracts",
       "known_gaps": ["Snapshot subgraphs intentionally remain open at cross-owner payload boundaries; the maintenance domain itself is aggregation-only and every definition remains in its owning domain"]
     },
     {
@@ -196,21 +164,6 @@
       "test_anchors": ["runtime/domain/deployment/validation/deployment_authoring_validation_test.go", "runtime/domain/deployment/validation/deployment_frontend_capability_usage_validation_test.go", "runtime/application/deployment/deployment_frontend_capability_application_service_test.go"],
       "schema_contract_status": "closed_frontend_manifest_entry_and_deployment_evidence_input",
       "known_gaps": ["Business-binding deployment evidence remains conditionally required by the owner Validator rather than unconditional in JSON Schema"]
-    },
-    {
-      "catalog_domain": "maintenance",
-      "owner": "appschema",
-      "ownership_status": "owner_owned",
-      "capabilities": ["maintenance.metadata_rollback"],
-      "current_definition_files": ["runtime/domain/appschema/contract/appschema_rollback_authoring.go"],
-      "target_contract_directory": "runtime/domain/appschema/contract",
-      "validation_anchors": ["runtime/domain/appschema/validation/appschema_definition_validation_service.go"],
-      "application_anchors": ["runtime/application/appschema/application_schema_runtime_restoration_application_service.go"],
-      "transport_anchors": ["runtime/transport/http/appschema/appschema_routes.go", "runtime/transport/http/appschema/definition_lifecycle_handlers.go"],
-      "persistence_anchors": ["runtime/infrastructure/persistence/database/appschema/application_schema_store.go"],
-      "test_anchors": ["runtime/domain/appschema/validation/appschema_rollback_authoring_validation_test.go", "runtime/domain/appschema/validation/appschema_rollback_validation.go", "runtime/application/appschema/application_schema_runtime_restoration_application_service_test.go", "runtime/transport/http/appschema/definition_lifecycle_handlers_test.go"],
-      "schema_contract_status": "closed_rollback_request_with_cross_owner_reference_dependency",
-      "known_gaps": ["Repair and semantic-loss contract is not published"]
     }
   ],
   "unpublished_required_capabilities": [],
@@ -227,7 +180,7 @@
   },
   "global_validation_audit": {
     "status": "complete",
-    "evidence_anchors": ["runtime/application/businesssystem/runtime_authoring_validation_application_service.go", "runtime/domain/changeplan/validation/changeplan_runtime_authoring_coverage_validation.go", "runtime/domain/changeplan/projection/changeplan_system_snapshot.go", "runtime/domain/manifest/validation", "runtime/bootstrap", "runtime/transport/http/changeplans"],
+    "evidence_anchors": ["runtime/application/businesssystem/runtime_authoring_validation_application_service.go", "runtime/domain/changeplan/validation/changeplan_runtime_authoring_coverage_validation.go", "runtime/domain/changeplan/projection/changeplan_system_snapshot.go", "runtime/domain/manifest/validation", "runtime/bootstrap", "runtime/transport/http/capabilities"],
     "known_gaps": []
   }
 }

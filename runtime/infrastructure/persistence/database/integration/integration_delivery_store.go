@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationpolicy "github.com/domainry/domainry-runtime/runtime/domain/integration/policy"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"

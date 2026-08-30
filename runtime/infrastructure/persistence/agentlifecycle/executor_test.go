@@ -3,7 +3,7 @@ package agentlifecycle
 import (
 	"testing"
 
-	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 )
 
 func TestExecutorOwnsAgentLifecyclePort(t *testing.T) {

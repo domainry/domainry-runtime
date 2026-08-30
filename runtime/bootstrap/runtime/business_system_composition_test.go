@@ -80,7 +80,7 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 	if _, err := application.records.Applications().FrontendCapabilities.RegisterManifest(t.Context(), frontendManifest, admin); err != nil {
 		t.Fatalf("register frontend manifest: %#v", err)
 	}
-	if _, err := publicationpersistence.NewStore(application.store).InsertOutbox(t.Context(), "default", integrationmodel.IntegrationOutboxMessage{ID: "outbox-1", WorkspaceID: "default", ConnectorKey: "crm", Operation: "sync", Status: "queued", CreatedBy: admin.UserID}); err != nil {
+	if _, err := publicationpersistence.NewPublicationStore(application.store).InsertOutbox(t.Context(), "default", integrationmodel.IntegrationOutboxMessage{ID: "outbox-1", WorkspaceID: "default", ConnectorKey: "crm", Operation: "sync", Status: "queued", CreatedBy: admin.UserID}); err != nil {
 		t.Fatal(err)
 	}
 	graph, err := application.records.Applications().BusinessReferences.Graph(t.Context(), admin)

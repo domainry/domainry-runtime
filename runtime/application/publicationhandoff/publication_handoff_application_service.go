@@ -29,7 +29,7 @@ type Locator struct {
 	MessageID   string
 }
 
-type Service struct {
+type PublicationHandoffApplicationService struct {
 	repository integrationrepository.RuntimePublicationRepository
 	workerRepo integrationrepository.RuntimePublicationWorkerRepository
 	delivery   integrationsdk.Delivery
@@ -52,7 +52,7 @@ type Dependencies struct {
 
 // Accept persists a Runtime-owned handoff before any Integration owner call.
 // The repository enforces message/deduplication-key idempotency.
-func (s *Service) Accept(ctx context.Context, request integrationsdk.DeliveryRequest, createdBy string) (integrationsdk.DeliveryReceipt, error) {
+func (s *PublicationHandoffApplicationService) Accept(ctx context.Context, request integrationsdk.DeliveryRequest, createdBy string) (integrationsdk.DeliveryReceipt, error) {
 	if s == nil || s.repository == nil {
 		return integrationsdk.DeliveryReceipt{}, apperror.New(apperror.KindUnavailable, "backend.runtime.publication.repository_unavailable", nil, nil)
 	}
@@ -72,26 +72,26 @@ func (s *Service) Accept(ctx context.Context, request integrationsdk.DeliveryReq
 	if err != nil {
 		return integrationsdk.DeliveryReceipt{}, err
 	}
-	s.Wake(Locator{WorkspaceID: message.WorkspaceID, MessageID: message.ID})
+	s.Wake(ctx, Locator{WorkspaceID: message.WorkspaceID, MessageID: message.ID})
 	return integrationsdk.DeliveryReceipt{MessageID: message.ID, Status: integrationsdk.DeliveryStatusAccepted}, nil
 }
 
-func New(deps Dependencies) *Service {
+func NewPublicationHandoffApplicationService(deps Dependencies) *PublicationHandoffApplicationService {
 	wakeups, publish := wakeupBinding(deps.Wakeups)
-	return &Service{repository: deps.Repository, workerRepo: deps.WorkerRepository, delivery: deps.Delivery, worker: workerplatform.NormalizeDependencies(deps.Worker), wakeups: wakeups, publish: publish, prepare: deps.PreparePayload}
+	return &PublicationHandoffApplicationService{repository: deps.Repository, workerRepo: deps.WorkerRepository, delivery: deps.Delivery, worker: workerplatform.NormalizeDependencies(deps.Worker), wakeups: wakeups, publish: publish, prepare: deps.PreparePayload}
 }
 
 // ValidateActionDurableIntent validates only Runtime-owned envelope facts.
 // Connector, connection, operation and provider capability validation happens
 // at the Integration owner boundary when Delivery.Accept is called.
-func (s *Service) ValidateActionDurableIntent(_ context.Context, intent runtimeext.DurableIntent, _ principalmodel.Principal) error {
+func (s *PublicationHandoffApplicationService) ValidateActionDurableIntent(_ context.Context, intent runtimeext.DurableIntent, _ principalmodel.Principal) error {
 	if !intent.Valid() {
 		return apperror.New(apperror.KindBadRequest, "backend.action.durable_intent_invalid", nil, nil)
 	}
 	return nil
 }
 
-func (s *Service) ListIntegrationOutboxMessages(ctx context.Context, connectorKey, status string, limit int, principal principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error) {
+func (s *PublicationHandoffApplicationService) ListIntegrationOutboxMessages(ctx context.Context, connectorKey, status string, limit int, principal principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error) {
 	if s == nil || s.repository == nil {
 		return nil, apperror.New(apperror.KindUnavailable, "backend.runtime.publication.repository_unavailable", nil, nil)
 	}
@@ -105,7 +105,7 @@ func (s *Service) ListIntegrationOutboxMessages(ctx context.Context, connectorKe
 	return s.repository.ListOutbox(ctx, workspaceID, strings.TrimSpace(connectorKey), strings.TrimSpace(status), limit)
 }
 
-func (s *Service) InspectIntegrationOutboxMessage(ctx context.Context, messageID string, principal principalmodel.Principal) (integrationmodel.IntegrationOutboxMessage, error) {
+func (s *PublicationHandoffApplicationService) InspectIntegrationOutboxMessage(ctx context.Context, messageID string, principal principalmodel.Principal) (integrationmodel.IntegrationOutboxMessage, error) {
 	reader, ok := s.repository.(integrationrepository.IntegrationOutboxReader)
 	if !ok {
 		return integrationmodel.IntegrationOutboxMessage{}, apperror.New(apperror.KindUnavailable, "backend.runtime.publication.reader_unavailable", nil, nil)
@@ -120,7 +120,7 @@ func (s *Service) InspectIntegrationOutboxMessage(ctx context.Context, messageID
 	return message, nil
 }
 
-func (s *Service) UpdateIntegrationOutboxStatus(ctx context.Context, messageID string, request integrationmodel.IntegrationOutboxStatusRequest, principal principalmodel.Principal) (integrationmodel.IntegrationOutboxMessage, error) {
+func (s *PublicationHandoffApplicationService) UpdateIntegrationOutboxStatus(ctx context.Context, messageID string, request integrationmodel.IntegrationOutboxStatusRequest, principal principalmodel.Principal) (integrationmodel.IntegrationOutboxMessage, error) {
 	status := strings.TrimSpace(request.Status)
 	if status != "cancelled" && status != "queued" && status != "sent" && status != "failed" && status != "dead_letter" {
 		return integrationmodel.IntegrationOutboxMessage{}, apperror.New(apperror.KindBadRequest, "backend.integration.outbox.invalid_status", nil, nil)
@@ -128,7 +128,7 @@ func (s *Service) UpdateIntegrationOutboxStatus(ctx context.Context, messageID s
 	return s.repository.UpdateOutboxStatus(ctx, strings.TrimSpace(principal.WorkspaceID), strings.TrimSpace(messageID), status, strings.TrimSpace(request.ResponseRef), strings.TrimSpace(request.Error))
 }
 
-func (s *Service) ScheduleIntegrationOutboxRetry(ctx context.Context, messageID string, request integrationmodel.IntegrationOutboxRetryRequest, principal principalmodel.Principal) (integrationmodel.IntegrationOutboxMessage, error) {
+func (s *PublicationHandoffApplicationService) ScheduleIntegrationOutboxRetry(ctx context.Context, messageID string, request integrationmodel.IntegrationOutboxRetryRequest, principal principalmodel.Principal) (integrationmodel.IntegrationOutboxMessage, error) {
 	message, err := s.InspectIntegrationOutboxMessage(ctx, messageID, principal)
 	if err != nil {
 		return message, err
@@ -139,7 +139,7 @@ func (s *Service) ScheduleIntegrationOutboxRetry(ctx context.Context, messageID 
 	return s.repository.ScheduleOutboxRetry(ctx, message.WorkspaceID, message.ID, 0, strings.TrimSpace(request.Error))
 }
 
-func (s *Service) Wake(locator Locator) {
+func (s *PublicationHandoffApplicationService) Wake(_ context.Context, locator Locator) {
 	if s == nil || s.publish == nil || strings.TrimSpace(locator.MessageID) == "" {
 		return
 	}
@@ -150,7 +150,7 @@ func (s *Service) Wake(locator Locator) {
 	s.publish(workerplatform.DurableTaskLocator{QueueKind: queueKind, WorkspaceID: workspace.String(), TaskID: strings.TrimSpace(locator.MessageID)})
 }
 
-func (s *Service) StartWorker(ctx context.Context, interval time.Duration, limit int) <-chan struct{} {
+func (s *PublicationHandoffApplicationService) StartWorker(ctx context.Context, interval time.Duration, limit int) <-chan struct{} {
 	if s == nil || s.workerRepo == nil || s.delivery == nil {
 		return workerplatform.Stopped()
 	}
@@ -167,7 +167,7 @@ func (s *Service) StartWorker(ctx context.Context, interval time.Duration, limit
 	})
 }
 
-func (s *Service) recoverLocators(ctx context.Context, limit int) ([]workerplatform.DurableTaskLocator, error) {
+func (s *PublicationHandoffApplicationService) recoverLocators(ctx context.Context, limit int) ([]workerplatform.DurableTaskLocator, error) {
 	if limit <= 0 {
 		limit = 25
 	}
@@ -182,7 +182,7 @@ func (s *Service) recoverLocators(ctx context.Context, limit int) ([]workerplatf
 	return result, nil
 }
 
-func (s *Service) process(ctx context.Context, locator Locator) (integrationmodel.IntegrationOutboxMessage, error) {
+func (s *PublicationHandoffApplicationService) process(ctx context.Context, locator Locator) (integrationmodel.IntegrationOutboxMessage, error) {
 	reader, ok := s.repository.(integrationrepository.IntegrationOutboxReader)
 	if !ok {
 		return integrationmodel.IntegrationOutboxMessage{}, errors.New("Runtime publication reader unavailable")

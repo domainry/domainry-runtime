@@ -12,6 +12,10 @@ func UseHandlers(router *HTTPRouter, handlers HTTPRouterHandlers) *HTTPRouter {
 	router.reportHTTP = handlers.Reports
 	router.frontendCapabilityHTTP = handlers.FrontendCapabilities
 	router.businessReferenceHTTP = handlers.BusinessReferences
+	router.integrationHTTP = nil
+	if handlers.Integrations != nil {
+		router.integrationHTTP = handlers.Integrations
+	}
 	router.businessSystemHTTP = handlers.BusinessSystem
 	router.capabilityHTTP = handlers.Capabilities
 	router.applicationSchemaHTTP = handlers.ApplicationSchema

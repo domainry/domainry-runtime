@@ -15,16 +15,15 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
-	localartifact "github.com/domainry/domainry-lifecycle/artifact/filesystem"
-	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
-	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
-	lifecyclepersistence "github.com/domainry/domainry-lifecycle/persistence"
+	lifecyclecore "github.com/domainry/domainry-lifecycle-sdk/application"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	lifecycleapplication "github.com/domainry/domainry-runtime/runtime/application/lifecycle"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	lifecyclemodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/lifecyclemodule"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	lifecyclehttp "github.com/domainry/domainry-runtime/runtime/transport/http/lifecycle"
+	"github.com/domainry/domainry-runtime/testsupport/lifecyclesdkfixture"
 )
 
 type lifecycleHTTPSubjectPort struct{}
@@ -55,10 +54,18 @@ func TestLifecycleSubjectExportHTTPFlowEnforcesWorkspaceExpiryAndAudit(t *testin
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	repository := lifecyclepersistence.NewLifecycleStore(lifecyclemodule.NewHost(store))
+	binding, err := lifecyclesdkfixture.Open(t.Context(), store, "lifecycle-http-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifacts, err := binding.SubjectArtifacts(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := binding.Repository()
 	port := lifecycleHTTPSubjectPort{}
-	service := lifecycleapplication.NewLifecycleApplicationService(t.Context(), lifecycleapplication.LifecycleApplicationDependencies{Repository: repository, SubjectResolver: port, SubjectHandlers: []lifecyclecontract.SubjectDataHandler{port}, Artifacts: localartifact.NewSubjectStore(t.TempDir())})
-	handler := lifecyclehttp.NewHandler(lifecyclehttp.Dependencies{
+	service := lifecycleapplication.NewLifecycleApplicationService(t.Context(), lifecyclecore.LifecycleApplicationDependencies{Repository: repository, SubjectResolver: port, SubjectHandlers: []lifecyclecontract.SubjectDataHandler{port}, Artifacts: artifacts})
+	handler := lifecyclehttp.NewLifecycleHandler(lifecyclehttp.LifecycleDependencies{
 		Service:       service,
 		Authenticated: func(next http.HandlerFunc) http.HandlerFunc { return next },
 		Principal: func(r *http.Request) principalmodel.Principal {

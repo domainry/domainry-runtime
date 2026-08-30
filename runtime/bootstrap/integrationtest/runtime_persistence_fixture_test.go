@@ -17,6 +17,13 @@ func openRuntimePersistenceFixture(t *testing.T, cfg config.Config) *persistence
 	if err != nil {
 		t.Fatal(err)
 	}
+	// OpenContext owns a query pool but intentionally does not assemble schema
+	// or bind module repositories. An independently opened integration fixture
+	// must enter the same host initialization boundary before using Metadata.
+	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
 	t.Cleanup(func() { _ = store.Close() })
 	return store
 }

@@ -92,10 +92,17 @@ import (
 	} else if len(matches) != 0 {
 		t.Fatalf("SDK-only Runtime consumer downloaded optional Notification implementation: %v", matches)
 	}
+	dependencyVersions := map[string]string{}
+	for _, dependency := range result.DependencyModules {
+		dependencyVersions[dependency.Path] = dependency.Version
+	}
 	for _, dependency := range []struct{ path, version string }{
 		{"github.com/domainry/domainry-identity", identityModuleVersion},
-		{"github.com/domainry/domainry-identity-sdk", "v0.1.0-dev3"},
+		{"github.com/domainry/domainry-identity-sdk", dependencyVersions["github.com/domainry/domainry-identity-sdk"]},
 	} {
+		if dependency.version == "" {
+			t.Fatalf("published dependency %s has no selected version", dependency.path)
+		}
 		escapedPath, _ := module.EscapePath(dependency.path)
 		escapedVersion, _ := module.EscapeVersion(dependency.version)
 		for _, extension := range []string{".info", ".mod", ".zip"} {
@@ -104,16 +111,13 @@ import (
 			}
 		}
 	}
-	dependencyVersions := map[string]string{}
-	for _, dependency := range result.DependencyModules {
-		dependencyVersions[dependency.Path] = dependency.Version
-	}
 	for path, wantVersion := range map[string]string{
-		"github.com/domainry/domainry-notification-sdk": "v0.1.0-dev.3",
-		"github.com/domainry/domainry-notification":     "v0.1.0-dev.8",
+		"github.com/domainry/domainry-identity-sdk":     "v0.1.0-dev9",
+		"github.com/domainry/domainry-notification-sdk": "v0.1.0-dev.5",
+		"github.com/domainry/domainry-notification":     "v0.1.0-dev.11",
 	} {
-		if dependencyVersions[path] != wantVersion {
-			t.Fatalf("released dependency %s version=%q, want %q", path, dependencyVersions[path], wantVersion)
+		if version := dependencyVersions[path]; version != wantVersion {
+			t.Fatalf("released dependency %s version=%q, want %q", path, version, wantVersion)
 		}
 	}
 	runtimeMod, err := os.ReadFile(filepath.Join(proxy, filepath.FromSlash(runtimeModulePath), "@v", result.Version+".mod"))
@@ -155,7 +159,7 @@ import (
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(notificationMod), "github.com/domainry/domainry-notification-sdk "+dependencyVersions["github.com/domainry/domainry-notification-sdk"]) {
-		t.Fatal("Notification distribution go.mod does not reference the content-addressed SDK version")
+		t.Fatal("Notification distribution go.mod does not reference the selected SDK tag")
 	}
 }
 

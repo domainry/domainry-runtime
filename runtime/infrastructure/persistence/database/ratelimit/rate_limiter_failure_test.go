@@ -108,6 +108,7 @@ func TestRateLimiterAllowOnceDatabaseStages(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			candidate, closeDB := scriptedRateLimiter(t, base, test.state)
 			defer closeDB()
+			candidate.now = func() time.Time { return now }
 			switch test.driverName {
 			case "postgres":
 				candidate.store.Engine = ormpostgres.NewProfile()
@@ -116,7 +117,7 @@ func TestRateLimiterAllowOnceDatabaseStages(t *testing.T) {
 				candidate.store.Engine = ormmysql.NewProfile()
 				candidate.store.SQLRenderer = mysql.NewEngine().SQLDialect().WithSchema(candidate.store.SQLDatabase.DatabaseSchema)
 			}
-			decision, retry, err := candidate.allowOnce(t.Context(), "key", test.limit, test.window, now)
+			decision, retry, err := candidate.allowOnce(t.Context(), "key", test.limit, test.window)
 			if test.wantErr == errAny {
 				if err == nil {
 					t.Fatal("expected scan error")

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	"github.com/shopspring/decimal"
 
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"

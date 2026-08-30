@@ -72,7 +72,7 @@ func TestAddBuilderPathCoversExistingMalformedAndAllBodyMethods(t *testing.T) {
 	}
 }
 
-func TestObjectActionPathsAndConnectorWebhookPathCannotChangeRuntimeRoute(t *testing.T) {
+func TestObjectActionPathsAndConnectorWebhookConfigCannotPublishRuntimeRoute(t *testing.T) {
 	paths := map[string]any{}
 	addObjectOpenAPIPaths(paths, definitionmodel.ObjectSchema{})
 	if len(paths) != 0 {
@@ -105,8 +105,8 @@ func TestObjectActionPathsAndConnectorWebhookPathCannotChangeRuntimeRoute(t *tes
 	if paths["/hooks/provider"] != nil {
 		t.Fatal("Connector config published a second inbound webhook route")
 	}
-	if paths["/integrations/webhooks/{workspaceID}/{connectionKey}"] == nil {
-		t.Fatal("canonical Runtime webhook route missing")
+	if paths["/integrations/webhooks/{workspaceID}/{connectionKey}"] != nil {
+		t.Fatal("Integration-owner webhook route leaked into Runtime OpenAPI")
 	}
 }
 

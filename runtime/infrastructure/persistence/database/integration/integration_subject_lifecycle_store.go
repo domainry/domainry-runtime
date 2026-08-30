@@ -8,9 +8,9 @@ import (
 	"encoding/json"
 	"time"
 
-	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	ormdialect "github.com/domainry/domainry-orm/dialect"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 )
 
 type lifecycleSQLStore interface {

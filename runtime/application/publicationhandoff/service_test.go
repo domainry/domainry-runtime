@@ -75,7 +75,7 @@ func (*deliveryProbe) Query(context.Context, string) (integrationsdk.DeliveryRec
 
 func TestAcceptPersistsRuntimePublicationWithoutCallingOwner(t *testing.T) {
 	repository := &publicationRepositoryProbe{}
-	service := New(Dependencies{Repository: repository})
+	service := NewPublicationHandoffApplicationService(Dependencies{Repository: repository})
 	receipt, err := service.Accept(t.Context(), integrationsdk.DeliveryRequest{MessageID: "message-1", DeduplicationKey: "dedup-1", WorkspaceID: "default", ConnectorKey: "email", ConnectionKey: "primary", Operation: "send", Payload: json.RawMessage(`{"subject":"hello"}`)}, "scheduler")
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +89,7 @@ func TestAcceptPersistsRuntimePublicationWithoutCallingOwner(t *testing.T) {
 }
 
 func TestDurableIntentValidationStopsAtRuntimeEnvelope(t *testing.T) {
-	service := New(Dependencies{})
+	service := NewPublicationHandoffApplicationService(Dependencies{})
 	valid := runtimeext.DurableIntent{ConsumerKey: "unknown-owner-connector", ConnectionKey: "owner-connection", OperationKey: "owner-operation", ContractSHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Payload: map[string]any{}}
 	if err := service.ValidateActionDurableIntent(t.Context(), valid, principalmodel.Principal{}); err != nil {
 		t.Fatalf("owner facts must be validated by Integration: %v", err)
@@ -102,7 +102,7 @@ func TestDurableIntentValidationStopsAtRuntimeEnvelope(t *testing.T) {
 func TestWorkerHandsStableIdentityToIntegrationOwner(t *testing.T) {
 	repository := &publicationWorkerProbe{publicationRepositoryProbe: publicationRepositoryProbe{inserted: integrationmodel.IntegrationOutboxMessage{ID: "message-1", DedupKey: "dedup-1", WorkspaceID: "default", ConnectorKey: "email", ConnectionKey: "primary", Operation: "send", Payload: map[string]any{"subject": "hello"}, Status: "queued"}}}
 	delivery := &deliveryProbe{}
-	service := New(Dependencies{Repository: &repository.publicationRepositoryProbe, WorkerRepository: repository, Delivery: delivery})
+	service := NewPublicationHandoffApplicationService(Dependencies{Repository: &repository.publicationRepositoryProbe, WorkerRepository: repository, Delivery: delivery})
 	if _, err := service.process(t.Context(), Locator{WorkspaceID: "default", MessageID: "message-1"}); err != nil {
 		t.Fatal(err)
 	}

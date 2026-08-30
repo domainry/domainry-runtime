@@ -2,39 +2,32 @@ module github.com/domainry/domainry-runtime
 
 go 1.26.0
 
-replace github.com/domainry/domainry-foundation => ../domainry-foundation
-
-replace github.com/domainry/domainry-orm => ../domainry-orm
-
-replace github.com/domainry/domainry-identity-sdk => ../domainry-identity-sdk
-
-replace github.com/domainry/domainry-data-exchange-sdk => ../domainry-data-exchange-sdk
-
 toolchain go1.26.6
 
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
-	github.com/domainry/domainry-agent v0.0.0
-	github.com/domainry/domainry-agent-sdk v0.0.0
-	github.com/domainry/domainry-audit v0.0.0-00010101000000-000000000000
-	github.com/domainry/domainry-audit-sdk v0.0.0
+	github.com/domainry/domainry-agent v0.1.2
+	github.com/domainry/domainry-agent-sdk v0.1.0
+	github.com/domainry/domainry-audit v0.1.2
+	github.com/domainry/domainry-audit-sdk v0.1.0
 	github.com/domainry/domainry-connector-sdk v0.1.0-dev.12
-	github.com/domainry/domainry-data-exchange-sdk v0.3.1-0.20260830024026-64866b01d3a6
-	github.com/domainry/domainry-foundation v0.1.0-dev.5
-	github.com/domainry/domainry-identity-sdk v0.1.0-dev8
-	github.com/domainry/domainry-integration v0.0.0
-	github.com/domainry/domainry-integration-sdk v0.0.0
-	github.com/domainry/domainry-lifecycle v0.0.0
-	github.com/domainry/domainry-metadata v0.0.0
-	github.com/domainry/domainry-metadata-sdk v0.0.0
-	github.com/domainry/domainry-monitoring v0.0.0
-	github.com/domainry/domainry-monitoring-sdk v0.0.0
-	github.com/domainry/domainry-notification v0.1.0-dev.8
-	github.com/domainry/domainry-notification-sdk v0.1.0-dev.3
-	github.com/domainry/domainry-report v0.0.0
-	github.com/domainry/domainry-report-sdk v0.0.0
-	github.com/domainry/domainry-scheduler v0.0.0
-	github.com/domainry/domainry-scheduler-sdk v0.0.0-00010101000000-000000000000
+	github.com/domainry/domainry-data-exchange-sdk v0.3.1
+	github.com/domainry/domainry-foundation v0.1.0-dev.6
+	github.com/domainry/domainry-identity-sdk v0.1.0-dev9
+	github.com/domainry/domainry-integration v0.1.2
+	github.com/domainry/domainry-integration-sdk v0.1.0
+	github.com/domainry/domainry-lifecycle v0.1.5
+	github.com/domainry/domainry-lifecycle-sdk v0.1.5
+	github.com/domainry/domainry-metadata v0.1.2
+	github.com/domainry/domainry-metadata-sdk v0.1.0
+	github.com/domainry/domainry-monitoring v0.1.0
+	github.com/domainry/domainry-monitoring-sdk v0.1.0
+	github.com/domainry/domainry-notification v0.1.0-dev.11
+	github.com/domainry/domainry-notification-sdk v0.1.0-dev.5
+	github.com/domainry/domainry-report v0.1.2
+	github.com/domainry/domainry-report-sdk v0.1.0
+	github.com/domainry/domainry-scheduler v0.1.2
+	github.com/domainry/domainry-scheduler-sdk v0.1.0
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/microsoft/go-mssqldb v1.10.0
@@ -55,21 +48,13 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 )
 
-replace github.com/domainry/domainry-audit => ../domainry-audit
-
-replace github.com/domainry/domainry-audit-sdk => ../domainry-audit-sdk
-
-replace github.com/domainry/domainry-agent-sdk => ../domainry-agent-sdk
-
-replace github.com/domainry/domainry-agent => ../domainry-agent
-
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/domainry/domainry-orm v0.1.25-0.20260829222221-e316e284305e
-	github.com/domainry/domainry-party v0.1.0-dev.2
-	github.com/domainry/domainry-party-sdk v0.1.0-dev.1
+	github.com/domainry/domainry-orm v0.1.29
+	github.com/domainry/domainry-party v0.1.0-dev.5
+	github.com/domainry/domainry-party-sdk v0.1.0-dev.3
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -105,29 +90,3 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
-
-replace github.com/domainry/domainry-party-sdk => ../domainry-party-sdk
-
-replace github.com/domainry/domainry-monitoring-sdk => ../domainry-monitoring-sdk
-
-replace github.com/domainry/domainry-metadata => ../domainry-metadata
-
-replace github.com/domainry/domainry-metadata-sdk => ../domainry-metadata-sdk
-
-replace github.com/domainry/domainry-monitoring => ../domainry-monitoring
-
-replace github.com/domainry/domainry-party => ../domainry-party
-
-replace github.com/domainry/domainry-scheduler-sdk => ../domainry-scheduler-sdk
-
-replace github.com/domainry/domainry-scheduler => ../domainry-scheduler
-
-replace github.com/domainry/domainry-report-sdk => ../domainry-report-sdk
-
-replace github.com/domainry/domainry-report => ../domainry-report
-
-replace github.com/domainry/domainry-integration-sdk => ../domainry-integration-sdk
-
-replace github.com/domainry/domainry-integration => ../domainry-integration
-
-replace github.com/domainry/domainry-lifecycle => ../domainry-lifecycle

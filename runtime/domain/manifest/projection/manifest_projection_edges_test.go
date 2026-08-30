@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
@@ -12,6 +13,7 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
+	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 func TestRenderManifestReviewMarkdownEmptyAndFallbackTitles(t *testing.T) {
@@ -94,10 +96,14 @@ func TestManifestRestorationProjection(t *testing.T) {
 			Connectors:  []integrationmodel.ConnectorSchema{{Key: "new"}},
 			Connections: []integrationmodel.ConnectionSchema{{Key: "connection"}},
 		},
-		SeedRecords: []businessseedmodel.SeedRecordSchema{{ObjectKey: "order"}},
+		SeedRecords:          []businessseedmodel.SeedRecordSchema{{ObjectKey: "order"}},
+		SchedulerDefinitions: []map[string]any{{"key": "nightly"}},
+		Reports:              []reportmodel.ReportSchema{{Key: "summary"}},
+		Skills:               []agentsdk.SkillSchema{{Key: "lookup"}},
+		Agents:               []agentsdk.AgentSchema{{Key: "assistant"}},
 	}
 	merged := MergeInstalledEnvelope(persisted, installed, []notificationmodel.NotificationTemplate{{Key: "template"}})
-	if merged.ManifestHash != "hash" || merged.Description != "description" || len(merged.Dictionaries) != 2 || len(merged.AutomationRules) != 2 || len(merged.Workflows) != 2 || len(merged.NotificationTemplates) != 1 || len(merged.Integrations.Connectors) != 2 || len(merged.Integrations.Connections) != 1 {
+	if merged.ManifestHash != "hash" || merged.Description != "description" || len(merged.Dictionaries) != 2 || len(merged.AutomationRules) != 2 || len(merged.Workflows) != 2 || len(merged.NotificationTemplates) != 1 || len(merged.Integrations.Connectors) != 2 || len(merged.Integrations.Connections) != 1 || len(merged.SchedulerDefinitions) != 1 || len(merged.Reports) != 1 || len(merged.Skills) != 1 || len(merged.Agents) != 1 {
 		t.Fatalf("merged envelope = %#v", merged)
 	}
 	merged = MergeConnectorValidationCatalog(merged, []integrationmodel.ConnectorSchema{{Key: "existing"}, {Key: "new"}, {Key: "new"}})

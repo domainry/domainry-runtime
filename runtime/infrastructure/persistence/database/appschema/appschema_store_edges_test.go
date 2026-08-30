@@ -34,26 +34,26 @@ func TestMetadataSnapshotRevisionBranches(t *testing.T) {
 		t.Fatal("expected snapshot scope error")
 	}
 	for _, step := range []metadataSQLQueryStep{
-		{columns: []string{"value"}, rows: [][]driver.Value{{" revision "}}},
+		{columns: []string{"source_hash", "schema_hash"}, rows: [][]driver.Value{{" source ", " schema "}}},
 		{err: errMetadataSQL},
 	} {
 		repository := scriptedApplicationSchemaStore(t, &metadataSQLState{querySteps: []metadataSQLQueryStep{step}}, base)
 		revision, err := repository.SnapshotRevision(t.Context(), metadataInstallScope())
-		if step.err == nil && (err != nil || revision != "revision") {
+		if step.err == nil && (err != nil || revision != "source:schema") {
 			t.Fatalf("revision=%q err=%v", revision, err)
 		}
 		if step.err != nil && err == nil {
 			t.Fatal("expected snapshot read error")
 		}
 	}
-	refreshSteps := []metadataSQLQueryStep{{columns: []string{"value"}}}
+	refreshSteps := []metadataSQLQueryStep{{columns: []string{"source_hash", "schema_hash"}}}
 	for range metadataCatalogDefinitionTables() {
 		refreshSteps = append(refreshSteps, metadataSQLQueryStep{columns: []string{"resource_key", "schema_hash"}})
 	}
-	refreshSteps = append(refreshSteps, metadataSQLQueryStep{columns: []string{"value"}, rows: [][]driver.Value{{" refreshed "}}})
+	refreshSteps = append(refreshSteps, metadataSQLQueryStep{columns: []string{"source_hash", "schema_hash"}, rows: [][]driver.Value{{" source ", " refreshed "}}})
 	repository := scriptedApplicationSchemaStore(t, &metadataSQLState{querySteps: refreshSteps, execSteps: []metadataSQLExecStep{{rows: 1}}}, base)
 	revision, err := repository.SnapshotRevision(t.Context(), metadataInstallScope())
-	if err != nil || revision != "refreshed" {
+	if err != nil || revision != "source:refreshed" {
 		t.Fatalf("refreshed revision=%q err=%v", revision, err)
 	}
 	if _, err := scriptedApplicationSchemaStore(t, &metadataSQLState{querySteps: []metadataSQLQueryStep{{columns: []string{"value"}}}, execSteps: []metadataSQLExecStep{{err: errMetadataSQL}}}, base).SnapshotRevision(t.Context(), metadataInstallScope()); err == nil {

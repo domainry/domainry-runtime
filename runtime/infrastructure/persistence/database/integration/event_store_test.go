@@ -22,7 +22,7 @@ var _ contextIntegrationEventContract = IntegrationEventStore{}
 func TestIntegrationEventStoreContractAndCancellation(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationEventStore(store)
@@ -55,7 +55,7 @@ func TestIntegrationEventStoreContractAndCancellation(t *testing.T) {
 func TestAcceptIntegrationEventRollsBackEventWhenMappingIntentFails(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.DB().Exec(`CREATE TRIGGER fail_mapping_intent BEFORE INSERT ON integration_event_mapping_intents BEGIN SELECT RAISE(FAIL, 'injected mapping intent failure'); END`); err != nil {
@@ -82,7 +82,7 @@ func TestAcceptIntegrationEventRollsBackEventWhenMappingIntentFails(t *testing.T
 func TestAcceptIntegrationEventCommitsEventAndMappingIntentTogether(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationEventStore(store)
@@ -107,7 +107,7 @@ func TestAcceptIntegrationEventCommitsEventAndMappingIntentTogether(t *testing.T
 func TestAcceptIntegrationEventQuarantinesExternalIDContentConflict(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationEventStore(store)
@@ -137,7 +137,7 @@ func TestAcceptIntegrationEventQuarantinesExternalIDContentConflict(t *testing.T
 func TestIntegrationEventStoreWorkspaceIsolationContract(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationEventStore(store)

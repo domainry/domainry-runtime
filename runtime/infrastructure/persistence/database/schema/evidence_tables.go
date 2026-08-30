@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 )
 
 func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]string, text string) error {
@@ -132,7 +132,12 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		{name: "idx_runtime_publication_due", table: "runtime_publication_outbox", columns: []string{"publication_type", "status", "next_attempt_at", "lease_expires_at", "created_at"}},
 		{name: "idx_runtime_publication_ack_due", table: "runtime_publication_outbox", columns: []string{"publication_type", "status", "ack_deadline_at"}},
 		{name: "uniq_runtime_publication_dedup", table: "runtime_publication_outbox", columns: []string{"workspace_id", "publication_type", "connector_key", "connection_key", "operation", "dedup_key"}, unique: true},
-		{name: "uniq_runtime_notification_publication_source", table: "runtime_publication_outbox", columns: []string{"publication_type", "tenant_id", "workspace_id", "application_key", "source_event_id"}, unique: true},
+		// Keep the notification source identity unique without collapsing every
+		// non-notification publication onto the same all-empty notification
+		// columns. The destination identity is empty for notifications, so the
+		// extended key preserves their original source uniqueness; Connector
+		// publications vary by their existing destination/dedup identity.
+		{name: "uniq_runtime_notification_publication_source", table: "runtime_publication_outbox", columns: []string{"publication_type", "tenant_id", "workspace_id", "application_key", "source_event_id", "connector_key", "connection_key", "operation", "dedup_key"}, unique: true},
 		{name: "idx_automation_execution_rule", table: "automation_rule_executions", columns: []string{"workspace_id", "rule_key", "created_at"}},
 		{name: "idx_automation_execution_record", table: "automation_rule_executions", columns: []string{"workspace_id", "object_key", "record_id", "created_at"}},
 		{name: "idx_automation_execution_status", table: "automation_rule_executions", columns: []string{"workspace_id", "status", "created_at"}},

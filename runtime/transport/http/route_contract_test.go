@@ -129,9 +129,8 @@ func TestEveryRuntimeRouteHasACompleteCompiledEndpointSurfaceContract(t *testing
 	}
 }
 
-func TestRuntimePublishesOneInboundWebhookRoute(t *testing.T) {
+func TestRuntimeDoesNotPublishIntegrationOwnerWebhookRoute(t *testing.T) {
 	routes := declaredRuntimeRoutes(t)
-	want := "POST /integrations/webhooks/{workspaceID}/{connectionKey}"
 	webhookRoutes := make([]string, 0)
 	for route := range routes {
 		if strings.Contains(strings.ToLower(route), "webhook") && !strings.Contains(route, "/webhook-subscriptions") {
@@ -139,8 +138,8 @@ func TestRuntimePublishesOneInboundWebhookRoute(t *testing.T) {
 		}
 	}
 	sort.Strings(webhookRoutes)
-	if len(webhookRoutes) != 1 || webhookRoutes[0] != want {
-		t.Fatalf("inbound webhook routes=%v want=[%s]", webhookRoutes, want)
+	if len(webhookRoutes) != 0 {
+		t.Fatalf("Runtime published Integration-owner webhook routes=%v", webhookRoutes)
 	}
 
 	spec := runtimeopenapi.Build(appschemamodel.ApplicationSchemaSnapshot{})
@@ -152,8 +151,8 @@ func TestRuntimePublishesOneInboundWebhookRoute(t *testing.T) {
 		}
 	}
 	sort.Strings(webhookPaths)
-	if len(webhookPaths) != 1 || webhookPaths[0] != "/integrations/webhooks/{workspaceID}/{connectionKey}" {
-		t.Fatalf("OpenAPI inbound webhook paths=%v", webhookPaths)
+	if len(webhookPaths) != 0 {
+		t.Fatalf("Runtime OpenAPI published Integration-owner webhook paths=%v", webhookPaths)
 	}
 }
 
@@ -230,7 +229,8 @@ func declaredRuntimeRoutes(t *testing.T) map[string]bool {
 	files = append(files, filepath.Join(filepath.Dir(current), "discovery", "discovery_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "openapi", "openapi_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "workflows", "workflows_routes.go"))
-	files = append(files, filepath.Join(filepath.Dir(current), "lifecycle", "lifecycle_handler.go"))
+	files = append(files, filepath.Join(filepath.Dir(current), "lifecycle", "lifecycle_routes.go"))
+	files = append(files, filepath.Join(filepath.Dir(current), "integrations", "integrations_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "automation", "automation_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "scheduler", "scheduler_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "reports", "reports_routes.go"))

@@ -11,7 +11,7 @@ func TestMetadataRepositoryOwnerContainsNoSchemaMutation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, forbidden := range []string{"CREATE TABLE", "ALTER TABLE", "DROP TABLE", "NewCreateTableBuilder", "NewAddColumnBuilder"} {
+	for _, forbidden := range []string{"CREATE TABLE", "ALTER TABLE", "DROP TABLE", "recordschema.NewTable", "ormschema.NewAddColumn"} {
 		if strings.Contains(string(source), forbidden) {
 			t.Fatalf("metadata repository owner contains schema mutation %q", forbidden)
 		}
@@ -23,7 +23,7 @@ func TestApplicationSchemaMaterializerOwnsDynamicPhysicalSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, required := range []string{"MigrationPlan", "SyncManifest", "ensureObjectStorage", "NewCreateTableBuilder", "NewAddColumnBuilder"} {
+	for _, required := range []string{"MigrationPlan", "SyncManifest", "ensureObjectStorage", "recordschema.NewTable", "ormschema.NewAddColumn"} {
 		if !strings.Contains(string(source), required) {
 			t.Fatalf("metadata schema materializer is missing %q", required)
 		}

@@ -105,7 +105,7 @@ type runtimeAssembly struct {
 	*actionruntime.ActionExecutionRuntime
 	internalMutations                   *recordapplication.RecordInternalMutationApplicationService
 	businessSystemService               *businesssystemapplication.BusinessSystemApplicationService
-	integrationService                  *publicationhandoff.Service
+	integrationService                  *publicationhandoff.PublicationHandoffApplicationService
 	lifecycleService                    *lifecycleapplication.LifecycleApplicationService
 	integrationWorkerRepo               integrationrepository.IntegrationWorkerRepository
 	integrationPublicationWorkerRepo    integrationrepository.RuntimePublicationWorkerRepository

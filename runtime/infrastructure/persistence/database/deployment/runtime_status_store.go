@@ -13,7 +13,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
 	"github.com/domainry/domainry-foundation/idempotency"
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 

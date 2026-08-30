@@ -15,19 +15,19 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	localartifact "github.com/domainry/domainry-lifecycle/artifact/filesystem"
-	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
-	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
-	lifecyclepersistence "github.com/domainry/domainry-lifecycle/persistence"
+	lifecyclecore "github.com/domainry/domainry-lifecycle-sdk/application"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
+	lifecyclerepository "github.com/domainry/domainry-lifecycle-sdk/repository"
 	lifecycleapplication "github.com/domainry/domainry-runtime/runtime/application/lifecycle"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	notificationpublicationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
 	operationspersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
-	lifecyclemodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/lifecyclemodule"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	lifecyclehttp "github.com/domainry/domainry-runtime/runtime/transport/http/lifecycle"
+	"github.com/domainry/domainry-runtime/testsupport/lifecyclesdkfixture"
 )
 
 func TestLifecycleGovernanceHandlersExecuteThroughHTTP(t *testing.T) {
@@ -135,7 +135,7 @@ func TestLifecycleGovernanceHandlersRejectMalformedJSON(t *testing.T) {
 	}
 }
 
-func newLifecycleGovernanceHTTPMux(t *testing.T) (*http.ServeMux, lifecyclepersistence.LifecycleStore) {
+func newLifecycleGovernanceHTTPMux(t *testing.T) (*http.ServeMux, lifecyclerepository.LifecycleRepository) {
 	t.Helper()
 	runtimeStore, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "lifecycle-governance-http.db")})
 	if err != nil {
@@ -145,16 +145,24 @@ func newLifecycleGovernanceHTTPMux(t *testing.T) (*http.ServeMux, lifecyclepersi
 	if err := runtimeStore.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	repository := lifecyclepersistence.NewLifecycleStore(lifecyclemodule.NewHost(runtimeStore))
-	executors := []lifecyclecontract.OwnerLifecycleExecutor{notificationpublicationpersistence.LifecycleExecutor(runtimeStore)}
+	binding, err := lifecyclesdkfixture.Open(t.Context(), runtimeStore, "lifecycle-governance-http-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifacts, err := binding.SubjectArtifacts(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := binding.Repository()
+	executors := []lifecyclecontract.OwnerLifecycleExecutor{notificationpublicationpersistence.LifecycleExecutor(runtimeStore, binding.ArchiveStore())}
 	ports := make([]lifecyclecontract.OwnerLifecycleExecutor, 0, len(executors))
 	for index := range executors {
 		ports = append(ports, executors[index])
 	}
 	subject := lifecycleHTTPSubjectPort{}
-	lifecycleService := lifecycleapplication.NewLifecycleApplicationService(t.Context(), lifecycleapplication.LifecycleApplicationDependencies{
+	lifecycleService := lifecycleapplication.NewLifecycleApplicationService(t.Context(), lifecyclecore.LifecycleApplicationDependencies{
 		Repository: repository, Executors: ports, SubjectResolver: subject,
-		SubjectHandlers: []lifecyclecontract.SubjectDataHandler{subject}, Artifacts: localartifact.NewSubjectStore(t.TempDir()),
+		SubjectHandlers: []lifecyclecontract.SubjectDataHandler{subject}, Artifacts: artifacts,
 	})
 	operationsRepository := operationspersistence.NewOperationsStore(runtimeStore)
 	nextID := 0
@@ -162,7 +170,7 @@ func newLifecycleGovernanceHTTPMux(t *testing.T) (*http.ServeMux, lifecyclepersi
 		nextID++
 		return fmt.Sprintf("lifecycle-http-%d", nextID)
 	})
-	handler := lifecyclehttp.NewHandler(lifecyclehttp.Dependencies{
+	handler := lifecyclehttp.NewLifecycleHandler(lifecyclehttp.LifecycleDependencies{
 		Service: lifecycleService, Operations: operationsService, Principal: func(r *http.Request) principalmodel.Principal {
 			principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
 			if r.Header.Get("X-Deny") == "true" {

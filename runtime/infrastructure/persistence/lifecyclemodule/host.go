@@ -8,8 +8,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/domainry/domainry-lifecycle/migrations"
-	"github.com/domainry/domainry-lifecycle/modulehost"
+	"github.com/domainry/domainry-lifecycle-sdk/modulehost"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
@@ -23,14 +22,6 @@ func (h Host) Migrations() modulehost.MigrationRegistrar {
 	return migrationRegistrar{store: h.store}
 }
 func (h Host) Transactions() modulehost.Transactor { return transactor{db: h.store.DB()} }
-
-func (h Host) ApplyMigrations(ctx context.Context) error {
-	values, err := migrations.Migrations(h.Dialect())
-	if err != nil {
-		return err
-	}
-	return h.Migrations().ApplyOwnedMigrations(ctx, migrations.Owner, values)
-}
 
 type migrationRegistrar struct{ store *database.RuntimeStore }
 

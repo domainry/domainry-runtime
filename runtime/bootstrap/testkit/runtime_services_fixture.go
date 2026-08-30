@@ -2,7 +2,9 @@ package testkit
 
 import (
 	"context"
-	lifecyclepersistence "github.com/domainry/domainry-lifecycle/persistence"
+
+	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
+	lifecyclemoduleimpl "github.com/domainry/domainry-lifecycle/module"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
@@ -60,6 +62,10 @@ func focusedPersistenceDependencies(ctx context.Context, config RuntimeServicesC
 	}
 	records := recordpersistence.NewRecordStore(config.Store)
 	reportDataset := reportpersistence.NewReportDatasetStore(config.Store)
+	lifecycleBinding, err := lifecyclemoduleimpl.NewFactory().OpenModule(ctx, lifecyclesdk.ApplicationRef{RuntimeID: "runtime-testkit"}, lifecyclemodule.NewHost(config.Store))
+	if err != nil {
+		panic("open Lifecycle test module: " + err.Error())
+	}
 	return composition.RuntimeServicesDependencies{
 		Records: records, RecordExecutions: records,
 		ReportDatasetRows:     reportDataset,
@@ -83,6 +89,6 @@ func focusedPersistenceDependencies(ctx context.Context, config RuntimeServicesC
 		ActionAssurance:       actionpersistence.NewActionAssuranceStore(config.Store),
 		RuntimeStatus:         deploymentpersistence.NewRuntimeStatusStore(config.Store),
 		FrontendCapabilities:  frontendcapabilitypersistence.NewFrontendCapabilityStore(config.Store),
-		Lifecycle:             lifecyclepersistence.NewLifecycleStore(lifecyclemodule.NewHost(config.Store)),
+		Lifecycle:             lifecycleBinding.Repository(),
 	}
 }

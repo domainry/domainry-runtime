@@ -1,7 +1,7 @@
 package record
 
 import (
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
 	"github.com/domainry/domainry-foundation/mutation"

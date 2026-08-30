@@ -9,7 +9,7 @@ import (
 	"time"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
-	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormbuilder "github.com/domainry/domainry-orm/query"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
