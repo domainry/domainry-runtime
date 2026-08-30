@@ -21,7 +21,7 @@ import (
 // NewRuntimeServices expands one SQL test store into focused owner stores and
 // always enters production composition through the typed dependency contract.
 func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *composition.RuntimeServices {
-	dependencies := focusedPersistenceDependencies(config)
+	dependencies := focusedPersistenceDependencies(ctx, config)
 	if config.ApplicationSchemaRepository != nil {
 		dependencies.ApplicationSchema = config.ApplicationSchemaRepository
 	}
@@ -54,7 +54,7 @@ func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *comp
 	})
 }
 
-func focusedPersistenceDependencies(config RuntimeServicesConfig) composition.RuntimeServicesDependencies {
+func focusedPersistenceDependencies(ctx context.Context, config RuntimeServicesConfig) composition.RuntimeServicesDependencies {
 	if config.Store == nil {
 		return composition.RuntimeServicesDependencies{}
 	}
@@ -66,7 +66,7 @@ func focusedPersistenceDependencies(config RuntimeServicesConfig) composition.Ru
 		ReportObjectSQL:       reportDataset,
 		ReportSnapshots:       reportpersistence.NewReportSnapshotStore(config.Store),
 		ReportSnapshotSources: reportDataset,
-		Audit:                 auditpersistence.NewRepositoryFromStore(config.Store),
+		Audit:                 auditpersistence.NewAuditStoreFromRuntimeStore(ctx, config.Store),
 		IntegrationConfig:     integrationpersistence.NewIntegrationConfigStore(config.Store),
 		IntegrationEvents:     integrationpersistence.NewIntegrationEventStore(config.Store),
 		IntegrationDelivery:   integrationpersistence.NewIntegrationDeliveryStore(config.Store),

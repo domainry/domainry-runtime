@@ -99,7 +99,7 @@ func TestAuditCursorSchemaAndPaginationOnRealMySQL(t *testing.T) {
 		}
 	}
 
-	repository := auditpersistence.NewRepositoryFromStore(store)
+	repository := auditpersistence.NewAuditStoreFromRuntimeStore(t.Context(), store)
 	stamp := "2026-08-22T12:00:00Z"
 	for _, event := range []auditmodel.AuditEvent{
 		{ID: "audit-a", WorkspaceID: "workspace-a", Event: "record.updated", ObjectKey: "订单", RecordID: "记录一", ActorID: "用户甲", CreatedAt: stamp},
@@ -167,7 +167,7 @@ func TestAuditBusinessClassAndRequestIDFiltersOnRealPostgres(t *testing.T) {
 
 func assertAuditBusinessClassAndRequestIDFilters(t *testing.T, store *persistence.RuntimeStore) {
 	t.Helper()
-	repository := auditpersistence.NewRepositoryFromStore(store)
+	repository := auditpersistence.NewAuditStoreFromRuntimeStore(t.Context(), store)
 	requestID := `req-%_\literal~`
 	for _, event := range []auditmodel.AuditEvent{
 		{ID: "audit-business-match", WorkspaceID: "workspace-a", Event: "ticket.assign", ObjectKey: "ticket", RecordID: "ticket-1", ActorID: "manager", Metadata: map[string]any{"request_id": requestID}, CreatedAt: "2026-08-22T12:00:04Z"},

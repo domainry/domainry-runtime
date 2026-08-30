@@ -5,7 +5,7 @@ import actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/m
 // This file exposes cross-owner Integration use-case entrypoints.
 
 import (
-	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
+	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 

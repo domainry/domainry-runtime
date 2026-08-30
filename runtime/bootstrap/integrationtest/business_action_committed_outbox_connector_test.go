@@ -97,7 +97,7 @@ func TestProjectGateConnectorExecutesOnlyCommittedActionOutbox(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	dependencies := objectActionTestDependencies(store)
+	dependencies := objectActionTestDependencies(t.Context(), store)
 	dependencies.ConnectorProviders = providers
 	services := NewRuntimeServices(t.Context(), RuntimeServicesConfig{Manifest: manifest, Dependencies: dependencies})
 

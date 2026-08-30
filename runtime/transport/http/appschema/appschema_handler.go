@@ -2,7 +2,7 @@ package appschema
 
 import (
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
-	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
+	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	"net/http"
 

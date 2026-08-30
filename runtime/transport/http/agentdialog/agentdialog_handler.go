@@ -5,7 +5,7 @@ import (
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent"
 	agentruntime "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
-	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
+	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	"net/http"

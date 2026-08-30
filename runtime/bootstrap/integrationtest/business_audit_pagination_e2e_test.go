@@ -29,7 +29,7 @@ func TestRuntimeBusinessAuditPaginationTraversesStableSQLitePagesOverHTTP(t *tes
 	token := runtimeIdentityFixtureSession(t, "admin", "admin").AccessToken
 
 	store := openRuntimePersistenceFixture(t, cfg)
-	audits := auditpersistence.NewRepositoryFromStore(store)
+	audits := auditpersistence.NewAuditStoreFromRuntimeStore(t.Context(), store)
 	for index := 1; index <= 5; index++ {
 		id := fmt.Sprintf("pagination-%03d", index)
 		if err := audits.InsertAuditEvent(t.Context(), "default", auditmodel.AuditEvent{

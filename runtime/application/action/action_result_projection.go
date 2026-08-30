@@ -11,10 +11,9 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityevaluator "github.com/domainry/domainry-identity-sdk/authorization/evaluator"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
-	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
-	auditservice "github.com/domainry/domainry-runtime/runtime/domain/audit/service"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 )
 
 func (s *ActionApplicationService) projectExecutionResult(ctx context.Context, action definitionmodel.ActionSchema, principal principalmodel.Principal, executed ActionExecutionResult) (ActionExecutionResult, error) {
@@ -70,11 +69,7 @@ func buildActionSuccessAudit(ctx context.Context, action definitionmodel.ActionS
 	if event == "" {
 		event = "business_action_executed"
 	}
-	return (auditservice.AuditEventFactory{}).NewAuditEvent(ctx, auditcontract.AuditAppendRequest{
-		Event: event, ObjectKey: action.ObjectKey, RecordID: invocation.RecordID, Principal: invocation.Principal,
-		Summary:  "Executed action " + action.Key,
-		Metadata: map[string]any{"action_key": action.Key, "invocation_id": result.InvocationID, "owner_source": invocation.Source, "status": result.Status},
-	})
+	return auditcontract.AuditBuildEvent(ctx, event, action.ObjectKey, invocation.RecordID, invocation.Principal, "Executed action "+action.Key, nil, nil, map[string]any{"action_key": action.Key, "invocation_id": result.InvocationID, "owner_source": invocation.Source, "status": result.Status})
 }
 
 func buildActionFailureAudits(ctx context.Context, action definitionmodel.ActionSchema, invocation actionmodel.ActionInvocation, result actionmodel.ActionInvocationResult, failure error) []auditmodel.AuditEvent {
@@ -105,17 +100,13 @@ func buildActionFailureAudits(ctx context.Context, action definitionmodel.Action
 	if err != nil || !auditDenial {
 		return nil
 	}
-	event := (auditservice.AuditEventFactory{}).NewAuditEvent(ctx, auditcontract.AuditAppendRequest{
-		Event: "record_scope_access_denied", ObjectKey: objectKey, RecordID: recordID, Principal: invocation.Principal,
-		Summary: "Record scope access denied",
-		Metadata: map[string]any{
-			"action":        "read_detail",
-			"action_key":    action.Key,
-			"decision":      "denied",
-			"invocation_id": result.InvocationID,
-			"owner_source":  invocation.Source,
-			"status":        "failed",
-		},
+	event := auditcontract.AuditBuildEvent(ctx, "record_scope_access_denied", objectKey, recordID, invocation.Principal, "Record scope access denied", nil, nil, map[string]any{
+		"action":        "read_detail",
+		"action_key":    action.Key,
+		"decision":      "denied",
+		"invocation_id": result.InvocationID,
+		"owner_source":  invocation.Source,
+		"status":        "failed",
 	})
 	return []auditmodel.AuditEvent{event}
 }

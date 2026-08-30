@@ -35,7 +35,7 @@ func initializeRecordApplications(s *runtimeAssembly) {
 	s.mutationKernel = dependencies.MutationKernel
 	s.recordApplicationService = recordapplication.NewRecordApplicationService(dependencies)
 	s.RecordDomainService = s.recordApplicationService.RecordDomainService
-	s.auditApplicationService.ConfigureBusinessExport(s.auditExportTokenKey, func(ctx context.Context, filters auditmodel.AuditBusinessExportFilter, principal principalmodel.Principal) error {
+	s.auditApplicationService.ConfigureBusinessExport(s.auditExportTokenKey, func(ctx context.Context, filters auditmodel.ExportFilter, principal principalmodel.Principal) error {
 		if filters.ObjectKey == "" || filters.RecordID == "" {
 			return nil
 		}

@@ -11,7 +11,7 @@ import (
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-data-exchange-sdk/modulehost"
 	"github.com/domainry/domainry-foundation/apperror"
-	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
+	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"

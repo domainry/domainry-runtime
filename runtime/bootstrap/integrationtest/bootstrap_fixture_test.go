@@ -170,7 +170,7 @@ func TestRuntimeBusinessOnlyManifestSeedsRuntimeOwnedNavigationAndLogin(t *testi
 		t.Fatalf("expected seeded workflow execution, got %#v", globalExecutions)
 	}
 
-	globalAuditEvents, err := auditpersistence.NewRepositoryFromStore(store).ListAuditEvents(t.Context(), "default", auditmodel.AuditEventQuery{Limit: 100})
+	globalAuditEvents, err := auditpersistence.NewAuditStoreFromRuntimeStore(t.Context(), store).ListAuditEvents(t.Context(), "default", auditmodel.AuditEventQuery{Limit: 100})
 	if err != nil {
 		t.Fatal(err)
 	}

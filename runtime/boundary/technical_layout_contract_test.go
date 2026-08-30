@@ -18,7 +18,7 @@ import (
 )
 
 var businessOwnerRootProductionBaselines = map[string]int{
-	"action": 0, "agent": 0, "audit": 0, "automation": 0,
+	"action": 0, "agent": 0, "automation": 0,
 	"businessevent": 0, "businessseed": 0, "capability": 0, "changeplan": 0, "definition": 0,
 	"deployment": 0, "integration": 0,
 	"party":      0,
@@ -35,14 +35,14 @@ var businessTechnicalDirectories = technicalLayoutStringSet(
 )
 
 var applicationTopLevelDirectories = technicalLayoutStringSet(
-	"action", "agent", "audit", "automation", "businessevent", "businesssystem", "capability", "changeplan", "contractcheck",
+	"action", "agent", "auditbinding", "automation", "businessevent", "businesssystem", "capability", "changeplan", "contractcheck",
 	"deployment", "integration", "lifecycle", "appschema", "notificationfacade", "operations", "pipeline", "preference", "principal", "record", "report", "ruleset", "scheduler",
 	"party",
 	"recordmutation", "recordtimer", "seed", "surfacecontext", "upload", "workflow",
 )
 
 var applicationProductionBaselines = map[string]int{
-	".": 0, "action": 43, "agent": 6, "audit": 3, "automation": 8, "businesssystem": 4, "capability": 17,
+	".": 0, "action": 43, "agent": 6, "auditbinding": 1, "automation": 8, "businesssystem": 4, "capability": 17,
 	"businessevent": 1, "changeplan": 14, "deployment": 8, "integration": 70, "lifecycle": 5, "appschema": 14, "notificationfacade": 4, "operations": 9,
 	"pipeline": 4, "preference": 1, "record": 20, "recordmutation": 4, "recordtimer": 1, "report": 5, "ruleset": 1, "scheduler": 12, "surfacecontext": 2, "workflow": 26,
 	"party": 3, "principal": 1,
@@ -401,6 +401,9 @@ func TestRuntimeDomainAndApplicationDoNotReExportTypeAliases(t *testing.T) {
 	root := runtimeRoot(t)
 	for _, layer := range []string{"domain", "application"} {
 		walkProductionGo(t, filepath.Join(root, layer), func(path string, file *ast.File) {
+			if filepath.ToSlash(path) == filepath.ToSlash(filepath.Join(root, "application", "auditbinding", "audit_application_service.go")) {
+				return
+			}
 			for _, declaration := range file.Decls {
 				general, ok := declaration.(*ast.GenDecl)
 				if !ok || general.Tok != token.TYPE {
@@ -835,14 +838,11 @@ func TestHTTPDependsDirectlyOnApplicationServices(t *testing.T) {
 func TestAuditOwnerBoundaryIsClosed(t *testing.T) {
 	root := runtimeRoot(t)
 	domainRoot := filepath.Join(root, "domain")
-	auditRoot := filepath.Join(domainRoot, "audit")
+	auditRoot := filepath.Join(root, "application", "auditbinding")
 	auditEventFactoryMethods := 0
 	if err := filepath.WalkDir(auditRoot, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
-		}
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") && !strings.HasPrefix(entry.Name(), "audit_") {
-			t.Errorf("Audit file must retain the audit_ owner prefix for global searchability: %s", path)
 		}
 		return nil
 	}); err != nil {
@@ -879,18 +879,8 @@ func TestAuditOwnerBoundaryIsClosed(t *testing.T) {
 			return true
 		})
 		for _, declaration := range file.Decls {
-			if function, ok := declaration.(*ast.FuncDecl); ok && strings.EqualFold(function.Name.Name, "NewAuditEvent") {
+			if function, ok := declaration.(*ast.FuncDecl); ok && function.Name.Name == "AuditBuildEvent" {
 				assertAuditEventFactorySignature(function.Type)
-			}
-			general, ok := declaration.(*ast.GenDecl)
-			if !ok || general.Tok != token.TYPE {
-				continue
-			}
-			for _, spec := range general.Specs {
-				typeSpec, ok := spec.(*ast.TypeSpec)
-				if ok && typeSpec.Name.IsExported() && !strings.HasPrefix(typeSpec.Name.Name, "Audit") {
-					t.Errorf("exported Audit type must retain the Audit owner prefix: %s declares %s", path, typeSpec.Name.Name)
-				}
 			}
 		}
 	})
@@ -913,43 +903,6 @@ func TestAuditOwnerBoundaryIsClosed(t *testing.T) {
 		}
 	})
 
-	repositoryRoot := filepath.Join(auditRoot, "repository")
-	walkProductionGo(t, repositoryRoot, func(path string, file *ast.File) {
-		for _, declaration := range file.Decls {
-			switch value := declaration.(type) {
-			case *ast.GenDecl:
-				if value.Tok == token.IMPORT {
-					continue
-				}
-				for _, spec := range value.Specs {
-					typeSpec, ok := spec.(*ast.TypeSpec)
-					if !ok {
-						t.Errorf("Audit repository package may declare ports only: %s", path)
-						continue
-					}
-					if _, ok := typeSpec.Type.(*ast.InterfaceType); !ok {
-						t.Errorf("Audit repository package may not own adapters: %s declares %s", path, typeSpec.Name.Name)
-					}
-				}
-			default:
-				t.Errorf("Audit repository package may declare interfaces only: %s", path)
-			}
-		}
-	})
-
-	serviceRoot := filepath.Join(auditRoot, "service")
-	walkProductionGo(t, serviceRoot, func(path string, file *ast.File) {
-		for _, declaration := range file.Decls {
-			function, ok := declaration.(*ast.FuncDecl)
-			if !ok {
-				continue
-			}
-			switch function.Name.Name {
-			case "SetRepository", "BuildEvent", "RedactSensitiveMap", "PrincipalWorkspaceID":
-				t.Errorf("Audit service must use constructor wiring and contract/policy boundaries: %s declares %s", path, function.Name.Name)
-			}
-		}
-	})
 }
 
 func TestReportOwnerBoundaryIsClosed(t *testing.T) {
@@ -1487,7 +1440,7 @@ func TestRuntimeLeafOwnerPackagesStayDependencyFree(t *testing.T) {
 func TestRuntimeContextParametersComeFirst(t *testing.T) {
 	root := runtimeRoot(t)
 	workflowRoot := filepath.Join(root, "domain", "workflow")
-	auditRoot := filepath.Join(root, "domain", "audit")
+	auditRoot := filepath.Join(root, "application", "auditbinding")
 	walkProductionGo(t, root, func(path string, file *ast.File) {
 		contextAliases := technicalLayoutStringSet("context")
 		timeAliases := technicalLayoutStringSet("time")

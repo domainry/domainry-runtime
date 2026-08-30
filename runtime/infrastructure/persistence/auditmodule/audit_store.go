@@ -10,31 +10,31 @@ import (
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	sdkcontract "github.com/domainry/domainry-audit-sdk/contract"
 	auditmoduleimpl "github.com/domainry/domainry-audit/module"
-	auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
+	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
-// Repository is the temporary Runtime domain facade over the external Audit
-// Binding. Persistence and query behavior are owned by domainry-audit.
-type Repository struct {
+// Store adapts Runtime transaction and system-scope semantics to the reusable
+// Audit application store contract. Audit persistence remains module-owned.
+type AuditStore struct {
 	binding auditsdk.Binding
 }
 
-func NewRepository(binding auditsdk.Binding) *Repository { return &Repository{binding: binding} }
+func NewAuditStore(binding auditsdk.Binding) *AuditStore { return &AuditStore{binding: binding} }
 
-// NewRepositoryFromStore is the embedded-host convenience constructor used by
-// tests and narrow integrations that do not own the full Runtime assembly.
-func NewRepositoryFromStore(store *persistence.RuntimeStore) *Repository {
-	binding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(context.Background(), auditsdk.ApplicationRef{InstallationID: "domainry-runtime"}, NewHost(store))
+// NewAuditStoreFromRuntimeStore opens the source-owned module against a caller-
+// supplied construction context for tests and narrow host integrations.
+func NewAuditStoreFromRuntimeStore(ctx context.Context, store *persistence.RuntimeStore) *AuditStore {
+	binding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(ctx, auditsdk.ApplicationRef{InstallationID: "domainry-runtime"}, NewHost(store))
 	if err != nil {
 		panic(err)
 	}
-	return NewRepository(binding)
+	return NewAuditStore(binding)
 }
 
-func (r *Repository) InsertAuditEvent(ctx context.Context, workspaceID string, event auditmodel.AuditEvent) error {
+func (r *AuditStore) InsertAuditEvent(ctx context.Context, workspaceID string, event auditmodel.AuditEvent) error {
 	if r == nil || r.binding == nil {
 		return fmt.Errorf("audit.binding_unavailable")
 	}
@@ -47,14 +47,14 @@ func (r *Repository) InsertAuditEvent(ctx context.Context, workspaceID string, e
 	return r.binding.PreparedAppender().AppendPrepared(ctx, event)
 }
 
-func (r *Repository) ListAuditEvents(ctx context.Context, workspaceID string, query auditmodel.AuditEventQuery) ([]auditmodel.AuditEvent, error) {
+func (r *AuditStore) ListAuditEvents(ctx context.Context, workspaceID string, query auditmodel.AuditEventQuery) ([]auditmodel.AuditEvent, error) {
 	if r == nil || r.binding == nil {
 		return nil, fmt.Errorf("audit.binding_unavailable")
 	}
 	return r.binding.Reader().List(ctx, workspaceID, query)
 }
 
-func (r *Repository) ListAuditEventsForSystem(ctx context.Context, scope principalmodel.SystemScope, query auditmodel.AuditEventQuery) ([]auditmodel.AuditEvent, error) {
+func (r *AuditStore) ListAuditEventsForSystem(ctx context.Context, scope principalmodel.SystemScope, query auditmodel.AuditEventQuery) ([]auditmodel.AuditEvent, error) {
 	if _, err := principalmodel.NewSystemQueryScope(scope); err != nil {
 		return nil, err
 	}
@@ -64,7 +64,7 @@ func (r *Repository) ListAuditEventsForSystem(ctx context.Context, scope princip
 	return r.binding.Reader().ListSystem(ctx, query)
 }
 
-func (r *Repository) ListAuditOptions(ctx context.Context, workspaceID string, query auditmodel.AuditOptionQuery) ([]auditmodel.AuditOption, error) {
+func (r *AuditStore) ListAuditOptions(ctx context.Context, workspaceID string, query auditmodel.AuditOptionQuery) ([]auditmodel.AuditOption, error) {
 	if r == nil || r.binding == nil {
 		return nil, fmt.Errorf("audit.binding_unavailable")
 	}
@@ -93,7 +93,7 @@ func (a transactionAdapter) QueryRowContext(ctx context.Context, statement strin
 
 type sqlResult struct{ sql.Result }
 
-var _ auditrepository.AuditRepository = (*Repository)(nil)
+var _ auditrepository.AuditRepository = (*AuditStore)(nil)
 
 type SubjectLifecycle struct{ lifecycle sdkcontract.SubjectLifecycle }
 

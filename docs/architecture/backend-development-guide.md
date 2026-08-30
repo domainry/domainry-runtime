@@ -366,8 +366,8 @@ Transport **SHOULD** 优先调用 Application public boundary。只有不涉及�
 package service
 
 import (
-    auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
-    auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
+    auditmodel "github.com/domainry/domainry-audit-sdk/contract"
+    auditrepository "github.com/domainry/domainry-audit-sdk/application"
 )
 
 type AuditDomainService struct {
@@ -387,7 +387,7 @@ func NewAuditDomainService(repository auditrepository.AuditRepository) *AuditDom
 package bootstrap
 
 import (
-    auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
+    auditrepository "github.com/domainry/domainry-audit-sdk/application"
     auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/audit"
 )
 
@@ -418,7 +418,7 @@ package audit
 import (
     "context"
 
-    auditmodel "github.com/domainry/domainry-runtime/runtime/domain/audit/model"
+    auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 )
 
 func (s AuditStore) InsertAuditEvent(ctx context.Context, event auditmodel.AuditEvent) error {
@@ -436,7 +436,7 @@ func (s AuditStore) InsertAuditEvent(ctx context.Context, event auditmodel.Audit
 ```go
 package model
 
-import auditservice "github.com/domainry/domainry-runtime/runtime/domain/audit/service"
+import auditservice "github.com/domainry/domainry-audit-sdk/application"
 ```
 
 问题：叶子模型反向依赖行为入口，必然放大循环。**改法**：把纯结构留在 `model`；真正共享的能力抽成 `contract`，由 `service` 依赖它。
@@ -514,166 +514,36 @@ func NewOrderApplicationService(db *sql.DB) *OrderApplicationService {
 
 任一问题无法回答，不得先增加 import 再用 architecture allowlist 放行。
 
-### R3.9 Audit 拆包案例：目录正确但依赖尚未完成
+### R3.9 Audit 可复用模块案例
 
-Audit 是本规约的迁移案例。它用于证明一个重要结论：**目录已经拆成 `model/repository/service`、package 能编译、focused tests 通过，仍然可能只是迁移中间态。** 当前 Audit 不得作为完成态范例直接复制。
+Audit 已从 Runtime/Identity 的本地业务 owner 中剥离，公共业务能力由两个源码仓库负责：
 
-#### R3.9.1 已完成且正确的部分
+- `domainry-audit-sdk/contract`：稳定事件、查询、Surface、导出及事务 port。
+- `domainry-audit-sdk/application`：泛型宿主 Application Service，统一事件构造、脱敏、权限回调、查询、Surface 投影和导出编排。
+- `domainry-audit`：模块内部 Domain/Application/Persistence 及 source-owned migrations。
 
-```text
-domain/audit/
-├── model/
-├── repository/
-└── service/
-```
-
-- Audit 根目录生产文件已归零。
-- `service -> repository -> model` 的 owner 内主方向正确。
-- `AuditStore` 仍位于 `infrastructure/persistence/database/audit`。
-- Bootstrap 使用编译期 assertion 验证 `AuditStore` 实现 Audit Repository port。
-- 目录、package、主类型/文件名和受影响行为测试通过。
-
-这些证据只能证明第一阶段结构迁移完成，不能证明跨 owner 依赖合规。
-
-#### R3.9.2 当前剩余问题
-
-| 问题 | 当前证据 | 违反规则 |
-| --- | --- | --- |
-| 其他 owner 直接 import `audit/service` | `domain/report/service`、`domain/metadata`、`domain/scheduler`、多个 `domain/integration` 文件调用 `BuildEvent`/`RedactSensitiveMap` | owner A **MUST NOT** import owner B `service` |
-| 其他 owner 直接 import `audit/repository` | Deployment、Report、Scheduler 持有 Audit Repository | owner A **MUST NOT** import owner B `repository` |
-| `service/event.go` 成为公共工具集合 | 同时提供事件构造、脱敏、workspace 推导、时间和 ID 生成 | Service 不应成为跨 owner helper package；policy/factory 职责混杂 |
-| `repository` 包含 legacy adapter | `AdaptLegacyRepository`、`legacyRepository` 与 port interface 同包 | Repository technical package 只定义持久化 port，不持有 composition compatibility adapter |
-| Audit Service 依赖其他 owner 根包 | 直接 import `domain/capability`、`domain/rules` | 跨 owner 默认只能依赖稳定 `model/contract` |
-| Service 暴露可变 wiring | `SetRepository` 可在构造后替换依赖 | wiring 应由 Bootstrap 构造期完成，Domain Service 不管理 composition lifecycle |
-
-#### R3.9.3 为什么原有门禁仍然通过
-
-当前层级门禁能够阻止：
+宿主只允许保留适配代码：
 
 ```text
-domain -> application/bootstrap/infrastructure/transport
-application -> bootstrap/infrastructure/transport
-transport -> bootstrap/infrastructure
+runtime/application/auditbinding/                 # Principal/权限 Policy 适配
+runtime/infrastructure/persistence/auditmodule/   # Host DB、事务和迁移 registrar 适配
 ```
 
-但它尚未完整区分：
+Runtime、Identity **MUST NOT** 再声明自己的 `domain/audit`、`application/audit`、Audit Repository port、Audit Domain Service 或迁移账本。业务调用依赖 SDK contract/application；Bootstrap 只负责把模块 Binding、宿主 Policy、事务 Store 组装起来。
 
-```text
-domain/<owner-a>/service -> domain/<owner-b>/service
-domain/<owner-a>/service -> domain/<owner-b>/repository
-domain/<owner>/repository -> compatibility adapter implementation
-```
+数据库规则：
 
-因此“architecture tests 通过”必须与 owner 内/跨 owner import inventory 一起判断。每个 owner 完成迁移时，应把该 owner 纳入精确 technical-package dependency gate；不得永久依赖人工审查。
+- Audit 模块使用宿主 Database、Dialect、Transaction、Migration lock 和全局 `_schema_migrations`。
+- Audit source module 提交自己拥有的 migration；宿主不得复制 Audit DDL/DML。
+- 持久化 DDL/DML 使用 `github.com/domainry/domainry-orm`；没有 ORM 等价能力时才允许带本地理由和方言测试的原生 SQL。
+- 当前 source-owned 表为 `_audit_events` 与 `audit_export_artifacts`，不得恢复 `business_audit_export_artifacts` 或模块私有迁移账本。
 
-#### R3.9.4 Audit 目标结构
+完成态门禁必须同时证明：
 
-```text
-domain/audit/
-├── model/          # audit_model.go；AuditEvent、AuditEventQuery、AuditOptionQuery
-├── contract/       # audit_append.go、audit_event_factory.go、audit_reader.go
-├── policy/         # audit_redaction.go；敏感字段识别和递归脱敏
-├── repository/     # audit_repository.go；Audit 持久化 port，仅 interface
-└── service/        # AuditDomainService；构造事件、执行权限和读写生命周期
-
-application/
-└── ...             # 跨 owner use case 与兼容 adapter
-
-infrastructure/persistence/database/audit/
-└── audit_store.go  # Repository 实现和 SQL mapping
-
-bootstrap/
-└── ...             # contract/repository 与 Store/Service 的唯一 wiring
-```
-
-推荐依赖方向：
-
-```mermaid
-flowchart TD
-    report["report service"] --> audit_contract["audit contract"]
-    scheduler["scheduler service"] --> audit_contract
-    integration["integration service/runtime"] --> audit_contract
-    audit_service["audit service"] --> audit_policy["audit policy"]
-    audit_service --> audit_repository["audit repository"]
-    audit_service --> audit_model["audit model"]
-    audit_contract --> audit_model
-    audit_policy --> audit_model
-    audit_repository --> audit_model
-    bootstrap["bootstrap"] --> audit_service
-    bootstrap --> audit_store["audit store"]
-    audit_store --> audit_model
-```
-
-跨 owner 调用方只看到 `audit/contract`，不看到 Audit Service、Repository 或 Store。Audit Service 在 owner 内完成事件构造和脱敏，并通过 Repository port 持久化。
-
-#### R3.9.5 推荐 contract 形状
-
-Audit contract 必须按调用能力拆分文件，并保留 owner 业务前缀；不得使用 `contract/audit.go`、`contract/contract.go` 等无法表达职责的宽泛文件名：
-
-```text
-contract/
-├── audit_append.go          # AuditAppendRequest、AuditAppender、AuditTelemetryAppender
-├── audit_event_factory.go   # AuditEventFactory
-└── audit_reader.go          # AuditReader
-```
-
-`audit/repository` 只有一个聚合持久化 port，仍必须使用带 owner 前缀的 `repository/audit_repository.go`。同一 owner 存在多个明确 capability Repository 时，使用 `<owner>_<capability>_repository.go`。跨 owner 调用方不得因为需要读取或追加 Audit 就把 Repository 复制进 `contract`，必须依赖上面的能力合同。
-
-```go
-package contract
-
-import (
-    "context"
-
-    principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-)
-
-type AuditAppendRequest struct {
-    Event     string
-    ObjectKey string
-    RecordID  string
-    Principal principalmodel.Principal
-    Summary   string
-    Before    map[string]any
-    After     map[string]any
-    Metadata  map[string]any
-}
-
-type AuditAppender interface {
-    AppendAudit(context.Context, AuditAppendRequest) error
-}
-
-type AuditEventFactory interface {
-    NewAuditEvent(context.Context, AuditAppendRequest) auditmodel.AuditEvent
-}
-```
-
-调用方表达“追加一个具有业务语义的 Audit 事实”，而不是自行调用 `BuildEvent`、自行脱敏后再操作 Audit Repository。若调用方只需要 best-effort telemetry，应使用语义明确的独立 `AuditTelemetryAppender`；不得让 mandatory transaction audit 与忽略错误的 telemetry 共用一个模糊入口。
-
-#### R3.9.6 推荐迁移顺序
-
-1. 在 `audit/contract` 定义最小 `AuditAppender`/`AuditReader`；不要把整个 Repository 暴露为跨 owner contract。
-2. 把脱敏和敏感字段判断移动到 `audit/policy`，保持无 I/O、可独立测试。
-3. 让 `AuditDomainService` 实现 `contract.AuditAppender`，在 Audit owner 内完成 Build、Redact、ID/时间和 Repository 写入。
-4. 将 Report、Scheduler、Deployment、Metadata、Integration 的 Audit 依赖替换为 `audit/contract` 或调用方本地最小 port。
-5. 将 `AdaptLegacyRepository` 移到 Application testkit/composition adapter 或 Infrastructure；`audit/repository` 只保留 interface。
-6. 删除 `SetRepository`，统一使用构造函数注入；需要可选能力时注入 no-op implementation，而不是运行时修改 wiring。
-7. 增加精确门禁，禁止已迁移 owner import 其他 owner 的 `service/repository/runtime`。
-8. 运行 Audit policy/service 单测、所有受影响 owner tests、Runtime layer gates、全量 Runtime tests 和 vet。
-
-#### R3.9.7 Audit 完成条件
-
-Audit 只有同时满足以下条件才可从“迁移中间态”改为“正例”：
-
-- `audit/repository` 只包含 port；
-- `audit/service` 不再被其他 Domain owner 直接 import；
-- 其他 owner 不再持有 Audit Repository；
-- 脱敏策略有独立 package 和 focused tests；
-- mandatory audit 与 best-effort telemetry 的失败语义明确分开；
-- Bootstrap 是唯一同时知道 Audit Service、Repository implementation 和 Store 的位置；
-- 精确跨 owner dependency gate 可以阻止上述问题重新出现；
-- focused、Runtime 全量、vet 与 `git diff --check` 全部通过。
-
+1. Runtime/Identity 不存在本地 `domain/audit` 和 `application/audit`。
+2. 不存在旧 standalone host、模块私有 migration ledger 和旧表生产引用。
+3. SDK、Audit、Identity 全量测试通过；Runtime 的 Audit focused tests 和 Audit architecture gates 通过。
+4. 宿主 adapter 不包含 Audit 权限、Surface、导出或持久化业务规则。
 ## R4. Application 与 Bootstrap 目录
 
 Application **MUST** 只负责业务用例编排：
@@ -832,7 +702,7 @@ cmd/<command-name>/
 
 - package 名 **MUST** 为紧凑小写词，默认为目录名移除下划线，例如 `request_context -> requestcontext`。
 - `domain/<owner>/model` package **MUST** 为 `<owner>model`。
-- `domain/<owner>/service`、`repository`、`validation`、`policy`、`runtime`、`projection`、`contract` package **MUST** 直接使用目录技术名；例如 `domain/audit/service` 声明 `package service`，不得声明 `auditservice`。调用方发生重名时使用语义 import alias，例如 `auditservice`、`auditrepository`。
+- `domain/<owner>/service`、`repository`、`validation`、`policy`、`runtime`、`projection`、`contract` package **MUST** 直接使用目录技术名；调用方发生重名时使用语义 import alias。可复用外部模块（如 Audit）直接依赖其 SDK，不得在宿主重建同名 Domain。
 - `cmd/*` package **MUST** 为 `main`。
 - 外部黑盒测试可使用 `<package>_test`。
 - 目录/package 不一致只能作为精确 reviewed legacy exception，不允许新增。

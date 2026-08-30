@@ -3,7 +3,7 @@ package transport
 import (
 	"context"
 
-	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
+	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )

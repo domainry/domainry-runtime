@@ -1,7 +1,7 @@
 package globalcapabilityseed
 
 import (
-	auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
+	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"

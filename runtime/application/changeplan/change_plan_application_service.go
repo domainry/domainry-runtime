@@ -2,7 +2,7 @@ package changeplan
 
 import (
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
-	auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
+	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	changeplanpolicy "github.com/domainry/domainry-runtime/runtime/domain/changeplan/policy"
 	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"

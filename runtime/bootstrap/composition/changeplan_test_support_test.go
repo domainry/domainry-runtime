@@ -4,7 +4,7 @@ import (
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	changeplanapplication "github.com/domainry/domainry-runtime/runtime/application/changeplan"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
-	auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
+	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
 	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"

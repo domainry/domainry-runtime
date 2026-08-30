@@ -12,7 +12,7 @@ import (
 )
 
 func (h *RecordsHandler) prepareBusinessAuditEventExport(w http.ResponseWriter, r *http.Request) {
-	var request auditmodel.AuditBusinessExportRequest
+	var request auditmodel.ExportRequest
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<10))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&request); err != nil {

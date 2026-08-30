@@ -154,7 +154,7 @@ func TestProjectGateConnectorRetryUnknownAndWebhookConvergeDeterministically(t *
 		t.Fatal(err)
 	}
 	clock := &p8GateReliabilityClock{now: time.Date(2026, 7, 23, 19, 0, 0, 0, time.UTC)}
-	dependencies := objectActionTestDependencies(store)
+	dependencies := objectActionTestDependencies(t.Context(), store)
 	dependencies.ConnectorProviders = providers
 	dependencies.Worker = workerplatform.Dependencies{Clock: clock, Jitter: p8GateCenteredJitter{}}
 	services := NewRuntimeServices(t.Context(), RuntimeServicesConfig{Manifest: p8GateManifest(), Dependencies: dependencies})

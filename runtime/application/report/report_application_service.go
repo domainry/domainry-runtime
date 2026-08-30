@@ -11,7 +11,7 @@ import (
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	reportexport "github.com/domainry/domainry-runtime/runtime/application/report/export"
-	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
+	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"

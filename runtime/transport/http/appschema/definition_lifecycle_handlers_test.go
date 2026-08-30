@@ -15,10 +15,10 @@ import (
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
-	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
+	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
-	auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
+	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"

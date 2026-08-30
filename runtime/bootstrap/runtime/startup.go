@@ -28,7 +28,7 @@ import (
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
-	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
+	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	notificationfacade "github.com/domainry/domainry-runtime/runtime/application/notificationfacade"
@@ -259,7 +259,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	manifest := restoredMetadata.manifest
 	auditBinding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(ctx, auditsdk.ApplicationRef{InstallationID: valueOrDefault(manifest.TemplateID, "domainry-runtime")}, runtimeauditmodule.NewHost(store))
 	mustCompleteRuntimeStartup(err)
-	runtimeAuditRepository := runtimeauditmodule.NewRepository(auditBinding)
+	runtimeAuditRepository := runtimeauditmodule.NewAuditStore(auditBinding)
 	runtimeAudit := auditapplication.NewAuditApplicationService(runtimeAuditRepository, auditBinding.Exporter())
 	identityDirectory := identityBinding.Directory()
 	identityPrincipals := identityBinding.Principals()

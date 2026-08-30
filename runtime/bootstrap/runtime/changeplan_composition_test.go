@@ -220,12 +220,12 @@ func TestBusinessChangePlanCompositionAppliesMetadataAndFreezesDraft(t *testing.
 	if err != nil || !found || definition.SourceKind != "builder" || definition.SourceID != plan.PlanID {
 		t.Fatalf("definition=%#v found=%v err=%v", definition, found, err)
 	}
-	audits, err := auditpersistence.NewRepositoryFromStore(application.store).ListAuditEvents(t.Context(), "default", auditmodel.AuditEventQuery{Event: "business_change_plan.published", Limit: 10})
+	audits, err := auditpersistence.NewAuditStoreFromRuntimeStore(t.Context(), application.store).ListAuditEvents(t.Context(), "default", auditmodel.AuditEventQuery{Event: "business_change_plan.published", Limit: 10})
 	if err != nil || len(audits) != 1 || audits[0].Metadata["request_id"] != admin.RequestID {
 		t.Fatalf("audits=%#v err=%v", audits, err)
 	}
 	for _, status := range []string{"succeeded", "replayed", "fingerprint_conflict"} {
-		idempotencyAudits, listErr := auditpersistence.NewRepositoryFromStore(application.store).ListAuditEvents(t.Context(), "default", auditmodel.AuditEventQuery{Event: "business_change_plan.idempotency_" + status, Limit: 10})
+		idempotencyAudits, listErr := auditpersistence.NewAuditStoreFromRuntimeStore(t.Context(), application.store).ListAuditEvents(t.Context(), "default", auditmodel.AuditEventQuery{Event: "business_change_plan.idempotency_" + status, Limit: 10})
 		if listErr != nil || len(idempotencyAudits) != 1 {
 			t.Fatalf("idempotency status=%s audits=%#v err=%v", status, idempotencyAudits, listErr)
 		}

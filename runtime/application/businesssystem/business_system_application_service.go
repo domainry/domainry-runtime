@@ -9,7 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
+	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"

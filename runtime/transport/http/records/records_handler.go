@@ -3,7 +3,7 @@ package records
 import (
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
-	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
+	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	actionpolicy "github.com/domainry/domainry-runtime/runtime/domain/action/policy"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"

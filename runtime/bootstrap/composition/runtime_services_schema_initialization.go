@@ -2,7 +2,7 @@ package composition
 
 import (
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
-	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
+	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 )

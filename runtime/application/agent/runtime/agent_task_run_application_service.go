@@ -11,7 +11,7 @@ import (
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
-	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
+	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 

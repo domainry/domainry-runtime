@@ -14,14 +14,14 @@ import (
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
-	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 )
 
 type recordsBusinessAuditExporter struct{}
 
 func (*recordsBusinessAuditExporter) ConfigureExport([]byte, auditmodel.ExportAuthorizer) {}
-func (*recordsBusinessAuditExporter) PrepareExport(context.Context, auditmodel.AuditBusinessExportRequest, string, auditmodel.ExportPrincipal) (auditmodel.ExportPrepared, error) {
+func (*recordsBusinessAuditExporter) PrepareExport(context.Context, auditmodel.ExportRequest, string, auditmodel.ExportPrincipal) (auditmodel.ExportPrepared, error) {
 	return auditmodel.ExportPrepared{ID: "export-1", ReportSource: "business_audit_events", Filename: "audit.csv", ContentSHA256: "hash", RowCount: 1, AuditIdentity: "identity", ScopeSHA256: "scope", DownloadToken: "token-token-token-token-token-token-token-token-token-token-token-token-token-token-token-token", ExpiresAt: "2026-08-30T00:00:00Z"}, nil
 }
 func (*recordsBusinessAuditExporter) DownloadExport(context.Context, string, auditmodel.ExportPrincipal) ([]byte, string, error) {

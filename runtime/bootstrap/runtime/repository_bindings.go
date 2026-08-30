@@ -3,7 +3,6 @@ package runtime
 import (
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
-	auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationrepository "github.com/domainry/domainry-runtime/runtime/domain/automation/repository"
 	businessseedrepository "github.com/domainry/domainry-runtime/runtime/domain/businessseed/repository"
@@ -24,6 +23,7 @@ import (
 	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/lifecycle"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
+	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 )
 
 // Keep Bootstrap dependency bindings compile-time checked. These assertions live
@@ -32,9 +32,9 @@ import (
 var (
 	_ recordrepository.RecordRepository                      = recordpersistence.RecordStore{}
 	_ recordrepository.RecordBusinessSeedRepository          = recordpersistence.RecordStore{}
-	_ auditrepository.AuditRepository                        = (*auditpersistence.Repository)(nil)
-	_ auditrepository.AuditEventWriterRepository             = (*auditpersistence.Repository)(nil)
-	_ auditrepository.AuditEventRepository                   = (*auditpersistence.Repository)(nil)
+	_ auditrepository.AuditRepository                        = (*auditpersistence.AuditStore)(nil)
+	_ auditrepository.AuditEventWriterRepository             = (*auditpersistence.AuditStore)(nil)
+	_ auditrepository.AuditEventRepository                   = (*auditpersistence.AuditStore)(nil)
 	_ appschemarepository.ApplicationSchemaRepository        = appschemapersistence.ApplicationSchemaStore{}
 	_ appschemarepository.DefinitionMutationRepository       = appschemapersistence.ApplicationSchemaStore{}
 	_ integrationrepository.IntegrationConfigRepository      = integrationpersistence.IntegrationConfigStore{}

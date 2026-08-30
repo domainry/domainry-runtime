@@ -18,7 +18,6 @@ var workspaceFallbackLine = regexp.MustCompile(`(?i)workspace[^\n]{0,80}(==|!=)[
 var reviewedWorkspaceFallbackBaseline = map[string]int{
 	"runtime/application/seed/business/records.go":                                           1,
 	"runtime/application/seed/globalcapability/runtime.go":                                   1,
-	"runtime/application/audit/audit_application_service.go":                                 2,
 	"runtime/application/automation/automation_definition_validation_application_service.go": 1,
 	"runtime/application/integration/integration_application_delivery_management.go":         2,
 	"runtime/application/integration/integration_application_execution_evidence.go":          1,
@@ -130,6 +129,12 @@ func TestWorkspaceFallbackInventoryIsAnExactNonGrowingBaseline(t *testing.T) {
 				// This migration inspector names and reports legacy default values;
 				// it never substitutes one workspace for another.
 				if filepath.ToSlash(relative) == "runtime/infrastructure/persistence/database/workspace_scope_migration.go" {
+					continue
+				}
+				// The legacy Audit upgrade assigns pre-workspace rows to the historical
+				// installation workspace before the source-owned module baseline runs.
+				if filepath.ToSlash(relative) == "runtime/infrastructure/persistence/database/runtime_schema.go" &&
+					(strings.Contains(line, "prepare legacy Audit workspace ownership") || (strings.Contains(line, "_audit_events") && strings.Contains(line, "DEFAULT 'default'"))) {
 					continue
 				}
 				// Scheduler's installation seed name is business vocabulary, not

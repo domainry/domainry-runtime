@@ -13,7 +13,7 @@ import (
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	deploymentrepository "github.com/domainry/domainry-runtime/runtime/domain/deployment/repository"
 
-	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
+	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"

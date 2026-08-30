@@ -22,7 +22,6 @@ import (
 	partysdk "github.com/domainry/domainry-party-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
-	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
@@ -30,7 +29,6 @@ import (
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
-	auditrepository "github.com/domainry/domainry-runtime/runtime/domain/audit/repository"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -53,6 +51,8 @@ import (
 	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
 	reportnotification "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/reportnotification"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
+	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
+	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 )
@@ -129,7 +129,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			return runtimeServiceAssembly{}, fmt.Errorf("open Audit module: %w", err)
 		}
 		if auditRepository == nil {
-			auditRepository = runtimeauditmodule.NewRepository(binding)
+			auditRepository = runtimeauditmodule.NewAuditStore(binding)
 		}
 		if auditSubjectLifecycle == nil {
 			auditSubjectLifecycle = runtimeauditmodule.NewSubjectLifecycle(binding)

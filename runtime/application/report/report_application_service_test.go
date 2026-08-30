@@ -7,7 +7,7 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
-	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
+	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/service"

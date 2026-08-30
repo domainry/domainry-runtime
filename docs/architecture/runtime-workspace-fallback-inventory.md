@@ -16,7 +16,6 @@ empty workspace comparisons, workspace/default proximity, and literal
 | ---: | --- |
 | 1 | `runtime/application/seed/business/records.go` |
 | 1 | `runtime/application/seed/globalcapability/runtime.go` |
-| 2 | `runtime/application/audit/audit_application_service.go` |
 | 1 | `runtime/application/automation/automation_definition_validation_application_service.go` |
 | 2 | `runtime/application/integration/integration_application_delivery_management.go` |
 | 1 | `runtime/application/integration/integration_application_execution_evidence.go` |

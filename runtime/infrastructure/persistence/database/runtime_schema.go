@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -100,6 +102,9 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 
 func (s *RuntimeStore) ensureAuditModuleSchemaLocked(ctx context.Context) error {
 	exists, err := s.RuntimeTableExists(ctx, "_audit_events")
+	if errors.Is(err, sql.ErrNoRows) {
+		exists, err = false, nil
+	}
 	if err != nil {
 		return fmt.Errorf("inspect legacy Audit schema: %w", err)
 	}

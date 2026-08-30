@@ -93,13 +93,13 @@ func (d *integrationTestIdentityDirectory) ListWorkforce(context.Context, identi
 	return values, nil
 }
 
-func objectActionTestDependencies(store *persistence.RuntimeStore) RuntimeServicesDependencies {
+func objectActionTestDependencies(ctx context.Context, store *persistence.RuntimeStore) RuntimeServicesDependencies {
 	if store == nil {
 		return RuntimeServicesDependencies{}
 	}
 	return RuntimeServicesDependencies{
 		Records:              recordpersistence.NewRecordStore(store),
-		Audit:                auditpersistence.NewRepositoryFromStore(store),
+		Audit:                auditpersistence.NewAuditStoreFromRuntimeStore(ctx, store),
 		IntegrationConfig:    integrationpersistence.NewIntegrationConfigStore(store),
 		IntegrationEvents:    integrationpersistence.NewIntegrationEventStore(store),
 		IntegrationDelivery:  integrationpersistence.NewIntegrationDeliveryStore(store),
@@ -138,8 +138,8 @@ func mapFromAny(value any) map[string]any {
 	return mapped
 }
 
-func auditStore(store *persistence.RuntimeStore) *auditpersistence.Repository {
-	return auditpersistence.NewRepositoryFromStore(store)
+func auditStore(ctx context.Context, store *persistence.RuntimeStore) *auditpersistence.AuditStore {
+	return auditpersistence.NewAuditStoreFromRuntimeStore(ctx, store)
 }
 
 func workflowProcessStore(store *persistence.RuntimeStore) workflowpersistence.WorkflowProcessStore {

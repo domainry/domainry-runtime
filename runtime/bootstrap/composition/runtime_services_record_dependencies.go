@@ -8,7 +8,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
+	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	deployment "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	principalapplication "github.com/domainry/domainry-runtime/runtime/application/principal"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"

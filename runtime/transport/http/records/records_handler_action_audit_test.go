@@ -20,7 +20,7 @@ import (
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
-	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
+	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"

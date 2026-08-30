@@ -5,7 +5,7 @@ import (
 
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
-	auditapplication "github.com/domainry/domainry-runtime/runtime/application/audit"
+	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	deployment "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	businessintegration "github.com/domainry/domainry-runtime/runtime/application/integration"
 	lifecycleapplication "github.com/domainry/domainry-runtime/runtime/application/lifecycle"

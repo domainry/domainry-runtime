@@ -152,8 +152,6 @@ func TestRuntimeApplicationContextFreeMethodsMatchReviewedPureOrConstructionExce
 		"ActionApplicationService.CatalogValidationErrors",
 		"ActionApplicationService.Definitions",
 		"ActionApplicationService.ReplaceDefinitions",
-		"AuditApplicationService.ConfigureBusinessExport",
-		"AuditApplicationService.SetEventProjector",
 		"AutomationApplicationService.AfterOutbox", "AutomationApplicationService.ValidateIntegrationOutput",
 		"BusinessSystemApplicationService.RuntimeProjectionConfigured", "BusinessSystemApplicationService.SetEvidenceRepository",
 		"BusinessSeedAuthoringApplicationService.AuthorizeSeedRecordUpsert",
