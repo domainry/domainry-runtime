@@ -142,7 +142,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 		SecurityAudit: records.Applications().Audit, RuntimeStatus: runtimeStatusProvider(dependencies),
 		TechnicalMetrics: func(ctx context.Context) string {
 			workerMetrics, agentTaskMetrics, agentInteractiveMetrics := runtimeOptionalWorkerMetrics(ctx, dependencies.WorkerControl, records.Applications().AgentTaskWorker, records.Applications().AgentInteractiveRuns)
-			return runtimeTechnicalOpenMetrics(ctx, dependencies.Store, records.Applications().RuntimeStatus) + integrations.OperationalMetricsOpenMetrics(ctx) + records.Applications().Records.BatchJobOpenMetrics(ctx) + workerMetrics + agentTaskMetrics + agentInteractiveMetrics
+			return runtimeTechnicalOpenMetrics(ctx, dependencies.Store, records.Applications().RuntimeStatus) + integrations.OperationalMetricsOpenMetrics(ctx) + workerMetrics + agentTaskMetrics + agentInteractiveMetrics
 		},
 		Backpressure: integrations.QueueBackpressureActive, WorkerControl: dependencies.WorkerControl,
 		RuntimeInstanceID:       dependencies.RuntimeInstanceID,

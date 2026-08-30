@@ -197,7 +197,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workflows` | `POST /tenant-admin/workflows/{workflowKey}/simulate` | `not_applicable` | none | `runtime/transport/http/workflows/workflows_routes.go` |
 | `workflows` | `POST /tenant-admin/workflows/{workflowKey}/validate` | `not_applicable` | none | `runtime/transport/http/workflows/workflows_routes.go` |
 
-## Application mutation commands (217)
+## Application mutation commands (210)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -336,9 +336,8 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `record` | `ApplyImport` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
 | `record` | `ApplyImportIdempotent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
 | `record` | `ApplySelfEffects` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_state_machine_effect_application_service.go` |
-| `record` | `Cancel` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_batch_job_runtime_application_service.go` |
+| `record` | `Cancel` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_data_exchange_application_service.go` |
 | `record` | `CancelBatchJob` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
-| `record` | `CancelOwnedBatchJob` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
 | `record` | `Create` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_create_application_service.go` |
 | `record` | `CreateClaimed` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_create_application_service.go` |
 | `record` | `CreateClaimedLocalized` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_create_application_service.go` |
@@ -351,26 +350,20 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `record` | `DeleteExpected` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_delete_application_service.go` |
 | `record` | `DeleteRecord` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_import_facade.go` |
 | `record` | `DeleteRecordExpected` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_import_facade.go` |
-| `record` | `EnqueueExport` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_batch_job_application_service.go` |
+| `record` | `EnqueueExport` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_data_exchange_application_service.go` |
 | `record` | `EnqueueExportJob` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
-| `record` | `EnqueueImport` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_batch_job_application_service.go` |
+| `record` | `EnqueueImport` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_data_exchange_application_service.go` |
 | `record` | `EnqueueImportJob` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
-| `record` | `EnqueueOwned` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_batch_job_application_service.go` |
-| `record` | `EnqueueOwnedBatchJob` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
+| `record` | `EnqueueImportStream` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_data_exchange_application_service.go` |
+| `record` | `EnqueueImportStream` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
 | `record` | `Insert` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_internal_mutation_application_service.go` |
-| `record` | `ProcessDue` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/record/record_batch_job_runtime_application_service.go` |
-| `record` | `ProcessDueBatchJobs` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/record/record_import_facade.go` |
 | `record` | `Rebuild` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/record/record_owner_department_path_application_service.go` |
 | `record` | `RebuildOwnerDepartmentPaths` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/record/record_import_facade.go` |
 | `record` | `RecordReferences` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_display.go` |
 | `record` | `RecordScopeAllows` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_display.go` |
 | `record` | `RecordScopeAllowsAction` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_display.go` |
-| `record` | `ResolveBatchJobDeadLetter` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
-| `record` | `ResolveTerminal` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_batch_job_application_service.go` |
 | `record` | `Restore` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_restore_application_service.go` |
 | `record` | `RestoreRecord` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
-| `record` | `RetryBatchJobDeadLetter` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
-| `record` | `RetryTerminal` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_batch_job_application_service.go` |
 | `record` | `Update` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_internal_mutation_application_service.go` |
 | `record` | `Update` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_update_application_service.go` |
 | `record` | `UpdateIdempotent` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_update_application_service.go` |

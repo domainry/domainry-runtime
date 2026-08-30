@@ -70,7 +70,6 @@ type RuntimeServicesDependencies struct {
 	ReportDatasetRows                   reportcontract.ReportDatasetRowReader
 	ReportObjectSQL                     reportcontract.ReportObjectSQLExecutor
 	ReportSnapshots                     reportcontract.ReportSnapshotStore
-	ReportExportArtifacts               reportcontract.ReportExportArtifactStore
 	ReportSnapshotSources               reportcontract.ReportSnapshotSourceVersionReader
 	RecordExecutions                    recordcontract.RecordMutationExecutionStore
 	DataExchange                        dataexchange.Binding
@@ -90,7 +89,6 @@ type RuntimeServicesDependencies struct {
 	WorkflowNotificationCompiler        func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	WorkflowTaskNotificationCommitter   workflowapplication.WorkflowTaskNotificationCommitter
 	RecordNotificationCompiler          func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
-	RecordBatchNotificationCommitter    recordapplication.RecordBatchTerminalNotificationCommitter
 	ReportNotificationCompiler          func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	ReportSnapshotNotificationCommitter reportapplication.ReportSnapshotNotificationCommitter
 	AutomationNotificationCompiler      func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
@@ -131,8 +129,6 @@ type RuntimeServicesDependencies struct {
 	LifecycleExternalErasure            lifecyclecontract.ExternalErasureHandler
 	LifecycleArtifacts                  lifecyclecontract.SubjectArtifactStore
 	LifecycleUploadArtifacts            lifecyclecontract.UploadArtifactStore
-	BatchJobQueueLimit                  int
-	BatchJobWorkspaceQueueLimit         int
 	Worker                              workerplatform.Dependencies
 }
 

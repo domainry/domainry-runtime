@@ -44,30 +44,13 @@ type ReportExportFreshness struct {
 	MaximumLagSeconds int64  `json:"maximum_lag_seconds,omitempty"`
 }
 
-// ReportExportArtifact is the Runtime-owned durable download record. Content
-// is final (including watermark), so ContentSHA256 always describes exactly
-// the bytes returned by GET download.
-type ReportExportArtifact struct {
-	ID                       string                   `json:"id"`
-	WorkspaceID              string                   `json:"workspace_id"`
-	ReportKey                string                   `json:"report_key"`
-	ObjectKey                string                   `json:"object_key"`
-	AuditID                  string                   `json:"audit_id"`
-	BusinessDownloadID       string                   `json:"business_download_id,omitempty"`
-	RequesterUserID          string                   `json:"requester_user_id"`
-	RoleKey                  string                   `json:"role_key"`
-	IdempotencyKey           string                   `json:"idempotency_key"`
-	Token                    string                   `json:"token"`
-	Filename                 string                   `json:"filename"`
-	Scope                    ReportExportScopeRequest `json:"scope"`
-	ScopeSHA256              string                   `json:"scope_sha256"`
-	AuthorizationScopeSHA256 string                   `json:"authorization_scope_sha256"`
-	ReportDefinitionSHA256   string                   `json:"report_definition_sha256"`
-	ControlDefinitionSHA256  string                   `json:"control_definition_sha256"`
-	ContentSHA256            string                   `json:"content_sha256"`
-	RowCount                 int                      `json:"row_count"`
-	Content                  []byte                   `json:"-"`
-	Watermarked              bool                     `json:"watermarked"`
-	CreatedAt                string                   `json:"created_at"`
-	ExpiresAt                string                   `json:"expires_at"`
+// ReportExportAuthorizationSnapshot is the immutable authorization evidence
+// carried by a Data Exchange export request and revalidated before download.
+type ReportExportAuthorizationSnapshot struct {
+	ObjectKey                string
+	Scope                    ReportExportScopeRequest
+	ScopeSHA256              string
+	AuthorizationScopeSHA256 string
+	ReportDefinitionSHA256   string
+	ControlDefinitionSHA256  string
 }

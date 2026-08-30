@@ -98,13 +98,6 @@
 "notification.workflow.task.reminded.title" = "Onay görevinin süresi yaklaşıyor: {{task_title}}"
 
 "notification.action.integration.secret.open" = "Kimlik bilgisini yönet"
-"notification.action.record.batch.open" = "İş sonucunu görüntüle"
-"notification.record.batch.completed.title" = "{{job_kind}} tamamlandı: {{object_key}}"
-"notification.record.batch.completed.body" = "Uzun süren iş tamamlandı ve {{total}} kayıt işlendi."
-"notification.record.batch.failed.title" = "{{job_kind}} başarısız: {{object_key}}"
-"notification.record.batch.failed.body" = "Uzun süren iş başarısız oldu. Güvenli hata kodunu inceleyin ve uygun olduğunda yeniden deneyin."
-"notification.record.batch.cancelled.title" = "{{job_kind}} iptal edildi: {{object_key}}"
-"notification.record.batch.cancelled.body" = "Uzun süren iş iptal edildi ve devam etmeyecek."
 "notification.action.report.open" = "Raporu aç"
 "notification.report.snapshot.completed.title" = "Rapor yenilendi: {{report_key}}"
 "notification.report.snapshot.completed.body" = "Rapor anlık görüntüsü görüntülenmeye hazır."

@@ -20,7 +20,7 @@ func TestDefaultOwnerExecutorPoliciesHaveContractCoverage(t *testing.T) {
 	want := map[string]map[string]bool{
 		"runtime_security": {"ratelimit.bucket.v1": true},
 		"action":           {"execution.idempotency_receipt.v1": true},
-		"record":           {"execution.idempotency_receipt.v1": true, "record.batch_artifact.v1": true},
+		"record":           {"execution.idempotency_receipt.v1": true},
 		"operations":       {"operations.receipt.v1": true, "operations.break_glass.v1": true},
 		"integration":      {"integration.webhook_nonce.v1": true, "integration.event.v1": true, "integration.delivery_evidence.v1": true, "technical.lease_checkpoint.v1": true},
 		"workflow":         {"workflow.definition.v1": true, "workflow.receipt.v1": true, "workflow.execution.v1": true},

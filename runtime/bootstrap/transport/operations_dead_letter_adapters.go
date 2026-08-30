@@ -9,7 +9,6 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
-	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
@@ -19,7 +18,7 @@ import (
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
-func registerOperationsDeadLetterOwners(service *operationsapplication.OperationsApplicationService, integrations *integrationapplication.IntegrationApplicationService, workflows *workflowapplication.WorkflowApplicationService, scheduler schedulerDeadLetterService, recordTimers recordTimerDeadLetterService, records *recordapplication.RecordApplicationService) {
+func registerOperationsDeadLetterOwners(service *operationsapplication.OperationsApplicationService, integrations *integrationapplication.IntegrationApplicationService, workflows *workflowapplication.WorkflowApplicationService, scheduler schedulerDeadLetterService, recordTimers recordTimerDeadLetterService) {
 	if service == nil {
 		return
 	}
@@ -35,9 +34,6 @@ func registerOperationsDeadLetterOwners(service *operationsapplication.Operation
 	}
 	if recordTimers != nil {
 		_ = service.RegisterDeadLetterOwner("record_timer", recordTimerDeadLetterOwner{service: recordTimers})
-	}
-	if records != nil {
-		_ = service.RegisterDeadLetterOwner("record_batch", recordBatchDeadLetterOwner{service: records})
 	}
 }
 
@@ -86,46 +82,6 @@ func valueString(data map[string]any, key string) string {
 }
 
 var _ recordTimerDeadLetterService = (*recordtimerapplication.RecordTimerApplicationService)(nil)
-
-type recordBatchDeadLetterOwner struct {
-	service recordBatchDeadLetterService
-}
-
-type recordBatchDeadLetterService interface {
-	InspectBatchJobDeadLetter(context.Context, string, principalmodel.Principal) (recordmodel.RecordBatchJob, error)
-	RetryBatchJobDeadLetter(context.Context, string, principalmodel.Principal) (recordmodel.RecordBatchJob, error)
-	ResolveBatchJobDeadLetter(context.Context, string, principalmodel.Principal) (recordmodel.RecordBatchJob, error)
-	GetBatchJob(context.Context, string, principalmodel.Principal) (recordmodel.RecordBatchJob, error)
-}
-
-func (o recordBatchDeadLetterOwner) Inspect(ctx context.Context, id string, principal principalmodel.Principal) (operationsapplication.OperationsDeadLetterItem, error) {
-	job, err := o.service.InspectBatchJobDeadLetter(ctx, id, principal)
-	if err != nil {
-		return operationsapplication.OperationsDeadLetterItem{}, err
-	}
-	actions := []string{"resolve", "retry", "ack"}
-	return operationsapplication.OperationsDeadLetterItem{Owner: "record_batch", ID: job.ID, ResourceType: "record_batch_job", Status: job.Status, FailureCode: job.ErrorCode, BusinessKey: job.IdempotencyKey, EvidenceRef: "record_batch_job:" + job.ID, AllowedActions: actions, Details: map[string]any{"kind": job.Kind, "object_key": job.ObjectKey, "attempt_count": job.AttemptCount, "fencing_token": job.FencingToken}, UpdatedAt: job.UpdatedAt}, nil
-}
-
-func (o recordBatchDeadLetterOwner) Act(ctx context.Context, id, action, _ string, _ string, principal principalmodel.Principal) (operationsapplication.OperationsDeadLetterItem, error) {
-	var err error
-	switch action {
-	case operationsapplication.OperationsDeadLetterRetry:
-		_, err = o.service.RetryBatchJobDeadLetter(ctx, id, principal)
-	case operationsapplication.OperationsDeadLetterResolve, operationsapplication.OperationsDeadLetterAck:
-		_, err = o.service.ResolveBatchJobDeadLetter(ctx, id, principal)
-	default:
-		err = deadLetterActionUnsupported()
-	}
-	if err != nil {
-		return operationsapplication.OperationsDeadLetterItem{}, err
-	}
-	job, getErr := o.service.GetBatchJob(ctx, id, principal)
-	if getErr != nil {
-		return operationsapplication.OperationsDeadLetterItem{}, getErr
-	}
-	return operationsapplication.OperationsDeadLetterItem{Owner: "record_batch", ID: job.ID, ResourceType: "record_batch_job", Status: job.Status, FailureCode: job.ErrorCode, EvidenceRef: "record_batch_job:" + job.ID, AllowedActions: []string{"resolve", "retry", "ack"}, Details: map[string]any{"kind": job.Kind, "object_key": job.ObjectKey, "attempt_count": job.AttemptCount, "fencing_token": job.FencingToken}, UpdatedAt: job.UpdatedAt}, nil
-}
 
 type integrationEventDeadLetterOwner struct {
 	service *integrationapplication.IntegrationApplicationService

@@ -29,7 +29,6 @@ func DefaultPolicyCatalog(workspaceID, publisher string, now time.Time) []lifecy
 		{"operations.receipt.v1", "operations", lifecyclemodel.RetentionClassLegalAudit, 7 * year, 90 * day, []lifecyclemodel.Sensitivity{lifecyclemodel.SensitivityAudit, lifecyclemodel.SensitivitySecurity}, locked, protected},
 		{"operations.control.v1", "operations", lifecyclemodel.RetentionClassLegalAudit, 7 * year, year, []lifecyclemodel.Sensitivity{lifecyclemodel.SensitivityAudit, lifecyclemodel.SensitivitySecurity}, locked, protected},
 		{"operations.break_glass.v1", "operations", lifecyclemodel.RetentionClassLegalAudit, 7 * year, year, []lifecyclemodel.Sensitivity{lifecyclemodel.SensitivityAudit, lifecyclemodel.SensitivitySecurity}, locked, protected},
-		{"record.batch_artifact.v1", "record", lifecyclemodel.RetentionClassProduct, 90 * day, day, []lifecyclemodel.Sensitivity{lifecyclemodel.SensitivityPII}, delayed, deleteBehavior},
 		{"integration.configuration.v1", "integration", lifecyclemodel.RetentionClassProduct, year, 90 * day, []lifecyclemodel.Sensitivity{lifecyclemodel.SensitivitySensitive}, delayed, anonymize},
 		{"integration.secret.v1", "integration", lifecyclemodel.RetentionClassUserErase, 30 * day, 30 * day, []lifecyclemodel.Sensitivity{lifecyclemodel.SensitivitySecurity}, delayed, deleteBehavior},
 		{"integration.identity_mapping.v1", "integration", lifecyclemodel.RetentionClassUserErase, 90 * day, 30 * day, []lifecyclemodel.Sensitivity{lifecyclemodel.SensitivityPII}, delayed, anonymize},

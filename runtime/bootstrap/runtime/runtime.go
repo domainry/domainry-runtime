@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	"sync"
 	"time"
 
@@ -39,6 +40,7 @@ type Runtime struct {
 	identityDirectory   identitysdk.Directory
 	identityPrincipals  identitysdk.PrincipalResolver
 	partyBinding        partysdk.Binding
+	dataExchangeBinding dataexchangesdk.Binding
 	manifest            manifestmodel.ManifestSchema
 	recordRepo          recordrepository.RecordRepository
 	rateLimiter         ratelimit.Limiter

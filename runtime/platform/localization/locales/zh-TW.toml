@@ -98,13 +98,6 @@
 "notification.workflow.task.reminded.title" = "審批任務即將到期：{{task_title}}"
 
 "notification.action.integration.secret.open" = "管理憑據"
-"notification.action.record.batch.open" = "查看任務結果"
-"notification.record.batch.completed.title" = "{{job_kind}}已完成：{{object_key}}"
-"notification.record.batch.completed.body" = "長時間任務已完成，共處理 {{total}} 筆記錄。"
-"notification.record.batch.failed.title" = "{{job_kind}}失敗：{{object_key}}"
-"notification.record.batch.failed.body" = "長時間任務執行失敗，請查看安全錯誤碼並在適當時重試。"
-"notification.record.batch.cancelled.title" = "{{job_kind}}已取消：{{object_key}}"
-"notification.record.batch.cancelled.body" = "長時間任務已取消，不會繼續執行。"
 "notification.action.report.open" = "開啟報表"
 "notification.report.snapshot.completed.title" = "報表重新整理完成：{{report_key}}"
 "notification.report.snapshot.completed.body" = "報表快照已準備完成，可以檢視。"

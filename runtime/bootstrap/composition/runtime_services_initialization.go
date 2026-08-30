@@ -9,6 +9,7 @@ import (
 	deployment "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	businessintegration "github.com/domainry/domainry-runtime/runtime/application/integration"
 	lifecycleapplication "github.com/domainry/domainry-runtime/runtime/application/lifecycle"
+	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
 	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -21,6 +22,10 @@ import (
 
 // newRuntimeServicesState allocates state before ordered service initialization.
 func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.ManifestSchema, deps RuntimeServicesDependencies) *runtimeAssembly {
+	dataExchangeProviders := deps.DataExchangeProviders
+	if dataExchangeProviders == nil && deps.DataExchange != nil {
+		dataExchangeProviders = recordapplication.NewDataExchangeProviders(nil)
+	}
 	identityDirectory := deps.IdentityDirectory
 	policyStore := deps.IntegrationPolicyStore
 	if policyStore == nil {
@@ -42,11 +47,10 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 		actionMetadataRevision:              deps.ActionMetadataRevision,
 		recordRepo:                          deps.Records,
 		dataExchange:                        deps.DataExchange,
-		dataExchangeProviders:               deps.DataExchangeProviders,
+		dataExchangeProviders:               dataExchangeProviders,
 		reportDatasetRows:                   deps.ReportDatasetRows,
 		reportObjectSQL:                     deps.ReportObjectSQL,
 		reportSnapshots:                     deps.ReportSnapshots,
-		reportExportArtifacts:               deps.ReportExportArtifacts,
 		reportSnapshotSources:               deps.ReportSnapshotSources,
 		auditRepo:                           deps.Audit,
 		integrationConfigRepo:               deps.IntegrationConfig,
@@ -66,7 +70,6 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 		workflowTaskNotificationCommitter:   deps.WorkflowTaskNotificationCommitter,
 		notificationIntentPublisher:         deps.NotificationIntentPublisher,
 		recordNotificationCompiler:          deps.RecordNotificationCompiler,
-		recordBatchNotificationCommitter:    deps.RecordBatchNotificationCommitter,
 		reportNotificationCompiler:          deps.ReportNotificationCompiler,
 		reportSnapshotNotificationCommitter: deps.ReportSnapshotNotificationCommitter,
 		automationNotificationCompiler:      deps.AutomationNotificationCompiler,
@@ -92,8 +95,6 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 		Repository: deps.Lifecycle, Executors: deps.LifecycleExecutors, SubjectResolver: deps.LifecycleSubjectResolver,
 		SubjectHandlers: deps.LifecycleSubjectHandlers, ExternalErasure: deps.LifecycleExternalErasure, Artifacts: deps.LifecycleArtifacts, UploadArtifacts: deps.LifecycleUploadArtifacts,
 	})
-	services.batchJobQueueLimit = deps.BatchJobQueueLimit
-	services.batchJobWorkspaceQueueLimit = deps.BatchJobWorkspaceQueueLimit
 	services.frontendCapabilities = newDeploymentFrontendCapabilityApplicationService(deps.FrontendCapabilities, func(ctx context.Context) deployment.FrontendBusinessBindings {
 		return frontendBusinessBindings(services)
 	})

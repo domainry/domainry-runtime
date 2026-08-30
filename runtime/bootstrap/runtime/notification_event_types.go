@@ -56,9 +56,6 @@ func notificationBuiltInEventTypes(locales []string, defaultLocale string, looku
 		integrationResourceHealthEventType("integration.quota.recovered", "integration.quota.recovered.in_app", "info", false),
 		integrationResourceHealthEventType("integration.billing.payment_required", "integration.billing.payment_required.in_app", "critical", true),
 		integrationResourceHealthEventType("integration.billing.recovered", "integration.billing.recovered.in_app", "info", false),
-		recordBatchEventType("record.batch.completed", "record.batch.completed.in_app", "info"),
-		recordBatchEventType("record.batch.failed", "record.batch.failed.in_app", "critical"),
-		recordBatchEventType("record.batch.cancelled", "record.batch.cancelled.in_app", "warning"),
 		reportSnapshotEventType("report.snapshot.completed", "report.snapshot.completed.in_app", "info"),
 		reportSnapshotEventType("report.snapshot.failed", "report.snapshot.failed.in_app", "critical"),
 		automationExecutionEventType("automation.execution.completed", "automation.execution.completed.in_app", "info"),
@@ -95,18 +92,6 @@ func reportSnapshotEventType(key, templateKey, severity string) notificationmode
 			{Key: "report_key", Type: "string", Required: true}, {Key: "status", Type: "string", Required: true}, {Key: "error_code", Type: "string"},
 		},
 		Actions: []notificationmodel.NotificationInboxActionDescriptor{{Key: "report.open", Kind: "route", ResourceType: "report", SurfaceRoutes: map[string]string{"business_workspace": "report.detail"}}},
-	}
-}
-
-func recordBatchEventType(key, templateKey, severity string) notificationmodel.NotificationEventType {
-	return notificationmodel.NotificationEventType{
-		Key: key, Source: "record", Category: "long_task", DefaultSeverity: severity, Surfaces: []string{"business_workspace"}, MandatoryInApp: true,
-		TemplateKey: templateKey, Variables: []notificationmodel.NotificationTemplateVariable{
-			{Key: "job_kind", Type: "string", Required: true}, {Key: "object_key", Type: "string", Required: true},
-			{Key: "status", Type: "string", Required: true}, {Key: "total", Type: "number"}, {Key: "error_code", Type: "string"},
-			{Key: "job_id", Type: "string"}, {Key: "audit_id", Type: "string"}, {Key: "artifact_id", Type: "string"},
-		},
-		Actions: []notificationmodel.NotificationInboxActionDescriptor{{Key: "record.batch.open", Kind: "route", ResourceType: "record_batch_job", SurfaceRoutes: map[string]string{"business_workspace": "record.batch.job.detail"}}},
 	}
 }
 
@@ -198,8 +183,6 @@ func notificationBuiltInPresentationKeys(eventType string) ([]string, []string) 
 		return []string{"quotaUsed", "observedAt"}, []string{"integration.connection.open"}
 	case "integration.billing.payment_required":
 		return []string{"balanceBand", "observedAt"}, []string{"integration.connection.open"}
-	case "record.batch.completed", "record.batch.failed", "record.batch.cancelled":
-		return nil, []string{"record.batch.open"}
 	case "report.snapshot.completed", "report.snapshot.failed":
 		return nil, []string{"report.open"}
 	case "automation.execution.completed", "automation.execution.failed":

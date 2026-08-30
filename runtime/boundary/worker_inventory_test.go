@@ -22,9 +22,8 @@ func TestRuntimeWorkerInventoryCoversProductionWorkers(t *testing.T) {
 		"scheduler", "workflow_execution", "workflow_deadline", "automation_instruction",
 		"integration_event", "integration_outbox", "integration_invocation_reconciliation",
 		"integration_credential_expiry", "notification_publication", "notification_inbox",
-		"notification_channel", "record_batch", "idempotency_cleanup", "metadata_snapshot",
+		"notification_channel", "data_exchange", "idempotency_cleanup", "metadata_snapshot",
 		"lifecycle_cleanup",
-		"report_export", "download_task",
 	} {
 		if !strings.Contains(document, "`"+workerID+"`") {
 			t.Errorf("Runtime worker %s is missing from runtime-worker-inventory.md", workerID)
@@ -73,7 +72,6 @@ func TestRuntimeNamedLoopsAreRegisteredInWorkerInventory(t *testing.T) {
 func TestRuntimeRawTickerBaselineIsExact(t *testing.T) {
 	repositoryRoot := filepath.Clean(filepath.Join(runtimeRoot(t), ".."))
 	expected := map[string]bool{
-		"runtime/application/record/record_batch_job_runtime_application_service.go": false,
 		"runtime/transport/http/notifications/notifications_inbox_stream_handler.go": false,
 		"runtime/transport/http/records/records_stream_handler.go":                   false,
 	}
@@ -97,7 +95,7 @@ func TestRuntimeRawTickerBaselineIsExact(t *testing.T) {
 		}
 		relative = filepath.ToSlash(relative)
 		if _, ok := expected[relative]; !ok {
-				t.Errorf("unregistered production ticker %s; use domainry-foundation/worker.StartNamedLoop or update the reviewed inventory", relative)
+			t.Errorf("unregistered production ticker %s; use domainry-foundation/worker.StartNamedLoop or update the reviewed inventory", relative)
 			return nil
 		}
 		expected[relative] = true

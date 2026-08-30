@@ -46,7 +46,7 @@ Registered schema tables:
 - `_business_seed_provenance` — `installation_scoped`
 - `_audit_events`, `business_audit_export_artifacts`, `transaction_boundary_intents` — `workspace_scoped`
 - record/action/idempotency: `business_action_executions`,
-  `action_assurance_grants`, `record_mutation_executions`, `record_batch_jobs`, `record_batch_job_chunks`
+  `action_assurance_grants`, `record_mutation_executions`
   — `workspace_scoped`
 - `idempotency_cleanup_leases` — `runtime_global`
 - workflow definitions: `workflow_definitions`, `workflow_definition_identities`,
@@ -69,7 +69,8 @@ Registered schema tables:
   `skill_definitions`, `agent_definitions`, `agent_entrypoint_definitions`,
   `agent_service_principal_definitions`, `agent_task_definitions`, `role_definitions`,
   `identity_profile_binding_definitions` — `installation_scoped`
-- `report_snapshots`, `report_export_artifacts` — `workspace_scoped`
+- `report_snapshots` — `workspace_scoped`
+- Data Exchange Module-owned `data_exchange_jobs`, `data_exchange_chunks`, `data_exchange_artifacts` — `workspace_scoped`; `data_exchange_queue_scopes` contains only payload-free workspace scheduling identities. SaaS mode keeps the same ownership boundary remotely.
 - Party Module-owned foundation tables in the borrowed Runtime database (or isolated behind Party SaaS): `party_parties`, `party_persons`,
   `party_organizations`, `party_contact_points`, `party_addresses`,
   `party_identifiers`, `party_communication_preferences`, `party_consents`,

@@ -504,31 +504,31 @@ func TestValidateFieldAccessAndArtifactIntegrity(t *testing.T) {
 	authHash, _ := reportservice.ReportAccessScopeHash(principal)
 	reportHash, _ := CanonicalJSONSHA256(exportReport())
 	controlHash, _ := CanonicalJSONSHA256(reportmodel.ReportExportControlSchema{})
-	artifact := reportmodel.ReportExportArtifact{ObjectKey: "order", Scope: scope, ScopeSHA256: scopeHash, AuthorizationScopeSHA256: authHash, ReportDefinitionSHA256: reportHash, ControlDefinitionSHA256: controlHash}
-	if err := ValidateCurrentArtifact(t.Context(), domain, exportReport(), reportmodel.ReportExportControlSchema{}, artifact, principal); err != nil {
+	snapshot := reportmodel.ReportExportAuthorizationSnapshot{ObjectKey: "order", Scope: scope, ScopeSHA256: scopeHash, AuthorizationScopeSHA256: authHash, ReportDefinitionSHA256: reportHash, ControlDefinitionSHA256: controlHash}
+	if err := ValidateCurrentExportAuthorization(t.Context(), domain, exportReport(), reportmodel.ReportExportControlSchema{}, snapshot, principal); err != nil {
 		t.Fatal(err)
 	}
-	artifact.ScopeSHA256 = "changed"
-	if err := ValidateCurrentArtifact(t.Context(), domain, exportReport(), reportmodel.ReportExportControlSchema{}, artifact, principal); apperror.CodeOf(err) != "backend.report.export_scope_changed" {
+	snapshot.ScopeSHA256 = "changed"
+	if err := ValidateCurrentExportAuthorization(t.Context(), domain, exportReport(), reportmodel.ReportExportControlSchema{}, snapshot, principal); apperror.CodeOf(err) != "backend.report.export_scope_changed" {
 		t.Fatalf("integrity err=%v", err)
 	}
-	artifact.Scope.Purpose = ""
-	if err := ValidateCurrentArtifact(t.Context(), domain, exportReport(), reportmodel.ReportExportControlSchema{}, artifact, principal); apperror.CodeOf(err) != "backend.report.export_scope_invalid" {
+	snapshot.Scope.Purpose = ""
+	if err := ValidateCurrentExportAuthorization(t.Context(), domain, exportReport(), reportmodel.ReportExportControlSchema{}, snapshot, principal); apperror.CodeOf(err) != "backend.report.export_scope_invalid" {
 		t.Fatalf("invalid scope err=%v", err)
 	}
-	artifact.Scope = scope
-	artifact.ScopeSHA256 = scopeHash
-	artifact.ReportDefinitionSHA256 = "changed"
-	if err := ValidateCurrentArtifact(t.Context(), domain, exportReport(), reportmodel.ReportExportControlSchema{}, artifact, principal); apperror.CodeOf(err) != "backend.report.export_scope_changed" {
+	snapshot.Scope = scope
+	snapshot.ScopeSHA256 = scopeHash
+	snapshot.ReportDefinitionSHA256 = "changed"
+	if err := ValidateCurrentExportAuthorization(t.Context(), domain, exportReport(), reportmodel.ReportExportControlSchema{}, snapshot, principal); apperror.CodeOf(err) != "backend.report.export_scope_changed" {
 		t.Fatalf("report definition integrity err=%v", err)
 	}
-	artifact.ReportDefinitionSHA256 = reportHash
-	artifact.ControlDefinitionSHA256 = "changed"
-	if err := ValidateCurrentArtifact(t.Context(), domain, exportReport(), reportmodel.ReportExportControlSchema{}, artifact, principal); apperror.CodeOf(err) != "backend.report.export_scope_changed" {
+	snapshot.ReportDefinitionSHA256 = reportHash
+	snapshot.ControlDefinitionSHA256 = "changed"
+	if err := ValidateCurrentExportAuthorization(t.Context(), domain, exportReport(), reportmodel.ReportExportControlSchema{}, snapshot, principal); apperror.CodeOf(err) != "backend.report.export_scope_changed" {
 		t.Fatalf("control definition integrity err=%v", err)
 	}
-	artifact.ControlDefinitionSHA256 = controlHash
-	if err := ValidateCurrentArtifact(t.Context(), failing, exportReport(), reportmodel.ReportExportControlSchema{}, artifact, principal); !errors.Is(err, want) {
+	snapshot.ControlDefinitionSHA256 = controlHash
+	if err := ValidateCurrentExportAuthorization(t.Context(), failing, exportReport(), reportmodel.ReportExportControlSchema{}, snapshot, principal); !errors.Is(err, want) {
 		t.Fatalf("current field access err=%v", err)
 	}
 }

@@ -98,13 +98,6 @@
 "notification.workflow.task.reminded.title" = "اقترب موعد مهمة الموافقة: {{task_title}}"
 
 "notification.action.integration.secret.open" = "إدارة بيانات الاعتماد"
-"notification.action.record.batch.open" = "عرض نتيجة المهمة"
-"notification.record.batch.completed.title" = "اكتملت {{job_kind}}: {{object_key}}"
-"notification.record.batch.completed.body" = "اكتملت المهمة طويلة التشغيل وتمت معالجة {{total}} سجلاً."
-"notification.record.batch.failed.title" = "فشلت {{job_kind}}: {{object_key}}"
-"notification.record.batch.failed.body" = "فشلت المهمة طويلة التشغيل. راجع رمز الخطأ الآمن وأعد المحاولة عند الحاجة."
-"notification.record.batch.cancelled.title" = "أُلغيت {{job_kind}}: {{object_key}}"
-"notification.record.batch.cancelled.body" = "أُلغيت المهمة طويلة التشغيل ولن تستمر."
 "notification.action.report.open" = "فتح التقرير"
 "notification.report.snapshot.completed.title" = "اكتمل تحديث التقرير: {{report_key}}"
 "notification.report.snapshot.completed.body" = "لقطة التقرير جاهزة للعرض."

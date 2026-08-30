@@ -6,9 +6,11 @@ import (
 	"strings"
 	"time"
 
+	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
+	reportexport "github.com/domainry/domainry-runtime/runtime/application/report/export"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -198,13 +200,13 @@ type ReportApplicationDependencies struct {
 	Domain                *reportservice.ReportDomainService
 	Records               ReportRecordExporter
 	ExportRecords         ReportExportRecordStore
-	ExportArtifacts       reportcontract.ReportExportArtifactStore
 	Audit                 auditcontract.AuditAppender
 	NotificationCompiler  func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	NotificationCommitter ReportSnapshotNotificationCommitter
 	ExportControls        func(context.Context, principalmodel.Principal) []reportmodel.ReportExportControlSchema
 	Clock                 func() time.Time
-	BatchJobs             *recordapplication.RecordApplicationService
+	DataExchange          dataexchange.Binding
+	DataExchangeProviders *recordapplication.DataExchangeProviders
 	CursorKey             []byte
 }
 
@@ -215,18 +217,18 @@ type ReportSnapshotNotificationCommitter interface {
 
 // ReportApplicationService owns Report use-case sequencing across Record and Audit.
 type ReportApplicationService struct {
-	productBrandName    string
-	domain              *reportservice.ReportDomainService
-	records             ReportRecordExporter
-	exportRecords       ReportExportRecordStore
-	exportArtifacts     reportcontract.ReportExportArtifactStore
-	audit               auditcontract.AuditAppender
-	compileNotification func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
-	commitNotification  ReportSnapshotNotificationCommitter
-	exportControls      func(context.Context, principalmodel.Principal) []reportmodel.ReportExportControlSchema
-	clock               func() time.Time
-	batchJobs           *recordapplication.RecordApplicationService
-	cursorKey           []byte
+	productBrandName     string
+	domain               *reportservice.ReportDomainService
+	records              ReportRecordExporter
+	exportRecords        ReportExportRecordStore
+	audit                auditcontract.AuditAppender
+	compileNotification  func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
+	commitNotification   ReportSnapshotNotificationCommitter
+	exportControls       func(context.Context, principalmodel.Principal) []reportmodel.ReportExportControlSchema
+	clock                func() time.Time
+	dataExchange         dataexchange.Binding
+	dataExchangeProvider *reportexport.DataExchangeProvider
+	cursorKey            []byte
 }
 
 func NewReportApplicationService(dependencies ReportApplicationDependencies) *ReportApplicationService {
@@ -238,9 +240,10 @@ func NewReportApplicationService(dependencies ReportApplicationDependencies) *Re
 	if len(cursorKey) == 0 {
 		cursorKey = []byte("report-pagination-test-key")
 	}
-	service := &ReportApplicationService{productBrandName: productbrand.ResolveName(dependencies.ProductBrandName), domain: dependencies.Domain, records: dependencies.Records, exportRecords: dependencies.ExportRecords, exportArtifacts: dependencies.ExportArtifacts, audit: dependencies.Audit, compileNotification: dependencies.NotificationCompiler, commitNotification: dependencies.NotificationCommitter, exportControls: dependencies.ExportControls, clock: clock, batchJobs: dependencies.BatchJobs, cursorKey: cursorKey}
-	if service.batchJobs != nil {
-		_ = service.batchJobs.RegisterOwnedBatchProcessor(reportExportBatchKind, service.processReportExportBatch)
+	service := &ReportApplicationService{productBrandName: productbrand.ResolveName(dependencies.ProductBrandName), domain: dependencies.Domain, records: dependencies.Records, exportRecords: dependencies.ExportRecords, audit: dependencies.Audit, compileNotification: dependencies.NotificationCompiler, commitNotification: dependencies.NotificationCommitter, exportControls: dependencies.ExportControls, clock: clock, dataExchange: dependencies.DataExchange, cursorKey: cursorKey}
+	if dependencies.DataExchangeProviders != nil {
+		service.dataExchangeProvider = reportexport.NewDataExchangeProvider(reportexport.DataExchangeDependencies{Binding: dependencies.DataExchange, Domain: dependencies.Domain, Records: dependencies.ExportRecords, Audit: dependencies.Audit, ResolvePrincipal: dependencies.DataExchangeProviders.ResolvePrincipal, ExportControl: service.exportControl, Watermark: service.reportExportWatermark, Clock: clock})
+		dependencies.DataExchangeProviders.RegisterExportProvider(reportexport.DataExchangeProviderKey, service.dataExchangeProvider)
 	}
 	return service
 }

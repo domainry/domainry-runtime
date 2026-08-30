@@ -41,6 +41,7 @@ func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *comp
 	dependencies.IdentityDirectory = config.IdentityDirectory
 	dependencies.AgentPrincipals = config.IdentityPrincipals
 	dependencies.ConnectorProviders = config.ConnectorProviders
+	dependencies.DataExchange = config.DataExchange
 	return composition.NewRuntimeServices(ctx, composition.RuntimeServicesConfig{
 		Manifest: manifestmodel.ManifestSchema{
 			TemplateID: config.TemplateID, Version: config.TemplateVersion, Name: config.Name,
@@ -64,7 +65,6 @@ func focusedPersistenceDependencies(config RuntimeServicesConfig) composition.Ru
 		ReportDatasetRows:     reportDataset,
 		ReportObjectSQL:       reportDataset,
 		ReportSnapshots:       reportpersistence.NewReportSnapshotStore(config.Store),
-		ReportExportArtifacts: reportpersistence.NewReportExportArtifactStore(config.Store),
 		ReportSnapshotSources: reportDataset,
 		Audit:                 auditpersistence.NewRepositoryFromStore(config.Store),
 		IntegrationConfig:     integrationpersistence.NewIntegrationConfigStore(config.Store),

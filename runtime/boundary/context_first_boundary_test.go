@@ -174,7 +174,6 @@ func TestRuntimeApplicationContextFreeMethodsMatchReviewedPureOrConstructionExce
 		"OperationsApplicationService.UseDirectAuthoringProjection",
 		"PipelineApplicationService.ApplyStageSLA", "PipelineApplicationService.ValidateStagePermission", "PipelineTransitionApplicationService.IsAction",
 		"RecordApplicationService.CanAccessRecord", "RecordApplicationService.NormalizeListQuery", "RecordApplicationService.ObjectForAction",
-		"RecordApplicationService.RegisterOwnedBatchProcessor", "RecordBatchJobApplicationService.RegisterOwnedProcessor",
 		"SchedulerApplicationService.ConfigureWorker", "SchedulerApplicationService.UseDefinitionHistoryReader", "SchedulerApplicationService.UseDefinitionSource", "SchedulerApplicationService.UseNotificationCompiler", "SchedulerApplicationService.UseReportSnapshotRuntime", "SchedulerApplicationService.WorkerConfig",
 	)
 	seen := map[string]bool{}

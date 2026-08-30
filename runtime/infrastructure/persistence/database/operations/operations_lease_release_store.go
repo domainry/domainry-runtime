@@ -24,7 +24,6 @@ var operationsLeaseReleaseSpecs = map[string]operationsLeaseReleaseSpec{
 	"workflow_deadline":    {table: "workflow_tasks", idColumn: "id", workspaceColumn: "workspace_id"},
 	"business_action":      {table: "business_action_executions", idColumn: "id", workspaceColumn: "workspace_id"},
 	"record_mutation":      {table: "record_mutation_executions", idColumn: "id", workspaceColumn: "workspace_id"},
-	"record_batch":         {table: "record_batch_jobs", idColumn: "id", workspaceColumn: "workspace_id"},
 	"idempotency_cleanup":  {table: "idempotency_cleanup_leases", idColumn: "id"},
 	"automation":           {table: "automation_instruction_executions", idColumn: "id", workspaceColumn: "workspace_id"},
 	"integration_event":    {table: "integration_events", idColumn: "id", workspaceColumn: "workspace_id"},

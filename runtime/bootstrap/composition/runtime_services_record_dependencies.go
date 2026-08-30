@@ -18,9 +18,7 @@ import (
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
 
@@ -45,25 +43,18 @@ func buildRecordApplicationDependencies(s *runtimeAssembly) recordapplication.Re
 		}
 	}
 	return recordapplication.RecordApplicationDependencies{
-		Repository:                  s.recordRepo,
-		MutationKernel:              recordmutation.NewMutationKernelApplicationService(s.recordRepo, revisionResolver),
-		QueryPolicy:                 s.RecordQueryPolicyDomainService,
-		Pipeline:                    s.PipelineApplicationService,
-		Validation:                  s.RecordValidationDomainService,
-		IdentityDirectory:           s.identityDirectory,
-		ScopeOwnerFactDerivation:    s.RecordScopeOwnerFactDerivationService,
-		Audit:                       s.auditApplicationService.AppendWithMetadata,
-		BuildAudit:                  auditapplication.AuditBuildEvent,
-		RecordMutationExecution:     s.RecordMutationExecutionRuntime,
-		BatchJobs:                   recordBatchJobStore(s.recordRepo),
-		DataExchange:                s.dataExchange,
-		DataExchangeProviders:       s.dataExchangeProviders,
-		BatchJobQueueLimit:          s.batchJobQueueLimit,
-		BatchJobWorkspaceQueueLimit: s.batchJobWorkspaceQueueLimit,
-		Worker:                      s.workerDependencies,
-		WorkerWakeups:               s.workerWakeups,
-		NotificationCompiler:        s.recordNotificationCompiler,
-		BatchNotificationCommitter:  s.recordBatchNotificationCommitter,
+		Repository:               s.recordRepo,
+		MutationKernel:           recordmutation.NewMutationKernelApplicationService(s.recordRepo, revisionResolver),
+		QueryPolicy:              s.RecordQueryPolicyDomainService,
+		Pipeline:                 s.PipelineApplicationService,
+		Validation:               s.RecordValidationDomainService,
+		IdentityDirectory:        s.identityDirectory,
+		ScopeOwnerFactDerivation: s.RecordScopeOwnerFactDerivationService,
+		Audit:                    s.auditApplicationService.AppendWithMetadata,
+		BuildAudit:               auditapplication.AuditBuildEvent,
+		RecordMutationExecution:  s.RecordMutationExecutionRuntime,
+		DataExchange:             s.dataExchange,
+		DataExchangeProviders:    s.dataExchangeProviders,
 		ValidateExportAssurance: func(ctx context.Context, object definitionmodel.ObjectSchema, principal principalmodel.Principal, intent map[string]any, token string) (map[string]string, error) {
 			policy := object.ExportAssurancePolicy
 			if policy == nil || len(policy.RequiredMethods) == 0 {
@@ -141,11 +132,6 @@ func buildRecordApplicationDependencies(s *runtimeAssembly) recordapplication.Re
 			return append([]profilebindingmodel.Binding(nil), s.identityProfileExtensions...)
 		},
 	}
-}
-
-func recordBatchJobStore(repository recordrepository.RecordRepository) recordcontract.RecordBatchJobStore {
-	store, _ := repository.(recordcontract.RecordBatchJobStore)
-	return store
 }
 
 func listRuntimeSurfaceContextStoredRecords(ctx context.Context, services *runtimeAssembly, workspaceID string, object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {

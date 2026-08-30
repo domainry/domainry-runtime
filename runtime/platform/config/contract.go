@@ -324,9 +324,6 @@ func (c Config) Validate() error {
 	if c.CapacityQueueDepthThreshold < 1 || c.CapacityQueueDepthThreshold > 1_000_000 || c.CapacityQueueOldestAgeThreshold <= 0 {
 		return fmt.Errorf("queue backpressure thresholds are invalid")
 	}
-	if c.CapacityBatchJobQueueLimit < 1 || c.CapacityBatchJobQueueLimit > 1_000_000 || c.CapacityBatchJobWorkspaceQueueLimit < 1 || c.CapacityBatchJobWorkspaceQueueLimit > c.CapacityBatchJobQueueLimit {
-		return fmt.Errorf("record batch job queue limits are invalid")
-	}
 	if c.BusinessEventReplayLimit < 1 || c.BusinessEventReplayLimit > 100_000 || c.BusinessEventSubscriberBuffer < 1 || c.BusinessEventSubscriberBuffer > 10_000 {
 		return fmt.Errorf("business event replay and subscriber buffer limits are invalid")
 	}

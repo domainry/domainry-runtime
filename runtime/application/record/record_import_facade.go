@@ -72,99 +72,31 @@ func (s *RecordUpdateApplicationService) PlanUpdateMutation(ctx context.Context,
 }
 
 func (s *RecordApplicationService) EnqueueImportJob(ctx context.Context, objectKey string, rawCSV []byte, key string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, bool, error) {
-	return s.batchJobs.EnqueueImport(ctx, objectKey, rawCSV, key, principal)
+	return s.dataExchange.EnqueueImport(ctx, objectKey, rawCSV, key, principal)
 }
 
 func (s *RecordApplicationService) EnqueueImportStream(ctx context.Context, objectKey string, source io.Reader, filename, contentType string, maxBytes int64, key string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, bool, error) {
-	return s.batchJobs.EnqueueImportStream(ctx, objectKey, source, filename, contentType, maxBytes, key, principal)
+	return s.dataExchange.EnqueueImportStream(ctx, objectKey, source, filename, contentType, maxBytes, key, principal)
 }
 
 func (s *RecordApplicationService) EnqueueExportJob(ctx context.Context, objectKey, key string, options RecordExportOptions, principal principalmodel.Principal) (recordmodel.RecordBatchJob, bool, error) {
-	return s.batchJobs.EnqueueExport(ctx, objectKey, key, options, principal)
-}
-
-func (s *RecordApplicationService) RegisterOwnedBatchProcessor(kind string, processor RecordBatchOwnedProcessor) error {
-	return s.batchJobs.RegisterOwnedProcessor(kind, processor)
-}
-
-func (s *RecordApplicationService) EnqueueOwnedBatchJob(ctx context.Context, kind, objectKey, key, auditID string, payload []byte, principal principalmodel.Principal) (recordmodel.RecordBatchJob, bool, error) {
-	return s.batchJobs.EnqueueOwned(ctx, kind, objectKey, key, auditID, payload, principal)
-}
-
-func (s *RecordApplicationService) GetOwnedBatchJob(ctx context.Context, jobID, kind string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, error) {
-	return s.batchJobs.GetOwned(ctx, jobID, kind, principal)
-}
-
-func (s *RecordApplicationService) FindOwnedBatchJobByFingerprint(ctx context.Context, kind, objectKey, fingerprint string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, bool, error) {
-	return s.batchJobs.FindOwnedByFingerprint(ctx, kind, objectKey, fingerprint, principal)
-}
-
-func (s *RecordApplicationService) FindOwnedBatchJobByIdempotency(ctx context.Context, kind, objectKey, key string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, bool, error) {
-	return s.batchJobs.FindOwnedByIdempotency(ctx, kind, objectKey, key, principal)
-}
-
-func (s *RecordApplicationService) CancelOwnedBatchJob(ctx context.Context, jobID, kind string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, error) {
-	if _, err := s.batchJobs.GetOwned(ctx, jobID, kind, principal); err != nil {
-		return recordmodel.RecordBatchJob{}, err
-	}
-	return s.batchJobs.Cancel(ctx, jobID, principal)
+	return s.dataExchange.EnqueueExport(ctx, objectKey, key, options, principal)
 }
 
 func (s *RecordApplicationService) GetBatchJob(ctx context.Context, jobID string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, error) {
-	return s.batchJobs.Get(ctx, jobID, principal)
+	return s.dataExchange.Get(ctx, jobID, principal)
 }
 
 func (s *RecordApplicationService) CancelBatchJob(ctx context.Context, jobID string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, error) {
-	return s.batchJobs.Cancel(ctx, jobID, principal)
-}
-
-func (s *RecordApplicationService) DownloadBatchJob(ctx context.Context, jobID string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, []recordmodel.RecordBatchJobChunk, error) {
-	return s.batchJobs.Download(ctx, jobID, principal)
+	return s.dataExchange.Cancel(ctx, jobID, principal)
 }
 
 func (s *RecordApplicationService) OpenBatchJobDownload(ctx context.Context, jobID string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, io.ReadCloser, error) {
-	return s.batchJobs.OpenDownload(ctx, jobID, principal)
+	return s.dataExchange.OpenDownload(ctx, jobID, principal)
 }
 
-func (s *RecordApplicationService) StartBatchJobWorker(ctx context.Context, interval time.Duration, limit int) <-chan struct{} {
-	return s.batchJobs.StartWorker(ctx, interval, limit)
-}
-
-func (s *RecordApplicationService) ProcessDueBatchJobs(ctx context.Context, limit int) error {
-	return s.batchJobs.ProcessDue(ctx, limit)
-}
-
-func (s *RecordApplicationService) BatchJobOpenMetrics(context.Context) string {
-	if s == nil || s.batchJobs == nil {
-		return ""
-	}
-	b := s.batchJobs
-	return fmt.Sprintf("# HELP domainry_runtime_record_batch_jobs_total Record batch jobs by transition.\n# TYPE domainry_runtime_record_batch_jobs_total counter\ndomainry_runtime_record_batch_jobs_total{outcome=\"queued\"} %d\ndomainry_runtime_record_batch_jobs_total{outcome=\"completed\"} %d\ndomainry_runtime_record_batch_jobs_total{outcome=\"failed\"} %d\ndomainry_runtime_record_batch_jobs_total{outcome=\"quarantined\"} %d\ndomainry_runtime_record_batch_jobs_total{outcome=\"cancelled\"} %d\ndomainry_runtime_record_batch_jobs_total{outcome=\"retried\"} %d\n# HELP domainry_runtime_record_batch_in_flight Current record batch jobs.\n# TYPE domainry_runtime_record_batch_in_flight gauge\ndomainry_runtime_record_batch_in_flight %d\n# HELP domainry_runtime_record_batch_queue_depth Queued record batch jobs.\n# TYPE domainry_runtime_record_batch_queue_depth gauge\ndomainry_runtime_record_batch_queue_depth %d\n# HELP domainry_runtime_record_batch_oldest_seconds Age of oldest queued job.\n# TYPE domainry_runtime_record_batch_oldest_seconds gauge\ndomainry_runtime_record_batch_oldest_seconds %.3f\n", b.queued.Load(), b.completed.Load(), b.failed.Load(), b.quarantined.Load(), b.cancelled.Load(), b.retried.Load(), b.inFlight.Load(), b.queueDepth.Load(), float64(b.oldestMillis.Load())/1000)
-}
-
-func (s *RecordApplicationService) InspectBatchJobDeadLetter(ctx context.Context, jobID string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, error) {
-	return s.batchJobs.InspectTerminal(ctx, jobID, principal)
-}
-
-func (s *RecordApplicationService) RetryBatchJobDeadLetter(ctx context.Context, jobID string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, error) {
-	return s.batchJobs.RetryTerminal(ctx, jobID, principal)
-}
-
-func (s *RecordApplicationService) ResolveBatchJobDeadLetter(ctx context.Context, jobID string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, error) {
-	return s.batchJobs.ResolveTerminal(ctx, jobID, principal)
-}
-
-func bytesCountCSVRows(content []byte) int {
-	count := 0
-	for _, value := range content {
-		if value == '\n' {
-			count++
-		}
-	}
-	if count > 0 {
-		count--
-	}
-	return count
+func (s *RecordApplicationService) StartDataExchangeWorker(ctx context.Context, interval time.Duration, limit int) <-chan struct{} {
+	return s.dataExchange.StartWorker(ctx, interval, limit)
 }
 
 func (s *RecordApplicationService) PreviewImport(ctx context.Context, objectKey string, rawCSV []byte, principal principalmodel.Principal) (recordmodel.RecordImportPreview, error) {

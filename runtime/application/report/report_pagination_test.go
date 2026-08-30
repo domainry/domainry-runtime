@@ -4,12 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	"strings"
 	"testing"
-	"time"
-
-	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	reportexport "github.com/domainry/domainry-runtime/runtime/application/report/export"
@@ -174,40 +169,8 @@ func TestReportPaginationKeepsEmptyRowsAsJSONArray(t *testing.T) {
 	}
 }
 
-func TestReportCSVPagesPreserveHeaderAndRows(t *testing.T) {
-	pages, total, err := reportCSVPages([]byte("id,value\n1,a\n2,b\n3,c\n"), 2)
-	if err != nil || total != 3 || len(pages) != 2 {
-		t.Fatalf("pages=%d total=%d err=%v", len(pages), total, err)
-	}
-	if string(pages[0]) != "id,value\n1,a\n2,b\n" || string(pages[1]) != "3,c\n" {
-		t.Fatalf("page contents=%q / %q", pages[0], pages[1])
-	}
-}
-
-func TestReportExportThresholdUsesExactAuthorizedTotal(t *testing.T) {
-	for _, test := range []struct {
-		total int
-		async bool
-	}{{0, false}, {1000, false}, {1001, true}} {
-		if actual := reportExportRequiresAsync(test.total); actual != test.async {
-			t.Fatalf("total=%d async=%v want=%v", test.total, actual, test.async)
-		}
-	}
-	if reportExportRoutesAsync(200) {
-		t.Fatal("ordinary 200-row export left the synchronous production threshold path")
-	}
-	rows := "id\n"
-	for index := 0; index < 1001; index++ {
-		rows += fmt.Sprintf("%d\n", index)
-	}
-	pages, total, err := reportCSVPages([]byte(rows), reportmodel.ReportPageMaximumSize)
-	if err != nil || total != 1001 || len(pages) != 6 {
-		t.Fatalf("1001-row paging total=%d pages=%d err=%v", total, len(pages), err)
-	}
-}
-
 func TestReportExportFingerprintBindsCanonicalConditionsNotRequestIdentity(t *testing.T) {
-	base := reportExportBatchPayload{
+	base := reportexport.ExportPayload{
 		WorkspaceID: "workspace-a", RequesterUserID: "user-a", ReportKey: "orders", ObjectKey: "order",
 		Scope:                  reportmodel.ReportExportScopeRequest{Parameters: map[string]any{"status": "paid"}},
 		ReportDefinitionSHA256: "definition", ReportSourceSHA256: "source", AuthorizationScopeSHA256: "scope", ResultSHA256: "result", ExactTotal: 12, Format: "csv",
@@ -220,41 +183,18 @@ func TestReportExportFingerprintBindsCanonicalConditionsNotRequestIdentity(t *te
 	if replay := reportExportRequestFingerprint(base); replay != first {
 		t.Fatalf("request identity changed canonical fingerprint: %s != %s", replay, first)
 	}
-	for name, mutate := range map[string]func(*reportExportBatchPayload){
-		"sql":   func(value *reportExportBatchPayload) { value.ReportSourceSHA256 = "source-v2" },
-		"scope": func(value *reportExportBatchPayload) { value.AuthorizationScopeSHA256 = "scope-v2" },
-		"parameters": func(value *reportExportBatchPayload) {
+	for name, mutate := range map[string]func(*reportexport.ExportPayload){
+		"sql":   func(value *reportexport.ExportPayload) { value.ReportSourceSHA256 = "source-v2" },
+		"scope": func(value *reportexport.ExportPayload) { value.AuthorizationScopeSHA256 = "scope-v2" },
+		"parameters": func(value *reportexport.ExportPayload) {
 			value.Scope.Parameters = map[string]any{"status": "refunded"}
 		},
-		"format": func(value *reportExportBatchPayload) { value.Format = "xlsx" },
+		"format": func(value *reportexport.ExportPayload) { value.Format = "xlsx" },
 	} {
 		changed := base
 		mutate(&changed)
 		if got := reportExportRequestFingerprint(changed); got == first {
 			t.Fatalf("%s change reused fingerprint %s", name, got)
 		}
-	}
-}
-
-func TestSynchronousReportExportReplayRenewsOnlyExpiredOrCorruptArtifact(t *testing.T) {
-	now := time.Date(2026, 8, 16, 10, 0, 0, 0, time.UTC)
-	content := []byte("id\n1\n")
-	store := &reportExportArtifactStoreStub{artifact: reportmodel.ReportExportArtifact{
-		WorkspaceID: "workspace-a", RequesterUserID: "user-a", ReportKey: "orders", IdempotencyKey: "fingerprint",
-		Content: content, ContentSHA256: reportexport.SHA256Hex(content), ExpiresAt: now.Add(time.Minute).Format(time.RFC3339Nano),
-	}}
-	service := &ReportApplicationService{exportArtifacts: store, clock: func() time.Time { return now }}
-	principal := principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-a", UserID: "user-a"}}
-	if key, err := service.reportExportSynchronousReplayKey(t.Context(), "orders", "fingerprint", principal); err != nil || key != "fingerprint" {
-		t.Fatalf("valid replay key=%q err=%v", key, err)
-	}
-	store.artifact.ExpiresAt = now.Add(-time.Second).Format(time.RFC3339Nano)
-	if key, err := service.reportExportSynchronousReplayKey(t.Context(), "orders", "fingerprint", principal); err != nil || key == "fingerprint" || !strings.HasPrefix(key, "fingerprint:renew:") {
-		t.Fatalf("expired replay key=%q err=%v", key, err)
-	}
-	store.artifact.ExpiresAt = now.Add(time.Minute).Format(time.RFC3339Nano)
-	store.artifact.Content = []byte("corrupt")
-	if key, err := service.reportExportSynchronousReplayKey(t.Context(), "orders", "fingerprint", principal); err != nil || key == "fingerprint" {
-		t.Fatalf("corrupt replay key=%q err=%v", key, err)
 	}
 }

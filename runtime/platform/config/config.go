@@ -65,8 +65,6 @@ type Config struct {
 	CapacityConnectorProviderRatePerMinute  int
 	CapacityQueueDepthThreshold             int
 	CapacityQueueOldestAgeThreshold         time.Duration
-	CapacityBatchJobQueueLimit              int
-	CapacityBatchJobWorkspaceQueueLimit     int
 	BusinessEventReplayLimit                int
 	BusinessEventSubscriberBuffer           int
 	BusinessEventGlobalConnections          int
@@ -208,8 +206,6 @@ func FromEnv() Config {
 		CapacityConnectorProviderRatePerMinute:  intEnv("CAPACITY_CONNECTOR_PROVIDER_RATE_PER_MINUTE", 600),
 		CapacityQueueDepthThreshold:             intEnv("CAPACITY_QUEUE_DEPTH_THRESHOLD", 200),
 		CapacityQueueOldestAgeThreshold:         durationEnv("CAPACITY_QUEUE_OLDEST_AGE_THRESHOLD", 5*time.Minute),
-		CapacityBatchJobQueueLimit:              intEnv("CAPACITY_BATCH_JOB_QUEUE_LIMIT", 10_000),
-		CapacityBatchJobWorkspaceQueueLimit:     intEnv("CAPACITY_BATCH_JOB_WORKSPACE_QUEUE_LIMIT", 1_000),
 		BusinessEventReplayLimit:                intEnv("BUSINESS_EVENT_REPLAY_LIMIT", 256),
 		BusinessEventSubscriberBuffer:           intEnv("BUSINESS_EVENT_SUBSCRIBER_BUFFER", 32),
 		BusinessEventGlobalConnections:          intEnv("BUSINESS_EVENT_GLOBAL_CONNECTIONS", 512),

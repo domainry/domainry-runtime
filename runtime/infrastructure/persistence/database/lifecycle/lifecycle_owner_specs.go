@@ -29,7 +29,6 @@ func DefaultOwnerExecutors(store *database.RuntimeStore, objects ...definitionmo
 		}},
 		{store: store, owner: "record", specs: []cleanupSpec{
 			{policyKey: "execution.idempotency_receipt.v1", table: "record_mutation_executions", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "expires_at", statusColumn: "status", ineligibleStatuses: []string{"pending", "processing"}},
-			{policyKey: "record.batch_artifact.v1", table: "record_batch_jobs", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "updated_at", statusColumn: "status", ineligibleStatuses: []string{"pending", "processing", "retrying"}},
 		}},
 		{store: store, owner: "operations", specs: []cleanupSpec{
 			{policyKey: "operations.receipt.v1", table: "runtime_operations", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "updated_at", statusColumn: "status", ineligibleStatuses: []string{"pending", "running", "pausing"}},
@@ -93,7 +92,7 @@ func DefaultOwnerExecutors(store *database.RuntimeStore, objects ...definitionmo
 		executors[index] = recordExecutor
 		break
 	}
-	reportSpecs := []cleanupSpec{{policyKey: "report.download.v1", table: "report_export_artifacts", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "expires_at"}}
+	reportSpecs := []cleanupSpec{}
 	if _, ok := objectMap["download_task"]; ok {
 		reportSpecs = append(reportSpecs, cleanupSpec{policyKey: "report.download.v1", table: "download_task", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "updated_at", statusColumn: "status", eligibleStatuses: []string{"expired", "failed", "cancelled"}})
 	}

@@ -28,26 +28,6 @@ func newRecordDataExchangeImportProvider(service *RecordImportApplicationService
 	return &recordDataExchangeImportProvider{service: service, principal: principal, seen: map[string]int{}}
 }
 
-// legacyRecordDataExchangeImportProvider keeps the pre-extraction Runtime
-// worker compiling while production composition moves to the SDK Binding.
-// It remains only for legacy RecordBatchJob fallback compatibility; both paths
-// now use the Data Exchange owner's fileengine implementation.
-type legacyRecordDataExchangeImportProvider struct {
-	sdk *recordDataExchangeImportProvider
-}
-
-func newLegacyRecordDataExchangeImportProvider(service *RecordImportApplicationService, principal principalmodel.Principal) *legacyRecordDataExchangeImportProvider {
-	return &legacyRecordDataExchangeImportProvider{sdk: newRecordDataExchangeImportProvider(service, principal)}
-}
-
-func (p *legacyRecordDataExchangeImportProvider) ValidateImportBatch(ctx context.Context, batch dataexchangesdk.ImportBatch) (dataexchangesdk.ImportBatchResult, error) {
-	return p.sdk.ValidateImportBatch(ctx, batch)
-}
-
-func (p *legacyRecordDataExchangeImportProvider) ApplyImportBatch(ctx context.Context, batch dataexchangesdk.ImportBatch) (dataexchangesdk.ImportBatchResult, error) {
-	return p.sdk.ApplyImportBatch(ctx, batch)
-}
-
 func (p *recordDataExchangeImportProvider) ValidateImportBatch(ctx context.Context, batch dataexchangesdk.ImportBatch) (dataexchangesdk.ImportBatchResult, error) {
 	if err := p.validateScope(batch.Scope); err != nil {
 		return dataexchangesdk.ImportBatchResult{}, err
@@ -108,10 +88,10 @@ func (p *recordDataExchangeImportProvider) ApplyImportBatch(ctx context.Context,
 
 func (p *recordDataExchangeImportProvider) validateScope(scope dataexchangesdk.Scope) error {
 	if p == nil || p.service == nil {
-		return apperror.New(apperror.KindInternal, "backend.record_batch.import_provider_unavailable", nil, nil)
+		return apperror.New(apperror.KindInternal, "backend.data_exchange.import_provider_unavailable", nil, nil)
 	}
 	if strings.TrimSpace(scope.WorkspaceID) != strings.TrimSpace(p.principal.WorkspaceID) || strings.TrimSpace(scope.ActorID) != strings.TrimSpace(p.principal.UserID) {
-		return apperror.New(apperror.KindForbidden, "backend.record_batch.import_scope_mismatch", nil, nil)
+		return apperror.New(apperror.KindForbidden, "backend.data_exchange.import_scope_mismatch", nil, nil)
 	}
 	return nil
 }
@@ -137,4 +117,3 @@ func recordDataExchangeCSV(batch dataexchangesdk.ImportBatch) ([]byte, error) {
 }
 
 var _ modulehost.ImportProvider = (*recordDataExchangeImportProvider)(nil)
-var _ modulehost.ImportProvider = (*legacyRecordDataExchangeImportProvider)(nil)

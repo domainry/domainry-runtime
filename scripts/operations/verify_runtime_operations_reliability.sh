@@ -121,10 +121,9 @@ load_soak_gate() {
   run_test state-soak go test -count=1 -timeout=5m \
     ./runtime/platform/capacity \
     -run '^TestBoundedRuntimeStateSoakDoesNotGrow$'
-  run_test queue-retry-backlog go test -count=1 -timeout=5m \
-    ./runtime/application/integration \
-    ./runtime/infrastructure/persistence/database/record \
-    -run '^(TestIntegrationWorkerPriorityQuotasKeepNewRetryAndReplayMoving|TestIntegrationQueuePressureActivatesAndRecoversAtThresholds|TestRecordBatchJobStoreFairClaimHeartbeatRetryAndQueueStats)$'
+	run_test queue-retry-backlog go test -count=1 -timeout=5m \
+		./runtime/application/integration \
+		-run '^(TestIntegrationWorkerPriorityQuotasKeepNewRetryAndReplayMoving|TestIntegrationQueuePressureActivatesAndRecoversAtThresholds)$'
   run_test postgres-pool-soak env RUNTIME_REQUIRE_REAL_DIALECTS=1 go test -count=1 -timeout=10m \
     ./runtime/infrastructure/persistence/database/dialecttest \
     -run '^TestPostgresPoolSoakHasNoLeakIdleTransactionsOrRetryStorm$'

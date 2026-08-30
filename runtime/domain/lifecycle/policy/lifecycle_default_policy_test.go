@@ -8,7 +8,7 @@ import (
 func TestDefaultPolicyCatalogCompleteAndPublished(t *testing.T) {
 	now := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
 	catalog := DefaultPolicyCatalog("workspace-1", "admin-1", now)
-	if len(catalog) != 32 {
+	if len(catalog) != 31 {
 		t.Fatalf("catalog size = %d", len(catalog))
 	}
 	byKey := map[string]int{}

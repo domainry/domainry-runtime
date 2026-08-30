@@ -22,50 +22,7 @@ func (Profile) Types(string) persistencedriver.EvidenceSchemaTypes {
 }
 
 func (Profile) Normalize(ctx context.Context, database persistencedriver.SchemaDatabase, renderer ormdialect.Renderer) error {
-	if err := normalizeLargeColumns(ctx, database, renderer); err != nil {
-		return err
-	}
 	return normalizeAuditCursorColumns(ctx, database, renderer)
-}
-
-func normalizeLargeColumns(ctx context.Context, database persistencedriver.SchemaDatabase, renderer ormdialect.Renderer) error {
-	specs := map[string][]string{"report_export_artifacts": {"content_base64"}, "record_batch_job_chunks": {"content"}}
-	query := "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND ((TABLE_NAME = " + renderer.Placeholder(1) + " AND COLUMN_NAME = " + renderer.Placeholder(2) + ") OR (TABLE_NAME = " + renderer.Placeholder(3) + " AND COLUMN_NAME = " + renderer.Placeholder(4) + "))"
-	rows, err := database.QueryContext(ctx, query, "report_export_artifacts", "content_base64", "record_batch_job_chunks", "content")
-	if err != nil {
-		return fmt.Errorf("inspect MySQL large evidence columns: %w", err)
-	}
-	modifications := map[string][]string{}
-	for rows.Next() {
-		var table, column, dataType string
-		if err := rows.Scan(&table, &column, &dataType); err != nil {
-			_ = rows.Close()
-			return fmt.Errorf("scan MySQL large evidence column: %w", err)
-		}
-		if !strings.EqualFold(dataType, "longtext") {
-			modifications[table] = append(modifications[table], column)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return fmt.Errorf("iterate MySQL large evidence columns: %w", err)
-	}
-	_ = rows.Close()
-	for table, columns := range modifications {
-		for _, column := range columns {
-			valid := false
-			for _, candidate := range specs[table] {
-				valid = valid || column == candidate
-			}
-			if !valid {
-				return fmt.Errorf("inspect MySQL large evidence columns: unexpected %s.%s", table, column)
-			}
-			if _, err := database.ExecContext(ctx, "ALTER TABLE "+renderer.Table(table)+" MODIFY COLUMN "+renderer.Identifier(column)+" LONGTEXT NOT NULL"); err != nil {
-				return fmt.Errorf("normalize MySQL large evidence column %s.%s: %w", table, column, err)
-			}
-		}
-	}
-	return nil
 }
 
 func normalizeAuditCursorColumns(ctx context.Context, database persistencedriver.SchemaDatabase, renderer ormdialect.Renderer) error {

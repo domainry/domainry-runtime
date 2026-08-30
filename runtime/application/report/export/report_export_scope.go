@@ -283,8 +283,8 @@ func normalizeObjectSQLExportScope(report reportmodel.ReportSchema, objectKey st
 	return scope, report, map[string]bool{}, nil
 }
 
-func ValidateCurrentArtifact(ctx context.Context, domain *reportservice.ReportDomainService, report reportmodel.ReportSchema, control reportmodel.ReportExportControlSchema, artifact reportmodel.ReportExportArtifact, principal principalmodel.Principal) error {
-	normalized, scopedReport, _, err := NormalizeScope(report, artifact.ObjectKey, control, artifact.Scope, principal)
+func ValidateCurrentExportAuthorization(ctx context.Context, domain *reportservice.ReportDomainService, report reportmodel.ReportSchema, control reportmodel.ReportExportControlSchema, snapshot reportmodel.ReportExportAuthorizationSnapshot, principal principalmodel.Principal) error {
+	normalized, scopedReport, _, err := NormalizeScope(report, snapshot.ObjectKey, control, snapshot.Scope, principal)
 	if err != nil {
 		return err
 	}
@@ -295,7 +295,7 @@ func ValidateCurrentArtifact(ctx context.Context, domain *reportservice.ReportDo
 	authorizationHash, _ := reportservice.ReportAccessScopeHash(principal)
 	reportHash, _ := CanonicalJSONSHA256(report)
 	controlHash, _ := CanonicalJSONSHA256(control)
-	if scopeHash != artifact.ScopeSHA256 || authorizationHash != artifact.AuthorizationScopeSHA256 || reportHash != artifact.ReportDefinitionSHA256 || controlHash != artifact.ControlDefinitionSHA256 {
+	if scopeHash != snapshot.ScopeSHA256 || authorizationHash != snapshot.AuthorizationScopeSHA256 || reportHash != snapshot.ReportDefinitionSHA256 || controlHash != snapshot.ControlDefinitionSHA256 {
 		return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.report.export_scope_changed"}
 	}
 	return nil

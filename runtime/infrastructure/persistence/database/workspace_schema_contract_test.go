@@ -117,7 +117,6 @@ func TestWorkspaceAssociationsHaveScopedLookupIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := map[string][]string{
-		"record_batch_job_chunks": {"workspace_id", "job_id"},
 		"workflow_node_instances": {"workspace_id", "process_id"},
 		"workflow_tasks":          {"workspace_id", "process_id"},
 		"workflow_process_events": {"workspace_id", "process_id"},

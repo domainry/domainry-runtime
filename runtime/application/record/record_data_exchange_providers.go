@@ -15,20 +15,23 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
+const recordDataExchangeResultChunkBytes = 1 << 20
+
 // DataExchangeProviders is the Runtime-owned anti-corruption boundary exposed
 // to either the in-process Module or the SaaS Binding. It contains no file/job
 // persistence: Runtime remains responsible only for authorized Record domain
 // validation, mutation and projection.
 type DataExchangeProviders struct {
-	mu       sync.Mutex
-	importer *RecordImportApplicationService
-	exporter *RecordExportApplicationService
-	resolve  func(context.Context, string, string) principalmodel.Principal
-	imports  map[string]*recordDataExchangeImportProvider
+	mu              sync.Mutex
+	importer        *RecordImportApplicationService
+	exporter        *RecordExportApplicationService
+	resolve         func(context.Context, string, string) principalmodel.Principal
+	imports         map[string]*recordDataExchangeImportProvider
+	exportProviders map[string]modulehost.ExportProvider
 }
 
 func NewDataExchangeProviders(resolve func(context.Context, string, string) principalmodel.Principal) *DataExchangeProviders {
-	return &DataExchangeProviders{resolve: resolve, imports: map[string]*recordDataExchangeImportProvider{}}
+	return &DataExchangeProviders{resolve: resolve, imports: map[string]*recordDataExchangeImportProvider{}, exportProviders: map[string]modulehost.ExportProvider{}}
 }
 
 func (p *DataExchangeProviders) Bind(importer *RecordImportApplicationService, exporter *RecordExportApplicationService) {
@@ -43,11 +46,29 @@ func (p *DataExchangeProviders) ConfigureResolver(resolve func(context.Context, 
 	p.resolve = resolve
 }
 
+// RegisterExportProvider attaches an application-owned provider to the shared
+// Module/SaaS host bridge. The registry owns no job or artifact state.
+func (p *DataExchangeProviders) RegisterExportProvider(key string, provider modulehost.ExportProvider) {
+	if p == nil || strings.TrimSpace(key) == "" || provider == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.exportProviders[strings.TrimSpace(key)] = provider
+}
+
 func (p *DataExchangeProviders) ImportProvider(key string) (modulehost.ImportProvider, bool) {
 	return dataExchangeImportProvider{owner: p}, strings.TrimSpace(key) == "records"
 }
 func (p *DataExchangeProviders) ExportProvider(key string) (modulehost.ExportProvider, bool) {
-	return dataExchangeExportProvider{owner: p}, strings.TrimSpace(key) == "records"
+	key = strings.TrimSpace(key)
+	if key == "records" {
+		return dataExchangeExportProvider{owner: p}, true
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	provider, ok := p.exportProviders[key]
+	return provider, ok
 }
 
 func (p *DataExchangeProviders) principal(ctx context.Context, scope dataexchange.Scope) principalmodel.Principal {
@@ -57,6 +78,13 @@ func (p *DataExchangeProviders) principal(ctx context.Context, scope dataexchang
 	}
 	value.WorkspaceID, value.UserID, value.RequestID = scope.WorkspaceID, scope.ActorID, scope.RequestID
 	return value
+}
+
+// ResolvePrincipal reconstructs the current persisted authorization context
+// for an application-owned provider. Scope identity remains supplied by Data
+// Exchange and cannot be overridden by provider payloads.
+func (p *DataExchangeProviders) ResolvePrincipal(ctx context.Context, scope dataexchange.Scope) principalmodel.Principal {
+	return p.principal(ctx, scope)
 }
 
 type dataExchangeImportProvider struct{ owner *DataExchangeProviders }
@@ -97,7 +125,7 @@ func (p dataExchangeExportProvider) ReadExportPage(ctx context.Context, r dataex
 	if exporter == nil {
 		return dataexchange.ExportPage{}, fmt.Errorf("Record export provider is unavailable")
 	}
-	var payload recordBatchExportPayload
+	var payload recordDataExchangeExportPayload
 	if len(r.Options) > 0 {
 		if err := json.Unmarshal(r.Options, &payload); err != nil {
 			return dataexchange.ExportPage{}, fmt.Errorf("decode Record export options: %w", err)
@@ -116,7 +144,7 @@ func (p dataExchangeExportProvider) ReadExportPage(ctx context.Context, r dataex
 			return dataexchange.ExportPage{}, fmt.Errorf("invalid Record export cursor")
 		}
 	}
-	encoded, err := exporter.encodeExportPage(ctx, prepared, pageNumber, true, recordBatchResultChunkBytes)
+	encoded, err := exporter.encodeExportPage(ctx, prepared, pageNumber, true, recordDataExchangeResultChunkBytes)
 	if err != nil {
 		return dataexchange.ExportPage{}, err
 	}

@@ -98,13 +98,6 @@
 "notification.workflow.task.reminded.title" = "承認タスクの期限が近づいています：{{task_title}}"
 
 "notification.action.integration.secret.open" = "認証情報を管理"
-"notification.action.record.batch.open" = "ジョブ結果を表示"
-"notification.record.batch.completed.title" = "{{job_kind}}が完了しました：{{object_key}}"
-"notification.record.batch.completed.body" = "長時間ジョブが完了し、{{total}}件のレコードを処理しました。"
-"notification.record.batch.failed.title" = "{{job_kind}}に失敗しました：{{object_key}}"
-"notification.record.batch.failed.body" = "長時間ジョブに失敗しました。安全なエラーコードを確認し、必要に応じて再試行してください。"
-"notification.record.batch.cancelled.title" = "{{job_kind}}がキャンセルされました：{{object_key}}"
-"notification.record.batch.cancelled.body" = "長時間ジョブはキャンセルされ、続行されません。"
 "notification.action.report.open" = "レポートを開く"
 "notification.report.snapshot.completed.title" = "レポート更新完了: {{report_key}}"
 "notification.report.snapshot.completed.body" = "レポートのスナップショットを表示できます。"

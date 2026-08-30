@@ -98,13 +98,6 @@
 "notification.workflow.task.reminded.title" = "审批任务即将到期：{{task_title}}"
 
 "notification.action.integration.secret.open" = "管理凭据"
-"notification.action.record.batch.open" = "查看任务结果"
-"notification.record.batch.completed.title" = "{{job_kind}}已完成：{{object_key}}"
-"notification.record.batch.completed.body" = "长任务已完成，共处理 {{total}} 条记录。"
-"notification.record.batch.failed.title" = "{{job_kind}}失败：{{object_key}}"
-"notification.record.batch.failed.body" = "长任务执行失败，请查看安全错误码并在适当时重试。"
-"notification.record.batch.cancelled.title" = "{{job_kind}}已取消：{{object_key}}"
-"notification.record.batch.cancelled.body" = "长任务已取消，不会继续执行。"
 "notification.action.report.open" = "打开报表"
 "notification.report.snapshot.completed.title" = "报表刷新完成：{{report_key}}"
 "notification.report.snapshot.completed.body" = "报表快照已准备好，可以查看。"

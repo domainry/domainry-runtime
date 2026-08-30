@@ -98,13 +98,6 @@
 "notification.workflow.task.reminded.title" = "Tâche d’approbation bientôt échue : {{task_title}}"
 
 "notification.action.integration.secret.open" = "Gérer l’identifiant"
-"notification.action.record.batch.open" = "Voir le résultat de la tâche"
-"notification.record.batch.completed.title" = "{{job_kind}} terminé : {{object_key}}"
-"notification.record.batch.completed.body" = "La tâche longue est terminée et a traité {{total}} enregistrements."
-"notification.record.batch.failed.title" = "Échec de {{job_kind}} : {{object_key}}"
-"notification.record.batch.failed.body" = "La tâche longue a échoué. Consultez le code d’erreur sécurisé et réessayez si nécessaire."
-"notification.record.batch.cancelled.title" = "{{job_kind}} annulé : {{object_key}}"
-"notification.record.batch.cancelled.body" = "La tâche longue a été annulée et ne continuera pas."
 "notification.action.report.open" = "Ouvrir le rapport"
 "notification.report.snapshot.completed.title" = "Rapport actualisé : {{report_key}}"
 "notification.report.snapshot.completed.body" = "L’instantané du rapport est prêt à être consulté."

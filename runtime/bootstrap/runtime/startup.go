@@ -48,7 +48,6 @@ import (
 	integrationnotificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integrationnotification"
 	notificationpublication "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
 	ratelimitpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/ratelimit"
-	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/localization"
@@ -313,8 +312,6 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	notificationActionAuthorizers.Register("workflow_task", newWorkflowTaskNotificationActionAuthorizer(workflowNotificationTasks.GetTask))
 	notificationActionAuthorizers.Register("scheduler_job", newSchedulerNotificationActionAuthorizer(restoredMetadata.metadataStore.GetDefinition))
 	registerIntegrationNotificationActionAuthorizers(notificationActionAuthorizers, integrationNotificationResources)
-	recordBatchNotifications := recordpersistence.NewRecordStore(store)
-	notificationActionAuthorizers.Register("record_batch_job", newRecordBatchNotificationActionAuthorizer(recordBatchNotifications.GetRecordBatchJob))
 	notificationActionAuthorizers.Freeze()
 	var templateRenderer composition.NotificationRenderer
 	var notificationHTTP notificationhttp.NotificationApplication
@@ -471,6 +468,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		identityDirectory:   identityDirectory,
 		identityPrincipals:  identityPrincipals,
 		partyBinding:        partyBinding,
+		dataExchangeBinding: serviceAssembly.dataExchangeBinding,
 		manifest:            manifest,
 		recordRepository:    recordRepository,
 		rateLimiter:         sharedRateLimiter,

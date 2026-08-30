@@ -2,6 +2,7 @@ package testkit
 
 import (
 	connector "github.com/domainry/domainry-connector-sdk"
+	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
@@ -46,4 +47,5 @@ type RuntimeServicesConfig struct {
 	IdentityDirectory         identitysdk.Directory
 	IdentityPrincipals        identitysdk.PrincipalResolver
 	ConnectorProviders        *connector.Registry
+	DataExchange              dataexchange.Binding
 }

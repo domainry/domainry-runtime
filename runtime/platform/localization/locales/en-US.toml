@@ -98,13 +98,6 @@
 "notification.workflow.task.reminded.title" = "Approval task due soon: {{task_title}}"
 
 "notification.action.integration.secret.open" = "Manage credential"
-"notification.action.record.batch.open" = "View job result"
-"notification.record.batch.completed.title" = "{{job_kind}} completed: {{object_key}}"
-"notification.record.batch.completed.body" = "The long-running job completed and processed {{total}} records."
-"notification.record.batch.failed.title" = "{{job_kind}} failed: {{object_key}}"
-"notification.record.batch.failed.body" = "The long-running job failed. Review the safe error code and retry when appropriate."
-"notification.record.batch.cancelled.title" = "{{job_kind}} cancelled: {{object_key}}"
-"notification.record.batch.cancelled.body" = "The long-running job was cancelled and will not continue."
 "notification.action.report.open" = "Open report"
 "notification.report.snapshot.completed.title" = "Report refreshed: {{report_key}}"
 "notification.report.snapshot.completed.body" = "The report snapshot is ready to view."

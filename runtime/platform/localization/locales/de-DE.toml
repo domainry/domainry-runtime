@@ -98,13 +98,6 @@
 "notification.workflow.task.reminded.title" = "Genehmigungsaufgabe bald fällig: {{task_title}}"
 
 "notification.action.integration.secret.open" = "Anmeldedaten verwalten"
-"notification.action.record.batch.open" = "Auftragsergebnis anzeigen"
-"notification.record.batch.completed.title" = "{{job_kind}} abgeschlossen: {{object_key}}"
-"notification.record.batch.completed.body" = "Der Langzeitauftrag wurde abgeschlossen und hat {{total}} Datensätze verarbeitet."
-"notification.record.batch.failed.title" = "{{job_kind}} fehlgeschlagen: {{object_key}}"
-"notification.record.batch.failed.body" = "Der Langzeitauftrag ist fehlgeschlagen. Prüfen Sie den sicheren Fehlercode und wiederholen Sie ihn bei Bedarf."
-"notification.record.batch.cancelled.title" = "{{job_kind}} abgebrochen: {{object_key}}"
-"notification.record.batch.cancelled.body" = "Der Langzeitauftrag wurde abgebrochen und wird nicht fortgesetzt."
 "notification.action.report.open" = "Bericht öffnen"
 "notification.report.snapshot.completed.title" = "Bericht aktualisiert: {{report_key}}"
 "notification.report.snapshot.completed.body" = "Der Berichtssnapshot kann jetzt angezeigt werden."

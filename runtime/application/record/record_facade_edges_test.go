@@ -1,8 +1,6 @@
 package record
 
 import (
-	"context"
-	"strings"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -17,13 +15,13 @@ import (
 
 func recordFacadeAuthorizationService() *RecordApplicationService {
 	return &RecordApplicationService{
-		create:    NewRecordCreateApplicationService(RecordCreateDependencies{}),
-		update:    NewRecordUpdateApplicationService(RecordUpdateDependencies{}),
-		delete:    NewRecordDeleteApplicationService(RecordDeleteDependencies{}),
-		restore:   NewRecordRestoreApplicationService(RecordRestoreDependencies{}),
-		importer:  NewRecordImportApplicationService(RecordImportDependencies{}),
-		exporter:  NewRecordExportApplicationService(RecordExportDependencies{}),
-		batchJobs: NewRecordBatchJobApplicationService(RecordBatchJobDependencies{}),
+		create:       NewRecordCreateApplicationService(RecordCreateDependencies{}),
+		update:       NewRecordUpdateApplicationService(RecordUpdateDependencies{}),
+		delete:       NewRecordDeleteApplicationService(RecordDeleteDependencies{}),
+		restore:      NewRecordRestoreApplicationService(RecordRestoreDependencies{}),
+		importer:     NewRecordImportApplicationService(RecordImportDependencies{}),
+		exporter:     NewRecordExportApplicationService(RecordExportDependencies{}),
+		dataExchange: NewRecordDataExchangeApplicationService(RecordDataExchangeDependencies{}),
 	}
 }
 
@@ -44,10 +42,7 @@ func TestRecordFacadeRejectsUnknownWorkspaceBeforeDependencies(t *testing.T) {
 		}},
 		{name: "get batch", call: func() error { _, err := service.GetBatchJob(t.Context(), "job-1", principal); return err }},
 		{name: "cancel batch", call: func() error { _, err := service.CancelBatchJob(t.Context(), "job-1", principal); return err }},
-		{name: "download batch", call: func() error { _, _, err := service.DownloadBatchJob(t.Context(), "job-1", principal); return err }},
-		{name: "inspect terminal", call: func() error { _, err := service.InspectBatchJobDeadLetter(t.Context(), "job-1", principal); return err }},
-		{name: "retry terminal", call: func() error { _, err := service.RetryBatchJobDeadLetter(t.Context(), "job-1", principal); return err }},
-		{name: "resolve terminal", call: func() error { _, err := service.ResolveBatchJobDeadLetter(t.Context(), "job-1", principal); return err }},
+		{name: "download batch", call: func() error { _, _, err := service.OpenBatchJobDownload(t.Context(), "job-1", principal); return err }},
 		{name: "preview import", call: func() error { _, err := service.PreviewImport(t.Context(), "customer", nil, principal); return err }},
 		{name: "apply import", call: func() error { _, err := service.ApplyImport(t.Context(), "customer", nil, principal); return err }},
 		{name: "apply idempotent import", call: func() error {
@@ -92,26 +87,12 @@ func TestRecordFacadeRejectsUnknownWorkspaceBeforeDependencies(t *testing.T) {
 	}
 }
 
-func TestRecordFacadeBatchWorkerNoStoreAndMetrics(t *testing.T) {
+func TestRecordFacadeDataExchangeWorkerWithoutBindingStops(t *testing.T) {
 	service := recordFacadeAuthorizationService()
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
 	select {
-	case <-service.StartBatchJobWorker(ctx, 0, 0):
+	case <-service.StartDataExchangeWorker(t.Context(), 0, 0):
 	default:
-		t.Fatal("worker without store must already be stopped")
-	}
-	if err := service.ProcessDueBatchJobs(t.Context(), 10); err != nil {
-		t.Fatal(err)
-	}
-	metrics := service.BatchJobOpenMetrics(t.Context())
-	for _, metric := range []string{"domainry_runtime_record_batch_jobs_total", "domainry_runtime_record_batch_in_flight", "domainry_runtime_record_batch_queue_depth"} {
-		if !strings.Contains(metrics, metric) {
-			t.Fatalf("metrics missing %q: %s", metric, metrics)
-		}
-	}
-	if got := (*RecordApplicationService)(nil).BatchJobOpenMetrics(context.Background()); got != "" {
-		t.Fatalf("nil metrics=%q", got)
+		t.Fatal("worker without Data Exchange must already be stopped")
 	}
 }
 
@@ -119,22 +100,6 @@ func TestRebuildOwnerDepartmentPathsRejectsBlankWorkspace(t *testing.T) {
 	service := &RecordApplicationService{}
 	if count, err := service.RebuildOwnerDepartmentPaths(t.Context(), " ", []identitysdk.WorkforceEntry{{IdentityUserID: "user-1"}}); count != 0 || apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("count=%d err=%v", count, err)
-	}
-}
-
-func TestBytesCountCSVRowsHandlesHeaderAndTrailingData(t *testing.T) {
-	for _, test := range []struct {
-		content string
-		want    int
-	}{
-		{content: "", want: 0},
-		{content: "name\n", want: 0},
-		{content: "name\nAcme\n", want: 1},
-		{content: "name\nAcme\nBeta", want: 1},
-	} {
-		if got := bytesCountCSVRows([]byte(test.content)); got != test.want {
-			t.Fatalf("content=%q got=%d want=%d", test.content, got, test.want)
-		}
 	}
 }
 
@@ -178,14 +143,5 @@ func TestCreateRecordIdempotentResultRuntimeUnavailableAndBeginFailure(t *testin
 	service.recordMutationExecution = recordruntime.NewRecordMutationExecutionRuntime(&createExecutionProbe{})
 	if _, _, err := service.CreateRecordIdempotentResult(t.Context(), object.Key, map[string]any{"name": "Acme"}, " ", principal); apperror.CodeOf(err) != "backend.idempotency.key_required" {
 		t.Fatalf("begin err=%v", err)
-	}
-}
-
-func TestBatchJobMetricsMissingServiceEdges(t *testing.T) {
-	if metrics := (*RecordApplicationService)(nil).BatchJobOpenMetrics(t.Context()); metrics != "" {
-		t.Fatalf("nil service metrics=%q", metrics)
-	}
-	if metrics := (&RecordApplicationService{}).BatchJobOpenMetrics(t.Context()); metrics != "" {
-		t.Fatalf("nil batch service metrics=%q", metrics)
 	}
 }

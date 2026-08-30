@@ -98,13 +98,6 @@
 "notification.workflow.task.reminded.title" = "승인 작업 마감 임박: {{task_title}}"
 
 "notification.action.integration.secret.open" = "자격 증명 관리"
-"notification.action.record.batch.open" = "작업 결과 보기"
-"notification.record.batch.completed.title" = "{{job_kind}} 완료: {{object_key}}"
-"notification.record.batch.completed.body" = "장기 실행 작업이 완료되어 {{total}}개 레코드를 처리했습니다."
-"notification.record.batch.failed.title" = "{{job_kind}} 실패: {{object_key}}"
-"notification.record.batch.failed.body" = "장기 실행 작업이 실패했습니다. 안전한 오류 코드를 확인하고 필요할 때 다시 시도하세요."
-"notification.record.batch.cancelled.title" = "{{job_kind}} 취소됨: {{object_key}}"
-"notification.record.batch.cancelled.body" = "장기 실행 작업이 취소되어 더 이상 진행되지 않습니다."
 "notification.action.report.open" = "보고서 열기"
 "notification.report.snapshot.completed.title" = "보고서 새로 고침 완료: {{report_key}}"
 "notification.report.snapshot.completed.body" = "보고서 스냅샷을 볼 수 있습니다."

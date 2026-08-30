@@ -25,7 +25,6 @@ var operationsLeaseSpecs = []operationsLeaseSpec{
 	{owner: "workflow_deadline", table: "workflow_tasks"},
 	{owner: "business_action", table: "business_action_executions"},
 	{owner: "record_mutation", table: "record_mutation_executions"},
-	{owner: "record_batch", table: "record_batch_jobs"},
 	{owner: "idempotency_cleanup", table: "idempotency_cleanup_leases"},
 	{owner: "automation", table: "automation_instruction_executions"},
 	{owner: "integration_event", table: "integration_events"},

@@ -40,7 +40,7 @@ func StartWorkers(ctx context.Context, runtime *Runtime) {
 	runtime.StartNotificationPublicationWorker(ctx)
 	runtime.startNotificationInboxWorker(ctx)
 	runtime.startNotificationChannelWorker(ctx)
-	runtime.startRecordBatchWorker(ctx)
+	runtime.startDataExchangeWorker(ctx)
 	runtime.startIdempotencyCleanupWorker(ctx)
 	runtime.startLifecycleCleanupWorker(ctx)
 	if runtime.api != nil {
@@ -175,11 +175,11 @@ func (a *Runtime) beginWorkerStartup() bool {
 	return true
 }
 
-func (a *Runtime) startRecordBatchWorker(ctx context.Context) {
+func (a *Runtime) startDataExchangeWorker(ctx context.Context) {
 	if a == nil || a.records == nil || a.records.Applications().Records == nil {
 		return
 	}
-	a.startControlledWorker(ctx, "record_batch", func(workerCtx context.Context) <-chan struct{} {
+	a.startControlledWorker(ctx, "data_exchange", func(workerCtx context.Context) <-chan struct{} {
 		interval := a.cfg.EffectiveWorkerPollInterval()
 		if interval <= 0 {
 			interval = time.Second
@@ -188,7 +188,7 @@ func (a *Runtime) startRecordBatchWorker(ctx context.Context) {
 		if batch <= 0 || batch > 25 {
 			batch = 10
 		}
-		return a.records.Applications().Records.StartBatchJobWorker(workerCtx, interval, batch)
+		return a.records.Applications().Records.StartDataExchangeWorker(workerCtx, interval, batch)
 	})
 }
 

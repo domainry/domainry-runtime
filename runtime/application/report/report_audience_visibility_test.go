@@ -41,7 +41,7 @@ func TestReportDirectKeyEntrypointsConcealDefinitionWithoutRequiredPermission(t 
 	records := &reportRecordExporterStub{}
 	service := NewReportApplicationService(ReportApplicationDependencies{
 		Domain: domain, Records: records,
-		ExportRecords: &reportExportStoreStub{}, ExportArtifacts: &reportExportArtifactStoreStub{},
+		ExportRecords: &reportExportStoreStub{},
 	})
 
 	if _, err := service.QueryObjectSQL(t.Context(), reportDefinition.Key, nil, principal); apperror.CodeOf(err) != "backend.report.not_found" {
@@ -53,7 +53,7 @@ func TestReportDirectKeyEntrypointsConcealDefinitionWithoutRequiredPermission(t 
 	if _, _, err := service.ExportObject(t.Context(), reportDefinition.Key, "order_line", principal); apperror.CodeOf(err) != "backend.report.not_found" {
 		t.Fatalf("export error=%v", err)
 	}
-	if _, err := service.PrepareExport(t.Context(), reportDefinition.Key, "order_line", "audit-1", "export-1", principal); apperror.CodeOf(err) != "backend.report.not_found" {
+	if _, err := service.PrepareExportRouted(t.Context(), reportDefinition.Key, "order_line", "audit-1", "export-1", reportmodel.ReportExportScopeRequest{Purpose: "test", Freshness: reportmodel.ReportExportFreshness{Mode: "realtime"}}, principal); apperror.CodeOf(err) != "backend.report.not_found" {
 		t.Fatalf("prepare export error=%v", err)
 	}
 	if records.calls != 0 {

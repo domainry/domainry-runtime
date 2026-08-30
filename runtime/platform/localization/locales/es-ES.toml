@@ -98,13 +98,6 @@
 "notification.workflow.task.reminded.title" = "La tarea de aprobación vence pronto: {{task_title}}"
 
 "notification.action.integration.secret.open" = "Gestionar credencial"
-"notification.action.record.batch.open" = "Ver resultado del trabajo"
-"notification.record.batch.completed.title" = "{{job_kind}} completado: {{object_key}}"
-"notification.record.batch.completed.body" = "El trabajo de larga duración terminó y procesó {{total}} registros."
-"notification.record.batch.failed.title" = "Error en {{job_kind}}: {{object_key}}"
-"notification.record.batch.failed.body" = "El trabajo de larga duración falló. Revise el código de error seguro y vuelva a intentarlo cuando corresponda."
-"notification.record.batch.cancelled.title" = "{{job_kind}} cancelado: {{object_key}}"
-"notification.record.batch.cancelled.body" = "El trabajo de larga duración se canceló y no continuará."
 "notification.action.report.open" = "Abrir informe"
 "notification.report.snapshot.completed.title" = "Informe actualizado: {{report_key}}"
 "notification.report.snapshot.completed.body" = "La instantánea del informe está lista para consultarse."

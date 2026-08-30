@@ -91,7 +91,7 @@ type operationsQueueSpec struct {
 }
 
 func (s OperationsStore) operationsQueueDiagnostics(ctx context.Context, request operationsmodel.OperationsDiagnosticsRequest) operationsmodel.OperationsDiagnosticsSection {
-	specs := []operationsQueueSpec{{"integration_event", "integration_events", "received_at", []any{"received", "processing", "failed"}}, {"integration_outbox", "integration_outbox_messages", "created_at", []any{"queued", "sending", "failed"}}, {"workflow_execution", "_workflow_executions", "created_at", []any{"pending", "running", "failed"}}, {"record_batch", "record_batch_jobs", "created_at", []any{"queued", "running", "retrying"}}}
+	specs := []operationsQueueSpec{{"integration_event", "integration_events", "received_at", []any{"received", "processing", "failed"}}, {"integration_outbox", "integration_outbox_messages", "created_at", []any{"queued", "sending", "failed"}}, {"workflow_execution", "_workflow_executions", "created_at", []any{"pending", "running", "failed"}}}
 	items := []map[string]any{}
 	for _, spec := range specs {
 		count, oldest, err := s.operationsQueueCount(ctx, spec, request.WorkspaceID)

@@ -321,10 +321,10 @@ func (s *ReportApplicationService) SummaryScopedPage(ctx context.Context, report
 	})
 }
 
-// probeReportExport decides the synchronous/async route without first
-// materializing an unbounded result. Common Dataset and object_sql_v1 reports
-// read at most threshold+1 rows. A complex Dataset may use the legacy evaluator
-// only when its declared hard maximum is itself synchronous-sized.
+// probeReportExport freezes a bounded result/version preflight without
+// materializing an unbounded export. Common Dataset and object_sql_v1 reports
+// read at most threshold+1 rows. A complex Dataset may use the full evaluator
+// only when its declared hard maximum fits the same bound.
 func (s *ReportApplicationService) probeReportExport(ctx context.Context, report, scopedReport reportmodel.ReportSchema, scope reportmodel.ReportExportScopeRequest, maxRows int, principal principalmodel.Principal) ([]reportmodel.ReportResultRow, reportmodel.ReportSnapshotSourceVersion, int, error) {
 	const consistencyRetries = 3
 	var lastErr error
@@ -350,16 +350,16 @@ func (s *ReportApplicationService) probeReportExport(ctx context.Context, report
 }
 
 func (s *ReportApplicationService) probeReportExportRows(ctx context.Context, report, scopedReport reportmodel.ReportSchema, scope reportmodel.ReportExportScopeRequest, maxRows int, principal principalmodel.Principal) ([]reportmodel.ReportResultRow, int, error) {
-	rows := make([]reportmodel.ReportResultRow, 0, reportExportAsyncThreshold+1)
+	rows := make([]reportmodel.ReportResultRow, 0, reportExportProbeRowLimit+1)
 	pageCursor := ""
-	for len(rows) <= reportExportAsyncThreshold {
+	for len(rows) <= reportExportProbeRowLimit {
 		pageSize := reportmodel.ReportPageMaximumSize
-		if remaining := reportExportAsyncThreshold + 1 - len(rows); remaining < pageSize {
+		if remaining := reportExportProbeRowLimit + 1 - len(rows); remaining < pageSize {
 			pageSize = remaining
 		}
 		summary, err := s.domain.ExecuteExportReportPage(ctx, scopedReport, scope.Parameters, pageCursor, len(rows), pageSize, principal)
 		if err != nil {
-			if apperror.CodeOf(err) != "backend.report.bounded_page_unavailable" || maxRows <= 0 || maxRows > reportExportAsyncThreshold {
+			if apperror.CodeOf(err) != "backend.report.bounded_page_unavailable" || maxRows <= 0 || maxRows > reportExportProbeRowLimit {
 				return nil, 0, err
 			}
 			full, executeErr := s.executeScopedExport(ctx, report, scopedReport, scope, principal)

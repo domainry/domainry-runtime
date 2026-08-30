@@ -14,14 +14,12 @@ import (
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
 
 type workflowTaskLookup func(context.Context, string, string) (workflowmodel.WorkflowTask, bool, error)
 type schedulerDefinitionLookup func(context.Context, principalmodel.SystemScope, string, string) (metadatamodel.MetadataDefinition, bool, error)
-type recordBatchJobLookup func(context.Context, string, string) (recordmodel.RecordBatchJob, bool, error)
 type reportCatalogLookup func(context.Context, principalmodel.Principal) []reportmodel.ReportSchema
 type automationRuleLookup func(context.Context, string, principalmodel.Principal) (automationmodel.AutomationRuleSchema, error)
 type notificationIntentPublisher func(context.Context, notificationmodel.NotificationIntent, principalmodel.SystemScope) (notificationmodel.NotificationEvent, bool, error)
@@ -99,22 +97,6 @@ func newSchedulerNotificationActionAuthorizer(lookup schedulerDefinitionLookup) 
 		}
 		if !found {
 			return &apperror.AppError{Kind: apperror.KindNotFound, Code: "backend.notification.inbox_action_resource_not_found"}
-		}
-		return nil
-	}
-}
-
-func newRecordBatchNotificationActionAuthorizer(lookup recordBatchJobLookup) func(context.Context, string, principalmodel.Principal) error {
-	return func(ctx context.Context, resourceID string, principal principalmodel.Principal) error {
-		job, found, err := lookup(ctx, principal.WorkspaceID, resourceID)
-		if err != nil {
-			return err
-		}
-		if !found {
-			return &apperror.AppError{Kind: apperror.KindNotFound, Code: "backend.notification.inbox_action_resource_not_found"}
-		}
-		if job.ActorID != principal.UserID {
-			return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.notification.inbox_action_forbidden"}
 		}
 		return nil
 	}

@@ -98,13 +98,6 @@
 "notification.workflow.task.reminded.title" = "Attività di approvazione in scadenza: {{task_title}}"
 
 "notification.action.integration.secret.open" = "Gestisci credenziale"
-"notification.action.record.batch.open" = "Visualizza risultato attività"
-"notification.record.batch.completed.title" = "{{job_kind}} completato: {{object_key}}"
-"notification.record.batch.completed.body" = "L’attività di lunga durata è terminata e ha elaborato {{total}} record."
-"notification.record.batch.failed.title" = "{{job_kind}} non riuscito: {{object_key}}"
-"notification.record.batch.failed.body" = "L’attività di lunga durata non è riuscita. Controlla il codice di errore sicuro e riprova quando opportuno."
-"notification.record.batch.cancelled.title" = "{{job_kind}} annullato: {{object_key}}"
-"notification.record.batch.cancelled.body" = "L’attività di lunga durata è stata annullata e non continuerà."
 "notification.action.report.open" = "Apri report"
 "notification.report.snapshot.completed.title" = "Report aggiornato: {{report_key}}"
 "notification.report.snapshot.completed.body" = "L’istantanea del report è pronta per la visualizzazione."

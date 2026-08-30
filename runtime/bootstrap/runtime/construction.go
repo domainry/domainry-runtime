@@ -2,6 +2,7 @@ package runtime
 
 import (
 	connector "github.com/domainry/domainry-connector-sdk"
+	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
@@ -31,6 +32,7 @@ type runtimeConstructionInput struct {
 	identityDirectory   identitysdk.Directory
 	identityPrincipals  identitysdk.PrincipalResolver
 	partyBinding        partysdk.Binding
+	dataExchangeBinding dataexchangesdk.Binding
 	manifest            manifestmodel.ManifestSchema
 	recordRepository    recordrepository.RecordRepository
 	rateLimiter         ratelimit.Limiter
@@ -60,6 +62,7 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		identityDirectory:   input.identityDirectory,
 		identityPrincipals:  input.identityPrincipals,
 		partyBinding:        input.partyBinding,
+		dataExchangeBinding: input.dataExchangeBinding,
 		manifest:            input.manifest,
 		recordRepo:          input.recordRepository,
 		rateLimiter:         input.rateLimiter,

@@ -11,11 +11,14 @@ import (
 	"testing"
 	"time"
 
+	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
+	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	reportapplication "github.com/domainry/domainry-runtime/runtime/application/report"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/domain/audit/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -99,28 +102,33 @@ func (e *reportsObjectSQLExecutor) ExecuteReportObjectSQL(_ context.Context, req
 	return reportcontract.ReportObjectSQLExecutionResult{Rows: e.rows}, nil
 }
 
-type reportsExportArtifactStore struct {
-	artifact reportmodel.ReportExportArtifact
-}
+type reportsDataExchangeBinding struct{ job dataexchange.Job }
 
-func (s *reportsExportArtifactStore) CreateOrGetReportExportArtifact(_ context.Context, artifact reportmodel.ReportExportArtifact) (reportmodel.ReportExportArtifact, bool, error) {
-	if s.artifact.ID != "" {
-		return s.artifact, false, nil
-	}
-	artifact.ID = "artifact-1"
-	s.artifact = artifact
-	return artifact, true, nil
+func (*reportsDataExchangeBinding) Descriptor() dataexchange.Descriptor {
+	return dataexchange.Descriptor{ProtocolVersion: dataexchange.ProtocolVersionV1, Mode: dataexchange.DeploymentModeModule}
 }
-func (s *reportsExportArtifactStore) LinkReportExportBusinessDownload(_ context.Context, _, artifactID, businessDownloadID string) error {
-	if s.artifact.ID != artifactID {
-		return errors.New("artifact not found")
-	}
-	s.artifact.BusinessDownloadID = businessDownloadID
-	return nil
+func (*reportsDataExchangeBinding) SubmitImport(context.Context, dataexchange.ImportRequest) (dataexchange.Job, bool, error) {
+	return dataexchange.Job{}, false, nil
 }
-func (s *reportsExportArtifactStore) ReportExportArtifactByToken(_ context.Context, workspaceID, token string) (reportmodel.ReportExportArtifact, bool, error) {
-	return s.artifact, s.artifact.WorkspaceID == workspaceID && s.artifact.Token == token, nil
+func (b *reportsDataExchangeBinding) SubmitExport(_ context.Context, request dataexchange.ExportRequest) (dataexchange.Job, bool, error) {
+	now := time.Date(2026, 8, 4, 12, 0, 0, 0, time.UTC)
+	b.job = dataexchange.Job{ID: "data_exchange:report-1", Provider: request.Provider, Operation: "export", Status: "queued", WorkspaceID: request.Scope.WorkspaceID, ObjectKey: request.ObjectKey, ActorID: request.Scope.ActorID, RoleKey: request.Scope.RoleKey, ReferenceID: request.ReferenceID, Options: append([]byte(nil), request.Options...), CreatedAt: now, UpdatedAt: now}
+	return b.job, false, nil
 }
+func (b *reportsDataExchangeBinding) Job(context.Context, dataexchange.JobRequest) (dataexchange.Job, error) {
+	return b.job, nil
+}
+func (b *reportsDataExchangeBinding) Cancel(context.Context, dataexchange.JobRequest) (dataexchange.Job, error) {
+	b.job.Status = "cancelled"
+	return b.job, nil
+}
+func (*reportsDataExchangeBinding) Download(context.Context, dataexchange.JobRequest) (dataexchange.Artifact, error) {
+	return dataexchange.Artifact{}, nil
+}
+func (*reportsDataExchangeBinding) Start(context.Context, dataexchange.WorkerConfig) <-chan struct{} {
+	return workerplatform.Stopped()
+}
+func (*reportsDataExchangeBinding) Close(context.Context) error { return nil }
 
 type reportsSnapshotReplayStore struct {
 	snapshot reportmodel.ReportSnapshot
@@ -468,13 +476,16 @@ func TestReportsExportHandlerToleratesClientWriteFailure(t *testing.T) {
 
 func TestReportsGovernedPrepareAndDownloadHandlers(t *testing.T) {
 	now := time.Date(2026, 8, 4, 12, 0, 0, 0, time.UTC)
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator-1"}}, accessfixture.Bundle{Key: "admin", Permissions: []string{"workspace.admin", "*"}})
 	store := &reportsExportRecordStore{audit: recordmodel.Record{ID: "audit-1", Data: map[string]any{"report_key": "revenue", "requested_by_identity_user_id": "operator-1", "status": "completed"}}}
+	exchange := &reportsDataExchangeBinding{}
+	providers := recordapplication.NewDataExchangeProviders(func(context.Context, string, string) principalmodel.Principal { return principal })
 	domain := reportservice.NewReportDomainService(reportservice.ReportDependencies{Reports: func(context.Context, principalmodel.Principal) []reportmodel.ReportSchema {
 		return []reportmodel.ReportSchema{{Key: "revenue", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "customer", Alias: "customer"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "id", Field: reportmodel.ReportDatasetField{SourceAlias: "customer", FieldKey: "id"}}}}}}
 	}, Access: reportsEmptyAccess{}, Records: reportsOneRecords{}, SnapshotSources: reportsSnapshotReplayStore{}})
 	service := reportapplication.NewReportApplicationService(reportapplication.ReportApplicationDependencies{
 		Domain: domain, Records: &reportsExporterStub{content: []byte("id\ncustomer-1\n"), filename: "customer.csv"}, ExportRecords: store,
-		ExportArtifacts: &reportsExportArtifactStore{}, Audit: &reportsAuditStub{},
+		Audit: &reportsAuditStub{}, DataExchange: exchange, DataExchangeProviders: providers,
 		ExportControls: func(context.Context, principalmodel.Principal) []reportmodel.ReportExportControlSchema {
 			return []reportmodel.ReportExportControlSchema{{ReportKey: "revenue", SourceObjects: []string{"customer"}, AuditObject: "report_export_audit", DownloadObject: "report_export_download", MaxRows: 1000, RecordMapping: reportmodel.ReportExportRecordMappingSchema{AuditReportKeyField: "report_key", AuditRequesterField: "requested_by_identity_user_id", AuditStatusField: "status", AuditPreparedStatuses: []string{"completed"}, AuditPreparedStatus: "completed", AuditDownloadedStatus: "completed", AuditDeniedStatus: "denied", AuditExpiredStatus: "expired", AuditRowCountField: "row_count", AuditScopeHashField: "filters_hash", DownloadAuditField: "audit_id", DownloadFilenameField: "file_name", DownloadContentHashField: "content_hash", DownloadExpiresAtField: "expires_at", DownloadTokenField: "file_reference"}}}
 		},
@@ -482,9 +493,7 @@ func TestReportsGovernedPrepareAndDownloadHandlers(t *testing.T) {
 	})
 	capture := &reportsHandlerCapture{}
 	handler := NewReportsHandler(ReportsDependencies{Service: service,
-		Principal: func(*http.Request) principalmodel.Principal {
-			return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator-1"}}, accessfixture.Bundle{Key: "admin", Permissions: []string{"workspace.admin", "*"}})
-		},
+		Principal: func(*http.Request) principalmodel.Principal { return principal },
 		WriteJSON: func(w http.ResponseWriter, status int, value any) {
 			w.WriteHeader(status)
 			_ = json.NewEncoder(w).Encode(value)
@@ -516,30 +525,22 @@ func TestReportsGovernedPrepareAndDownloadHandlers(t *testing.T) {
 	valid.Header.Set("Idempotency-Key", "prepare-1")
 	validResponse := httptest.NewRecorder()
 	handler.prepareReportExport(validResponse, valid)
-	if validResponse.Code != http.StatusOK || validResponse.Header().Get("X-Report-Export-Artifact-ID") != "artifact-1" || validResponse.Header().Get("X-Report-Export-Download-Token") == "" || validResponse.Header().Get("X-Report-Export-Row-Count") != "1" || validResponse.Header().Get("X-Report-Export-Expires-At") == "" {
-		t.Fatalf("compatibility headers status=%d headers=%v error=%v", validResponse.Code, validResponse.Header(), capture.serviceErr)
+	if validResponse.Code != http.StatusAccepted || validResponse.Header().Get("Location") != "/report-exports/data_exchange:report-1" {
+		t.Fatalf("prepare status=%d headers=%v body=%s error=%v", validResponse.Code, validResponse.Header(), validResponse.Body.String(), capture.serviceErr)
 	}
-	prepared, err := service.PrepareExportScoped(t.Context(), "revenue", "customer", "audit-1", "prepare-1", reportmodel.ReportExportScopeRequest{TagMatch: "all", FieldProjection: []string{"id"}, Purpose: "browser export", Freshness: reportmodel.ReportExportFreshness{Mode: "realtime"}}, accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator-1"}}, accessfixture.Bundle{Key: "admin", Permissions: []string{"workspace.admin", "*"}}))
-	if err != nil || len(prepared.Token) != 64 || len(prepared.ContentSHA256) != 64 || prepared.RowCount != 1 {
-		t.Fatalf("legacy artifact preparation contract=%#v error=%v", prepared, err)
+	status := httptest.NewRequest(http.MethodGet, "/report-exports/data_exchange:report-1", nil)
+	status.SetPathValue("jobID", "data_exchange:report-1")
+	statusResponse := httptest.NewRecorder()
+	handler.getReportExportJob(statusResponse, status)
+	if statusResponse.Code != http.StatusOK || !strings.Contains(statusResponse.Body.String(), `"status":"accepted"`) {
+		t.Fatalf("status=%d body=%s error=%v", statusResponse.Code, statusResponse.Body.String(), capture.serviceErr)
 	}
-	token := prepared.Token
-	if store.download.Data["file_reference"] != token {
-		t.Fatalf("business download token=%v prepared token=%s", store.download.Data["file_reference"], token)
-	}
-	download := httptest.NewRequest(http.MethodGet, "/report-exports/"+token, nil)
-	download.SetPathValue("token", token)
-	downloadResponse := httptest.NewRecorder()
-	handler.downloadReportExport(downloadResponse, download)
-	if downloadResponse.Code != http.StatusOK || downloadResponse.Body.String() != "id\ncustomer-1\n" {
-		t.Fatalf("download status=%d body=%q error=%v", downloadResponse.Code, downloadResponse.Body.String(), capture.serviceErr)
-	}
-	capture.serviceErr = nil
-	missing := httptest.NewRequest(http.MethodGet, "/report-exports/short", nil)
-	missing.SetPathValue("token", "short")
-	handler.downloadReportExport(httptest.NewRecorder(), missing)
-	if capture.serviceErr == nil {
-		t.Fatal("invalid download token was accepted")
+	cancel := httptest.NewRequest(http.MethodPost, "/report-exports/data_exchange:report-1/cancel", nil)
+	cancel.SetPathValue("jobID", "data_exchange:report-1")
+	cancelResponse := httptest.NewRecorder()
+	handler.cancelReportExportJob(cancelResponse, cancel)
+	if cancelResponse.Code != http.StatusOK || !strings.Contains(cancelResponse.Body.String(), `"status":"cancelled"`) {
+		t.Fatalf("cancel status=%d body=%s error=%v", cancelResponse.Code, cancelResponse.Body.String(), capture.serviceErr)
 	}
 }
 

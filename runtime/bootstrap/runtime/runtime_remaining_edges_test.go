@@ -87,7 +87,7 @@ func TestRuntimeWorkerNilAndOptionalOwnerEdges(t *testing.T) {
 	runtime.startIntegrationCredentialExpiryWorker(t.Context())
 	runtime.startRuntimeReleaseHeartbeat(t.Context())
 	runtime.startControlledWorker(t.Context(), "owner", func(context.Context) <-chan struct{} { return nil })
-	runtime.startRecordBatchWorker(t.Context())
+	runtime.startDataExchangeWorker(t.Context())
 	runtime.startIdempotencyCleanupWorker(t.Context())
 	runtime.startLifecycleCleanupWorker(t.Context())
 
@@ -121,7 +121,7 @@ func TestRuntimeWorkerNilAndOptionalOwnerEdges(t *testing.T) {
 	StartWorkers(t.Context(), empty)
 	StartWorkers(t.Context(), empty)
 	partial := &Runtime{records: &composition.RuntimeServices{}}
-	partial.startRecordBatchWorker(t.Context())
+	partial.startDataExchangeWorker(t.Context())
 	partial.startIdempotencyCleanupWorker(t.Context())
 	partial.startLifecycleCleanupWorker(t.Context())
 }
@@ -209,7 +209,7 @@ func TestRuntimeStartsConfiguredWorkerOwners(t *testing.T) {
 	highBatch := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	highBatch.cfg.SchedulerPollInterval = time.Millisecond
 	highBatch.cfg.SchedulerBatchSize = 26
-	highBatch.startRecordBatchWorker(t.Context())
+	highBatch.startDataExchangeWorker(t.Context())
 	highBatch.StartNotificationPublicationWorker(t.Context())
 	time.Sleep(20 * time.Millisecond)
 	if err := highBatch.stopWorkers(shutdownTimeout); err != nil {
@@ -222,7 +222,7 @@ func TestRuntimeStartsConfiguredWorkerOwners(t *testing.T) {
 	mediumBatch := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory())
 	mediumBatch.cfg.SchedulerPollInterval = time.Millisecond
 	mediumBatch.cfg.SchedulerBatchSize = 10
-	mediumBatch.startRecordBatchWorker(t.Context())
+	mediumBatch.startDataExchangeWorker(t.Context())
 	time.Sleep(20 * time.Millisecond)
 	if err := mediumBatch.stopWorkers(shutdownTimeout); err != nil {
 		t.Fatalf("medium-batch worker shutdown error=%v", err)

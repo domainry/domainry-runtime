@@ -181,69 +181,14 @@ func TestIntegrationOutboxDeadLetterOwnerInspectRetryResolveAndProjectionFallbac
 }
 
 func TestDeadLetterAdapterHelpersAndNilRegistration(t *testing.T) {
-	registerOperationsDeadLetterOwners(nil, nil, nil, nil, nil, nil)
+	registerOperationsDeadLetterOwners(nil, nil, nil, nil, nil)
 	service := operationsapplication.NewOperationsApplicationService(nil, nil, nil, nil)
-	registerOperationsDeadLetterOwners(service, nil, nil, nil, nil, nil)
+	registerOperationsDeadLetterOwners(service, nil, nil, nil, nil)
 	if valueOr(" value ", "fallback") != "value" || valueOr(" ", "fallback") != "fallback" {
 		t.Fatal("value fallback mismatch")
 	}
 	if apperror.CodeOf(deadLetterActionUnsupported()) != "backend.operations.dead_letter_action_unsupported" {
 		t.Fatal("unsupported action code mismatch")
-	}
-}
-
-type recordBatchDeadLetterServiceStub struct {
-	job        recordmodel.RecordBatchJob
-	inspectErr error
-	actionErr  error
-	getErr     error
-	action     string
-}
-
-func (s *recordBatchDeadLetterServiceStub) InspectBatchJobDeadLetter(context.Context, string, principalmodel.Principal) (recordmodel.RecordBatchJob, error) {
-	return s.job, s.inspectErr
-}
-func (s *recordBatchDeadLetterServiceStub) RetryBatchJobDeadLetter(context.Context, string, principalmodel.Principal) (recordmodel.RecordBatchJob, error) {
-	s.action = "retry"
-	return s.job, s.actionErr
-}
-func (s *recordBatchDeadLetterServiceStub) ResolveBatchJobDeadLetter(context.Context, string, principalmodel.Principal) (recordmodel.RecordBatchJob, error) {
-	s.action = "resolve"
-	return s.job, s.actionErr
-}
-func (s *recordBatchDeadLetterServiceStub) GetBatchJob(context.Context, string, principalmodel.Principal) (recordmodel.RecordBatchJob, error) {
-	return s.job, s.getErr
-}
-
-func TestRecordBatchDeadLetterOwnerAllActionsAndFailures(t *testing.T) {
-	service := &recordBatchDeadLetterServiceStub{job: recordmodel.RecordBatchJob{ID: "job", Kind: "import", ObjectKey: "customer", Status: "dead_letter", ErrorCode: "failed", IdempotencyKey: "business", AttemptCount: 2, FencingToken: 3, UpdatedAt: "now"}}
-	owner := recordBatchDeadLetterOwner{service: service}
-	principal := deadLetterPrincipal()
-	item, err := owner.Inspect(t.Context(), "job", principal)
-	if err != nil || item.Owner != "record_batch" || item.BusinessKey != "business" || item.Details["fencing_token"] != int64(3) {
-		t.Fatalf("item=%#v err=%v", item, err)
-	}
-	service.inspectErr = errors.New("inspect failed")
-	if _, err := owner.Inspect(t.Context(), "job", principal); !errors.Is(err, service.inspectErr) {
-		t.Fatalf("inspect error=%v", err)
-	}
-	service.inspectErr = nil
-	for _, action := range []string{operationsapplication.OperationsDeadLetterRetry, operationsapplication.OperationsDeadLetterResolve, operationsapplication.OperationsDeadLetterAck} {
-		item, err = owner.Act(t.Context(), "job", action, "reason", "key", principal)
-		if err != nil || item.ID != "job" {
-			t.Fatalf("action=%s item=%#v err=%v", action, item, err)
-		}
-	}
-	if _, err := owner.Act(t.Context(), "job", "invalid", "", "", principal); apperror.CodeOf(err) != "backend.operations.dead_letter_action_unsupported" {
-		t.Fatalf("unsupported error=%v", err)
-	}
-	service.actionErr = errors.New("action failed")
-	if _, err := owner.Act(t.Context(), "job", operationsapplication.OperationsDeadLetterRetry, "", "", principal); !errors.Is(err, service.actionErr) {
-		t.Fatalf("action error=%v", err)
-	}
-	service.actionErr, service.getErr = nil, errors.New("get failed")
-	if _, err := owner.Act(t.Context(), "job", operationsapplication.OperationsDeadLetterResolve, "", "", principal); !errors.Is(err, service.getErr) {
-		t.Fatalf("get error=%v", err)
 	}
 }
 

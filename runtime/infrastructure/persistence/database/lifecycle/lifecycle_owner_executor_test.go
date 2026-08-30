@@ -127,32 +127,6 @@ func TestOwnerExecutorResumesPartialBatchesFromDurableArchiveEvidence(t *testing
 	}
 }
 
-func TestRecordBatchCleanupArchivesAndPurgesChunksBeforeJob(t *testing.T) {
-	store := openLifecycleStore(t)
-	now := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
-	old := lifecycleTime(now.Add(-48 * time.Hour))
-	if _, err := store.DB().ExecContext(t.Context(), "INSERT INTO record_batch_jobs (id, workspace_id, kind, object_key, status, idempotency_key, request_fingerprint, payload_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", "batch-1", "workspace-a", "export", "customer", "succeeded", "idem-1", "fingerprint", "{}", old, old); err != nil {
-		t.Fatal(err)
-	}
-	for sequence := 1; sequence <= 2; sequence++ {
-		if _, err := store.DB().ExecContext(t.Context(), "INSERT INTO record_batch_job_chunks (workspace_id, job_id, sequence_no, content, created_at) VALUES (?, ?, ?, ?, ?)", "workspace-a", "batch-1", sequence, "row", old); err != nil {
-			t.Fatal(err)
-		}
-	}
-	executor := ownerExecutorForTest(t, DefaultOwnerExecutors(store), "record")
-	policy := lifecyclemodel.PolicyVersion{Policy: lifecyclemodel.RetentionPolicy{Key: "record.batch_artifact.v1", Version: "1", Owner: "record", DefaultRetention: time.Hour}}
-	result, err := executor.ProcessBatch(t.Context(), lifecyclemodel.CleanupJob{ID: "cleanup-batch", WorkspaceID: "workspace-a", Operation: lifecyclemodel.OperationPurge, UpdatedAt: now}, policy, nil, 10)
-	if err != nil || result.Purged != 3 || result.Archived != 3 {
-		t.Fatalf("result=%#v err=%v", result, err)
-	}
-	for _, table := range []string{"record_batch_jobs", "record_batch_job_chunks"} {
-		var count int
-		if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+table+" WHERE workspace_id = ?", "workspace-a").Scan(&count); err != nil || count != 0 {
-			t.Fatalf("table=%s count=%d err=%v", table, count, err)
-		}
-	}
-}
-
 func TestSoftDeletedBusinessRecordCleanupBlocksWorkflowReference(t *testing.T) {
 	store := openLifecycleStore(t)
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}, {Key: "deleted_at", Type: "datetime"}, {Key: "deleted_by", Type: "text"}, {Key: "name", Type: "text"}}}

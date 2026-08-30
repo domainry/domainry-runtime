@@ -179,19 +179,6 @@ func TestOwnerChildFailurePaths(t *testing.T) {
 	_, _, _ = scriptedOwner(t, &lifecycleSQLState{}, "x").archiveIntegrationEventMappingIntents(t.Context(), job, policy, "event", true)
 	_, _, _ = scriptedOwner(t, &lifecycleSQLState{querySteps: []lifecycleSQLQueryStep{{}, {}, {}}}, "x").archiveWorkflowProcessChildren(t.Context(), job, policy, "process", false)
 	_, _, _ = scriptedOwner(t, &lifecycleSQLState{querySteps: []lifecycleSQLQueryStep{{}, {}, {}}}, "x").archiveWorkflowProcessChildren(t.Context(), job, policy, "process", true)
-	chunk := lifecycleSQLQueryStep{columns: []string{"sequence", "content", "created"}, rows: [][]driver.Value{{int64(1), "x", "now"}}}
-	for _, state := range []*lifecycleSQLState{
-		{querySteps: []lifecycleSQLQueryStep{{err: errLifecycleSQL}}},
-		{querySteps: []lifecycleSQLQueryStep{{columns: []string{"sequence"}, rows: [][]driver.Value{{int64(1)}}}}},
-		{querySteps: []lifecycleSQLQueryStep{{columns: []string{"sequence", "content", "created"}, nextErr: errLifecycleSQL}}},
-		{querySteps: []lifecycleSQLQueryStep{chunk, exists}, execSteps: []lifecycleSQLExecStep{{rowsErr: errLifecycleSQL}}},
-		{querySteps: []lifecycleSQLQueryStep{chunk, {err: errLifecycleSQL}}},
-		{querySteps: []lifecycleSQLQueryStep{chunk, exists}, execSteps: []lifecycleSQLExecStep{{err: errLifecycleSQL}}},
-	} {
-		_, _, _ = scriptedOwner(t, state, "x").archiveRecordBatchChunks(t.Context(), job, policy, "batch", true)
-	}
-	_, _, _ = scriptedOwner(t, &lifecycleSQLState{}, "x").archiveRecordBatchChunks(t.Context(), job, policy, "batch", false)
-	_, _, _ = scriptedOwner(t, &lifecycleSQLState{}, "x").archiveRecordBatchChunks(t.Context(), job, policy, "batch", true)
 }
 
 func TestOwnerProcessSpecFailurePaths(t *testing.T) {
@@ -235,7 +222,6 @@ func TestOwnerProcessSpecFailurePaths(t *testing.T) {
 	// Archive lookup, child processing, and final purge failures.
 	_, _ = scriptedOwner(t, &lifecycleSQLState{querySteps: []lifecycleSQLQueryStep{candidate(now.Format(time.RFC3339Nano)), {err: errLifecycleSQL}}}, "x").processSpec(t.Context(), job, policy, base, nil, now, 1)
 	for _, spec := range []cleanupSpec{
-		{policyKey: "p", table: "record_batch_jobs", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "updated_at"},
 		{policyKey: "p", table: "integration_events", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "updated_at"},
 		{policyKey: "p", table: "workflow_process_instances", idColumn: "id", tenantColumn: "workspace_id", timeColumn: "updated_at", workflowProcessChildren: true},
 	} {

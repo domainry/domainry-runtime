@@ -50,7 +50,6 @@ import (
 	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/lifecycle"
 	metadatapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/metadata"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
-	recordnotification "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/recordnotification"
 	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
 	reportnotification "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/reportnotification"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
@@ -60,9 +59,10 @@ import (
 
 // runtimeServiceAssembly is the result of wiring domain ports to adapters.
 type runtimeServiceAssembly struct {
-	services *composition.RuntimeServices
-	records  recordrepository.RecordRepository
-	worker   workerplatform.Dependencies
+	services            *composition.RuntimeServices
+	records             recordrepository.RecordRepository
+	worker              workerplatform.Dependencies
+	dataExchangeBinding dataexchangesdk.Binding
 }
 
 type runtimeExtensionRegistries struct {
@@ -188,7 +188,6 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			ReportDatasetRows:                   reportDatasetStore,
 			ReportObjectSQL:                     reportDatasetStore,
 			ReportSnapshots:                     reportpersistence.NewReportSnapshotStore(store),
-			ReportExportArtifacts:               reportpersistence.NewReportExportArtifactStore(store),
 			ReportSnapshotSources:               reportDatasetStore,
 			RecordExecutions:                    records,
 			DataExchange:                        dataExchangeBinding,
@@ -209,7 +208,6 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			WorkflowNotificationCompiler:        notificationCompiler,
 			WorkflowTaskNotificationCommitter:   taskNotificationCommitter,
 			RecordNotificationCompiler:          notificationCompiler,
-			RecordBatchNotificationCommitter:    recordnotification.NewRecordBatchNotificationCommitter(store),
 			ReportNotificationCompiler:          notificationCompiler,
 			ReportSnapshotNotificationCommitter: reportnotification.NewReportSnapshotNotificationCommitter(store),
 			AutomationNotificationCompiler:      notificationCompiler,
@@ -278,15 +276,13 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			LifecycleUploadArtifacts:           lifecycleFileArtifacts,
 			LifecycleSubjectHandlers:           subjectHandlers,
 			LifecycleExternalErasure:           integrationSubjectLifecycle,
-			BatchJobQueueLimit:                 cfg.CapacityBatchJobQueueLimit,
-			BatchJobWorkspaceQueueLimit:        cfg.CapacityBatchJobWorkspaceQueueLimit,
 			Worker:                             workerDependencies,
 		},
 	})
 	lifecyclePrincipal := principalmodel.NewSystemPrincipal("runtime-lifecycle", principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "install default lifecycle policies"))
 	workflowScope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "initialize published workflow definitions")
 	return completeRuntimeServiceAssembly(
-		runtimeServiceAssembly{services: services, records: records, worker: workerDependencies},
+		runtimeServiceAssembly{services: services, records: records, worker: workerDependencies, dataExchangeBinding: dataExchangeBinding},
 		func() error {
 			return services.Applications().Lifecycle.InstallDefaultPolicies(ctx, principalmodel.InstallationWorkspaceID, lifecyclePrincipal, time.Now().UTC())
 		},

@@ -149,7 +149,6 @@ func TestConfigValidationRejectsEachRuntimeBoundary(t *testing.T) {
 			cfg.CapacityConnectorProviderRatePerMinute = cfg.CapacityConnectorGlobalRatePerMinute + 1
 		}, "connector rate"},
 		{"queue threshold", func(cfg *Config) { cfg.CapacityQueueDepthThreshold = 0 }, "queue backpressure"},
-		{"batch queue", func(cfg *Config) { cfg.CapacityBatchJobWorkspaceQueueLimit = cfg.CapacityBatchJobQueueLimit + 1 }, "record batch job"},
 		{"telemetry ratio", func(cfg *Config) { cfg.TelemetrySampleRatio = 2 }, "TELEMETRY_SAMPLE_RATIO"},
 		{"database pool", func(cfg *Config) { cfg.DatabaseMaxIdleConns = cfg.DatabaseMaxOpenConns + 1 }, "database pool"},
 		{"database timeout", func(cfg *Config) { cfg.DatabaseLockTimeout = 0 }, "database timeouts"},

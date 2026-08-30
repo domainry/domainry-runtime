@@ -131,26 +131,8 @@ func (h *ReportsHandler) prepareReportExport(w http.ResponseWriter, r *http.Requ
 		h.writeServiceError(w, r, err)
 		return
 	}
-	if result.Async {
-		w.Header().Set("Location", "/report-exports/"+result.Job.ID)
-		h.writeJSON(w, http.StatusAccepted, result.Job)
-		return
-	}
-	content, filename, err := h.service.DownloadExport(r.Context(), result.Download.Token, h.principal(r))
-	if err != nil {
-		h.writeServiceError(w, r, err)
-		return
-	}
-	artifactID := result.Download.ArtifactID
-	if artifactID == "" {
-		artifactID = result.Download.ID
-	}
-	w.Header().Set("X-Report-Export-Artifact-ID", artifactID)
-	w.Header().Set("X-Content-SHA256", result.Download.ContentSHA256)
-	w.Header().Set("X-Report-Export-Download-Token", result.Download.Token)
-	w.Header().Set("X-Report-Export-Row-Count", strconv.Itoa(result.Download.RowCount))
-	w.Header().Set("X-Report-Export-Expires-At", result.Download.ExpiresAt)
-	h.writeExportFile(w, r, content, filename)
+	w.Header().Set("Location", "/report-exports/"+result.Job.ID)
+	h.writeJSON(w, http.StatusAccepted, result.Job)
 }
 
 func (h *ReportsHandler) getReportExportJob(w http.ResponseWriter, r *http.Request) {

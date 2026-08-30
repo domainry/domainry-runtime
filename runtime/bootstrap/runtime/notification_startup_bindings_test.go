@@ -16,7 +16,6 @@ import (
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	metadatamodel "github.com/domainry/domainry-runtime/runtime/domain/metadata/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
@@ -149,7 +148,7 @@ func TestWorkflowTaskNotificationBindingsBoundaryMatrix(t *testing.T) {
 	}
 }
 
-func TestSchedulerAndRecordBatchNotificationAuthorizerBoundaries(t *testing.T) {
+func TestSchedulerNotificationAuthorizerBoundaries(t *testing.T) {
 	failure := errors.New("lookup failed")
 	for _, test := range []struct {
 		name        string
@@ -168,36 +167,6 @@ func TestSchedulerAndRecordBatchNotificationAuthorizerBoundaries(t *testing.T) {
 				return metadatamodel.MetadataDefinition{}, test.found, test.err
 			})
 			err := authorize(t.Context(), "job", accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{Permissions: test.permissions}))
-			if test.err != nil && !errors.Is(err, test.err) {
-				t.Fatalf("error=%v", err)
-			}
-			if test.wantCode != "" && apperror.CodeOf(err) != test.wantCode {
-				t.Fatalf("code=%q error=%v", apperror.CodeOf(err), err)
-			}
-			if test.err == nil && test.wantCode == "" && err != nil {
-				t.Fatal(err)
-			}
-		})
-	}
-
-	principal := principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace", UserID: "user"}}
-	for _, test := range []struct {
-		name     string
-		job      recordmodel.RecordBatchJob
-		found    bool
-		err      error
-		wantCode string
-	}{
-		{name: "lookup error", err: failure},
-		{name: "missing", wantCode: "backend.notification.inbox_action_resource_not_found"},
-		{name: "other actor", found: true, job: recordmodel.RecordBatchJob{ActorID: "other"}, wantCode: "backend.notification.inbox_action_forbidden"},
-		{name: "owner", found: true, job: recordmodel.RecordBatchJob{ActorID: "user"}},
-	} {
-		t.Run("record "+test.name, func(t *testing.T) {
-			authorize := newRecordBatchNotificationActionAuthorizer(func(context.Context, string, string) (recordmodel.RecordBatchJob, bool, error) {
-				return test.job, test.found, test.err
-			})
-			err := authorize(t.Context(), "job", principal)
 			if test.err != nil && !errors.Is(err, test.err) {
 				t.Fatalf("error=%v", err)
 			}

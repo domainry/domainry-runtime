@@ -47,8 +47,8 @@ func reportSummaryPageSchema() map[string]any {
 }
 
 func reportExportJobSchema() map[string]any {
-	return openAPIRequiredObject([]string{"id", "batch_job_id", "audit_id", "report_key", "object_key", "status", "pages_completed", "rows_exported", "total", "scope", "created_at", "updated_at"}, map[string]any{
-		"id": map[string]any{"type": "string"}, "batch_job_id": map[string]any{"type": "string"}, "audit_id": map[string]any{"type": "string"},
+	return openAPIRequiredObject([]string{"id", "data_exchange_job_id", "audit_id", "report_key", "object_key", "status", "pages_completed", "rows_exported", "total", "scope", "created_at", "updated_at"}, map[string]any{
+		"id": map[string]any{"type": "string"}, "data_exchange_job_id": map[string]any{"type": "string"}, "audit_id": map[string]any{"type": "string"},
 		"report_key": map[string]any{"type": "string"}, "object_key": map[string]any{"type": "string"},
 		"status":          map[string]any{"type": "string", "enum": []string{"accepted", "running", "completed", "failed", "cancelled"}},
 		"pages_completed": map[string]any{"type": "integer"}, "rows_exported": map[string]any{"type": "integer"}, "total": map[string]any{"type": "integer"},

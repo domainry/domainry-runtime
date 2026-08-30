@@ -82,7 +82,6 @@ type runtimeAssembly struct {
 	reportDatasetRows                 reportcontract.ReportDatasetRowReader
 	reportObjectSQL                   reportcontract.ReportObjectSQLExecutor
 	reportSnapshots                   reportcontract.ReportSnapshotStore
-	reportExportArtifacts             reportcontract.ReportExportArtifactStore
 	reportSnapshotSources             reportcontract.ReportSnapshotSourceVersionReader
 	auditRepo                         auditrepository.AuditRepository
 	auditApplicationService           *auditapplication.AuditApplicationService
@@ -125,7 +124,6 @@ type runtimeAssembly struct {
 	workflowTaskNotificationCommitter   workflowapplication.WorkflowTaskNotificationCommitter
 	notificationIntentPublisher         func(context.Context, notificationmodel.NotificationIntent) error
 	recordNotificationCompiler          func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
-	recordBatchNotificationCommitter    recordapplication.RecordBatchTerminalNotificationCommitter
 	reportNotificationCompiler          func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	reportSnapshotNotificationCommitter reportapplication.ReportSnapshotNotificationCommitter
 	automationNotificationCompiler      func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)

@@ -28,7 +28,7 @@ var reviewedWorkspaceSQLTables = map[string]bool{
 	"lifecycle_archive_entries": true, "lifecycle_audit_evidence": true, "lifecycle_cleanup_jobs": true,
 	"lifecycle_deletion_registry": true, "lifecycle_external_erasures": true, "lifecycle_legal_holds": true,
 	"lifecycle_policy_versions": true, "lifecycle_subject_requests": true, "lifecycle_file_artifacts": true,
-	"notification_recipient_preferences": true, "record_batch_job_chunks": true, "record_batch_jobs": true, "record_mutation_executions": true,
+	"notification_recipient_preferences": true, "record_mutation_executions": true,
 	"transaction_boundary_intents": true, "workflow_execution_receipts": true, "workflow_node_instances": true,
 	"workflow_process_events": true, "workflow_process_instances": true, "workflow_tasks": true,
 }

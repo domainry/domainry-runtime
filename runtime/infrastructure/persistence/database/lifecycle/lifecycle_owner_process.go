@@ -92,14 +92,6 @@ func (e OwnerExecutor) processSpec(ctx context.Context, job lifecyclemodel.Clean
 		if archived {
 			result.Archived++
 		}
-		if spec.table == "record_batch_jobs" {
-			childArchived, childPurged, childErr := e.archiveRecordBatchChunks(ctx, job, policy, candidate.id, job.Operation == lifecyclemodel.OperationPurge)
-			result.Archived, result.Purged = result.Archived+childArchived, result.Purged+childPurged
-			if childErr != nil {
-				result.Failed++
-				return result, childErr
-			}
-		}
 		if spec.table == "integration_events" {
 			childArchived, childPurged, childErr := e.archiveIntegrationEventMappingIntents(ctx, job, policy, candidate.id, job.Operation == lifecyclemodel.OperationPurge)
 			result.Archived, result.Purged = result.Archived+childArchived, result.Purged+childPurged

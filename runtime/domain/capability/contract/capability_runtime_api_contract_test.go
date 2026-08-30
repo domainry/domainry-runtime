@@ -183,7 +183,7 @@ func TestRuntimeAPIContractRouteSchemasAreClosed(t *testing.T) {
 	}
 }
 
-func TestRuntimeAPIContractPublishesGovernedReportExportScopeAndArtifactEvidence(t *testing.T) {
+func TestRuntimeAPIContractPublishesGovernedReportDataExchangeJob(t *testing.T) {
 	var document struct {
 		Routes map[string]struct {
 			Request, Response string
@@ -192,15 +192,12 @@ func TestRuntimeAPIContractPublishesGovernedReportExportScopeAndArtifactEvidence
 			Required    []string            `json:"required"`
 			Optional    []string            `json:"optional"`
 			FieldValues map[string][]string `json:"field_values"`
-			Threshold   struct {
-				Field string `json:"field"`
-			} `json:"threshold"`
 		} `json:"schemas"`
 	}
 	if err := json.Unmarshal(RuntimeAPIContractDocument(), &document); err != nil {
 		t.Fatal(err)
 	}
-	if route := document.Routes["report_export_prepare"]; route.Request != "report_export_prepare_request" || route.Response != "report_export_file_or_job" {
+	if route := document.Routes["report_export_prepare"]; route.Request != "report_export_prepare_request" || route.Response != "report_export_job" {
 		t.Fatalf("route=%+v", route)
 	}
 	if document.Routes["report_export_job_get"].Response != "report_export_job" || document.Routes["report_export_job_cancel"].Response != "report_export_job" {
@@ -225,8 +222,8 @@ func TestRuntimeAPIContractPublishesGovernedReportExportScopeAndArtifactEvidence
 	if !reflect.DeepEqual(document.Schemas["report_summary"].FieldValues["total_semantics"], []string{"exact", "at_least"}) {
 		t.Fatalf("report summary total semantics=%v", document.Schemas["report_summary"].FieldValues["total_semantics"])
 	}
-	if document.Schemas["report_export_file_or_job"].Threshold.Field != "same_report_authorized_threshold_probe" {
-		t.Fatalf("report export threshold=%+v", document.Schemas["report_export_file_or_job"].Threshold)
+	if !contains(document.Schemas["report_export_job"].Required, "data_exchange_job_id") || contains(document.Schemas["report_export_job"].Required, "batch_job_id") {
+		t.Fatalf("report export job schema=%+v", document.Schemas["report_export_job"])
 	}
 	for _, key := range []string{"purpose", "freshness", "role_key", "data_scopes", "metric_definitions"} {
 		if !contains(document.Schemas["report_export_scope"].Required, key) {

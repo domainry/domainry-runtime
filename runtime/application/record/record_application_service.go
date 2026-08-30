@@ -8,7 +8,6 @@ import (
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	pipelineapplication "github.com/domainry/domainry-runtime/runtime/application/pipeline"
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
-	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	recordruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
@@ -21,12 +20,10 @@ import (
 
 	"context"
 
-	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	workerplatform "github.com/domainry/domainry-foundation/worker"
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
 )
 
@@ -38,7 +35,7 @@ type RecordApplicationService struct {
 	restore                   *RecordRestoreApplicationService
 	importer                  *RecordImportApplicationService
 	exporter                  *RecordExportApplicationService
-	batchJobs                 *RecordBatchJobApplicationService
+	dataExchange              *RecordDataExchangeApplicationService
 	ownerDepartmentPaths      *RecordOwnerDepartmentPathApplicationService
 	queryPolicy               *recordservice.RecordQueryPolicyDomainService
 	audit                     func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
@@ -71,16 +68,9 @@ type RecordApplicationDependencies struct {
 	AfterOutbox                  func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []integrationmodel.IntegrationOutboxMessage
 	BuildAudit                   func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any) auditmodel.AuditEvent
 	RecordMutationExecution      *recordruntime.RecordMutationExecutionRuntime
-	BatchJobs                    recordcontract.RecordBatchJobStore
 	DataExchange                 dataexchange.Binding
 	DataExchangeProviders        *DataExchangeProviders
 	ResolveBatchPrincipal        func(context.Context, string, string) principalmodel.Principal
-	BatchJobQueueLimit           int
-	BatchJobWorkspaceQueueLimit  int
-	Worker                       workerplatform.Dependencies
-	WorkerWakeups                *workerplatform.WakeupBroker
-	NotificationCompiler         func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
-	BatchNotificationCommitter   RecordBatchTerminalNotificationCommitter
 	ValidateExportAssurance      func(context.Context, definitionmodel.ObjectSchema, principalmodel.Principal, map[string]any, string) (map[string]string, error)
 }
 
@@ -339,7 +329,7 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 		dependencies.DataExchangeProviders.ConfigureResolver(dependencies.ResolveBatchPrincipal)
 		dependencies.DataExchangeProviders.Bind(importer, exporter)
 	}
-	batchJobs := NewRecordBatchJobApplicationService(RecordBatchJobDependencies{Store: dependencies.BatchJobs, Importer: importer, Exporter: exporter, DataExchange: dependencies.DataExchange, ResolvePrincipal: dependencies.ResolveBatchPrincipal, Audit: service.audit, QueueLimit: dependencies.BatchJobQueueLimit, WorkspaceLimit: dependencies.BatchJobWorkspaceQueueLimit, Worker: dependencies.Worker, WorkerWakeups: dependencies.WorkerWakeups, NotificationCompiler: dependencies.NotificationCompiler, NotificationCommitter: dependencies.BatchNotificationCommitter})
+	dataExchange := NewRecordDataExchangeApplicationService(RecordDataExchangeDependencies{Importer: importer, Exporter: exporter, DataExchange: dependencies.DataExchange})
 	service.RecordDomainService = recordservice.NewRecordDomainService(recordservice.RecordDomainServiceDependencies{
 		Repository: dependencies.Repository, Reader: reader, References: references,
 		IdentityDirectory: dependencies.IdentityDirectory,
@@ -350,7 +340,7 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 	service.restore = restore
 	service.importer = importer
 	service.exporter = exporter
-	service.batchJobs = batchJobs
+	service.dataExchange = dataExchange
 	service.ownerDepartmentPaths = ownerDepartmentPaths
 	return service
 }

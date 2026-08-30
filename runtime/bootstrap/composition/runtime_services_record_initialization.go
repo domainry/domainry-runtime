@@ -24,8 +24,6 @@ type recordRuntimeState struct {
 	mutationKernel                        *recordruntime.MutationKernelApplicationService
 	RecordMutationExecutionRuntime        *recordexecutionruntime.RecordMutationExecutionRuntime
 	RecordScopeOwnerFactDerivationService *recordservice.RecordScopeOwnerFactDerivationDomainService
-	batchJobQueueLimit                    int
-	batchJobWorkspaceQueueLimit           int
 }
 
 func (s *runtimeAssembly) reportRecordSchemaMap() map[string]definitionmodel.ObjectSchema {
@@ -81,10 +79,10 @@ func initializeRecordApplications(s *runtimeAssembly) {
 	s.reportsService = reportapplication.NewReportApplicationService(reportapplication.ReportApplicationDependencies{
 		ProductBrandName: s.productBrandName,
 		Domain:           reportDomain, Records: reportRecords, ExportRecords: reportRecords, Audit: s.auditApplicationService,
-		ExportArtifacts:      s.reportExportArtifacts,
-		BatchJobs:            s.recordApplicationService,
-		CursorKey:            s.auditExportTokenKey,
-		NotificationCompiler: s.reportNotificationCompiler, NotificationCommitter: s.reportSnapshotNotificationCommitter,
+		DataExchange:          s.dataExchange,
+		DataExchangeProviders: s.dataExchangeProviders,
+		CursorKey:             s.auditExportTokenKey,
+		NotificationCompiler:  s.reportNotificationCompiler, NotificationCommitter: s.reportSnapshotNotificationCommitter,
 		ExportControls: func(_ context.Context, principal principalmodel.Principal) []reportmodel.ReportExportControlSchema {
 			return append([]reportmodel.ReportExportControlSchema(nil), s.reportExportControls...)
 		},
