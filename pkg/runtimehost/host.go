@@ -18,7 +18,6 @@ import (
 	"github.com/domainry/domainry-foundation/telemetry"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
-	integrationmodule "github.com/domainry/domainry-integration/module"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
@@ -348,9 +347,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	}
 	integrationFactory := options.IntegrationFactory
 	if integrationFactory == nil {
-		// Compatibility for existing generated projects; new compositions inject
-		// this explicitly so choosing SaaS never depends on Runtime configuration.
-		integrationFactory = integrationmodule.NewFactory()
+		return fmt.Errorf("configure Integration factory: generated project composition did not supply an SDK Factory")
 	}
 	for _, entry := range configSnapshot.StartupReport() {
 		zap.L().Info("Runtime configuration", zap.String("name", entry.Name), zap.String("source", entry.Source), zap.String("version", entry.Version), zap.Bool("redacted", entry.Redacted))

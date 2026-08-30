@@ -8,7 +8,7 @@ Owner：账号、认证、用户、角色、权限、session 与应用授权目�
 
 Runtime 通过 `runtimehost.Options.IdentityFactory` 注入 Factory，并在 `pkg/runtimehost/identity_integration.go` 打开 Binding。Module 必须实现 SDK HTTP Surface provider，向 Runtime 暴露 browser authentication 与 management surface；SaaS Binding 必须不返回进程内 Surface。两种模式都通过 `Descriptor` 校验 protocol、policy bundle、catalog、issuer/audience 和 mode。
 
-Identity 状态不属于 Runtime。Module 可以使用 Runtime 提供的项目数据库 handle，但使用 Identity 自己的表前缀/迁移账本；SaaS 状态由远端 Identity 服务持有。Runtime 只提供业务 Profile 与 Party organization scope resolver，不接管 Identity 授权模型。
+Identity 状态不属于 Runtime。Module 可以使用 Runtime 提供的项目数据库 handle，并保留 Identity source-owned 表命名空间；所有迁移必须通过宿主 migration registrar 提交，复用宿主唯一 `_schema_migrations`，不得创建 Identity 私有迁移账本。SaaS 状态由远端 Identity 服务持有。Runtime 只提供业务 Profile 与 Party organization scope resolver，不接管 Identity 授权模型。
 
 ## 代码接入
 
@@ -22,6 +22,7 @@ Identity 状态不属于 Runtime。Module 可以使用 Runtime 提供的项目�
 ## 变更约束
 
 - 新路由必须进入 SDK HTTP Surface 合同并声明 exposure；不得从 Runtime router 直接 import Identity handler。
+- Module 的 DDL/DML 必须使用 `domainry-orm`；只有 ORM 无等价能力时才允许局部 raw SQL，并附方言测试与理由。
 - 新授权事实先归属 Identity 或 Runtime business profile owner，再通过窄 resolver 投影，不能复制两份真相。
 - Module/SaaS 切换必须校验 issuer、audience、角色目录 publication 和 session/token 行为。
 - 外部编译验收必须证明 SaaS 项目不依赖 `domainry-identity/module`。
@@ -29,4 +30,3 @@ Identity 状态不属于 Runtime。Module 可以使用 Runtime 提供的项目�
 ## 已知差异
 
 进程内 HTTP Surface 是 Identity Module 的明确差异，不是所有能力的通用要求。SaaS 浏览器流量由远程 Identity endpoint 承担。
-

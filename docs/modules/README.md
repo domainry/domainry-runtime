@@ -11,6 +11,7 @@
 | [Scheduler](scheduler.md) | `runtimehost.Options.SchedulerFactory` | 已实现 | 已实现 | Module worker 受 Runtime admission，SaaS 拥有 clock worker |
 | [Agent](agent.md) | `runtimehost.Options.AgentFactory` | 已实现 | 已实现 | Runtime 保留 task/workflow/授权 owner；Agent 拥有 provider execution |
 | [Data Exchange](data-exchange.md) | `runtimehost.Options.DataExchangeFactory` | 已实现 | 已实现 | Host 暴露 import/export provider |
+| [Integration](integration.md) | `runtimehost.Options.IntegrationFactory` | 已实现 | 已实现 | Runtime 只保留 durable publication handoff |
 | [Audit](audit.md) | Runtime bootstrap 固定组装 | 已实现 | 未形成可选拓扑 | 支持同事务 prepared append |
 
 ## 新模块文档要求

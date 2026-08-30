@@ -50,6 +50,12 @@ type identityFactoryStub struct {
 
 type agentFactoryStub struct{}
 
+type integrationFactoryStub struct{}
+
+func (integrationFactoryStub) DeploymentMode() integrationsdk.DeploymentMode {
+	return integrationsdk.DeploymentModeModule
+}
+
 func (agentFactoryStub) Open(context.Context, agentsdk.ApplicationRef) (agentsdk.Binding, error) {
 	return nil, errors.New("unused Agent factory")
 }
@@ -140,7 +146,7 @@ func validOptions() Options {
 		ConnectorContractVersion:  connector.ContractVersion,
 		ConnectorContractSHA256:   connector.ContractSHA256,
 		DomainSDK:                 domainSDK,
-	}, IdentityFactory: identityFactoryStub{}, NotificationFactory: notificationFactoryStub{}, PartyFactory: partyFactoryStub{}, MonitoringFactory: monitoringFactoryStub{}, SchedulerFactory: schedulerFactoryStub{}, DataExchangeFactory: dataExchangeFactoryStub{}, AgentFactory: agentFactoryStub{}}
+	}, IdentityFactory: identityFactoryStub{}, NotificationFactory: notificationFactoryStub{}, PartyFactory: partyFactoryStub{}, MonitoringFactory: monitoringFactoryStub{}, SchedulerFactory: schedulerFactoryStub{}, DataExchangeFactory: dataExchangeFactoryStub{}, AgentFactory: agentFactoryStub{}, IntegrationFactory: integrationFactoryStub{}}
 }
 
 func serverManifestJSON(t *testing.T, target *manifestmodel.GeneratedDomainSDKIdentity) []byte {
