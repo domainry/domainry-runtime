@@ -215,5 +215,17 @@ physical table name.
 - `_schema_materializations`, `_runtime_schema_migrations`, and
   `_party_schema_migrations`: obsolete ledgers are dropped, never adopted or
   backed up. `_schema_migrations` is the only migration ledger.
+- `_identity_change_plan_drafts`, `_identity_change_plan_operations`,
+  `_identity_portability_export_receipts`,
+  `_identity_portability_import_receipts`, and
+  `_identity_portability_write_fence_events`: these were retired compatibility
+  names, not current Identity-owned persistence. They are not recreated under
+  new names. Portability write-fence state is owned by
+  `_identity_workspace_write_fences`, while durable evidence is written to
+  `_audit_events`.
+- `_identity_definition_versions`: this was a legacy bridge into the generic
+  Metadata definition-version store, not a current Identity table. Generic
+  versions live in `_metadata_definition_versions`; Identity-owned profile
+  binding versions live in `_identity_profile_binding_definition_versions`.
 - Unpublished compatibility copies, rename migrations, and backup tables for
   the retired names are not created.
