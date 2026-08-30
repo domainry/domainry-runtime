@@ -14,14 +14,13 @@ import (
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	agentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/agent"
 )
 
 func assembleAgentApplicationPorts(dependencies HTTPServerDependencies, principalDirectories ...identitysdk.PrincipalResolver) (*agent.AgentApplicationService, *agent.AgentProposalApplicationService) {
-	if dependencies.Store == nil {
+	if dependencies.AgentRepositories == nil || dependencies.AgentRepositories.AgentStateRepository() == nil {
 		return nil, nil
 	}
-	state := agent.NewAgentApplicationService(agentpersistence.NewAgentStateStore(dependencies.Store))
+	state := agent.NewAgentApplicationService(dependencies.AgentRepositories.AgentStateRepository())
 	var principals identitysdk.PrincipalResolver
 	if len(principalDirectories) > 0 && principalDirectories[0] != nil {
 		principals = principalDirectories[0]

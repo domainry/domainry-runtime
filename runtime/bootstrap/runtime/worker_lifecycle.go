@@ -32,11 +32,7 @@ func StartWorkers(ctx context.Context, runtime *Runtime) {
 	runtime.startRecordTimerWorker(ctx)
 	runtime.startAgentTaskWorker(ctx)
 	runtime.StartWorkflowWorker(ctx)
-	runtime.StartIntegrationEventWorker(ctx)
 	runtime.StartIntegrationOutboxWorker(ctx)
-	runtime.startConnectorProviderBackgroundWorker(ctx)
-	runtime.startIntegrationInvocationReconciliationWorker(ctx)
-	runtime.startIntegrationCredentialExpiryWorker(ctx)
 	runtime.StartNotificationPublicationWorker(ctx)
 	runtime.startNotificationInboxWorker(ctx)
 	runtime.startNotificationChannelWorker(ctx)
@@ -247,46 +243,25 @@ func startWorkflowContinuationWorkerLoop(
 }
 
 func (a *Runtime) StartIntegrationEventWorker(ctx context.Context) {
-	a.startControlledWorker(ctx, "integration_event", func(workerCtx context.Context) <-chan struct{} {
-		return a.records.Applications().Integrations.StartEventWorker(workerCtx, time.Second, 25)
-	})
+	// Inbound event processing belongs to Integration Module/SaaS.
 }
 
 func (a *Runtime) StartIntegrationOutboxWorker(ctx context.Context) {
 	a.startControlledWorker(ctx, "integration_outbox", func(workerCtx context.Context) <-chan struct{} {
-		return a.records.Applications().Integrations.StartOutboxWorker(workerCtx, time.Second, 25)
+		return a.records.Applications().PublicationHandoff.StartWorker(workerCtx, time.Second, 25)
 	})
 }
 
 func (a *Runtime) startConnectorProviderBackgroundWorker(ctx context.Context) {
-	if a == nil || a.records == nil || runtimeWorkerApplications(a.records).Integrations == nil {
-		return
-	}
-	a.startControlledWorker(ctx, "integration_gmail", func(workerCtx context.Context) <-chan struct{} {
-		return a.records.Applications().Integrations.StartConnectorBackgroundWorker(workerCtx, 5*time.Second, 25)
-	})
+	// Provider workers belong to Integration Module/SaaS.
 }
 
 func (a *Runtime) startIntegrationInvocationReconciliationWorker(ctx context.Context) {
-	a.startControlledWorker(ctx, "integration_reconciliation", func(workerCtx context.Context) <-chan struct{} {
-		scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "reconcile integration invocation receipts")
-		return a.records.Applications().Integrations.StartInvocationReconciliationWorker(workerCtx, time.Minute, 5*time.Minute, 100, scope)
-	})
+	// Invocation evidence and reconciliation belong to Integration Module/SaaS.
 }
 
 func (a *Runtime) startIntegrationCredentialExpiryWorker(ctx context.Context) {
-	if a == nil || a.records == nil {
-		return
-	}
-	a.startControlledWorker(ctx, "integration_credential_expiry", func(workerCtx context.Context) <-chan struct{} {
-		return workerplatform.StartNamedLoop(workerCtx, "integration_credential_expiry", time.Hour, func() {
-			runLoggedRuntimeWorkerTick(workerCtx, a.worker.Control, "integration credential expiry worker failed", func() error {
-				scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "publish integration credential expiry notifications")
-				_, err := a.records.Applications().Integrations.ProcessCredentialExpiryNotifications(workerCtx, a.worker.Clock.Now(), 500, scope)
-				return err
-			})
-		})
-	})
+	// Credential lifecycle belongs to Integration Module/SaaS.
 }
 
 func (a *Runtime) StartNotificationPublicationWorker(ctx context.Context) {

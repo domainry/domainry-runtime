@@ -7,15 +7,16 @@ import (
 	"testing"
 	"time"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/requestcontext"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 )
 
 type agentTaskRunnerStub struct {
-	startResult    AgentTaskRunnerResult
-	pollResults    []AgentTaskRunnerResult
-	cancelResult   AgentTaskRunnerResult
+	startResult    agentsdk.TaskResult
+	pollResults    []agentsdk.TaskResult
+	cancelResult   agentsdk.TaskResult
 	startErr       error
 	pollErr        error
 	cancelErr      error
@@ -25,26 +26,26 @@ type agentTaskRunnerStub struct {
 	startWorkspace string
 }
 
-func (s *agentTaskRunnerStub) Start(ctx context.Context, _ AgentTaskRunnerRequest) (AgentTaskRunnerResult, error) {
+func (s *agentTaskRunnerStub) Start(ctx context.Context, _ agentsdk.TaskRequest) (agentsdk.TaskResult, error) {
 	s.starts++
 	s.startWorkspace = requestcontext.WorkspaceID(ctx)
 	return s.startResult, s.startErr
 }
-func (s *agentTaskRunnerStub) Poll(context.Context, string, string) (AgentTaskRunnerResult, error) {
+func (s *agentTaskRunnerStub) Poll(context.Context, string, string) (agentsdk.TaskResult, error) {
 	s.polls++
 	if len(s.pollResults) == 0 {
-		return AgentTaskRunnerResult{Status: AgentProviderRunRunning, ExternalRunID: "external-1"}, s.pollErr
+		return agentsdk.TaskResult{Status: agentsdk.ProviderRunRunning, ExternalRunID: "external-1"}, s.pollErr
 	}
 	result := s.pollResults[0]
 	s.pollResults = s.pollResults[1:]
 	return result, s.pollErr
 }
-func (s *agentTaskRunnerStub) Cancel(context.Context, string, string) (AgentTaskRunnerResult, error) {
+func (s *agentTaskRunnerStub) Cancel(context.Context, string, string) (agentsdk.TaskResult, error) {
 	s.cancels++
 	return s.cancelResult, s.cancelErr
 }
 
-func agentTaskRunnerExecutorFixture(t *testing.T, runner AgentTaskRunner) (*AgentTaskRunnerExecutor, agentmodel.AgentTaskRun) {
+func agentTaskRunnerExecutorFixture(t *testing.T, runner agentsdk.TaskRunner) (*AgentTaskRunnerExecutor, agentmodel.AgentTaskRun) {
 	t.Helper()
 	authorization, initiator, schema, _ := agentAuthorizationFixture()
 	outputSchema := map[string]any{"type": "object", "required": []string{"score"}, "properties": map[string]any{"score": map[string]any{"type": "number"}}, "additionalProperties": false}
@@ -61,12 +62,12 @@ func agentTaskRunnerExecutorFixture(t *testing.T, runner AgentTaskRunner) (*Agen
 	}
 	credentials := NewAgentTaskCredentialApplicationService([]byte("0123456789abcdef0123456789abcdef"), agentTaskClock{now: time.Now().UTC()}, agentCredentialIDStub{})
 	executor := NewAgentTaskRunnerExecutor(AgentTaskRunnerExecutorDependencies{Runner: runner, Authorization: authorization, Credentials: credentials, PollInterval: time.Millisecond})
-	run := agentmodel.AgentTaskRun{ID: "run-1", WorkspaceID: initiator.WorkspaceID, ProcessID: "process-1", TaskKey: "customer.review", TaskVersion: "1.0.0", Identity: agentmodel.AgentExecutionIdentity{Mode: agentmodel.AgentTaskIdentityInherit, Initiator: agentPrincipalReference(initiator)}, Input: map[string]any{"record_id": "customer-1"}, IdempotencyKey: "idem-1", CorrelationID: "correlation-1", Evidence: agentmodel.AgentTaskExecutionEvidence{ManifestHash: "manifest", Authorization: []agentmodel.AgentAuthorizationEvidence{{AllowedObjects: []string{"customer"}, AllowedActions: []string{"customer.update"}, AllowedOutcomes: []string{"success"}}}}, Attempts: []agentmodel.AgentTaskAttempt{{Number: 1}}}
+	run := agentmodel.AgentTaskRun{ID: "run-1", WorkspaceID: initiator.WorkspaceID, ProcessID: "process-1", TaskKey: "customer.review", TaskVersion: "1.0.0", Identity: agentsdk.ExecutionIdentity{Mode: agentsdk.AgentTaskIdentityInherit, Initiator: agentPrincipalReference(initiator)}, Input: map[string]any{"record_id": "customer-1"}, IdempotencyKey: "idem-1", CorrelationID: "correlation-1", Evidence: agentmodel.AgentTaskExecutionEvidence{ManifestHash: "manifest", Authorization: []agentmodel.AgentAuthorizationEvidence{{AllowedObjects: []string{"customer"}, AllowedActions: []string{"customer.update"}, AllowedOutcomes: []string{"success"}}}}, Attempts: []agentmodel.AgentTaskAttempt{{Number: 1}}}
 	return executor, run
 }
 
 func TestAgentTaskRunnerExecutorStartsPollsValidatesAndRetainsEvidence(t *testing.T) {
-	runner := &agentTaskRunnerStub{startResult: AgentTaskRunnerResult{Status: AgentProviderRunRunning, ExternalRunID: "external-1"}, pollResults: []AgentTaskRunnerResult{{Status: AgentProviderRunCompleted, ExternalRunID: "external-1", Outcome: "success", Output: map[string]any{"score": float64(90)}, Model: "model-1", Usage: map[string]any{"tokens": 10}}}}
+	runner := &agentTaskRunnerStub{startResult: agentsdk.TaskResult{Status: agentsdk.ProviderRunRunning, ExternalRunID: "external-1"}, pollResults: []agentsdk.TaskResult{{Status: agentsdk.ProviderRunCompleted, ExternalRunID: "external-1", Outcome: "success", Output: map[string]any{"score": float64(90)}, Model: "model-1", Usage: map[string]any{"tokens": 10}}}}
 	executor, run := agentTaskRunnerExecutorFixture(t, runner)
 	completion, err := executor.ExecuteAgentTask(t.Context(), run)
 	if err != nil || completion.Status != agentmodel.AgentTaskRunSucceeded || completion.ExternalRunID != "external-1" || completion.Evidence.ManifestHash != "manifest" || completion.Evidence.Model != "model-1" || runner.starts != 1 || runner.polls != 1 || runner.startWorkspace != run.WorkspaceID {
@@ -75,7 +76,7 @@ func TestAgentTaskRunnerExecutorStartsPollsValidatesAndRetainsEvidence(t *testin
 }
 
 func TestAgentTaskRunnerExecutorReconcilesExistingExternalRunBeforeStart(t *testing.T) {
-	runner := &agentTaskRunnerStub{pollResults: []AgentTaskRunnerResult{{Status: AgentProviderRunCompleted, ExternalRunID: "existing", Outcome: "success", Output: map[string]any{"score": 1}}}}
+	runner := &agentTaskRunnerStub{pollResults: []agentsdk.TaskResult{{Status: agentsdk.ProviderRunCompleted, ExternalRunID: "existing", Outcome: "success", Output: map[string]any{"score": 1}}}}
 	executor, run := agentTaskRunnerExecutorFixture(t, runner)
 	run.Attempts[0].ExternalRunID = "existing"
 	if _, err := executor.ExecuteAgentTask(t.Context(), run); err != nil || runner.starts != 0 || runner.polls != 1 {
@@ -85,7 +86,7 @@ func TestAgentTaskRunnerExecutorReconcilesExistingExternalRunBeforeStart(t *test
 
 func TestAgentTaskRunnerExecutorClassifiesTimeoutOutputAndProviderBoundaries(t *testing.T) {
 	t.Run("local timeout retains reconciliation", func(t *testing.T) {
-		runner := &agentTaskRunnerStub{startResult: AgentTaskRunnerResult{Status: AgentProviderRunRunning, ExternalRunID: "external-timeout"}}
+		runner := &agentTaskRunnerStub{startResult: agentsdk.TaskResult{Status: agentsdk.ProviderRunRunning, ExternalRunID: "external-timeout"}}
 		executor, run := agentTaskRunnerExecutorFixture(t, runner)
 		executor.dependencies.PollInterval = time.Minute
 		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Millisecond)
@@ -96,11 +97,11 @@ func TestAgentTaskRunnerExecutorClassifiesTimeoutOutputAndProviderBoundaries(t *
 			t.Fatalf("error=%#v", err)
 		}
 	})
-	for name, result := range map[string]AgentTaskRunnerResult{
-		"outcome": {Status: AgentProviderRunCompleted, ExternalRunID: "external", Outcome: "root", Output: map[string]any{"score": 1}},
-		"schema":  {Status: AgentProviderRunCompleted, ExternalRunID: "external", Outcome: "success", Output: map[string]any{"unknown": true}},
-		"unknown": {Status: AgentProviderRunUnknown, ExternalRunID: "external"},
-		"failed":  {Status: AgentProviderRunFailed, ExternalRunID: "external", ErrorClass: "provider_5xx", ErrorCode: "provider.unavailable", Retryable: true},
+	for name, result := range map[string]agentsdk.TaskResult{
+		"outcome": {Status: agentsdk.ProviderRunCompleted, ExternalRunID: "external", Outcome: "root", Output: map[string]any{"score": 1}},
+		"schema":  {Status: agentsdk.ProviderRunCompleted, ExternalRunID: "external", Outcome: "success", Output: map[string]any{"unknown": true}},
+		"unknown": {Status: agentsdk.ProviderRunUnknown, ExternalRunID: "external"},
+		"failed":  {Status: agentsdk.ProviderRunFailed, ExternalRunID: "external", ErrorClass: "provider_5xx", ErrorCode: "provider.unavailable", Retryable: true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			runner := &agentTaskRunnerStub{startResult: result}
@@ -110,7 +111,7 @@ func TestAgentTaskRunnerExecutorClassifiesTimeoutOutputAndProviderBoundaries(t *
 			}
 		})
 	}
-	runner := &agentTaskRunnerStub{startResult: AgentTaskRunnerResult{Status: AgentProviderRunCancelled}}
+	runner := &agentTaskRunnerStub{startResult: agentsdk.TaskResult{Status: agentsdk.ProviderRunCancelled}}
 	executor, run := agentTaskRunnerExecutorFixture(t, runner)
 	if completion, err := executor.ExecuteAgentTask(t.Context(), run); err != nil || completion.Status != agentmodel.AgentTaskRunCancelled {
 		t.Fatalf("provider cancelled=%#v err=%v", completion, err)
@@ -118,7 +119,7 @@ func TestAgentTaskRunnerExecutorClassifiesTimeoutOutputAndProviderBoundaries(t *
 }
 
 func TestAgentTaskRunnerExecutorPropagatesAndReconcilesCancel(t *testing.T) {
-	runner := &agentTaskRunnerStub{cancelResult: AgentTaskRunnerResult{Status: AgentProviderRunUnknown}}
+	runner := &agentTaskRunnerStub{cancelResult: agentsdk.TaskResult{Status: agentsdk.ProviderRunUnknown}}
 	executor, run := agentTaskRunnerExecutorFixture(t, runner)
 	run.Attempts[0].ExternalRunID = "external-cancel"
 	completion, err := executor.CancelAgentTask(t.Context(), run)
@@ -161,8 +162,8 @@ func TestAgentTaskRunnerExecutorDependencyAndProviderBoundaryMatrix(t *testing.T
 	run.TimeoutSeconds = 1
 	for name, candidate := range map[string]*agentTaskRunnerStub{
 		"start error":         {startErr: errors.New("start")},
-		"missing external id": {startResult: AgentTaskRunnerResult{Status: AgentProviderRunAccepted}},
-		"poll error":          {startResult: AgentTaskRunnerResult{Status: AgentProviderRunRunning, ExternalRunID: "external"}, pollErr: errors.New("poll")},
+		"missing external id": {startResult: agentsdk.TaskResult{Status: agentsdk.ProviderRunAccepted}},
+		"poll error":          {startResult: agentsdk.TaskResult{Status: agentsdk.ProviderRunRunning, ExternalRunID: "external"}, pollErr: errors.New("poll")},
 	} {
 		executor, candidateRun := agentTaskRunnerExecutorFixture(t, candidate)
 		candidateRun.TimeoutSeconds = run.TimeoutSeconds
@@ -185,13 +186,13 @@ func TestAgentTaskRunnerExecutorCancellationBoundaryMatrix(t *testing.T) {
 	}
 	run.Attempts[0].ExternalRunID = "external"
 	for name, result := range map[string]struct {
-		value AgentTaskRunnerResult
+		value agentsdk.TaskResult
 		err   error
 	}{
 		"error":     {err: errors.New("cancel")},
-		"unknown":   {value: AgentTaskRunnerResult{Status: AgentProviderRunUnknown}},
-		"running":   {value: AgentTaskRunnerResult{Status: AgentProviderRunRunning}},
-		"cancelled": {value: AgentTaskRunnerResult{Status: AgentProviderRunCancelled}},
+		"unknown":   {value: agentsdk.TaskResult{Status: agentsdk.ProviderRunUnknown}},
+		"running":   {value: agentsdk.TaskResult{Status: agentsdk.ProviderRunRunning}},
+		"cancelled": {value: agentsdk.TaskResult{Status: agentsdk.ProviderRunCancelled}},
 	} {
 		runner.cancelResult, runner.cancelErr = result.value, result.err
 		completion, err := executor.CancelAgentTask(t.Context(), run)
@@ -208,7 +209,7 @@ func TestAgentTaskRunnerExecutorCancellationBoundaryMatrix(t *testing.T) {
 }
 
 func TestAgentTaskRunnerHelperBoundaryMatrix(t *testing.T) {
-	if err := agentRunnerError(AgentTaskRunnerResult{}, "external", errors.New("provider")); err.(*AgentTaskExecutionError).Code != "agent.runner.provider_failed" {
+	if err := agentRunnerError(agentsdk.TaskResult{}, "external", errors.New("provider")); err.(*AgentTaskExecutionError).Code != "agent.runner.provider_failed" {
 		t.Fatalf("runner error=%#v", err)
 	}
 	base := agentmodel.AgentTaskRun{Reconciliation: agentmodel.AgentTaskReconciliation{ExternalRunID: "fallback"}, Attempts: []agentmodel.AgentTaskAttempt{{ExternalRunID: " old "}, {}, {ExternalRunID: " latest "}}}

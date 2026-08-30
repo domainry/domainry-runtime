@@ -16,6 +16,7 @@ import (
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
 	healthplatform "github.com/domainry/domainry-runtime/runtime/platform/health"
 	"github.com/domainry/domainry-runtime/runtime/platform/productbrand"
+	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	businesseventhttp "github.com/domainry/domainry-runtime/runtime/transport/http/businessevents"
 	businesssystemhttp "github.com/domainry/domainry-runtime/runtime/transport/http/businesssystem"
 	"go.uber.org/zap"
@@ -41,17 +42,15 @@ type HTTPRouter struct {
 	discoveryHTTP           httpRouteRegistrar
 	openAPIHTTP             httpRouteRegistrar
 	operationsHTTP          httpRouteRegistrar
+	lifecycleHTTP           httpRouteRegistrar
 	workflowHTTP            httpRouteRegistrar
 	automationHTTP          httpRouteRegistrar
 	schedulerHTTP           httpRouteRegistrar
 	reportHTTP              httpRouteRegistrar
 	frontendCapabilityHTTP  httpRouteRegistrar
 	businessReferenceHTTP   httpRouteRegistrar
-	businessSeedHTTP        httpRouteRegistrar
 	businessSystemHTTP      httpRouteRegistrar
 	capabilityHTTP          httpRouteRegistrar
-	changePlanHTTP          httpRouteRegistrar
-	integrationHTTP         httpRouteRegistrar
 	applicationSchemaHTTP   httpRouteRegistrar
 	notificationHTTP        httpRouteRegistrar
 	partyHTTP               httpRouteRegistrar
@@ -65,6 +64,7 @@ type HTTPRouter struct {
 	corsAllowedOrigins      []string
 	surfaceGroupPolicies    map[SurfaceRouteGroup]SurfaceRouteGroupPolicy
 	surfaceGroupCapacity    map[SurfaceRouteGroup]*capacityplatform.Controller
+	rateLimiter             ratelimit.Limiter
 	allowDevAuthHeaders     bool
 	agentDialogHTTP         httpRouteRegistrar
 	technicalMetrics        TechnicalMetricsProvider
@@ -106,9 +106,9 @@ func NewHTTPRouter(config HTTPRouterConfig, deps HTTPRouterDependencies) *HTTPRo
 		securityAudit: deps.SecurityAudit, runtimeStatus: deps.RuntimeStatus,
 		corsAllowedOrigins: normalizeCORSOrigins(config.CORSAllowedOrigins), allowDevAuthHeaders: config.AllowDevAuthHeaders,
 		surfaceGroupPolicies: config.SurfaceGroupPolicies,
-		surfaceGroupCapacity: map[SurfaceRouteGroup]*capacityplatform.Controller{},
-		technicalMetrics:     deps.TechnicalMetrics,
-		httpMetrics:          NewMemoryHTTPMetricsCollector(defaultHTTPMetricsMaxSeries), serviceKind: BusinessRuntimeServiceKind,
+		surfaceGroupCapacity: map[SurfaceRouteGroup]*capacityplatform.Controller{}, rateLimiter: deps.RateLimiter,
+		technicalMetrics: deps.TechnicalMetrics,
+		httpMetrics:      NewMemoryHTTPMetricsCollector(defaultHTTPMetricsMaxSeries), serviceKind: BusinessRuntimeServiceKind,
 		productBrandName: productbrand.ResolveName(config.ProductBrandName),
 		healthRegistry:   healthplatform.NewRegistry(), healthCheckTimeout: config.HealthCheckTimeout, maxJSONBodyBytes: config.MaxJSONBodyBytes,
 		capacityController: controller, requestTimeout: config.RequestTimeout, backpressure: deps.Backpressure, workerControl: deps.WorkerControl,
@@ -119,6 +119,9 @@ func NewHTTPRouter(config HTTPRouterConfig, deps HTTPRouterDependencies) *HTTPRo
 	}
 	for group, policy := range config.SurfaceGroupPolicies {
 		if policy.RateLimitPerMinute <= 0 {
+			continue
+		}
+		if router.rateLimiter != nil {
 			continue
 		}
 		router.surfaceGroupCapacity[group] = capacityplatform.NewController(capacityplatform.Limits{
@@ -204,9 +207,6 @@ func (s *HTTPRouter) Routes() http.Handler {
 	s.frontendCapabilityHTTP.RegisterRoutes(mux)
 	s.businessSystemHTTP.RegisterRoutes(mux)
 	s.businessReferenceHTTP.RegisterRoutes(mux)
-	runOptionalRouteRegistrar(s.businessSeedHTTP != nil, func() { s.businessSeedHTTP.RegisterRoutes(mux) })
-	s.changePlanHTTP.RegisterRoutes(mux)
-	s.integrationHTTP.RegisterRoutes(mux)
 	runOptionalRouteRegistrar(s.notificationHTTP != nil, func() { s.notificationHTTP.RegisterRoutes(mux) })
 	s.uploadHTTP.RegisterRoutes(mux)
 	s.surfaceContextHTTP.RegisterRoutes(mux)
@@ -215,6 +215,7 @@ func (s *HTTPRouter) Routes() http.Handler {
 	s.automationHTTP.RegisterRoutes(mux)
 	s.schedulerHTTP.RegisterRoutes(mux)
 	s.operationsHTTP.RegisterRoutes(mux)
+	runOptionalRouteRegistrar(s.lifecycleHTTP != nil, func() { s.lifecycleHTTP.RegisterRoutes(mux) })
 	s.registerFallbackRoutes(mux)
 	admitted := s.withAdmission(mux, mux)
 	controlled := s.withOperationalControls(mux, admitted)

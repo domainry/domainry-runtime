@@ -60,10 +60,6 @@ func (r *automationExecutionRepositoryStub) InsertExecution(_ context.Context, _
 
 type automationMetadataStub struct{ err error }
 
-func (s *automationMetadataStub) ListApplicationDefinitionVersions(_ context.Context, _, resourceKey string, _ principalmodel.Principal) ([]appschemamodel.ApplicationDefinitionVersion, error) {
-	return []appschemamodel.ApplicationDefinitionVersion{{ResourceType: "automation_rule", ResourceKey: resourceKey, SchemaVersion: "1"}}, s.err
-}
-
 type automationHandlerCapture struct {
 	serviceErr  error
 	legacyCalls int
@@ -91,7 +87,7 @@ func newAutomationHandlerFixture() *automationHandlerFixture {
 	capture := &automationHandlerCapture{}
 	fixture := &automationHandlerFixture{registry: registry, executions: executions, metadata: metadata, capture: capture, principal: principal}
 	service := automationapplication.NewAutomationApplicationService(automationapplication.AutomationApplicationDependencies{
-		Rules: registry, ExecutionRepository: executions, Metadata: metadata,
+		Rules: registry, ExecutionRepository: executions,
 		Schema: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 			return appschemamodel.ApplicationSchemaSnapshot{}
 		},
@@ -206,19 +202,6 @@ func TestAutomationHandlersListCapabilitiesHistoryAndGet(t *testing.T) {
 	fixture.handler.getAutomationRule(missing, automationRequest(http.MethodGet, "/", "", "missing"))
 	if missing.Code != http.StatusUnprocessableEntity || fixture.capture.serviceErr == nil {
 		t.Fatalf("missing status=%d error=%v", missing.Code, fixture.capture.serviceErr)
-	}
-
-	versions := httptest.NewRecorder()
-	fixture.handler.listAutomationRuleVersions(versions, automationRequest(http.MethodGet, "/", "", " welcome "))
-	if versions.Code != http.StatusOK || !strings.Contains(versions.Body.String(), `"schema_version":"1"`) {
-		t.Fatalf("versions status=%d body=%s", versions.Code, versions.Body.String())
-	}
-	fixture.metadata.err = errors.New("versions failed")
-	fixture.capture.serviceErr = nil
-	versions = httptest.NewRecorder()
-	fixture.handler.listAutomationRuleVersions(versions, automationRequest(http.MethodGet, "/", "", "welcome"))
-	if versions.Code != http.StatusUnprocessableEntity || fixture.capture.serviceErr == nil {
-		t.Fatalf("version failure status=%d error=%v", versions.Code, fixture.capture.serviceErr)
 	}
 
 }

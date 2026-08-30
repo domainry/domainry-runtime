@@ -6,30 +6,33 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 
 	"strings"
 
+	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	agentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/agent"
 
-	"github.com/domainry/domainry-foundation/apperror"
 	ormbuilder "github.com/domainry/domainry-orm/builder"
 	notificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notification"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 )
 
 type WorkflowDecisionStore struct {
-	store *database.RuntimeStore
-	db    workflowDatabase
+	store      *database.RuntimeStore
+	db         workflowDatabase
+	agentTasks agentrepository.AgentTaskTransactionRepository
 }
 
-func NewWorkflowDecisionStore(store *database.RuntimeStore) WorkflowDecisionStore {
-	return WorkflowDecisionStore{store: store}
+func NewWorkflowDecisionStore(store *database.RuntimeStore, agentTasks ...agentrepository.AgentTaskTransactionRepository) WorkflowDecisionStore {
+	value := WorkflowDecisionStore{store: store}
+	if len(agentTasks) > 0 {
+		value.agentTasks = agentTasks[0]
+	}
+	return value
 }
 
 func (r WorkflowDecisionStore) database() workflowDatabase {
@@ -156,16 +159,19 @@ func (r WorkflowDecisionStore) CommitWorkflowState(ctx context.Context, commit t
 	}
 	for _, task := range commit.InsertAgentTasks {
 		task.WorkspaceID = workspaceID
-		if err := r.insertAgentTaskTx(ctx, tx, task); err != nil {
-			return err
+		if r.agentTasks == nil {
+			return fmt.Errorf("Agent transaction repository is unavailable")
 		}
-		if err := agentpersistence.RegisterAgentTaskWorkerScope(ctx, r.store, tx, workspaceID, time.UnixMilli(task.UpdatedAtMillis)); err != nil {
+		if err := r.agentTasks.InsertAgentTask(ctx, tx, agentTaskMutation(task)); err != nil {
 			return err
 		}
 	}
 	for _, task := range commit.UpdateAgentTasks {
 		task.WorkspaceID = workspaceID
-		if err := r.updateAgentTaskTx(ctx, tx, task); err != nil {
+		if r.agentTasks == nil {
+			return fmt.Errorf("Agent transaction repository is unavailable")
+		}
+		if err := r.agentTasks.UpdateAgentTask(ctx, tx, agentTaskMutation(task)); err != nil {
 			return err
 		}
 	}
@@ -208,38 +214,14 @@ func (r WorkflowDecisionStore) CommitWorkflowState(ctx context.Context, commit t
 	return nil
 }
 
-func (r WorkflowDecisionStore) insertAgentTaskTx(ctx context.Context, tx *sql.Tx, run transactionmodel.WorkflowAgentTaskCommit) error {
-	columns := []string{"workspace_id", "run_id", "idempotency_key", "task_key", "process_id", "status", "lease_owner", "fencing_token", "lease_expires_at", "next_attempt_at", "payload_json", "created_at", "updated_at"}
-	values := []any{run.WorkspaceID, run.RunID, run.IdempotencyKey, run.TaskKey, run.ProcessID, run.Status, run.LeaseOwner, run.FencingToken, run.LeaseExpiresAt, run.NextAttemptAt, run.Payload, run.CreatedAtMillis, run.UpdatedAtMillis}
-	return r.insertTx(ctx, tx, "agent_task_runs", columns, values)
-}
-
-func (r WorkflowDecisionStore) updateAgentTaskTx(ctx context.Context, tx *sql.Tx, run transactionmodel.WorkflowAgentTaskCommit) error {
-	expectedStatus := strings.TrimSpace(run.ExpectedStatus)
-	if expectedStatus == "" {
-		expectedStatus = "running"
+func agentTaskMutation(run transactionmodel.WorkflowAgentTaskCommit) agentrepository.AgentTaskMutation {
+	return agentrepository.AgentTaskMutation{
+		WorkspaceID: run.WorkspaceID, RunID: run.RunID, IdempotencyKey: run.IdempotencyKey,
+		TaskKey: run.TaskKey, ProcessID: run.ProcessID, Status: run.Status, ExpectedStatus: run.ExpectedStatus,
+		LeaseOwner: run.LeaseOwner, FencingToken: run.FencingToken, LeaseExpiresAt: run.LeaseExpiresAt,
+		NextAttemptAt: run.NextAttemptAt, Payload: append([]byte(nil), run.Payload...),
+		CreatedAtMillis: run.CreatedAtMillis, UpdatedAtMillis: run.UpdatedAtMillis,
 	}
-	predicate := ormbuilder.And(ormbuilder.Equal("run_id", run.RunID), ormbuilder.Equal("status", expectedStatus))
-	if expectedStatus == "running" {
-		predicate = ormbuilder.And(predicate, ormbuilder.Equal("lease_owner", run.LeaseOwner), ormbuilder.Equal("fencing_token", run.FencingToken))
-	}
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "agent_task_runs", run.WorkspaceID).
-		Set("status", run.Status).Set("payload_json", run.Payload).Set("updated_at", run.UpdatedAtMillis).Where(predicate).Build()
-	if err != nil {
-		return fmt.Errorf("build agent task update: %w", err)
-	}
-	result, err := tx.ExecContext(ctx, query, args...)
-	if err != nil {
-		return err
-	}
-	rows, rowsErr := result.RowsAffected()
-	if rowsErr != nil {
-		return rowsErr
-	}
-	if rows != 1 {
-		return apperror.New(apperror.KindConflict, "agent.task.terminal_fence_rejected", nil, nil)
-	}
-	return nil
 }
 
 func recordMutationTxOptions() *sql.TxOptions {

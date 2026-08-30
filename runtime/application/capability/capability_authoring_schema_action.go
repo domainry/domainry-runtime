@@ -8,10 +8,6 @@ func authoringSchemaDomain() capabilitycontract.CapabilityAuthoringDomain {
 	return metadataauthoring.ApplicationSchemaAuthoringDomain()
 }
 
-func authoringViewDomain() capabilitycontract.CapabilityAuthoringDomain {
-	return metadataauthoring.ApplicationSchemaViewAuthoringDomain()
-}
-
 func authoringActionDomain() capabilitycontract.CapabilityAuthoringDomain {
 	return actionauthoring.ActionAuthoringDomain()
 }

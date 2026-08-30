@@ -83,8 +83,7 @@ func TestInsertMetadataResourceBranches(t *testing.T) {
 		err   bool
 	}{
 		{steps: []metadataSQLExecStep{{err: errMetadataSQL}}, err: true},
-		{steps: []metadataSQLExecStep{{rows: 1}, {err: errMetadataSQL}}, err: true},
-		{steps: []metadataSQLExecStep{{rows: 1}, {rows: 1}}},
+		{steps: []metadataSQLExecStep{{rows: 1}}},
 	} {
 		err := runMetadataTransaction(t, base, metadataSQLState{execSteps: testCase.steps}, func(repository ApplicationSchemaStore, tx *sql.Tx) error {
 			return repository.insertMetadataResource(t.Context(), tx, metadataResourceTestSeed(map[string]any{"key": "account"}), "now")
@@ -116,18 +115,12 @@ func TestSyncMetadataResourceBranches(t *testing.T) {
 	}{
 		{queries: []metadataSQLQueryStep{{err: errMetadataSQL}}, err: true},
 		{queries: []metadataSQLQueryStep{{columns: columns}}, execs: []metadataSQLExecStep{{err: errMetadataSQL}}, err: true},
-		{queries: []metadataSQLQueryStep{{columns: columns}}, execs: []metadataSQLExecStep{{rows: 1}, {rows: 1}}},
+		{queries: []metadataSQLQueryStep{{columns: columns}}, execs: []metadataSQLExecStep{{rows: 1}}},
 		{queries: []metadataSQLQueryStep{{columns: columns, rows: [][]driver.Value{{"old", "user", nil}}}}},
 		{queries: []metadataSQLQueryStep{{columns: columns, rows: [][]driver.Value{{"old", "generated", "disabled"}}}}},
 		{queries: []metadataSQLQueryStep{{columns: columns, rows: [][]driver.Value{{sameHash, "generated", nil}}}}},
 		{queries: []metadataSQLQueryStep{{columns: columns, rows: [][]driver.Value{{"old", "generated", nil}}}}, execs: []metadataSQLExecStep{{err: errMetadataSQL}}, err: true},
-		{queries: []metadataSQLQueryStep{{columns: columns, rows: [][]driver.Value{{"old", "generated", nil}}}}, execs: []metadataSQLExecStep{{rows: 1}, {err: errMetadataSQL}}, err: true},
-		{queries: []metadataSQLQueryStep{{columns: columns, rows: [][]driver.Value{{"old", "generated", nil}}}}, execs: []metadataSQLExecStep{{rows: 1}, {rows: 1}}},
-		{queries: []metadataSQLQueryStep{{columns: columns, rows: [][]driver.Value{{"old", "generated", nil}}}, {err: errMetadataSQL}}, execs: []metadataSQLExecStep{{rows: 1}}, err: true},
-		{queries: []metadataSQLQueryStep{{columns: columns, rows: [][]driver.Value{{"old", "generated", nil}}}, {columns: []string{"resource_type", "resource_key", "schema_version", "schema_hash"}, rows: [][]driver.Value{{"wrong", "account", "1", sameHash}}}}, execs: []metadataSQLExecStep{{rows: 1}}, err: true},
-		{queries: []metadataSQLQueryStep{{columns: columns, rows: [][]driver.Value{{"old", "generated", nil}}}, {columns: []string{"resource_type", "resource_key", "schema_version", "schema_hash"}, rows: [][]driver.Value{{"object", "wrong", "1", sameHash}}}}, execs: []metadataSQLExecStep{{rows: 1}}, err: true},
-		{queries: []metadataSQLQueryStep{{columns: columns, rows: [][]driver.Value{{"old", "generated", nil}}}, {columns: []string{"resource_type", "resource_key", "schema_version", "schema_hash"}, rows: [][]driver.Value{{"object", "account", "wrong", sameHash}}}}, execs: []metadataSQLExecStep{{rows: 1}}, err: true},
-		{queries: []metadataSQLQueryStep{{columns: columns, rows: [][]driver.Value{{"old", "generated", nil}}}, {columns: []string{"resource_type", "resource_key", "schema_version", "schema_hash"}, rows: [][]driver.Value{{"object", "account", "1", "wrong"}}}}, execs: []metadataSQLExecStep{{rows: 1}}, err: true},
+		{queries: []metadataSQLQueryStep{{columns: columns, rows: [][]driver.Value{{"old", "generated", nil}}}}, execs: []metadataSQLExecStep{{rows: 1}}},
 	} {
 		err := runMetadataTransaction(t, base, metadataSQLState{querySteps: testCase.queries, execSteps: testCase.execs}, func(repository ApplicationSchemaStore, tx *sql.Tx) error {
 			return repository.syncMetadataResource(t.Context(), tx, metadataResourceTestSeed(map[string]any{"key": "account"}), "now")
@@ -138,7 +131,7 @@ func TestSyncMetadataResourceBranches(t *testing.T) {
 	}
 }
 
-func TestSyncMetadataResourceCanReturnToHistoricalGeneratedVersion(t *testing.T) {
+func TestSyncMetadataResourceReplacesCurrentGeneratedProjection(t *testing.T) {
 	baseDB := openStoreForGeneratedListTest(t)
 	t.Cleanup(func() { _ = baseDB.Close() })
 	if err := baseDB.EnsureRuntimeSchema(t.Context()); err != nil {
@@ -188,12 +181,12 @@ func TestSyncMetadataResourceCanReturnToHistoricalGeneratedVersion(t *testing.T)
 	if currentHash != expectedHash {
 		t.Fatalf("active definition did not return to version A: got %s want %s", currentHash, expectedHash)
 	}
-	var versionCount int
-	if err := baseDB.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM metadata_definition_versions WHERE resource_type = ? AND resource_key = ?", seed.ResourceType, seed.Key).Scan(&versionCount); err != nil {
+	var versionTableCount int
+	if err := baseDB.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'metadata_definition_versions'").Scan(&versionTableCount); err != nil {
 		t.Fatal(err)
 	}
-	if versionCount != 3 {
-		t.Fatalf("historical version was duplicated: got %d versions, want 3", versionCount)
+	if versionTableCount != 0 {
+		t.Fatal("current metadata projection unexpectedly retained a version-history table")
 	}
 }
 
@@ -211,10 +204,6 @@ func TestManifestMetadataTransactionFailures(t *testing.T) {
 	if err := scriptedApplicationSchemaStore(t, &metadataSQLState{querySteps: []metadataSQLQueryStep{{columns: []string{"count"}, rows: [][]driver.Value{{int64(0)}}}}, beginErr: errMetadataSQL}, base).EnsureManifestMetadata(t.Context(), manifest); err == nil {
 		t.Fatal("expected seed begin error")
 	}
-	invalid := manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: " "}}}
-	if err := scriptedApplicationSchemaStore(t, &metadataSQLState{querySteps: []metadataSQLQueryStep{{columns: []string{"count"}, rows: [][]driver.Value{{int64(0)}}}}}, base).EnsureManifestMetadata(t.Context(), invalid); err == nil {
-		t.Fatal("expected invalid seed error")
-	}
 	countZero := metadataSQLQueryStep{columns: []string{"count"}, rows: [][]driver.Value{{int64(0)}}}
 	successExecs := func(count int) []metadataSQLExecStep {
 		steps := make([]metadataSQLExecStep, count)
@@ -229,10 +218,6 @@ func TestManifestMetadataTransactionFailures(t *testing.T) {
 	}{
 		{name: "catalog", state: metadataSQLState{querySteps: []metadataSQLQueryStep{countZero}, execSteps: []metadataSQLExecStep{{err: errMetadataSQL}}}},
 		{name: "resource", state: metadataSQLState{querySteps: []metadataSQLQueryStep{countZero}, execSteps: append(successExecs(5), metadataSQLExecStep{err: errMetadataSQL})}},
-		{name: "localized", state: metadataSQLState{
-			querySteps: []metadataSQLQueryStep{countZero, {columns: []string{"text", "source_kind"}}},
-			execSteps:  append(successExecs(8), metadataSQLExecStep{err: errMetadataSQL}),
-		}},
 		{name: "commit", state: metadataSQLState{
 			querySteps: []metadataSQLQueryStep{countZero, {columns: []string{"text", "source_kind"}}, {columns: []string{"text", "source_kind"}}, {columns: []string{"text", "source_kind"}}},
 			execSteps:  successExecs(9), commitErr: errMetadataSQL,
@@ -247,9 +232,6 @@ func TestManifestMetadataTransactionFailures(t *testing.T) {
 	}
 	if err := base.SyncManifestMetadata(t.Context(), manifestmodel.ManifestSchema{}); err == nil {
 		t.Fatal("expected empty sync error")
-	}
-	if err := base.SyncManifestMetadata(t.Context(), invalid); err == nil {
-		t.Fatal("expected invalid sync seed error")
 	}
 	if err := scriptedApplicationSchemaStore(t, &metadataSQLState{beginErr: errMetadataSQL}, base).SyncManifestMetadata(t.Context(), manifest); err == nil {
 		t.Fatal("expected sync begin error")

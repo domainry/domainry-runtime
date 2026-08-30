@@ -27,7 +27,6 @@ type FrontendCapabilitySupportEntry struct {
 	AcceptanceTests     []string `json:"acceptance_tests"`
 	ActorRoles          []string `json:"actor_roles,omitempty"`
 	BusinessObjects     []string `json:"business_objects,omitempty"`
-	ViewKeys            []string `json:"view_keys,omitempty"`
 	ImplementedActions  []string `json:"implemented_actions,omitempty"`
 	ReportKeys          []string `json:"report_keys,omitempty"`
 	FieldKeys           []string `json:"field_keys,omitempty"`

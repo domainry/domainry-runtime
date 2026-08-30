@@ -33,25 +33,17 @@ func TestQueryPolicyServiceObjectPermissionErrorsRemainStructured(t *testing.T) 
 	}
 }
 
-func TestQueryPolicyServiceNormalizesFromIsolatedViewSnapshot(t *testing.T) {
-	service := NewRecordQueryPolicyDomainService(RecordQueryPolicyDependencies{Views: func() []definitionmodel.ViewSchema {
-		return []definitionmodel.ViewSchema{{
-			Key: "customers", ObjectKey: "customer", Config: map[string]any{
-				"page_size": 50, "search_fields": []any{"name", "missing"},
-				"filters": []any{map[string]any{"key": "mine", "field": "owner_id", "source": "current_user"}},
-				"sort":    []any{map[string]any{"field": "name", "direction": "desc"}},
-			},
-		}}
-	}})
+func TestQueryPolicyServiceNormalizesExplicitListQuery(t *testing.T) {
+	service := NewRecordQueryPolicyDomainService(RecordQueryPolicyDependencies{})
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}, {Key: "owner_id", Type: "user"}}}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{UserID: "user-1", WorkspaceID: "workspace-1"}}, accessfixture.Bundle{RecordScope: "all_records"})
 
-	query := service.NormalizeListQuery(object, recordmodel.RecordListQuery{ViewKey: "customers", Filters: map[string]any{"mine": true}}, principal)
+	query := service.NormalizeListQuery(object, recordmodel.RecordListQuery{PageSize: 50, SearchFields: []string{"name"}, Filters: map[string]any{"owner_id": "user-1"}, Sort: []recordmodel.RecordSortRule{{Field: "name", Direction: "desc"}}}, principal)
 	if query.Page != 1 || query.PageSize != 50 || !reflect.DeepEqual(query.SearchFields, []string{"name"}) {
 		t.Fatalf("pagination/search normalization = %#v", query)
 	}
 	if got := query.Filters["owner_id"]; got != "user-1" {
-		t.Fatalf("current-user view filter = %#v", got)
+		t.Fatalf("explicit owner filter = %#v", got)
 	}
 	if len(query.Sort) != 2 || query.Sort[0].Field != "name" || query.Sort[0].Direction != "desc" || query.Sort[1].Field != "id" || query.Sort[1].Direction != "asc" {
 		t.Fatalf("sort normalization = %#v", query.Sort)

@@ -69,7 +69,7 @@ func (s *IntegrationApplicationService) wakeIntegrationEvent(event integrationmo
 }
 
 func (s *IntegrationApplicationService) ProcessIntegrationEvent(ctx context.Context, locator IntegrationEventLocator) (EventProcessBatchResult, error) {
-	if s == nil || s.eventRepo == nil || s.workerRepo == nil {
+	if s == nil || s.eventRepo == nil || s.publicationWorkerRepo == nil {
 		return EventProcessBatchResult{}, apperror.New(apperror.KindUnavailable, "backend.integration.event.worker_unavailable", nil, nil)
 	}
 	workspace, err := principalmodel.NewWorkspaceID(locator.WorkspaceID)

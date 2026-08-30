@@ -2,9 +2,6 @@ package integrationtest
 
 import (
 	"context"
-	"encoding/json"
-
-	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
@@ -13,8 +10,6 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
-	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 
@@ -48,11 +43,11 @@ func TestMetadataSnapshotWatcherInvalidatesSecondRuntimeFromSharedDatabase(t *te
 	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "test metadata snapshot watcher")
 	done := second.Applications().ApplicationSchema.StartSnapshotWatcher(ctx, 5*time.Millisecond, scope)
 	time.Sleep(15 * time.Millisecond)
-	current, ok, err := repository.GetDefinition(t.Context(), scope, "object", "account")
-	if err != nil || !ok {
-		t.Fatalf("current=%#v ok=%v err=%v", current, ok, err)
-	}
-	if _, err := repository.PublishDefinition(t.Context(), scope, "object", "account", appschemamodel.ApplicationDefinitionUpsertRequest{ExpectedSchemaHash: &current.SchemaHash, Payload: json.RawMessage(`{"key":"account","name":"Business Account"}`)}, auditmodel.AuditEvent{ID: "metadata-watcher-update", WorkspaceID: principalmodel.InstallationWorkspaceID, Event: "metadata_definition.saved", CreatedAt: time.Now().UTC().Format(time.RFC3339)}); err != nil {
+	updated := manifest
+	updated.Objects = append([]definitionmodel.ObjectSchema(nil), manifest.Objects...)
+	updated.Objects[0].Name = "Business Account"
+	updated.Version = "2"
+	if err := repository.SyncManifest(t.Context(), scope, updated); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(time.Second)

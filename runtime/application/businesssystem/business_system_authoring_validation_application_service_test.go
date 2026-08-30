@@ -75,7 +75,7 @@ func TestRuntimeAuthoringValidationMapsOwnerDiagnosticsAndReadiness(t *testing.T
 		CurrentManifest: func(context.Context, principalmodel.Principal) (manifestmodel.ManifestSchema, error) {
 			return manifestmodel.ManifestSchema{
 				SchemaVersion: "2", TemplateID: "direct", Version: "0.0.0-configuring",
-				Objects: []definitionmodel.ObjectSchema{{Key: "order", Name: "Order", Fields: []definitionmodel.FieldSchema{{Key: "status", Name: "Status", Type: "text", Required: true}}}}, Views: []definitionmodel.ViewSchema{},
+				Objects: []definitionmodel.ObjectSchema{{Key: "order", Name: "Order", Fields: []definitionmodel.FieldSchema{{Key: "status", Name: "Status", Type: "text", Required: true}}}},
 			}, nil
 		},
 		CurrentSnapshot: func(context.Context, principalmodel.Principal) (changeplanprojection.BusinessSystemSnapshot, error) {
@@ -110,7 +110,7 @@ func TestRuntimeAuthoringValidationRejectsIncompleteConfigurationSnapshot(t *tes
 	snapshot.ResourceVisibility["runtime_state.scheduler"] = "hidden"
 	service := NewRuntimeAuthoringValidationApplicationService(RuntimeAuthoringValidationDependencies{
 		CurrentManifest: func(context.Context, principalmodel.Principal) (manifestmodel.ManifestSchema, error) {
-			return manifestmodel.ManifestSchema{SchemaVersion: "2", TemplateID: "direct", Version: "0.0.0-configuring", Objects: []definitionmodel.ObjectSchema{}, Views: []definitionmodel.ViewSchema{}}, nil
+			return manifestmodel.ManifestSchema{SchemaVersion: "2", TemplateID: "direct", Version: "0.0.0-configuring", Objects: []definitionmodel.ObjectSchema{}}, nil
 		},
 		CurrentSnapshot: func(context.Context, principalmodel.Principal) (changeplanprojection.BusinessSystemSnapshot, error) {
 			return snapshot, nil
@@ -150,7 +150,6 @@ func TestRuntimeAuthoringGlobalChecksRejectLiveReadinessAndProvenanceGaps(t *tes
 	snapshot := runtimeAuthoringCompleteConfigurationSnapshot(nil)
 	snapshot.Schema.Objects = []definitionmodel.ObjectSchema{{Key: "order"}}
 	snapshot.RuntimeState.Connections = []changeplanprojection.IntegrationConnectionSummary{{Key: "crm", Status: "active", Ready: false}}
-	snapshot.SeedRecords = []businessseedmodel.BusinessSeedProvenance{{SeedKey: "missing", ObjectKey: "missing", RecordID: "", ContentHash: ""}}
 	snapshot.FrontendCapabilities.MissingFrontendSupport = []changeplanmodel.FrontendRequirement{{CapabilityKey: "schema.object", SupportKey: "metadata.object.editor.v1"}}
 	report := RuntimeAuthoringValidationReport{Checks: map[string]string{"definition_graph": "ok", "manifest": "ok"}, Diagnostics: []RuntimeAuthoringValidationDiagnostic{}}
 	runtimeAuthoringApplyGlobalChecks(&report, snapshot)
@@ -159,12 +158,12 @@ func TestRuntimeAuthoringGlobalChecksRejectLiveReadinessAndProvenanceGaps(t *tes
 			t.Fatalf("semantic check %s=%q", key, report.Checks[key])
 		}
 	}
-	for _, key := range []string{"connector_readiness", "seed_writability", "frontend_support"} {
+	for _, key := range []string{"connector_readiness", "frontend_support"} {
 		if report.Checks[key] != "invalid" {
 			t.Fatalf("live check %s=%q report=%#v", key, report.Checks[key], report)
 		}
 	}
-	if len(report.Diagnostics) != 3 {
+	if len(report.Diagnostics) != 2 {
 		t.Fatalf("diagnostics=%#v", report.Diagnostics)
 	}
 }

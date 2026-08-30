@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 
-	agentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/agent"
+	agentpersistence "github.com/domainry/domainry-agent/persistence"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -42,7 +42,11 @@ func TestTwoRuntimeInstancesShareAgentSessionAndReportHTTPState(t *testing.T) {
 	queryPayload, _ := json.Marshal(map[string]any{"query_ref": queryRef, "workspace_id": "default", "user_id": "runtime_fixture_user", "role": "business_admin", "status": "completed", "execution_mode": "server", "created_at": now})
 	auditPayload, _ := json.Marshal(map[string]any{"query_ref": queryRef, "workspace_id": "default", "user_id": "runtime_fixture_user", "role": "business_admin", "status": "handoff_required", "handoff": "report_center_export_audit", "created_at": now})
 	taskPayload, _ := json.Marshal(map[string]any{"query_ref": queryRef, "workspace_id": "default", "user_id": "runtime_fixture_user", "role": "business_admin", "status": "pending_export_approval", "task_key": "download_task:" + queryRef, "handoff": "report_center_download_task", "created_at": now})
-	repository := agentpersistence.NewAgentStateStore(store)
+	agentStore, err := agentpersistence.NewStore(store.DB(), store.SQLRenderer, store.Driver())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := agentpersistence.NewAgentStateStore(agentStore)
 	if err := repository.PutBatch(t.Context(), "default", []agentmodel.AgentStateRecord{{Kind: "proposal", Key: "default:runtime_fixture_user:business_admin:shared-proposal", WorkspaceID: "default", UserID: "runtime_fixture_user", RoleKey: "business_admin", Payload: proposalPayload, UpdatedAt: now}, {Kind: "report_query_run", Key: key, WorkspaceID: "default", UserID: "runtime_fixture_user", RoleKey: "business_admin", Payload: queryPayload, UpdatedAt: now}, {Kind: "report_export_audit", Key: key, WorkspaceID: "default", UserID: "runtime_fixture_user", RoleKey: "business_admin", Payload: auditPayload, UpdatedAt: now}, {Kind: "report_download_task", Key: key, WorkspaceID: "default", UserID: "runtime_fixture_user", RoleKey: "business_admin", Payload: taskPayload, UpdatedAt: now}}); err != nil {
 		t.Fatal(err)
 	}

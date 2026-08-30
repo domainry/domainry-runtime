@@ -4,8 +4,8 @@ import (
 	"strings"
 	"time"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
 
@@ -98,11 +98,11 @@ func WorkflowValidateGraph(graph *definitionmodel.WorkflowGraphSchema) error {
 				return badRequest("backend.workflow.agent_task_execution_policy_invalid", "node", id)
 			}
 			switch strings.TrimSpace(contract.Identity.Mode) {
-			case agentmodel.AgentTaskIdentityInherit:
+			case agentsdk.AgentTaskIdentityInherit:
 				if strings.TrimSpace(contract.Identity.PrincipalKey) != "" {
 					return badRequest("backend.workflow.agent_task_identity_invalid", "node", id)
 				}
-			case agentmodel.AgentTaskIdentityService:
+			case agentsdk.AgentTaskIdentityService:
 				if strings.TrimSpace(contract.Identity.PrincipalKey) == "" {
 					return badRequest("backend.workflow.agent_task_identity_invalid", "node", id)
 				}
@@ -115,7 +115,7 @@ func WorkflowValidateGraph(graph *definitionmodel.WorkflowGraphSchema) error {
 				return badRequest("backend.workflow.agent_task_error_policy_invalid", "node", id)
 			}
 			allowedOutcomes := map[string]bool{}
-			for _, outcome := range agentmodel.AgentTaskOutcomes {
+			for _, outcome := range agentsdk.AgentTaskOutcomes {
 				allowedOutcomes[outcome] = true
 			}
 			seenOutcomes := map[string]bool{}
@@ -186,7 +186,7 @@ func WorkflowValidateGraph(graph *definitionmodel.WorkflowGraphSchema) error {
 			}
 		case "agent_task":
 			allowed := map[string]bool{}
-			for _, outcome := range agentmodel.AgentTaskOutcomes {
+			for _, outcome := range agentsdk.AgentTaskOutcomes {
 				allowed[outcome] = true
 			}
 			for branch := range outgoing {

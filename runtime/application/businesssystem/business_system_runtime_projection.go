@@ -21,8 +21,6 @@ import (
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
 
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-
-	businessintegration "github.com/domainry/domainry-runtime/runtime/application/integration"
 )
 
 // businessRuntimeProjectionPorts contains only the cross-owner reads needed to
@@ -105,7 +103,9 @@ func (s *BusinessSystemApplicationService) RuntimeStateSnapshot(ctx context.Cont
 	return changeplanprojection.BusinessRuntimeStateSnapshot{
 		RunningWorkflowProcesses: changeplanprojection.ProjectWorkflowProcesses(processes), AutomationRules: rules,
 		RecentAutomationRuns: automation.Items, Scheduler: scheduler, Reports: append([]reportmodel.ReportSchema(nil), s.runtimeProjection.schemaForPrincipal(ctx, principal).Reports...),
-		Connectors: connectors, Connections: changeplanprojection.ProjectIntegrationConnections(connections, businessintegration.ConnectionCanSend), RecentOutboxMessages: changeplanprojection.ProjectIntegrationOutbox(outbox),
+		Connectors: connectors, Connections: changeplanprojection.ProjectIntegrationConnections(connections, func(connection integrationmodel.IntegrationConnection) bool {
+			return connection.Status == "active" || connection.Status == "verified" || connection.Status == "degraded"
+		}), RecentOutboxMessages: changeplanprojection.ProjectIntegrationOutbox(outbox),
 		Idempotency: idempotencyStatus,
 	}, nil
 }

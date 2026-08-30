@@ -63,7 +63,7 @@ type BusinessSystemSnapshot struct {
 	RuntimeState             BusinessRuntimeStateSnapshot                   `json:"runtime_state"`
 	FrontendCapabilities     changeplanmodel.FrontendCapabilities           `json:"frontend_capabilities"`
 	ResourceSources          []SystemResourceSource                         `json:"resource_sources"`
-	SeedRecords              []businessseedmodel.BusinessSeedProvenance     `json:"seed_records"`
+	SeedRecords              []businessseedmodel.BusinessSeedProvenance     `json:"seed_records,omitempty"`
 	ObjectRecordCounts       map[string]int                                 `json:"object_record_counts"`
 	HiddenResourceCategories []string                                       `json:"hidden_resource_categories"`
 	ResourceVisibility       map[string]string                              `json:"resource_visibility"`

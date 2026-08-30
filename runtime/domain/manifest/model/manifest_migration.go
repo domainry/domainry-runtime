@@ -102,7 +102,7 @@ func migrateLegacyFrontendEnvelope(envelope map[string]json.RawMessage, report *
 			Message: "legacy user bootstrap data was removed; provision users and assignments through Identity",
 		})
 	}
-	for _, key := range []string{"frontend", "surfaces", "components"} {
+	for _, key := range []string{"frontend", "surfaces", "components", "views"} {
 		raw, exists := envelope[key]
 		if !exists {
 			continue
@@ -118,22 +118,9 @@ func migrateLegacyFrontendEnvelope(envelope map[string]json.RawMessage, report *
 		delete(envelope, "menus")
 		report.Warnings = append(report.Warnings, ManifestMigrationWarning{Code: "manifest.v1.menu_payload_removed", Path: "/menus", Message: "domain navigation belongs to the source-owned frontend Route Registry"})
 	}
-	var entrypoints []map[string]json.RawMessage
-	if raw := envelope["entrypoints"]; len(raw) > 0 && json.Unmarshal(raw, &entrypoints) == nil {
-		changed := false
-		for index := range entrypoints {
-			for _, key := range []string{"route", "surface_key", "layout"} {
-				if _, exists := entrypoints[index][key]; !exists {
-					continue
-				}
-				delete(entrypoints[index], key)
-				changed = true
-				report.Warnings = append(report.Warnings, ManifestMigrationWarning{Code: "manifest.v1.entrypoint_frontend_field_removed", Path: fmt.Sprintf("/entrypoints/%d/%s", index, key), Message: "entrypoint frontend routing belongs to the source-owned Route Registry"})
-			}
-		}
-		if changed {
-			envelope["entrypoints"], _ = json.Marshal(entrypoints)
-		}
+	if _, exists := envelope["entrypoints"]; exists {
+		delete(envelope, "entrypoints")
+		report.Warnings = append(report.Warnings, ManifestMigrationWarning{Code: "manifest.v1.entrypoints_removed", Path: "/entrypoints", Message: "frontend routing belongs to the source-owned Route Registry"})
 	}
 	var actions []map[string]json.RawMessage
 	if raw := envelope["actions"]; len(raw) > 0 && json.Unmarshal(raw, &actions) == nil {

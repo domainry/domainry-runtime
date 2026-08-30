@@ -38,12 +38,6 @@ func TestCapabilityAuthoringInstanceSortsAndKeepsAnyReadyConnection(t *testing.T
 			},
 		}
 	})
-	service.UsePreferenceReferenceSource(func(context.Context, principalmodel.Principal) ([]string, error) {
-		return []string{"z_preference", "a_preference", "a_preference"}, nil
-	})
-	service.UseRuleSetReferenceSource(func(context.Context, principalmodel.Principal) ([]string, error) {
-		return []string{"z_rule_set", "a_rule_set", "a_rule_set"}, nil
-	})
 	instance, err := service.capabilityAuthoringInstance(t.Context(), principalmodel.Principal{})
 	if err != nil {
 		t.Fatal(err)
@@ -51,9 +45,7 @@ func TestCapabilityAuthoringInstanceSortsAndKeepsAnyReadyConnection(t *testing.T
 	if !reflect.DeepEqual(instance.ObjectKeys, []string{"a_object", "z_object"}) ||
 		!reflect.DeepEqual(instance.ActionKeys, []string{"a_action", "z_action"}) ||
 		!reflect.DeepEqual(instance.WorkflowKeys, []string{"a_workflow", "z_workflow"}) ||
-		!reflect.DeepEqual(instance.ReportKeys, []string{"a_report", "z_report"}) ||
-		!reflect.DeepEqual(instance.PreferenceKeys, []string{"a_preference", "z_preference"}) ||
-		!reflect.DeepEqual(instance.RuleSetKeys, []string{"a_rule_set", "z_rule_set"}) {
+		!reflect.DeepEqual(instance.ReportKeys, []string{"a_report", "z_report"}) {
 		t.Fatalf("instance keys are not deterministic: %#v", instance)
 	}
 	if len(instance.ConnectorOperations) != 2 || instance.ConnectorOperations[0].ConnectorKey != "a_connector" || !instance.ConnectorOperations[0].Ready || instance.ConnectorOperations[1].Ready {
@@ -70,7 +62,7 @@ func TestCapabilityAuthoringInstanceWithoutSchemaIsEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(instance.ObjectKeys) != 0 || len(instance.ActionKeys) != 0 || len(instance.WorkflowKeys) != 0 || len(instance.ReportKeys) != 0 || len(instance.PreferenceKeys) != 0 || len(instance.RuleSetKeys) != 0 || len(instance.ConnectorOperations) != 0 {
+	if len(instance.ObjectKeys) != 0 || len(instance.ActionKeys) != 0 || len(instance.WorkflowKeys) != 0 || len(instance.ReportKeys) != 0 || len(instance.ConnectorOperations) != 0 {
 		t.Fatalf("unexpected empty instance: %#v", instance)
 	}
 }

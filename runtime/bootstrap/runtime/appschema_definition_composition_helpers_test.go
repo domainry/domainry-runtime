@@ -67,7 +67,7 @@ func TestApplicationDefinitionCompositionReusesOwnerValidationForSystemDraftCand
 			t.Fatalf("kind=%s preview=%#v err=%v", tc.kind, preview, err)
 		}
 		err = metadata.ValidateMetadataCandidate(t.Context(), []appschemamodel.ApplicationDefinitionMutation{{Operation: "create", ResourceType: tc.kind, ResourceKey: tc.key, Request: request}})
-		if apperror.CodeOf(err) != "backend.change_plan.candidate_invalid" || strings.TrimSpace(apperror.ParamsOf(err)["diagnostic"]) == "" {
+		if apperror.CodeOf(err) != "backend.metadata.candidate_invalid" || strings.TrimSpace(apperror.ParamsOf(err)["diagnostic"]) == "" {
 			t.Fatalf("kind=%s preview=%s candidate=%s params=%#v err=%v", tc.kind, preview.Errors[0].ErrorCode, apperror.CodeOf(err), apperror.ParamsOf(err), err)
 		}
 	}
@@ -88,8 +88,8 @@ func newMetadataCompositionAppWithManifest(t *testing.T, name string, objects []
 		t.Fatal(err)
 	}
 	manifest.TemplateID, manifest.Version, manifest.Name, manifest.Objects = name, "1", name, objects
-	manifest.Views, manifest.Actions, manifest.Workflows, manifest.AutomationRules = nil, nil, nil, nil
-	manifest.Reports, manifest.EntryPoints, manifest.Skills, manifest.Agents, manifest.SeedRecords = nil, nil, nil, nil, nil
+	manifest.Actions, manifest.Workflows, manifest.AutomationRules = nil, nil, nil
+	manifest.Reports, manifest.Skills, manifest.Agents, manifest.SeedRecords = nil, nil, nil, nil
 	manifest.BusinessLoops, manifest.StateMachines, manifest.ValidationPlan = nil, nil, nil
 	manifest.IdentityProfileExtensions, manifest.SensitiveFieldPolicies, manifest.ReportExportControls = nil, nil, nil
 	if configure != nil {
@@ -172,5 +172,5 @@ func metadataCompositionRequest(t *testing.T, objectKey string, value any) appsc
 	if err != nil {
 		t.Fatal(err)
 	}
-	return appschemamodel.ApplicationDefinitionUpsertRequest{ObjectKey: objectKey, SourceKind: "user", Payload: payload}
+	return appschemamodel.ApplicationDefinitionUpsertRequest{ObjectKey: objectKey, Payload: payload}
 }

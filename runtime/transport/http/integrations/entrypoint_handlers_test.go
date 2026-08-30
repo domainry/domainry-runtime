@@ -11,9 +11,9 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -84,6 +84,7 @@ func newIntegrationEntrypointHTTPApplication(t *testing.T) (*database.RuntimeSto
 		store.Close()
 		t.Fatal(err)
 	}
+	applyIntegrationOwnerMigrations(t, store)
 	application := integrationapplication.NewIntegrationApplicationService(integrationapplication.ApplicationDependencies{
 		ConfigRepository:   integrationpersistence.NewIntegrationConfigStore(store),
 		EventRepository:    integrationpersistence.NewIntegrationEventStore(store),
@@ -97,7 +98,7 @@ func newIntegrationEntrypointHTTPApplication(t *testing.T) (*database.RuntimeSto
 			return principalmodel.Principal{}
 		},
 		Schema: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
-			return appschemamodel.ApplicationSchemaSnapshot{Agents: []agentmodel.AgentSchema{{Key: "assistant", Name: "Assistant", Tools: []string{"readRecord"}}}}
+			return appschemamodel.ApplicationSchemaSnapshot{Agents: []agentsdk.AgentSchema{{Key: "assistant", Name: "Assistant", Tools: []string{"readRecord"}}}}
 		},
 		InvokeAction: func(_ context.Context, invocation actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error) {
 			return actionmodel.ActionInvocationResult{Record: &actionmodel.ActionResult{ActionKey: invocation.ActionKey, ObjectKey: invocation.ObjectKey, RecordID: invocation.RecordID, Message: "ok"}}, nil

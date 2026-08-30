@@ -129,7 +129,6 @@ func (validator *frontendCapabilityUsageValidator) normalize() {
 		sort.Strings(entry.AcceptanceTests)
 		sort.Strings(entry.ActorRoles)
 		sort.Strings(entry.BusinessObjects)
-		sort.Strings(entry.ViewKeys)
 		sort.Strings(entry.ImplementedActions)
 		sort.Strings(entry.ReportKeys)
 		sort.Strings(entry.FieldKeys)
@@ -154,7 +153,7 @@ func containsTrimmedString(values []string, target string) bool {
 }
 
 func frontendCapabilityHasBusinessBindings(entry deploymentmodel.FrontendCapabilitySupportEntry) bool {
-	return len(entry.ActorRoles) > 0 || len(entry.BusinessObjects) > 0 || len(entry.ViewKeys) > 0 ||
+	return len(entry.ActorRoles) > 0 || len(entry.BusinessObjects) > 0 ||
 		len(entry.ImplementedActions) > 0 || len(entry.ReportKeys) > 0 || len(entry.FieldKeys) > 0 || len(entry.AcceptanceClaims) > 0
 }
 

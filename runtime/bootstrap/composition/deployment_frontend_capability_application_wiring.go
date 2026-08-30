@@ -31,7 +31,7 @@ func frontendCapabilityDefinitions() []deploymentmodel.FrontendCapabilityDefinit
 }
 
 func frontendBusinessBindings(schema CanonicalSchemaProvider) deploymentapplication.FrontendBusinessBindings {
-	bindings := deploymentapplication.FrontendBusinessBindings{Objects: map[string]bool{}, Views: map[string]bool{}, Actions: map[string]bool{}, Reports: map[string]bool{}, Fields: map[string]bool{}}
+	bindings := deploymentapplication.FrontendBusinessBindings{Objects: map[string]bool{}, Actions: map[string]bool{}, Reports: map[string]bool{}, Fields: map[string]bool{}}
 	if schema == nil {
 		return bindings
 	}
@@ -43,9 +43,6 @@ func frontendBusinessBindings(schema CanonicalSchemaProvider) deploymentapplicat
 		for _, field := range object.Fields {
 			bindings.Fields[object.Key+"."+field.Key] = true
 		}
-	}
-	for _, view := range snapshot.Views {
-		bindings.Views[view.Key] = true
 	}
 	for _, action := range snapshot.Actions {
 		bindings.Actions[action.Key] = true

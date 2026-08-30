@@ -295,7 +295,7 @@ func TestHundredConcurrentRecordUpdatesProveNoLostUpdateOrPartialCommit(t *testi
 		"TestRecordMutationHundredConcurrentUpdatesHaveNoLostUpdateOrPartialCommit",
 		"index < 100", "ExpectedUpdatedAt: initial.UpdatedAt", "succeeded.Load() != 1",
 		"conflicted.Load()+transientlyRejected.Load() != 99", "winnerCount != 1",
-		"_audit_events", "integration_outbox_messages", "_workflow_executions",
+		"_audit_events", "runtime_publication_outbox", "_workflow_executions",
 	} {
 		if !strings.Contains(string(raw), required) {
 			t.Errorf("100-concurrent-update proof missing %q", required)

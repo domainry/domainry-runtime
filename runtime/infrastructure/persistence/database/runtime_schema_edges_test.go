@@ -24,20 +24,17 @@ func runtimeSchemaStore(t *testing.T, state *databaseSQLState) *RuntimeStore {
 }
 
 func runtimeSchemaLedgerQueries(count int64, checksum string, dirty bool) []databaseSQLQueryStep {
-	steps := make([]databaseSQLQueryStep, 0, 11)
-	for range 9 {
-		steps = append(steps, databaseSQLQueryStep{})
-	}
-	steps = append(steps,
+	steps := make([]databaseSQLQueryStep, 10) // host ledger column probes
+	return append(steps,
+		databaseSQLQueryStep{}, // legacy _schema_materializations table probe
 		databaseSQLQueryStep{columns: []string{"count"}, rows: [][]driver.Value{{count}}},
 		databaseSQLQueryStep{columns: []string{"checksum", "dirty"}, rows: [][]driver.Value{{checksum, dirty}}},
 	)
-	return steps
 }
 
 func TestRuntimeSchemaHelpersAndDatabaseSelection(t *testing.T) {
 	versions := SupportedRuntimeSchemaUpgradeVersions()
-	if len(versions) != 12 || versions[0] != "001_connector_runtime_lifecycle" || versions[11] != "012_rate_limit_schema_owner" {
+	if len(versions) != 13 || versions[0] != "001_connector_runtime_lifecycle" || versions[12] != "013_agent_schema_owner" {
 		t.Fatalf("versions=%#v", versions)
 	}
 	store := runtimeSchemaStore(t, &databaseSQLState{})
@@ -112,12 +109,8 @@ func TestRuntimeSchemaMigrationLedgerFailures(t *testing.T) {
 	if _, err := store.runtimeSchemaMigrationPending(t.Context(), "version"); !errors.Is(err, errDatabaseSQL) {
 		t.Fatalf("create error=%v", err)
 	}
-	store = runtimeSchemaStore(t, &databaseSQLState{execSteps: []databaseSQLExecStep{{rows: 1}, {err: errDatabaseSQL}}, querySteps: []databaseSQLQueryStep{{err: errDatabaseSQL}}})
-	if _, err := store.runtimeSchemaMigrationPending(t.Context(), "version"); !errors.Is(err, errDatabaseSQL) {
-		t.Fatalf("alter error=%v", err)
-	}
-	queries := make([]databaseSQLQueryStep, 10)
-	queries[9].err = errDatabaseSQL
+	queries := make([]databaseSQLQueryStep, 12)
+	queries[11] = databaseSQLQueryStep{err: errDatabaseSQL}
 	store = runtimeSchemaStore(t, &databaseSQLState{querySteps: queries})
 	if _, err := store.runtimeSchemaMigrationPending(t.Context(), "version"); !errors.Is(err, errDatabaseSQL) {
 		t.Fatalf("count error=%v", err)
@@ -126,9 +119,7 @@ func TestRuntimeSchemaMigrationLedgerFailures(t *testing.T) {
 	if pending, err := store.runtimeSchemaMigrationPending(t.Context(), "version"); err != nil || !pending {
 		t.Fatalf("pending=%v err=%v", pending, err)
 	}
-	queries = make([]databaseSQLQueryStep, 10)
-	queries[0] = databaseSQLQueryStep{err: errDatabaseSQL}
-	queries[9] = databaseSQLQueryStep{columns: []string{"count"}, rows: [][]driver.Value{{int64(0)}}}
+	queries = runtimeSchemaLedgerQueries(0, "", false)[:12]
 	store = runtimeSchemaStore(t, &databaseSQLState{querySteps: queries})
 	if pending, err := store.runtimeSchemaMigrationPending(t.Context(), "version"); err != nil || !pending {
 		t.Fatalf("alter success pending=%v err=%v", pending, err)
@@ -206,9 +197,6 @@ func (stub runtimeSchemaAssemblerStub) EnsureEvidenceSchema(context.Context, run
 func (stub runtimeSchemaAssemblerStub) EnsureWorkflowProcessSchema(context.Context, runtimeschema.Store) error {
 	return stub.result("workflow")
 }
-func (stub runtimeSchemaAssemblerStub) EnsureAgentSchema(context.Context, runtimeschema.Store) error {
-	return stub.result("agent")
-}
 func (stub runtimeSchemaAssemblerStub) EnsureRateLimitSchema(context.Context, runtimeschema.Store) error {
 	return stub.result("ratelimit")
 }
@@ -217,7 +205,7 @@ func (stub runtimeSchemaAssemblerStub) EnsureLifecycleSchema(context.Context, ru
 }
 
 func TestEnsureRuntimeSchemaAssemblerFailures(t *testing.T) {
-	for _, stage := range []string{"metadata", "evidence", "workflow", "agent", "ratelimit", "lifecycle"} {
+	for _, stage := range []string{"metadata", "evidence", "workflow", "ratelimit", "lifecycle"} {
 		t.Run(stage, func(t *testing.T) {
 			state := &databaseSQLState{querySteps: runtimeSchemaLedgerQueries(1, currentRuntimeSchemaChecksum(), false)}
 			store := runtimeSchemaStore(t, state)
@@ -255,7 +243,7 @@ func TestEnsureRuntimeSchemaOrchestrationFailures(t *testing.T) {
 		t.Fatalf("pending error=%v", err)
 	}
 
-	pendingLedgerQueries := runtimeSchemaLedgerQueries(0, "", false)[:10]
+	pendingLedgerQueries := runtimeSchemaLedgerQueries(0, "", false)[:12]
 	validationQueries := append(append([]databaseSQLQueryStep{}, pendingLedgerQueries...), databaseSQLQueryStep{err: errDatabaseSQL})
 	validation := runtimeSchemaStore(t, &databaseSQLState{querySteps: validationQueries})
 	if err := validation.EnsureRuntimeSchema(t.Context()); !errors.Is(err, errDatabaseSQL) {
@@ -314,7 +302,7 @@ func TestRuntimeSchemaPendingRecordAndActionExecutionContextEdges(t *testing.T) 
 
 func TestRuntimeSchemaMigrationChecksumQueryFailure(t *testing.T) {
 	queries := runtimeSchemaLedgerQueries(1, currentRuntimeSchemaChecksum(), false)
-	queries[10] = databaseSQLQueryStep{err: errDatabaseSQL}
+	queries[12] = databaseSQLQueryStep{err: errDatabaseSQL}
 	store := runtimeSchemaStore(t, &databaseSQLState{querySteps: queries})
 	if _, err := store.runtimeSchemaMigrationPending(t.Context(), "version"); !errors.Is(err, errDatabaseSQL) {
 		t.Fatalf("checksum query error=%v", err)
@@ -330,9 +318,6 @@ func TestSchemaAssemblerSeamMethods(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := store.EnsureWorkflowProcessSchema(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.EnsureAgentSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.EnsureRateLimitSchema(t.Context()); err != nil {

@@ -60,7 +60,7 @@ func (s *IntegrationApplicationService) RecordIntegrationInvocation(ctx context.
 		EventID: strings.TrimSpace(req.EventID), ObjectKey: strings.TrimSpace(req.ObjectKey), RecordID: strings.TrimSpace(req.RecordID),
 		WorkflowExecutionID: strings.TrimSpace(req.WorkflowExecutionID), Metadata: metadata,
 	}
-	saved, err := s.deliveryRepo.InsertInvocation(ctx, invocation.WorkspaceID, invocation)
+	saved, err := s.invocationRepo.InsertInvocation(ctx, invocation.WorkspaceID, invocation)
 	if err != nil {
 		return integrationmodel.IntegrationInvocation{}, err
 	}
@@ -113,7 +113,7 @@ func (s *IntegrationApplicationService) EnqueueIntegrationOutboxMessage(ctx cont
 		Operation: operation, Status: "queued", Payload: payload, EventID: strings.TrimSpace(req.EventID),
 		RequestRef: requestRef, DedupKey: valueOrDefault(dedupKey, requestRef), CreatedBy: principal.UserID,
 	}
-	saved, err := s.deliveryRepo.InsertOutbox(ctx, message.WorkspaceID, message)
+	saved, err := s.publicationRepo.InsertOutbox(ctx, message.WorkspaceID, message)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, err
 	}

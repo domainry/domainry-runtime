@@ -329,7 +329,6 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `party` | `UpsertPosition` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/party/party_catalog_application_service.go` |
 | `pipeline` | `ApplyItemDefaults` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/pipeline/pipeline_application_service.go` |
 | `pipeline` | `Execute` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/pipeline/pipeline_transition_application_service.go` |
-| `preference` | `Resolve` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/preference/workspace_preference_application_service.go` |
 | `principal` | `ResolveBusinessPrincipal` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/principal/business_principal_application_service.go` |
 | `record` | `Apply` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_application_service.go` |
 | `record` | `ApplyIdempotent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_application_service.go` |

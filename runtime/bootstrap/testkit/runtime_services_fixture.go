@@ -2,20 +2,20 @@ package testkit
 
 import (
 	"context"
+	lifecyclepersistence "github.com/domainry/domainry-lifecycle/persistence"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	actionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/action"
 	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	automationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automation"
-	changeplanpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/changeplan"
 	deploymentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/deployment"
 	frontendcapabilitypersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/frontendcapability"
 	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
-	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/lifecycle"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
+	lifecyclemodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/lifecyclemodule"
 )
 
 // NewRuntimeServices expands one SQL test store into focused owner stores and
@@ -45,9 +45,9 @@ func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *comp
 	return composition.NewRuntimeServices(ctx, composition.RuntimeServicesConfig{
 		Manifest: manifestmodel.ManifestSchema{
 			TemplateID: config.TemplateID, Version: config.TemplateVersion, Name: config.Name,
-			Objects: config.Objects, Views: config.Views, Actions: config.Actions, Workflows: config.Workflows,
+			Objects: config.Objects, Actions: config.Actions, Workflows: config.Workflows,
 			AutomationRules: config.AutomationRules, Dictionaries: config.Dictionaries, Integrations: config.Integrations,
-			Reports: config.Reports, EntryPoints: config.Entrypoints, Skills: config.Skills, Agents: config.Agents,
+			Reports: config.Reports, Skills: config.Skills, Agents: config.Agents,
 			IdentityProfileExtensions: config.IdentityProfileExtensions,
 		},
 		Dependencies: dependencies,
@@ -78,12 +78,11 @@ func focusedPersistenceDependencies(ctx context.Context, config RuntimeServicesC
 		ApplicationSchema:     appschemapersistence.NewApplicationSchemaStore(config.Store),
 		AutomationWorker:      automationpersistence.NewAutomationWorkerStore(config.Store),
 		AutomationExecutions:  automationpersistence.NewAutomationExecutionStore(config.Store),
-		BusinessChangePlans:   changeplanpersistence.NewBusinessChangePlanStore(config.Store),
-		BusinessEvidence:      changeplanpersistence.NewBusinessEvidenceStore(config.Store),
+		BusinessEvidence:      nil,
 		ActionExecutions:      actionpersistence.NewActionBusinessExecutionStore(config.Store),
 		ActionAssurance:       actionpersistence.NewActionAssuranceStore(config.Store),
 		RuntimeStatus:         deploymentpersistence.NewRuntimeStatusStore(config.Store),
 		FrontendCapabilities:  frontendcapabilitypersistence.NewFrontendCapabilityStore(config.Store),
-		Lifecycle:             lifecyclepersistence.NewLifecycleStore(config.Store),
+		Lifecycle:             lifecyclepersistence.NewLifecycleStore(lifecyclemodule.NewHost(config.Store)),
 	}
 }

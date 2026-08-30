@@ -11,9 +11,10 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	"go.opentelemetry.io/otel/attribute"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/telemetry"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -56,13 +57,13 @@ func NewAgentAuthorizationApplicationService(dependencies AgentAuthorizationDepe
 
 type AgentExecutionIdentityRequest struct {
 	Initiator               principalmodel.Principal
-	Identity                agentmodel.AgentTaskIdentity
+	Identity                agentsdk.AgentTaskIdentity
 	ExpectedRotationVersion int
 }
 
 type AgentTaskAuthorizationRequest struct {
 	Initiator               principalmodel.Principal
-	Identity                agentmodel.AgentTaskIdentity
+	Identity                agentsdk.AgentTaskIdentity
 	ExpectedRotationVersion int
 	TaskKey                 string
 	TaskVersion             string
@@ -73,8 +74,8 @@ type AgentTaskAuthorizationRequest struct {
 
 type AgentTaskAuthorization struct {
 	Principal       principalmodel.Principal
-	Identity        agentmodel.AgentExecutionIdentity
-	Task            agentmodel.AgentTaskDefinition
+	Identity        agentsdk.ExecutionIdentity
+	Task            agentsdk.AgentTaskDefinition
 	AllowedObjects  []string
 	AllowedActions  []string
 	AllowedOutcomes []string
@@ -96,50 +97,50 @@ type GlobalAgentContextRequest struct {
 	AvailableOperationIDs []string
 }
 
-func (s *AgentAuthorizationApplicationService) ResolveExecutionIdentity(ctx context.Context, request AgentExecutionIdentityRequest) (principalmodel.Principal, agentmodel.AgentExecutionIdentity, error) {
+func (s *AgentAuthorizationApplicationService) ResolveExecutionIdentity(ctx context.Context, request AgentExecutionIdentityRequest) (principalmodel.Principal, agentsdk.ExecutionIdentity, error) {
 	initiator := request.Initiator
 	initiatorWorkspace, workspaceErr := principalmodel.NewWorkspaceID(initiator.WorkspaceID)
 	if workspaceErr != nil {
-		return principalmodel.Principal{}, agentmodel.AgentExecutionIdentity{}, agentAuthorizationError("agent.authorization.initiator_inactive", initiator.AuthorizationRevision)
+		return principalmodel.Principal{}, agentsdk.ExecutionIdentity{}, agentAuthorizationError("agent.authorization.initiator_inactive", initiator.AuthorizationRevision)
 	}
 	if !initiator.Known || strings.TrimSpace(initiator.UserID) == "" {
-		return principalmodel.Principal{}, agentmodel.AgentExecutionIdentity{}, agentAuthorizationError("agent.authorization.initiator_inactive", initiator.AuthorizationRevision)
+		return principalmodel.Principal{}, agentsdk.ExecutionIdentity{}, agentAuthorizationError("agent.authorization.initiator_inactive", initiator.AuthorizationRevision)
 	}
 	if s == nil || s.principals == nil || s.schema == nil {
-		return principalmodel.Principal{}, agentmodel.AgentExecutionIdentity{}, apperror.New(apperror.KindUnavailable, "agent.authorization.resolver_unavailable", nil, nil)
+		return principalmodel.Principal{}, agentsdk.ExecutionIdentity{}, apperror.New(apperror.KindUnavailable, "agent.authorization.resolver_unavailable", nil, nil)
 	}
 	var execution principalmodel.Principal
-	identity := agentmodel.AgentExecutionIdentity{Mode: strings.TrimSpace(request.Identity.Mode), Initiator: agentPrincipalReference(initiator)}
+	identity := agentsdk.ExecutionIdentity{Mode: strings.TrimSpace(request.Identity.Mode), Initiator: agentPrincipalReference(initiator)}
 	switch identity.Mode {
-	case agentmodel.AgentTaskIdentityInherit:
+	case agentsdk.AgentTaskIdentityInherit:
 		var err error
 		execution, err = resolveIdentitySDKPrincipal(ctx, s.principals, initiator.UserID, initiator.RoleKey)
 		if err != nil {
-			return principalmodel.Principal{}, agentmodel.AgentExecutionIdentity{}, err
+			return principalmodel.Principal{}, agentsdk.ExecutionIdentity{}, err
 		}
-	case agentmodel.AgentTaskIdentityService:
+	case agentsdk.AgentTaskIdentityService:
 		binding, found := findAgentServicePrincipal(fullAgentSchema(ctx, s.schema), request.Identity.PrincipalKey)
 		if !found || !binding.Enabled {
-			return principalmodel.Principal{}, agentmodel.AgentExecutionIdentity{}, agentAuthorizationError("agent.authorization.service_principal_disabled", initiator.AuthorizationRevision)
+			return principalmodel.Principal{}, agentsdk.ExecutionIdentity{}, agentAuthorizationError("agent.authorization.service_principal_disabled", initiator.AuthorizationRevision)
 		}
 		if request.ExpectedRotationVersion > 0 && request.ExpectedRotationVersion != binding.RotationVersion {
-			return principalmodel.Principal{}, agentmodel.AgentExecutionIdentity{}, agentAuthorizationError("agent.authorization.service_rotation_stale", initiator.AuthorizationRevision)
+			return principalmodel.Principal{}, agentsdk.ExecutionIdentity{}, agentAuthorizationError("agent.authorization.service_rotation_stale", initiator.AuthorizationRevision)
 		}
 		var err error
 		execution, err = resolveIdentitySDKPrincipal(ctx, s.principals, binding.UserID, binding.RoleKey)
 		if err != nil {
-			return principalmodel.Principal{}, agentmodel.AgentExecutionIdentity{}, err
+			return principalmodel.Principal{}, agentsdk.ExecutionIdentity{}, err
 		}
 		identity.ServicePrincipalKey, identity.ServiceRotationVersion = binding.Key, binding.RotationVersion
 	default:
-		return principalmodel.Principal{}, agentmodel.AgentExecutionIdentity{}, agentAuthorizationError("agent.authorization.identity_mode_denied", initiator.AuthorizationRevision)
+		return principalmodel.Principal{}, agentsdk.ExecutionIdentity{}, agentAuthorizationError("agent.authorization.identity_mode_denied", initiator.AuthorizationRevision)
 	}
 	if !execution.Known {
-		return principalmodel.Principal{}, agentmodel.AgentExecutionIdentity{}, agentAuthorizationError("agent.authorization.execution_principal_inactive", initiator.AuthorizationRevision)
+		return principalmodel.Principal{}, agentsdk.ExecutionIdentity{}, agentAuthorizationError("agent.authorization.execution_principal_inactive", initiator.AuthorizationRevision)
 	}
 	executionWorkspace, workspaceErr := principalmodel.NewWorkspaceID(execution.WorkspaceID)
 	if workspaceErr != nil || executionWorkspace != initiatorWorkspace {
-		return principalmodel.Principal{}, agentmodel.AgentExecutionIdentity{}, agentAuthorizationError("agent.authorization.workspace_removed", execution.AuthorizationRevision)
+		return principalmodel.Principal{}, agentsdk.ExecutionIdentity{}, agentAuthorizationError("agent.authorization.workspace_removed", execution.AuthorizationRevision)
 	}
 	execution.RequestID, execution.CorrelationID, execution.CausationID = initiator.RequestID, initiator.CorrelationID, initiator.CausationID
 	execution.SurfaceKey = initiator.SurfaceKey
@@ -167,7 +168,7 @@ func (s *AgentAuthorizationApplicationService) AuthorizeTask(ctx context.Context
 	objects := agentIntersect(agentEffectiveNodeLimit(task.AllowedObjects, request.NodeAllowedObjects), visibleObjects)
 	actions := agentIntersect(agentEffectiveNodeLimit(task.AllowedActions, request.NodeAllowedActions), visibleActions)
 	outcomes := agentEffectiveNodeLimit(task.AllowedOutcomes, request.NodeAllowedOutcomes)
-	if len(task.AllowedObjects) > 0 && len(objects) == 0 || len(task.AllowedActions) > 0 && task.SideEffectMode != agentmodel.AgentTaskSideEffectAnalysisOnly && len(actions) == 0 {
+	if len(task.AllowedObjects) > 0 && len(objects) == 0 || len(task.AllowedActions) > 0 && task.SideEffectMode != agentsdk.AgentTaskSideEffectAnalysisOnly && len(actions) == 0 {
 		return AgentTaskAuthorization{}, agentAuthorizationError("agent.authorization.capability_revoked", execution.AuthorizationRevision)
 	}
 	fields := map[string][]string{}
@@ -185,7 +186,7 @@ func (s *AgentAuthorizationApplicationService) AuthorizeTask(ctx context.Context
 	return AgentTaskAuthorization{Principal: execution, Identity: identity, Task: task, AllowedObjects: objects, AllowedActions: actions, AllowedOutcomes: outcomes, AllowedTools: tools, VisibleFields: fields, Evidence: evidence}, nil
 }
 
-func agentToolsForTask(snapshot appschemamodel.ApplicationSchemaSnapshot, task agentmodel.AgentTaskDefinition) []string {
+func agentToolsForTask(snapshot appschemamodel.ApplicationSchemaSnapshot, task agentsdk.AgentTaskDefinition) []string {
 	skillKeys := map[string]bool{}
 	tools := []string{}
 	for _, agent := range snapshot.Agents {
@@ -206,50 +207,46 @@ func agentToolsForTask(snapshot appschemamodel.ApplicationSchemaSnapshot, task a
 	return agentUniqueStrings(tools)
 }
 
-func (s *AgentAuthorizationApplicationService) ResolveGlobalContext(ctx context.Context, request GlobalAgentContextRequest) (result agentmodel.GlobalAgentContext, err error) {
+func (s *AgentAuthorizationApplicationService) ResolveGlobalContext(ctx context.Context, request GlobalAgentContextRequest) (result agentsdk.GlobalContext, err error) {
 	ctx, span := telemetry.StartUseCase(ctx, "agent.global_context.resolve", attribute.String("workspace.id", request.Principal.WorkspaceID), attribute.String("agent.entrypoint", request.EntrypointKey), attribute.String("product.surface", request.Surface), attribute.String("route.key", request.RouteKey))
 	defer func() { telemetry.EndUseCase(span, err, "") }()
-	principal, _, err := s.ResolveExecutionIdentity(ctx, AgentExecutionIdentityRequest{Initiator: request.Principal, Identity: agentmodel.AgentTaskIdentity{Mode: agentmodel.AgentTaskIdentityInherit}})
+	principal, _, err := s.ResolveExecutionIdentity(ctx, AgentExecutionIdentityRequest{Initiator: request.Principal, Identity: agentsdk.AgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityInherit}})
 	if err != nil {
-		return agentmodel.GlobalAgentContext{}, err
+		return agentsdk.GlobalContext{}, err
 	}
 	full := fullAgentSchema(ctx, s.schema)
 	assignment, found := findAgentEntrypoint(full.AgentEntrypoints, request.EntrypointKey)
 	if !found || !assignment.Enabled || !principal.HasAllPermissions(assignment.RequiredPermissions) {
-		return agentmodel.GlobalAgentContext{}, agentAuthorizationError("agent.authorization.entrypoint_denied", principal.AuthorizationRevision)
+		return agentsdk.GlobalContext{}, agentAuthorizationError("agent.authorization.entrypoint_denied", principal.AuthorizationRevision)
 	}
 	if strings.TrimSpace(request.Surface) != strings.TrimSpace(assignment.Surface) {
-		return agentmodel.GlobalAgentContext{}, agentAuthorizationError("agent.authorization.surface_denied", principal.AuthorizationRevision)
+		return agentsdk.GlobalContext{}, agentAuthorizationError("agent.authorization.surface_denied", principal.AuthorizationRevision)
 	}
-	entrypoint, routeFound := findBusinessEntrypoint(full.EntryPoints, request.RouteKey)
-	if !routeFound || !agentRouteAllowed(assignment.RoutePatterns, request.RouteKey) || agentEntrypointSurface(entrypoint) != assignment.Surface {
-		return agentmodel.GlobalAgentContext{}, agentAuthorizationError("agent.authorization.route_denied", principal.AuthorizationRevision)
+	if !agentRouteAllowed(assignment.RoutePatterns, request.RouteKey) {
+		return agentsdk.GlobalContext{}, agentAuthorizationError("agent.authorization.route_denied", principal.AuthorizationRevision)
 	}
 	visible := s.schema.SchemaForPrincipal(ctx, principal)
-	if _, visibleRoute := findBusinessEntrypoint(visible.EntryPoints, request.RouteKey); !visibleRoute {
-		return agentmodel.GlobalAgentContext{}, agentAuthorizationError("agent.authorization.route_denied", principal.AuthorizationRevision)
-	}
 	objectKey := strings.TrimSpace(request.ObjectKey)
-	if objectKey != "" && (!agentEntrypointAllowsObject(entrypoint, objectKey) || !agentObjectKeys(visible.Objects)[objectKey]) {
-		return agentmodel.GlobalAgentContext{}, agentAuthorizationError("agent.authorization.object_denied", principal.AuthorizationRevision)
+	if objectKey != "" && !agentObjectKeys(visible.Objects)[objectKey] {
+		return agentsdk.GlobalContext{}, agentAuthorizationError("agent.authorization.object_denied", principal.AuthorizationRevision)
 	}
 	selected := agentUniqueStrings(request.SelectedRecordIDs)
 	if len(selected) > assignment.ContextContract.MaxSelectedRecord {
-		return agentmodel.GlobalAgentContext{}, agentAuthorizationError("agent.authorization.selection_limit", principal.AuthorizationRevision)
+		return agentsdk.GlobalContext{}, agentAuthorizationError("agent.authorization.selection_limit", principal.AuthorizationRevision)
 	}
 	for _, recordID := range append([]string{strings.TrimSpace(request.RecordID)}, selected...) {
 		if recordID == "" {
 			continue
 		}
 		if objectKey == "" || s.records == nil {
-			return agentmodel.GlobalAgentContext{}, agentAuthorizationError("agent.authorization.record_denied", principal.AuthorizationRevision)
+			return agentsdk.GlobalContext{}, agentAuthorizationError("agent.authorization.record_denied", principal.AuthorizationRevision)
 		}
 		allowed, visibilityErr := s.records.CanReadAgentRecord(ctx, objectKey, recordID, principal)
 		if visibilityErr != nil {
-			return agentmodel.GlobalAgentContext{}, visibilityErr
+			return agentsdk.GlobalContext{}, visibilityErr
 		}
 		if !allowed {
-			return agentmodel.GlobalAgentContext{}, agentAuthorizationError("agent.authorization.record_denied", principal.AuthorizationRevision)
+			return agentsdk.GlobalContext{}, agentAuthorizationError("agent.authorization.record_denied", principal.AuthorizationRevision)
 		}
 	}
 	taskKeys := agentIntersect(assignment.AllowedTaskKeys, agentTaskKeys(visible.AgentTasks))
@@ -270,28 +267,17 @@ func (s *AgentAuthorizationApplicationService) ResolveGlobalContext(ctx context.
 	if len(request.AvailableOperationIDs) > 0 {
 		operations = agentIntersect(request.AvailableOperationIDs, agentStringSet(operations))
 	}
-	contextValue := agentmodel.GlobalAgentContext{
-		ContractVersion: agentmodel.GlobalAgentContextContractVersion, EntrypointKey: assignment.Key, AgentKey: assignment.AgentKey, Surface: assignment.Surface, RouteKey: strings.TrimSpace(request.RouteKey),
+	contextValue := agentsdk.GlobalContext{
+		ContractVersion: agentsdk.GlobalAgentContextContractVersion, EntrypointKey: assignment.Key, AgentKey: assignment.AgentKey, Surface: assignment.Surface, RouteKey: strings.TrimSpace(request.RouteKey),
 		ObjectKey: objectKey, RecordID: strings.TrimSpace(request.RecordID), SelectedRecordIDs: selected, Locale: strings.TrimSpace(request.Locale), Timezone: strings.TrimSpace(request.Timezone),
 		Principal: agentPrincipalReference(principal), AllowedTaskKeys: taskKeys, AllowedWorkflowKeys: workflowKeys, AvailableOperations: operations,
 	}
 	encoded, _ := json.Marshal(contextValue)
 	if len(encoded) > assignment.ContextContract.MaxContextBytes {
-		return agentmodel.GlobalAgentContext{}, agentAuthorizationError("agent.authorization.context_limit", principal.AuthorizationRevision)
+		return agentsdk.GlobalContext{}, agentAuthorizationError("agent.authorization.context_limit", principal.AuthorizationRevision)
 	}
 	contextValue.ContextRevision = agentStableHash(map[string]any{"context": contextValue, "schema_hash": visible.SchemaHash, "authorization_revision": principal.AuthorizationRevision})
 	return contextValue, nil
-}
-
-func agentEntrypointAllowsObject(entrypoint definitionmodel.EntryPointSchema, objectKey string) bool {
-	for _, field := range []string{"create_objects", "read_objects", "update_objects"} {
-		for _, value := range agentStringsFromAny(entrypoint.Config[field]) {
-			if value == objectKey {
-				return true
-			}
-		}
-	}
-	return strings.TrimSpace(fmt.Sprint(entrypoint.Config["primary_object"])) == objectKey
 }
 
 func agentStringsFromAny(value any) []string {
@@ -376,7 +362,7 @@ func agentActionKeys(actions []definitionmodel.ActionSchema) map[string]bool {
 	return out
 }
 
-func agentTaskKeys(tasks []agentmodel.AgentTaskDefinition) map[string]bool {
+func agentTaskKeys(tasks []agentsdk.AgentTaskDefinition) map[string]bool {
 	out := map[string]bool{}
 	for _, task := range tasks {
 		if task.Enabled {

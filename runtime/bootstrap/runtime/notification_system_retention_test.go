@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
 	"github.com/domainry/domainry-notification-sdk/contract"
-	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 )
 
 type notificationRetentionStub struct {

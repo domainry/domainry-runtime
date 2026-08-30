@@ -3,7 +3,7 @@ package policy
 import (
 	"testing"
 
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
 
@@ -28,10 +28,10 @@ func TestWorkflowAgentTaskGraphContract(t *testing.T) {
 		{name: "timeout", mutate: func(g *definitionmodel.WorkflowGraphSchema) { g.Nodes[1].Contract.AgentTask.TimeoutSeconds = 0 }, code: "backend.workflow.agent_task_execution_policy_invalid"},
 		{name: "retry", mutate: func(g *definitionmodel.WorkflowGraphSchema) { g.Nodes[1].Contract.AgentTask.Retry.MaxAttempts = 0 }, code: "backend.workflow.agent_task_execution_policy_invalid"},
 		{name: "inherit principal", mutate: func(g *definitionmodel.WorkflowGraphSchema) {
-			g.Nodes[1].Contract.AgentTask.Identity = definitionmodel.WorkflowAgentTaskIdentity{Mode: agentmodel.AgentTaskIdentityInherit, PrincipalKey: "root"}
+			g.Nodes[1].Contract.AgentTask.Identity = definitionmodel.WorkflowAgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityInherit, PrincipalKey: "root"}
 		}, code: "backend.workflow.agent_task_identity_invalid"},
 		{name: "service principal", mutate: func(g *definitionmodel.WorkflowGraphSchema) {
-			g.Nodes[1].Contract.AgentTask.Identity = definitionmodel.WorkflowAgentTaskIdentity{Mode: agentmodel.AgentTaskIdentityService}
+			g.Nodes[1].Contract.AgentTask.Identity = definitionmodel.WorkflowAgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityService}
 		}, code: "backend.workflow.agent_task_identity_invalid"},
 		{name: "unknown identity", mutate: func(g *definitionmodel.WorkflowGraphSchema) { g.Nodes[1].Contract.AgentTask.Identity.Mode = "root" }, code: "backend.workflow.agent_task_identity_invalid"},
 		{name: "unknown on error", mutate: func(g *definitionmodel.WorkflowGraphSchema) { g.Nodes[1].Contract.AgentTask.OnError = "continue" }, code: "backend.workflow.agent_task_error_policy_invalid"},
@@ -90,7 +90,7 @@ func validWorkflowAgentTaskGraph() *definitionmodel.WorkflowGraphSchema {
 		Nodes: []definitionmodel.WorkflowGraphNode{
 			{ID: "trigger", Type: "trigger"},
 			{ID: "agent", Type: "agent_task", Contract: &definitionmodel.WorkflowNodeContract{AgentTask: &definitionmodel.WorkflowAgentTaskNodeContract{
-				TaskKey: "customer.summarize", TaskVersion: "1.0.0", Identity: definitionmodel.WorkflowAgentTaskIdentity{Mode: agentmodel.AgentTaskIdentityService, PrincipalKey: "agent_service"},
+				TaskKey: "customer.summarize", TaskVersion: "1.0.0", Identity: definitionmodel.WorkflowAgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityService, PrincipalKey: "agent_service"},
 				Input: map[string]any{}, OutputVariable: "summary", ExecutionMode: "async", TimeoutSeconds: 30,
 				Retry: &definitionmodel.WorkflowRetryPolicy{MaxAttempts: 2}, OnError: "error_branch", AllowedOutcomes: []string{"success", "error"},
 			}}},

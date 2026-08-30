@@ -95,7 +95,7 @@ func (s *IntegrationApplicationService) receiveIntegrationWebhookForWorkspace(ct
 			_, _ = s.eventRepo.UpdateEventStatus(ctx, connection.WorkspaceID, saved.ID, "failed", valueOrDefault(integrationErrorCode(normalizeErr), "backend.internal"))
 			return WebhookReceiveResult{}, normalizeErr
 		}
-		updated, found, updateErr := s.deliveryRepo.UpdateOutboxStatusByResponseRef(ctx, connection.WorkspaceID, connection.Key, strings.TrimSpace(verified.DeliveryReceipt.ResponseRef), status, strings.TrimSpace(verified.DeliveryReceipt.Error))
+		updated, found, updateErr := s.publicationRepo.UpdateOutboxStatusByResponseRef(ctx, connection.WorkspaceID, connection.Key, strings.TrimSpace(verified.DeliveryReceipt.ResponseRef), status, strings.TrimSpace(verified.DeliveryReceipt.Error))
 		if updateErr != nil {
 			return WebhookReceiveResult{}, updateErr
 		}

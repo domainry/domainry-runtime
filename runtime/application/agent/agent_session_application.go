@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 

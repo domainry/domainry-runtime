@@ -3,7 +3,9 @@ package schema
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -31,8 +33,7 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		kind  string
 		table string
 	}{
-		{kind: "integration_event", table: "integration_events"},
-		{kind: "integration_outbox", table: "integration_outbox_messages"},
+		{kind: "integration_outbox", table: "runtime_publication_outbox"},
 		{kind: "workflow_continuation", table: "_workflow_executions"},
 	} {
 		exists, existsErr := runtimeSchemaTableExists(ctx, s, queue.table)
@@ -48,35 +49,13 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 	if _, err := s.SchemaDB().ExecContext(ctx, "DELETE FROM "+s.TableIdentifier("runtime_worker_queue_scopes")+" WHERE "+s.Identifier("queue_kind")+" = "+s.Placeholder(1), "integration_outbox_task"); err != nil {
 		return fmt.Errorf("remove legacy integration outbox worker tasks: %w", err)
 	}
-	if err := s.EnsureRuntimeColumn(ctx, "integration_connections", "provider_key", text+" NOT NULL DEFAULT ''"); err != nil {
-		return err
-	}
-	for _, column := range []string{"expires_at", "rotated_at", "revoked_at", "last_tested_at", "last_test_status", "last_test_error"} {
-		definition := text + " NOT NULL DEFAULT ''"
-		if column == "last_test_error" {
-			definition = "TEXT NOT NULL DEFAULT ''"
-		}
-		if err := s.EnsureRuntimeColumn(ctx, "integration_secrets", column, definition); err != nil {
-			return err
-		}
-	}
-	if err := s.EnsureRuntimeColumn(ctx, "integration_invocations", "provider_key", text+" NOT NULL DEFAULT ''"); err != nil {
-		return err
-	}
-	for _, table := range []string{"automation_instruction_executions", "integration_events", "integration_outbox_messages"} {
+	for _, table := range []string{"automation_instruction_executions", "runtime_publication_outbox"} {
 		if err := s.EnsureRuntimeColumn(ctx, table, "lease_owner", text+" NOT NULL DEFAULT ''"); err != nil {
 			return err
 		}
 	}
 	if err := s.EnsureRuntimeColumn(ctx, "automation_instruction_executions", "fencing_token", "BIGINT NOT NULL DEFAULT 1"); err != nil {
 		return err
-	}
-	for column, definition := range map[string]string{
-		"lease_owner": text + " NOT NULL DEFAULT ''", "lease_expires_at": text + " NOT NULL DEFAULT ''", "fencing_token": "BIGINT NOT NULL DEFAULT 0",
-	} {
-		if err := s.EnsureRuntimeColumn(ctx, "report_snapshots", column, definition); err != nil {
-			return err
-		}
 	}
 	for column, definition := range map[string]string{
 		"request_fingerprint": text + " NOT NULL DEFAULT ''",
@@ -91,12 +70,7 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 			return err
 		}
 	}
-	for _, table := range []string{"integration_events", "integration_outbox_messages"} {
-		if err := s.EnsureRuntimeColumn(ctx, table, "lease_expires_at", text+" NOT NULL DEFAULT ''"); err != nil {
-			return err
-		}
-	}
-	if err := s.EnsureRuntimeColumn(ctx, "integration_events", "fencing_token", "BIGINT NOT NULL DEFAULT 0"); err != nil {
+	if err := s.EnsureRuntimeColumn(ctx, "runtime_publication_outbox", "lease_expires_at", text+" NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
 	for column, definition := range map[string]string{
@@ -104,12 +78,31 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		"dedup_key":           text + " NOT NULL DEFAULT ''",
 		"request_fingerprint": text + " NOT NULL DEFAULT ''",
 		"fencing_token":       "BIGINT NOT NULL DEFAULT 0",
+		"publication_type":    text + " NOT NULL DEFAULT 'integration.connector'",
+		"tenant_id":           text + " NOT NULL DEFAULT ''",
+		"application_key":     text + " NOT NULL DEFAULT ''",
+		"source_event_id":     text + " NOT NULL DEFAULT ''",
+		"event_type":          text + " NOT NULL DEFAULT ''",
+		"intent_json":         "TEXT NOT NULL DEFAULT '{}'",
+		"connector_key":       text + " NOT NULL DEFAULT ''",
+		"connection_key":      text,
+		"operation":           text + " NOT NULL DEFAULT ''",
+		"payload_json":        "TEXT NOT NULL DEFAULT '{}'",
+		"event_id":            text,
+		"request_ref":         "TEXT",
+		"response_ref":        "TEXT",
+		"error":               "TEXT",
+		"remote_event_id":     text + " NOT NULL DEFAULT ''",
+		"last_error_code":     text + " NOT NULL DEFAULT ''",
+		"last_error":          "TEXT NOT NULL DEFAULT ''",
+		"terminal_at":         text + " NOT NULL DEFAULT ''",
+		"created_by":          text + " NOT NULL DEFAULT ''",
 	} {
-		if err := s.EnsureRuntimeColumn(ctx, "integration_outbox_messages", column, definition); err != nil {
+		if err := s.EnsureRuntimeColumn(ctx, "runtime_publication_outbox", column, definition); err != nil {
 			return err
 		}
 	}
-	if _, err := s.SchemaDB().ExecContext(ctx, "UPDATE "+s.TableIdentifier("integration_outbox_messages")+" SET "+s.Identifier("dedup_key")+" = "+s.Identifier("id")+" WHERE "+s.Identifier("dedup_key")+" = ''"); err != nil {
+	if _, err := s.SchemaDB().ExecContext(ctx, "UPDATE "+s.TableIdentifier("runtime_publication_outbox")+" SET "+s.Identifier("dedup_key")+" = "+s.Identifier("id")+" WHERE "+s.Identifier("dedup_key")+" = ''"); err != nil {
 		return fmt.Errorf("backfill integration outbox dedup key: %w", err)
 	}
 	for column, definition := range map[string]string{
@@ -133,32 +126,13 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		columns []string
 		unique  bool
 	}{
-		{name: "uniq_integration_events_external", table: "integration_events", columns: []string{"workspace_id", "provider", "external_id"}, unique: true},
-		{name: "uniq_integration_event_mapping_intent", table: "integration_event_mapping_intents", columns: []string{"workspace_id", "event_id"}, unique: true},
-		{name: "idx_integration_event_mapping_intent_status", table: "integration_event_mapping_intents", columns: []string{"workspace_id", "status", "created_at"}},
 		{name: "uniq_transaction_boundary_intent", table: "transaction_boundary_intents", columns: []string{"workspace_id", "owner", "operation", "idempotency_key"}, unique: true},
 		{name: "idx_transaction_boundary_intent_due", table: "transaction_boundary_intents", columns: []string{"status", "next_attempt_at", "lease_expires_at"}},
-		{name: "uniq_integration_api_keys_workspace_key", table: "integration_api_keys", columns: []string{"workspace_id", "api_key"}, unique: true},
-		{name: "uniq_integration_api_keys_token_hash", table: "integration_api_keys", columns: []string{"token_hash"}, unique: true},
-		{name: "idx_integration_api_keys_status", table: "integration_api_keys", columns: []string{"workspace_id", "status"}},
-		{name: "idx_integration_events_status", table: "integration_events", columns: []string{"workspace_id", "provider", "status"}},
-		{name: "uniq_integration_webhook_nonce", table: "integration_webhook_nonces", columns: []string{"workspace_id", "connector_key", "nonce"}, unique: true},
-		{name: "idx_integration_webhook_nonce_expiry", table: "integration_webhook_nonces", columns: []string{"expires_at"}},
-		{name: "uniq_integration_webhook_subscription", table: "integration_webhook_subscriptions", columns: []string{"workspace_id", "subscription_key"}, unique: true},
-		{name: "idx_integration_webhook_subscription_connection", table: "integration_webhook_subscriptions", columns: []string{"workspace_id", "connection_key"}},
-		{name: "idx_integration_outbox_connector", table: "integration_outbox_messages", columns: []string{"workspace_id", "connector_key", "status"}},
-		{name: "idx_integration_outbox_due", table: "integration_outbox_messages", columns: []string{"status", "next_attempt_at"}},
-		{name: "idx_integration_outbox_ack_due", table: "integration_outbox_messages", columns: []string{"status", "ack_deadline_at"}},
-		{name: "uniq_integration_outbox_dedup", table: "integration_outbox_messages", columns: []string{"workspace_id", "connector_key", "connection_key", "operation", "dedup_key"}, unique: true},
-		{name: "uniq_notification_publication_source", table: "notification_publication_outbox", columns: []string{"tenant_id", "workspace_id", "application_key", "source_event_id"}, unique: true},
-		{name: "idx_notification_service_publication_due", table: "notification_publication_outbox", columns: []string{"status", "next_attempt_at", "lease_expires_at", "created_at"}},
-		{name: "uniq_integration_credential_refresh_lease", table: "integration_credential_refresh_leases", columns: []string{"workspace_id", "connection_key"}, unique: true},
-		{name: "idx_integration_credential_refresh_lease_expiry", table: "integration_credential_refresh_leases", columns: []string{"lease_expires_at"}},
-		{name: "uniq_integration_secret_material", table: "integration_secret_materials", columns: []string{"workspace_id", "secret_key"}, unique: true},
-		{name: "uniq_integration_secrets_workspace_key", table: "integration_secrets", columns: []string{"workspace_id", "secret_key"}, unique: true},
-		{name: "idx_integration_secrets_status", table: "integration_secrets", columns: []string{"workspace_id", "status"}},
-		{name: "uniq_connector_provider_state", table: "connector_provider_states", columns: []string{"workspace_id", "connector_key", "provider_key", "connection_key", "task_key"}, unique: true},
-		{name: "idx_connector_provider_state_due", table: "connector_provider_states", columns: []string{"status", "due_at", "lease_expires_at"}},
+		{name: "idx_runtime_publication_destination", table: "runtime_publication_outbox", columns: []string{"publication_type", "workspace_id", "connector_key", "status"}},
+		{name: "idx_runtime_publication_due", table: "runtime_publication_outbox", columns: []string{"publication_type", "status", "next_attempt_at", "lease_expires_at", "created_at"}},
+		{name: "idx_runtime_publication_ack_due", table: "runtime_publication_outbox", columns: []string{"publication_type", "status", "ack_deadline_at"}},
+		{name: "uniq_runtime_publication_dedup", table: "runtime_publication_outbox", columns: []string{"workspace_id", "publication_type", "connector_key", "connection_key", "operation", "dedup_key"}, unique: true},
+		{name: "uniq_runtime_notification_publication_source", table: "runtime_publication_outbox", columns: []string{"publication_type", "tenant_id", "workspace_id", "application_key", "source_event_id"}, unique: true},
 		{name: "idx_automation_execution_rule", table: "automation_rule_executions", columns: []string{"workspace_id", "rule_key", "created_at"}},
 		{name: "idx_automation_execution_record", table: "automation_rule_executions", columns: []string{"workspace_id", "object_key", "record_id", "created_at"}},
 		{name: "idx_automation_execution_status", table: "automation_rule_executions", columns: []string{"workspace_id", "status", "created_at"}},
@@ -177,8 +151,6 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		{name: "idx_workflow_execution_receipt_lease", table: "workflow_execution_receipts", columns: []string{"status", "lease_expires_at"}},
 		{name: "uniq_runtime_operation_key", table: "runtime_operations", columns: []string{"workspace_id", "system_purpose", "kind", "idempotency_key"}, unique: true},
 		{name: "idx_runtime_operation_status", table: "runtime_operations", columns: []string{"workspace_id", "status", "created_at"}},
-		{name: "uniq_report_snapshot_idempotency", table: "report_snapshots", columns: []string{"workspace_id", "report_key", "access_scope_hash", "idempotency_key"}, unique: true},
-		{name: "idx_report_snapshot_latest", table: "report_snapshots", columns: []string{"workspace_id", "report_key", "access_scope_hash", "status", "refreshed_at"}},
 		{name: "uniq_runtime_operation_control", table: "runtime_operation_controls", columns: []string{"system_purpose", "control_kind", "owner"}, unique: true},
 		{name: "idx_runtime_operation_control_state", table: "runtime_operation_controls", columns: []string{"system_purpose", "control_kind", "state"}},
 		{name: "idx_runtime_release_instance_expiry", table: "runtime_release_instances", columns: []string{"lease_expires_at"}},
@@ -187,9 +159,6 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		{name: "uniq_runtime_break_glass_audit", table: "runtime_break_glass_grants", columns: []string{"workspace_id", "audit_event_id"}, unique: true},
 		{name: "uniq_runtime_database_retirement_object", table: "runtime_database_retirements", columns: []string{"engine", "database_name", "schema_name", "object_kind", "object_name", "parent_name"}, unique: true},
 		{name: "idx_runtime_database_retirement_status", table: "runtime_database_retirements", columns: []string{"state", "updated_at"}},
-		{name: "uniq_integration_external_identities_workspace_key", table: "integration_external_identities", columns: []string{"workspace_id", "identity_key"}, unique: true},
-		{name: "uniq_integration_external_identities_subject", table: "integration_external_identities", columns: []string{"workspace_id", "provider", "external_subject_type", "external_subject"}, unique: true},
-		{name: "idx_integration_external_identities_actor", table: "integration_external_identities", columns: []string{"actor_id", "role_key"}},
 	}
 	for _, index := range indexes {
 		if err := s.CreateIndexIfMissing(ctx, index.table, index.name, index.unique, index.columns...); err != nil {
@@ -248,6 +217,9 @@ func backfillWorkerQueueScopes(ctx context.Context, s Store, queueKind, table st
 func runtimeSchemaTableExists(ctx context.Context, s Store, table string) (bool, error) {
 	table = strings.TrimSpace(table)
 	exists, err := s.RuntimeTableExists(ctx, table)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
 	if err != nil {
 		return false, fmt.Errorf("inspect runtime schema table %s: %w", table, err)
 	}

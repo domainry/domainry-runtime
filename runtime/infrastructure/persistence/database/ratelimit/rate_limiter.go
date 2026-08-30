@@ -3,11 +3,13 @@ package ratelimit
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormdriver "github.com/domainry/domainry-orm/driver"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 )
@@ -17,10 +19,13 @@ type RateLimiter struct {
 	store *database.RuntimeStore
 	db    *sql.DB
 	now   func() time.Time
+	begin func(context.Context, *sql.DB) (ormdriver.Transaction, error)
 }
 
+const databaseRetryAttempts = 32
+
 func NewRateLimiter(store *database.RuntimeStore) *RateLimiter {
-	return &RateLimiter{store: store, db: store.DB(), now: time.Now}
+	return &RateLimiter{store: store, db: store.DB(), now: time.Now, begin: store.Engine.BeginWrite}
 }
 
 func (l *RateLimiter) EnsureSchema(ctx context.Context) error {
@@ -42,25 +47,42 @@ func (l *RateLimiter) Allow(ctx context.Context, key string, limit int, window t
 		return ratelimit.Decision{Allowed: true, Limit: limit}, nil
 	}
 	key = strings.TrimSpace(key)
-	now := l.now().UTC()
-	for attempt := 0; attempt < 3; attempt++ {
-		decision, retry, err := l.allowOnce(ctx, key, limit, window, now)
+	if key == "" {
+		return ratelimit.Decision{}, errors.New("rate limit bucket key is required")
+	}
+	if len(key) > 255 {
+		return ratelimit.Decision{}, errors.New("rate limit bucket key exceeds 255 bytes")
+	}
+	var lastErr error
+	for attempt := 0; attempt < databaseRetryAttempts; attempt++ {
+		decision, retry, err := l.allowOnce(ctx, key, limit, window, l.now().UTC())
 		if !retry {
 			return decision, err
 		}
+		lastErr = err
 		if err := ctx.Err(); err != nil {
 			return ratelimit.Decision{}, err
 		}
+		if attempt < databaseRetryAttempts-1 {
+			delayAttempt := min(attempt, 5)
+			timer := time.NewTimer(time.Duration(1<<delayAttempt) * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return ratelimit.Decision{}, ctx.Err()
+			case <-timer.C:
+			}
+		}
 	}
-	return ratelimit.Decision{}, fmt.Errorf("rate limit bucket conflict")
+	return ratelimit.Decision{}, fmt.Errorf("rate limit bucket conflict after retries: %w", lastErr)
 }
 
 func (l *RateLimiter) allowOnce(ctx context.Context, key string, limit int, window time.Duration, now time.Time) (ratelimit.Decision, bool, error) {
-	tx, err := l.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	tx, err := l.begin(ctx, l.db)
 	if err != nil {
-		return ratelimit.Decision{}, false, err
+		return ratelimit.Decision{}, l.retryable(err), err
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() { _ = tx.Rollback(ctx) }()
 	selectBuilder := ormbuilder.NewSelectBuilder(l.store.SQLRenderer, "runtime_rate_limit_bucket").
 		Columns("window_start_ns", "request_count").Where(ormbuilder.Equal("bucket_key", key))
 	selectBuilder, err = l.store.Engine.ApplyClaimLock(selectBuilder, false)
@@ -75,10 +97,10 @@ func (l *RateLimiter) allowOnce(ctx context.Context, key string, limit int, wind
 	var count int
 	err = tx.QueryRowContext(ctx, query, args...).Scan(&startNS, &count)
 	if err != nil && err != sql.ErrNoRows {
-		return ratelimit.Decision{}, false, err
+		return ratelimit.Decision{}, l.retryable(err), err
 	}
 	windowStart := time.Unix(0, startNS).UTC()
-	if err == sql.ErrNoRows || startNS == 0 || now.Sub(windowStart) >= window {
+	if err == sql.ErrNoRows || startNS == 0 || now.Before(windowStart) || now.Sub(windowStart) >= window {
 		windowStart, count = now, 0
 	}
 	count++
@@ -90,7 +112,7 @@ func (l *RateLimiter) allowOnce(ctx context.Context, key string, limit int, wind
 			return ratelimit.Decision{}, false, fmt.Errorf("build rate limit bucket insert: %w", buildErr)
 		}
 		if _, insertErr := tx.ExecContext(ctx, insert, insertArgs...); insertErr != nil {
-			return ratelimit.Decision{}, true, nil
+			return ratelimit.Decision{}, l.retryable(insertErr), insertErr
 		}
 	} else {
 		update, updateArgs, buildErr := ormbuilder.NewUpdateBuilder(l.store.SQLRenderer, "runtime_rate_limit_bucket").
@@ -100,11 +122,11 @@ func (l *RateLimiter) allowOnce(ctx context.Context, key string, limit int, wind
 			return ratelimit.Decision{}, false, fmt.Errorf("build rate limit bucket update: %w", buildErr)
 		}
 		if _, err := tx.ExecContext(ctx, update, updateArgs...); err != nil {
-			return ratelimit.Decision{}, false, err
+			return ratelimit.Decision{}, l.retryable(err), err
 		}
 	}
-	if err := tx.Commit(); err != nil {
-		return ratelimit.Decision{}, true, nil
+	if err := tx.Commit(ctx); err != nil {
+		return ratelimit.Decision{}, l.retryable(err), err
 	}
 	decision := ratelimit.Decision{Allowed: count <= limit, Count: count, Limit: limit}
 	if !decision.Allowed {
@@ -114,6 +136,15 @@ func (l *RateLimiter) allowOnce(ctx context.Context, key string, limit int, wind
 		}
 	}
 	return decision, false, nil
+}
+
+func (l *RateLimiter) retryable(err error) bool {
+	switch l.store.Engine.ClassifyError(err) {
+	case ormdriver.ErrorConflict, ormdriver.ErrorSerialization, ormdriver.ErrorDeadlock, ormdriver.ErrorUnavailable:
+		return true
+	default:
+		return false
+	}
 }
 
 var _ ratelimit.Limiter = (*RateLimiter)(nil)

@@ -11,7 +11,7 @@ import (
 	localizationmodel "github.com/domainry/domainry-runtime/runtime/domain/localization/model"
 )
 
-const expectedDescriptorContractHash = "487ffbd86f20c3b8df35b0836f3fc0438846fece117edec4883f1e006d06d29d"
+const expectedDescriptorContractHash = "4a45efe5f916bfdd527e52bbfa18ab7eb1a2fbf5388ec0fda72ed52c3513860c"
 
 func TestRuntimeConnectorDescriptorContractHash(t *testing.T) {
 	actual, err := DescriptorContractHash()

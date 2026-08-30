@@ -6,8 +6,6 @@ import (
 
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 
-	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
-
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
 	"encoding/json"
@@ -49,21 +47,6 @@ func TestValidateManifestAcceptsRuntimeIdentityFoundationRelationTargets(t *test
 	}
 	if err := ValidateManifest(manifest); err != nil {
 		t.Fatalf("published Runtime Foundation relation target rejected: %v", err)
-	}
-}
-
-func TestValidateManifestAcceptsCompleteMaterializedSeedEvidenceWithoutCopyingPayloads(t *testing.T) {
-	manifest := loadFixtureManifest(t, "domain-only-minimal.json")
-	manifest.SeedRecords = nil
-	seeds := make([]businessseedmodel.BusinessSeedProvenance, 0, len(manifest.Objects))
-	for _, object := range manifest.Objects {
-		seeds = append(seeds, businessseedmodel.BusinessSeedProvenance{SeedKey: object.Key + ".primary", ObjectKey: object.Key, RecordID: object.Key + "-1", ContentHash: "hash"})
-	}
-	if err := ValidateManifestWithMaterializedSeeds(manifest, nil, seeds); err != nil {
-		t.Fatalf("complete materialized seed evidence rejected: %v", err)
-	}
-	if err := ValidateManifestWithMaterializedSeeds(manifest, nil, nil); err == nil || !strings.Contains(err.Error(), "domain schema must declare seed data") {
-		t.Fatalf("missing materialized seed evidence accepted: %v", err)
 	}
 }
 

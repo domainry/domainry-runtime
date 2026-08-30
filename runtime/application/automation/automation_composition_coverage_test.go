@@ -34,13 +34,13 @@ func (automationConfigRepositoryProbe) ListConnections(context.Context, string) 
 func TestAutomationCompositionRepositoriesForwardToManagement(t *testing.T) {
 	registry := &automationFacadeRegistry{rules: map[string]automationmodel.AutomationRuleSchema{}}
 	service := NewAutomationApplicationService(AutomationApplicationDependencies{
-		Rules: registry, DeliveryRepository: automationDeliveryRepositoryProbe{}, ConfigRepository: automationConfigRepositoryProbe{},
+		Rules: registry, DeliveryRepository: automationDeliveryRepositoryProbe{},
 		Schema: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 			return appschemamodel.ApplicationSchemaSnapshot{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "email"}}}}
 		},
 	})
 	principal := automationFacadePrincipal()
-	if catalog, err := service.AutomationCapabilities(t.Context(), principal); err != nil || len(catalog.Connections) != 1 || len(catalog.Connectors) != 1 {
+	if catalog, err := service.AutomationCapabilities(t.Context(), principal); err != nil || len(catalog.Connections) != 0 || len(catalog.Connectors) != 1 {
 		t.Fatalf("catalog=%+v err=%v", catalog, err)
 	}
 	if history, err := service.AutomationExecutions(t.Context(), automationmodel.AutomationExecutionFilter{}, principal); err != nil || history.Count != 0 {

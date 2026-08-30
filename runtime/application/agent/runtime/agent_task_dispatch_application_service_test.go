@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -18,7 +19,7 @@ func TestAgentTaskDispatchPreparesAuthorizedDurableRun(t *testing.T) {
 	run, err := service.Prepare(t.Context(), AgentTaskDispatchRequest{
 		WorkspaceID: "workspace-1", ProcessID: "process-1", NodeInstanceID: "node-instance-1", NodeID: "review", Iteration: 2,
 		DefinitionSnapshotHash: "definition-hash", ManifestHash: "manifest-hash", TaskKey: "customer.review", TaskVersion: "1.0.0",
-		Identity: agentmodel.AgentTaskIdentity{Mode: agentmodel.AgentTaskIdentityInherit}, Input: map[string]any{"record_id": "customer-1"},
+		Identity: agentsdk.AgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityInherit}, Input: map[string]any{"record_id": "customer-1"},
 		AllowedObjects: []string{"customer"}, AllowedActions: []string{"customer.update"}, AllowedOutcomes: []string{"success"},
 		TimeoutSeconds: 30, MaxAttempts: 3, Initiator: initiator, CorrelationID: "correlation-1",
 	})
@@ -36,7 +37,7 @@ func TestAgentTaskDispatchPreparesAuthorizedDurableRun(t *testing.T) {
 func TestAgentTaskDispatchFailsClosedAtBoundaries(t *testing.T) {
 	authorization, initiator, _, _ := agentAuthorizationFixture()
 	service := NewAgentTaskDispatchApplicationService(authorization, agentTaskClock{now: time.Now()}, agentCredentialIDStub{})
-	valid := AgentTaskDispatchRequest{WorkspaceID: initiator.WorkspaceID, ProcessID: "process", NodeInstanceID: "node", NodeID: "task", Iteration: 1, TaskKey: "customer.review", TaskVersion: "1.0.0", Identity: agentmodel.AgentTaskIdentity{Mode: agentmodel.AgentTaskIdentityInherit}, Initiator: initiator}
+	valid := AgentTaskDispatchRequest{WorkspaceID: initiator.WorkspaceID, ProcessID: "process", NodeInstanceID: "node", NodeID: "task", Iteration: 1, TaskKey: "customer.review", TaskVersion: "1.0.0", Identity: agentsdk.AgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityInherit}, Initiator: initiator}
 	for name, mutate := range map[string]func(*AgentTaskDispatchRequest){
 		"workspace": func(r *AgentTaskDispatchRequest) { r.WorkspaceID = "other" },
 		"process":   func(r *AgentTaskDispatchRequest) { r.ProcessID = "" },
@@ -65,7 +66,7 @@ func TestAgentTaskDispatchPreparesStandaloneInteractiveHandoff(t *testing.T) {
 	dispatch := NewAgentTaskDispatchApplicationService(authorization, agentTaskClock{now: time.Date(2026, 8, 4, 12, 0, 0, 0, time.UTC)}, agentCredentialIDStub{})
 	run, err := dispatch.PrepareInteractive(t.Context(), AgentInteractiveTaskDispatchRequest{
 		InteractiveRunID: "interactive-1", WorkspaceID: initiator.WorkspaceID, TaskKey: "customer.review", TaskVersion: "1.0.0", IdempotencyKey: "interactive-1:handoff-1",
-		Identity: agentmodel.AgentTaskIdentity{Mode: agentmodel.AgentTaskIdentityInherit}, AllowedObjects: []string{"customer"}, AllowedActions: []string{"customer.update"}, AllowedOutcomes: []string{"success"}, Initiator: initiator,
+		Identity: agentsdk.AgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityInherit}, AllowedObjects: []string{"customer"}, AllowedActions: []string{"customer.update"}, AllowedOutcomes: []string{"success"}, Initiator: initiator,
 	})
 	if err != nil || run.InteractiveRunID != "interactive-1" || run.ProcessID != "" || run.NodeInstanceID != "" || run.IdempotencyKey != "interactive-1:handoff-1" || run.Identity.Execution.UserID != initiator.UserID {
 		t.Fatalf("run=%#v err=%v", run, err)
@@ -82,7 +83,7 @@ func TestAgentTaskDispatchBoundaryMatrix(t *testing.T) {
 	if defaults := NewAgentTaskDispatchApplicationService(authorization, nil, nil); defaults.clock == nil || defaults.ids == nil {
 		t.Fatal("default dispatch dependencies missing")
 	}
-	valid := AgentTaskDispatchRequest{WorkspaceID: initiator.WorkspaceID, ProcessID: "process", NodeInstanceID: "node", NodeID: "task", Iteration: 1, TaskKey: "customer.review", TaskVersion: "1.0.0", Identity: agentmodel.AgentTaskIdentity{Mode: agentmodel.AgentTaskIdentityInherit}, Initiator: initiator}
+	valid := AgentTaskDispatchRequest{WorkspaceID: initiator.WorkspaceID, ProcessID: "process", NodeInstanceID: "node", NodeID: "task", Iteration: 1, TaskKey: "customer.review", TaskVersion: "1.0.0", Identity: agentsdk.AgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityInherit}, Initiator: initiator}
 	if _, err := (*AgentTaskDispatchApplicationService)(nil).Prepare(t.Context(), valid); apperror.CodeOf(err) != "agent.task.dispatch_unavailable" {
 		t.Fatalf("nil prepare=%v", err)
 	}
@@ -111,7 +112,7 @@ func TestAgentTaskDispatchBoundaryMatrix(t *testing.T) {
 		t.Fatalf("zero clock run=%v", err)
 	}
 
-	interactive := AgentInteractiveTaskDispatchRequest{WorkspaceID: initiator.WorkspaceID, InteractiveRunID: "interactive", IdempotencyKey: "idem", TaskKey: "customer.review", TaskVersion: "1.0.0", Identity: agentmodel.AgentTaskIdentity{Mode: agentmodel.AgentTaskIdentityInherit}, Initiator: initiator}
+	interactive := AgentInteractiveTaskDispatchRequest{WorkspaceID: initiator.WorkspaceID, InteractiveRunID: "interactive", IdempotencyKey: "idem", TaskKey: "customer.review", TaskVersion: "1.0.0", Identity: agentsdk.AgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityInherit}, Initiator: initiator}
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 	if _, err := service.PrepareInteractive(cancelled, interactive); !errors.Is(err, context.Canceled) {

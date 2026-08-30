@@ -23,6 +23,42 @@ type integrationNotificationResourceReaderStub struct {
 	err         error
 }
 
+func registerIntegrationNotificationActionAuthorizers(registry *notificationfacade.ActionAuthorizerRegistry, resources integrationNotificationResourceReaderStub) {
+	if registry == nil {
+		return
+	}
+	registry.Register("integration_secret", func(ctx context.Context, id string, principal principalmodel.Principal) error {
+		if !integrationapplication.HasPermission(principal, integrationapplication.PermissionSecretManage) {
+			return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.notification.inbox_action_forbidden"}
+		}
+		values, err := resources.ListSecrets(ctx, principal.WorkspaceID)
+		if err != nil {
+			return err
+		}
+		for _, value := range values {
+			if value.Key == id {
+				return nil
+			}
+		}
+		return &apperror.AppError{Kind: apperror.KindNotFound, Code: "backend.notification.inbox_action_resource_not_found"}
+	})
+	registry.Register("integration_connection", func(ctx context.Context, id string, principal principalmodel.Principal) error {
+		if !integrationapplication.HasPermission(principal, integrationapplication.PermissionConnectionManage) {
+			return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.notification.inbox_action_forbidden"}
+		}
+		values, err := resources.ListConnections(ctx, principal.WorkspaceID)
+		if err != nil {
+			return err
+		}
+		for _, value := range values {
+			if value.Key == id {
+				return nil
+			}
+		}
+		return &apperror.AppError{Kind: apperror.KindNotFound, Code: "backend.notification.inbox_action_resource_not_found"}
+	})
+}
+
 func (s integrationNotificationResourceReaderStub) ListSecrets(context.Context, string) ([]integrationmodel.IntegrationSecret, error) {
 	return s.secrets, s.err
 }
@@ -69,7 +105,6 @@ func TestIntegrationNotificationActionsReauthorizeTenantAdminResourceAccess(t *t
 		})
 	}
 	registerIntegrationNotificationActionAuthorizers(nil, integrationNotificationResourceReaderStub{})
-	registerIntegrationNotificationActionAuthorizers(notificationfacade.NewActionAuthorizerRegistry(), nil)
 }
 
 func TestRuntimeNotificationActionAuthorizerBindingFailsClosedUntilWired(t *testing.T) {

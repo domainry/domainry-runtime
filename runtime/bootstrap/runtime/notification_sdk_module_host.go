@@ -165,7 +165,7 @@ func (m notificationSDKDeliveryMetrics) Metrics(ctx context.Context, workspaceID
 }
 
 type notificationSDKDeliveryGateway struct {
-	repository  integrationrepository.IntegrationDeliveryRepository
+	repository  integrationrepository.RuntimePublicationRepository
 	productName string
 	wakeup      func(integrationmodel.IntegrationOutboxMessage)
 }

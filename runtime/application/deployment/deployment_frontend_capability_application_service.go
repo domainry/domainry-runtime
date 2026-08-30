@@ -20,7 +20,6 @@ import (
 
 type FrontendBusinessBindings struct {
 	Objects               map[string]bool
-	Views                 map[string]bool
 	Actions               map[string]bool
 	Reports               map[string]bool
 	Fields                map[string]bool
@@ -211,7 +210,7 @@ func (s *DeploymentFrontendCapabilityApplicationService) enrichSnapshot(ctx cont
 }
 
 func hasFrontendBusinessBindings(entry deploymentmodel.FrontendCapabilitySupportEntry) bool {
-	return len(entry.ActorRoles) > 0 || len(entry.BusinessObjects) > 0 || len(entry.ViewKeys) > 0 ||
+	return len(entry.ActorRoles) > 0 || len(entry.BusinessObjects) > 0 ||
 		len(entry.ImplementedActions) > 0 || len(entry.ReportKeys) > 0 || len(entry.FieldKeys) > 0 || len(entry.AcceptanceClaims) > 0
 }
 

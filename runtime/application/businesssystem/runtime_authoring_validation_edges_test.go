@@ -105,7 +105,7 @@ func TestRuntimeAuthoringValidationDependencyAndSourceErrors(t *testing.T) {
 func TestRuntimeAuthoringValidationReusesCurrentDefinitionValidation(t *testing.T) {
 	dependencies := runtimeAuthoringEdgeDependencies()
 	dependencies.ValidateDefinitions = func(context.Context, []integrationmodel.ConnectorSchema) error {
-		return apperror.New(apperror.KindBadRequest, "backend.change_plan.candidate_invalid", nil, map[string]string{
+		return apperror.New(apperror.KindBadRequest, "backend.metadata.candidate_invalid", nil, map[string]string{
 			"resource_type": "scheduler", "resource_key": "daily-refresh", "diagnostic": "unknown workflow target",
 		})
 	}
@@ -180,7 +180,7 @@ func TestRuntimeAuthoringValidationDiagnosticOwnersAndHashEdges(t *testing.T) {
 
 	plain := runtimeAuthoringDefinitionDiagnostic(apperror.New(
 		apperror.KindBadRequest,
-		"backend.change_plan.candidate_invalid",
+		"backend.metadata.candidate_invalid",
 		nil,
 		nil,
 	))
@@ -189,7 +189,7 @@ func TestRuntimeAuthoringValidationDiagnosticOwnersAndHashEdges(t *testing.T) {
 	}
 	withoutKey := runtimeAuthoringDefinitionDiagnostic(apperror.New(
 		apperror.KindBadRequest,
-		"backend.change_plan.candidate_invalid",
+		"backend.metadata.candidate_invalid",
 		nil,
 		map[string]string{"resource_type": "workflow"},
 	))
@@ -199,7 +199,7 @@ func TestRuntimeAuthoringValidationDiagnosticOwnersAndHashEdges(t *testing.T) {
 	for _, resourceType := range []string{"object", "field", "action", "connector"} {
 		diagnostic := runtimeAuthoringDefinitionDiagnostic(apperror.New(
 			apperror.KindBadRequest,
-			"backend.change_plan.candidate_invalid",
+			"backend.metadata.candidate_invalid",
 			nil,
 			map[string]string{"resource_type": resourceType, "resource_key": "resource"},
 		))
@@ -234,7 +234,7 @@ func TestRuntimeAuthoringGlobalCheckConditionOutcomes(t *testing.T) {
 		FrontendCapabilities: changeplanmodel.FrontendCapabilities{StaleFrontendSupport: []changeplanmodel.FrontendSupportEntry{{SupportKey: "stale"}}},
 	}
 	runtimeAuthoringApplyGlobalChecks(&report, snapshot)
-	if report.Checks["connector_readiness"] != "invalid" || report.Checks["seed_writability"] != "invalid" || report.Checks["frontend_support"] != "invalid" {
+	if report.Checks["connector_readiness"] != "invalid" || report.Checks["frontend_support"] != "invalid" {
 		t.Fatalf("global checks=%#v diagnostics=%#v", report.Checks, report.Diagnostics)
 	}
 

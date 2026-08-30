@@ -7,6 +7,7 @@ import (
 	"time"
 
 	workerplatform "github.com/domainry/domainry-foundation/worker"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -135,6 +136,17 @@ func TestRuntimeNotificationWorkerSkipsMissingManagementService(t *testing.T) {
 	runtime.StartNotificationPublicationWorker(t.Context())
 	if len(runtime.workerCancels) != 0 {
 		t.Fatalf("notification worker started without management service: %d", len(runtime.workerCancels))
+	}
+}
+
+func TestIntegrationSaaSTopologyDoesNotStartOwnerWorkers(t *testing.T) {
+	runtime := &Runtime{integrationMode: integrationsdk.DeploymentModeSaaS}
+	runtime.StartIntegrationEventWorker(t.Context())
+	runtime.startConnectorProviderBackgroundWorker(t.Context())
+	runtime.startIntegrationInvocationReconciliationWorker(t.Context())
+	runtime.startIntegrationCredentialExpiryWorker(t.Context())
+	if len(runtime.workerCancels) != 0 || len(runtime.workerDone) != 0 {
+		t.Fatalf("Integration SaaS started local owner workers: cancels=%d done=%d", len(runtime.workerCancels), len(runtime.workerDone))
 	}
 }
 

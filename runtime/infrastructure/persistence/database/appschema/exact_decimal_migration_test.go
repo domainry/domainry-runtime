@@ -58,7 +58,7 @@ func TestSQLiteExactDecimalMigrationPreservesDataConstraintsAndEvidenceAcrossRes
 	}
 	var evidenceRows, rowCount int64
 	var beforeHash, afterHash string
-	if err := db.QueryRowContext(t.Context(), `SELECT COUNT(*), MAX(row_count), MAX(before_hash), MAX(after_hash) FROM metadata_exact_decimal_migrations WHERE object_key='migration_parent'`).Scan(&evidenceRows, &rowCount, &beforeHash, &afterHash); err != nil {
+	if err := db.QueryRowContext(t.Context(), `SELECT COUNT(*), MAX(row_count), MAX(before_hash), MAX(after_hash) FROM application_schema_exact_decimal_migrations WHERE object_key='migration_parent'`).Scan(&evidenceRows, &rowCount, &beforeHash, &afterHash); err != nil {
 		t.Fatal(err)
 	}
 	if evidenceRows != 1 || rowCount != 1 || beforeHash == "" || afterHash == "" {
@@ -96,7 +96,7 @@ func TestSQLiteExactDecimalMigrationPreservesDataConstraintsAndEvidenceAcrossRes
 	if err := restartedMetadata.SyncManifest(t.Context(), metadataTestInstallationScope(), manifest); err != nil {
 		t.Fatalf("runtime restart sync: %v", err)
 	}
-	if err := restarted.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM metadata_exact_decimal_migrations WHERE object_key='migration_parent'`).Scan(&evidenceRows); err != nil || evidenceRows != 1 {
+	if err := restarted.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM application_schema_exact_decimal_migrations WHERE object_key='migration_parent'`).Scan(&evidenceRows); err != nil || evidenceRows != 1 {
 		t.Fatalf("idempotent evidence rows=%d err=%v", evidenceRows, err)
 	}
 }
@@ -145,7 +145,7 @@ func TestSQLiteExactDecimalMigrationExternalFixture(t *testing.T) {
 			t.Fatal("nonconforming external fixture unexpectedly migrated")
 		}
 		var evidenceRows int
-		if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM metadata_exact_decimal_migrations`).Scan(&evidenceRows); err != nil || evidenceRows != 0 {
+		if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM application_schema_exact_decimal_migrations`).Scan(&evidenceRows); err != nil || evidenceRows != 0 {
 			t.Fatalf("blocked migration evidence rows=%d err=%v", evidenceRows, err)
 		}
 		var physicalType string
@@ -159,7 +159,7 @@ func TestSQLiteExactDecimalMigrationExternalFixture(t *testing.T) {
 		t.Fatal(syncErr)
 	}
 	var evidenceRows, migratedRows int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*), COALESCE(SUM(row_count),0) FROM metadata_exact_decimal_migrations`).Scan(&evidenceRows, &migratedRows); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*), COALESCE(SUM(row_count),0) FROM application_schema_exact_decimal_migrations`).Scan(&evidenceRows, &migratedRows); err != nil {
 		t.Fatal(err)
 	}
 	if evidenceRows == 0 {
@@ -216,7 +216,7 @@ func TestSQLiteExactDecimalMigrationRollsBackOnScaleLoss(t *testing.T) {
 		t.Fatalf("rollback value=%v err=%v", value, err)
 	}
 	var evidence int
-	if err := db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM metadata_exact_decimal_migrations WHERE object_key='migration_rollback'`).Scan(&evidence); err != nil || evidence != 0 {
+	if err := db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM application_schema_exact_decimal_migrations WHERE object_key='migration_rollback'`).Scan(&evidence); err != nil || evidence != 0 {
 		t.Fatalf("rollback evidence=%d err=%v", evidence, err)
 	}
 	if err := store.SyncManifest(t.Context(), metadataTestInstallationScope(), manifest); err == nil {

@@ -27,12 +27,8 @@ var operationsLeaseSpecs = []operationsLeaseSpec{
 	{owner: "record_mutation", table: "record_mutation_executions"},
 	{owner: "idempotency_cleanup", table: "idempotency_cleanup_leases"},
 	{owner: "automation", table: "automation_instruction_executions"},
-	{owner: "integration_event", table: "integration_events"},
-	{owner: "integration_outbox", table: "integration_outbox_messages"},
+	{owner: "integration_outbox", table: "runtime_publication_outbox"},
 	{owner: "transaction_boundary", table: "transaction_boundary_intents"},
-	{owner: "credential_refresh", table: "integration_credential_refresh_leases"},
-	{owner: "changeplan", table: "business_change_plan_operations"},
-	{owner: "lifecycle_cleanup", table: "lifecycle_cleanup_jobs"},
 }
 
 func (s OperationsStore) OperationsLeaseSnapshot(ctx context.Context, instanceID string, now time.Time) (operationsmodel.OperationsLeaseSnapshot, error) {

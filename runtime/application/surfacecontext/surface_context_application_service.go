@@ -86,7 +86,6 @@ func (s *SurfaceContextApplicationService) Context(ctx context.Context, request 
 				PageSize:     pageSize,
 				Search:       strings.TrimSpace(item.Search),
 				SearchFields: append([]string(nil), item.SearchFields...),
-				ViewKey:      strings.TrimSpace(item.ViewKey),
 				Filters:      item.Filters,
 				Sort:         item.Sort,
 			}, principal)

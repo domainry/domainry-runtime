@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/requestcontext"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"

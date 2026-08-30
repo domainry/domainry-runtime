@@ -36,10 +36,8 @@ import (
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	"github.com/domainry/domainry-runtime/runtime/transport/provision"
@@ -329,7 +327,7 @@ func TestProjectRuntimeReleaseIntegrityTracksLiveSchemaAndFrozenRegistries(t *te
 	if err := runtime.releaseIntegrity.RegistryReadiness(t.Context()); err != nil {
 		t.Fatalf("initial Registry readiness=%v", err)
 	}
-	if _, err := runtime.store.DB().ExecContext(t.Context(), "UPDATE metadata_catalog SET value = ? WHERE key = ?", "drifted-schema", "schema_hash"); err != nil {
+	if _, err := runtime.store.DB().ExecContext(t.Context(), "UPDATE _runtime_metadata_projection SET schema_hash = ? WHERE id = ?", "drifted-schema", "current"); err != nil {
 		t.Fatal(err)
 	}
 	if err := runtime.releaseIntegrity.SchemaReadiness(t.Context()); !errors.Is(err, deploymentapplication.ErrRuntimeReleaseSchemaIntegrity) {
@@ -339,7 +337,7 @@ func TestProjectRuntimeReleaseIntegrityTracksLiveSchemaAndFrozenRegistries(t *te
 
 func TestNewBuildsObjectlessConfiguringRuntimeForDirectAuthoring(t *testing.T) {
 	cfg := bootstrapTestConfig(t)
-	cfg.ManifestPath = writeManifestLoaderFixture(t, `{"schema_version":"2","template_id":"direct-authoring-project","version":"0.0.0-configuring","source_blueprint_id":"runtime-direct-authoring-v4","objects":[],"views":[]}`)
+	cfg.ManifestPath = writeManifestLoaderFixture(t, `{"schema_version":"2","template_id":"direct-authoring-project","version":"0.0.0-configuring","source_blueprint_id":"runtime-direct-authoring-v4","objects":[]}`)
 	cfg.AllowEmptyAuthoringManifest = true
 	cfg.RuntimeAllowDevIdentityHeaders = true
 	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
@@ -458,13 +456,13 @@ func TestGlobalValidationAndDeliveryGateMoveOwnedRuntimeToReady(t *testing.T) {
 	for _, category := range []string{
 		"schema", "resource_sources",
 		"runtime_state.automation", "runtime_state.integrations", "runtime_state.reports", "runtime_state.scheduler",
-		"seed_records", "frontend_capabilities",
+		"frontend_capabilities",
 	} {
 		if checks["configuration."+category] != "ok" {
 			t.Fatalf("global validation did not cover %s: %#v", category, report)
 		}
 	}
-	for _, check := range []string{"cross_resource_references", "cycles", "permission_closure", "foundation_usage", "connector_readiness", "seed_writability", "frontend_support"} {
+	for _, check := range []string{"cross_resource_references", "cycles", "permission_closure", "foundation_usage", "connector_readiness", "frontend_support"} {
 		if checks[check] != "ok" {
 			t.Fatalf("global validation did not pass %s: %#v", check, report)
 		}
@@ -613,18 +611,7 @@ func TestNewRejectsNilContextInvalidSecurityAndMissingManifest(t *testing.T) {
 	})
 }
 
-func TestNewPropagatesIntegrationNotificationAndServiceAssemblyFailures(t *testing.T) {
-	unknownConnection := bootstrapTestConfig(t)
-	unknownConnection.ManifestPath = writeManifestLoaderFixture(t, `{
-		"schema_version":"2",
-		"objects":[{"key":"account","fields":[{"key":"name","type":"text"}]}],
-		"integrations":{"connections":[{"key":"bad","connector_key":"missing","provider_key":"missing"}]}
-	}`)
-	unknownConnection.SkipManifestValidation = true
-	assertBootstrapPanic(t, func() {
-		New(t.Context(), unknownConnection, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
-	})
-
+func TestNewPropagatesNotificationAndServiceAssemblyFailures(t *testing.T) {
 	invalidNotification := bootstrapTestConfig(t)
 	invalidNotification.ManifestPath = writeManifestLoaderFixture(t, `{
 		"schema_version":"2",
@@ -703,33 +690,6 @@ func TestRestoreRuntimeMetadataHonorsCancelledContext(t *testing.T) {
 	cancel()
 	if _, err := restoreRuntimeMetadata(ctx, store, manifest); err == nil {
 		t.Fatal("cancelled metadata restoration must fail")
-	}
-}
-
-func TestRuntimeWiresCredentialExpirySourceToIdempotentNotificationPublisher(t *testing.T) {
-	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
-	t.Cleanup(func() { _ = runtime.CloseContext(t.Context()) })
-	now := runtime.worker.Clock.Now().UTC()
-	configStore := integrationpersistence.NewIntegrationConfigStore(runtime.store)
-	if _, err := configStore.UpsertSecret(t.Context(), runtime.cfg.NotificationWorkspaceID, integrationmodel.IntegrationSecret{
-		Key: "erp-token", WorkspaceID: runtime.cfg.NotificationWorkspaceID, Kind: "api_key", Status: "active", Description: "ERP token",
-		CreatedBy: "credential-owner", ExpiresAt: now.Add(24 * time.Hour).Format(time.RFC3339),
-	}); err != nil {
-		t.Fatal(err)
-	}
-	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "test wired credential expiry notification")
-	for attempt := 0; attempt < 2; attempt++ {
-		count, err := runtime.records.Applications().Integrations.ProcessCredentialExpiryNotifications(t.Context(), now, 100, scope)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if want := 1 - attempt; count != want {
-			t.Fatalf("attempt=%d published=%d want=%d", attempt, count, want)
-		}
-	}
-	var events int
-	if err := runtime.store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+runtime.store.TableIdentifier("notification_events")+" WHERE "+runtime.store.Identifier("workspace_id")+" = "+runtime.store.Placeholder(1)+" AND "+runtime.store.Identifier("source_event_id")+" LIKE "+runtime.store.Placeholder(2), runtime.cfg.NotificationWorkspaceID, "credential_expiry:erp-token:%").Scan(&events); err != nil || events != 1 {
-		t.Fatalf("events=%d err=%v", events, err)
 	}
 }
 

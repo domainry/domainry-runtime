@@ -2,12 +2,16 @@ package transport
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
+	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
@@ -19,10 +23,84 @@ import (
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	agentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/agent"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 )
+
+type transportAgentRepositoryBinding struct {
+	state agentrepository.AgentStateRepository
+}
+
+func (b transportAgentRepositoryBinding) AgentStateRepository() agentrepository.AgentStateRepository {
+	return b.state
+}
+func (transportAgentRepositoryBinding) AgentTaskRunRepository() agentrepository.AgentTaskRunRepository {
+	return nil
+}
+
+type transportAgentStateRepository struct {
+	mu     sync.Mutex
+	values map[string]agentmodel.AgentStateRecord
+}
+
+func newTransportAgentStateRepository() *transportAgentStateRepository {
+	return &transportAgentStateRepository{values: map[string]agentmodel.AgentStateRecord{}}
+}
+func transportAgentStateKey(workspace, kind, key string) string {
+	return strings.TrimSpace(workspace) + "\x00" + strings.TrimSpace(kind) + "\x00" + strings.TrimSpace(key)
+}
+func (r *transportAgentStateRepository) Put(ctx context.Context, workspace string, value agentmodel.AgentStateRecord) error {
+	return r.PutBatch(ctx, workspace, []agentmodel.AgentStateRecord{value})
+}
+func (r *transportAgentStateRepository) PutBatch(ctx context.Context, workspace string, values []agentmodel.AgentStateRecord) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, value := range values {
+		value.Payload = append(json.RawMessage(nil), value.Payload...)
+		r.values[transportAgentStateKey(workspace, value.Kind, value.Key)] = value
+	}
+	return nil
+}
+func (r *transportAgentStateRepository) CompareAndSwap(ctx context.Context, workspace string, value agentmodel.AgentStateRecord, expected int64) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	key := transportAgentStateKey(workspace, value.Kind, value.Key)
+	current, ok := r.values[key]
+	if !ok || current.UpdatedAt != expected {
+		return false, nil
+	}
+	r.values[key] = value
+	return true, nil
+}
+func (r *transportAgentStateRepository) Get(ctx context.Context, workspace, kind, key string) (agentmodel.AgentStateRecord, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return agentmodel.AgentStateRecord{}, false, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	value, ok := r.values[transportAgentStateKey(workspace, kind, key)]
+	return value, ok, nil
+}
+func (r *transportAgentStateRepository) List(ctx context.Context, workspace, kind, user, role string) ([]agentmodel.AgentStateRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	values := []agentmodel.AgentStateRecord{}
+	for _, value := range r.values {
+		if value.WorkspaceID == workspace && value.Kind == kind && (user == "" || value.UserID == user) && (role == "" || value.RoleKey == role) {
+			values = append(values, value)
+		}
+	}
+	return values, nil
+}
 
 func TestAssembleRuntimeHTTPServerRequiresConstructionContext(t *testing.T) {
 	defer func() {
@@ -190,16 +268,15 @@ func TestAssembleRuntimeHTTPServerPersistentGraphWiresOptionalOwners(t *testing.
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	if err := agentpersistence.NewAgentSchemaMigration(store).EnsureSchema(t.Context()); err != nil {
-		t.Fatal(err)
-	}
+	repositories := transportAgentRepositoryBinding{state: newTransportAgentStateRepository()}
 	services := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{
 		Store: store,
 	})
 	server := AssembleRuntimeHTTPServer(t.Context(), HTTPServerDependencies{
-		Records:         services,
-		IdentityBinding: transportIdentityBindingStub{},
-		Store:           store,
+		Records:           services,
+		IdentityBinding:   transportIdentityBindingStub{},
+		Store:             store,
+		AgentRepositories: repositories,
 		Config: config.Config{
 			UploadDir:                      "uploads",
 			RuntimeAllowDevIdentityHeaders: true,
@@ -232,7 +309,7 @@ func TestAssembleRuntimeHTTPServerPersistentGraphWiresOptionalOwners(t *testing.
 		t.Fatalf("metrics status=%d body=%s", response.Code, response.Body.String())
 	}
 
-	dependencies := HTTPServerDependencies{Records: services, Store: store}
+	dependencies := HTTPServerDependencies{Records: services, Store: store, AgentRepositories: repositories}
 	state, proposals := assembleAgentApplicationPorts(dependencies)
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "operator"}}, accessfixture.Bundle{Key: "admin", Permissions: []string{"workspace.admin"}})
 	normalized := proposals.NormalizeGuardedWrite(t.Context(), map[string]any{"tool_binding": map[string]any{"tool_name": "updateRecord", "object_key": "customer", "record_id": "customer-1", "data": map[string]any{"name": "updated"}}}, principal)

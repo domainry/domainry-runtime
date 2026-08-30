@@ -14,9 +14,9 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 

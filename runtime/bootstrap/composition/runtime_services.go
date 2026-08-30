@@ -3,20 +3,24 @@ package composition
 import (
 	"context"
 
+	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
-	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
+	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	reportsnapshot "github.com/domainry/domainry-runtime/runtime/application/report/snapshot"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
-	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	connector "github.com/domainry/domainry-connector-sdk"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
+	lifecyclerepository "github.com/domainry/domainry-lifecycle/repository"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
@@ -28,8 +32,6 @@ import (
 	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
 	deploymentrepository "github.com/domainry/domainry-runtime/runtime/domain/deployment/repository"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
-	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
-	lifecyclerepository "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/repository"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
@@ -71,25 +73,30 @@ type NotificationRenderRequest struct {
 // RuntimeServicesDependencies declares every explicit repository and external
 // port required by the Runtime composition root.
 type RuntimeServicesDependencies struct {
-	ProductBrandName                    string
-	ActionRuntimeRevision               string
-	ActionProjectRevision               string
-	ActionMetadataRevision              string
-	Records                             recordrepository.RecordRepository
-	ReportDatasetRows                   reportcontract.ReportDatasetRowReader
-	ReportObjectSQL                     reportcontract.ReportObjectSQLExecutor
-	ReportSnapshots                     reportcontract.ReportSnapshotStore
-	ReportSnapshotSources               reportcontract.ReportSnapshotSourceVersionReader
-	RecordExecutions                    recordcontract.RecordMutationExecutionStore
-	DataExchange                        dataexchange.Binding
-	DataExchangeProviders               *recordapplication.DataExchangeProviders
-	Audit                               auditrepository.AuditRepository
-	AuditApplication                    *auditapplication.AuditApplicationService
-	AuditExportTokenKey                 []byte
-	IntegrationConfig                   integrationrepository.IntegrationConfigRepository
-	IntegrationEvents                   integrationrepository.IntegrationEventRepository
+	ProductBrandName       string
+	ActionRuntimeRevision  string
+	ActionProjectRevision  string
+	ActionMetadataRevision string
+	Records                recordrepository.RecordRepository
+	ReportDatasetRows      reportcontract.ReportDatasetRowReader
+	ReportObjectSQL        reportcontract.ReportObjectSQLExecutor
+	ReportSnapshots        reportcontract.ReportSnapshotStore
+	ReportSnapshotSources  reportcontract.ReportSnapshotSourceVersionReader
+	RecordExecutions       recordcontract.RecordMutationExecutionStore
+	DataExchange           dataexchange.Binding
+	DataExchangeProviders  *recordapplication.DataExchangeProviders
+	Audit                  auditrepository.AuditRepository
+	AuditApplication       *auditapplication.AuditApplicationService
+	AuditExportTokenKey    []byte
+	IntegrationConfig      integrationrepository.IntegrationConfigRepository
+	IntegrationEvents      integrationrepository.IntegrationEventRepository
+	IntegrationPublication integrationrepository.RuntimePublicationRepository
+	// IntegrationDelivery is the deprecated combined test/compatibility port.
 	IntegrationDelivery                 integrationrepository.IntegrationDeliveryRepository
 	IntegrationWorker                   integrationrepository.IntegrationWorkerRepository
+	IntegrationPublicationWorker        integrationrepository.RuntimePublicationWorkerRepository
+	IntegrationOwnerDelivery            integrationsdk.Delivery
+	IntegrationOwnerCatalog             integrationsdk.Catalog
 	WorkerWakeups                       *workerplatform.WakeupBroker
 	WorkflowWorker                      workflowcontract.WorkflowWorkerStore
 	WorkflowDefinitions                 workflowcontract.WorkflowDefinitionStore
@@ -106,19 +113,18 @@ type RuntimeServicesDependencies struct {
 	ApplicationSchema                   appschemarepository.ApplicationSchemaRepository
 	AutomationWorker                    automationcontract.AutomationWorkerStore
 	AutomationExecutions                automationrepository.AutomationExecutionRepository
-	BusinessChangePlans                 changeplanrepository.ChangePlanRepository
 	BusinessEvidence                    changeplanrepository.ChangePlanEvidenceRepository
 	ActionExecutions                    actioncontract.ActionExecutionStore
 	ActionAssurance                     actioncontract.ActionAssuranceStore
 	AgentTaskRuns                       agentrepository.AgentTaskRunRepository
 	AgentPrincipals                     identitysdk.PrincipalResolver
-	AgentTaskRunner                     agentapplication.AgentTaskRunner
-	AgentInteractiveRunner              agentapplication.InteractiveAgentRunner
+	AgentTaskRunner                     agentsdk.TaskRunner
+	AgentInteractiveRunner              agentsdk.InteractiveRunner
 	AgentTaskCredentialKey              []byte
 	AgentTaskWorkerConfig               agentapplication.AgentTaskWorkerConfig
 	BusinessHandlers                    *runtimeext.BusinessHandlerRegistry
 	VerifyFileClean                     func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
-	PrepareOutboxPayload                integrationapplication.OutboxPayloadPreparer
+	PrepareOutboxPayload                publicationhandoff.PayloadPreparer
 	ConnectorProviders                  *connector.Registry
 	RuntimeStatus                       deploymentrepository.DeploymentRuntimeStatusRepository
 	FrontendCapabilities                deploymentrepository.DeploymentFrontendCapabilityRepository
@@ -126,10 +132,6 @@ type RuntimeServicesDependencies struct {
 	IdentityDirectory                   identitysdk.Directory
 	PartyDirectory                      partysdk.Directory
 	IntegrationAPILimiter               ratelimit.Limiter
-	IntegrationNotificationCompiler     integrationapplication.IntegrationNotificationCompiler
-	IntegrationNotificationPublisher    integrationapplication.IntegrationNotificationPublisher
-	IntegrationCredentialNotifications  integrationapplication.IntegrationCredentialNotificationCommitter
-	IntegrationCredentialExpirySource   integrationapplication.IntegrationCredentialExpirySource
 	IntegrationPolicyStore              resilience.Store
 	Lifecycle                           lifecyclerepository.LifecycleRepository
 	LifecycleExecutors                  []lifecyclecontract.OwnerLifecycleExecutor
@@ -164,7 +166,7 @@ func newRuntimeServicesAssembly(ctx context.Context, config RuntimeServicesConfi
 	queryPolicy := initializeSchemaAndRecordFoundation(services, deps)
 	initializeWorkflowAutomationAndGovernance(services, deps)
 	initializeRecordApplications(services)
-	services.applyManifestMetadata(manifest.TemplateID, manifest.Version, manifest.Name, manifest.Objects, manifest.Views, manifest.Actions, manifest.Workflows, manifest.AutomationRules, manifest.Dictionaries, manifest.Integrations, manifest.Reports, manifest.EntryPoints, manifest.Skills, manifest.Agents, manifest.IdentityProfileExtensions)
+	services.applyManifestMetadata(manifest.TemplateID, manifest.Version, manifest.Name, manifest.Objects, manifest.Actions, manifest.Workflows, manifest.AutomationRules, manifest.Dictionaries, manifest.Integrations, manifest.Reports, manifest.Skills, manifest.Agents, manifest.IdentityProfileExtensions)
 	services.applyManifestAgentMetadata(manifest.AgentTasks, manifest.AgentEntrypoints, manifest.AgentServicePrincipals)
 	initializeIntegrationAndBusinessSystem(ctx, services, manifest, deps, queryPolicy)
 	return services

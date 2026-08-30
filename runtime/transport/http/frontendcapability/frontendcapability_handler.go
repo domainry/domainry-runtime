@@ -52,19 +52,6 @@ func (h *FrontendCapabilityHandler) getOpsStatus(w http.ResponseWriter, r *http.
 	h.writeJSON(w, http.StatusOK, result)
 }
 
-func (h *FrontendCapabilityHandler) registerManifest(w http.ResponseWriter, r *http.Request) {
-	var request deploymentmodel.FrontendCapabilityManifest
-	if !h.decodeJSON(w, r, &request) {
-		return
-	}
-	result, err := h.service.RegisterManifest(r.Context(), request, h.principal(r))
-	if err != nil {
-		h.writeServiceError(w, r, err)
-		return
-	}
-	h.writeJSON(w, http.StatusOK, result)
-}
-
 func (h *FrontendCapabilityHandler) validateManifest(w http.ResponseWriter, r *http.Request) {
 	var request deploymentmodel.FrontendCapabilityManifest
 	if !h.decodeJSON(w, r, &request) {

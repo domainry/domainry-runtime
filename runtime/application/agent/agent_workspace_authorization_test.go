@@ -6,8 +6,8 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 

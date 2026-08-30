@@ -8,7 +8,7 @@ import (
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
 
-func TestManifestRejectsUnindexedHighRiskRelationAndViewFilter(t *testing.T) {
+func TestManifestRejectsUnindexedHighRiskRelation(t *testing.T) {
 	manifest := manifestmodel.ManifestSchema{
 		Objects: []definitionmodel.ObjectSchema{
 			{Key: "account", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text", Config: map[string]any{"indexed": true}}}},
@@ -18,15 +18,11 @@ func TestManifestRejectsUnindexedHighRiskRelationAndViewFilter(t *testing.T) {
 				{Key: "category", Type: "select"},
 			}},
 		},
-		Views: []definitionmodel.ViewSchema{{Key: "entries", ObjectKey: "entry", Config: map[string]any{"filters": []any{map[string]any{"field": "status"}}}}},
 	}
 	state := newValidationState(manifest, nil)
 	state.validateRequiredIndexes()
 	diagnostics := state.errs.Error()
-	for _, required := range []string{
-		"required_index_missing: relation entry.account_id",
-		"required_index_missing: filter entry.status",
-	} {
+	for _, required := range []string{"required_index_missing: relation entry.account_id"} {
 		if !strings.Contains(diagnostics, required) {
 			t.Fatalf("missing %q in diagnostics: %s", required, diagnostics)
 		}

@@ -14,14 +14,16 @@ import (
 
 	auditmodulehost "github.com/domainry/domainry-audit-sdk/modulehost"
 	auditmodule "github.com/domainry/domainry-audit/module"
-	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
+	lifecyclemigrations "github.com/domainry/domainry-lifecycle/migrations"
+	metadatamodule "github.com/domainry/domainry-metadata/module"
 	ormbuilder "github.com/domainry/domainry-orm/builder"
+	ormmigration "github.com/domainry/domainry-orm/migration"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/base"
 	runtimeschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/schema"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-const CurrentRuntimeSchemaVersion = "013_agent_schema_owner"
+const CurrentRuntimeSchemaVersion = "018_runtime_metadata_projection"
 
 const (
 	managedDatabaseCohortTable           = "_domainry_managed_runtime_database_cohort"
@@ -29,7 +31,7 @@ const (
 )
 
 func SupportedRuntimeSchemaUpgradeVersions() []string {
-	return []string{"001_connector_runtime_lifecycle", "002_data_lifecycle_governance", "003_operations_reliability", "004_runtime_release_cohort", "005_identity_workforce_separation", "006_party_foundation", "007_identity_global_names", "008_identity_account_directory", "009_managed_database_cohort", "010_external_identity_ownership", "011_notification_service_publication_outbox", "012_rate_limit_schema_owner"}
+	return []string{"001_connector_runtime_lifecycle", "002_data_lifecycle_governance", "003_operations_reliability", "004_runtime_release_cohort", "005_identity_workforce_separation", "006_party_foundation", "007_identity_global_names", "008_identity_account_directory", "009_managed_database_cohort", "010_external_identity_ownership", "011_notification_service_publication_outbox", "012_rate_limit_schema_owner", "013_agent_schema_owner"}
 }
 
 func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
@@ -38,6 +40,9 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 			return err
 		}
 		if err := s.verifyManagedDatabaseCohortMarker(ctx); err != nil {
+			return err
+		}
+		if err := s.ensureLifecycleModule(ctx); err != nil {
 			return err
 		}
 		return s.EnsureWorkspaceRLS(ctx)
@@ -70,15 +75,38 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 		if err := s.startRuntimeSchemaMigration(ctx, CurrentRuntimeSchemaVersion); err != nil {
 			return err
 		}
+		if err := s.retirePresentationDefinitionTables(ctx); err != nil {
+			return err
+		}
 	}
 	if err := s.ensureManagedDatabaseCohortMarker(ctx); err != nil {
 		return err
 	}
+	metadataMigrations, err := metadatamodule.SchemaMigrationsForDialect(s.SQLRenderer)
+	if err != nil {
+		return err
+	}
+	ownedMetadataMigrations := make([]ormmigration.Migration, len(metadataMigrations))
+	for index, migration := range metadataMigrations {
+		ownedMetadataMigrations[index] = ormmigration.Migration{Version: migration.Version, Name: migration.Name, Statements: append([]string(nil), migration.Statements...)}
+	}
+	if err := s.applyOwnedMigrationsLocked(ctx, "metadata", ownedMetadataMigrations); err != nil {
+		return err
+	}
+	s.metadataDefinitions = metadatamodule.NewDefinitionRepository(s.schemaDatabase(), s.SQLRenderer)
 	if err := s.EnsureApplicationSchema(ctx); err != nil {
 		return err
 	}
 	if err := s.EnsureEvidenceSchema(ctx); err != nil {
 		return err
+	}
+	// Legacy host and embedded-module migrations may still create the retired
+	// authoring tables while upgrading an older database. Drop them only after
+	// every contributing schema owner has completed its migration set.
+	if pending {
+		if err := s.retireOnlineMetadataAuthoringTables(ctx); err != nil {
+			return err
+		}
 	}
 	if err := s.ensureAuditModuleSchemaLocked(ctx); err != nil {
 		return err
@@ -86,19 +114,48 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 	if err := s.EnsureWorkflowProcessSchema(ctx); err != nil {
 		return err
 	}
-	if err := s.EnsureAgentSchema(ctx); err != nil {
-		return err
-	}
 	if err := s.EnsureRateLimitSchema(ctx); err != nil {
 		return err
 	}
-	if err := s.EnsureLifecycleSchema(ctx); err != nil {
+	if err := s.ensureLifecycleModuleLocked(ctx); err != nil {
 		return err
 	}
 	if err := s.recordRuntimeSchemaMigrationIfPending(ctx, pending, startedAt); err != nil {
 		return err
 	}
 	return s.EnsureWorkspaceRLS(ctx)
+}
+
+// retireOnlineMetadataAuthoringTables removes Runtime-owned state for the
+// retired online metadata editor. Project JSON artifacts are the sole metadata
+// source; the database contains only the current materialized projection.
+// domainry-orm has no DROP TABLE builder, so this bounded migration uses
+// host-qualified identifiers.
+func (s *RuntimeStore) retireOnlineMetadataAuthoringTables(ctx context.Context) error {
+	for _, table := range []string{
+		"business_change_plan_operations",
+		"business_change_plan_drafts",
+		"application_definition_versions",
+		"preference_definitions",
+		"rule_set_definitions",
+	} {
+		if _, err := s.schemaDatabase().ExecContext(ctx, "DROP TABLE IF EXISTS "+s.TableIdentifier(table)); err != nil {
+			return fmt.Errorf("drop retired online metadata authoring table %s: %w", table, err)
+		}
+	}
+	return nil
+}
+
+// retirePresentationDefinitionTables removes the unused presentation metadata
+// stores. domainry-orm has no DROP TABLE builder, so this migration uses bounded,
+// dialect-neutral DDL with host-qualified identifiers.
+func (s *RuntimeStore) retirePresentationDefinitionTables(ctx context.Context) error {
+	for _, table := range []string{"view_definitions", "surface_definitions", "component_definitions", "entrypoint_definitions"} {
+		if _, err := s.schemaDatabase().ExecContext(ctx, "DROP TABLE IF EXISTS "+s.TableIdentifier(table)); err != nil {
+			return fmt.Errorf("drop retired presentation definition table %s: %w", table, err)
+		}
+	}
+	return nil
 }
 
 func (s *RuntimeStore) ensureAuditModuleSchemaLocked(ctx context.Context) error {
@@ -123,18 +180,18 @@ func (s *RuntimeStore) ensureAuditModuleSchemaLocked(ctx context.Context) error 
 			return err
 		}
 	}
-	values := make([]notificationmodulehost.SchemaMigration, len(migrations))
+	values := make([]ormmigration.Migration, len(migrations))
 	for index, migration := range migrations {
-		values[index] = notificationmodulehost.SchemaMigration{Version: migration.Version, Name: migration.Name, Statements: append([]string(nil), migration.Statements...)}
+		values[index] = ormmigration.Migration{Version: migration.Version, Name: migration.Name, Statements: append([]string(nil), migration.Statements...)}
 		if migration.Baseline != nil {
-			baseline := notificationmodulehost.SchemaBaseline{Tables: make([]notificationmodulehost.SchemaTable, len(migration.Baseline.Tables))}
+			baseline := ormmigration.Baseline{Tables: make([]ormmigration.Table, len(migration.Baseline.Tables))}
 			for tableIndex, table := range migration.Baseline.Tables {
-				baseline.Tables[tableIndex] = notificationmodulehost.SchemaTable{Name: table.Name, Columns: make([]notificationmodulehost.SchemaColumn, len(table.Columns)), Indexes: make([]notificationmodulehost.SchemaIndex, len(table.Indexes))}
+				baseline.Tables[tableIndex] = ormmigration.Table{Name: table.Name, Columns: make([]ormmigration.Column, len(table.Columns)), Indexes: make([]ormmigration.Index, len(table.Indexes))}
 				for columnIndex, column := range table.Columns {
-					baseline.Tables[tableIndex].Columns[columnIndex] = notificationmodulehost.SchemaColumn{Name: column.Name, Type: column.Type, Nullable: column.Nullable, PrimaryKey: column.PrimaryKey}
+					baseline.Tables[tableIndex].Columns[columnIndex] = ormmigration.Column{Name: column.Name, Type: column.Type, Nullable: column.Nullable, PrimaryKey: column.PrimaryKey}
 				}
 				for indexIndex, item := range table.Indexes {
-					baseline.Tables[tableIndex].Indexes[indexIndex] = notificationmodulehost.SchemaIndex{Name: item.Name, Unique: item.Unique, Columns: append([]string(nil), item.Columns...)}
+					baseline.Tables[tableIndex].Indexes[indexIndex] = ormmigration.Index{Name: item.Name, Unique: item.Unique, Columns: append([]string(nil), item.Columns...)}
 				}
 			}
 			values[index].Baseline = &baseline
@@ -268,8 +325,8 @@ func (s *RuntimeStore) recordRuntimeSchemaMigrationIfPending(ctx context.Context
 func (s *RuntimeStore) verifyRuntimeSchema(ctx context.Context) error {
 	var checksum string
 	var dirty bool
-	query := "SELECT " + s.identifier("checksum") + ", " + s.identifier("dirty") + " FROM " + s.tableIdentifier("_schema_materializations") + " WHERE " + s.identifier("version") + " = " + s.placeholder(1)
-	if err := s.db.QueryRowContext(ctx, query, CurrentRuntimeSchemaVersion).Scan(&checksum, &dirty); err != nil {
+	query := "SELECT " + s.identifier("checksum") + ", " + s.identifier("dirty") + " FROM " + s.tableIdentifier("_schema_migrations") + " WHERE " + s.identifier("path") + " = " + s.placeholder(1)
+	if err := s.db.QueryRowContext(ctx, query, runtimeSchemaMigrationPath(CurrentRuntimeSchemaVersion)).Scan(&checksum, &dirty); err != nil {
 		return fmt.Errorf("verify runtime schema compatibility: %w", err)
 	}
 	if dirty {
@@ -287,9 +344,7 @@ type runtimeSchemaAssembler interface {
 	EnsureApplicationSchema(context.Context, runtimeschema.Store) error
 	EnsureEvidenceSchema(context.Context, runtimeschema.Store) error
 	EnsureWorkflowProcessSchema(context.Context, runtimeschema.Store) error
-	EnsureAgentSchema(context.Context, runtimeschema.Store) error
 	EnsureRateLimitSchema(context.Context, runtimeschema.Store) error
-	EnsureLifecycleSchema(context.Context, runtimeschema.Store) error
 }
 
 func (s *RuntimeStore) schemaDatabase() schemaDatabase {
@@ -329,13 +384,6 @@ func (s *RuntimeStore) EnsureWorkflowProcessSchema(ctx context.Context) error {
 	return runtimeschema.EnsureWorkflowProcessSchema(ctx, s)
 }
 
-func (s *RuntimeStore) EnsureAgentSchema(ctx context.Context) error {
-	if s.schemaAssembler != nil {
-		return s.schemaAssembler.EnsureAgentSchema(ctx, s)
-	}
-	return runtimeschema.EnsureAgentSchema(ctx, s)
-}
-
 func (s *RuntimeStore) EnsureRateLimitSchema(ctx context.Context) error {
 	if s.schemaAssembler != nil {
 		return s.schemaAssembler.EnsureRateLimitSchema(ctx, s)
@@ -344,10 +392,23 @@ func (s *RuntimeStore) EnsureRateLimitSchema(ctx context.Context) error {
 }
 
 func (s *RuntimeStore) EnsureLifecycleSchema(ctx context.Context) error {
-	if s.schemaAssembler != nil {
-		return s.schemaAssembler.EnsureLifecycleSchema(ctx, s)
+	return s.ensureLifecycleModule(ctx)
+}
+
+func (s *RuntimeStore) ensureLifecycleModule(ctx context.Context) error {
+	values, err := lifecyclemigrations.Migrations(s.RuntimeRenderer())
+	if err != nil {
+		return err
 	}
-	return runtimeschema.EnsureLifecycleSchema(ctx, s)
+	return s.ApplyORMOwnedMigrations(ctx, lifecyclemigrations.Owner, values)
+}
+
+func (s *RuntimeStore) ensureLifecycleModuleLocked(ctx context.Context) error {
+	values, err := lifecyclemigrations.Migrations(s.RuntimeRenderer())
+	if err != nil {
+		return err
+	}
+	return s.applyOwnedMigrationsLocked(ctx, lifecyclemigrations.Owner, values)
 }
 
 func (s *RuntimeStore) runtimeMigrationConfig() config.Config {
@@ -363,23 +424,15 @@ func (s *RuntimeStore) runtimeMigrationConfig() config.Config {
 
 func (s *RuntimeStore) runtimeSchemaMigrationPending(ctx context.Context, version string) (bool, error) {
 	db := s.schemaDatabase()
-	text := s.metadataIDColumnType()
-	if _, err := db.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.tableIdentifier("_schema_materializations")+" ("+s.identifier("version")+" "+text+" PRIMARY KEY, "+s.identifier("name")+" "+text+" NOT NULL DEFAULT '', "+s.identifier("kind")+" "+text+" NOT NULL DEFAULT 'runtime_schema_data', "+s.identifier("checksum")+" "+text+" NOT NULL DEFAULT '', "+s.identifier("dirty")+" BOOLEAN NOT NULL DEFAULT FALSE, "+s.identifier("applied_at")+" "+text+" NOT NULL, "+s.identifier("runtime_version")+" "+text+" NOT NULL DEFAULT '', "+s.identifier("duration_ms")+" BIGINT NOT NULL DEFAULT 0, "+s.identifier("operator")+" "+text+" NOT NULL DEFAULT '', "+s.identifier("instance_id")+" "+text+" NOT NULL DEFAULT '', "+s.identifier("backup_id")+" "+text+" NOT NULL DEFAULT '')"); err != nil {
+	if err := s.ensureMigrationLedger(ctx); err != nil {
 		return false, fmt.Errorf("prepare runtime schema migration ledger: %w", err)
 	}
-	columns := []struct{ name, definition string }{{"name", text + " NOT NULL DEFAULT ''"}, {"kind", text + " NOT NULL DEFAULT 'runtime_schema_data'"}, {"checksum", text + " NOT NULL DEFAULT ''"}, {"dirty", "BOOLEAN NOT NULL DEFAULT FALSE"}, {"runtime_version", text + " NOT NULL DEFAULT ''"}, {"duration_ms", "BIGINT NOT NULL DEFAULT 0"}, {"operator", text + " NOT NULL DEFAULT ''"}, {"instance_id", text + " NOT NULL DEFAULT ''"}, {"backup_id", text + " NOT NULL DEFAULT ''"}}
-	for _, column := range columns {
-		rows, queryErr := db.QueryContext(ctx, "SELECT "+s.identifier(column.name)+" FROM "+s.tableIdentifier("_schema_materializations")+" WHERE 1 = 0")
-		if queryErr == nil {
-			_ = rows.Close()
-			continue
-		}
-		if _, alterErr := db.ExecContext(ctx, "ALTER TABLE "+s.tableIdentifier("_schema_materializations")+" ADD COLUMN "+s.identifier(column.name)+" "+column.definition); alterErr != nil {
-			return false, alterErr
-		}
+	if err := s.adoptLegacyRuntimeMaterializationLedger(ctx); err != nil {
+		return false, err
 	}
+	path := runtimeSchemaMigrationPath(version)
 	var count int
-	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+s.tableIdentifier("_schema_materializations")+" WHERE "+s.identifier("version")+" = "+s.placeholder(1), version).Scan(&count); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+s.tableIdentifier("_schema_migrations")+" WHERE "+s.identifier("path")+" = "+s.placeholder(1), path).Scan(&count); err != nil {
 		return false, fmt.Errorf("check runtime schema migration: %w", err)
 	}
 	if count == 0 {
@@ -387,14 +440,14 @@ func (s *RuntimeStore) runtimeSchemaMigrationPending(ctx context.Context, versio
 	}
 	var checksum string
 	var dirty bool
-	if err := db.QueryRowContext(ctx, "SELECT "+s.identifier("checksum")+", "+s.identifier("dirty")+" FROM "+s.tableIdentifier("_schema_materializations")+" WHERE "+s.identifier("version")+" = "+s.placeholder(1), version).Scan(&checksum, &dirty); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT "+s.identifier("checksum")+", "+s.identifier("dirty")+" FROM "+s.tableIdentifier("_schema_migrations")+" WHERE "+s.identifier("path")+" = "+s.placeholder(1), path).Scan(&checksum, &dirty); err != nil {
 		return false, err
 	}
 	if dirty {
 		return false, fmt.Errorf("migration.dirty: runtime schema %s", version)
 	}
 	if strings.TrimSpace(checksum) == "" {
-		_, err := db.ExecContext(ctx, "UPDATE "+s.tableIdentifier("_schema_materializations")+" SET "+s.identifier("checksum")+" = "+s.placeholder(1)+" WHERE "+s.identifier("version")+" = "+s.placeholder(2), currentRuntimeSchemaChecksum(), version)
+		_, err := db.ExecContext(ctx, "UPDATE "+s.tableIdentifier("_schema_migrations")+" SET "+s.identifier("checksum")+" = "+s.placeholder(1)+" WHERE "+s.identifier("path")+" = "+s.placeholder(2), currentRuntimeSchemaChecksum(), path)
 		return false, err
 	}
 	if checksum != currentRuntimeSchemaChecksum() {
@@ -404,22 +457,73 @@ func (s *RuntimeStore) runtimeSchemaMigrationPending(ctx context.Context, versio
 }
 
 func (s *RuntimeStore) startRuntimeSchemaMigration(ctx context.Context, version string) error {
-	columns := []string{"version", "name", "kind", "checksum", "dirty", "applied_at", "runtime_version", "duration_ms", "operator", "instance_id", "backup_id"}
-	query := "INSERT INTO " + s.tableIdentifier("_schema_materializations") + " (" + strings.Join(quotedColumns(s, columns), ", ") + ") VALUES (" + strings.Join(placeholders(s, len(columns)), ", ") + ")"
-	_, err := s.schemaDatabase().ExecContext(ctx, query, version, "managed_database_cohort", "runtime_schema_data", currentRuntimeSchemaChecksum(), true, time.Now().UTC().Format(time.RFC3339), s.config.RuntimeVersion, 0, migrationOperator(s.config), migrationInstanceID(s.config), s.migrationBackupID)
+	columns := []string{"path", "version", "name", "kind", "checksum", "dirty", "applied_at", "runtime_version", "duration_ms", "operator", "instance_id", "backup_id"}
+	query := "INSERT INTO " + s.tableIdentifier("_schema_migrations") + " (" + strings.Join(quotedColumns(s, columns), ", ") + ") VALUES (" + strings.Join(placeholders(s, len(columns)), ", ") + ")"
+	_, err := s.schemaDatabase().ExecContext(ctx, query, runtimeSchemaMigrationPath(version), version, "managed_database_cohort", "runtime_schema", currentRuntimeSchemaChecksum(), true, time.Now().UTC().Format(time.RFC3339), s.config.RuntimeVersion, 0, migrationOperator(s.config), migrationInstanceID(s.config), s.migrationBackupID)
 	return err
 }
 
 func (s *RuntimeStore) recordRuntimeSchemaMigration(ctx context.Context, version string, duration time.Duration) error {
-	_, err := s.schemaDatabase().ExecContext(ctx, "UPDATE "+s.tableIdentifier("_schema_materializations")+" SET "+s.identifier("dirty")+" = FALSE, "+s.identifier("duration_ms")+" = "+s.placeholder(1)+", "+s.identifier("applied_at")+" = "+s.placeholder(2)+" WHERE "+s.identifier("version")+" = "+s.placeholder(3), duration.Milliseconds(), time.Now().UTC().Format(time.RFC3339), version)
+	_, err := s.schemaDatabase().ExecContext(ctx, "UPDATE "+s.tableIdentifier("_schema_migrations")+" SET "+s.identifier("dirty")+" = FALSE, "+s.identifier("duration_ms")+" = "+s.placeholder(1)+", "+s.identifier("applied_at")+" = "+s.placeholder(2)+" WHERE "+s.identifier("path")+" = "+s.placeholder(3), duration.Milliseconds(), time.Now().UTC().Format(time.RFC3339), runtimeSchemaMigrationPath(version))
 	if err != nil {
 		return fmt.Errorf("record runtime schema migration: %w", err)
 	}
 	return nil
 }
 
+func runtimeSchemaMigrationPath(version string) string {
+	return "runtime_schema_" + strings.TrimSpace(version)
+}
+
+func (s *RuntimeStore) adoptLegacyRuntimeMaterializationLedger(ctx context.Context) error {
+	exists, err := s.RuntimeTableExists(ctx, "_schema_materializations")
+	if errors.Is(err, sql.ErrNoRows) || !exists {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("inspect legacy runtime materialization ledger: %w", err)
+	}
+	columns := []string{"version", "name", "kind", "checksum", "dirty", "applied_at", "runtime_version", "duration_ms", "operator", "instance_id", "backup_id"}
+	rows, err := s.schemaDatabase().QueryContext(ctx, "SELECT "+strings.Join(quotedColumns(s, columns), ", ")+" FROM "+s.tableIdentifier("_schema_materializations"))
+	if err != nil {
+		return fmt.Errorf("read legacy runtime materialization ledger: %w", err)
+	}
+	type legacyMaterialization struct {
+		version, name, kind, checksum, appliedAt, runtimeVersion, operator, instanceID, backupID string
+		dirty                                                                                    bool
+		duration                                                                                 int64
+	}
+	values := []legacyMaterialization{}
+	for rows.Next() {
+		var value legacyMaterialization
+		if err := rows.Scan(&value.version, &value.name, &value.kind, &value.checksum, &value.dirty, &value.appliedAt, &value.runtimeVersion, &value.duration, &value.operator, &value.instanceID, &value.backupID); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		values = append(values, value)
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, value := range values {
+		query, args, buildErr := ormbuilder.NewInsertBuilder(s.RuntimeRenderer(), "_schema_migrations").Columns("path", "version", "name", "kind", "checksum", "dirty", "applied_at", "runtime_version", "duration_ms", "operator", "instance_id", "backup_id").Values(runtimeSchemaMigrationPath(value.version), value.version, value.name, "runtime_schema", value.checksum, value.dirty, value.appliedAt, value.runtimeVersion, value.duration, value.operator, value.instanceID, value.backupID).OnConflictDoNothing("path").Build()
+		if buildErr != nil {
+			return buildErr
+		}
+		if _, err := s.schemaDatabase().ExecContext(ctx, query, args...); err != nil {
+			return fmt.Errorf("adopt runtime materialization %s: %w", value.version, err)
+		}
+	}
+	// domainry-orm has no DROP TABLE builder. This bounded cleanup retires the
+	// former second migration ledger after every row has been adopted.
+	if _, err := s.schemaDatabase().ExecContext(ctx, "DROP TABLE "+s.tableIdentifier("_schema_materializations")); err != nil {
+		return fmt.Errorf("retire legacy runtime materialization ledger: %w", err)
+	}
+	return nil
+}
+
 func currentRuntimeSchemaChecksum() string {
-	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":metadata,object_fields,record_data,evidence,party,lifecycle,operations,indexes,report_snapshots,runtime_release_cohorts,runtime_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,agent"))
+	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":metadata_projection,object_fields,record_data,evidence,party,lifecycle,operations,indexes,runtime_release_cohorts,runtime_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,module_migrations"))
 	return hex.EncodeToString(sum[:])
 }
 

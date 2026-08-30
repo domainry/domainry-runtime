@@ -9,6 +9,5 @@ func (h *FrontendCapabilityHandler) RegisterRoutes(mux *http.ServeMux) {
 	}
 	mux.HandleFunc("GET /frontend-capability-manifest", authenticated(h.getManifest))
 	mux.HandleFunc("POST /frontend-capability-manifest/validate", authenticated(h.validateManifest))
-	mux.HandleFunc("PUT /frontend-capability-manifest", authenticated(h.registerManifest))
 	mux.HandleFunc("GET /operations/capability-status", authenticated(h.getOpsStatus))
 }

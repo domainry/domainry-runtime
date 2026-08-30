@@ -1,26 +1,29 @@
 package integration
 
-import actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
-
-// This file exposes cross-owner Integration use-case entrypoints.
-
 import (
+	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
+
+	// This file exposes cross-owner Integration use-case entrypoints.
+
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 
 	"context"
 	"fmt"
 
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 
 	"strings"
 	"time"
 
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
+
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 
 	apperrorbusiness "github.com/domainry/domainry-foundation/apperror"
+
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	integrationprojection "github.com/domainry/domainry-runtime/runtime/domain/integration/projection"
 )
 
@@ -85,7 +88,7 @@ func (s *IntegrationApplicationService) InvokeIntegrationAgentTool(ctx context.C
 		return integrationmodel.IntegrationAgentToolInvocationResult{}, err
 	}
 	snapshot := s.schema(ctx, resolvedPrincipal)
-	var agent agentmodel.AgentSchema
+	var agent agentsdk.AgentSchema
 	found := false
 	for _, candidate := range snapshot.Agents {
 		if candidate.Key == agentKey {
@@ -173,7 +176,7 @@ func (s *IntegrationApplicationService) InvokeIntegrationAgentTool(ctx context.C
 		}
 		status = invocation.Status
 	}
-	saved, err := s.deliveryRepo.InsertInvocation(ctx, invocation.WorkspaceID, invocation)
+	saved, err := s.invocationRepo.InsertInvocation(ctx, invocation.WorkspaceID, invocation)
 	if err != nil {
 		return integrationmodel.IntegrationAgentToolInvocationResult{}, err
 	}

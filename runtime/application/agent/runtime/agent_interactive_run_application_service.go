@@ -6,10 +6,11 @@ import (
 	"strings"
 	"sync"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -42,7 +43,7 @@ type AgentInteractiveRunCreateRequest struct {
 	AgentKey       string
 	EntrypointKey  string
 	IdempotencyKey string
-	Context        agentmodel.GlobalAgentContext
+	Context        agentsdk.GlobalContext
 	Principal      principalmodel.Principal
 }
 
@@ -140,8 +141,8 @@ func (s *AgentInteractiveRunApplicationService) Complete(ctx context.Context, ru
 	return run, nil
 }
 
-func (s *AgentInteractiveRunApplicationService) HandoffTask(ctx context.Context, run agentmodel.AgentInteractiveRun, route AgentRouteResult, task agentmodel.AgentTaskRun) (agentmodel.AgentInteractiveRun, bool, error) {
-	if s == nil || s.repository == nil || run.Status != agentmodel.AgentInteractiveRunRunning || route.RouteType != agentmodel.AgentRouteTask || strings.TrimSpace(route.TargetKey) != task.TaskKey || strings.TrimSpace(route.TargetVersion) != task.TaskVersion || strings.TrimSpace(route.IdempotencyKey) == "" {
+func (s *AgentInteractiveRunApplicationService) HandoffTask(ctx context.Context, run agentmodel.AgentInteractiveRun, route agentsdk.RouteResult, task agentmodel.AgentTaskRun) (agentmodel.AgentInteractiveRun, bool, error) {
+	if s == nil || s.repository == nil || run.Status != agentmodel.AgentInteractiveRunRunning || route.RouteType != agentsdk.AgentRouteTask || strings.TrimSpace(route.TargetKey) != task.TaskKey || strings.TrimSpace(route.TargetVersion) != task.TaskVersion || strings.TrimSpace(route.IdempotencyKey) == "" {
 		return agentmodel.AgentInteractiveRun{}, false, apperror.New(apperror.KindConflict, "agent.interactive.handoff_invalid", nil, nil)
 	}
 	task.InteractiveRunID = run.ID
@@ -156,8 +157,8 @@ func (s *AgentInteractiveRunApplicationService) HandoffTask(ctx context.Context,
 	return handedOff, replayed, err
 }
 
-func (s *AgentInteractiveRunApplicationService) HandoffWorkflow(ctx context.Context, run agentmodel.AgentInteractiveRun, route AgentRouteResult, processID string) (agentmodel.AgentInteractiveRun, bool, error) {
-	if s == nil || s.repository == nil || run.Status != agentmodel.AgentInteractiveRunRunning || route.RouteType != agentmodel.AgentRouteWorkflow || strings.TrimSpace(route.TargetKey) == "" || strings.TrimSpace(route.IdempotencyKey) == "" || strings.TrimSpace(processID) == "" {
+func (s *AgentInteractiveRunApplicationService) HandoffWorkflow(ctx context.Context, run agentmodel.AgentInteractiveRun, route agentsdk.RouteResult, processID string) (agentmodel.AgentInteractiveRun, bool, error) {
+	if s == nil || s.repository == nil || run.Status != agentmodel.AgentInteractiveRunRunning || route.RouteType != agentsdk.AgentRouteWorkflow || strings.TrimSpace(route.TargetKey) == "" || strings.TrimSpace(route.IdempotencyKey) == "" || strings.TrimSpace(processID) == "" {
 		return agentmodel.AgentInteractiveRun{}, false, apperror.New(apperror.KindConflict, "agent.interactive.handoff_invalid", nil, nil)
 	}
 	expected := run.Revision

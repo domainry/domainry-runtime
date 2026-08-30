@@ -68,7 +68,7 @@ func Definitions() []Definition {
 	for i := 0; i < typeOfConfig.NumField(); i++ {
 		field := typeOfConfig.Field(i)
 		name := configEnvName(field.Name)
-		secret := strings.Contains(name, "SECRET") || strings.Contains(name, "PASSWORD") || strings.Contains(name, "TOKEN") || strings.Contains(name, "DSN") || strings.Contains(name, "API_KEY") || strings.Contains(name, "ACCESS_TOKEN") || field.Name == "IntegrationDecryptOnlyKeys" || field.Name == "TelemetryHeaders"
+		secret := strings.Contains(name, "SECRET") || strings.Contains(name, "PASSWORD") || strings.Contains(name, "TOKEN") || strings.Contains(name, "DSN") || strings.Contains(name, "API_KEY") || strings.Contains(name, "ACCESS_TOKEN") || field.Name == "IntegrationDecryptOnlyKeys" || field.Name == "TelemetryHeaders" || field.Name == "RateLimitRedisURL"
 		defaultValue := valueOfDefaults.Field(i).Interface()
 		if field.Name == "BusinessSeedSyncDisabled" {
 			defaultValue = !defaultValue.(bool)
@@ -235,6 +235,18 @@ func (s Snapshot) StartupReport() []Provenance {
 func (c Config) Validate() error {
 	if err := c.ValidateSecurity(); err != nil {
 		return err
+	}
+	switch strings.ToLower(strings.TrimSpace(c.RateLimitBackend)) {
+	case "", "database":
+	case "redis":
+		if strings.TrimSpace(c.RateLimitRedisURL) == "" {
+			return errors.New("RATE_LIMIT_REDIS_URL is required when RATE_LIMIT_BACKEND=redis")
+		}
+		if c.RateLimitRedisConnectTimeout <= 0 {
+			return errors.New("RATE_LIMIT_REDIS_CONNECT_TIMEOUT must be positive")
+		}
+	default:
+		return fmt.Errorf("unsupported RATE_LIMIT_BACKEND %q", c.RateLimitBackend)
 	}
 	if strings.TrimSpace(c.IdentityWorkspaceID) == "" {
 		return fmt.Errorf("IDENTITY_WORKSPACE_ID is required")

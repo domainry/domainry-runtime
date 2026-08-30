@@ -37,10 +37,10 @@ func (a businessReferenceRuntimeAdapter) snapshotObjectRecords(ctx context.Conte
 }
 
 func (a businessReferenceRuntimeAdapter) ListIntegrationOutboxMessages(ctx context.Context, status, connectorKey string, limit int, principal principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error) {
-	if a.records == nil || a.records.integrationService == nil || a.records.integrationDeliveryRepo == nil {
+	if a.records == nil || a.records.integrationService == nil || a.records.integrationPublicationRepo == nil {
 		return []integrationmodel.IntegrationOutboxMessage{}, nil
 	}
-	return a.records.integrationService.ListIntegrationOutboxMessages(ctx, status, connectorKey, limit, principal)
+	return a.records.integrationService.ListIntegrationOutboxMessages(ctx, connectorKey, status, limit, principal)
 }
 
 type BusinessReferenceRuntimeProvider interface {

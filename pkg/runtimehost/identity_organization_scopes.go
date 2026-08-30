@@ -25,7 +25,7 @@ func projectIdentityDatabaseHandle(database *bootstrap.ProjectDatabase, filePath
 	if scopes != nil {
 		scopeResolver = scopes.Resolve
 	}
-	return identitysdk.DatabaseHandle{Pool: database.DB(), Driver: database.Driver(), Schema: database.DatabaseSchema(), FilePath: filePath, OrganizationScopeResolver: scopeResolver, BusinessProfileResolver: profileResolver}
+	return identitysdk.DatabaseHandle{Pool: database.DB(), Driver: database.Driver(), Schema: database.DatabaseSchema(), FilePath: filePath, OrganizationScopeResolver: scopeResolver, BusinessProfileResolver: profileResolver, Migrations: database}
 }
 
 // partyOrganizationScopeProjection breaks the assembly-time cycle without

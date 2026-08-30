@@ -152,6 +152,7 @@ func newWebhookHTTPTestRuntime(t *testing.T) (*persistence.RuntimeStore, http.Ha
 		store.Close()
 		t.Fatal(err)
 	}
+	applyIntegrationOwnerMigrations(t, store)
 	if _, err := integrationConfigRepository(store).UpsertConnection(t.Context(), "default", integrationmodel.IntegrationConnection{Key: "slack-primary", WorkspaceID: "default", ConnectorKey: "collaboration", ProviderKey: "slack", Status: "active", SecretRefs: map[string]string{"signing_secret": "env:SLACK_HTTP_SIGNING_SECRET"}}); err != nil {
 		store.Close()
 		t.Fatal(err)
@@ -186,7 +187,7 @@ func newWebhookHTTPTestRuntime(t *testing.T) (*persistence.RuntimeStore, http.Ha
 		t.Fatal(err)
 	}
 	providers.Freeze()
-	records := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "webhook", TemplateVersion: "1", Name: "Webhook", Objects: nil, Views: nil, Actions: nil, Workflows: nil, AutomationRules: nil, Dictionaries: nil, Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "collaboration", Providers: []integrationmodel.ConnectorProviderSchema{{Key: "slack"}, {Key: "teams"}}}, mockSchema}}, Reports: nil, Entrypoints: nil, Skills: nil, Agents: nil, Store: store, ConnectorProviders: providers})
+	records := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "webhook", TemplateVersion: "1", Name: "Webhook", Objects: nil, Actions: nil, Workflows: nil, AutomationRules: nil, Dictionaries: nil, Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "collaboration", Providers: []integrationmodel.ConnectorProviderSchema{{Key: "slack"}, {Key: "teams"}}}, mockSchema}}, Reports: nil, Skills: nil, Agents: nil, Store: store, ConnectorProviders: providers})
 	return store, runtimebootstrap.AssembleHTTPServer(t.Context(), records, runtimetestkit.IdentityBindingStub{}, t.TempDir(), nil, true).Routes()
 }
 

@@ -16,6 +16,7 @@ type operationsLeaseReleaseSpec struct {
 	table           string
 	idColumn        string
 	workspaceColumn string
+	publicationType string
 }
 
 var operationsLeaseReleaseSpecs = map[string]operationsLeaseReleaseSpec{
@@ -26,11 +27,8 @@ var operationsLeaseReleaseSpecs = map[string]operationsLeaseReleaseSpec{
 	"record_mutation":      {table: "record_mutation_executions", idColumn: "id", workspaceColumn: "workspace_id"},
 	"idempotency_cleanup":  {table: "idempotency_cleanup_leases", idColumn: "id"},
 	"automation":           {table: "automation_instruction_executions", idColumn: "id", workspaceColumn: "workspace_id"},
-	"integration_event":    {table: "integration_events", idColumn: "id", workspaceColumn: "workspace_id"},
-	"integration_outbox":   {table: "integration_outbox_messages", idColumn: "id", workspaceColumn: "workspace_id"},
+	"integration_outbox":   {table: "runtime_publication_outbox", idColumn: "id", workspaceColumn: "workspace_id", publicationType: "integration.connector"},
 	"transaction_boundary": {table: "transaction_boundary_intents", idColumn: "id", workspaceColumn: "workspace_id"},
-	"changeplan":           {table: "business_change_plan_operations", idColumn: "id", workspaceColumn: "workspace_id"},
-	"lifecycle_cleanup":    {table: "lifecycle_cleanup_jobs", idColumn: "id", workspaceColumn: "workspace_id"},
 }
 
 func (s OperationsStore) ForceReleaseOperationsLease(ctx context.Context, request operationsmodel.OperationsLeaseReleaseRequest) (operationsmodel.OperationsLeaseReleaseResult, bool, error) {
@@ -104,7 +102,11 @@ func (s OperationsStore) ForceReleaseOperationsLease(ctx context.Context, reques
 }
 
 func operationsLeaseReleasePredicate(spec operationsLeaseReleaseSpec, request operationsmodel.OperationsLeaseReleaseRequest) ormbuilder.Predicate {
-	return ormbuilder.Equal(spec.idColumn, request.ResourceID)
+	predicate := ormbuilder.Predicate(ormbuilder.Equal(spec.idColumn, request.ResourceID))
+	if spec.publicationType != "" {
+		predicate = ormbuilder.And(ormbuilder.Equal("publication_type", spec.publicationType), predicate)
+	}
+	return predicate
 }
 
 func (s OperationsStore) operationsLeaseReleaseIdentity(spec operationsLeaseReleaseSpec, request operationsmodel.OperationsLeaseReleaseRequest) (string, []any) {

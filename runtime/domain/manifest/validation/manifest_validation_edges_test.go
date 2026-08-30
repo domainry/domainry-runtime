@@ -250,7 +250,6 @@ func TestManifestObjectViewReferenceActionAndConnectionEdges(t *testing.T) {
 			{Key: "source", Fields: []definitionmodel.FieldSchema{{Key: ""}, {Key: "plain", Type: "text"}, {Key: "relation-no-target", Type: "relation"}, {Key: "relation", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "target"}}, {Key: "relation", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "missing"}}}, Validations: []definitionmodel.ValidationSchema{{FieldKey: "missing", Fields: []string{"missing"}}}},
 			{Key: "source", Fields: []definitionmodel.FieldSchema{{Key: "plain", Type: "text"}, {Key: "relation-no-target", Type: "relation"}, {Key: "relation", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "target"}}}}, {Key: "target", Fields: []definitionmodel.FieldSchema{{Key: "label"}}},
 		},
-		Views:   []definitionmodel.ViewSchema{{Key: "", ObjectKey: "missing"}, {Key: "same", ObjectKey: "source"}, {Key: "same", ObjectKey: "source"}},
 		Actions: []definitionmodel.ActionSchema{{Key: "", ObjectKey: "missing"}, {Key: "same", ObjectKey: "source"}, {Key: "same", ObjectKey: "source", RequiresPermission: "source.write"}},
 		Integrations: integrationmodel.IntegrationSchema{
 			Connectors: []integrationmodel.ConnectorSchema{
@@ -272,7 +271,6 @@ func TestManifestObjectViewReferenceActionAndConnectionEdges(t *testing.T) {
 	}
 	state := newValidationState(manifest, nil)
 	state.validateObjects()
-	state.validateViews()
 	state.validateActions()
 	state.validateIntegrationConnections()
 	if len(state.errs) < 10 {

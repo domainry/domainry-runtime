@@ -13,12 +13,8 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-var disableRemovedGeneratedActionsForManifest = func(ctx context.Context, store ApplicationSchemaStore, tx *sql.Tx, manifest manifestmodel.ManifestSchema, now string) error {
-	return store.disableRemovedGeneratedActions(ctx, tx, manifest, now)
-}
-
-var disableRemovedGeneratedAutomationRulesForManifest = func(ctx context.Context, store ApplicationSchemaStore, tx *sql.Tx, manifest manifestmodel.ManifestSchema, now string) error {
-	return store.disableRemovedGeneratedAutomationRules(ctx, tx, manifest, now)
+var removeDeletedGeneratedAutomationRulesForManifest = func(ctx context.Context, store ApplicationSchemaStore, tx *sql.Tx, manifest manifestmodel.ManifestSchema, now string) error {
+	return store.removeDeletedGeneratedAutomationRules(ctx, tx, manifest)
 }
 
 var closeGeneratedActionRows = func(rows *sql.Rows) error { return rows.Close() }
@@ -40,6 +36,9 @@ func (s ApplicationSchemaStore) EnsureManifestMetadata(ctx context.Context, seed
 		return fmt.Errorf("manifest metadata seed has no objects")
 	}
 	ctx = manifestMetadataContext(ctx)
+	if err := s.syncMetadataModuleDefinitions(ctx, seed); err != nil {
+		return err
+	}
 	seeded, err := s.manifestMetadataSeeded(ctx)
 	if err != nil {
 		return err
@@ -57,16 +56,8 @@ func (s ApplicationSchemaStore) EnsureManifestMetadata(ctx context.Context, seed
 	}
 	defer tx.Rollback()
 	now := time.Now().UTC().Format(time.RFC3339)
-	for key, value := range map[string]string{
-		"template_id":      seed.TemplateID,
-		"template_version": seed.Version,
-		"default_locale":   manifestDefaultLocale(seed),
-		"name":             seed.Name,
-		"schema_version":   seed.Version,
-	} {
-		if err := s.insertMetadataCatalog(ctx, tx, key, value, now); err != nil {
-			return err
-		}
+	if err := s.upsertMetadataProjection(ctx, tx, seed, now); err != nil {
+		return err
 	}
 	for _, seed := range seeds {
 		if err := s.insertMetadataResource(ctx, tx, seed, now); err != nil {
@@ -79,7 +70,7 @@ func (s ApplicationSchemaStore) EnsureManifestMetadata(ctx context.Context, seed
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit metadata seed: %w", err)
 	}
-	return nil
+	return s.refreshMetadataCatalogHash(ctx)
 }
 
 func (s ApplicationSchemaStore) SyncManifestMetadata(ctx context.Context, seed manifestmodel.ManifestSchema) error {
@@ -87,6 +78,9 @@ func (s ApplicationSchemaStore) SyncManifestMetadata(ctx context.Context, seed m
 		return fmt.Errorf("manifest metadata sync has no objects")
 	}
 	ctx = manifestMetadataContext(ctx)
+	if err := s.syncMetadataModuleDefinitions(ctx, seed); err != nil {
+		return err
+	}
 	seeds, err := manifestMetadataSeeds(seed)
 	if err != nil {
 		return err
@@ -97,26 +91,15 @@ func (s ApplicationSchemaStore) SyncManifestMetadata(ctx context.Context, seed m
 	}
 	defer tx.Rollback()
 	now := time.Now().UTC().Format(time.RFC3339)
-	for key, value := range map[string]string{
-		"template_id":      seed.TemplateID,
-		"template_version": seed.Version,
-		"default_locale":   manifestDefaultLocale(seed),
-		"name":             seed.Name,
-		"schema_version":   seed.Version,
-	} {
-		if err := s.upsertMetadataCatalog(ctx, tx, key, value, now); err != nil {
-			return err
-		}
+	if err := s.upsertMetadataProjection(ctx, tx, seed, now); err != nil {
+		return err
 	}
 	for _, seed := range seeds {
 		if err := s.syncMetadataResource(ctx, tx, seed, now); err != nil {
 			return err
 		}
 	}
-	if err := disableRemovedGeneratedActionsForManifest(ctx, s, tx, seed, now); err != nil {
-		return err
-	}
-	if err := disableRemovedGeneratedAutomationRulesForManifest(ctx, s, tx, seed, now); err != nil {
+	if err := removeDeletedGeneratedAutomationRulesForManifest(ctx, s, tx, seed, now); err != nil {
 		return err
 	}
 	if err := s.syncManifestLocalizedTexts(ctx, tx, seed, now); err != nil {
@@ -126,6 +109,36 @@ func (s ApplicationSchemaStore) SyncManifestMetadata(ctx context.Context, seed m
 		return fmt.Errorf("commit metadata sync: %w", err)
 	}
 	_ = s.refreshMetadataCatalogHash(ctx)
+	return nil
+}
+
+func (s ApplicationSchemaStore) upsertMetadataProjection(ctx context.Context, tx *sql.Tx, seed manifestmodel.ManifestSchema, now string) error {
+	_, sourceHash, err := metadataPayload(seed)
+	if err != nil {
+		return fmt.Errorf("hash metadata source: %w", err)
+	}
+	contractVersion := strings.TrimSpace(seed.SchemaVersion)
+	if contractVersion == "" {
+		contractVersion = "manifest-v1"
+	}
+	columns := []string{"id", "contract_version", "source_hash", "schema_hash", "artifact_version", "materializer_version", "status", "template_id", "default_locale", "name", "materialized_at"}
+	values := []any{"current", contractVersion, sourceHash, "", strings.TrimSpace(seed.Version), "runtime-materializer-v1", "materialized", strings.TrimSpace(seed.TemplateID), manifestDefaultLocale(seed), strings.TrimSpace(seed.Name), now}
+	insert := ormbuilder.NewInsertBuilder(s.store.SQLRenderer, "_runtime_metadata_projection").Columns(columns...).Values(values...)
+	assignments := make([]ormbuilder.Assignment, 0, len(columns)-1)
+	for _, column := range columns[1:] {
+		assignments = append(assignments, ormbuilder.AssignExpression(column, ormbuilder.InsertedValue(column)))
+	}
+	insert, err = s.store.Engine.ApplyUpsert(insert, []string{"id"}, assignments...)
+	if err != nil {
+		return fmt.Errorf("build metadata projection upsert: %w", err)
+	}
+	query, args, err := insert.Build()
+	if err != nil {
+		return fmt.Errorf("build metadata projection: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+		return fmt.Errorf("upsert metadata projection: %w", err)
+	}
 	return nil
 }
 
@@ -140,28 +153,16 @@ func manifestMetadataContext(ctx context.Context) context.Context {
 	return requestcontext.WithWorkspaceID(ctx, principalmodel.InstallationWorkspaceID)
 }
 
-func (s ApplicationSchemaStore) disableRemovedGeneratedActions(ctx context.Context, tx *sql.Tx, manifest manifestmodel.ManifestSchema, now string) error {
-	activeKeys := make(map[string]bool, len(manifest.Actions))
-	for _, action := range manifest.Actions {
-		if key := strings.TrimSpace(action.Key); key != "" {
-			activeKeys[key] = true
-		}
-	}
-	return s.disableRemovedGeneratedDefinitions(ctx, tx, "action_definitions", manifestGeneratedSourceID(manifest), activeKeys, now)
-}
-
-// disableRemovedGeneratedAutomationRules deactivates automation rule
-// definitions that were removed from the model: without it, rules deleted
-// before an evolution apply + repackage kept executing on an existing Runtime
-// database until the cohort was rebuilt from scratch.
-func (s ApplicationSchemaStore) disableRemovedGeneratedAutomationRules(ctx context.Context, tx *sql.Tx, manifest manifestmodel.ManifestSchema, now string) error {
+// removeDeletedGeneratedAutomationRules makes the current projection exactly
+// match source-controlled JSON. Runtime does not retain tombstones or history.
+func (s ApplicationSchemaStore) removeDeletedGeneratedAutomationRules(ctx context.Context, tx *sql.Tx, manifest manifestmodel.ManifestSchema) error {
 	activeKeys := make(map[string]bool, len(manifest.AutomationRules))
 	for _, rule := range manifest.AutomationRules {
 		if key := strings.TrimSpace(rule.Key); key != "" {
 			activeKeys[key] = true
 		}
 	}
-	return s.disableRemovedGeneratedDefinitions(ctx, tx, "automation_rule_definitions", manifestGeneratedSourceID(manifest), activeKeys, now)
+	return s.removeDeletedGeneratedDefinitions(ctx, tx, "automation_rule_definitions", manifestGeneratedSourceID(manifest), activeKeys)
 }
 
 func manifestGeneratedSourceID(manifest manifestmodel.ManifestSchema) string {
@@ -171,8 +172,8 @@ func manifestGeneratedSourceID(manifest manifestmodel.ManifestSchema) string {
 	return "generated-template"
 }
 
-func (s ApplicationSchemaStore) disableRemovedGeneratedDefinitions(ctx context.Context, tx *sql.Tx, table, sourceID string, activeKeys map[string]bool, now string) error {
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, table).Columns("resource_key").Where(ormbuilder.And(ormbuilder.Equal("source_kind", "generated"), ormbuilder.Equal("source_id", sourceID), ormbuilder.IsNull("disabled_at"))).Build()
+func (s ApplicationSchemaStore) removeDeletedGeneratedDefinitions(ctx context.Context, tx *sql.Tx, table, sourceID string, activeKeys map[string]bool) error {
+	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, table).Columns("resource_key").Where(ormbuilder.And(ormbuilder.Equal("source_kind", "generated"), ormbuilder.Equal("source_id", sourceID))).Build()
 	if buildErr != nil {
 		return fmt.Errorf("build generated %s manifest sync list: %w", table, buildErr)
 	}
@@ -199,12 +200,12 @@ func (s ApplicationSchemaStore) disableRemovedGeneratedDefinitions(ctx context.C
 		return fmt.Errorf("close generated %s for manifest sync: %w", table, err)
 	}
 	for _, key := range removedKeys {
-		update, updateArgs, buildErr := ormbuilder.NewUpdateBuilder(s.store.SQLRenderer, table).Set("disabled_at", now).Set("updated_at", now).Where(ormbuilder.Equal("resource_key", key)).Build()
+		remove, removeArgs, buildErr := ormbuilder.NewDeleteBuilder(s.store.SQLRenderer, table).Where(ormbuilder.Equal("resource_key", key)).Build()
 		if buildErr != nil {
-			return fmt.Errorf("build removed generated %s entry %s disable: %w", table, key, buildErr)
+			return fmt.Errorf("build deleted generated %s entry %s removal: %w", table, key, buildErr)
 		}
-		if _, err := tx.ExecContext(ctx, update, updateArgs...); err != nil {
-			return fmt.Errorf("disable removed generated %s entry %s: %w", table, key, err)
+		if _, err := tx.ExecContext(ctx, remove, removeArgs...); err != nil {
+			return fmt.Errorf("remove deleted generated %s entry %s: %w", table, key, err)
 		}
 	}
 	return nil

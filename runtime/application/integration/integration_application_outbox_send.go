@@ -79,14 +79,14 @@ func (s *IntegrationApplicationService) wakeIntegrationOutbox(message integratio
 }
 
 func (s *IntegrationApplicationService) ProcessIntegrationOutbox(ctx context.Context, locator IntegrationOutboxLocator) (OutboxProcessBatchResult, error) {
-	if s == nil || s.deliveryRepo == nil || s.workerRepo == nil {
+	if s == nil || s.publicationRepo == nil || s.publicationWorkerRepo == nil {
 		return OutboxProcessBatchResult{}, apperror.New(apperror.KindUnavailable, "backend.integration.outbox.worker_unavailable", nil, nil)
 	}
 	workspace, err := principalmodel.NewWorkspaceID(locator.WorkspaceID)
 	if err != nil || strings.TrimSpace(locator.MessageID) == "" {
 		return OutboxProcessBatchResult{}, apperror.New(apperror.KindBadRequest, "backend.integration.outbox.locator_invalid", err, nil)
 	}
-	reader, ok := s.deliveryRepo.(integrationrepository.IntegrationOutboxReader)
+	reader, ok := s.publicationRepo.(integrationrepository.IntegrationOutboxReader)
 	if !ok {
 		return OutboxProcessBatchResult{}, apperror.New(apperror.KindUnavailable, "backend.integration.outbox.reader_unavailable", nil, nil)
 	}

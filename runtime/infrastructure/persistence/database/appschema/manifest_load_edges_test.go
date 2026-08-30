@@ -3,8 +3,11 @@ package appschema
 import (
 	"context"
 	"database/sql/driver"
+	"encoding/json"
+	"errors"
 	"testing"
 
+	metadatarepository "github.com/domainry/domainry-metadata-sdk/repository"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
@@ -13,10 +16,10 @@ func TestLegacyManifestLoadEveryReadStageFailure(t *testing.T) {
 	baseDB := openStoreForGeneratedListTest(t)
 	t.Cleanup(func() { _ = baseDB.Close() })
 	base := NewApplicationSchemaStore(baseDB)
-	for stage := 0; stage <= 22; stage++ {
+	base.metadataDefinitions = manifestLoadMetadataRepository{snapshot: metadatarepository.Snapshot{Definitions: []metadatarepository.Definition{{ResourceType: "object", Key: "account", Payload: json.RawMessage(`{"key":"account","name":"Account"}`)}}}}
+	for stage := 0; stage < 5; stage++ {
 		steps := []metadataSQLQueryStep{metadataCatalogQueryStep()}
-		steps = append(steps, metadataSQLQueryStep{columns: []string{"payload"}, rows: [][]driver.Value{{`{"key":"account","name":"Account"}`}}})
-		for len(steps) < 23 {
+		for len(steps) < 5 {
 			steps = append(steps, metadataSQLQueryStep{columns: []string{"payload"}})
 		}
 		steps[stage] = metadataSQLQueryStep{err: errMetadataSQL}
@@ -26,19 +29,43 @@ func TestLegacyManifestLoadEveryReadStageFailure(t *testing.T) {
 		}
 	}
 	steps := []metadataSQLQueryStep{metadataCatalogQueryStep()}
-	for len(steps) < 23 {
+	for len(steps) < 5 {
 		steps = append(steps, metadataSQLQueryStep{columns: []string{"payload"}})
 	}
-	if _, err := scriptedApplicationSchemaStore(t, &metadataSQLState{querySteps: steps}, base).LoadManifestMetadata(t.Context()); err == nil {
+	emptyMetadata := base
+	emptyMetadata.metadataDefinitions = manifestLoadMetadataRepository{}
+	if _, err := scriptedApplicationSchemaStore(t, &metadataSQLState{querySteps: steps}, emptyMetadata).LoadManifestMetadata(t.Context()); err == nil {
 		t.Fatal("expected missing objects error")
 	}
-	steps = []metadataSQLQueryStep{metadataCatalogQueryStep(), {columns: []string{"payload"}, rows: [][]driver.Value{{`{"key":"account","name":"Account"}`}}}, {columns: []string{"payload"}}, {columns: []string{"payload"}, rows: [][]driver.Value{{`{"object_key":"account","type":"required"}`}}}}
-	for len(steps) < 23 {
+	steps = []metadataSQLQueryStep{metadataCatalogQueryStep()}
+	for len(steps) < 5 {
 		steps = append(steps, metadataSQLQueryStep{columns: []string{"payload"}})
 	}
 	manifest, err := scriptedApplicationSchemaStore(t, &metadataSQLState{querySteps: steps}, base).LoadManifestMetadata(t.Context())
 	if err != nil || len(manifest.Objects) != 1 || manifest.TemplateID != "template" {
 		t.Fatalf("manifest=%#v err=%v", manifest, err)
+	}
+}
+
+type manifestLoadMetadataRepository struct {
+	snapshot metadatarepository.Snapshot
+	err      error
+}
+
+func (r manifestLoadMetadataRepository) SyncDefinitions(context.Context, metadatarepository.Snapshot) error {
+	return r.err
+}
+func (r manifestLoadMetadataRepository) DefinitionSnapshot(context.Context) (metadatarepository.Snapshot, error) {
+	return r.snapshot, r.err
+}
+
+func TestManifestLoadPropagatesMetadataModuleFailure(t *testing.T) {
+	store := openStoreForGeneratedListTest(t)
+	defer store.Close()
+	repository := NewApplicationSchemaStore(store)
+	repository.metadataDefinitions = manifestLoadMetadataRepository{err: errors.New("metadata module unavailable")}
+	if _, err := repository.LoadManifestMetadata(t.Context()); err == nil {
+		t.Fatal("expected Metadata module failure")
 	}
 }
 
@@ -48,10 +75,9 @@ func TestLegacyManifestLoadPrimitiveFailures(t *testing.T) {
 	base := NewApplicationSchemaStore(baseDB)
 	for _, step := range []metadataSQLQueryStep{
 		{err: errMetadataSQL},
-		{columns: []string{"key"}, rows: [][]driver.Value{{"template_id"}}},
-		{columns: []string{"key", "value"}, rows: [][]driver.Value{{"template_id", "template"}}, nextErr: errMetadataSQL},
-		{columns: []string{"key", "value"}, rows: [][]driver.Value{{"template_id", ""}, {"template_version", "1"}}},
-		{columns: []string{"key", "value"}, rows: [][]driver.Value{{"template_id", "template"}, {"template_version", ""}}},
+		{columns: []string{"template_id"}, rows: [][]driver.Value{{"template"}}},
+		{columns: metadataCatalogQueryStep().columns, rows: [][]driver.Value{{"", "1", "en", "Application", "1", "schema-hash", "source-hash"}}},
+		{columns: metadataCatalogQueryStep().columns, rows: [][]driver.Value{{"template", "", "en", "Application", "1", "schema-hash", "source-hash"}}},
 	} {
 		if _, err := scriptedApplicationSchemaStore(t, &metadataSQLState{querySteps: []metadataSQLQueryStep{step}}, base).loadMetadataCatalog(t.Context()); err == nil {
 			t.Fatal("expected catalog error")

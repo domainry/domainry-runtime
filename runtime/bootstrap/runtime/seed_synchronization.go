@@ -17,7 +17,6 @@ import (
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	automationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automation"
-	changeplanpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/changeplan"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 )
 
@@ -43,7 +42,7 @@ func synchronizeRuntimeSeeds(ctx context.Context, store *persistence.RuntimeStor
 				if deriveErr != nil {
 					return deriveErr
 				}
-				return businessseed.SyncManifestBusinessSeeds(workspaceContext, recordStore, changeplanpersistence.NewBusinessEvidenceStore(store), seedManifest, businessseed.ManifestBusinessSeedRowsFromManifest(seedManifest))
+				return businessseed.SyncManifestBusinessSeeds(workspaceContext, recordStore, seedManifest, businessseed.ManifestBusinessSeedRowsFromManifest(seedManifest))
 			},
 			synchronizeAutomation: func() error {
 				return automationseed.SyncExecutionSeeds(workspaceContext, automationpersistence.NewAutomationExecutionStore(store), manifest.AutomationExecutionSeeds)

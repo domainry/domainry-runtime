@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
+	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
-	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"

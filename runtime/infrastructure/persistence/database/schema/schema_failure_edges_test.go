@@ -87,7 +87,6 @@ func TestSchemaAssemblersPropagateEveryOrderedMutationFailure(t *testing.T) {
 		ensure func(context.Context, runtimeschema.Store) error
 	}{
 		{name: "metadata", ensure: runtimeschema.EnsureApplicationSchema},
-		{name: "lifecycle", ensure: runtimeschema.EnsureLifecycleSchema},
 		{name: "workflow-process", ensure: runtimeschema.EnsureWorkflowProcessSchema},
 		{name: "evidence", ensure: runtimeschema.EnsureEvidenceSchema},
 	}
@@ -130,7 +129,6 @@ func TestSchemaAssemblersPreserveCancellation(t *testing.T) {
 	cancel()
 	for _, ensure := range []func(context.Context, runtimeschema.Store) error{
 		runtimeschema.EnsureApplicationSchema,
-		runtimeschema.EnsureLifecycleSchema,
 		runtimeschema.EnsureWorkflowProcessSchema,
 		runtimeschema.EnsureEvidenceSchema,
 	} {

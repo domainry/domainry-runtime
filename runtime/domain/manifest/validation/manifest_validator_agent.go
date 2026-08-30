@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"strings"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	agentcatalog "github.com/domainry/domainry-runtime/runtime/domain/agent/contract/catalog"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	invocationcontract "github.com/domainry/domainry-runtime/runtime/domain/manifest/contract/invocation"
 	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
 )
 
 func (state *validationState) validateAgents() {
-	skills := map[string]agentmodel.SkillSchema{}
+	skills := map[string]agentsdk.SkillSchema{}
 	for index, skill := range state.manifest.Skills {
 		path := fmt.Sprintf("skills[%d]", index)
 		key := strings.TrimSpace(skill.Key)
@@ -41,7 +41,7 @@ func (state *validationState) validateAgents() {
 		skills[key] = skill
 	}
 
-	agents := map[string]agentmodel.AgentSchema{}
+	agents := map[string]agentsdk.AgentSchema{}
 	for index, agent := range state.manifest.Agents {
 		path := fmt.Sprintf("agents[%d]", index)
 		key := strings.TrimSpace(agent.Key)
@@ -68,12 +68,12 @@ func (state *validationState) validateAgents() {
 		agents[key] = agent
 	}
 
-	servicePrincipals := map[string]agentmodel.AgentServicePrincipalBinding{}
+	servicePrincipals := map[string]agentsdk.AgentServicePrincipalBinding{}
 	for index, binding := range state.manifest.AgentServicePrincipals {
 		path := fmt.Sprintf("agent_service_principals[%d]", index)
 		key := strings.TrimSpace(binding.Key)
-		if binding.ContractVersion != agentmodel.AgentServicePrincipalContractVersion {
-			state.add(path+".contract_version", "must be %q", agentmodel.AgentServicePrincipalContractVersion)
+		if binding.ContractVersion != agentsdk.AgentServicePrincipalContractVersion {
+			state.add(path+".contract_version", "must be %q", agentsdk.AgentServicePrincipalContractVersion)
 		}
 		if !storageValuePattern.MatchString(key) {
 			state.add(path+".key", "must be a stable non-empty key")
@@ -92,12 +92,12 @@ func (state *validationState) validateAgents() {
 		servicePrincipals[key] = binding
 	}
 
-	tasks := map[string]agentmodel.AgentTaskDefinition{}
+	tasks := map[string]agentsdk.AgentTaskDefinition{}
 	for index, task := range state.manifest.AgentTasks {
 		path := fmt.Sprintf("agent_tasks[%d]", index)
 		key := strings.TrimSpace(task.Key)
-		if task.ContractVersion != agentmodel.AgentTaskContractVersion {
-			state.add(path+".contract_version", "must be %q", agentmodel.AgentTaskContractVersion)
+		if task.ContractVersion != agentsdk.AgentTaskContractVersion {
+			state.add(path+".contract_version", "must be %q", agentsdk.AgentTaskContractVersion)
 		}
 		if !storageValuePattern.MatchString(key) {
 			state.add(path+".key", "must be a stable non-empty key")
@@ -151,11 +151,11 @@ func (state *validationState) validateAgents() {
 		}
 		validateAgentTaskOutcomes(state, path+".allowed_outcomes", task.AllowedOutcomes)
 		switch task.SideEffectMode {
-		case agentmodel.AgentTaskSideEffectAnalysisOnly:
+		case agentsdk.AgentTaskSideEffectAnalysisOnly:
 			if len(task.AllowedActions) > 0 {
 				state.add(path+".allowed_actions", "must be empty for analysis_only")
 			}
-		case agentmodel.AgentTaskSideEffectProposalOnly, agentmodel.AgentTaskSideEffectActionAllowed:
+		case agentsdk.AgentTaskSideEffectProposalOnly, agentsdk.AgentTaskSideEffectActionAllowed:
 			if len(task.AllowedActions) == 0 {
 				state.add(path+".allowed_actions", "must declare at least one Business Action for %s", task.SideEffectMode)
 			}
@@ -175,30 +175,16 @@ func (state *validationState) validateAgents() {
 	for _, workflow := range state.manifest.Workflows {
 		workflows[strings.TrimSpace(workflow.Key)] = workflow
 	}
-	businessEntrypointKeys := map[string]bool{}
-	businessEntrypoints := map[string]definitionmodel.EntryPointSchema{}
-	for index, entrypoint := range state.manifest.EntryPoints {
-		path := fmt.Sprintf("entrypoints[%d]", index)
-		key := strings.TrimSpace(entrypoint.Key)
-		if len(entrypoint.RequiredPermissions) == 0 {
-			state.add(path+".required_permissions", "must declare at least one permission")
-		}
-		validateAgentStringSet(state, path+".required_permissions", entrypoint.RequiredPermissions)
-		businessEntrypointKeys[key] = true
-		businessEntrypoints[key] = entrypoint
-	}
 	agentEntrypointKeys := map[string]bool{}
 	defaultAssignments := map[string]string{}
 	for index, assignment := range state.manifest.AgentEntrypoints {
 		path := fmt.Sprintf("agent_entrypoints[%d]", index)
 		key := strings.TrimSpace(assignment.Key)
-		if assignment.ContractVersion != agentmodel.AgentEntrypointContractVersion {
-			state.add(path+".contract_version", "must be %q", agentmodel.AgentEntrypointContractVersion)
+		if assignment.ContractVersion != agentsdk.AgentEntrypointContractVersion {
+			state.add(path+".contract_version", "must be %q", agentsdk.AgentEntrypointContractVersion)
 		}
 		if !storageValuePattern.MatchString(key) {
 			state.add(path+".key", "must be a stable non-empty key")
-		} else if businessEntrypointKeys[key] {
-			state.add(path+".key", "conflicts with business entrypoint %q", key)
 		} else if agentEntrypointKeys[key] {
 			state.add(path+".key", "duplicate Agent entrypoint %q", key)
 		}
@@ -228,19 +214,6 @@ func (state *validationState) validateAgents() {
 			state.add(path+".route_patterns", "must declare at least one route pattern")
 		}
 		validateAgentStringSet(state, path+".route_patterns", assignment.RoutePatterns)
-		for routeIndex, pattern := range assignment.RoutePatterns {
-			if !validAgentRoutePattern(pattern, businessEntrypointKeys) {
-				state.add(fmt.Sprintf("%s.route_patterns[%d]", path, routeIndex), "references invalid or unknown route pattern %q", pattern)
-				continue
-			}
-			for routeKey, entrypoint := range businessEntrypoints {
-				if agentRoutePatternMatches(pattern, routeKey) {
-					if runtimeEntrypointSurface(entrypoint) != strings.TrimSpace(assignment.Surface) {
-						state.add(fmt.Sprintf("%s.route_patterns[%d]", path, routeIndex), "route %q belongs to Surface %q, not %q", routeKey, runtimeEntrypointSurface(entrypoint), assignment.Surface)
-					}
-				}
-			}
-		}
 		validateAgentStringSet(state, path+".allowed_task_keys", assignment.AllowedTaskKeys)
 		for taskIndex, taskKey := range assignment.AllowedTaskKeys {
 			task, exists := tasks[strings.TrimSpace(taskKey)]
@@ -283,7 +256,7 @@ func (state *validationState) validateAgents() {
 		if workflow.Graph == nil {
 			continue
 		}
-		nodeTasks := map[string]agentmodel.AgentTaskDefinition{}
+		nodeTasks := map[string]agentsdk.AgentTaskDefinition{}
 		for nodeIndex, node := range workflow.Graph.Nodes {
 			if strings.TrimSpace(node.Type) != "agent_task" {
 				continue
@@ -310,7 +283,7 @@ func (state *validationState) validateAgents() {
 					state.add(path+".task_key", "references disabled Agent Task %q", contract.TaskKey)
 				}
 			}
-			if contract.Identity.Mode == agentmodel.AgentTaskIdentityService {
+			if contract.Identity.Mode == agentsdk.AgentTaskIdentityService {
 				binding, found := servicePrincipals[strings.TrimSpace(contract.Identity.PrincipalKey)]
 				if !found {
 					state.add(path+".identity.principal_key", "references unknown service principal %q", contract.Identity.PrincipalKey)
@@ -344,7 +317,7 @@ func validateAgentTools(state *validationState, path string, values []string) {
 	}
 }
 
-func agentUsesObjectTool(agent agentmodel.AgentSchema, skills map[string]agentmodel.SkillSchema) bool {
+func agentUsesObjectTool(agent agentsdk.AgentSchema, skills map[string]agentsdk.SkillSchema) bool {
 	for _, toolKey := range agent.Tools {
 		if tool, exists := agentcatalog.Lookup(toolKey); exists && tool.RequiresAllowedObjects {
 			return true

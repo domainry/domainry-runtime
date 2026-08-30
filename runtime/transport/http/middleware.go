@@ -30,6 +30,29 @@ func (s *HTTPRouter) withSurfaceRouteGroupPolicy(group SurfaceRouteGroup, next h
 		if policy.MaxJSONBodyBytes > 0 && r.Body != nil {
 			r.Body = http.MaxBytesReader(w, r.Body, policy.MaxJSONBodyBytes)
 		}
+		if s.rateLimiter != nil && policy.RateLimitPerMinute > 0 && !capacityProbePath(r.URL.Path) {
+			decision, err := s.rateLimiter.Allow(r.Context(), "http_surface:"+string(group), policy.RateLimitPerMinute, time.Minute)
+			if err != nil {
+				w.Header().Set("Retry-After", "1")
+				s.appendSecurityAudit(r, "surface_listener_rate_limit_unavailable", "Runtime listener rate-limit backend unavailable", map[string]any{
+					"group": group, "audit_class": policy.AuditClass,
+				})
+				writeError(w, r, http.StatusServiceUnavailable, "capacity.surface_rate_limit_unavailable")
+				return
+			}
+			if !decision.Allowed {
+				retrySeconds := int64((decision.RetryAfter + time.Second - 1) / time.Second)
+				if retrySeconds < 1 {
+					retrySeconds = 1
+				}
+				w.Header().Set("Retry-After", strconv.FormatInt(retrySeconds, 10))
+				s.appendSecurityAudit(r, "surface_listener_rate_limited", "Runtime listener rate limit denied", map[string]any{
+					"group": group, "audit_class": policy.AuditClass,
+				})
+				writeError(w, r, http.StatusTooManyRequests, "capacity.surface_rate_limited")
+				return
+			}
+		}
 		if controller != nil && !capacityProbePath(r.URL.Path) {
 			principal := s.principalFromRequest(r)
 			workspaceID := strings.TrimSpace(principal.WorkspaceID)

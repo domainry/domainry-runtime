@@ -12,7 +12,6 @@ import (
 
 	"sort"
 	"strings"
-	"time"
 
 	ormbuilder "github.com/domainry/domainry-orm/builder"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
@@ -97,10 +96,6 @@ func manifestLocalizedTextSeeds(seed manifestmodel.ManifestSchema) []appschemamo
 			addI18n("validation", key, validation.I18n)
 		}
 	}
-	for _, view := range seed.Views {
-		addDefault("view", view.Key, "name", view.Name)
-		addI18n("view", view.Key, view.I18n)
-	}
 	for _, action := range seed.Actions {
 		addDefault("action", action.Key, "label", action.Label)
 		addI18n("action", action.Key, action.I18n)
@@ -139,11 +134,6 @@ func manifestLocalizedTextSeeds(seed manifestmodel.ManifestSchema) []appschemamo
 	for _, control := range seed.ReportExportControls {
 		addDefault("report_export_control", control.Key, "name", control.Name)
 		addI18n("report_export_control", control.Key, control.I18n)
-	}
-	for _, entrypoint := range seed.EntryPoints {
-		addDefault("entrypoint", entrypoint.Key, "name", entrypoint.Name)
-		addDefault("entrypoint", entrypoint.Key, "description", entrypoint.Description)
-		addI18n("entrypoint", entrypoint.Key, entrypoint.I18n)
 	}
 	for _, skill := range seed.Skills {
 		addDefault("skill", skill.Key, "name", skill.Name)
@@ -320,42 +310,6 @@ func (s ApplicationSchemaStore) syncLocalizedText(ctx context.Context, tx *sql.T
 		return fmt.Errorf("update localized text %s/%s/%s/%s: %w", seed.EntityType, seed.EntityKey, seed.Property, seed.Locale, err)
 	}
 	return nil
-}
-
-func (s ApplicationSchemaStore) UpsertLocalizedText(ctx context.Context, workspaceID string, req appschemamodel.LocalizedTextUpsertRequest) (appschemamodel.LocalizedText, error) {
-	workspaceID, err := requireMetadataWorkspaceID(workspaceID, req.WorkspaceID)
-	if err != nil {
-		return appschemamodel.LocalizedText{}, err
-	}
-	req.WorkspaceID = workspaceID
-	text := normalizeLocalizedText(appschemamodel.LocalizedText{
-		WorkspaceID: req.WorkspaceID,
-		EntityType:  req.EntityType,
-		EntityKey:   req.EntityKey,
-		Property:    req.Property,
-		Locale:      req.Locale,
-		Text:        req.Text,
-		SourceKind:  firstNonEmptyLocalizedText(req.SourceKind, "user"),
-		SourceID:    firstNonEmptyLocalizedText(req.SourceID, "metadata_api"),
-	})
-	if text.EntityType == "" || text.EntityKey == "" || text.Property == "" || text.Locale == "" || text.Text == "" {
-		return appschemamodel.LocalizedText{}, fmt.Errorf("localized text requires entity_type, entity_key, property, locale, and text")
-	}
-	tx, err := s.database().BeginTx(ctx, nil)
-	if err != nil {
-		return appschemamodel.LocalizedText{}, fmt.Errorf("begin localized text upsert: %w", err)
-	}
-	defer tx.Rollback()
-	now := time.Now().UTC().Format(time.RFC3339)
-	if err := s.upsertLocalizedText(ctx, tx, text, now); err != nil {
-		return appschemamodel.LocalizedText{}, err
-	}
-	if err := tx.Commit(); err != nil {
-		return appschemamodel.LocalizedText{}, fmt.Errorf("commit localized text upsert: %w", err)
-	}
-	text.CreatedAt = now
-	text.UpdatedAt = now
-	return text, nil
 }
 
 func (s ApplicationSchemaStore) upsertLocalizedText(ctx context.Context, tx *sql.Tx, text appschemamodel.LocalizedText, now string) error {

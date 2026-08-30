@@ -9,14 +9,15 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/requestcontext"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 type AgentTaskRunnerExecutorDependencies struct {
-	Runner        AgentTaskRunner
+	Runner        agentsdk.TaskRunner
 	Authorization *AgentAuthorizationApplicationService
 	Credentials   *AgentTaskCredentialApplicationService
 	PollInterval  time.Duration
@@ -46,12 +47,12 @@ func (e *AgentTaskRunnerExecutor) ExecuteAgentTask(ctx context.Context, run agen
 	if err != nil {
 		return AgentTaskRunCompletion{}, err
 	}
-	request := AgentTaskRunnerRequest{TaskRunID: run.ID, ProcessID: run.ProcessID, WorkspaceID: run.WorkspaceID, Task: authorization.Task, Identity: authorization.Identity, Input: run.Input, ExecutionCredential: credential, CorrelationID: run.CorrelationID, IdempotencyKey: run.IdempotencyKey}
+	request := agentsdk.TaskRequest{TaskRunID: run.ID, ProcessID: run.ProcessID, WorkspaceID: run.WorkspaceID, Task: authorization.Task, Identity: authorization.Identity, Input: run.Input, ExecutionCredential: credential, CorrelationID: run.CorrelationID, IdempotencyKey: run.IdempotencyKey}
 	if run.TimeoutSeconds > 0 {
 		request.Deadline = time.Now().UTC().Add(time.Duration(run.TimeoutSeconds) * time.Second)
 	}
 	externalRunID := latestAgentExternalRunID(run)
-	var result AgentTaskRunnerResult
+	var result agentsdk.TaskResult
 	if externalRunID == "" {
 		result, err = e.dependencies.Runner.Start(ctx, request)
 		externalRunID = strings.TrimSpace(result.ExternalRunID)
@@ -61,7 +62,7 @@ func (e *AgentTaskRunnerExecutor) ExecuteAgentTask(ctx context.Context, run agen
 	if err != nil {
 		return AgentTaskRunCompletion{}, agentRunnerError(result, externalRunID, err)
 	}
-	for result.Status == AgentProviderRunAccepted || result.Status == AgentProviderRunRunning {
+	for result.Status == agentsdk.ProviderRunAccepted || result.Status == agentsdk.ProviderRunRunning {
 		if externalRunID == "" {
 			return AgentTaskRunCompletion{}, &AgentTaskExecutionError{Class: "provider_contract", Code: "agent.runner.external_run_id_required"}
 		}
@@ -87,7 +88,7 @@ func (e *AgentTaskRunnerExecutor) CancelAgentTask(ctx context.Context, run agent
 		return AgentTaskRunCompletion{Status: agentmodel.AgentTaskRunCancelled, Outcome: "cancelled", ErrorCode: "agent.task.cancelled"}, nil
 	}
 	result, err := e.dependencies.Runner.Cancel(ctx, externalRunID, run.IdempotencyKey)
-	if err != nil || result.Status == AgentProviderRunUnknown || result.Status == AgentProviderRunRunning {
+	if err != nil || result.Status == agentsdk.ProviderRunUnknown || result.Status == agentsdk.ProviderRunRunning {
 		return AgentTaskRunCompletion{Status: agentmodel.AgentTaskRunCancelled, Outcome: "cancelled", ErrorCode: "agent.task.cancel_uncertain", Reconciliation: agentmodel.AgentTaskReconciliation{Required: true, ExternalRunID: externalRunID, State: "cancel_uncertain", Reason: "provider_cancel_unconfirmed"}}, nil
 	}
 	return AgentTaskRunCompletion{Status: agentmodel.AgentTaskRunCancelled, Outcome: "cancelled", ErrorCode: "agent.task.cancelled", Reconciliation: agentmodel.AgentTaskReconciliation{ExternalRunID: externalRunID, State: "cancelled"}}, nil
@@ -101,12 +102,12 @@ func (e *AgentTaskRunnerExecutor) authorize(ctx context.Context, run agentmodel.
 		decision := run.Evidence.Authorization[count-1]
 		objects, actions, outcomes = decision.AllowedObjects, decision.AllowedActions, decision.AllowedOutcomes
 	}
-	return e.dependencies.Authorization.AuthorizeTask(ctx, AgentTaskAuthorizationRequest{Initiator: initiator, Identity: agentmodel.AgentTaskIdentity{Mode: run.Identity.Mode, PrincipalKey: run.Identity.ServicePrincipalKey}, ExpectedRotationVersion: run.Identity.ServiceRotationVersion, TaskKey: run.TaskKey, TaskVersion: run.TaskVersion, NodeAllowedObjects: objects, NodeAllowedActions: actions, NodeAllowedOutcomes: outcomes})
+	return e.dependencies.Authorization.AuthorizeTask(ctx, AgentTaskAuthorizationRequest{Initiator: initiator, Identity: agentsdk.AgentTaskIdentity{Mode: run.Identity.Mode, PrincipalKey: run.Identity.ServicePrincipalKey}, ExpectedRotationVersion: run.Identity.ServiceRotationVersion, TaskKey: run.TaskKey, TaskVersion: run.TaskVersion, NodeAllowedObjects: objects, NodeAllowedActions: actions, NodeAllowedOutcomes: outcomes})
 }
 
-func (e *AgentTaskRunnerExecutor) completion(authorization AgentTaskAuthorization, result AgentTaskRunnerResult, externalRunID string, evidence agentmodel.AgentTaskExecutionEvidence) (AgentTaskRunCompletion, error) {
+func (e *AgentTaskRunnerExecutor) completion(authorization AgentTaskAuthorization, result agentsdk.TaskResult, externalRunID string, evidence agentmodel.AgentTaskExecutionEvidence) (AgentTaskRunCompletion, error) {
 	switch result.Status {
-	case AgentProviderRunCompleted:
+	case agentsdk.ProviderRunCompleted:
 		if !agentContains(authorization.AllowedOutcomes, result.Outcome) {
 			return AgentTaskRunCompletion{}, &AgentTaskExecutionError{Class: "output_validation", Code: "agent.runner.outcome_invalid", ExternalRunID: externalRunID}
 		}
@@ -117,16 +118,16 @@ func (e *AgentTaskRunnerExecutor) completion(authorization AgentTaskAuthorizatio
 		evidence.TaskVersion, evidence.AgentKey, evidence.Model, evidence.Usage = authorization.Task.Version, authorization.Task.AgentKey, result.Model, result.Usage
 		evidence.Authorization = append(evidence.Authorization, authorization.Evidence)
 		return AgentTaskRunCompletion{Status: status, Outcome: result.Outcome, Output: result.Output, ExternalRunID: externalRunID, RawEvidenceRef: agentStableHash(result.RawEvidence), Evidence: evidence, Reconciliation: agentmodel.AgentTaskReconciliation{ExternalRunID: externalRunID, State: "completed"}}, nil
-	case AgentProviderRunCancelled:
+	case agentsdk.ProviderRunCancelled:
 		return AgentTaskRunCompletion{Status: agentmodel.AgentTaskRunCancelled, Outcome: "cancelled", ErrorCode: "agent.runner.cancelled"}, nil
-	case AgentProviderRunFailed:
+	case agentsdk.ProviderRunFailed:
 		return AgentTaskRunCompletion{}, agentRunnerError(result, externalRunID, nil)
 	default:
 		return AgentTaskRunCompletion{}, &AgentTaskExecutionError{Class: "provider_unknown", Code: "agent.runner.status_unknown", Retryable: true, ExternalRunID: externalRunID, Reconciliation: agentmodel.AgentTaskReconciliation{Required: true, ExternalRunID: externalRunID, State: "poll_required", Reason: "provider_status_unknown"}}
 	}
 }
 
-func agentRunnerError(result AgentTaskRunnerResult, externalRunID string, cause error) error {
+func agentRunnerError(result agentsdk.TaskResult, externalRunID string, cause error) error {
 	code := strings.TrimSpace(result.ErrorCode)
 	if code == "" {
 		code = "agent.runner.provider_failed"

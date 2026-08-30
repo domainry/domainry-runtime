@@ -49,7 +49,7 @@ func (s *Server) configuring(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := os.Stat(s.manifestPath); err == nil {
-		s.writeError(w, http.StatusConflict, "runtime.non_empty_update_requires_change_plan", "installed Runtime cannot enter direct configuring mode")
+		s.writeError(w, http.StatusConflict, "runtime.installed_manifest_is_source_controlled", "installed Runtime metadata must be updated through a versioned manifest deployment")
 		return
 	} else if !os.IsNotExist(err) {
 		s.writeError(w, http.StatusInternalServerError, "runtime.current_manifest_unreadable", err.Error())
@@ -58,7 +58,7 @@ func (s *Server) configuring(w http.ResponseWriter, r *http.Request) {
 	manifest := manifestmodel.ManifestSchema{
 		SchemaVersion: manifestmodel.CurrentManifestSchemaVersion,
 		TemplateID:    "direct-authoring-" + request.RuntimeID, Version: "0.0.0-configuring", SourceBlueprintID: DirectAuthoringSourceID,
-		Objects: []definitionmodel.ObjectSchema{}, Views: []definitionmodel.ViewSchema{},
+		Objects: []definitionmodel.ObjectSchema{},
 	}
 	hash := hashManifestPart(manifest)
 	if err := s.writeConfiguringManifest(s.manifestPath, manifest); err != nil {

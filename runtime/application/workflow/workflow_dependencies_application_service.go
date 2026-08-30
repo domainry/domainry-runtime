@@ -4,10 +4,11 @@ import (
 	"context"
 	"time"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
@@ -77,8 +78,8 @@ type WorkflowRegistry interface {
 
 type WorkflowSchemaSnapshot struct {
 	Actions                []definitionmodel.ActionSchema
-	AgentTasks             []agentmodel.AgentTaskDefinition
-	AgentServicePrincipals []agentmodel.AgentServicePrincipalBinding
+	AgentTasks             []agentsdk.AgentTaskDefinition
+	AgentServicePrincipals []agentsdk.AgentServicePrincipalBinding
 	Dictionaries           []appschemamodel.DictionarySchema
 	Integrations           integrationmodel.IntegrationSchema
 }

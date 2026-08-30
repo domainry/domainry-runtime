@@ -34,7 +34,7 @@ func TestRuntimeOrganizationScopeResolverBridgesPartyFacts(t *testing.T) {
 	}
 }
 
-func TestRuntimeBusinessProfileProjectionUsesActiveManifestWhenMetadataBindingTableIsEmpty(t *testing.T) {
+func TestRuntimeBusinessProfileProjectionUsesActiveManifestWithoutRuntimeOwnedBindingTable(t *testing.T) {
 	store, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "gym.db")})
 	if err != nil {
 		t.Fatal(err)
@@ -60,13 +60,6 @@ func TestRuntimeBusinessProfileProjectionUsesActiveManifestWhenMetadataBindingTa
 	}
 	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO member (workspace_id,id,created_at,updated_at,identity_user_id,risk,store_id) VALUES ('default','member_1787940383392750000','now','now','wechat-user','stable','store_seed')`); err != nil {
 		t.Fatal(err)
-	}
-	var persistedDefinitions int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM identity_profile_binding_definitions`).Scan(&persistedDefinitions); err != nil {
-		t.Fatal(err)
-	}
-	if persistedDefinitions != 0 {
-		t.Fatalf("fixture unexpectedly persisted explicit binding definitions: %d", persistedDefinitions)
 	}
 	projection := newRuntimeBusinessProfileProjection(store)
 	projection.Publish([]definitionmodel.ObjectSchema{member}, []profilebindingmodel.Binding{extension})

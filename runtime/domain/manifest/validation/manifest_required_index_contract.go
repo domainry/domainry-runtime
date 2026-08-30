@@ -15,12 +15,6 @@ func (state *validationState) validateRequiredIndexes() {
 			}
 		}
 	}
-	for viewIndex, view := range state.manifest.Views {
-		for filterIndex, filter := range manifestMapSlice(view.Config["filters"]) {
-			fieldKey := cleanManifestReference(filter["field"])
-			state.requireManifestFieldIndex(view.ObjectKey, fieldKey, fmt.Sprintf("views[%d].config.filters[%d].field", viewIndex, filterIndex), "filter")
-		}
-	}
 }
 
 func (state *validationState) requireManifestFieldIndex(objectKey, fieldKey, path, usage string) {

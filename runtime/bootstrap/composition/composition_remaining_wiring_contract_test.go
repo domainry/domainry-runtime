@@ -11,21 +11,21 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
+	agentpersistence "github.com/domainry/domainry-agent/persistence"
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
-	connector "github.com/domainry/domainry-connector-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
-	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
-	businessintegration "github.com/domainry/domainry-runtime/runtime/application/integration"
+	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	connectortest "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit/connectors"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	actionservice "github.com/domainry/domainry-runtime/runtime/domain/action/service"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
@@ -38,7 +38,6 @@ import (
 	surfacecontextmodel "github.com/domainry/domainry-runtime/runtime/domain/surfacecontext/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	agentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/agent"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	"github.com/domainry/domainry-runtime/runtime/platform/resilience"
@@ -100,22 +99,22 @@ func (s agentPrincipalDirectoryStub) Resolve(context.Context, identitysdk.Princi
 
 type agentTaskRunnerStub struct{}
 
-func (agentTaskRunnerStub) Start(context.Context, agentapplication.AgentTaskRunnerRequest) (agentapplication.AgentTaskRunnerResult, error) {
-	return agentapplication.AgentTaskRunnerResult{}, nil
+func (agentTaskRunnerStub) Start(context.Context, agentsdk.TaskRequest) (agentsdk.TaskResult, error) {
+	return agentsdk.TaskResult{}, nil
 }
 
-func (agentTaskRunnerStub) Poll(context.Context, string, string) (agentapplication.AgentTaskRunnerResult, error) {
-	return agentapplication.AgentTaskRunnerResult{}, nil
+func (agentTaskRunnerStub) Poll(context.Context, string, string) (agentsdk.TaskResult, error) {
+	return agentsdk.TaskResult{}, nil
 }
 
-func (agentTaskRunnerStub) Cancel(context.Context, string, string) (agentapplication.AgentTaskRunnerResult, error) {
-	return agentapplication.AgentTaskRunnerResult{}, nil
+func (agentTaskRunnerStub) Cancel(context.Context, string, string) (agentsdk.TaskResult, error) {
+	return agentsdk.TaskResult{}, nil
 }
 
 type interactiveAgentRunnerStub struct{}
 
-func (interactiveAgentRunnerStub) Run(context.Context, agentapplication.InteractiveAgentRunRequest) (agentapplication.InteractiveAgentResult, error) {
-	return agentapplication.InteractiveAgentResult{}, nil
+func (interactiveAgentRunnerStub) Run(context.Context, agentsdk.InteractiveRequest) (agentsdk.InteractiveResult, error) {
+	return agentsdk.InteractiveResult{}, nil
 }
 
 func TestActionNotificationCompilerValidatesDependenciesRecipientsAndProjection(t *testing.T) {
@@ -234,10 +233,22 @@ func TestRuntimeCompositionWiresPersistentAgentWorkersAndInteractiveFactory(t *t
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	repository := agentpersistence.NewAgentTaskRunStore(store)
-	if err := agentpersistence.NewAgentSchemaMigration(store).EnsureSchema(t.Context()); err != nil {
+	agentMigrations, err := agentpersistence.SchemaMigrations(store.Driver(), store.DatabaseSchema())
+	if err != nil {
 		t.Fatal(err)
 	}
+	hostMigrations := make([]notificationmodulehost.SchemaMigration, len(agentMigrations))
+	for index, migration := range agentMigrations {
+		hostMigrations[index] = notificationmodulehost.SchemaMigration{Version: migration.Version, Name: migration.Name, Statements: append([]string(nil), migration.Statements...)}
+	}
+	if err := store.ApplyOwnedMigrations(t.Context(), "agent", hostMigrations); err != nil {
+		t.Fatal(err)
+	}
+	agentStore, err := agentpersistence.NewStore(store.DB(), store.SQLRenderer, store.Driver())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := agentpersistence.NewAgentTaskRunStore(agentStore)
 	withoutRunner := NewRuntimeServices(t.Context(), RuntimeServicesConfig{Dependencies: RuntimeServicesDependencies{AgentTaskRuns: repository, AgentPrincipals: agentPrincipalDirectoryStub{}}})
 	if withoutRunner.Applications().AgentInteractiveRuns == nil || withoutRunner.Applications().NewAgentInteractive != nil {
 		t.Fatalf("runnerless applications=%+v", withoutRunner.Applications())
@@ -444,127 +455,132 @@ func TestRecordInitializationAuditProjectorCoversPresentationAndFailures(t *test
 	}
 }
 
-func TestWorkflowConnectorSchemaProviderFindsRegisteredAdapter(t *testing.T) {
-	providers := connectortest.Registry(connectortest.Provider("mock", "test", compositionConnectorAdapterStub{}, nil))
-	runtime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
-		Manifest:     manifestmodel.ManifestSchema{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "mock", Providers: []integrationmodel.ConnectorProviderSchema{{Key: "test"}}}}}},
-		Dependencies: RuntimeServicesDependencies{ConnectorProviders: providers},
-	})
-	provider := runtimeWorkflowSchemaProvider{records: runtime}
-	if _, ok := runtime.connectorRegistry.ProviderAdapter("mock", "test"); !ok {
-		t.Fatal("exact mock provider adapter was not registered")
-	}
-	if !provider.ConnectorAdapterExists(t.Context(), "mock") {
-		t.Fatal("registered mock connector was not reported ready")
-	}
-}
+/*
+	Legacy in-Runtime provider/connection/event composition was removed when
 
-func TestCompositionConsumesFrozenPublicConnectorRegistryDirectly(t *testing.T) {
-	operation := connector.CallOperation[map[string]any, map[string]any]{
-		ConnectorKey: "mock", ProviderKey: "project", Key: "ping",
-		ContractSHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		Reliability: connector.ReliabilityContract{
-			Effect: connector.EffectRead, Idempotency: connector.IdempotencyContract{Strategy: connector.IdempotencyNatural},
-			Reconciliation: connector.ReconciliationNone, Compensation: connector.CompensationContract{Mode: connector.CompensationNone},
-		},
-	}
-	bound, err := connector.BindCall(operation, func(context.Context, connector.TypedRequest[map[string]any]) (connector.TypedResult[map[string]any], error) {
-		return connector.TypedResult[map[string]any]{Output: map[string]any{"ok": true}}, nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	provider, err := connector.NewProvider(connector.ProviderSchema{ConnectorKey: "mock", ProviderKey: "project", ProviderRevision: "test-v1"}, bound)
-	if err != nil {
-		t.Fatal(err)
-	}
-	providers := connector.NewRegistry()
-	if err := providers.Register(provider); err != nil {
-		t.Fatal(err)
-	}
-	providers.Freeze()
+Integration ownership moved behind the SDK Binding.
 
-	runtime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
-		Manifest:     manifestmodel.ManifestSchema{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "mock", Providers: []integrationmodel.ConnectorProviderSchema{{Key: "project"}}}}}},
-		Dependencies: RuntimeServicesDependencies{ConnectorProviders: providers},
-	})
-	if _, ok := runtime.connectorRegistry.ProviderAdapter("mock", "project"); !ok {
-		t.Fatal("composition did not resolve the public provider from the supplied frozen Registry")
+	func TestWorkflowConnectorSchemaProviderFindsRegisteredAdapter(t *testing.T) {
+		providers := connectortest.Registry(connectortest.Provider("mock", "test", compositionConnectorAdapterStub{}, nil))
+		runtime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
+			Manifest:     manifestmodel.ManifestSchema{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "mock", Providers: []integrationmodel.ConnectorProviderSchema{{Key: "test"}}}}}},
+			Dependencies: RuntimeServicesDependencies{ConnectorProviders: providers},
+		})
+		provider := runtimeWorkflowSchemaProvider{records: runtime}
+		if _, ok := runtime.connectorRegistry.ProviderAdapter("mock", "test"); !ok {
+			t.Fatal("exact mock provider adapter was not registered")
+		}
+		if !provider.ConnectorAdapterExists(t.Context(), "mock") {
+			t.Fatal("registered mock connector was not reported ready")
+		}
 	}
-	if _, ok := runtime.connectorRegistry.ProviderAdapter("mock", ""); ok {
-		t.Fatal("composition introduced a connector-only public provider fallback")
-	}
-}
 
-func TestIntegrationCompositionInvokesProviderReferenceAndSchemaClosures(t *testing.T) {
-	delivery := &runtimeServicesDeliveryRepository{}
-	runtime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
-		Manifest: manifestmodel.ManifestSchema{
-			Objects: []definitionmodel.ObjectSchema{{Key: "activity", Name: "Activity", Fields: []definitionmodel.FieldSchema{
-				{Key: "subject", Type: "text"}, {Key: "owner_id", Type: "text"}, {Key: "status", Type: "text"},
-			}}},
-			Integrations: integrationmodel.IntegrationSchema{
-				Connectors: []integrationmodel.ConnectorSchema{{Key: "email", Type: "email", Provider: "test", Providers: []integrationmodel.ConnectorProviderSchema{{Key: "test"}}, Operations: []integrationmodel.ConnectorOperationSchema{{Key: "send"}}}},
-				EventMappings: []integrationmodel.IntegrationEventMappingSchema{{
-					Key: "owner", Provider: "provider", EventType: "created", TargetType: "owner_task",
-					ExternalIdentity: integrationmodel.IntegrationExternalIdentityMappingSchema{SubjectPath: "subject", OnUnmapped: "read_only"},
-				}},
+	func TestCompositionConsumesFrozenPublicConnectorRegistryDirectly(t *testing.T) {
+		operation := connector.CallOperation[map[string]any, map[string]any]{
+			ConnectorKey: "mock", ProviderKey: "project", Key: "ping",
+			ContractSHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			Reliability: connector.ReliabilityContract{
+				Effect: connector.EffectRead, Idempotency: connector.IdempotencyContract{Strategy: connector.IdempotencyNatural},
+				Reconciliation: connector.ReconciliationNone, Compensation: connector.CompensationContract{Mode: connector.CompensationNone},
 			},
-		},
-		Dependencies: RuntimeServicesDependencies{IntegrationDelivery: delivery},
-	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Key: "admin", Permissions: []string{"workspace.admin", "*", businessintegration.PermissionInvoke, businessintegration.PermissionRetry}})
+		}
+		bound, err := connector.BindCall(operation, func(context.Context, connector.TypedRequest[map[string]any]) (connector.TypedResult[map[string]any], error) {
+			return connector.TypedResult[map[string]any]{Output: map[string]any{"ok": true}}, nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		provider, err := connector.NewProvider(connector.ProviderSchema{ConnectorKey: "mock", ProviderKey: "project", ProviderRevision: "test-v1"}, bound)
+		if err != nil {
+			t.Fatal(err)
+		}
+		providers := connector.NewRegistry()
+		if err := providers.Register(provider); err != nil {
+			t.Fatal(err)
+		}
+		providers.Freeze()
 
-	invocation, err := runtime.integrationService.RecordIntegrationInvocation(t.Context(), integrationmodel.IntegrationInvocationRecordRequest{
-		ConnectorKey: "email", ProviderKey: "test", Operation: "send",
-	}, principal)
-	if err != nil || invocation.ProviderKey != "test" {
-		t.Fatalf("integration invocation=%#v error=%v", invocation, err)
+		runtime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
+			Manifest:     manifestmodel.ManifestSchema{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "mock", Providers: []integrationmodel.ConnectorProviderSchema{{Key: "project"}}}}}},
+			Dependencies: RuntimeServicesDependencies{ConnectorProviders: providers},
+		})
+		if _, ok := runtime.connectorRegistry.ProviderAdapter("mock", "project"); !ok {
+			t.Fatal("composition did not resolve the public provider from the supplied frozen Registry")
+		}
+		if _, ok := runtime.connectorRegistry.ProviderAdapter("mock", ""); ok {
+			t.Fatal("composition introduced a connector-only public provider fallback")
+		}
 	}
 
-	resolver := serviceReferenceResolver(&runtime.integrationService)
-	if references, err := resolver(t.Context(), "missing", principal); err != nil || len(references) != 0 {
-		t.Fatalf("connection references=%#v error=%v", references, err)
-	}
+	func TestIntegrationCompositionInvokesProviderReferenceAndSchemaClosures(t *testing.T) {
+		delivery := &runtimeServicesDeliveryRepository{}
+		runtime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
+			Manifest: manifestmodel.ManifestSchema{
+				Objects: []definitionmodel.ObjectSchema{{Key: "activity", Name: "Activity", Fields: []definitionmodel.FieldSchema{
+					{Key: "subject", Type: "text"}, {Key: "owner_id", Type: "text"}, {Key: "status", Type: "text"},
+				}}},
+				Integrations: integrationmodel.IntegrationSchema{
+					Connectors: []integrationmodel.ConnectorSchema{{Key: "email", Type: "email", Provider: "test", Providers: []integrationmodel.ConnectorProviderSchema{{Key: "test"}}, Operations: []integrationmodel.ConnectorOperationSchema{{Key: "send"}}}},
+					EventMappings: []integrationmodel.IntegrationEventMappingSchema{{
+						Key: "owner", Provider: "provider", EventType: "created", TargetType: "owner_task",
+						ExternalIdentity: integrationmodel.IntegrationExternalIdentityMappingSchema{SubjectPath: "subject", OnUnmapped: "read_only"},
+					}},
+				},
+			},
+			Dependencies: RuntimeServicesDependencies{IntegrationDelivery: delivery},
+		})
+		principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Key: "admin", Permissions: []string{"workspace.admin", "*", businessintegration.PermissionInvoke, businessintegration.PermissionRetry}})
 
-	event := integrationmodel.IntegrationEvent{ID: "event-1", WorkspaceID: "default", Provider: "provider", EventType: "created", Payload: map[string]any{"title": "Follow up", "subject": "external-1"}}
-	if _, handled, err := runtime.integrationService.ExecuteIntegrationEventMapping(t.Context(), event, principal); !handled || err == nil {
-		t.Fatalf("owner task without Record repository handled=%t error=%v", handled, err)
-	}
+		invocation, err := runtime.integrationService.RecordIntegrationInvocation(t.Context(), integrationmodel.IntegrationInvocationRecordRequest{
+			ConnectorKey: "email", ProviderKey: "test", Operation: "send",
+		}, principal)
+		if err != nil || invocation.ProviderKey != "test" {
+			t.Fatalf("integration invocation=%#v error=%v", invocation, err)
+		}
 
-	records := &pipelineFailureRepository{records: map[string]map[string]recordmodel.Record{}}
-	config := &compositionIntegrationIdentityRepository{identities: []integrationmodel.IntegrationExternalIdentity{{
-		Key: "provider_external-2", WorkspaceID: "default", Provider: "provider", ExternalSubject: "external-2",
-		ExternalSubjectType: "user", ActorID: "admin", RoleKey: "admin", Status: "active",
-	}}}
-	worker := &compositionIntegrationEventWorker{event: integrationmodel.IntegrationEvent{
-		ID: "event-2", WorkspaceID: "default", Provider: "provider", EventType: "created",
-		Payload: map[string]any{"title": "Follow up", "subject": "external-2"},
-	}}
-	snapshot := runtime.Schema()
-	workerRuntime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
-		Manifest: manifestmodel.ManifestSchema{Objects: snapshot.Objects, Integrations: snapshot.Integrations},
-		Dependencies: RuntimeServicesDependencies{
-			Records: records, IntegrationConfig: config, IntegrationDelivery: &runtimeServicesDeliveryRepository{}, IntegrationWorker: worker,
-			AgentPrincipals: agentPrincipalDirectoryStub{principal: principal},
-		},
-	})
-	result, err := workerRuntime.integrationService.ProcessDueIntegrationEvents(t.Context(), 1, principal)
-	if err != nil || result.Processed != 1 || len(records.records["activity"]) != 1 {
-		t.Fatalf("mapped event result=%#v activities=%#v error=%v", result, records.records["activity"], err)
-	}
+		resolver := serviceReferenceResolver(&runtime.integrationService)
+		if references, err := resolver(t.Context(), "missing", principal); err != nil || len(references) != 0 {
+			t.Fatalf("connection references=%#v error=%v", references, err)
+		}
 
-	canonical := workerRuntime.integrationService
-	workerRuntime.integrationService = nil
-	if rebuilt := integrationApplication(workerRuntime); rebuilt == nil {
-		t.Fatal("integration composition fallback was not assembled")
-	}
-	if _, err := integrationRuntimeActionInvoker(workerRuntime.Applications())(t.Context(), actionmodel.ActionInvocation{ActionKey: "missing", Principal: principal}); err == nil {
-		t.Fatal("integration action callback did not delegate")
-	}
-	workerRuntime.integrationService = canonical
-}
+		event := integrationmodel.IntegrationEvent{ID: "event-1", WorkspaceID: "default", Provider: "provider", EventType: "created", Payload: map[string]any{"title": "Follow up", "subject": "external-1"}}
+		if _, handled, err := runtime.integrationService.ExecuteIntegrationEventMapping(t.Context(), event, principal); !handled || err == nil {
+			t.Fatalf("owner task without Record repository handled=%t error=%v", handled, err)
+		}
 
+		records := &pipelineFailureRepository{records: map[string]map[string]recordmodel.Record{}}
+		config := &compositionIntegrationIdentityRepository{identities: []integrationmodel.IntegrationExternalIdentity{{
+			Key: "provider_external-2", WorkspaceID: "default", Provider: "provider", ExternalSubject: "external-2",
+			ExternalSubjectType: "user", ActorID: "admin", RoleKey: "admin", Status: "active",
+		}}}
+		worker := &compositionIntegrationEventWorker{event: integrationmodel.IntegrationEvent{
+			ID: "event-2", WorkspaceID: "default", Provider: "provider", EventType: "created",
+			Payload: map[string]any{"title": "Follow up", "subject": "external-2"},
+		}}
+		snapshot := runtime.Schema()
+		workerRuntime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
+			Manifest: manifestmodel.ManifestSchema{Objects: snapshot.Objects, Integrations: snapshot.Integrations},
+			Dependencies: RuntimeServicesDependencies{
+				Records: records, IntegrationConfig: config, IntegrationDelivery: &runtimeServicesDeliveryRepository{}, IntegrationWorker: worker,
+				AgentPrincipals: agentPrincipalDirectoryStub{principal: principal},
+			},
+		})
+		result, err := workerRuntime.integrationService.ProcessDueIntegrationEvents(t.Context(), 1, principal)
+		if err != nil || result.Processed != 1 || len(records.records["activity"]) != 1 {
+			t.Fatalf("mapped event result=%#v activities=%#v error=%v", result, records.records["activity"], err)
+		}
+
+		canonical := workerRuntime.integrationService
+		workerRuntime.integrationService = nil
+		if rebuilt := integrationApplication(workerRuntime); rebuilt == nil {
+			t.Fatal("integration composition fallback was not assembled")
+		}
+		if _, err := integrationRuntimeActionInvoker(workerRuntime.Applications())(t.Context(), actionmodel.ActionInvocation{ActionKey: "missing", Principal: principal}); err == nil {
+			t.Fatal("integration action callback did not delegate")
+		}
+		workerRuntime.integrationService = canonical
+	}
+*/
 func TestCompositionFinalBranchContracts(t *testing.T) {
 	recordResult := workflowActionInvocationResult(actionmodel.ActionInvocationResult{Record: &actionmodel.ActionResult{RecordID: "record-1"}})
 	if recordResult.Record == nil || recordResult.Record.RecordID != "record-1" {
@@ -898,7 +914,7 @@ func TestAssembledBusinessHandlerCoversRevisionAndDurableIntentFallbacks(t *test
 		t.Fatalf("missing durable intent validator error=%v", err)
 	}
 	withIntegration := newService(t, nil, true)
-	withIntegration.integrationService = businessintegration.NewIntegrationApplicationService(businessintegration.ApplicationDependencies{})
+	withIntegration.integrationService = publicationhandoff.New(publicationhandoff.Dependencies{})
 	if _, err := invoke(withIntegration); err == nil || strings.Contains(err.Error(), "durable_intent_validator_required") {
 		t.Fatalf("configured durable intent validator error=%v", err)
 	}
@@ -985,56 +1001,6 @@ func TestRecordQueryPolicyCompositionCandidateEvaluatorAvailability(t *testing.T
 	policy = newRecordQueryPolicyService(services)
 	if allowed, err := policy.CanWriteCandidateScope(t.Context(), principal, reservation, candidate); allowed || err == nil || !strings.Contains(err.Error(), "evaluator is unavailable") {
 		t.Fatalf("missing evaluator allowed=%v err=%v", allowed, err)
-	}
-}
-
-type recordPolicyMetadataRepository struct {
-	appschemarepository.ApplicationSchemaRepository
-	definitions map[string][]appschemamodel.ApplicationDefinition
-	err         error
-	resource    string
-	reason      string
-}
-
-func (r *recordPolicyMetadataRepository) ListDefinitions(
-	_ context.Context,
-	scope principalmodel.SystemScope,
-	resourceType string,
-) ([]appschemamodel.ApplicationDefinition, error) {
-	r.resource = resourceType
-	r.reason = scope.Purpose
-	if r.err != nil {
-		return nil, r.err
-	}
-	return append([]appschemamodel.ApplicationDefinition(nil), r.definitions[resourceType]...), nil
-}
-
-func TestApplicationDefinitionReferenceSourcesFilterDisabledAndPropagateErrors(t *testing.T) {
-	repository := &recordPolicyMetadataRepository{definitions: map[string][]appschemamodel.ApplicationDefinition{
-		"preference": {
-			{ResourceKey: " preference.active "},
-			{ResourceKey: "preference.disabled", DisabledAt: "2026-07-27T00:00:00Z"},
-		},
-		"rule_set": {
-			{ResourceKey: " rule.active "},
-			{ResourceKey: "rule.disabled", DisabledAt: "2026-07-27T00:00:00Z"},
-		},
-	}}
-	preferences := applicationDefinitionReferenceSource(repository, "preference", "discover preference references")
-	keys, err := preferences(t.Context(), principalmodel.Principal{})
-	if err != nil || len(keys) != 1 || keys[0] != "preference.active" ||
-		repository.resource != "preference" || repository.reason != "discover preference references" {
-		t.Fatalf("preference keys=%v resource=%q reason=%q err=%v", keys, repository.resource, repository.reason, err)
-	}
-	rules := applicationDefinitionReferenceSource(repository, "rule_set", "discover rule set references")
-	keys, err = rules(t.Context(), principalmodel.Principal{})
-	if err != nil || len(keys) != 1 || keys[0] != "rule.active" ||
-		repository.resource != "rule_set" || repository.reason != "discover rule set references" {
-		t.Fatalf("rule keys=%v resource=%q reason=%q err=%v", keys, repository.resource, repository.reason, err)
-	}
-	repository.err = errors.New("metadata definitions unavailable")
-	if _, err := preferences(t.Context(), principalmodel.Principal{}); !errors.Is(err, repository.err) {
-		t.Fatalf("metadata error=%v", err)
 	}
 }
 

@@ -9,9 +9,10 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -62,7 +63,7 @@ func TestAgentInteractiveRunLifecycleAndPrincipalIsolation(t *testing.T) {
 	service := NewAgentInteractiveRunApplicationService(repository, agentTaskClock{now: now}, agentCredentialIDStub{})
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1", UserID: "user-1"}, SurfaceKey: "business_workspace", CorrelationID: "correlation-1"}, accessfixture.Bundle{Key: "operator"})
 	principal.AuthorizationRevision = "auth-1"
-	trusted := agentmodel.GlobalAgentContext{Surface: principal.SurfaceKey, RouteKey: "customer.detail", EntrypointKey: "assistant.global", AgentKey: "customer-agent", ContextRevision: "context-1", Principal: agentmodel.AgentPrincipalReference{WorkspaceID: principal.WorkspaceID, UserID: principal.UserID, RoleKey: principal.RoleKey, AuthorizationRevision: "auth-1"}}
+	trusted := agentsdk.GlobalContext{Surface: principal.SurfaceKey, RouteKey: "customer.detail", EntrypointKey: "assistant.global", AgentKey: "customer-agent", ContextRevision: "context-1", Principal: agentsdk.PrincipalReference{WorkspaceID: principal.WorkspaceID, UserID: principal.UserID, RoleKey: principal.RoleKey, AuthorizationRevision: "auth-1"}}
 	run, replayed, err := service.Create(t.Context(), AgentInteractiveRunCreateRequest{SessionID: "session-1", AgentKey: "customer-agent", EntrypointKey: trusted.EntrypointKey, IdempotencyKey: "message-1", Context: trusted, Principal: principal})
 	if err != nil || replayed || run.ID != "interactive_run_nonce" || run.ContextRevision != trusted.ContextRevision || run.Authorization.AuthorizationRevision != "auth-1" {
 		t.Fatalf("run=%#v replayed=%v err=%v", run, replayed, err)
@@ -96,7 +97,7 @@ func TestAgentInteractiveRunTaskHandoffIsTypedAndStable(t *testing.T) {
 	service := NewAgentInteractiveRunApplicationService(repository, nil, nil)
 	run := agentmodel.AgentInteractiveRun{ID: "interactive", WorkspaceID: "workspace", Status: agentmodel.AgentInteractiveRunRunning, Revision: 2}
 	task := agentmodel.AgentTaskRun{ID: "task", WorkspaceID: "workspace", ProcessID: "process", TaskKey: "customer.review", TaskVersion: "1.0.0"}
-	route := AgentRouteResult{RouteType: agentmodel.AgentRouteTask, TargetKey: task.TaskKey, TargetVersion: task.TaskVersion, IdempotencyKey: "handoff-1"}
+	route := agentsdk.RouteResult{RouteType: agentsdk.AgentRouteTask, TargetKey: task.TaskKey, TargetVersion: task.TaskVersion, IdempotencyKey: "handoff-1"}
 	handoff, duplicate, err := service.HandoffTask(t.Context(), run, route, task)
 	if err != nil || duplicate || handoff.TaskRunID != task.ID || repository.run.RoutedTargetKey != task.TaskKey {
 		t.Fatalf("handoff=%#v duplicate=%v err=%v", handoff, duplicate, err)
@@ -104,23 +105,23 @@ func TestAgentInteractiveRunTaskHandoffIsTypedAndStable(t *testing.T) {
 	if service.metricsSnapshot().HandedOff != 1 {
 		t.Fatalf("handoff metrics=%#v", service.metricsSnapshot())
 	}
-	route.RouteType = agentmodel.AgentRouteWorkflow
+	route.RouteType = agentsdk.AgentRouteWorkflow
 	if _, _, err := service.HandoffTask(t.Context(), run, route, task); apperror.CodeOf(err) != "agent.interactive.handoff_invalid" {
 		t.Fatalf("untyped handoff=%v", err)
 	}
-	validRoute := AgentRouteResult{RouteType: agentmodel.AgentRouteTask, TargetKey: task.TaskKey, TargetVersion: task.TaskVersion, IdempotencyKey: "handoff-1"}
-	for name, mutate := range map[string]func(*agentmodel.AgentInteractiveRun, *AgentRouteResult, *agentmodel.AgentTaskRun){
-		"nil": func(*agentmodel.AgentInteractiveRun, *AgentRouteResult, *agentmodel.AgentTaskRun) {},
-		"status": func(value *agentmodel.AgentInteractiveRun, _ *AgentRouteResult, _ *agentmodel.AgentTaskRun) {
+	validRoute := agentsdk.RouteResult{RouteType: agentsdk.AgentRouteTask, TargetKey: task.TaskKey, TargetVersion: task.TaskVersion, IdempotencyKey: "handoff-1"}
+	for name, mutate := range map[string]func(*agentmodel.AgentInteractiveRun, *agentsdk.RouteResult, *agentmodel.AgentTaskRun){
+		"nil": func(*agentmodel.AgentInteractiveRun, *agentsdk.RouteResult, *agentmodel.AgentTaskRun) {},
+		"status": func(value *agentmodel.AgentInteractiveRun, _ *agentsdk.RouteResult, _ *agentmodel.AgentTaskRun) {
 			value.Status = agentmodel.AgentInteractiveRunCompleted
 		},
-		"target": func(_ *agentmodel.AgentInteractiveRun, value *AgentRouteResult, _ *agentmodel.AgentTaskRun) {
+		"target": func(_ *agentmodel.AgentInteractiveRun, value *agentsdk.RouteResult, _ *agentmodel.AgentTaskRun) {
 			value.TargetKey = "other"
 		},
-		"version": func(_ *agentmodel.AgentInteractiveRun, value *AgentRouteResult, _ *agentmodel.AgentTaskRun) {
+		"version": func(_ *agentmodel.AgentInteractiveRun, value *agentsdk.RouteResult, _ *agentmodel.AgentTaskRun) {
 			value.TargetVersion = "other"
 		},
-		"idempotency": func(_ *agentmodel.AgentInteractiveRun, value *AgentRouteResult, _ *agentmodel.AgentTaskRun) {
+		"idempotency": func(_ *agentmodel.AgentInteractiveRun, value *agentsdk.RouteResult, _ *agentmodel.AgentTaskRun) {
 			value.IdempotencyKey = ""
 		},
 	} {
@@ -155,7 +156,7 @@ func TestAgentInteractiveRunNilMetricsAreSafe(t *testing.T) {
 func TestAgentInteractiveRunBoundaryMatrix(t *testing.T) {
 	now := time.Date(2026, 8, 4, 15, 0, 0, 0, time.UTC)
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1", UserID: "user-1", AuthorizationRevision: "auth-1"}, SurfaceKey: "business_workspace"}, accessfixture.Bundle{Key: "operator"})
-	trusted := agentmodel.GlobalAgentContext{Surface: principal.SurfaceKey, RouteKey: "customer.detail", EntrypointKey: "assistant.global", AgentKey: "customer-agent", ContextRevision: "context-1", Principal: agentmodel.AgentPrincipalReference{WorkspaceID: principal.WorkspaceID, UserID: principal.UserID, RoleKey: principal.RoleKey, AuthorizationRevision: principal.AuthorizationRevision}}
+	trusted := agentsdk.GlobalContext{Surface: principal.SurfaceKey, RouteKey: "customer.detail", EntrypointKey: "assistant.global", AgentKey: "customer-agent", ContextRevision: "context-1", Principal: agentsdk.PrincipalReference{WorkspaceID: principal.WorkspaceID, UserID: principal.UserID, RoleKey: principal.RoleKey, AuthorizationRevision: principal.AuthorizationRevision}}
 	request := AgentInteractiveRunCreateRequest{SessionID: "session-1", EntrypointKey: trusted.EntrypointKey, IdempotencyKey: "message-1", Context: trusted, Principal: principal}
 	wantErr := errors.New("repository failure")
 
@@ -300,18 +301,20 @@ func TestAgentInteractiveRunWorkflowHandoffAndToolEvidenceEdges(t *testing.T) {
 	wantErr := errors.New("repository failure")
 	now := time.Date(2026, 8, 4, 15, 0, 0, 0, time.UTC)
 	run := agentmodel.AgentInteractiveRun{ID: "run-1", WorkspaceID: "workspace-1", Status: agentmodel.AgentInteractiveRunRunning, CreatedAt: now, UpdatedAt: now, Revision: 1}
-	route := AgentRouteResult{RouteType: agentmodel.AgentRouteWorkflow, TargetKey: "customer.follow_up", TargetVersion: "1", IdempotencyKey: "handoff-1"}
-	for name, mutate := range map[string]func(*agentmodel.AgentInteractiveRun, *AgentRouteResult, *string){
-		"nil": func(*agentmodel.AgentInteractiveRun, *AgentRouteResult, *string) {},
-		"status": func(value *agentmodel.AgentInteractiveRun, _ *AgentRouteResult, _ *string) {
+	route := agentsdk.RouteResult{RouteType: agentsdk.AgentRouteWorkflow, TargetKey: "customer.follow_up", TargetVersion: "1", IdempotencyKey: "handoff-1"}
+	for name, mutate := range map[string]func(*agentmodel.AgentInteractiveRun, *agentsdk.RouteResult, *string){
+		"nil": func(*agentmodel.AgentInteractiveRun, *agentsdk.RouteResult, *string) {},
+		"status": func(value *agentmodel.AgentInteractiveRun, _ *agentsdk.RouteResult, _ *string) {
 			value.Status = agentmodel.AgentInteractiveRunCompleted
 		},
-		"route type": func(_ *agentmodel.AgentInteractiveRun, value *AgentRouteResult, _ *string) {
-			value.RouteType = agentmodel.AgentRouteTask
+		"route type": func(_ *agentmodel.AgentInteractiveRun, value *agentsdk.RouteResult, _ *string) {
+			value.RouteType = agentsdk.AgentRouteTask
 		},
-		"target":      func(_ *agentmodel.AgentInteractiveRun, value *AgentRouteResult, _ *string) { value.TargetKey = "" },
-		"idempotency": func(_ *agentmodel.AgentInteractiveRun, value *AgentRouteResult, _ *string) { value.IdempotencyKey = "" },
-		"process":     func(_ *agentmodel.AgentInteractiveRun, _ *AgentRouteResult, value *string) { *value = "" },
+		"target": func(_ *agentmodel.AgentInteractiveRun, value *agentsdk.RouteResult, _ *string) { value.TargetKey = "" },
+		"idempotency": func(_ *agentmodel.AgentInteractiveRun, value *agentsdk.RouteResult, _ *string) {
+			value.IdempotencyKey = ""
+		},
+		"process": func(_ *agentmodel.AgentInteractiveRun, _ *agentsdk.RouteResult, value *string) { *value = "" },
 	} {
 		t.Run("handoff "+name, func(t *testing.T) {
 			candidate, candidateRoute, processID := run, route, "process-1"
@@ -338,7 +341,7 @@ func TestAgentInteractiveRunWorkflowHandoffAndToolEvidenceEdges(t *testing.T) {
 	for name, stored := range map[string]agentmodel.AgentInteractiveRun{
 		"missing": {},
 		"status":  {ID: run.ID, Status: agentmodel.AgentInteractiveRunCompleted, RouteType: route.RouteType, RoutedTargetKey: route.TargetKey, ProcessID: "process-1"},
-		"type":    {ID: run.ID, Status: agentmodel.AgentInteractiveRunHandedOff, RouteType: agentmodel.AgentRouteTask, RoutedTargetKey: route.TargetKey, ProcessID: "process-1"},
+		"type":    {ID: run.ID, Status: agentmodel.AgentInteractiveRunHandedOff, RouteType: agentsdk.AgentRouteTask, RoutedTargetKey: route.TargetKey, ProcessID: "process-1"},
 		"target":  {ID: run.ID, Status: agentmodel.AgentInteractiveRunHandedOff, RouteType: route.RouteType, RoutedTargetKey: "other", ProcessID: "process-1"},
 		"process": {ID: run.ID, Status: agentmodel.AgentInteractiveRunHandedOff, RouteType: route.RouteType, RoutedTargetKey: route.TargetKey, ProcessID: "other"},
 	} {

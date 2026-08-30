@@ -23,11 +23,23 @@ type DataExchangeProviders struct {
 	exporter        *RecordExportApplicationService
 	resolve         func(context.Context, string, string) principalmodel.Principal
 	imports         map[string]*recordDataExchangeImportProvider
+	importProviders map[string]modulehost.ImportProvider
 	exportProviders map[string]modulehost.ExportProvider
 }
 
 func NewDataExchangeProviders(resolve func(context.Context, string, string) principalmodel.Principal) *DataExchangeProviders {
-	return &DataExchangeProviders{resolve: resolve, imports: map[string]*recordDataExchangeImportProvider{}, exportProviders: map[string]modulehost.ExportProvider{}}
+	return &DataExchangeProviders{resolve: resolve, imports: map[string]*recordDataExchangeImportProvider{}, importProviders: map[string]modulehost.ImportProvider{}, exportProviders: map[string]modulehost.ExportProvider{}}
+}
+
+// RegisterImportProvider attaches an application-owned atomic or row-batch
+// provider to the shared Module/SaaS host bridge.
+func (p *DataExchangeProviders) RegisterImportProvider(key string, provider modulehost.ImportProvider) {
+	if p == nil || strings.TrimSpace(key) == "" || provider == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.importProviders[strings.TrimSpace(key)] = provider
 }
 
 func (p *DataExchangeProviders) Bind(importer *RecordImportApplicationService, exporter *RecordExportApplicationService) {
@@ -54,7 +66,14 @@ func (p *DataExchangeProviders) RegisterExportProvider(key string, provider modu
 }
 
 func (p *DataExchangeProviders) ImportProvider(key string) (modulehost.ImportProvider, bool) {
-	return dataExchangeImportProvider{owner: p}, strings.TrimSpace(key) == "records"
+	key = strings.TrimSpace(key)
+	if key == "records" {
+		return dataExchangeImportProvider{owner: p}, true
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	provider, ok := p.importProviders[key]
+	return provider, ok
 }
 func (p *DataExchangeProviders) ExportProvider(key string) (modulehost.ExportProvider, bool) {
 	key = strings.TrimSpace(key)

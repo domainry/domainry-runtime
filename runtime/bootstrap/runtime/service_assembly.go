@@ -6,23 +6,31 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+
 	auditsdk "github.com/domainry/domainry-audit-sdk"
 	auditmoduleimpl "github.com/domainry/domainry-audit/module"
 	connector "github.com/domainry/domainry-connector-sdk"
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
+	dataexchangemodulehost "github.com/domainry/domainry-data-exchange-sdk/modulehost"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	localartifact "github.com/domainry/domainry-lifecycle/artifact/filesystem"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
+	lifecyclepersistence "github.com/domainry/domainry-lifecycle/persistence"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	partysdk "github.com/domainry/domainry-party-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
-	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
+	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
+	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	deploymentseed "github.com/domainry/domainry-runtime/runtime/application/seed/deployment"
@@ -30,29 +38,27 @@ import (
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
-	localartifact "github.com/domainry/domainry-runtime/runtime/infrastructure/lifecycleartifact/filesystem"
+	agentlifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/agentlifecycle"
 	runtimeauditmodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	actionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/action"
-	agentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/agent"
 	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	automationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automation"
 	automationnotification "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automationnotification"
-	changeplanpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/changeplan"
 	deploymentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/deployment"
 	frontendcapabilitypersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/frontendcapability"
-	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
-	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/lifecycle"
+	notificationpublicationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
+	operationspersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
+	publicationhandoffpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
+	ratelimitpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/ratelimit"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
 	reportnotification "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/reportnotification"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
-	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
-	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
+	lifecyclemodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/lifecyclemodule"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 )
@@ -66,19 +72,23 @@ type runtimeServiceAssembly struct {
 }
 
 type runtimeExtensionRegistries struct {
-	businessHandlers                   *runtimeext.BusinessHandlerRegistry
-	connectorProviders                 *connector.Registry
-	notificationCompiler               func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
-	taskNotificationCommitter          workflowapplication.WorkflowTaskNotificationCommitter
-	integrationNotificationPublisher   integrationapplication.IntegrationNotificationPublisher
-	integrationCredentialNotifications integrationapplication.IntegrationCredentialNotificationCommitter
-	integrationCredentialExpirySource  integrationapplication.IntegrationCredentialExpirySource
-	notificationSubjectLifecycle       lifecyclecontract.SubjectDataHandler
-	notificationRetention              lifecyclecontract.OwnerLifecycleExecutor
-	auditRepository                    auditrepository.AuditRepository
-	auditSubjectLifecycle              lifecyclecontract.SubjectDataHandler
-	dataExchangeFactory                dataexchangesdk.Factory
-	agentBinding                       agentsdk.Binding
+	businessHandlers             *runtimeext.BusinessHandlerRegistry
+	connectorProviders           *connector.Registry
+	notificationCompiler         func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
+	taskNotificationCommitter    workflowapplication.WorkflowTaskNotificationCommitter
+	notificationPublisher        notificationIntentPublisher
+	integrationOwnerDelivery     integrationsdk.Delivery
+	integrationOwnerCatalog      integrationsdk.Catalog
+	dataExchangeProviderKey      string
+	dataExchangeImportProvider   dataexchangemodulehost.ImportProvider
+	dataExchangeExportProvider   dataexchangemodulehost.ExportProvider
+	integrationMode              integrationsdk.DeploymentMode
+	notificationSubjectLifecycle lifecyclecontract.SubjectDataHandler
+	notificationRetention        lifecyclecontract.OwnerLifecycleExecutor
+	auditRepository              auditrepository.AuditRepository
+	auditSubjectLifecycle        lifecyclecontract.SubjectDataHandler
+	dataExchangeFactory          dataexchangesdk.Factory
+	agentBinding                 agentsdk.Binding
 }
 
 func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest manifestmodel.ManifestSchema, notifications composition.NotificationRenderer, store *persistence.RuntimeStore, identityDirectory identitysdk.Directory, identityPrincipals identitysdk.PrincipalResolver, partyDirectory partysdk.Directory, auditApplication *auditapplication.AuditApplicationService, apiLimiter ratelimit.Limiter, workerDependencies workerplatform.Dependencies, extensionRegistries ...runtimeExtensionRegistries) (runtimeServiceAssembly, error) {
@@ -86,15 +96,18 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	connectorProviders := connector.NewRegistry()
 	var notificationCompiler func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	var taskNotificationCommitter workflowapplication.WorkflowTaskNotificationCommitter
-	var integrationNotificationPublisher integrationapplication.IntegrationNotificationPublisher
-	var integrationCredentialNotifications integrationapplication.IntegrationCredentialNotificationCommitter
-	var integrationCredentialExpirySource integrationapplication.IntegrationCredentialExpirySource
+	var notificationPublisher notificationIntentPublisher
+	var integrationOwnerDelivery integrationsdk.Delivery
+	var integrationOwnerCatalog integrationsdk.Catalog
 	var notificationSubjectLifecycle lifecyclecontract.SubjectDataHandler
 	var notificationRetention lifecyclecontract.OwnerLifecycleExecutor
 	var auditRepository auditrepository.AuditRepository
 	var auditSubjectLifecycle lifecyclecontract.SubjectDataHandler
 	var dataExchangeFactory dataexchangesdk.Factory
 	var agentBinding agentsdk.Binding
+	var dataExchangeProviderKey string
+	var dataExchangeImportProvider dataexchangemodulehost.ImportProvider
+	var dataExchangeExportProvider dataexchangemodulehost.ExportProvider
 	if len(extensionRegistries) > 0 && extensionRegistries[0].businessHandlers != nil {
 		businessHandlers = extensionRegistries[0].businessHandlers
 	} else {
@@ -108,9 +121,9 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	if len(extensionRegistries) > 0 {
 		notificationCompiler = extensionRegistries[0].notificationCompiler
 		taskNotificationCommitter = extensionRegistries[0].taskNotificationCommitter
-		integrationNotificationPublisher = extensionRegistries[0].integrationNotificationPublisher
-		integrationCredentialNotifications = extensionRegistries[0].integrationCredentialNotifications
-		integrationCredentialExpirySource = extensionRegistries[0].integrationCredentialExpirySource
+		notificationPublisher = extensionRegistries[0].notificationPublisher
+		integrationOwnerDelivery = extensionRegistries[0].integrationOwnerDelivery
+		integrationOwnerCatalog = extensionRegistries[0].integrationOwnerCatalog
 		notificationSubjectLifecycle = extensionRegistries[0].notificationSubjectLifecycle
 		notificationRetention = extensionRegistries[0].notificationRetention
 		if extensionRegistries[0].auditRepository != nil {
@@ -118,9 +131,12 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		}
 		if extensionRegistries[0].auditSubjectLifecycle != nil {
 			auditSubjectLifecycle = extensionRegistries[0].auditSubjectLifecycle
-			dataExchangeFactory = extensionRegistries[0].dataExchangeFactory
-			agentBinding = extensionRegistries[0].agentBinding
 		}
+		dataExchangeFactory = extensionRegistries[0].dataExchangeFactory
+		agentBinding = extensionRegistries[0].agentBinding
+		dataExchangeProviderKey = extensionRegistries[0].dataExchangeProviderKey
+		dataExchangeImportProvider = extensionRegistries[0].dataExchangeImportProvider
+		dataExchangeExportProvider = extensionRegistries[0].dataExchangeExportProvider
 	}
 	if auditRepository == nil || auditSubjectLifecycle == nil {
 		binding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(ctx,
@@ -140,16 +156,50 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		return runtimeServiceAssembly{}, fmt.Errorf("Data Exchange factory is required")
 	}
 	dataExchangeProviders := recordapplication.NewDataExchangeProviders(nil)
+	if strings.TrimSpace(dataExchangeProviderKey) != "" {
+		dataExchangeProviders.RegisterImportProvider(dataExchangeProviderKey, dataExchangeImportProvider)
+		dataExchangeProviders.RegisterExportProvider(dataExchangeProviderKey, dataExchangeExportProvider)
+	}
 	dataExchangeBinding, err := openDataExchangeBinding(ctx, dataExchangeFactory, dataexchangesdk.ApplicationRef{ApplicationID: valueOrDefault(manifest.TemplateID, "domainry-runtime"), RuntimeID: valueOrDefault(cfg.RuntimeVersion, "domainry-runtime")}, dataExchangeModuleHost{store: store, providers: dataExchangeProviders})
 	if err != nil {
 		return runtimeServiceAssembly{}, fmt.Errorf("open Data Exchange module: %w", err)
 	}
-	agentTaskRuns := agentpersistence.NewAgentTaskRunStore(store)
-	if err := ensureAgentRuntimeSchemas(ctx, agentpersistence.NewAgentSchemaMigration(store), agentTaskRuns); err != nil {
-		return runtimeServiceAssembly{}, err
+	var agentTaskRuns agentrepository.AgentTaskRunRepository
+	var agentTaskTransactions agentrepository.AgentTaskTransactionRepository
+	var agentLifecycle agentrepository.AgentLifecycleRepository
+	if agentBinding != nil {
+		persistenceBinding, ok := agentBinding.(agentrepository.Binding)
+		if !ok || persistenceBinding.AgentTaskRunRepository() == nil {
+			return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding returned no owned task repository")
+		}
+		agentTaskRuns = persistenceBinding.AgentTaskRunRepository()
+		lifecycleBinding, _ := agentBinding.(agentrepository.LifecycleBinding)
+		if lifecycleBinding != nil {
+			agentLifecycle = lifecycleBinding.AgentLifecycleRepository()
+		}
+		if agentLifecycle == nil {
+			return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding returned no lifecycle repository")
+		}
+		agentTaskTransactions, _ = agentTaskRuns.(agentrepository.AgentTaskTransactionRepository)
+		if agentTaskTransactions == nil {
+			return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding returned no transaction repository")
+		}
 	}
 	workerDependencies = workerplatform.NormalizeDependencies(workerDependencies)
-	lifecycleExecutors := lifecyclepersistence.DefaultOwnerExecutors(store, manifest.Objects...)
+	lifecycleExecutors := []lifecyclecontract.OwnerLifecycleExecutor{
+		ratelimitpersistence.LifecycleExecutor(store),
+		actionpersistence.LifecycleExecutor(store),
+		recordpersistence.LifecycleExecutor(store, manifest.Objects...),
+		operationspersistence.LifecycleExecutor(store),
+		notificationpublicationpersistence.LifecycleExecutor(store),
+		workflowpersistence.LifecycleExecutor(store),
+		automationpersistence.LifecycleExecutor(store),
+		runtimeauditmodule.LifecycleExecutor(store),
+		reportpersistence.LifecycleExecutor(store, agentLifecycle, manifest.Objects...),
+	}
+	if agentLifecycle != nil {
+		lifecycleExecutors = append(lifecycleExecutors, agentlifecyclepersistence.NewExecutor(store, agentLifecycle))
+	}
 	lifecycleExecutorPorts := append([]lifecyclecontract.OwnerLifecycleExecutor(nil), lifecycleExecutors...)
 	if notificationRetention != nil {
 		lifecycleExecutorPorts = append(lifecycleExecutorPorts, notificationRetention)
@@ -158,22 +208,25 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	if uploadDirectory == "" {
 		uploadDirectory = "../data/uploads"
 	}
-	integrationSubjectLifecycle := integrationpersistence.NewIntegrationSubjectLifecycleStore(store)
 	lifecycleArtifacts := localartifact.NewSubjectStore(uploadDirectory)
-	lifecycleFileArtifacts := lifecyclepersistence.NewFileArtifactStore(store, manifest.Objects, uploadDirectory)
+	lifecycleHost := lifecyclemodule.NewHost(store)
+	lifecycleFileArtifacts := lifecyclepersistence.NewFileArtifactStore(lifecycleHost, lifecyclemodule.NewUploadFieldCatalog(manifest.Objects), uploadDirectory,
+		lifecyclepersistence.WithUploadArtifactReferences(recordpersistence.NewUploadArtifactReferences(store, manifest.Objects)),
+		lifecyclepersistence.WithExpiredUploadReferenceCleaner(reportpersistence.NewUploadArtifactCleaner(store, manifest.Objects)),
+	)
 	fileScanKey := sha256.Sum256([]byte("domainry-file-scan-receipt-v1:" + cfg.IntegrationSecretKey))
 	fileScans := uploadapplication.NewFileScanReceiptVerifier(lifecycleFileArtifacts, fileScanKey[:])
 	recordSubjectLifecycle := recordapplication.NewRecordSubjectLifecycleApplicationService(records, manifest.Objects, lifecycleArtifacts, manifest.IdentityProfileExtensions)
 	reportDatasetStore := reportpersistence.NewReportDatasetStore(store)
-	var agentTaskRunner agentapplication.AgentTaskRunner
-	var interactiveAgentRunner agentapplication.InteractiveAgentRunner
+	var agentTaskRunner agentsdk.TaskRunner
+	var interactiveAgentRunner agentsdk.InteractiveRunner
 	if agentBinding != nil {
-		agentTaskRunner = runtimeAgentTaskRunner{runner: agentBinding.TaskRunner()}
-		interactiveAgentRunner = runtimeInteractiveAgentRunner{runner: agentBinding.InteractiveRunner()}
+		agentTaskRunner = agentBinding.TaskRunner()
+		interactiveAgentRunner = agentBinding.InteractiveRunner()
 	}
 	agentTaskCredentialKey := sha256.Sum256([]byte("domainry-agent-task-credential-v1:" + cfg.IntegrationSecretKey))
 	projectRevision, metadataRevision := runtimeActionRevisions(manifest)
-	subjectHandlers := []lifecyclecontract.SubjectDataHandler{recordSubjectLifecycle, integrationSubjectLifecycle, auditSubjectLifecycle}
+	subjectHandlers := []lifecyclecontract.SubjectDataHandler{recordSubjectLifecycle, auditSubjectLifecycle}
 	if notificationSubjectLifecycle != nil {
 		subjectHandlers = append(subjectHandlers, notificationSubjectLifecycle)
 	}
@@ -202,15 +255,16 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			AuditApplication:                    auditApplication,
 			AuditExportTokenKey:                 []byte(cfg.AuditExportTokenKey),
 			ApplicationSchema:                   appschemapersistence.NewApplicationSchemaStore(store),
-			IntegrationConfig:                   integrationpersistence.NewIntegrationConfigStore(store),
-			IntegrationEvents:                   integrationpersistence.NewIntegrationEventStore(store),
-			IntegrationDelivery:                 integrationpersistence.NewIntegrationDeliveryStore(store),
-			IntegrationWorker:                   integrationpersistence.NewIntegrationWorkerStore(store),
+			IntegrationConfig:                   nil,
+			IntegrationEvents:                   nil,
+			IntegrationPublication:              publicationhandoffpersistence.NewStore(store),
+			IntegrationWorker:                   nil,
+			IntegrationPublicationWorker:        publicationhandoffpersistence.NewWorkerStore(store),
 			WorkerWakeups:                       store.WorkerWakeups(),
 			WorkflowWorker:                      workflowpersistence.NewWorkflowWorkerStore(store),
 			WorkflowDefinitions:                 workflowpersistence.NewWorkflowDefinitionStore(store),
 			WorkflowProcesses:                   workflowpersistence.NewWorkflowProcessStore(store),
-			WorkflowDecisions:                   workflowpersistence.NewWorkflowDecisionStore(store),
+			WorkflowDecisions:                   workflowpersistence.NewWorkflowDecisionStore(store, agentTaskTransactions),
 			WorkflowNotificationCompiler:        notificationCompiler,
 			WorkflowTaskNotificationCommitter:   taskNotificationCommitter,
 			RecordNotificationCompiler:          notificationCompiler,
@@ -218,11 +272,10 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			ReportSnapshotNotificationCommitter: reportnotification.NewReportSnapshotNotificationCommitter(store),
 			AutomationNotificationCompiler:      notificationCompiler,
 			AutomationNotificationCommitter:     automationnotification.NewAutomationExecutionNotificationCommitter(store),
-			NotificationIntentPublisher:         notificationIntentPublisherCallback(notificationIntentPublisher(integrationNotificationPublisher)),
+			NotificationIntentPublisher:         notificationIntentPublisherCallback(notificationPublisher),
 			AutomationWorker:                    automationpersistence.NewAutomationWorkerStore(store),
 			AutomationExecutions:                automationpersistence.NewAutomationExecutionStore(store),
-			BusinessChangePlans:                 changeplanpersistence.NewBusinessChangePlanStore(store),
-			BusinessEvidence:                    changeplanpersistence.NewBusinessEvidenceStore(store),
+			BusinessEvidence:                    nil,
 			ActionExecutions:                    actionpersistence.NewActionBusinessExecutionStore(store),
 			ActionAssurance:                     actionpersistence.NewActionAssuranceStore(store),
 			BusinessHandlers:                    businessHandlers,
@@ -265,24 +318,22 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 				prepared["_runtime_scan_evidence_ref"] = evidence.EvidenceRef
 				return prepared, nil
 			},
-			ConnectorProviders:                 connectorProviders,
-			RuntimeStatus:                      deploymentpersistence.NewRuntimeStatusStore(store),
-			FrontendCapabilities:               frontendcapabilitypersistence.NewFrontendCapabilityStore(store),
-			Notifications:                      notifications,
-			IdentityDirectory:                  identityDirectory,
-			PartyDirectory:                     partyDirectory,
-			IntegrationAPILimiter:              apiLimiter,
-			IntegrationNotificationCompiler:    notificationCompiler,
-			IntegrationNotificationPublisher:   integrationNotificationPublisher,
-			IntegrationCredentialNotifications: integrationCredentialNotifications,
-			IntegrationCredentialExpirySource:  integrationCredentialExpirySource,
-			Lifecycle:                          lifecyclepersistence.NewLifecycleStore(store),
-			LifecycleExecutors:                 lifecycleExecutorPorts,
-			LifecycleArtifacts:                 lifecycleArtifacts,
-			LifecycleUploadArtifacts:           lifecycleFileArtifacts,
-			LifecycleSubjectHandlers:           subjectHandlers,
-			LifecycleExternalErasure:           integrationSubjectLifecycle,
-			Worker:                             workerDependencies,
+			ConnectorProviders:       connectorProviders,
+			RuntimeStatus:            deploymentpersistence.NewRuntimeStatusStore(store),
+			FrontendCapabilities:     frontendcapabilitypersistence.NewFrontendCapabilityStore(store),
+			Notifications:            notifications,
+			IdentityDirectory:        identityDirectory,
+			PartyDirectory:           partyDirectory,
+			IntegrationAPILimiter:    apiLimiter,
+			IntegrationOwnerDelivery: integrationOwnerDelivery,
+			IntegrationOwnerCatalog:  integrationOwnerCatalog,
+			Lifecycle:                lifecyclepersistence.NewLifecycleStore(lifecycleHost),
+			LifecycleExecutors:       lifecycleExecutorPorts,
+			LifecycleArtifacts:       lifecycleArtifacts,
+			LifecycleUploadArtifacts: lifecycleFileArtifacts,
+			LifecycleSubjectHandlers: subjectHandlers,
+			LifecycleExternalErasure: nil,
+			Worker:                   workerDependencies,
 		},
 	})
 	lifecyclePrincipal := principalmodel.NewSystemPrincipal("runtime-lifecycle", principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "install default lifecycle policies"))
@@ -297,8 +348,6 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		},
 		func() {
 			services.Applications().Scheduler.ConfigureWorker(schedulerapplication.WorkerConfig{Enabled: cfg.SchedulerEnabled, PollInterval: cfg.SchedulerPollInterval, BatchSize: cfg.SchedulerBatchSize, LeaseTTL: cfg.SchedulerLeaseTTL, MaxCatchupWindows: cfg.SchedulerMaxCatchupWindows})
-			services.Applications().Integrations.RegisterSharedIntegrationOutboxSenders()
-			services.Applications().Integrations.RegisterProviderIntegrationOutboxSenders()
 		},
 		func() error {
 			return services.Applications().Workflows.InitializePublishedWorkflowDefinitions(ctx, manifest.Workflows, workflowScope)

@@ -21,7 +21,7 @@ SaaS mode keeps them in the remote Identity service.
 
 Registered schema tables:
 
-- `_schema_materializations`, `_schema_migrations` — `installation_scoped`
+- `_schema_migrations` — `installation_scoped` and the sole host/module migration ledger
 - `runtime_release_cohorts`, `runtime_release_instances` — `installation_scoped`;
   they coordinate one process release identity across the whole Runtime
   installation and must never be partitioned by tenant workspace
@@ -31,7 +31,8 @@ Registered schema tables:
   explicit system purpose and does not accept a tenant workspace discriminator
 - `runtime_worker_queue_scopes` — `runtime_global`; it enumerates explicit
   workspace scope keys for governed cross-workspace worker queue discovery
-- `runtime_rate_limit_bucket` — `runtime_global` technical storage; the bucket
+- `runtime_rate_limit_bucket` — `runtime_global` technical storage used by the
+  `database` rate-limit backend; the bucket
   key supplied by each tenant-facing caller includes its explicit workspace or
   tenant-owned credential scope, while the shared limiter itself does not infer
   or substitute a workspace
@@ -43,7 +44,6 @@ Registered schema tables:
   queried through a wildcard tenant scope
 - `runtime_database_retirements` — `runtime_global`; object retirement, access
   observations, approvals and backup evidence never inherit tenant scope
-- `_business_seed_provenance` — `installation_scoped`
 - `_audit_events`, `audit_export_artifacts`, `transaction_boundary_intents` — `workspace_scoped`
 - record/action/idempotency: `business_action_executions`,
   `action_assurance_grants`, `record_mutation_executions`
@@ -60,16 +60,16 @@ Registered schema tables:
   — `installation_scoped`
 - `business_change_plan_operations`, `business_localized_text`, `business_record_localized_value` — `workspace_scoped`
 - definition catalog: `object_definitions`, `field_definitions`,
-  `validation_definitions`, `view_definitions`, `action_definitions`,
-  `scheduler_definitions`, `preference_definitions`, `rule_set_definitions`, `report_definitions`,
-  `operation_state_example_definitions`, `sensitive_field_policy_definitions`,
-  `report_export_control_definitions`, `dictionary_definitions`,
-  `connector_definitions`, `integration_event_mapping_definitions`,
-  `surface_definitions`, `component_definitions`, `entrypoint_definitions`,
-  `skill_definitions`, `agent_definitions`, `agent_entrypoint_definitions`,
-  `agent_service_principal_definitions`, `agent_task_definitions`, `role_definitions`,
-  `identity_profile_binding_definitions` — `installation_scoped`
-- `report_snapshots` — `workspace_scoped`
+  `validation_definitions`, `action_definitions`,
+  `dictionary_definitions`, `connector_definitions`, `integration_event_mapping_definitions`,
+  `role_definitions` — `installation_scoped`
+- Scheduler Module-owned `scheduler_definitions` — `installation_scoped`
+- Report Module-owned `report_definitions`, `operation_state_example_definitions`,
+  `sensitive_field_policy_definitions`, `report_export_control_definitions` — `installation_scoped`;
+  `report_snapshots` — `workspace_scoped`
+- Identity-owned `identity_profile_binding_definitions` — `installation_scoped`
+- Agent Module-owned `skill_definitions`, `agent_definitions`, `agent_entrypoint_definitions`,
+  `agent_service_principal_definitions`, `agent_task_definitions` — `installation_scoped`
 - Data Exchange Module-owned `data_exchange_jobs`, `data_exchange_chunks`, `data_exchange_artifacts` — `workspace_scoped`; `data_exchange_queue_scopes` contains only payload-free workspace scheduling identities. SaaS mode keeps the same ownership boundary remotely.
 - Party Module-owned foundation tables in the borrowed Runtime database (or isolated behind Party SaaS): `party_parties`, `party_persons`,
   `party_organizations`, `party_contact_points`, `party_addresses`,
@@ -77,18 +77,20 @@ Registered schema tables:
   `party_privacy_preferences`, `party_marketing_subscriptions`,
   `party_job_catalog`, `party_positions`, `party_organization_extensions`,
   `party_organization_extension_memberships` — `workspace_scoped`
-- integration: `integration_connections`, `integration_api_keys`,
+- Integration Module-owned tables in the borrowed Runtime database (or isolated behind Integration SaaS): `integration_connections`, `integration_api_keys`,
   `integration_secret_materials`, `integration_secrets`,
   `integration_external_identities`, `integration_credential_refresh_leases`,
   `integration_webhook_subscriptions`, `integration_webhook_nonces`,
   `web_push_subscriptions`,
   `integration_events`, `integration_invocations`,
-  `integration_outbox_messages`, `integration_event_mapping_intents`,
+  `integration_event_mapping_intents`,
   `connector_provider_states`
   — `workspace_scoped`
-- Notification SaaS publication handoff: `notification_publication_outbox`
-  — `workspace_scoped`; all Notification-owned tables are outside the Runtime
-  schema and are governed by the selected Module or SaaS Binding.
+- Runtime durable publication handoff: `runtime_publication_outbox`
+  — `workspace_scoped`; `publication_type` separates `integration.connector`
+  from `notification.saas` while sharing lease, retry, fencing and recovery.
+  Notification-owned tables remain outside the Runtime schema and are governed
+  by the selected Module or SaaS Binding.
 - `frontend_capability_manifests` — `workspace_scoped`
 - lifecycle governance: `lifecycle_policy_versions`, `lifecycle_legal_holds`,
   `lifecycle_cleanup_jobs`, `lifecycle_subject_requests`,

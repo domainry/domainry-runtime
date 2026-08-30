@@ -5,19 +5,18 @@ import capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/c
 const metadataJSONSchemaDraft = "https://json-schema.org/draft/2020-12/schema"
 
 func metadataAuthoringRequestSchema(payload capabilitycontract.CapabilityAuthoringSchema, objectKeyRequired bool) *capabilitycontract.CapabilityAuthoringSchema {
-	required := []string{"expected_schema_hash", "payload"}
+	required := []string{"payload"}
 	if objectKeyRequired {
 		required = append(required, "object_key")
 	}
 	return &capabilitycontract.CapabilityAuthoringSchema{
 		Schema: metadataJSONSchemaDraft, Type: "object", AdditionalProperties: metadataBoolPointer(false), Required: required,
 		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-			"object_key":           metadataStringSchema("Runtime object owning this resource."),
-			"name":                 metadataStringSchema("Optional display name stored with the definition."),
-			"source_kind":          metadataStringSchema("Stable authoring source kind."),
-			"source_id":            metadataStringSchema("Stable authoring source identifier."),
-			"expected_schema_hash": metadataStringSchema("Current Runtime schema hash used for optimistic concurrency."),
-			"payload":              payload,
+			"object_key":  metadataStringSchema("Runtime object owning this resource."),
+			"name":        metadataStringSchema("Optional display name stored with the definition."),
+			"source_kind": metadataStringSchema("Stable authoring source kind."),
+			"source_id":   metadataStringSchema("Stable authoring source identifier."),
+			"payload":     payload,
 		},
 	}
 }
@@ -171,10 +170,9 @@ func metadataViewPayloadSchema() capabilitycontract.CapabilityAuthoringSchema {
 
 func metadataAuthoringExecution(resource string) *capabilitycontract.CapabilityAuthoringExecution {
 	return &capabilitycontract.CapabilityAuthoringExecution{
-		ReadSet: []string{"metadata.schema_snapshot", resource}, WriteSet: []string{"metadata.definition_version", resource},
-		Transaction: "reviewed_change_plan_transaction", Idempotency: "idempotency_key_and_plan_revision",
-		SideEffects: []string{"audit:business_change_plan.item_applied", "schema_snapshot_rebuild"}, SideEffectLevel: "internal", Compensation: "restore_as_new_system_draft", PermissionModel: "workspace.admin",
-		ChangeControl: "reviewed_system_draft_change_plan",
+		ReadSet:     []string{"metadata.schema_snapshot", resource},
+		Transaction: "read_only_candidate_validation", Idempotency: "naturally_idempotent_at_candidate_hash",
+		SideEffectLevel: "none", PermissionModel: "workspace.admin", ChangeControl: "source_controlled_json",
 	}
 }
 
@@ -182,16 +180,9 @@ func metadataConfigurationRoutes(resourceType string) []string {
 	base := "/metadata/definitions/" + resourceType + "/{resourceKey}"
 	return []string{
 		"GET " + base,
-		"GET " + base + "/versions",
 		"POST " + base + "/validate",
 		"GET /domain-system-snapshot",
 		"GET /domain-reference-graph",
-		"GET /tenant-admin/change-plans/{planID}",
-		"PUT /tenant-admin/change-plans/{planID}",
-		"POST /tenant-admin/change-plans/{planID}/simulate",
-		"POST /tenant-admin/change-plans/{planID}/review",
-		"POST /tenant-admin/change-plans/{planID}/approve",
-		"POST /tenant-admin/change-plans/apply",
 	}
 }
 

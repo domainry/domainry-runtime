@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"strings"
 
+	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/idempotency"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	operationshttp "github.com/domainry/domainry-runtime/runtime/transport/http/operations"
 )

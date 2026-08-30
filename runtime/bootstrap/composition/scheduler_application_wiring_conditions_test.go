@@ -6,12 +6,10 @@ import (
 	"errors"
 	"testing"
 
-	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
-	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -31,35 +29,14 @@ func (schedulerMetadataFunction) SyncManifest(context.Context, principalmodel.Sy
 func (schedulerMetadataFunction) MigrationPlan(context.Context, principalmodel.SystemScope, manifestmodel.ManifestSchema) ([]appschemamodel.ApplicationSchemaMigrationStep, error) {
 	return nil, nil
 }
-func (schedulerMetadataFunction) PublishDefinition(context.Context, principalmodel.SystemScope, string, string, appschemamodel.ApplicationDefinitionUpsertRequest, auditmodel.AuditEvent) (appschemamodel.ApplicationDefinition, error) {
-	return appschemamodel.ApplicationDefinition{}, nil
-}
-func (schedulerMetadataFunction) CompleteDefinitionRefresh(context.Context, principalmodel.SystemScope, string, string, string, string) error {
-	return nil
-}
-func (schedulerMetadataFunction) ApplyDefinitionMutations(context.Context, principalmodel.SystemScope, []appschemamodel.ApplicationDefinitionMutation, []auditmodel.AuditEvent, *changeplanmodel.BusinessChangePlanPublication) ([]appschemamodel.ApplicationDefinition, error) {
-	return nil, nil
-}
-func (schedulerMetadataFunction) DisableDefinition(context.Context, principalmodel.SystemScope, string, string) error {
-	return nil
-}
 func (schedulerMetadataFunction) ListDefinitions(context.Context, principalmodel.SystemScope, string) ([]appschemamodel.ApplicationDefinition, error) {
 	return nil, nil
 }
 func (schedulerMetadataFunction) GetDefinition(context.Context, principalmodel.SystemScope, string, string) (appschemamodel.ApplicationDefinition, bool, error) {
 	return appschemamodel.ApplicationDefinition{}, false, nil
 }
-func (schedulerMetadataFunction) ListDefinitionVersions(context.Context, principalmodel.SystemScope, string, string) ([]appschemamodel.ApplicationDefinitionVersion, error) {
-	return nil, nil
-}
-func (schedulerMetadataFunction) RollbackDefinition(context.Context, principalmodel.SystemScope, string, string, appschemamodel.ApplicationDefinitionRollbackRequest, auditmodel.AuditEvent) (appschemamodel.ApplicationDefinition, error) {
-	return appschemamodel.ApplicationDefinition{}, nil
-}
 func (schedulerMetadataFunction) ListLocalizedTexts(context.Context, string, appschemamodel.LocalizedTextQuery) ([]appschemamodel.LocalizedText, error) {
 	return nil, nil
-}
-func (schedulerMetadataFunction) UpsertLocalizedText(context.Context, string, appschemamodel.LocalizedTextUpsertRequest) (appschemamodel.LocalizedText, error) {
-	return appschemamodel.LocalizedText{}, nil
 }
 
 type schedulerMetadataSourceRepository struct {
@@ -67,10 +44,8 @@ type schedulerMetadataSourceRepository struct {
 	definitions []appschemamodel.ApplicationDefinition
 	definition  appschemamodel.ApplicationDefinition
 	found       bool
-	versions    []appschemamodel.ApplicationDefinitionVersion
 	listErr     error
 	getErr      error
-	versionsErr error
 }
 
 func (r schedulerMetadataSourceRepository) ListDefinitions(context.Context, principalmodel.SystemScope, string) ([]appschemamodel.ApplicationDefinition, error) {
@@ -78,9 +53,6 @@ func (r schedulerMetadataSourceRepository) ListDefinitions(context.Context, prin
 }
 func (r schedulerMetadataSourceRepository) GetDefinition(context.Context, principalmodel.SystemScope, string, string) (appschemamodel.ApplicationDefinition, bool, error) {
 	return r.definition, r.found, r.getErr
-}
-func (r schedulerMetadataSourceRepository) ListDefinitionVersions(context.Context, principalmodel.SystemScope, string, string) ([]appschemamodel.ApplicationDefinitionVersion, error) {
-	return r.versions, r.versionsErr
 }
 
 type schedulerMetadataMarker string
@@ -107,9 +79,6 @@ func TestSchedulerApplicationDefinitionSourceConditions(t *testing.T) {
 		if _, found, err := source.GetSchedulerDefinition(t.Context(), "nightly"); err != nil || found {
 			t.Fatalf("unavailable get found=%v err=%v", found, err)
 		}
-		if versions, err := source.ListSchedulerDefinitionVersions(t.Context(), "nightly"); err != nil || versions != nil {
-			t.Fatalf("unavailable versions=%#v err=%v", versions, err)
-		}
 	}
 
 	cases := []struct {
@@ -133,14 +102,6 @@ func TestSchedulerApplicationDefinitionSourceConditions(t *testing.T) {
 			_, _, err := source.GetSchedulerDefinition(t.Context(), "nightly")
 			return err
 		}},
-		{"versions error", schedulerMetadataSourceRepository{ApplicationSchemaRepository: base, versionsErr: wantErr}, func(source schedulerApplicationDefinitionSource) error {
-			_, err := source.ListSchedulerDefinitionVersions(t.Context(), "nightly")
-			return err
-		}},
-		{"versions decode", schedulerMetadataSourceRepository{ApplicationSchemaRepository: base, versions: []appschemamodel.ApplicationDefinitionVersion{{SchemaVersion: "v1", Payload: []byte("{")}}}, func(source schedulerApplicationDefinitionSource) error {
-			_, err := source.ListSchedulerDefinitionVersions(t.Context(), "nightly")
-			return err
-		}},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
@@ -155,7 +116,6 @@ func TestSchedulerApplicationDefinitionSourceConditions(t *testing.T) {
 		definitions:                 []appschemamodel.ApplicationDefinition{valid},
 		definition:                  valid,
 		found:                       true,
-		versions:                    []appschemamodel.ApplicationDefinitionVersion{{SchemaVersion: "v1", Payload: json.RawMessage(`{"enabled":false}`), CreatedAt: "created"}},
 	}
 	source := schedulerApplicationDefinitionSource{repository: repo}
 	if records, err := source.ListSchedulerDefinitions(t.Context()); err != nil || len(records) != 1 || records[0].Data["key"] != "nightly" {
@@ -168,9 +128,6 @@ func TestSchedulerApplicationDefinitionSourceConditions(t *testing.T) {
 	missing.found = false
 	if _, found, err := (schedulerApplicationDefinitionSource{repository: missing}).GetSchedulerDefinition(t.Context(), "missing"); err != nil || found {
 		t.Fatalf("missing found=%v err=%v", found, err)
-	}
-	if versions, err := source.ListSchedulerDefinitionVersions(t.Context(), "nightly"); err != nil || len(versions) != 1 || versions[0].Data["enabled"] != false {
-		t.Fatalf("versions=%#v err=%v", versions, err)
 	}
 }
 

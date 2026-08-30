@@ -11,7 +11,6 @@ func ApplicationSchemaRelationAuthoringCapability() capabilitycontract.Capabilit
 			{Key: "target", Type: "object_key", Required: true}, {Key: "cardinality", Type: "string", Default: "many_to_one", Enum: []string{"many_to_one", "one_to_one"}},
 			{Key: "on_delete", Type: "string", Default: "restrict", Enum: []string{"cascade", "restrict", "set_null"}},
 			{Key: "inverse_name", Type: "string"}, {Key: "indexed", Type: "boolean", Default: true},
-			metadataExpectedSchemaHashParameter(),
 		},
 		Permissions: []string{"metadata.read", "metadata.write"}, ValidationEndpoint: "POST /metadata/definitions/field/{resourceKey}/validate",
 		ConfigurationRoutes: metadataConfigurationRoutes("field"), FrontendSupportKey: "metadata.relation.editor.v1",
@@ -37,7 +36,7 @@ func ApplicationSchemaRelationAuthoringCapability() capabilitycontract.Capabilit
 		Sources: []capabilitycontract.CapabilityAuthoringSource{
 			{Kind: "contract", Path: "runtime/domain/appschema/contract/appschema_relation_authoring.go", Symbol: "ApplicationSchemaRelationAuthoringCapability"},
 			{Kind: "validation", Path: "runtime/domain/appschema/validation/appschema_field_mutation_validation.go", Symbol: "ApplicationSchemaNormalizeFieldMutation"},
-			{Kind: "service", Path: "runtime/application/appschema/appschema_definition_orchestration_application_service.go", Symbol: "ApplicationSchemaApplicationService.UpsertApplicationDefinition"},
+			{Kind: "service", Path: "runtime/application/appschema/appschema_definition_validation_application_service.go", Symbol: "ApplicationSchemaApplicationService.ValidateApplicationDefinitionPayload"},
 		},
 	}
 }

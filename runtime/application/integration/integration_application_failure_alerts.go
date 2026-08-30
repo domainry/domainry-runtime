@@ -38,7 +38,7 @@ func (s *IntegrationApplicationService) failDueEvent(ctx context.Context, event 
 	errorText := stableIntegrationFailureCode(failure, "backend.integration.event.processing_failed")
 	failureClass := integrationFailureClass(failure)
 	if !failureClass.Retryable() || event.AttemptCount >= integrationruntime.IntegrationEventMaxAttempts {
-		saved, err := s.workerRepo.UpdateEventStatus(ctx, event.WorkspaceID, event.ID, event.LeaseOwner, event.FencingToken, "dead_letter", errorText, s.worker.Clock.Now().Format(time.RFC3339))
+		saved, err := s.eventWorkerRepo.UpdateEventStatus(ctx, event.WorkspaceID, event.ID, event.LeaseOwner, event.FencingToken, "dead_letter", errorText, s.worker.Clock.Now().Format(time.RFC3339))
 		if err != nil {
 			if mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
 				return event, "skipped"
@@ -49,7 +49,7 @@ func (s *IntegrationApplicationService) failDueEvent(ctx context.Context, event 
 		s.enqueueFailureAlert(ctx, "integration_event_dead_letter", map[string]any{"source_type": "integration_event", "source_id": saved.ID, "provider": saved.Provider, "event_type": saved.EventType, "external_id": saved.ExternalID, "status": saved.Status, "attempt_count": saved.AttemptCount, "error_code": errorText, "workspace_id": saved.WorkspaceID}, saved.WorkspaceID, saved.ID, principal)
 		return saved, "dead_lettered"
 	}
-	saved, err := s.workerRepo.ScheduleEventRetry(ctx, event.WorkspaceID, event.ID, event.LeaseOwner, event.FencingToken, s.integrationRetryDelaySeconds(event.AttemptCount), errorText, s.worker.Clock.Now().Format(time.RFC3339))
+	saved, err := s.eventWorkerRepo.ScheduleEventRetry(ctx, event.WorkspaceID, event.ID, event.LeaseOwner, event.FencingToken, s.integrationRetryDelaySeconds(event.AttemptCount), errorText, s.worker.Clock.Now().Format(time.RFC3339))
 	if err != nil {
 		if mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
 			return event, "skipped"
@@ -68,7 +68,7 @@ func (s *IntegrationApplicationService) failDueOutboxMessage(ctx context.Context
 	}
 	if integrationpolicy.IntegrationProviderOutcomeUncertain(failure, responseRef) {
 		errorText = "backend.integration.outbox.outcome_uncertain"
-		saved, err := s.workerRepo.UpdateOutboxStatus(ctx, message.WorkspaceID, message.ID, message.LeaseOwner, message.FencingToken, "quarantined", responseRef, errorText, "", s.worker.Clock.Now().Format(time.RFC3339))
+		saved, err := s.publicationWorkerRepo.UpdateOutboxStatus(ctx, message.WorkspaceID, message.ID, message.LeaseOwner, message.FencingToken, "quarantined", responseRef, errorText, "", s.worker.Clock.Now().Format(time.RFC3339))
 		if err != nil {
 			if mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
 				return message, "skipped"
@@ -83,13 +83,13 @@ func (s *IntegrationApplicationService) failDueOutboxMessage(ctx context.Context
 	if !failureClass.Retryable() || message.AttemptCount >= integrationruntime.IntegrationOutboxMaxAttempts {
 		if err := s.enqueueNotificationFallback(ctx, message, principal); err != nil {
 			fallbackCode := stableIntegrationFailureCode(err, "backend.notification.fallback_enqueue_failed")
-			saved, retryErr := s.workerRepo.ScheduleOutboxRetry(ctx, message.WorkspaceID, message.ID, message.LeaseOwner, message.FencingToken, s.integrationRetryDelaySeconds(message.AttemptCount), fallbackCode, s.worker.Clock.Now().Format(time.RFC3339))
+			saved, retryErr := s.publicationWorkerRepo.ScheduleOutboxRetry(ctx, message.WorkspaceID, message.ID, message.LeaseOwner, message.FencingToken, s.integrationRetryDelaySeconds(message.AttemptCount), fallbackCode, s.worker.Clock.Now().Format(time.RFC3339))
 			if retryErr == nil {
 				s.audit(ctx, "notification_fallback_enqueue_retried", "integration_outbox", message.ID, principal, "Retrying dead-letter transition because notification fallback could not be persisted", integrationprojection.IntegrationOutboxAuditShape(message), integrationprojection.IntegrationOutboxAuditShape(saved), map[string]any{"error_code": fallbackCode})
 				return saved, "retried"
 			}
 		}
-		saved, err := s.workerRepo.UpdateOutboxStatus(ctx, message.WorkspaceID, message.ID, message.LeaseOwner, message.FencingToken, "dead_letter", "", errorText, "", s.worker.Clock.Now().Format(time.RFC3339))
+		saved, err := s.publicationWorkerRepo.UpdateOutboxStatus(ctx, message.WorkspaceID, message.ID, message.LeaseOwner, message.FencingToken, "dead_letter", "", errorText, "", s.worker.Clock.Now().Format(time.RFC3339))
 		if err != nil {
 			if mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
 				return message, "skipped"
@@ -104,7 +104,7 @@ func (s *IntegrationApplicationService) failDueOutboxMessage(ctx context.Context
 		_ = s.emitFailedAppointmentBookingEvent(ctx, saved, errorText, principal)
 		return saved, "dead_lettered"
 	}
-	saved, err := s.workerRepo.ScheduleOutboxRetry(ctx, message.WorkspaceID, message.ID, message.LeaseOwner, message.FencingToken, s.integrationRetryDelaySeconds(message.AttemptCount), errorText, s.worker.Clock.Now().Format(time.RFC3339))
+	saved, err := s.publicationWorkerRepo.ScheduleOutboxRetry(ctx, message.WorkspaceID, message.ID, message.LeaseOwner, message.FencingToken, s.integrationRetryDelaySeconds(message.AttemptCount), errorText, s.worker.Clock.Now().Format(time.RFC3339))
 	if err != nil {
 		if mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
 			return message, "skipped"

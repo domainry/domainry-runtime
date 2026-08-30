@@ -10,7 +10,7 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"

@@ -142,7 +142,7 @@ func (s *BusinessSystemApplicationService) businessResourceSources(ctx context.C
 	return items, nil
 }
 
-var businessSnapshotGovernanceCategories = []string{"frontend_capabilities", "object_record_counts", "resource_sources", "runtime_state.automation", "runtime_state.integrations", "runtime_state.reports", "runtime_state.scheduler", "seed_records"}
+var businessSnapshotGovernanceCategories = []string{"frontend_capabilities", "object_record_counts", "resource_sources", "runtime_state.automation", "runtime_state.integrations", "runtime_state.reports", "runtime_state.scheduler"}
 
 func baseBusinessSnapshotVisibility() map[string]string {
 	return map[string]string{"schema": "visible"}
@@ -310,7 +310,7 @@ func businessSystemFrontendEntries(source []deploymentmodel.FrontendCapabilitySu
 			SupportKey: entry.SupportKey, CapabilityKeys: append([]string(nil), entry.CapabilityKeys...), Route: entry.Route,
 			RequiredPermissions: append([]string(nil), entry.RequiredPermissions...), FeatureModule: entry.FeatureModule,
 			AcceptanceTests: append([]string(nil), entry.AcceptanceTests...), ActorRoles: append([]string(nil), entry.ActorRoles...),
-			BusinessObjects: append([]string(nil), entry.BusinessObjects...), ViewKeys: append([]string(nil), entry.ViewKeys...),
+			BusinessObjects:    append([]string(nil), entry.BusinessObjects...),
 			ImplementedActions: append([]string(nil), entry.ImplementedActions...), ReportKeys: append([]string(nil), entry.ReportKeys...),
 			FieldKeys: append([]string(nil), entry.FieldKeys...), AcceptanceClaims: append([]string(nil), entry.AcceptanceClaims...),
 		})

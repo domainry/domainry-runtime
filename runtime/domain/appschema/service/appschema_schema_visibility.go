@@ -1,13 +1,13 @@
 package service
 
 import (
-	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	"time"
+
+	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityevaluator "github.com/domainry/domainry-identity-sdk/authorization/evaluator"
 
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -16,6 +16,7 @@ import (
 
 	"strings"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -70,30 +71,16 @@ func SnapshotForPrincipal(snapshot appschemamodel.ApplicationSchemaSnapshot, pri
 			visibleGuardedWrites = append(visibleGuardedWrites, contract)
 		}
 	}
-	visibleViews := make([]definitionmodel.ViewSchema, 0, len(snapshot.Views))
-	for _, view := range snapshot.Views {
-		if visibleObjectKeys[view.ObjectKey] {
-			visibleViews = append(visibleViews, view)
-		}
-	}
 	visibleReports := make([]reportmodel.ReportSchema, 0, len(snapshot.Reports))
 	for _, report := range snapshot.Reports {
 		if reportVisibleForPrincipal(report, principal, visibleObjectKeys) {
 			visibleReports = append(visibleReports, report)
 		}
 	}
-	visibleEntryPoints := make([]definitionmodel.EntryPointSchema, 0, len(snapshot.EntryPoints))
-	for _, entrypoint := range snapshot.EntryPoints {
-		if principal.HasAllPermissions(entrypoint.RequiredPermissions) {
-			visibleEntryPoints = append(visibleEntryPoints, entrypoint)
-		}
-	}
 	snapshot.Objects = visibleObjects
-	snapshot.Views = visibleViews
 	snapshot.Actions = visibleActions
 	snapshot.GuardedWrites = visibleGuardedWrites
 	snapshot.Reports = visibleReports
-	snapshot.EntryPoints = visibleEntryPoints
 	visibleProfileExtensions := make([]profilebindingmodel.Binding, 0, len(snapshot.IdentityProfileExtensions))
 	for _, extension := range snapshot.IdentityProfileExtensions {
 		if visibleObjectKeys[extension.ObjectKey] {
@@ -109,12 +96,12 @@ func SnapshotForPrincipal(snapshot appschemamodel.ApplicationSchemaSnapshot, pri
 	return snapshot
 }
 
-func visibleAgentContractsForPrincipal(snapshot appschemamodel.ApplicationSchemaSnapshot, principal principalmodel.Principal, visibleObjects, visibleActions map[string]bool) ([]agentmodel.AgentTaskDefinition, []agentmodel.AgentEntrypointAssignment) {
+func visibleAgentContractsForPrincipal(snapshot appschemamodel.ApplicationSchemaSnapshot, principal principalmodel.Principal, visibleObjects, visibleActions map[string]bool) ([]agentsdk.AgentTaskDefinition, []agentsdk.AgentEntrypointAssignment) {
 	agents := map[string]bool{}
 	for _, agent := range snapshot.Agents {
 		agents[strings.TrimSpace(agent.Key)] = true
 	}
-	tasks := []agentmodel.AgentTaskDefinition{}
+	tasks := []agentsdk.AgentTaskDefinition{}
 	taskKeys := map[string]bool{}
 	for _, task := range snapshot.AgentTasks {
 		if !task.Enabled {
@@ -146,7 +133,7 @@ func visibleAgentContractsForPrincipal(snapshot appschemamodel.ApplicationSchema
 			workflows[strings.TrimSpace(workflow.Key)] = true
 		}
 	}
-	entrypoints := []agentmodel.AgentEntrypointAssignment{}
+	entrypoints := []agentsdk.AgentEntrypointAssignment{}
 	for _, entrypoint := range snapshot.AgentEntrypoints {
 		if !entrypoint.Enabled {
 			continue
@@ -228,9 +215,9 @@ func actionAllowed(principal principalmodel.Principal, action definitionmodel.Ac
 	return principal.Allows(objectKey, actionName)
 }
 
-func visibleAgentRegistryForPrincipal(skills []agentmodel.SkillSchema, agents []agentmodel.AgentSchema, principal principalmodel.Principal, visibleObjects map[string]bool) ([]agentmodel.SkillSchema, []agentmodel.AgentSchema) {
-	visibleSkills := make([]agentmodel.SkillSchema, 0, len(skills))
-	skillByKey := map[string]agentmodel.SkillSchema{}
+func visibleAgentRegistryForPrincipal(skills []agentsdk.SkillSchema, agents []agentsdk.AgentSchema, principal principalmodel.Principal, visibleObjects map[string]bool) ([]agentsdk.SkillSchema, []agentsdk.AgentSchema) {
+	visibleSkills := make([]agentsdk.SkillSchema, 0, len(skills))
+	skillByKey := map[string]agentsdk.SkillSchema{}
 	for _, skill := range skills {
 		allowedTools := visibleAgentToolsForPrincipal(skill.AllowedTools, principal, visibleObjects)
 		if len(skill.AllowedTools) > 0 && len(allowedTools) == 0 {
@@ -240,7 +227,7 @@ func visibleAgentRegistryForPrincipal(skills []agentmodel.SkillSchema, agents []
 		visibleSkills = append(visibleSkills, skill)
 		skillByKey[skill.Key] = skill
 	}
-	visibleAgents := make([]agentmodel.AgentSchema, 0, len(agents))
+	visibleAgents := make([]agentsdk.AgentSchema, 0, len(agents))
 	for _, agent := range agents {
 		tools := visibleAgentToolsForPrincipal(agent.Tools, principal, visibleObjects)
 		if len(agent.Tools) > 0 && len(tools) == 0 {

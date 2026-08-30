@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )
 
 func badRequest(code string, params ...string) error {
@@ -52,16 +51,6 @@ func wrapMetadataError(err error) error {
 	var appErr *apperror.AppError
 	if errors.As(err, &appErr) {
 		return err
-	}
-	var versionConflict *appschemamodel.ApplicationDefinitionConflictError
-	if errors.As(err, &versionConflict) {
-		return conflict(
-			"backend.metadata.definition_version_conflict",
-			"resource_type", versionConflict.ResourceType,
-			"resource_key", versionConflict.ResourceKey,
-			"expected_hash", versionConflict.ExpectedHash,
-			"current_hash", versionConflict.CurrentHash,
-		)
 	}
 	return &apperror.AppError{
 		Kind:   apperror.KindInternal,

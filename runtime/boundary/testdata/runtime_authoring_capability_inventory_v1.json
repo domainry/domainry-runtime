@@ -216,7 +216,7 @@
   "unpublished_required_capabilities": [],
   "dynamic_reference_audit": {
     "status": "complete",
-    "required_kinds": ["object_key", "field_key", "action_key", "workflow_key", "report_key", "scheduler_target_key", "preference_key", "rule_set_key", "role_key", "permission_key", "user_id", "department_id", "role_id", "menu_id", "connector_key", "connection_key", "provider_key", "operation_key"],
+    "required_kinds": ["object_key", "field_key", "action_key", "workflow_key", "report_key", "scheduler_target_key", "role_key", "permission_key", "user_id", "department_id", "role_id", "menu_id", "connector_key", "connection_key", "provider_key", "operation_key"],
     "current_instance_projection": "runtime/application/capability/capability_authoring_instance.go",
     "known_gaps": ["No known dynamic reference gaps; field, provider and operation references intentionally require owner scope and every response is bound to the current capability instance hash"]
   },

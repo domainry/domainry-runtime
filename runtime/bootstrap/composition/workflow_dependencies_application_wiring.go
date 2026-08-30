@@ -4,11 +4,12 @@ import (
 	"context"
 	"strings"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	apperror "github.com/domainry/domainry-foundation/apperror"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -92,7 +93,7 @@ func workflowDependencies(records *runtimeAssembly) workflowapplication.Workflow
 				RunID: preparation.RunID, WorkspaceID: preparation.WorkspaceID, ProcessID: preparation.ProcessID, NodeInstanceID: preparation.NodeInstanceID,
 				NodeID: preparation.NodeID, Iteration: preparation.Iteration, DefinitionSnapshotHash: preparation.DefinitionSnapshotHash, ManifestHash: preparation.ManifestHash,
 				TaskKey: preparation.Contract.TaskKey, TaskVersion: preparation.Contract.TaskVersion,
-				Identity: agentmodel.AgentTaskIdentity{Mode: preparation.Contract.Identity.Mode, PrincipalKey: preparation.Contract.Identity.PrincipalKey}, Input: preparation.Input,
+				Identity: agentsdk.AgentTaskIdentity{Mode: preparation.Contract.Identity.Mode, PrincipalKey: preparation.Contract.Identity.PrincipalKey}, Input: preparation.Input,
 				AllowedObjects: preparation.Contract.AllowedObjects, AllowedActions: preparation.Contract.AllowedActions, AllowedOutcomes: preparation.Contract.AllowedOutcomes,
 				TimeoutSeconds: preparation.Contract.TimeoutSeconds, MaxAttempts: maxAttempts, Initiator: preparation.Initiator, CorrelationID: preparation.CorrelationID,
 			})

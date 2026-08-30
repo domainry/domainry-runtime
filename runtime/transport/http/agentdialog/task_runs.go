@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 )
 
 type agentTaskRunProjection struct {

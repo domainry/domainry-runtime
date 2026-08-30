@@ -146,7 +146,6 @@ var idempotencyReceiptTables = []idempotencyReceiptTable{
 	{owner: "record", table: "record_mutation_executions", scopeColumn: "operation"},
 	{owner: "action", table: "business_action_executions", targetColumn: "record_id"},
 	{owner: "workflow", table: "workflow_execution_receipts"},
-	{owner: "changeplan", table: "business_change_plan_operations", scopeColumn: "operation"},
 }
 
 func (r RuntimeStatusStore) ListIdempotencyReceipts(ctx context.Context, workspaceID, status string, limit int) ([]idempotency.ReceiptSummary, error) {

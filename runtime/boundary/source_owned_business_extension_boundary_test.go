@@ -349,7 +349,7 @@ func TestBookClassAtomicFailureProofCoversEveryCommittedFactStage(t *testing.T) 
 		`storedClass.Data["remaining_capacity"] != int64(1)`,
 		`records.GetRecord(t.Context(), "workspace-a", classBooking, "booking-1")`,
 		`"_audit_events":`,
-		`"integration_outbox_messages":`,
+		`"runtime_publication_outbox":`,
 		`receipt.Status != string(idempotency.StatusProcessing)`,
 	} {
 		if !strings.Contains(content, required) {

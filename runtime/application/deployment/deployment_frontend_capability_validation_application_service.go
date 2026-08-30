@@ -32,12 +32,12 @@ func (s *DeploymentFrontendCapabilityApplicationService) validateBusinessBinding
 	}
 	bindings := s.businessBindings(ctx)
 	known := map[string]map[string]bool{
-		"business_objects": bindings.Objects, "view_keys": bindings.Views,
+		"business_objects":    bindings.Objects,
 		"implemented_actions": bindings.Actions, "report_keys": bindings.Reports, "field_keys": bindings.Fields,
 	}
 	for entryIndex, entry := range validation.NormalizedManifest.Entries {
 		bindings := map[string][]string{
-			"business_objects": entry.BusinessObjects, "view_keys": entry.ViewKeys,
+			"business_objects":    entry.BusinessObjects,
 			"implemented_actions": entry.ImplementedActions, "report_keys": entry.ReportKeys, "field_keys": entry.FieldKeys,
 		}
 		for kind, values := range bindings {

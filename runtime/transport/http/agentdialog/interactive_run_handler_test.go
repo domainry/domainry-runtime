@@ -12,8 +12,9 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	agentruntime "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -35,8 +36,8 @@ func typedInteractiveHandler(t *testing.T, execute AgentInteractiveExecutor, rea
 	errorCode := ""
 	return NewAgentDialogHandler(AgentDialogDependencies{
 		Principal: func(*http.Request) principalmodel.Principal { return principal }, Interactive: execute, InteractiveRuns: reader,
-		ContextResolver: agentDialogContextResolverFunc(func(context.Context, agentruntime.GlobalAgentContextRequest) (agentmodel.GlobalAgentContext, error) {
-			return agentmodel.GlobalAgentContext{ContextRevision: "context-1", EntrypointKey: "assistant.global", AgentKey: "customer-agent", Surface: principal.SurfaceKey, RouteKey: "workspace.customer", Principal: agentmodel.AgentPrincipalReference{WorkspaceID: principal.WorkspaceID, UserID: principal.UserID, RoleKey: principal.RoleKey}}, nil
+		ContextResolver: agentDialogContextResolverFunc(func(context.Context, agentruntime.GlobalAgentContextRequest) (agentsdk.GlobalContext, error) {
+			return agentsdk.GlobalContext{ContextRevision: "context-1", EntrypointKey: "assistant.global", AgentKey: "customer-agent", Surface: principal.SurfaceKey, RouteKey: "workspace.customer", Principal: agentsdk.PrincipalReference{WorkspaceID: principal.WorkspaceID, UserID: principal.UserID, RoleKey: principal.RoleKey}}, nil
 		}),
 		DecodeJSON: func(w http.ResponseWriter, r *http.Request, target any) bool {
 			return json.NewDecoder(r.Body).Decode(target) == nil
@@ -57,7 +58,7 @@ func TestAgentDialogBlockingRunUsesTypedInteractiveLifecycle(t *testing.T) {
 	var received agentruntime.AgentInteractiveExecutionRequest
 	handler, _ := typedInteractiveHandler(t, interactiveExecutorFunc(func(_ context.Context, request agentruntime.AgentInteractiveExecutionRequest) (agentruntime.AgentInteractiveExecutionResult, error) {
 		received = request
-		return agentruntime.AgentInteractiveExecutionResult{Run: agentmodel.AgentInteractiveRun{ID: "interactive_run_1", Status: agentmodel.AgentInteractiveRunCompleted}, Result: agentruntime.InteractiveAgentResult{RunID: "interactive_run_1", Status: "completed", Message: "done"}}, nil
+		return agentruntime.AgentInteractiveExecutionResult{Run: agentmodel.AgentInteractiveRun{ID: "interactive_run_1", Status: agentmodel.AgentInteractiveRunCompleted}, Result: agentsdk.InteractiveResult{RunID: "interactive_run_1", Status: "completed", Message: "done"}}, nil
 	}), nil)
 	request := httptest.NewRequest(http.MethodPost, "/agent-dialog/runs", strings.NewReader(`{"message":"review","external_session_id":"session-1","idempotency_key":"message-1","context":{"record_id":"forged"}}`))
 	response := httptest.NewRecorder()
@@ -93,7 +94,7 @@ func TestAgentDialogStreamUsesSameTypedInteractiveLifecycleAndReturnsHandoffEven
 		if request.IdempotencyKey != "stream-1" {
 			t.Fatalf("request=%#v", request)
 		}
-		return agentruntime.AgentInteractiveExecutionResult{Run: agentmodel.AgentInteractiveRun{ID: "interactive_run_stream", Status: agentmodel.AgentInteractiveRunHandedOff, TaskRunID: "task-1"}, Result: agentruntime.InteractiveAgentResult{Status: "handed_off", Handoff: &agentmodel.InteractiveAgentHandoff{ContractVersion: agentmodel.InteractiveHandoffContractVersion, RouteType: agentmodel.AgentRouteTask, TargetKey: "customer.review", IdempotencyKey: "handoff-1", TaskRunID: "task-1"}}}, nil
+		return agentruntime.AgentInteractiveExecutionResult{Run: agentmodel.AgentInteractiveRun{ID: "interactive_run_stream", Status: agentmodel.AgentInteractiveRunHandedOff, TaskRunID: "task-1"}, Result: agentsdk.InteractiveResult{Status: "handed_off", Handoff: &agentsdk.InteractiveAgentHandoff{ContractVersion: agentsdk.InteractiveHandoffContractVersion, RouteType: agentsdk.AgentRouteTask, TargetKey: "customer.review", IdempotencyKey: "handoff-1", TaskRunID: "task-1"}}}, nil
 	}), nil)
 	request := httptest.NewRequest(http.MethodPost, "/agent-dialog/runs/stream", strings.NewReader(`{"message":"review","idempotency_key":"stream-1"}`))
 	response := httptest.NewRecorder()

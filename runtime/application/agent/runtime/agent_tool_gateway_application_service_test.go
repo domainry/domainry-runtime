@@ -7,10 +7,11 @@ import (
 	"testing"
 	"time"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 )
@@ -106,7 +107,7 @@ func agentToolGatewayFixture(t *testing.T, tool string) (*AgentToolGateway, Agen
 	}
 	now := time.Date(2026, 8, 4, 10, 0, 0, 0, time.UTC)
 	credentials := NewAgentTaskCredentialApplicationService([]byte(strings.Repeat("k", 32)), agentTaskClock{now: now}, agentCredentialIDStub{})
-	token, err := credentials.Issue(t.Context(), AgentTaskCredentialClaims{WorkspaceID: "workspace-1", ProcessID: "process-1", TaskRunID: "run-1", Principal: agentmodel.AgentPrincipalReference{UserID: "operator", RoleKey: "operator", WorkspaceID: "workspace-1"}, AllowedTools: []string{tool}}, time.Minute)
+	token, err := credentials.Issue(t.Context(), AgentTaskCredentialClaims{WorkspaceID: "workspace-1", ProcessID: "process-1", TaskRunID: "run-1", Principal: agentsdk.PrincipalReference{UserID: "operator", RoleKey: "operator", WorkspaceID: "workspace-1"}, AllowedTools: []string{tool}}, time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +117,7 @@ func agentToolGatewayFixture(t *testing.T, tool string) (*AgentToolGateway, Agen
 	repository := &agentTaskRunRepositoryStub{current: run}
 	taskRuns := NewAgentTaskRunApplicationService(repository, agentTaskClock{now: now})
 	gateway := NewAgentToolGateway(AgentToolGatewayDependencies{Authorization: authorization, Credentials: credentials, Queries: queries, Actions: actions, Proposals: proposals, Risk: agentToolRiskStub{}, Ledger: ledger, TaskRuns: taskRuns})
-	request := AgentToolInvocationRequest{Credential: token, WorkspaceID: "workspace-1", ProcessID: "process-1", TaskRunID: "run-1", Owner: workerplatform.WorkerID("worker"), FencingToken: 1, Initiator: initiator, Identity: agentmodel.AgentTaskIdentity{Mode: agentmodel.AgentTaskIdentityInherit}, TaskKey: "customer.review", TaskVersion: "1.0.0", NodeAllowedObjects: []string{"customer"}, NodeAllowedActions: []string{"customer.update"}, NodeAllowedOutcomes: []string{"success"}, Tool: tool, IdempotencyKey: "action-1"}
+	request := AgentToolInvocationRequest{Credential: token, WorkspaceID: "workspace-1", ProcessID: "process-1", TaskRunID: "run-1", Owner: workerplatform.WorkerID("worker"), FencingToken: 1, Initiator: initiator, Identity: agentsdk.AgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityInherit}, TaskKey: "customer.review", TaskVersion: "1.0.0", NodeAllowedObjects: []string{"customer"}, NodeAllowedActions: []string{"customer.update"}, NodeAllowedOutcomes: []string{"success"}, Tool: tool, IdempotencyKey: "action-1"}
 	return gateway, request, ledger, queries, actions, proposals
 }
 
@@ -158,9 +159,9 @@ func TestAgentToolGatewayActionModeAndRiskCannotBeLowered(t *testing.T) {
 		gateway, request, ledger, _, actions, _ := agentToolGatewayFixture(t, AgentToolInvokeAction)
 		auth := gateway.dependencies.Authorization
 		schema := auth.schema.(*agentSchemaProviderStub)
-		schema.full.AgentTasks[0].SideEffectMode = agentmodel.AgentTaskSideEffectAnalysisOnly
+		schema.full.AgentTasks[0].SideEffectMode = agentsdk.AgentTaskSideEffectAnalysisOnly
 		filtered := schema.filtered["operator:operator"]
-		filtered.AgentTasks[0].SideEffectMode = agentmodel.AgentTaskSideEffectAnalysisOnly
+		filtered.AgentTasks[0].SideEffectMode = agentsdk.AgentTaskSideEffectAnalysisOnly
 		schema.filtered["operator:operator"] = filtered
 		request.Input = map[string]any{"action_key": "customer.update", "object_key": "customer"}
 		_, err := gateway.Invoke(t.Context(), request)
@@ -265,11 +266,11 @@ func TestAgentToolGatewayDependencyCredentialAndLedgerBoundaries(t *testing.T) {
 	if _, err := base.Invoke(t.Context(), badAuthorization); err == nil {
 		t.Fatal("expected authorization error")
 	}
-	for name, mutate := range map[string]func(*agentmodel.AgentPrincipalReference){
-		"user": func(p *agentmodel.AgentPrincipalReference) { p.UserID = "other" },
-		"role": func(p *agentmodel.AgentPrincipalReference) { p.RoleKey = "other" },
+	for name, mutate := range map[string]func(*agentsdk.PrincipalReference){
+		"user": func(p *agentsdk.PrincipalReference) { p.UserID = "other" },
+		"role": func(p *agentsdk.PrincipalReference) { p.RoleKey = "other" },
 	} {
-		principal := agentmodel.AgentPrincipalReference{UserID: "operator", RoleKey: "operator", WorkspaceID: request.WorkspaceID}
+		principal := agentsdk.PrincipalReference{UserID: "operator", RoleKey: "operator", WorkspaceID: request.WorkspaceID}
 		mutate(&principal)
 		token, issueErr := base.dependencies.Credentials.Issue(t.Context(), AgentTaskCredentialClaims{WorkspaceID: request.WorkspaceID, ProcessID: request.ProcessID, TaskRunID: request.TaskRunID, Principal: principal, AllowedTools: []string{request.Tool}}, time.Minute)
 		if issueErr != nil {
@@ -439,7 +440,7 @@ func TestAgentToolGatewayReadActionAndOutputBoundaryMatrix(t *testing.T) {
 			t.Fatalf("%s expected error", name)
 		}
 	}
-	if maxAgentToolCalls(agentmodel.AgentTaskDefinition{}) != 20 || maxAgentToolCalls(agentmodel.AgentTaskDefinition{ExecutionLimits: agentmodel.AgentExecutionLimits{MaxToolCalls: 3}}) != 3 {
+	if maxAgentToolCalls(agentsdk.AgentTaskDefinition{}) != 20 || maxAgentToolCalls(agentsdk.AgentTaskDefinition{ExecutionLimits: agentsdk.AgentExecutionLimits{MaxToolCalls: 3}}) != 3 {
 		t.Fatal("tool call defaults")
 	}
 	for tool, want := range map[string]int{AgentToolInvokeAction: 5, AgentToolQueryRecords: 2, AgentToolGetRecord: 1} {
@@ -462,7 +463,7 @@ func TestAgentToolGatewayReadActionAndOutputBoundaryMatrix(t *testing.T) {
 		snapshot.Agents[0].Tools = append(snapshot.Agents[0].Tools, "custom_tool")
 		schema.filtered[key] = snapshot
 	}
-	token, err := customGateway.dependencies.Credentials.Issue(t.Context(), AgentTaskCredentialClaims{WorkspaceID: customRequest.WorkspaceID, ProcessID: customRequest.ProcessID, TaskRunID: customRequest.TaskRunID, Principal: agentmodel.AgentPrincipalReference{UserID: "operator", RoleKey: "operator", WorkspaceID: customRequest.WorkspaceID}, AllowedTools: []string{"custom_tool"}}, time.Minute)
+	token, err := customGateway.dependencies.Credentials.Issue(t.Context(), AgentTaskCredentialClaims{WorkspaceID: customRequest.WorkspaceID, ProcessID: customRequest.ProcessID, TaskRunID: customRequest.TaskRunID, Principal: agentsdk.PrincipalReference{UserID: "operator", RoleKey: "operator", WorkspaceID: customRequest.WorkspaceID}, AllowedTools: []string{"custom_tool"}}, time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -475,7 +476,7 @@ func TestAgentToolGatewayReadActionAndOutputBoundaryMatrix(t *testing.T) {
 func TestInteractiveAgentReusesToolGatewayWithLiveContextAndProposalAssociations(t *testing.T) {
 	authorization, principal, schema, _ := agentAuthorizationFixture()
 	principal.SurfaceKey = "business_workspace"
-	schema.full.AgentEntrypoints[0].RoutingContract.AllowedRouteTypes = []string{agentmodel.AgentRouteInteractiveQuery, agentmodel.AgentRouteProposal, agentmodel.AgentRouteTask, agentmodel.AgentRouteWorkflow}
+	schema.full.AgentEntrypoints[0].RoutingContract.AllowedRouteTypes = []string{agentsdk.AgentRouteInteractiveQuery, agentsdk.AgentRouteProposal, agentsdk.AgentRouteTask, agentsdk.AgentRouteWorkflow}
 	trusted, err := authorization.ResolveGlobalContext(t.Context(), GlobalAgentContextRequest{Principal: principal, EntrypointKey: "assistant.global", Surface: principal.SurfaceKey, RouteKey: "workspace.customer", ObjectKey: "customer", RecordID: "customer-1"})
 	if err != nil {
 		t.Fatal(err)
@@ -488,12 +489,12 @@ func TestInteractiveAgentReusesToolGatewayWithLiveContextAndProposalAssociations
 	}
 	queries, proposals := &agentToolQueryStub{}, &agentToolProposalStub{}
 	gateway := NewAgentToolGateway(AgentToolGatewayDependencies{Authorization: authorization, Queries: queries, Proposals: proposals, InteractiveRuns: runs})
-	queryRoute := AgentRouteResult{RouteType: agentmodel.AgentRouteInteractiveQuery, TargetKey: trusted.AgentKey, TargetVersion: "1.0.0", Input: map[string]any{"tool": AgentToolQueryRecords, "object_key": "customer", "query": map[string]any{"page_size": 5}}}
+	queryRoute := agentsdk.RouteResult{RouteType: agentsdk.AgentRouteInteractiveQuery, TargetKey: trusted.AgentKey, TargetVersion: "1.0.0", Input: map[string]any{"tool": AgentToolQueryRecords, "object_key": "customer", "query": map[string]any{"page_size": 5}}}
 	queried, err := gateway.InvokeInteractive(t.Context(), AgentInteractiveToolInvocationRequest{Run: run, Route: queryRoute})
 	if err != nil || queried.Invocation.Status != "executed" || queried.Run.ToolCallCount != 1 || len(queried.Run.ToolInvocations) != 1 || queries.principal.AuthorizationRevision != "operator-rev-2" || len(queries.fields) != 1 || queries.fields[0] != "name" {
 		t.Fatalf("queried=%#v fields=%v principal=%#v err=%v", queried, queries.fields, queries.principal, err)
 	}
-	proposalRoute := AgentRouteResult{RouteType: agentmodel.AgentRouteProposal, TargetKey: "customer.update", Input: map[string]any{"object_key": "customer", "record_id": "customer-1", "data": map[string]any{"name": "Ada"}}, IdempotencyKey: "proposal-1"}
+	proposalRoute := agentsdk.RouteResult{RouteType: agentsdk.AgentRouteProposal, TargetKey: "customer.update", Input: map[string]any{"object_key": "customer", "record_id": "customer-1", "data": map[string]any{"name": "Ada"}}, IdempotencyKey: "proposal-1"}
 	proposed, err := gateway.InvokeInteractive(t.Context(), AgentInteractiveToolInvocationRequest{Run: queried.Run, Route: proposalRoute, IdempotencyKey: proposalRoute.IdempotencyKey})
 	if err != nil || proposed.Invocation.Status != "proposal_required" || proposals.calls != 1 || proposals.last.InteractiveRunID != run.ID || proposals.last.SessionID != run.SessionID || proposals.last.ContextRevision != trusted.ContextRevision {
 		t.Fatalf("proposed=%#v proposal=%#v err=%v", proposed, proposals.last, err)
@@ -503,7 +504,7 @@ func TestInteractiveAgentReusesToolGatewayWithLiveContextAndProposalAssociations
 func TestInteractiveToolGatewayRejectsObjectActionAndBudgetEscalation(t *testing.T) {
 	authorization, principal, schema, _ := agentAuthorizationFixture()
 	principal.SurfaceKey = "business_workspace"
-	schema.full.AgentEntrypoints[0].RoutingContract.AllowedRouteTypes = []string{agentmodel.AgentRouteInteractiveQuery, agentmodel.AgentRouteProposal}
+	schema.full.AgentEntrypoints[0].RoutingContract.AllowedRouteTypes = []string{agentsdk.AgentRouteInteractiveQuery, agentsdk.AgentRouteProposal}
 	trusted, err := authorization.ResolveGlobalContext(t.Context(), GlobalAgentContextRequest{Principal: principal, EntrypointKey: "assistant.global", Surface: principal.SurfaceKey, RouteKey: "workspace.customer", ObjectKey: "customer"})
 	if err != nil {
 		t.Fatal(err)
@@ -515,9 +516,9 @@ func TestInteractiveToolGatewayRejectsObjectActionAndBudgetEscalation(t *testing
 		t.Fatal(err)
 	}
 	gateway := NewAgentToolGateway(AgentToolGatewayDependencies{Authorization: authorization, Queries: &agentToolQueryStub{}, Proposals: &agentToolProposalStub{}, InteractiveRuns: runs})
-	for name, route := range map[string]AgentRouteResult{
-		"object":        {RouteType: agentmodel.AgentRouteInteractiveQuery, TargetKey: trusted.AgentKey, Input: map[string]any{"tool": AgentToolQueryRecords, "object_key": "invoice"}},
-		"direct action": {RouteType: agentmodel.AgentRouteInteractiveQuery, TargetKey: trusted.AgentKey, Input: map[string]any{"tool": AgentToolInvokeAction, "object_key": "customer"}},
+	for name, route := range map[string]agentsdk.RouteResult{
+		"object":        {RouteType: agentsdk.AgentRouteInteractiveQuery, TargetKey: trusted.AgentKey, Input: map[string]any{"tool": AgentToolQueryRecords, "object_key": "invoice"}},
+		"direct action": {RouteType: agentsdk.AgentRouteInteractiveQuery, TargetKey: trusted.AgentKey, Input: map[string]any{"tool": AgentToolInvokeAction, "object_key": "customer"}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := gateway.InvokeInteractive(t.Context(), AgentInteractiveToolInvocationRequest{Run: run, Route: route, IdempotencyKey: "one"}); err == nil {
@@ -526,7 +527,7 @@ func TestInteractiveToolGatewayRejectsObjectActionAndBudgetEscalation(t *testing
 		})
 	}
 	run.ToolInvocations = []agentmodel.AgentTaskToolInvocationEvidence{{CostUnits: 20}}
-	if _, err := gateway.InvokeInteractive(t.Context(), AgentInteractiveToolInvocationRequest{Run: run, Route: AgentRouteResult{RouteType: agentmodel.AgentRouteInteractiveQuery, TargetKey: trusted.AgentKey, Input: map[string]any{"tool": AgentToolQueryRecords, "object_key": "customer"}}}); apperror.CodeOf(err) != "agent.task.cost_budget_exceeded" {
+	if _, err := gateway.InvokeInteractive(t.Context(), AgentInteractiveToolInvocationRequest{Run: run, Route: agentsdk.RouteResult{RouteType: agentsdk.AgentRouteInteractiveQuery, TargetKey: trusted.AgentKey, Input: map[string]any{"tool": AgentToolQueryRecords, "object_key": "customer"}}}); apperror.CodeOf(err) != "agent.task.cost_budget_exceeded" {
 		t.Fatalf("budget err=%v", err)
 	}
 }
@@ -536,10 +537,10 @@ func interactiveToolGatewayFixture(t *testing.T) (*AgentToolGateway, agentmodel.
 	authorization, principal, schema, _ := agentAuthorizationFixture()
 	principal.SurfaceKey = "business_workspace"
 	schema.full.Agents[0].Tools = append(schema.full.Agents[0].Tools, AgentToolGetRecord)
-	schema.full.AgentEntrypoints[0].RoutingContract.AllowedRouteTypes = []string{agentmodel.AgentRouteInteractiveQuery, agentmodel.AgentRouteProposal}
+	schema.full.AgentEntrypoints[0].RoutingContract.AllowedRouteTypes = []string{agentsdk.AgentRouteInteractiveQuery, agentsdk.AgentRouteProposal}
 	for key, snapshot := range schema.filtered {
 		snapshot.Agents[0].Tools = append(snapshot.Agents[0].Tools, AgentToolGetRecord)
-		snapshot.AgentEntrypoints[0].RoutingContract.AllowedRouteTypes = []string{agentmodel.AgentRouteInteractiveQuery, agentmodel.AgentRouteProposal}
+		snapshot.AgentEntrypoints[0].RoutingContract.AllowedRouteTypes = []string{agentsdk.AgentRouteInteractiveQuery, agentsdk.AgentRouteProposal}
 		schema.filtered[key] = snapshot
 	}
 	trusted, err := authorization.ResolveGlobalContext(t.Context(), GlobalAgentContextRequest{Principal: principal, EntrypointKey: "assistant.global", Surface: principal.SurfaceKey, RouteKey: "workspace.customer", ObjectKey: "customer", RecordID: "customer-1"})
@@ -558,7 +559,7 @@ func interactiveToolGatewayFixture(t *testing.T) (*AgentToolGateway, agentmodel.
 
 func TestInteractiveToolGatewayDependencyScopeAuthorizationAndBudgetBoundaries(t *testing.T) {
 	gateway, run, _, _, _ := interactiveToolGatewayFixture(t)
-	validRoute := AgentRouteResult{RouteType: agentmodel.AgentRouteInteractiveQuery, Input: map[string]any{"tool": AgentToolQueryRecords, "object_key": "customer"}}
+	validRoute := agentsdk.RouteResult{RouteType: agentsdk.AgentRouteInteractiveQuery, Input: map[string]any{"tool": AgentToolQueryRecords, "object_key": "customer"}}
 	for name, candidate := range map[string]*AgentToolGateway{
 		"nil":           nil,
 		"authorization": NewAgentToolGateway(AgentToolGatewayDependencies{}),
@@ -617,7 +618,7 @@ func TestInteractiveToolGatewayDependencyScopeAuthorizationAndBudgetBoundaries(t
 }
 
 func TestInteractiveToolGatewayLimiterReadProposalOutputAndPersistenceBoundaries(t *testing.T) {
-	validQuery := AgentRouteResult{RouteType: agentmodel.AgentRouteInteractiveQuery, Input: map[string]any{"tool": AgentToolQueryRecords, "object_key": "customer"}}
+	validQuery := agentsdk.RouteResult{RouteType: agentsdk.AgentRouteInteractiveQuery, Input: map[string]any{"tool": AgentToolQueryRecords, "object_key": "customer"}}
 	for name, limiter := range map[string]agentToolLimiterStub{"error": {err: errors.New("limit")}, "denied": {decision: ratelimit.Decision{Allowed: false}}, "allowed": {decision: ratelimit.Decision{Allowed: true}}} {
 		gateway, run, _, _, _ := interactiveToolGatewayFixture(t)
 		gateway.dependencies.RateLimiter = limiter
@@ -629,26 +630,26 @@ func TestInteractiveToolGatewayLimiterReadProposalOutputAndPersistenceBoundaries
 			t.Fatalf("%s expected limiter error", name)
 		}
 	}
-	for name, setup := range map[string]func(*AgentToolGateway, *agentToolQueryStub, *agentInteractiveRunRepositoryStub, *AgentRouteResult){
-		"query missing": func(g *AgentToolGateway, _ *agentToolQueryStub, _ *agentInteractiveRunRepositoryStub, _ *AgentRouteResult) {
+	for name, setup := range map[string]func(*AgentToolGateway, *agentToolQueryStub, *agentInteractiveRunRepositoryStub, *agentsdk.RouteResult){
+		"query missing": func(g *AgentToolGateway, _ *agentToolQueryStub, _ *agentInteractiveRunRepositoryStub, _ *agentsdk.RouteResult) {
 			g.dependencies.Queries = nil
 		},
-		"object empty": func(_ *AgentToolGateway, _ *agentToolQueryStub, _ *agentInteractiveRunRepositoryStub, r *AgentRouteResult) {
+		"object empty": func(_ *AgentToolGateway, _ *agentToolQueryStub, _ *agentInteractiveRunRepositoryStub, r *agentsdk.RouteResult) {
 			r.Input["object_key"] = ""
 		},
-		"object other": func(_ *AgentToolGateway, _ *agentToolQueryStub, _ *agentInteractiveRunRepositoryStub, r *AgentRouteResult) {
+		"object other": func(_ *AgentToolGateway, _ *agentToolQueryStub, _ *agentInteractiveRunRepositoryStub, r *agentsdk.RouteResult) {
 			r.Input["object_key"] = "invoice"
 		},
-		"query error": func(_ *AgentToolGateway, q *agentToolQueryStub, _ *agentInteractiveRunRepositoryStub, _ *AgentRouteResult) {
+		"query error": func(_ *AgentToolGateway, q *agentToolQueryStub, _ *agentInteractiveRunRepositoryStub, _ *agentsdk.RouteResult) {
 			q.err = errors.New("query")
 		},
-		"deadline": func(_ *AgentToolGateway, q *agentToolQueryStub, _ *agentInteractiveRunRepositoryStub, _ *AgentRouteResult) {
+		"deadline": func(_ *AgentToolGateway, q *agentToolQueryStub, _ *agentInteractiveRunRepositoryStub, _ *agentsdk.RouteResult) {
 			q.err = context.DeadlineExceeded
 		},
-		"output marshal": func(_ *AgentToolGateway, q *agentToolQueryStub, _ *agentInteractiveRunRepositoryStub, _ *AgentRouteResult) {
+		"output marshal": func(_ *AgentToolGateway, q *agentToolQueryStub, _ *agentInteractiveRunRepositoryStub, _ *agentsdk.RouteResult) {
 			q.output = make(chan int)
 		},
-		"save": func(_ *AgentToolGateway, _ *agentToolQueryStub, r *agentInteractiveRunRepositoryStub, _ *AgentRouteResult) {
+		"save": func(_ *AgentToolGateway, _ *agentToolQueryStub, r *agentInteractiveRunRepositoryStub, _ *agentsdk.RouteResult) {
 			r.saveErr = errors.New("save")
 		},
 	} {
@@ -662,7 +663,7 @@ func TestInteractiveToolGatewayLimiterReadProposalOutputAndPersistenceBoundaries
 	}
 	for name, input := range map[string]map[string]any{"valid": {"tool": AgentToolGetRecord, "object_key": "customer", "record_id": "one"}, "object empty": {"tool": AgentToolGetRecord, "record_id": "one"}, "object other": {"tool": AgentToolGetRecord, "object_key": "invoice", "record_id": "one"}, "record empty": {"tool": AgentToolGetRecord, "object_key": "customer"}} {
 		gateway, run, _, _, _ := interactiveToolGatewayFixture(t)
-		route := AgentRouteResult{RouteType: agentmodel.AgentRouteInteractiveQuery, Input: input}
+		route := agentsdk.RouteResult{RouteType: agentsdk.AgentRouteInteractiveQuery, Input: input}
 		result, err := gateway.InvokeInteractive(t.Context(), AgentInteractiveToolInvocationRequest{Run: run, Route: route})
 		if name == "valid" && (err != nil || result.Invocation.Status != "executed") {
 			t.Fatalf("get=%#v err=%v", result, err)
@@ -673,31 +674,31 @@ func TestInteractiveToolGatewayLimiterReadProposalOutputAndPersistenceBoundaries
 	}
 	gateway, run, _, _, _ := interactiveToolGatewayFixture(t)
 	gateway.dependencies.Queries = nil
-	if _, err := gateway.InvokeInteractive(t.Context(), AgentInteractiveToolInvocationRequest{Run: run, Route: AgentRouteResult{RouteType: agentmodel.AgentRouteInteractiveQuery, Input: map[string]any{"tool": AgentToolGetRecord, "object_key": "customer", "record_id": "one"}}}); apperror.CodeOf(err) != "agent.tool.query_unavailable" {
+	if _, err := gateway.InvokeInteractive(t.Context(), AgentInteractiveToolInvocationRequest{Run: run, Route: agentsdk.RouteResult{RouteType: agentsdk.AgentRouteInteractiveQuery, Input: map[string]any{"tool": AgentToolGetRecord, "object_key": "customer", "record_id": "one"}}}); apperror.CodeOf(err) != "agent.tool.query_unavailable" {
 		t.Fatalf("get missing=%v", err)
 	}
 }
 
 func TestInteractiveToolGatewayProposalBoundaryMatrix(t *testing.T) {
-	base := AgentRouteResult{RouteType: agentmodel.AgentRouteProposal, TargetKey: "customer.update", Input: map[string]any{"object_key": "customer"}}
-	for name, mutate := range map[string]func(*AgentToolGateway, *AgentRouteResult, *agentToolProposalStub, *agentInteractiveRunRepositoryStub, *string){
-		"route": func(_ *AgentToolGateway, r *AgentRouteResult, _ *agentToolProposalStub, _ *agentInteractiveRunRepositoryStub, _ *string) {
-			r.RouteType = agentmodel.AgentRouteInteractiveQuery
+	base := agentsdk.RouteResult{RouteType: agentsdk.AgentRouteProposal, TargetKey: "customer.update", Input: map[string]any{"object_key": "customer"}}
+	for name, mutate := range map[string]func(*AgentToolGateway, *agentsdk.RouteResult, *agentToolProposalStub, *agentInteractiveRunRepositoryStub, *string){
+		"route": func(_ *AgentToolGateway, r *agentsdk.RouteResult, _ *agentToolProposalStub, _ *agentInteractiveRunRepositoryStub, _ *string) {
+			r.RouteType = agentsdk.AgentRouteInteractiveQuery
 			r.Input["tool"] = AgentToolInvokeAction
 		},
-		"action": func(_ *AgentToolGateway, r *AgentRouteResult, _ *agentToolProposalStub, _ *agentInteractiveRunRepositoryStub, _ *string) {
+		"action": func(_ *AgentToolGateway, r *agentsdk.RouteResult, _ *agentToolProposalStub, _ *agentInteractiveRunRepositoryStub, _ *string) {
 			r.TargetKey = "other"
 		},
-		"key": func(_ *AgentToolGateway, _ *AgentRouteResult, _ *agentToolProposalStub, _ *agentInteractiveRunRepositoryStub, k *string) {
+		"key": func(_ *AgentToolGateway, _ *agentsdk.RouteResult, _ *agentToolProposalStub, _ *agentInteractiveRunRepositoryStub, k *string) {
 			*k = ""
 		},
-		"proposal missing": func(g *AgentToolGateway, _ *AgentRouteResult, _ *agentToolProposalStub, _ *agentInteractiveRunRepositoryStub, _ *string) {
+		"proposal missing": func(g *AgentToolGateway, _ *agentsdk.RouteResult, _ *agentToolProposalStub, _ *agentInteractiveRunRepositoryStub, _ *string) {
 			g.dependencies.Proposals = nil
 		},
-		"object": func(_ *AgentToolGateway, r *AgentRouteResult, _ *agentToolProposalStub, _ *agentInteractiveRunRepositoryStub, _ *string) {
+		"object": func(_ *AgentToolGateway, r *agentsdk.RouteResult, _ *agentToolProposalStub, _ *agentInteractiveRunRepositoryStub, _ *string) {
 			r.Input["object_key"] = "invoice"
 		},
-		"proposal error": func(_ *AgentToolGateway, _ *AgentRouteResult, p *agentToolProposalStub, _ *agentInteractiveRunRepositoryStub, _ *string) {
+		"proposal error": func(_ *AgentToolGateway, _ *agentsdk.RouteResult, p *agentToolProposalStub, _ *agentInteractiveRunRepositoryStub, _ *string) {
 			p.err = errors.New("proposal")
 		},
 	} {
@@ -729,7 +730,7 @@ func TestInteractiveToolGatewayTimeoutAndOutputSizeLimits(t *testing.T) {
 			snapshot.Agents[0].ExecutionLimits = schema.full.Agents[0].ExecutionLimits
 			schema.filtered[key] = snapshot
 		}
-		result, err := gateway.InvokeInteractive(t.Context(), AgentInteractiveToolInvocationRequest{Run: run, Route: AgentRouteResult{RouteType: agentmodel.AgentRouteInteractiveQuery, Input: map[string]any{"tool": AgentToolQueryRecords, "object_key": "customer"}}})
+		result, err := gateway.InvokeInteractive(t.Context(), AgentInteractiveToolInvocationRequest{Run: run, Route: agentsdk.RouteResult{RouteType: agentsdk.AgentRouteInteractiveQuery, Input: map[string]any{"tool": AgentToolQueryRecords, "object_key": "customer"}}})
 		if name == "timeout configured" && (err != nil || result.Invocation.Status != "executed") {
 			t.Fatalf("timeout result=%#v err=%v", result, err)
 		}
@@ -744,7 +745,7 @@ func TestInteractiveToolGatewayTimeoutAndOutputSizeLimits(t *testing.T) {
 		snapshot.Agents[0].Tools = append(snapshot.Agents[0].Tools, "custom_tool")
 		schema.filtered[key] = snapshot
 	}
-	if _, err := gateway.InvokeInteractive(t.Context(), AgentInteractiveToolInvocationRequest{Run: run, Route: AgentRouteResult{RouteType: agentmodel.AgentRouteInteractiveQuery, Input: map[string]any{"tool": "custom_tool"}}}); apperror.CodeOf(err) != "agent.tool.not_allowed" {
+	if _, err := gateway.InvokeInteractive(t.Context(), AgentInteractiveToolInvocationRequest{Run: run, Route: agentsdk.RouteResult{RouteType: agentsdk.AgentRouteInteractiveQuery, Input: map[string]any{"tool": "custom_tool"}}}); apperror.CodeOf(err) != "agent.tool.not_allowed" {
 		t.Fatalf("custom interactive tool=%v", err)
 	}
 }

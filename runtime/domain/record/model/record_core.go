@@ -80,7 +80,6 @@ type RecordListQuery struct {
 	Sort                      []RecordSortRule        `json:"sort,omitempty"`
 	SelectFields              []string                `json:"select_fields,omitempty"`
 	LockIntent                string                  `json:"lock_intent,omitempty"`
-	ViewKey                   string                  `json:"view,omitempty"`
 	Scope                     string                  `json:"-"`
 	PrincipalUserID           string                  `json:"-"`
 	PrincipalWorkspaceID      string                  `json:"-"`

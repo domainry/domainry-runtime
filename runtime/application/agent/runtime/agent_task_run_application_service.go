@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
+	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -119,7 +119,7 @@ func (s *AgentTaskRunApplicationService) ClaimNextForWorker(ctx context.Context,
 	if !scope.Valid() || scope.Kind != principalmodel.SystemScopeRuntimeGlobal || strings.TrimSpace(owner.String()) == "" || leaseDuration <= 0 {
 		return agentrepository.AgentTaskClaim{}, false, apperror.New(apperror.KindBadRequest, "agent.task.claim_invalid", nil, nil)
 	}
-	return repository.ClaimNextAgentTaskRunForWorker(ctx, scope, owner.String(), s.clock.Now().UTC(), leaseDuration)
+	return repository.ClaimNextAgentTaskRunForWorker(ctx, agentrepository.SystemScope{Kind: string(scope.Kind), Purpose: scope.Purpose}, owner.String(), s.clock.Now().UTC(), leaseDuration)
 }
 
 func (s *AgentTaskRunApplicationService) ListForWorker(ctx context.Context, scope principalmodel.SystemScope, filter agentrepository.AgentTaskRunFilter) ([]agentmodel.AgentTaskRun, error) {
@@ -133,7 +133,7 @@ func (s *AgentTaskRunApplicationService) ListForWorker(ctx context.Context, scop
 	if !scope.Valid() || scope.Kind != principalmodel.SystemScopeRuntimeGlobal {
 		return nil, apperror.New(apperror.KindBadRequest, "agent.task.query_invalid", nil, nil)
 	}
-	return repository.ListAgentTaskRunsForWorker(ctx, scope, filter)
+	return repository.ListAgentTaskRunsForWorker(ctx, agentrepository.SystemScope{Kind: string(scope.Kind), Purpose: scope.Purpose}, filter)
 }
 
 func (s *AgentTaskRunApplicationService) Heartbeat(ctx context.Context, workspaceID, runID string, owner workerplatform.WorkerID, token workerplatform.FencingToken, leaseDuration time.Duration) (workerplatform.HeartbeatResult, error) {

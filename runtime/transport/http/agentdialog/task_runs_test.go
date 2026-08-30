@@ -10,14 +10,15 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 func TestAgentTaskProjectionShowsGovernedEvidenceAndRedactsSensitiveInternals(t *testing.T) {
 	now := time.Date(2026, 8, 4, 12, 0, 0, 0, time.UTC)
 	run := agentmodel.AgentTaskRun{ID: "run", WorkspaceID: "workspace", ProcessID: "process", TaskKey: "screen", TaskVersion: "1", Status: agentmodel.AgentTaskRunWaitingApproval, Input: map[string]any{"secret": "hidden"}, Output: map[string]any{"score": 90}, RawEvidenceRef: "raw-secret", Attempt: 1, MaxAttempts: 3, Revision: 4, CreatedAt: now, UpdatedAt: now,
-		Identity: agentmodel.AgentExecutionIdentity{Mode: "inherit", Initiator: agentmodel.AgentPrincipalReference{UserID: "user", RoleKey: "hr"}, Execution: agentmodel.AgentPrincipalReference{UserID: "user", RoleKey: "hr"}},
+		Identity: agentsdk.ExecutionIdentity{Mode: "inherit", Initiator: agentsdk.PrincipalReference{UserID: "user", RoleKey: "hr"}, Execution: agentsdk.PrincipalReference{UserID: "user", RoleKey: "hr"}},
 		Approval: &agentmodel.AgentTaskApproval{ProposalID: "proposal", Execution: map[string]any{"action_receipt_id": "receipt"}}, Evidence: agentmodel.AgentTaskExecutionEvidence{AuditRefs: []string{"audit"}}, Reconciliation: agentmodel.AgentTaskReconciliation{Required: true, State: "poll_required"},
 	}
 	raw, err := json.Marshal(projectAgentTaskRun(run))
@@ -53,7 +54,7 @@ func TestAgentTaskOperationsRequireExplicitPermissions(t *testing.T) {
 }
 
 func TestAgentTaskAuthorizationRevisionPreventsRestoringOldResult(t *testing.T) {
-	run := agentmodel.AgentTaskRun{Identity: agentmodel.AgentExecutionIdentity{Initiator: agentmodel.AgentPrincipalReference{AuthorizationRevision: "auth-1"}}}
+	run := agentmodel.AgentTaskRun{Identity: agentsdk.ExecutionIdentity{Initiator: agentsdk.PrincipalReference{AuthorizationRevision: "auth-1"}}}
 	if !agentTaskAuthorizationStale(run, "auth-2") || agentTaskAuthorizationStale(run, "auth-1") || agentTaskAuthorizationStale(run, "") {
 		t.Fatal("task result authorization revision boundary mismatch")
 	}

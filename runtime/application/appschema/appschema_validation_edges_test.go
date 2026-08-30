@@ -90,10 +90,6 @@ func TestMetadataApplicationErrorBoundaries(t *testing.T) {
 	if wrapMetadataError(appErr) != appErr {
 		t.Fatal("application error was wrapped")
 	}
-	conflictErr := &appschemamodel.ApplicationDefinitionConflictError{ResourceType: "object", ResourceKey: "order", ExpectedHash: "old", CurrentHash: "new"}
-	if err := wrapMetadataError(conflictErr); apperror.CodeOf(err) != "backend.metadata.definition_version_conflict" {
-		t.Fatalf("conflict error=%v", err)
-	}
 	schemaMismatch := &appschemamodel.ApplicationSchemaPhysicalSchemaMismatchError{ObjectKey: "invoice", ColumnKey: "amount", ExpectedType: "TEXT", ActualType: "REAL"}
 	if err := wrapMetadataError(schemaMismatch); apperror.KindOf(err) != apperror.KindConflict || apperror.CodeOf(err) != "backend.metadata.physical_schema_incompatible" || apperror.ParamsOf(err)["column_key"] != "amount" {
 		t.Fatalf("schema mismatch error=%v", err)
@@ -168,25 +164,22 @@ func TestApplicationDefinitionValidationApplicationPaths(t *testing.T) {
 	if _, _, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "report", "key", appschemamodel.ApplicationDefinitionUpsertRequest{Payload: json.RawMessage(`{`)}); apperror.CodeOf(err) != "backend.report.definition_invalid" {
 		t.Fatalf("report error=%v", err)
 	}
-	if _, _, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "preference", "policy.limit", appschemamodel.ApplicationDefinitionUpsertRequest{Payload: json.RawMessage(`{"key":"policy.limit","name":"Limit","value_type":"integer","value":1.5,"effective_from":"2026-07-01"}`)}); apperror.CodeOf(err) != "backend.preference.value_type_mismatch" || apperror.ParamsOf(err)["preference_key"] != "policy.limit" {
-		t.Fatalf("preference error=%v code=%q params=%v", err, apperror.CodeOf(err), apperror.ParamsOf(err))
-	}
 	if _, issues, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "report", "key", appschemamodel.ApplicationDefinitionUpsertRequest{Payload: json.RawMessage(`{}`)}); err != nil || len(issues) == 0 {
 		t.Fatalf("report issues=%v err=%v", issues, err)
 	}
 	if _, _, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "field", "key", appschemamodel.ApplicationDefinitionUpsertRequest{Payload: json.RawMessage(`{`)}); err == nil {
 		t.Fatal("malformed field request unexpectedly valid")
 	}
-	viewRequest := appschemamodel.ApplicationDefinitionUpsertRequest{Payload: json.RawMessage(`{"key":"order_list","name":"Orders","object_key":"order","type":"table","config":{"columns":["number"]}}`)}
-	if normalized, issues, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "view", "order_list", viewRequest); err != nil || len(issues) != 0 || len(normalized) == 0 {
-		t.Fatalf("normalized=%s issues=%v err=%v", normalized, issues, err)
+	viewRequest := appschemamodel.ApplicationDefinitionUpsertRequest{Payload: json.RawMessage(`{"key":"order_list"}`)}
+	if _, _, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "view", "order_list", viewRequest); err == nil {
+		t.Fatal("retired view definition unexpectedly accepted")
 	}
 	for _, resourceType := range []string{"field", "automation_rule", "connector", "action", "report"} {
 		if _, err := service.ValidateApplicationDefinitionPayload(t.Context(), resourceType, appschemamodel.ApplicationDefinitionUpsertRequest{Payload: json.RawMessage(`{`)}); err == nil {
 			t.Fatalf("type=%s malformed payload unexpectedly valid", resourceType)
 		}
 	}
-	if normalized, err := service.ValidateApplicationDefinitionPayload(t.Context(), "view", viewRequest); err != nil || len(normalized.Payload) == 0 {
-		t.Fatalf("default normalized=%+v err=%v", normalized, err)
+	if _, err := service.ValidateApplicationDefinitionPayload(t.Context(), "view", viewRequest); err == nil {
+		t.Fatal("retired view definition unexpectedly accepted by payload validator")
 	}
 }

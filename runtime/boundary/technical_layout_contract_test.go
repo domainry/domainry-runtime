@@ -25,7 +25,7 @@ var businessOwnerRootProductionBaselines = map[string]int{
 	"expression": 0,
 	"lifecycle":  0, "localization": 0, "manifest": 0, "appschema": 0,
 	"notification": 0, "operations": 0, "pipeline": 0, "principal": 0, "profilebinding": 0, "record": 0, "report": 0,
-	"preference": 0, "ruleset": 0, "scheduler": 0, "surfacecontext": 0, "transaction": 0, "workflow": 0,
+	"scheduler": 0, "surfacecontext": 0, "transaction": 0, "workflow": 0,
 	"surface": 0,
 }
 
@@ -36,7 +36,7 @@ var businessTechnicalDirectories = technicalLayoutStringSet(
 
 var applicationTopLevelDirectories = technicalLayoutStringSet(
 	"action", "agent", "auditbinding", "automation", "businessevent", "businesssystem", "capability", "changeplan", "contractcheck",
-	"deployment", "integration", "lifecycle", "appschema", "notificationfacade", "operations", "pipeline", "preference", "principal", "record", "report", "ruleset", "scheduler",
+	"deployment", "integration", "lifecycle", "appschema", "notificationfacade", "operations", "pipeline", "principal", "record", "report", "scheduler",
 	"party",
 	"recordmutation", "recordtimer", "seed", "surfacecontext", "upload", "workflow",
 )
@@ -44,7 +44,7 @@ var applicationTopLevelDirectories = technicalLayoutStringSet(
 var applicationProductionBaselines = map[string]int{
 	".": 0, "action": 43, "agent": 6, "auditbinding": 1, "automation": 8, "businesssystem": 4, "capability": 17,
 	"businessevent": 1, "changeplan": 14, "deployment": 8, "integration": 70, "lifecycle": 5, "appschema": 14, "notificationfacade": 4, "operations": 9,
-	"pipeline": 4, "preference": 1, "record": 20, "recordmutation": 4, "recordtimer": 1, "report": 5, "ruleset": 1, "scheduler": 12, "surfacecontext": 2, "workflow": 26,
+	"pipeline": 4, "record": 20, "recordmutation": 4, "recordtimer": 1, "report": 5, "scheduler": 12, "surfacecontext": 2, "workflow": 26,
 	"party": 3, "principal": 1,
 	"upload": 4,
 	"seed":   0, "seed/automation": 2, "seed/business": 2,
@@ -98,7 +98,6 @@ var httpOwnerExportNames = map[string]string{
 	"businessseeds":      "BusinessSeed",
 	"businesssystem":     "BusinessSystem",
 	"capabilities":       "Capabilities",
-	"changeplans":        "ChangePlans",
 	"discovery":          "Discovery",
 	"frontendcapability": "FrontendCapability",
 	"party":              "Party",

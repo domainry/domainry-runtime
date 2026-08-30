@@ -242,8 +242,6 @@ func (s *Server) apply(w http.ResponseWriter, r *http.Request) {
 			s.writeJSON(w, http.StatusConflict, map[string]any{"code": "manifest_review_required", "message": "manifest changes require destructive approval", "blockers": review.Blockers})
 			return
 		}
-		s.writeError(w, http.StatusConflict, "non_empty_manifest_update_requires_change_plan", "non-empty Runtime updates must use the BusinessSystemChangePlan maintenance boundary")
-		return
 	}
 	if err := writeManifestAtomic(s.manifestPath, request.Manifest); err != nil {
 		s.writeError(w, http.StatusInternalServerError, "manifest_write_failed", err.Error())
@@ -251,8 +249,12 @@ func (s *Server) apply(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.activate != nil {
 		if err = s.activate(request.Manifest); err != nil {
-			_ = os.Remove(s.manifestPath)
-			_ = s.appendAudit(request, hash, "rolled_back", "manifest file removed after Runtime activation failure; database recovery follows Runtime bootstrap transaction boundary")
+			if found {
+				_ = writeManifestAtomic(s.manifestPath, current)
+			} else {
+				_ = os.Remove(s.manifestPath)
+			}
+			_ = s.appendAudit(request, hash, "rolled_back", "manifest file restored after Runtime activation failure; database recovery follows Runtime bootstrap transaction boundary")
 			s.writeError(w, http.StatusInternalServerError, "runtime_activation_failed", err.Error())
 			return
 		}
@@ -313,10 +315,7 @@ func (s *Server) v1Review(w http.ResponseWriter, r *http.Request) {
 			if found && currentHash != hash {
 				review := businessmanifest.ReviewManifestUpdate(current, manifest, businessmanifest.ReviewOptions{ApproveDestructive: false})
 				for index, blocker := range review.Blockers {
-					diagnostics = append(diagnostics, provisionV1Diagnostic("runtime.manifest_update_blocked", fmt.Sprintf("/blockers/%d", index), blocker.Description, "use_maintenance_change_plan"))
-				}
-				if len(review.Blockers) == 0 {
-					diagnostics = append(diagnostics, provisionV1Diagnostic("runtime.non_empty_update_requires_change_plan", "/runtime/current", "non-empty Runtime updates must use the BusinessSystemChangePlan maintenance boundary", "use_maintenance_change_plan"))
+					diagnostics = append(diagnostics, provisionV1Diagnostic("runtime.manifest_update_blocked", fmt.Sprintf("/blockers/%d", index), blocker.Description, "approve_destructive_manifest_deployment"))
 				}
 			}
 		}
@@ -358,6 +357,7 @@ func (s *Server) v1Apply(w http.ResponseWriter, r *http.Request) {
 	currentSnapshot := emptySnapshotHash
 	currentHash := ""
 	found := false
+	var currentManifest manifestmodel.ManifestSchema
 	if len(diagnostics) == 0 {
 		current, loadedHash, loaded, err := s.loadCurrent()
 		if err != nil {
@@ -365,12 +365,11 @@ func (s *Server) v1Apply(w http.ResponseWriter, r *http.Request) {
 		} else {
 			currentHash = loadedHash
 			found = loaded
+			currentManifest = current
 			currentSnapshot = snapshotHash(found, currentHash)
 			if found && currentHash != hash {
 				if current.TemplateID != manifest.TemplateID {
 					diagnostics = append(diagnostics, provisionV1Diagnostic("runtime.template_id_conflict", "/provision_request/manifest/template_id", "a different template_id is already installed", "use_dedicated_project_runtime"))
-				} else {
-					diagnostics = append(diagnostics, provisionV1Diagnostic("runtime.non_empty_update_requires_change_plan", "/runtime/current", "non-empty Runtime updates must use the BusinessSystemChangePlan maintenance boundary", "use_maintenance_change_plan"))
 				}
 			}
 		}
@@ -386,7 +385,7 @@ func (s *Server) v1Apply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resultStatus := "applied"
-	if found {
+	if found && currentHash == hash {
 		resultStatus = "noop"
 	} else {
 		if err := writeManifestAtomic(s.manifestPath, manifest); err != nil {
@@ -395,7 +394,11 @@ func (s *Server) v1Apply(w http.ResponseWriter, r *http.Request) {
 		}
 		if s.activate != nil {
 			if err := s.activate(manifest); err != nil {
-				_ = os.Remove(s.manifestPath)
+				if found {
+					_ = writeManifestAtomic(s.manifestPath, currentManifest)
+				} else {
+					_ = os.Remove(s.manifestPath)
+				}
 				s.writeV1ApplyBlocked(w, request, "runtime.activation_failed", "/runtime/activation", err.Error(), "inspect_runtime_bootstrap")
 				return
 			}

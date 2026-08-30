@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/domainry/domainry-foundation/secrets"
-	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )

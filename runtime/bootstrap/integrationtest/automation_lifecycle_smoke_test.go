@@ -42,27 +42,4 @@ func TestCRMAutomationRuleLifecycleThroughPublicAPI(t *testing.T) {
 	if invalidValidation.Valid || len(invalidValidation.Errors) != 1 || invalidValidation.Errors[0].Section != "trigger" || invalidValidation.Errors[0].FieldPath != "trigger.operation" || invalidValidation.Errors[0].ErrorCode != "backend.automation.operation_invalid" {
 		t.Fatalf("expected typed trigger validation issue, got %#v", invalidValidation)
 	}
-	var rule automationmodel.AutomationRuleSchema
-	for _, candidate := range rules.Items {
-		if candidate.Key == "customer.verify_business_license" {
-			rule = candidate
-			break
-		}
-	}
-	if rule.Key == "" {
-		t.Fatalf("expected customer.verify_business_license in seeded rules, got %#v", rules.Items)
-	}
-	current := loadApplicationDefinitionFixture(t, handler, "sales_manager", "automation_rule", rule.Key)
-	rule.Enabled = false
-	disabledDefinition := publishSystemDefinitionUpdateFixture(t, handler, "sales_manager", "automation-author", "automation-approver", "automation-lifecycle-disable", current, rule, "automation.rule")
-	disabled := runtimeFixtureRequest[automationmodel.AutomationRuleSchema](t, handler, "sales_manager", http.MethodGet, "/automation-rules/customer.verify_business_license", nil)
-	if disabled.Enabled {
-		t.Fatalf("expected system draft disable to preserve the rule, got %#v", disabled)
-	}
-	rule.Enabled = true
-	publishSystemDefinitionUpdateFixture(t, handler, "sales_manager", "automation-author", "automation-approver", "automation-lifecycle-enable", disabledDefinition, rule, "automation.rule")
-	enabled := runtimeFixtureRequest[automationmodel.AutomationRuleSchema](t, handler, "sales_manager", http.MethodGet, "/automation-rules/customer.verify_business_license", nil)
-	if !enabled.Enabled {
-		t.Fatalf("expected system draft enable to restore the rule, got %#v", enabled)
-	}
 }

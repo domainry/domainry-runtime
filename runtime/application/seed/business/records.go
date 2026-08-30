@@ -1,8 +1,6 @@
 package businessseed
 
 import (
-	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
-	businessseedrepository "github.com/domainry/domainry-runtime/runtime/domain/businessseed/repository"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 
@@ -10,8 +8,6 @@ import (
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -32,8 +28,8 @@ type manifestBusinessSeedRow struct {
 	SourceID   string
 }
 
-func SyncManifestBusinessSeeds(ctx context.Context, records recordrepository.RecordBusinessSeedRepository, provenanceRepository businessseedrepository.ProvenanceRepository, manifest manifestmodel.ManifestSchema, rows []manifestBusinessSeedRow) error {
-	if records == nil || provenanceRepository == nil || len(rows) == 0 {
+func SyncManifestBusinessSeeds(ctx context.Context, records recordrepository.RecordBusinessSeedRepository, manifest manifestmodel.ManifestSchema, rows []manifestBusinessSeedRow) error {
+	if records == nil || len(rows) == 0 {
 		return nil
 	}
 	objectByKey := manifestBusinessSeedObjects(manifest)
@@ -76,12 +72,6 @@ func SyncManifestBusinessSeeds(ctx context.Context, records recordrepository.Rec
 		}
 		if err := records.InsertRecord(ctx, workspaceID, object, record); err != nil {
 			return fmt.Errorf("sync domain seed %s/%s: %w", row.ObjectKey, row.Key, err)
-		}
-		content, _ := json.Marshal(record.Data)
-		hash := sha256.Sum256(content)
-		provenance := businessseedmodel.BusinessSeedProvenance{SeedKey: row.Key, ObjectKey: row.ObjectKey, RecordID: record.ID, SourceKind: valueOrDefault(strings.TrimSpace(row.SourceKind), "template"), SourceID: valueOrDefault(strings.TrimSpace(row.SourceID), manifest.TemplateID), TemplateID: manifest.TemplateID, TemplateVersion: manifest.Version, ContentHash: hex.EncodeToString(hash[:]), MaterializedAt: now}
-		if err := provenanceRepository.UpsertSeedProvenance(ctx, provenance); err != nil {
-			return fmt.Errorf("record domain seed provenance %s/%s: %w", row.ObjectKey, row.Key, err)
 		}
 	}
 	return nil

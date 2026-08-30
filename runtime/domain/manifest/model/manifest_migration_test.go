@@ -17,7 +17,7 @@ func TestDecodeManifestMigratesV1FrontendPayloadWithGoldenReport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if manifest.SchemaVersion != CurrentManifestSchemaVersion || manifest.ManifestHash == "" || len(manifest.EntryPoints) != 1 {
+	if manifest.SchemaVersion != CurrentManifestSchemaVersion || manifest.ManifestHash == "" {
 		t.Fatalf("migrated manifest=%#v", manifest)
 	}
 	migratedRaw, _ := json.Marshal(manifest)
@@ -50,14 +50,14 @@ func TestDecodeManifestV2RejectsRetiredFrontendKeys(t *testing.T) {
 }
 
 func TestDecodeManifestV2RejectsRetiredActionConfig(t *testing.T) {
-	raw := []byte(`{"schema_version":"2","template_id":"crm","version":"2","objects":[],"views":[],"actions":[{"key":"order.submit","object_key":"order","kind":"record_operation","requires_permission":"order.update","audit_event":"order.submitted","config":{"steps":[]}}]}`)
+	raw := []byte(`{"schema_version":"2","template_id":"crm","version":"2","objects":[],"actions":[{"key":"order.submit","object_key":"order","kind":"record_operation","requires_permission":"order.update","audit_event":"order.submitted","config":{"steps":[]}}]}`)
 	if _, _, err := DecodeManifest(raw); err == nil || !strings.Contains(err.Error(), "unknown field \"config\"") {
 		t.Fatalf("v2 retired Action config was not rejected by strict decode: %v", err)
 	}
 }
 
 func TestManifestContentHashIsStableAndRejectsUnsupportedProgrammaticValues(t *testing.T) {
-	manifest := ManifestSchema{SchemaVersion: CurrentManifestSchemaVersion, TemplateID: "crm", Version: "1", ManifestHash: "old", Objects: nil, Views: nil}
+	manifest := ManifestSchema{SchemaVersion: CurrentManifestSchemaVersion, TemplateID: "crm", Version: "1", ManifestHash: "old", Objects: nil}
 	first, err := ManifestContentHash(manifest)
 	if err != nil || first == "" {
 		t.Fatalf("first hash=%q err=%v", first, err)
@@ -82,8 +82,8 @@ func TestDecodeManifestVersionAndStrictDecodeMatrix(t *testing.T) {
 	}{
 		{name: "invalid JSON", raw: "{", wantError: "unexpected"},
 		{name: "unsupported version", raw: `{"schema_version":"3"}`, wantError: "unsupported manifest schema_version"},
-		{name: "strict v2", raw: `{"schema_version":"2","template_id":"crm","version":"1","objects":[],"views":[]}`},
-		{name: "versionless", raw: `{"template_id":"crm","version":"1","objects":[],"views":[]}`, migrated: true},
+		{name: "strict v2", raw: `{"schema_version":"2","template_id":"crm","version":"1","objects":[]}`},
+		{name: "versionless", raw: `{"template_id":"crm","version":"1","objects":[]}`, migrated: true},
 		{name: "v1 decode error", raw: `{"schema_version":"1","objects":"invalid"}`, wantError: "cannot unmarshal", migrated: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -114,18 +114,17 @@ func TestLegacyEnvelopeMigrationHandlesAbsentMalformedAndUnchangedSections(t *te
 		"entrypoints": json.RawMessage(`[{"key":"entry"}]`),
 		"actions":     json.RawMessage(`[{"key":"action","config":"invalid"},{"key":"plain","config":{}}]`),
 	}
-	originalEntrypoints := append(json.RawMessage(nil), envelope["entrypoints"]...)
 	originalActions := append(json.RawMessage(nil), envelope["actions"]...)
 	migrateLegacyFrontendEnvelope(envelope, &report)
-	for _, removed := range []string{"frontend", "menus", "surfaces", "components"} {
+	for _, removed := range []string{"frontend", "menus", "surfaces", "components", "entrypoints"} {
 		if _, exists := envelope[removed]; exists {
 			t.Fatalf("legacy key %q retained: %#v", removed, envelope)
 		}
 	}
-	if !reflect.DeepEqual(envelope["entrypoints"], originalEntrypoints) || !reflect.DeepEqual(envelope["actions"], originalActions) {
+	if !reflect.DeepEqual(envelope["actions"], originalActions) {
 		t.Fatalf("unchanged sections were rewritten: %#v", envelope)
 	}
-	if len(report.LegacyFrontendReferences) != 0 || len(report.Warnings) != 4 {
+	if len(report.LegacyFrontendReferences) != 0 || len(report.Warnings) != 5 {
 		t.Fatalf("migration report=%#v", report)
 	}
 	malformedSections := map[string]json.RawMessage{"entrypoints": json.RawMessage(`{}`), "actions": json.RawMessage(`{}`)}

@@ -10,6 +10,5 @@ func (h *AutomationHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /automation-rules/authoring-fragments/{capabilityKey}/validate", h.validateAutomationAuthoringFragment)
 	mux.HandleFunc("POST /automation-rules/simulate", h.simulateAutomationRule)
 	mux.HandleFunc("GET /automation-rules/{ruleKey}", h.getAutomationRule)
-	mux.HandleFunc("GET /automation-rules/{ruleKey}/versions", h.listAutomationRuleVersions)
 	mux.HandleFunc("POST /automation-rules/{ruleKey}/simulate", h.simulateAutomationRule)
 }

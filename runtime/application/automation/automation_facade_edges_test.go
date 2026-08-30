@@ -56,15 +56,10 @@ type automationFacadeConnectorCatalog struct {
 	schema integrationmodel.IntegrationSchema
 }
 
+type automationFacadeMetadataProbe struct{}
+
 func (c automationFacadeConnectorCatalog) Schema() integrationmodel.IntegrationSchema {
 	return c.schema
-}
-
-type automationFacadeMetadataProbe struct {
-}
-
-func (p *automationFacadeMetadataProbe) ListApplicationDefinitionVersions(_ context.Context, _ string, resourceKey string, _ principalmodel.Principal) ([]appschemamodel.ApplicationDefinitionVersion, error) {
-	return []appschemamodel.ApplicationDefinitionVersion{{ResourceType: "automation_rule", ResourceKey: resourceKey, SchemaVersion: "1"}}, nil
 }
 
 type automationFacadeWorkflowProbe struct {
@@ -84,7 +79,6 @@ func newAutomationFacade(registry *automationFacadeRegistry, metadata *automatio
 	return NewAutomationApplicationService(AutomationApplicationDependencies{
 		Rules:      registry,
 		Connectors: automationFacadeConnectorCatalog{schema: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "erp"}}}},
-		Metadata:   metadata,
 		Schema: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 			return appschemamodel.ApplicationSchemaSnapshot{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "erp"}}}}
 		},

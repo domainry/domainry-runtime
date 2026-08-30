@@ -119,7 +119,7 @@ func TestChangePlanReferenceServiceBuildsOptionalRuntimeEvidence(t *testing.T) {
 		},
 	}
 	frontend := changePlanFrontendFake{snapshot: changeplanmodel.FrontendCapabilities{Manifest: &changeplanmodel.FrontendManifest{Entries: []changeplanmodel.FrontendSupportEntry{{
-		SupportKey: "orders", Route: "/orders", FeatureModule: "orders-page", CapabilityKeys: []string{"object.list"}, RequiredPermissions: []string{"order.read"}, ActorRoles: []string{"sales"}, BusinessObjects: []string{"order"}, ViewKeys: []string{"order_list"}, ImplementedActions: []string{"order.approve"}, ReportKeys: []string{"orders"}, FieldKeys: []string{"order.status"}, AcceptanceClaims: []string{"order-list-refresh"},
+		SupportKey: "orders", Route: "/orders", FeatureModule: "orders-page", CapabilityKeys: []string{"object.list"}, RequiredPermissions: []string{"order.read"}, ActorRoles: []string{"sales"}, BusinessObjects: []string{"order"}, ImplementedActions: []string{"order.approve"}, ReportKeys: []string{"orders"}, FieldKeys: []string{"order.status"}, AcceptanceClaims: []string{"order-list-refresh"},
 	}}}}}
 	evidence := changePlanEvidenceFake{seeds: []businessseedmodel.BusinessSeedProvenance{{SeedKey: "order_seed", ObjectKey: "order", RecordID: "order-1", SourceKind: "fixture"}}}
 	service := NewChangePlanReferenceApplicationService(nil, runtime, evidence, frontend)
@@ -127,7 +127,7 @@ func TestChangePlanReferenceServiceBuildsOptionalRuntimeEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(graph.Nodes) < 18 || len(graph.Edges) < 18 || graph.Hash == "" {
+	if len(graph.Nodes) < 18 || len(graph.Edges) < 17 || graph.Hash == "" {
 		t.Fatalf("optional graph too small: nodes=%d edges=%d hash=%q", len(graph.Nodes), len(graph.Edges), graph.Hash)
 	}
 

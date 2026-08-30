@@ -14,7 +14,7 @@ func DeploymentFrontendSupportObservationAuthoringCapability() capabilitycontrac
 			{Key: "entries", Type: "array", Required: true, ItemSchema: "frontend_capability_support_entry"},
 		},
 		Permissions: []string{"workspace.admin"}, ValidationEndpoint: "POST /frontend-capability-manifest/validate",
-		ConfigurationRoutes: []string{"GET /frontend-capability-manifest", "POST /frontend-capability-manifest/validate", "PUT /frontend-capability-manifest"},
+		ConfigurationRoutes: []string{"GET /frontend-capability-manifest", "POST /frontend-capability-manifest/validate"},
 		InputSchema:         deploymentFrontendManifestInputSchema(), OutputSchema: deploymentFrontendManifestValidationOutputSchema(),
 		OutputVariables: []capabilitycontract.CapabilityAuthoringOutput{{Name: "valid", JSONPointer: "/valid", Type: "boolean", VisibleTo: "subsequent_capability_calls"}, {Name: "normalized_manifest", JSONPointer: "/normalized_manifest", Type: "frontend_capability_manifest", VisibleTo: "subsequent_capability_calls"}},
 		Execution:       &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"runtime.authoring_capabilities", "deployment.frontend_manifest"}, WriteSet: []string{"deployment.frontend_manifest"}, Transaction: "deployment_manifest_transaction", Idempotency: "manifest_contract_hash", SideEffects: []string{"frontend_capability_manifest_registered"}, SideEffectLevel: "internal", Compensation: "restore_previous_manifest_revision", PermissionModel: "workspace.admin"},
@@ -35,11 +35,11 @@ func DeploymentFrontendSupportObservationAuthoringCapability() capabilitycontrac
 			{Code: "backend.frontend.capability_duplicate", FieldPath: "entries[].capability_keys[]", ParameterKeys: []string{"actual"}, MessageKey: "backend.frontend.capability_duplicate"},
 			{Code: "backend.frontend.permission_invalid", FieldPath: "entries[].required_permissions[]", ParameterKeys: []string{"actual"}, MessageKey: "backend.frontend.permission_invalid"},
 			{Code: "backend.frontend.permission_missing", FieldPath: "entries[].required_permissions", ParameterKeys: []string{"permission", "capability"}, MessageKey: "backend.frontend.permission_missing"},
-			{Code: "backend.frontend.business_binding_invalid", FieldPath: "entries[].{actor_roles,business_objects,view_keys,implemented_actions,report_keys,field_keys,acceptance_claims}[]", ParameterKeys: []string{"kind", "actual"}, MessageKey: "backend.frontend.business_binding_invalid"},
-			{Code: "backend.frontend.business_binding_unknown", FieldPath: "entries[].{actor_roles,business_objects,view_keys,implemented_actions,report_keys,field_keys}[]", ParameterKeys: []string{"kind", "actual"}, MessageKey: "backend.frontend.business_binding_unknown"},
+			{Code: "backend.frontend.business_binding_invalid", FieldPath: "entries[].{actor_roles,business_objects,implemented_actions,report_keys,field_keys,acceptance_claims}[]", ParameterKeys: []string{"kind", "actual"}, MessageKey: "backend.frontend.business_binding_invalid"},
+			{Code: "backend.frontend.business_binding_unknown", FieldPath: "entries[].{actor_roles,business_objects,implemented_actions,report_keys,field_keys}[]", ParameterKeys: []string{"kind", "actual"}, MessageKey: "backend.frontend.business_binding_unknown"},
 			{Code: "backend.frontend.support_missing", FieldPath: "entries", ParameterKeys: []string{"support_key", "capability"}, MessageKey: "backend.frontend.support_missing"},
 		},
-		Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "validation", Path: "runtime/domain/deployment/validation/deployment_frontend_capability_usage_validation.go", Symbol: "frontendCapabilityUsageValidator"}, {Kind: "service", Path: "runtime/application/deployment/deployment_frontend_capability_application_service.go", Symbol: "DeploymentFrontendCapabilityApplicationService.RegisterManifest"}, {Kind: "ui", Path: "frontend/domainry-admin/src/data/frontend-capability-support.ts", Symbol: "FRONTEND_CAPABILITY_SUPPORT_MANIFEST"}},
+		Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "validation", Path: "runtime/domain/deployment/validation/deployment_frontend_capability_usage_validation.go", Symbol: "frontendCapabilityUsageValidator"}, {Kind: "materializer", Path: "runtime/application/seed/deployment/frontend_capability.go", Symbol: "SyncFrontendCapabilityManifest"}, {Kind: "ui", Path: "frontend/domainry-admin/src/data/frontend-capability-support.ts", Symbol: "FRONTEND_CAPABILITY_SUPPORT_MANIFEST"}},
 	}
 }
 
@@ -53,7 +53,7 @@ func deploymentFrontendManifestInputSchema() *capabilitycontract.CapabilityAutho
 	}}
 	entry := capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: &closed, Required: []string{"support_key", "capability_keys", "route", "required_permissions", "feature_module", "acceptance_tests"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
 		"support_key": {Type: "string"}, "capability_keys": stringArray(), "route": {Type: "string"}, "required_permissions": stringArray(), "feature_module": {Type: "string"}, "acceptance_tests": stringArray(),
-		"actor_roles": stringArray(), "business_objects": stringArray(), "view_keys": stringArray(), "implemented_actions": stringArray(), "report_keys": stringArray(), "field_keys": stringArray(), "acceptance_claims": stringArray(),
+		"actor_roles": stringArray(), "business_objects": stringArray(), "implemented_actions": stringArray(), "report_keys": stringArray(), "field_keys": stringArray(), "acceptance_claims": stringArray(),
 	}}
 	return &capabilitycontract.CapabilityAuthoringSchema{Schema: "https://json-schema.org/draft/2020-12/schema", Type: "object", AdditionalProperties: &closed, Required: []string{"manifest_version", "frontend_version", "runtime_contract_versions", "entries"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
 		"manifest_version": {Type: "string", Const: deploymentmodel.FrontendCapabilityManifestVersion}, "frontend_version": {Type: "string"}, "runtime_contract_versions": stringArray(), "deployment_evidence": evidence, "entries": {Type: "array", Items: &entry},

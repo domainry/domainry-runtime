@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	"slices"
 	"testing"
 	"time"
+
+	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
@@ -23,10 +24,8 @@ import (
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
-	businessintegration "github.com/domainry/domainry-runtime/runtime/application/integration"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
@@ -36,6 +35,7 @@ import (
 	automationbusiness "github.com/domainry/domainry-runtime/runtime/domain/automation/service"
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
+	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
@@ -157,7 +157,7 @@ func (r *runtimeServicesActionExecutionRepository) CommitExecution(ctx context.C
 }
 
 type runtimeServicesBusinessEvidenceRepository struct {
-	BusinessEvidenceRepository
+	changeplanrepository.ChangePlanEvidenceRepository
 }
 
 type runtimeServicesBusinessSystemEvidenceRepository struct {
@@ -764,318 +764,321 @@ func TestApplicationDefinitionValidationRoutesOwnerContracts(t *testing.T) {
 		}
 		service.ValidateApplicationDefinitionPayload(t.Context(), resourceType, request(payload))
 	}
-	if normalized, err := service.ValidateApplicationDefinitionPayload(t.Context(), "view", request(`{"key":"customer_list","name":"Customers","object_key":"customer","type":"table","config":{"columns":["name"]}}`)); err != nil || len(normalized.Payload) == 0 {
-		t.Fatalf("unhandled normalized=%s error=%v", normalized.Payload, err)
+	if _, err := service.ValidateApplicationDefinitionPayload(t.Context(), "view", request(`{"key":"customer_list"}`)); err == nil {
+		t.Fatal("retired view definition unexpectedly accepted")
 	}
 }
 
-func TestIntegrationEventOrchestrationUsesNarrowApplicationPorts(t *testing.T) {
-	registry := businessintegration.NewConnectorRegistry(integrationmodel.IntegrationSchema{EventMappings: []integrationmodel.IntegrationEventMappingSchema{
-		{Key: "workflow", Provider: "workflow", TargetType: "workflow", WorkflowKey: "lead.follow_up"},
-		{Key: "action", Provider: "action", TargetType: "action", ObjectKey: "lead", RecordID: "lead-1", ActionKey: "lead.convert"},
-		{Key: "owner", Provider: "owner", TargetType: "owner_task"},
-		{Key: "invalid", Provider: "invalid", TargetType: "unsupported"},
-	}})
-	records := &runtimeServicesIntegrationEventRecords{}
-	resolvedPrincipal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "owner", WorkspaceID: "default"}}
-	resolveEventIdentity := func(context.Context, integrationmodel.IntegrationExternalIdentityResolveRequest, principalmodel.Principal) (integrationmodel.IntegrationExternalIdentityResolveResult, principalmodel.Principal, error) {
-		return integrationmodel.IntegrationExternalIdentityResolveResult{Mapped: true}, resolvedPrincipal, nil
-	}
-	var executeEventWorkflow businessintegration.IntegrationEventWorkflowExecutor
-	var executeEventAction businessintegration.IntegrationEventActionExecutor
-	var schemaObjectMap map[string]definitionmodel.ObjectSchema
-	service := newIntegrationApplicationServiceWithDependencies(IntegrationRuntimeWiringDependencies{
-		ConnectorRegistry: registry, EventRecords: records,
-		SchemaObjectMap: func(context.Context) map[string]definitionmodel.ObjectSchema { return schemaObjectMap },
-		EventIdentityResolver: func(ctx context.Context, request integrationmodel.IntegrationExternalIdentityResolveRequest, principal principalmodel.Principal) (integrationmodel.IntegrationExternalIdentityResolveResult, principalmodel.Principal, error) {
-			return resolveEventIdentity(ctx, request, principal)
-		},
-		EventWorkflowExecutor: func(ctx context.Context, key string, request integrationmodel.IntegrationEntrypointWorkflowRequest, principal principalmodel.Principal) (businessintegration.IntegrationWorkflowRunResult, error) {
-			return executeEventWorkflow(ctx, key, request, principal)
-		},
-		EventActionExecutor: func(ctx context.Context, objectKey, recordID, actionKey string, request integrationmodel.IntegrationEntrypointActionRequest, principal principalmodel.Principal) (businessintegration.IntegrationActionExecutionResult, error) {
-			return executeEventAction(ctx, objectKey, recordID, actionKey, request, principal)
-		},
-	})
+/*
+Integration owner orchestration moved to domainry-integration Module/SaaS.
 
-	event := func(provider string) integrationmodel.IntegrationEvent {
-		return integrationmodel.IntegrationEvent{ID: provider + "-1", Provider: provider, EventType: "updated", Payload: map[string]any{"subject": "Follow up"}}
-	}
-	if _, handled, err := service.ExecuteIntegrationEventMapping(t.Context(), event("missing"), resolvedPrincipal); err != nil || handled {
-		t.Fatalf("unmapped handled=%t error=%v", handled, err)
-	}
-	if _, handled, err := service.ExecuteIntegrationEventMapping(t.Context(), event("invalid"), resolvedPrincipal); err == nil || !handled {
-		t.Fatalf("invalid mapping handled=%t error=%v", handled, err)
-	}
+	func TestIntegrationEventOrchestrationUsesNarrowApplicationPorts(t *testing.T) {
+		registry := businessintegration.NewConnectorRegistry(integrationmodel.IntegrationSchema{EventMappings: []integrationmodel.IntegrationEventMappingSchema{
+			{Key: "workflow", Provider: "workflow", TargetType: "workflow", WorkflowKey: "lead.follow_up"},
+			{Key: "action", Provider: "action", TargetType: "action", ObjectKey: "lead", RecordID: "lead-1", ActionKey: "lead.convert"},
+			{Key: "owner", Provider: "owner", TargetType: "owner_task"},
+			{Key: "invalid", Provider: "invalid", TargetType: "unsupported"},
+		}})
+		records := &runtimeServicesIntegrationEventRecords{}
+		resolvedPrincipal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "owner", WorkspaceID: "default"}}
+		resolveEventIdentity := func(context.Context, integrationmodel.IntegrationExternalIdentityResolveRequest, principalmodel.Principal) (integrationmodel.IntegrationExternalIdentityResolveResult, principalmodel.Principal, error) {
+			return integrationmodel.IntegrationExternalIdentityResolveResult{Mapped: true}, resolvedPrincipal, nil
+		}
+		var executeEventWorkflow businessintegration.IntegrationEventWorkflowExecutor
+		var executeEventAction businessintegration.IntegrationEventActionExecutor
+		var schemaObjectMap map[string]definitionmodel.ObjectSchema
+		service := newIntegrationApplicationServiceWithDependencies(IntegrationRuntimeWiringDependencies{
+			ConnectorRegistry: registry, EventRecords: records,
+			SchemaObjectMap: func(context.Context) map[string]definitionmodel.ObjectSchema { return schemaObjectMap },
+			EventIdentityResolver: func(ctx context.Context, request integrationmodel.IntegrationExternalIdentityResolveRequest, principal principalmodel.Principal) (integrationmodel.IntegrationExternalIdentityResolveResult, principalmodel.Principal, error) {
+				return resolveEventIdentity(ctx, request, principal)
+			},
+			EventWorkflowExecutor: func(ctx context.Context, key string, request integrationmodel.IntegrationEntrypointWorkflowRequest, principal principalmodel.Principal) (businessintegration.IntegrationWorkflowRunResult, error) {
+				return executeEventWorkflow(ctx, key, request, principal)
+			},
+			EventActionExecutor: func(ctx context.Context, objectKey, recordID, actionKey string, request integrationmodel.IntegrationEntrypointActionRequest, principal principalmodel.Principal) (businessintegration.IntegrationActionExecutionResult, error) {
+				return executeEventAction(ctx, objectKey, recordID, actionKey, request, principal)
+			},
+		})
 
-	executeEventWorkflow = func(context.Context, string, integrationmodel.IntegrationEntrypointWorkflowRequest, principalmodel.Principal) (businessintegration.IntegrationWorkflowRunResult, error) {
-		return businessintegration.IntegrationWorkflowRunResult{}, errors.New("workflow failed")
-	}
-	if _, handled, err := service.ExecuteIntegrationEventMapping(t.Context(), event("workflow"), resolvedPrincipal); err == nil || !handled {
-		t.Fatalf("workflow failure handled=%t error=%v", handled, err)
-	}
-	executeEventWorkflow = func(context.Context, string, integrationmodel.IntegrationEntrypointWorkflowRequest, principalmodel.Principal) (businessintegration.IntegrationWorkflowRunResult, error) {
-		return businessintegration.IntegrationWorkflowRunResult{Workflow: workflowmodel.WorkflowRunResult{WorkflowKey: "lead.follow_up", Status: "completed"}}, nil
-	}
-	if decision, handled, err := service.ExecuteIntegrationEventMapping(t.Context(), event("workflow"), resolvedPrincipal); err != nil || !handled || decision.Status != "processed" {
-		t.Fatalf("workflow decision=%#v handled=%t error=%v", decision, handled, err)
-	}
+		event := func(provider string) integrationmodel.IntegrationEvent {
+			return integrationmodel.IntegrationEvent{ID: provider + "-1", Provider: provider, EventType: "updated", Payload: map[string]any{"subject": "Follow up"}}
+		}
+		if _, handled, err := service.ExecuteIntegrationEventMapping(t.Context(), event("missing"), resolvedPrincipal); err != nil || handled {
+			t.Fatalf("unmapped handled=%t error=%v", handled, err)
+		}
+		if _, handled, err := service.ExecuteIntegrationEventMapping(t.Context(), event("invalid"), resolvedPrincipal); err == nil || !handled {
+			t.Fatalf("invalid mapping handled=%t error=%v", handled, err)
+		}
 
-	executeEventAction = func(context.Context, string, string, string, integrationmodel.IntegrationEntrypointActionRequest, principalmodel.Principal) (businessintegration.IntegrationActionExecutionResult, error) {
-		return businessintegration.IntegrationActionExecutionResult{}, errors.New("action failed")
-	}
-	if _, handled, err := service.ExecuteIntegrationEventMapping(t.Context(), event("action"), resolvedPrincipal); err == nil || !handled {
-		t.Fatalf("action failure handled=%t error=%v", handled, err)
-	}
-	executeEventAction = func(context.Context, string, string, string, integrationmodel.IntegrationEntrypointActionRequest, principalmodel.Principal) (businessintegration.IntegrationActionExecutionResult, error) {
-		return businessintegration.IntegrationActionExecutionResult{Action: actionmodel.ActionResult{ObjectKey: "lead", RecordID: "lead-1", ActionKey: "lead.convert"}}, nil
-	}
-	if decision, handled, err := service.ExecuteIntegrationEventMapping(t.Context(), event("action"), resolvedPrincipal); err != nil || !handled || decision.Status != "processed" {
-		t.Fatalf("action decision=%#v handled=%t error=%v", decision, handled, err)
-	}
+		executeEventWorkflow = func(context.Context, string, integrationmodel.IntegrationEntrypointWorkflowRequest, principalmodel.Principal) (businessintegration.IntegrationWorkflowRunResult, error) {
+			return businessintegration.IntegrationWorkflowRunResult{}, errors.New("workflow failed")
+		}
+		if _, handled, err := service.ExecuteIntegrationEventMapping(t.Context(), event("workflow"), resolvedPrincipal); err == nil || !handled {
+			t.Fatalf("workflow failure handled=%t error=%v", handled, err)
+		}
+		executeEventWorkflow = func(context.Context, string, integrationmodel.IntegrationEntrypointWorkflowRequest, principalmodel.Principal) (businessintegration.IntegrationWorkflowRunResult, error) {
+			return businessintegration.IntegrationWorkflowRunResult{Workflow: workflowmodel.WorkflowRunResult{WorkflowKey: "lead.follow_up", Status: "completed"}}, nil
+		}
+		if decision, handled, err := service.ExecuteIntegrationEventMapping(t.Context(), event("workflow"), resolvedPrincipal); err != nil || !handled || decision.Status != "processed" {
+			t.Fatalf("workflow decision=%#v handled=%t error=%v", decision, handled, err)
+		}
 
-	resolveEventIdentity = func(context.Context, integrationmodel.IntegrationExternalIdentityResolveRequest, principalmodel.Principal) (integrationmodel.IntegrationExternalIdentityResolveResult, principalmodel.Principal, error) {
-		return integrationmodel.IntegrationExternalIdentityResolveResult{}, principalmodel.Principal{}, errors.New("identity failed")
-	}
-	if _, handled, err := service.ExecuteIntegrationEventMapping(t.Context(), event("owner"), resolvedPrincipal); err == nil || !handled {
-		t.Fatalf("identity failure handled=%t error=%v", handled, err)
-	}
-	resolveEventIdentity = func(context.Context, integrationmodel.IntegrationExternalIdentityResolveRequest, principalmodel.Principal) (integrationmodel.IntegrationExternalIdentityResolveResult, principalmodel.Principal, error) {
-		return integrationmodel.IntegrationExternalIdentityResolveResult{Mapped: true}, resolvedPrincipal, nil
-	}
-	if _, _, err := service.ExecuteIntegrationEventMapping(t.Context(), event("owner"), resolvedPrincipal); err == nil {
-		t.Fatal("missing Activity schema must reject owner task")
-	}
-	schemaObjectMap = map[string]definitionmodel.ObjectSchema{"activity": {Key: "activity"}}
-	records.createErr = errors.New("create failed")
-	if _, _, err := service.ExecuteIntegrationEventMapping(t.Context(), event("owner"), resolvedPrincipal); err == nil {
-		t.Fatal("Record create failure must reject owner task")
-	}
-	records.createErr = nil
-	if decision, handled, err := service.ExecuteIntegrationEventMapping(t.Context(), event("owner"), resolvedPrincipal); err != nil || !handled || decision.Status != "processed" || len(records.created) != 1 {
-		t.Fatalf("owner decision=%#v handled=%t created=%d error=%v", decision, handled, len(records.created), err)
-	}
+		executeEventAction = func(context.Context, string, string, string, integrationmodel.IntegrationEntrypointActionRequest, principalmodel.Principal) (businessintegration.IntegrationActionExecutionResult, error) {
+			return businessintegration.IntegrationActionExecutionResult{}, errors.New("action failed")
+		}
+		if _, handled, err := service.ExecuteIntegrationEventMapping(t.Context(), event("action"), resolvedPrincipal); err == nil || !handled {
+			t.Fatalf("action failure handled=%t error=%v", handled, err)
+		}
+		executeEventAction = func(context.Context, string, string, string, integrationmodel.IntegrationEntrypointActionRequest, principalmodel.Principal) (businessintegration.IntegrationActionExecutionResult, error) {
+			return businessintegration.IntegrationActionExecutionResult{Action: actionmodel.ActionResult{ObjectKey: "lead", RecordID: "lead-1", ActionKey: "lead.convert"}}, nil
+		}
+		if decision, handled, err := service.ExecuteIntegrationEventMapping(t.Context(), event("action"), resolvedPrincipal); err != nil || !handled || decision.Status != "processed" {
+			t.Fatalf("action decision=%#v handled=%t error=%v", decision, handled, err)
+		}
 
-	if _, ok := service.IntegrationFindFirstRecordByField(t.Context(), "contact", "email", " ", resolvedPrincipal); ok {
-		t.Fatal("blank lookup value must not query Records")
-	}
-	records.listErr = errors.New("list failed")
-	if _, ok := service.IntegrationFindFirstRecordByField(t.Context(), "contact", "email", "user@example.com", resolvedPrincipal); ok {
-		t.Fatal("failed Record lookup must not resolve a relation")
-	}
-	records.listErr, records.page = nil, recordmodel.RecordPageResult{}
-	if _, ok := service.IntegrationFindFirstRecordByField(t.Context(), "contact", "email", "user@example.com", resolvedPrincipal); ok {
-		t.Fatal("empty Record lookup must not resolve a relation")
-	}
-	records.page = recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "contact-1"}}}
-	if record, ok := service.IntegrationFindFirstRecordByField(t.Context(), "contact", "email", "user@example.com", resolvedPrincipal); !ok || record.ID != "contact-1" {
-		t.Fatalf("record=%#v resolved=%t", record, ok)
-	}
-}
+		resolveEventIdentity = func(context.Context, integrationmodel.IntegrationExternalIdentityResolveRequest, principalmodel.Principal) (integrationmodel.IntegrationExternalIdentityResolveResult, principalmodel.Principal, error) {
+			return integrationmodel.IntegrationExternalIdentityResolveResult{}, principalmodel.Principal{}, errors.New("identity failed")
+		}
+		if _, handled, err := service.ExecuteIntegrationEventMapping(t.Context(), event("owner"), resolvedPrincipal); err == nil || !handled {
+			t.Fatalf("identity failure handled=%t error=%v", handled, err)
+		}
+		resolveEventIdentity = func(context.Context, integrationmodel.IntegrationExternalIdentityResolveRequest, principalmodel.Principal) (integrationmodel.IntegrationExternalIdentityResolveResult, principalmodel.Principal, error) {
+			return integrationmodel.IntegrationExternalIdentityResolveResult{Mapped: true}, resolvedPrincipal, nil
+		}
+		if _, _, err := service.ExecuteIntegrationEventMapping(t.Context(), event("owner"), resolvedPrincipal); err == nil {
+			t.Fatal("missing Activity schema must reject owner task")
+		}
+		schemaObjectMap = map[string]definitionmodel.ObjectSchema{"activity": {Key: "activity"}}
+		records.createErr = errors.New("create failed")
+		if _, _, err := service.ExecuteIntegrationEventMapping(t.Context(), event("owner"), resolvedPrincipal); err == nil {
+			t.Fatal("Record create failure must reject owner task")
+		}
+		records.createErr = nil
+		if decision, handled, err := service.ExecuteIntegrationEventMapping(t.Context(), event("owner"), resolvedPrincipal); err != nil || !handled || decision.Status != "processed" || len(records.created) != 1 {
+			t.Fatalf("owner decision=%#v handled=%t created=%d error=%v", decision, handled, len(records.created), err)
+		}
 
-func TestIntegrationApplicationWiringUsesOwnerPortsAndCanonicalService(t *testing.T) {
-	if service := integrationApplication(nil); service == nil {
-		t.Fatal("nil Runtime must produce an independently usable Integration application service")
-	}
-	withDefaults := newIntegrationApplicationServiceWithDependencies(IntegrationRuntimeWiringDependencies{})
-	if withDefaults == nil {
-		t.Fatal("default Integration dependencies were not installed")
-	}
-	providedAutomation := automationapplication.NewAutomationApplicationService(automationapplication.AutomationApplicationDependencies{})
-	withProvidedAutomation := newIntegrationApplicationServiceWithDependencies(IntegrationRuntimeWiringDependencies{Automation: providedAutomation})
-	if withProvidedAutomation == nil {
-		t.Fatal("provided Automation application port was replaced")
+		if _, ok := service.IntegrationFindFirstRecordByField(t.Context(), "contact", "email", " ", resolvedPrincipal); ok {
+			t.Fatal("blank lookup value must not query Records")
+		}
+		records.listErr = errors.New("list failed")
+		if _, ok := service.IntegrationFindFirstRecordByField(t.Context(), "contact", "email", "user@example.com", resolvedPrincipal); ok {
+			t.Fatal("failed Record lookup must not resolve a relation")
+		}
+		records.listErr, records.page = nil, recordmodel.RecordPageResult{}
+		if _, ok := service.IntegrationFindFirstRecordByField(t.Context(), "contact", "email", "user@example.com", resolvedPrincipal); ok {
+			t.Fatal("empty Record lookup must not resolve a relation")
+		}
+		records.page = recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "contact-1"}}}
+		if record, ok := service.IntegrationFindFirstRecordByField(t.Context(), "contact", "email", "user@example.com", resolvedPrincipal); !ok || record.ID != "contact-1" {
+			t.Fatalf("record=%#v resolved=%t", record, ok)
+		}
 	}
 
-	registry := businessintegration.NewConnectorRegistry(integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{
-		{Key: "email", Providers: []integrationmodel.ConnectorProviderSchema{{Key: "smtp"}, {Key: "postmark"}}},
-		{Key: "webhook", Provider: "webhook"},
-	}})
-	config := &runtimeServicesIntegrationConfigRepository{connections: []integrationmodel.IntegrationConnection{
-		{Key: "smtp-main", WorkspaceID: "default", ConnectorKey: "email", ProviderKey: "smtp"},
-		{Key: "wrong-main", WorkspaceID: "default", ConnectorKey: "webhook", ProviderKey: "webhook"},
-	}}
-	var schema appschemamodel.ApplicationSchemaSnapshot
-	service := newIntegrationApplicationServiceWithDependencies(IntegrationRuntimeWiringDependencies{ConnectorRegistry: registry, ConfigRepository: config, Schema: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
-		return schema
-	}})
-	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}
-	if references, err := service.IntegrationConnectionReferences(t.Context(), "smtp-main", principal); err != nil || len(references) != 0 {
-		t.Fatalf("nil-schema references=%#v error=%v", references, err)
-	}
-	schema = appschemamodel.ApplicationSchemaSnapshot{
-		Actions:         []definitionmodel.ActionSchema{{Key: "customer.notify"}},
-		AutomationRules: []automationmodel.AutomationRuleSchema{{Key: "customer.created"}},
-		Workflows:       []definitionmodel.WorkflowSchema{{Key: "customer.follow_up"}},
-		Integrations:    integrationmodel.IntegrationSchema{EventMappings: []integrationmodel.IntegrationEventMappingSchema{{Key: "customer.event", Payload: map[string]any{"connection_key": "smtp-main"}}}},
-	}
-	if references, err := service.IntegrationConnectionReferences(t.Context(), "smtp-main", principal); err != nil || len(references) == 0 {
-		t.Fatalf("schema references=%#v error=%v", references, err)
-	}
-	if _, err := service.ResolveIntegrationDeliveryProvider(t.Context(), "missing", "", "smtp", "default"); err == nil {
-		t.Fatal("missing connector must be rejected")
-	}
-	if provider, err := service.ResolveIntegrationDeliveryProvider(t.Context(), "email", "", "postmark", "default"); err != nil || provider != "postmark" {
-		t.Fatalf("requested provider=%q error=%v", provider, err)
-	}
-	if _, err := service.ResolveIntegrationDeliveryProvider(t.Context(), "email", "absent", "", "default"); err == nil {
-		t.Fatal("missing connection must be rejected")
-	}
-	if _, err := service.ResolveIntegrationDeliveryProvider(t.Context(), "email", "wrong-main", "", "default"); err == nil {
-		t.Fatal("connection connector mismatch must be rejected")
-	}
-	if provider, err := service.ResolveIntegrationDeliveryProvider(t.Context(), "email", "smtp-main", "", "default"); err != nil || provider != "smtp" {
-		t.Fatalf("connection provider=%q error=%v", provider, err)
+	func TestIntegrationApplicationWiringUsesOwnerPortsAndCanonicalService(t *testing.T) {
+		if service := integrationApplication(nil); service == nil {
+			t.Fatal("nil Runtime must produce an independently usable Integration application service")
+		}
+		withDefaults := newIntegrationApplicationServiceWithDependencies(IntegrationRuntimeWiringDependencies{})
+		if withDefaults == nil {
+			t.Fatal("default Integration dependencies were not installed")
+		}
+		providedAutomation := automationapplication.NewAutomationApplicationService(automationapplication.AutomationApplicationDependencies{})
+		withProvidedAutomation := newIntegrationApplicationServiceWithDependencies(IntegrationRuntimeWiringDependencies{Automation: providedAutomation})
+		if withProvidedAutomation == nil {
+			t.Fatal("provided Automation application port was replaced")
+		}
+
+		registry := businessintegration.NewConnectorRegistry(integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{
+			{Key: "email", Providers: []integrationmodel.ConnectorProviderSchema{{Key: "smtp"}, {Key: "postmark"}}},
+			{Key: "webhook", Provider: "webhook"},
+		}})
+		config := &runtimeServicesIntegrationConfigRepository{connections: []integrationmodel.IntegrationConnection{
+			{Key: "smtp-main", WorkspaceID: "default", ConnectorKey: "email", ProviderKey: "smtp"},
+			{Key: "wrong-main", WorkspaceID: "default", ConnectorKey: "webhook", ProviderKey: "webhook"},
+		}}
+		var schema appschemamodel.ApplicationSchemaSnapshot
+		service := newIntegrationApplicationServiceWithDependencies(IntegrationRuntimeWiringDependencies{ConnectorRegistry: registry, ConfigRepository: config, Schema: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
+			return schema
+		}})
+		principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}
+		if references, err := service.IntegrationConnectionReferences(t.Context(), "smtp-main", principal); err != nil || len(references) != 0 {
+			t.Fatalf("nil-schema references=%#v error=%v", references, err)
+		}
+		schema = appschemamodel.ApplicationSchemaSnapshot{
+			Actions:         []definitionmodel.ActionSchema{{Key: "customer.notify"}},
+			AutomationRules: []automationmodel.AutomationRuleSchema{{Key: "customer.created"}},
+			Workflows:       []definitionmodel.WorkflowSchema{{Key: "customer.follow_up"}},
+			Integrations:    integrationmodel.IntegrationSchema{EventMappings: []integrationmodel.IntegrationEventMappingSchema{{Key: "customer.event", Payload: map[string]any{"connection_key": "smtp-main"}}}},
+		}
+		if references, err := service.IntegrationConnectionReferences(t.Context(), "smtp-main", principal); err != nil || len(references) == 0 {
+			t.Fatalf("schema references=%#v error=%v", references, err)
+		}
+		if _, err := service.ResolveIntegrationDeliveryProvider(t.Context(), "missing", "", "smtp", "default"); err == nil {
+			t.Fatal("missing connector must be rejected")
+		}
+		if provider, err := service.ResolveIntegrationDeliveryProvider(t.Context(), "email", "", "postmark", "default"); err != nil || provider != "postmark" {
+			t.Fatalf("requested provider=%q error=%v", provider, err)
+		}
+		if _, err := service.ResolveIntegrationDeliveryProvider(t.Context(), "email", "absent", "", "default"); err == nil {
+			t.Fatal("missing connection must be rejected")
+		}
+		if _, err := service.ResolveIntegrationDeliveryProvider(t.Context(), "email", "wrong-main", "", "default"); err == nil {
+			t.Fatal("connection connector mismatch must be rejected")
+		}
+		if provider, err := service.ResolveIntegrationDeliveryProvider(t.Context(), "email", "smtp-main", "", "default"); err != nil || provider != "smtp" {
+			t.Fatalf("connection provider=%q error=%v", provider, err)
+		}
+
+		service.RegisterSharedIntegrationOutboxSenders()
+		service.RegisterDefaultIntegrationOutboxSenders()
+		canonicalRuntime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{})
+		if canonical := integrationApplication(canonicalRuntime); canonical != canonicalRuntime.integrationService {
+			t.Fatal("Integration constructor did not reuse the canonical Runtime service")
+		}
+
+		events := struct {
+			integrationrepository.IntegrationEventRepository
+		}{}
+		delivery := &runtimeServicesDeliveryRepository{}
+		worker := struct {
+			integrationrepository.IntegrationWorkerRepository
+		}{}
+		configured := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{Dependencies: RuntimeServicesDependencies{
+			IntegrationConfig: config, IntegrationEvents: events, IntegrationDelivery: delivery, IntegrationWorker: worker,
+		}})
+		if configured.integrationConfigRepo != config || configured.integrationEventRepo != events || configured.integrationDeliveryRepo != delivery || configured.integrationWorkerRepo != worker {
+			t.Fatal("constructor did not retain explicit Integration repositories")
+		}
 	}
 
-	service.RegisterSharedIntegrationOutboxSenders()
-	service.RegisterDefaultIntegrationOutboxSenders()
-	canonicalRuntime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{})
-	if canonical := integrationApplication(canonicalRuntime); canonical != canonicalRuntime.integrationService {
-		t.Fatal("Integration constructor did not reuse the canonical Runtime service")
-	}
+	func TestIntegrationEntrypointsUseNarrowActionWorkflowAndRecordPorts(t *testing.T) {
+		failure := errors.New("entrypoint owner failed")
+		delivery := &runtimeServicesDeliveryRepository{}
+		config := &runtimeServicesIntegrationConfigRepository{}
+		registry := businessintegration.NewConnectorRegistry(integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "email", Provider: "email"}}})
+		records := &runtimeServicesIntegrationAgentRecords{}
+		workflowPort := &runtimeServicesIntegrationWorkflowApplication{result: workflowmodel.WorkflowRunResult{WorkflowKey: "customer.follow_up", Status: "completed"}}
+		var invokeAction func(context.Context, actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error)
+		var agents []agentsdk.AgentSchema
+		service := newIntegrationApplicationServiceWithDependencies(IntegrationRuntimeWiringDependencies{
+			ConfigRepository: config, DeliveryRepository: delivery, ConnectorRegistry: registry,
+			Records: records, Workflows: workflowPort,
+			InvokeAction: func(ctx context.Context, invocation actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error) {
+				return invokeAction(ctx, invocation)
+			},
+			Schema: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
+				return appschemamodel.ApplicationSchemaSnapshot{Agents: agents, Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "email"}}}}
+			},
+		})
+		admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+		adminWithRequest := admin
+		adminWithRequest.RequestID = "request-1"
+		validIdentity := integrationmodel.IntegrationExternalIdentityResolveRequest{Provider: "slack", ExternalSubject: "user-1", OnUnmapped: "read_only"}
+		missingIdentity := integrationmodel.IntegrationExternalIdentityResolveRequest{Provider: "slack"}
 
-	events := struct {
-		integrationrepository.IntegrationEventRepository
-	}{}
-	delivery := &runtimeServicesDeliveryRepository{}
-	worker := struct {
-		integrationrepository.IntegrationWorkerRepository
-	}{}
-	configured := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{Dependencies: RuntimeServicesDependencies{
-		IntegrationConfig: config, IntegrationEvents: events, IntegrationDelivery: delivery, IntegrationWorker: worker,
-	}})
-	if configured.integrationConfigRepo != config || configured.integrationEventRepo != events || configured.integrationDeliveryRepo != delivery || configured.integrationWorkerRepo != worker {
-		t.Fatal("constructor did not retain explicit Integration repositories")
-	}
-}
+		if _, err := service.ExecuteIntegrationAction(t.Context(), "customer", "customer-1", "customer.activate", integrationmodel.IntegrationEntrypointActionRequest{ExternalIdentity: missingIdentity}, admin); err == nil {
+			t.Fatal("Action entrypoint identity failure must propagate")
+		}
+		invokeAction = func(context.Context, actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error) {
+			return actionmodel.ActionInvocationResult{}, failure
+		}
+		if _, err := service.ExecuteIntegrationAction(t.Context(), "customer", "customer-1", "customer.activate", integrationmodel.IntegrationEntrypointActionRequest{ExternalIdentity: validIdentity}, admin); !errors.Is(err, failure) {
+			t.Fatalf("Action entrypoint error=%v", err)
+		}
+		invokeAction = func(context.Context, actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error) {
+			return actionmodel.ActionInvocationResult{Record: &actionmodel.ActionResult{ActionKey: "customer.activate", ObjectKey: "customer", RecordID: "customer-1"}}, nil
+		}
+		if result, err := service.ExecuteIntegrationAction(t.Context(), "customer", "customer-1", "customer.activate", integrationmodel.IntegrationEntrypointActionRequest{ExternalIdentity: validIdentity}, admin); err != nil || result.Action.ActionKey != "customer.activate" {
+			t.Fatalf("Action result=%#v error=%v", result, err)
+		}
 
-func TestIntegrationEntrypointsUseNarrowActionWorkflowAndRecordPorts(t *testing.T) {
-	failure := errors.New("entrypoint owner failed")
-	delivery := &runtimeServicesDeliveryRepository{}
-	config := &runtimeServicesIntegrationConfigRepository{}
-	registry := businessintegration.NewConnectorRegistry(integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "email", Provider: "email"}}})
-	records := &runtimeServicesIntegrationAgentRecords{}
-	workflowPort := &runtimeServicesIntegrationWorkflowApplication{result: workflowmodel.WorkflowRunResult{WorkflowKey: "customer.follow_up", Status: "completed"}}
-	var invokeAction func(context.Context, actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error)
-	var agents []agentmodel.AgentSchema
-	service := newIntegrationApplicationServiceWithDependencies(IntegrationRuntimeWiringDependencies{
-		ConfigRepository: config, DeliveryRepository: delivery, ConnectorRegistry: registry,
-		Records: records, Workflows: workflowPort,
-		InvokeAction: func(ctx context.Context, invocation actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error) {
-			return invokeAction(ctx, invocation)
-		},
-		Schema: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
-			return appschemamodel.ApplicationSchemaSnapshot{Agents: agents, Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "email"}}}}
-		},
-	})
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
-	adminWithRequest := admin
-	adminWithRequest.RequestID = "request-1"
-	validIdentity := integrationmodel.IntegrationExternalIdentityResolveRequest{Provider: "slack", ExternalSubject: "user-1", OnUnmapped: "read_only"}
-	missingIdentity := integrationmodel.IntegrationExternalIdentityResolveRequest{Provider: "slack"}
+		if _, err := service.RunIntegrationWorkflow(t.Context(), "customer.follow_up", integrationmodel.IntegrationEntrypointWorkflowRequest{ExternalIdentity: missingIdentity}, admin); err == nil {
+			t.Fatal("Workflow entrypoint identity failure must propagate")
+		}
+		*workflowPort = runtimeServicesIntegrationWorkflowApplication{err: failure}
+		if _, err := service.RunIntegrationWorkflow(t.Context(), "customer.follow_up", integrationmodel.IntegrationEntrypointWorkflowRequest{ExternalIdentity: validIdentity}, admin); !errors.Is(err, failure) {
+			t.Fatalf("Workflow entrypoint error=%v", err)
+		}
+		*workflowPort = runtimeServicesIntegrationWorkflowApplication{result: workflowmodel.WorkflowRunResult{WorkflowKey: "customer.follow_up", Status: "completed"}}
+		if result, err := service.RunIntegrationWorkflow(t.Context(), "customer.follow_up", integrationmodel.IntegrationEntrypointWorkflowRequest{ExternalIdentity: validIdentity}, admin); err != nil || result.Workflow.Status != "completed" {
+			t.Fatalf("Workflow result=%#v error=%v", result, err)
+		}
 
-	if _, err := service.ExecuteIntegrationAction(t.Context(), "customer", "customer-1", "customer.activate", integrationmodel.IntegrationEntrypointActionRequest{ExternalIdentity: missingIdentity}, admin); err == nil {
-		t.Fatal("Action entrypoint identity failure must propagate")
-	}
-	invokeAction = func(context.Context, actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error) {
-		return actionmodel.ActionInvocationResult{}, failure
-	}
-	if _, err := service.ExecuteIntegrationAction(t.Context(), "customer", "customer-1", "customer.activate", integrationmodel.IntegrationEntrypointActionRequest{ExternalIdentity: validIdentity}, admin); !errors.Is(err, failure) {
-		t.Fatalf("Action entrypoint error=%v", err)
-	}
-	invokeAction = func(context.Context, actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error) {
-		return actionmodel.ActionInvocationResult{Record: &actionmodel.ActionResult{ActionKey: "customer.activate", ObjectKey: "customer", RecordID: "customer-1"}}, nil
-	}
-	if result, err := service.ExecuteIntegrationAction(t.Context(), "customer", "customer-1", "customer.activate", integrationmodel.IntegrationEntrypointActionRequest{ExternalIdentity: validIdentity}, admin); err != nil || result.Action.ActionKey != "customer.activate" {
-		t.Fatalf("Action result=%#v error=%v", result, err)
-	}
+		allTools := []string{"readRecord", "createRecord", "updateRecord", "deleteRecord", "callConnector"}
+		agents = []agentsdk.AgentSchema{{Key: "other", Tools: allTools}, {Key: "operations", Tools: allTools}}
+		invoke := func(principal principalmodel.Principal, agentKey, toolKey string, request integrationmodel.IntegrationAgentToolInvocationRequest) (integrationmodel.IntegrationAgentToolInvocationResult, error) {
+			request.ExternalIdentity = validIdentity
+			return service.InvokeIntegrationAgentTool(t.Context(), agentKey, toolKey, request, principal)
+		}
+		if _, err := invoke(principalmodel.Principal{}, "operations", "readRecord", integrationmodel.IntegrationAgentToolInvocationRequest{}); err == nil {
+			t.Fatal("unknown principal must not invoke Agent Tool")
+		}
+		if _, err := invoke(admin, "", "readRecord", integrationmodel.IntegrationAgentToolInvocationRequest{}); err == nil {
+			t.Fatal("blank Agent key must be rejected")
+		}
+		if _, err := invoke(admin, "operations", "", integrationmodel.IntegrationAgentToolInvocationRequest{}); err == nil {
+			t.Fatal("blank Tool key must be rejected")
+		}
+		requestWithMissingIdentity := integrationmodel.IntegrationAgentToolInvocationRequest{ExternalIdentity: missingIdentity}
+		if _, err := service.InvokeIntegrationAgentTool(t.Context(), "operations", "readRecord", requestWithMissingIdentity, admin); err == nil {
+			t.Fatal("Agent Tool identity failure must propagate")
+		}
+		if _, err := invoke(admin, "missing", "readRecord", integrationmodel.IntegrationAgentToolInvocationRequest{}); err == nil {
+			t.Fatal("missing Agent must be rejected")
+		}
+		agents = []agentsdk.AgentSchema{{Key: "operations", Tools: []string{"readRecord"}}}
+		if _, err := invoke(admin, "operations", "deleteRecord", integrationmodel.IntegrationAgentToolInvocationRequest{}); err == nil {
+			t.Fatal("disallowed Tool must be rejected")
+		}
+		agents = []agentsdk.AgentSchema{{Key: "operations", Tools: allTools}}
+		if _, err := invoke(admin, "operations", "callConnector", integrationmodel.IntegrationAgentToolInvocationRequest{}); err == nil {
+			t.Fatal("Connector Tool without connector must fail risk assessment")
+		}
 
-	if _, err := service.RunIntegrationWorkflow(t.Context(), "customer.follow_up", integrationmodel.IntegrationEntrypointWorkflowRequest{ExternalIdentity: missingIdentity}, admin); err == nil {
-		t.Fatal("Workflow entrypoint identity failure must propagate")
+		if result, err := invoke(admin, "operations", "readRecord", integrationmodel.IntegrationAgentToolInvocationRequest{}); err != nil || result.Status != "prepared" || result.ApprovalPlan != nil {
+			t.Fatalf("read Tool result=%#v error=%v", result, err)
+		}
+		if result, err := invoke(adminWithRequest, "operations", "createRecord", integrationmodel.IntegrationAgentToolInvocationRequest{Input: map[string]any{"object_key": "customer", "data": map[string]any{"name": "Acme"}}}); err != nil || result.Status != "approval_required" || result.ApprovalPlan == nil {
+			t.Fatalf("approval result=%#v error=%v", result, err)
+		}
+		if result, err := invoke(admin, "operations", "callConnector", integrationmodel.IntegrationAgentToolInvocationRequest{Input: map[string]any{"connector_key": "email"}}); err != nil || result.Status != "approval_required" || result.ActionInvocation.Metadata["connector_key"] != "email" {
+			t.Fatalf("connector approval result=%#v error=%v", result, err)
+		}
+		if result, err := invoke(admin, "operations", "createRecord", integrationmodel.IntegrationAgentToolInvocationRequest{Approved: true, Input: map[string]any{"object_key": "customer", "data": map[string]any{"name": "Acme"}}}); err != nil || result.Status != "executed" {
+			t.Fatalf("create result=%#v error=%v", result, err)
+		}
+		records.createErr = failure
+		if _, err := invoke(admin, "operations", "createRecord", integrationmodel.IntegrationAgentToolInvocationRequest{Approved: true, Input: map[string]any{"object_key": "customer"}}); !errors.Is(err, failure) {
+			t.Fatalf("create error=%v", err)
+		}
+		records.createErr = nil
+		if result, err := invoke(admin, "operations", "updateRecord", integrationmodel.IntegrationAgentToolInvocationRequest{Approved: true, Input: map[string]any{"object_key": "customer", "record_id": "customer-1"}}); err != nil || result.Status != "executed" {
+			t.Fatalf("update result=%#v error=%v", result, err)
+		}
+		records.updateErr = failure
+		if _, err := invoke(admin, "operations", "updateRecord", integrationmodel.IntegrationAgentToolInvocationRequest{Approved: true, Input: map[string]any{"object_key": "customer", "record_id": "customer-1"}}); !errors.Is(err, failure) {
+			t.Fatalf("update error=%v", err)
+		}
+		records.updateErr = nil
+		if result, err := invoke(admin, "operations", "deleteRecord", integrationmodel.IntegrationAgentToolInvocationRequest{Approved: true, Input: map[string]any{"object_key": "customer", "record_id": "customer-1"}}); err != nil || result.Status != "executed" {
+			t.Fatalf("delete result=%#v error=%v", result, err)
+		}
+		records.deleteErr = failure
+		if _, err := invoke(admin, "operations", "deleteRecord", integrationmodel.IntegrationAgentToolInvocationRequest{Approved: true, Input: map[string]any{"object_key": "customer", "record_id": "customer-1"}}); !errors.Is(err, failure) {
+			t.Fatalf("delete error=%v", err)
+		}
+		records.deleteErr = nil
+		if result, err := invoke(admin, "operations", "readRecord", integrationmodel.IntegrationAgentToolInvocationRequest{Approved: true}); err != nil || result.Status != "prepared" {
+			t.Fatalf("no-op Tool result=%#v error=%v", result, err)
+		}
+		delivery.invocationErr = failure
+		if _, err := invoke(admin, "operations", "readRecord", integrationmodel.IntegrationAgentToolInvocationRequest{}); !errors.Is(err, failure) {
+			t.Fatalf("invocation persistence error=%v", err)
+		}
 	}
-	*workflowPort = runtimeServicesIntegrationWorkflowApplication{err: failure}
-	if _, err := service.RunIntegrationWorkflow(t.Context(), "customer.follow_up", integrationmodel.IntegrationEntrypointWorkflowRequest{ExternalIdentity: validIdentity}, admin); !errors.Is(err, failure) {
-		t.Fatalf("Workflow entrypoint error=%v", err)
-	}
-	*workflowPort = runtimeServicesIntegrationWorkflowApplication{result: workflowmodel.WorkflowRunResult{WorkflowKey: "customer.follow_up", Status: "completed"}}
-	if result, err := service.RunIntegrationWorkflow(t.Context(), "customer.follow_up", integrationmodel.IntegrationEntrypointWorkflowRequest{ExternalIdentity: validIdentity}, admin); err != nil || result.Workflow.Status != "completed" {
-		t.Fatalf("Workflow result=%#v error=%v", result, err)
-	}
-
-	allTools := []string{"readRecord", "createRecord", "updateRecord", "deleteRecord", "callConnector"}
-	agents = []agentmodel.AgentSchema{{Key: "other", Tools: allTools}, {Key: "operations", Tools: allTools}}
-	invoke := func(principal principalmodel.Principal, agentKey, toolKey string, request integrationmodel.IntegrationAgentToolInvocationRequest) (integrationmodel.IntegrationAgentToolInvocationResult, error) {
-		request.ExternalIdentity = validIdentity
-		return service.InvokeIntegrationAgentTool(t.Context(), agentKey, toolKey, request, principal)
-	}
-	if _, err := invoke(principalmodel.Principal{}, "operations", "readRecord", integrationmodel.IntegrationAgentToolInvocationRequest{}); err == nil {
-		t.Fatal("unknown principal must not invoke Agent Tool")
-	}
-	if _, err := invoke(admin, "", "readRecord", integrationmodel.IntegrationAgentToolInvocationRequest{}); err == nil {
-		t.Fatal("blank Agent key must be rejected")
-	}
-	if _, err := invoke(admin, "operations", "", integrationmodel.IntegrationAgentToolInvocationRequest{}); err == nil {
-		t.Fatal("blank Tool key must be rejected")
-	}
-	requestWithMissingIdentity := integrationmodel.IntegrationAgentToolInvocationRequest{ExternalIdentity: missingIdentity}
-	if _, err := service.InvokeIntegrationAgentTool(t.Context(), "operations", "readRecord", requestWithMissingIdentity, admin); err == nil {
-		t.Fatal("Agent Tool identity failure must propagate")
-	}
-	if _, err := invoke(admin, "missing", "readRecord", integrationmodel.IntegrationAgentToolInvocationRequest{}); err == nil {
-		t.Fatal("missing Agent must be rejected")
-	}
-	agents = []agentmodel.AgentSchema{{Key: "operations", Tools: []string{"readRecord"}}}
-	if _, err := invoke(admin, "operations", "deleteRecord", integrationmodel.IntegrationAgentToolInvocationRequest{}); err == nil {
-		t.Fatal("disallowed Tool must be rejected")
-	}
-	agents = []agentmodel.AgentSchema{{Key: "operations", Tools: allTools}}
-	if _, err := invoke(admin, "operations", "callConnector", integrationmodel.IntegrationAgentToolInvocationRequest{}); err == nil {
-		t.Fatal("Connector Tool without connector must fail risk assessment")
-	}
-
-	if result, err := invoke(admin, "operations", "readRecord", integrationmodel.IntegrationAgentToolInvocationRequest{}); err != nil || result.Status != "prepared" || result.ApprovalPlan != nil {
-		t.Fatalf("read Tool result=%#v error=%v", result, err)
-	}
-	if result, err := invoke(adminWithRequest, "operations", "createRecord", integrationmodel.IntegrationAgentToolInvocationRequest{Input: map[string]any{"object_key": "customer", "data": map[string]any{"name": "Acme"}}}); err != nil || result.Status != "approval_required" || result.ApprovalPlan == nil {
-		t.Fatalf("approval result=%#v error=%v", result, err)
-	}
-	if result, err := invoke(admin, "operations", "callConnector", integrationmodel.IntegrationAgentToolInvocationRequest{Input: map[string]any{"connector_key": "email"}}); err != nil || result.Status != "approval_required" || result.ActionInvocation.Metadata["connector_key"] != "email" {
-		t.Fatalf("connector approval result=%#v error=%v", result, err)
-	}
-	if result, err := invoke(admin, "operations", "createRecord", integrationmodel.IntegrationAgentToolInvocationRequest{Approved: true, Input: map[string]any{"object_key": "customer", "data": map[string]any{"name": "Acme"}}}); err != nil || result.Status != "executed" {
-		t.Fatalf("create result=%#v error=%v", result, err)
-	}
-	records.createErr = failure
-	if _, err := invoke(admin, "operations", "createRecord", integrationmodel.IntegrationAgentToolInvocationRequest{Approved: true, Input: map[string]any{"object_key": "customer"}}); !errors.Is(err, failure) {
-		t.Fatalf("create error=%v", err)
-	}
-	records.createErr = nil
-	if result, err := invoke(admin, "operations", "updateRecord", integrationmodel.IntegrationAgentToolInvocationRequest{Approved: true, Input: map[string]any{"object_key": "customer", "record_id": "customer-1"}}); err != nil || result.Status != "executed" {
-		t.Fatalf("update result=%#v error=%v", result, err)
-	}
-	records.updateErr = failure
-	if _, err := invoke(admin, "operations", "updateRecord", integrationmodel.IntegrationAgentToolInvocationRequest{Approved: true, Input: map[string]any{"object_key": "customer", "record_id": "customer-1"}}); !errors.Is(err, failure) {
-		t.Fatalf("update error=%v", err)
-	}
-	records.updateErr = nil
-	if result, err := invoke(admin, "operations", "deleteRecord", integrationmodel.IntegrationAgentToolInvocationRequest{Approved: true, Input: map[string]any{"object_key": "customer", "record_id": "customer-1"}}); err != nil || result.Status != "executed" {
-		t.Fatalf("delete result=%#v error=%v", result, err)
-	}
-	records.deleteErr = failure
-	if _, err := invoke(admin, "operations", "deleteRecord", integrationmodel.IntegrationAgentToolInvocationRequest{Approved: true, Input: map[string]any{"object_key": "customer", "record_id": "customer-1"}}); !errors.Is(err, failure) {
-		t.Fatalf("delete error=%v", err)
-	}
-	records.deleteErr = nil
-	if result, err := invoke(admin, "operations", "readRecord", integrationmodel.IntegrationAgentToolInvocationRequest{Approved: true}); err != nil || result.Status != "prepared" {
-		t.Fatalf("no-op Tool result=%#v error=%v", result, err)
-	}
-	delivery.invocationErr = failure
-	if _, err := invoke(admin, "operations", "readRecord", integrationmodel.IntegrationAgentToolInvocationRequest{}); !errors.Is(err, failure) {
-		t.Fatalf("invocation persistence error=%v", err)
-	}
-}
-
+*/
 func TestBusinessRuntimeProjectionPropagatesOwnerFailures(t *testing.T) {
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin"}}
 	failure := errors.New("owner read failed")
@@ -1166,7 +1169,7 @@ func TestBusinessSystemSnapshotUsesNarrowOwnerPorts(t *testing.T) {
 	limited := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "reader"}}
 	reader := accessfixture.Attach(limited, accessfixture.Bundle{Permissions: []string{"workflow.definition.read"}})
 
-	newService := func(failAt string, evidence BusinessEvidenceRepository) *businesssystemapplication.BusinessSystemApplicationService {
+	newService := func(failAt string, evidence changeplanrepository.ChangePlanEvidenceRepository) *businesssystemapplication.BusinessSystemApplicationService {
 		schema := appschemamodel.ApplicationSchemaSnapshot{SchemaHash: "schema-1", Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}, Workflows: []definitionmodel.WorkflowSchema{{Key: "customer.approval"}}}
 		service := businesssystemapplication.NewBusinessSystemApplicationService(businesssystemapplication.BusinessSystemApplicationDependencies{
 			FeaturePermissions: func(context.Context, principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error) {
@@ -1263,7 +1266,7 @@ func TestMetadataProjectionReplacesRuntimeOwnedSchemaState(t *testing.T) {
 	actions := []definitionmodel.ActionSchema{{Key: " "}, {Key: "customer.activate"}}
 	workflows := []definitionmodel.WorkflowSchema{{Key: " "}, {Key: "customer.approval"}}
 	rules := []automationmodel.AutomationRuleSchema{{Key: " "}, {Key: "customer.created"}}
-	runtime.applyManifestMetadata(" template ", " 1 ", " Runtime ", objects, nil, actions, workflows, rules, nil, integrationmodel.IntegrationSchema{}, nil, nil, nil, nil, nil)
+	runtime.applyManifestMetadata(" template ", " 1 ", " Runtime ", objects, actions, workflows, rules, nil, integrationmodel.IntegrationSchema{}, nil, nil, nil, nil)
 	if runtime.templateID != "template" || runtime.templateVersion != "1" || runtime.name != "Runtime" || runtime.connectorRegistry == nil {
 		t.Fatalf("runtime identity=%q/%q/%q connector=%#v", runtime.templateID, runtime.templateVersion, runtime.name, runtime.connectorRegistry)
 	}
@@ -1271,7 +1274,7 @@ func TestMetadataProjectionReplacesRuntimeOwnedSchemaState(t *testing.T) {
 		t.Fatalf("projection objects=%d actions=%d workflows=%d rules=%d", len(runtime.schema), len(runtime.actions), len(runtime.workflows), len(runtime.automationRules))
 	}
 	runtime.dictionaryRuntime = appschemaservice.NewApplicationSchemaDictionaryDomainService(nil)
-	runtime.applyManifestMetadata("template", "2", "Runtime", objects[1:], nil, actions[1:], workflows[1:], rules[1:], []appschemamodel.DictionarySchema{{Key: "status"}}, integrationmodel.IntegrationSchema{}, nil, nil, nil, nil, nil)
+	runtime.applyManifestMetadata("template", "2", "Runtime", objects[1:], actions[1:], workflows[1:], rules[1:], []appschemamodel.DictionarySchema{{Key: "status"}}, integrationmodel.IntegrationSchema{}, nil, nil, nil, nil)
 	if runtime.templateVersion != "2" || len(runtime.dictionaries) != 1 {
 		t.Fatalf("replacement version=%q dictionaries=%#v", runtime.templateVersion, runtime.dictionaries)
 	}
@@ -1362,39 +1365,17 @@ func TestRecordActionApplicationWiringCoversRoutingAndCoreValidationBoundaries(t
 	}
 }
 
-func TestBusinessChangePlanCompositionBuildsOwnerServiceWithOptionalRuntime(t *testing.T) {
-	withoutRuntime := NewBusinessChangePlanApplicationService(nil, nil, nil, nil)
-	if withoutRuntime == nil {
-		t.Fatal("Business Change Plan owner service was not constructed")
-	}
-
-	metadata := assembleApplicationSchema(newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{}))
-	runtime := businessChangePlanMetadataRuntimeAdapter{metadata: metadata}
-	invalidDictionary := appschemamodel.ApplicationDefinitionUpsertRequest{Payload: json.RawMessage(`{"key":"status","items":[{"key":"active","value":"active"},{"key":"active","value":"duplicate"}]}`)}
-	if _, err := runtime.ValidateApplicationDefinitionPayload(t.Context(), "dictionary", "status", invalidDictionary); err == nil {
-		t.Fatal("invalid Change Plan dictionary payload must be rejected")
-	}
-	validDictionary := appschemamodel.ApplicationDefinitionUpsertRequest{Payload: json.RawMessage(`{"key":"status","items":[{"key":"active","value":"active"}]}`)}
-	if _, err := runtime.ValidateApplicationDefinitionPayload(t.Context(), "dictionary", "status", validDictionary); err != nil {
-		t.Fatalf("valid Change Plan dictionary payload error=%v", err)
-	}
-	if _, err := runtime.ValidateApplicationDefinitionPayload(t.Context(), "action", "customer.activate", appschemamodel.ApplicationDefinitionUpsertRequest{Payload: json.RawMessage(`{`)}); err == nil {
-		t.Fatal("invalid Change Plan action payload must be rejected")
-	}
-}
-
 func TestFrontendBusinessBindingsSupportsAbsentAndPopulatedSchema(t *testing.T) {
 	if bindings := frontendBusinessBindings(nil); len(bindings.Objects) != 0 || len(bindings.Fields) != 0 {
 		t.Fatalf("nil bindings=%#v", bindings)
 	}
 	records := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{Manifest: manifestmodel.ManifestSchema{
 		Objects: []definitionmodel.ObjectSchema{{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name"}}}},
-		Views:   []definitionmodel.ViewSchema{{Key: "customer.list"}},
 		Actions: []definitionmodel.ActionSchema{{Key: "customer.create"}},
 		Reports: []reportmodel.ReportSchema{{Key: "customer.summary"}},
 	}})
 	bindings := frontendBusinessBindings(records)
-	if !bindings.Objects["customer"] || !bindings.Fields["customer.name"] || !bindings.Views["customer.list"] || !bindings.Actions["customer.create"] || !bindings.Reports["customer.summary"] ||
+	if !bindings.Objects["customer"] || !bindings.Fields["customer.name"] || !bindings.Actions["customer.create"] || !bindings.Reports["customer.summary"] ||
 		bindings.SchemaHash == "" || bindings.SchemaSnapshotVersion == "" {
 		t.Fatalf("bindings=%#v", bindings)
 	}
@@ -1421,7 +1402,7 @@ func TestBusinessReferenceFrontendProjectionSupportsOptionalPortsAndEvidence(t *
 	entry := FrontendCapabilitySupportEntry{
 		SupportKey: "record-table", CapabilityKeys: []string{"record.list"}, Route: "/records", RequiredPermissions: []string{"record.read"},
 		FeatureModule: "records", AcceptanceTests: []string{"lists records"}, ActorRoles: []string{"admin"}, BusinessObjects: []string{"customer"},
-		ViewKeys: []string{"customer.list"}, ImplementedActions: []string{"customer.create"}, ReportKeys: []string{"customer.summary"},
+		ImplementedActions: []string{"customer.create"}, ReportKeys: []string{"customer.summary"},
 		FieldKeys: []string{"customer.name"}, AcceptanceClaims: []string{"customer-list-visible"},
 	}
 	withoutEvidence := changePlanFrontendCapabilities(FrontendCapabilitySnapshot{

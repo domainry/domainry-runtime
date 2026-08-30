@@ -1,27 +1,39 @@
 package integration
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
+type webPushSubscriptionsProbe struct {
+	readiness integrationsdk.WebPushReadiness
+}
+
+func (p webPushSubscriptionsProbe) Readiness(context.Context, string) (integrationsdk.WebPushReadiness, error) {
+	return p.readiness, nil
+}
+func (webPushSubscriptionsProbe) List(context.Context, string, string) ([]integrationsdk.WebPushSubscription, error) {
+	return nil, nil
+}
+func (webPushSubscriptionsProbe) Upsert(context.Context, string, string, string, integrationsdk.WebPushSubscriptionInput) (integrationsdk.WebPushSubscription, error) {
+	return integrationsdk.WebPushSubscription{}, nil
+}
+func (webPushSubscriptionsProbe) Revoke(context.Context, string, string, string) (integrationsdk.WebPushSubscription, error) {
+	return integrationsdk.WebPushSubscription{}, nil
+}
+func (webPushSubscriptionsProbe) CleanupExpired(context.Context, string) (int, error) { return 0, nil }
+
 func TestWebPushReadinessReturnsOnlyPublicVAPIDConfiguration(t *testing.T) {
-	config := &integrationManagementConfigRepo{
-		connections: []integrationmodel.IntegrationConnection{{
-			Key: "push", ConnectorKey: "notification", ProviderKey: "web_push", Status: "verified",
-			Config:     map[string]any{"vapid_public_key": "public-vapid-key", "unrelated": "visible-only-to-runtime"},
-			SecretRefs: map[string]string{"vapid_private_key": "secret:vapid-private"},
-		}},
-		secrets: []integrationmodel.IntegrationSecret{{Key: "vapid-private", Status: "active", ValueRef: "runtime-secret-material-must-not-leak"}},
-	}
-	service := NewIntegrationApplicationService(ApplicationDependencies{ConfigRepository: config})
+	service := NewIntegrationApplicationService(ApplicationDependencies{OwnerWebPushSubscriptions: webPushSubscriptionsProbe{readiness: integrationsdk.WebPushReadiness{Ready: true, PublicKey: "public-vapid-key", ConnectionKey: "push", Status: "verified"}}})
 	result, err := service.WebPushReadiness(t.Context(), integrationManagementPrincipal())
 	if err != nil || !result.Ready || result.PublicKey != "public-vapid-key" || result.ConnectionKey != "push" || result.Status != "verified" || result.Reason != "" {
 		t.Fatalf("readiness=%#v err=%v", result, err)
@@ -36,10 +48,7 @@ func TestWebPushReadinessReturnsOnlyPublicVAPIDConfiguration(t *testing.T) {
 }
 
 func TestWebPushReadinessFailsClosedAndRequiresAuthenticatedUser(t *testing.T) {
-	service := NewIntegrationApplicationService(ApplicationDependencies{ConfigRepository: &integrationManagementConfigRepo{connections: []integrationmodel.IntegrationConnection{{
-		Key: "push", ConnectorKey: "notification", ProviderKey: "web_push", Status: "active",
-		Config: map[string]any{"vapid_public_key": "public-vapid-key"},
-	}}}})
+	service := NewIntegrationApplicationService(ApplicationDependencies{OwnerWebPushSubscriptions: webPushSubscriptionsProbe{readiness: integrationsdk.WebPushReadiness{PublicKey: "public-vapid-key", ConnectionKey: "push", Status: "active", Reason: "private_key_unbound"}}})
 	result, err := service.WebPushReadiness(t.Context(), integrationManagementPrincipal())
 	if err != nil || result.Ready || result.Reason != "private_key_unbound" || result.PublicKey != "public-vapid-key" {
 		t.Fatalf("readiness=%#v err=%v", result, err)

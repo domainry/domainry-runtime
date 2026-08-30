@@ -37,7 +37,7 @@ func TestSurfaceContextRequestNormalizationLimitsErrorsAndSelection(t *testing.T
 			if objectKey == "denied" {
 				return recordmodel.RecordPageResult{}, &apperror.AppError{Kind: apperror.KindForbidden, Code: "denied"}
 			}
-			if objectKey == "customer" && (query.Page != 1 || query.PageSize != maxPageSize || query.Search != "needle" || query.ViewKey != "view-1") {
+			if objectKey == "customer" && (query.Page != 1 || query.PageSize != maxPageSize || query.Search != "needle") {
 				t.Fatalf("query=%#v", query)
 			}
 			return recordmodel.RecordPageResult{Items: []recordmodel.Record{}, Page: query.Page, PageSize: query.PageSize}, nil
@@ -46,7 +46,7 @@ func TestSurfaceContextRequestNormalizationLimitsErrorsAndSelection(t *testing.T
 			return recordmodel.Record{}, selectionFailure
 		},
 	})
-	items := []surfacecontextmodel.SurfaceContextObjectRequest{{ObjectKey: " "}, {ObjectKey: "customer", Page: -1, PageSize: 500, Search: " needle ", ViewKey: " view-1 "}, {ObjectKey: "customer"}, {ObjectKey: "unknown"}, {ObjectKey: "denied"}}
+	items := []surfacecontextmodel.SurfaceContextObjectRequest{{ObjectKey: " "}, {ObjectKey: "customer", Page: -1, PageSize: 500, Search: " needle "}, {ObjectKey: "customer"}, {ObjectKey: "unknown"}, {ObjectKey: "denied"}}
 	for index := len(items); index < maxObjects+3; index++ {
 		items = append(items, surfacecontextmodel.SurfaceContextObjectRequest{ObjectKey: fmt.Sprintf("object-%02d", index)})
 	}

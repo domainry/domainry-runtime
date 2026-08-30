@@ -9,9 +9,9 @@ import (
 )
 
 func TestParseListQueryNormalizesPaginationFiltersAndSort(t *testing.T) {
-	r := httptest.NewRequest("GET", "/records?page=2&page_size=25&search=+needle+&view=+compact+&filters=%7B%22status%22%3A%22open%22%7D&sort=-created_at,name+desc,priority:DESC,empty:", nil)
+	r := httptest.NewRequest("GET", "/records?page=2&page_size=25&search=+needle+&filters=%7B%22status%22%3A%22open%22%7D&sort=-created_at,name+desc,priority:DESC,empty:", nil)
 	query := parseListQuery(r)
-	if query.Page != 2 || query.PageSize != 25 || query.Search != "needle" || query.ViewKey != "compact" || query.Filters["status"] != "open" {
+	if query.Page != 2 || query.PageSize != 25 || query.Search != "needle" || query.Filters["status"] != "open" {
 		t.Fatalf("query=%#v", query)
 	}
 	want := []recordmodel.RecordSortRule{

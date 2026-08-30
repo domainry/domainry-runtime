@@ -1,8 +1,6 @@
 package integration
 
 import (
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-
 	"fmt"
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -10,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 )
@@ -41,7 +40,7 @@ func AssessAgentToolRiskForGuardedWrites(toolKey string, input map[string]any, s
 	})
 }
 
-func CandidateAgentTools(agent agentmodel.AgentSchema) []string {
+func CandidateAgentTools(agent agentsdk.AgentSchema) []string {
 	if agent.Tools == nil {
 		return []string{}
 	}
@@ -50,7 +49,7 @@ func CandidateAgentTools(agent agentmodel.AgentSchema) []string {
 
 // AgentAllowsTool keeps the agent-tool allowlist rule in the Integration
 // owner instead of requiring composition callers to duplicate slice matching.
-func AgentAllowsTool(agent agentmodel.AgentSchema, toolKey string) bool {
+func AgentAllowsTool(agent agentsdk.AgentSchema, toolKey string) bool {
 	toolKey = strings.TrimSpace(toolKey)
 	for _, candidate := range CandidateAgentTools(agent) {
 		if strings.TrimSpace(candidate) == toolKey {

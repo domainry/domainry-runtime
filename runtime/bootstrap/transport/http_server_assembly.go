@@ -2,6 +2,8 @@ package transport
 
 import (
 	"context"
+
+	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	"time"
 
@@ -14,9 +16,9 @@ import (
 
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
-	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	principalapplication "github.com/domainry/domainry-runtime/runtime/application/principal"
+	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
 
@@ -44,6 +46,7 @@ type HTTPServerDependencies struct {
 	MonitoringBinding      monitoringsdk.Binding
 	SchedulerBinding       schedulersdk.Binding
 	Store                  *persistence.RuntimeStore
+	AgentRepositories      agentrepository.Binding
 	RateLimiter            ratelimit.Limiter
 	Notifications          notificationhttp.NotificationApplication
 	Manifest               manifestmodel.ManifestSchema
@@ -62,7 +65,7 @@ type httpServerAssembly struct {
 	callbacks     runtimehttp.HandlerCallbacks
 	handlers      runtimehttp.HTTPRouterHandlers
 	recordQueries *recordapplication.RecordApplicationService
-	integrations  *integrationapplication.IntegrationApplicationService
+	publications  *publicationhandoff.Service
 	metadata      *appschemaapplication.ApplicationSchemaApplicationService
 	operations    *operationsapplication.OperationsApplicationService
 	identityHTTP  *identityhttpmiddleware.Middleware
@@ -82,9 +85,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	if dependencies.IdentityBinding == nil {
 		panic("transport.AssembleRuntimeHTTPServer requires an Identity SDK Binding")
 	}
-	integrations := records.Applications().Integrations
-	integrations.UseConnectorCapacity(ctx, capacityplatform.NewController(capacityplatform.Limits{GlobalInFlight: dependencies.Config.CapacityConnectorGlobalInFlight, WorkspaceInFlight: dependencies.Config.CapacityConnectorWorkspaceInFlight, UseCaseInFlight: dependencies.Config.CapacityConnectorProviderInFlight, RetryInFlight: dependencies.Config.CapacityRetryInFlight, GlobalRate: dependencies.Config.CapacityConnectorGlobalRatePerMinute, WorkspaceRate: dependencies.Config.CapacityConnectorWorkspaceRatePerMinute, UseCaseRate: dependencies.Config.CapacityConnectorProviderRatePerMinute, RateWindow: time.Minute, MaxWorkspaceStates: dependencies.Config.CapacityMaxWorkspaceStates, MaxUseCaseStates: 256, WorkspaceStateTTL: dependencies.Config.CapacityWorkspaceStateTTL, DegradedRatio: dependencies.Config.CapacityDegradedRatio, RecoveryRatio: dependencies.Config.CapacityRecoveryRatio, RetryAfter: dependencies.Config.CapacityRetryAfter}, nil))
-	integrations.UseQueueBackpressureThresholds(ctx, dependencies.Config.CapacityQueueDepthThreshold, dependencies.Config.CapacityQueueOldestAgeThreshold)
+	publications := records.Applications().PublicationHandoff
 	resolver, err := identityprincipal.NewResolver(dependencies.IdentityBinding, identityprincipal.Options{Clock: dependencies.Clock, MaxCacheTTL: time.Minute})
 	if err != nil {
 		panic("assemble Identity SDK principal resolver: " + err.Error())
@@ -98,6 +99,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	if identityDirectory == nil || identityPrincipals == nil {
 		panic("transport.AssembleRuntimeHTTPServer requires a complete Identity SDK Binding")
 	}
+	var integrationAuthentication runtimehttp.IntegrationAuthenticationPrincipalProvider
 	server := runtimehttp.NewHTTPRouter(runtimehttp.HTTPRouterConfig{
 		ProductBrandName:   dependencies.Config.EffectiveProductBrandName(),
 		CORSAllowedOrigins: dependencies.Config.CORSAllowedOrigins, AllowDevAuthHeaders: dependencies.Config.RuntimeAllowDevIdentityHeaders,
@@ -127,7 +129,8 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 		BusinessEventPrincipalConnections: dependencies.Config.BusinessEventPrincipalConnections, BusinessEventHeartbeatInterval: dependencies.Config.BusinessEventHeartbeatInterval,
 		BusinessEventRetryInterval: dependencies.Config.BusinessEventRetryInterval,
 	}, runtimehttp.HTTPRouterDependencies{
-		IdentityAuthentication: identityAuthentication, IdentityPrincipal: principalmodel.NewPrincipalFromIdentity, IntegrationAuthentication: integrations,
+		IdentityAuthentication: identityAuthentication, IdentityPrincipal: principalmodel.NewPrincipalFromIdentity, IntegrationAuthentication: integrationAuthentication,
+		RateLimiter:           dependencies.RateLimiter,
 		IdentityAuthorization: identityPrincipals,
 		BusinessPrincipal: principalapplication.NewBusinessPrincipalApplicationService(principalapplication.BusinessPrincipalDependencies{
 			Records: recordApplication.Repository(),
@@ -141,9 +144,9 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 		SecurityAudit: records.Applications().Audit, RuntimeStatus: runtimeStatusProvider(dependencies),
 		TechnicalMetrics: func(ctx context.Context) string {
 			workerMetrics, agentTaskMetrics, agentInteractiveMetrics := runtimeOptionalWorkerMetrics(ctx, dependencies.WorkerControl, records.Applications().AgentTaskWorker, records.Applications().AgentInteractiveRuns)
-			return runtimeTechnicalOpenMetrics(ctx, dependencies.Store, records.Applications().RuntimeStatus) + integrations.OperationalMetricsOpenMetrics(ctx) + workerMetrics + agentTaskMetrics + agentInteractiveMetrics
+			return runtimeTechnicalOpenMetrics(ctx, dependencies.Store, records.Applications().RuntimeStatus) + workerMetrics + agentTaskMetrics + agentInteractiveMetrics
 		},
-		Backpressure: integrations.QueueBackpressureActive, WorkerControl: dependencies.WorkerControl,
+		WorkerControl:           dependencies.WorkerControl,
 		RuntimeInstanceID:       dependencies.RuntimeInstanceID,
 		OperationsControlState:  runtimeOperationsControlState(dependencies.Store),
 		RuntimeReleaseAdmission: dependencies.ReleaseAdmission,
@@ -152,7 +155,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	})
 	assembly := &httpServerAssembly{
 		dependencies: dependencies, server: server, callbacks: server.HandlerCallbacks(),
-		recordQueries: recordApplication, integrations: integrations,
+		recordQueries: recordApplication, publications: publications,
 		metadata: records.Applications().ApplicationSchema, identityHTTP: identityAuthentication,
 		principals: identityPrincipals,
 	}

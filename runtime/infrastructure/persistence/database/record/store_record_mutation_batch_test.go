@@ -142,7 +142,7 @@ func assertDialectWorkflowIntentCount(t *testing.T, store *RuntimeStore, driver 
 func assertDialectOutboxCount(t *testing.T, store *RuntimeStore, driver string, expected int) {
 	t.Helper()
 	var count int
-	if err := store.DB().QueryRow(`SELECT COUNT(*) FROM integration_outbox_messages WHERE id LIKE ?`, "outbox_"+driver+"_%").Scan(&count); err != nil {
+	if err := store.DB().QueryRow(`SELECT COUNT(*) FROM runtime_publication_outbox WHERE id LIKE ?`, "outbox_"+driver+"_%").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != expected {
@@ -230,7 +230,7 @@ func TestMutationSideFactFailureWindowsRollbackRecordAuditOutboxAndWorkflowInten
 		name, table string
 	}{
 		{name: "audit", table: "_audit_events"},
-		{name: "outbox", table: "integration_outbox_messages"},
+		{name: "outbox", table: "runtime_publication_outbox"},
 		{name: "workflow_intent", table: "_workflow_executions"},
 	} {
 		t.Run(failure.name, func(t *testing.T) {

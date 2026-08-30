@@ -153,7 +153,7 @@ func (s *IntegrationApplicationService) ExecuteIntegrationSyncCall(ctx context.C
 			"compensation": integrationpolicy.RedactSensitiveMap(cloneMap(req.Compensation)), "compensation_policy": req.CompensationPolicy,
 		}),
 	}
-	preparedInvocation, insertErr := s.deliveryRepo.InsertInvocation(ctx, invocation.WorkspaceID, invocation)
+	preparedInvocation, insertErr := s.invocationRepo.InsertInvocation(ctx, invocation.WorkspaceID, invocation)
 	if insertErr != nil {
 		return SyncCallResult{}, insertErr
 	}
@@ -237,10 +237,10 @@ func (s *IntegrationApplicationService) ExecuteIntegrationSyncCall(ctx context.C
 	outcomeMetadata["response_schema"], outcomeMetadata["sync_policy"] = syncResponseSchemaMetadata(req.ResponseSchema, req.ResponseStrict), syncPolicyMetadata(req)
 	var saved integrationmodel.IntegrationInvocation
 	var updateErr error
-	if outcomes, ok := s.deliveryRepo.(integrationrepository.IntegrationInvocationOutcomeRepository); ok {
+	if outcomes, ok := s.invocationRepo.(integrationrepository.IntegrationInvocationOutcomeRepository); ok {
 		saved, updateErr = outcomes.CompleteInvocation(ctx, preparedInvocation.WorkspaceID, preparedInvocation.ID, status, time.Since(started).Milliseconds(), responseRef, errorText, outcomeMetadata)
 	} else {
-		saved, updateErr = s.deliveryRepo.UpdateInvocationStatus(ctx, preparedInvocation.WorkspaceID, preparedInvocation.ID, status, time.Since(started).Milliseconds(), responseRef, errorText)
+		saved, updateErr = s.invocationRepo.UpdateInvocationStatus(ctx, preparedInvocation.WorkspaceID, preparedInvocation.ID, status, time.Since(started).Milliseconds(), responseRef, errorText)
 	}
 	if updateErr != nil {
 		return SyncCallResult{ActionInvocation: preparedInvocation, Response: responsePayload}, updateErr

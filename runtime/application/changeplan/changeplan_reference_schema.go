@@ -4,8 +4,6 @@ import (
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
@@ -15,19 +13,18 @@ import (
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 type ReferenceSchema struct {
 	Objects         []definitionmodel.ObjectSchema
-	Views           []definitionmodel.ViewSchema
 	Actions         []definitionmodel.ActionSchema
 	Workflows       []definitionmodel.WorkflowSchema
 	AutomationRules []automationmodel.AutomationRuleSchema
 	Reports         []reportmodel.ReportSchema
 	Integrations    integrationmodel.IntegrationSchema
-	EntryPoints     []definitionmodel.EntryPointSchema
-	Agents          []agentmodel.AgentSchema
+	Agents          []agentsdk.AgentSchema
 	ProfileBindings []profilebindingmodel.Binding
 }
 

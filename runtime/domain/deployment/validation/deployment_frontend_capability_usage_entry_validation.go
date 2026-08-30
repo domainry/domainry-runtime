@@ -86,7 +86,6 @@ func (validator *frontendCapabilityUsageValidator) validateEntryBusinessBindings
 	}{
 		{name: "actor_roles", values: &entry.ActorRoles},
 		{name: "business_objects", values: &entry.BusinessObjects},
-		{name: "view_keys", values: &entry.ViewKeys},
 		{name: "implemented_actions", values: &entry.ImplementedActions},
 		{name: "report_keys", values: &entry.ReportKeys},
 		{name: "field_keys", values: &entry.FieldKeys, field: true},

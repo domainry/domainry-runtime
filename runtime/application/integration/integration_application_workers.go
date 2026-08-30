@@ -27,7 +27,7 @@ import (
 )
 
 func (s *IntegrationApplicationService) StartEventWorker(ctx context.Context, interval time.Duration, limit int) <-chan struct{} {
-	if s.registry == nil || !s.registry.HasEventWork() || s.workerRepo == nil {
+	if s.registry == nil || !s.registry.HasEventWork() || s.publicationWorkerRepo == nil {
 		return workerplatform.Stopped()
 	}
 	if interval < 30*time.Second {
@@ -44,7 +44,7 @@ func (s *IntegrationApplicationService) StartEventWorker(ctx context.Context, in
 }
 
 func (s *IntegrationApplicationService) StartOutboxWorker(ctx context.Context, interval time.Duration, limit int) <-chan struct{} {
-	if s.registry == nil || !s.registry.HasOutboxSenders() || s.workerRepo == nil {
+	if s.registry == nil || !s.registry.HasOutboxSenders() || s.publicationWorkerRepo == nil {
 		return workerplatform.Stopped()
 	}
 	if interval < 30*time.Second {
@@ -85,7 +85,7 @@ func (s *IntegrationApplicationService) ProcessDueIntegrationEvents(ctx context.
 		limit = 200
 	}
 	workerScope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "poll due integration events")
-	due, err := s.workerRepo.ListDueEvents(ctx, workerScope, capacityplatform.OverscanLimit(limit, 4, 800), s.worker.Clock.Now().Format(time.RFC3339))
+	due, err := s.eventWorkerRepo.ListDueEvents(ctx, workerScope, capacityplatform.OverscanLimit(limit, 4, 800), s.worker.Clock.Now().Format(time.RFC3339))
 	if err != nil {
 		return EventProcessBatchResult{}, err
 	}
@@ -152,7 +152,7 @@ func (s *IntegrationApplicationService) processDueEvent(ctx context.Context, eve
 	var claimedOK bool
 	err := workerplatform.CheckFault(ctx, s.worker.Faults, workerplatform.FaultWorkerClaim)
 	if err == nil {
-		claimed, claimedOK, err = s.workerRepo.ClaimEvent(ctx, event.WorkspaceID, event.ID, s.worker.WorkerID.String(), started.Format(time.RFC3339))
+		claimed, claimedOK, err = s.eventWorkerRepo.ClaimEvent(ctx, event.WorkspaceID, event.ID, s.worker.WorkerID.String(), started.Format(time.RFC3339))
 	}
 	if err != nil {
 		s.audit(ctx, "integration_event_worker_skipped", "integration_event", event.ID, principal, "Skipped integration event "+event.ID, integrationprojection.IntegrationEventAuditShape(event), nil, map[string]any{"workspace_id": event.WorkspaceID, "provider": event.Provider, "reason": "claim_failed", "error_code": stableIntegrationFailureCode(err, "backend.integration.event.claim_failed")})
@@ -175,7 +175,7 @@ func (s *IntegrationApplicationService) processDueEvent(ctx context.Context, eve
 		var handled bool
 		decision, handled, err = s.executeEventMapping(workCtx, executionEvent, principal)
 		if err == nil && !handled {
-			saved, updateErr := s.workerRepo.UpdateEventStatus(ctx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, "failed", "backend.integration.event.handler_not_found", s.worker.Clock.Now().Format(time.RFC3339))
+			saved, updateErr := s.eventWorkerRepo.UpdateEventStatus(ctx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, "failed", "backend.integration.event.handler_not_found", s.worker.Clock.Now().Format(time.RFC3339))
 			if updateErr != nil {
 				saved = claimed
 			}
@@ -212,7 +212,7 @@ func (s *IntegrationApplicationService) processDueEvent(ctx context.Context, eve
 	if err := workerplatform.CheckFault(ctx, s.worker.Faults, workerplatform.FaultWorkerBeforeComplete); err != nil {
 		return s.failDueEvent(ctx, claimed, principal, err)
 	}
-	saved, err := s.workerRepo.UpdateEventStatus(ctx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, status, strings.TrimSpace(decision.Error), s.worker.Clock.Now().Format(time.RFC3339))
+	saved, err := s.eventWorkerRepo.UpdateEventStatus(ctx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, status, strings.TrimSpace(decision.Error), s.worker.Clock.Now().Format(time.RFC3339))
 	if err != nil {
 		if mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
 			return claimed, "skipped"
@@ -232,7 +232,7 @@ func (s *IntegrationApplicationService) processDueOutboxMessage(ctx context.Cont
 	var claimedOK bool
 	err := workerplatform.CheckFault(ctx, s.worker.Faults, workerplatform.FaultWorkerClaim)
 	if err == nil {
-		claimed, claimedOK, err = s.workerRepo.ClaimOutbox(ctx, message.WorkspaceID, message.ID, s.worker.WorkerID.String(), claimStarted.Format(time.RFC3339))
+		claimed, claimedOK, err = s.publicationWorkerRepo.ClaimOutbox(ctx, message.WorkspaceID, message.ID, s.worker.WorkerID.String(), claimStarted.Format(time.RFC3339))
 	}
 	if s.operationalMetrics != nil {
 		s.operationalMetrics.observeClaim(s.worker.Clock.Now().Sub(claimStarted))
@@ -248,7 +248,7 @@ func (s *IntegrationApplicationService) processDueOutboxMessage(ctx context.Cont
 	sender, ok := s.IntegrationOutboxSender(claimed.ConnectorKey)
 	if !ok {
 		const errorCode = "backend.integration.outbox.sender_not_found"
-		retried, retryErr := s.workerRepo.ScheduleOutboxRetry(ctx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, 60, errorCode, s.worker.Clock.Now().Format(time.RFC3339))
+		retried, retryErr := s.publicationWorkerRepo.ScheduleOutboxRetry(ctx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, 60, errorCode, s.worker.Clock.Now().Format(time.RFC3339))
 		if retryErr == nil {
 			return retried, "skipped"
 		}
@@ -299,7 +299,7 @@ func (s *IntegrationApplicationService) processDueOutboxMessage(ctx context.Cont
 			// deliberately detaching from the cancelled worker context.
 			cleanupCtx, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 			defer cancelCleanup()
-			released, releaseErr := s.workerRepo.UpdateOutboxStatus(
+			released, releaseErr := s.publicationWorkerRepo.UpdateOutboxStatus(
 				cleanupCtx,
 				claimed.WorkspaceID,
 				claimed.ID,
@@ -336,7 +336,7 @@ func (s *IntegrationApplicationService) processDueOutboxMessage(ctx context.Cont
 	if status == "sent" && sendResult.AckTimeoutSeconds > 0 {
 		ackDeadlineAt = completedAt.Add(time.Duration(sendResult.AckTimeoutSeconds) * time.Second).Format(time.RFC3339)
 	}
-	saved, err := s.workerRepo.UpdateOutboxStatus(ctx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, status, strings.TrimSpace(sendResult.ResponseRef), "", ackDeadlineAt, completedAt.Format(time.RFC3339))
+	saved, err := s.publicationWorkerRepo.UpdateOutboxStatus(ctx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, status, strings.TrimSpace(sendResult.ResponseRef), "", ackDeadlineAt, completedAt.Format(time.RFC3339))
 	if err != nil {
 		if mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
 			if s.operationalMetrics != nil {
@@ -366,7 +366,7 @@ func (s *IntegrationApplicationService) eventHeartbeat(event integrationmodel.In
 		if err := workerplatform.CheckFault(ctx, s.worker.Faults, workerplatform.FaultWorkerHeartbeat); err != nil {
 			return err
 		}
-		_, err := s.workerRepo.HeartbeatEvent(ctx, event.WorkspaceID, event.ID, event.LeaseOwner, event.FencingToken, s.worker.Clock.Now().Format(time.RFC3339))
+		_, err := s.eventWorkerRepo.HeartbeatEvent(ctx, event.WorkspaceID, event.ID, event.LeaseOwner, event.FencingToken, s.worker.Clock.Now().Format(time.RFC3339))
 		return err
 	}
 }
@@ -376,7 +376,7 @@ func (s *IntegrationApplicationService) outboxHeartbeat(message integrationmodel
 		if err := workerplatform.CheckFault(ctx, s.worker.Faults, workerplatform.FaultWorkerHeartbeat); err != nil {
 			return err
 		}
-		_, err := s.workerRepo.HeartbeatOutbox(ctx, message.WorkspaceID, message.ID, message.LeaseOwner, message.FencingToken, s.worker.Clock.Now().Format(time.RFC3339))
+		_, err := s.publicationWorkerRepo.HeartbeatOutbox(ctx, message.WorkspaceID, message.ID, message.LeaseOwner, message.FencingToken, s.worker.Clock.Now().Format(time.RFC3339))
 		return err
 	}
 }

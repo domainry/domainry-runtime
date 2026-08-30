@@ -6,6 +6,7 @@ import (
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
@@ -32,6 +33,7 @@ type runtimeConstructionInput struct {
 	identityBinding     identitysdk.Binding
 	identityDirectory   identitysdk.Directory
 	identityPrincipals  identitysdk.PrincipalResolver
+	integrationMode     integrationsdk.DeploymentMode
 	partyBinding        partysdk.Binding
 	dataExchangeBinding dataexchangesdk.Binding
 	manifest            manifestmodel.ManifestSchema
@@ -63,6 +65,7 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		identityBinding:     input.identityBinding,
 		identityDirectory:   input.identityDirectory,
 		identityPrincipals:  input.identityPrincipals,
+		integrationMode:     input.integrationMode,
 		partyBinding:        input.partyBinding,
 		dataExchangeBinding: input.dataExchangeBinding,
 		manifest:            input.manifest,

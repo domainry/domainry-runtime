@@ -9,9 +9,3 @@ func TestMetadataPhysicalSchemaMismatchErrorParameters(t *testing.T) {
 		t.Fatalf("error=%v params=%#v", err, params)
 	}
 }
-
-func TestApplicationDefinitionConflictErrorMessage(t *testing.T) {
-	if got := (&ApplicationDefinitionConflictError{}).Error(); got != "metadata.definition.versionConflict" {
-		t.Fatalf("message=%q", got)
-	}
-}

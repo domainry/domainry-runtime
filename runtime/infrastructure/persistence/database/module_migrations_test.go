@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/domainry/domainry-notification-sdk/modulehost"
+	ormmigration "github.com/domainry/domainry-orm/migration"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -29,7 +30,7 @@ func TestOwnedModuleMigrationAppliesAndRejectsChecksumDrift(t *testing.T) {
 		t.Fatalf("owned table was not created: %v", err)
 	}
 	var kind string
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT kind FROM _schema_migrations WHERE path = ?", moduleMigrationPath("notification", migration)).Scan(&kind); err != nil || kind != "module:notification" {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT kind FROM _schema_migrations WHERE path = ?", moduleMigrationPath("notification", ormmigration.Migration{Version: migration.Version, Name: migration.Name})).Scan(&kind); err != nil || kind != "module:notification" {
 		t.Fatalf("ledger kind=%q err=%v", kind, err)
 	}
 	migration.Statements[0] = "CREATE TABLE notification_owned_test (id TEXT, changed TEXT)"
@@ -53,7 +54,7 @@ func TestOwnedModuleMigrationBaselinesOnlyCompleteLegacySchema(t *testing.T) {
 		t.Fatalf("complete legacy baseline: %v", err)
 	}
 	var dirty bool
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT dirty FROM _schema_migrations WHERE path = ?", moduleMigrationPath("notification", migration)).Scan(&dirty); err != nil || dirty {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT dirty FROM _schema_migrations WHERE path = ?", moduleMigrationPath("notification", ormmigration.Migration{Version: migration.Version, Name: migration.Name})).Scan(&dirty); err != nil || dirty {
 		t.Fatalf("baseline dirty=%v err=%v", dirty, err)
 	}
 

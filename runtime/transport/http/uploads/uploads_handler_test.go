@@ -21,10 +21,11 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	lifecycleaccess "github.com/domainry/domainry-lifecycle/access"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -38,7 +39,7 @@ func (s *uploadArtifactStoreStub) RegisterUpload(_ context.Context, artifact lif
 	return s.err
 }
 
-func (*uploadArtifactStoreStub) ReconcileUploadArtifacts(context.Context, principalmodel.SystemScope, time.Time, int) (lifecyclecontract.UploadCleanupResult, error) {
+func (*uploadArtifactStoreStub) ReconcileUploadArtifacts(context.Context, lifecycleaccess.SystemScope, time.Time, int) (lifecyclecontract.UploadCleanupResult, error) {
 	return lifecyclecontract.UploadCleanupResult{}, nil
 }
 

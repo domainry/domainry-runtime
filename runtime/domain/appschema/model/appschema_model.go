@@ -62,15 +62,6 @@ type LocalizedTextCoverageResult struct {
 	TotalCount     int                         `json:"total_count"`
 }
 
-type ApplicationDefinitionVersion struct {
-	ResourceType  string          `json:"resource_type"`
-	ResourceKey   string          `json:"resource_key"`
-	SchemaVersion string          `json:"schema_version"`
-	SchemaHash    string          `json:"schema_hash"`
-	Payload       json.RawMessage `json:"payload"`
-	CreatedAt     string          `json:"created_at"`
-}
-
 type ApplicationSchemaMigrationStep struct {
 	ObjectKey   string `json:"object_key"`
 	Table       string `json:"table"`
@@ -121,23 +112,9 @@ type ApplicationDefinition struct {
 }
 
 type ApplicationDefinitionUpsertRequest struct {
-	ObjectKey          string          `json:"object_key,omitempty"`
-	Name               string          `json:"name,omitempty"`
-	SourceKind         string          `json:"source_kind,omitempty"`
-	SourceID           string          `json:"source_id,omitempty"`
-	ExpectedSchemaHash *string         `json:"expected_schema_hash,omitempty"`
-	Payload            json.RawMessage `json:"payload"`
-}
-
-type ApplicationDefinitionConflictError struct {
-	ResourceType string
-	ResourceKey  string
-	ExpectedHash string
-	CurrentHash  string
-}
-
-func (e *ApplicationDefinitionConflictError) Error() string {
-	return "metadata.definition.versionConflict"
+	ObjectKey string          `json:"object_key,omitempty"`
+	Name      string          `json:"name,omitempty"`
+	Payload   json.RawMessage `json:"payload"`
 }
 
 type ApplicationDefinitionMutation struct {
@@ -145,16 +122,4 @@ type ApplicationDefinitionMutation struct {
 	ResourceType string
 	ResourceKey  string
 	Request      ApplicationDefinitionUpsertRequest
-}
-
-type ApplicationDefinitionRollbackRequest struct {
-	TargetVersion              string `json:"target_version"`
-	ExpectedSchemaHash         string `json:"expected_schema_hash"`
-	ExpectedReferenceGraphHash string `json:"expected_reference_graph_hash"`
-	BusinessReason             string `json:"business_reason"`
-	ChangePlanID               string `json:"change_plan_id"`
-	ChangePlanRevision         int    `json:"change_plan_revision,omitempty"`
-	BuilderTaskID              string `json:"builder_task_id,omitempty"`
-	AuthoringContractVersion   string `json:"authoring_contract_version"`
-	AuthoringContractHash      string `json:"authoring_contract_hash"`
 }

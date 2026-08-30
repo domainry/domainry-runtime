@@ -1,7 +1,6 @@
 package appschema
 
 import (
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
@@ -11,10 +10,6 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
-
-	preferencevalidation "github.com/domainry/domainry-runtime/runtime/domain/preference/validation"
-
-	rulesetvalidation "github.com/domainry/domainry-runtime/runtime/domain/ruleset/validation"
 
 	"context"
 	"encoding/json"
@@ -36,52 +31,14 @@ type metadataDefinitionPayloadShape struct {
 
 func metadataDefinitionTable(resourceType string) (string, error) {
 	switch strings.TrimSpace(resourceType) {
-	case "object":
-		return "object_definitions", nil
-	case "field":
-		return "field_definitions", nil
-	case "validation":
-		return "validation_definitions", nil
-	case "view":
-		return "view_definitions", nil
-	case "action":
-		return "action_definitions", nil
 	case "workflow":
 		return "workflow_definitions", nil
-	case "scheduler":
-		return "scheduler_definitions", nil
 	case "automation_rule":
 		return "automation_rule_definitions", nil
-	case "preference":
-		return "preference_definitions", nil
-	case "rule_set":
-		return "rule_set_definitions", nil
-	case "dictionary":
-		return "dictionary_definitions", nil
 	case "connector":
-		return "connector_definitions", nil
+		return "application_connector_requirements", nil
 	case "integration_event_mapping":
-		return "integration_event_mapping_definitions", nil
-	case "report":
-		return "report_definitions", nil
-	case "operation_state_example":
-		return "operation_state_example_definitions", nil
-	case "sensitive_field_policy":
-		return "sensitive_field_policy_definitions", nil
-	case "report_export_control":
-		return "report_export_control_definitions", nil
-	case "identity_profile_binding":
-		return "identity_profile_binding_definitions", nil
-	case "surface":
-		return "surface_definitions", nil
-	case "component":
-		return "component_definitions", nil
-	case "entrypoint":
-		return "entrypoint_definitions", nil
-	case "skill":
-		return "skill_definitions", nil
-	case "agent":
-		return "agent_definitions", nil
+		return "application_integration_event_mapping_requirements", nil
 	default:
 		return "", fmt.Errorf("unsupported metadata resource type %q", resourceType)
 	}
@@ -130,16 +87,6 @@ func metadataDefinitionShape(ctx context.Context, resourceType string, resourceK
 		key := valueOrFirstNonEmpty(resourceKey, payload.Key)
 		payload.Key = key
 		return metadataDefinitionPayloadShape{Key: key, ObjectKey: objectKey, Name: valueOrFirstNonEmpty(req.Name, payload.Message), Payload: payload}, metadataDefinitionKeyError("validation", key)
-	case "view":
-		var payload definitionmodel.ViewSchema
-		if err := json.Unmarshal(req.Payload, &payload); err != nil {
-			return metadataDefinitionPayloadShape{}, err
-		}
-		key := valueOrFirstNonEmpty(resourceKey, payload.Key)
-		payload.Key = key
-		objectKey := valueOrFirstNonEmpty(req.ObjectKey, payload.ObjectKey)
-		payload.ObjectKey = objectKey
-		return metadataDefinitionPayloadShape{Key: key, ObjectKey: objectKey, Name: valueOrFirstNonEmpty(req.Name, payload.Name), Payload: payload}, metadataDefinitionKeyError("view", key)
 	case "action":
 		var payload definitionmodel.ActionSchema
 		if err := json.Unmarshal(req.Payload, &payload); err != nil {
@@ -188,18 +135,6 @@ func metadataDefinitionShape(ctx context.Context, resourceType string, resourceK
 			return metadataDefinitionPayloadShape{}, err
 		}
 		return metadataDefinitionPayloadShape{Key: key, Name: valueOrFirstNonEmpty(req.Name, metadataMapString(payload, "name"), key), Payload: payload}, metadataDefinitionKeyError("scheduler", key)
-	case "preference":
-		payload, err := preferencevalidation.DecodeWorkspacePreferenceDefinition(resourceKey, req.Payload)
-		if err != nil {
-			return metadataDefinitionPayloadShape{}, err
-		}
-		return metadataDefinitionPayloadShape{Key: payload.Key, Name: payload.Name, Payload: payload}, metadataDefinitionKeyError("preference", payload.Key)
-	case "rule_set":
-		payload, err := rulesetvalidation.DecodeRuleSetDefinition(resourceKey, req.Payload)
-		if err != nil {
-			return metadataDefinitionPayloadShape{}, err
-		}
-		return metadataDefinitionPayloadShape{Key: payload.Key, Name: payload.Name, Payload: payload}, metadataDefinitionKeyError("rule_set", payload.Key)
 	case "dictionary":
 		var payload appschemamodel.DictionarySchema
 		if err := json.Unmarshal(req.Payload, &payload); err != nil {
@@ -278,43 +213,6 @@ func metadataDefinitionShape(ctx context.Context, resourceType string, resourceK
 		key := valueOrFirstNonEmpty(resourceKey, payload.ObjectKey)
 		payload.ObjectKey = key
 		return metadataDefinitionPayloadShape{Key: key, ObjectKey: key, Name: valueOrFirstNonEmpty(req.Name, payload.BusinessIdentity.Key, key), Payload: payload}, metadataDefinitionKeyError("identity_profile_binding", key)
-	case "surface", "component":
-		var payload map[string]any
-		if err := json.Unmarshal(req.Payload, &payload); err != nil {
-			return metadataDefinitionPayloadShape{}, err
-		}
-		if payload == nil {
-			return metadataDefinitionPayloadShape{}, fmt.Errorf("metadata.%s.invalidPayload", strings.TrimSpace(resourceType))
-		}
-		key := valueOrFirstNonEmpty(resourceKey, metadataMapString(payload, "key"))
-		payload["key"] = key
-		objectKey := valueOrFirstNonEmpty(req.ObjectKey, metadataMapString(payload, "object_key"))
-		name := valueOrFirstNonEmpty(req.Name, metadataMapString(payload, "name", "label"), key)
-		return metadataDefinitionPayloadShape{Key: key, ObjectKey: objectKey, Name: name, Payload: payload}, metadataDefinitionKeyError(strings.TrimSpace(resourceType), key)
-	case "entrypoint":
-		var payload definitionmodel.EntryPointSchema
-		if err := json.Unmarshal(req.Payload, &payload); err != nil {
-			return metadataDefinitionPayloadShape{}, err
-		}
-		key := valueOrFirstNonEmpty(resourceKey, payload.Key)
-		payload.Key = key
-		return metadataDefinitionPayloadShape{Key: key, Name: valueOrFirstNonEmpty(req.Name, payload.Name), Payload: payload}, metadataDefinitionKeyError("entrypoint", key)
-	case "skill":
-		var payload agentmodel.SkillSchema
-		if err := json.Unmarshal(req.Payload, &payload); err != nil {
-			return metadataDefinitionPayloadShape{}, err
-		}
-		key := valueOrFirstNonEmpty(resourceKey, payload.Key)
-		payload.Key = key
-		return metadataDefinitionPayloadShape{Key: key, Name: valueOrFirstNonEmpty(req.Name, payload.Name), Payload: payload}, metadataDefinitionKeyError("skill", key)
-	case "agent":
-		var payload agentmodel.AgentSchema
-		if err := json.Unmarshal(req.Payload, &payload); err != nil {
-			return metadataDefinitionPayloadShape{}, err
-		}
-		key := valueOrFirstNonEmpty(resourceKey, payload.Key)
-		payload.Key = key
-		return metadataDefinitionPayloadShape{Key: key, Name: valueOrFirstNonEmpty(req.Name, payload.Name), Payload: payload}, metadataDefinitionKeyError("agent", key)
 	default:
 		return metadataDefinitionPayloadShape{}, fmt.Errorf("unsupported metadata resource type %q", resourceType)
 	}

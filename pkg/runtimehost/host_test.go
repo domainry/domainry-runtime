@@ -19,11 +19,11 @@ import (
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/telemetry"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
-	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -104,8 +104,8 @@ func (identityBindingStub) Descriptor() identitysdk.Descriptor {
 
 type serverConnectorGatewayFake struct{}
 
-func (serverConnectorGatewayFake) Call(context.Context, runtimeext.ActionExecution, integrationapplication.SyncCallRequest) (integrationapplication.SyncCallResult, error) {
-	return integrationapplication.SyncCallResult{}, nil
+func (serverConnectorGatewayFake) Call(context.Context, runtimeext.ActionExecution, ConnectorCallRequest) (ConnectorCallResult, error) {
+	return ConnectorCallResult{}, nil
 }
 
 func (f *serverRuntimeFake) StartWorkers(context.Context) {
@@ -198,7 +198,7 @@ func serverTestDependencies(t *testing.T, cfg config.Config, runtime runtimeProc
 			databaseConfig.DBPath = databasePath
 			return bootstrap.PrepareProjectDatabase(ctx, databaseConfig)
 		},
-		newRuntime: func(_ context.Context, _ config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, _ identitysdk.Binding, _ notificationsdk.Factory, _ partysdk.Factory, _ monitoringsdk.Factory, _ schedulersdk.Factory, _ dataexchangesdk.Factory, _ agentsdk.Factory, _ *bootstrap.ProjectDatabase) runtimeProcess {
+		newRuntime: func(_ context.Context, _ config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, _ identitysdk.Binding, _ notificationsdk.Factory, _ partysdk.Factory, _ monitoringsdk.Factory, _ schedulersdk.Factory, _ dataexchangesdk.Factory, _ agentsdk.Factory, _ integrationsdk.Factory, _ *bootstrap.ProjectDatabase) runtimeProcess {
 			if handlers == nil || !handlers.Frozen() {
 				panic("host passed an unfrozen registry")
 			}
@@ -370,7 +370,7 @@ func TestRunWithDependenciesBindsAndUnbindsGeneratedConnectorGateway(t *testing.
 		generated = gateway
 		return runtimeext.ExtensionSet{}, nil
 	}
-	target := &connectorBindingTarget{result: integrationapplication.SyncCallResult{Response: map[string]any{"name": "Ada"}}}
+	target := &connectorBindingTarget{result: ConnectorCallResult{Payload: json.RawMessage(`{"name":"Ada"}`)}}
 	runtime := &serverRuntimeFake{gateway: target}
 	runtime.startedHook = func() {
 		result, err := generated.Call(t.Context(), connectorBindingExecution{}, ConnectorCallRequest{ConnectorKey: "member_center", ConnectionKey: "primary", OperationKey: "get_member", ContractSHA256: "contract", Mode: "call", Payload: json.RawMessage(`{}`)})
@@ -407,7 +407,7 @@ func TestRunWithDependenciesRejectsManifestSDKTargetBeforeRuntimeCreation(t *tes
 			created := 0
 			deps := serverTestDependencies(t, serverTestConfig(), &serverRuntimeFake{})
 			deps.readFile = func(string) ([]byte, error) { return serverManifestJSON(t, test.target), nil }
-			deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, partysdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, *bootstrap.ProjectDatabase) runtimeProcess {
+			deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, partysdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, *bootstrap.ProjectDatabase) runtimeProcess {
 				created++
 				return &serverRuntimeFake{}
 			}
@@ -512,7 +512,7 @@ func TestRunWithDependenciesCoversConfigurationActivationAndServeOutcomes(t *tes
 		return runtimeext.ExtensionSet{}, nil
 	}
 	deps = serverTestDependencies(t, cfg, &serverRuntimeFake{})
-	deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, partysdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, *bootstrap.ProjectDatabase) runtimeProcess {
+	deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, partysdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, *bootstrap.ProjectDatabase) runtimeProcess {
 		return nil
 	}
 	if err := runWithDependencies(options, deps); err == nil || !strings.Contains(err.Error(), "returned no process") {

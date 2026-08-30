@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
@@ -18,13 +17,12 @@ import (
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
-func registerOperationsDeadLetterOwners(service *operationsapplication.OperationsApplicationService, integrations *integrationapplication.IntegrationApplicationService, workflows *workflowapplication.WorkflowApplicationService, scheduler schedulerDeadLetterService, recordTimers recordTimerDeadLetterService) {
+func registerOperationsDeadLetterOwners(service *operationsapplication.OperationsApplicationService, publications runtimePublicationDeadLetterService, workflows *workflowapplication.WorkflowApplicationService, scheduler schedulerDeadLetterService, recordTimers recordTimerDeadLetterService) {
 	if service == nil {
 		return
 	}
-	if integrations != nil {
-		_ = service.RegisterDeadLetterOwner("integration_event", integrationEventDeadLetterOwner{service: integrations})
-		_ = service.RegisterDeadLetterOwner("integration_outbox", integrationOutboxDeadLetterOwner{service: integrations})
+	if publications != nil {
+		_ = service.RegisterDeadLetterOwner("integration_outbox", integrationOutboxDeadLetterOwner{service: publications})
 	}
 	if workflows != nil {
 		_ = service.RegisterDeadLetterOwner("workflow_execution", workflowDeadLetterOwner{service: workflows})
@@ -83,36 +81,14 @@ func valueString(data map[string]any, key string) string {
 
 var _ recordTimerDeadLetterService = (*recordtimerapplication.RecordTimerApplicationService)(nil)
 
-type integrationEventDeadLetterOwner struct {
-	service *integrationapplication.IntegrationApplicationService
-}
-
-func (o integrationEventDeadLetterOwner) Inspect(ctx context.Context, id string, principal principalmodel.Principal) (operationsapplication.OperationsDeadLetterItem, error) {
-	event, err := o.service.InspectIntegrationEvent(ctx, id, principal)
-	if err != nil {
-		return operationsapplication.OperationsDeadLetterItem{}, err
-	}
-	return integrationEventDeadLetterItem(event), nil
-}
-func (o integrationEventDeadLetterOwner) Act(ctx context.Context, id, action, reason, _ string, principal principalmodel.Principal) (operationsapplication.OperationsDeadLetterItem, error) {
-	var event integrationmodel.IntegrationEvent
-	var err error
-	switch action {
-	case operationsapplication.OperationsDeadLetterRetry:
-		event, err = o.service.ScheduleIntegrationEventRetry(ctx, id, integrationmodel.IntegrationEventRetryRequest{Error: reason}, principal)
-	case operationsapplication.OperationsDeadLetterResolve, operationsapplication.OperationsDeadLetterAck:
-		event, err = o.service.UpdateIntegrationEventStatus(ctx, id, integrationmodel.IntegrationEventStatusRequest{Status: "ignored", Error: reason}, principal)
-	default:
-		err = deadLetterActionUnsupported()
-	}
-	return integrationEventDeadLetterItem(event), err
-}
-func integrationEventDeadLetterItem(event integrationmodel.IntegrationEvent) operationsapplication.OperationsDeadLetterItem {
-	return operationsapplication.OperationsDeadLetterItem{Owner: "integration_event", ID: event.ID, ResourceType: "integration_event", Status: event.Status, FailureCode: event.Error, CorrelationID: event.ExternalID, BusinessKey: event.Provider + ":" + event.EventType, EvidenceRef: "integration_event:" + event.ID, AllowedActions: []string{"resolve", "retry", "ack"}, Details: map[string]any{"provider": event.Provider, "event_type": event.EventType, "attempt_count": event.AttemptCount}, UpdatedAt: event.UpdatedAt}
-}
-
 type integrationOutboxDeadLetterOwner struct {
-	service *integrationapplication.IntegrationApplicationService
+	service runtimePublicationDeadLetterService
+}
+
+type runtimePublicationDeadLetterService interface {
+	InspectIntegrationOutboxMessage(context.Context, string, principalmodel.Principal) (integrationmodel.IntegrationOutboxMessage, error)
+	ScheduleIntegrationOutboxRetry(context.Context, string, integrationmodel.IntegrationOutboxRetryRequest, principalmodel.Principal) (integrationmodel.IntegrationOutboxMessage, error)
+	UpdateIntegrationOutboxStatus(context.Context, string, integrationmodel.IntegrationOutboxStatusRequest, principalmodel.Principal) (integrationmodel.IntegrationOutboxMessage, error)
 }
 
 func (o integrationOutboxDeadLetterOwner) Inspect(ctx context.Context, id string, principal principalmodel.Principal) (operationsapplication.OperationsDeadLetterItem, error) {

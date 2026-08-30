@@ -19,7 +19,6 @@ type PublishedRuntimeSchemaDTO struct {
 	SchemaHash      string                                                 `json:"schema_hash"`
 	SnapshotVersion string                                                 `json:"snapshot_version"`
 	Objects         []definitionmodel.ObjectSchema                         `json:"objects"`
-	Views           []definitionmodel.ViewSchema                           `json:"views"`
 	Actions         []definitionmodel.ActionSchema                         `json:"actions"`
 	GuardedWrites   []appschemamodel.ApplicationSchemaGuardedWriteContract `json:"guarded_writes,omitempty"`
 	Workflows       []definitionmodel.WorkflowSchema                       `json:"workflows"`
@@ -57,14 +56,10 @@ func (s *ApplicationSchemaQueryApplicationService) PublishedRuntimeSchema(ctx co
 		objects[index].Config = sanitizePublishedMap(objects[index].Config)
 		objects[index].UX = sanitizePublishedMap(objects[index].UX)
 	}
-	views := append([]definitionmodel.ViewSchema(nil), snapshot.Views...)
-	for index := range views {
-		views[index].Config = sanitizePublishedMap(views[index].Config)
-	}
 	return PublishedRuntimeSchemaDTO{
 		TemplateID: snapshot.TemplateID, TemplateVersion: snapshot.TemplateVersion, Name: snapshot.Name,
 		SchemaHash: snapshot.SchemaHash, SnapshotVersion: snapshot.SnapshotVersion,
-		Objects: objects, Views: views, Actions: append([]definitionmodel.ActionSchema(nil), snapshot.Actions...),
+		Objects: objects, Actions: append([]definitionmodel.ActionSchema(nil), snapshot.Actions...),
 		GuardedWrites: append([]appschemamodel.ApplicationSchemaGuardedWriteContract(nil), snapshot.GuardedWrites...),
 		Workflows:     append([]definitionmodel.WorkflowSchema(nil), snapshot.Workflows...),
 		Dictionaries:  append([]appschemamodel.DictionarySchema(nil), snapshot.Dictionaries...),

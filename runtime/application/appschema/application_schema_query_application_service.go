@@ -61,7 +61,7 @@ func (s *ApplicationSchemaApplicationService) ReloadApplicationSchema(ctx contex
 	if err := s.repository.SyncManifest(ctx, metadataInstallationScope("synchronize metadata manifest"), manifest); err != nil {
 		return appschemamodel.ApplicationSchemaSnapshot{}, wrapMetadataError(err)
 	}
-	s.runtime.ApplyManifestMetadata(valueOrDefault(manifest.TemplateID, s.templateID), valueOrDefault(manifest.Version, s.version), valueOrDefault(manifest.Name, s.name), manifest.Objects, manifest.Views, manifest.Actions, manifest.Workflows, manifest.AutomationRules, manifest.Dictionaries, manifest.Integrations, manifest.Reports, manifest.EntryPoints, manifest.Skills, manifest.Agents, manifest.IdentityProfileExtensions)
+	s.runtime.ApplyManifestMetadata(valueOrDefault(manifest.TemplateID, s.templateID), valueOrDefault(manifest.Version, s.version), valueOrDefault(manifest.Name, s.name), manifest.Objects, manifest.Actions, manifest.Workflows, manifest.AutomationRules, manifest.Dictionaries, manifest.Integrations, manifest.Reports, manifest.Skills, manifest.Agents, manifest.IdentityProfileExtensions)
 	applyManifestAgentMetadata(s.runtime, manifest)
 	workflowScope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "reload published workflow definitions")
 	if err := s.workflows.InitializePublishedWorkflowDefinitions(ctx, manifest.Workflows, workflowScope); err != nil {
@@ -174,17 +174,6 @@ func (s *ApplicationSchemaApplicationService) withEffectiveActionDefinitions(res
 	return result
 }
 
-func (s *ApplicationSchemaApplicationService) ListApplicationDefinitionVersions(ctx context.Context, resourceType, resourceKey string, principal principalmodel.Principal) ([]appschemamodel.ApplicationDefinitionVersion, error) {
-	if err := metadataAuthorizeQuery(principal); err != nil {
-		return nil, err
-	}
-	if !principal.HasPermission("workspace.admin") {
-		return nil, forbidden("auth.permission_denied")
-	}
-	versions, err := s.repository.ListDefinitionVersions(ctx, metadataInstallationScope("list metadata definition versions"), resourceType, resourceKey)
-	return versions, wrapMetadataError(err)
-}
-
 func (s *ApplicationSchemaApplicationService) ListLocalizedTexts(ctx context.Context, query appschemamodel.LocalizedTextQuery, principal principalmodel.Principal) ([]appschemamodel.LocalizedText, error) {
 	if err := metadataAuthorizeQuery(principal); err != nil {
 		return nil, err
@@ -207,21 +196,6 @@ func (s *ApplicationSchemaApplicationService) LocalizedTextsForLocale(ctx contex
 	}
 	values, err := s.repository.ListLocalizedTexts(ctx, workspaceID, appschemamodel.LocalizedTextQuery{WorkspaceID: workspaceID, Locale: locale})
 	return values, wrapMetadataError(err)
-}
-
-func (s *ApplicationSchemaApplicationService) UpsertLocalizedText(ctx context.Context, req appschemamodel.LocalizedTextUpsertRequest, principal principalmodel.Principal) (appschemamodel.LocalizedText, error) {
-	if err := metadataAuthorizeCommand(principal); err != nil {
-		return appschemamodel.LocalizedText{}, err
-	}
-	if strings.TrimSpace(req.WorkspaceID) != strings.TrimSpace(principal.WorkspaceID) || !principal.HasPermission("workspace.admin") {
-		return appschemamodel.LocalizedText{}, forbidden("auth.permission_denied")
-	}
-	value, err := s.repository.UpsertLocalizedText(ctx, req.WorkspaceID, req)
-	if err != nil {
-		return value, wrapMetadataError(err)
-	}
-	s.dictionary.Invalidate()
-	return value, nil
 }
 
 func (s *ApplicationSchemaApplicationService) DictionaryItems(ctx context.Context, dictionaryKey, locale string, principal principalmodel.Principal) (appschemamodel.DictionaryItemsResult, bool, error) {

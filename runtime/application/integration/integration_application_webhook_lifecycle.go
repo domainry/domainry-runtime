@@ -146,7 +146,7 @@ func (s *IntegrationApplicationService) PublishIntegrationWebhookEvent(ctx conte
 			RequestRef: valueOrDefault(strings.TrimSpace(req.RequestRef), "webhook_subscription:"+subscription.Key+":"+eventType),
 			CreatedBy:  principal.UserID,
 		}
-		saved, err := s.deliveryRepo.InsertOutbox(ctx, message.WorkspaceID, message)
+		saved, err := s.publicationRepo.InsertOutbox(ctx, message.WorkspaceID, message)
 		if err != nil {
 			return integrationmodel.IntegrationWebhookPublishResult{}, err
 		}

@@ -21,8 +21,6 @@ import (
 
 	automationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automation"
 
-	changeplanpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/changeplan"
-
 	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
 
@@ -111,8 +109,7 @@ func objectActionTestDependencies(ctx context.Context, store *persistence.Runtim
 		WorkflowDecisions:    workflowpersistence.NewWorkflowDecisionStore(store),
 		AutomationWorker:     automationpersistence.NewAutomationWorkerStore(store),
 		AutomationExecutions: automationpersistence.NewAutomationExecutionStore(store),
-		BusinessChangePlans:  changeplanpersistence.NewBusinessChangePlanStore(store),
-		BusinessEvidence:     changeplanpersistence.NewBusinessEvidenceStore(store),
+		BusinessEvidence:     nil,
 		ActionExecutions:     actionpersistence.NewActionBusinessExecutionStore(store),
 	}
 }

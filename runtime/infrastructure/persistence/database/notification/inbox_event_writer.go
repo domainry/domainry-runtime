@@ -94,8 +94,9 @@ func (w InboxEventWriter) CommittedCount(ctx context.Context, event notification
 	}
 	var count int
 	if scope, saas := w.runtimeStore.NotificationSaaSPublications(); saas {
-		query, args, err := ormbuilder.NewWorkspaceSelectBuilder(w.runtimeStore.SQLRenderer, "notification_publication_outbox", event.WorkspaceID).
+		query, args, err := ormbuilder.NewWorkspaceSelectBuilder(w.runtimeStore.SQLRenderer, "runtime_publication_outbox", event.WorkspaceID).
 			Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(ormbuilder.And(
+			ormbuilder.Equal("publication_type", "notification.saas"),
 			ormbuilder.Equal("tenant_id", scope.TenantID),
 			ormbuilder.Equal("application_key", scope.ApplicationKey), ormbuilder.Equal("source_event_id", event.SourceEventID),
 		)).Build()

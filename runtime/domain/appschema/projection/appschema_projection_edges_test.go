@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
@@ -110,8 +110,8 @@ func TestMetadataDictionaryConversionAndNormalization(t *testing.T) {
 func TestMetadataLocalizedTextCoverageProjection(t *testing.T) {
 	snapshot := appschemamodel.ApplicationSchemaSnapshot{
 		Name: "App", Objects: []definitionmodel.ObjectSchema{{Key: "object", Name: "Object", Description: "", Fields: []definitionmodel.FieldSchema{{Key: "field", Name: "Field", Options: []map[string]any{{"value": "one", "label": "One", "description": "Desc"}, {"value": "", "key": "two", "label": "", "description": ""}, {"value": "three"}, {"value": "", "key": ""}, {}}}}, Validations: []definitionmodel.ValidationSchema{{Key: "", Type: "required", FieldKey: "field", Message: "Required"}, {Key: "explicit", Message: "Explicit"}}}},
-		Views: []definitionmodel.ViewSchema{{Key: "view", Name: "View"}}, Actions: []definitionmodel.ActionSchema{{Key: "action", Label: "Action", PayloadFields: []definitionmodel.ActionPayloadField{{Key: "payload", Name: "Payload"}}}}, Workflows: []definitionmodel.WorkflowSchema{{Key: "workflow", Name: "Workflow"}},
-		Dictionaries: []appschemamodel.DictionarySchema{{Key: "dict", Name: "Dictionary", Items: []appschemamodel.DictionaryItemSchema{{Key: "item", Label: "Item"}, {Value: "value", Description: "Description"}}}}, Reports: []reportmodel.ReportSchema{{Key: "report", Name: "Report"}}, EntryPoints: []definitionmodel.EntryPointSchema{{Key: "entry", Name: "Entry", Description: "Description"}}, Skills: []agentmodel.SkillSchema{{Key: "skill", Name: "Skill", Description: "Description"}}, Agents: []agentmodel.AgentSchema{{Key: "agent", Name: "Agent", Description: "Description"}},
+		Actions: []definitionmodel.ActionSchema{{Key: "action", Label: "Action", PayloadFields: []definitionmodel.ActionPayloadField{{Key: "payload", Name: "Payload"}}}}, Workflows: []definitionmodel.WorkflowSchema{{Key: "workflow", Name: "Workflow"}},
+		Dictionaries: []appschemamodel.DictionarySchema{{Key: "dict", Name: "Dictionary", Items: []appschemamodel.DictionaryItemSchema{{Key: "item", Label: "Item"}, {Value: "value", Description: "Description"}}}}, Reports: []reportmodel.ReportSchema{{Key: "report", Name: "Report"}}, Skills: []agentsdk.SkillSchema{{Key: "skill", Name: "Skill", Description: "Description"}}, Agents: []agentsdk.AgentSchema{{Key: "agent", Name: "Agent", Description: "Description"}},
 	}
 	expected := metadataLocalizedTextExpectedItems(snapshot)
 	if len(expected) < 20 {

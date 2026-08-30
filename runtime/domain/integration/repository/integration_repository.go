@@ -83,10 +83,9 @@ type IntegrationEventRepository interface {
 	RecordWebhookNonce(context.Context, string, string, string, string, string) (bool, error)
 }
 
-type IntegrationDeliveryRepository interface {
-	ListInvocations(context.Context, string, string, string, string, string, int) ([]integrationmodel.IntegrationInvocation, error)
-	InsertInvocation(context.Context, string, integrationmodel.IntegrationInvocation) (integrationmodel.IntegrationInvocation, error)
-	UpdateInvocationStatus(context.Context, string, string, string, int64, string, string) (integrationmodel.IntegrationInvocation, error)
+// RuntimePublicationRepository is the Runtime-owned durable handoff ledger.
+// It intentionally contains no Provider invocation evidence.
+type RuntimePublicationRepository interface {
 	ListOutbox(context.Context, string, string, string, int) ([]integrationmodel.IntegrationOutboxMessage, error)
 	InsertOutbox(context.Context, string, integrationmodel.IntegrationOutboxMessage) (integrationmodel.IntegrationOutboxMessage, error)
 	UpdateOutboxStatus(context.Context, string, string, string, string, string) (integrationmodel.IntegrationOutboxMessage, error)
@@ -94,19 +93,24 @@ type IntegrationDeliveryRepository interface {
 	ScheduleOutboxRetry(context.Context, string, string, int, string) (integrationmodel.IntegrationOutboxMessage, error)
 }
 
-type IntegrationOutboxReader interface {
-	GetOutbox(context.Context, string, string) (integrationmodel.IntegrationOutboxMessage, bool, error)
+// IntegrationInvocationRepository is owner-side execution evidence. Runtime
+// composition must not provide a local implementation; it remains temporarily
+// separate for compatibility while callers move to the Integration Binding.
+type IntegrationInvocationRepository interface {
+	ListInvocations(context.Context, string, string, string, string, string, int) ([]integrationmodel.IntegrationInvocation, error)
+	InsertInvocation(context.Context, string, integrationmodel.IntegrationInvocation) (integrationmodel.IntegrationInvocation, error)
+	UpdateInvocationStatus(context.Context, string, string, string, int64, string, string) (integrationmodel.IntegrationInvocation, error)
 }
 
-// WebPushSubscriptionRepository owns workspace-scoped browser subscription
-// material. Public projections must never expose Endpoint, P256DH, or Auth.
-type WebPushSubscriptionRepository interface {
-	ListWebPushSubscriptions(context.Context, string, string) ([]integrationmodel.WebPushSubscription, error)
-	GetWebPushSubscription(context.Context, string, string) (integrationmodel.WebPushSubscription, bool, error)
-	UpsertWebPushSubscription(context.Context, string, integrationmodel.WebPushSubscription) (integrationmodel.WebPushSubscription, error)
-	RevokeWebPushSubscription(context.Context, string, string, string) (integrationmodel.WebPushSubscription, error)
-	ExpireWebPushSubscription(context.Context, string, string) error
-	CleanupExpiredWebPushSubscriptions(context.Context, string) (int, error)
+// IntegrationDeliveryRepository is the legacy aggregate contract. New Runtime
+// code must depend on one of the narrow owner-specific interfaces above.
+type IntegrationDeliveryRepository interface {
+	RuntimePublicationRepository
+	IntegrationInvocationRepository
+}
+
+type IntegrationOutboxReader interface {
+	GetOutbox(context.Context, string, string) (integrationmodel.IntegrationOutboxMessage, bool, error)
 }
 
 // IntegrationInvocationOutcomeRepository finalizes a durable prepared
@@ -125,17 +129,25 @@ type IntegrationInvocationReconciliationRepository interface {
 	MarkInvocationReconciliationRequired(ctx context.Context, workspaceID, invocationID, detectedAt string) (integrationmodel.IntegrationInvocation, bool, error)
 }
 
-type IntegrationWorkerRepository interface {
+type IntegrationEventWorkerRepository interface {
 	ListDueEvents(ctx context.Context, scope principalmodel.SystemScope, limit int, now string) ([]integrationmodel.IntegrationEvent, error)
 	ClaimEvent(ctx context.Context, workspaceID, eventID, owner, now string) (integrationmodel.IntegrationEvent, bool, error)
 	HeartbeatEvent(ctx context.Context, workspaceID, eventID, expectedLeaseOwner string, expectedFencingToken int64, now string) (integrationmodel.IntegrationEvent, error)
 	UpdateEventStatus(ctx context.Context, workspaceID, eventID, expectedLeaseOwner string, expectedFencingToken int64, status, errorText, now string) (integrationmodel.IntegrationEvent, error)
 	ScheduleEventRetry(ctx context.Context, workspaceID, eventID, expectedLeaseOwner string, expectedFencingToken int64, delaySeconds int, errorText, now string) (integrationmodel.IntegrationEvent, error)
+}
+
+type RuntimePublicationWorkerRepository interface {
 	ListDueOutbox(ctx context.Context, scope principalmodel.SystemScope, limit int, now string) ([]integrationmodel.IntegrationOutboxMessage, error)
 	ClaimOutbox(ctx context.Context, workspaceID, messageID, owner, now string) (integrationmodel.IntegrationOutboxMessage, bool, error)
 	HeartbeatOutbox(ctx context.Context, workspaceID, messageID, expectedLeaseOwner string, expectedFencingToken int64, now string) (integrationmodel.IntegrationOutboxMessage, error)
 	UpdateOutboxStatus(ctx context.Context, workspaceID, messageID, expectedLeaseOwner string, expectedFencingToken int64, status, responseRef, errorText, ackDeadlineAt, now string) (integrationmodel.IntegrationOutboxMessage, error)
 	ScheduleOutboxRetry(ctx context.Context, workspaceID, messageID, expectedLeaseOwner string, expectedFencingToken int64, delaySeconds int, errorText, now string) (integrationmodel.IntegrationOutboxMessage, error)
+}
+
+type IntegrationWorkerRepository interface {
+	IntegrationEventWorkerRepository
+	RuntimePublicationWorkerRepository
 }
 
 // IntegrationAcknowledgementReconciliationRepository owns acknowledgements

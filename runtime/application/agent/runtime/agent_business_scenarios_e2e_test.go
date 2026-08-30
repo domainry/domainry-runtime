@@ -9,7 +9,8 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -25,12 +26,12 @@ func TestResumeScreeningScenarioUsesHRScopeAndProposalOnly(t *testing.T) {
 	}
 	run, owner, _ := runningAgentTaskRun(now)
 	run.ID, run.WorkspaceID, run.ProcessID, run.NodeInstanceID, run.TaskKey, run.TaskVersion = "resume-run", initiator.WorkspaceID, "resume-process", "screen-node", "resume.screen", "1.0.0"
-	run.Identity = agentmodel.AgentExecutionIdentity{Mode: agentmodel.AgentTaskIdentityInherit, Initiator: agentPrincipalReference(initiator), Execution: agentPrincipalReference(initiator)}
+	run.Identity = agentsdk.ExecutionIdentity{Mode: agentsdk.AgentTaskIdentityInherit, Initiator: agentPrincipalReference(initiator), Execution: agentPrincipalReference(initiator)}
 	run.Lease.Owner, run.Lease.FencingToken = string(owner), 1
 	repository := &agentTaskRunRepositoryStub{current: run}
 	queries, proposals, ledger := &agentToolQueryStub{}, &agentToolProposalStub{}, &agentToolLedgerStub{}
 	gateway := NewAgentToolGateway(AgentToolGatewayDependencies{Authorization: authorization, Credentials: credentials, Queries: queries, Proposals: proposals, Risk: agentToolRiskStub{proposal: true}, Ledger: ledger, TaskRuns: NewAgentTaskRunApplicationService(repository, agentTaskClock{now: now})})
-	request := AgentToolInvocationRequest{Credential: token, WorkspaceID: initiator.WorkspaceID, ProcessID: run.ProcessID, TaskRunID: run.ID, Owner: owner, FencingToken: 1, Initiator: initiator, Identity: agentmodel.AgentTaskIdentity{Mode: agentmodel.AgentTaskIdentityInherit}, TaskKey: run.TaskKey, TaskVersion: run.TaskVersion, NodeAllowedObjects: []string{"candidate", "resume"}, NodeAllowedActions: []string{"candidate.reject"}, NodeAllowedOutcomes: []string{"success", "manual_review", "rejected", "error"}}
+	request := AgentToolInvocationRequest{Credential: token, WorkspaceID: initiator.WorkspaceID, ProcessID: run.ProcessID, TaskRunID: run.ID, Owner: owner, FencingToken: 1, Initiator: initiator, Identity: agentsdk.AgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityInherit}, TaskKey: run.TaskKey, TaskVersion: run.TaskVersion, NodeAllowedObjects: []string{"candidate", "resume"}, NodeAllowedActions: []string{"candidate.reject"}, NodeAllowedOutcomes: []string{"success", "manual_review", "rejected", "error"}}
 	request.Tool, request.Input = AgentToolQueryRecords, map[string]any{"object_key": "candidate"}
 	if _, err := gateway.Invoke(t.Context(), request); err != nil || strings.Join(queries.fields, ",") != "experience,name" || queries.principal.UserID != initiator.UserID {
 		t.Fatalf("HR-scoped query fields=%v principal=%#v err=%v", queries.fields, queries.principal, err)
@@ -54,7 +55,7 @@ func TestCustomerPreprocessingScenarioUsesServiceIdentityAndStrictRedactedOutput
 	servicePrincipal := directory.principals["agent_customer:agent_service"]
 	serviceFiltered := schema.filtered["operator:operator"]
 	schema.filtered[servicePrincipal.UserID+":"+servicePrincipal.RoleKey] = serviceFiltered
-	execution, identity, err := authorization.ResolveExecutionIdentity(t.Context(), AgentExecutionIdentityRequest{Initiator: initiator, Identity: agentmodel.AgentTaskIdentity{Mode: agentmodel.AgentTaskIdentityService, PrincipalKey: "customer_service"}, ExpectedRotationVersion: 3})
+	execution, identity, err := authorization.ResolveExecutionIdentity(t.Context(), AgentExecutionIdentityRequest{Initiator: initiator, Identity: agentsdk.AgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityService, PrincipalKey: "customer_service"}, ExpectedRotationVersion: 3})
 	if err != nil || execution.UserID != "agent_customer" || identity.Initiator.UserID != initiator.UserID || identity.Execution.UserID == identity.Initiator.UserID {
 		t.Fatalf("service identity execution=%#v identity=%#v err=%v", execution, identity, err)
 	}
@@ -73,8 +74,8 @@ func TestGlobalAgentCrossPageScenarioRestoresStableHandoffAndRejectsOldAuthority
 	principal.AuthorizationRevision = trusted.Principal.AuthorizationRevision
 	runs := NewAgentInteractiveRunApplicationService(repository, agentTaskClock{now: time.Date(2026, 8, 4, 19, 0, 0, 0, time.UTC)}, agentCredentialIDStub{})
 	dispatch := NewAgentTaskDispatchApplicationService(authorization, agentTaskClock{now: time.Now().UTC()}, agentCredentialIDStub{})
-	runner := interactiveAgentRunnerFunc(func(_ context.Context, _ InteractiveAgentRunRequest) (InteractiveAgentResult, error) {
-		return InteractiveAgentResult{Route: &AgentRouteResult{RouteType: agentmodel.AgentRouteTask, TargetKey: "customer.review", TargetVersion: "1.0.0", Input: map[string]any{"record_id": "customer-1"}, IdempotencyKey: "page-handoff-1"}}, nil
+	runner := interactiveAgentRunnerFunc(func(_ context.Context, _ agentsdk.InteractiveRequest) (agentsdk.InteractiveResult, error) {
+		return agentsdk.InteractiveResult{Route: &agentsdk.RouteResult{RouteType: agentsdk.AgentRouteTask, TargetKey: "customer.review", TargetVersion: "1.0.0", Input: map[string]any{"record_id": "customer-1"}, IdempotencyKey: "page-handoff-1"}}, nil
 	})
 	service := NewAgentInteractiveExecutionApplicationService(AgentInteractiveExecutionDependencies{Runs: runs, Authorize: authorization, Runner: runner, Dispatch: dispatch})
 	result, err := service.Execute(t.Context(), AgentInteractiveExecutionRequest{SessionID: "session-page", IdempotencyKey: "message-page", Message: "review current record", Context: trusted, Principal: principal})
@@ -101,8 +102,8 @@ func resumeScreeningAuthorizationFixture() (*AgentAuthorizationApplicationServic
 	fresh := initiator
 	fresh.AuthorizationRevision = "hr-auth-2"
 	directory := &agentPrincipalDirectoryStub{principals: map[string]principalmodel.Principal{"hr-user:hr_recruiter": fresh}}
-	task := agentmodel.AgentTaskDefinition{ContractVersion: agentmodel.AgentTaskContractVersion, Key: "resume.screen", Version: "1.0.0", AgentKey: "talent_agent", InputSchema: map[string]any{"type": "object"}, OutputSchema: map[string]any{"type": "object"}, AllowedObjects: []string{"candidate", "resume"}, AllowedActions: []string{"candidate.reject"}, AllowedOutcomes: []string{"success", "manual_review", "rejected", "error"}, SideEffectMode: agentmodel.AgentTaskSideEffectProposalOnly, ExecutionLimits: agentmodel.AgentExecutionLimits{MaxToolCalls: 4, MaxInputBytes: 4096, MaxOutputBytes: 4096}, Enabled: true}
-	full := appschemamodel.ApplicationSchemaSnapshot{SchemaHash: "hr-full", Objects: []definitionmodel.ObjectSchema{{Key: "candidate", Fields: []definitionmodel.FieldSchema{{Key: "name"}, {Key: "experience"}, {Key: "private_phone"}}}, {Key: "resume"}}, Actions: []definitionmodel.ActionSchema{{Key: "candidate.reject", ObjectKey: "candidate"}}, Skills: []agentmodel.SkillSchema{{Key: "talent_reader", Version: "1.0.0", Name: "Talent reader", AllowedTools: []string{"query_records", "invoke_action"}, AllowedObjects: []string{"candidate", "resume"}}}, Agents: []agentmodel.AgentSchema{{Key: "talent_agent", Version: "1.0.0", Name: "Talent agent", SkillKeys: []string{"talent_reader"}}}, AgentTasks: []agentmodel.AgentTaskDefinition{task}}
+	task := agentsdk.AgentTaskDefinition{ContractVersion: agentsdk.AgentTaskContractVersion, Key: "resume.screen", Version: "1.0.0", AgentKey: "talent_agent", InputSchema: map[string]any{"type": "object"}, OutputSchema: map[string]any{"type": "object"}, AllowedObjects: []string{"candidate", "resume"}, AllowedActions: []string{"candidate.reject"}, AllowedOutcomes: []string{"success", "manual_review", "rejected", "error"}, SideEffectMode: agentsdk.AgentTaskSideEffectProposalOnly, ExecutionLimits: agentsdk.AgentExecutionLimits{MaxToolCalls: 4, MaxInputBytes: 4096, MaxOutputBytes: 4096}, Enabled: true}
+	full := appschemamodel.ApplicationSchemaSnapshot{SchemaHash: "hr-full", Objects: []definitionmodel.ObjectSchema{{Key: "candidate", Fields: []definitionmodel.FieldSchema{{Key: "name"}, {Key: "experience"}, {Key: "private_phone"}}}, {Key: "resume"}}, Actions: []definitionmodel.ActionSchema{{Key: "candidate.reject", ObjectKey: "candidate"}}, Skills: []agentsdk.SkillSchema{{Key: "talent_reader", Version: "1.0.0", Name: "Talent reader", AllowedTools: []string{"query_records", "invoke_action"}, AllowedObjects: []string{"candidate", "resume"}}}, Agents: []agentsdk.AgentSchema{{Key: "talent_agent", Version: "1.0.0", Name: "Talent agent", SkillKeys: []string{"talent_reader"}}}, AgentTasks: []agentsdk.AgentTaskDefinition{task}}
 	filtered := full
 	filtered.SchemaHash = "hr-filtered"
 	filtered.Objects = []definitionmodel.ObjectSchema{{Key: "candidate", Fields: []definitionmodel.FieldSchema{{Key: "name"}, {Key: "experience"}}}, {Key: "resume"}}

@@ -9,22 +9,22 @@ import (
 	"strings"
 	"time"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 type AgentTaskCredentialClaims struct {
-	Version      string                             `json:"version"`
-	WorkspaceID  string                             `json:"workspace_id"`
-	ProcessID    string                             `json:"process_id,omitempty"`
-	TaskRunID    string                             `json:"task_run_id"`
-	Principal    agentmodel.AgentPrincipalReference `json:"principal"`
-	AllowedTools []string                           `json:"allowed_tools"`
-	IssuedAt     time.Time                          `json:"issued_at"`
-	ExpiresAt    time.Time                          `json:"expires_at"`
-	Nonce        string                             `json:"nonce"`
+	Version      string                      `json:"version"`
+	WorkspaceID  string                      `json:"workspace_id"`
+	ProcessID    string                      `json:"process_id,omitempty"`
+	TaskRunID    string                      `json:"task_run_id"`
+	Principal    agentsdk.PrincipalReference `json:"principal"`
+	AllowedTools []string                    `json:"allowed_tools"`
+	IssuedAt     time.Time                   `json:"issued_at"`
+	ExpiresAt    time.Time                   `json:"expires_at"`
+	Nonce        string                      `json:"nonce"`
 }
 
 type AgentTaskCredentialScope struct {

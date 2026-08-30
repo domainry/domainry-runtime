@@ -3,22 +3,36 @@ package composition
 import (
 	"context"
 
+	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	deployment "github.com/domainry/domainry-runtime/runtime/application/deployment"
-	businessintegration "github.com/domainry/domainry-runtime/runtime/application/integration"
 	lifecycleapplication "github.com/domainry/domainry-runtime/runtime/application/lifecycle"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
-	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
+	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	recordruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	resilience "github.com/domainry/domainry-runtime/runtime/platform/resilience"
 )
+
+func firstIntegrationPublicationRepository(primary integrationrepository.RuntimePublicationRepository, legacy integrationrepository.IntegrationDeliveryRepository) integrationrepository.RuntimePublicationRepository {
+	if primary != nil {
+		return primary
+	}
+	return legacy
+}
+
+func firstIntegrationPublicationWorkerRepository(primary integrationrepository.RuntimePublicationWorkerRepository, legacy integrationrepository.IntegrationWorkerRepository) integrationrepository.RuntimePublicationWorkerRepository {
+	if primary != nil {
+		return primary
+	}
+	return legacy
+}
 
 // newRuntimeServicesState allocates state before ordered service initialization.
 func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.ManifestSchema, deps RuntimeServicesDependencies) *runtimeAssembly {
@@ -35,12 +49,13 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 	if apiLimiter == nil {
 		apiLimiter = ratelimit.NewMemoryLimiter(ratelimit.DefaultMemoryCapacity)
 	}
-	connectorRegistry := businessintegration.NewConnectorRegistryWithProviders(manifest.Integrations, deps.ConnectorProviders)
+	connectorRegistry := newRuntimeConnectorCatalog(manifest.Integrations)
 	auditApplicationService := deps.AuditApplication
 	if auditApplicationService == nil {
 		auditApplicationService = auditapplication.NewAuditApplicationService(deps.Audit)
 	}
 	services := &runtimeAssembly{
+		schedulerDefinitions:                cloneSchedulerDefinitionMaps(manifest.SchedulerDefinitions),
 		productBrandName:                    deps.ProductBrandName,
 		actionRuntimeRevision:               deps.ActionRuntimeRevision,
 		actionProjectRevision:               deps.ActionProjectRevision,
@@ -55,13 +70,13 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 		auditRepo:                           deps.Audit,
 		integrationConfigRepo:               deps.IntegrationConfig,
 		integrationEventRepo:                deps.IntegrationEvents,
+		integrationPublicationRepo:          firstIntegrationPublicationRepository(deps.IntegrationPublication, deps.IntegrationDelivery),
 		integrationDeliveryRepo:             deps.IntegrationDelivery,
 		integrationWorkerRepo:               deps.IntegrationWorker,
+		integrationPublicationWorkerRepo:    firstIntegrationPublicationWorkerRepository(deps.IntegrationPublicationWorker, deps.IntegrationWorker),
 		workerWakeups:                       deps.WorkerWakeups,
-		integrationNotificationCompiler:     deps.IntegrationNotificationCompiler,
-		integrationNotificationPublisher:    deps.IntegrationNotificationPublisher,
-		integrationCredentialNotifications:  deps.IntegrationCredentialNotifications,
-		integrationCredentialExpirySource:   deps.IntegrationCredentialExpirySource,
+		integrationOwnerDelivery:            deps.IntegrationOwnerDelivery,
+		integrationOwnerCatalog:             deps.IntegrationOwnerCatalog,
 		workflowWorkerRepo:                  deps.WorkflowWorker,
 		workflowDefinitionRepo:              deps.WorkflowDefinitions,
 		workflowProcessRepo:                 deps.WorkflowProcesses,
@@ -77,7 +92,6 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 		applicationSchemaRepo:               deps.ApplicationSchema,
 		automationWorkerRepo:                deps.AutomationWorker,
 		automationExecutionRepo:             deps.AutomationExecutions,
-		businessChangePlanRepo:              deps.BusinessChangePlans,
 		businessEvidenceRepo:                deps.BusinessEvidence,
 		runtimeStatusRepo:                   deps.RuntimeStatus,
 		actionAssuranceStore:                deps.ActionAssurance,

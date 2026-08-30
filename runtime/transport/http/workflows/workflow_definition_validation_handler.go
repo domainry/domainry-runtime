@@ -9,8 +9,7 @@ import (
 
 func (h *WorkflowsHandler) validateWorkflowDefinition(w http.ResponseWriter, r *http.Request) {
 	request := struct {
-		ExpectedSchemaHash string                         `json:"expected_schema_hash"`
-		Payload            definitionmodel.WorkflowSchema `json:"payload"`
+		Payload definitionmodel.WorkflowSchema `json:"payload"`
 	}{}
 	if !h.decodeJSON(w, r, &request) {
 		return

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
@@ -16,13 +16,13 @@ import (
 func TestWorkflowPublishValidatesAgentTaskServicePrincipalAndActionRiskReferences(t *testing.T) {
 	schema := workflowReferenceSchemaEdgeStub{snapshot: WorkflowSchemaSnapshot{
 		Actions:                []definitionmodel.ActionSchema{{Key: "customer.delete", ObjectKey: "order", Kind: definitionmodel.ActionKindRecordDelete, RiskLevel: "critical"}},
-		AgentTasks:             []agentmodel.AgentTaskDefinition{{Key: "customer.review", Version: "1.0.0", AgentKey: "agent", AllowedObjects: []string{"order"}, AllowedActions: []string{"customer.delete"}, AllowedOutcomes: []string{"success", "error"}, SideEffectMode: agentmodel.AgentTaskSideEffectActionAllowed, Enabled: true}},
-		AgentServicePrincipals: []agentmodel.AgentServicePrincipalBinding{{Key: "review-service", UserID: "service-user", RoleKey: "service-role", Enabled: true}},
+		AgentTasks:             []agentsdk.AgentTaskDefinition{{Key: "customer.review", Version: "1.0.0", AgentKey: "agent", AllowedObjects: []string{"order"}, AllowedActions: []string{"customer.delete"}, AllowedOutcomes: []string{"success", "error"}, SideEffectMode: agentsdk.AgentTaskSideEffectActionAllowed, Enabled: true}},
+		AgentServicePrincipals: []agentsdk.AgentServicePrincipalBinding{{Key: "review-service", UserID: "service-user", RoleKey: "service-role", Enabled: true}},
 	}}
 	validator := NewWorkflowReferenceValidator(schema, func(context.Context) map[string]definitionmodel.ObjectSchema {
 		return map[string]definitionmodel.ObjectSchema{"order": {Key: "order"}}
 	}, nil)
-	node := definitionmodel.WorkflowGraphNode{ID: "agent", Type: "agent_task", Contract: &definitionmodel.WorkflowNodeContract{AgentTask: &definitionmodel.WorkflowAgentTaskNodeContract{TaskKey: "customer.review", TaskVersion: "1.0.0", Identity: definitionmodel.WorkflowAgentTaskIdentity{Mode: agentmodel.AgentTaskIdentityService, PrincipalKey: "review-service"}}}}
+	node := definitionmodel.WorkflowGraphNode{ID: "agent", Type: "agent_task", Contract: &definitionmodel.WorkflowNodeContract{AgentTask: &definitionmodel.WorkflowAgentTaskNodeContract{TaskKey: "customer.review", TaskVersion: "1.0.0", Identity: definitionmodel.WorkflowAgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityService, PrincipalKey: "review-service"}}}}
 	if issues := validator.validateWorkflowAgentTaskReference(t.Context(), node); len(issues) != 0 {
 		t.Fatalf("published high-risk task should rely on forced Proposal policy: %#v", issues)
 	}

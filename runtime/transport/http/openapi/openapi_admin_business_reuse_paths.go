@@ -11,7 +11,4 @@ func addAdminCapabilityDisclosureOpenAPIPaths(paths map[string]any) {
 	paths["/operations/monitoring/metrics"] = map[string]any{
 		"get": openAPIOperation("getMonitoringMetrics", "Operations", "Aggregated Runtime monitoring snapshot", openAPIAdminSecurity(), openAPIJSONResponse("Monitoring metrics", openAPIObject(nil))),
 	}
-	addBuilderPath(paths, "/business-seeds/{seedKey}", "Business Seeds", "get", "put")
-	addBuilderPath(paths, "/business-seeds/{seedKey}/validate", "Business Seeds", "post")
-	addBuilderPath(paths, "/business-seeds/{seedKey}/versions", "Business Seeds", "get")
 }

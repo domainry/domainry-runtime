@@ -1,15 +1,15 @@
 package openapi
 
-import deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
-
-import appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
-
 import (
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
+
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 	"sort"
 	"strings"
+
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
 
 func openAPISchemas(snapshot appschemamodel.ApplicationSchemaSnapshot) map[string]any {
@@ -163,13 +163,13 @@ func openAPIAgentTaskDefinitionSchema() map[string]any {
 	return map[string]any{"type": "object", "additionalProperties": false,
 		"required": []string{"contract_version", "key", "version", "agent_key", "instruction", "input_schema", "output_schema", "allowed_outcomes", "side_effect_mode", "enabled"},
 		"properties": map[string]any{
-			"contract_version": map[string]any{"type": "string", "enum": []string{agentmodel.AgentTaskContractVersion}},
+			"contract_version": map[string]any{"type": "string", "enum": []string{agentsdk.AgentTaskContractVersion}},
 			"key":              map[string]any{"type": "string"}, "version": map[string]any{"type": "string"}, "agent_key": map[string]any{"type": "string"},
 			"name": map[string]any{"type": "string"}, "description": map[string]any{"type": "string"}, "instruction": map[string]any{"type": "string"},
 			"input_schema": openAPIObject(nil), "output_schema": openAPIObject(nil),
 			"allowed_objects": openAPIArray(map[string]any{"type": "string"}), "allowed_actions": openAPIArray(map[string]any{"type": "string"}),
-			"allowed_outcomes": map[string]any{"type": "array", "minItems": 1, "uniqueItems": true, "items": map[string]any{"type": "string", "enum": agentmodel.AgentTaskOutcomes}},
-			"side_effect_mode": map[string]any{"type": "string", "enum": []string{agentmodel.AgentTaskSideEffectAnalysisOnly, agentmodel.AgentTaskSideEffectProposalOnly, agentmodel.AgentTaskSideEffectActionAllowed}},
+			"allowed_outcomes": map[string]any{"type": "array", "minItems": 1, "uniqueItems": true, "items": map[string]any{"type": "string", "enum": agentsdk.AgentTaskOutcomes}},
+			"side_effect_mode": map[string]any{"type": "string", "enum": []string{agentsdk.AgentTaskSideEffectAnalysisOnly, agentsdk.AgentTaskSideEffectProposalOnly, agentsdk.AgentTaskSideEffectActionAllowed}},
 			"execution_limits": openAPIObject(nil), "enabled": map[string]any{"type": "boolean"},
 		},
 	}
@@ -179,7 +179,7 @@ func openAPIGlobalAgentContextSchema() map[string]any {
 	return map[string]any{"type": "object", "additionalProperties": false,
 		"required": []string{"contract_version", "max_selected_records", "max_context_bytes"},
 		"properties": map[string]any{
-			"contract_version":     map[string]any{"type": "string", "enum": []string{agentmodel.GlobalAgentContextContractVersion}},
+			"contract_version":     map[string]any{"type": "string", "enum": []string{agentsdk.GlobalAgentContextContractVersion}},
 			"allowed_hint_fields":  map[string]any{"type": "array", "uniqueItems": true, "items": map[string]any{"type": "string", "enum": []string{"route_key", "object_key", "record_id", "selected_record_ids", "locale", "timezone"}}},
 			"max_selected_records": map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
 			"max_context_bytes":    map[string]any{"type": "integer", "minimum": 1024, "maximum": 1048576},
@@ -191,8 +191,8 @@ func openAPIAgentRoutingSchema() map[string]any {
 	return map[string]any{"type": "object", "additionalProperties": false,
 		"required": []string{"contract_version", "allowed_route_types"},
 		"properties": map[string]any{
-			"contract_version":    map[string]any{"type": "string", "enum": []string{agentmodel.AgentRoutingContractVersion}},
-			"allowed_route_types": map[string]any{"type": "array", "minItems": 1, "uniqueItems": true, "items": map[string]any{"type": "string", "enum": []string{agentmodel.AgentRouteInteractiveQuery, agentmodel.AgentRouteTask, agentmodel.AgentRouteWorkflow, agentmodel.AgentRouteProposal}}},
+			"contract_version":    map[string]any{"type": "string", "enum": []string{agentsdk.AgentRoutingContractVersion}},
+			"allowed_route_types": map[string]any{"type": "array", "minItems": 1, "uniqueItems": true, "items": map[string]any{"type": "string", "enum": []string{agentsdk.AgentRouteInteractiveQuery, agentsdk.AgentRouteTask, agentsdk.AgentRouteWorkflow, agentsdk.AgentRouteProposal}}},
 			"allow_recursive":     map[string]any{"type": "boolean", "enum": []bool{false}},
 		},
 	}
@@ -202,7 +202,7 @@ func openAPIAgentEntrypointAssignmentSchema() map[string]any {
 	return map[string]any{"type": "object", "additionalProperties": false,
 		"required": []string{"contract_version", "key", "agent_key", "surface", "required_permissions", "route_patterns", "context_contract", "routing_contract", "enabled"},
 		"properties": map[string]any{
-			"contract_version": map[string]any{"type": "string", "enum": []string{agentmodel.AgentEntrypointContractVersion}},
+			"contract_version": map[string]any{"type": "string", "enum": []string{agentsdk.AgentEntrypointContractVersion}},
 			"key":              map[string]any{"type": "string"}, "agent_key": map[string]any{"type": "string"},
 			"surface":             map[string]any{"type": "string", "enum": []string{"business_workspace", "admin_console", "consumer_portal"}},
 			"default_for_surface": map[string]any{"type": "boolean"}, "required_permissions": openAPIArray(map[string]any{"type": "string"}),
@@ -218,11 +218,11 @@ func openAPIWorkflowAgentTaskNodeSchema() map[string]any {
 		"required": []string{"task_key", "task_version", "identity", "input", "output_variable", "execution_mode"},
 		"properties": map[string]any{
 			"task_key": map[string]any{"type": "string"}, "task_version": map[string]any{"type": "string"},
-			"identity": map[string]any{"type": "object", "additionalProperties": false, "required": []string{"mode"}, "properties": map[string]any{"mode": map[string]any{"type": "string", "enum": []string{agentmodel.AgentTaskIdentityInherit, agentmodel.AgentTaskIdentityService}}, "principal_key": map[string]any{"type": "string"}}},
+			"identity": map[string]any{"type": "object", "additionalProperties": false, "required": []string{"mode"}, "properties": map[string]any{"mode": map[string]any{"type": "string", "enum": []string{agentsdk.AgentTaskIdentityInherit, agentsdk.AgentTaskIdentityService}}, "principal_key": map[string]any{"type": "string"}}},
 			"input":    openAPIObject(nil), "output_variable": map[string]any{"type": "string"}, "execution_mode": map[string]any{"type": "string", "enum": []string{"async"}},
 			"timeout_seconds": map[string]any{"type": "integer", "minimum": 1}, "retry": openAPIObject(nil), "on_error": map[string]any{"type": "string", "enum": []string{"", "fail", "error_branch"}},
 			"allowed_objects": openAPIArray(map[string]any{"type": "string"}), "allowed_actions": openAPIArray(map[string]any{"type": "string"}),
-			"allowed_outcomes": map[string]any{"type": "array", "uniqueItems": true, "items": map[string]any{"type": "string", "enum": agentmodel.AgentTaskOutcomes}},
+			"allowed_outcomes": map[string]any{"type": "array", "uniqueItems": true, "items": map[string]any{"type": "string", "enum": agentsdk.AgentTaskOutcomes}},
 		},
 	}
 }
@@ -231,8 +231,8 @@ func openAPIInteractiveAgentHandoffSchema() map[string]any {
 	return map[string]any{"type": "object", "additionalProperties": false,
 		"required": []string{"contract_version", "route_type", "target_key", "input", "idempotency_key"},
 		"properties": map[string]any{
-			"contract_version": map[string]any{"type": "string", "enum": []string{agentmodel.InteractiveHandoffContractVersion}},
-			"route_type":       map[string]any{"type": "string", "enum": []string{agentmodel.AgentRouteTask, agentmodel.AgentRouteWorkflow}},
+			"contract_version": map[string]any{"type": "string", "enum": []string{agentsdk.InteractiveHandoffContractVersion}},
+			"route_type":       map[string]any{"type": "string", "enum": []string{agentsdk.AgentRouteTask, agentsdk.AgentRouteWorkflow}},
 			"target_key":       map[string]any{"type": "string"}, "input": openAPIObject(nil), "idempotency_key": map[string]any{"type": "string"},
 			"process_id": map[string]any{"type": "string", "readOnly": true}, "task_run_id": map[string]any{"type": "string", "readOnly": true},
 		},

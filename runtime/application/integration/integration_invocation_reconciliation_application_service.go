@@ -30,8 +30,8 @@ func (s *IntegrationApplicationService) StartInvocationReconciliationWorker(ctx 
 	if _, err := principalmodel.NewSystemCommandScope(scope); err != nil {
 		return workerplatform.Stopped()
 	}
-	_, invocationOK := s.deliveryRepo.(integrationrepository.IntegrationInvocationReconciliationRepository)
-	_, acknowledgementOK := s.deliveryRepo.(integrationrepository.IntegrationAcknowledgementReconciliationRepository)
+	_, invocationOK := s.invocationRepo.(integrationrepository.IntegrationInvocationReconciliationRepository)
+	_, acknowledgementOK := s.publicationRepo.(integrationrepository.IntegrationAcknowledgementReconciliationRepository)
 	if !invocationOK && !acknowledgementOK {
 		return workerplatform.Stopped()
 	}
@@ -68,8 +68,8 @@ func (s *IntegrationApplicationService) ReconcileMissingIntegrationReceipts(ctx 
 	if _, err := principalmodel.NewSystemCommandScope(scope); err != nil {
 		return InvocationReconciliationResult{}, fmt.Errorf("backend.system_scope_required: %w", err)
 	}
-	invocationRepository, invocationOK := s.deliveryRepo.(integrationrepository.IntegrationInvocationReconciliationRepository)
-	acknowledgementRepository, acknowledgementOK := s.deliveryRepo.(integrationrepository.IntegrationAcknowledgementReconciliationRepository)
+	invocationRepository, invocationOK := s.invocationRepo.(integrationrepository.IntegrationInvocationReconciliationRepository)
+	acknowledgementRepository, acknowledgementOK := s.publicationRepo.(integrationrepository.IntegrationAcknowledgementReconciliationRepository)
 	if !invocationOK && !acknowledgementOK {
 		return InvocationReconciliationResult{}, fmt.Errorf("backend.integration.invocation.reconciliation_repository_unavailable")
 	}

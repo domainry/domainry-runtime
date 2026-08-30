@@ -161,7 +161,4 @@ func TestQueryPolicyFallbackAndReportingOwnerEdges(t *testing.T) {
 	if objects := service.objects(); objects != nil {
 		t.Fatalf("nil object dependency returned %#v", objects)
 	}
-	if views := service.views(); views != nil {
-		t.Fatalf("nil view dependency returned %#v", views)
-	}
 }

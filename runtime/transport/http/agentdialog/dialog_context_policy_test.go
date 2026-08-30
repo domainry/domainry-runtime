@@ -14,15 +14,15 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	agentruntime "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 )
 
-type agentDialogContextResolverFunc func(context.Context, agentruntime.GlobalAgentContextRequest) (agentmodel.GlobalAgentContext, error)
+type agentDialogContextResolverFunc func(context.Context, agentruntime.GlobalAgentContextRequest) (agentsdk.GlobalContext, error)
 
-func (fn agentDialogContextResolverFunc) ResolveGlobalContext(ctx context.Context, request agentruntime.GlobalAgentContextRequest) (agentmodel.GlobalAgentContext, error) {
+func (fn agentDialogContextResolverFunc) ResolveGlobalContext(ctx context.Context, request agentruntime.GlobalAgentContextRequest) (agentsdk.GlobalContext, error) {
 	return fn(ctx, request)
 }
 

@@ -58,7 +58,7 @@ func (s *IntegrationApplicationService) enqueueNotificationFallback(ctx context.
 	if message.ConnectorKey == "" || message.Operation == "" {
 		return fmt.Errorf("fallback target %d is incomplete", hop)
 	}
-	saved, err := s.deliveryRepo.InsertOutbox(ctx, message.WorkspaceID, message)
+	saved, err := s.publicationRepo.InsertOutbox(ctx, message.WorkspaceID, message)
 	if err != nil {
 		text := strings.ToLower(err.Error())
 		if strings.Contains(text, "unique") || strings.Contains(text, "duplicate") {

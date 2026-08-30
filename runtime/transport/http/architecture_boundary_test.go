@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
 	agent "github.com/domainry/domainry-runtime/runtime/application/agent"
-	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 )
 
 func TestHTTPRouterDoesNotRetainAgentStateRepository(t *testing.T) {

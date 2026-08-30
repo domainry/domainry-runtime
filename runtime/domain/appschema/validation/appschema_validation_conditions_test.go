@@ -127,25 +127,6 @@ func TestReportAndRollbackRuntimeFinalConditionOutcomes(t *testing.T) {
 		t.Fatal("implicit id field not recognized")
 	}
 
-	valid := appschemamodel.ApplicationDefinitionRollbackRequest{TargetVersion: "v1", ExpectedSchemaHash: "hash", BusinessReason: "restore", ChangePlanID: "plan", AuthoringContractVersion: "v1", AuthoringContractHash: "contract"}
-	if code := ApplicationSchemaRollbackRequestErrorCode(valid); code != "" {
-		t.Fatalf("valid rollback code=%q", code)
-	}
-	for _, mutate := range []func(*appschemamodel.ApplicationDefinitionRollbackRequest){
-		func(request *appschemamodel.ApplicationDefinitionRollbackRequest) { request.ExpectedSchemaHash = "" },
-		func(request *appschemamodel.ApplicationDefinitionRollbackRequest) { request.BusinessReason = "" },
-		func(request *appschemamodel.ApplicationDefinitionRollbackRequest) { request.ChangePlanID = "" },
-		func(request *appschemamodel.ApplicationDefinitionRollbackRequest) {
-			request.AuthoringContractVersion = ""
-		},
-		func(request *appschemamodel.ApplicationDefinitionRollbackRequest) { request.AuthoringContractHash = "" },
-	} {
-		request := valid
-		mutate(&request)
-		if code := ApplicationSchemaRollbackRequestErrorCode(request); code == "" {
-			t.Fatalf("invalid rollback accepted: %#v", request)
-		}
-	}
 }
 
 func assertMetadataValidationCode(t *testing.T, err error, code string) {

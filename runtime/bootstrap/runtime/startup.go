@@ -4,20 +4,30 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
-	"time"
 
 	auditsdk "github.com/domainry/domainry-audit-sdk"
 	auditmoduleimpl "github.com/domainry/domainry-audit/module"
 	connector "github.com/domainry/domainry-connector-sdk"
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
+	dataexchangemodulehost "github.com/domainry/domainry-data-exchange-sdk/modulehost"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	integrationmodulehost "github.com/domainry/domainry-integration-sdk/modulehost"
+	integrationsaashost "github.com/domainry/domainry-integration-sdk/saashost"
+	integrationmodule "github.com/domainry/domainry-integration/module"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
+	metadatamodule "github.com/domainry/domainry-metadata/module"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
 	partysdk "github.com/domainry/domainry-party-sdk"
 	partymodulehost "github.com/domainry/domainry-party-sdk/modulehost"
+	reportsdk "github.com/domainry/domainry-report-sdk"
+	reportmodule "github.com/domainry/domainry-report/module"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 	schedulermodulehost "github.com/domainry/domainry-scheduler-sdk/modulehost"
 	schedulersaashost "github.com/domainry/domainry-scheduler-sdk/saashost"
@@ -28,8 +38,8 @@ import (
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
-	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	notificationfacade "github.com/domainry/domainry-runtime/runtime/application/notificationfacade"
+	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	manifestseed "github.com/domainry/domainry-runtime/runtime/application/seed/globalcapability"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
@@ -41,10 +51,8 @@ import (
 	runtimeauditmodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	deploymentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/deployment"
-	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
-	integrationnotificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integrationnotification"
 	notificationpublication "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
-	ratelimitpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/ratelimit"
+	publicationhandoffpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/localization"
@@ -59,10 +67,14 @@ func New(ctx context.Context, cfg config.Config, identityBinding identitysdk.Bin
 	return NewWithExtensions(ctx, cfg, businessHandlers, connectorProviders, identityBinding, notificationFactory, partyFactory, dataExchangeFactory)
 }
 
-func NewWithScheduler(ctx context.Context, cfg config.Config, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, schedulerFactory schedulersdk.Factory, dataExchangeFactory dataexchangesdk.Factory) *Runtime {
+func NewWithScheduler(ctx context.Context, cfg config.Config, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, schedulerFactory schedulersdk.Factory, dataExchangeFactory dataexchangesdk.Factory, agent ...agentsdk.Factory) *Runtime {
 	businessHandlers := runtimeext.NewBusinessHandlerRegistry()
 	businessHandlers.Freeze()
-	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, businessHandlers, emptyConnectorProviderRegistry(), runtimehttp.RuntimeReleaseIdentity{}, identityBinding, notificationFactory, partyFactory, nil, schedulerFactory, dataExchangeFactory, nil, nil)
+	var agentFactory agentsdk.Factory
+	if len(agent) > 0 {
+		agentFactory = agent[0]
+	}
+	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, businessHandlers, emptyConnectorProviderRegistry(), runtimehttp.RuntimeReleaseIdentity{}, identityBinding, notificationFactory, partyFactory, nil, schedulerFactory, dataExchangeFactory, agentFactory, integrationmodule.NewFactory(), nil)
 }
 
 func NewWithBusinessHandlers(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, dataExchangeFactory dataexchangesdk.Factory) *Runtime {
@@ -70,8 +82,12 @@ func NewWithBusinessHandlers(ctx context.Context, cfg config.Config, businessHan
 	return NewWithExtensions(ctx, cfg, businessHandlers, connectorProviders, identityBinding, notificationFactory, partyFactory, dataExchangeFactory)
 }
 
-func NewWithBusinessHandlersAndScheduler(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, schedulerFactory schedulersdk.Factory, dataExchangeFactory dataexchangesdk.Factory) *Runtime {
-	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, businessHandlers, emptyConnectorProviderRegistry(), runtimehttp.RuntimeReleaseIdentity{}, identityBinding, notificationFactory, partyFactory, nil, schedulerFactory, dataExchangeFactory, nil, nil)
+func NewWithBusinessHandlersAndScheduler(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, schedulerFactory schedulersdk.Factory, dataExchangeFactory dataexchangesdk.Factory, agent ...agentsdk.Factory) *Runtime {
+	var agentFactory agentsdk.Factory
+	if len(agent) > 0 {
+		agentFactory = agent[0]
+	}
+	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, businessHandlers, emptyConnectorProviderRegistry(), runtimehttp.RuntimeReleaseIdentity{}, identityBinding, notificationFactory, partyFactory, nil, schedulerFactory, dataExchangeFactory, agentFactory, integrationmodule.NewFactory(), nil)
 }
 
 func emptyConnectorProviderRegistry() *connector.Registry {
@@ -106,7 +122,7 @@ func NewProjectWithAllFactoriesAndDatabase(ctx context.Context, cfg config.Confi
 	if len(monitoring) > 0 {
 		factory = monitoring[0]
 	}
-	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, identity, notification, party, factory, nil, dataExchange, nil, store, artifactEvidence)
+	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, identity, notification, party, factory, nil, dataExchange, nil, integrationmodule.NewFactory(), store, artifactEvidence)
 }
 
 func NewProjectWithOwnerFactoriesAndDatabase(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, artifactEvidence deploymentapplication.RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, store *persistence.RuntimeStore, agent ...agentsdk.Factory) *Runtime {
@@ -114,7 +130,17 @@ func NewProjectWithOwnerFactoriesAndDatabase(ctx context.Context, cfg config.Con
 	if len(agent) > 0 {
 		agentFactory = agent[0]
 	}
-	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, identity, notification, party, monitoring, scheduler, dataExchange, agentFactory, store, artifactEvidence)
+	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, identity, notification, party, monitoring, scheduler, dataExchange, agentFactory, integrationmodule.NewFactory(), store, artifactEvidence)
+}
+
+// NewVerifiedProjectWithTopologyFactoriesAndDatabase is the composition-root
+// entry point for selecting Integration Module or SaaS explicitly.
+func NewVerifiedProjectWithTopologyFactoriesAndDatabase(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, artifactEvidence deploymentapplication.RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, store *persistence.RuntimeStore, agent ...agentsdk.Factory) *Runtime {
+	var agentFactory agentsdk.Factory
+	if len(agent) > 0 {
+		agentFactory = agent[0]
+	}
+	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, identity, notification, party, monitoring, scheduler, dataExchange, agentFactory, integration, store, artifactEvidence)
 }
 
 func newWithExtensions(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, dataExchangeFactory dataexchangesdk.Factory, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
@@ -126,10 +152,10 @@ func newWithExtensionsUsingStore(ctx context.Context, cfg config.Config, busines
 }
 
 func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, dataExchangeFactory dataexchangesdk.Factory, preparedStore *persistence.RuntimeStore, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
-	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, identityBinding, notificationFactory, partyFactory, nil, nil, dataExchangeFactory, nil, preparedStore, artifactEvidence...)
+	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, identityBinding, notificationFactory, partyFactory, nil, nil, dataExchangeFactory, nil, integrationmodule.NewFactory(), preparedStore, artifactEvidence...)
 }
 
-func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, monitoringFactory monitoringsdk.Factory, schedulerFactory schedulersdk.Factory, dataExchangeFactory dataexchangesdk.Factory, agentFactory agentsdk.Factory, preparedStore *persistence.RuntimeStore, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
+func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, monitoringFactory monitoringsdk.Factory, schedulerFactory schedulersdk.Factory, dataExchangeFactory dataexchangesdk.Factory, agentFactory agentsdk.Factory, integrationFactory integrationsdk.Factory, preparedStore *persistence.RuntimeStore, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
 	if ctx == nil {
 		panic("bootstrap.NewWithExtensions requires a non-nil lifecycle context")
 	}
@@ -150,6 +176,9 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	}
 	if dataExchangeFactory == nil {
 		panic("bootstrap.NewWithExtensions requires a Data Exchange SDK Factory")
+	}
+	if integrationFactory == nil {
+		panic("bootstrap.NewWithExtensions requires an Integration SDK Factory")
 	}
 	cfg = normalizeRuntimeConfig(cfg)
 	mustCompleteRuntimeStartup(cfg.ValidateSecurity())
@@ -177,6 +206,32 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	}()
 	releaseLease, err = releaseCohort.Join(ctx, workerDependencies.WorkerID.String(), releaseIdentity, workerDependencies.Clock.Now())
 	mustCompleteRuntimeStartup(err)
+	metadataBinding, err := metadatamodule.NewFactory().OpenModule(ctx, metadatasdk.ApplicationRef{InstallationID: valueOrDefault(seedManifest.TemplateID, "domainry-runtime")}, runtimeMetadataModuleHost{store: store})
+	mustCompleteRuntimeStartup(err)
+	defer metadataBinding.Close(context.WithoutCancel(ctx))
+	reportBinding, err := reportmodule.NewFactory().OpenModule(ctx, reportsdk.ApplicationRef{RuntimeID: cfg.RuntimeInstanceID}, runtimeReportModuleHost{store: store})
+	mustCompleteRuntimeStartup(err)
+	mustCompleteRuntimeStartup(synchronizeReportDefinitions(ctx, reportBinding, seedManifest))
+	integrationBinding, err := openIntegrationBinding(ctx, integrationsdk.ApplicationRef{RuntimeID: cfg.RuntimeInstanceID}, integrationFactory, runtimeIntegrationModuleHost{store: store, providers: connectorProviders})
+	mustCompleteRuntimeStartup(err)
+	mustCompleteRuntimeStartup(integrationBinding.Descriptor().Validate())
+	integrationOwnerDelivery := integrationBinding.Delivery()
+	if integrationOwnerDelivery == nil {
+		mustCompleteRuntimeStartup(errors.New("Integration Binding returned no Delivery port"))
+	}
+	integrationOwnerCatalog := integrationBinding.Catalog()
+	if integrationOwnerCatalog == nil {
+		mustCompleteRuntimeStartup(errors.New("Integration Binding returned no Catalog port"))
+	}
+	integrationOwnerRequirements := integrationBinding.Requirements()
+	if integrationOwnerRequirements == nil {
+		mustCompleteRuntimeStartup(errors.New("Integration Binding returned no Requirements port"))
+	}
+	integrationWebPushBinding, ok := integrationBinding.(integrationsdk.WebPushBinding)
+	if !ok || integrationWebPushBinding.WebPushSubscriptions() == nil {
+		mustCompleteRuntimeStartup(errors.New("Integration Binding returned no Web Push subscriptions port"))
+	}
+	defer integrationBinding.Close(context.WithoutCancel(ctx))
 	restoredMetadata, err := restoreRuntimeMetadata(ctx, store, seedManifest)
 	mustCompleteRuntimeStartup(err)
 	manifest := restoredMetadata.manifest
@@ -189,6 +244,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	if identityDirectory == nil || identityPrincipals == nil {
 		mustCompleteRuntimeStartup(errors.New("Identity Binding returned incomplete Runtime ports"))
 	}
+	identityDataExchangeKey, identityDataExchangeImport, identityDataExchangeExport := identityDataExchangeProviders(identityBinding)
 	partyApplication := partysdk.ApplicationRef{TenantID: cfg.PartyTenantID, WorkspaceID: cfg.PartyWorkspaceID, ApplicationKey: cfg.PartyApplicationKey}
 	var partyBinding partysdk.Binding
 	if moduleFactory, ok := partyFactory.(partymodulehost.Factory); ok {
@@ -221,14 +277,12 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		},
 		businessHandlers, connectorProviders,
 	)
-	installationScope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "synchronize manifest integration connections")
-	mustCompleteRuntimeStartup(integrationapplication.SyncManifestIntegrationConnections(ctx, integrationpersistence.NewIntegrationConfigStore(store), connectorProviders, manifest.Integrations, installationScope))
+	mustCompleteRuntimeStartup(integrationOwnerRequirements.SynchronizeConnections(ctx, composition.IntegrationConnectionRequirements(manifest.Integrations.Connections)))
 	mustCompleteRuntimeStartup(manifestseed.SyncRows(ctx, runtimeAuditRepository, workflowpersistence.NewWorkflowWorkerStore(store)))
 	templateID := valueOrDefault(manifest.TemplateID, generatedTemplateID)
 	runtimeNotificationEventTypes, err := NotificationRuntimeEventTypes(manifest.NotificationEventTypes, localization.SupportedLocales(), localization.DefaultLocale, localization.Lookup)
 	mustCompleteRuntimeStartup(err)
 	workflowNotificationTasks := workflowpersistence.NewWorkflowProcessStore(store)
-	integrationNotificationResources := integrationpersistence.NewIntegrationConfigStore(store)
 	notificationActionAuthorizers := notificationfacade.NewActionAuthorizerRegistry()
 	reportNotificationActions := &runtimeNotificationActionAuthorizerBinding{}
 	notificationActionAuthorizers.Register("report", reportNotificationActions.Authorize)
@@ -238,12 +292,11 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	notificationActionAuthorizers.RegisterResolved("project_record", projectRecordNotificationActions.Authorize)
 	notificationActionAuthorizers.Register("workflow_task", newWorkflowTaskNotificationActionAuthorizer(workflowNotificationTasks.GetTask))
 	notificationActionAuthorizers.Register("scheduler_job", newSchedulerNotificationActionAuthorizer(restoredMetadata.metadataStore.GetDefinition))
-	registerIntegrationNotificationActionAuthorizers(notificationActionAuthorizers, integrationNotificationResources)
 	notificationActionAuthorizers.Freeze()
 	var templateRenderer composition.NotificationRenderer
 	var notificationHTTP notificationhttp.NotificationApplication
 	var notificationCompiler runtimeNotificationCompiler
-	var integrationNotificationPublisher integrationapplication.IntegrationNotificationPublisher
+	var notificationPublisher notificationIntentPublisher
 	var sdkDeliveryGateway *notificationSDKDeliveryGateway
 	var notificationBinding notificationsdk.Binding
 	var notificationWorkers notificationsdk.LocalWorkers
@@ -251,7 +304,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	{
 		catalog, catalogErr := notificationSDKCatalog(valueOrDefault(manifest.DefaultLocale, cfg.AppLocale), manifest, runtimeNotificationEventTypes)
 		mustCompleteRuntimeStartup(catalogErr)
-		sdkDeliveryGateway = &notificationSDKDeliveryGateway{repository: integrationpersistence.NewIntegrationDeliveryStore(store), productName: cfg.EffectiveProductBrandName()}
+		sdkDeliveryGateway = &notificationSDKDeliveryGateway{repository: publicationhandoffpersistence.NewStore(store), productName: cfg.EffectiveProductBrandName()}
 		application := notificationsdk.ApplicationRef{TenantID: cfg.NotificationTenantID, WorkspaceID: cfg.NotificationWorkspaceID, ApplicationKey: cfg.NotificationApplicationKey}
 		if moduleFactory, ok := notificationFactory.(modulehost.Factory); ok {
 			host := notificationSDKModuleHost{
@@ -293,7 +346,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		facade, facadeErr := notificationfacade.NewNotificationApplicationService(notificationBinding, notificationActionAuthorizers.Authorize)
 		mustCompleteRuntimeStartup(facadeErr)
 		notificationHTTP = facade
-		integrationNotificationPublisher = facade.PublishInboxIntent
+		notificationPublisher = facade.PublishInboxIntent
 	}
 	systemTemplateBinding, ok := notificationBinding.(notificationsdk.SystemTemplateBinding)
 	if !ok || systemTemplateBinding.SystemTemplates() == nil {
@@ -311,26 +364,39 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	}
 	manifest.TemplateID = templateID
 	manifest.Version = valueOrDefault(manifest.Version, generatedTemplateVersion)
-	sharedRateLimiter := ratelimitpersistence.NewRateLimiter(store)
-	mustCompleteRuntimeStartup(sharedRateLimiter.EnsureSchema(ctx))
+	sharedRateLimiter, err := openSharedRateLimiter(ctx, cfg, store)
+	mustCompleteRuntimeStartup(err)
+	rateLimiterTransferred := false
+	defer func() {
+		if !rateLimiterTransferred {
+			if closer, ok := sharedRateLimiter.(interface{ Close() error }); ok {
+				_ = closer.Close()
+			}
+		}
+	}()
 	workflowNotificationScope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "compile workflow notification intent")
 	startupCallbacks := runtimeStartupCallbacks{records: nil, notificationManagement: notificationCompiler, workflowNotificationScope: workflowNotificationScope}
 	var agentBinding agentsdk.Binding
-	agentBinding, err = openAgentBinding(ctx, cfg.RuntimeInstanceID, agentFactory)
+	agentBinding, err = openAgentBinding(ctx, cfg.RuntimeInstanceID, store, agentFactory)
 	mustCompleteRuntimeStartup(err)
+	mustCompleteRuntimeStartup(synchronizeAgentDefinitions(ctx, agentBinding, &manifest))
 	serviceAssembly, err := assembleRuntimeServices(ctx, cfg, manifest, templateRenderer, store, identityDirectory, identityPrincipals, partyBinding.Directory(), runtimeAudit, sharedRateLimiter, workerDependencies, runtimeExtensionRegistries{
 		businessHandlers: businessHandlers, connectorProviders: connectorProviders,
-		notificationCompiler:               startupCallbacks.CompileNotification,
-		taskNotificationCommitter:          workflowpersistence.NewWorkflowTaskNotificationStore(store),
-		integrationNotificationPublisher:   integrationNotificationPublisher,
-		integrationCredentialNotifications: integrationnotificationpersistence.NewIntegrationCredentialNotificationCommitter(store),
-		integrationCredentialExpirySource:  integrationpersistence.NewIntegrationCredentialExpiryStore(store),
-		notificationSubjectLifecycle:       notificationSystemSubjectLifecycle{subjects: systemSubjectBinding.SystemSubjects()},
-		notificationRetention:              notificationSystemRetention{retention: systemRetentionBinding.SystemRetention()},
-		auditRepository:                    runtimeAuditRepository,
-		auditSubjectLifecycle:              runtimeauditmodule.NewSubjectLifecycle(auditBinding),
-		dataExchangeFactory:                dataExchangeFactory,
-		agentBinding:                       agentBinding,
+		notificationCompiler:         startupCallbacks.CompileNotification,
+		taskNotificationCommitter:    workflowpersistence.NewWorkflowTaskNotificationStore(store),
+		notificationPublisher:        notificationPublisher,
+		integrationOwnerDelivery:     integrationOwnerDelivery,
+		integrationOwnerCatalog:      integrationOwnerCatalog,
+		dataExchangeProviderKey:      identityDataExchangeKey,
+		dataExchangeImportProvider:   identityDataExchangeImport,
+		dataExchangeExportProvider:   identityDataExchangeExport,
+		integrationMode:              integrationBinding.Descriptor().Mode,
+		notificationSubjectLifecycle: notificationSystemSubjectLifecycle{subjects: systemSubjectBinding.SystemSubjects()},
+		notificationRetention:        notificationSystemRetention{retention: systemRetentionBinding.SystemRetention()},
+		auditRepository:              runtimeAuditRepository,
+		auditSubjectLifecycle:        runtimeauditmodule.NewSubjectLifecycle(auditBinding),
+		dataExchangeFactory:          dataExchangeFactory,
+		agentBinding:                 agentBinding,
 	})
 	mustCompleteRuntimeStartup(err)
 	records, recordRepository := serviceAssembly.services, serviceAssembly.records
@@ -343,7 +409,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	var schedulerBinding schedulersdk.Binding
 	if schedulerFactory != nil {
 		application := schedulersdk.ApplicationRef{RuntimeID: cfg.RuntimeInstanceID}
-		host := composition.NewSchedulerSDKModuleHost(records.Applications().Scheduler, records.Applications().Integrations, store, workerDependencies.WorkerID.String())
+		host := composition.NewSchedulerSDKModuleHost(records.Applications().Scheduler, records.Applications().PublicationHandoff, composition.IntegrationConnectionRequirements(manifest.Integrations.Connections), store, workerDependencies.WorkerID.String(), manifest.SchedulerDefinitions)
 		if moduleFactory, ok := schedulerFactory.(schedulermodulehost.Factory); ok {
 			schedulerBinding, err = moduleFactory.OpenModule(ctx, application, host)
 		} else if saasFactory, ok := schedulerFactory.(schedulersaashost.Factory); ok {
@@ -362,7 +428,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	mustCompleteRuntimeStartup(publishRuntimeProjectRoles(ctx, identityBinding, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience))
 	startupCallbacks.records = records
 	notificationWakeup := func(message integrationmodel.IntegrationOutboxMessage) {
-		integrationapplication.WakeIntegrationOutbox(records.Applications().Integrations, integrationapplication.IntegrationOutboxLocator{WorkspaceID: message.WorkspaceID, MessageID: message.ID})
+		records.Applications().PublicationHandoff.Wake(publicationhandoff.Locator{WorkspaceID: message.WorkspaceID, MessageID: message.ID})
 	}
 	if sdkDeliveryGateway != nil {
 		sdkDeliveryGateway.BindWakeup(notificationWakeup)
@@ -398,6 +464,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		identityBinding:     identityBinding,
 		identityDirectory:   identityDirectory,
 		identityPrincipals:  identityPrincipals,
+		integrationMode:     integrationBinding.Descriptor().Mode,
 		partyBinding:        partyBinding,
 		dataExchangeBinding: serviceAssembly.dataExchangeBinding,
 		manifest:            manifest,
@@ -422,7 +489,39 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	runtime.borrowedStore = preparedStore != nil
 	runtime.startMetadataSnapshotWatcher(ctx)
 	startupOwnsStore = false
+	rateLimiterTransferred = true
 	return BindHTTP(ctx, runtime)
+}
+
+type identityDataExchangeProviderBinding interface {
+	IdentityDataExchangeProviders() (string, dataexchangemodulehost.ImportProvider, dataexchangemodulehost.ExportProvider)
+}
+
+func identityDataExchangeProviders(binding identitysdk.Binding) (string, dataexchangemodulehost.ImportProvider, dataexchangemodulehost.ExportProvider) {
+	providerBinding, ok := binding.(identityDataExchangeProviderBinding)
+	if !ok {
+		return "", nil, nil
+	}
+	return providerBinding.IdentityDataExchangeProviders()
+}
+
+func openIntegrationBinding(ctx context.Context, application integrationsdk.ApplicationRef, factory integrationsdk.Factory, moduleHost integrationmodulehost.Host) (integrationsdk.Binding, error) {
+	switch factory.DeploymentMode() {
+	case integrationsdk.DeploymentModeModule:
+		moduleFactory, ok := factory.(integrationmodulehost.Factory)
+		if !ok {
+			return nil, errors.New("Integration Module factory does not implement modulehost.Factory")
+		}
+		return moduleFactory.OpenModule(ctx, application, moduleHost)
+	case integrationsdk.DeploymentModeSaaS:
+		saasFactory, ok := factory.(integrationsaashost.Factory)
+		if !ok {
+			return nil, errors.New("Integration SaaS factory does not implement saashost.Factory")
+		}
+		return saasFactory.OpenSaaS(ctx, application, struct{}{})
+	default:
+		return nil, fmt.Errorf("unsupported Integration deployment mode %q", factory.DeploymentMode())
+	}
 }
 
 type runtimeNotificationCompiler interface {

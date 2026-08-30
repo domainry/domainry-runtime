@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
-	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 )
 
 type connectorBindingExecution struct{}
@@ -35,11 +34,11 @@ func (connectorBindingExecution) AcquireSynchronousConnectorCall(runtimeext.Acti
 }
 
 type connectorBindingTarget struct {
-	request integrationapplication.SyncCallRequest
-	result  integrationapplication.SyncCallResult
+	request ConnectorCallRequest
+	result  ConnectorCallResult
 }
 
-func (t *connectorBindingTarget) Call(_ context.Context, _ runtimeext.ActionExecution, request integrationapplication.SyncCallRequest) (integrationapplication.SyncCallResult, error) {
+func (t *connectorBindingTarget) Call(_ context.Context, _ runtimeext.ActionExecution, request ConnectorCallRequest) (ConnectorCallResult, error) {
 	t.request = request
 	return t.result, nil
 }
@@ -53,7 +52,7 @@ func TestBindableConnectorGatewayMapsGeneratedRequestToRuntime(t *testing.T) {
 	if _, err := gateway.Call(t.Context(), connectorBindingExecution{}, request); runtimeextErrorCode(err) != "backend.connector.gateway_unavailable" {
 		t.Fatalf("unbound error=%v", err)
 	}
-	target := &connectorBindingTarget{result: integrationapplication.SyncCallResult{Response: map[string]any{"name": "Ada"}}}
+	target := &connectorBindingTarget{result: ConnectorCallResult{Payload: json.RawMessage(`{"name":"Ada"}`)}}
 	if err := gateway.bind(target); err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +63,7 @@ func TestBindableConnectorGatewayMapsGeneratedRequestToRuntime(t *testing.T) {
 	if err != nil || string(result.Payload) != `{"name":"Ada"}` {
 		t.Fatalf("result=%s error=%v", result.Payload, err)
 	}
-	if target.request.ConnectorKey != request.ConnectorKey || target.request.ConnectionKey != request.ConnectionKey || target.request.Operation != request.OperationKey || target.request.ContractSHA256 != request.ContractSHA256 || target.request.OperationMode != request.Mode || target.request.ActionKey != "group_class.book_class" || target.request.Request["sequence"] != json.Number("9007199254740993") {
+	if target.request.ConnectorKey != request.ConnectorKey || target.request.ConnectionKey != request.ConnectionKey || target.request.OperationKey != request.OperationKey || target.request.ContractSHA256 != request.ContractSHA256 || target.request.Mode != request.Mode || string(target.request.Payload) != string(request.Payload) {
 		t.Fatalf("mapped request=%#v", target.request)
 	}
 	gateway.unbind()

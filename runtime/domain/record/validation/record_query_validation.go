@@ -14,32 +14,12 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
 
-func RecordSelectListView(views []definitionmodel.ViewSchema, objectKey, viewKey string) definitionmodel.ViewSchema {
-	for _, view := range views {
-		if view.ObjectKey != objectKey {
-			continue
-		}
-		if strings.TrimSpace(viewKey) != "" && view.Key == viewKey {
-			return view
-		}
-		if strings.TrimSpace(viewKey) == "" && strings.EqualFold(fmt.Sprint(view.Config["business_view"]), "list") {
-			return view
-		}
-	}
-	for _, view := range views {
-		if view.ObjectKey == objectKey {
-			return view
-		}
-	}
-	return definitionmodel.ViewSchema{Config: map[string]any{}}
-}
-
-func RecordNormalizeListQuery(object definitionmodel.ObjectSchema, view definitionmodel.ViewSchema, query recordmodel.RecordListQuery, principal principalmodel.Principal) recordmodel.RecordListQuery {
+func RecordNormalizeListQuery(object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery, principal principalmodel.Principal) recordmodel.RecordListQuery {
 	if query.Page <= 0 {
 		query.Page = 1
 	}
 	if query.PageSize <= 0 {
-		query.PageSize = RecordIntFromAny(view.Config["page_size"], 25)
+		query.PageSize = 25
 	}
 	if query.PageSize <= 0 {
 		query.PageSize = 25
@@ -47,17 +27,11 @@ func RecordNormalizeListQuery(object definitionmodel.ObjectSchema, view definiti
 	if query.PageSize > 200 {
 		query.PageSize = 200
 	}
-	if len(query.SearchFields) == 0 {
-		query.SearchFields = stringListAny(view.Config["search_fields"])
-	}
 	query.SearchFields = allowedFieldKeys(object, query.SearchFields)
 	if strings.TrimSpace(query.Search) != "" && len(query.SearchFields) == 0 {
 		query.SearchFields = defaultSearchFields(object)
 	}
-	query.Filters = normalizeListFilters(object, view, query.Filters, principal)
-	if len(query.Sort) == 0 {
-		query.Sort = sortRulesFromAny(view.Config["sort"])
-	}
+	query.Filters = normalizeListFilters(object, query.Filters)
 	query.Sort = allowedSortRules(object, query.Sort)
 	if len(query.Sort) == 0 {
 		query.Sort = []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}
@@ -94,7 +68,7 @@ func recordSortContainsField(rules []recordmodel.RecordSortRule, field string) b
 	return false
 }
 
-func normalizeListFilters(object definitionmodel.ObjectSchema, view definitionmodel.ViewSchema, raw map[string]any, principal principalmodel.Principal) map[string]any {
+func normalizeListFilters(object definitionmodel.ObjectSchema, raw map[string]any) map[string]any {
 	out, fields := map[string]any{}, map[string]definitionmodel.FieldSchema{}
 	for _, field := range object.Fields {
 		fields[field.Key] = field
@@ -104,7 +78,6 @@ func normalizeListFilters(object definitionmodel.ObjectSchema, view definitionmo
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	viewFilterKeys := make([]string, 0)
 	for _, rawKey := range keys {
 		key, value := strings.TrimSpace(rawKey), raw[rawKey]
 		if key == "" || RecordIsEmptyValue(value) {
@@ -132,14 +105,6 @@ func normalizeListFilters(object definitionmodel.ObjectSchema, view definitionmo
 				out[key] = normalized
 			}
 			continue
-		}
-		viewFilterKeys = append(viewFilterKeys, key)
-	}
-	for _, key := range viewFilterKeys {
-		if resolvedKey, resolvedValue, ok := resolveViewFilter(view, key, principal); ok && RecordFieldExists(object, resolvedKey) {
-			if normalized, err := RecordNormalizeFieldValue(fields[resolvedKey], resolvedValue); err == nil {
-				out[resolvedKey] = normalized
-			}
 		}
 	}
 	return out
@@ -193,25 +158,6 @@ func normalizedListFilterValues(field definitionmodel.FieldSchema, raw any, iden
 		result = append(result, normalized)
 	}
 	return result
-}
-
-func resolveViewFilter(view definitionmodel.ViewSchema, key string, principal principalmodel.Principal) (string, any, bool) {
-	filters, ok := view.Config["filters"].([]any)
-	if !ok {
-		return "", nil, false
-	}
-	for _, item := range filters {
-		filter, ok := item.(map[string]any)
-		if !ok || strings.TrimSpace(fmt.Sprint(filter["key"])) != key {
-			continue
-		}
-		value := filter["value"]
-		if strings.TrimSpace(fmt.Sprint(filter["source"])) == "current_user" {
-			value = principal.UserID
-		}
-		return strings.TrimSpace(fmt.Sprint(filter["field"])), value, true
-	}
-	return "", nil, false
 }
 
 func allowedFieldKeys(object definitionmodel.ObjectSchema, values []string) []string {

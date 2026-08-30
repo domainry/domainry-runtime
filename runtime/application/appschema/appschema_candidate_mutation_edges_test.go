@@ -17,10 +17,6 @@ func candidateMutation(operation, resourceType, resourceKey, objectKey, payload 
 	}
 }
 
-func ruleSetReferencePayload(inputType, outputType string) json.RawMessage {
-	return json.RawMessage(`{"key":"policy.limit","name":"Limit policy","match_policy":"first_match","input_types":{"limit":"` + inputType + `"},"output_types":{"allowed":"` + outputType + `"},"effective_from":"2026-07-01","rules":[{"key":"allow","priority":1,"when":{"kind":"literal","value_type":"boolean","value":true},"outputs":{"allowed":{"kind":"literal","value_type":"boolean","value":true}}}],"default_outputs":{"allowed":{"kind":"literal","value_type":"boolean","value":false}}}`)
-}
-
 func TestApplyMetadataCandidateMutationCoversEveryPublishedResourceKind(t *testing.T) {
 	candidate := manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{
 		Key: "customer", Name: "Customer",
@@ -32,24 +28,14 @@ func TestApplyMetadataCandidateMutationCoversEveryPublishedResourceKind(t *testi
 		candidateMutation("create", "object", "customer", "", `{"key":"customer","name":"Updated"}`),
 		candidateMutation("create", "field", "customer.name", "customer", `{"key":"name","name":"Name","type":"text"}`),
 		candidateMutation("create", "validation", "required_name", "customer", `{"key":"required_name","object_key":"customer"}`),
-		candidateMutation("create", "view", "customer.list", "", `{"key":"customer.list"}`),
 		candidateMutation("create", "action", "customer.update", "", `{"key":"customer.update"}`),
 		candidateMutation("create", "workflow", "customer.flow", "", `{"key":"customer.flow"}`),
-		candidateMutation("create", "scheduler", "customer.timer", "", `{}`),
 		candidateMutation("create", "automation_rule", "customer.changed", "", `{"key":"customer.changed"}`),
 		candidateMutation("create", "dictionary", "customer.status", "", `{"key":"customer.status"}`),
 		candidateMutation("create", "connector", "crm", "", `{"key":"crm"}`),
 		candidateMutation("create", "integration_event_mapping", "crm.updated", "", `{"key":"crm.updated"}`),
-		candidateMutation("create", "report", "customer.summary", "", `{"key":"customer.summary"}`),
-		candidateMutation("create", "operation_state_example", "customer.example", "", `{"key":"customer.example"}`),
-		candidateMutation("create", "sensitive_field_policy", "customer.secret", "", `{"key":"customer.secret"}`),
-		candidateMutation("create", "report_export_control", "customer.export", "", `{"key":"customer.export"}`),
-		candidateMutation("create", "entrypoint", "customer.home", "", `{"key":"customer.home"}`),
 		candidateMutation("create", "skill", "customer.skill", "", `{"key":"customer.skill"}`),
 		candidateMutation("create", "agent", "customer.agent", "", `{"key":"customer.agent"}`),
-		candidateMutation("create", "identity_profile_binding", "customer", "", `{"object_key":"customer"}`),
-		candidateMutation("create", "preference", "customer.limit", "", `{"key":"customer.limit","name":"Limit","value_type":"integer","value":10,"effective_from":"2026-01-01"}`),
-		candidateMutation("create", "rule_set", "policy.limit", "", string(ruleSetReferencePayload("integer", "boolean"))),
 	}
 	for _, mutation := range creates {
 		if err := applyMetadataCandidateMutation(&candidate, mutation); err != nil {
@@ -92,13 +78,14 @@ func TestApplyMetadataCandidateMutationRejectsEveryMalformedBoundary(t *testing.
 		{"validation inferred object", candidateMutation("create", "validation", "rule", "", `{"key":"rule","object_key":"missing"}`), "unknown object"},
 		{"validation json", candidateMutation("create", "validation", "rule", "customer", `{`), "unexpected end"},
 		{"validation mismatch", candidateMutation("create", "validation", "rule", "customer", `{"key":"rule","object_key":"other"}`), "object key mismatch"},
-		{"slice json", candidateMutation("create", "view", "x", "", `{`), "unexpected end"},
-		{"slice key", candidateMutation("create", "view", "x", "", `{"key":"y"}`), "resource key mismatch"},
 		{"identity role", candidateMutation("create", "role", "operator", "", `{"key":"operator"}`), "unsupported candidate resource type"},
-		{"preference", candidateMutation("create", "preference", "x", "", `{}`), "preference"},
-		{"rule set", candidateMutation("create", "rule_set", "x", "", `{}`), "rule"},
+		{"preference", candidateMutation("create", "preference", "x", "", `{}`), "unsupported candidate resource type"},
+		{"rule set", candidateMutation("create", "rule_set", "x", "", `{}`), "unsupported candidate resource type"},
 		{"surface", candidateMutation("create", "surface", "x", "", `{}`), "unsupported candidate resource type"},
 		{"component", candidateMutation("create", "component", "x", "", `{}`), "unsupported candidate resource type"},
+		{"scheduler module", candidateMutation("create", "scheduler", "x", "", `{}`), "unsupported candidate resource type"},
+		{"report module", candidateMutation("create", "report", "x", "", `{}`), "unsupported candidate resource type"},
+		{"identity module", candidateMutation("create", "identity_profile_binding", "x", "", `{}`), "unsupported candidate resource type"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			err := applyMetadataCandidateMutation(&candidate, test.mutation)
@@ -108,11 +95,6 @@ func TestApplyMetadataCandidateMutationRejectsEveryMalformedBoundary(t *testing.
 		})
 	}
 
-	for _, resourceType := range []string{"preference", "rule_set"} {
-		if err := applyMetadataCandidateMutation(&candidate, candidateMutation("delete", resourceType, "x", "", `{`)); err != nil {
-			t.Fatalf("delete %s must not decode payload: %v", resourceType, err)
-		}
-	}
 }
 
 func TestCandidateObjectMemberKeyUsesExplicitAndQualifiedKeys(t *testing.T) {

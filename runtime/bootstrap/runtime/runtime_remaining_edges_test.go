@@ -79,9 +79,6 @@ func TestRuntimeWorkerNilAndOptionalOwnerEdges(t *testing.T) {
 	if RoutesForSurfaceGroup(nil, runtimehttp.SurfaceRouteGroupAll) == nil || RoutesForSurfaceGroup(&Runtime{}, runtimehttp.SurfaceRouteGroupAll) == nil {
 		t.Fatal("nil HTTP surface fallback missing")
 	}
-	if ActionConnectorGateway(nil) == nil || ActionConnectorGateway(&Runtime{}) == nil {
-		t.Fatal("nil connector gateway fallback missing")
-	}
 	runtime.startSchedulerWorker(t.Context())
 	runtime.startNotificationChannelWorker(t.Context())
 	runtime.startIntegrationCredentialExpiryWorker(t.Context())
@@ -194,7 +191,7 @@ func TestRuntimeStartsConfiguredWorkerOwners(t *testing.T) {
 	cfg.SchedulerPollInterval = 0
 	cfg.SchedulerBatchSize = 0
 	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
-	if RoutesForSurfaceGroup(runtime, runtimehttp.SurfaceRouteGroupAll) == nil || ActionConnectorGateway(runtime) == nil {
+	if RoutesForSurfaceGroup(runtime, runtimehttp.SurfaceRouteGroupAll) == nil {
 		t.Fatal("assembled Runtime helpers were unavailable")
 	}
 	StartWorkers(t.Context(), runtime)

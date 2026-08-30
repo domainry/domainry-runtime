@@ -6,9 +6,10 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	agentruntime "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -48,7 +49,7 @@ func (h *AgentDialogHandler) agentTaskToolInvoke(w http.ResponseWriter, r *http.
 	result, err := h.taskTools.Invoke(r.Context(), agentruntime.AgentToolInvocationRequest{
 		Credential: payload.Credential, WorkspaceID: run.WorkspaceID, ProcessID: run.ProcessID, TaskRunID: run.ID,
 		Owner: workerplatform.WorkerID(run.Lease.Owner), FencingToken: workerplatform.FencingToken(run.Lease.FencingToken),
-		Initiator: initiator, Identity: agentmodel.AgentTaskIdentity{Mode: run.Identity.Mode, PrincipalKey: run.Identity.ServicePrincipalKey}, ExpectedRotationVersion: run.Identity.ServiceRotationVersion,
+		Initiator: initiator, Identity: agentsdk.AgentTaskIdentity{Mode: run.Identity.Mode, PrincipalKey: run.Identity.ServicePrincipalKey}, ExpectedRotationVersion: run.Identity.ServiceRotationVersion,
 		TaskKey: run.TaskKey, TaskVersion: run.TaskVersion, NodeAllowedObjects: objects, NodeAllowedActions: actions, NodeAllowedOutcomes: outcomes,
 		Tool: payload.Tool, Input: payload.Input, IdempotencyKey: payload.IdempotencyKey,
 	})

@@ -10,22 +10,8 @@ import (
 
 // CapabilityAuthoringApplicationService exposes authoring capabilities.
 type CapabilityAuthoringApplicationService struct {
-	schema               func(context.Context, principalmodel.Principal) capabilitycontract.CapabilityInstanceSchema
-	identityReferences   func(context.Context, principalmodel.Principal) (CapabilityIdentityReferences, error)
-	preferenceReferences func(context.Context, principalmodel.Principal) ([]string, error)
-	ruleSetReferences    func(context.Context, principalmodel.Principal) ([]string, error)
-}
-
-func (s *CapabilityAuthoringApplicationService) UseRuleSetReferenceSource(source func(context.Context, principalmodel.Principal) ([]string, error)) {
-	if s != nil {
-		s.ruleSetReferences = source
-	}
-}
-
-func (s *CapabilityAuthoringApplicationService) UsePreferenceReferenceSource(source func(context.Context, principalmodel.Principal) ([]string, error)) {
-	if s != nil {
-		s.preferenceReferences = source
-	}
+	schema             func(context.Context, principalmodel.Principal) capabilitycontract.CapabilityInstanceSchema
+	identityReferences func(context.Context, principalmodel.Principal) (CapabilityIdentityReferences, error)
 }
 
 type CapabilityIdentityReferences struct {

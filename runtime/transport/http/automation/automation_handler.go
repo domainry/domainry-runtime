@@ -81,15 +81,6 @@ func (h *AutomationHandler) getAutomationRule(w http.ResponseWriter, r *http.Req
 	h.writeJSON(w, http.StatusOK, rule)
 }
 
-func (h *AutomationHandler) listAutomationRuleVersions(w http.ResponseWriter, r *http.Request) {
-	versions, err := h.commands.AutomationRuleVersions(r.Context(), strings.TrimSpace(r.PathValue("ruleKey")), h.principal(r))
-	if err != nil {
-		h.writeServiceError(w, r, err)
-		return
-	}
-	h.writeJSON(w, http.StatusOK, map[string]any{"items": versions, "count": len(versions)})
-}
-
 func (h *AutomationHandler) validateAutomationRule(w http.ResponseWriter, r *http.Request) {
 	var rule automationmodel.AutomationRuleSchema
 	if !h.decodeJSON(w, r, &rule) {

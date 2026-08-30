@@ -73,7 +73,7 @@ func TestRecordMutationExecutionClaimCommitReplayConflictAndRollback(t *testing.
 	if found, ok, err := repository.FindRecordMutationExecution(t.Context(), request.Execution); err != nil || !ok || found.ID != claim.Execution.ID {
 		t.Fatalf("find execution=%#v ok=%v err=%v", found, ok, err)
 	}
-	for table, id := range map[string]string{"_audit_events": "create-audit-1", "integration_outbox_messages": "create-outbox-1", "_workflow_executions": "create-workflow-1", "notification_events": "create-notification-1", "record_mutation_executions": claim.Execution.ID} {
+	for table, id := range map[string]string{"_audit_events": "create-audit-1", "runtime_publication_outbox": "create-outbox-1", "_workflow_executions": "create-workflow-1", "notification_events": "create-notification-1", "record_mutation_executions": claim.Execution.ID} {
 		var count int
 		if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.Identifier(table)+" WHERE "+store.Identifier("id")+" = ?", id).Scan(&count); err != nil || count != 1 {
 			t.Fatalf("atomic fact %s/%s count=%d err=%v", table, id, count, err)
@@ -221,7 +221,7 @@ func TestRecordMutationHundredConcurrentUpdatesHaveNoLostUpdateOrPartialCommit(t
 	winner := current.Data["name"].(string)
 	for table, prefix := range map[string]string{
 		"_audit_events":               "update-audit-",
-		"integration_outbox_messages": "update-outbox-",
+		"runtime_publication_outbox": "update-outbox-",
 		"_workflow_executions":        "update-workflow-",
 	} {
 		var count, winnerCount int

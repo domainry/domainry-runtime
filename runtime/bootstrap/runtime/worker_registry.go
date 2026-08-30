@@ -79,10 +79,15 @@ func (a *Runtime) close(ctx context.Context) error {
 		cancel()
 		a.partyBinding = nil
 	}
-	if a.borrowedStore {
-		return errors.Join(releaseErr, notificationErr, monitoringErr, schedulerErr, dataExchangeErr, agentErr, partyErr)
+	var rateLimiterErr error
+	if closer, ok := a.rateLimiter.(interface{ Close() error }); ok {
+		rateLimiterErr = closer.Close()
+		a.rateLimiter = nil
 	}
-	return errors.Join(releaseErr, notificationErr, monitoringErr, schedulerErr, dataExchangeErr, agentErr, partyErr, a.store.Close())
+	if a.borrowedStore {
+		return errors.Join(releaseErr, notificationErr, monitoringErr, schedulerErr, dataExchangeErr, agentErr, partyErr, rateLimiterErr)
+	}
+	return errors.Join(releaseErr, notificationErr, monitoringErr, schedulerErr, dataExchangeErr, agentErr, partyErr, rateLimiterErr, a.store.Close())
 }
 
 func (a *Runtime) startTrackedWorker(parent context.Context, start func(context.Context) <-chan struct{}) {

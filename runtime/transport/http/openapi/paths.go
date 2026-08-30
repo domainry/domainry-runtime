@@ -109,34 +109,6 @@ func addRuntimeContractOpenAPIPaths(paths map[string]any) {
 	paths["/domain-references/{resourceType}/{resourceKey}"] = map[string]any{
 		"get": openAPIOperation("getBusinessReferenceImpact", "Business maintenance", "List direct and indirect consumers before changing a resource", openAPIAdminSecurity(), openAPIPathParameter("resourceType", "Resource type"), openAPIPathParameter("resourceKey", "Resource key"), openAPIJSONResponse("Reference impact", openAPIObject(nil))),
 	}
-	paths["/tenant-admin/change-plans/validate"] = map[string]any{
-		"post": openAPIOperation("validateBusinessChangePlan", "Business maintenance", "Validate an incremental domain-system change plan against current Snapshot, contract, ownership, references, and review policy without applying it", openAPIAdminSecurity(), openAPIJSONRequest(openAPIObject(nil)), openAPIJSONResponse("Change plan validation", openAPIObject(nil))),
-	}
-	paths["/tenant-admin/change-plans/{planID}"] = map[string]any{
-		"get": openAPIOperation("getBusinessChangePlanDraft", "Business maintenance", "Read the current high-risk configuration plan draft or frozen published plan", openAPIAdminSecurity(), openAPIPathParameter("planID", "Change plan ID"), openAPIJSONResponse("Change plan draft", openAPIObject(nil))),
-		"put": openAPIOperation("saveBusinessChangePlanDraft", "Business maintenance", "Create or optimistically update a high-risk configuration plan draft", openAPIAdminSecurity(), openAPIPathParameter("planID", "Change plan ID"), openAPIJSONRequest(openAPIObject(nil)), openAPIJSONResponse("Change plan draft", openAPIObject(nil))),
-	}
-	paths["/tenant-admin/change-plans/{planID}/review"] = map[string]any{
-		"post": openAPIOperation("submitBusinessChangePlanForReview", "Business maintenance", "Validate and freeze a draft revision for independent approval", openAPIAdminSecurity(), openAPIPathParameter("planID", "Change plan ID"), openAPIJSONRequest(openAPIObject(nil)), openAPIJSONResponse("Change plan review state", openAPIObject(nil))),
-	}
-	paths["/tenant-admin/change-plans/{planID}/clone-current"] = map[string]any{
-		"post": openAPIOperation("cloneCurrentBusinessSystemDraft", "Business maintenance", "Clone all active Metadata definitions and pinned resource hashes into a workspace-scoped editable system draft", openAPIAdminSecurity(), openAPIPathParameter("planID", "Change plan ID"), openAPIJSONRequest(openAPIObject(nil)), openAPIJSONResponse("Cloned change plan draft", openAPIObject(nil))),
-	}
-	paths["/tenant-admin/change-plans/{planID}/simulate"] = map[string]any{
-		"post": openAPIOperation("simulateBusinessChangePlanScenarios", "Business maintenance", "Run typed acceptance scenarios against the fully composed Metadata candidate without publishing or executing side effects", openAPIAdminSecurity(), openAPIPathParameter("planID", "Change plan ID"), openAPIJSONRequest(openAPIObject(nil)), openAPIJSONResponse("Acceptance scenario simulation", openAPIObject(nil))),
-	}
-	paths["/tenant-admin/change-plans/{planID}/approve"] = map[string]any{
-		"post": openAPIOperation("approveBusinessChangePlan", "Business maintenance", "Independently approve the exact reviewed draft revision after revalidation", openAPIAdminSecurity(), openAPIPathParameter("planID", "Change plan ID"), openAPIJSONRequest(openAPIObject(nil)), openAPIJSONResponse("Approved change plan state", openAPIObject(nil))),
-	}
-	paths["/tenant-admin/change-plans/{planID}/export"] = map[string]any{
-		"get": openAPIOperation("exportBusinessSystemPackage", "Business maintenance", "Export an approved or published revision as a deterministic system package with resource hashes, dependencies, empty-workspace apply plan, and acceptance scenarios", openAPIAdminSecurity(), openAPIPathParameter("planID", "Change plan ID"), openAPIJSONResponse("System package", openAPIObject(nil))),
-	}
-	paths["/tenant-admin/change-plans/{planID}/package"] = map[string]any{
-		"put": openAPIOperation("importBusinessSystemPackage", "Business maintenance", "Verify a current-contract system package and bind it to an empty workspace as a normal editable draft; review, approval, and atomic publish remain mandatory", openAPIAdminSecurity(), openAPIPathParameter("planID", "Change plan ID"), openAPIJSONRequest(openAPIObject(nil)), openAPIJSONResponse("Imported change plan draft", openAPIObject(nil))),
-	}
-	paths["/domain-maintenance/rollback-policy"] = map[string]any{
-		"get": openAPIOperation("getBusinessRollbackPolicy", "Business maintenance", "Describe automatic, compensating, and manual rollback behavior without mutating execution evidence", openAPIAdminSecurity(), openAPIJSONResponse("Rollback policy", openAPIObject(nil))),
-	}
 	paths["/tenant-admin/platform-capabilities"] = map[string]any{
 		"get": openAPIOperation("getPlatformCapabilities", "Capabilities", "Temporarily unauthenticated builder discovery of the Runtime authoring contract and target-instance capability bindings", openAPIPublicSecurity(), openAPIJSONResponse("Platform capabilities", openAPIObject(nil))),
 	}

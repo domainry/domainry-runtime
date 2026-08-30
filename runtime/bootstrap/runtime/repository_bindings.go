@@ -1,15 +1,15 @@
 package runtime
 
 import (
+	lifecyclepersistence "github.com/domainry/domainry-lifecycle/persistence"
+	lifecyclerepository "github.com/domainry/domainry-lifecycle/repository"
+	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationrepository "github.com/domainry/domainry-runtime/runtime/domain/automation/repository"
-	businessseedrepository "github.com/domainry/domainry-runtime/runtime/domain/businessseed/repository"
-	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
 	deploymentrepository "github.com/domainry/domainry-runtime/runtime/domain/deployment/repository"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
-	lifecyclerepository "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/repository"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 	workflowrepository "github.com/domainry/domainry-runtime/runtime/domain/workflow/repository"
@@ -17,45 +17,35 @@ import (
 	actionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/action"
 	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	automationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automation"
-	changeplanpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/changeplan"
 	deploymentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/deployment"
-	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
-	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/lifecycle"
+	publicationhandoffpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
-	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 )
 
 // Keep Bootstrap dependency bindings compile-time checked. These assertions live
 // outside service/storage so neither package needs to import the other and
 // create an implementation-detail dependency cycle.
 var (
-	_ recordrepository.RecordRepository                      = recordpersistence.RecordStore{}
-	_ recordrepository.RecordBusinessSeedRepository          = recordpersistence.RecordStore{}
-	_ auditrepository.AuditRepository                        = (*auditpersistence.AuditStore)(nil)
-	_ auditrepository.AuditEventWriterRepository             = (*auditpersistence.AuditStore)(nil)
-	_ auditrepository.AuditEventRepository                   = (*auditpersistence.AuditStore)(nil)
-	_ appschemarepository.ApplicationSchemaRepository        = appschemapersistence.ApplicationSchemaStore{}
-	_ appschemarepository.DefinitionMutationRepository       = appschemapersistence.ApplicationSchemaStore{}
-	_ integrationrepository.IntegrationConfigRepository      = integrationpersistence.IntegrationConfigStore{}
-	_ integrationrepository.IntegrationConnectionRepository  = integrationpersistence.IntegrationConfigStore{}
-	_ integrationrepository.IntegrationEventRepository       = integrationpersistence.IntegrationEventStore{}
-	_ integrationrepository.IntegrationDeliveryRepository    = integrationpersistence.IntegrationDeliveryStore{}
-	_ integrationrepository.IntegrationWorkerRepository      = integrationpersistence.IntegrationWorkerStore{}
-	_ lifecyclerepository.LifecycleRepository                = lifecyclepersistence.LifecycleStore{}
-	_ workflowcontract.WorkflowWorkerStore                   = workflowpersistence.WorkflowWorkerStore{}
-	_ workflowcontract.WorkflowDefinitionStore               = workflowpersistence.WorkflowDefinitionStore{}
-	_ workflowcontract.WorkflowProcessStore                  = workflowpersistence.WorkflowProcessStore{}
-	_ workflowcontract.WorkflowDecisionStore                 = workflowpersistence.WorkflowDecisionStore{}
-	_ automationcontract.AutomationWorkerStore               = automationpersistence.AutomationWorkerStore{}
-	_ automationrepository.AutomationExecutionRepository     = automationpersistence.AutomationExecutionStore{}
-	_ automationrepository.ExecutionSeedRepository           = automationpersistence.AutomationExecutionStore{}
-	_ changeplanrepository.ChangePlanRepository              = changeplanpersistence.BusinessChangePlanStore{}
-	_ changeplanrepository.ChangePlanEvidenceRepository      = changeplanpersistence.BusinessEvidenceStore{}
-	_ businessseedrepository.ProvenanceRepository            = changeplanpersistence.BusinessEvidenceStore{}
-	_ workflowrepository.WorkflowExecutionRepository         = workflowpersistence.WorkflowWorkerStore{}
-	_ actioncontract.ActionExecutionStore                    = actionpersistence.ActionBusinessExecutionStore{}
-	_ actioncontract.ActionExecutionTransactionStore         = actionpersistence.ActionBusinessExecutionStore{}
-	_ actioncontract.ActionAssuranceStore                    = actionpersistence.ActionAssuranceStore{}
-	_ deploymentrepository.DeploymentRuntimeStatusRepository = deploymentpersistence.RuntimeStatusStore{}
+	_ recordrepository.RecordRepository                        = recordpersistence.RecordStore{}
+	_ recordrepository.RecordBusinessSeedRepository            = recordpersistence.RecordStore{}
+	_ auditrepository.AuditRepository                          = (*auditpersistence.AuditStore)(nil)
+	_ auditrepository.AuditEventWriterRepository               = (*auditpersistence.AuditStore)(nil)
+	_ auditrepository.AuditEventRepository                     = (*auditpersistence.AuditStore)(nil)
+	_ appschemarepository.ApplicationSchemaRepository          = appschemapersistence.ApplicationSchemaStore{}
+	_ integrationrepository.RuntimePublicationRepository       = publicationhandoffpersistence.Store{}
+	_ integrationrepository.RuntimePublicationWorkerRepository = publicationhandoffpersistence.WorkerStore{}
+	_ lifecyclerepository.LifecycleRepository                  = lifecyclepersistence.LifecycleStore{}
+	_ workflowcontract.WorkflowWorkerStore                     = workflowpersistence.WorkflowWorkerStore{}
+	_ workflowcontract.WorkflowDefinitionStore                 = workflowpersistence.WorkflowDefinitionStore{}
+	_ workflowcontract.WorkflowProcessStore                    = workflowpersistence.WorkflowProcessStore{}
+	_ workflowcontract.WorkflowDecisionStore                   = workflowpersistence.WorkflowDecisionStore{}
+	_ automationcontract.AutomationWorkerStore                 = automationpersistence.AutomationWorkerStore{}
+	_ automationrepository.AutomationExecutionRepository       = automationpersistence.AutomationExecutionStore{}
+	_ automationrepository.ExecutionSeedRepository             = automationpersistence.AutomationExecutionStore{}
+	_ workflowrepository.WorkflowExecutionRepository           = workflowpersistence.WorkflowWorkerStore{}
+	_ actioncontract.ActionExecutionStore                      = actionpersistence.ActionBusinessExecutionStore{}
+	_ actioncontract.ActionExecutionTransactionStore           = actionpersistence.ActionBusinessExecutionStore{}
+	_ actioncontract.ActionAssuranceStore                      = actionpersistence.ActionAssuranceStore{}
+	_ deploymentrepository.DeploymentRuntimeStatusRepository   = deploymentpersistence.RuntimeStatusStore{}
 )

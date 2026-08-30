@@ -65,7 +65,7 @@ func TestLoadManifestSeedRejectsUnreadableInvalidAndObjectlessManifest(t *testin
 }
 
 func TestLoadManifestSeedAllowsObjectlessOnlyForTrustedAuthoringBootstrap(t *testing.T) {
-	path := writeManifestLoaderFixture(t, `{"schema_version":"2","template_id":"runtime-direct-authoring","version":"0.0.0","objects":[],"views":[]}`)
+	path := writeManifestLoaderFixture(t, `{"schema_version":"2","template_id":"runtime-direct-authoring","version":"0.0.0","objects":[]}`)
 	manifest, err := loadManifestSeedWithOptions(t.Context(), path, true)
 	if err != nil || len(manifest.Objects) != 0 {
 		t.Fatalf("manifest=%#v err=%v", manifest, err)

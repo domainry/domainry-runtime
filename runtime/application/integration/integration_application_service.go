@@ -20,6 +20,8 @@ import (
 
 	"time"
 
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+
 	resilience "github.com/domainry/domainry-runtime/runtime/platform/resilience"
 )
 
@@ -116,56 +118,68 @@ type IntegrationCredentialExpirySource interface {
 }
 
 type ApplicationDependencies struct {
-	ConfigRepository           integrationrepository.IntegrationConfigRepository
-	EventRepository            integrationrepository.IntegrationEventRepository
-	DeliveryRepository         integrationrepository.IntegrationDeliveryRepository
-	WorkerRepository           integrationrepository.IntegrationWorkerRepository
-	Registry                   Registry
-	Audit                      AuditFunc
-	ConnectionHistory          IntegrationConnectionHistoryReader
-	PolicyStore                resilience.Store
-	APILimiter                 ratelimit.Limiter
-	ConnectionNormalizer       ConnectionNormalizer
-	InvocationProviderResolver InvocationProviderResolver
-	ConnectorExists            ConnectorExists
-	EventMappingExecutor       EventMappingExecutor
-	AutomationOutboxExecutor   AutomationOutboxExecutor
-	AdapterOutboxSender        AdapterOutboxSender
-	OutboxPayloadPreparer      OutboxPayloadPreparer
-	OperationInputValidator    OperationInputValidator
-	OperationOutputValidator   OperationOutputValidator
-	PrincipalResolver          PrincipalResolver
-	UnmappedPrincipalResolver  UnmappedReadOnlyPrincipalResolver
-	ConnectionReferenceCheck   ConnectionReferenceCheck
-	ConnectionDraftValidator   ConnectionDraftValidator
-	ConnectionConfigPreparer   ConnectionConfigPreparer
-	WebhookAlgorithmNormalizer WebhookSignatureAlgorithmNormalizer
-	WebhookSignatureVerifier   WebhookSignatureVerifier
-	ConnectorCapacity          *capacityplatform.Controller
-	NotificationCompiler       IntegrationNotificationCompiler
-	NotificationPublisher      IntegrationNotificationPublisher
-	CredentialNotifications    IntegrationCredentialNotificationCommitter
-	CredentialExpirySource     IntegrationCredentialExpirySource
-	Schema                     IntegrationSchemaProvider
-	SchemaObjectMap            IntegrationSchemaObjectMapProvider
-	InvokeAction               IntegrationActionInvoker
-	Records                    IntegrationAgentRecordApplication
-	EventRecords               IntegrationEventRecordApplication
-	Workflows                  IntegrationWorkflowApplication
-	Automation                 IntegrationAutomationApplication
-	EventWorkflowExecutor      IntegrationEventWorkflowExecutor
-	EventActionExecutor        IntegrationEventActionExecutor
-	EventIdentityResolver      IntegrationEventIdentityResolver
-	Worker                     workerplatform.Dependencies
-	WorkerWakeups              *workerplatform.WakeupBroker
+	ConfigRepository      integrationrepository.IntegrationConfigRepository
+	EventRepository       integrationrepository.IntegrationEventRepository
+	PublicationRepository integrationrepository.RuntimePublicationRepository
+	InvocationRepository  integrationrepository.IntegrationInvocationRepository
+	// DeliveryRepository is the deprecated combined port retained for source
+	// compatibility. Runtime composition supplies only PublicationRepository.
+	DeliveryRepository          integrationrepository.IntegrationDeliveryRepository
+	OwnerCatalog                integrationsdk.Catalog
+	OwnerWebPushSubscriptions   integrationsdk.WebPushSubscriptions
+	PublicationWorkerRepository integrationrepository.RuntimePublicationWorkerRepository
+	EventWorkerRepository       integrationrepository.IntegrationEventWorkerRepository
+	WorkerRepository            integrationrepository.IntegrationWorkerRepository
+	Registry                    Registry
+	Audit                       AuditFunc
+	ConnectionHistory           IntegrationConnectionHistoryReader
+	PolicyStore                 resilience.Store
+	APILimiter                  ratelimit.Limiter
+	ConnectionNormalizer        ConnectionNormalizer
+	InvocationProviderResolver  InvocationProviderResolver
+	ConnectorExists             ConnectorExists
+	EventMappingExecutor        EventMappingExecutor
+	AutomationOutboxExecutor    AutomationOutboxExecutor
+	AdapterOutboxSender         AdapterOutboxSender
+	OutboxPayloadPreparer       OutboxPayloadPreparer
+	OperationInputValidator     OperationInputValidator
+	OperationOutputValidator    OperationOutputValidator
+	PrincipalResolver           PrincipalResolver
+	UnmappedPrincipalResolver   UnmappedReadOnlyPrincipalResolver
+	ConnectionReferenceCheck    ConnectionReferenceCheck
+	ConnectionDraftValidator    ConnectionDraftValidator
+	ConnectionConfigPreparer    ConnectionConfigPreparer
+	WebhookAlgorithmNormalizer  WebhookSignatureAlgorithmNormalizer
+	WebhookSignatureVerifier    WebhookSignatureVerifier
+	ConnectorCapacity           *capacityplatform.Controller
+	NotificationCompiler        IntegrationNotificationCompiler
+	NotificationPublisher       IntegrationNotificationPublisher
+	CredentialNotifications     IntegrationCredentialNotificationCommitter
+	CredentialExpirySource      IntegrationCredentialExpirySource
+	Schema                      IntegrationSchemaProvider
+	SchemaObjectMap             IntegrationSchemaObjectMapProvider
+	InvokeAction                IntegrationActionInvoker
+	Records                     IntegrationAgentRecordApplication
+	EventRecords                IntegrationEventRecordApplication
+	Workflows                   IntegrationWorkflowApplication
+	Automation                  IntegrationAutomationApplication
+	EventWorkflowExecutor       IntegrationEventWorkflowExecutor
+	EventActionExecutor         IntegrationEventActionExecutor
+	EventIdentityResolver       IntegrationEventIdentityResolver
+	Worker                      workerplatform.Dependencies
+	WorkerWakeups               *workerplatform.WakeupBroker
 }
 
 // IntegrationApplicationService owns integration lifecycle behavior.
 type IntegrationApplicationService struct {
 	configRepo                integrationrepository.IntegrationConfigRepository
 	eventRepo                 integrationrepository.IntegrationEventRepository
-	deliveryRepo              integrationrepository.IntegrationDeliveryRepository
-	workerRepo                integrationrepository.IntegrationWorkerRepository
+	publicationRepo           integrationrepository.RuntimePublicationRepository
+	invocationRepo            integrationrepository.IntegrationInvocationRepository
+	ownerCatalog              integrationsdk.Catalog
+	ownerWebPushSubscriptions integrationsdk.WebPushSubscriptions
+	publicationWorkerRepo     integrationrepository.RuntimePublicationWorkerRepository
+	eventWorkerRepo           integrationrepository.IntegrationEventWorkerRepository
 	providerStateRepo         integrationrepository.ConnectorProviderStateRepository
 	registry                  Registry
 	audit                     AuditFunc
@@ -213,6 +227,26 @@ type IntegrationApplicationService struct {
 }
 
 func NewIntegrationApplicationService(dependencies ApplicationDependencies) *IntegrationApplicationService {
+	publicationRepository := dependencies.PublicationRepository
+	invocationRepository := dependencies.InvocationRepository
+	if dependencies.DeliveryRepository != nil {
+		if publicationRepository == nil {
+			publicationRepository = dependencies.DeliveryRepository
+		}
+		if invocationRepository == nil {
+			invocationRepository = dependencies.DeliveryRepository
+		}
+	}
+	publicationWorkerRepository := dependencies.PublicationWorkerRepository
+	eventWorkerRepository := dependencies.EventWorkerRepository
+	if dependencies.WorkerRepository != nil {
+		if publicationWorkerRepository == nil {
+			publicationWorkerRepository = dependencies.WorkerRepository
+		}
+		if eventWorkerRepository == nil {
+			eventWorkerRepository = dependencies.WorkerRepository
+		}
+	}
 	dependencies.Worker = workerplatform.NormalizeDependencies(dependencies.Worker)
 	outboxWakeups, publishOutboxWakeup := newIntegrationOutboxWakeupBinding(dependencies.WorkerWakeups)
 	audit := dependencies.Audit
@@ -221,33 +255,37 @@ func NewIntegrationApplicationService(dependencies ApplicationDependencies) *Int
 		}
 	}
 	service := &IntegrationApplicationService{
-		configRepo:              dependencies.ConfigRepository,
-		eventRepo:               dependencies.EventRepository,
-		deliveryRepo:            dependencies.DeliveryRepository,
-		workerRepo:              dependencies.WorkerRepository,
-		registry:                dependencies.Registry,
-		audit:                   audit,
-		connectionHistory:       dependencies.ConnectionHistory,
-		policyStore:             dependencies.PolicyStore,
-		apiLimiter:              dependencies.APILimiter,
-		principal:               dependencies.PrincipalResolver,
-		schema:                  dependencies.Schema,
-		schemaMap:               dependencies.SchemaObjectMap,
-		invokeAction:            dependencies.InvokeAction,
-		recordsApp:              dependencies.Records,
-		eventRecords:            dependencies.EventRecords,
-		workflows:               dependencies.Workflows,
-		automation:              dependencies.Automation,
-		operationalMetrics:      newIntegrationOperationalMetrics(),
-		connectorCapacity:       capacityplatform.NewController(capacityplatform.Limits{GlobalInFlight: 64, WorkspaceInFlight: 16, UseCaseInFlight: 8, RetryInFlight: 8, GlobalRate: 1200, WorkspaceRate: 300, UseCaseRate: 600, RateWindow: time.Minute, MaxWorkspaceStates: 10_000, MaxUseCaseStates: 256}, nil),
-		worker:                  dependencies.Worker,
-		eventWakeups:            make(chan IntegrationEventLocator, 256),
-		outboxWakeups:           outboxWakeups,
-		publishOutboxWakeup:     publishOutboxWakeup,
-		compileNotification:     dependencies.NotificationCompiler,
-		publishNotification:     dependencies.NotificationPublisher,
-		credentialNotifications: dependencies.CredentialNotifications,
-		credentialExpirySource:  dependencies.CredentialExpirySource,
+		configRepo:                dependencies.ConfigRepository,
+		eventRepo:                 dependencies.EventRepository,
+		publicationRepo:           publicationRepository,
+		invocationRepo:            invocationRepository,
+		ownerCatalog:              dependencies.OwnerCatalog,
+		ownerWebPushSubscriptions: dependencies.OwnerWebPushSubscriptions,
+		publicationWorkerRepo:     publicationWorkerRepository,
+		eventWorkerRepo:           eventWorkerRepository,
+		registry:                  dependencies.Registry,
+		audit:                     audit,
+		connectionHistory:         dependencies.ConnectionHistory,
+		policyStore:               dependencies.PolicyStore,
+		apiLimiter:                dependencies.APILimiter,
+		principal:                 dependencies.PrincipalResolver,
+		schema:                    dependencies.Schema,
+		schemaMap:                 dependencies.SchemaObjectMap,
+		invokeAction:              dependencies.InvokeAction,
+		recordsApp:                dependencies.Records,
+		eventRecords:              dependencies.EventRecords,
+		workflows:                 dependencies.Workflows,
+		automation:                dependencies.Automation,
+		operationalMetrics:        newIntegrationOperationalMetrics(),
+		connectorCapacity:         capacityplatform.NewController(capacityplatform.Limits{GlobalInFlight: 64, WorkspaceInFlight: 16, UseCaseInFlight: 8, RetryInFlight: 8, GlobalRate: 1200, WorkspaceRate: 300, UseCaseRate: 600, RateWindow: time.Minute, MaxWorkspaceStates: 10_000, MaxUseCaseStates: 256}, nil),
+		worker:                    dependencies.Worker,
+		eventWakeups:              make(chan IntegrationEventLocator, 256),
+		outboxWakeups:             outboxWakeups,
+		publishOutboxWakeup:       publishOutboxWakeup,
+		compileNotification:       dependencies.NotificationCompiler,
+		publishNotification:       dependencies.NotificationPublisher,
+		credentialNotifications:   dependencies.CredentialNotifications,
+		credentialExpirySource:    dependencies.CredentialExpirySource,
 		normalizeConnection: func(_ context.Context, connection integrationmodel.IntegrationConnection) (integrationmodel.IntegrationConnection, error) {
 			return connection, nil
 		},

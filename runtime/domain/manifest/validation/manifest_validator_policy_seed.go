@@ -4,52 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
-	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
-
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
-
-func (state *validationState) validateMaterializedSeedRecords(seeds []businessseedmodel.BusinessSeedProvenance) {
-	if len(seeds) == 0 {
-		state.add("seed_records", "domain schema must declare seed data")
-		return
-	}
-	seeded := make(map[string]bool, len(seeds))
-	for index, seed := range seeds {
-		path := fmt.Sprintf("seed_records[%d]", index)
-		objectKey := strings.TrimSpace(seed.ObjectKey)
-		if strings.HasPrefix(objectKey, "identity_") {
-			state.add(path+".object_key", "platform Identity resources cannot be created through domain seed_records; provision them through Identity")
-			continue
-		}
-		if state.objects[objectKey].Key == "" {
-			state.add(path+".object_key", "unknown object %q", seed.ObjectKey)
-			continue
-		}
-		if strings.TrimSpace(seed.SeedKey) == "" || strings.TrimSpace(seed.RecordID) == "" || strings.TrimSpace(seed.ContentHash) == "" {
-			state.add(path, "materialized seed provenance is incomplete")
-			continue
-		}
-		seeded[objectKey] = true
-	}
-	optionalProfileObjects := map[string]bool{}
-	for _, extension := range state.manifest.IdentityProfileExtensions {
-		optionalProfileObjects[extension.ObjectKey] = true
-	}
-	for objectKey, object := range state.objects {
-		if optionalProfileObjects[objectKey] {
-			continue
-		}
-		if runtimeOwned, _ := object.Config["runtime_owned"].(bool); runtimeOwned {
-			continue
-		}
-		if !seeded[objectKey] {
-			state.add("seed_records", "object %q has required fields but no seed record", objectKey)
-		}
-	}
-}
 
 func (state *validationState) validateSeedRecords() {
 	if len(state.manifest.SeedRecords) == 0 {
@@ -90,10 +48,7 @@ func (state *validationState) validateSeedRecords() {
 			state.validateSeedFieldValue(path+".data."+field.Key, objectKey, field, seed.Data[field.Key])
 		}
 		for dataKey := range seed.Data {
-			if dataKey == "__seed_key" {
-				continue
-			}
-			if state.fields[objectKey][dataKey].Key == "" {
+			if dataKey != "__seed_key" && state.fields[objectKey][dataKey].Key == "" {
 				state.add(path+".data."+dataKey, "unknown seed field")
 			}
 		}
@@ -142,7 +97,7 @@ func hasNonEmptyString(values []string) bool {
 	return false
 }
 
-func (state *validationState) validateSeedFieldValue(path string, objectKey string, field definitionmodel.FieldSchema, value any) {
+func (state *validationState) validateSeedFieldValue(path, objectKey string, field definitionmodel.FieldSchema, value any) {
 	if value == nil {
 		return
 	}

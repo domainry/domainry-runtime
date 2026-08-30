@@ -37,9 +37,6 @@ func (s *ChangePlanReferenceApplicationService) addFrontendCapabilityReferences(
 		for index, objectKey := range entry.BusinessObjects {
 			builder.Edge("frontend_route", entry.Route, "object", objectKey, "presents_object", "business_objects["+stringIndex(index)+"]")
 		}
-		for index, viewKey := range entry.ViewKeys {
-			builder.Edge("frontend_route", entry.Route, "view", viewKey, "uses_view", "view_keys["+stringIndex(index)+"]")
-		}
 		for index, actionKey := range entry.ImplementedActions {
 			builder.Edge("frontend_route", entry.Route, "action", actionKey, "exposes_action", "implemented_actions["+stringIndex(index)+"]")
 		}

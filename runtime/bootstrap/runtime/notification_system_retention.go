@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
+	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	"github.com/domainry/domainry-notification-sdk/contract"
-	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
-	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 )
 
 type notificationSystemRetention struct {

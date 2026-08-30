@@ -8,7 +8,7 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -32,15 +32,13 @@ func TestApplicationSchemaLocaleProjectsAllOwnedShapes(t *testing.T) {
 		Objects: []definitionmodel.ObjectSchema{{Validations: []definitionmodel.ValidationSchema{{}}}, {Key: "order", Name: "Order", Description: "Description", Fields: []definitionmodel.FieldSchema{{
 			Key: "status", Name: "Status", Options: []map[string]any{{"value": "ready", "label": "Ready"}},
 		}}, Validations: []definitionmodel.ValidationSchema{{Type: "required", FieldKey: "status", Message: "Required"}, {Key: "named", Message: "Named"}}}},
-		Views:         []definitionmodel.ViewSchema{{Key: "orders", Name: "Orders"}},
 		Actions:       []definitionmodel.ActionSchema{{Key: "order.approve", Label: "Approve", PayloadFields: []definitionmodel.ActionPayloadField{{Key: "note", Name: "Note"}}}},
 		GuardedWrites: []appschemamodel.ApplicationSchemaGuardedWriteContract{{ActionKey: "order.approve", Label: "Approve"}},
 		Workflows:     []definitionmodel.WorkflowSchema{{Key: "notify", Name: "Notify"}},
 		Dictionaries:  []appschemamodel.DictionarySchema{{Key: "status", Name: "Status", Description: "Status values", Items: []appschemamodel.DictionaryItemSchema{{Value: "ready", Label: "Ready", Description: "Ready description"}}}},
 		Reports:       []reportmodel.ReportSchema{{Key: "orders", Name: "Orders report"}},
-		EntryPoints:   []definitionmodel.EntryPointSchema{{Key: "home", Name: "Home", Description: "Home description"}},
-		Skills:        []agentmodel.SkillSchema{{Key: "search", Name: "Search", Description: "Search description"}},
-		Agents:        []agentmodel.AgentSchema{{Key: "assistant", Name: "Assistant", Description: "Assistant description"}},
+		Skills:        []agentsdk.SkillSchema{{Key: "search", Name: "Search", Description: "Search description"}},
+		Agents:        []agentsdk.AgentSchema{{Key: "assistant", Name: "Assistant", Description: "Assistant description"}},
 	}
 	values := []appschemamodel.LocalizedText{{EntityType: "app", EntityKey: "app", Property: "name", Text: "Anwendung"}}
 	service := NewApplicationSchemaDomainService(schemaServiceProviderStub{snapshot: snapshot}, metadataLocaleRepository{values: values})

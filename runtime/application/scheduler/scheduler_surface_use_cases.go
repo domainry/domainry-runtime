@@ -52,18 +52,15 @@ type TenantAdminSchedulerDefinitionVersionDTO struct {
 	Value     TenantAdminSchedulerDefinitionDTO `json:"value"`
 }
 
-// TenantAdminSchedulerAuthoringContract makes the write owner explicit:
-// definitions, status and business-calendar bindings are published through a
-// reviewed domain change plan, not mutated by an operational scheduler API.
+// TenantAdminSchedulerAuthoringContract describes validation of scheduler
+// definitions authored in source-controlled project JSON.
 type TenantAdminSchedulerAuthoringContract struct {
-	ResourceType            string   `json:"resource_type"`
-	StatusField             string   `json:"status_field"`
-	AllowedStatuses         []string `json:"allowed_statuses"`
-	BusinessCalendarField   string   `json:"business_calendar_field"`
-	MutationOwner           string   `json:"mutation_owner"`
-	RequiresChangePlan      bool     `json:"requires_change_plan"`
-	ValidationEndpoint      string   `json:"validation_endpoint"`
-	ChangePlanApplyEndpoint string   `json:"change_plan_apply_endpoint"`
+	ResourceType          string   `json:"resource_type"`
+	StatusField           string   `json:"status_field"`
+	AllowedStatuses       []string `json:"allowed_statuses"`
+	BusinessCalendarField string   `json:"business_calendar_field"`
+	MutationOwner         string   `json:"mutation_owner"`
+	ValidationEndpoint    string   `json:"validation_endpoint"`
 }
 
 type OpsSchedulerRunDTO struct {
@@ -183,14 +180,12 @@ func (s *SchedulerApplicationService) TenantAdminAuthoringContract(_ context.Con
 		return TenantAdminSchedulerAuthoringContract{}, err
 	}
 	return TenantAdminSchedulerAuthoringContract{
-		ResourceType:            "scheduler",
-		StatusField:             "status",
-		AllowedStatuses:         []string{"enabled", "disabled", "paused", "archived"},
-		BusinessCalendarField:   "business_calendar_key",
-		MutationOwner:           "domain_change_plan",
-		RequiresChangePlan:      true,
-		ValidationEndpoint:      "/tenant-admin/scheduler/definitions/validate",
-		ChangePlanApplyEndpoint: "/tenant-admin/change-plans/apply",
+		ResourceType:          "scheduler",
+		StatusField:           "status",
+		AllowedStatuses:       []string{"enabled", "disabled", "paused", "archived"},
+		BusinessCalendarField: "business_calendar_key",
+		MutationOwner:         "source_controlled_json",
+		ValidationEndpoint:    "/tenant-admin/scheduler/definitions/validate",
 	}, nil
 }
 

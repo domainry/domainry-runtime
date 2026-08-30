@@ -1,7 +1,6 @@
 package service
 
 import (
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
@@ -14,25 +13,24 @@ import (
 
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"sort"
 )
 
 type SchemaSnapshotState struct {
 	TemplateID, TemplateVersion, Name string
 	Objects                           []definitionmodel.ObjectSchema
-	Views                             []definitionmodel.ViewSchema
 	Actions                           []definitionmodel.ActionSchema
 	Workflows                         []definitionmodel.WorkflowSchema
 	AutomationRules                   []automationmodel.AutomationRuleSchema
 	Dictionaries                      []appschemamodel.DictionarySchema
 	Integrations                      integrationmodel.IntegrationSchema
 	Reports                           []reportmodel.ReportSchema
-	EntryPoints                       []definitionmodel.EntryPointSchema
-	Skills                            []agentmodel.SkillSchema
-	Agents                            []agentmodel.AgentSchema
-	AgentTasks                        []agentmodel.AgentTaskDefinition
-	AgentEntrypoints                  []agentmodel.AgentEntrypointAssignment
-	AgentServicePrincipals            []agentmodel.AgentServicePrincipalBinding
+	Skills                            []agentsdk.SkillSchema
+	Agents                            []agentsdk.AgentSchema
+	AgentTasks                        []agentsdk.AgentTaskDefinition
+	AgentEntrypoints                  []agentsdk.AgentEntrypointAssignment
+	AgentServicePrincipals            []agentsdk.AgentServicePrincipalBinding
 	IdentityProfileExtensions         []profilebindingmodel.Binding
 }
 
@@ -47,13 +45,13 @@ func BuildSchemaSnapshot(state SchemaSnapshotState) appschemamodel.ApplicationSc
 	sort.Slice(automationRules, func(i, j int) bool { return automationRules[i].Key < automationRules[j].Key })
 	snapshot := appschemamodel.ApplicationSchemaSnapshot{
 		TemplateID: state.TemplateID, TemplateVersion: state.TemplateVersion, Name: state.Name,
-		Objects: objects, Views: append([]definitionmodel.ViewSchema(nil), state.Views...), Actions: actions,
+		Objects: objects, Actions: actions,
 		GuardedWrites: GuardedWriteContracts(actions), Workflows: workflows, AutomationRules: automationRules,
 		Dictionaries: append([]appschemamodel.DictionarySchema(nil), state.Dictionaries...), Integrations: CloneIntegrationSchema(state.Integrations),
-		Reports: append([]reportmodel.ReportSchema(nil), state.Reports...), EntryPoints: append([]definitionmodel.EntryPointSchema(nil), state.EntryPoints...),
-		Skills: append([]agentmodel.SkillSchema(nil), state.Skills...), Agents: append([]agentmodel.AgentSchema(nil), state.Agents...),
-		AgentTasks: append([]agentmodel.AgentTaskDefinition(nil), state.AgentTasks...), AgentEntrypoints: append([]agentmodel.AgentEntrypointAssignment(nil), state.AgentEntrypoints...),
-		AgentServicePrincipals:    append([]agentmodel.AgentServicePrincipalBinding(nil), state.AgentServicePrincipals...),
+		Reports: append([]reportmodel.ReportSchema(nil), state.Reports...),
+		Skills:  append([]agentsdk.SkillSchema(nil), state.Skills...), Agents: append([]agentsdk.AgentSchema(nil), state.Agents...),
+		AgentTasks: append([]agentsdk.AgentTaskDefinition(nil), state.AgentTasks...), AgentEntrypoints: append([]agentsdk.AgentEntrypointAssignment(nil), state.AgentEntrypoints...),
+		AgentServicePrincipals:    append([]agentsdk.AgentServicePrincipalBinding(nil), state.AgentServicePrincipals...),
 		IdentityProfileExtensions: append([]profilebindingmodel.Binding(nil), state.IdentityProfileExtensions...),
 	}
 	snapshot.SchemaHash = SchemaSnapshotHash(snapshot)

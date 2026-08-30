@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	metadatarepository "github.com/domainry/domainry-metadata-sdk/repository"
 	ormdialect "github.com/domainry/domainry-orm/dialect"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -26,6 +27,7 @@ type ApplicationSchemaStore struct {
 	createIndex          func(context.Context, string, string, bool, ...string) error
 	storage              appschemastorage.Profile
 	exactDecimalMigrator metadataExactDecimalMigrator
+	metadataDefinitions  metadatarepository.DefinitionRepository
 }
 
 type metadataProfileFactory func() (appschemastorage.Profile, metadataExactDecimalMigrator)
@@ -53,12 +55,12 @@ func (r ApplicationSchemaStore) SnapshotRevision(ctx context.Context, scope prin
 		executor = actionExecutor
 	}
 	var revision string
-	err := executor.QueryRowContext(ctx, "SELECT "+r.store.Identifier("value")+" FROM "+r.store.TableIdentifier("metadata_catalog")+" WHERE "+r.store.Identifier("key")+" = "+r.store.Placeholder(1), "schema_hash").Scan(&revision)
+	err := executor.QueryRowContext(ctx, "SELECT "+r.store.Identifier("schema_hash")+" FROM "+r.store.TableIdentifier("_runtime_metadata_projection")+" WHERE "+r.store.Identifier("id")+" = "+r.store.Placeholder(1), "current").Scan(&revision)
 	if err == sql.ErrNoRows {
 		if refreshErr := r.refreshCatalogHashWithExecutor(ctx, executor); refreshErr != nil {
 			return "", refreshErr
 		}
-		err = executor.QueryRowContext(ctx, "SELECT "+r.store.Identifier("value")+" FROM "+r.store.TableIdentifier("metadata_catalog")+" WHERE "+r.store.Identifier("key")+" = "+r.store.Placeholder(1), "schema_hash").Scan(&revision)
+		err = executor.QueryRowContext(ctx, "SELECT "+r.store.Identifier("schema_hash")+" FROM "+r.store.TableIdentifier("_runtime_metadata_projection")+" WHERE "+r.store.Identifier("id")+" = "+r.store.Placeholder(1), "current").Scan(&revision)
 	}
 	if err != nil {
 		return "", fmt.Errorf("load metadata snapshot revision: %w", err)
@@ -72,7 +74,7 @@ func NewApplicationSchemaStore(store *database.RuntimeStore) ApplicationSchemaSt
 		panic(fmt.Sprintf("unsupported Metadata storage profile %q", store.Engine.Name()))
 	}
 	profile, migrator := factory()
-	return ApplicationSchemaStore{store: store, db: store.DB(), storage: profile, exactDecimalMigrator: migrator}
+	return ApplicationSchemaStore{store: store, db: store.DB(), storage: profile, exactDecimalMigrator: migrator, metadataDefinitions: store.MetadataDefinitions()}
 }
 
 func (r ApplicationSchemaStore) database() *sql.DB {

@@ -92,13 +92,13 @@ func (s *RuntimeAuthoringValidationApplicationService) ValidateWithCoverage(ctx 
 		report.Checks[key] = status
 	}
 	if definitionErr := s.dependencies.ValidateDefinitions(ctx, snapshot.RuntimeState.Connectors); definitionErr != nil {
-		if apperror.CodeOf(definitionErr) != "backend.change_plan.candidate_invalid" {
+		if apperror.CodeOf(definitionErr) != "backend.metadata.candidate_invalid" {
 			return RuntimeAuthoringValidationReport{}, definitionErr
 		}
 		report.Checks["definition_graph"] = "invalid"
 		report.Diagnostics = append(report.Diagnostics, runtimeAuthoringDefinitionDiagnostic(definitionErr))
 	}
-	if validationErr := manifestvalidation.ValidateManifestWithMaterializedSeeds(manifest, snapshot.RuntimeState.Connectors, snapshot.SeedRecords); validationErr != nil {
+	if validationErr := manifestvalidation.ValidateManifestWithConnectorCatalog(manifest, snapshot.RuntimeState.Connectors); validationErr != nil {
 		report.Checks["manifest"] = "invalid"
 		var validationErrors manifestvalidation.ValidationErrors
 		// ValidateManifestWithConnectorCatalog owns this closed error contract:
@@ -174,7 +174,6 @@ var runtimeAuthoringRequiredConfigurationCategories = []string{
 	"runtime_state.integrations",
 	"runtime_state.reports",
 	"runtime_state.scheduler",
-	"seed_records",
 	"frontend_capabilities",
 }
 
@@ -299,22 +298,6 @@ func runtimeAuthoringApplyGlobalChecks(report *RuntimeAuthoringValidationReport,
 		}
 	}
 
-	report.Checks["seed_writability"] = "ok"
-	objects := make(map[string]bool, len(snapshot.Schema.Objects))
-	for _, object := range snapshot.Schema.Objects {
-		objects[strings.TrimSpace(object.Key)] = true
-	}
-	for _, seed := range snapshot.SeedRecords {
-		if strings.TrimSpace(seed.SeedKey) != "" && strings.TrimSpace(seed.RecordID) != "" && strings.TrimSpace(seed.ContentHash) != "" && objects[strings.TrimSpace(seed.ObjectKey)] {
-			continue
-		}
-		report.Checks["seed_writability"] = "invalid"
-		report.Diagnostics = append(report.Diagnostics, RuntimeAuthoringValidationDiagnostic{
-			Code: "backend.business_seed.provenance_orphaned", Owner: "seed", CapabilityKey: "seed.record",
-			ResourcePath: "seed_records." + seed.SeedKey, Message: "seed provenance cannot be resolved to a writable Runtime object and record",
-		})
-	}
-
 	report.Checks["frontend_support"] = "ok"
 	frontend := snapshot.FrontendCapabilities
 	if len(frontend.MissingFrontendSupport) > 0 || len(frontend.StaleFrontendSupport) > 0 {
@@ -327,7 +310,7 @@ func runtimeAuthoringApplyGlobalChecks(report *RuntimeAuthoringValidationReport,
 		}
 		for _, stale := range frontend.StaleFrontendSupport {
 			report.Diagnostics = append(report.Diagnostics, RuntimeAuthoringValidationDiagnostic{
-				Code: "backend.change_plan.frontend_manifest_stale", Owner: "deployment", ResourcePath: "frontend_capabilities." + stale.SupportKey,
+				Code: "backend.frontend.manifest_stale", Owner: "deployment", ResourcePath: "frontend_capabilities." + stale.SupportKey,
 				Message: "frontend support is stale for the current Runtime contract",
 			})
 		}

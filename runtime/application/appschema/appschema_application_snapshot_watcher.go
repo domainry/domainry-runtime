@@ -30,7 +30,7 @@ func (s *ApplicationSchemaApplicationService) reloadMetadataFromSource(ctx conte
 	if err != nil {
 		return err
 	}
-	s.runtime.ApplyManifestMetadata(valueOrDefault(manifest.TemplateID, s.templateID), valueOrDefault(manifest.Version, s.version), valueOrDefault(manifest.Name, s.name), manifest.Objects, manifest.Views, manifest.Actions, manifest.Workflows, manifest.AutomationRules, manifest.Dictionaries, manifest.Integrations, manifest.Reports, manifest.EntryPoints, manifest.Skills, manifest.Agents, manifest.IdentityProfileExtensions)
+	s.runtime.ApplyManifestMetadata(valueOrDefault(manifest.TemplateID, s.templateID), valueOrDefault(manifest.Version, s.version), valueOrDefault(manifest.Name, s.name), manifest.Objects, manifest.Actions, manifest.Workflows, manifest.AutomationRules, manifest.Dictionaries, manifest.Integrations, manifest.Reports, manifest.Skills, manifest.Agents, manifest.IdentityProfileExtensions)
 	applyManifestAgentMetadata(s.runtime, manifest)
 	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "refresh published workflow definitions from metadata snapshot")
 	if err := s.workflows.InitializePublishedWorkflowDefinitions(ctx, manifest.Workflows, scope); err != nil {

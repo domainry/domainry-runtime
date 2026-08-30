@@ -14,10 +14,11 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	agentruntime "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -148,7 +149,7 @@ func TestAgentTaskOperationHTTPBranches(t *testing.T) {
 
 func TestAgentTaskToolInvokeHTTPBranches(t *testing.T) {
 	now := time.Now().UTC()
-	valid := agentmodel.AgentTaskRun{ID: "run", WorkspaceID: "default", ProcessID: "process", TaskKey: "task", TaskVersion: "1", Status: agentmodel.AgentTaskRunRunning, Lease: agentmodel.AgentTaskLease{Owner: "worker", FencingToken: 2, ExpiresAt: now.Add(time.Minute)}, Identity: agentmodel.AgentExecutionIdentity{Initiator: agentmodel.AgentPrincipalReference{UserID: "user", WorkspaceID: "default"}}}
+	valid := agentmodel.AgentTaskRun{ID: "run", WorkspaceID: "default", ProcessID: "process", TaskKey: "task", TaskVersion: "1", Status: agentmodel.AgentTaskRunRunning, Lease: agentmodel.AgentTaskLease{Owner: "worker", FencingToken: 2, ExpiresAt: now.Add(time.Minute)}, Identity: agentsdk.ExecutionIdentity{Initiator: agentsdk.PrincipalReference{UserID: "user", WorkspaceID: "default"}}}
 	body := `{"workspace_id":"default","task_run_id":"run","tool":"query_records","input":{},"idempotency_key":"key"}`
 	wantErr := errors.New("tool denied")
 	tests := []struct {
@@ -201,8 +202,8 @@ func TestTypedInteractiveHTTPFailureBranches(t *testing.T) {
 	principal := taskPrincipal("agent.task.read")
 	newHandler := func(resolveErr, executeErr error, result agentruntime.AgentInteractiveExecutionResult) *AgentDialogHandler {
 		h := agentTaskHTTPHandler(principal, nil, nil)
-		h.contextResolver = agentDialogContextResolverFunc(func(context.Context, agentruntime.GlobalAgentContextRequest) (agentmodel.GlobalAgentContext, error) {
-			return agentmodel.GlobalAgentContext{EntrypointKey: "assistant", ContextRevision: "context"}, resolveErr
+		h.contextResolver = agentDialogContextResolverFunc(func(context.Context, agentruntime.GlobalAgentContextRequest) (agentsdk.GlobalContext, error) {
+			return agentsdk.GlobalContext{EntrypointKey: "assistant", ContextRevision: "context"}, resolveErr
 		})
 		h.interactive = interactiveExecutorFunc(func(context.Context, agentruntime.AgentInteractiveExecutionRequest) (agentruntime.AgentInteractiveExecutionResult, error) {
 			return result, executeErr
@@ -235,7 +236,7 @@ func TestTypedInteractiveHTTPFailureBranches(t *testing.T) {
 	streamWithoutAudit := newHandler(nil, wantErr, agentruntime.AgentInteractiveExecutionResult{})
 	streamWithoutAudit.securityAuditForPrincipal = nil
 	call("stream execute without audit", true, streamWithoutAudit, "key", http.StatusOK)
-	invalid := agentruntime.AgentInteractiveExecutionResult{Result: agentruntime.InteractiveAgentResult{Structured: map[string]any{"bad": make(chan int)}}}
+	invalid := agentruntime.AgentInteractiveExecutionResult{Result: agentsdk.InteractiveResult{Structured: map[string]any{"bad": make(chan int)}}}
 	call("stream marshal", true, newHandler(nil, nil, invalid), "key", http.StatusOK)
 	flushAgentDialogEvent(nonFlushingResponseWriter{ResponseWriter: httptest.NewRecorder()})
 }
@@ -250,8 +251,8 @@ func TestAgentDialogTypedSelectionAndOwnerOperationConditionEdges(t *testing.T) 
 		w := httptest.NewRecorder()
 		h.agentDialogRun(w, httptest.NewRequest(http.MethodPost, "/agent-dialog/runs", strings.NewReader(payload)))
 	}
-	h.contextResolver = agentDialogContextResolverFunc(func(context.Context, agentruntime.GlobalAgentContextRequest) (agentmodel.GlobalAgentContext, error) {
-		return agentmodel.GlobalAgentContext{}, nil
+	h.contextResolver = agentDialogContextResolverFunc(func(context.Context, agentruntime.GlobalAgentContextRequest) (agentsdk.GlobalContext, error) {
+		return agentsdk.GlobalContext{}, nil
 	})
 	w := httptest.NewRecorder()
 	h.agentDialogRun(w, httptest.NewRequest(http.MethodPost, "/agent-dialog/runs", strings.NewReader(`{"message":"hello","response_mode":"streaming"}`)))
@@ -277,8 +278,8 @@ func TestAgentDialogLocalStatusAndResolverFailureBranches(t *testing.T) {
 	base.interactive = interactiveExecutorFunc(func(context.Context, agentruntime.AgentInteractiveExecutionRequest) (agentruntime.AgentInteractiveExecutionResult, error) {
 		return agentruntime.AgentInteractiveExecutionResult{}, nil
 	})
-	base.contextResolver = agentDialogContextResolverFunc(func(context.Context, agentruntime.GlobalAgentContextRequest) (agentmodel.GlobalAgentContext, error) {
-		return agentmodel.GlobalAgentContext{}, wantErr
+	base.contextResolver = agentDialogContextResolverFunc(func(context.Context, agentruntime.GlobalAgentContextRequest) (agentsdk.GlobalContext, error) {
+		return agentsdk.GlobalContext{}, wantErr
 	})
 	response := httptest.NewRecorder()
 	base.agentDialogRunStream(response, httptest.NewRequest(http.MethodPost, "/agent-dialog/runs/stream", strings.NewReader(`{"message":"hello"}`)))
@@ -315,7 +316,7 @@ func TestAgentDialogLocalStatusAndResolverFailureBranches(t *testing.T) {
 
 func TestAgentDialogGetTaskRunBranches(t *testing.T) {
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "default", AuthorizationRevision: "auth-2"}}, accessfixture.Bundle{Key: "role"})
-	valid := agentmodel.AgentTaskRun{ID: "run", WorkspaceID: "default", Identity: agentmodel.AgentExecutionIdentity{Initiator: agentmodel.AgentPrincipalReference{UserID: "user", RoleKey: "role", AuthorizationRevision: "auth-2"}}}
+	valid := agentmodel.AgentTaskRun{ID: "run", WorkspaceID: "default", Identity: agentsdk.ExecutionIdentity{Initiator: agentsdk.PrincipalReference{UserID: "user", RoleKey: "role", AuthorizationRevision: "auth-2"}}}
 	wantErr := errors.New("get failure")
 	for _, test := range []struct {
 		name string

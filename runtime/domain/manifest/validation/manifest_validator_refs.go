@@ -108,23 +108,6 @@ func (state *validationState) validateObjects() {
 	}
 }
 
-func (state *validationState) validateViews() {
-	seen := map[string]bool{}
-	for index, view := range state.manifest.Views {
-		path := fmt.Sprintf("views[%d]", index)
-		key := strings.TrimSpace(view.Key)
-		if key == "" {
-			state.add(path+".key", "is required")
-		} else if seen[key] {
-			state.add(path+".key", "duplicate view key %q", key)
-		}
-		seen[key] = true
-		if _, ok := state.objects[strings.TrimSpace(view.ObjectKey)]; !ok {
-			state.add(path+".object_key", "unknown object %q", view.ObjectKey)
-		}
-	}
-}
-
 func (state *validationState) validateActions() {
 	roles := make(map[string]manifestmodel.RoleSchema, len(state.manifest.Roles))
 	for _, role := range state.manifest.Roles {

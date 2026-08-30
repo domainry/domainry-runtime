@@ -4,8 +4,6 @@ import (
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
@@ -18,6 +16,7 @@ import (
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
@@ -38,7 +37,6 @@ type ManifestSchema struct {
 	Description               string                                          `json:"description,omitempty"`
 	I18n                      localizationmodel.LocalizedTextMap              `json:"i18n,omitempty"`
 	Objects                   []definitionmodel.ObjectSchema                  `json:"objects"`
-	Views                     []definitionmodel.ViewSchema                    `json:"views"`
 	Roles                     []RoleSchema                                    `json:"roles"`
 	Actions                   []definitionmodel.ActionSchema                  `json:"actions,omitempty"`
 	Workflows                 []definitionmodel.WorkflowSchema                `json:"workflows,omitempty"`
@@ -54,12 +52,11 @@ type ManifestSchema struct {
 	OperationStateExamples    []reportmodel.ReportOperationStateExampleSchema `json:"operation_state_examples,omitempty"`
 	SensitiveFieldPolicies    []reportmodel.ReportSensitiveFieldPolicySchema  `json:"sensitive_field_policies,omitempty"`
 	ReportExportControls      []reportmodel.ReportExportControlSchema         `json:"report_export_controls,omitempty"`
-	EntryPoints               []definitionmodel.EntryPointSchema              `json:"entrypoints,omitempty"`
-	Skills                    []agentmodel.SkillSchema                        `json:"skills,omitempty"`
-	Agents                    []agentmodel.AgentSchema                        `json:"agents,omitempty"`
-	AgentTasks                []agentmodel.AgentTaskDefinition                `json:"agent_tasks,omitempty"`
-	AgentEntrypoints          []agentmodel.AgentEntrypointAssignment          `json:"agent_entrypoints,omitempty"`
-	AgentServicePrincipals    []agentmodel.AgentServicePrincipalBinding       `json:"agent_service_principals,omitempty"`
+	Skills                    []agentsdk.SkillSchema                          `json:"skills,omitempty"`
+	Agents                    []agentsdk.AgentSchema                          `json:"agents,omitempty"`
+	AgentTasks                []agentsdk.AgentTaskDefinition                  `json:"agent_tasks,omitempty"`
+	AgentEntrypoints          []agentsdk.AgentEntrypointAssignment            `json:"agent_entrypoints,omitempty"`
+	AgentServicePrincipals    []agentsdk.AgentServicePrincipalBinding         `json:"agent_service_principals,omitempty"`
 	SeedRecords               []businessseedmodel.SeedRecordSchema            `json:"seed_records,omitempty"`
 	AutomationExecutionSeeds  []automationmodel.AutomationRuleExecution       `json:"automation_execution_seeds,omitempty"`
 	BusinessLoops             []map[string]any                                `json:"business_loops,omitempty"`

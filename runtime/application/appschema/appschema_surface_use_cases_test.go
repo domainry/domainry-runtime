@@ -24,10 +24,6 @@ func TestPublishedRuntimeSchemaOmitsAdministrationAndInternalConfiguration(t *te
 			Key: "order", Name: "Order",
 			Config: map[string]any{"display": "table", "sql_query": "select secret", "internal_registry": "hidden", "nested": map[string]any{"access_token": "hidden", "safe": "visible"}},
 		}},
-		Views: []definitionmodel.ViewSchema{{
-			Key: "order.table", ObjectKey: "order", Type: "table",
-			Config: map[string]any{"label": "Orders", "password": "hidden"},
-		}},
 	}
 	service := NewApplicationSchemaQueryApplicationService(metadataSchemaApplicationProviderStub{snapshot: snapshot}, nil)
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "user-a"}}, accessfixture.Bundle{Key: "member"})

@@ -8,17 +8,17 @@ import (
 )
 
 func TestChangePlanReferenceImpactDirectIndirectCycleAndStableOrder(t *testing.T) {
-	target := changeplanmodel.ReferenceEdge{FromType: "view", FromKey: "b", ToType: "field", ToKey: "status", Kind: "reads", Path: "z"}
+	target := changeplanmodel.ReferenceEdge{FromType: "report", FromKey: "b", ToType: "field", ToKey: "status", Kind: "reads", Path: "z"}
 	graph := changeplanmodel.ReferenceGraph{Hash: "hash-1", Edges: []changeplanmodel.ReferenceEdge{
 		target,
 		{FromType: "action", FromKey: "a", ToType: "field", ToKey: "status", Kind: "writes", Path: "a"},
 		{FromType: "field", FromKey: "other", ToType: "field", ToKey: "status", Kind: "depends"},
 		{FromType: "field", FromKey: "status", ToType: "object", ToKey: "order", Kind: "belongs_to"},
-		{FromType: "surface", FromKey: "s", ToType: "view", ToKey: "b", Kind: "renders"},
+		{FromType: "report", FromKey: "s", ToType: "report", ToKey: "b", Kind: "reads"},
 		{FromType: "surface", FromKey: "other", ToType: "field", ToKey: "other", Kind: "renders"},
-		{FromType: "action", FromKey: "unrelated", ToType: "view", ToKey: "other", Kind: "unrelated"},
+		{FromType: "action", FromKey: "unrelated", ToType: "report", ToKey: "other", Kind: "unrelated"},
 		{FromType: "report", FromKey: "r", ToType: "action", ToKey: "a", Kind: "invokes"},
-		{FromType: "view", FromKey: "b", ToType: "surface", ToKey: "s", Kind: "cycle"},
+		{FromType: "report", FromKey: "b", ToType: "report", ToKey: "s", Kind: "cycle"},
 	}}
 	impact := ChangePlanReferenceImpact(graph, "field", "status")
 	if impact.ResourceType != "field" || impact.ResourceKey != "status" || impact.GraphHash != "hash-1" || !impact.DeletionBlocked {
@@ -30,7 +30,7 @@ func TestChangePlanReferenceImpactDirectIndirectCycleAndStableOrder(t *testing.T
 	if len(impact.DirectDependencies) != 1 || impact.DirectDependencies[0].ToKey != "order" {
 		t.Fatalf("direct dependencies = %#v", impact.DirectDependencies)
 	}
-	if len(impact.IndirectConsumers) != 3 || impact.IndirectConsumers[0].FromKey != "r" || impact.IndirectConsumers[1].FromKey != "other" || impact.IndirectConsumers[2].FromKey != "s" {
+	if len(impact.IndirectConsumers) != 3 || impact.IndirectConsumers[0].FromKey != "r" || impact.IndirectConsumers[1].FromKey != "s" || impact.IndirectConsumers[2].FromKey != "other" {
 		t.Fatalf("indirect consumers = %#v", impact.IndirectConsumers)
 	}
 	empty := ChangePlanReferenceImpact(graph, "field", "missing")

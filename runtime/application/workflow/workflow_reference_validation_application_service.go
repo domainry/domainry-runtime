@@ -8,11 +8,11 @@ import (
 	"fmt"
 
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
 	"strings"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
 	workflowvalidation "github.com/domainry/domainry-runtime/runtime/domain/workflow/validation"
@@ -88,7 +88,7 @@ func (s *WorkflowReferenceValidator) validateWorkflowAgentTaskReference(ctx cont
 	}
 	contract := node.Contract.AgentTask
 	snapshot := s.schema.WorkflowSchemaSnapshot(ctx, principalmodel.Principal{})
-	var task agentmodel.AgentTaskDefinition
+	var task agentsdk.AgentTaskDefinition
 	found := false
 	for _, candidate := range snapshot.AgentTasks {
 		if !candidate.Enabled {
@@ -106,7 +106,7 @@ func (s *WorkflowReferenceValidator) validateWorkflowAgentTaskReference(ctx cont
 		return []workflowmodel.WorkflowValidationIssue{workflowReferenceIssue("backend.workflow.agent_task_not_published", node.ID, contract.TaskKey+"@"+contract.TaskVersion)}
 	}
 	issues := []workflowmodel.WorkflowValidationIssue{}
-	if contract.Identity.Mode == agentmodel.AgentTaskIdentityService {
+	if contract.Identity.Mode == agentsdk.AgentTaskIdentityService {
 		bindingFound := false
 		for _, binding := range snapshot.AgentServicePrincipals {
 			if !binding.Enabled {

@@ -26,8 +26,8 @@ If a hook fails:
 
 | Effect | Durable fact before dispatch | Post-commit behavior |
 | --- | --- | --- |
-| Email and Webhook delivery | `integration_outbox_messages` staged as a source-owned Action durable intent or by record automation | workers claim and deliver; an inline hook may only wake the worker |
-| Other asynchronous Connector/API work | `integration_outbox_messages` with a stable `request_ref` | workers retry from durable state with provider idempotency |
+| Email and Webhook delivery | `runtime_publication_outbox` staged as a source-owned Action durable intent or by record automation | workers claim and deliver; an inline hook may only wake the worker |
+| Other asynchronous Connector/API work | `runtime_publication_outbox` with a stable `request_ref` | workers retry from durable state with provider idempotency |
 | Asynchronous Workflow | `_workflow_executions(status=pending)` stored in the same record/action mutation commit | the fast path must first claim the pending execution; polling remains the recovery path |
 | Explicit synchronous source-owned Action Connector call | `integration_invocations(status=prepared)` persisted before the Provider call | terminal outcome, reconciliation, and compensation evidence are persisted; this is not an after-commit hook |
 

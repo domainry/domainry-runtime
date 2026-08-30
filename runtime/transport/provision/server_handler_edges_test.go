@@ -125,7 +125,7 @@ func TestProvisionApplyCoversEvidenceValidationCurrentAndActivationFailures(t *t
 	}
 }
 
-func TestProvisionApplyRejectsTemplateConflictUpdateAndAuditFailure(t *testing.T) {
+func TestProvisionApplyRejectsTemplateConflictAndAcceptsSourceControlledUpdate(t *testing.T) {
 	current := provisionTestManifest(t)
 	for name, next := range map[string]manifestmodel.ManifestSchema{
 		"template": manifestVariant(t, func(value *manifestmodel.ManifestSchema) { value.TemplateID = value.TemplateID + "-other" }),
@@ -140,14 +140,12 @@ func TestProvisionApplyRejectsTemplateConflictUpdateAndAuditFailure(t *testing.T
 			response := provisionRequest(t, server, http.MethodPost, "/metadata/manifests/apply", map[string]any{
 				"manifest": next, "reviewed_manifest_hash": next.ManifestHash, "expected_snapshot_hash": current.ManifestHash, "actor": "builder", "reason": "test",
 			})
-			if response.Code != http.StatusConflict {
+			if name == "template" {
+				if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), `"code":"template_id_conflict"`) {
+					t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+				}
+			} else if response.Code != http.StatusCreated || !strings.Contains(response.Body.String(), `"status":"applied"`) {
 				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
-			}
-			if name == "template" && !strings.Contains(response.Body.String(), `"code":"template_id_conflict"`) {
-				t.Fatalf("body=%s", response.Body.String())
-			}
-			if name == "update" && !strings.Contains(response.Body.String(), "change_plan") && !strings.Contains(response.Body.String(), "manifest_review_required") {
-				t.Fatalf("body=%s", response.Body.String())
 			}
 		})
 	}
@@ -277,7 +275,7 @@ func TestBuilderV1ReviewCoversValidationAndInstalledStateBoundaries(t *testing.T
 	changed := manifestVariant(t, func(value *manifestmodel.ManifestSchema) { value.Name += " Updated" })
 	changedRequest := builderV1ProvisionRequest(t, changed, "dev")
 	changedReview := provisionRequest(t, installedServer, http.MethodPost, "/provision/review", map[string]any{"provision_request": changedRequest})
-	if status, codes := v1DiagnosticCodes(t, changedReview); status != "blocked" || !codes["runtime.non_empty_update_requires_change_plan"] {
+	if status, codes := v1DiagnosticCodes(t, changedReview); status != "ready" || len(codes) != 0 {
 		t.Fatalf("status=%q codes=%#v body=%s", status, codes, changedReview.Body.String())
 	}
 }
@@ -314,11 +312,12 @@ func TestBuilderV1ApplyCoversBlockedInstalledAndStorageBoundaries(t *testing.T) 
 			}
 			server := NewServer(target, "dev", testContractIdentity(), nil).Routes()
 			response := provisionRequest(t, server, http.MethodPost, "/provision/apply", map[string]any{"provision_request": builderV1ProvisionRequest(t, next, "dev")})
-			want := "runtime.non_empty_update_requires_change_plan"
+			status, codes := v1DiagnosticCodes(t, response)
 			if name == "template" {
-				want = "runtime.template_id_conflict"
-			}
-			if status, codes := v1DiagnosticCodes(t, response); status != "blocked" || !codes[want] {
+				if status != "blocked" || !codes["runtime.template_id_conflict"] {
+					t.Fatalf("status=%q codes=%#v body=%s", status, codes, response.Body.String())
+				}
+			} else if status != "applied" {
 				t.Fatalf("status=%q codes=%#v body=%s", status, codes, response.Body.String())
 			}
 		})

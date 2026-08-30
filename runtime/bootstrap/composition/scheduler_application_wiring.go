@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	workerplatform "github.com/domainry/domainry-foundation/worker"
+	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
-	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -20,9 +21,13 @@ import (
 
 type schedulerApplicationDefinitionSource struct {
 	repository appschemarepository.ApplicationSchemaRepository
+	authored   []map[string]any
 }
 
 func (s schedulerApplicationDefinitionSource) ListSchedulerDefinitions(ctx context.Context) ([]recordmodel.Record, error) {
+	if s.authored != nil {
+		return schedulerAuthoredRecords(s.authored)
+	}
 	if !schedulerMetadataRepositoryAvailable(s.repository) {
 		return nil, nil
 	}
@@ -42,6 +47,19 @@ func (s schedulerApplicationDefinitionSource) ListSchedulerDefinitions(ctx conte
 }
 
 func (s schedulerApplicationDefinitionSource) GetSchedulerDefinition(ctx context.Context, key string) (recordmodel.Record, bool, error) {
+	if s.authored != nil {
+		records, err := schedulerAuthoredRecords(s.authored)
+		if err != nil {
+			return recordmodel.Record{}, false, err
+		}
+		key = strings.TrimSpace(key)
+		for _, record := range records {
+			if record.ID == key {
+				return record, true, nil
+			}
+		}
+		return recordmodel.Record{}, false, nil
+	}
 	if !schedulerMetadataRepositoryAvailable(s.repository) {
 		return recordmodel.Record{}, false, nil
 	}
@@ -54,22 +72,37 @@ func (s schedulerApplicationDefinitionSource) GetSchedulerDefinition(ctx context
 }
 
 func (s schedulerApplicationDefinitionSource) ListSchedulerDefinitionVersions(ctx context.Context, key string) ([]schedulerapplication.SchedulerDefinitionVersion, error) {
+	if s.authored != nil {
+		record, found, err := s.GetSchedulerDefinition(ctx, key)
+		if err != nil || !found {
+			return nil, err
+		}
+		return []schedulerapplication.SchedulerDefinitionVersion{{VersionID: record.UpdatedAt, Event: "manifest_definition", Data: record.Data, CreatedAt: record.CreatedAt}}, nil
+	}
 	if !schedulerMetadataRepositoryAvailable(s.repository) {
 		return nil, nil
 	}
-	versions, err := s.repository.ListDefinitionVersions(ctx, principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "read scheduler definition versions"), "scheduler", key)
-	if err != nil {
+	record, found, err := s.GetSchedulerDefinition(ctx, key)
+	if err != nil || !found {
 		return nil, err
 	}
-	out := make([]schedulerapplication.SchedulerDefinitionVersion, 0, len(versions))
-	for _, version := range versions {
-		data := map[string]any{}
-		if err := json.Unmarshal(version.Payload, &data); err != nil {
-			return nil, fmt.Errorf("decode scheduler definition version %s: %w", version.SchemaVersion, err)
+	return []schedulerapplication.SchedulerDefinitionVersion{{VersionID: record.UpdatedAt, Event: "manifest_definition", Data: record.Data, CreatedAt: record.CreatedAt}}, nil
+}
+
+func schedulerAuthoredRecords(definitions []map[string]any) ([]recordmodel.Record, error) {
+	records := make([]recordmodel.Record, 0, len(definitions))
+	for _, definition := range definitions {
+		key := strings.TrimSpace(fmt.Sprint(definition["key"]))
+		if key == "" {
+			return nil, fmt.Errorf("Scheduler manifest definition key is required")
 		}
-		out = append(out, schedulerapplication.SchedulerDefinitionVersion{VersionID: version.SchemaVersion, Event: "metadata_version", Data: data, CreatedAt: version.CreatedAt})
+		revision := strings.TrimSpace(fmt.Sprint(definition["revision"]))
+		if revision == "" || revision == "<nil>" {
+			revision = "published"
+		}
+		records = append(records, recordmodel.Record{ID: key, Data: cloneSchedulerDefinitionMap(definition), CreatedAt: revision, UpdatedAt: revision})
 	}
-	return out, nil
+	return records, nil
 }
 
 func schedulerMetadataRepositoryAvailable(repository appschemarepository.ApplicationSchemaRepository) bool {

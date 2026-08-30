@@ -151,12 +151,11 @@ func TestFrontendCapabilityValidationAuthorizationAndBindings(t *testing.T) {
 	}
 
 	bindings := FrontendBusinessBindings{
-		Objects: map[string]bool{}, Views: map[string]bool{}, Actions: map[string]bool{}, Reports: map[string]bool{}, Fields: map[string]bool{},
+		Objects: map[string]bool{}, Actions: map[string]bool{}, Reports: map[string]bool{}, Fields: map[string]bool{},
 	}
 	service = frontendCapabilityTestServiceWithBindings(func(context.Context) FrontendBusinessBindings { return bindings })
 	manifest.Entries[0].ActorRoles = []string{"missing-role"}
 	manifest.Entries[0].BusinessObjects = []string{"missing-object"}
-	manifest.Entries[0].ViewKeys = []string{"missing-view"}
 	manifest.Entries[0].ImplementedActions = []string{"missing-action"}
 	manifest.Entries[0].ReportKeys = []string{"missing-report"}
 	manifest.Entries[0].FieldKeys = []string{"missing-field"}

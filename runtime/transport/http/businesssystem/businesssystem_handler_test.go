@@ -119,7 +119,7 @@ func TestRuntimeAuthoringValidationDrivesTrustedLifecycleCallbacks(t *testing.T)
 	principal := principalmodel.NewSystemPrincipal("builder", principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "runtime authoring validation"), "workspace.admin")
 	validation := businesssystemapplication.NewRuntimeAuthoringValidationApplicationService(businesssystemapplication.RuntimeAuthoringValidationDependencies{
 		CurrentManifest: func(context.Context, principalmodel.Principal) (manifestmodel.ManifestSchema, error) {
-			return manifestmodel.ManifestSchema{SchemaVersion: "2", TemplateID: "direct", Version: "configuring", Objects: []definitionmodel.ObjectSchema{}, Views: []definitionmodel.ViewSchema{}}, nil
+			return manifestmodel.ManifestSchema{SchemaVersion: "2", TemplateID: "direct", Version: "configuring", Objects: []definitionmodel.ObjectSchema{}}, nil
 		},
 		CurrentSnapshot: func(context.Context, principalmodel.Principal) (changeplanprojection.BusinessSystemSnapshot, error) {
 			return businessSystemCompleteValidationSnapshot(), nil

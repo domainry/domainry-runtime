@@ -22,8 +22,8 @@ func changePlanFrontendEntries(source []deploymentmodel.FrontendCapabilitySuppor
 			Route: entry.Route, RequiredPermissions: append([]string(nil), entry.RequiredPermissions...), FeatureModule: entry.FeatureModule,
 			AcceptanceTests: append([]string(nil), entry.AcceptanceTests...),
 			ActorRoles:      append([]string(nil), entry.ActorRoles...), BusinessObjects: append([]string(nil), entry.BusinessObjects...),
-			ViewKeys: append([]string(nil), entry.ViewKeys...), ImplementedActions: append([]string(nil), entry.ImplementedActions...),
-			ReportKeys: append([]string(nil), entry.ReportKeys...), FieldKeys: append([]string(nil), entry.FieldKeys...),
+			ImplementedActions: append([]string(nil), entry.ImplementedActions...),
+			ReportKeys:         append([]string(nil), entry.ReportKeys...), FieldKeys: append([]string(nil), entry.FieldKeys...),
 			AcceptanceClaims: append([]string(nil), entry.AcceptanceClaims...),
 		})
 	}
@@ -61,9 +61,9 @@ func assembleChangePlanReferenceApplication(schema CapabilityAuthoringSchemaProv
 		}
 		snapshot := schema.SchemaForPrincipal(ctx, principal)
 		return changeplanbusiness.ReferenceSchema{
-			Objects: snapshot.Objects, Views: snapshot.Views, Actions: snapshot.Actions, Workflows: snapshot.Workflows,
+			Objects: snapshot.Objects, Actions: snapshot.Actions, Workflows: snapshot.Workflows,
 			AutomationRules: snapshot.AutomationRules, Reports: snapshot.Reports, Integrations: snapshot.Integrations,
-			EntryPoints: snapshot.EntryPoints, Agents: snapshot.Agents,
+			Agents:          snapshot.Agents,
 			ProfileBindings: snapshot.IdentityProfileExtensions,
 		}
 	}, runtimePort, evidence, frontendPort)

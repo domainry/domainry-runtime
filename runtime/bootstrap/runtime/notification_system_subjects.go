@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
-	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 )
 
 type notificationSystemSubjectLifecycle struct {

@@ -1,13 +1,12 @@
 package validation
 
 import (
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
-
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 )
 
 func TestBuilderAgentCapabilityDocumentTracksRuntimeContract(t *testing.T) {
@@ -28,26 +27,26 @@ func TestBuilderAgentCapabilityDocumentTracksRuntimeContract(t *testing.T) {
 		}
 	}
 	for _, value := range []string{
-		agentmodel.AgentTaskContractVersion,
-		agentmodel.AgentEntrypointContractVersion,
-		agentmodel.AgentServicePrincipalContractVersion,
-		agentmodel.GlobalAgentContextContractVersion,
-		agentmodel.AgentRoutingContractVersion,
-		agentmodel.AgentTaskSideEffectAnalysisOnly,
-		agentmodel.AgentTaskSideEffectProposalOnly,
-		agentmodel.AgentTaskSideEffectActionAllowed,
-		agentmodel.AgentTaskIdentityInherit,
-		agentmodel.AgentTaskIdentityService,
-		agentmodel.AgentRouteInteractiveQuery,
-		agentmodel.AgentRouteTask,
-		agentmodel.AgentRouteWorkflow,
-		agentmodel.AgentRouteProposal,
+		agentsdk.AgentTaskContractVersion,
+		agentsdk.AgentEntrypointContractVersion,
+		agentsdk.AgentServicePrincipalContractVersion,
+		agentsdk.GlobalAgentContextContractVersion,
+		agentsdk.AgentRoutingContractVersion,
+		agentsdk.AgentTaskSideEffectAnalysisOnly,
+		agentsdk.AgentTaskSideEffectProposalOnly,
+		agentsdk.AgentTaskSideEffectActionAllowed,
+		agentsdk.AgentTaskIdentityInherit,
+		agentsdk.AgentTaskIdentityService,
+		agentsdk.AgentRouteInteractiveQuery,
+		agentsdk.AgentRouteTask,
+		agentsdk.AgentRouteWorkflow,
+		agentsdk.AgentRouteProposal,
 	} {
 		if !strings.Contains(document, value) {
 			t.Errorf("Agent document drift: missing Runtime contract value %q", value)
 		}
 	}
-	for _, outcome := range agentmodel.AgentTaskOutcomes {
+	for _, outcome := range agentsdk.AgentTaskOutcomes {
 		if !strings.Contains(document, outcome) {
 			t.Errorf("Agent document drift: missing task outcome %q", outcome)
 		}

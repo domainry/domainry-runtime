@@ -9,9 +9,10 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -46,7 +47,7 @@ func TestWorkflowAgentTaskNodeAtomicallyCreatesWaitingNodeAndDurableRun(t *testi
 		},
 	})
 	process := workflowmodel.WorkflowProcessInstance{ID: "process-1", WorkspaceID: principal.WorkspaceID, DefinitionHash: "definition-hash", Variables: map[string]any{"record_id": "record-1"}}
-	node := definitionmodel.WorkflowGraphNode{ID: "agent", Type: "agent_task", Name: "Review", Contract: &definitionmodel.WorkflowNodeContract{AgentTask: &definitionmodel.WorkflowAgentTaskNodeContract{TaskKey: "customer.review", TaskVersion: "1.0.0", Identity: definitionmodel.WorkflowAgentTaskIdentity{Mode: agentmodel.AgentTaskIdentityInherit}, Input: map[string]any{"record_id": "{{record_id}}"}, OutputVariable: "review", ExecutionMode: "async"}}}
+	node := definitionmodel.WorkflowGraphNode{ID: "agent", Type: "agent_task", Name: "Review", Contract: &definitionmodel.WorkflowNodeContract{AgentTask: &definitionmodel.WorkflowAgentTaskNodeContract{TaskKey: "customer.review", TaskVersion: "1.0.0", Identity: definitionmodel.WorkflowAgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityInherit}, Input: map[string]any{"record_id": "{{record_id}}"}, OutputVariable: "review", ExecutionMode: "async"}}}
 	outcome, waiting, err := runtime.ProcessEngine().executeNode(t.Context(), &process, node, principal)
 	if err != nil || !waiting || outcome != "waiting" {
 		t.Fatalf("outcome=%q waiting=%v err=%v", outcome, waiting, err)
@@ -74,7 +75,7 @@ func TestAgentTaskTerminalAtomicallyUpdatesTaskNodeProcessAndResumeIntent(t *tes
 	processes := &workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{process.ID: process}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{process.ID: {{ID: "node-instance", ProcessID: process.ID, NodeID: "agent", NodeType: "agent_task", Iteration: 1, Status: "waiting"}}}}
 	service := NewWorkflowApplicationService(WorkflowDependencies{Processes: processes, Decisions: state})
 	now := time.Now().UTC()
-	run := agentmodel.AgentTaskRun{ID: "run-1", WorkspaceID: principal.WorkspaceID, ProcessID: process.ID, NodeInstanceID: "node-instance", TaskKey: "customer.review", TaskVersion: "1.0.0", Status: agentmodel.AgentTaskRunSucceeded, Outcome: "success", Output: map[string]any{"score": 90}, Attempt: 1, UpdatedAt: now, Identity: agentmodel.AgentExecutionIdentity{Mode: agentmodel.AgentTaskIdentityInherit, Execution: agentmodel.AgentPrincipalReference{UserID: principal.UserID, RoleKey: principal.RoleKey}}, Evidence: agentmodel.AgentTaskExecutionEvidence{AgentKey: "customer-agent", ToolInvocationRefs: []string{"tool-1"}, AuditRefs: []string{"audit-1"}}, RawEvidenceRef: "evidence-1"}
+	run := agentmodel.AgentTaskRun{ID: "run-1", WorkspaceID: principal.WorkspaceID, ProcessID: process.ID, NodeInstanceID: "node-instance", TaskKey: "customer.review", TaskVersion: "1.0.0", Status: agentmodel.AgentTaskRunSucceeded, Outcome: "success", Output: map[string]any{"score": 90}, Attempt: 1, UpdatedAt: now, Identity: agentsdk.ExecutionIdentity{Mode: agentsdk.AgentTaskIdentityInherit, Execution: agentsdk.PrincipalReference{UserID: principal.UserID, RoleKey: principal.RoleKey}}, Evidence: agentmodel.AgentTaskExecutionEvidence{AgentKey: "customer-agent", ToolInvocationRefs: []string{"tool-1"}, AuditRefs: []string{"audit-1"}}, RawEvidenceRef: "evidence-1"}
 	if err := service.CommitAgentTaskTerminal(t.Context(), run, "worker-1", 7); err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +128,7 @@ func TestAgentTaskApprovalTerminalUsesWaitingStatusCAS(t *testing.T) {
 	process := workflowmodel.WorkflowProcessInstance{ID: "process-approval", WorkspaceID: principal.WorkspaceID, WorkflowKey: "flow", WorkflowName: "Flow", DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "flow", Graph: graph}, Status: "waiting", CurrentNodeIDs: []string{"agent"}, Variables: map[string]any{}}
 	processes := &workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{process.ID: process}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{process.ID: {{ID: "node-approval", ProcessID: process.ID, NodeID: "agent", NodeType: "agent_task", Status: "waiting"}}}}
 	service := NewWorkflowApplicationService(WorkflowDependencies{Processes: processes, Decisions: state})
-	run := agentmodel.AgentTaskRun{ID: "run-approval", WorkspaceID: principal.WorkspaceID, ProcessID: process.ID, NodeInstanceID: "node-approval", TaskKey: "customer.review", TaskVersion: "1.0.0", Status: agentmodel.AgentTaskRunSucceeded, Outcome: "success", UpdatedAt: time.Now().UTC(), Identity: agentmodel.AgentExecutionIdentity{Execution: agentmodel.AgentPrincipalReference{UserID: principal.UserID, RoleKey: principal.RoleKey}}, Approval: &agentmodel.AgentTaskApproval{ProposalID: "proposal", Status: "resolved", Decision: "approved"}}
+	run := agentmodel.AgentTaskRun{ID: "run-approval", WorkspaceID: principal.WorkspaceID, ProcessID: process.ID, NodeInstanceID: "node-approval", TaskKey: "customer.review", TaskVersion: "1.0.0", Status: agentmodel.AgentTaskRunSucceeded, Outcome: "success", UpdatedAt: time.Now().UTC(), Identity: agentsdk.ExecutionIdentity{Execution: agentsdk.PrincipalReference{UserID: principal.UserID, RoleKey: principal.RoleKey}}, Approval: &agentmodel.AgentTaskApproval{ProposalID: "proposal", Status: "resolved", Decision: "approved"}}
 	if err := service.CommitAgentTaskApprovalTerminal(t.Context(), run); err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +220,7 @@ func TestWorkflowSimulationShowsAgentTaskWithoutModelTaskOrSideEffects(t *testin
 		Version: 2,
 		Nodes: []definitionmodel.WorkflowGraphNode{
 			{ID: "trigger", Type: "trigger"},
-			{ID: "agent", Type: "agent_task", Contract: &definitionmodel.WorkflowNodeContract{AgentTask: &definitionmodel.WorkflowAgentTaskNodeContract{TaskKey: "customer.review", TaskVersion: "1.0.0", Identity: definitionmodel.WorkflowAgentTaskIdentity{Mode: agentmodel.AgentTaskIdentityInherit}, Input: map[string]any{}, OutputVariable: "review", ExecutionMode: "async", TimeoutSeconds: 30, Retry: &definitionmodel.WorkflowRetryPolicy{MaxAttempts: 2}, OnError: "error_branch", AllowedOutcomes: []string{"success", "error"}}}},
+			{ID: "agent", Type: "agent_task", Contract: &definitionmodel.WorkflowNodeContract{AgentTask: &definitionmodel.WorkflowAgentTaskNodeContract{TaskKey: "customer.review", TaskVersion: "1.0.0", Identity: definitionmodel.WorkflowAgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityInherit}, Input: map[string]any{}, OutputVariable: "review", ExecutionMode: "async", TimeoutSeconds: 30, Retry: &definitionmodel.WorkflowRetryPolicy{MaxAttempts: 2}, OnError: "error_branch", AllowedOutcomes: []string{"success", "error"}}}},
 			{ID: "done", Type: "action", Contract: &definitionmodel.WorkflowNodeContract{Action: &definitionmodel.WorkflowBusinessActionNodeContract{ActionKey: "customer.finish"}}},
 		},
 		Edges: []definitionmodel.WorkflowGraphEdge{{Source: "trigger", Target: "agent"}, {Source: "agent", Target: "done", Branch: "success"}, {Source: "agent", Target: "done", Branch: "error"}},

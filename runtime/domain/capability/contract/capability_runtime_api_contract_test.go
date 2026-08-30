@@ -41,7 +41,8 @@ func TestRuntimeAPIContractMatchesPublishedFrontendContract(t *testing.T) {
 	if err := json.Unmarshal(RuntimeAPIContractDocument(), &runtimeDocument); err != nil {
 		t.Fatal(err)
 	}
-	if err := json.Unmarshal(frontend, &frontendDocument); err != nil {
+	projectedFrontend, _ := projectRuntimeAPIContract(frontend)
+	if err := json.Unmarshal(projectedFrontend, &frontendDocument); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(runtimeDocument, frontendDocument) {

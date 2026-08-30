@@ -70,9 +70,6 @@ func TestCapabilityDiscoveryAuthorizationAndDomainFilterEdges(t *testing.T) {
 
 func TestCapabilityDiscoverySelectionErrorAndOptionalEdges(t *testing.T) {
 	service, admin := capabilityDiscoveryEdgeService()
-	if detail, err := service.CapabilityDetailSelected(t.Context(), admin, "seed.record", CapabilityDetailSelection{}); err != nil || len(detail.Selection) != 0 {
-		t.Fatalf("generic seed=%#v err=%v", detail, err)
-	}
 	if detail, err := service.CapabilityDetailSelected(t.Context(), admin, "integration.connection.rotate", CapabilityDetailSelection{}); err != nil || len(detail.Selection) != 0 {
 		t.Fatalf("generic rotate=%#v err=%v", detail, err)
 	}

@@ -232,8 +232,7 @@ func RestoreReconciliationPlan() []ReconciliationAction {
 		{Table: "workflow_execution_receipts", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
 		{Table: "business_action_executions", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
 		{Table: "record_mutation_executions", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
-		{Table: "integration_events", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
-		{Table: "integration_outbox_messages", Action: "requeue_expired_delivery", Guard: "lease_expires_at <= restored_at AND terminal_at IS NULL"},
+		{Table: "runtime_publication_outbox", Action: "requeue_expired_delivery", Guard: "lease_expires_at <= restored_at AND terminal_at IS NULL"},
 		{Table: "transaction_boundary_intents", Action: "requeue_expired_intent", Guard: "lease_expires_at <= restored_at"},
 	}
 }

@@ -1,7 +1,10 @@
 package integrationmodel
 
-import "encoding/json"
-import agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+import (
+	"encoding/json"
+
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+)
 
 type IntegrationConnection struct {
 	Key          string            `json:"key"`
@@ -413,7 +416,7 @@ type IntegrationAgentToolInvocationRequest struct {
 }
 
 type IntegrationAgentToolInvocationResult struct {
-	Agent            agentmodel.AgentSchema                   `json:"agent"`
+	Agent            agentsdk.AgentSchema                     `json:"agent"`
 	Tool             string                                   `json:"tool"`
 	Status           string                                   `json:"status"`
 	ExternalIdentity IntegrationExternalIdentityResolveResult `json:"external_identity"`

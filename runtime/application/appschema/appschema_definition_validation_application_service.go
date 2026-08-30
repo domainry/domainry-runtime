@@ -7,8 +7,6 @@ import (
 	appschemavalidation "github.com/domainry/domainry-runtime/runtime/domain/appschema/validation"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestvalidation "github.com/domainry/domainry-runtime/runtime/domain/manifest/validation"
-	preferencevalidation "github.com/domainry/domainry-runtime/runtime/domain/preference/validation"
-	rulesetvalidation "github.com/domainry/domainry-runtime/runtime/domain/ruleset/validation"
 
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 
@@ -24,7 +22,6 @@ import (
 
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 
-	"github.com/domainry/domainry-foundation/apperror"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )
 
@@ -103,34 +100,17 @@ func (s *ApplicationSchemaApplicationService) ValidateApplicationDefinition(ctx 
 }
 
 func (s *ApplicationSchemaApplicationService) ValidateApplicationDefinitionRequestPayload(ctx context.Context, resourceType, resourceKey string, req appschemamodel.ApplicationDefinitionUpsertRequest) (json.RawMessage, []appschemamodel.ApplicationDefinitionValidationIssue, error) {
+	if retiredPresentationDefinitionType(resourceType) {
+		return nil, nil, badRequest("backend.app_schema.resource_type_unsupported", "resource_type", resourceType)
+	}
 	if resourceType == "object" {
 		normalized, err := appschemavalidation.ApplicationSchemaValidateObjectDefinition(resourceKey, req.Payload)
-		return normalized, nil, err
-	}
-	if resourceType == "view" {
-		normalized, err := appschemavalidation.ApplicationSchemaValidateViewDefinition(resourceKey, req.Payload, s.runtime.Schema().Objects)
 		return normalized, nil, err
 	}
 	if resourceType == "dictionary" {
 		if err := appschemavalidation.ApplicationSchemaValidateDictionaryDefinition(resourceKey, req.Payload); err != nil {
 			return nil, nil, err
 		}
-	}
-	if resourceType == "preference" {
-		preference, err := preferencevalidation.DecodeWorkspacePreferenceDefinition(resourceKey, req.Payload)
-		if err != nil {
-			return nil, nil, apperror.FromError(apperror.KindBadRequest, err)
-		}
-		normalized, _ := json.Marshal(preference)
-		return normalized, nil, nil
-	}
-	if resourceType == "rule_set" {
-		ruleSet, err := rulesetvalidation.DecodeRuleSetDefinition(resourceKey, req.Payload)
-		if err != nil {
-			return nil, nil, apperror.FromError(apperror.KindBadRequest, err)
-		}
-		normalized, _ := json.Marshal(ruleSet)
-		return normalized, nil, nil
 	}
 	if resourceType == "action" {
 		action, err := decodeActionDefinitionPayload(req.Payload)
@@ -168,6 +148,9 @@ func (s *ApplicationSchemaApplicationService) ValidateApplicationDefinitionReque
 }
 
 func (s *ApplicationSchemaApplicationService) ValidateApplicationDefinitionPayload(ctx context.Context, resourceType string, req appschemamodel.ApplicationDefinitionUpsertRequest) (appschemamodel.ApplicationDefinitionUpsertRequest, error) {
+	if retiredPresentationDefinitionType(resourceType) {
+		return req, badRequest("backend.app_schema.resource_type_unsupported", "resource_type", resourceType)
+	}
 	switch resourceType {
 	case "field":
 		return s.normalizeAndValidateFieldMetadataMutation(ctx, req)
@@ -177,22 +160,6 @@ func (s *ApplicationSchemaApplicationService) ValidateApplicationDefinitionPaylo
 			return req, badRequest("backend.automation.definition_invalid")
 		}
 		return req, s.ValidateAutomationRuleDefinition(ctx, rule)
-	case "preference":
-		preference, err := preferencevalidation.DecodeWorkspacePreferenceDefinition("", req.Payload)
-		if err != nil {
-			return req, apperror.FromError(apperror.KindBadRequest, err)
-		}
-		normalized, _ := json.Marshal(preference)
-		req.Payload = normalized
-		return req, nil
-	case "rule_set":
-		ruleSet, err := rulesetvalidation.DecodeRuleSetDefinition("", req.Payload)
-		if err != nil {
-			return req, apperror.FromError(apperror.KindBadRequest, err)
-		}
-		normalized, _ := json.Marshal(ruleSet)
-		req.Payload = normalized
-		return req, nil
 	case "identity_profile_binding":
 		var binding profilebindingmodel.Binding
 		if err := json.Unmarshal(req.Payload, &binding); err != nil {
@@ -233,15 +200,17 @@ func (s *ApplicationSchemaApplicationService) ValidateApplicationDefinitionPaylo
 			return req, badRequest("backend.report.definition_invalid")
 		}
 		return req, validateReportDefinitionForSnapshot(ctx, s.runtime.Schema(), s.records, report)
-	case "view":
-		normalized, err := appschemavalidation.ApplicationSchemaValidateViewDefinition("", req.Payload, s.runtime.Schema().Objects)
-		if err != nil {
-			return req, err
-		}
-		req.Payload = normalized
-		return req, nil
 	default:
 		return req, nil
+	}
+}
+
+func retiredPresentationDefinitionType(resourceType string) bool {
+	switch resourceType {
+	case "view", "surface", "component", "entrypoint":
+		return true
+	default:
+		return false
 	}
 }
 

@@ -285,7 +285,7 @@ func (s *IntegrationApplicationService) ProcessDueIntegrationOutbox(ctx context.
 
 func (s *IntegrationApplicationService) listDueIntegrationOutbox(ctx context.Context, limit int) ([]integrationmodel.IntegrationOutboxMessage, error) {
 	workerScope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "poll due integration outbox")
-	due, err := s.workerRepo.ListDueOutbox(ctx, workerScope, capacityplatform.OverscanLimit(limit, 4, 800), s.worker.Clock.Now().Format(time.RFC3339))
+	due, err := s.publicationWorkerRepo.ListDueOutbox(ctx, workerScope, capacityplatform.OverscanLimit(limit, 4, 800), s.worker.Clock.Now().Format(time.RFC3339))
 	if err != nil {
 		return nil, err
 	}

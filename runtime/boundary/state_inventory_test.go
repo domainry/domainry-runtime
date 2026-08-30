@@ -19,9 +19,9 @@ func TestRuntimeStateInventoryCoversKnownMutableState(t *testing.T) {
 		"_audit_events",
 		"workflow_process_instances",
 		"automation_rule_executions",
-		"integration_outbox_messages",
+		"runtime_publication_outbox",
 		"integration_webhook_nonces",
-		"metadata_definition_versions",
+		"metadata.current_projection.v1",
 		"agentDialogSessions",
 		"agentDialogProposals",
 		"agentReportQueryRuns",
@@ -47,7 +47,7 @@ func TestRuntimeStateInventoryCoversKnownMutableState(t *testing.T) {
 			t.Errorf("runtime state inventory is missing retention class %q", class)
 		}
 	}
-	for _, policyKey := range []string{"record.object.default.v1", "audit.evidence.v1", "workflow.execution.v1", "integration.delivery_evidence.v1", "technical.lease_checkpoint.v1", "report.export.v1"} {
+	for _, policyKey := range []string{"record.object.default.v1", "audit.evidence.v1", "workflow.execution.v1", "runtime.publication_handoff.v1", "report.export.v1"} {
 		if !strings.Contains(document, "`"+policyKey+"`") {
 			t.Errorf("runtime state inventory is missing policy key %q", policyKey)
 		}

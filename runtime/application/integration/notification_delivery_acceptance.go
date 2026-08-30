@@ -16,7 +16,7 @@ import (
 // AcceptNotificationDelivery is the Runtime-owned durable acceptance boundary
 // used by Notification SaaS. Provider invocation always remains asynchronous.
 func (s *IntegrationApplicationService) AcceptNotificationDelivery(ctx context.Context, request deliverygateway.Request, productName string) (deliverygateway.Receipt, error) {
-	if s == nil || s.deliveryRepo == nil {
+	if s == nil || s.publicationRepo == nil {
 		return deliverygateway.Receipt{}, fmt.Errorf("notification Delivery Gateway repository is unavailable")
 	}
 	payload, err := notificationDeliveryPayload(request.Rendered, productName)
@@ -41,7 +41,7 @@ func (s *IntegrationApplicationService) AcceptNotificationDelivery(ctx context.C
 	if err != nil {
 		return deliverygateway.Receipt{}, err
 	}
-	message, err := s.deliveryRepo.InsertOutbox(ctx, request.WorkspaceID, integrationmodel.IntegrationOutboxMessage{
+	message, err := s.publicationRepo.InsertOutbox(ctx, request.WorkspaceID, integrationmodel.IntegrationOutboxMessage{
 		WorkspaceID: request.WorkspaceID, ConnectorKey: request.ConnectorKey, ConnectionKey: request.ConnectionKey,
 		Operation: request.Operation, Status: "queued", Payload: payload, EventID: request.EventID,
 		RequestRef: request.RequestID, DedupKey: request.DedupeKey, RequestFingerprint: fingerprint,

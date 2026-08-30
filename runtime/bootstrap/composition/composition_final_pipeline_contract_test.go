@@ -6,7 +6,6 @@ import (
 	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	businessintegration "github.com/domainry/domainry-runtime/runtime/application/integration"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	actionservice "github.com/domainry/domainry-runtime/runtime/domain/action/service"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
@@ -27,15 +26,15 @@ func TestPipelineCompositionAllowsMissingOptionalAutomation(t *testing.T) {
 }
 
 func TestCompositionDeclaredConnectorPorts(t *testing.T) {
-	registry := businessintegration.NewConnectorRegistry(integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{
+	registry := newRuntimeConnectorCatalog(integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{
 		{Key: "other", Provider: "missing"}, {Key: "declared", Provider: "missing"},
 	}})
 	provider := runtimeWorkflowSchemaProvider{records: &runtimeAssembly{connectorRegistry: registry}}
-	if provider.ConnectorAdapterExists(t.Context(), "declared") {
-		t.Fatal("declared connector without adapter must not report ready")
+	if !provider.ConnectorAdapterExists(t.Context(), "declared") {
+		t.Fatal("declared application connector must be recognized without a Runtime Provider adapter")
 	}
-	if provider.ConnectorAdapterExists(t.Context(), "other") {
-		t.Fatal("second declared connector without adapter must not report ready")
+	if !provider.ConnectorAdapterExists(t.Context(), "other") {
+		t.Fatal("second declared application connector was not recognized")
 	}
 }
 

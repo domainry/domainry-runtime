@@ -5,16 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"sync"
 
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
-	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 )
 
 type runtimeConnectorGateway interface {
-	Call(context.Context, runtimeext.ActionExecution, integrationapplication.SyncCallRequest) (integrationapplication.SyncCallResult, error)
+	Call(context.Context, runtimeext.ActionExecution, ConnectorCallRequest) (ConnectorCallResult, error)
 }
 
 type bindableConnectorGateway struct {
@@ -51,23 +49,10 @@ func (g *bindableConnectorGateway) Call(ctx context.Context, execution runtimeex
 	if execution == nil {
 		return ConnectorCallResult{}, &runtimeext.BusinessError{Code: runtimeext.ConnectorActionExecutionRequiredErrorCode, Message: "Connector ActionExecution is required"}
 	}
-	payload, err := decodeConnectorCallPayload(request.Payload)
-	if err != nil {
+	if _, err := decodeConnectorCallPayload(request.Payload); err != nil {
 		return ConnectorCallResult{}, &runtimeext.BusinessError{Code: "backend.connector.request_invalid", Message: "Connector request payload must be one JSON object", Cause: err}
 	}
-	result, err := target.Call(ctx, execution, integrationapplication.SyncCallRequest{
-		ConnectorKey: request.ConnectorKey, ConnectionKey: request.ConnectionKey, Operation: request.OperationKey,
-		ContractSHA256: request.ContractSHA256, OperationMode: request.Mode, OperationEffect: request.Effect, Request: payload,
-		ActionKey: execution.Identity().ActionKey,
-	})
-	if err != nil {
-		return ConnectorCallResult{}, err
-	}
-	encoded, err := json.Marshal(result.Response)
-	if err != nil {
-		return ConnectorCallResult{}, fmt.Errorf("encode Runtime Connector response: %w", err)
-	}
-	return ConnectorCallResult{Payload: encoded}, nil
+	return target.Call(ctx, execution, request)
 }
 
 func decodeConnectorCallPayload(payload json.RawMessage) (map[string]any, error) {
@@ -87,4 +72,10 @@ func decodeConnectorCallPayload(payload json.RawMessage) (map[string]any, error)
 		return nil, err
 	}
 	return result, nil
+}
+
+type unavailableRuntimeConnectorGateway struct{}
+
+func (unavailableRuntimeConnectorGateway) Call(context.Context, runtimeext.ActionExecution, ConnectorCallRequest) (ConnectorCallResult, error) {
+	return ConnectorCallResult{}, &runtimeext.BusinessError{Code: "backend.connector.gateway_unavailable", Message: "Synchronous Runtime Connector execution moved to the Integration owner"}
 }

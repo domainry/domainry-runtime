@@ -223,10 +223,10 @@ func TestExecuteIntegrationSyncCallEnforcesRuntimeDeadline(t *testing.T) {
 	if adapter.timeout != time.Second || adapter.deadline.IsZero() {
 		t.Fatalf("adapter governance timeout=%s deadline=%s", adapter.timeout, adapter.deadline)
 	}
-	if len(service.deliveryRepo.(*independentDeliveryRepository).invocations) == 0 {
+	if len(service.invocationRepo.(*independentDeliveryRepository).invocations) == 0 {
 		t.Fatal("timed out call did not persist an invocation outcome")
 	}
-	outcome := service.deliveryRepo.(*independentDeliveryRepository).invocations[len(service.deliveryRepo.(*independentDeliveryRepository).invocations)-1]
+	outcome := service.invocationRepo.(*independentDeliveryRepository).invocations[len(service.invocationRepo.(*independentDeliveryRepository).invocations)-1]
 	if outcome.Status != "failed" || outcome.ResponseRef != "policy:timeout" || outcome.Error != "backend.integration.sync_call.timeout" {
 		t.Fatalf("timeout outcome=%#v", outcome)
 	}

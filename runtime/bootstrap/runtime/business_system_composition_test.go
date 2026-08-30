@@ -12,8 +12,6 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
-	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
-
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -29,9 +27,7 @@ import (
 
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
 
-	changeplanpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/changeplan"
-
-	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
+	publicationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
 )
 
 func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T) {
@@ -79,12 +75,12 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 		FrontendVersion:         "frontend-1",
 		RuntimeContractVersions: []string{capabilitycontract.RuntimeAuthoringContractVersion},
 		DeploymentEvidence:      &deploymentmodel.FrontendDeploymentEvidence{AuditContractVersion: "domainry-frontend-verification-evidence-v1", DesignContractHash: strings.Repeat("a", 64), RouteRegistryHash: strings.Repeat("b", 64), FrontendSourceHash: strings.Repeat("c", 64), AuditArtifactHash: strings.Repeat("d", 64)},
-		Entries:                 []deploymentmodel.FrontendCapabilitySupportEntry{{SupportKey: "domain.route.customers.v1", Route: "/customers", FeatureModule: "features/customers", AcceptanceTests: []string{"tests/customers.spec.ts"}, ActorRoles: []string{"admin"}, BusinessObjects: []string{"customer"}, ImplementedActions: []string{"customer.qualify"}, ReportKeys: []string{"customer.summary"}, FieldKeys: []string{"customer.status"}}},
+		Entries:                 []deploymentmodel.FrontendCapabilitySupportEntry{{SupportKey: "domain.route.customers.v1", Route: "/customers", FeatureModule: "features/customers", AcceptanceTests: []string{"tests/customers.spec.ts"}, ActorRoles: []string{"admin"}, BusinessObjects: []string{"customer"}, ImplementedActions: []string{"customer.qualify"}, FieldKeys: []string{"customer.status"}}},
 	}
 	if _, err := application.records.Applications().FrontendCapabilities.RegisterManifest(t.Context(), frontendManifest, admin); err != nil {
-		t.Fatal(err)
+		t.Fatalf("register frontend manifest: %#v", err)
 	}
-	if _, err := integrationpersistence.NewIntegrationDeliveryStore(application.store).InsertOutbox(t.Context(), "default", integrationmodel.IntegrationOutboxMessage{ID: "outbox-1", WorkspaceID: "default", ConnectorKey: "crm", Operation: "sync", Status: "queued", CreatedBy: admin.UserID}); err != nil {
+	if _, err := publicationpersistence.NewStore(application.store).InsertOutbox(t.Context(), "default", integrationmodel.IntegrationOutboxMessage{ID: "outbox-1", WorkspaceID: "default", ConnectorKey: "crm", Operation: "sync", Status: "queued", CreatedBy: admin.UserID}); err != nil {
 		t.Fatal(err)
 	}
 	graph, err := application.records.Applications().BusinessReferences.Graph(t.Context(), admin)
@@ -98,10 +94,6 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 	workflowImpact := changeplanprojection.ChangePlanReferenceImpact(graph, "workflow", "customer.approval")
 	if !referenceCompositionHasConsumer(workflowImpact.DirectConsumers, "automation", "customer.after_update", "starts_workflow") {
 		t.Fatalf("workflow impact=%#v", workflowImpact)
-	}
-	objectImpact := changeplanprojection.ChangePlanReferenceImpact(graph, "object", "customer")
-	if !referenceCompositionHasConsumer(objectImpact.DirectConsumers, "seed_record", "customer.references.customer", "materialized_from_seed") {
-		t.Fatalf("record/seed impact=%#v", objectImpact)
 	}
 	connectorImpact := changeplanprojection.ChangePlanReferenceImpact(graph, "connector_operation", "crm.sync")
 	if !referenceCompositionHasConsumer(connectorImpact.DirectConsumers, "outbox_message", "outbox-1", "delivers_operation") {
@@ -117,11 +109,6 @@ func TestBusinessSystemSnapshotCompositionHidesGovernanceFacts(t *testing.T) {
 	}
 	application, _ := newMetadataCompositionApp(t, "visibility", objects, roles)
 	defer application.CloseContext(t.Context())
-	evidence := changeplanpersistence.NewBusinessEvidenceStore(application.store)
-	if err := evidence.UpsertSeedProvenance(t.Context(), businessseedmodel.BusinessSeedProvenance{SeedKey: "customer_acme", ObjectKey: "customer", RecordID: "customer_customer_acme", SourceKind: "template", SourceID: "visibility", ContentHash: "hash", MaterializedAt: "2026-07-11T00:00:00Z"}); err != nil {
-		t.Fatal(err)
-	}
-	application.records.Applications().BusinessSystem.SetEvidenceRepository(evidence)
 	viewer := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "viewer", WorkspaceID: "default"}}, roles[1])
 	snapshot, err := application.records.Applications().BusinessSystem.Snapshot(t.Context(), viewer)
 	if err != nil || snapshot.ResourceVisibility["schema"] != "visible" || len(snapshot.SeedRecords) != 0 || len(snapshot.ResourceSources) != 0 {

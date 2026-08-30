@@ -13,8 +13,8 @@ import (
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	changeplanapplication "github.com/domainry/domainry-runtime/runtime/application/changeplan"
 	deployment "github.com/domainry/domainry-runtime/runtime/application/deployment"
-	businessintegration "github.com/domainry/domainry-runtime/runtime/application/integration"
 	lifecycleapplication "github.com/domainry/domainry-runtime/runtime/application/lifecycle"
+	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	reportexportapplication "github.com/domainry/domainry-runtime/runtime/application/report/export/application"
@@ -41,13 +41,12 @@ type RuntimeApplications struct {
 	RuntimeStatus         *deployment.DeploymentRuntimeStatusApplicationService
 	SurfaceContext        *surfacecontextbusiness.SurfaceContextApplicationService
 	BusinessSystem        *businesssystemapplication.BusinessSystemApplicationService
-	Integrations          *businessintegration.IntegrationApplicationService
+	PublicationHandoff    *publicationhandoff.Service
 	Lifecycle             *lifecycleapplication.LifecycleApplicationService
 	Schema                *appschemaapplication.ApplicationSchemaQueryApplicationService
 	FrontendCapabilities  *deployment.DeploymentFrontendCapabilityApplicationService
 	AuthoringCapabilities *capabilityapplication.CapabilityAuthoringApplicationService
 	BusinessReferences    *changeplanapplication.ChangePlanReferenceApplicationService
-	BusinessChangePlans   *changeplanapplication.ChangePlanApplicationService
 	ReportSnapshots       *reportsnapshot.ReportSnapshotApplicationService
 	ReportQueries         *reportquery.ReportQueryApplicationService
 	ReportExports         *reportexportapplication.ReportExportApplicationService
@@ -84,13 +83,12 @@ func (s *runtimeAssembly) Applications() RuntimeApplications {
 		RuntimeStatus:         s.runtimeStatusService,
 		SurfaceContext:        s.surfaceContextService,
 		BusinessSystem:        s.businessSystemService,
-		Integrations:          s.integrationService,
+		PublicationHandoff:    s.integrationService,
 		Lifecycle:             s.lifecycleService,
 		Schema:                s.schemaService,
 		FrontendCapabilities:  s.frontendCapabilities,
 		AuthoringCapabilities: s.authoringCapabilities,
 		BusinessReferences:    s.businessReferences,
-		BusinessChangePlans:   s.businessChangePlans,
 		ReportSnapshots:       s.reportSnapshotsService,
 		ReportQueries:         s.reportQueriesService,
 		ReportExports:         s.reportExportsService,

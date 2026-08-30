@@ -18,7 +18,6 @@ func ApplicationSchemaFieldAuthoringCapability() capabilitycontract.CapabilityAu
 			{Key: "scale", Type: "integer", Minimum: metadataFloatPointer(0), Maximum: metadataFloatPointer(38), RequiredWhen: map[string]any{"type": "currency"}, Default: 2},
 			{Key: "rounding_mode", Type: "string", Enum: []string{"ceiling", "down", "floor", "half_even", "half_up", "up"}, RequiredWhen: map[string]any{"type": "currency"}, Default: "half_even"},
 			{Key: "currency_code", Type: "currency_code", Format: "iso-4217", RequiredWhen: map[string]any{"type": "currency"}, Default: "XXX"},
-			metadataExpectedSchemaHashParameter(),
 		},
 		Permissions: []string{"metadata.read", "metadata.write"}, AuditEvents: []string{"metadata_definition_upserted"},
 		ValidationEndpoint: "POST /metadata/definitions/field/{resourceKey}/validate", ConfigurationRoutes: metadataConfigurationRoutes("field"),
@@ -48,7 +47,7 @@ func ApplicationSchemaFieldAuthoringCapability() capabilitycontract.CapabilityAu
 		Sources: []capabilitycontract.CapabilityAuthoringSource{
 			{Kind: "contract", Path: "runtime/domain/appschema/contract/appschema_field_authoring.go", Symbol: "ApplicationSchemaFieldAuthoringCapability"},
 			{Kind: "validation", Path: "runtime/domain/appschema/validation/appschema_field_mutation_validation.go", Symbol: "ApplicationSchemaNormalizeFieldMutation"},
-			{Kind: "service", Path: "runtime/application/appschema/appschema_definition_orchestration_application_service.go", Symbol: "ApplicationSchemaApplicationService.UpsertApplicationDefinition"},
+			{Kind: "service", Path: "runtime/application/appschema/appschema_definition_validation_application_service.go", Symbol: "ApplicationSchemaApplicationService.ValidateApplicationDefinitionPayload"},
 		},
 	}
 }

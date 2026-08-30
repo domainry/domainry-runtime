@@ -12,8 +12,8 @@ import (
 
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 
+	agentpersistence "github.com/domainry/domainry-agent/persistence"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	agentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/agent"
 
 	"path/filepath"
 	"testing"
@@ -66,7 +66,7 @@ func TestContextWorkflowDecisionCommitIsAtomic(t *testing.T) {
 					Audit: &auditmodel.AuditEvent{ID: "decision_audit", Event: "workflow_task_decided", ObjectKey: object.Key, RecordID: "business_1", ActorID: "manager", CreatedAt: "v2"},
 				}},
 			}
-			committed, err := NewWorkflowDecisionStore(store).CommitWorkflowDecision(t.Context(), commit)
+			committed, err := newAgentWorkflowDecisionStore(store).CommitWorkflowDecision(t.Context(), commit)
 			if test.duplicate {
 				if err == nil || committed {
 					t.Fatalf("expected event failure, committed=%v err=%v", committed, err)
@@ -94,7 +94,7 @@ func TestWorkflowStateCommitRollsBackRecoveryWhenEventWriteFails(t *testing.T) {
 	process.Status, process.UpdatedAt = "resolved", "v2"
 	node.Status, node.CompletedAt = "failed", "v2"
 	task.Status, task.UpdatedAt = "cancelled", "v2"
-	err := NewWorkflowDecisionStore(store).CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{
+	err := newAgentWorkflowDecisionStore(store).CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{
 		WorkspaceID: "default",
 		Process:     &process, UpdateNodes: []workflowmodel.WorkflowNodeInstance{node}, UpdateTasks: []workflowmodel.WorkflowTask{task}, Events: []workflowmodel.WorkflowProcessEvent{event},
 	})
@@ -121,7 +121,7 @@ func TestWorkflowStateCommitAtomicallyCreatesAgentNodeAndTask(t *testing.T) {
 			InsertAgentTasks: []transactionmodel.WorkflowAgentTaskCommit{{WorkspaceID: "default", RunID: "agent-run", IdempotencyKey: process.ID + ":agent:1", TaskKey: "customer.review", ProcessID: process.ID, Status: "pending", Payload: payload, CreatedAtMillis: 1, UpdatedAtMillis: 1}},
 			Events:           []workflowmodel.WorkflowProcessEvent{event},
 		}
-		err := NewWorkflowDecisionStore(store).CommitWorkflowState(t.Context(), commit)
+		err := newAgentWorkflowDecisionStore(store).CommitWorkflowState(t.Context(), commit)
 		if duplicateEvent && err == nil {
 			t.Fatal("expected duplicate event to roll back Agent task and node")
 		}
@@ -147,7 +147,7 @@ func TestWorkflowStateCommitAtomicallyFencesAgentTerminalAndResumeIntent(t *test
 	for _, staleFence := range []bool{false, true} {
 		store, _, process, node, _ := workflowDecisionStoreFixture(t)
 		runningPayload := []byte(`{"id":"run-1","workspace_id":"default","status":"running"}`)
-		if err := NewWorkflowDecisionStore(store).CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "default", InsertAgentTasks: []transactionmodel.WorkflowAgentTaskCommit{{WorkspaceID: "default", RunID: "run-1", IdempotencyKey: "idem-1", TaskKey: "customer.review", ProcessID: process.ID, Status: "running", LeaseOwner: "worker-1", FencingToken: 4, Payload: runningPayload, CreatedAtMillis: 1, UpdatedAtMillis: 1}}}); err != nil {
+		if err := newAgentWorkflowDecisionStore(store).CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "default", InsertAgentTasks: []transactionmodel.WorkflowAgentTaskCommit{{WorkspaceID: "default", RunID: "run-1", IdempotencyKey: "idem-1", TaskKey: "customer.review", ProcessID: process.ID, Status: "running", LeaseOwner: "worker-1", FencingToken: 4, Payload: runningPayload, CreatedAtMillis: 1, UpdatedAtMillis: 1}}}); err != nil {
 			t.Fatal(err)
 		}
 		completedProcess, completedNode := process, node
@@ -158,7 +158,7 @@ func TestWorkflowStateCommitAtomicallyFencesAgentTerminalAndResumeIntent(t *test
 			token = 3
 		}
 		resume := workflowmodel.WorkflowExecution{WorkspaceID: "default", ID: "resume-1", WorkflowKey: process.WorkflowKey, Status: "pending", ActionType: "workflow_graph", Action: map[string]any{}, Result: map[string]any{"resume_process_id": process.ID}, ActorID: "user", CreatedAt: "v2", UpdatedAt: "v2"}
-		err := NewWorkflowDecisionStore(store).CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "default", Process: &completedProcess, UpdateNodes: []workflowmodel.WorkflowNodeInstance{completedNode}, UpdateAgentTasks: []transactionmodel.WorkflowAgentTaskCommit{{WorkspaceID: "default", RunID: "run-1", Status: "succeeded", LeaseOwner: "worker-1", FencingToken: token, Payload: []byte(`{"id":"run-1","status":"succeeded"}`), UpdatedAtMillis: 2}}, InsertExecutions: []workflowmodel.WorkflowExecution{resume}})
+		err := newAgentWorkflowDecisionStore(store).CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "default", Process: &completedProcess, UpdateNodes: []workflowmodel.WorkflowNodeInstance{completedNode}, UpdateAgentTasks: []transactionmodel.WorkflowAgentTaskCommit{{WorkspaceID: "default", RunID: "run-1", Status: "succeeded", LeaseOwner: "worker-1", FencingToken: token, Payload: []byte(`{"id":"run-1","status":"succeeded"}`), UpdatedAtMillis: 2}}, InsertExecutions: []workflowmodel.WorkflowExecution{resume}})
 		if staleFence && err == nil {
 			t.Fatal("expected stale terminal fence to reject the whole commit")
 		}
@@ -191,7 +191,7 @@ func TestWorkflowStateCommitAtomicallyResolvesWaitingAgentApproval(t *testing.T)
 	store, _, process, node, _ := workflowDecisionStoreFixture(t)
 	defer store.Close()
 	waitingPayload := []byte(`{"id":"run-approval","workspace_id":"default","status":"waiting_approval"}`)
-	decisionStore := NewWorkflowDecisionStore(store)
+	decisionStore := newAgentWorkflowDecisionStore(store)
 	if err := decisionStore.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "default", InsertAgentTasks: []transactionmodel.WorkflowAgentTaskCommit{{WorkspaceID: "default", RunID: "run-approval", IdempotencyKey: "idem-approval", TaskKey: "customer.review", ProcessID: process.ID, Status: "waiting_approval", Payload: waitingPayload, CreatedAtMillis: 1, UpdatedAtMillis: 1}}}); err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +235,7 @@ func openStoreForGeneratedListTest(t *testing.T) *database.RuntimeStore {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := agentpersistence.NewAgentSchemaMigration(store).EnsureSchema(t.Context()); err != nil {
+	if err := agentpersistence.EnsureSchema(t.Context(), store.DB(), store.Driver(), store.DatabaseSchema()); err != nil {
 		_ = store.Close()
 		t.Fatal(err)
 	}
@@ -252,7 +252,7 @@ func TestContextWorkflowDecisionConflictDoesNotApplySideEffects(t *testing.T) {
 	decided.CompletedAt = "v2"
 	decided.UpdatedAt = "v2"
 	process.Status = "completed"
-	committed, err := NewWorkflowDecisionStore(store).CommitWorkflowDecision(t.Context(), transactionmodel.WorkflowDecisionCommit{
+	committed, err := newAgentWorkflowDecisionStore(store).CommitWorkflowDecision(t.Context(), transactionmodel.WorkflowDecisionCommit{
 		WorkspaceID: "default",
 		DecidedTask: decided, ExpectedTaskStatus: "open", ExpectedAssigneeID: "other-user", Process: &process,
 		Events:          []workflowmodel.WorkflowProcessEvent{{WorkspaceID: "default", ID: "must_not_exist", ProcessID: process.ID, Event: "task_approved", ActorID: "other-user", CreatedAt: "v2"}},
@@ -284,7 +284,7 @@ func TestWorkflowDecisionNotificationEventCommitsAndRollsBackWithTask(t *testing
 			}
 			decided := task
 			decided.Status, decided.Decision, decided.CompletedBy, decided.CompletedAt, decided.UpdatedAt = "approved", "approved", "manager", "v2", "v2"
-			committed, err := NewWorkflowDecisionStore(store).CommitWorkflowDecision(t.Context(), transactionmodel.WorkflowDecisionCommit{
+			committed, err := newAgentWorkflowDecisionStore(store).CommitWorkflowDecision(t.Context(), transactionmodel.WorkflowDecisionCommit{
 				WorkspaceID: "default", DecidedTask: decided, ExpectedTaskStatus: "open", ExpectedAssigneeID: "manager",
 				NotificationEvents: []notificationmodel.NotificationEvent{event},
 			})

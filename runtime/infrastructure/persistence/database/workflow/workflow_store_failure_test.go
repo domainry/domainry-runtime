@@ -231,7 +231,7 @@ func TestWorkflowDecisionStoreTransactionFailures(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			db := openWorkflowScriptedDB(&test.state)
 			t.Cleanup(func() { _ = db.Close() })
-			store := NewWorkflowDecisionStore(base)
+			store := newAgentWorkflowDecisionStore(base)
 			store.db = db
 			err := test.run(store)
 			if test.name == "state insert execution encoding" {
@@ -252,7 +252,7 @@ func TestWorkflowStateCommitSuccessfulOptionalWrites(t *testing.T) {
 		_ = db.Close()
 		_ = base.Close()
 	})
-	store := NewWorkflowDecisionStore(base)
+	store := newAgentWorkflowDecisionStore(base)
 	store.db = db
 	execution := workflowmodel.WorkflowExecution{ID: "execution"}
 	if err := store.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{

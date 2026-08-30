@@ -9,7 +9,7 @@ func ApplicationSchemaDictionaryAuthoringCapabilities() []capabilitycontract.Cap
 		SystemDraftResourceType: "dictionary",
 		Parameters: []capabilitycontract.CapabilityAuthoringParameter{
 			{Key: "key", Type: "string", Required: true}, {Key: "name", Type: "string"}, {Key: "description", Type: "string"},
-			{Key: "items", Type: "array", ItemSchema: "dictionary_item"}, {Key: "config", Type: "object"}, metadataExpectedSchemaHashParameter(),
+			{Key: "items", Type: "array", ItemSchema: "dictionary_item"}, {Key: "config", Type: "object"},
 		},
 		Permissions: []string{"dictionary.read", "dictionary.write"}, AuditEvents: []string{"metadata_definition_upserted", "metadata_definition_deleted"},
 		ValidationEndpoint: "POST /metadata/definitions/dictionary/{resourceKey}/validate", ConfigurationRoutes: metadataConfigurationRoutes("dictionary"), FrontendSupportKey: "schema.dictionary.editor.v1",
@@ -36,7 +36,7 @@ func ApplicationSchemaDictionaryAuthoringCapabilities() []capabilitycontract.Cap
 		Sources: []capabilitycontract.CapabilityAuthoringSource{
 			{Kind: "contract", Path: "runtime/domain/appschema/contract/appschema_dictionary_authoring.go", Symbol: "ApplicationSchemaDictionaryAuthoringCapabilities"},
 			{Kind: "validation", Path: "runtime/domain/appschema/validation/appschema_dictionary_validation.go", Symbol: "ApplicationSchemaValidateDictionaryDefinition"},
-			{Kind: "service", Path: "runtime/application/appschema/appschema_definition_orchestration_application_service.go", Symbol: "ApplicationSchemaApplicationService.UpsertApplicationDefinition"},
+			{Kind: "service", Path: "runtime/application/appschema/appschema_definition_validation_application_service.go", Symbol: "ApplicationSchemaApplicationService.ValidateApplicationDefinitionPayload"},
 		},
 	}}
 }

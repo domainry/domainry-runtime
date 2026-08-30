@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
 
-func validateAgentExecutionLimits(state *validationState, path string, limits agentmodel.AgentExecutionLimits) {
+func validateAgentExecutionLimits(state *validationState, path string, limits agentsdk.AgentExecutionLimits) {
 	for key, value := range map[string]int{"max_steps": limits.MaxSteps, "timeout_seconds": limits.TimeoutSeconds, "max_tool_calls": limits.MaxToolCalls, "max_input_bytes": limits.MaxInputBytes, "max_output_bytes": limits.MaxOutputBytes} {
 		if value < 0 {
 			state.add(path+"."+key, "must not be negative")
@@ -87,7 +87,7 @@ func validateAgentJSONSchemaRef(state *validationState, path, ref string, root m
 }
 
 func validateAgentTaskOutcomes(state *validationState, path string, outcomes []string) {
-	allowed := stringSet(agentmodel.AgentTaskOutcomes)
+	allowed := stringSet(agentsdk.AgentTaskOutcomes)
 	seen := map[string]bool{}
 	if len(outcomes) == 0 {
 		state.add(path, "must declare at least one outcome")
@@ -103,7 +103,7 @@ func validateAgentTaskOutcomes(state *validationState, path string, outcomes []s
 	}
 }
 
-func agentAllowedObjects(agent agentmodel.AgentSchema, skills map[string]agentmodel.SkillSchema) map[string]bool {
+func agentAllowedObjects(agent agentsdk.AgentSchema, skills map[string]agentsdk.SkillSchema) map[string]bool {
 	allowed := map[string]bool{}
 	for _, skillKey := range agent.SkillKeys {
 		for _, objectKey := range skills[strings.TrimSpace(skillKey)].AllowedObjects {
@@ -113,7 +113,7 @@ func agentAllowedObjects(agent agentmodel.AgentSchema, skills map[string]agentmo
 	return allowed
 }
 
-func agentAllowsCapability(agent agentmodel.AgentSchema, skills map[string]agentmodel.SkillSchema, capability string) bool {
+func agentAllowsCapability(agent agentsdk.AgentSchema, skills map[string]agentsdk.SkillSchema, capability string) bool {
 	for _, tool := range agent.Tools {
 		if strings.TrimSpace(tool) == capability {
 			return true
@@ -129,9 +129,9 @@ func agentAllowsCapability(agent agentmodel.AgentSchema, skills map[string]agent
 	return false
 }
 
-func validateGlobalAgentContextContract(state *validationState, path string, contract agentmodel.GlobalAgentContextContract) {
-	if contract.ContractVersion != agentmodel.GlobalAgentContextContractVersion {
-		state.add(path+".contract_version", "must be %q", agentmodel.GlobalAgentContextContractVersion)
+func validateGlobalAgentContextContract(state *validationState, path string, contract agentsdk.GlobalAgentContextContract) {
+	if contract.ContractVersion != agentsdk.GlobalAgentContextContractVersion {
+		state.add(path+".contract_version", "must be %q", agentsdk.GlobalAgentContextContractVersion)
 	}
 	allowedHints := stringSet([]string{"route_key", "object_key", "record_id", "selected_record_ids", "locale", "timezone"})
 	seen := map[string]bool{}
@@ -156,11 +156,11 @@ func validateGlobalAgentContextContract(state *validationState, path string, con
 	}
 }
 
-func validateAgentRoutingContract(state *validationState, path string, contract agentmodel.AgentRoutingContract) {
-	if contract.ContractVersion != agentmodel.AgentRoutingContractVersion {
-		state.add(path+".contract_version", "must be %q", agentmodel.AgentRoutingContractVersion)
+func validateAgentRoutingContract(state *validationState, path string, contract agentsdk.AgentRoutingContract) {
+	if contract.ContractVersion != agentsdk.AgentRoutingContractVersion {
+		state.add(path+".contract_version", "must be %q", agentsdk.AgentRoutingContractVersion)
 	}
-	allowed := stringSet([]string{agentmodel.AgentRouteInteractiveQuery, agentmodel.AgentRouteTask, agentmodel.AgentRouteWorkflow, agentmodel.AgentRouteProposal})
+	allowed := stringSet([]string{agentsdk.AgentRouteInteractiveQuery, agentsdk.AgentRouteTask, agentsdk.AgentRouteWorkflow, agentsdk.AgentRouteProposal})
 	seen := map[string]bool{}
 	if len(contract.AllowedRouteTypes) == 0 {
 		state.add(path+".allowed_route_types", "must declare at least one route type")
@@ -207,19 +207,6 @@ func agentRoutePatternMatches(pattern, key string) bool {
 	return key == pattern
 }
 
-func runtimeEntrypointSurface(entrypoint definitionmodel.EntryPointSchema) string {
-	switch strings.TrimSpace(fmt.Sprint(entrypoint.Config["kind"])) {
-	case "backoffice", "operator_console", "business_workspace":
-		return "business_workspace"
-	case "admin_console":
-		return "admin_console"
-	case "customer_portal", "consumer_portal":
-		return "consumer_portal"
-	default:
-		return ""
-	}
-}
-
 func validateAgentStringSet(state *validationState, path string, values []string) {
 	seen := map[string]bool{}
 	for index, value := range values {
@@ -233,7 +220,7 @@ func validateAgentStringSet(state *validationState, path string, values []string
 	}
 }
 
-func validateAgentNodeAllowlist(state *validationState, path string, contract definitionmodel.WorkflowAgentTaskNodeContract, task agentmodel.AgentTaskDefinition, taskExists bool) {
+func validateAgentNodeAllowlist(state *validationState, path string, contract definitionmodel.WorkflowAgentTaskNodeContract, task agentsdk.AgentTaskDefinition, taskExists bool) {
 	if !taskExists {
 		return
 	}

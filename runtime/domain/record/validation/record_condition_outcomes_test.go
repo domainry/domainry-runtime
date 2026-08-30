@@ -81,12 +81,10 @@ func TestRecordNormalizeConditionOutcomes(t *testing.T) {
 }
 
 func TestRecordQueryConditionOutcomes(t *testing.T) {
-	object, view := recordQueryFixture()
-	_ = RecordSelectListView([]definitionmodel.ViewSchema{view}, "order", "missing")
+	object := definitionmodel.ObjectSchema{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}, {Key: "amount", Type: "number"}}}
 	query := recordmodel.RecordListQuery{Page: 2, PageSize: 10, SearchFields: []string{"name"}, Sort: []recordmodel.RecordSortRule{{Field: "name"}}, Filters: map[string]any{"name": nil, "id__in": []any{}, "amount__lte": "10", "fixed": true}}
-	_ = RecordNormalizeListQuery(object, view, query, principalmodel.Principal{})
-	badView := definitionmodel.ViewSchema{Config: map[string]any{"filters": []any{map[string]any{"key": "bad", "field": "missing", "value": "x"}, map[string]any{"key": "broken", "field": "name", "value": func() {}}}}}
-	_ = normalizeListFilters(object, badView, map[string]any{"bad": true, "broken": true}, principalmodel.Principal{})
+	_ = RecordNormalizeListQuery(object, query, principalmodel.Principal{})
+	_ = normalizeListFilters(object, map[string]any{"bad": true, "broken": true})
 	_ = normalizedListFilterValues(definitionmodel.FieldSchema{}, []any{"", nil, "x"}, true)
 	_, _ = splitSortRule("name desc")
 }
@@ -271,9 +269,8 @@ func TestRecordAccessStateAndQueryRemainingConditions(t *testing.T) {
 	_ = RecordValidateThresholdPermissionPolicies(definitionmodel.ObjectSchema{Validations: []definitionmodel.ValidationSchema{{Type: "threshold_permission", FieldKey: "amount", Config: map[string]any{"threshold": 1, "permission": "order.approve"}}}}, nil, map[string]any{"amount": ""}, "update", principal)
 	_ = validateStructuredTransition(map[string]any{"required_fields": []string{""}, "required_permission": "order."}, map[string]any{}, principalmodel.Principal{})
 	_ = RecordMessageCode("code.with space", "fallback")
-	object, _ := recordQueryFixture()
-	_ = RecordSelectListView([]definitionmodel.ViewSchema{{Key: "x", ObjectKey: "order", Config: map[string]any{"business_view": "detail"}}}, "order", "")
-	_ = normalizeListFilters(object, definitionmodel.ViewSchema{Config: map[string]any{}}, map[string]any{"amount__gte": "1", "unresolved": true}, principalmodel.Principal{})
+	object := definitionmodel.ObjectSchema{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "amount", Type: "number"}}}
+	_ = normalizeListFilters(object, map[string]any{"amount__gte": "1", "unresolved": true})
 	_, _ = splitSortRule("name")
 }
 

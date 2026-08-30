@@ -8,10 +8,11 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/logging"
 	"github.com/domainry/domainry-foundation/telemetry"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -22,7 +23,7 @@ type AgentInteractiveWorkflowStarter interface {
 type AgentInteractiveExecutionDependencies struct {
 	Runs      *AgentInteractiveRunApplicationService
 	Authorize *AgentAuthorizationApplicationService
-	Runner    InteractiveAgentRunner
+	Runner    agentsdk.InteractiveRunner
 	Dispatch  *AgentTaskDispatchApplicationService
 	Workflows AgentInteractiveWorkflowStarter
 	Tools     *AgentToolGateway
@@ -38,13 +39,13 @@ func NewAgentInteractiveExecutionApplicationService(dependencies AgentInteractiv
 
 type AgentInteractiveExecutionRequest struct {
 	SessionID, IdempotencyKey, Message string
-	Context                            agentmodel.GlobalAgentContext
+	Context                            agentsdk.GlobalContext
 	Principal                          principalmodel.Principal
 }
 
 type AgentInteractiveExecutionResult struct {
 	Run    agentmodel.AgentInteractiveRun `json:"run"`
-	Result InteractiveAgentResult         `json:"result"`
+	Result agentsdk.InteractiveResult     `json:"result"`
 }
 
 func (s *AgentInteractiveExecutionApplicationService) Execute(ctx context.Context, request AgentInteractiveExecutionRequest) (executionResult AgentInteractiveExecutionResult, err error) {
@@ -78,7 +79,7 @@ func (s *AgentInteractiveExecutionApplicationService) Execute(ctx context.Contex
 	}
 	workCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	result, runErr := s.dependencies.Runner.Run(workCtx, InteractiveAgentRunRequest{
+	result, runErr := s.dependencies.Runner.Run(workCtx, agentsdk.InteractiveRequest{
 		RunID: run.ID, SessionID: run.SessionID, Context: authorized.Context, Message: strings.TrimSpace(request.Message), Candidates: authorized.Candidates,
 		IdempotencyKey: request.IdempotencyKey, MaxSteps: limits.MaxSteps, MaxToolCalls: limits.MaxToolCalls, Deadline: time.Now().UTC().Add(timeout),
 	})
@@ -102,11 +103,11 @@ func (s *AgentInteractiveExecutionApplicationService) Execute(ctx context.Contex
 		}
 		result.Route = &route
 		switch route.RouteType {
-		case agentmodel.AgentRouteTask:
+		case agentsdk.AgentRouteTask:
 			return s.handoffInteractiveTask(ctx, run, result, route, authorized)
-		case agentmodel.AgentRouteWorkflow:
+		case agentsdk.AgentRouteWorkflow:
 			return s.handoffInteractiveWorkflow(ctx, run, result, route, authorized.Principal)
-		case agentmodel.AgentRouteInteractiveQuery, agentmodel.AgentRouteProposal:
+		case agentsdk.AgentRouteInteractiveQuery, agentsdk.AgentRouteProposal:
 			if s.dependencies.Tools == nil {
 				return s.failInteractiveExecution(ctx, run, result, apperror.New(apperror.KindUnavailable, "agent.interactive.tool_gateway_unavailable", nil, nil))
 			}
@@ -123,13 +124,13 @@ func (s *AgentInteractiveExecutionApplicationService) Execute(ctx context.Contex
 	return AgentInteractiveExecutionResult{Run: completed, Result: result}, err
 }
 
-func (s *AgentInteractiveExecutionApplicationService) handoffInteractiveTask(ctx context.Context, run agentmodel.AgentInteractiveRun, result InteractiveAgentResult, route AgentRouteResult, authorized AgentInteractiveAuthorization) (AgentInteractiveExecutionResult, error) {
+func (s *AgentInteractiveExecutionApplicationService) handoffInteractiveTask(ctx context.Context, run agentmodel.AgentInteractiveRun, result agentsdk.InteractiveResult, route agentsdk.RouteResult, authorized AgentInteractiveAuthorization) (AgentInteractiveExecutionResult, error) {
 	if s.dependencies.Dispatch == nil {
 		return s.failInteractiveExecution(ctx, run, result, apperror.New(apperror.KindUnavailable, "agent.interactive.task_handoff_unavailable", nil, nil))
 	}
 	task, err := s.dependencies.Dispatch.PrepareInteractive(ctx, AgentInteractiveTaskDispatchRequest{
 		InteractiveRunID: run.ID, WorkspaceID: run.WorkspaceID, TaskKey: route.TargetKey, TaskVersion: route.TargetVersion,
-		IdempotencyKey: run.ID + ":" + route.IdempotencyKey, Identity: agentmodel.AgentTaskIdentity{Mode: agentmodel.AgentTaskIdentityInherit}, Input: route.Input,
+		IdempotencyKey: run.ID + ":" + route.IdempotencyKey, Identity: agentsdk.AgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityInherit}, Input: route.Input,
 		Initiator: authorized.Principal, CorrelationID: run.CorrelationID,
 	})
 	if err != nil {
@@ -139,12 +140,12 @@ func (s *AgentInteractiveExecutionApplicationService) handoffInteractiveTask(ctx
 	if err != nil {
 		return AgentInteractiveExecutionResult{}, err
 	}
-	result.Status, result.Handoff = "handed_off", &agentmodel.InteractiveAgentHandoff{ContractVersion: agentmodel.InteractiveHandoffContractVersion, RouteType: route.RouteType, TargetKey: route.TargetKey, Input: route.Input, IdempotencyKey: route.IdempotencyKey, TaskRunID: handedOff.TaskRunID}
+	result.Status, result.Handoff = "handed_off", &agentsdk.InteractiveAgentHandoff{ContractVersion: agentsdk.InteractiveHandoffContractVersion, RouteType: route.RouteType, TargetKey: route.TargetKey, Input: route.Input, IdempotencyKey: route.IdempotencyKey, TaskRunID: handedOff.TaskRunID}
 	logging.FromContext(ctx).Info("agent interactive task handed off", logging.Fields(map[string]any{"workspace_id": handedOff.WorkspaceID, "session_id": handedOff.SessionID, "interactive_run_id": handedOff.ID, "entrypoint_key": handedOff.EntrypointKey, "surface": handedOff.Surface, "process_id": handedOff.ProcessID, "task_run_id": handedOff.TaskRunID, "correlation_id": handedOff.CorrelationID})...)
 	return AgentInteractiveExecutionResult{Run: handedOff, Result: result}, nil
 }
 
-func (s *AgentInteractiveExecutionApplicationService) handoffInteractiveWorkflow(ctx context.Context, run agentmodel.AgentInteractiveRun, result InteractiveAgentResult, route AgentRouteResult, principal principalmodel.Principal) (AgentInteractiveExecutionResult, error) {
+func (s *AgentInteractiveExecutionApplicationService) handoffInteractiveWorkflow(ctx context.Context, run agentmodel.AgentInteractiveRun, result agentsdk.InteractiveResult, route agentsdk.RouteResult, principal principalmodel.Principal) (AgentInteractiveExecutionResult, error) {
 	if s.dependencies.Workflows == nil {
 		return s.failInteractiveExecution(ctx, run, result, apperror.New(apperror.KindUnavailable, "agent.interactive.workflow_handoff_unavailable", nil, nil))
 	}
@@ -156,12 +157,12 @@ func (s *AgentInteractiveExecutionApplicationService) handoffInteractiveWorkflow
 	if err != nil {
 		return AgentInteractiveExecutionResult{}, err
 	}
-	result.Status, result.Handoff = "handed_off", &agentmodel.InteractiveAgentHandoff{ContractVersion: agentmodel.InteractiveHandoffContractVersion, RouteType: route.RouteType, TargetKey: route.TargetKey, Input: route.Input, IdempotencyKey: route.IdempotencyKey, ProcessID: processID}
+	result.Status, result.Handoff = "handed_off", &agentsdk.InteractiveAgentHandoff{ContractVersion: agentsdk.InteractiveHandoffContractVersion, RouteType: route.RouteType, TargetKey: route.TargetKey, Input: route.Input, IdempotencyKey: route.IdempotencyKey, ProcessID: processID}
 	logging.FromContext(ctx).Info("agent interactive workflow handed off", logging.Fields(map[string]any{"workspace_id": handedOff.WorkspaceID, "session_id": handedOff.SessionID, "interactive_run_id": handedOff.ID, "entrypoint_key": handedOff.EntrypointKey, "surface": handedOff.Surface, "process_id": handedOff.ProcessID, "correlation_id": handedOff.CorrelationID})...)
 	return AgentInteractiveExecutionResult{Run: handedOff, Result: result}, nil
 }
 
-func (s *AgentInteractiveExecutionApplicationService) failInteractiveExecution(ctx context.Context, run agentmodel.AgentInteractiveRun, result InteractiveAgentResult, cause error) (AgentInteractiveExecutionResult, error) {
+func (s *AgentInteractiveExecutionApplicationService) failInteractiveExecution(ctx context.Context, run agentmodel.AgentInteractiveRun, result agentsdk.InteractiveResult, cause error) (AgentInteractiveExecutionResult, error) {
 	failed, err := s.dependencies.Runs.Complete(ctx, run, agentmodel.AgentInteractiveRunFailed, nil, apperror.CodeOf(cause))
 	if err != nil {
 		return AgentInteractiveExecutionResult{}, err
@@ -170,9 +171,9 @@ func (s *AgentInteractiveExecutionApplicationService) failInteractiveExecution(c
 }
 
 func restoredInteractiveExecution(run agentmodel.AgentInteractiveRun) AgentInteractiveExecutionResult {
-	result := InteractiveAgentResult{RunID: run.ID, Status: string(run.Status), Structured: run.StructuredResult}
+	result := agentsdk.InteractiveResult{RunID: run.ID, Status: string(run.Status), Structured: run.StructuredResult}
 	if run.Status == agentmodel.AgentInteractiveRunHandedOff {
-		result.Handoff = &agentmodel.InteractiveAgentHandoff{ContractVersion: agentmodel.InteractiveHandoffContractVersion, RouteType: run.RouteType, TargetKey: run.RoutedTargetKey, IdempotencyKey: run.IdempotencyKey, ProcessID: run.ProcessID, TaskRunID: run.TaskRunID}
+		result.Handoff = &agentsdk.InteractiveAgentHandoff{ContractVersion: agentsdk.InteractiveHandoffContractVersion, RouteType: run.RouteType, TargetKey: run.RoutedTargetKey, IdempotencyKey: run.IdempotencyKey, ProcessID: run.ProcessID, TaskRunID: run.TaskRunID}
 	}
 	return AgentInteractiveExecutionResult{Run: run, Result: result}
 }

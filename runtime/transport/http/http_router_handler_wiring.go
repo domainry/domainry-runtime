@@ -12,11 +12,8 @@ func UseHandlers(router *HTTPRouter, handlers HTTPRouterHandlers) *HTTPRouter {
 	router.reportHTTP = handlers.Reports
 	router.frontendCapabilityHTTP = handlers.FrontendCapabilities
 	router.businessReferenceHTTP = handlers.BusinessReferences
-	router.businessSeedHTTP = handlers.BusinessSeeds
 	router.businessSystemHTTP = handlers.BusinessSystem
 	router.capabilityHTTP = handlers.Capabilities
-	router.changePlanHTTP = handlers.ChangePlans
-	router.integrationHTTP = handlers.Integrations
 	router.applicationSchemaHTTP = handlers.ApplicationSchema
 	router.notificationHTTP = nil
 	if handlers.Notifications != nil {
@@ -31,6 +28,10 @@ func UseHandlers(router *HTTPRouter, handlers HTTPRouterHandlers) *HTTPRouter {
 		router.agentDialogHTTP = handlers.AgentDialog
 	}
 	router.operationsHTTP = handlers.Operations
+	router.lifecycleHTTP = nil
+	if handlers.Lifecycle != nil {
+		router.lifecycleHTTP = handlers.Lifecycle
+	}
 	if handlers.BusinessEvents != nil {
 		router.businessEventHTTP = handlers.BusinessEvents
 	}

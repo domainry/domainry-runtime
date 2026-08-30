@@ -6,7 +6,6 @@ func (h *SchedulerHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/scheduler-triggers:accept", h.acceptSchedulerTrigger)
 	mux.HandleFunc("GET /tenant-admin/scheduler/definitions", h.authenticated(h.listTenantAdminSchedulerDefinitions))
 	mux.HandleFunc("GET /tenant-admin/scheduler/definitions/{definitionID}", h.authenticated(h.getTenantAdminSchedulerDefinition))
-	mux.HandleFunc("GET /tenant-admin/scheduler/definitions/{definitionID}/versions", h.authenticated(h.listTenantAdminSchedulerDefinitionVersions))
 	mux.HandleFunc("GET /tenant-admin/scheduler/authoring-contract", h.authenticated(h.getTenantAdminSchedulerAuthoringContract))
 	mux.HandleFunc("POST /tenant-admin/scheduler/definitions/validate", h.authenticated(h.previewSchedulerJob))
 	mux.HandleFunc("POST /tenant-admin/scheduler/schedules/preview", h.authenticated(h.previewSchedulerSchedule))

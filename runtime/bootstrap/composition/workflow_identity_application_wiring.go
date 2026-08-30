@@ -42,12 +42,7 @@ func (p runtimeWorkflowSchemaProvider) ConnectorAdapterExists(ctx context.Contex
 		return false
 	}
 	key = strings.TrimSpace(key)
-	for _, connector := range p.records.connectorRegistry.Schema().Connectors {
-		if strings.TrimSpace(connector.Key) == key {
-			return p.records.connectorRegistry.AdapterReady(connector)
-		}
-	}
-	return false
+	return p.records.connectorRegistry.ConnectorDeclared(key)
 }
 
 type runtimeWorkflowScheduler struct {

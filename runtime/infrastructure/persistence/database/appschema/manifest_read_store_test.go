@@ -17,11 +17,6 @@ func TestApplicationSchemaStoreLoadsPersistedManifest(t *testing.T) {
 	manifest := manifestmodel.ManifestSchema{
 		TemplateID: "manifest-read", Version: "1", Name: "Manifest read", DefaultLocale: "zh-CN",
 		Objects: []definitionmodel.ObjectSchema{{Key: "account", Name: "Account", Fields: []definitionmodel.FieldSchema{{Key: "name", Name: "Name", Type: "text", Config: map[string]any{"definition_object_key": "ignored"}}}, Validations: []definitionmodel.ValidationSchema{{Key: "account.name.required", ObjectKey: "account", Type: "required", FieldKey: "name"}}}},
-		SchedulerDefinitions: []map[string]any{{
-			"key": "account.refresh", "name": "Refresh accounts", "status": "enabled",
-			"target_type": "workflow", "target_key": "scheduled:account.refresh",
-			"schedule_type": "interval", "interval_seconds": 60,
-		}},
 	}
 	if err := repository.EnsureManifestMetadata(t.Context(), manifest); err != nil {
 		t.Fatal(err)
@@ -30,16 +25,8 @@ func TestApplicationSchemaStoreLoadsPersistedManifest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.TemplateID != manifest.TemplateID || loaded.Version != "1" || len(loaded.Objects) != 1 || len(loaded.Objects[0].Fields) != 1 || len(loaded.Objects[0].Validations) != 1 || len(loaded.SchedulerDefinitions) != 1 || loaded.SchedulerDefinitions[0]["key"] != "account.refresh" {
+	if loaded.TemplateID != manifest.TemplateID || loaded.Version != "1" || len(loaded.Objects) != 1 || len(loaded.Objects[0].Fields) != 1 || len(loaded.Objects[0].Validations) != 1 || len(loaded.SchedulerDefinitions) != 0 {
 		t.Fatalf("loaded=%+v", loaded)
-	}
-	definition, found, err := repository.GetDefinition(t.Context(), metadataTestInstallationScope(), "scheduler", "account.refresh")
-	if err != nil || !found || definition.SourceKind != "generated" {
-		t.Fatalf("scheduler definition=%#v found=%v err=%v", definition, found, err)
-	}
-	versions, err := repository.ListDefinitionVersions(t.Context(), metadataTestInstallationScope(), "scheduler", "account.refresh")
-	if err != nil || len(versions) != 1 {
-		t.Fatalf("scheduler versions=%#v err=%v", versions, err)
 	}
 }
 

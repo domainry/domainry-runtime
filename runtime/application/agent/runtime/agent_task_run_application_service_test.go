@@ -9,10 +9,10 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -45,11 +45,11 @@ type agentTaskSystemRepositoryStub struct {
 	systemErr   error
 }
 
-func (s *agentTaskSystemRepositoryStub) ClaimNextAgentTaskRunForWorker(context.Context, principalmodel.SystemScope, string, time.Time, time.Duration) (agentrepository.AgentTaskClaim, bool, error) {
+func (s *agentTaskSystemRepositoryStub) ClaimNextAgentTaskRunForWorker(context.Context, agentrepository.SystemScope, string, time.Time, time.Duration) (agentrepository.AgentTaskClaim, bool, error) {
 	return s.systemClaim, s.systemFound, s.systemErr
 }
 
-func (s *agentTaskSystemRepositoryStub) ListAgentTaskRunsForWorker(context.Context, principalmodel.SystemScope, agentrepository.AgentTaskRunFilter) ([]agentmodel.AgentTaskRun, error) {
+func (s *agentTaskSystemRepositoryStub) ListAgentTaskRunsForWorker(context.Context, agentrepository.SystemScope, agentrepository.AgentTaskRunFilter) ([]agentmodel.AgentTaskRun, error) {
 	return s.systemRuns, s.systemErr
 }
 

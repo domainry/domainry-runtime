@@ -5,9 +5,6 @@ type WebPushSubscription struct {
 	WorkspaceID  string `json:"workspace_id,omitempty"`
 	UserID       string `json:"user_id"`
 	EndpointHash string `json:"endpoint_hash"`
-	Endpoint     string `json:"-"`
-	P256DH       string `json:"-"`
-	Auth         string `json:"-"`
 	Status       string `json:"status"`
 	ExpiresAt    string `json:"expires_at,omitempty"`
 	CreatedAt    string `json:"created_at"`

@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode"
 
+	agentmodule "github.com/domainry/domainry-agent/module"
 	notificationmodule "github.com/domainry/domainry-notification/module"
 	partymodule "github.com/domainry/domainry-party/module"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
@@ -239,7 +240,7 @@ func newIntegrationRuntime(t *testing.T, cfg config.Config) *bootstrap.Runtime {
 		}
 	}
 	if !hasBusinessHandlers {
-		return bootstrap.NewWithScheduler(t.Context(), cfg, identityBinding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory())
+		return bootstrap.NewWithScheduler(t.Context(), cfg, identityBinding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory(), integrationAgentFactory())
 	}
 	if strings.TrimSpace(cfg.RuntimeVersion) == "" {
 		cfg.RuntimeVersion = "integrationtest-runtime-v1"
@@ -253,7 +254,11 @@ func newIntegrationRuntime(t *testing.T, cfg config.Config) *bootstrap.Runtime {
 	if err := os.WriteFile(cfg.ManifestPath, normalized, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	return bootstrap.NewWithBusinessHandlersAndScheduler(t.Context(), cfg, registry, identityBinding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory())
+	return bootstrap.NewWithBusinessHandlersAndScheduler(t.Context(), cfg, registry, identityBinding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory(), integrationAgentFactory())
+}
+
+func integrationAgentFactory() *agentmodule.Factory {
+	return agentmodule.NewFactory(agentmodule.Options{BaseURL: "http://127.0.0.1", APIKey: "integration-test", AgentID: 1})
 }
 
 func sourceOwnedFixturePrecondition(actionKey string) (string, any) {

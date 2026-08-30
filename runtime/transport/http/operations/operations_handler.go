@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/idempotency"
-	lifecycleapplication "github.com/domainry/domainry-runtime/runtime/application/lifecycle"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
@@ -61,7 +60,6 @@ type OperationsHandler struct {
 	controls           OperationsControlService
 	leases             OperationsLeaseService
 	databaseRetirement DatabaseRetirementService
-	lifecycle          *lifecycleapplication.LifecycleApplicationService
 	monitoring         MonitoringMetricsService
 	principal          func(*http.Request) principalmodel.Principal
 	writeJSON          func(http.ResponseWriter, int, any)
@@ -76,7 +74,6 @@ type OperationsDependencies struct {
 	Controls           OperationsControlService
 	Leases             OperationsLeaseService
 	DatabaseRetirement DatabaseRetirementService
-	Lifecycle          *lifecycleapplication.LifecycleApplicationService
 	Monitoring         MonitoringMetricsService
 	Principal          func(*http.Request) principalmodel.Principal
 	WriteJSON          func(http.ResponseWriter, int, any)
@@ -92,7 +89,7 @@ func NewOperationsHandler(deps OperationsDependencies) *OperationsHandler {
 	if authenticated == nil {
 		authenticated = deps.Admin
 	}
-	return &OperationsHandler{service: deps.Service, controls: deps.Controls, leases: deps.Leases, databaseRetirement: deps.DatabaseRetirement, lifecycle: deps.Lifecycle, monitoring: deps.Monitoring, principal: deps.Principal, writeJSON: deps.WriteJSON, writeServiceError: deps.WriteServiceError, decodeJSON: deps.DecodeJSON, securityAudit: deps.SecurityAudit, authenticated: authenticated}
+	return &OperationsHandler{service: deps.Service, controls: deps.Controls, leases: deps.Leases, databaseRetirement: deps.DatabaseRetirement, monitoring: deps.Monitoring, principal: deps.Principal, writeJSON: deps.WriteJSON, writeServiceError: deps.WriteServiceError, decodeJSON: deps.DecodeJSON, securityAudit: deps.SecurityAudit, authenticated: authenticated}
 }
 
 func (h *OperationsHandler) receipts(w http.ResponseWriter, r *http.Request) {

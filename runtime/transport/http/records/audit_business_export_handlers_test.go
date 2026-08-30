@@ -14,8 +14,8 @@ import (
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 type recordsBusinessAuditExporter struct{}

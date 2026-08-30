@@ -90,15 +90,6 @@ type ObjectLedgerPolicy struct {
 	Signature string `json:"signature,omitempty"`
 }
 
-type ViewSchema struct {
-	Key       string                             `json:"key"`
-	Name      string                             `json:"name"`
-	ObjectKey string                             `json:"object_key"`
-	Type      string                             `json:"type"`
-	I18n      localizationmodel.LocalizedTextMap `json:"i18n,omitempty"`
-	Config    map[string]any                     `json:"config"`
-}
-
 type ActionSchema struct {
 	Key                   string                             `json:"key"`
 	ObjectKey             string                             `json:"object_key"`

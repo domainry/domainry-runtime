@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
-	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -23,17 +23,26 @@ import (
 // in the source-owned Scheduler module.
 type schedulerSDKModuleHost struct {
 	scheduler    *schedulerapplication.SchedulerApplicationService
-	integrations *integrationapplication.IntegrationApplicationService
+	publications schedulerPublicationAcceptor
 	dispatcher   *SchedulerCallbackDispatcher
 	store        *persistence.RuntimeStore
 	workerID     string
 	mu           sync.RWMutex
 	revision     int64
 	definitions  map[string]recordmodel.Record
+	authored     []map[string]any
+	authoredSet  bool
 }
 
-func NewSchedulerSDKModuleHost(scheduler *schedulerapplication.SchedulerApplicationService, integrations *integrationapplication.IntegrationApplicationService, store *persistence.RuntimeStore, workerID string) modulehost.ModuleHost {
-	return &schedulerSDKModuleHost{scheduler: scheduler, integrations: integrations, dispatcher: NewSchedulerCallbackDispatcher(scheduler, integrations), store: store, workerID: strings.TrimSpace(workerID), definitions: map[string]recordmodel.Record{}}
+func NewSchedulerSDKModuleHost(scheduler *schedulerapplication.SchedulerApplicationService, publications schedulerPublicationAcceptor, requirements []integrationsdk.ConnectionRequirement, store *persistence.RuntimeStore, workerID string, authoredDefinitions ...[]map[string]any) modulehost.ModuleHost {
+	host := &schedulerSDKModuleHost{scheduler: scheduler, publications: publications, store: store, workerID: strings.TrimSpace(workerID), definitions: map[string]recordmodel.Record{}}
+	if len(authoredDefinitions) > 0 {
+		host.authoredSet = true
+		host.authored = cloneSchedulerDefinitionMaps(authoredDefinitions[0])
+	}
+	host.dispatcher = NewSchedulerCallbackDispatcher(scheduler, publications, requirements)
+	host.dispatcher.definition = host.definition
+	return host
 }
 func (h *schedulerSDKModuleHost) Definitions() modulehost.DefinitionProvider         { return h }
 func (h *schedulerSDKModuleHost) Dispatcher() modulehost.Dispatcher                  { return h }
@@ -73,12 +82,25 @@ func (r schedulerSDKMigrationRegistrar) ApplyOwnedMigrations(ctx context.Context
 }
 
 func (h *schedulerSDKModuleHost) Snapshot(ctx context.Context) (schedulersdk.DefinitionSnapshot, error) {
-	if h.scheduler == nil {
-		return schedulersdk.DefinitionSnapshot{}, fmt.Errorf("Runtime Scheduler definition source is unavailable")
-	}
-	records, err := h.scheduler.PublishedDefinitions(ctx, schedulerSDKSystemPrincipal("scheduler.definition.read"))
-	if err != nil {
-		return schedulersdk.DefinitionSnapshot{}, err
+	var records []recordmodel.Record
+	if h.authoredSet {
+		records = make([]recordmodel.Record, 0, len(h.authored))
+		for _, definition := range h.authored {
+			key := schedulerSDKString(definition, "key")
+			if key == "" {
+				return schedulersdk.DefinitionSnapshot{}, fmt.Errorf("Scheduler manifest definition key is required")
+			}
+			records = append(records, recordmodel.Record{ID: key, Data: cloneSchedulerDefinitionMap(definition), UpdatedAt: schedulerSDKStringDefault(definition, "revision", "published")})
+		}
+	} else {
+		if h.scheduler == nil {
+			return schedulersdk.DefinitionSnapshot{}, fmt.Errorf("Runtime Scheduler definition source is unavailable")
+		}
+		var err error
+		records, err = h.scheduler.PublishedDefinitions(ctx, schedulerSDKSystemPrincipal("scheduler.definition.read"))
+		if err != nil {
+			return schedulersdk.DefinitionSnapshot{}, err
+		}
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -90,6 +112,29 @@ func (h *schedulerSDKModuleHost) Snapshot(ctx context.Context) (schedulersdk.Def
 		definitions = append(definitions, schedulerSDKDefinition(record))
 	}
 	return schedulersdk.DefinitionSnapshot{Revision: h.revision, Definitions: definitions}, nil
+}
+
+func (h *schedulerSDKModuleHost) definition(_ context.Context, key string) (recordmodel.Record, bool, error) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	record, found := h.definitions[strings.TrimSpace(key)]
+	return record, found, nil
+}
+
+func cloneSchedulerDefinitionMaps(values []map[string]any) []map[string]any {
+	result := make([]map[string]any, len(values))
+	for index, value := range values {
+		result[index] = cloneSchedulerDefinitionMap(value)
+	}
+	return result
+}
+
+func cloneSchedulerDefinitionMap(value map[string]any) map[string]any {
+	result := make(map[string]any, len(value))
+	for key, item := range value {
+		result[key] = item
+	}
+	return result
 }
 
 func schedulerSDKDefinition(record recordmodel.Record) schedulersdk.Definition {
@@ -112,11 +157,21 @@ func schedulerSDKDefinition(record recordmodel.Record) schedulersdk.Definition {
 // never owns or mutates Scheduler run lifecycle state.
 type SchedulerCallbackDispatcher struct {
 	scheduler    *schedulerapplication.SchedulerApplicationService
-	integrations *integrationapplication.IntegrationApplicationService
+	publications schedulerPublicationAcceptor
+	connectors   map[string]string
+	definition   func(context.Context, string) (recordmodel.Record, bool, error)
 }
 
-func NewSchedulerCallbackDispatcher(scheduler *schedulerapplication.SchedulerApplicationService, integrations *integrationapplication.IntegrationApplicationService) *SchedulerCallbackDispatcher {
-	return &SchedulerCallbackDispatcher{scheduler: scheduler, integrations: integrations}
+type schedulerPublicationAcceptor interface {
+	Accept(context.Context, integrationsdk.DeliveryRequest, string) (integrationsdk.DeliveryReceipt, error)
+}
+
+func NewSchedulerCallbackDispatcher(scheduler *schedulerapplication.SchedulerApplicationService, publications schedulerPublicationAcceptor, requirements []integrationsdk.ConnectionRequirement) *SchedulerCallbackDispatcher {
+	connectors := make(map[string]string, len(requirements))
+	for _, requirement := range requirements {
+		connectors[strings.TrimSpace(requirement.Key)] = strings.TrimSpace(requirement.ConnectorKey)
+	}
+	return &SchedulerCallbackDispatcher{scheduler: scheduler, publications: publications, connectors: connectors}
 }
 
 func (d *SchedulerCallbackDispatcher) Dispatch(ctx context.Context, trigger schedulersdk.Trigger) (schedulersdk.DownstreamReceipt, error) {
@@ -135,6 +190,13 @@ func (d *SchedulerCallbackDispatcher) Dispatch(ctx context.Context, trigger sche
 }
 
 func (d *SchedulerCallbackDispatcher) publishedDefinition(ctx context.Context, key string) (recordmodel.Record, error) {
+	if d != nil && d.definition != nil {
+		if record, found, err := d.definition(ctx, key); err != nil {
+			return recordmodel.Record{}, err
+		} else if found {
+			return record, nil
+		}
+	}
 	if d == nil || d.scheduler == nil {
 		return recordmodel.Record{}, fmt.Errorf("Runtime Scheduler definition source is unavailable")
 	}
@@ -151,29 +213,29 @@ func (d *SchedulerCallbackDispatcher) publishedDefinition(ctx context.Context, k
 }
 
 func (d *SchedulerCallbackDispatcher) dispatchHTTPCallback(ctx context.Context, trigger schedulersdk.Trigger) (schedulersdk.DownstreamReceipt, error) {
-	if d == nil || d.integrations == nil {
-		return schedulersdk.DownstreamReceipt{}, fmt.Errorf("Runtime Integration application is unavailable")
+	if d == nil || d.publications == nil {
+		return schedulersdk.DownstreamReceipt{}, fmt.Errorf("Integration delivery boundary is unavailable")
 	}
-	principal := schedulerSDKWorkspacePrincipal("integration.invoke")
-	connection, err := d.integrations.GetIntegrationConnection(ctx, trigger.Target.ConnectionKey, principal)
+	connectorKey := strings.TrimSpace(d.connectors[strings.TrimSpace(trigger.Target.ConnectionKey)])
+	if connectorKey == "" {
+		return schedulersdk.DownstreamReceipt{}, fmt.Errorf("Scheduler HTTP connection %q is not declared by the application", trigger.Target.ConnectionKey)
+	}
+	payload := trigger.Target.Payload
+	if len(payload) == 0 {
+		payload = json.RawMessage("{}")
+	}
+	if !json.Valid(payload) {
+		return schedulersdk.DownstreamReceipt{}, fmt.Errorf("decode Scheduler HTTP payload: invalid JSON")
+	}
+	receipt, err := d.publications.Accept(ctx, integrationsdk.DeliveryRequest{MessageID: trigger.RunID, DeduplicationKey: trigger.IdempotencyKey, WorkspaceID: principalmodel.InstallationWorkspaceID, ConnectorKey: connectorKey, ConnectionKey: trigger.Target.ConnectionKey, Operation: trigger.Target.Operation, Payload: payload}, "scheduler")
 	if err != nil {
 		return schedulersdk.DownstreamReceipt{}, err
 	}
-	payload := map[string]any{}
-	if len(trigger.Target.Payload) > 0 {
-		if err := json.Unmarshal(trigger.Target.Payload, &payload); err != nil {
-			return schedulersdk.DownstreamReceipt{}, fmt.Errorf("decode Scheduler HTTP payload: %w", err)
-		}
-	}
-	result, err := d.integrations.ExecuteIntegrationSyncCall(ctx, integrationapplication.SyncCallRequest{ConnectorKey: connection.ConnectorKey, ConnectionKey: connection.Key, Operation: trigger.Target.Operation, Request: payload, RequestRef: trigger.IdempotencyKey}, principal)
-	if err != nil {
-		return schedulersdk.DownstreamReceipt{}, err
-	}
-	receiptID := strings.TrimSpace(result.ActionInvocation.ID)
+	receiptID := strings.TrimSpace(receipt.InvocationID)
 	if receiptID == "" {
 		receiptID = trigger.RunID
 	}
-	return schedulersdk.DownstreamReceipt{ID: receiptID, Owner: connection.ConnectorKey, Status: "accepted"}, nil
+	return schedulersdk.DownstreamReceipt{ID: receiptID, Owner: connectorKey, Status: "accepted"}, nil
 }
 
 var _ modulehost.Dispatcher = (*SchedulerCallbackDispatcher)(nil)

@@ -21,8 +21,7 @@ func assembleAutomationApplication(records *runtimeAssembly) *automationapplicat
 		RecordRepository:    records.recordRepo,
 		WorkerStore:         records.automationWorkerRepo,
 		ExecutionRepository: records.automationExecutionRepo,
-		DeliveryRepository:  records.integrationDeliveryRepo,
-		ConfigRepository:    records.integrationConfigRepo,
+		DeliveryRepository:  records.integrationPublicationRepo,
 		Audit:               records.auditApplicationService.AppendWithMetadata,
 		Principal: func(ctx context.Context, userID, roleKey, fallbackRoleKey string) principalmodel.Principal {
 			if roleKey == "" {
@@ -39,7 +38,6 @@ func assembleAutomationApplication(records *runtimeAssembly) *automationapplicat
 			return records.actionService.Invoke(ctx, actionmodel.ActionSourceAutomation, invocation)
 		},
 		Workflows:    records.Applications().Workflows,
-		Metadata:     metadata,
 		CanAccess:    records.RecordQueryPolicyDomainService.CanAccessRecord,
 		ValidateRule: metadata.ValidateAutomationRuleDefinition,
 		AuthoringProjection: func() capabilitycontract.CapabilityAuthoringProjection {

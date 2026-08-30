@@ -75,9 +75,6 @@ func TestBootstrapExtensionAndProjectFacadeEntrypoints(t *testing.T) {
 		if runtime == nil {
 			t.Fatalf("constructor %d returned nil", index)
 		}
-		if ActionConnectorGateway(runtime) == nil {
-			t.Fatalf("constructor %d gateway nil", index)
-		}
 		if RoutesForSurfaceGroup(runtime, runtimehttp.SurfaceRouteGroupPublic) == nil {
 			t.Fatalf("constructor %d routes nil", index)
 		}
@@ -85,7 +82,7 @@ func TestBootstrapExtensionAndProjectFacadeEntrypoints(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if ActionConnectorGateway(nil) == nil || RoutesForSurfaceGroup(nil, runtimehttp.SurfaceRouteGroupPublic) == nil {
+	if RoutesForSurfaceGroup(nil, runtimehttp.SurfaceRouteGroupPublic) == nil {
 		t.Fatal("nil facade fallback missing")
 	}
 }

@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )

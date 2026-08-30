@@ -114,36 +114,6 @@ func deadLetterPrincipal() principalmodel.Principal {
 	}})
 }
 
-func TestIntegrationEventDeadLetterOwnerInspectRetryResolveAndErrors(t *testing.T) {
-	repository := &deadLetterEventRepository{found: true, event: integrationmodel.IntegrationEvent{
-		ID: "event", Provider: "crm", EventType: "customer.updated", ExternalID: "external", Status: "dead_letter", Error: "failed", AttemptCount: 3, UpdatedAt: "now",
-	}}
-	service := integrationapplication.NewIntegrationApplicationService(integrationapplication.ApplicationDependencies{EventRepository: repository})
-	owner := integrationEventDeadLetterOwner{service: service}
-	principal := deadLetterPrincipal()
-
-	item, err := owner.Inspect(t.Context(), " event ", principal)
-	if err != nil || item.Owner != "integration_event" || item.BusinessKey != "crm:customer.updated" || item.CorrelationID != "external" || item.Details["attempt_count"] != 3 {
-		t.Fatalf("item=%#v err=%v", item, err)
-	}
-	item, err = owner.Act(t.Context(), "event", operationsapplication.OperationsDeadLetterRetry, " retry reason ", "ignored", principal)
-	if err != nil || item.Status != "retrying" || repository.errorText != "retry reason" {
-		t.Fatalf("retry item=%#v repo=%#v err=%v", item, repository, err)
-	}
-	repository.event.Status, repository.event.NextRetryAt = "dead_letter", ""
-	item, err = owner.Act(t.Context(), "event", operationsapplication.OperationsDeadLetterResolve, " resolved ", "ignored", principal)
-	if err != nil || item.Status != "ignored" || repository.status != "ignored" || repository.errorText != "resolved" {
-		t.Fatalf("resolve item=%#v repo=%#v err=%v", item, repository, err)
-	}
-	if _, err := owner.Act(t.Context(), "event", "invalid", "", "", principal); apperror.CodeOf(err) != "backend.operations.dead_letter_action_unsupported" {
-		t.Fatalf("unsupported err=%v", err)
-	}
-	repository.err = errors.New("event unavailable")
-	if _, err := owner.Inspect(t.Context(), "event", principal); !errors.Is(err, repository.err) {
-		t.Fatalf("inspect error=%v", err)
-	}
-}
-
 func TestIntegrationOutboxDeadLetterOwnerInspectRetryResolveAndProjectionFallbacks(t *testing.T) {
 	repository := &deadLetterDeliveryRepository{found: true, message: integrationmodel.IntegrationOutboxMessage{
 		ID: "message", WorkspaceID: "workspace", ConnectorKey: "__automation__", Operation: "run", Status: "dead_letter", Error: "failed", EventID: "event", DedupKey: "dedup", AttemptCount: 2, UpdatedAt: "now",

@@ -67,21 +67,10 @@ func addBusinessBuilderOpenAPIPaths(paths map[string]any) {
 	addBuilderPath(paths, "/tenant-admin/metadata/definitions/{resourceType}", "Metadata Administration", "get")
 	addBuilderPath(paths, "/tenant-admin/metadata/definitions/{resourceType}/{resourceKey}", "Metadata Administration", "get")
 	addBuilderPath(paths, "/tenant-admin/metadata/definitions/{resourceType}/{resourceKey}/validate", "Metadata Administration", "post")
-	addBuilderPath(paths, "/tenant-admin/metadata/definitions/{resourceType}/{resourceKey}/versions", "Metadata Administration", "get")
-	addBuilderPath(paths, "/tenant-admin/metadata/definitions/{resourceType}/{resourceKey}/diff", "Metadata Administration", "get")
 	addBuilderPath(paths, "/tenant-admin/metadata/migration-plan", "Metadata Administration", "get")
 	addBuilderPath(paths, "/tenant-admin/metadata/objects/{objectKey}/record-count", "Metadata Administration", "get")
 	addBuilderPath(paths, "/tenant-admin/metadata/capabilities", "Metadata Administration", "get")
 	addBuilderPath(paths, "/operations/metadata/diagnostics", "Metadata Operations", "get")
-	addBuilderPath(paths, "/tenant-admin/change-plans/validate", "Metadata Administration", "post")
-	addBuilderPath(paths, "/tenant-admin/change-plans/{planID}", "Metadata Administration", "get", "put")
-	addBuilderPath(paths, "/tenant-admin/change-plans/{planID}/clone-current", "Metadata Administration", "post")
-	addBuilderPath(paths, "/tenant-admin/change-plans/{planID}/simulate", "Metadata Administration", "post")
-	addBuilderPath(paths, "/tenant-admin/change-plans/{planID}/review", "Metadata Administration", "post")
-	addBuilderPath(paths, "/tenant-admin/change-plans/{planID}/approve", "Metadata Administration", "post")
-	addBuilderPath(paths, "/tenant-admin/change-plans/{planID}/export", "Metadata Administration", "get")
-	addBuilderPath(paths, "/tenant-admin/change-plans/{planID}/package", "Metadata Administration", "put")
-	addBuilderPath(paths, "/tenant-admin/change-plans/apply", "Metadata Administration", "post")
 	addBuilderPath(paths, "/business/audit-events", "Audit Business", "get")
 	addBusinessAuditOpenAPIPath(paths)
 	addBuilderPath(paths, "/business/records/stream", "Business Records", "get")
@@ -90,11 +79,9 @@ func addBusinessBuilderOpenAPIPaths(paths map[string]any) {
 	addBuilderPath(paths, "/operations/audit-events", "Audit Operations", "get")
 	addBuilderPath(paths, "/operations/audit-events/export", "Audit Operations", "get")
 	addBuilderPath(paths, "/frontend-capability-manifest/validate", "Capabilities", "post")
-	addBuilderPath(paths, "/tenant-admin/change-plans/apply", "Capabilities", "post")
-	addBuilderPath(paths, "/frontend-capability-manifest", "Capabilities", "get", "put")
+	addBuilderPath(paths, "/frontend-capability-manifest", "Capabilities", "get")
 	paths["/frontend-capability-manifest"] = map[string]any{
 		"get": openAPIOperation("getFrontendCapabilityManifest", "Capabilities", "Read deployed frontend capability evidence and compatibility gaps", openAPIAdminSecurity(), openAPIJSONResponse("Frontend capability snapshot", openAPIRef("FrontendCapabilitySnapshot"))),
-		"put": openAPIOperation("registerFrontendCapabilityManifest", "Capabilities", "Register deployed frontend capability evidence; domain routes require Builder artifact and source hashes", openAPIAdminSecurity(), openAPIJSONRequest(openAPIRef("FrontendCapabilityManifest")), openAPIJSONResponse("Frontend capability snapshot", openAPIRef("FrontendCapabilitySnapshot"))),
 	}
 	paths["/frontend-capability-manifest/validate"] = map[string]any{
 		"post": openAPIOperation("validateFrontendCapabilityManifest", "Capabilities", "Validate deployed frontend routes, permissions, domain bindings and artifact hashes without persisting", openAPIAdminSecurity(), openAPIJSONRequest(openAPIRef("FrontendCapabilityManifest")), openAPIJSONResponse("Frontend capability validation", openAPIRef("FrontendCapabilityValidation"))),
@@ -142,7 +129,6 @@ func addBusinessBuilderOpenAPIPaths(paths map[string]any) {
 	addBuilderPath(paths, "/tenant-admin/workflows/{workflowKey}/simulate", "Workflow Administration", "post")
 	addBuilderPath(paths, "/tenant-admin/scheduler/definitions", "Scheduler Administration", "get")
 	addBuilderPath(paths, "/tenant-admin/scheduler/definitions/{definitionID}", "Scheduler Administration", "get")
-	addBuilderPath(paths, "/tenant-admin/scheduler/definitions/{definitionID}/versions", "Scheduler Administration", "get")
 	addBuilderPath(paths, "/tenant-admin/scheduler/authoring-contract", "Scheduler Administration", "get")
 	addBuilderPath(paths, "/tenant-admin/scheduler/definitions/validate", "Scheduler Administration", "post")
 	addBuilderPath(paths, "/tenant-admin/scheduler/schedules/preview", "Scheduler Administration", "post")
@@ -154,7 +140,6 @@ func addBusinessBuilderOpenAPIPaths(paths map[string]any) {
 	addBuilderPath(paths, "/operations/scheduler/runs/{runID}/cancel", "Scheduler Operations", "post")
 	addBuilderPath(paths, "/operations/scheduler/dead-letters/{deadLetterID}/resolve", "Scheduler Operations", "post")
 	addBuilderPath(paths, "/operations/scheduler/dead-letters/{deadLetterID}/requeue", "Scheduler Operations", "post")
-	addBuilderPath(paths, "/automation-rules/{ruleKey}/versions", "Automation", "get")
 	addBuilderPath(paths, "/automation-rules/authoring-fragments/{capabilityKey}/validate", "Automation", "post")
 
 	addBuilderPath(paths, "/tenant-admin/integrations/catalog", "Integration Administration", "get")
@@ -193,12 +178,10 @@ func addBusinessBuilderOpenAPIPaths(paths map[string]any) {
 	addBuilderPath(paths, "/operations/integrations/outbox/{messageID}/retry", "Integration Operations", "post")
 	addBuilderPath(paths, "/business/integration-intents/{messageID}", "Integration Business", "get")
 
-	addBuilderPath(paths, "/tenant-admin/metadata/localized-texts", "Metadata", "get", "put")
+	addBuilderPath(paths, "/tenant-admin/metadata/localized-texts", "Metadata", "get")
 	addBuilderPath(paths, "/tenant-admin/metadata/localized-texts/coverage", "Metadata", "get")
 	addBuilderPath(paths, "/tenant-admin/metadata/localized-texts/export", "Metadata", "get")
 	addBuilderPath(paths, "/tenant-admin/metadata/localized-texts/export.xlsx", "Metadata", "get")
-	addBuilderPath(paths, "/tenant-admin/metadata/localized-texts/import", "Metadata", "post")
-	addBuilderPath(paths, "/tenant-admin/metadata/reload", "Metadata", "post")
 	addBuilderPath(paths, "/surfaces/{surfaceKey}/context", "Surfaces", "post")
 	paths["/surfaces/{surfaceKey}/context"] = map[string]any{
 		"post": openAPIOperation("surfaceContext", "Surfaces", "Batch records and readable relation projections for a surface", openAPIAdminSecurity(), openAPIPathParameter("surfaceKey", "Surface key"), openAPIJSONRequest(openAPIRef("SurfaceContextRequest")), openAPIJSONResponse("Surface context", openAPIRef("SurfaceContextResult"))),

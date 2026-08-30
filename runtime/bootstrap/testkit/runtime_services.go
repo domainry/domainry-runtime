@@ -6,7 +6,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
@@ -26,16 +26,14 @@ type RuntimeServicesConfig struct {
 	TemplateVersion             string
 	Name                        string
 	Objects                     []definitionmodel.ObjectSchema
-	Views                       []definitionmodel.ViewSchema
 	Actions                     []definitionmodel.ActionSchema
 	Workflows                   []definitionmodel.WorkflowSchema
 	AutomationRules             []automationmodel.AutomationRuleSchema
 	Dictionaries                []appschemamodel.DictionarySchema
 	Integrations                integrationmodel.IntegrationSchema
 	Reports                     []reportmodel.ReportSchema
-	Entrypoints                 []definitionmodel.EntryPointSchema
-	Skills                      []agentmodel.SkillSchema
-	Agents                      []agentmodel.AgentSchema
+	Skills                      []agentsdk.SkillSchema
+	Agents                      []agentsdk.AgentSchema
 	IdentityProfileExtensions   []profilebindingmodel.Binding
 	Store                       *database.RuntimeStore
 	ApplicationSchemaRepository appschemarepository.ApplicationSchemaRepository

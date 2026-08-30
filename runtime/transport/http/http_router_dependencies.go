@@ -11,6 +11,7 @@ import (
 	businesseventcontract "github.com/domainry/domainry-runtime/runtime/domain/businessevent/contract"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
+	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -19,13 +20,11 @@ import (
 	automationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/automation"
 	businesseventhttp "github.com/domainry/domainry-runtime/runtime/transport/http/businessevents"
 	businessreferencehttp "github.com/domainry/domainry-runtime/runtime/transport/http/businessreferences"
-	businessseedhttp "github.com/domainry/domainry-runtime/runtime/transport/http/businessseeds"
 	businesssystemhttp "github.com/domainry/domainry-runtime/runtime/transport/http/businesssystem"
 	capabilityhttp "github.com/domainry/domainry-runtime/runtime/transport/http/capabilities"
-	changeplanhttp "github.com/domainry/domainry-runtime/runtime/transport/http/changeplans"
 	discoveryhttp "github.com/domainry/domainry-runtime/runtime/transport/http/discovery"
 	frontendcapabilityhttp "github.com/domainry/domainry-runtime/runtime/transport/http/frontendcapability"
-	integrationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/integrations"
+	lifecyclehttp "github.com/domainry/domainry-runtime/runtime/transport/http/lifecycle"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 	openapihttp "github.com/domainry/domainry-runtime/runtime/transport/http/openapi"
 	operationshttp "github.com/domainry/domainry-runtime/runtime/transport/http/operations"
@@ -146,6 +145,7 @@ type HTTPRouterDependencies struct {
 	RuntimeReleaseIntegrity   RuntimeReleaseIntegrityProvider
 	RuntimeInstanceID         string
 	BusinessEventBackplane    businesseventcontract.Backplane
+	RateLimiter               ratelimit.Limiter
 }
 
 type HTTPRouterHandlers struct {
@@ -160,16 +160,14 @@ type HTTPRouterHandlers struct {
 	Reports              *reporthttp.ReportsHandler
 	FrontendCapabilities *frontendcapabilityhttp.FrontendCapabilityHandler
 	BusinessReferences   *businessreferencehttp.BusinessReferencesHandler
-	BusinessSeeds        *businessseedhttp.BusinessSeedHandler
 	BusinessSystem       *businesssystemhttp.BusinessSystemHandler
 	Capabilities         *capabilityhttp.CapabilitiesHandler
-	ChangePlans          *changeplanhttp.ChangePlansHandler
-	Integrations         *integrationhttp.IntegrationsHandler
 	ApplicationSchema    *appschemahttp.ApplicationSchemaHandler
 	Notifications        *notificationhttp.NotificationsHandler
 	Party                *partyhttp.PartyHandler
 	AgentDialog          *agentdialoghttp.AgentDialogHandler
 	Operations           *operationshttp.OperationsHandler
+	Lifecycle            *lifecyclehttp.Handler
 	BusinessEvents       *businesseventhttp.BusinessEventsHandler
 }
 

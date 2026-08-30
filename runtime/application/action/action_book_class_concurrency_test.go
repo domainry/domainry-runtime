@@ -356,7 +356,7 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 		t.Fatalf("stored bookings booked=%d waitlisted=%d outcomes=(%d,%d)", storedBooked, storedWaitlisted, booked, waitlisted)
 	}
 	for table, want := range map[string]int{
-		"integration_outbox_messages": 30,
+		"runtime_publication_outbox": 30,
 		"_audit_events":               90,
 	} {
 		var count int
@@ -428,7 +428,7 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 	}
 	for table, want := range map[string]int{
 		"concurrent_class_booking":    30,
-		"integration_outbox_messages": 30,
+		"runtime_publication_outbox": 30,
 		"_audit_events":               90,
 		"business_action_executions":  100,
 	} {

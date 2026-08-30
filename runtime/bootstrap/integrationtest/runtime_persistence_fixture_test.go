@@ -1,12 +1,9 @@
 package integrationtest
 
 import (
-	"encoding/json"
 	"testing"
-	"time"
 
-	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
-	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -32,14 +29,19 @@ func publishSchedulerDefinitionFixture(t *testing.T, cfg config.Config, key stri
 
 func publishSchedulerDefinitionStoreFixture(t *testing.T, store *persistence.RuntimeStore, key string, payload map[string]any) {
 	t.Helper()
-	raw, err := json.Marshal(payload)
+	repository := metadataStore(store)
+	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "materialize scheduler integration fixture")
+	manifest, err := repository.LoadManifest(t.Context(), scope)
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectedHash := ""
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err = metadataStore(store).PublishDefinition(t.Context(), principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "publish scheduler integration fixture"), "scheduler", key, appschemamodel.ApplicationDefinitionUpsertRequest{ExpectedSchemaHash: &expectedHash, Payload: raw}, auditmodel.AuditEvent{ID: "audit_scheduler_" + key, WorkspaceID: principalmodel.InstallationWorkspaceID, Event: "metadata_definition.saved", ObjectKey: "scheduler", RecordID: key, ActorID: "integration-test", CreatedAt: now})
-	if err != nil {
-		t.Fatalf("publish scheduler definition %s: %v", key, err)
+	definition := make(map[string]any, len(payload)+1)
+	for field, value := range payload {
+		definition[field] = value
+	}
+	definition["key"] = key
+	manifest.SchedulerDefinitions = append(manifest.SchedulerDefinitions, definition)
+	if err := repository.SyncManifest(t.Context(), scope, manifestmodel.ManifestSchema(manifest)); err != nil {
+		t.Fatalf("materialize scheduler definition %s: %v", key, err)
 	}
 }

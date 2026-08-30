@@ -16,7 +16,6 @@ func parseListQuery(r *http.Request) recordmodel.RecordListQuery {
 		Page:           intQuery(values.Get("page")),
 		PageSize:       intQuery(values.Get("page_size")),
 		Search:         strings.TrimSpace(values.Get("search")),
-		ViewKey:        strings.TrimSpace(values.Get("view")),
 		Filters:        map[string]any{},
 		Locale:         recordRequestLocale(r),
 		FallbackLocale: recordFallbackLocale(r),

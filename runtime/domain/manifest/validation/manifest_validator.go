@@ -77,7 +77,6 @@ func ValidateRuntimeDefinitionGraphWithConnectorCatalog(manifest manifestmodel.M
 	state.validateRoles()
 	state.validateDictionaries()
 	state.validateIdentityProfileExtensions()
-	state.validateViews()
 	state.validateActions()
 	state.validateAgents()
 	state.validateIntegrationConnections()
@@ -98,17 +97,6 @@ func ValidateRuntimeDefinitionGraphWithConnectorCatalog(manifest manifestmodel.M
 // explicitly composed Runtime Connector catalog. Manifest-owned connector
 // definitions take precedence over catalog entries with the same key.
 func ValidateManifestWithConnectorCatalog(manifest manifestmodel.ManifestSchema, connectorCatalog []integrationmodel.ConnectorSchema) error {
-	return validateManifestWithConnectorCatalogAndSeedEvidence(manifest, connectorCatalog, nil)
-}
-
-// ValidateManifestWithMaterializedSeeds validates a live authoring snapshot.
-// Direct seed authoring stores validated records plus immutable provenance
-// instead of copying domain payloads back into the Manifest envelope.
-func ValidateManifestWithMaterializedSeeds(manifest manifestmodel.ManifestSchema, connectorCatalog []integrationmodel.ConnectorSchema, seeds []businessseedmodel.BusinessSeedProvenance) error {
-	return validateManifestWithConnectorCatalogAndSeedEvidence(manifest, connectorCatalog, &seeds)
-}
-
-func validateManifestWithConnectorCatalogAndSeedEvidence(manifest manifestmodel.ManifestSchema, connectorCatalog []integrationmodel.ConnectorSchema, materializedSeeds *[]businessseedmodel.BusinessSeedProvenance) error {
 	state := newValidationState(manifest, connectorCatalog)
 	state.validateRequiredShell()
 	state.validateSourceIntentCoverage()
@@ -116,7 +104,6 @@ func validateManifestWithConnectorCatalogAndSeedEvidence(manifest manifestmodel.
 	state.validateRoles()
 	state.validateDictionaries()
 	state.validateIdentityProfileExtensions()
-	state.validateViews()
 	state.validateActions()
 	state.validateAgents()
 	state.validateIntegrationConnections()
@@ -126,11 +113,7 @@ func validateManifestWithConnectorCatalogAndSeedEvidence(manifest manifestmodel.
 	state.validateNotificationTemplates()
 	state.validateReports()
 	state.validateGovernance()
-	if len(manifest.SeedRecords) > 0 || materializedSeeds == nil {
-		state.validateSeedRecords()
-	} else {
-		state.validateMaterializedSeedRecords(*materializedSeeds)
-	}
+	state.validateSeedRecords()
 	state.validateRequiredIndexes()
 	if len(state.errs) > 0 {
 		return state.errs

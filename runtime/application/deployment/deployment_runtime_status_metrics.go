@@ -25,6 +25,11 @@ func (s *DeploymentRuntimeStatusApplicationService) businessActionMetrics(ctx co
 	const limit = 200
 	actions := s.schema.SchemaForPrincipal(ctx, principalmodel.Principal{}).Actions
 	configured := deploymentprojection.DeploymentBusinessActionConfiguredCount(actions)
+	if s.delivery == nil {
+		// Provider invocation evidence belongs to Integration Module/SaaS and
+		// is intentionally not mirrored into Runtime monitoring state.
+		return deploymentprojection.DeploymentBusinessActionMetrics(configured, nil, limit), nil
+	}
 	invocations, err := s.delivery.ListInvocations(ctx, principalmodel.InstallationWorkspaceID, "", "", "", "", limit)
 	if err != nil {
 		return deploymentprojection.DeploymentBusinessActionMetrics(configured, nil, limit), err

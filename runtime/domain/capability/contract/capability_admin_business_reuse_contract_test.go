@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -90,7 +91,15 @@ func TestRuntimeAPIContractPublishesEveryReusableAdminCapability(t *testing.T) {
 		t.Fatalf("unexpected Admin Business contract header: %+v", api.AdminBusinessReuse)
 	}
 
-	want := reusableAdminEndpointIdentities(inventory.Endpoints)
+	activeEndpoints := make([]adminBusinessReuseRoute, 0, len(inventory.Endpoints))
+	for _, endpoint := range inventory.Endpoints {
+		method, path, found := strings.Cut(endpoint.EndpointIdentity, " ")
+		if found && retiredRuntimeEndpoint(method, path) {
+			continue
+		}
+		activeEndpoints = append(activeEndpoints, endpoint)
+	}
+	want := reusableAdminEndpointIdentities(activeEndpoints)
 	got := reusableAdminEndpointIdentities(api.AdminBusinessReuse.Routes)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Runtime API Admin reuse routes drifted\ngot=%v\nwant=%v", got, want)

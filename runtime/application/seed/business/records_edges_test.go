@@ -48,19 +48,6 @@ func (p *businessSeedRecordProbe) InsertRecord(_ context.Context, workspace stri
 	return nil
 }
 
-type businessSeedProvenanceProbe struct {
-	err   error
-	items []businessseedmodel.BusinessSeedProvenance
-}
-
-func (p *businessSeedProvenanceProbe) UpsertSeedProvenance(_ context.Context, provenance businessseedmodel.BusinessSeedProvenance) error {
-	if p.err != nil {
-		return p.err
-	}
-	p.items = append(p.items, provenance)
-	return nil
-}
-
 func businessSeedManifest() manifestmodel.ManifestSchema {
 	return manifestmodel.ManifestSchema{
 		TemplateID: "template-a", Version: "1.2.3",
@@ -75,22 +62,19 @@ func businessSeedManifest() manifestmodel.ManifestSchema {
 func TestSyncManifestBusinessSeedsNoopTargetAndLookupFailures(t *testing.T) {
 	manifest := businessSeedManifest()
 	row := manifestBusinessSeedRow{Key: "parent-one", ObjectKey: "parent", DataJSON: `{"name":"Parent"}`}
-	if err := SyncManifestBusinessSeeds(t.Context(), nil, &businessSeedProvenanceProbe{}, manifest, []manifestBusinessSeedRow{row}); err != nil {
+	if err := SyncManifestBusinessSeeds(t.Context(), nil, manifest, []manifestBusinessSeedRow{row}); err != nil {
 		t.Fatalf("nil records err=%v", err)
 	}
-	if err := SyncManifestBusinessSeeds(t.Context(), &businessSeedRecordProbe{}, nil, manifest, []manifestBusinessSeedRow{row}); err != nil {
-		t.Fatalf("nil provenance err=%v", err)
-	}
-	if err := SyncManifestBusinessSeeds(t.Context(), &businessSeedRecordProbe{}, &businessSeedProvenanceProbe{}, manifest, nil); err != nil {
+	if err := SyncManifestBusinessSeeds(t.Context(), &businessSeedRecordProbe{}, manifest, nil); err != nil {
 		t.Fatalf("empty rows err=%v", err)
 	}
 
 	records := &businessSeedRecordProbe{totals: map[string]int{"parent": 1}}
-	if err := SyncManifestBusinessSeeds(t.Context(), records, &businessSeedProvenanceProbe{}, manifest, []manifestBusinessSeedRow{row}); err != nil || len(records.inserted) != 0 {
+	if err := SyncManifestBusinessSeeds(t.Context(), records, manifest, []manifestBusinessSeedRow{row}); err != nil || len(records.inserted) != 0 {
 		t.Fatalf("nonempty inserted=%v err=%v", records.inserted, err)
 	}
 	records = &businessSeedRecordProbe{listErr: map[string]error{"parent": errBusinessSeedProbe}}
-	if err := SyncManifestBusinessSeeds(t.Context(), records, &businessSeedProvenanceProbe{}, manifest, []manifestBusinessSeedRow{row}); !errors.Is(err, errBusinessSeedProbe) || !strings.Contains(err.Error(), "check domain seed target parent") {
+	if err := SyncManifestBusinessSeeds(t.Context(), records, manifest, []manifestBusinessSeedRow{row}); !errors.Is(err, errBusinessSeedProbe) || !strings.Contains(err.Error(), "check domain seed target parent") {
 		t.Fatalf("list err=%v", err)
 	}
 }
@@ -105,8 +89,7 @@ func TestSyncManifestBusinessSeedsOrdersResolvesFiltersAndPersistsEvidence(t *te
 		{Key: "", ObjectKey: "parent", DataJSON: `{"name":"Fallback"}`},
 	}
 	records := &businessSeedRecordProbe{}
-	provenance := &businessSeedProvenanceProbe{}
-	if err := SyncManifestBusinessSeeds(t.Context(), records, provenance, manifest, rows); err != nil {
+	if err := SyncManifestBusinessSeeds(t.Context(), records, manifest, rows); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(records.insertOrder, []string{"parent", "child", "parent"}) {
@@ -126,9 +109,6 @@ func TestSyncManifestBusinessSeedsOrdersResolvesFiltersAndPersistsEvidence(t *te
 	if !reflect.DeepEqual(nested["refs"], []any{"parent_parent_one", "literal"}) {
 		t.Fatalf("nested refs=%#v", nested)
 	}
-	if len(provenance.items) != 3 || provenance.items[0].SourceKind != "template" || provenance.items[0].SourceID != "template-a" || provenance.items[1].SourceKind != "plugin" || provenance.items[1].SourceID != "source-a" {
-		t.Fatalf("provenance=%#v", provenance.items)
-	}
 	for _, workspace := range records.workspaces {
 		if workspace != principalmodel.InstallationWorkspaceID {
 			t.Fatalf("workspace=%q", workspace)
@@ -141,7 +121,7 @@ func TestSyncManifestBusinessSeedsOrdersResolvesFiltersAndPersistsEvidence(t *te
 
 func TestSyncManifestBusinessSeedsAcceptsEmptyData(t *testing.T) {
 	records := &businessSeedRecordProbe{}
-	err := SyncManifestBusinessSeeds(t.Context(), records, &businessSeedProvenanceProbe{}, businessSeedManifest(), []manifestBusinessSeedRow{{Key: "empty", ObjectKey: "parent"}})
+	err := SyncManifestBusinessSeeds(t.Context(), records, businessSeedManifest(), []manifestBusinessSeedRow{{Key: "empty", ObjectKey: "parent"}})
 	if err != nil || len(records.inserted) != 1 || len(records.inserted[0].Data) != 0 {
 		t.Fatalf("inserted=%#v err=%v", records.inserted, err)
 	}
@@ -150,7 +130,7 @@ func TestSyncManifestBusinessSeedsAcceptsEmptyData(t *testing.T) {
 func TestSyncManifestBusinessSeedsUsesContextWorkspace(t *testing.T) {
 	records := &businessSeedRecordProbe{}
 	ctx := requestcontext.WithWorkspaceID(t.Context(), "acceptance-tenant-b")
-	err := SyncManifestBusinessSeeds(ctx, records, &businessSeedProvenanceProbe{}, businessSeedManifest(), []manifestBusinessSeedRow{{Key: "tenant-parent", ObjectKey: "parent", DataJSON: `{"name":"Tenant Parent"}`}})
+	err := SyncManifestBusinessSeeds(ctx, records, businessSeedManifest(), []manifestBusinessSeedRow{{Key: "tenant-parent", ObjectKey: "parent", DataJSON: `{"name":"Tenant Parent"}`}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +157,7 @@ func TestSyncManifestBusinessSeedsOrderingDecodeAndPersistenceFailures(t *testin
 		{"decode", []manifestBusinessSeedRow{{Key: "a", ObjectKey: "parent", DataJSON: `{`}}, "decode domain seed parent/a"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			err := SyncManifestBusinessSeeds(t.Context(), &businessSeedRecordProbe{}, &businessSeedProvenanceProbe{}, manifest, test.rows)
+			err := SyncManifestBusinessSeeds(t.Context(), &businessSeedRecordProbe{}, manifest, test.rows)
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("err=%v", err)
 			}
@@ -185,11 +165,8 @@ func TestSyncManifestBusinessSeedsOrderingDecodeAndPersistenceFailures(t *testin
 	}
 	row := manifestBusinessSeedRow{Key: "a", ObjectKey: "parent", DataJSON: `{"name":"A"}`}
 	records := &businessSeedRecordProbe{insertErr: map[string]error{"parent": errBusinessSeedProbe}}
-	if err := SyncManifestBusinessSeeds(t.Context(), records, &businessSeedProvenanceProbe{}, manifest, []manifestBusinessSeedRow{row}); !errors.Is(err, errBusinessSeedProbe) || !strings.Contains(err.Error(), "sync domain seed parent/a") {
+	if err := SyncManifestBusinessSeeds(t.Context(), records, manifest, []manifestBusinessSeedRow{row}); !errors.Is(err, errBusinessSeedProbe) || !strings.Contains(err.Error(), "sync domain seed parent/a") {
 		t.Fatalf("insert err=%v", err)
-	}
-	if err := SyncManifestBusinessSeeds(t.Context(), &businessSeedRecordProbe{}, &businessSeedProvenanceProbe{err: errBusinessSeedProbe}, manifest, []manifestBusinessSeedRow{row}); !errors.Is(err, errBusinessSeedProbe) || !strings.Contains(err.Error(), "record domain seed provenance parent/a") {
-		t.Fatalf("provenance err=%v", err)
 	}
 }
 
@@ -199,7 +176,7 @@ func TestSyncManifestBusinessSeedsResolvesCyclicReferencesWithDeterministicIDs(t
 		{Key: "b", ObjectKey: "parent", DataJSON: `{"name":"$record:a"}`},
 	}
 	records := &businessSeedRecordProbe{}
-	if err := SyncManifestBusinessSeeds(t.Context(), records, &businessSeedProvenanceProbe{}, businessSeedManifest(), rows); err != nil {
+	if err := SyncManifestBusinessSeeds(t.Context(), records, businessSeedManifest(), rows); err != nil {
 		t.Fatal(err)
 	}
 	if len(records.inserted) != 2 {

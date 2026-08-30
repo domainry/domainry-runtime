@@ -246,6 +246,27 @@ func (s *IntegrationApplicationService) IntegrationConnectorCatalog(ctx context.
 }
 
 func (s *IntegrationApplicationService) integrationConnectorCatalogForWorkspace(ctx context.Context, workspaceID string) ([]integrationmodel.ConnectorSchema, error) {
+	if s.ownerCatalog != nil {
+		definitions, err := s.ownerCatalog.ListConnectorDefinitions(ctx)
+		if err != nil {
+			return nil, err
+		}
+		connectors := make([]integrationmodel.ConnectorSchema, 0, len(definitions))
+		for _, definition := range definitions {
+			var connector integrationmodel.ConnectorSchema
+			if err := json.Unmarshal(definition.Definition, &connector); err != nil {
+				return nil, badRequest("backend.integration.connector.definition_invalid", "connector", definition.Key)
+			}
+			if strings.TrimSpace(connector.Key) == "" {
+				connector.Key = definition.Key
+			}
+			if strings.TrimSpace(connector.Name) == "" {
+				connector.Name = definition.DisplayName
+			}
+			connectors = append(connectors, connector)
+		}
+		return connectors, nil
+	}
 	connectors, adapters := s.registry.Catalog()
 	connections, err := s.configRepo.ListConnections(ctx, workspaceID)
 	if err != nil {

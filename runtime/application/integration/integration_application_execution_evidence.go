@@ -54,7 +54,7 @@ func (s *IntegrationApplicationService) RecordIntegrationExecutionEvidence(ctx c
 		DurationMS: duration, RequestRef: strings.TrimSpace(evidence.RequestRef), ResponseRef: strings.TrimSpace(evidence.ResponseRef),
 		Error: strings.TrimSpace(evidence.Error), EventID: strings.TrimSpace(evidence.EventID), Metadata: metadata,
 	}
-	saved, err := s.deliveryRepo.InsertInvocation(ctx, invocation.WorkspaceID, invocation)
+	saved, err := s.invocationRepo.InsertInvocation(ctx, invocation.WorkspaceID, invocation)
 	if err != nil {
 		return integrationmodel.IntegrationInvocation{}, err
 	}

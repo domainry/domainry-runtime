@@ -2,18 +2,19 @@ package bootstrap
 
 import (
 	"context"
-	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"net/http"
 
-	"github.com/domainry/domainry-connector-sdk"
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+
+	connector "github.com/domainry/domainry-connector-sdk"
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
-	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	runtimebootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap/runtime"
 	transportbootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap/transport"
@@ -36,16 +37,16 @@ func New(ctx context.Context, cfg config.Config, identity identitysdk.Binding, n
 	return runtimebootstrap.New(ctx, cfg, identity, notification, party, dataExchange)
 }
 
-func NewWithScheduler(ctx context.Context, cfg config.Config, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory) *Runtime {
-	return runtimebootstrap.NewWithScheduler(ctx, cfg, identity, notification, party, scheduler, dataExchange)
+func NewWithScheduler(ctx context.Context, cfg config.Config, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, agent ...agentsdk.Factory) *Runtime {
+	return runtimebootstrap.NewWithScheduler(ctx, cfg, identity, notification, party, scheduler, dataExchange, agent...)
 }
 
 func NewWithBusinessHandlers(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, dataExchange dataexchangesdk.Factory) *Runtime {
 	return runtimebootstrap.NewWithBusinessHandlers(ctx, cfg, handlers, identity, notification, party, dataExchange)
 }
 
-func NewWithBusinessHandlersAndScheduler(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory) *Runtime {
-	return runtimebootstrap.NewWithBusinessHandlersAndScheduler(ctx, cfg, handlers, identity, notification, party, scheduler, dataExchange)
+func NewWithBusinessHandlersAndScheduler(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, agent ...agentsdk.Factory) *Runtime {
+	return runtimebootstrap.NewWithBusinessHandlersAndScheduler(ctx, cfg, handlers, identity, notification, party, scheduler, dataExchange, agent...)
 }
 
 func NewWithExtensions(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, dataExchange dataexchangesdk.Factory) *Runtime {
@@ -72,6 +73,10 @@ func NewVerifiedProjectWithOwnerFactoriesAndDatabase(ctx context.Context, cfg co
 	return runtimebootstrap.NewProjectWithOwnerFactoriesAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, notification, party, monitoring, scheduler, dataExchange, database, agent...)
 }
 
+func NewVerifiedProjectWithTopologyFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, database *ProjectDatabase, agent ...agentsdk.Factory) *Runtime {
+	return runtimebootstrap.NewVerifiedProjectWithTopologyFactoriesAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, notification, party, monitoring, scheduler, dataExchange, integration, database, agent...)
+}
+
 func PartyOrganizationScopes(runtime *Runtime) partysdk.OrganizationScopes {
 	return runtimebootstrap.PartyOrganizationScopes(runtime)
 }
@@ -86,12 +91,6 @@ func StartWorkers(ctx context.Context, runtime *Runtime) {
 
 func RoutesForSurfaceGroup(runtime *Runtime, group runtimehttp.SurfaceRouteGroup) http.Handler {
 	return runtimebootstrap.RoutesForSurfaceGroup(runtime, group)
-}
-
-// ActionConnectorGateway is an internal host-composition seam. It deliberately
-// remains a package function so Runtime exposes only process lifecycle methods.
-func ActionConnectorGateway(runtime *Runtime) *integrationapplication.ActionConnectorGateway {
-	return runtimebootstrap.ActionConnectorGateway(runtime)
 }
 
 func AssembleHTTPServer(ctx context.Context, records *composition.RuntimeServices, identity identitysdk.Binding, uploadDir string, corsAllowedOrigins []string, allowDevAuthHeaders bool) *runtimehttp.HTTPRouter {

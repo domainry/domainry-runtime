@@ -11,8 +11,11 @@ import (
 	"testing"
 	"time"
 
+	ormdriver "github.com/domainry/domainry-orm/driver"
+	ormmysql "github.com/domainry/domainry-orm/mysql"
 	ormpostgres "github.com/domainry/domainry-orm/postgres"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -20,6 +23,7 @@ import (
 func TestRateLimiterInputSchemaAndRetryBoundaries(t *testing.T) {
 	base := openRateLimitStore(t)
 	now := time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)
+	retryableErr := errors.New("database is locked")
 
 	limiter := NewRateLimiter(base)
 	limiter.now = func() time.Time { return now }
@@ -33,21 +37,24 @@ func TestRateLimiterInputSchemaAndRetryBoundaries(t *testing.T) {
 		}
 	}
 
-	wantErr := errors.New("injected rate limit failure")
 	if err := limiter.EnsureSchema(t.Context()); err != nil {
 		t.Fatalf("verify materialized schema: %v", err)
 	}
-
 	t.Run("bounded conflicts", func(t *testing.T) {
 		state := &rateLimitDBState{
-			execSteps:   []rateLimitExecStep{{rows: 1}, {rows: 1}, {rows: 1}},
-			querySteps:  []rateLimitQueryStep{{err: sql.ErrNoRows}, {err: sql.ErrNoRows}, {err: sql.ErrNoRows}},
-			commitSteps: []rateLimitCommitStep{{err: wantErr}, {err: wantErr}, {err: wantErr}},
+			execSteps:   make([]rateLimitExecStep, databaseRetryAttempts),
+			querySteps:  make([]rateLimitQueryStep, databaseRetryAttempts),
+			commitSteps: make([]rateLimitCommitStep, databaseRetryAttempts),
+		}
+		for index := range databaseRetryAttempts {
+			state.execSteps[index] = rateLimitExecStep{rows: 1}
+			state.querySteps[index] = rateLimitQueryStep{err: sql.ErrNoRows}
+			state.commitSteps[index] = rateLimitCommitStep{err: retryableErr}
 		}
 		candidate, closeDB := scriptedRateLimiter(t, base, state)
 		defer closeDB()
 		candidate.now = func() time.Time { return now }
-		if _, err := candidate.Allow(t.Context(), " key ", 1, time.Second); err == nil || err.Error() != "rate limit bucket conflict" {
+		if _, err := candidate.Allow(t.Context(), " key ", 1, time.Second); err == nil || !strings.Contains(err.Error(), "rate limit bucket conflict after retries") || !errors.Is(err, retryableErr) {
 			t.Fatalf("conflict error=%v", err)
 		}
 	})
@@ -57,7 +64,7 @@ func TestRateLimiterInputSchemaAndRetryBoundaries(t *testing.T) {
 		state := &rateLimitDBState{
 			execSteps:   []rateLimitExecStep{{rows: 1}},
 			querySteps:  []rateLimitQueryStep{{err: sql.ErrNoRows}},
-			commitSteps: []rateLimitCommitStep{{err: wantErr, hook: cancel}},
+			commitSteps: []rateLimitCommitStep{{err: retryableErr, hook: cancel}},
 		}
 		candidate, closeDB := scriptedRateLimiter(t, base, state)
 		defer closeDB()
@@ -72,6 +79,7 @@ func TestRateLimiterAllowOnceDatabaseStages(t *testing.T) {
 	base := openRateLimitStore(t)
 	now := time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)
 	wantErr := errors.New("injected rate limit failure")
+	retryableErr := errors.New("database is locked")
 
 	tests := []struct {
 		name       string
@@ -88,10 +96,11 @@ func TestRateLimiterAllowOnceDatabaseStages(t *testing.T) {
 		{name: "begin", state: &rateLimitDBState{beginErrors: []error{wantErr}}, limit: 1, window: time.Second, wantErr: wantErr},
 		{name: "query", state: &rateLimitDBState{querySteps: []rateLimitQueryStep{{err: wantErr}}}, limit: 1, window: time.Second, wantErr: wantErr},
 		{name: "scan", state: &rateLimitDBState{querySteps: []rateLimitQueryStep{{values: []driver.Value{"bad", int64(1)}}}}, limit: 1, window: time.Second, wantErr: errAny},
-		{name: "insert", state: &rateLimitDBState{querySteps: []rateLimitQueryStep{{err: sql.ErrNoRows}}, execSteps: []rateLimitExecStep{{err: wantErr}}}, limit: 1, window: time.Second, wantRetry: true},
+		{name: "insert", state: &rateLimitDBState{querySteps: []rateLimitQueryStep{{err: sql.ErrNoRows}}, execSteps: []rateLimitExecStep{{err: retryableErr}}}, limit: 1, window: time.Second, wantRetry: true, wantErr: retryableErr},
 		{name: "update", state: &rateLimitDBState{querySteps: []rateLimitQueryStep{{values: []driver.Value{now.UnixNano(), int64(1)}}}, execSteps: []rateLimitExecStep{{err: wantErr}}}, limit: 2, window: time.Second, wantErr: wantErr},
-		{name: "commit", state: &rateLimitDBState{querySteps: []rateLimitQueryStep{{values: []driver.Value{now.UnixNano(), int64(1)}}}, execSteps: []rateLimitExecStep{{rows: 1}}, commitSteps: []rateLimitCommitStep{{err: wantErr}}}, limit: 2, window: time.Second, wantRetry: true},
+		{name: "commit", state: &rateLimitDBState{querySteps: []rateLimitQueryStep{{values: []driver.Value{now.UnixNano(), int64(1)}}}, execSteps: []rateLimitExecStep{{rows: 1}}, commitSteps: []rateLimitCommitStep{{err: retryableErr}}}, limit: 2, window: time.Second, wantRetry: true, wantErr: retryableErr},
 		{name: "postgres expired", state: &rateLimitDBState{querySteps: []rateLimitQueryStep{{values: []driver.Value{now.Add(-time.Second).UnixNano(), int64(9)}}}, execSteps: []rateLimitExecStep{{rows: 1}}}, driverName: "postgres", limit: 2, window: time.Second, wantCount: 1, wantForUpd: true},
+		{name: "mysql existing", state: &rateLimitDBState{querySteps: []rateLimitQueryStep{{values: []driver.Value{now.UnixNano(), int64(1)}}}, execSteps: []rateLimitExecStep{{rows: 1}}}, driverName: "mysql", limit: 2, window: time.Second, wantCount: 2, wantForUpd: true},
 		{name: "zero start", state: &rateLimitDBState{querySteps: []rateLimitQueryStep{{values: []driver.Value{int64(0), int64(9)}}}, execSteps: []rateLimitExecStep{{rows: 1}}}, limit: 2, window: time.Second, wantCount: 1},
 		{name: "negative retry after", state: &rateLimitDBState{querySteps: []rateLimitQueryStep{{values: []driver.Value{now.UnixNano(), int64(0)}}}, execSteps: []rateLimitExecStep{{rows: 1}}}, limit: 0, window: -time.Nanosecond, wantCount: 1, wantWait: 0},
 	}
@@ -99,9 +108,13 @@ func TestRateLimiterAllowOnceDatabaseStages(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			candidate, closeDB := scriptedRateLimiter(t, base, test.state)
 			defer closeDB()
-			if test.driverName == "postgres" {
+			switch test.driverName {
+			case "postgres":
 				candidate.store.Engine = ormpostgres.NewProfile()
 				candidate.store.SQLRenderer = postgres.NewEngine().SQLDialect().WithSchema(candidate.store.SQLDatabase.DatabaseSchema)
+			case "mysql":
+				candidate.store.Engine = ormmysql.NewProfile()
+				candidate.store.SQLRenderer = mysql.NewEngine().SQLDialect().WithSchema(candidate.store.SQLDatabase.DatabaseSchema)
 			}
 			decision, retry, err := candidate.allowOnce(t.Context(), "key", test.limit, test.window, now)
 			if test.wantErr == errAny {
@@ -142,6 +155,7 @@ func scriptedRateLimiter(t *testing.T, store *database.RuntimeStore, state *rate
 	db := sql.OpenDB(rateLimitConnector{state: state})
 	limiter := NewRateLimiter(store)
 	limiter.db = db
+	limiter.begin = ormdriver.BeginSerializable
 	return limiter, func() { _ = db.Close() }
 }
 

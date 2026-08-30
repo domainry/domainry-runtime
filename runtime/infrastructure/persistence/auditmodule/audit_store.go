@@ -10,8 +10,8 @@ import (
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	sdkcontract "github.com/domainry/domainry-audit-sdk/contract"
 	auditmoduleimpl "github.com/domainry/domainry-audit/module"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
-	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )

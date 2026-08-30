@@ -20,7 +20,6 @@ import (
 type RecordQueryPolicyDependencies struct {
 	Objects               func() []definitionmodel.ObjectSchema
 	Reports               func() []reportmodel.ReportSchema
-	Views                 func() []definitionmodel.ViewSchema
 	CandidateScopeMatches func(context.Context, string, recordmodel.Record, recordmodel.RecordScopeExpression) (bool, error)
 }
 
@@ -74,8 +73,7 @@ func (s *RecordQueryPolicyDomainService) EnsureReportSnapshotAccess(object defin
 }
 
 func (s *RecordQueryPolicyDomainService) NormalizeListQuery(object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery, principal principalmodel.Principal) recordmodel.RecordListQuery {
-	view := recordvalidation.RecordSelectListView(s.views(), object.Key, query.ViewKey)
-	query = recordvalidation.RecordNormalizeListQuery(object, view, query, principal)
+	query = recordvalidation.RecordNormalizeListQuery(object, query, principal)
 	if expression, err, handled := RecordCompileSDKDataScopeExpression(object, s.objects(), principal, "read"); handled {
 		query.Scope = "custom"
 		query.RootObjectKey = object.Key
@@ -202,11 +200,4 @@ func (s *RecordQueryPolicyDomainService) reports() []reportmodel.ReportSchema {
 		return nil
 	}
 	return s.dependencies.Reports()
-}
-
-func (s *RecordQueryPolicyDomainService) views() []definitionmodel.ViewSchema {
-	if s.dependencies.Views == nil {
-		return nil
-	}
-	return s.dependencies.Views()
 }

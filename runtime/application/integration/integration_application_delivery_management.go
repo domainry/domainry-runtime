@@ -25,7 +25,7 @@ func (s *IntegrationApplicationService) ListIntegrationInvocations(ctx context.C
 	if limit <= 0 || limit > 200 {
 		limit = 100
 	}
-	invocations, err := s.deliveryRepo.ListInvocations(ctx, principalWorkspaceID(principal), strings.TrimSpace(connectorKey), strings.TrimSpace(recordID), strings.TrimSpace(workflowExecutionID), strings.TrimSpace(status), 200)
+	invocations, err := s.invocationRepo.ListInvocations(ctx, principalWorkspaceID(principal), strings.TrimSpace(connectorKey), strings.TrimSpace(recordID), strings.TrimSpace(workflowExecutionID), strings.TrimSpace(status), 200)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func (s *IntegrationApplicationService) UpdateIntegrationInvocationStatus(ctx co
 	if req.DurationMS < 0 {
 		return integrationmodel.IntegrationInvocation{}, badRequest("backend.integration.invocation.invalid_duration")
 	}
-	saved, err := s.deliveryRepo.UpdateInvocationStatus(ctx, principalWorkspaceID(principal), strings.TrimSpace(invocationID), status, req.DurationMS, strings.TrimSpace(req.ResponseRef), strings.TrimSpace(req.Error))
+	saved, err := s.invocationRepo.UpdateInvocationStatus(ctx, principalWorkspaceID(principal), strings.TrimSpace(invocationID), status, req.DurationMS, strings.TrimSpace(req.ResponseRef), strings.TrimSpace(req.Error))
 	if err != nil {
 		return integrationmodel.IntegrationInvocation{}, err
 	}
@@ -80,14 +80,14 @@ func (s *IntegrationApplicationService) ListIntegrationOutboxMessages(ctx contex
 	if limit <= 0 || limit > 200 {
 		limit = 100
 	}
-	return s.deliveryRepo.ListOutbox(ctx, principalWorkspaceID(principal), strings.TrimSpace(connectorKey), strings.TrimSpace(status), limit)
+	return s.publicationRepo.ListOutbox(ctx, principalWorkspaceID(principal), strings.TrimSpace(connectorKey), strings.TrimSpace(status), limit)
 }
 
 func (s *IntegrationApplicationService) InspectIntegrationOutboxMessage(ctx context.Context, messageID string, principal principalmodel.Principal) (integrationmodel.IntegrationOutboxMessage, error) {
 	if err := integrationAuthorizeQuery(principal); err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, err
 	}
-	reader, ok := s.deliveryRepo.(integrationrepository.IntegrationOutboxReader)
+	reader, ok := s.publicationRepo.(integrationrepository.IntegrationOutboxReader)
 	if !ok {
 		return integrationmodel.IntegrationOutboxMessage{}, internalError("read integration outbox", errors.New("outbox reader unavailable"))
 	}
@@ -105,7 +105,7 @@ func (s *IntegrationApplicationService) GetBusinessIntegrationIntent(ctx context
 	if err := integrationAuthorizeQuery(principal); err != nil {
 		return integrationmodel.IntegrationIntentResult{}, err
 	}
-	reader, ok := s.deliveryRepo.(integrationrepository.IntegrationOutboxReader)
+	reader, ok := s.publicationRepo.(integrationrepository.IntegrationOutboxReader)
 	if !ok {
 		return integrationmodel.IntegrationIntentResult{}, internalError("read integration intent", errors.New("outbox reader unavailable"))
 	}
@@ -123,7 +123,10 @@ func (s *IntegrationApplicationService) GetBusinessIntegrationIntent(ctx context
 		Operation: message.Operation, Status: message.Status, ResponseRef: message.ResponseRef,
 		Error: message.Error, AttemptCount: message.AttemptCount, CreatedAt: message.CreatedAt, UpdatedAt: message.UpdatedAt,
 	}
-	invocations, err := s.deliveryRepo.ListInvocations(ctx, principalWorkspaceID(principal), message.ConnectorKey, "", "", "", 500)
+	if s.invocationRepo == nil {
+		return result, nil
+	}
+	invocations, err := s.invocationRepo.ListInvocations(ctx, principalWorkspaceID(principal), message.ConnectorKey, "", "", "", 500)
 	if err != nil {
 		return integrationmodel.IntegrationIntentResult{}, err
 	}
@@ -158,7 +161,7 @@ func (s *IntegrationApplicationService) UpdateIntegrationOutboxStatus(ctx contex
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, err
 	}
-	saved, err := s.deliveryRepo.UpdateOutboxStatus(ctx, principalWorkspaceID(principal), strings.TrimSpace(messageID), status, strings.TrimSpace(req.ResponseRef), strings.TrimSpace(req.Error))
+	saved, err := s.publicationRepo.UpdateOutboxStatus(ctx, principalWorkspaceID(principal), strings.TrimSpace(messageID), status, strings.TrimSpace(req.ResponseRef), strings.TrimSpace(req.Error))
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, err
 	}
@@ -177,7 +180,7 @@ func (s *IntegrationApplicationService) ScheduleIntegrationOutboxRetry(ctx conte
 		return integrationmodel.IntegrationOutboxMessage{}, forbidden("auth.permission_denied")
 	}
 	messageID = strings.TrimSpace(messageID)
-	reader, ok := s.deliveryRepo.(integrationrepository.IntegrationOutboxReader)
+	reader, ok := s.publicationRepo.(integrationrepository.IntegrationOutboxReader)
 	if !ok {
 		return integrationmodel.IntegrationOutboxMessage{}, internalError("read integration outbox for retry", errors.New("outbox reader unavailable"))
 	}
@@ -224,7 +227,7 @@ func (s *IntegrationApplicationService) ScheduleIntegrationOutboxRetry(ctx conte
 		// that makes a non-idempotent write safe to retry.
 		retryError = existing.Error
 	}
-	saved, err := s.deliveryRepo.ScheduleOutboxRetry(ctx, principalWorkspaceID(principal), messageID, req.DelaySeconds, retryError)
+	saved, err := s.publicationRepo.ScheduleOutboxRetry(ctx, principalWorkspaceID(principal), messageID, req.DelaySeconds, retryError)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, err
 	}

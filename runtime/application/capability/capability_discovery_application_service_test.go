@@ -34,12 +34,6 @@ func TestCapabilityDiscoveryProgressivelyLoadsAndBindsReferences(t *testing.T) {
 			UserIDs: []string{"user-a"}, DepartmentIDs: []string{"sales"}, RoleIDs: []string{"operator-id"}, MenuIDs: []string{"orders", "orders", " reports "},
 		}, nil
 	})
-	service.UsePreferenceReferenceSource(func(context.Context, principalmodel.Principal) ([]string, error) {
-		return []string{"order.review_limit", " order.review_limit "}, nil
-	})
-	service.UseRuleSetReferenceSource(func(context.Context, principalmodel.Principal) ([]string, error) {
-		return []string{"order.adjustment_policy", " order.adjustment_policy "}, nil
-	})
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	index, err := service.DiscoveryIndex(t.Context(), admin)
 	if err != nil || len(index.Domains) == 0 || index.ContractHash == "" || index.InstanceHash == "" {
@@ -65,7 +59,7 @@ func TestCapabilityDiscoveryProgressivelyLoadsAndBindsReferences(t *testing.T) {
 		kind, scope, want string
 	}{
 		{kind: "object_key", want: "order"}, {kind: "relation_target_object_key", want: "identity_department"}, {kind: "field_key", scope: "order", want: "status"},
-		{kind: "action_key", want: "order.confirm"}, {kind: "preference_key", want: "order.review_limit"}, {kind: "rule_set_key", want: "order.adjustment_policy"},
+		{kind: "action_key", want: "order.confirm"},
 		{kind: "scheduler_target_key", scope: "workflow", want: "scheduled:order.approval"}, {kind: "scheduler_target_key", scope: "report_export", want: "orders.daily"},
 		{kind: "user_id", want: "user-a"}, {kind: "department_id", want: "sales"}, {kind: "role_id", want: "operator-id"},
 		{kind: "menu_id", want: "orders"}, {kind: "menu_id", want: "reports"},
@@ -173,45 +167,6 @@ func TestCapabilityDetailSpecializesIntegrationConnectionForSelectedProvider(t *
 	}
 	if _, err := service.CapabilityDetailSelected(t.Context(), admin, "integration.operation_test", CapabilityDetailSelection{ConnectorKey: "webhook", OperationKey: "missing"}); apperror.CodeOf(err) != "backend.capability.operation_not_found" {
 		t.Fatalf("missing operation error=%v", err)
-	}
-}
-
-func TestCapabilityDetailSpecializesSeedRecordForSelectedObject(t *testing.T) {
-	loads := 0
-	service := NewCapabilityAuthoringApplicationService(func(context.Context, principalmodel.Principal) capabilitycontract.CapabilityInstanceSchema {
-		loads++
-		return capabilitycontract.CapabilityInstanceSchema{Objects: []definitionmodel.ObjectSchema{{
-			Key: "customer", Fields: []definitionmodel.FieldSchema{
-				{Key: "name", Type: "text", Required: true},
-				{Key: "status", Type: "text", Default: "active", Validation: definitionmodel.FieldValidation{Options: []string{"active", "inactive"}}},
-				{Key: "credit_limit", Type: "number"},
-			},
-		}}}
-	})
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
-	detail, err := service.CapabilityDetailSelected(t.Context(), admin, "seed.record", CapabilityDetailSelection{ObjectKey: "customer"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if loads != 1 {
-		t.Fatalf("detail loaded instance schema %d times; specialization must use the instance_hash snapshot", loads)
-	}
-	if detail.Domain != "seed" || detail.Selection["object_key"] != "customer" {
-		t.Fatalf("detail domain=%s selection=%v", detail.Domain, detail.Selection)
-	}
-	data := detail.Capability.InputSchema.Properties["data"]
-	if data.AdditionalProperties == nil || *data.AdditionalProperties || data.Properties["name"].Type != "string" || data.Properties["credit_limit"].Type != "number" || !capabilityStringContains(data.Required, "name") {
-		t.Fatalf("specialized seed data schema=%#v", data)
-	}
-	status := data.Properties["status"]
-	if status.Default != "active" || len(status.Enum) != 2 || status.Enum[1] != "inactive" {
-		t.Fatalf("specialized status schema=%#v", status)
-	}
-	if detail.Capability.Examples[0].Value["object_key"] != "customer" {
-		t.Fatalf("specialized examples=%#v", detail.Capability.Examples)
-	}
-	if _, err := service.CapabilityDetailSelected(t.Context(), admin, "seed.record", CapabilityDetailSelection{ObjectKey: "missing"}); apperror.CodeOf(err) != "backend.capability.object_not_found" {
-		t.Fatalf("missing object error=%v", err)
 	}
 }
 

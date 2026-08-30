@@ -178,6 +178,7 @@ func newIntegrationEventHTTPApplication(t *testing.T) (*database.RuntimeStore, *
 		store.Close()
 		t.Fatal(err)
 	}
+	applyIntegrationOwnerMigrations(t, store)
 	application := integrationapplication.NewIntegrationApplicationService(integrationapplication.ApplicationDependencies{
 		ConfigRepository:   integrationpersistence.NewIntegrationConfigStore(store),
 		EventRepository:    integrationpersistence.NewIntegrationEventStore(store),

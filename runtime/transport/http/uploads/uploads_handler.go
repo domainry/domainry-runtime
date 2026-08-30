@@ -14,8 +14,8 @@ import (
 	"time"
 
 	requestcontext "github.com/domainry/domainry-foundation/requestcontext"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
-	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 

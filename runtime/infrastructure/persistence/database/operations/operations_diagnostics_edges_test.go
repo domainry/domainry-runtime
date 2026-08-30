@@ -31,9 +31,8 @@ func TestOperationsDiagnosticsFailureAndPaginationEdges(t *testing.T) {
 	}
 	store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{
 		{columns: []string{"total", "dirty"}, rows: [][]driver.Value{{int64(1), int64(1)}}},
-		{columns: []string{"total", "dirty"}, rows: [][]driver.Value{{int64(1), nil}}},
 	}})
-	if section := store.operationsMigrationDiagnostics(t.Context()); section.Status != "blocked" || len(section.Items) != 2 {
+	if section := store.operationsMigrationDiagnostics(t.Context()); section.Status != "blocked" || len(section.Items) != 1 {
 		t.Fatalf("migration section=%+v", section)
 	}
 

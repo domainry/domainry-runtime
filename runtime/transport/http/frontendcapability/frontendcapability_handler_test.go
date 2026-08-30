@@ -91,21 +91,9 @@ func TestFrontendCapabilityHandlers(t *testing.T) {
 		t.Fatalf("invalid JSON status=%d", response.Code)
 	}
 	response = httptest.NewRecorder()
-	handler.registerManifest(response, httptest.NewRequest(http.MethodPut, "/frontend-capability-manifest", strings.NewReader("{")))
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("invalid register JSON status=%d", response.Code)
-	}
-
-	response = httptest.NewRecorder()
 	handler.validateManifest(response, httptest.NewRequest(http.MethodPost, "/frontend-capability-manifest/validate", strings.NewReader(string(manifestJSON))))
 	if response.Code != http.StatusOK {
 		t.Fatalf("validate status=%d", response.Code)
-	}
-
-	response = httptest.NewRecorder()
-	handler.registerManifest(response, httptest.NewRequest(http.MethodPut, "/frontend-capability-manifest", strings.NewReader(string(manifestJSON))))
-	if response.Code != http.StatusOK {
-		t.Fatalf("register status=%d", response.Code)
 	}
 
 	response = httptest.NewRecorder()
@@ -181,13 +169,17 @@ func TestFrontendCapabilityManifestRoutesUseAuthenticatedOwnerPermissionBoundary
 	for _, route := range []struct{ method, path string }{
 		{http.MethodGet, "/frontend-capability-manifest"},
 		{http.MethodPost, "/frontend-capability-manifest/validate"},
-		{http.MethodPut, "/frontend-capability-manifest"},
 	} {
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, httptest.NewRequest(route.method, route.path, nil))
 		if response.Code != http.StatusNoContent {
 			t.Fatalf("%s %s still uses Admin Console wrapper: status=%d", route.method, route.path, response.Code)
 		}
+	}
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPut, "/frontend-capability-manifest", nil))
+	if response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("retired online manifest registration status=%d", response.Code)
 	}
 }
 
@@ -200,11 +192,6 @@ func TestFrontendCapabilityServiceErrorsAndRoutes(t *testing.T) {
 	}
 
 	response := httptest.NewRecorder()
-	handler.registerManifest(response, httptest.NewRequest(http.MethodPut, "/frontend-capability-manifest", strings.NewReader(string(manifestJSON))))
-	if response.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("register repository failure status=%d", response.Code)
-	}
-	response = httptest.NewRecorder()
 	handler.getManifest(response, httptest.NewRequest(http.MethodGet, "/frontend-capability-manifest", nil))
 	if response.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("snapshot repository failure status=%d", response.Code)

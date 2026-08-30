@@ -201,6 +201,7 @@ func newIntegrationManagementHTTPApplication(t *testing.T) (*database.RuntimeSto
 		store.Close()
 		t.Fatal(err)
 	}
+	applyIntegrationOwnerMigrations(t, store)
 	configRepository := integrationpersistence.NewIntegrationConfigStore(store)
 	if _, err := configRepository.UpsertConnection(t.Context(), "workspace-1", integrationmodel.IntegrationConnection{
 		Key: "webhook-connection", WorkspaceID: "workspace-1", ConnectorKey: "webhook", ProviderKey: "probe", Status: "verified", Config: map[string]any{"url": "https://example.invalid"},

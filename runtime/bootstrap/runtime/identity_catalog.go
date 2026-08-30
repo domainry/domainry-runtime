@@ -117,11 +117,6 @@ func runtimeIdentityCatalog(snapshot appschemamodel.ApplicationSchemaSnapshot, w
 			addPermission(permission, "")
 		}
 	}
-	for _, entrypoint := range snapshot.EntryPoints {
-		for _, permission := range entrypoint.RequiredPermissions {
-			addPermission(permission, "")
-		}
-	}
 	for _, entrypoint := range snapshot.AgentEntrypoints {
 		for _, permission := range entrypoint.RequiredPermissions {
 			addPermission(permission, "")

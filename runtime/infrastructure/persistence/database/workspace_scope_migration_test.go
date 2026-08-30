@@ -20,13 +20,35 @@ func TestFreshRuntimeDoesNotInitializeHistoricalMigrationReportTables(t *testing
 			t.Fatal(err)
 		}
 	}
-	for _, table := range []string{"_workspace_scope_migration_reports", "_idempotency_migration_reports"} {
+	for _, table := range []string{"_workspace_scope_migration_reports", "_idempotency_migration_reports", "view_definitions", "surface_definitions", "component_definitions", "entrypoint_definitions"} {
 		var count int
 		if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&count); err != nil {
 			t.Fatal(err)
 		}
 		if count != 0 {
 			t.Fatalf("fresh Runtime initialized retired migration table %s", table)
+		}
+	}
+}
+
+func TestRuntimeSchemaUpgradeDropsRetiredGeneratedViewDefinitionTables(t *testing.T) {
+	store, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "retired-generated-views.db"), IntegrationSecretKey: "retired-generated-views-key"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	for _, table := range []string{"view_definitions", "surface_definitions", "component_definitions", "entrypoint_definitions"} {
+		if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE `+table+` (id TEXT PRIMARY KEY)`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"view_definitions", "surface_definitions", "component_definitions", "entrypoint_definitions"} {
+		var count int
+		if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&count); err != nil || count != 0 {
+			t.Fatalf("retired generated-view table %s remains: count=%d err=%v", table, count, err)
 		}
 	}
 }
@@ -49,7 +71,7 @@ func TestWorkspaceScopeMigrationReportsLegacyRowsWithoutBackfill(t *testing.T) {
 		t.Fatalf("workspace validation initialized retired report table: count=%d err=%v", reportTableCount, err)
 	}
 	var dirtyMigrationCount int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_materializations WHERE version = ?`, database.CurrentRuntimeSchemaVersion).Scan(&dirtyMigrationCount); err != nil || dirtyMigrationCount != 0 {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_migrations WHERE path = ?`, "runtime_schema_"+database.CurrentRuntimeSchemaVersion).Scan(&dirtyMigrationCount); err != nil || dirtyMigrationCount != 0 {
 		t.Fatalf("workspace preflight left a dirty migration ledger row: count=%d err=%v", dirtyMigrationCount, err)
 	}
 	var missing, blank, legacyDefault sqlNullString

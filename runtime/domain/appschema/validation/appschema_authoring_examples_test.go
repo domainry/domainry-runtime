@@ -12,7 +12,7 @@ import (
 
 func TestMetadataAuthoringExamplesExecuteOwnerValidators(t *testing.T) {
 	objects := []definitionmodel.ObjectSchema{{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "number"}, {Key: "status"}, {Key: "created_at"}}}, {Key: "customer"}}
-	capabilities := append(metadataauthoring.ApplicationSchemaAuthoringCapabilities(), metadataauthoring.ApplicationSchemaViewAuthoringCapabilities()...)
+	capabilities := metadataauthoring.ApplicationSchemaAuthoringCapabilities()
 	for _, capability := range capabilities {
 		for _, example := range capability.Examples {
 			request, payload := metadataExampleRequest(t, example.Value)
@@ -25,8 +25,6 @@ func TestMetadataAuthoringExamplesExecuteOwnerValidators(t *testing.T) {
 				_, err = ApplicationSchemaNormalizeFieldMutation(request, objects, metadataauthoring.ApplicationSchemaAuthoringFieldTypes(), nil, 0)
 			case "schema.dictionary":
 				err = ApplicationSchemaValidateDictionaryDefinition("order_status", payload)
-			case "view.definition":
-				_, err = ApplicationSchemaValidateViewDefinition("order_list", payload, objects)
 			}
 			if len(example.ExpectedErrorCodes) == 0 {
 				if err != nil {

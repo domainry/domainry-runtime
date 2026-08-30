@@ -13,7 +13,14 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
+	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 )
+
+type surfaceRateLimiterFunc func(context.Context, string, int, time.Duration) (ratelimit.Decision, error)
+
+func (fn surfaceRateLimiterFunc) Allow(ctx context.Context, key string, limit int, window time.Duration) (ratelimit.Decision, error) {
+	return fn(ctx, key, limit, window)
+}
 
 func TestSurfaceRouteGroupPolicyAppliesIndependentBodyTimeoutAndRateLimits(t *testing.T) {
 	router := &HTTPRouter{
@@ -64,6 +71,39 @@ func TestSurfaceRouteGroupPolicyAppliesIndependentBodyTimeoutAndRateLimits(t *te
 	fast.ServeHTTP(second, httptest.NewRequest(http.MethodGet, "/objects/customer/records", nil))
 	if first.Code != http.StatusNoContent || second.Code != http.StatusTooManyRequests {
 		t.Fatalf("rate statuses first=%d second=%d", first.Code, second.Code)
+	}
+}
+
+func TestSurfaceRouteGroupUsesSharedRateLimiterAndFailsClosed(t *testing.T) {
+	shared := ratelimit.NewMemoryLimiter(8)
+	policy := map[SurfaceRouteGroup]SurfaceRouteGroupPolicy{
+		SurfaceRouteGroupPublic: {RateLimitPerMinute: 1, AuditClass: "public_surface"},
+	}
+	firstRouter := &HTTPRouter{surfaceGroupPolicies: policy, surfaceGroupCapacity: map[SurfaceRouteGroup]*capacityplatform.Controller{}, rateLimiter: shared}
+	secondRouter := &HTTPRouter{surfaceGroupPolicies: policy, surfaceGroupCapacity: map[SurfaceRouteGroup]*capacityplatform.Controller{}, rateLimiter: shared}
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+
+	first := httptest.NewRecorder()
+	firstRouter.withSurfaceRouteGroupPolicy(SurfaceRouteGroupPublic, next).ServeHTTP(first, httptest.NewRequest(http.MethodGet, "/objects/customer/records", nil))
+	second := httptest.NewRecorder()
+	secondRouter.withSurfaceRouteGroupPolicy(SurfaceRouteGroupPublic, next).ServeHTTP(second, httptest.NewRequest(http.MethodGet, "/objects/customer/records", nil))
+	if first.Code != http.StatusNoContent || second.Code != http.StatusTooManyRequests || second.Header().Get("Retry-After") == "" {
+		t.Fatalf("shared statuses first=%d second=%d retry=%q", first.Code, second.Code, second.Header().Get("Retry-After"))
+	}
+
+	failing := &HTTPRouter{
+		surfaceGroupPolicies: policy,
+		rateLimiter: surfaceRateLimiterFunc(func(_ context.Context, key string, limit int, window time.Duration) (ratelimit.Decision, error) {
+			if key != "http_surface:public" || limit != 1 || window != time.Minute {
+				t.Fatalf("key=%q limit=%d window=%s", key, limit, window)
+			}
+			return ratelimit.Decision{}, errors.New("backend unavailable")
+		}),
+	}
+	unavailable := httptest.NewRecorder()
+	failing.withSurfaceRouteGroupPolicy(SurfaceRouteGroupPublic, next).ServeHTTP(unavailable, httptest.NewRequest(http.MethodGet, "/objects/customer/records", nil))
+	if unavailable.Code != http.StatusServiceUnavailable || unavailable.Header().Get("Retry-After") != "1" {
+		t.Fatalf("unavailable status=%d retry=%q", unavailable.Code, unavailable.Header().Get("Retry-After"))
 	}
 }
 

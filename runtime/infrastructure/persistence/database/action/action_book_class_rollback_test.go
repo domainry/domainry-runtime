@@ -172,7 +172,7 @@ func testBookClassAtomicStageRollback(t *testing.T, stage string) {
 	}
 	for table, ids := range map[string][]string{
 		"_audit_events":               {classAuditID, bookingAuditID, actionAuditID},
-		"integration_outbox_messages": {outboxID},
+		"runtime_publication_outbox": {outboxID},
 	} {
 		for _, id := range ids {
 			var count int
@@ -212,7 +212,7 @@ func bookClassFailureTriggerSQL(stage, groupClass, classBooking, classAuditID, b
 	case "booking_audit":
 		return bookClassIDFailureTrigger("p8_fail_booking_audit", "_audit_events", bookingAuditID)
 	case "outbox":
-		return bookClassIDFailureTrigger("p8_fail_outbox", "integration_outbox_messages", outboxID)
+		return bookClassIDFailureTrigger("p8_fail_outbox", "runtime_publication_outbox", outboxID)
 	case "action_audit":
 		return bookClassIDFailureTrigger("p8_fail_action_audit", "_audit_events", actionAuditID)
 	case "receipt":

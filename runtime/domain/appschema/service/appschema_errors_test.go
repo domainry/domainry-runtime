@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )
 
 func TestMetadataErrorConstructorsPreserveKindsAndSanitizeParams(t *testing.T) {
@@ -81,31 +80,6 @@ func TestWrapMetadataError(t *testing.T) {
 		source := &apperror.AppError{Kind: apperror.KindNotFound, Code: "backend.metadata.missing"}
 		if got := wrapMetadataError(source); got != source {
 			t.Fatalf("wrapped application error = %v, want original", got)
-		}
-	})
-
-	t.Run("definition version conflict", func(t *testing.T) {
-		source := &appschemamodel.ApplicationDefinitionConflictError{
-			ResourceType: "object",
-			ResourceKey:  "invoice",
-			ExpectedHash: "expected",
-			CurrentHash:  "current",
-		}
-		err := wrapMetadataError(source)
-		if got := apperror.KindOf(err); got != apperror.KindConflict {
-			t.Fatalf("kind = %q", got)
-		}
-		if got := apperror.CodeOf(err); got != "backend.metadata.definition_version_conflict" {
-			t.Fatalf("code = %q", got)
-		}
-		want := map[string]string{
-			"resource_type": "object",
-			"resource_key":  "invoice",
-			"expected_hash": "expected",
-			"current_hash":  "current",
-		}
-		if got := apperror.ParamsOf(err); !reflect.DeepEqual(got, want) {
-			t.Fatalf("params = %#v, want %#v", got, want)
 		}
 	})
 

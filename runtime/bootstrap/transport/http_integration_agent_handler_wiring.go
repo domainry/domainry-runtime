@@ -4,12 +4,11 @@ import (
 	"context"
 	"crypto/sha256"
 
+	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	agentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/agent"
 	agentdialoghttp "github.com/domainry/domainry-runtime/runtime/transport/http/agentdialog"
-	integrationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/integrations"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 )
 
@@ -25,20 +24,17 @@ func (a agentRecordVisibilityAdapter) CanReadAgentRecord(ctx context.Context, ob
 }
 
 func (a *httpServerAssembly) wireIntegrationAndAgentHandlers(agentDialogRateLimitPerMinute int) {
-	a.handlers.Integrations = integrationhttp.NewIntegrationsHandler(integrationhttp.IntegrationsDependencies{
-		Connections: a.integrations, Bindings: a.integrations,
-		RuntimeExecution: a.integrations, Webhooks: a.integrations, Operations: a.operations,
-		Principal: a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
-		WriteError: a.callbacks.WriteError, WriteServiceError: a.callbacks.WriteServiceError,
-		DecodeJSON: a.callbacks.DecodeJSON, Admin: a.identityHTTP.PermissionFunc("workspace.admin"),
-		Authenticated: a.identityHTTP.AuthenticatedFunc, Entrypoint: a.identityHTTP.PermissionFunc("integration.entrypoint.invoke"),
-		Locale: a.callbacks.Locale, Identity: a.dependencies.IdentityBinding,
-		IdentityAudience: a.dependencies.Config.IdentityAudience, ProductName: a.dependencies.Config.EffectiveProductBrandName(),
-	})
+	// Integration management and webhook ingress are exposed by the Integration
+	// owner in both Module and SaaS topologies. Runtime only exposes its durable
+	// outbound handoff worker.
 	state, proposals := assembleAgentApplicationPorts(a.dependencies, a.principals)
 	// assembleAgentApplicationPorts owns the pair invariant: both ports are
 	// either available from one persistent store or both absent.
 	if state != nil {
+		var toolLedger agentrepository.AgentToolCallLedger
+		if a.dependencies.AgentRepositories != nil {
+			toolLedger, _ = a.dependencies.AgentRepositories.AgentTaskRunRepository().(agentrepository.AgentToolCallLedger)
+		}
 		contextResolver := agentapplication.NewAgentAuthorizationApplicationService(agentapplication.AgentAuthorizationDependencies{
 			Principals: a.principals,
 			Schema:     a.dependencies.Records,
@@ -50,7 +46,7 @@ func (a *httpServerAssembly) wireIntegrationAndAgentHandlers(agentDialogRateLimi
 			Authorization: contextResolver, Credentials: credentials,
 			Queries: agentTaskToolQueryAdapter{records: a.recordQueries}, Actions: agentTaskToolActionAdapter{actions: a.dependencies.Records.Applications().Actions},
 			Proposals: agentTaskToolProposalAdapter{state: state}, Risk: agentTaskToolRiskAdapter{actions: a.dependencies.Records.Applications().Actions},
-			Ledger: agentpersistence.NewAgentTaskRunStore(a.dependencies.Store), RateLimiter: a.dependencies.RateLimiter,
+			Ledger: toolLedger, RateLimiter: a.dependencies.RateLimiter,
 			InteractiveRuns: a.dependencies.Records.Applications().AgentInteractiveRuns,
 			TaskRuns:        a.dependencies.Records.Applications().AgentTasks,
 		})
@@ -76,7 +72,7 @@ func (a *httpServerAssembly) wireIntegrationAndAgentHandlers(agentDialogRateLimi
 	if a.dependencies.Notifications != nil {
 		a.handlers.Notifications = notificationhttp.NewNotificationsHandler(notificationhttp.NotificationsDependencies{
 			Management: a.dependencies.Notifications, Delivery: a.dependencies.Notifications, Inbox: a.dependencies.Notifications,
-			DeliveryLedger: a.integrations,
+			DeliveryLedger: a.publications,
 			Principal:      a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
 			WriteError: a.callbacks.WriteError, WriteServiceError: a.callbacks.WriteServiceError,
 			DecodeJSON: a.callbacks.DecodeJSON, Authenticated: a.identityHTTP.AuthenticatedFunc,

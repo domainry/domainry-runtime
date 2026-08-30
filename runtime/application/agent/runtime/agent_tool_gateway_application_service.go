@@ -10,12 +10,13 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/telemetry"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	agentcatalog "github.com/domainry/domainry-runtime/runtime/domain/agent/contract/catalog"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 )
@@ -63,7 +64,7 @@ type AgentToolProposalRequest struct {
 	InteractiveRunID, SessionID, EntrypointKey, Surface, RouteKey, ContextRevision       string
 	Attempt                                                                              int
 	Input                                                                                map[string]any
-	Identity                                                                             agentmodel.AgentExecutionIdentity
+	Identity                                                                             agentsdk.ExecutionIdentity
 	Principal                                                                            principalmodel.Principal
 }
 
@@ -96,7 +97,7 @@ type AgentToolInvocationRequest struct {
 	Owner                                                       workerplatform.WorkerID
 	FencingToken                                                workerplatform.FencingToken
 	Initiator                                                   principalmodel.Principal
-	Identity                                                    agentmodel.AgentTaskIdentity
+	Identity                                                    agentsdk.AgentTaskIdentity
 	ExpectedRotationVersion                                     int
 	TaskKey, TaskVersion                                        string
 	NodeAllowedObjects, NodeAllowedActions, NodeAllowedOutcomes []string
@@ -211,7 +212,7 @@ func (g *AgentToolGateway) Invoke(ctx context.Context, request AgentToolInvocati
 		if !agentContains(authorization.AllowedActions, actionKey) || !agentContains(authorization.AllowedObjects, objectKey) {
 			return result, apperror.New(apperror.KindForbidden, "agent.tool.action_denied", nil, nil)
 		}
-		if authorization.Task.SideEffectMode == agentmodel.AgentTaskSideEffectAnalysisOnly {
+		if authorization.Task.SideEffectMode == agentsdk.AgentTaskSideEffectAnalysisOnly {
 			return result, apperror.New(apperror.KindForbidden, "agent.tool.write_denied", nil, nil)
 		}
 		if strings.TrimSpace(request.IdempotencyKey) == "" {
@@ -225,7 +226,7 @@ func (g *AgentToolGateway) Invoke(ctx context.Context, request AgentToolInvocati
 			return result, riskErr
 		}
 		data := agentToolMap(request.Input["data"])
-		if authorization.Task.SideEffectMode == agentmodel.AgentTaskSideEffectProposalOnly || requiresProposal {
+		if authorization.Task.SideEffectMode == agentsdk.AgentTaskSideEffectProposalOnly || requiresProposal {
 			if g.dependencies.Proposals == nil {
 				return result, apperror.New(apperror.KindUnavailable, "agent.tool.proposal_unavailable", nil, nil)
 			}
@@ -283,7 +284,7 @@ func (g *AgentToolGateway) Invoke(ctx context.Context, request AgentToolInvocati
 	return result, nil
 }
 
-func maxAgentToolCalls(task agentmodel.AgentTaskDefinition) int {
+func maxAgentToolCalls(task agentsdk.AgentTaskDefinition) int {
 	if task.ExecutionLimits.MaxToolCalls > 0 {
 		return task.ExecutionLimits.MaxToolCalls
 	}

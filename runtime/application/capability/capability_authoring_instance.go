@@ -19,7 +19,7 @@ func (s *CapabilityAuthoringApplicationService) capabilityAuthoringInstance(ctx 
 
 func (s *CapabilityAuthoringApplicationService) capabilityAuthoringInstanceFromSchema(ctx context.Context, principal principalmodel.Principal, snapshot capabilitycontract.CapabilityInstanceSchema) (capabilitycontract.CapabilityAuthoringInstance, error) {
 	result := capabilitycontract.CapabilityAuthoringInstance{
-		ObjectKeys: []string{}, FieldKeys: []capabilitycontract.CapabilityAuthoringScopedValues{}, ActionKeys: []string{}, WorkflowKeys: []string{}, ReportKeys: []string{}, PreferenceKeys: []string{}, RuleSetKeys: []string{},
+		ObjectKeys: []string{}, FieldKeys: []capabilitycontract.CapabilityAuthoringScopedValues{}, ActionKeys: []string{}, WorkflowKeys: []string{}, ReportKeys: []string{},
 		RoleKeys: []string{}, PermissionKeys: []string{}, UserIDs: []string{}, WorkforceProfileIDs: []string{}, DepartmentIDs: []string{}, RoleIDs: []string{}, MenuIDs: []string{},
 		ConnectorKeys: []string{}, ConnectionKeys: []string{}, ConnectorOperations: []capabilitycontract.CapabilityAuthoringConnectorBinding{},
 	}
@@ -77,27 +77,11 @@ func (s *CapabilityAuthoringApplicationService) capabilityAuthoringInstanceFromS
 		result.RoleIDs = normalizedCapabilityReferences(references.RoleIDs)
 		result.MenuIDs = normalizedCapabilityReferences(references.MenuIDs)
 	}
-	if s.preferenceReferences != nil {
-		preferences, err := s.preferenceReferences(ctx, principal)
-		if err != nil {
-			return capabilitycontract.CapabilityAuthoringInstance{}, err
-		}
-		result.PreferenceKeys = normalizedCapabilityReferences(preferences)
-	}
-	if s.ruleSetReferences != nil {
-		ruleSets, err := s.ruleSetReferences(ctx, principal)
-		if err != nil {
-			return capabilitycontract.CapabilityAuthoringInstance{}, err
-		}
-		result.RuleSetKeys = normalizedCapabilityReferences(ruleSets)
-	}
 	sort.Strings(result.ObjectKeys)
 	sort.Slice(result.FieldKeys, func(i, j int) bool { return result.FieldKeys[i].Scope < result.FieldKeys[j].Scope })
 	sort.Strings(result.ActionKeys)
 	sort.Strings(result.WorkflowKeys)
 	sort.Strings(result.ReportKeys)
-	sort.Strings(result.PreferenceKeys)
-	sort.Strings(result.RuleSetKeys)
 	sort.Strings(result.RoleKeys)
 	sort.Strings(result.PermissionKeys)
 	sort.Strings(result.ConnectorKeys)

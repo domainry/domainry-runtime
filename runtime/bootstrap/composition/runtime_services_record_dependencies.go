@@ -152,15 +152,10 @@ func initializeIntegrationAndBusinessSystem(ctx context.Context, s *runtimeAssem
 	s.actionService = assembleActionApplication(s, s, queryPolicy, s.applicationSchemaService, deps.BusinessHandlers, func(ctx context.Context, event, objectKey, recordID string, principal principalmodel.Principal, summary string, metadata map[string]any) {
 		s.auditApplicationService.AppendWithMetadata(ctx, event, objectKey, recordID, principal, summary, nil, nil, metadata)
 	})
-	// Change Plan scenario simulation depends on the canonical Action planner,
-	// so construct the Change Plan service only after Action wiring is complete.
-	s.businessChangePlans = newChangePlanApplicationService(s.businessChangePlanRepo, s.applicationSchemaRepo, s.auditRepo, s.applicationSchemaService, s.actionService)
-	s.runtimeStatusService = deployment.NewDeploymentRuntimeStatusApplicationServiceWithWorker(manifest.TemplateID, manifest.Version, s, s.schedulerService, deps.RuntimeStatus, deps.Records, s.auditApplicationService, deps.WorkflowWorker, deps.IntegrationDelivery, s.workerDependencies)
+	s.runtimeStatusService = deployment.NewDeploymentRuntimeStatusApplicationServiceWithWorker(manifest.TemplateID, manifest.Version, s, s.schedulerService, deps.RuntimeStatus, deps.Records, s.auditApplicationService, deps.WorkflowWorker, nil, s.workerDependencies)
 	s.runtimeStatusService.ConfigureLifecycleHealth(ctx, s.lifecycleService)
 	s.workflowProcesses = assembleWorkflowProcessEngine(s)
-	integrationsService := integrationApplication(s)
-	integrationsService.RegisterDefaultIntegrationOutboxSenders()
-	integrationsService.RegisterProviderIntegrationOutboxSenders()
+	integrationsService := publicationHandoffApplication(s)
 	s.integrationService = integrationsService
 	s.businessSystemService = assembleBusinessSystemApplication(s.schemaService, s.applicationSchemaService, s.workflowApplicationService, s.automationApplicationService, integrationsService, s.recordApplicationService, s.schedulerService, s.frontendCapabilities, s.runtimeStatusService, s.businessEvidenceRepo)
 }

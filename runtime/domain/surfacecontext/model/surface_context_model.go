@@ -4,7 +4,6 @@ import recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/m
 
 type SurfaceContextObjectRequest struct {
 	ObjectKey    string                       `json:"object_key"`
-	ViewKey      string                       `json:"view,omitempty"`
 	Page         int                          `json:"page,omitempty"`
 	PageSize     int                          `json:"page_size,omitempty"`
 	Search       string                       `json:"search,omitempty"`

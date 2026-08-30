@@ -18,7 +18,7 @@ const (
 	RuntimeAuthoringContractVersion = "runtime-authoring-v1"
 	// RuntimeAuthoringContractHash identifies the published, canonical authoring catalog.
 	// The Application catalog test fails whenever catalog content changes without updating it.
-	RuntimeAuthoringContractHash = "5ea29c34c8494464aa5b6ecedbdccf6bf188534423a6db1c14d0284d346d1905"
+	RuntimeAuthoringContractHash = "8ad4f0abf9fcd4cd938fd569e31c67949ad0bcee9291565d4b519c79b53ba4de"
 )
 
 type CapabilityRuntimeAuthoringContract struct {
@@ -229,8 +229,6 @@ type CapabilityAuthoringInstance struct {
 	ActionKeys          []string                              `json:"action_keys"`
 	WorkflowKeys        []string                              `json:"workflow_keys"`
 	ReportKeys          []string                              `json:"report_keys"`
-	PreferenceKeys      []string                              `json:"preference_keys"`
-	RuleSetKeys         []string                              `json:"rule_set_keys"`
 	RoleKeys            []string                              `json:"role_keys"`
 	PermissionKeys      []string                              `json:"permission_keys"`
 	UserIDs             []string                              `json:"user_ids"`

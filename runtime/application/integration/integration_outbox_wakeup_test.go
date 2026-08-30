@@ -45,7 +45,7 @@ func TestProcessIntegrationOutboxTargetsExactCommittedMessage(t *testing.T) {
 		return OutboxSendResult{Status: "sent"}, nil
 	})
 	service := integrationOutboxWorkerService(worker, sender)
-	service.deliveryRepo = &integrationManagementDeliveryRepo{outboxes: []integrationmodel.IntegrationOutboxMessage{message}, found: true}
+	service.publicationRepo = &integrationManagementDeliveryRepo{outboxes: []integrationmodel.IntegrationOutboxMessage{message}, found: true}
 	result, err := service.ProcessIntegrationOutbox(t.Context(), IntegrationOutboxLocator{WorkspaceID: message.WorkspaceID, MessageID: message.ID})
 	if err != nil || result.Sent != 1 || worker.lastStatus != "sent" {
 		t.Fatalf("result=%#v status=%q err=%v", result, worker.lastStatus, err)

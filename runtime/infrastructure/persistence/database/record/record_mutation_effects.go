@@ -26,8 +26,8 @@ import (
 	runtimeauditmodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 
-	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
 	notificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notification"
+	publicationhandoff "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
 )
 
 func (r RecordStore) insertWorkflowIntentTx(ctx context.Context, tx TransactionExecutor, intent workflowmodel.WorkflowExecution) error {
@@ -83,13 +83,13 @@ func (r RecordStore) insertIntegrationOutboxTx(ctx context.Context, tx Transacti
 	s := r.store
 	message.Payload = telemetry.EnsureAsyncPayload(ctx, message.Payload)
 	now := time.Now().UTC().Format(time.RFC3339)
-	message.WorkspaceID = integrationpersistence.WorkspaceID(message.WorkspaceID)
+	message.WorkspaceID = publicationhandoff.WorkspaceID(message.WorkspaceID)
 	message.DedupKey = strings.TrimSpace(message.DedupKey)
 	if message.DedupKey == "" {
 		return fmt.Errorf("mutation outbox requires stable dedup key")
 	}
 	if strings.TrimSpace(message.ID) == "" {
-		message.ID = integrationpersistence.OutboxDedupID(message.WorkspaceID, message.ConnectorKey, message.ConnectionKey, message.Operation, message.DedupKey)
+		message.ID = publicationhandoff.OutboxDedupID(message.WorkspaceID, message.ConnectorKey, message.ConnectionKey, message.Operation, message.DedupKey)
 	}
 	if strings.TrimSpace(message.Status) == "" {
 		message.Status = "queued"
@@ -100,14 +100,14 @@ func (r RecordStore) insertIntegrationOutboxTx(ctx context.Context, tx Transacti
 	if err != nil {
 		return fmt.Errorf("encode mutation outbox payload: %w", err)
 	}
-	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.SQLRenderer, "integration_outbox_messages", message.WorkspaceID).Columns("id", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at").Values(message.ID, message.ConnectorKey, message.ConnectionKey, message.Operation, message.Status, string(payload), message.EventID, message.RequestRef, message.DedupKey, message.RequestFingerprint, message.ResponseRef, message.Error, message.AttemptCount, message.NextAttemptAt, message.LastAttemptAt, message.LeaseOwner, message.LeaseExpiresAt, message.FencingToken, message.CreatedBy, message.CreatedAt, message.UpdatedAt).Build()
+	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.SQLRenderer, "runtime_publication_outbox", message.WorkspaceID).Columns("id", "publication_type", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at").Values(message.ID, "integration.connector", message.ConnectorKey, message.ConnectionKey, message.Operation, message.Status, string(payload), message.EventID, message.RequestRef, message.DedupKey, message.RequestFingerprint, message.ResponseRef, message.Error, message.AttemptCount, message.NextAttemptAt, message.LastAttemptAt, message.LeaseOwner, message.LeaseExpiresAt, message.FencingToken, message.CreatedBy, message.CreatedAt, message.UpdatedAt).Build()
 	if buildErr != nil {
 		return buildErr
 	}
 	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 		return fmt.Errorf("insert mutation outbox: %w", database.MutationConstraintError(err, "integration_outbox", message.ID, mutation.MutationConflictIdempotency))
 	}
-	if err := integrationpersistence.RegisterOutboxWorkerQueueScope(ctx, r.store, tx, message.WorkspaceID, now); err != nil {
+	if err := publicationhandoff.RegisterWorkerScope(ctx, r.store, tx, message.WorkspaceID, now); err != nil {
 		return err
 	}
 	if transactioncontract.ActiveTransaction(ctx) {
@@ -145,9 +145,9 @@ func (r RecordStore) publishIntegrationOutboxWakeup(workspaceID string, message 
 	if len(resolvedWorkspace) == 0 {
 		resolvedWorkspace = workspaceID
 	}
-	message.WorkspaceID = integrationpersistence.WorkspaceID(resolvedWorkspace)
+	message.WorkspaceID = publicationhandoff.WorkspaceID(resolvedWorkspace)
 	if strings.TrimSpace(message.ID) == "" {
-		message.ID = integrationpersistence.OutboxDedupID(message.WorkspaceID, message.ConnectorKey, message.ConnectionKey, message.Operation, message.DedupKey)
+		message.ID = publicationhandoff.OutboxDedupID(message.WorkspaceID, message.ConnectorKey, message.ConnectionKey, message.Operation, message.DedupKey)
 	}
 	r.store.WorkerWakeups().Publish(workerplatform.DurableTaskLocator{QueueKind: "integration_outbox", WorkspaceID: message.WorkspaceID, TaskID: message.ID})
 }

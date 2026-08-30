@@ -15,23 +15,26 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	localartifact "github.com/domainry/domainry-lifecycle/artifact/filesystem"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
+	lifecyclepersistence "github.com/domainry/domainry-lifecycle/persistence"
 	lifecycleapplication "github.com/domainry/domainry-runtime/runtime/application/lifecycle"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
-	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
-	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	localartifact "github.com/domainry/domainry-runtime/runtime/infrastructure/lifecycleartifact/filesystem"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/lifecycle"
+	notificationpublicationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
 	operationspersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
+	lifecyclemodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/lifecyclemodule"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	lifecyclehttp "github.com/domainry/domainry-runtime/runtime/transport/http/lifecycle"
 )
 
 func TestLifecycleGovernanceHandlersExecuteThroughHTTP(t *testing.T) {
 	mux, repository := newLifecycleGovernanceHTTPMux(t)
 	now := time.Now().UTC()
 	policy := lifecyclemodel.PolicyVersion{Policy: lifecyclemodel.RetentionPolicy{
-		Key: "integration.webhook_nonce.v1", Version: "1", Owner: "integration",
+		Key: "runtime.publication_handoff.v1", Version: "1", Owner: "runtime_handoff",
 		Class: lifecyclemodel.RetentionClassTechnical, DefaultRetention: time.Hour, MinimumRetention: 15 * time.Minute,
 		WorkspaceMayExtend: true, BackupBehavior: lifecyclemodel.BackupBehaviorStandard, EraseBehavior: lifecyclemodel.EraseBehaviorDelete,
 	}, Revision: 1}
@@ -43,13 +46,13 @@ func TestLifecycleGovernanceHandlersExecuteThroughHTTP(t *testing.T) {
 	if policies["count"].(float64) != 1 {
 		t.Fatalf("policies=%#v", policies)
 	}
-	preview := operationsRequest(t, mux, http.MethodGet, "/operations/lifecycle/cleanup/preview?policy_key=integration.webhook_nonce.v1", "", nil, http.StatusOK)
+	preview := operationsRequest(t, mux, http.MethodGet, "/operations/lifecycle/cleanup/preview?policy_key=runtime.publication_handoff.v1", "", nil, http.StatusOK)
 	if preview["rows"].(float64) != 0 {
 		t.Fatalf("preview=%#v", preview)
 	}
 
 	job := operationsRequest(t, mux, http.MethodPost, "/operations/lifecycle/cleanup/jobs", "", lifecyclemodel.CleanupJob{
-		PolicyKey: "integration.webhook_nonce.v1", PolicyVersion: "1", Operation: lifecyclemodel.OperationPurge, Reason: "retention cleanup",
+		PolicyKey: "runtime.publication_handoff.v1", PolicyVersion: "1", Operation: lifecyclemodel.OperationPurge, Reason: "retention cleanup",
 	}, http.StatusAccepted)
 	jobID := job["id"].(string)
 	completed := operationsRequest(t, mux, http.MethodPost, "/operations/lifecycle/cleanup/jobs/"+jobID+"/run?batch_size=10", "cleanup-run", nil, http.StatusOK)
@@ -60,7 +63,7 @@ func TestLifecycleGovernanceHandlersExecuteThroughHTTP(t *testing.T) {
 	if metrics["purged_total"].(float64) != 0 {
 		t.Fatalf("metrics=%#v", metrics)
 	}
-	archiveRequest := httptest.NewRequest(http.MethodGet, "/operations/lifecycle/archive?source_table=integration_webhook_nonces&limit=5", nil)
+	archiveRequest := httptest.NewRequest(http.MethodGet, "/operations/lifecycle/archive?source_table=runtime_publication_outbox&limit=5", nil)
 	archiveResponse := httptest.NewRecorder()
 	mux.ServeHTTP(archiveResponse, archiveRequest)
 	var archive []lifecyclemodel.ArchiveEntry
@@ -69,7 +72,7 @@ func TestLifecycleGovernanceHandlersExecuteThroughHTTP(t *testing.T) {
 	}
 
 	hold := lifecyclemodel.LegalHold{
-		Owner: "integration", ResourceType: "integration_webhook_nonces", ResourceID: "nonce-1",
+		Owner: "runtime_handoff", ResourceType: "runtime_publication_outbox", ResourceID: "nonce-1",
 		Reason: "legal case", Authority: "legal", StartsAt: now.Add(-time.Hour), ReviewAt: now.Add(time.Hour), AuditEvidence: "case-1",
 	}
 	createdHold := operationsRequest(t, mux, http.MethodPost, "/operations/lifecycle/legal-holds", "", hold, http.StatusCreated)
@@ -117,9 +120,9 @@ func TestLifecycleGovernanceHandlersRejectMalformedJSON(t *testing.T) {
 	}
 	for _, path := range []string{
 		"/operations/lifecycle/policies",
-		"/operations/lifecycle/cleanup/preview?policy_key=integration.webhook_nonce.v1",
+		"/operations/lifecycle/cleanup/preview?policy_key=runtime.publication_handoff.v1",
 		"/operations/lifecycle/metrics",
-		"/operations/lifecycle/archive?source_table=integration_webhook_nonces",
+		"/operations/lifecycle/archive?source_table=runtime_publication_outbox",
 		"/operations/lifecycle/external-erasures",
 	} {
 		request := httptest.NewRequest(http.MethodGet, path, nil)
@@ -142,8 +145,8 @@ func newLifecycleGovernanceHTTPMux(t *testing.T) (*http.ServeMux, lifecyclepersi
 	if err := runtimeStore.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	repository := lifecyclepersistence.NewLifecycleStore(runtimeStore)
-	executors := lifecyclepersistence.DefaultOwnerExecutors(runtimeStore)
+	repository := lifecyclepersistence.NewLifecycleStore(lifecyclemodule.NewHost(runtimeStore))
+	executors := []lifecyclecontract.OwnerLifecycleExecutor{notificationpublicationpersistence.LifecycleExecutor(runtimeStore)}
 	ports := make([]lifecyclecontract.OwnerLifecycleExecutor, 0, len(executors))
 	for index := range executors {
 		ports = append(ports, executors[index])
@@ -159,15 +162,15 @@ func newLifecycleGovernanceHTTPMux(t *testing.T) (*http.ServeMux, lifecyclepersi
 		nextID++
 		return fmt.Sprintf("lifecycle-http-%d", nextID)
 	})
-	handler := NewOperationsHandler(OperationsDependencies{
-		Service: operationsService, Lifecycle: lifecycleService, Principal: func(r *http.Request) principalmodel.Principal {
+	handler := lifecyclehttp.NewHandler(lifecyclehttp.Dependencies{
+		Service: lifecycleService, Operations: operationsService, Principal: func(r *http.Request) principalmodel.Principal {
 			principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
 			if r.Header.Get("X-Deny") == "true" {
 				accessfixture.Set(&principal, accessfixture.Bundle{})
 			}
 			return principal
 		},
-		Admin: func(next http.HandlerFunc) http.HandlerFunc { return next },
+		Authenticated: func(next http.HandlerFunc) http.HandlerFunc { return next },
 		DecodeJSON: func(w http.ResponseWriter, r *http.Request, target any) bool {
 			if err := json.NewDecoder(r.Body).Decode(target); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)

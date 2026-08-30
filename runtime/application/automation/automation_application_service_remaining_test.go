@@ -58,11 +58,6 @@ func TestAutomationAuthoringFragmentRejectsUnknownPrincipal(t *testing.T) {
 		t.Fatalf("invalid fragment result=%+v err=%v", result, err)
 	}
 
-	service = newAutomationFacade(&automationFacadeRegistry{rules: map[string]automationmodel.AutomationRuleSchema{}}, &automationFacadeMetadataProbe{})
-	if versions, err := service.AutomationRuleVersions(t.Context(), " rule-1 ", manager); err != nil ||
-		len(versions) != 1 || versions[0].ResourceKey != "rule-1" {
-		t.Fatalf("rule versions=%+v err=%v", versions, err)
-	}
 }
 
 func TestAutomationRunBeforePersistsExecutionAndAfterRuleStoresResult(t *testing.T) {

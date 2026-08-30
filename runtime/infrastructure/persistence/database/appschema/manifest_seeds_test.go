@@ -2,10 +2,8 @@ package appschema
 
 import (
 	"encoding/json"
-	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	"testing"
 
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
@@ -23,7 +21,6 @@ func TestManifestMetadataSeedsEveryResourceKind(t *testing.T) {
 	manifest := decodeManifestSeed(t, `{
 		"template_id":" template ","version":" 7 ",
 		"objects":[{"key":"account","name":"Account","fields":[{"key":"name","name":"Name","type":"text"}],"validations":[{"type":"required","field_key":"name","message":"Required"},{"key":"custom","object_key":"other","type":"custom"}]}],
-		"views":[{"key":"account.list","object_key":"account","name":"Accounts"}],
 		"actions":[{"key":"account.create","object_key":"account","label":"Create"}],
 		"workflows":[{"key":"account.sync","name":"Sync","trigger":{"object_key":"account"},"action":{"execution_identity":"workflow_service_role:sync_bot"},"run_as":"workflow_service_role:runner"}],
 		"scheduler_definitions":[{"key":"account.refresh","name":"Refresh","status":"enabled","schedule_type":"interval","interval_seconds":60,"target_type":"workflow","target_key":"scheduled:account.sync"}],
@@ -34,7 +31,6 @@ func TestManifestMetadataSeedsEveryResourceKind(t *testing.T) {
 		"operation_state_examples":[{"key":"account.state","object_key":"account","name":"State"}],
 		"sensitive_field_policies":[{"key":"account.secret","object_key":"account","name":"Secret"}],
 		"report_export_controls":[{"key":"account.export","report_key":"account.report","name":"Export"}],
-		"entrypoints":[{"key":"home","name":"Home"}],
 		"skills":[{"key":"account.skill","name":"Skill"}],
 		"agents":[{"key":"account.agent","name":"Agent"}]
 	}`)
@@ -42,81 +38,36 @@ func TestManifestMetadataSeedsEveryResourceKind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(seeds) != 19 {
+	if len(seeds) != 4 {
 		t.Fatalf("seed count=%d seeds=%#v", len(seeds), seeds)
 	}
 	if seeds[0].SchemaVersion != "7" || seeds[0].SourceID != "template" {
 		t.Fatalf("normalized seed=%#v", seeds[0])
 	}
-	field := seeds[1]
-	if field.Key != "account.name" || field.ObjectKey != "account" || metadataFieldObjectKey(field.Payload.(definitionmodel.FieldSchema)) != "account" {
-		t.Fatalf("field seed=%#v", field)
-	}
-	if metadataFieldObjectKey(manifest.Objects[0].Fields[0]) != "" {
-		t.Fatal("source manifest was mutated")
-	}
-	if seeds[2].Key != "account.required.name" || seeds[2].ObjectKey != "account" {
-		t.Fatalf("generated validation seed=%#v", seeds[2])
-	}
-	foundScheduler := false
-	for _, seed := range seeds {
-		if seed.ResourceType == "scheduler" && seed.Key == "account.refresh" {
-			foundScheduler = true
-		}
-	}
-	if !foundScheduler {
-		t.Fatalf("published scheduler definition missing from metadata seeds: %#v", seeds)
-	}
-	defaults, err := manifestMetadataSeeds(decodeManifestSeed(t, `{"objects":[{"key":"account"}]}`))
+	defaults, err := manifestMetadataSeeds(decodeManifestSeed(t, `{"workflows":[{"key":"account.sync"}]}`))
 	if err != nil || defaults[0].SchemaVersion != "1" || defaults[0].SourceID != "generated-template" {
 		t.Fatalf("default seed=%#v err=%v", defaults, err)
 	}
 }
 
 func TestManifestMetadataSeedRejectsMissingDirectKeys(t *testing.T) {
-	if metadataAgentTaskKey("task", "") != "" {
-		t.Fatal("unversioned Agent Task key accepted")
-	}
 	for _, raw := range []string{
-		`{"objects":[{"key":""}]}`,
-		`{"views":[{"key":""}]}`,
-		`{"actions":[{"key":""}]}`,
 		`{"workflows":[{"key":""}]}`,
-		`{"scheduler_definitions":[{"key":""}]}`,
 		`{"automation_rules":[{"key":""}]}`,
-		`{"dictionaries":[{"key":""}]}`,
 		`{"integrations":{"connectors":[{"key":""}]}}`,
 		`{"integrations":{"event_mappings":[{"key":""}]}}`,
-		`{"reports":[{"key":""}]}`,
-		`{"operation_state_examples":[{"key":""}]}`,
-		`{"sensitive_field_policies":[{"key":""}]}`,
-		`{"report_export_controls":[{"key":""}]}`,
-		`{"entrypoints":[{"key":""}]}`,
-		`{"skills":[{"key":""}]}`,
-		`{"agents":[{"key":""}]}`,
-		`{"identity_profile_extensions":[{"object_key":""}]}`,
 	} {
 		if _, err := manifestMetadataSeeds(decodeManifestSeed(t, raw)); err == nil {
 			t.Fatalf("expected missing key error for %s", raw)
 		}
 	}
-	for _, manifest := range []manifestmodel.ManifestSchema{
-		{AgentTasks: []agentmodel.AgentTaskDefinition{{}}},
-		{AgentEntrypoints: []agentmodel.AgentEntrypointAssignment{{}}},
-		{AgentServicePrincipals: []agentmodel.AgentServicePrincipalBinding{{}}},
-	} {
-		if _, err := manifestMetadataSeeds(manifest); err == nil {
-			t.Fatalf("expected missing Agent metadata key error for %#v", manifest)
-		}
-	}
 }
 
-func TestManifestMetadataSeedAcceptsIdentityProfileBinding(t *testing.T) {
-	seeds, err := manifestMetadataSeeds(manifestmodel.ManifestSchema{IdentityProfileExtensions: []profilebindingmodel.Binding{{
-		ObjectKey: "customer_profile", BusinessIdentity: profilebindingmodel.BusinessIdentityBinding{Key: "customer"},
-	}}})
-	if err != nil || len(seeds) != 1 || seeds[0].ResourceType != "identity_profile_binding" {
-		t.Fatalf("identity profile seeds=%#v err=%v", seeds, err)
+func TestManifestMetadataSeedsExcludeExtractedModuleDefinitions(t *testing.T) {
+	manifest := decodeManifestSeed(t, `{"scheduler_definitions":[{"key":"daily"}],"reports":[{"key":"summary"}],"operation_state_examples":[{"key":"state"}],"sensitive_field_policies":[{"key":"pii"}],"report_export_controls":[{"key":"export"}],"identity_profile_extensions":[{"object_key":"profile"}]}`)
+	seeds, err := manifestMetadataSeeds(manifest)
+	if err != nil || len(seeds) != 0 {
+		t.Fatalf("module-owned definitions leaked into Runtime seeds=%#v err=%v", seeds, err)
 	}
 }
 

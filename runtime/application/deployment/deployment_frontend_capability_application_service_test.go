@@ -72,7 +72,7 @@ func TestFrontendCapabilityServiceRejectsInvalidCapabilityAndBusinessBindings(t 
 	if _, err := service.ValidateManifestDefinition(invented); err == nil {
 		t.Fatal("invented capability binding was accepted")
 	}
-	bindings := FrontendBusinessBindings{Objects: map[string]bool{"customer": true}, Views: map[string]bool{}, Actions: map[string]bool{}, Reports: map[string]bool{}, Fields: map[string]bool{}}
+	bindings := FrontendBusinessBindings{Objects: map[string]bool{"customer": true}, Actions: map[string]bool{}, Reports: map[string]bool{}, Fields: map[string]bool{}}
 	service = frontendCapabilityTestServiceWithBindings(func(context.Context) FrontendBusinessBindings { return bindings })
 	invalid := invented
 	invalid.Entries[0].CapabilityKeys = []string{"schema.field"}

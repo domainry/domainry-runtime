@@ -100,9 +100,6 @@ func BuildWithProductBrand(snapshot appschemamodel.ApplicationSchemaSnapshot, pr
 		path := "/operations/idempotency/receipts/{owner}/{receiptID}/" + operation
 		paths[path] = map[string]any{"post": openAPIOperation(operation+"IdempotencyReceipt", "Operations", "Safely "+operation+" an eligible idempotency receipt", openAPIAdminSecurity(), openAPIJSONResponse("Operation result", openAPIObject(nil)))}
 	}
-	for _, path := range []string{"/tenant-admin/metadata/manifests/validate", "/tenant-admin/metadata/manifests/review", "/tenant-admin/metadata/manifests/apply"} {
-		paths[path] = map[string]any{"post": openAPIOperation("provision"+openAPIOperationName(path), "Provision", "Authenticated or internally scoped manifest Provision operation", openAPIAdminSecurity(), openAPIJSONRequest(openAPIObject(nil)), openAPIJSONResponse("Provision result", openAPIObject(nil)))}
-	}
 	paths["/tenant-admin/metadata/manifests/current"] = map[string]any{"get": openAPIOperation("getCurrentRuntimeManifest", "Provision", "Authenticated read of the installed Runtime-native manifest", openAPIAdminSecurity(), openAPIJSONResponse("Installed manifest", openAPIObject(nil)))}
 	paths["/permissions/effective"] = map[string]any{
 		"get": openAPIOperation("getEffectivePermissions", "Permissions", "Effective generated-app principal permissions; optional object_key and record_id apply the same record RLS decision used by Action execution", openAPIAdminSecurity(), openAPIJSONResponse("Effective permissions", openAPIObject(nil))),

@@ -48,10 +48,6 @@ func (s *ApplicationSchemaDomainService) ForPrincipalLocale(ctx context.Context,
 			validation.Message = localize("validation", key, "message", validation.Message)
 		}
 	}
-	for index := range snapshot.Views {
-		view := &snapshot.Views[index]
-		view.Name = localize("view", view.Key, "name", view.Name)
-	}
 	for index := range snapshot.Actions {
 		action := &snapshot.Actions[index]
 		action.Label = localize("action", action.Key, "label", action.Label)
@@ -82,11 +78,6 @@ func (s *ApplicationSchemaDomainService) ForPrincipalLocale(ctx context.Context,
 	for index := range snapshot.Reports {
 		report := &snapshot.Reports[index]
 		report.Name = localize("report", report.Key, "name", report.Name)
-	}
-	for index := range snapshot.EntryPoints {
-		entrypoint := &snapshot.EntryPoints[index]
-		entrypoint.Name = localize("entrypoint", entrypoint.Key, "name", entrypoint.Name)
-		entrypoint.Description = localize("entrypoint", entrypoint.Key, "description", entrypoint.Description)
 	}
 	for index := range snapshot.Skills {
 		skill := &snapshot.Skills[index]

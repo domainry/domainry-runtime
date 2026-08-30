@@ -2,16 +2,17 @@ package composition
 
 import (
 	"context"
-	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	"testing"
 	"time"
+
+	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -267,7 +268,7 @@ func TestRecordDomainWiringInvokesSchemaWorkflowAndPipelinePorts(t *testing.T) {
 func TestWorkflowSchemaWiringHandlesOptionalIdentityDirectory(t *testing.T) {
 	runtime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{Manifest: manifestmodel.ManifestSchema{
 		Actions:                []definitionmodel.ActionSchema{{Key: "customer.activate", ObjectKey: "customer", Kind: "record"}},
-		AgentServicePrincipals: []agentmodel.AgentServicePrincipalBinding{{Key: "review-service", Enabled: true}},
+		AgentServicePrincipals: []agentsdk.AgentServicePrincipalBinding{{Key: "review-service", Enabled: true}},
 	}, Dependencies: RuntimeServicesDependencies{IdentityDirectory: compositionIdentityDirectory{}}})
 	provider := runtimeWorkflowSchemaProvider{records: runtime}
 	canceled, cancel := context.WithCancel(t.Context())
@@ -383,15 +384,15 @@ func TestOptionalMetadataAndIntegrationCompositionFallbacks(t *testing.T) {
 	if assembleApplicationSchema(nil) == nil {
 		t.Fatal("nil runtime must still produce a metadata application owner")
 	}
-	if integrationApplication(nil) == nil {
+	if publicationHandoffApplication(nil) == nil {
 		t.Fatal("nil runtime must still produce an integration application owner")
 	}
 	runtime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{})
 	if got := assembleApplicationSchema(runtime); got != runtime.applicationSchemaService {
 		t.Fatal("metadata composition did not reuse the canonical owner")
 	}
-	if got := integrationApplication(runtime); got != runtime.integrationService {
-		t.Fatal("integration composition did not reuse the canonical owner")
+	if got := publicationHandoffApplication(runtime); got == nil {
+		t.Fatal("publication handoff composition was not assembled")
 	}
 	if users, err := listRuntimeSurfaceContextDirectoryUsers(t.Context(), &runtimeAssembly{}); err != nil || users != nil {
 		t.Fatalf("missing surface identity directory users=%#v error=%v", users, err)

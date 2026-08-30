@@ -7,10 +7,13 @@ import (
 	"strings"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
+	lifecyclepersistence "github.com/domainry/domainry-lifecycle/persistence"
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
-	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
-	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/lifecycle"
+	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
+	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
+	lifecyclemodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/lifecyclemodule"
 	automationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/automation"
 	capabilityhttp "github.com/domainry/domainry-runtime/runtime/transport/http/capabilities"
 	recordhttp "github.com/domainry/domainry-runtime/runtime/transport/http/records"
@@ -41,7 +44,11 @@ func (a *httpServerAssembly) wireRecordAndProcessHandlers() {
 	var artifacts lifecyclecontract.UploadArtifactStore
 	var scans *uploadapplication.FileScanReceiptVerifier
 	if a.dependencies.Store != nil {
-		fileStore := lifecyclepersistence.NewFileArtifactStore(a.dependencies.Store, a.dependencies.Manifest.Objects, uploadDir)
+		host := lifecyclemodule.NewHost(a.dependencies.Store)
+		fileStore := lifecyclepersistence.NewFileArtifactStore(host, lifecyclemodule.NewUploadFieldCatalog(a.dependencies.Manifest.Objects), uploadDir,
+			lifecyclepersistence.WithUploadArtifactReferences(recordpersistence.NewUploadArtifactReferences(a.dependencies.Store, a.dependencies.Manifest.Objects)),
+			lifecyclepersistence.WithExpiredUploadReferenceCleaner(reportpersistence.NewUploadArtifactCleaner(a.dependencies.Store, a.dependencies.Manifest.Objects)),
+		)
 		artifacts = fileStore
 		key := sha256.Sum256([]byte("domainry-file-scan-receipt-v1:" + a.dependencies.Config.IntegrationSecretKey))
 		scans = uploadapplication.NewFileScanReceiptVerifier(fileStore, key[:])
@@ -70,7 +77,7 @@ func (a *httpServerAssembly) wireRecordAndProcessHandlers() {
 		WriteServiceError: a.callbacks.WriteServiceError, DecodeJSON: a.callbacks.DecodeJSON, Admin: a.identityHTTP.PermissionFunc("workspace.admin"),
 		Authenticated: a.identityHTTP.AuthenticatedFunc,
 		Binding:       a.dependencies.SchedulerBinding,
-		Dispatcher:    composition.NewSchedulerCallbackDispatcher(records.Applications().Scheduler, records.Applications().Integrations),
+		Dispatcher:    composition.NewSchedulerCallbackDispatcher(records.Applications().Scheduler, records.Applications().PublicationHandoff, composition.IntegrationConnectionRequirements(a.dependencies.Manifest.Integrations.Connections)),
 		RuntimeID:     a.dependencies.RuntimeInstanceID,
 		AuthenticateService: func(ctx context.Context, credential string) error {
 			if a.dependencies.IdentityBinding == nil || a.dependencies.IdentityBinding.Tokens() == nil || strings.TrimSpace(credential) == "" {

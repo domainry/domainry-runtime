@@ -26,9 +26,8 @@ func TestWorkspaceOwnerPhysicalIsolationAcrossDialects(t *testing.T) {
 	owners := []struct{ owner, table, mutationColumn string }{
 		{owner: "audit", table: "_audit_events", mutationColumn: "summary"},
 		{owner: "automation", table: "automation_rule_executions", mutationColumn: "candidate_json"},
-		{owner: "changeplan", table: "business_change_plan_operations", mutationColumn: "result_json"},
 		{owner: "deployment", table: "frontend_capability_manifests", mutationColumn: "manifest_json"},
-		{owner: "integration", table: "integration_outbox_messages", mutationColumn: "payload_json"},
+		{owner: "integration", table: "runtime_publication_outbox", mutationColumn: "payload_json"},
 		{owner: "lifecycle", table: "lifecycle_cleanup_jobs", mutationColumn: "payload_json"},
 		{owner: "metadata", table: "business_localized_text", mutationColumn: "text"},
 		{owner: "record", table: "business_record_localized_value", mutationColumn: "text_value"},

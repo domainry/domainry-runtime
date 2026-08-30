@@ -1,8 +1,8 @@
 package composition
 
 import (
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -12,8 +12,8 @@ import (
 )
 
 type applicationSchemaLifecycleRuntime interface {
-	applyManifestMetadata(string, string, string, []definitionmodel.ObjectSchema, []definitionmodel.ViewSchema, []definitionmodel.ActionSchema, []definitionmodel.WorkflowSchema, []automationmodel.AutomationRuleSchema, []appschemamodel.DictionarySchema, integrationmodel.IntegrationSchema, []reportmodel.ReportSchema, []definitionmodel.EntryPointSchema, []agentmodel.SkillSchema, []agentmodel.AgentSchema, []profilebindingmodel.Binding)
-	applyManifestAgentMetadata([]agentmodel.AgentTaskDefinition, []agentmodel.AgentEntrypointAssignment, []agentmodel.AgentServicePrincipalBinding)
+	applyManifestMetadata(string, string, string, []definitionmodel.ObjectSchema, []definitionmodel.ActionSchema, []definitionmodel.WorkflowSchema, []automationmodel.AutomationRuleSchema, []appschemamodel.DictionarySchema, integrationmodel.IntegrationSchema, []reportmodel.ReportSchema, []agentsdk.SkillSchema, []agentsdk.AgentSchema, []profilebindingmodel.Binding)
+	applyManifestAgentMetadata([]agentsdk.AgentTaskDefinition, []agentsdk.AgentEntrypointAssignment, []agentsdk.AgentServicePrincipalBinding)
 	Schema() appschemamodel.ApplicationSchemaSnapshot
 }
 
@@ -23,11 +23,11 @@ type applicationSchemaLifecycleRuntimeAdapter struct {
 
 var _ appschemaapplication.LifecycleRuntime = applicationSchemaLifecycleRuntimeAdapter{}
 
-func (a applicationSchemaLifecycleRuntimeAdapter) ApplyManifestMetadata(templateID, templateVersion, name string, objects []definitionmodel.ObjectSchema, views []definitionmodel.ViewSchema, actions []definitionmodel.ActionSchema, workflows []definitionmodel.WorkflowSchema, automationRules []automationmodel.AutomationRuleSchema, dictionaries []appschemamodel.DictionarySchema, integrations integrationmodel.IntegrationSchema, reports []reportmodel.ReportSchema, entrypoints []definitionmodel.EntryPointSchema, skills []agentmodel.SkillSchema, agents []agentmodel.AgentSchema, profileBindings []profilebindingmodel.Binding) {
-	a.runtime.applyManifestMetadata(templateID, templateVersion, name, objects, views, actions, workflows, automationRules, dictionaries, integrations, reports, entrypoints, skills, agents, profileBindings)
+func (a applicationSchemaLifecycleRuntimeAdapter) ApplyManifestMetadata(templateID, templateVersion, name string, objects []definitionmodel.ObjectSchema, actions []definitionmodel.ActionSchema, workflows []definitionmodel.WorkflowSchema, automationRules []automationmodel.AutomationRuleSchema, dictionaries []appschemamodel.DictionarySchema, integrations integrationmodel.IntegrationSchema, reports []reportmodel.ReportSchema, skills []agentsdk.SkillSchema, agents []agentsdk.AgentSchema, profileBindings []profilebindingmodel.Binding) {
+	a.runtime.applyManifestMetadata(templateID, templateVersion, name, objects, actions, workflows, automationRules, dictionaries, integrations, reports, skills, agents, profileBindings)
 }
 
-func (a applicationSchemaLifecycleRuntimeAdapter) ApplyManifestAgentMetadata(tasks []agentmodel.AgentTaskDefinition, entrypoints []agentmodel.AgentEntrypointAssignment, principals []agentmodel.AgentServicePrincipalBinding) {
+func (a applicationSchemaLifecycleRuntimeAdapter) ApplyManifestAgentMetadata(tasks []agentsdk.AgentTaskDefinition, entrypoints []agentsdk.AgentEntrypointAssignment, principals []agentsdk.AgentServicePrincipalBinding) {
 	a.runtime.applyManifestAgentMetadata(tasks, entrypoints, principals)
 }
 
@@ -47,7 +47,7 @@ func assembleApplicationSchema(records *runtimeAssembly) *appschemaapplication.A
 		Workflows: records.Applications().Workflows, Dictionary: records.dictionaryRuntime,
 		Audit: records.auditApplicationService, AuditAppender: records.auditApplicationService.AppendWithMetadata,
 		TemplateID: records.templateID, Version: records.templateVersion, Name: records.name,
-		Records: records.recordRepo, Integrations: records.integrationConfigRepo,
-		References: records.businessReferences, ChangePlans: records.businessChangePlanRepo,
+		Records:    records.recordRepo,
+		References: records.businessReferences,
 	})
 }

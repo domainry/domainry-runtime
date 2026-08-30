@@ -34,7 +34,7 @@ func (r IntegrationDeliveryStore) GetOutbox(ctx context.Context, workspaceID, id
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, false, err
 	}
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).Columns(integrationOutboxColumns...).Where(ormbuilder.Equal("id", strings.TrimSpace(id))).Build()
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "runtime_publication_outbox", workspaceID).Columns(integrationOutboxColumns...).Where(integrationPublicationPredicate(ormbuilder.Equal("id", strings.TrimSpace(id)))).Build()
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, false, err
 	}
@@ -273,7 +273,7 @@ func (r IntegrationDeliveryStore) ListOverdueOutboxAcknowledgements(ctx context.
 	if now == "" {
 		return nil, fmt.Errorf("integration outbox acknowledgement cutoff is required")
 	}
-	query, args, err := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "integration_outbox_messages").Columns(integrationOutboxColumns...).Where(ormbuilder.And(ormbuilder.Equal("status", "sent"), ormbuilder.NotEqual("ack_deadline_at", ""), ormbuilder.LessThanOrEqual("ack_deadline_at", now))).OrderBy(ormbuilder.Ascending("ack_deadline_at"), ormbuilder.Ascending("workspace_id"), ormbuilder.Ascending("id")).Limit(limit).Build()
+	query, args, err := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "runtime_publication_outbox").Columns(integrationOutboxColumns...).Where(integrationPublicationPredicate(ormbuilder.And(ormbuilder.Equal("status", "sent"), ormbuilder.NotEqual("ack_deadline_at", ""), ormbuilder.LessThanOrEqual("ack_deadline_at", now)))).OrderBy(ormbuilder.Ascending("ack_deadline_at"), ormbuilder.Ascending("workspace_id"), ormbuilder.Ascending("id")).Limit(limit).Build()
 	if err != nil {
 		return nil, fmt.Errorf("build overdue integration outbox acknowledgement list: %w", err)
 	}
@@ -306,7 +306,7 @@ func (r IntegrationDeliveryStore) MarkOutboxAcknowledgementReconciliationRequire
 	if messageID == "" || detectedAt == "" {
 		return integrationmodel.IntegrationOutboxMessage{}, false, fmt.Errorf("integration outbox acknowledgement reconciliation identity is required")
 	}
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).Set("status", "quarantined").Set("error", "backend.integration.outbox.ack_timeout").Set("ack_deadline_at", "").Set("next_attempt_at", "").Set("updated_at", detectedAt).Where(ormbuilder.And(ormbuilder.Equal("id", messageID), ormbuilder.Equal("status", "sent"), ormbuilder.NotEqual("ack_deadline_at", ""), ormbuilder.LessThanOrEqual("ack_deadline_at", detectedAt))).Build()
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "runtime_publication_outbox", workspaceID).Set("status", "quarantined").Set("error", "backend.integration.outbox.ack_timeout").Set("ack_deadline_at", "").Set("next_attempt_at", "").Set("updated_at", detectedAt).Where(integrationPublicationPredicate(ormbuilder.And(ormbuilder.Equal("id", messageID), ormbuilder.Equal("status", "sent"), ormbuilder.NotEqual("ack_deadline_at", ""), ormbuilder.LessThanOrEqual("ack_deadline_at", detectedAt)))).Build()
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, false, fmt.Errorf("build integration outbox acknowledgement reconciliation: %w", err)
 	}
@@ -339,17 +339,15 @@ func (r IntegrationDeliveryStore) ListOutbox(ctx context.Context, workspaceID, c
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	predicates := []ormbuilder.Predicate{}
+	predicates := []ormbuilder.Predicate{ormbuilder.Equal("publication_type", "integration.connector")}
 	for _, filter := range []struct{ column, value string }{{"connector_key", connectorKey}, {"status", status}} {
 		if filter.value = strings.TrimSpace(filter.value); filter.value != "" {
 			predicates = append(predicates, ormbuilder.Equal(filter.column, filter.value))
 		}
 	}
-	builder := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).
+	builder := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "runtime_publication_outbox", workspaceID).
 		Columns(integrationOutboxColumns...).OrderBy(ormbuilder.Descending("created_at")).Limit(limit)
-	if len(predicates) != 0 {
-		builder.Where(ormbuilder.And(predicates...))
-	}
+	builder.Where(ormbuilder.And(predicates...))
 	query, args, buildErr := builder.Build()
 	if buildErr != nil {
 		return nil, fmt.Errorf("build integration outbox query: %w", buildErr)
@@ -412,13 +410,13 @@ func (r IntegrationDeliveryStore) InsertOutbox(ctx context.Context, workspaceID 
 	value.CreatedAt, value.UpdatedAt = now, now
 	value.Payload = telemetry.EnsureAsyncPayload(ctx, value.Payload)
 	payload, _ := json.Marshal(nonNilMap(value.Payload))
-	columns := []string{"id", "workspace_id", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "ack_deadline_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at"}
-	args := []any{value.ID, value.WorkspaceID, value.ConnectorKey, value.ConnectionKey, value.Operation, value.Status, string(payload), value.EventID, value.RequestRef, value.DedupKey, value.RequestFingerprint, value.ResponseRef, value.Error, value.AttemptCount, value.NextAttemptAt, value.AckDeadlineAt, value.LastAttemptAt, value.LeaseOwner, value.LeaseExpiresAt, value.FencingToken, value.CreatedBy, value.CreatedAt, value.UpdatedAt}
+	columns := []string{"id", "workspace_id", "publication_type", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "ack_deadline_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at"}
+	args := []any{value.ID, value.WorkspaceID, "integration.connector", value.ConnectorKey, value.ConnectionKey, value.Operation, value.Status, string(payload), value.EventID, value.RequestRef, value.DedupKey, value.RequestFingerprint, value.ResponseRef, value.Error, value.AttemptCount, value.NextAttemptAt, value.AckDeadlineAt, value.LastAttemptAt, value.LeaseOwner, value.LeaseExpiresAt, value.FencingToken, value.CreatedBy, value.CreatedAt, value.UpdatedAt}
 	insertColumns, insertValues, err := workspaceInsertValues(workspaceID, columns, args)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, err
 	}
-	query, insertArgs, err := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).Columns(insertColumns...).Values(insertValues...).Build()
+	query, insertArgs, err := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "runtime_publication_outbox", workspaceID).Columns(insertColumns...).Values(insertValues...).Build()
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("build integration outbox insert: %w", err)
 	}
@@ -444,7 +442,7 @@ func (r IntegrationDeliveryStore) InsertOutbox(ctx context.Context, workspaceID 
 }
 
 func (r IntegrationDeliveryStore) findOutboxByDedup(ctx context.Context, value integrationmodel.IntegrationOutboxMessage) (integrationmodel.IntegrationOutboxMessage, bool, error) {
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_outbox_messages", value.WorkspaceID).Columns(integrationOutboxColumns...).Where(ormbuilder.And(ormbuilder.Equal("connector_key", value.ConnectorKey), ormbuilder.Equal("connection_key", value.ConnectionKey), ormbuilder.Equal("operation", value.Operation), ormbuilder.Equal("dedup_key", value.DedupKey))).Build()
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "runtime_publication_outbox", value.WorkspaceID).Columns(integrationOutboxColumns...).Where(integrationPublicationPredicate(ormbuilder.And(ormbuilder.Equal("connector_key", value.ConnectorKey), ormbuilder.Equal("connection_key", value.ConnectionKey), ormbuilder.Equal("operation", value.Operation), ormbuilder.Equal("dedup_key", value.DedupKey)))).Build()
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, false, err
 	}
@@ -466,7 +464,7 @@ func (r IntegrationDeliveryStore) UpdateOutboxStatus(ctx context.Context, worksp
 		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("integration outbox id is required")
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).Set("status", status).Set("response_ref", responseRef).Set("error", errorText).Set("next_attempt_at", "").Set("updated_at", now).Where(ormbuilder.Equal("id", id)).Build()
+	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "runtime_publication_outbox", workspaceID).Set("status", status).Set("response_ref", responseRef).Set("error", errorText).Set("next_attempt_at", "").Set("updated_at", now).Where(integrationPublicationPredicate(ormbuilder.Equal("id", id))).Build()
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("build integration outbox status update: %w", err)
 	}
@@ -501,7 +499,7 @@ func (r IntegrationDeliveryStore) UpdateOutboxStatusByResponseRef(ctx context.Co
 		return integrationmodel.IntegrationOutboxMessage{}, false, nil
 	}
 	for attempt := 0; attempt < 4; attempt++ {
-		query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).Columns(integrationOutboxColumns...).Where(ormbuilder.And(ormbuilder.Equal("connection_key", connectionKey), ormbuilder.Equal("response_ref", responseRef))).OrderBy(ormbuilder.Descending("created_at"), ormbuilder.Descending("id")).Limit(1).Build()
+		query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "runtime_publication_outbox", workspaceID).Columns(integrationOutboxColumns...).Where(integrationPublicationPredicate(ormbuilder.And(ormbuilder.Equal("connection_key", connectionKey), ormbuilder.Equal("response_ref", responseRef)))).OrderBy(ormbuilder.Descending("created_at"), ormbuilder.Descending("id")).Limit(1).Build()
 		if buildErr != nil {
 			return integrationmodel.IntegrationOutboxMessage{}, false, buildErr
 		}
@@ -517,7 +515,7 @@ func (r IntegrationDeliveryStore) UpdateOutboxStatusByResponseRef(ctx context.Co
 			return existing, true, nil
 		}
 		now := time.Now().UTC().Format(time.RFC3339)
-		query, args, buildErr = ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).Set("status", strings.TrimSpace(status)).Set("error", strings.TrimSpace(errorText)).Set("next_attempt_at", "").Set("ack_deadline_at", "").Set("updated_at", now).Where(ormbuilder.And(ormbuilder.Equal("id", existing.ID), ormbuilder.Equal("status", existing.Status))).Build()
+		query, args, buildErr = ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "runtime_publication_outbox", workspaceID).Set("status", strings.TrimSpace(status)).Set("error", strings.TrimSpace(errorText)).Set("next_attempt_at", "").Set("ack_deadline_at", "").Set("updated_at", now).Where(integrationPublicationPredicate(ormbuilder.And(ormbuilder.Equal("id", existing.ID), ormbuilder.Equal("status", existing.Status)))).Build()
 		if buildErr != nil {
 			return integrationmodel.IntegrationOutboxMessage{}, true, buildErr
 		}
@@ -557,11 +555,11 @@ func (r IntegrationDeliveryStore) ScheduleOutboxRetry(ctx context.Context, works
 	}
 	now := time.Now().UTC()
 	nowText, next := now.Format(time.RFC3339), now.Add(time.Duration(delay)*time.Second).Format(time.RFC3339)
-	builder := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).Set("status", "queued").SetExpression("attempt_count", ormbuilder.Add(ormbuilder.Column("attempt_count"), ormbuilder.Value(1))).Set("next_attempt_at", next).Set("last_attempt_at", nowText).Set("updated_at", nowText)
+	builder := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "runtime_publication_outbox", workspaceID).Set("status", "queued").SetExpression("attempt_count", ormbuilder.Add(ormbuilder.Column("attempt_count"), ormbuilder.Value(1))).Set("next_attempt_at", next).Set("last_attempt_at", nowText).Set("updated_at", nowText)
 	if strings.TrimSpace(errorText) != "" {
 		builder.Set("error", errorText)
 	}
-	query, args, err := builder.Where(ormbuilder.Equal("id", id)).Build()
+	query, args, err := builder.Where(integrationPublicationPredicate(ormbuilder.Equal("id", id))).Build()
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("build integration outbox retry: %w", err)
 	}
@@ -599,7 +597,7 @@ func (r IntegrationDeliveryStore) findInvocation(ctx context.Context, workspaceI
 	return value, err == nil, err
 }
 func (r IntegrationDeliveryStore) findOutbox(ctx context.Context, workspaceID, id string) (integrationmodel.IntegrationOutboxMessage, bool, error) {
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "integration_outbox_messages", workspaceID).Columns(integrationOutboxColumns...).Where(ormbuilder.Equal("id", strings.TrimSpace(id))).Build()
+	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "runtime_publication_outbox", workspaceID).Columns(integrationOutboxColumns...).Where(integrationPublicationPredicate(ormbuilder.Equal("id", strings.TrimSpace(id)))).Build()
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, false, err
 	}

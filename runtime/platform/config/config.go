@@ -43,6 +43,10 @@ type Config struct {
 	HTTPPublicRateLimitPerMinute            int
 	HTTPTenantAdminRateLimitPerMinute       int
 	HTTPOpsRateLimitPerMinute               int
+	RateLimitBackend                        string
+	RateLimitRedisURL                       string
+	RateLimitRedisPrefix                    string
+	RateLimitRedisConnectTimeout            time.Duration
 	CapacityGlobalInFlight                  int
 	CapacityWorkspaceInFlight               int
 	CapacityUseCaseInFlight                 int
@@ -180,6 +184,10 @@ func FromEnv() Config {
 		HTTPPublicRateLimitPerMinute:            intEnv("HTTP_PUBLIC_RATE_LIMIT_PER_MINUTE", 6000),
 		HTTPTenantAdminRateLimitPerMinute:       intEnv("HTTP_TENANT_ADMIN_RATE_LIMIT_PER_MINUTE", 3000),
 		HTTPOpsRateLimitPerMinute:               intEnv("HTTP_OPS_RATE_LIMIT_PER_MINUTE", 1200),
+		RateLimitBackend:                        env("RATE_LIMIT_BACKEND", "database"),
+		RateLimitRedisURL:                       strings.TrimSpace(os.Getenv("RATE_LIMIT_REDIS_URL")),
+		RateLimitRedisPrefix:                    env("RATE_LIMIT_REDIS_PREFIX", "domainry:ratelimit:v1:"),
+		RateLimitRedisConnectTimeout:            durationEnv("RATE_LIMIT_REDIS_CONNECT_TIMEOUT", 2*time.Second),
 		CapacityGlobalInFlight:                  intEnv("CAPACITY_GLOBAL_IN_FLIGHT", 256),
 		CapacityWorkspaceInFlight:               intEnv("CAPACITY_WORKSPACE_IN_FLIGHT", 32),
 		CapacityUseCaseInFlight:                 intEnv("CAPACITY_USE_CASE_IN_FLIGHT", 64),

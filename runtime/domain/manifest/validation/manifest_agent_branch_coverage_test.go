@@ -3,7 +3,7 @@ package validation
 import (
 	"testing"
 
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
@@ -46,12 +46,11 @@ func TestManifestAgentTopLevelValidationBranches(t *testing.T) {
 		{"unknown action task agent", func(m *manifestmodel.ManifestSchema) { m.AgentTasks[0].AgentKey = "missing" }},
 		{"unknown action-capable task agent", func(m *manifestmodel.ManifestSchema) {
 			m.AgentTasks[0].AgentKey = "missing"
-			m.AgentTasks[0].SideEffectMode = agentmodel.AgentTaskSideEffectActionAllowed
+			m.AgentTasks[0].SideEffectMode = agentsdk.AgentTaskSideEffectActionAllowed
 			m.AgentTasks[0].AllowedActions = []string{"customer.update"}
 		}},
 		{"route non-match and task owner mismatch", func(m *manifestmodel.ManifestSchema) {
-			m.EntryPoints = append(m.EntryPoints, definitionmodel.EntryPointSchema{Key: "portal.home", Config: map[string]any{"kind": "customer_portal"}})
-			m.Agents = append(m.Agents, agentmodel.AgentSchema{Key: "other-agent", Version: "1"})
+			m.Agents = append(m.Agents, agentsdk.AgentSchema{Key: "other-agent", Version: "1"})
 			m.AgentEntrypoints[0].AgentKey = "other-agent"
 		}},
 		{"disabled assignment targets", func(m *manifestmodel.ManifestSchema) {
@@ -88,19 +87,19 @@ func TestManifestAgentHelperValidationBranches(t *testing.T) {
 	validateAgentJSONSchemaValue(state, "schema", map[string]any{"$ref": 3}, map[string]any{}, 0)
 	validateAgentJSONSchemaValue(state, "schema", map[string]any{"$ref": ""}, map[string]any{}, 0)
 	validateAgentTaskOutcomes(state, "outcomes", nil)
-	validateGlobalAgentContextContract(state, "context", agentmodel.GlobalAgentContextContract{AllowedHintFields: []string{"locale", "locale"}, MaxSelectedRecord: 1, MaxContextBytes: 1024})
-	validateGlobalAgentContextContract(state, "context", agentmodel.GlobalAgentContextContract{MaxSelectedRecord: 0, MaxContextBytes: 1048577})
+	validateGlobalAgentContextContract(state, "context", agentsdk.GlobalAgentContextContract{AllowedHintFields: []string{"locale", "locale"}, MaxSelectedRecord: 1, MaxContextBytes: 1024})
+	validateGlobalAgentContextContract(state, "context", agentsdk.GlobalAgentContextContract{MaxSelectedRecord: 0, MaxContextBytes: 1048577})
 	validateAgentJSONSchema(state, "schema", map[string]any{"type": 3})
-	validateAgentRoutingContract(state, "routing", agentmodel.AgentRoutingContract{AllowedRouteTypes: []string{agentmodel.AgentRouteTask, agentmodel.AgentRouteTask}})
-	validateAgentRoutingContract(state, "routing", agentmodel.AgentRoutingContract{ContractVersion: agentmodel.AgentRoutingContractVersion})
+	validateAgentRoutingContract(state, "routing", agentsdk.AgentRoutingContract{AllowedRouteTypes: []string{agentsdk.AgentRouteTask, agentsdk.AgentRouteTask}})
+	validateAgentRoutingContract(state, "routing", agentsdk.AgentRoutingContract{ContractVersion: agentsdk.AgentRoutingContractVersion})
 	validateAgentStringSet(state, "strings", []string{"", "value", "value"})
-	if !agentAllowsCapability(agentmodel.AgentSchema{Tools: []string{" invoke_action "}}, nil, "invoke_action") {
+	if !agentAllowsCapability(agentsdk.AgentSchema{Tools: []string{" invoke_action "}}, nil, "invoke_action") {
 		t.Fatal("direct agent tool ignored")
 	}
-	if agentAllowsCapability(agentmodel.AgentSchema{}, nil, "invoke_action") {
+	if agentAllowsCapability(agentsdk.AgentSchema{}, nil, "invoke_action") {
 		t.Fatal("missing capability accepted")
 	}
-	if agentAllowsCapability(agentmodel.AgentSchema{Tools: []string{"query_records"}}, nil, "invoke_action") {
+	if agentAllowsCapability(agentsdk.AgentSchema{Tools: []string{"query_records"}}, nil, "invoke_action") {
 		t.Fatal("unrelated capability accepted")
 	}
 	patterns := []string{"", "bad route", "**", "*", "missing*"}
@@ -114,11 +113,6 @@ func TestManifestAgentHelperValidationBranches(t *testing.T) {
 	}
 	if !validAgentRoutePattern("workspace.home", map[string]bool{"workspace.home": true}) {
 		t.Fatal("exact route pattern rejected")
-	}
-	for kind, want := range map[string]string{"backoffice": "business_workspace", "admin_console": "admin_console", "customer_portal": "consumer_portal", "unknown": ""} {
-		if got := runtimeEntrypointSurface(definitionmodel.EntryPointSchema{Config: map[string]any{"kind": kind}}); got != want {
-			t.Fatalf("kind=%s got=%s", kind, got)
-		}
 	}
 	if len(state.errs) == 0 {
 		t.Fatal("helper validation produced no errors")

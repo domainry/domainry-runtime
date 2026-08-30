@@ -4,11 +4,11 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-func agentDialogTrustedRuntimeContext(context agentmodel.GlobalAgentContext) map[string]any {
+func agentDialogTrustedRuntimeContext(context agentsdk.GlobalContext) map[string]any {
 	return map[string]any{
 		"contract_version": context.ContractVersion, "context_revision": context.ContextRevision,
 		"entrypoint_key": context.EntrypointKey, "agent_key": context.AgentKey, "surface": context.Surface, "route_key": context.RouteKey,
@@ -36,7 +36,7 @@ func agentDialogRuntimeContext(input map[string]any, principal principalmodel.Pr
 			out[key] = value
 		}
 	}
-	for _, key := range []string{"reports", "workflows", "workflow_executions", "integration_events"} {
+	for _, key := range []string{"reports", "workflows", "workflow_executions"} {
 		if value := agentDialogSafeValue(input[key], 3); value != nil {
 			out[key] = value
 		}

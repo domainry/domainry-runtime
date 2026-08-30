@@ -15,8 +15,6 @@ import (
 
 func TestCapabilityAuthoringSourcesAndInstanceRemainingConditions(t *testing.T) {
 	var nilService *CapabilityAuthoringApplicationService
-	nilService.UseRuleSetReferenceSource(nil)
-	nilService.UsePreferenceReferenceSource(nil)
 	nilService.UseIdentityReferenceSource(t.Context(), nil)
 	service := NewCapabilityAuthoringApplicationService(func(context.Context, principalmodel.Principal) capabilitycontract.CapabilityInstanceSchema {
 		return capabilitycontract.CapabilityInstanceSchema{Actions: []definitionmodel.ActionSchema{{Key: "empty"}, {Key: "allowed", RequiresPermission: "booking.approve"}}}
@@ -32,18 +30,6 @@ func TestCapabilityAuthoringSourcesAndInstanceRemainingConditions(t *testing.T) 
 		t.Fatal("projection source error ignored")
 	}
 	service.identityReferences = nil
-	service.UsePreferenceReferenceSource(func(context.Context, principalmodel.Principal) ([]string, error) {
-		return nil, errors.New("preference")
-	})
-	if _, err := service.Capabilities(t.Context(), principal); err == nil {
-		t.Fatal("preference reference error ignored")
-	}
-	service.preferenceReferences = nil
-	service.UseRuleSetReferenceSource(func(context.Context, principalmodel.Principal) ([]string, error) { return nil, errors.New("rule set") })
-	if _, err := service.Capabilities(t.Context(), principal); err == nil {
-		t.Fatal("rule set reference error ignored")
-	}
-	service.ruleSetReferences = nil
 	contract, err := service.Capabilities(t.Context(), principal)
 	if err != nil || len(contract.Instance.ActionKeys) != 2 {
 		t.Fatalf("contract=%+v err=%v", contract.Instance, err)

@@ -2,12 +2,15 @@ package composition
 
 import (
 	"context"
-	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	"sync"
+
+	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
@@ -21,9 +24,9 @@ import (
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	changeplanapplication "github.com/domainry/domainry-runtime/runtime/application/changeplan"
 	deploymentbusiness "github.com/domainry/domainry-runtime/runtime/application/deployment"
-	businessintegration "github.com/domainry/domainry-runtime/runtime/application/integration"
 	lifecycleapplication "github.com/domainry/domainry-runtime/runtime/application/lifecycle"
 	pipelineapplication "github.com/domainry/domainry-runtime/runtime/application/pipeline"
+	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	reportexportapplication "github.com/domainry/domainry-runtime/runtime/application/report/export/application"
@@ -34,7 +37,6 @@ import (
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	metadata "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
@@ -63,20 +65,19 @@ type runtimeAssembly struct {
 	actionProjectRevision             string
 	actionMetadataRevision            string
 	schema                            map[string]definitionmodel.ObjectSchema
-	views                             []definitionmodel.ViewSchema
 	actions                           map[string]definitionmodel.ActionSchema
 	workflows                         map[string]definitionmodel.WorkflowSchema
+	schedulerDefinitions              []map[string]any
 	automationRules                   map[string]automationmodel.AutomationRuleSchema
 	dictionaries                      []appschemamodel.DictionarySchema
 	integrations                      integrationmodel.IntegrationSchema
 	reports                           []reportmodel.ReportSchema
 	reportObjects                     map[string]struct{}
-	entrypoints                       []definitionmodel.EntryPointSchema
-	skills                            []agentmodel.SkillSchema
-	agents                            []agentmodel.AgentSchema
-	agentTasks                        []agentmodel.AgentTaskDefinition
-	agentEntrypoints                  []agentmodel.AgentEntrypointAssignment
-	agentServicePrincipals            []agentmodel.AgentServicePrincipalBinding
+	skills                            []agentsdk.SkillSchema
+	agents                            []agentsdk.AgentSchema
+	agentTasks                        []agentsdk.AgentTaskDefinition
+	agentEntrypoints                  []agentsdk.AgentEntrypointAssignment
+	agentServicePrincipals            []agentsdk.AgentServicePrincipalBinding
 	identityProfileExtensions         []profilebindingmodel.Binding
 	recordRepo                        recordrepository.RecordRepository
 	dataExchange                      dataexchange.Binding
@@ -104,17 +105,17 @@ type runtimeAssembly struct {
 	*actionruntime.ActionExecutionRuntime
 	internalMutations                   *recordapplication.RecordInternalMutationApplicationService
 	businessSystemService               *businesssystemapplication.BusinessSystemApplicationService
-	integrationService                  *businessintegration.IntegrationApplicationService
+	integrationService                  *publicationhandoff.Service
 	lifecycleService                    *lifecycleapplication.LifecycleApplicationService
 	integrationWorkerRepo               integrationrepository.IntegrationWorkerRepository
+	integrationPublicationWorkerRepo    integrationrepository.RuntimePublicationWorkerRepository
 	workerWakeups                       *workerplatform.WakeupBroker
 	integrationConfigRepo               integrationrepository.IntegrationConfigRepository
 	integrationEventRepo                integrationrepository.IntegrationEventRepository
+	integrationPublicationRepo          integrationrepository.RuntimePublicationRepository
 	integrationDeliveryRepo             integrationrepository.IntegrationDeliveryRepository
-	integrationNotificationCompiler     businessintegration.IntegrationNotificationCompiler
-	integrationNotificationPublisher    businessintegration.IntegrationNotificationPublisher
-	integrationCredentialNotifications  businessintegration.IntegrationCredentialNotificationCommitter
-	integrationCredentialExpirySource   businessintegration.IntegrationCredentialExpirySource
+	integrationOwnerDelivery            integrationsdk.Delivery
+	integrationOwnerCatalog             integrationsdk.Catalog
 	workflowWorkerRepo                  workflowcontract.WorkflowWorkerStore
 	workflowApplicationService          *workflowapplication.WorkflowApplicationService
 	applicationSchemaService            *appschemaapplication.ApplicationSchemaApplicationService
@@ -133,22 +134,20 @@ type runtimeAssembly struct {
 	applicationSchemaRepo               appschemarepository.ApplicationSchemaRepository
 	automationWorkerRepo                automationcontract.AutomationWorkerStore
 	automationExecutionRepo             automationrepository.AutomationExecutionRepository
-	businessChangePlanRepo              changeplanrepository.ChangePlanRepository
 	businessEvidenceRepo                changeplanrepository.ChangePlanEvidenceRepository
 	runtimeStatusRepo                   deploymentrepository.DeploymentRuntimeStatusRepository
 	identityDirectory                   identitysdk.Directory
 	actionAssuranceStore                actioncontract.ActionAssuranceStore
 	workflowProcesses                   *workflowapplication.WorkflowProcessEngine
-	connectorRegistry                   *businessintegration.ConnectorRegistry
+	connectorRegistry                   *runtimeConnectorCatalog
 	verifyFileClean                     func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
-	prepareOutboxPayload                businessintegration.OutboxPayloadPreparer
+	prepareOutboxPayload                publicationhandoff.PayloadPreparer
 	integrationPolicyStore              resilience.Store
 	apiKeyRateLimiter                   ratelimit.Limiter
 	dictionaryRuntime                   *metadata.ApplicationSchemaDictionaryDomainService
 	frontendCapabilities                *deploymentbusiness.DeploymentFrontendCapabilityApplicationService
 	authoringCapabilities               *capabilityapplication.CapabilityAuthoringApplicationService
 	businessReferences                  *changeplanapplication.ChangePlanReferenceApplicationService
-	businessChangePlans                 *changeplanapplication.ChangePlanApplicationService
 	reportSnapshotsService              *reportsnapshot.ReportSnapshotApplicationService
 	reportQueriesService                *reportquery.ReportQueryApplicationService
 	reportExportsService                *reportexportapplication.ReportExportApplicationService

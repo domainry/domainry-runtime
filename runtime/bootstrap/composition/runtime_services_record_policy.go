@@ -3,7 +3,6 @@ package composition
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
@@ -11,7 +10,6 @@ import (
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
-	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -21,11 +19,6 @@ import (
 )
 
 func newRecordQueryPolicyService(services *runtimeAssembly) *recordservice.RecordQueryPolicyDomainService {
-	views := func() []definitionmodel.ViewSchema {
-		services.mu.RLock()
-		defer services.mu.RUnlock()
-		return append([]definitionmodel.ViewSchema(nil), services.views...)
-	}
 	return recordservice.NewRecordQueryPolicyDomainService(recordservice.RecordQueryPolicyDependencies{
 		Objects: func() []definitionmodel.ObjectSchema {
 			return services.Schema().Objects
@@ -33,7 +26,6 @@ func newRecordQueryPolicyService(services *runtimeAssembly) *recordservice.Recor
 		Reports: func() []reportmodel.ReportSchema {
 			return services.Schema().Reports
 		},
-		Views: views,
 		CandidateScopeMatches: func(ctx context.Context, workspaceID string, candidate recordmodel.Record, expression recordmodel.RecordScopeExpression) (bool, error) {
 			evaluator, ok := services.recordRepo.(interface {
 				CandidateScopeMatches(context.Context, string, recordmodel.Record, recordmodel.RecordScopeExpression) (bool, error)
@@ -124,47 +116,12 @@ func newSchedulerOperationRuntimeAdapter(s *runtimeAssembly) schedulerOperationR
 	}
 }
 
-func activeApplicationDefinitionKeys(
-	ctx context.Context,
-	repository appschemarepository.ApplicationSchemaRepository,
-	resourceType string,
-	reason string,
-) ([]string, error) {
-	definitions, err := repository.ListDefinitions(
-		ctx,
-		principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, reason),
-		resourceType,
-	)
-	if err != nil {
-		return nil, err
-	}
-	keys := make([]string, 0, len(definitions))
-	for _, definition := range definitions {
-		if strings.TrimSpace(definition.DisabledAt) == "" {
-			keys = append(keys, strings.TrimSpace(definition.ResourceKey))
-		}
-	}
-	return keys, nil
-}
-
-func applicationDefinitionReferenceSource(
-	repository appschemarepository.ApplicationSchemaRepository,
-	resourceType string,
-	reason string,
-) func(context.Context, principalmodel.Principal) ([]string, error) {
-	return func(ctx context.Context, _ principalmodel.Principal) ([]string, error) {
-		return activeApplicationDefinitionKeys(ctx, repository, resourceType, reason)
-	}
-}
-
 func initializeWorkflowAutomationAndGovernance(s *runtimeAssembly, deps RuntimeServicesDependencies) {
 	schedulerRuntime := newSchedulerOperationRuntimeAdapter(s)
 	s.schedulerService = newSchedulerApplicationService(s, schedulerRuntime, s.recordRepo, s.auditApplicationService, s.workerDependencies)
 	s.recordTimerService = recordtimerapplication.NewRecordTimerApplicationService(s.schedulerService)
 	s.schedulerService.UseNotificationCompiler(s.workflowNotificationCompiler)
-	if s.applicationSchemaRepo != nil {
-		s.schedulerService.UseDefinitionSource(schedulerApplicationDefinitionSource{repository: s.applicationSchemaRepo})
-	}
+	s.schedulerService.UseDefinitionSource(schedulerApplicationDefinitionSource{authored: s.schedulerDefinitions})
 	s.workflowApplicationService = assembleWorkflowApplication(s)
 	if s.agentInteractiveRunService != nil && deps.AgentInteractiveRunner != nil {
 		s.newAgentInteractiveExecution = func(tools *agentapplication.AgentToolGateway) *agentapplication.AgentInteractiveExecutionApplicationService {
@@ -175,10 +132,6 @@ func initializeWorkflowAutomationAndGovernance(s *runtimeAssembly, deps RuntimeS
 		}
 	}
 	s.authoringCapabilities = newCapabilityAuthoringApplicationService(s)
-	if s.applicationSchemaRepo != nil {
-		s.authoringCapabilities.UsePreferenceReferenceSource(applicationDefinitionReferenceSource(s.applicationSchemaRepo, "preference", "discover preference references"))
-		s.authoringCapabilities.UseRuleSetReferenceSource(applicationDefinitionReferenceSource(s.applicationSchemaRepo, "rule_set", "discover rule set references"))
-	}
 	s.businessReferences = assembleChangePlanReferenceApplication(s, businessReferenceRuntimeAdapter{records: s, workflows: s.workflowApplicationService}, s.businessEvidenceRepo, s.frontendCapabilities)
 	s.applicationSchemaService = assembleApplicationSchema(s)
 	s.automationApplicationService = assembleAutomationApplication(s)

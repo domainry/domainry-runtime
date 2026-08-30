@@ -218,7 +218,7 @@ func TestRecordIdempotencyCrashWindowRollsBackBusinessWriteBeforeReceiptCompleti
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM crash_window_record WHERE id = ?`, record.ID).Scan(&businessCount); err != nil || businessCount != 0 {
 		t.Fatalf("business write escaped failed transaction: count=%d err=%v", businessCount, err)
 	}
-	for table, id := range map[string]string{"_audit_events": "crash-audit-1", "integration_outbox_messages": "crash-outbox-1", "_workflow_executions": "crash-workflow-1"} {
+	for table, id := range map[string]string{"_audit_events": "crash-audit-1", "runtime_publication_outbox": "crash-outbox-1", "_workflow_executions": "crash-workflow-1"} {
 		var count int
 		if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.Identifier(table)+" WHERE "+store.Identifier("id")+" = ?", id).Scan(&count); err != nil || count != 0 {
 			t.Fatalf("atomic side fact escaped failed transaction: %s/%s count=%d err=%v", table, id, count, err)

@@ -8,8 +8,8 @@ import (
 
 	auditsdk "github.com/domainry/domainry-audit-sdk"
 	sdkcontract "github.com/domainry/domainry-audit-sdk/contract"
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 type Appender struct{ binding auditsdk.Binding }

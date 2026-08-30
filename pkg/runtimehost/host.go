@@ -17,6 +17,8 @@ import (
 	"github.com/domainry/domainry-foundation/logging"
 	"github.com/domainry/domainry-foundation/telemetry"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	integrationmodule "github.com/domainry/domainry-integration/module"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
@@ -70,7 +72,7 @@ func (r bootstrapRuntimeProcess) RoutesForSurfaceGroup(group runtimehttp.Surface
 }
 
 func (r bootstrapRuntimeProcess) connectorGateway() runtimeConnectorGateway {
-	return bootstrap.ActionConnectorGateway(r.Runtime)
+	return unavailableRuntimeConnectorGateway{}
 }
 func (r bootstrapRuntimeProcess) partyOrganizationScopes() partysdk.OrganizationScopes {
 	return bootstrap.PartyOrganizationScopes(r.Runtime)
@@ -86,7 +88,7 @@ type serverRunDependencies struct {
 	stat                 func(string) (os.FileInfo, error)
 	readFile             func(string) ([]byte, error)
 	prepareDatabase      func(context.Context, config.Config) (*bootstrap.ProjectDatabase, error)
-	newRuntime           func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, partysdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, *bootstrap.ProjectDatabase) runtimeProcess
+	newRuntime           func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, partysdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, *bootstrap.ProjectDatabase) runtimeProcess
 	listenAndServe       func(*http.Server) error
 	shutdown             func(context.Context, *http.Server) error
 }
@@ -102,8 +104,8 @@ func defaultServerRunDependencies() serverRunDependencies {
 		stat:                 os.Stat,
 		readFile:             os.ReadFile,
 		prepareDatabase:      bootstrap.PrepareProjectDatabase,
-		newRuntime: func(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, monitoringFactory monitoringsdk.Factory, schedulerFactory schedulersdk.Factory, dataExchangeFactory dataexchangesdk.Factory, agentFactory agentsdk.Factory, database *bootstrap.ProjectDatabase) runtimeProcess {
-			return bootstrapRuntimeProcess{Runtime: bootstrap.NewVerifiedProjectWithOwnerFactoriesAndDatabase(ctx, cfg, handlers, connectors, identity, evidence, binding, notificationFactory, partyFactory, monitoringFactory, schedulerFactory, dataExchangeFactory, database, agentFactory)}
+		newRuntime: func(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, monitoringFactory monitoringsdk.Factory, schedulerFactory schedulersdk.Factory, dataExchangeFactory dataexchangesdk.Factory, agentFactory agentsdk.Factory, integrationFactory integrationsdk.Factory, database *bootstrap.ProjectDatabase) runtimeProcess {
+			return bootstrapRuntimeProcess{Runtime: bootstrap.NewVerifiedProjectWithTopologyFactoriesAndDatabase(ctx, cfg, handlers, connectors, identity, evidence, binding, notificationFactory, partyFactory, monitoringFactory, schedulerFactory, dataExchangeFactory, integrationFactory, database, agentFactory)}
 		},
 		listenAndServe: func(server *http.Server) error { return server.ListenAndServe() },
 		shutdown:       func(ctx context.Context, server *http.Server) error { return server.Shutdown(ctx) },
@@ -344,6 +346,12 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	if agentFactory == nil {
 		return fmt.Errorf("configure Agent factory: generated project composition did not supply an SDK Factory")
 	}
+	integrationFactory := options.IntegrationFactory
+	if integrationFactory == nil {
+		// Compatibility for existing generated projects; new compositions inject
+		// this explicitly so choosing SaaS never depends on Runtime configuration.
+		integrationFactory = integrationmodule.NewFactory()
+	}
 	for _, entry := range configSnapshot.StartupReport() {
 		zap.L().Info("Runtime configuration", zap.String("name", entry.Name), zap.String("source", entry.Source), zap.String("version", entry.Version), zap.Bool("redacted", entry.Redacted))
 	}
@@ -423,7 +431,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 			if manifest.SourceBlueprintID == provision.DirectAuthoringSourceID && len(manifest.Objects) == 0 {
 				runtimeConfig.AllowEmptyAuthoringManifest = true
 			}
-			runtime := dependencies.newRuntime(lifecycleCtx, runtimeConfig, businessHandlers, connectorProviders, releaseIdentity, artifactEvidence, identityBinding, notificationFactory, partyFactory, monitoringFactory, schedulerFactory, dataExchangeFactory, agentFactory, projectDatabase)
+			runtime := dependencies.newRuntime(lifecycleCtx, runtimeConfig, businessHandlers, connectorProviders, releaseIdentity, artifactEvidence, identityBinding, notificationFactory, partyFactory, monitoringFactory, schedulerFactory, dataExchangeFactory, agentFactory, integrationFactory, projectDatabase)
 			if runtime == nil {
 				return nil, errors.New("Runtime bootstrap returned no process")
 			}

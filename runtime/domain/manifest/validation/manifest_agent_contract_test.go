@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
@@ -17,7 +17,7 @@ func TestManifestAgentContractsAcceptCompletePublishedGraph(t *testing.T) {
 	}
 	for _, budget := range []string{"low", "standard", "high"} {
 		budgetState := &validationState{}
-		validateAgentExecutionLimits(budgetState, "agent.execution_limits", agentmodel.AgentExecutionLimits{CostBudget: budget})
+		validateAgentExecutionLimits(budgetState, "agent.execution_limits", agentsdk.AgentExecutionLimits{CostBudget: budget})
 		if len(budgetState.errs) != 0 {
 			t.Fatalf("valid cost budget %q rejected: %v", budget, budgetState.errs)
 		}
@@ -63,10 +63,10 @@ func TestManifestAgentContractsFailClosed(t *testing.T) {
 		{name: "unknown side effect", mutate: func(m *manifestmodel.ManifestSchema) { m.AgentTasks[0].SideEffectMode = "root" }, want: "unsupported mode"},
 		{name: "analysis action", mutate: func(m *manifestmodel.ManifestSchema) { m.AgentTasks[0].AllowedActions = []string{"invoice.approve"} }, want: "must be empty for analysis_only"},
 		{name: "proposal without action", mutate: func(m *manifestmodel.ManifestSchema) {
-			m.AgentTasks[0].SideEffectMode = agentmodel.AgentTaskSideEffectProposalOnly
+			m.AgentTasks[0].SideEffectMode = agentsdk.AgentTaskSideEffectProposalOnly
 		}, want: "must declare at least one Business Action"},
 		{name: "proposal without tool", mutate: func(m *manifestmodel.ManifestSchema) {
-			m.AgentTasks[0].SideEffectMode = agentmodel.AgentTaskSideEffectProposalOnly
+			m.AgentTasks[0].SideEffectMode = agentsdk.AgentTaskSideEffectProposalOnly
 			m.AgentTasks[0].AllowedActions = []string{"invoice.approve"}
 			m.Skills[0].AllowedTools = nil
 		}, want: "does not allow invoke_action"},
@@ -80,11 +80,9 @@ func TestManifestAgentContractsFailClosed(t *testing.T) {
 		{name: "unknown entrypoint agent", mutate: func(m *manifestmodel.ManifestSchema) { m.AgentEntrypoints[0].AgentKey = "missing" }, want: "references unknown agent"},
 		{name: "unknown surface", mutate: func(m *manifestmodel.ManifestSchema) { m.AgentEntrypoints[0].Surface = "root" }, want: "unknown product Surface"},
 		{name: "empty entrypoint permission", mutate: func(m *manifestmodel.ManifestSchema) { m.AgentEntrypoints[0].RequiredPermissions = nil }, want: "must declare at least one permission"},
-		{name: "unknown route", mutate: func(m *manifestmodel.ManifestSchema) { m.AgentEntrypoints[0].RoutePatterns = []string{"root.*"} }, want: "invalid or unknown route pattern"},
-		{name: "cross surface route", mutate: func(m *manifestmodel.ManifestSchema) { m.AgentEntrypoints[0].Surface = "consumer_portal" }, want: "belongs to Surface"},
 		{name: "unknown task target", mutate: func(m *manifestmodel.ManifestSchema) { m.AgentEntrypoints[0].AllowedTaskKeys = []string{"missing"} }, want: "unknown Agent Task"},
 		{name: "task target belongs to another agent", mutate: func(m *manifestmodel.ManifestSchema) {
-			m.Agents = append(m.Agents, agentmodel.AgentSchema{Key: "other", Version: "1.0.0", Name: "Other"})
+			m.Agents = append(m.Agents, agentsdk.AgentSchema{Key: "other", Version: "1.0.0", Name: "Other"})
 			m.AgentTasks[0].AgentKey = "other"
 		}, want: "not entrypoint Agent"},
 		{name: "disabled task target", mutate: func(m *manifestmodel.ManifestSchema) { m.AgentTasks[0].Enabled = false }, want: "disabled Agent Task"},
@@ -96,7 +94,6 @@ func TestManifestAgentContractsFailClosed(t *testing.T) {
 			duplicate.Key = "assistant.secondary"
 			m.AgentEntrypoints = append(m.AgentEntrypoints, duplicate)
 		}, want: "conflicts with default assignment"},
-		{name: "business entrypoint key conflict", mutate: func(m *manifestmodel.ManifestSchema) { m.AgentEntrypoints[0].Key = "workspace.home" }, want: "conflicts with business entrypoint"},
 		{name: "unknown context hint", mutate: func(m *manifestmodel.ManifestSchema) {
 			m.AgentEntrypoints[0].ContextContract.AllowedHintFields = []string{"principal"}
 		}, want: "unsupported context hint"},
@@ -142,35 +139,34 @@ func TestManifestAgentContractsFailClosed(t *testing.T) {
 
 func validAgentContractManifest() manifestmodel.ManifestSchema {
 	return manifestmodel.ManifestSchema{
-		Objects:     []definitionmodel.ObjectSchema{{Key: "customer"}, {Key: "invoice"}},
-		Actions:     []definitionmodel.ActionSchema{{Key: "invoice.approve"}},
-		EntryPoints: []definitionmodel.EntryPointSchema{{Key: "workspace.home", RequiredPermissions: []string{"workspace.use"}, Config: map[string]any{"kind": "backoffice"}}},
-		Skills: []agentmodel.SkillSchema{{
+		Objects: []definitionmodel.ObjectSchema{{Key: "customer"}, {Key: "invoice"}},
+		Actions: []definitionmodel.ActionSchema{{Key: "invoice.approve"}},
+		Skills: []agentsdk.SkillSchema{{
 			Key: "customer_reader", Version: "1.0.0", Name: "Customer reader",
 			AllowedTools: []string{"query_records", "invoke_action"}, AllowedObjects: []string{"customer"},
 		}},
-		Agents: []agentmodel.AgentSchema{{
+		Agents: []agentsdk.AgentSchema{{
 			Key: "customer_agent", Version: "1.0.0", Name: "Customer agent", SkillKeys: []string{"customer_reader"},
-			ExecutionLimits: agentmodel.AgentExecutionLimits{MaxSteps: 8, TimeoutSeconds: 60, MaxToolCalls: 4, MaxInputBytes: 4096, MaxOutputBytes: 4096},
+			ExecutionLimits: agentsdk.AgentExecutionLimits{MaxSteps: 8, TimeoutSeconds: 60, MaxToolCalls: 4, MaxInputBytes: 4096, MaxOutputBytes: 4096},
 		}},
-		AgentTasks: []agentmodel.AgentTaskDefinition{{
-			ContractVersion: agentmodel.AgentTaskContractVersion, Key: "customer.summarize", Version: "1.0.0", AgentKey: "customer_agent",
+		AgentTasks: []agentsdk.AgentTaskDefinition{{
+			ContractVersion: agentsdk.AgentTaskContractVersion, Key: "customer.summarize", Version: "1.0.0", AgentKey: "customer_agent",
 			Instruction: "Summarize a customer", InputSchema: map[string]any{"type": "object"}, OutputSchema: map[string]any{
 				"type": "object", "$defs": map[string]any{"summary": map[string]any{"type": "string"}},
 				"properties": map[string]any{"summary": map[string]any{"$ref": "#/$defs/summary"}, "record": map[string]any{"$ref": "domainry://objects/customer"}, "action": map[string]any{"$ref": "domainry://actions/invoice.approve"}},
 			},
-			AllowedObjects: []string{"customer"}, AllowedOutcomes: []string{"success", "error"}, SideEffectMode: agentmodel.AgentTaskSideEffectAnalysisOnly,
-			ExecutionLimits: agentmodel.AgentExecutionLimits{MaxSteps: 4, TimeoutSeconds: 30, MaxToolCalls: 2, MaxInputBytes: 2048, MaxOutputBytes: 2048}, Enabled: true,
+			AllowedObjects: []string{"customer"}, AllowedOutcomes: []string{"success", "error"}, SideEffectMode: agentsdk.AgentTaskSideEffectAnalysisOnly,
+			ExecutionLimits: agentsdk.AgentExecutionLimits{MaxSteps: 4, TimeoutSeconds: 30, MaxToolCalls: 2, MaxInputBytes: 2048, MaxOutputBytes: 2048}, Enabled: true,
 		}},
-		AgentServicePrincipals: []agentmodel.AgentServicePrincipalBinding{{
-			ContractVersion: agentmodel.AgentServicePrincipalContractVersion, Key: "customer_agent_service", UserID: "agent_customer_service", RoleKey: "agent_service", Enabled: true, RotationVersion: 1,
+		AgentServicePrincipals: []agentsdk.AgentServicePrincipalBinding{{
+			ContractVersion: agentsdk.AgentServicePrincipalContractVersion, Key: "customer_agent_service", UserID: "agent_customer_service", RoleKey: "agent_service", Enabled: true, RotationVersion: 1,
 		}},
-		AgentEntrypoints: []agentmodel.AgentEntrypointAssignment{{
-			ContractVersion: agentmodel.AgentEntrypointContractVersion, Key: "assistant.global", AgentKey: "customer_agent", Surface: "business_workspace",
+		AgentEntrypoints: []agentsdk.AgentEntrypointAssignment{{
+			ContractVersion: agentsdk.AgentEntrypointContractVersion, Key: "assistant.global", AgentKey: "customer_agent", Surface: "business_workspace",
 			DefaultForSurface: true, RequiredPermissions: []string{"agent.use"}, RoutePatterns: []string{"workspace.*"}, AllowedTaskKeys: []string{"customer.summarize"},
 			AllowedWorkflowKeys: []string{"customer.review"}, Enabled: true,
-			ContextContract: agentmodel.GlobalAgentContextContract{ContractVersion: agentmodel.GlobalAgentContextContractVersion, AllowedHintFields: []string{"route_key", "record_id"}, MaxSelectedRecord: 20, MaxContextBytes: 65536},
-			RoutingContract: agentmodel.AgentRoutingContract{ContractVersion: agentmodel.AgentRoutingContractVersion, AllowedRouteTypes: []string{agentmodel.AgentRouteInteractiveQuery, agentmodel.AgentRouteTask, agentmodel.AgentRouteWorkflow}},
+			ContextContract: agentsdk.GlobalAgentContextContract{ContractVersion: agentsdk.GlobalAgentContextContractVersion, AllowedHintFields: []string{"route_key", "record_id"}, MaxSelectedRecord: 20, MaxContextBytes: 65536},
+			RoutingContract: agentsdk.AgentRoutingContract{ContractVersion: agentsdk.AgentRoutingContractVersion, AllowedRouteTypes: []string{agentsdk.AgentRouteInteractiveQuery, agentsdk.AgentRouteTask, agentsdk.AgentRouteWorkflow}},
 		}},
 		Workflows: []definitionmodel.WorkflowSchema{{
 			Key: "customer.review", Enabled: true, TriggerContract: &definitionmodel.WorkflowTriggerContract{Type: "manual"},
@@ -178,7 +174,7 @@ func validAgentContractManifest() manifestmodel.ManifestSchema {
 				Nodes: []definitionmodel.WorkflowGraphNode{
 					{ID: "trigger", Type: "trigger"},
 					{ID: "summarize", Type: "agent_task", Contract: &definitionmodel.WorkflowNodeContract{AgentTask: &definitionmodel.WorkflowAgentTaskNodeContract{
-						TaskKey: "customer.summarize", TaskVersion: "1.0.0", Identity: definitionmodel.WorkflowAgentTaskIdentity{Mode: agentmodel.AgentTaskIdentityService, PrincipalKey: "customer_agent_service"},
+						TaskKey: "customer.summarize", TaskVersion: "1.0.0", Identity: definitionmodel.WorkflowAgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityService, PrincipalKey: "customer_agent_service"},
 						Input: map[string]any{"customer_id": "${record.id}"}, OutputVariable: "summary", ExecutionMode: "async", TimeoutSeconds: 30,
 						Retry: &definitionmodel.WorkflowRetryPolicy{MaxAttempts: 2}, OnError: "error_branch", AllowedObjects: []string{"customer"}, AllowedOutcomes: []string{"success", "error"},
 					}}},

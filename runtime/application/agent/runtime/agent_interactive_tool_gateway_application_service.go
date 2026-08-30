@@ -12,15 +12,16 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/telemetry"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 type AgentInteractiveToolInvocationRequest struct {
 	Run            agentmodel.AgentInteractiveRun
-	Route          AgentRouteResult
+	Route          agentsdk.RouteResult
 	IdempotencyKey string
 }
 
@@ -50,7 +51,7 @@ func (g *AgentToolGateway) InvokeInteractive(ctx context.Context, request AgentI
 		return result, err
 	}
 	tool := strings.TrimSpace(agentToolString(request.Route.Input, "tool"))
-	if request.Route.RouteType == agentmodel.AgentRouteProposal {
+	if request.Route.RouteType == agentsdk.AgentRouteProposal {
 		tool = AgentToolInvokeAction
 	}
 	if !agentContains(authorized.AllowedTools, tool) {
@@ -119,7 +120,7 @@ func (g *AgentToolGateway) InvokeInteractive(ctx context.Context, request AgentI
 		invocation.Status = "executed"
 	case AgentToolInvokeAction:
 		actionKey := strings.TrimSpace(request.Route.TargetKey)
-		if request.Route.RouteType != agentmodel.AgentRouteProposal || !agentContains(authorized.AllowedActions, actionKey) || strings.TrimSpace(request.IdempotencyKey) == "" {
+		if request.Route.RouteType != agentsdk.AgentRouteProposal || !agentContains(authorized.AllowedActions, actionKey) || strings.TrimSpace(request.IdempotencyKey) == "" {
 			return result, apperror.New(apperror.KindForbidden, "agent.tool.action_denied", nil, nil)
 		}
 		if g.dependencies.Proposals == nil {
@@ -133,7 +134,7 @@ func (g *AgentToolGateway) InvokeInteractive(ctx context.Context, request AgentI
 		proposal, err = g.dependencies.Proposals.CreateAgentActionProposal(ctx, AgentToolProposalRequest{
 			ActionKey: actionKey, ObjectKey: objectKey, RecordID: recordID, Input: agentToolMap(request.Route.Input["data"]), IdempotencyKey: request.IdempotencyKey,
 			InteractiveRunID: run.ID, SessionID: run.SessionID, EntrypointKey: run.EntrypointKey, Surface: run.Surface, RouteKey: run.RouteKey, ContextRevision: run.ContextRevision,
-			Principal: authorized.Principal, Identity: agentmodel.AgentExecutionIdentity{Mode: agentmodel.AgentTaskIdentityInherit, Initiator: run.Context.Principal, Execution: run.Context.Principal},
+			Principal: authorized.Principal, Identity: agentsdk.ExecutionIdentity{Mode: agentsdk.AgentTaskIdentityInherit, Initiator: run.Context.Principal, Execution: run.Context.Principal},
 		})
 		invocation.Proposal = proposal.Value
 		invocation.Status = "proposal_required"

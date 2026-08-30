@@ -2,20 +2,21 @@ package runtime
 
 import (
 	"context"
-	agentsdk "github.com/domainry/domainry-agent-sdk"
-	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	"sync"
 	"time"
+
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 
 	connector "github.com/domainry/domainry-connector-sdk"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
-	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -40,6 +41,7 @@ type Runtime struct {
 	identityBinding     identitysdk.Binding
 	identityDirectory   identitysdk.Directory
 	identityPrincipals  identitysdk.PrincipalResolver
+	integrationMode     integrationsdk.DeploymentMode
 	partyBinding        partysdk.Binding
 	dataExchangeBinding dataexchangesdk.Binding
 	manifest            manifestmodel.ManifestSchema
@@ -86,15 +88,6 @@ func (a *Runtime) replaceRuntimeReleaseLease(lease deploymentmodel.RuntimeReleas
 	a.releaseMu.Lock()
 	defer a.releaseMu.Unlock()
 	a.releaseLease = lease
-}
-
-// ActionConnectorGateway returns the internal synchronous Connector composition
-// port without expanding Runtime's process-level method surface.
-func ActionConnectorGateway(runtime *Runtime) *integrationapplication.ActionConnectorGateway {
-	if runtime == nil || runtime.records == nil {
-		return integrationapplication.NewActionConnectorGateway(nil)
-	}
-	return integrationapplication.NewActionConnectorGateway(runtime.records.Applications().Integrations)
 }
 
 // PartyOrganizationScopes exposes only the Party-owned fact projection needed

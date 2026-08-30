@@ -47,24 +47,18 @@ type AutomationWorkflowRunner interface {
 	RunAutomationWorkflow(context.Context, string, map[string]any, principalmodel.Principal) (workflowmodel.WorkflowRunResult, error)
 }
 
-type AutomationApplicationDefinitionPort interface {
-	ListApplicationDefinitionVersions(context.Context, string, string, principalmodel.Principal) ([]appschemamodel.ApplicationDefinitionVersion, error)
-}
-
 type AutomationApplicationDependencies struct {
 	Rules                 automationcontract.AutomationRuleRegistry
 	Connectors            AutomationConnectorCatalog
 	RecordRepository      recordrepository.RecordRepository
 	WorkerStore           automationcontract.AutomationWorkerStore
 	ExecutionRepository   automationrepository.AutomationExecutionRepository
-	DeliveryRepository    integrationrepository.IntegrationDeliveryRepository
-	ConfigRepository      integrationrepository.IntegrationConfigRepository
+	DeliveryRepository    integrationrepository.RuntimePublicationRepository
 	Audit                 func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
 	Principal             func(context.Context, string, string, string) principalmodel.Principal
 	Schema                func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
 	InvokeAction          func(context.Context, actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error)
 	Workflows             AutomationWorkflowRunner
-	Metadata              AutomationApplicationDefinitionPort
 	CanAccess             func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool
 	ValidateRule          func(context.Context, automationmodel.AutomationRuleSchema) error
 	AuthoringProjection   func() capability.CapabilityAuthoringProjection
@@ -88,14 +82,12 @@ type AutomationApplicationService struct {
 	recordRepo          recordrepository.RecordRepository
 	workerRepo          automationcontract.AutomationWorkerStore
 	executionRepo       automationrepository.AutomationExecutionRepository
-	deliveryRepo        integrationrepository.IntegrationDeliveryRepository
-	configRepo          integrationrepository.IntegrationConfigRepository
+	deliveryRepo        integrationrepository.RuntimePublicationRepository
 	audit               func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
 	principal           func(context.Context, string, string, string) principalmodel.Principal
 	schema              func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
 	invokeAction        func(context.Context, actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error)
 	workflows           AutomationWorkflowRunner
-	metadata            AutomationApplicationDefinitionPort
 	canAccess           func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool
 	validateRule        func(context.Context, automationmodel.AutomationRuleSchema) error
 	management          *AutomationManagementApplicationService
@@ -109,19 +101,18 @@ func NewAutomationApplicationService(dependencies AutomationApplicationDependenc
 	service := &AutomationApplicationService{
 		rules: dependencies.Rules, connectors: dependencies.Connectors,
 		recordRepo: dependencies.RecordRepository, workerRepo: dependencies.WorkerStore, executionRepo: dependencies.ExecutionRepository,
-		deliveryRepo: dependencies.DeliveryRepository, configRepo: dependencies.ConfigRepository,
-		audit: dependencies.Audit, principal: dependencies.Principal, schema: dependencies.Schema,
-		invokeAction: dependencies.InvokeAction, workflows: dependencies.Workflows, metadata: dependencies.Metadata,
+		deliveryRepo: dependencies.DeliveryRepository,
+		audit:        dependencies.Audit, principal: dependencies.Principal, schema: dependencies.Schema,
+		invokeAction: dependencies.InvokeAction, workflows: dependencies.Workflows,
 		canAccess: dependencies.CanAccess, validateRule: dependencies.ValidateRule,
 		worker: dependencies.Worker, compileNotification: dependencies.NotificationCompiler, commitNotification: dependencies.NotificationCommitter,
 	}
 	service.management = NewAutomationManagementApplicationService(AutomationManagementDependencies{
 		Rules: service.rules, Executions: service.executionRepo,
 		ListInvocations: func(ctx context.Context, workspaceID string, filter automationmodel.AutomationExecutionFilter) ([]integrationmodel.IntegrationInvocation, error) {
-			if service.deliveryRepo == nil {
-				return []integrationmodel.IntegrationInvocation{}, nil
-			}
-			return service.deliveryRepo.ListInvocations(ctx, workspaceID, filter.ConnectorKey, "", "", "", 500)
+			// Provider invocation evidence is owned by Integration and is not
+			// mirrored into Runtime automation state.
+			return []integrationmodel.IntegrationInvocation{}, nil
 		},
 		ListOutbox: func(ctx context.Context, workspaceID string) ([]integrationmodel.IntegrationOutboxMessage, error) {
 			if service.deliveryRepo == nil {
@@ -130,10 +121,9 @@ func NewAutomationApplicationService(dependencies AutomationApplicationDependenc
 			return service.deliveryRepo.ListOutbox(ctx, workspaceID, "__automation__", "", 500)
 		},
 		ListConnections: func(ctx context.Context, workspaceID string) ([]integrationmodel.IntegrationConnection, error) {
-			if service.configRepo == nil {
-				return []integrationmodel.IntegrationConnection{}, nil
-			}
-			return service.configRepo.ListConnections(ctx, workspaceID)
+			// Connection state is owned by Integration Module/SaaS and is not
+			// mirrored into Runtime automation projections.
+			return []integrationmodel.IntegrationConnection{}, nil
 		},
 		Connectors: func(ctx context.Context, principal principalmodel.Principal) []integrationmodel.ConnectorSchema {
 			return service.schema(ctx, principal).Integrations.Connectors
@@ -295,10 +285,6 @@ func (s *AutomationApplicationService) ValidateAutomationAuthoringFragment(_ con
 		result.Errors = []automationvalidation.AutomationValidationIssue{issue}
 	}
 	return result, nil
-}
-
-func (s *AutomationApplicationService) AutomationRuleVersions(ctx context.Context, ruleKey string, principal principalmodel.Principal) ([]appschemamodel.ApplicationDefinitionVersion, error) {
-	return s.metadata.ListApplicationDefinitionVersions(ctx, "automation_rule", strings.TrimSpace(ruleKey), principal)
 }
 
 func (s *AutomationApplicationService) SimulateAutomationRule(ctx context.Context, ruleKey string, request automationcontract.AutomationSimulationRequest, principal principalmodel.Principal) (automationprojection.AutomationSimulationResult, error) {

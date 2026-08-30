@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -22,7 +23,7 @@ type AgentTaskDispatchRequest struct {
 	ManifestHash           string
 	TaskKey                string
 	TaskVersion            string
-	Identity               agentmodel.AgentTaskIdentity
+	Identity               agentsdk.AgentTaskIdentity
 	Input                  map[string]any
 	AllowedObjects         []string
 	AllowedActions         []string
@@ -36,7 +37,7 @@ type AgentTaskDispatchRequest struct {
 type AgentInteractiveTaskDispatchRequest struct {
 	RunID, InteractiveRunID, WorkspaceID, TaskKey, TaskVersion string
 	IdempotencyKey, ManifestHash, CorrelationID                string
-	Identity                                                   agentmodel.AgentTaskIdentity
+	Identity                                                   agentsdk.AgentTaskIdentity
 	Input                                                      map[string]any
 	AllowedObjects, AllowedActions, AllowedOutcomes            []string
 	TimeoutSeconds, MaxAttempts                                int

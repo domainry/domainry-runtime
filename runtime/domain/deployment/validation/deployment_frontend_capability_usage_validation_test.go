@@ -16,7 +16,7 @@ func TestValidateFrontendCapabilityManifestValidNormalizationAndWarnings(t *test
 		DeploymentEvidence:      &deploymentmodel.FrontendDeploymentEvidence{AuditContractVersion: "audit-v1", DesignContractHash: hash, RouteRegistryHash: hash, FrontendSourceHash: hash, AuditArtifactHash: hash},
 		Entries: []deploymentmodel.FrontendCapabilitySupportEntry{{
 			SupportKey: " customer.list ", CapabilityKeys: []string{" customer.read ", "customer.write"}, Route: "/customers", RequiredPermissions: []string{" customer.read ", "customer.write"},
-			FeatureModule: "src/customers", AcceptanceTests: []string{"tests/write.spec.ts", " tests/read.spec.ts "}, ActorRoles: []string{"sales"}, BusinessObjects: []string{"customer"}, ViewKeys: []string{"customer.list"}, ImplementedActions: []string{"customer.create"}, ReportKeys: []string{"customer.pipeline"}, FieldKeys: []string{"customer.name"}, AcceptanceClaims: []string{"list-visible"},
+			FeatureModule: "src/customers", AcceptanceTests: []string{"tests/write.spec.ts", " tests/read.spec.ts "}, ActorRoles: []string{"sales"}, BusinessObjects: []string{"customer"}, ImplementedActions: []string{"customer.create"}, ReportKeys: []string{"customer.pipeline"}, FieldKeys: []string{"customer.name"}, AcceptanceClaims: []string{"list-visible"},
 		}},
 	}
 	definitions := func() []deploymentmodel.FrontendCapabilityDefinition {
@@ -86,7 +86,7 @@ func TestFrontendEntryRouteEvidenceCapabilitiesAndPermissions(t *testing.T) {
 func TestFrontendBusinessBindingValidationAndSmallHelpers(t *testing.T) {
 	validator := frontendCapabilityUsageValidator{}
 	entry := deploymentmodel.FrontendCapabilitySupportEntry{
-		SupportKey: "support", ActorRoles: []string{"", "sales", "sales", "bad role"}, BusinessObjects: []string{" customer "}, ViewKeys: []string{"customer.list"}, ImplementedActions: []string{"customer.create"}, ReportKeys: []string{"customer.report"},
+		SupportKey: "support", ActorRoles: []string{"", "sales", "sales", "bad role"}, BusinessObjects: []string{" customer "}, ImplementedActions: []string{"customer.create"}, ReportKeys: []string{"customer.report"},
 		FieldKeys: []string{"", "customer", ".name", "customer.", "customer.name", "customer.name"}, AcceptanceClaims: []string{"claim"},
 	}
 	validator.validateEntryBusinessBindings("entry", &entry)
@@ -95,7 +95,7 @@ func TestFrontendBusinessBindingValidationAndSmallHelpers(t *testing.T) {
 		t.Fatal("manifest business binding detection")
 	}
 	for _, entry := range []deploymentmodel.FrontendCapabilitySupportEntry{
-		{ActorRoles: []string{"x"}}, {BusinessObjects: []string{"x"}}, {ViewKeys: []string{"x"}}, {ImplementedActions: []string{"x"}}, {ReportKeys: []string{"x"}}, {FieldKeys: []string{"x"}}, {AcceptanceClaims: []string{"x"}}, {},
+		{ActorRoles: []string{"x"}}, {BusinessObjects: []string{"x"}}, {ImplementedActions: []string{"x"}}, {ReportKeys: []string{"x"}}, {FieldKeys: []string{"x"}}, {AcceptanceClaims: []string{"x"}}, {},
 	} {
 		_ = frontendCapabilityHasBusinessBindings(entry)
 	}

@@ -6,13 +6,15 @@ Owner：模型/provider 执行、协议适配、provider run、模型路由与�
 
 ## 边界与模式
 
-Runtime 继续拥有 `agent_task_runs`、`agent_interactive_runs`、workflow 推进、workspace/principal 授权、proposal/approval、tool gateway、Runtime claim/lease/fencing、重试、DLQ 和人工 reconciliation。`domainry-agent` 只执行已授权的 Agent 请求，并返回 provider run identity、标准化结果、错误分类和 usage；provider 完成不等于 Runtime workflow 已提交。
+`domainry-agent` 拥有 Agent/Skill/Task 定义，以及 `agent_runtime_state`、`agent_task_runs`、`agent_interactive_runs`、`agent_worker_scopes` 的聚合、Repository、DDL 和 DML。Agent/Skill/Task/Context/Routing/Runner 公共合同以 `domainry-agent-sdk` 为唯一源码。Runtime 只保留 workflow 推进、workspace/principal 授权、proposal/approval、tool gateway、宿主事务编排和业务 terminal commit；provider 完成不等于 Runtime workflow 已提交。
 
 项目组合根通过 `runtimehost.Options.AgentFactory` 选择拓扑。Module Factory 在 Runtime 进程内打开 Binding；SaaS Factory 返回远程 Binding。Runtime 对 nil Binding、未知 mode 和协议不匹配 fail closed，Agent Provider 的地址、凭据和协议配置全部归 `domainry-agent` 所有。
 
 ## 公共合同
 
 - SDK：`domainry-agent-sdk/sdk.go`
+- 定义合同：`domainry-agent-sdk/definitions.go`
+- Agent 自身定义校验：`domainry-agent/definition/validation.go`
 - 协议：`domainry-agent-protocol-v1`
 - 能力：`task.start`、`task.poll`、`task.cancel`、`interactive.run`、`structured_output`、`usage`、`tool_callback`
 - Runtime 业务 adapter：`runtime/bootstrap/runtime/agent_sdk_binding.go`
@@ -20,15 +22,15 @@ Runtime 继续拥有 `agent_task_runs`、`agent_interactive_runs`、workflow 推
 
 ## 数据、事务与 worker
 
-- Module 第一阶段无自有数据库，因此不申请 migration；若以后持久化 provider execution，必须通过 Runtime migration registrar 写入唯一 `_schema_migrations` ledger。
-- SaaS provider execution 数据归 Agent SaaS；不得访问 Runtime 数据库。
-- Runtime task run 与 provider run 通过稳定 idempotency key 和 `external_run_id` 关联；不共享数据库事务。
-- Runtime worker 继续负责业务 task claim、lease、heartbeat、retry、DLQ 和 workflow terminal commit；Agent 只负责 provider execution。
+- Module 借用宿主数据库、事务、SQL 方言、迁移锁和唯一 `_schema_migrations`；Agent Factory 以 owner `agent` 向宿主 migration registrar 提交 source-owned migration，不创建私有 ledger。
+- SaaS 在独立 Agent 数据库应用同一套 Agent migration；不得访问 Runtime 数据库。
+- Module 下 Agent task mutation 参加宿主 workflow 事务；SaaS 下宿主事务只写 Agent SaaS adapter 的 durable outbox，提交后 relay 以幂等 mutation 写入远端 Agent 数据库，回滚不发布。
+- Agent Repository 负责 task claim、lease、heartbeat、retry、interactive run 和运行状态；Runtime worker 负责何时调度、授权、业务副作用与 workflow terminal commit。
 - 不确定 Start 结果必须先 Poll/reconcile，不得直接创建第二个 provider run；Cancel 必须幂等。
 
 ## Tool 与安全边界
 
-Agent 只能携带 Runtime 签发的短期 `execution_credential` 调用 Runtime Agent Tool Gateway。Agent SDK/实现不能取得 Runtime service container、repository、数据库或内部授权对象；tool 的授权、risk policy、proposal 和 audit 仍由 Runtime 完成。
+Agent 只能携带 Runtime 签发的短期 `execution_credential` 调用 Runtime Agent Tool Gateway。Agent SDK/实现不能取得 Runtime service container 或内部授权对象；Module 只能通过窄化 Host 接口取得借用的数据库、方言和 migration registrar。tool 的授权、risk policy、proposal 和 audit 仍由 Runtime 完成。
 
 ## 代码接入
 
@@ -50,3 +52,5 @@ Agent 只能携带 Runtime 签发的短期 `execution_credential` 调用 Runtime
 - `domainry-agent/remote` 通过真实 HTTP test server 验证 Descriptor 握手、鉴权、幂等键和 task 协议。
 - Runtime 的 Module-only/SaaS-only 外部项目编译测试均包含 `domainry-agent` 依赖闭包。
 - Runtime 旧 `runtime/infrastructure/agentrunner/http` provider adapter 与隐式 runner 选择已删除。
+- Runtime 边界测试禁止重新声明 SDK 公共 Agent 合同；Runtime 业务代码直接引用 SDK 类型，不保留 alias 兼容层。
+- Runtime 边界测试禁止重新声明 Agent-owned 表、聚合、Repository 和 DDL；定义同步通过 SDK `DefinitionRepository` 完成。

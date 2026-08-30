@@ -15,6 +15,7 @@ import (
 	"github.com/domainry/domainry-foundation/secrets"
 	"github.com/domainry/domainry-foundation/telemetry"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
+	metadatarepository "github.com/domainry/domainry-metadata-sdk/repository"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
 	ormbuilder "github.com/domainry/domainry-orm/builder"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/base"
@@ -54,6 +55,14 @@ type RuntimeStore struct {
 	schemaAssembler      runtimeSchemaAssembler
 	backupChecksum       func(string) (string, error)
 	migrationReadDir     func(string) ([]os.DirEntry, error)
+	metadataDefinitions  metadatarepository.DefinitionRepository
+}
+
+func (s *RuntimeStore) MetadataDefinitions() metadatarepository.DefinitionRepository {
+	if s == nil {
+		return nil
+	}
+	return s.metadataDefinitions
 }
 
 type NotificationSaaSPublicationScope struct {

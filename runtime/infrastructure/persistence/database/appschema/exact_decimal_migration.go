@@ -466,7 +466,7 @@ func (r ApplicationSchemaStore) recordExactDecimalEvidence(ctx context.Context, 
 	identity := metadataExactDecimalMigrationContract + "|" + table + "|" + strings.Join(keys, ",") + "|" + strings.Join(toTypes, ",")
 	idHash := sha256.Sum256([]byte(identity))
 	id := hex.EncodeToString(idHash[:])
-	query := "INSERT INTO " + r.store.TableIdentifier("metadata_exact_decimal_migrations") + " (" + quotedMetadataIdentifiers(r.store, []string{"id", "contract_version", "object_key", "column_keys", "from_types", "to_types", "row_count", "before_hash", "after_hash", "applied_at"}) + ") VALUES (" + strings.Join(placeholders(r.store, 10), ", ") + ")"
+	query := "INSERT INTO " + r.store.TableIdentifier("application_schema_exact_decimal_migrations") + " (" + quotedMetadataIdentifiers(r.store, []string{"id", "contract_version", "object_key", "column_keys", "from_types", "to_types", "row_count", "before_hash", "after_hash", "applied_at"}) + ") VALUES (" + strings.Join(placeholders(r.store, 10), ", ") + ")"
 	if _, err := executor.ExecContext(ctx, query, id, metadataExactDecimalMigrationContract, table, strings.Join(keys, ","), strings.Join(fromTypes, ","), strings.Join(toTypes, ","), rowCount, beforeHash, afterHash, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 		return fmt.Errorf("record exact decimal migration evidence for %s: %w", table, err)
 	}

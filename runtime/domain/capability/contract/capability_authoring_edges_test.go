@@ -23,7 +23,7 @@ func TestRuntimeAuthoringErrorContractMappings(t *testing.T) {
 		"backend.scheduler.invalid":                                 "scheduler.business_job",
 		"backend.report.invalid":                                    "report.definition",
 		"backend.frontend.invalid":                                  "maintenance.frontend_support_observation",
-		"backend.change_plan.invalid":                               "maintenance.change_plan_validation",
+		"backend.change_plan.invalid":                               "",
 		"backend.integration.binding.invalid":                       "integration.binding_validation",
 		"backend.integration.connector.operation_invalid":           "integration.connector_operation",
 		"backend.integration.connector.protocol_field_invalid":      "integration.connector_operation",

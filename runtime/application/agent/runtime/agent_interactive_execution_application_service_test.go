@@ -6,14 +6,15 @@ import (
 	"testing"
 	"time"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-type interactiveAgentRunnerFunc func(context.Context, InteractiveAgentRunRequest) (InteractiveAgentResult, error)
+type interactiveAgentRunnerFunc func(context.Context, agentsdk.InteractiveRequest) (agentsdk.InteractiveResult, error)
 
-func (fn interactiveAgentRunnerFunc) Run(ctx context.Context, request InteractiveAgentRunRequest) (InteractiveAgentResult, error) {
+func (fn interactiveAgentRunnerFunc) Run(ctx context.Context, request agentsdk.InteractiveRequest) (agentsdk.InteractiveResult, error) {
 	return fn(ctx, request)
 }
 
@@ -28,7 +29,7 @@ func (s *interactiveWorkflowStarterStub) StartInteractiveAgentWorkflow(_ context
 	return "process-1", s.err
 }
 
-func interactiveExecutionFixture(t *testing.T) (*AgentAuthorizationApplicationService, principalmodel.Principal, agentmodel.GlobalAgentContext, *agentInteractiveRunRepositoryStub) {
+func interactiveExecutionFixture(t *testing.T) (*AgentAuthorizationApplicationService, principalmodel.Principal, agentsdk.GlobalContext, *agentInteractiveRunRepositoryStub) {
 	t.Helper()
 	authorization, principal, _, _ := agentAuthorizationFixture()
 	principal.SurfaceKey = "business_workspace"
@@ -43,11 +44,11 @@ func TestInteractiveExecutionHandsOffTaskWithoutHoldingRequestOpen(t *testing.T)
 	authorization, principal, trusted, repository := interactiveExecutionFixture(t)
 	runs := NewAgentInteractiveRunApplicationService(repository, agentTaskClock{now: time.Date(2026, 8, 4, 16, 0, 0, 0, time.UTC)}, agentCredentialIDStub{})
 	dispatch := NewAgentTaskDispatchApplicationService(authorization, agentTaskClock{now: time.Date(2026, 8, 4, 16, 0, 0, 0, time.UTC)}, agentCredentialIDStub{})
-	runner := interactiveAgentRunnerFunc(func(_ context.Context, request InteractiveAgentRunRequest) (InteractiveAgentResult, error) {
+	runner := interactiveAgentRunnerFunc(func(_ context.Context, request agentsdk.InteractiveRequest) (agentsdk.InteractiveResult, error) {
 		if len(request.Candidates) != 2 || request.Context.ContextRevision != trusted.ContextRevision || request.Deadline.IsZero() {
 			t.Fatalf("runner request=%#v", request)
 		}
-		return InteractiveAgentResult{Route: &AgentRouteResult{RouteType: agentmodel.AgentRouteTask, TargetKey: "customer.review", TargetVersion: "1.0.0", Input: map[string]any{"record_id": "customer-1"}, IdempotencyKey: "handoff-1"}}, nil
+		return agentsdk.InteractiveResult{Route: &agentsdk.RouteResult{RouteType: agentsdk.AgentRouteTask, TargetKey: "customer.review", TargetVersion: "1.0.0", Input: map[string]any{"record_id": "customer-1"}, IdempotencyKey: "handoff-1"}}, nil
 	})
 	service := NewAgentInteractiveExecutionApplicationService(AgentInteractiveExecutionDependencies{Runs: runs, Authorize: authorization, Runner: runner, Dispatch: dispatch})
 	result, err := service.Execute(t.Context(), AgentInteractiveExecutionRequest{SessionID: "session-1", IdempotencyKey: "message-1", Message: "review customer", Context: trusted, Principal: principal})
@@ -60,8 +61,8 @@ func TestInteractiveExecutionStartsOnlyAuthorizedWorkflowAndPersistsLink(t *test
 	authorization, principal, trusted, repository := interactiveExecutionFixture(t)
 	runs := NewAgentInteractiveRunApplicationService(repository, agentTaskClock{now: time.Now()}, agentCredentialIDStub{})
 	workflows := &interactiveWorkflowStarterStub{}
-	runner := interactiveAgentRunnerFunc(func(context.Context, InteractiveAgentRunRequest) (InteractiveAgentResult, error) {
-		return InteractiveAgentResult{Route: &AgentRouteResult{RouteType: agentmodel.AgentRouteWorkflow, TargetKey: "customer.flow", Input: map[string]any{"record_id": "customer-1"}, IdempotencyKey: "workflow-1"}}, nil
+	runner := interactiveAgentRunnerFunc(func(context.Context, agentsdk.InteractiveRequest) (agentsdk.InteractiveResult, error) {
+		return agentsdk.InteractiveResult{Route: &agentsdk.RouteResult{RouteType: agentsdk.AgentRouteWorkflow, TargetKey: "customer.flow", Input: map[string]any{"record_id": "customer-1"}, IdempotencyKey: "workflow-1"}}, nil
 	})
 	service := NewAgentInteractiveExecutionApplicationService(AgentInteractiveExecutionDependencies{Runs: runs, Authorize: authorization, Runner: runner, Workflows: workflows})
 	result, err := service.Execute(t.Context(), AgentInteractiveExecutionRequest{SessionID: "session-1", IdempotencyKey: "message-1", Message: "start workflow", Context: trusted, Principal: principal})
@@ -72,11 +73,11 @@ func TestInteractiveExecutionStartsOnlyAuthorizedWorkflowAndPersistsLink(t *test
 
 func TestInteractiveExecutionRejectsForgedRouteAndClassifiesTimeout(t *testing.T) {
 	for name, runner := range map[string]interactiveAgentRunnerFunc{
-		"forged route": func(context.Context, InteractiveAgentRunRequest) (InteractiveAgentResult, error) {
-			return InteractiveAgentResult{Route: &AgentRouteResult{RouteType: agentmodel.AgentRouteTask, TargetKey: "forged", TargetVersion: "v1", IdempotencyKey: "one"}}, nil
+		"forged route": func(context.Context, agentsdk.InteractiveRequest) (agentsdk.InteractiveResult, error) {
+			return agentsdk.InteractiveResult{Route: &agentsdk.RouteResult{RouteType: agentsdk.AgentRouteTask, TargetKey: "forged", TargetVersion: "v1", IdempotencyKey: "one"}}, nil
 		},
-		"timeout": func(context.Context, InteractiveAgentRunRequest) (InteractiveAgentResult, error) {
-			return InteractiveAgentResult{}, context.DeadlineExceeded
+		"timeout": func(context.Context, agentsdk.InteractiveRequest) (agentsdk.InteractiveResult, error) {
+			return agentsdk.InteractiveResult{}, context.DeadlineExceeded
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -100,8 +101,8 @@ func TestInteractiveExecutionRejectsForgedRouteAndClassifiesTimeout(t *testing.T
 func TestInteractiveExecutionDependencyRequestAuthorizationAndCreateBoundaries(t *testing.T) {
 	authorization, principal, trusted, repository := interactiveExecutionFixture(t)
 	runs := NewAgentInteractiveRunApplicationService(repository, nil, nil)
-	runner := interactiveAgentRunnerFunc(func(context.Context, InteractiveAgentRunRequest) (InteractiveAgentResult, error) {
-		return InteractiveAgentResult{}, nil
+	runner := interactiveAgentRunnerFunc(func(context.Context, agentsdk.InteractiveRequest) (agentsdk.InteractiveResult, error) {
+		return agentsdk.InteractiveResult{}, nil
 	})
 	for name, service := range map[string]*AgentInteractiveExecutionApplicationService{
 		"nil":       nil,
@@ -134,7 +135,7 @@ func TestInteractiveExecutionDependencyRequestAuthorizationAndCreateBoundaries(t
 }
 
 func TestInteractiveExecutionReplayTimeoutCompletionAndRouteNilBoundaries(t *testing.T) {
-	requestFor := func(principal principalmodel.Principal, trusted agentmodel.GlobalAgentContext) AgentInteractiveExecutionRequest {
+	requestFor := func(principal principalmodel.Principal, trusted agentsdk.GlobalContext) AgentInteractiveExecutionRequest {
 		return AgentInteractiveExecutionRequest{SessionID: "session", IdempotencyKey: "key", Message: " message ", Context: trusted, Principal: principal}
 	}
 	t.Run("replayed running resumes", func(t *testing.T) {
@@ -142,9 +143,9 @@ func TestInteractiveExecutionReplayTimeoutCompletionAndRouteNilBoundaries(t *tes
 		repository.replayed, repository.preserveRunOnCreate = true, true
 		repository.run = agentmodel.AgentInteractiveRun{ID: "existing", WorkspaceID: principal.WorkspaceID, SessionID: "session", UserID: principal.UserID, RoleKey: principal.RoleKey, Status: agentmodel.AgentInteractiveRunRunning, Context: trusted, ContextRevision: trusted.ContextRevision, Revision: 1}
 		called := false
-		service := NewAgentInteractiveExecutionApplicationService(AgentInteractiveExecutionDependencies{Runs: NewAgentInteractiveRunApplicationService(repository, nil, nil), Authorize: authorization, Runner: interactiveAgentRunnerFunc(func(context.Context, InteractiveAgentRunRequest) (InteractiveAgentResult, error) {
+		service := NewAgentInteractiveExecutionApplicationService(AgentInteractiveExecutionDependencies{Runs: NewAgentInteractiveRunApplicationService(repository, nil, nil), Authorize: authorization, Runner: interactiveAgentRunnerFunc(func(context.Context, agentsdk.InteractiveRequest) (agentsdk.InteractiveResult, error) {
 			called = true
-			return InteractiveAgentResult{}, nil
+			return agentsdk.InteractiveResult{}, nil
 		})})
 		if _, err := service.Execute(t.Context(), requestFor(principal, trusted)); err != nil || !called {
 			t.Fatalf("called=%v err=%v", called, err)
@@ -152,8 +153,8 @@ func TestInteractiveExecutionReplayTimeoutCompletionAndRouteNilBoundaries(t *tes
 	})
 	t.Run("immediate provider error", func(t *testing.T) {
 		authorization, principal, trusted, repository := interactiveExecutionFixture(t)
-		service := NewAgentInteractiveExecutionApplicationService(AgentInteractiveExecutionDependencies{Runs: NewAgentInteractiveRunApplicationService(repository, nil, nil), Authorize: authorization, Runner: interactiveAgentRunnerFunc(func(context.Context, InteractiveAgentRunRequest) (InteractiveAgentResult, error) {
-			return InteractiveAgentResult{}, errors.New("provider")
+		service := NewAgentInteractiveExecutionApplicationService(AgentInteractiveExecutionDependencies{Runs: NewAgentInteractiveRunApplicationService(repository, nil, nil), Authorize: authorization, Runner: interactiveAgentRunnerFunc(func(context.Context, agentsdk.InteractiveRequest) (agentsdk.InteractiveResult, error) {
+			return agentsdk.InteractiveResult{}, errors.New("provider")
 		})})
 		if _, err := service.Execute(t.Context(), requestFor(principal, trusted)); err == nil {
 			t.Fatal("expected provider error")
@@ -163,10 +164,10 @@ func TestInteractiveExecutionReplayTimeoutCompletionAndRouteNilBoundaries(t *tes
 		authorization, principal, trusted, repository := interactiveExecutionFixture(t)
 		repository.replayed = true
 		repository.preserveRunOnCreate = true
-		repository.run = agentmodel.AgentInteractiveRun{ID: "existing", WorkspaceID: principal.WorkspaceID, Status: status, StructuredResult: map[string]any{"ok": true}, RouteType: agentmodel.AgentRouteTask, RoutedTargetKey: "customer.review", TaskRunID: "task"}
-		service := NewAgentInteractiveExecutionApplicationService(AgentInteractiveExecutionDependencies{Runs: NewAgentInteractiveRunApplicationService(repository, nil, nil), Authorize: authorization, Runner: interactiveAgentRunnerFunc(func(context.Context, InteractiveAgentRunRequest) (InteractiveAgentResult, error) {
+		repository.run = agentmodel.AgentInteractiveRun{ID: "existing", WorkspaceID: principal.WorkspaceID, Status: status, StructuredResult: map[string]any{"ok": true}, RouteType: agentsdk.AgentRouteTask, RoutedTargetKey: "customer.review", TaskRunID: "task"}
+		service := NewAgentInteractiveExecutionApplicationService(AgentInteractiveExecutionDependencies{Runs: NewAgentInteractiveRunApplicationService(repository, nil, nil), Authorize: authorization, Runner: interactiveAgentRunnerFunc(func(context.Context, agentsdk.InteractiveRequest) (agentsdk.InteractiveResult, error) {
 			t.Fatal("runner called on replay")
-			return InteractiveAgentResult{}, nil
+			return agentsdk.InteractiveResult{}, nil
 		})})
 		result, err := service.Execute(t.Context(), requestFor(principal, trusted))
 		if err != nil || result.Run.ID != "existing" {
@@ -183,11 +184,11 @@ func TestInteractiveExecutionReplayTimeoutCompletionAndRouteNilBoundaries(t *tes
 		visible := schema.filtered["operator:operator"]
 		visible.Agents[0].ExecutionLimits.TimeoutSeconds = 1
 		schema.filtered["operator:operator"] = visible
-		service := NewAgentInteractiveExecutionApplicationService(AgentInteractiveExecutionDependencies{Runs: NewAgentInteractiveRunApplicationService(repository, nil, nil), Authorize: authorization, Runner: interactiveAgentRunnerFunc(func(_ context.Context, request InteractiveAgentRunRequest) (InteractiveAgentResult, error) {
+		service := NewAgentInteractiveExecutionApplicationService(AgentInteractiveExecutionDependencies{Runs: NewAgentInteractiveRunApplicationService(repository, nil, nil), Authorize: authorization, Runner: interactiveAgentRunnerFunc(func(_ context.Context, request agentsdk.InteractiveRequest) (agentsdk.InteractiveResult, error) {
 			if request.MaxSteps != 0 {
 				t.Fatalf("request=%#v", request)
 			}
-			return InteractiveAgentResult{ExternalRunID: " external ", Model: " model ", Usage: map[string]any{"tokens": 1}, Structured: map[string]any{"answer": true}}, nil
+			return agentsdk.InteractiveResult{ExternalRunID: " external ", Model: " model ", Usage: map[string]any{"tokens": 1}, Structured: map[string]any{"answer": true}}, nil
 		})})
 		result, err := service.Execute(t.Context(), requestFor(principal, trusted))
 		if err != nil || result.Run.Status != agentmodel.AgentInteractiveRunCompleted || result.Run.ExternalRunID != "external" {
@@ -202,9 +203,9 @@ func TestInteractiveExecutionReplayTimeoutCompletionAndRouteNilBoundaries(t *tes
 		visible.Agents[0].ExecutionLimits.TimeoutSeconds = 1
 		schema.filtered["operator:operator"] = visible
 		repository.saveErr = errors.New("complete")
-		service := NewAgentInteractiveExecutionApplicationService(AgentInteractiveExecutionDependencies{Runs: NewAgentInteractiveRunApplicationService(repository, nil, nil), Authorize: authorization, Runner: interactiveAgentRunnerFunc(func(ctx context.Context, _ InteractiveAgentRunRequest) (InteractiveAgentResult, error) {
+		service := NewAgentInteractiveExecutionApplicationService(AgentInteractiveExecutionDependencies{Runs: NewAgentInteractiveRunApplicationService(repository, nil, nil), Authorize: authorization, Runner: interactiveAgentRunnerFunc(func(ctx context.Context, _ agentsdk.InteractiveRequest) (agentsdk.InteractiveResult, error) {
 			<-ctx.Done()
-			return InteractiveAgentResult{}, errors.New("provider ended")
+			return agentsdk.InteractiveResult{}, errors.New("provider ended")
 		})})
 		if _, err := service.Execute(t.Context(), requestFor(principal, trusted)); !errors.Is(err, repository.saveErr) {
 			t.Fatalf("complete error=%v", err)
@@ -213,41 +214,41 @@ func TestInteractiveExecutionReplayTimeoutCompletionAndRouteNilBoundaries(t *tes
 }
 
 func TestInteractiveExecutionHandoffAndToolFailureBoundaries(t *testing.T) {
-	request := func(principal principalmodel.Principal, trusted agentmodel.GlobalAgentContext) AgentInteractiveExecutionRequest {
+	request := func(principal principalmodel.Principal, trusted agentsdk.GlobalContext) AgentInteractiveExecutionRequest {
 		return AgentInteractiveExecutionRequest{SessionID: "session", IdempotencyKey: "key", Message: "message", Context: trusted, Principal: principal}
 	}
 	for name, test := range map[string]struct {
-		route     AgentRouteResult
+		route     agentsdk.RouteResult
 		configure func(*AgentInteractiveExecutionDependencies, *agentInteractiveRunRepositoryStub)
 	}{
-		"task missing": {route: AgentRouteResult{RouteType: agentmodel.AgentRouteTask, TargetKey: "customer.review", TargetVersion: "1.0.0", IdempotencyKey: "route"}, configure: func(_ *AgentInteractiveExecutionDependencies, _ *agentInteractiveRunRepositoryStub) {}},
-		"task prepare": {route: AgentRouteResult{RouteType: agentmodel.AgentRouteTask, TargetKey: "customer.review", TargetVersion: "1.0.0", IdempotencyKey: "route"}, configure: func(d *AgentInteractiveExecutionDependencies, _ *agentInteractiveRunRepositoryStub) {
+		"task missing": {route: agentsdk.RouteResult{RouteType: agentsdk.AgentRouteTask, TargetKey: "customer.review", TargetVersion: "1.0.0", IdempotencyKey: "route"}, configure: func(_ *AgentInteractiveExecutionDependencies, _ *agentInteractiveRunRepositoryStub) {}},
+		"task prepare": {route: agentsdk.RouteResult{RouteType: agentsdk.AgentRouteTask, TargetKey: "customer.review", TargetVersion: "1.0.0", IdempotencyKey: "route"}, configure: func(d *AgentInteractiveExecutionDependencies, _ *agentInteractiveRunRepositoryStub) {
 			d.Dispatch = NewAgentTaskDispatchApplicationService(nil, nil, nil)
 		}},
-		"task handoff": {route: AgentRouteResult{RouteType: agentmodel.AgentRouteTask, TargetKey: "customer.review", TargetVersion: "1.0.0", IdempotencyKey: "route"}, configure: func(d *AgentInteractiveExecutionDependencies, r *agentInteractiveRunRepositoryStub) {
+		"task handoff": {route: agentsdk.RouteResult{RouteType: agentsdk.AgentRouteTask, TargetKey: "customer.review", TargetVersion: "1.0.0", IdempotencyKey: "route"}, configure: func(d *AgentInteractiveExecutionDependencies, r *agentInteractiveRunRepositoryStub) {
 			d.Dispatch = NewAgentTaskDispatchApplicationService(d.Authorize, nil, nil)
 			r.handoffErr = errors.New("handoff")
 		}},
-		"workflow missing": {route: AgentRouteResult{RouteType: agentmodel.AgentRouteWorkflow, TargetKey: "customer.flow", IdempotencyKey: "route"}, configure: func(_ *AgentInteractiveExecutionDependencies, _ *agentInteractiveRunRepositoryStub) {}},
-		"workflow start": {route: AgentRouteResult{RouteType: agentmodel.AgentRouteWorkflow, TargetKey: "customer.flow", IdempotencyKey: "route"}, configure: func(d *AgentInteractiveExecutionDependencies, _ *agentInteractiveRunRepositoryStub) {
+		"workflow missing": {route: agentsdk.RouteResult{RouteType: agentsdk.AgentRouteWorkflow, TargetKey: "customer.flow", IdempotencyKey: "route"}, configure: func(_ *AgentInteractiveExecutionDependencies, _ *agentInteractiveRunRepositoryStub) {}},
+		"workflow start": {route: agentsdk.RouteResult{RouteType: agentsdk.AgentRouteWorkflow, TargetKey: "customer.flow", IdempotencyKey: "route"}, configure: func(d *AgentInteractiveExecutionDependencies, _ *agentInteractiveRunRepositoryStub) {
 			d.Workflows = &interactiveWorkflowStarterStub{err: errors.New("start")}
 		}},
-		"workflow handoff": {route: AgentRouteResult{RouteType: agentmodel.AgentRouteWorkflow, TargetKey: "customer.flow", IdempotencyKey: "route"}, configure: func(d *AgentInteractiveExecutionDependencies, r *agentInteractiveRunRepositoryStub) {
+		"workflow handoff": {route: agentsdk.RouteResult{RouteType: agentsdk.AgentRouteWorkflow, TargetKey: "customer.flow", IdempotencyKey: "route"}, configure: func(d *AgentInteractiveExecutionDependencies, r *agentInteractiveRunRepositoryStub) {
 			d.Workflows = &interactiveWorkflowStarterStub{}
 			r.saveErr = errors.New("handoff")
 		}},
-		"tool missing": {route: AgentRouteResult{RouteType: agentmodel.AgentRouteInteractiveQuery, TargetKey: "customer_agent", TargetVersion: "1.0.0", Input: map[string]any{"tool": AgentToolQueryRecords, "object_key": "customer"}, IdempotencyKey: "route"}, configure: func(_ *AgentInteractiveExecutionDependencies, _ *agentInteractiveRunRepositoryStub) {}},
+		"tool missing": {route: agentsdk.RouteResult{RouteType: agentsdk.AgentRouteInteractiveQuery, TargetKey: "customer_agent", TargetVersion: "1.0.0", Input: map[string]any{"tool": AgentToolQueryRecords, "object_key": "customer"}, IdempotencyKey: "route"}, configure: func(_ *AgentInteractiveExecutionDependencies, _ *agentInteractiveRunRepositoryStub) {}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			authorization, principal, trusted, repository := interactiveExecutionFixture(t)
 			schema := authorization.schema.(*agentSchemaProviderStub)
-			schema.full.AgentEntrypoints[0].RoutingContract.AllowedRouteTypes = []string{agentmodel.AgentRouteTask, agentmodel.AgentRouteWorkflow, agentmodel.AgentRouteInteractiveQuery}
+			schema.full.AgentEntrypoints[0].RoutingContract.AllowedRouteTypes = []string{agentsdk.AgentRouteTask, agentsdk.AgentRouteWorkflow, agentsdk.AgentRouteInteractiveQuery}
 			visible := schema.filtered["operator:operator"]
 			visible.AgentEntrypoints = schema.full.AgentEntrypoints
 			schema.filtered["operator:operator"] = visible
-			dependencies := AgentInteractiveExecutionDependencies{Runs: NewAgentInteractiveRunApplicationService(repository, nil, nil), Authorize: authorization, Runner: interactiveAgentRunnerFunc(func(context.Context, InteractiveAgentRunRequest) (InteractiveAgentResult, error) {
+			dependencies := AgentInteractiveExecutionDependencies{Runs: NewAgentInteractiveRunApplicationService(repository, nil, nil), Authorize: authorization, Runner: interactiveAgentRunnerFunc(func(context.Context, agentsdk.InteractiveRequest) (agentsdk.InteractiveResult, error) {
 				value := test.route
-				return InteractiveAgentResult{Route: &value}, nil
+				return agentsdk.InteractiveResult{Route: &value}, nil
 			})}
 			test.configure(&dependencies, repository)
 			if _, err := NewAgentInteractiveExecutionApplicationService(dependencies).Execute(t.Context(), request(principal, trusted)); err == nil {
@@ -258,15 +259,15 @@ func TestInteractiveExecutionHandoffAndToolFailureBoundaries(t *testing.T) {
 	t.Run("tool invocation and final completion errors", func(t *testing.T) {
 		authorization, principal, trusted, repository := interactiveExecutionFixture(t)
 		schema := authorization.schema.(*agentSchemaProviderStub)
-		schema.full.AgentEntrypoints[0].RoutingContract.AllowedRouteTypes = []string{agentmodel.AgentRouteInteractiveQuery}
+		schema.full.AgentEntrypoints[0].RoutingContract.AllowedRouteTypes = []string{agentsdk.AgentRouteInteractiveQuery}
 		visible := schema.filtered["operator:operator"]
 		visible.AgentEntrypoints = schema.full.AgentEntrypoints
 		schema.filtered["operator:operator"] = visible
 		runs := NewAgentInteractiveRunApplicationService(repository, nil, nil)
 		gateway := NewAgentToolGateway(AgentToolGatewayDependencies{Authorization: authorization, Queries: &agentToolQueryStub{err: errors.New("query")}, InteractiveRuns: runs})
-		route := AgentRouteResult{RouteType: agentmodel.AgentRouteInteractiveQuery, TargetKey: "customer_agent", TargetVersion: "1.0.0", Input: map[string]any{"tool": AgentToolQueryRecords, "object_key": "customer"}, IdempotencyKey: "route"}
-		service := NewAgentInteractiveExecutionApplicationService(AgentInteractiveExecutionDependencies{Runs: runs, Authorize: authorization, Runner: interactiveAgentRunnerFunc(func(context.Context, InteractiveAgentRunRequest) (InteractiveAgentResult, error) {
-			return InteractiveAgentResult{Route: &route}, nil
+		route := agentsdk.RouteResult{RouteType: agentsdk.AgentRouteInteractiveQuery, TargetKey: "customer_agent", TargetVersion: "1.0.0", Input: map[string]any{"tool": AgentToolQueryRecords, "object_key": "customer"}, IdempotencyKey: "route"}
+		service := NewAgentInteractiveExecutionApplicationService(AgentInteractiveExecutionDependencies{Runs: runs, Authorize: authorization, Runner: interactiveAgentRunnerFunc(func(context.Context, agentsdk.InteractiveRequest) (agentsdk.InteractiveResult, error) {
+			return agentsdk.InteractiveResult{Route: &route}, nil
 		}), Tools: gateway})
 		if _, err := service.Execute(t.Context(), request(principal, trusted)); err == nil {
 			t.Fatal("expected tool error")
@@ -279,15 +280,15 @@ func TestInteractiveExecutionHandoffAndToolFailureBoundaries(t *testing.T) {
 	t.Run("tool invocation succeeds", func(t *testing.T) {
 		authorization, principal, trusted, repository := interactiveExecutionFixture(t)
 		schema := authorization.schema.(*agentSchemaProviderStub)
-		schema.full.AgentEntrypoints[0].RoutingContract.AllowedRouteTypes = []string{agentmodel.AgentRouteInteractiveQuery}
+		schema.full.AgentEntrypoints[0].RoutingContract.AllowedRouteTypes = []string{agentsdk.AgentRouteInteractiveQuery}
 		visible := schema.filtered["operator:operator"]
 		visible.AgentEntrypoints = schema.full.AgentEntrypoints
 		schema.filtered["operator:operator"] = visible
 		runs := NewAgentInteractiveRunApplicationService(repository, nil, nil)
 		gateway := NewAgentToolGateway(AgentToolGatewayDependencies{Authorization: authorization, Queries: &agentToolQueryStub{}, InteractiveRuns: runs})
-		route := AgentRouteResult{RouteType: agentmodel.AgentRouteInteractiveQuery, TargetKey: "customer_agent", TargetVersion: "1.0.0", Input: map[string]any{"tool": AgentToolQueryRecords, "object_key": "customer"}, IdempotencyKey: "route"}
-		service := NewAgentInteractiveExecutionApplicationService(AgentInteractiveExecutionDependencies{Runs: runs, Authorize: authorization, Runner: interactiveAgentRunnerFunc(func(context.Context, InteractiveAgentRunRequest) (InteractiveAgentResult, error) {
-			return InteractiveAgentResult{Route: &route}, nil
+		route := agentsdk.RouteResult{RouteType: agentsdk.AgentRouteInteractiveQuery, TargetKey: "customer_agent", TargetVersion: "1.0.0", Input: map[string]any{"tool": AgentToolQueryRecords, "object_key": "customer"}, IdempotencyKey: "route"}
+		service := NewAgentInteractiveExecutionApplicationService(AgentInteractiveExecutionDependencies{Runs: runs, Authorize: authorization, Runner: interactiveAgentRunnerFunc(func(context.Context, agentsdk.InteractiveRequest) (agentsdk.InteractiveResult, error) {
+			return agentsdk.InteractiveResult{Route: &route}, nil
 		}), Tools: gateway})
 		result, err := service.Execute(t.Context(), request(principal, trusted))
 		if err != nil || result.Run.Status != agentmodel.AgentInteractiveRunCompleted || result.Result.Structured["status"] != "executed" {

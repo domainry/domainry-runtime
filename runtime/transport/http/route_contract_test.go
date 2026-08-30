@@ -167,7 +167,7 @@ func TestRoutesOnlyComposesDomainRegistrarsAndGlobalMiddleware(t *testing.T) {
 		"discoveryHTTP": false, "openAPIHTTP": false,
 		"reportHTTP": false, "agentDialogHTTP": false, "applicationSchemaHTTP": false,
 		"capabilityHTTP": false, "frontendCapabilityHTTP": false, "businessSystemHTTP": false,
-		"businessReferenceHTTP": false, "changePlanHTTP": false, "integrationHTTP": false,
+		"businessReferenceHTTP": false, "integrationHTTP": false,
 		"uploadHTTP": false, "surfaceContextHTTP": false, "recordHTTP": false, "workflowHTTP": false,
 		"automationHTTP": false, "schedulerHTTP": false,
 		"operationsHTTP": false, "businessEventHTTP": false,
@@ -237,10 +237,8 @@ func declaredRuntimeRoutes(t *testing.T) map[string]bool {
 	files = append(files, filepath.Join(filepath.Dir(current), "frontendcapability", "frontendcapability_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "appschema", "appschema_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "businessreferences", "businessreferences_routes.go"))
-	files = append(files, filepath.Join(filepath.Dir(current), "businessseeds", "businessseeds_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "businesssystem", "businesssystem_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "capabilities", "capabilities_routes.go"))
-	files = append(files, filepath.Join(filepath.Dir(current), "changeplans", "changeplans_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "operations", "operations_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "businessevents", "businessevents_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "notifications", "notifications_routes.go"))

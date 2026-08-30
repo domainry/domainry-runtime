@@ -6,6 +6,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/logging"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
+	lifecycleapplication "github.com/domainry/domainry-runtime/runtime/application/lifecycle"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -14,30 +15,27 @@ func (a *Runtime) startLifecycleCleanupWorker(ctx context.Context) {
 		return
 	}
 	a.startTrackedWorker(ctx, func(workerCtx context.Context) <-chan struct{} {
+		runner := lifecycleapplication.NewWorkerRunner(a.records.Applications().Lifecycle)
 		return workerplatform.StartNamedLoop(workerCtx, "lifecycle_cleanup", 5*time.Minute, func() {
 			now := a.worker.Clock.Now()
 			scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "process lifecycle cleanup jobs")
-			runLifecycleCleanupTick(workerCtx, a.worker.Control,
-				func() error {
-					_, err := a.records.Applications().Lifecycle.ProcessRunnableCleanupJobs(workerCtx, a.worker.WorkerID.String(), 100, 25, now, scope)
-					return err
-				},
-				func() error {
-					_, err := a.records.Applications().Lifecycle.CleanupExpiredSubjectArtifacts(workerCtx, now, scope)
-					return err
-				},
-			)
+			runLifecycleCleanupTick(workerCtx, a.worker.Control, func() error {
+				_, err := runner.Tick(workerCtx, lifecycleapplication.WorkerTick{LeaseOwner: a.worker.WorkerID.String(), BatchSize: 100, JobLimit: 25, Now: now, Scope: scope})
+				return err
+			}, nil)
 		})
 	})
 }
 
 func runLifecycleCleanupTick(ctx context.Context, control *workerplatform.Controller, process, cleanup func() error) {
 	control.RunIfAccepting(func() {
-		if err := process(); err != nil && ctx.Err() == nil {
-			logging.FromContext(ctx).Error("lifecycle cleanup worker failed", logging.StableErrorFields(err)...)
-		}
-		if err := cleanup(); err != nil && ctx.Err() == nil {
-			logging.FromContext(ctx).Error("lifecycle artifact cleanup failed", logging.StableErrorFields(err)...)
+		for _, tick := range []func() error{process, cleanup} {
+			if tick == nil {
+				continue
+			}
+			if err := tick(); err != nil && ctx.Err() == nil {
+				logging.FromContext(ctx).Error("lifecycle cleanup worker failed", logging.StableErrorFields(err)...)
+			}
 		}
 	})
 }

@@ -10,7 +10,6 @@ func ApplicationSchemaObjectAuthoringCapability() capabilitycontract.CapabilityA
 		Parameters: []capabilitycontract.CapabilityAuthoringParameter{
 			{Key: "key", Type: "string", Required: true, MinLength: metadataIntPointer(1)},
 			{Key: "name", Type: "string", Required: true, MinLength: metadataIntPointer(1)},
-			metadataExpectedSchemaHashParameter(),
 		},
 		Permissions: []string{"workspace.admin"}, AuditEvents: []string{"metadata_definition_upserted"},
 		ValidationEndpoint: "POST /metadata/definitions/object/{resourceKey}/validate", ConfigurationRoutes: metadataConfigurationRoutes("object"),
@@ -40,7 +39,7 @@ func ApplicationSchemaObjectAuthoringCapability() capabilitycontract.CapabilityA
 		Sources: []capabilitycontract.CapabilityAuthoringSource{
 			{Kind: "contract", Path: "runtime/domain/appschema/contract/appschema_object_authoring.go", Symbol: "ApplicationSchemaObjectAuthoringCapability"},
 			{Kind: "validation", Path: "runtime/domain/appschema/validation/appschema_object_validation.go", Symbol: "ApplicationSchemaValidateObjectDefinition"},
-			{Kind: "service", Path: "runtime/application/appschema/appschema_definition_orchestration_application_service.go", Symbol: "ApplicationSchemaApplicationService.UpsertApplicationDefinition"},
+			{Kind: "service", Path: "runtime/application/appschema/appschema_definition_validation_application_service.go", Symbol: "ApplicationSchemaApplicationService.ValidateApplicationDefinitionPayload"},
 		},
 	}
 }

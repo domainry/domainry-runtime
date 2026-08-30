@@ -1,11 +1,8 @@
 package appschema
 
 import (
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
-
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
+	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 
@@ -18,10 +15,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
-
-	"sort"
-	"strconv"
 	"strings"
 
 	ormbuilder "github.com/domainry/domainry-orm/builder"
@@ -40,23 +33,7 @@ func (r ApplicationSchemaStore) LoadManifest(ctx context.Context, scope principa
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
-	objects, err := loadMetadataSliceContext[definitionmodel.ObjectSchema](ctx, r.database(), r.store, "object_definitions")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
-	fields, err := loadMetadataSliceContext[definitionmodel.FieldSchema](ctx, r.database(), r.store, "field_definitions")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
-	validations, err := loadMetadataSliceContext[definitionmodel.ValidationSchema](ctx, r.database(), r.store, "validation_definitions")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
-	views, err := loadMetadataSliceContext[definitionmodel.ViewSchema](ctx, r.database(), r.store, "view_definitions")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
-	actions, err := loadMetadataSliceContext[definitionmodel.ActionSchema](ctx, r.database(), r.store, "action_definitions")
+	objects, fields, validations, actions, dictionaries, err := r.loadMetadataModuleDefinitions(ctx)
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
@@ -64,67 +41,15 @@ func (r ApplicationSchemaStore) LoadManifest(ctx context.Context, scope principa
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
-	schedulerDefinitions, err := loadMetadataSliceContext[map[string]any](ctx, r.database(), r.store, "scheduler_definitions")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
 	automations, err := loadMetadataSliceContext[automationmodel.AutomationRuleSchema](ctx, r.database(), r.store, "automation_rule_definitions")
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
-	dictionaries, err := loadMetadataSliceContext[appschemamodel.DictionarySchema](ctx, r.database(), r.store, "dictionary_definitions")
+	connectors, err := loadMetadataSliceContext[integrationmodel.ConnectorSchema](ctx, r.database(), r.store, "application_connector_requirements")
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
-	connectors, err := loadMetadataSliceContext[integrationmodel.ConnectorSchema](ctx, r.database(), r.store, "connector_definitions")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
-	eventMappings, err := loadMetadataSliceContext[integrationmodel.IntegrationEventMappingSchema](ctx, r.database(), r.store, "integration_event_mapping_definitions")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
-	reports, err := loadMetadataSliceContext[reportmodel.ReportSchema](ctx, r.database(), r.store, "report_definitions")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
-	operationExamples, err := loadMetadataSliceContext[reportmodel.ReportOperationStateExampleSchema](ctx, r.database(), r.store, "operation_state_example_definitions")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
-	sensitivePolicies, err := loadMetadataSliceContext[reportmodel.ReportSensitiveFieldPolicySchema](ctx, r.database(), r.store, "sensitive_field_policy_definitions")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
-	exportControls, err := loadMetadataSliceContext[reportmodel.ReportExportControlSchema](ctx, r.database(), r.store, "report_export_control_definitions")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
-	entrypoints, err := loadMetadataSliceContext[definitionmodel.EntryPointSchema](ctx, r.database(), r.store, "entrypoint_definitions")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
-	skills, err := loadMetadataSliceContext[agentmodel.SkillSchema](ctx, r.database(), r.store, "skill_definitions")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
-	agents, err := loadMetadataSliceContext[agentmodel.AgentSchema](ctx, r.database(), r.store, "agent_definitions")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
-	agentTasks, err := loadMetadataSliceContext[agentmodel.AgentTaskDefinition](ctx, r.database(), r.store, "agent_task_definitions")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
-	agentEntrypoints, err := loadMetadataSliceContext[agentmodel.AgentEntrypointAssignment](ctx, r.database(), r.store, "agent_entrypoint_definitions")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
-	agentServicePrincipals, err := loadMetadataSliceContext[agentmodel.AgentServicePrincipalBinding](ctx, r.database(), r.store, "agent_service_principal_definitions")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
-	profileBindings, err := loadMetadataSliceContext[profilebindingmodel.Binding](ctx, r.database(), r.store, "identity_profile_binding_definitions")
+	eventMappings, err := loadMetadataSliceContext[integrationmodel.IntegrationEventMappingSchema](ctx, r.database(), r.store, "application_integration_event_mapping_requirements")
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
@@ -145,37 +70,24 @@ func (r ApplicationSchemaStore) LoadManifest(ctx context.Context, scope principa
 	}
 	return manifestmodel.ManifestSchema{
 		TemplateID: catalog["template_id"], Version: catalog["template_version"], DefaultLocale: catalog["default_locale"], Name: catalog["name"],
-		Objects: objects, Views: views, Actions: actions, Workflows: workflows, SchedulerDefinitions: schedulerDefinitions, AutomationRules: automations,
+		Objects: objects, Actions: actions, Workflows: workflows, AutomationRules: automations,
 		Dictionaries: dictionaries,
-		Integrations: integrationmodel.IntegrationSchema{Connectors: connectors, EventMappings: eventMappings}, Reports: reports,
-		OperationStateExamples: operationExamples, SensitiveFieldPolicies: sensitivePolicies, ReportExportControls: exportControls,
-		EntryPoints: entrypoints, Skills: skills, Agents: agents, AgentTasks: agentTasks, AgentEntrypoints: agentEntrypoints, AgentServicePrincipals: agentServicePrincipals, IdentityProfileExtensions: profileBindings,
+		Integrations: integrationmodel.IntegrationSchema{Connectors: connectors, EventMappings: eventMappings},
 	}, nil
 }
 
 func (r ApplicationSchemaStore) loadCatalog(ctx context.Context) (map[string]string, error) {
-	query, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "metadata_catalog").Columns("key", "value").Build()
+	query, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "_runtime_metadata_projection").Columns("template_id", "artifact_version", "default_locale", "name", "contract_version", "schema_hash", "source_hash").Where(ormbuilder.Equal("id", "current")).Build()
 	if buildErr != nil {
 		return nil, fmt.Errorf("build metadata catalog load: %w", buildErr)
 	}
-	rows, err := r.database().QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("load metadata catalog: %w", err)
+	var templateID, artifactVersion, defaultLocale, name, contractVersion, schemaHash, sourceHash string
+	if err := r.database().QueryRowContext(ctx, query, args...).Scan(&templateID, &artifactVersion, &defaultLocale, &name, &contractVersion, &schemaHash, &sourceHash); err != nil {
+		return nil, fmt.Errorf("load metadata projection: %w", err)
 	}
-	defer rows.Close()
-	out := map[string]string{}
-	for rows.Next() {
-		var key, value string
-		if err := rows.Scan(&key, &value); err != nil {
-			return nil, fmt.Errorf("scan metadata catalog: %w", err)
-		}
-		out[key] = value
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("read metadata catalog: %w", err)
-	}
+	out := map[string]string{"template_id": templateID, "template_version": artifactVersion, "default_locale": defaultLocale, "name": name, "schema_version": contractVersion, "schema_hash": schemaHash, "source_hash": sourceHash}
 	if strings.TrimSpace(out["template_id"]) == "" || strings.TrimSpace(out["template_version"]) == "" {
-		return nil, fmt.Errorf("metadata catalog is missing template identity")
+		return nil, fmt.Errorf("metadata projection is missing template identity")
 	}
 	return out, nil
 }
@@ -212,6 +124,9 @@ func (r ApplicationSchemaStore) ListDefinitions(ctx context.Context, scope princ
 	if err := requireMetadataInstallationScope(scope); err != nil {
 		return nil, err
 	}
+	if metadataModuleOwnsDefinition(resourceType) {
+		return r.ListApplicationDefinitions(ctx, resourceType, "")
+	}
 	table, err := metadataDefinitionTable(resourceType)
 	if err != nil {
 		return nil, err
@@ -239,6 +154,9 @@ func (r ApplicationSchemaStore) ListDefinitions(ctx context.Context, scope princ
 func (r ApplicationSchemaStore) GetDefinition(ctx context.Context, scope principalmodel.SystemScope, resourceType, resourceKey string) (appschemamodel.ApplicationDefinition, bool, error) {
 	if err := requireMetadataInstallationScope(scope); err != nil {
 		return appschemamodel.ApplicationDefinition{}, false, err
+	}
+	if metadataModuleOwnsDefinition(resourceType) {
+		return r.GetApplicationDefinition(ctx, resourceType, resourceKey)
 	}
 	table, err := metadataDefinitionTable(resourceType)
 	if err != nil {
@@ -270,83 +188,4 @@ func scanApplicationDefinition(scanner metadataDefinitionScanner, resourceType s
 		definition.DisabledAt = disabled.String
 	}
 	return definition, nil
-}
-
-func (r ApplicationSchemaStore) ListDefinitionVersions(ctx context.Context, scope principalmodel.SystemScope, resourceType, resourceKey string) ([]appschemamodel.ApplicationDefinitionVersion, error) {
-	if err := requireMetadataInstallationScope(scope); err != nil {
-		return nil, err
-	}
-	query, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "metadata_definition_versions").Columns("schema_version", "schema_hash", "payload_json", "created_at").Where(ormbuilder.And(ormbuilder.Equal("resource_type", resourceType), ormbuilder.Equal("resource_key", resourceKey))).OrderBy(ormbuilder.Descending("created_at")).Build()
-	if buildErr != nil {
-		return nil, fmt.Errorf("build versions %s %s: %w", resourceType, resourceKey, buildErr)
-	}
-	rows, err := r.database().QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("list versions %s %s: %w", resourceType, resourceKey, err)
-	}
-	defer rows.Close()
-	out := []appschemamodel.ApplicationDefinitionVersion{}
-	for rows.Next() {
-		var version appschemamodel.ApplicationDefinitionVersion
-		var payload string
-		if err := rows.Scan(&version.SchemaVersion, &version.SchemaHash, &payload, &version.CreatedAt); err != nil {
-			return nil, fmt.Errorf("scan version: %w", err)
-		}
-		version.ResourceType, version.ResourceKey, version.Payload = resourceType, resourceKey, json.RawMessage(payload)
-		out = append(out, version)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	sort.SliceStable(out, func(i, j int) bool {
-		left, leftErr := strconv.Atoi(strings.TrimSpace(out[i].SchemaVersion))
-		right, rightErr := strconv.Atoi(strings.TrimSpace(out[j].SchemaVersion))
-		if leftErr == nil && rightErr == nil && left != right {
-			return left > right
-		}
-		if out[i].CreatedAt != out[j].CreatedAt {
-			return out[i].CreatedAt > out[j].CreatedAt
-		}
-		return out[i].SchemaVersion > out[j].SchemaVersion
-	})
-	return out, nil
-}
-
-func (r ApplicationSchemaStore) metadataDefinitionReplay(ctx context.Context, scope principalmodel.SystemScope, resourceType, resourceKey, targetHash string, expectedHash *string) (appschemamodel.ApplicationDefinition, bool, error) {
-	current, found, err := r.GetDefinition(ctx, scope, resourceType, resourceKey)
-	if err != nil {
-		return appschemamodel.ApplicationDefinition{}, false, err
-	}
-	if !found {
-		if expectedHash != nil && strings.TrimSpace(*expectedHash) != "" {
-			return appschemamodel.ApplicationDefinition{}, false, &appschemamodel.ApplicationDefinitionConflictError{ResourceType: resourceType, ResourceKey: resourceKey, ExpectedHash: strings.TrimSpace(*expectedHash)}
-		}
-		return appschemamodel.ApplicationDefinition{}, false, nil
-	}
-	expected := ""
-	if expectedHash != nil {
-		expected = strings.TrimSpace(*expectedHash)
-	}
-	if current.SchemaHash != targetHash {
-		if expectedHash != nil && current.SchemaHash != expected {
-			return appschemamodel.ApplicationDefinition{}, false, &appschemamodel.ApplicationDefinitionConflictError{ResourceType: resourceType, ResourceKey: resourceKey, ExpectedHash: expected, CurrentHash: current.SchemaHash}
-		}
-		return appschemamodel.ApplicationDefinition{}, false, nil
-	}
-	if expectedHash == nil || expected == current.SchemaHash {
-		return current, true, nil
-	}
-	if expected == "" && strings.TrimSpace(current.SchemaVersion) == "1" {
-		return current, true, nil
-	}
-	versions, err := r.ListDefinitionVersions(ctx, scope, resourceType, resourceKey)
-	if err != nil {
-		return appschemamodel.ApplicationDefinition{}, false, err
-	}
-	for index, version := range versions {
-		if version.SchemaVersion == current.SchemaVersion && version.SchemaHash == current.SchemaHash && index+1 < len(versions) && versions[index+1].SchemaHash == expected {
-			return current, true, nil
-		}
-	}
-	return appschemamodel.ApplicationDefinition{}, false, &appschemamodel.ApplicationDefinitionConflictError{ResourceType: resourceType, ResourceKey: resourceKey, ExpectedHash: expected, CurrentHash: current.SchemaHash}
 }

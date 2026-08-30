@@ -2,24 +2,26 @@ package agentdialog
 
 import (
 	"context"
+	"net/http"
+	"strings"
+
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent"
 	agentruntime "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
-	"net/http"
-	"strings"
 
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
-	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
+	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 )
 
 type AgentDialogContextResolver interface {
-	ResolveGlobalContext(context.Context, agentruntime.GlobalAgentContextRequest) (agentmodel.GlobalAgentContext, error)
+	ResolveGlobalContext(context.Context, agentruntime.GlobalAgentContextRequest) (agentsdk.GlobalContext, error)
 }
 
 type AgentInteractiveExecutor interface {

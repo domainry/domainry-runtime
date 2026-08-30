@@ -105,7 +105,7 @@ func assertIntegrationOutboxDialectLease(t *testing.T, store *database.RuntimeSt
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = store.DB().ExecContext(t.Context(), "DELETE FROM "+store.TableIdentifier("integration_outbox_messages")+" WHERE "+store.Identifier("workspace_id")+" = "+store.Placeholder(1), workspace)
+		_, _ = store.DB().ExecContext(t.Context(), "DELETE FROM "+store.TableIdentifier("runtime_publication_outbox")+" WHERE "+store.Identifier("workspace_id")+" = "+store.Placeholder(1), workspace)
 	})
 	repository := NewIntegrationWorkerStore(store)
 	start := make(chan struct{})

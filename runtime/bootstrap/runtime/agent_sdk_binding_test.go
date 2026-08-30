@@ -3,13 +3,24 @@ package runtime
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-agent-sdk/modulehost"
-	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
+
+func openAgentBindingRuntimeStore(t *testing.T) *persistence.RuntimeStore {
+	t.Helper()
+	store, err := persistence.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "agent-binding.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	return store
+}
 
 type agentSDKRunnerStub struct{ request agentsdk.TaskRequest }
 
@@ -59,25 +70,26 @@ func TestOpenAgentBindingUsesModuleFactoryAndValidatesDescriptor(t *testing.T) {
 	runner := &agentSDKRunnerStub{}
 	binding := &agentSDKBindingStub{runner: runner, descriptor: agentsdk.Descriptor{ProtocolVersion: agentsdk.ProtocolVersionV1, Mode: agentsdk.DeploymentModeModule, Capabilities: []string{"task.start", "task.poll", "task.cancel", "interactive.run"}}}
 	factory := &agentSDKModuleFactoryStub{binding: binding}
-	opened, err := openAgentBinding(t.Context(), "runtime", factory)
+	store := openAgentBindingRuntimeStore(t)
+	opened, err := openAgentBinding(t.Context(), "runtime", store, factory)
 	if err != nil || opened != binding || factory.runtimeID != "runtime" {
 		t.Fatalf("opened=%#v runtime=%q err=%v", opened, factory.runtimeID, err)
 	}
-	adapter := runtimeAgentTaskRunner{runner: opened.TaskRunner()}
-	result, err := adapter.Start(t.Context(), agentapplication.AgentTaskRunnerRequest{TaskRunID: "task", WorkspaceID: "workspace", Task: agentmodel.AgentTaskDefinition{Key: "review", Version: "1", Instruction: "review"}, IdempotencyKey: "key"})
+	result, err := opened.TaskRunner().Start(t.Context(), agentsdk.TaskRequest{TaskRunID: "task", WorkspaceID: "workspace", Task: agentsdk.AgentTaskDefinition{Key: "review", Version: "1", Instruction: "review"}, IdempotencyKey: "key"})
 	if err != nil || result.ExternalRunID != "provider" || runner.request.TaskRunID != "task" {
 		t.Fatalf("result=%+v request=%+v err=%v", result, runner.request, err)
 	}
 }
 func TestOpenAgentBindingFailsClosedAndClosesInvalidBinding(t *testing.T) {
-	if binding, err := openAgentBinding(t.Context(), "runtime", nil); err != nil || binding != nil {
+	store := openAgentBindingRuntimeStore(t)
+	if binding, err := openAgentBinding(t.Context(), "runtime", store, nil); err != nil || binding != nil {
 		t.Fatalf("binding=%#v err=%v", binding, err)
 	}
 	invalid := &agentSDKBindingStub{runner: &agentSDKRunnerStub{}, descriptor: agentsdk.Descriptor{ProtocolVersion: "old", Mode: agentsdk.DeploymentModeModule}}
-	if _, err := openAgentBinding(t.Context(), "runtime", &agentSDKModuleFactoryStub{binding: invalid}); err == nil || !invalid.closed {
+	if _, err := openAgentBinding(t.Context(), "runtime", store, &agentSDKModuleFactoryStub{binding: invalid}); err == nil || !invalid.closed {
 		t.Fatalf("invalid descriptor err=%v closed=%v", err, invalid.closed)
 	}
-	if _, err := openAgentBinding(t.Context(), "runtime", &agentSDKModuleFactoryStub{}); err == nil {
+	if _, err := openAgentBinding(t.Context(), "runtime", store, &agentSDKModuleFactoryStub{}); err == nil {
 		t.Fatal("nil Binding accepted")
 	}
 }

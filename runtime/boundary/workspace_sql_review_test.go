@@ -22,7 +22,7 @@ var reviewedWorkspaceSQLTables = map[string]bool{
 	"business_change_plan_operations": true, "business_localized_text": true, "business_record_localized_value": true, "frontend_capability_manifests": true,
 	"integration_api_keys": true, "integration_connections": true, "integration_credential_refresh_leases": true,
 	"integration_event_mapping_intents": true, "integration_events": true, "integration_external_identities": true,
-	"integration_invocations": true, "integration_outbox_messages": true, "integration_secret_materials": true, "integration_secrets": true,
+	"integration_invocations": true, "runtime_publication_outbox": true, "integration_secret_materials": true, "integration_secrets": true,
 	"connector_provider_states":  true,
 	"integration_webhook_nonces": true, "integration_webhook_subscriptions": true, "notification_delivery_reservations": true,
 	"lifecycle_archive_entries": true, "lifecycle_audit_evidence": true, "lifecycle_cleanup_jobs": true,

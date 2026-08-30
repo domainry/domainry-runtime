@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
 )
 
 func TestIntegrationSubjectLifecycleExportsQueuesProviderEraseAndAnonymizes(t *testing.T) {

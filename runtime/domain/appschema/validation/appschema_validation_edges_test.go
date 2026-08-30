@@ -274,7 +274,7 @@ func TestDefinitionValidationRequestEdges(t *testing.T) {
 			}
 		})
 	}
-	if businessResourceTypeExists("unknown") || !businessResourceTypeExists("field") || !businessResourceTypeExists("identity_profile_binding") {
+	if businessResourceTypeExists("unknown") || !businessResourceTypeExists("field") || businessResourceTypeExists("identity_profile_binding") || businessResourceTypeExists("scheduler") || businessResourceTypeExists("report") {
 		t.Fatal("resource type lookup mismatch")
 	}
 	result := definitionValidationFailure(appschemamodel.ApplicationDefinitionValidationResult{}, badRequest("custom", "field", ""))

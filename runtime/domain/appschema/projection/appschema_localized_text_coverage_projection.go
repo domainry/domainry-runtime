@@ -116,9 +116,6 @@ func metadataLocalizedTextExpectedItems(snapshot appschemamodel.ApplicationSchem
 			add("validation", key, "message", validation.Message)
 		}
 	}
-	for _, view := range snapshot.Views {
-		add("view", view.Key, "name", view.Name)
-	}
 	for _, action := range snapshot.Actions {
 		add("action", action.Key, "label", action.Label)
 		for _, field := range action.PayloadFields {
@@ -139,10 +136,6 @@ func metadataLocalizedTextExpectedItems(snapshot appschemamodel.ApplicationSchem
 	}
 	for _, report := range snapshot.Reports {
 		add("report", report.Key, "name", report.Name)
-	}
-	for _, entrypoint := range snapshot.EntryPoints {
-		add("entrypoint", entrypoint.Key, "name", entrypoint.Name)
-		add("entrypoint", entrypoint.Key, "description", entrypoint.Description)
 	}
 	for _, skill := range snapshot.Skills {
 		add("skill", skill.Key, "name", skill.Name)

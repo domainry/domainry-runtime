@@ -3,7 +3,6 @@ package integration
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
@@ -13,7 +12,6 @@ import (
 	"github.com/domainry/domainry-foundation/telemetry"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationpolicy "github.com/domainry/domainry-runtime/runtime/domain/integration/policy"
-	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 )
 
 func (s *IntegrationApplicationService) SendAdapterOutboxMessage(ctx context.Context, message integrationmodel.IntegrationOutboxMessage, principal principalmodel.Principal) (sendResult OutboxSendResult, err error) {
@@ -51,22 +49,6 @@ func (s *IntegrationApplicationService) SendAdapterOutboxMessage(ctx context.Con
 	prepared, err := s.prepareRegisteredOutboxCall(ctx, message, connection, principal, requestPayload)
 	if err != nil {
 		return OutboxSendResult{}, err
-	}
-	if message.ConnectorKey == "notification" && message.Operation == "send" {
-		hydrated, hydrateErr := s.hydrateWebPushSubscription(ctx, workspaceID, requestPayload)
-		err = hydrateErr
-		if err != nil {
-			return OutboxSendResult{}, err
-		}
-		// The operation contract validates the public subscription_id payload.
-		// Mutate the captured request only after validation so endpoint key
-		// material exists solely during Provider execution and never in audit.
-		for key := range requestPayload {
-			delete(requestPayload, key)
-		}
-		for key, value := range hydrated {
-			requestPayload[key] = value
-		}
 	}
 	if integrationpolicy.IntegrationConnectionUsesRefreshToken(connection) {
 		releaseCredentialLease, err := s.AcquireCredentialRefreshLease(ctx, connection, 0)
@@ -111,11 +93,6 @@ func (s *IntegrationApplicationService) SendAdapterOutboxMessage(ctx context.Con
 		return OutboxSendResult{ResponseRef: result.ResponseRef}, evidenceErr
 	}
 	if callErr != nil {
-		if result.ProviderErrorCode == "notification.subscription_expired" {
-			if repository, ok := s.deliveryRepo.(integrationrepository.WebPushSubscriptionRepository); ok {
-				_ = repository.ExpireWebPushSubscription(ctx, workspaceID, strings.TrimSpace(fmt.Sprint(message.Payload["subscription_id"])))
-			}
-		}
 		return OutboxSendResult{ResponseRef: result.ResponseRef}, callErr
 	}
 	return OutboxSendResult{

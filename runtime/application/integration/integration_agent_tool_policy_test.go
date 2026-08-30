@@ -9,17 +9,17 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 func TestCandidateAgentToolsAndAllowlist(t *testing.T) {
-	if tools := CandidateAgentTools(agentmodel.AgentSchema{}); tools == nil || len(tools) != 0 {
+	if tools := CandidateAgentTools(agentsdk.AgentSchema{}); tools == nil || len(tools) != 0 {
 		t.Fatalf("nil tools projection = %#v", tools)
 	}
-	agent := agentmodel.AgentSchema{Tools: []string{" readRecord ", "callConnector"}}
+	agent := agentsdk.AgentSchema{Tools: []string{" readRecord ", "callConnector"}}
 	if got := CandidateAgentTools(agent); !reflect.DeepEqual(got, agent.Tools) {
 		t.Fatalf("candidate tools = %#v", got)
 	}

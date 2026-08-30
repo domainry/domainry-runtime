@@ -1,7 +1,7 @@
 package agent
 
 import (
-	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
+	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
 )
 
 type AgentApplicationService struct {

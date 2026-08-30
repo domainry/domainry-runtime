@@ -15,14 +15,16 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	localartifact "github.com/domainry/domainry-lifecycle/artifact/filesystem"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle/contract"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle/model"
+	lifecyclepersistence "github.com/domainry/domainry-lifecycle/persistence"
 	lifecycleapplication "github.com/domainry/domainry-runtime/runtime/application/lifecycle"
-	lifecyclecontract "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/contract"
-	lifecyclemodel "github.com/domainry/domainry-runtime/runtime/domain/lifecycle/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	localartifact "github.com/domainry/domainry-runtime/runtime/infrastructure/lifecycleartifact/filesystem"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	lifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/lifecycle"
+	lifecyclemodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/lifecyclemodule"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	lifecyclehttp "github.com/domainry/domainry-runtime/runtime/transport/http/lifecycle"
 )
 
 type lifecycleHTTPSubjectPort struct{}
@@ -53,12 +55,12 @@ func TestLifecycleSubjectExportHTTPFlowEnforcesWorkspaceExpiryAndAudit(t *testin
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	repository := lifecyclepersistence.NewLifecycleStore(store)
+	repository := lifecyclepersistence.NewLifecycleStore(lifecyclemodule.NewHost(store))
 	port := lifecycleHTTPSubjectPort{}
 	service := lifecycleapplication.NewLifecycleApplicationService(t.Context(), lifecycleapplication.LifecycleApplicationDependencies{Repository: repository, SubjectResolver: port, SubjectHandlers: []lifecyclecontract.SubjectDataHandler{port}, Artifacts: localartifact.NewSubjectStore(t.TempDir())})
-	handler := NewOperationsHandler(OperationsDependencies{
-		Lifecycle: service,
-		Admin:     func(next http.HandlerFunc) http.HandlerFunc { return next },
+	handler := lifecyclehttp.NewHandler(lifecyclehttp.Dependencies{
+		Service:       service,
+		Authenticated: func(next http.HandlerFunc) http.HandlerFunc { return next },
 		Principal: func(r *http.Request) principalmodel.Principal {
 			workspaceID := r.Header.Get("X-Workspace")
 			if workspaceID == "" {

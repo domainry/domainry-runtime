@@ -7,6 +7,7 @@ import (
 	"github.com/domainry/domainry-connector-sdk"
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
@@ -23,6 +24,9 @@ type Options struct {
 	// injects domainry-identity-sdk/remote.Factory. Runtime never selects or
 	// switches the deployment topology.
 	IdentityFactory identitysdk.Factory
+	// IntegrationFactory selects the source-owned in-process Module or SaaS
+	// Binding. Runtime owns only the durable outbound handoff.
+	IntegrationFactory integrationsdk.Factory
 	// NotificationFactory is selected by generated composition. Module builds
 	// inject domainry-notification/module; SaaS builds inject the SDK Remote
 	// Factory. Runtime never switches topology from environment at startup.

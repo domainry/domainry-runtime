@@ -28,7 +28,7 @@ func workflowDecisionEdgeCommit(task workflowmodel.WorkflowTask) transactionmode
 
 func TestWorkflowDecisionRejectsWorkspaceBeginAndDecisionFailures(t *testing.T) {
 	store, _, _, _, task := workflowDecisionStoreFixture(t)
-	decisionStore := NewWorkflowDecisionStore(store)
+	decisionStore := newAgentWorkflowDecisionStore(store)
 	if committed, err := decisionStore.CommitWorkflowDecision(t.Context(), transactionmodel.WorkflowDecisionCommit{WorkspaceID: " "}); err == nil || committed {
 		t.Fatalf("blank decision committed=%v error=%v", committed, err)
 	}
@@ -111,7 +111,7 @@ func TestWorkflowDecisionRollsBackEachTransactionalWriteFailure(t *testing.T) {
 			fixture := newWorkflowDecisionEdgeFixture(t)
 			commit := workflowDecisionEdgeCommit(fixture.task)
 			test.configure(t, fixture, &commit)
-			committed, err := NewWorkflowDecisionStore(fixture.store).CommitWorkflowDecision(t.Context(), commit)
+			committed, err := newAgentWorkflowDecisionStore(fixture.store).CommitWorkflowDecision(t.Context(), commit)
 			if err == nil || committed {
 				t.Fatalf("committed=%v error=%v", committed, err)
 			}
@@ -180,7 +180,7 @@ func TestWorkflowStateRollsBackEachTransactionalWriteFailure(t *testing.T) {
 			fixture := newWorkflowDecisionEdgeFixture(t)
 			commit := transactionmodel.WorkflowStateCommit{WorkspaceID: "default"}
 			test.configure(t, fixture, &commit)
-			if err := NewWorkflowDecisionStore(fixture.store).CommitWorkflowState(t.Context(), commit); err == nil {
+			if err := newAgentWorkflowDecisionStore(fixture.store).CommitWorkflowState(t.Context(), commit); err == nil {
 				t.Fatal("state failure committed")
 			}
 		})
@@ -191,7 +191,7 @@ func TestWorkflowDecisionSkipsDuplicateDecidedTaskUpdate(t *testing.T) {
 	fixture := newWorkflowDecisionEdgeFixture(t)
 	commit := workflowDecisionEdgeCommit(fixture.task)
 	commit.UpdateTasks = []workflowmodel.WorkflowTask{workflowDecisionEdgeTask(fixture.task)}
-	committed, err := NewWorkflowDecisionStore(fixture.store).CommitWorkflowDecision(t.Context(), commit)
+	committed, err := newAgentWorkflowDecisionStore(fixture.store).CommitWorkflowDecision(t.Context(), commit)
 	if err != nil || !committed {
 		t.Fatalf("committed=%v error=%v", committed, err)
 	}
@@ -199,7 +199,7 @@ func TestWorkflowDecisionSkipsDuplicateDecidedTaskUpdate(t *testing.T) {
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 	commit = workflowDecisionEdgeCommit(fixture.task)
-	if committed, err := NewWorkflowDecisionStore(fixture.store).CommitWorkflowDecision(cancelled, commit); err == nil || committed {
+	if committed, err := newAgentWorkflowDecisionStore(fixture.store).CommitWorkflowDecision(cancelled, commit); err == nil || committed {
 		t.Fatalf("cancelled committed=%v error=%v", committed, err)
 	}
 }
@@ -247,12 +247,12 @@ func TestWorkflowDecisionCommitsAllOptionalWorkflowWrites(t *testing.T) {
 	commit.Events = []workflowmodel.WorkflowProcessEvent{{ID: "event-optional", ProcessID: fixture.process.ID, Event: "optional", CreatedAt: "v2"}}
 	commit.InsertExecutions = []workflowmodel.WorkflowExecution{workflowWorkerEdgeExecution("execution-inserted")}
 	commit.WorkflowExecution = &existingExecution
-	committed, err := NewWorkflowDecisionStore(fixture.store).CommitWorkflowDecision(t.Context(), commit)
+	committed, err := newAgentWorkflowDecisionStore(fixture.store).CommitWorkflowDecision(t.Context(), commit)
 	if err != nil || !committed {
 		t.Fatalf("committed=%v error=%v", committed, err)
 	}
 
-	if err := NewWorkflowDecisionStore(fixture.store).CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "default"}); err != nil {
+	if err := newAgentWorkflowDecisionStore(fixture.store).CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "default"}); err != nil {
 		t.Fatalf("empty state commit=%v", err)
 	}
 }

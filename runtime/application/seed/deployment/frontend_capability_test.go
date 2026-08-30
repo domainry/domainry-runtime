@@ -39,7 +39,7 @@ func (p *frontendCapabilityRegistrarProbe) RegisterManifest(ctx context.Context,
 }
 
 func TestInstallFrontendCapabilityManifestSeedsSeparateDeploymentEvidence(t *testing.T) {
-	records := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "crm", TemplateVersion: "1", Name: "CRM", Objects: []definitionmodel.ObjectSchema{{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}}, Views: nil, Actions: nil, Workflows: nil, AutomationRules: nil, Dictionaries: nil, Integrations: integrationmodel.IntegrationSchema{}, Reports: nil, Entrypoints: nil, Skills: nil, Agents: nil, Store: nil})
+	records := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "crm", TemplateVersion: "1", Name: "CRM", Objects: []definitionmodel.ObjectSchema{{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}}, Actions: nil, Workflows: nil, AutomationRules: nil, Dictionaries: nil, Integrations: integrationmodel.IntegrationSchema{}, Reports: nil, Skills: nil, Agents: nil, Store: nil})
 	manifest := deploymentmodel.FrontendCapabilityManifest{
 		ManifestVersion: deploymentmodel.FrontendCapabilityManifestVersion, FrontendVersion: "frontend-1",
 		RuntimeContractVersions: []string{capabilitycontract.RuntimeAuthoringContractVersion},

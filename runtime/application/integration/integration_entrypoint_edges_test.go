@@ -9,9 +9,9 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -172,7 +172,7 @@ func TestInvokeIntegrationAgentToolEdges(t *testing.T) {
 	records := &integrationEntrypointRecords{}
 	delivery := &independentDeliveryRepository{}
 	snapshot := appschemamodel.ApplicationSchemaSnapshot{
-		Agents:       []agentmodel.AgentSchema{{Key: "agent", Tools: []string{"readRecord", "createRecord", "callConnector"}}},
+		Agents:       []agentsdk.AgentSchema{{Key: "agent", Tools: []string{"readRecord", "createRecord", "callConnector"}}},
 		Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "connector"}}},
 	}
 	service := NewIntegrationApplicationService(ApplicationDependencies{

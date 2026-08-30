@@ -76,10 +76,6 @@ func wrapMetadataError(err error) error {
 	if errors.As(err, &appErr) {
 		return err
 	}
-	var versionConflict *appschemamodel.ApplicationDefinitionConflictError
-	if errors.As(err, &versionConflict) {
-		return conflict("backend.metadata.definition_version_conflict", "resource_type", versionConflict.ResourceType, "resource_key", versionConflict.ResourceKey, "expected_hash", versionConflict.ExpectedHash, "current_hash", versionConflict.CurrentHash)
-	}
 	var schemaMismatch *appschemamodel.ApplicationSchemaPhysicalSchemaMismatchError
 	if errors.As(err, &schemaMismatch) {
 		return conflict(schemaMismatch.ErrorCode(), "object_key", schemaMismatch.ObjectKey, "column_key", schemaMismatch.ColumnKey, "expected_type", schemaMismatch.ExpectedType, "actual_type", schemaMismatch.ActualType)

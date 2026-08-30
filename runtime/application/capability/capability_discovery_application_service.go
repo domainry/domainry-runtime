@@ -9,7 +9,6 @@ import (
 	definitioncontract "github.com/domainry/domainry-runtime/runtime/domain/definition/contract"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	businessseedcontract "github.com/domainry/domainry-runtime/runtime/domain/businessseed/contract"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
@@ -110,14 +109,6 @@ func (s *CapabilityAuthoringApplicationService) CapabilityDetailSelected(ctx con
 		for _, definition := range domain.Capabilities {
 			if definition.Key == capabilityKey {
 				selected := map[string]string{}
-				if capabilityKey == "seed.record" && selection.ObjectKey != "" {
-					object, found := capabilityObjectByKey(snapshot, selection.ObjectKey)
-					if !found {
-						return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryNotFound("backend.capability.object_not_found", "object_key", selection.ObjectKey)
-					}
-					definition = businessseedcontract.SpecializeSeedRecordAuthoringCapability(object)
-					selected = map[string]string{"object_key": selection.ObjectKey}
-				}
 				if capabilityKey == "integration.connection" || capabilityKey == "integration.connection.rotate" {
 					if selection.ConnectorKey != "" || selection.ProviderKey != "" {
 						if selection.ConnectorKey == "" || selection.ProviderKey == "" {
@@ -256,10 +247,6 @@ func (s *CapabilityAuthoringApplicationService) ReferenceValues(ctx context.Cont
 		values = contract.Instance.WorkflowKeys
 	case "report_key":
 		values = contract.Instance.ReportKeys
-	case "preference_key":
-		values = contract.Instance.PreferenceKeys
-	case "rule_set_key":
-		values = contract.Instance.RuleSetKeys
 	case "role_key":
 		values = contract.Instance.RoleKeys
 	case "permission_key":

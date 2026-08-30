@@ -1,14 +1,15 @@
 package service
 
 import (
-	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	"testing"
+
+	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -73,7 +74,6 @@ func TestSnapshotVisibilityFiltersObjectsActionsReportsAndAgentRegistry(t *testi
 			{ObjectKey: "customer", ActionKey: "customer.approve"},
 			{ObjectKey: "customer", ActionKey: "customer.reject"},
 		},
-		Views: []definitionmodel.ViewSchema{{Key: "customers", ObjectKey: "customer"}, {Key: "invoices", ObjectKey: "invoice"}},
 		Reports: []reportmodel.ReportSchema{
 			{Key: "customer_report", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "customer", Alias: "customer"}}},
 			{Key: "invoice_report", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "invoice", Alias: "invoice"}}},
@@ -81,33 +81,32 @@ func TestSnapshotVisibilityFiltersObjectsActionsReportsAndAgentRegistry(t *testi
 			{Key: "forbidden_report", RequiredPermissions: []string{"report.manage"}},
 			{Key: "global_report"},
 		},
-		EntryPoints: []definitionmodel.EntryPointSchema{{Key: "unscoped"}, {Key: "sales", RequiredPermissions: []string{"customer.read"}}, {Key: "finance", RequiredPermissions: []string{"finance.read"}}},
-		Skills: []agentmodel.SkillSchema{
+		Skills: []agentsdk.SkillSchema{
 			{Key: "search", AllowedTools: []string{"searchRecords", "searchRecords", ""}},
 			{Key: "create", AllowedTools: []string{"createRecord"}},
 			{Key: "integration", AllowedTools: []string{"crm_sync"}},
 			{Key: "hidden", AllowedTools: []string{"admin_sync"}},
 			{Key: "passive"},
 		},
-		Agents: []agentmodel.AgentSchema{
+		Agents: []agentsdk.AgentSchema{
 			{Key: "sales-agent", Tools: []string{"getRecord", "crm_sync"}, SkillKeys: []string{"search", "integration", "hidden"}},
 			{Key: "hidden-agent", Tools: []string{"admin_sync"}},
 			{Key: "missing-skill", SkillKeys: []string{"hidden"}},
 			{Key: "passive"},
 		},
-		AgentTasks: []agentmodel.AgentTaskDefinition{
-			{Key: "customer-review", AgentKey: "sales-agent", AllowedObjects: []string{"customer", "invoice"}, AllowedActions: []string{"customer.approve", "customer.reject"}, SideEffectMode: agentmodel.AgentTaskSideEffectActionAllowed, Enabled: true},
-			{Key: "invoice-review", AgentKey: "sales-agent", AllowedObjects: []string{"invoice"}, SideEffectMode: agentmodel.AgentTaskSideEffectAnalysisOnly, Enabled: true},
-			{Key: "customer-reject", AgentKey: "sales-agent", AllowedActions: []string{"customer.reject"}, SideEffectMode: agentmodel.AgentTaskSideEffectActionAllowed, Enabled: true},
-			{Key: "hidden-agent-task", AgentKey: "hidden-agent", SideEffectMode: agentmodel.AgentTaskSideEffectAnalysisOnly, Enabled: true},
-			{Key: "disabled-task", AgentKey: "sales-agent", SideEffectMode: agentmodel.AgentTaskSideEffectAnalysisOnly},
+		AgentTasks: []agentsdk.AgentTaskDefinition{
+			{Key: "customer-review", AgentKey: "sales-agent", AllowedObjects: []string{"customer", "invoice"}, AllowedActions: []string{"customer.approve", "customer.reject"}, SideEffectMode: agentsdk.AgentTaskSideEffectActionAllowed, Enabled: true},
+			{Key: "invoice-review", AgentKey: "sales-agent", AllowedObjects: []string{"invoice"}, SideEffectMode: agentsdk.AgentTaskSideEffectAnalysisOnly, Enabled: true},
+			{Key: "customer-reject", AgentKey: "sales-agent", AllowedActions: []string{"customer.reject"}, SideEffectMode: agentsdk.AgentTaskSideEffectActionAllowed, Enabled: true},
+			{Key: "hidden-agent-task", AgentKey: "hidden-agent", SideEffectMode: agentsdk.AgentTaskSideEffectAnalysisOnly, Enabled: true},
+			{Key: "disabled-task", AgentKey: "sales-agent", SideEffectMode: agentsdk.AgentTaskSideEffectAnalysisOnly},
 		},
-		AgentEntrypoints: []agentmodel.AgentEntrypointAssignment{
+		AgentEntrypoints: []agentsdk.AgentEntrypointAssignment{
 			{Key: "sales", AgentKey: "sales-agent", Surface: "workspace", RequiredPermissions: []string{"customer.read"}, AllowedTaskKeys: []string{"customer-review", "invoice-review"}, AllowedWorkflowKeys: []string{"active", "disabled"}, Enabled: true},
 			{Key: "finance", AgentKey: "sales-agent", Surface: "workspace", RequiredPermissions: []string{"finance.read"}, Enabled: true},
 			{Key: "admin-surface", AgentKey: "sales-agent", Surface: "admin", RequiredPermissions: []string{"customer.read"}, Enabled: true},
 		},
-		AgentServicePrincipals:    []agentmodel.AgentServicePrincipalBinding{{Key: "agent-service", UserID: "service-user", RoleKey: "service"}},
+		AgentServicePrincipals:    []agentsdk.AgentServicePrincipalBinding{{Key: "agent-service", UserID: "service-user", RoleKey: "service"}},
 		Workflows:                 []definitionmodel.WorkflowSchema{{Key: "active", Enabled: true}, {Key: "disabled"}},
 		IdentityProfileExtensions: []profilebindingmodel.Binding{{ObjectKey: "customer"}, {ObjectKey: "invoice"}},
 	}
@@ -115,11 +114,11 @@ func TestSnapshotVisibilityFiltersObjectsActionsReportsAndAgentRegistry(t *testi
 	if filtered.SchemaHash == "" || filtered.SnapshotVersion != filtered.SchemaHash || filtered.SchemaHash != SchemaSnapshotHash(filtered) {
 		t.Fatalf("filtered schema hash does not describe the returned projection: hash=%q version=%q", filtered.SchemaHash, filtered.SnapshotVersion)
 	}
-	if len(filtered.Objects) != 1 || filtered.Objects[0].Key != "customer" || len(filtered.Views) != 1 || len(filtered.Actions) != 1 || len(filtered.GuardedWrites) != 1 {
+	if len(filtered.Objects) != 1 || filtered.Objects[0].Key != "customer" || len(filtered.Actions) != 1 || len(filtered.GuardedWrites) != 1 {
 		t.Fatalf("core visibility=%+v", filtered)
 	}
-	if len(filtered.Reports) != 3 || len(filtered.EntryPoints) != 1 || len(filtered.IdentityProfileExtensions) != 1 {
-		t.Fatalf("surface visibility reports=%v entrypoints=%v extensions=%v", filtered.Reports, filtered.EntryPoints, filtered.IdentityProfileExtensions)
+	if len(filtered.Reports) != 3 || len(filtered.IdentityProfileExtensions) != 1 {
+		t.Fatalf("surface visibility reports=%v extensions=%v", filtered.Reports, filtered.IdentityProfileExtensions)
 	}
 	if len(filtered.Skills) != 3 || len(filtered.Agents) != 2 || len(filtered.Skills[0].AllowedTools) != 1 {
 		t.Fatalf("agent registry skills=%v agents=%v", filtered.Skills, filtered.Agents)
@@ -177,9 +176,9 @@ func TestVisibilityPermissionAndToolHelperEdges(t *testing.T) {
 		t.Fatal("entrypoint visibility mismatch")
 	}
 	contractSnapshot := appschemamodel.ApplicationSchemaSnapshot{
-		Agents:     []agentmodel.AgentSchema{{Key: "agent"}},
-		AgentTasks: []agentmodel.AgentTaskDefinition{{Key: "task", AgentKey: "agent", Enabled: true}},
-		AgentEntrypoints: []agentmodel.AgentEntrypointAssignment{
+		Agents:     []agentsdk.AgentSchema{{Key: "agent"}},
+		AgentTasks: []agentsdk.AgentTaskDefinition{{Key: "task", AgentKey: "agent", Enabled: true}},
+		AgentEntrypoints: []agentsdk.AgentEntrypointAssignment{
 			{Key: "disabled", AgentKey: "agent"},
 			{Key: "missing", AgentKey: "missing", Enabled: true},
 			{Key: "active", AgentKey: "agent", Enabled: true, RequiredPermissions: []string{"customer.read"}},

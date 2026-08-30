@@ -1,8 +1,9 @@
 package changeplan
 
-import changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
-
-import "context"
+import (
+	"context"
+	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
+)
 
 func (s *ChangePlanReferenceApplicationService) addSeedProvenanceReferences(ctx context.Context, builder *changeplanprojection.ChangePlanReferenceGraphBuilder) error {
 	if s.evidence == nil {

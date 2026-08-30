@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
-	agentmodel "github.com/domainry/domainry-runtime/runtime/domain/agent/model"
 )
 
 type agentCredentialIDStub struct{}
@@ -23,7 +23,7 @@ func TestAgentTaskCredentialIsShortLivedAndStrictlyScoped(t *testing.T) {
 	service := NewAgentTaskCredentialApplicationService([]byte(strings.Repeat("k", 32)), clock, agentCredentialIDStub{})
 	claims := AgentTaskCredentialClaims{
 		WorkspaceID: "workspace-a", ProcessID: "process-a", TaskRunID: "run-a", AllowedTools: []string{"query_records", "query_records", "invoke_action"},
-		Principal: agentmodel.AgentPrincipalReference{UserID: "user-a", RoleKey: "operator", WorkspaceID: "workspace-a", AuthorizationRevision: "auth-1"},
+		Principal: agentsdk.PrincipalReference{UserID: "user-a", RoleKey: "operator", WorkspaceID: "workspace-a", AuthorizationRevision: "auth-1"},
 	}
 	token, err := service.Issue(t.Context(), claims, 5*time.Minute)
 	if err != nil || strings.Count(token, ".") != 1 {
@@ -56,7 +56,7 @@ func TestAgentTaskCredentialIsShortLivedAndStrictlyScoped(t *testing.T) {
 
 func TestAgentTaskCredentialRejectsUnsafeConfigurationAndClaims(t *testing.T) {
 	now := time.Date(2026, 8, 4, 10, 0, 0, 0, time.UTC)
-	claims := AgentTaskCredentialClaims{WorkspaceID: "workspace", TaskRunID: "run", Principal: agentmodel.AgentPrincipalReference{UserID: "user", RoleKey: "role"}}
+	claims := AgentTaskCredentialClaims{WorkspaceID: "workspace", TaskRunID: "run", Principal: agentsdk.PrincipalReference{UserID: "user", RoleKey: "role"}}
 	if _, err := NewAgentTaskCredentialApplicationService([]byte("short"), agentTaskClock{now: now}, nil).Issue(t.Context(), claims, time.Minute); apperror.CodeOf(err) != "agent.credential.signer_unavailable" {
 		t.Fatalf("short key err=%v", err)
 	}
@@ -79,7 +79,7 @@ func TestAgentTaskCredentialBoundaryMatrix(t *testing.T) {
 	if defaults := NewAgentTaskCredentialApplicationService(key, nil, nil); defaults.clock == nil || defaults.ids == nil {
 		t.Fatal("default credential dependencies missing")
 	}
-	valid := AgentTaskCredentialClaims{WorkspaceID: "workspace", ProcessID: "process", TaskRunID: "run", Principal: agentmodel.AgentPrincipalReference{UserID: "user", RoleKey: "role"}, AllowedTools: []string{"query"}, Nonce: "provided"}
+	valid := AgentTaskCredentialClaims{WorkspaceID: "workspace", ProcessID: "process", TaskRunID: "run", Principal: agentsdk.PrincipalReference{UserID: "user", RoleKey: "role"}, AllowedTools: []string{"query"}, Nonce: "provided"}
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 	if _, err := service.Issue(cancelled, valid, time.Minute); !errors.Is(err, context.Canceled) {

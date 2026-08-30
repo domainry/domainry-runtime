@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/domainry/domainry-notification-sdk/modulehost"
+	ormmigration "github.com/domainry/domainry-orm/migration"
 )
 
 type moduleSchemaColumn struct {
@@ -27,7 +27,7 @@ type moduleSchemaTable struct {
 	indexes []moduleSchemaIndex
 }
 
-func (s *RuntimeStore) proveModuleMigrationBaseline(ctx context.Context, baseline *modulehost.SchemaBaseline) (bool, error) {
+func (s *RuntimeStore) proveModuleMigrationBaseline(ctx context.Context, baseline *ormmigration.Baseline) (bool, error) {
 	if baseline == nil || len(baseline.Tables) == 0 {
 		return false, nil
 	}
@@ -57,7 +57,7 @@ func (s *RuntimeStore) proveModuleMigrationBaseline(ctx context.Context, baselin
 	return true, nil
 }
 
-func compareModuleSchemaTable(expected modulehost.SchemaTable, actual moduleSchemaTable) error {
+func compareModuleSchemaTable(expected ormmigration.Table, actual moduleSchemaTable) error {
 	if len(actual.columns) != len(expected.Columns) {
 		return fmt.Errorf("columns=%d want=%d", len(actual.columns), len(expected.Columns))
 	}
@@ -81,7 +81,7 @@ func compareModuleSchemaTable(expected modulehost.SchemaTable, actual moduleSche
 		return fmt.Errorf("explicit indexes=%d want=%d", len(actual.indexes), len(expected.Indexes))
 	}
 	sort.Slice(actual.indexes, func(i, j int) bool { return actual.indexes[i].name < actual.indexes[j].name })
-	wanted := append([]modulehost.SchemaIndex(nil), expected.Indexes...)
+	wanted := append([]ormmigration.Index(nil), expected.Indexes...)
 	sort.Slice(wanted, func(i, j int) bool { return wanted[i].Name < wanted[j].Name })
 	for position, want := range wanted {
 		got := actual.indexes[position]
