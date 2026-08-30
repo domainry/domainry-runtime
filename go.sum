@@ -21,6 +21,10 @@ github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/domainry/domainry-connector-sdk v0.1.0-dev.12 h1:tIsk0HmlLKe4bfvyAMNJCtqpo0HyUugHPVUKfw+GVOo=
 github.com/domainry/domainry-connector-sdk v0.1.0-dev.12/go.mod h1:y3YMg09XmWCuxyIeYb1d4xC4AkFmqGWbrm+OaumeyY8=
+github.com/domainry/domainry-data-exchange v0.1.0 h1:QG+s4OxkV0vO+cQsEYJNCC6SDrakwqJ3iaLpFOJS9O8=
+github.com/domainry/domainry-data-exchange v0.1.0/go.mod h1:t9MorCQIOWskyl1PIu7nCqo/Kc2wgK3fnuilhTbQa6k=
+github.com/domainry/domainry-data-exchange-sdk v0.1.0 h1:2tLNqL1D63K0KQEo4QvpbWpBQwiUWXNuwhM2lu/hgQM=
+github.com/domainry/domainry-data-exchange-sdk v0.1.0/go.mod h1:0j2ePvtZHqhOX1CUM/LZLe+dTGfL4ORuVC+OLI74FbI=
 github.com/domainry/domainry-identity-sdk v0.1.0-dev8 h1:EXhMdCHaxl4mQSx83r9lAAhqPzd9JiCPYDlNOf4YlQ4=
 github.com/domainry/domainry-identity-sdk v0.1.0-dev8/go.mod h1:6DLdAWQS3aTU5D87w8UIS4HSK/Lj9f7/qFslLJR0Gxw=
 github.com/domainry/domainry-notification v0.1.0-dev.8 h1:hu18OGvFNB+N4tFLKN3ohrpJrCfW9iWg5QnYxkiTR0M=

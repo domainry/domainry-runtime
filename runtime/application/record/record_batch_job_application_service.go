@@ -14,11 +14,11 @@ import (
 	"time"
 
 	exchangecontract "github.com/domainry/domainry-data-exchange-sdk"
+	dataexchange "github.com/domainry/domainry-data-exchange/fileengine"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
-	"github.com/domainry/domainry-runtime/pkg/dataexchange"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"

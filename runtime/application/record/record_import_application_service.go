@@ -17,10 +17,10 @@ import (
 	"strings"
 	"time"
 
+	dataexchange "github.com/domainry/domainry-data-exchange/fileengine"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/logging"
-	"github.com/domainry/domainry-runtime/pkg/dataexchange"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
@@ -184,7 +184,7 @@ func (s *RecordImportApplicationService) buildPreview(ctx context.Context, objec
 			if fieldKey == "" {
 				fieldKey = header
 			}
-			// encoding/csv fixes FieldsPerRecord from the header, so every row
+			// fileengine fixes the CSV field count from the header, so every row
 			// reaching this point has exactly the same number of columns.
 			row.RawValues[fieldKey] = strings.TrimSpace(rawRow[columnIndex])
 			field, ok := fieldByHeader[fieldKey]

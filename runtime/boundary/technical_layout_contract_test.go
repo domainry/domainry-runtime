@@ -44,7 +44,7 @@ var applicationTopLevelDirectories = technicalLayoutStringSet(
 var applicationProductionBaselines = map[string]int{
 	".": 0, "action": 43, "agent": 6, "audit": 3, "automation": 8, "businesssystem": 4, "capability": 17,
 	"businessevent": 1, "changeplan": 14, "deployment": 8, "integration": 70, "lifecycle": 5, "metadata": 14, "notificationfacade": 4, "operations": 9,
-	"pipeline": 4, "preference": 1, "record": 18, "recordmutation": 4, "recordtimer": 1, "report": 5, "ruleset": 1, "scheduler": 12, "surfacecontext": 2, "workflow": 26,
+	"pipeline": 4, "preference": 1, "record": 20, "recordmutation": 4, "recordtimer": 1, "report": 5, "ruleset": 1, "scheduler": 12, "surfacecontext": 2, "workflow": 26,
 	"party": 3, "principal": 1,
 	"upload": 4,
 	"seed":   0, "seed/automation": 2, "seed/business": 2,
@@ -64,6 +64,7 @@ var bootstrapRuntimeProductionFiles = technicalLayoutStringSet(
 	"notification_event_types.go", "notification_startup_bindings.go", "runtime.go", "seed_synchronization.go", "service_assembly.go", "startup.go",
 	"identity_project_roles.go", "notification_sdk_module_host.go", "party_sdk_module_host.go", "notification_system_retention.go", "notification_system_subjects.go",
 	"monitoring_module_host.go",
+	"data_exchange_module_host.go",
 	"startup_errors.go", "store_preparation.go", "worker_dependencies.go", "worker_lifecycle.go", "worker_lifecycle_cleanup.go", "worker_registry.go", "operations_control_worker.go",
 )
 

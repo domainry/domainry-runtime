@@ -13,12 +13,12 @@ import (
 	exchangecontract "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	dataexchange "github.com/domainry/domainry-data-exchange/fileengine"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/logging"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
-	"github.com/domainry/domainry-runtime/pkg/dataexchange"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -89,8 +89,8 @@ func (s *RecordBatchJobApplicationService) processImport(ctx context.Context, jo
 	}
 	provider := newLegacyRecordDataExchangeImportProvider(s.dependencies.Importer, principal)
 	result, err := dataexchange.ProcessCSVImport(ctx, provider, dataexchange.ImportEngineRequest{
-		Batch: dataexchange.ImportBatch{
-			Scope:     dataexchange.Scope{WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID, RoleKey: principal.RoleKey, RequestID: job.ID},
+		Batch: exchangecontract.ImportBatch{
+			Scope:     exchangecontract.Scope{WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID, RoleKey: principal.RoleKey, RequestID: job.ID},
 			ObjectKey: job.ObjectKey, JobID: job.ID,
 		},
 		Open:      openSource,

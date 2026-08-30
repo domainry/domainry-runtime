@@ -8,8 +8,8 @@ import (
 
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-data-exchange-sdk/modulehost"
+	fileexchange "github.com/domainry/domainry-data-exchange/fileengine"
 	"github.com/domainry/domainry-foundation/apperror"
-	fileexchange "github.com/domainry/domainry-runtime/pkg/dataexchange"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 )
@@ -30,7 +30,8 @@ func newRecordDataExchangeImportProvider(service *RecordImportApplicationService
 
 // legacyRecordDataExchangeImportProvider keeps the pre-extraction Runtime
 // worker compiling while production composition moves to the SDK Binding.
-// It can be deleted with pkg/dataexchange after that cutover.
+// It remains only for legacy RecordBatchJob fallback compatibility; both paths
+// now use the Data Exchange owner's fileengine implementation.
 type legacyRecordDataExchangeImportProvider struct {
 	sdk *recordDataExchangeImportProvider
 }
@@ -39,25 +40,12 @@ func newLegacyRecordDataExchangeImportProvider(service *RecordImportApplicationS
 	return &legacyRecordDataExchangeImportProvider{sdk: newRecordDataExchangeImportProvider(service, principal)}
 }
 
-func (p *legacyRecordDataExchangeImportProvider) ValidateImportBatch(ctx context.Context, batch fileexchange.ImportBatch) (fileexchange.ImportBatchResult, error) {
-	result, err := p.sdk.ValidateImportBatch(ctx, sdkImportBatch(batch))
-	return fileexchange.ImportBatchResult{Accepted: result.Accepted, Rejected: result.Rejected, Receipt: result.Receipt}, err
+func (p *legacyRecordDataExchangeImportProvider) ValidateImportBatch(ctx context.Context, batch dataexchangesdk.ImportBatch) (dataexchangesdk.ImportBatchResult, error) {
+	return p.sdk.ValidateImportBatch(ctx, batch)
 }
 
-func (p *legacyRecordDataExchangeImportProvider) ApplyImportBatch(ctx context.Context, batch fileexchange.ImportBatch) (fileexchange.ImportBatchResult, error) {
-	result, err := p.sdk.ApplyImportBatch(ctx, sdkImportBatch(batch))
-	return fileexchange.ImportBatchResult{Accepted: result.Accepted, Rejected: result.Rejected, Receipt: result.Receipt}, err
-}
-
-func sdkImportBatch(batch fileexchange.ImportBatch) dataexchangesdk.ImportBatch {
-	rows := make([]dataexchangesdk.ImportRow, len(batch.Rows))
-	for i, row := range batch.Rows {
-		rows[i] = dataexchangesdk.ImportRow{Number: row.Number, Values: append([]string(nil), row.Values...)}
-	}
-	return dataexchangesdk.ImportBatch{
-		Scope:     dataexchangesdk.Scope{WorkspaceID: batch.Scope.WorkspaceID, ActorID: batch.Scope.ActorID, RoleKey: batch.Scope.RoleKey, RequestID: batch.Scope.RequestID},
-		ObjectKey: batch.ObjectKey, JobID: batch.JobID, ChunkID: batch.ChunkID, Headers: append([]string(nil), batch.Headers...), Rows: rows,
-	}
+func (p *legacyRecordDataExchangeImportProvider) ApplyImportBatch(ctx context.Context, batch dataexchangesdk.ImportBatch) (dataexchangesdk.ImportBatchResult, error) {
+	return p.sdk.ApplyImportBatch(ctx, batch)
 }
 
 func (p *recordDataExchangeImportProvider) ValidateImportBatch(ctx context.Context, batch dataexchangesdk.ImportBatch) (dataexchangesdk.ImportBatchResult, error) {
@@ -149,4 +137,4 @@ func recordDataExchangeCSV(batch dataexchangesdk.ImportBatch) ([]byte, error) {
 }
 
 var _ modulehost.ImportProvider = (*recordDataExchangeImportProvider)(nil)
-var _ fileexchange.ImportProvider = (*legacyRecordDataExchangeImportProvider)(nil)
+var _ modulehost.ImportProvider = (*legacyRecordDataExchangeImportProvider)(nil)

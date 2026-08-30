@@ -3,16 +3,15 @@ package record
 import (
 	"bytes"
 	"context"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 	"sync"
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-data-exchange-sdk/modulehost"
+	"github.com/domainry/domainry-data-exchange/fileengine"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -121,21 +120,14 @@ func (p dataExchangeExportProvider) ReadExportPage(ctx context.Context, r dataex
 	if err != nil {
 		return dataexchange.ExportPage{}, err
 	}
-	reader := csv.NewReader(bytes.NewReader(encoded.content))
-	columns, err := reader.Read()
+	var columns []string
+	rows := make([][]string, 0, encoded.rows)
+	columns, err = fileengine.DecodeCSV(ctx, bytes.NewReader(encoded.content), fileengine.CSVDecodeLimits{MaxBytes: int64(len(encoded.content)), MaxRows: recordExportBatchSize, MaxColumns: recordImportMaxColumns}, func(_ []string, row fileengine.CSVRecord) error {
+		rows = append(rows, row.Values)
+		return nil
+	})
 	if err != nil {
 		return dataexchange.ExportPage{}, err
-	}
-	rows := make([][]string, 0, encoded.rows)
-	for {
-		row, readErr := reader.Read()
-		if readErr == io.EOF {
-			break
-		}
-		if readErr != nil {
-			return dataexchange.ExportPage{}, readErr
-		}
-		rows = append(rows, row)
 	}
 	next := ""
 	if encoded.hasNext {

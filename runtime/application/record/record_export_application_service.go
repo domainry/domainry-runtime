@@ -17,8 +17,8 @@ import (
 	"sort"
 	"strings"
 
+	dataexchange "github.com/domainry/domainry-data-exchange/fileengine"
 	"github.com/domainry/domainry-foundation/apperror"
-	"github.com/domainry/domainry-runtime/pkg/dataexchange"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 

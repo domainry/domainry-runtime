@@ -16,6 +16,7 @@ import (
 	"time"
 
 	connector "github.com/domainry/domainry-connector-sdk"
+	dataexchangemodule "github.com/domainry/domainry-data-exchange/module"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	monitoringremote "github.com/domainry/domainry-monitoring-sdk/remote"
