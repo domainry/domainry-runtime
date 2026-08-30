@@ -1,6 +1,7 @@
 package reports
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -9,28 +10,49 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/logging"
-	reportapplication "github.com/domainry/domainry-runtime/runtime/application/report"
+	reportexport "github.com/domainry/domainry-runtime/runtime/application/report/export"
+	reportexportapplication "github.com/domainry/domainry-runtime/runtime/application/report/export/application"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 type ReportsHandler struct {
-	service           *reportapplication.ReportApplicationService
+	queries           ReportQueryUseCases
+	snapshots         ReportSnapshotUseCases
+	exports           ReportExportUseCases
 	principal         func(*http.Request) principalmodel.Principal
 	writeJSON         func(http.ResponseWriter, int, any)
 	writeServiceError func(http.ResponseWriter, *http.Request, error)
 }
 
 type ReportsDependencies struct {
-	Service           *reportapplication.ReportApplicationService
+	Queries           ReportQueryUseCases
+	Snapshots         ReportSnapshotUseCases
+	Exports           ReportExportUseCases
 	Principal         func(*http.Request) principalmodel.Principal
 	WriteJSON         func(http.ResponseWriter, int, any)
 	WriteServiceError func(http.ResponseWriter, *http.Request, error)
 }
 
+type ReportSnapshotUseCases interface {
+	RefreshSnapshot(context.Context, string, string, principalmodel.Principal) (reportmodel.ReportSnapshot, error)
+}
+
+type ReportQueryUseCases interface {
+	SummaryScopedPage(context.Context, string, string, string, []string, reportmodel.ReportPageRequest, principalmodel.Principal) (reportmodel.ReportSummary, error)
+	QueryObjectSQLPage(context.Context, string, map[string]any, reportmodel.ReportPageRequest, principalmodel.Principal) (reportmodel.ReportSummary, error)
+}
+
+type ReportExportUseCases interface {
+	PrepareExportRouted(context.Context, string, string, string, string, reportmodel.ReportExportScopeRequest, principalmodel.Principal) (reportexportapplication.ReportExportPreparation, error)
+	GetExportJob(context.Context, string, principalmodel.Principal) (reportexport.ExchangeJob, error)
+	CancelExportJob(context.Context, string, principalmodel.Principal) (reportexport.ExchangeJob, error)
+	DownloadExport(context.Context, string, principalmodel.Principal) ([]byte, string, error)
+}
+
 func NewReportsHandler(deps ReportsDependencies) *ReportsHandler {
 	return &ReportsHandler{
-		service: deps.Service, principal: deps.Principal,
+		queries: deps.Queries, snapshots: deps.Snapshots, exports: deps.Exports, principal: deps.Principal,
 		writeJSON: deps.WriteJSON, writeServiceError: deps.WriteServiceError,
 	}
 }
@@ -41,7 +63,7 @@ func (h *ReportsHandler) reportSummary(w http.ResponseWriter, r *http.Request) {
 		h.writeServiceError(w, r, err)
 		return
 	}
-	summary, err := h.service.SummaryScopedPage(r.Context(), strings.TrimSpace(r.PathValue("reportKey")), strings.TrimSpace(r.URL.Query().Get("mode")), strings.TrimSpace(r.URL.Query().Get("query_key")), r.URL.Query()["tags"], page, h.principal(r))
+	summary, err := h.queries.SummaryScopedPage(r.Context(), strings.TrimSpace(r.PathValue("reportKey")), strings.TrimSpace(r.URL.Query().Get("mode")), strings.TrimSpace(r.URL.Query().Get("query_key")), r.URL.Query()["tags"], page, h.principal(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
@@ -69,7 +91,7 @@ func (h *ReportsHandler) queryReportObjectSQL(w http.ResponseWriter, r *http.Req
 	if request.Parameters == nil {
 		request.Parameters = map[string]any{}
 	}
-	summary, err := h.service.QueryObjectSQLPage(r.Context(), strings.TrimSpace(r.PathValue("reportKey")), request.Parameters, reportmodel.ReportPageRequest{PageSize: request.PageSize, Cursor: request.Cursor}, h.principal(r))
+	summary, err := h.queries.QueryObjectSQLPage(r.Context(), strings.TrimSpace(r.PathValue("reportKey")), request.Parameters, reportmodel.ReportPageRequest{PageSize: request.PageSize, Cursor: request.Cursor}, h.principal(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
@@ -91,7 +113,7 @@ func reportPageRequest(r *http.Request) (reportmodel.ReportPageRequest, error) {
 }
 
 func (h *ReportsHandler) refreshReportSnapshot(w http.ResponseWriter, r *http.Request) {
-	snapshot, err := h.service.RefreshSnapshot(r.Context(), strings.TrimSpace(r.PathValue("reportKey")), strings.TrimSpace(r.Header.Get("Idempotency-Key")), h.principal(r))
+	snapshot, err := h.snapshots.RefreshSnapshot(r.Context(), strings.TrimSpace(r.PathValue("reportKey")), strings.TrimSpace(r.Header.Get("Idempotency-Key")), h.principal(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
@@ -111,7 +133,7 @@ func (h *ReportsHandler) prepareReportExport(w http.ResponseWriter, r *http.Requ
 		h.writeServiceError(w, r, err)
 		return
 	}
-	result, err := h.service.PrepareExportRouted(
+	result, err := h.exports.PrepareExportRouted(
 		r.Context(), strings.TrimSpace(r.PathValue("reportKey")), strings.TrimSpace(r.PathValue("objectKey")),
 		strings.TrimSpace(request.AuditID), strings.TrimSpace(r.Header.Get("Idempotency-Key")), request.Scope, h.principal(r),
 	)
@@ -124,7 +146,7 @@ func (h *ReportsHandler) prepareReportExport(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *ReportsHandler) getReportExportJob(w http.ResponseWriter, r *http.Request) {
-	result, err := h.service.GetExportJob(r.Context(), strings.TrimSpace(r.PathValue("jobID")), h.principal(r))
+	result, err := h.exports.GetExportJob(r.Context(), strings.TrimSpace(r.PathValue("jobID")), h.principal(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
@@ -133,7 +155,7 @@ func (h *ReportsHandler) getReportExportJob(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *ReportsHandler) cancelReportExportJob(w http.ResponseWriter, r *http.Request) {
-	result, err := h.service.CancelExportJob(r.Context(), strings.TrimSpace(r.PathValue("jobID")), h.principal(r))
+	result, err := h.exports.CancelExportJob(r.Context(), strings.TrimSpace(r.PathValue("jobID")), h.principal(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
@@ -142,7 +164,7 @@ func (h *ReportsHandler) cancelReportExportJob(w http.ResponseWriter, r *http.Re
 }
 
 func (h *ReportsHandler) downloadReportExport(w http.ResponseWriter, r *http.Request) {
-	content, filename, err := h.service.DownloadExport(r.Context(), strings.TrimSpace(r.PathValue("token")), h.principal(r))
+	content, filename, err := h.exports.DownloadExport(r.Context(), strings.TrimSpace(r.PathValue("token")), h.principal(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return

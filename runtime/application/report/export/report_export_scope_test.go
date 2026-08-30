@@ -17,7 +17,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
-	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/service"
+	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/query"
 )
 
 type exportAccessStub struct {

@@ -30,7 +30,7 @@ var businessOwnerRootProductionBaselines = map[string]int{
 }
 
 var businessTechnicalDirectories = technicalLayoutStringSet(
-	"model", "validation", "service", "repository", "runtime", "projection",
+	"model", "validation", "service", "query", "snapshot", "repository", "runtime", "projection",
 	"policy", "contract", "testdata",
 )
 
@@ -199,6 +199,8 @@ func TestRuntimeDomainDependencyMatrixIsClosed(t *testing.T) {
 		"projection": technicalLayoutStringSet("model", "contract", "policy", "projection"),
 		"runtime":    technicalLayoutStringSet("model", "contract", "policy", "runtime"),
 		"service":    technicalLayoutStringSet("model", "contract", "policy", "validation", "repository", "projection", "runtime", "service"),
+		"query":      technicalLayoutStringSet("model", "contract", "policy", "projection", "query", "snapshot"),
+		"snapshot":   technicalLayoutStringSet("model", "contract", "snapshot"),
 	}
 
 	err := filepath.WalkDir(domainRoot, func(path string, entry fs.DirEntry, walkErr error) error {
@@ -948,6 +950,23 @@ func TestReportOwnerBoundaryIsClosed(t *testing.T) {
 				if value.Name.Name == "SetRepository" && value.Recv != nil {
 					t.Errorf("Report dependencies must be fixed at construction: %s", path)
 				}
+			}
+		}
+	})
+
+	applicationRoot := filepath.Join(root, "application", "report")
+	walkProductionGo(t, applicationRoot, func(path string, file *ast.File) {
+		name := filepath.Base(path)
+		if name != "report_query_application_service.go" && name != "report_snapshot_application_service.go" {
+			return
+		}
+		for _, spec := range file.Imports {
+			importPath, err := strconv.Unquote(spec.Path.Value)
+			if err != nil {
+				continue
+			}
+			if strings.Contains(importPath, "domainry-data-exchange") || strings.Contains(importPath, "/auditbinding") || strings.Contains(importPath, "/domain/record/repository") || strings.Contains(importPath, "/application/record") {
+				t.Errorf("Report Query/Snapshot application capability must not absorb Export, Audit, or Record persistence dependencies: %s imports %s", path, importPath)
 			}
 		}
 	})

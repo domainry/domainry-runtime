@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	auditmodulehost "github.com/domainry/domainry-audit-sdk/modulehost"
 	auditmodule "github.com/domainry/domainry-audit/module"
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	ormbuilder "github.com/domainry/domainry-orm/builder"
@@ -117,6 +118,11 @@ func (s *RuntimeStore) ensureAuditModuleSchemaLocked(ctx context.Context) error 
 	if err != nil {
 		return err
 	}
+	if len(migrations) > 0 {
+		if err := s.migrateLegacyAuditPrimaryKey(ctx, migrations[0]); err != nil {
+			return err
+		}
+	}
 	values := make([]notificationmodulehost.SchemaMigration, len(migrations))
 	for index, migration := range migrations {
 		values[index] = notificationmodulehost.SchemaMigration{Version: migration.Version, Name: migration.Name, Statements: append([]string(nil), migration.Statements...)}
@@ -135,6 +141,92 @@ func (s *RuntimeStore) ensureAuditModuleSchemaLocked(ctx context.Context) error 
 		}
 	}
 	return s.applyOwnedMigrationsLocked(ctx, "audit", values)
+}
+
+// migrateLegacyAuditPrimaryKey retires the pre-module global Audit key before
+// the source-owned migration registrar proves the Audit baseline. The ORM has
+// no cross-dialect primary-key alteration or INSERT...SELECT schema-rebuild
+// equivalent, so this bounded DDL is intentionally local to migration code.
+func (s *RuntimeStore) migrateLegacyAuditPrimaryKey(ctx context.Context, migration auditmodulehost.SchemaMigration) error {
+	if migration.Baseline == nil || len(migration.Baseline.Tables) != 1 || len(migration.Statements) == 0 {
+		return nil
+	}
+	actual, exists, err := s.inspectModuleSchemaTable(ctx, "_audit_events")
+	if err != nil || !exists {
+		return err
+	}
+	primary := map[string]bool{}
+	for _, column := range actual.columns {
+		primary[column.name] = column.primaryKey
+	}
+	if primary["workspace_id"] || !primary["id"] {
+		return nil
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin legacy Audit primary-key migration: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	table := s.TableIdentifier("_audit_events")
+	workspace := s.Identifier("workspace_id")
+	id := s.Identifier("id")
+	switch strings.ToLower(strings.TrimSpace(s.Driver())) {
+	case "sqlite", "sqlite3":
+		legacyName := "_audit_events_legacy_global_key"
+		legacy := s.TableIdentifier(legacyName)
+		if _, err := tx.ExecContext(ctx, "ALTER TABLE "+table+" RENAME TO "+s.Identifier(legacyName)); err != nil {
+			return fmt.Errorf("rename legacy Audit table: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, migration.Statements[0]); err != nil {
+			return fmt.Errorf("create source-owned Audit table: %w", err)
+		}
+		columns := make([]string, 0, len(migration.Baseline.Tables[0].Columns))
+		for _, column := range migration.Baseline.Tables[0].Columns {
+			columns = append(columns, s.Identifier(column.Name))
+		}
+		projection := strings.Join(columns, ", ")
+		if _, err := tx.ExecContext(ctx, "INSERT INTO "+table+" ("+projection+") SELECT "+projection+" FROM "+legacy); err != nil {
+			return fmt.Errorf("copy legacy Audit rows: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, "DROP TABLE "+legacy); err != nil {
+			return fmt.Errorf("drop retired Audit table: %w", err)
+		}
+	case "postgres", "postgresql", "pgx":
+		var constraint string
+		query := "SELECT constraint_name FROM information_schema.table_constraints WHERE table_schema = current_schema() AND table_name = '_audit_events' AND constraint_type = 'PRIMARY KEY'"
+		if err := tx.QueryRowContext(ctx, query).Scan(&constraint); err != nil {
+			return fmt.Errorf("inspect legacy Audit primary key: %w", err)
+		}
+		statement, _ := legacyAuditPrimaryKeyReplacementSQL(s.Driver(), table, workspace, id, s.Identifier(constraint))
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("replace legacy Audit primary key: %w", err)
+		}
+	case "mysql":
+		statement, _ := legacyAuditPrimaryKeyReplacementSQL(s.Driver(), table, workspace, id, "")
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("replace legacy Audit primary key: %w", err)
+		}
+	default:
+		return fmt.Errorf("unsupported legacy Audit migration driver %q", s.Driver())
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit legacy Audit primary-key migration: %w", err)
+	}
+	return nil
+}
+
+func legacyAuditPrimaryKeyReplacementSQL(driver, table, workspace, id, constraint string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(driver)) {
+	case "postgres", "postgresql", "pgx":
+		if strings.TrimSpace(constraint) == "" {
+			return "", fmt.Errorf("Postgres legacy Audit primary-key constraint is empty")
+		}
+		return "ALTER TABLE " + table + " DROP CONSTRAINT " + constraint + ", ADD PRIMARY KEY (" + workspace + ", " + id + ")", nil
+	case "mysql":
+		return "ALTER TABLE " + table + " DROP PRIMARY KEY, ADD PRIMARY KEY (" + workspace + ", " + id + ")", nil
+	default:
+		return "", fmt.Errorf("unsupported legacy Audit primary-key replacement driver %q", driver)
+	}
 }
 
 func (s *RuntimeStore) runtimeMigrationStore() *RuntimeStore {

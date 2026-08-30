@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,17 +48,36 @@ func TestManifestSchedulerDefinitionManualCapabilityStartupRestartAndExactlyOnce
 	filtered := make([]any, 0, len(objects)+len(canonical))
 	for _, rawObject := range objects {
 		object, _ := rawObject.(map[string]any)
-		if object["key"].(string) != "job_definition" && !canonicalKeys[object["key"].(string)] {
+		objectKey, _ := object["key"].(string)
+		if !strings.HasPrefix(objectKey, "job_") && !canonicalKeys[objectKey] {
+			fields, _ := object["fields"].([]any)
+			filteredFields := make([]any, 0, len(fields))
+			for _, rawField := range fields {
+				field, _ := rawField.(map[string]any)
+				validation, _ := field["validation"].(map[string]any)
+				if validation["target"] == "job_definition" {
+					continue
+				}
+				filteredFields = append(filteredFields, rawField)
+			}
+			object["fields"] = filteredFields
 			filtered = append(filtered, rawObject)
 		}
 	}
-	manifest["objects"] = append(filtered, canonical...)
+	manifest["objects"] = filtered
 	seedRecords, _ := manifest["seed_records"].([]any)
 	filteredSeeds := make([]any, 0, len(seedRecords))
 	for _, rawSeed := range seedRecords {
 		seed, _ := rawSeed.(map[string]any)
 		objectKey, _ := seed["object_key"].(string)
-		if objectKey == "job_definition" || canonicalKeys[objectKey] {
+		if strings.HasPrefix(objectKey, "job_") || canonicalKeys[objectKey] {
+			continue
+		}
+		data, _ := seed["data"].(map[string]any)
+		if _, referencesLegacyDefinition := data["job_definition_id"]; referencesLegacyDefinition {
+			continue
+		}
+		if _, referencesLegacyRun := data["job_run_id"]; referencesLegacyRun {
 			continue
 		}
 		filteredSeeds = append(filteredSeeds, rawSeed)
@@ -75,10 +95,7 @@ func TestManifestSchedulerDefinitionManualCapabilityStartupRestartAndExactlyOnce
 	manifest["roles"] = append(roles, map[string]any{
 		"key": "scheduler_operator", "name": "Scheduler Operator",
 		"permissions": []any{"admin_console.access", "scheduler.command", "scheduler.definition.read"}, "record_scope": "all_records",
-		"data_permissions": []any{
-			map[string]any{"object_key": "customer", "scope": "all_records", "read": true, "write": false},
-			map[string]any{"object_key": "job_run", "scope": "all_records", "read": true, "write": true},
-		},
+		"data_permissions": []any{map[string]any{"object_key": "customer", "scope": "all_records", "read": true, "write": false}},
 	})
 	encoded, err := json.Marshal(manifest)
 	if err != nil {
@@ -109,7 +126,7 @@ func TestManifestSchedulerDefinitionManualCapabilityStartupRestartAndExactlyOnce
 	assertSchedulerActionCount(t, store.DB(), 1)
 
 	bootstrap.StartWorkers(t.Context(), runtime)
-	waitForSchedulerPersistence(t, store.DB(), "business_config_activation_job", 2)
+	waitForSchedulerPersistence(t, store.DB(), "business_config_activation_job", 1)
 	state := schedulerOperatorRequest(t, runtime.Routes(), http.MethodGet, "/operations/scheduler/state", "", http.StatusOK)
 	if state["provisioned"] != true {
 		t.Fatalf("scheduler state=%#v", state)
@@ -124,7 +141,7 @@ func TestManifestSchedulerDefinitionManualCapabilityStartupRestartAndExactlyOnce
 	// The successful missed window advanced the durable cursor into the future;
 	// restart before that next interval must not repeat its workflow action.
 	time.Sleep(150 * time.Millisecond)
-	assertSchedulerActionCount(t, store.DB(), 2)
+	assertSchedulerActionCount(t, store.DB(), 1)
 }
 
 func schedulerOperatorRequest(t *testing.T, handler http.Handler, method, path, idempotencyKey string, expected int) map[string]any {

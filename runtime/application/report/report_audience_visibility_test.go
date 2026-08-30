@@ -13,9 +13,28 @@ import (
 	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
-	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/service"
+	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/query"
 )
+
+type reportAudienceExportStore struct{}
+
+func (*reportAudienceExportStore) GetReportRecord(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error) {
+	return recordmodel.Record{}, nil
+}
+func (*reportAudienceExportStore) ListReportRecordsForPrincipal(context.Context, string, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error) {
+	return recordmodel.RecordPageResult{}, nil
+}
+func (*reportAudienceExportStore) CreateReportRecord(context.Context, string, map[string]any, string, principalmodel.Principal) (recordmodel.Record, error) {
+	return recordmodel.Record{}, nil
+}
+func (*reportAudienceExportStore) UpdateReportRecord(context.Context, string, string, map[string]any, string, principalmodel.Principal) (recordmodel.Record, error) {
+	return recordmodel.Record{}, nil
+}
+func (*reportAudienceExportStore) TransitionReportExportAuditStatus(context.Context, string, string, string, string, string, string) error {
+	return nil
+}
 
 func TestReportDirectKeyEntrypointsConcealDefinitionWithoutRequiredPermission(t *testing.T) {
 	reportDefinition := reportmodel.ReportSchema{
@@ -40,7 +59,7 @@ func TestReportDirectKeyEntrypointsConcealDefinitionWithoutRequiredPermission(t 
 	})
 	service := NewReportApplicationService(ReportApplicationDependencies{
 		Domain:        domain,
-		ExportRecords: &reportExportStoreStub{},
+		ExportRecords: &reportAudienceExportStore{},
 	})
 
 	if _, err := service.QueryObjectSQL(t.Context(), reportDefinition.Key, nil, principal); apperror.CodeOf(err) != "backend.report.not_found" {

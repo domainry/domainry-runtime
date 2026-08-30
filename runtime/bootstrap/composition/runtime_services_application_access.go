@@ -17,7 +17,9 @@ import (
 	lifecycleapplication "github.com/domainry/domainry-runtime/runtime/application/lifecycle"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
-	reportapplication "github.com/domainry/domainry-runtime/runtime/application/report"
+	reportexportapplication "github.com/domainry/domainry-runtime/runtime/application/report/export/application"
+	reportquery "github.com/domainry/domainry-runtime/runtime/application/report/query"
+	reportsnapshot "github.com/domainry/domainry-runtime/runtime/application/report/snapshot"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	surfacecontextbusiness "github.com/domainry/domainry-runtime/runtime/application/surfacecontext"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
@@ -46,7 +48,9 @@ type RuntimeApplications struct {
 	AuthoringCapabilities *capabilityapplication.CapabilityAuthoringApplicationService
 	BusinessReferences    *changeplanapplication.ChangePlanReferenceApplicationService
 	BusinessChangePlans   *changeplanapplication.ChangePlanApplicationService
-	Reports               *reportapplication.ReportApplicationService
+	ReportSnapshots       *reportsnapshot.ReportSnapshotApplicationService
+	ReportQueries         *reportquery.ReportQueryApplicationService
+	ReportExports         *reportexportapplication.ReportExportApplicationService
 	Scheduler             *schedulerapplication.SchedulerApplicationService
 	RecordTimers          *recordtimerapplication.RecordTimerApplicationService
 }
@@ -87,7 +91,9 @@ func (s *runtimeAssembly) Applications() RuntimeApplications {
 		AuthoringCapabilities: s.authoringCapabilities,
 		BusinessReferences:    s.businessReferences,
 		BusinessChangePlans:   s.businessChangePlans,
-		Reports:               s.reportsService,
+		ReportSnapshots:       s.reportSnapshotsService,
+		ReportQueries:         s.reportQueriesService,
+		ReportExports:         s.reportExportsService,
 		Scheduler:             scheduler,
 		RecordTimers:          recordTimers,
 	}

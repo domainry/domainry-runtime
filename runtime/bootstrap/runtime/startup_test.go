@@ -17,7 +17,6 @@ import (
 
 	connector "github.com/domainry/domainry-connector-sdk"
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
-	dataexchangemodule "github.com/domainry/domainry-data-exchange/module"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	monitoringremote "github.com/domainry/domainry-monitoring-sdk/remote"
@@ -25,6 +24,7 @@ import (
 	monitoringserver "github.com/domainry/domainry-monitoring/server"
 	notificationmodule "github.com/domainry/domainry-notification/module"
 	partymodule "github.com/domainry/domainry-party/module"
+	dataexchangefixture "github.com/domainry/domainry-runtime/testsupport/dataexchangefixture"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 	schedulermodule "github.com/domainry/domainry-scheduler/module"
@@ -55,7 +55,7 @@ func runtimeTestPartyFactory() *partymodule.Factory {
 }
 
 func runtimeTestDataExchangeFactory() dataexchangesdk.Factory {
-	return dataexchangemodule.NewFactory(dataexchangemodule.Options{})
+	return dataexchangefixture.NewFactory()
 }
 
 type startupContractMismatchHandler struct{}
@@ -229,7 +229,7 @@ func TestProjectRuntimeOpensExtractedSchedulerModuleBinding(t *testing.T) {
 	connectors.Freeze()
 	cfg := bootstrapTestConfig(t)
 	cfg.RuntimeInstanceID = "scheduler-runtime"
-	runtime := NewProjectWithOwnerFactoriesAndDatabase(t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), nil, schedulermodule.NewFactory(schedulermodule.Options{}), dataexchangemodule.NewFactory(dataexchangemodule.Options{}), nil)
+	runtime := NewProjectWithOwnerFactoriesAndDatabase(t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), nil, schedulermodule.NewFactory(schedulermodule.Options{}), dataexchangefixture.NewFactory(), nil)
 	if runtime.schedulerBinding == nil || runtime.schedulerBinding.Descriptor().Mode != schedulersdk.DeploymentModeModule {
 		t.Fatalf("scheduler binding=%#v", runtime.schedulerBinding)
 	}

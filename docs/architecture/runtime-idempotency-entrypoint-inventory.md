@@ -377,7 +377,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `recordtimer` | `ProcessDueForAllWorkspaces` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/recordtimer/record_timer_application_service.go` |
 | `recordtimer` | `ResolveFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/recordtimer/record_timer_application_service.go` |
 | `recordtimer` | `RetryFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/recordtimer/record_timer_application_service.go` |
-| `report` | `CancelExportJob` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/report/report_export_batch_application.go` |
+| `report` | `CancelExportJob` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/report/export/application/report_export_data_exchange_application.go` |
 | `scheduler` | `CancelRecordTimers` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/scheduler/scheduler_record_timer_core.go` |
 | `scheduler` | `DispatchOwnedTrigger` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/scheduler/scheduler_external_dispatch.go` |
 | `scheduler` | `ProcessDueRecordTimers` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/scheduler/scheduler_record_timer_processing.go` |

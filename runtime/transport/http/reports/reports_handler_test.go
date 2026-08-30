@@ -18,15 +18,17 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
-	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
-	reportapplication "github.com/domainry/domainry-runtime/runtime/application/report"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
+	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
+	reportexportapplication "github.com/domainry/domainry-runtime/runtime/application/report/export/application"
+	reportquery "github.com/domainry/domainry-runtime/runtime/application/report/query"
+	reportsnapshot "github.com/domainry/domainry-runtime/runtime/application/report/snapshot"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
-	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/service"
+	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/query"
 )
 
 type reportsAuditStub struct{ err error }
@@ -159,8 +161,8 @@ func (s *reportsExportRecordStore) TransitionReportExportAuditStatus(_ context.C
 	return nil
 }
 
-func (s reportsSnapshotReplayStore) BeginReportSnapshot(context.Context, reportcontract.ReportSnapshotBeginRequest) (reportmodel.ReportSnapshot, bool, error) {
-	return s.snapshot, false, s.err
+func (s reportsSnapshotReplayStore) BeginReportSnapshot(context.Context, reportcontract.ReportSnapshotBeginRequest) (reportcontract.ReportSnapshotClaim, error) {
+	return reportcontract.ReportSnapshotClaim{Snapshot: s.snapshot, Disposition: reportcontract.ReportSnapshotClaimReplay}, s.err
 }
 func (reportsSnapshotReplayStore) CompleteReportSnapshot(context.Context, reportcontract.ReportSnapshotCompleteRequest) error {
 	return nil
@@ -185,8 +187,8 @@ func TestReportsObjectSQLQueryRouteBindsTypedParameters(t *testing.T) {
 	domain := reportservice.NewReportDomainService(reportservice.ReportDependencies{Reports: func(context.Context, principalmodel.Principal) []reportmodel.ReportSchema {
 		return []reportmodel.ReportSchema{report}
 	}, Access: reportsObjectSQLAccess{object: object}, ObjectSQL: executor, SnapshotSources: reportsSnapshotReplayStore{}})
-	service := reportapplication.NewReportApplicationService(reportapplication.ReportApplicationDependencies{Domain: domain})
-	handler := NewReportsHandler(ReportsDependencies{Service: service, Principal: func(*http.Request) principalmodel.Principal {
+	service := reportquery.NewReportQueryApplicationService(reportquery.ReportQueryApplicationDependencies{Domain: domain})
+	handler := NewReportsHandler(ReportsDependencies{Queries: service, Principal: func(*http.Request) principalmodel.Principal {
 		return principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}
 	}, WriteJSON: func(w http.ResponseWriter, status int, value any) {
 		w.WriteHeader(status)
@@ -214,8 +216,8 @@ func TestReportsObjectSQLQueryRouteWritesEmptyRowsAsJSONArray(t *testing.T) {
 	domain := reportservice.NewReportDomainService(reportservice.ReportDependencies{Reports: func(context.Context, principalmodel.Principal) []reportmodel.ReportSchema {
 		return []reportmodel.ReportSchema{report}
 	}, Access: reportsObjectSQLAccess{object: object}, ObjectSQL: &reportsObjectSQLExecutor{rows: []map[string]string{}}, SnapshotSources: reportsSnapshotReplayStore{}})
-	service := reportapplication.NewReportApplicationService(reportapplication.ReportApplicationDependencies{Domain: domain})
-	handler := NewReportsHandler(ReportsDependencies{Service: service, Principal: func(*http.Request) principalmodel.Principal {
+	service := reportquery.NewReportQueryApplicationService(reportquery.ReportQueryApplicationDependencies{Domain: domain})
+	handler := NewReportsHandler(ReportsDependencies{Queries: service, Principal: func(*http.Request) principalmodel.Principal {
 		return principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}
 	}, WriteJSON: func(w http.ResponseWriter, status int, value any) {
 		w.WriteHeader(status)
@@ -241,9 +243,9 @@ func newReportsSummaryHandler(reports []reportmodel.ReportSchema, capture *repor
 		},
 		Access: reportsEmptyAccess{}, Records: reportsEmptyRecords{}, ObjectSQL: &reportsObjectSQLExecutor{rows: []map[string]string{{}}}, SnapshotSources: reportsSnapshotReplayStore{},
 	})
-	service := reportapplication.NewReportApplicationService(reportapplication.ReportApplicationDependencies{Domain: domain})
+	service := reportquery.NewReportQueryApplicationService(reportquery.ReportQueryApplicationDependencies{Domain: domain})
 	return NewReportsHandler(ReportsDependencies{
-		Service: service,
+		Queries: service,
 		Principal: func(*http.Request) principalmodel.Principal {
 			return principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator-1", WorkspaceID: "workspace-a"}}
 		},
@@ -269,9 +271,9 @@ func newReportsSnapshotHandler(store reportsSnapshotReplayStore, capture *report
 		},
 		Snapshots: store, SnapshotSources: store,
 	})
-	service := reportapplication.NewReportApplicationService(reportapplication.ReportApplicationDependencies{Domain: domain})
+	service := reportsnapshot.NewReportSnapshotApplicationService(reportsnapshot.ReportSnapshotApplicationDependencies{Domain: domain})
 	return NewReportsHandler(ReportsDependencies{
-		Service: service,
+		Snapshots: service,
 		Principal: func(*http.Request) principalmodel.Principal {
 			return principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator-1", WorkspaceID: "workspace-a"}}
 		},
@@ -394,16 +396,16 @@ func TestReportsGovernedPrepareAndDownloadHandlers(t *testing.T) {
 	domain := reportservice.NewReportDomainService(reportservice.ReportDependencies{Reports: func(context.Context, principalmodel.Principal) []reportmodel.ReportSchema {
 		return []reportmodel.ReportSchema{{Key: "revenue", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "customer", Alias: "customer"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "id", Field: reportmodel.ReportDatasetField{SourceAlias: "customer", FieldKey: "id"}}}}}}
 	}, Access: reportsEmptyAccess{}, Records: reportsOneRecords{}, SnapshotSources: reportsSnapshotReplayStore{}})
-	service := reportapplication.NewReportApplicationService(reportapplication.ReportApplicationDependencies{
-		Domain: domain, ExportRecords: store,
+	service := reportexportapplication.NewReportExportApplicationService(reportexportapplication.ReportExportApplicationDependencies{
+		Domain: domain, Records: store,
 		Audit: &reportsAuditStub{}, DataExchange: exchange, DataExchangeProviders: providers,
-		ExportControls: func(context.Context, principalmodel.Principal) []reportmodel.ReportExportControlSchema {
+		Controls: func(context.Context, principalmodel.Principal) []reportmodel.ReportExportControlSchema {
 			return []reportmodel.ReportExportControlSchema{{ReportKey: "revenue", SourceObjects: []string{"customer"}, AuditObject: "report_export_audit", DownloadObject: "report_export_download", MaxRows: 1000, RecordMapping: reportmodel.ReportExportRecordMappingSchema{AuditReportKeyField: "report_key", AuditRequesterField: "requested_by_identity_user_id", AuditStatusField: "status", AuditPreparedStatuses: []string{"completed"}, AuditPreparedStatus: "completed", AuditDownloadedStatus: "completed", AuditDeniedStatus: "denied", AuditExpiredStatus: "expired", AuditRowCountField: "row_count", AuditScopeHashField: "filters_hash", DownloadAuditField: "audit_id", DownloadFilenameField: "file_name", DownloadContentHashField: "content_hash", DownloadExpiresAtField: "expires_at", DownloadTokenField: "file_reference"}}}
 		},
 		Clock: func() time.Time { return now },
 	})
 	capture := &reportsHandlerCapture{}
-	handler := NewReportsHandler(ReportsDependencies{Service: service,
+	handler := NewReportsHandler(ReportsDependencies{Exports: service,
 		Principal: func(*http.Request) principalmodel.Principal { return principal },
 		WriteJSON: func(w http.ResponseWriter, status int, value any) {
 			w.WriteHeader(status)

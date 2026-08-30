@@ -18,7 +18,7 @@ import (
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
-	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/service"
+	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/query"
 )
 
 func TestContextualFieldPolicyEndToEndKeepsReadExportReportAuditAndWriteAligned(t *testing.T) {

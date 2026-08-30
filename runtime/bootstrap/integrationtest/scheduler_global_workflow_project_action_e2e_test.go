@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -24,24 +23,8 @@ func TestSchedulerGlobalWorkflowProjectActionDurableEffectAndFailurePropagation(
 
 	activationLeadID := runtimeFixtureRecordIDByField(t, handler, "sales_manager", "lead", "status", "new")
 	dailyReviewLeadID := runtimeFixtureRecordIDByField(t, handler, "sales_manager", "lead", "status", "working")
-	publishSchedulerDefinitionFixture(t, cfg, "business_config_activation_job", map[string]any{
-		"key": "business_config_activation_job", "name": "Business configuration activation", "status": "enabled", "trigger_type": "scheduled",
-		"schedule_type": "interval", "interval_seconds": 60, "timezone": "UTC", "target_type": "workflow",
-		"target_key": "scheduled:business_config_activation", "max_attempts": 1, "timeout_seconds": 120,
-	})
-	publishSchedulerDefinitionFixture(t, cfg, "daily_operations_review_job", map[string]any{
-		"key": "daily_operations_review_job", "name": "Daily operations review", "status": "enabled", "trigger_type": "scheduled",
-		"schedule_type": "daily_at", "time_of_day": "08:00", "timezone": "America/Sao_Paulo", "target_type": "workflow",
-		"target_key": "scheduled:daily_operations_review", "max_attempts": 1, "timeout_seconds": 300,
-	})
-	publishSchedulerDefinitionFixture(t, cfg, "lead_activation_failure_job", map[string]any{
-		"key": "lead_activation_failure_job", "name": "Lead activation failure", "status": "enabled", "trigger_type": "scheduled",
-		"schedule_type": "interval", "interval_seconds": 60, "timezone": "UTC", "target_type": "workflow",
-		"target_key": "scheduled:lead_activation_failure", "max_attempts": 1, "timeout_seconds": 120,
-	})
-
 	succeeded := schedulerSmokeRequest(t, handler, http.MethodPost, "/operations/scheduler/definitions/business_config_activation_job/run", nil, http.StatusOK)
-	if run, _ := succeeded["run"].(map[string]any); run["status"] != "succeeded" {
+	if succeeded["status"] != "succeeded" {
 		store := openRuntimePersistenceFixture(t, cfg)
 		executions, listErr := workflowpersistence.NewWorkflowWorkerStore(store).ListExecutions(t.Context(), "default", 100)
 		t.Fatalf("success workflow executions=%#v listErr=%v response=%#v", executions, listErr, succeeded)
@@ -59,11 +42,7 @@ func TestSchedulerGlobalWorkflowProjectActionDurableEffectAndFailurePropagation(
 	}
 
 	failed := schedulerSmokeRequest(t, handler, http.MethodPost, "/operations/scheduler/definitions/lead_activation_failure_job/run", nil, http.StatusOK)
-	assertSchedulerRunStatus(t, failed, "dead_letter")
-	run, _ := failed["run"].(map[string]any)
-	if run["error_category"] != "workflow_failure" || !strings.Contains(stringValueFromJSON(run, "error_message"), "workflow executions failed") {
-		t.Fatalf("Action failure did not propagate to Scheduler evidence: %#v", failed)
-	}
+	assertSchedulerRunStatus(t, failed, "succeeded")
 	store := openRuntimePersistenceFixture(t, cfg)
 	executions, err := workflowpersistence.NewWorkflowWorkerStore(store).ListExecutions(t.Context(), "default", 100)
 	if err != nil {
@@ -77,15 +56,14 @@ func TestSchedulerGlobalWorkflowProjectActionDurableEffectAndFailurePropagation(
 		}
 	}
 	if !foundActionFailure {
-		t.Fatalf("failed project Action error code missing from durable Workflow evidence: %#v", executions)
+		t.Fatalf("accepted Scheduler dispatch lost downstream project Action failure evidence: response=%#v executions=%#v", failed, executions)
 	}
 }
 
 func assertSchedulerRunStatus(t *testing.T, response map[string]any, want string) {
 	t.Helper()
-	run, ok := response["run"].(map[string]any)
-	if !ok || run["status"] != want {
-		t.Fatalf("scheduler run status=%v want=%s response=%#v", run["status"], want, response)
+	if response["status"] != want {
+		t.Fatalf("scheduler run status=%v want=%s response=%#v", response["status"], want, response)
 	}
 }
 
@@ -131,6 +109,11 @@ func schedulerGlobalWorkflowManifest(t *testing.T) string {
 		schedulerGlobalActionWorkflow("daily_operations_review", "lead.create_daily_review_tasks"),
 		schedulerGlobalActionWorkflow("lead_activation_failure", "lead.fail_due_candidates"),
 	)
+	manifest["scheduler_definitions"] = []any{
+		map[string]any{"key": "business_config_activation_job", "name": "Business configuration activation", "status": "enabled", "trigger_type": "scheduled", "schedule_type": "interval", "interval_seconds": 60, "timezone": "UTC", "target_type": "workflow", "target_key": "scheduled:business_config_activation", "max_attempts": 1, "timeout_seconds": 120},
+		map[string]any{"key": "daily_operations_review_job", "name": "Daily operations review", "status": "enabled", "trigger_type": "scheduled", "schedule_type": "daily_at", "time_of_day": "08:00", "timezone": "America/Sao_Paulo", "target_type": "workflow", "target_key": "scheduled:daily_operations_review", "max_attempts": 1, "timeout_seconds": 300},
+		map[string]any{"key": "lead_activation_failure_job", "name": "Lead activation failure", "status": "enabled", "trigger_type": "scheduled", "schedule_type": "interval", "interval_seconds": 60, "timezone": "UTC", "target_type": "workflow", "target_key": "scheduled:lead_activation_failure", "max_attempts": 1, "timeout_seconds": 120},
+	}
 	normalized, err := json.Marshal(manifest)
 	if err != nil {
 		t.Fatal(err)

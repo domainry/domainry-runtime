@@ -240,7 +240,7 @@
       "key": "report_export_audit_terminal_transition",
       "category": "internal_lifecycle",
       "operations": ["conditionally_transition_prepared_audit_after_download_denial_or_expiry"],
-      "source_files": ["runtime/application/report/report_application_service.go"],
+      "source_files": ["runtime/application/report/adapter/report_record_adapter.go"],
       "authorizer": "Runtime-owned governed export artifact plus compiler-validated report export control mapping; requester permissions are rechecked separately and may already be revoked",
       "schema_defaults_owner": "Published report export audit Object schema",
       "validation_owner": "Manifest report export control validation restricts the mapped audit object, status field and terminal values",

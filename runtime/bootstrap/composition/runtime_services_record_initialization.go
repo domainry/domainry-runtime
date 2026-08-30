@@ -7,7 +7,10 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordruntime "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
-	reportapplication "github.com/domainry/domainry-runtime/runtime/application/report"
+	reportadapter "github.com/domainry/domainry-runtime/runtime/application/report/adapter"
+	reportexportapplication "github.com/domainry/domainry-runtime/runtime/application/report/export/application"
+	reportquery "github.com/domainry/domainry-runtime/runtime/application/report/query"
+	reportsnapshot "github.com/domainry/domainry-runtime/runtime/application/report/snapshot"
 	surfacecontextbusiness "github.com/domainry/domainry-runtime/runtime/application/surfacecontext"
 	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -16,7 +19,7 @@ import (
 	recordexecutionruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
-	reportbusiness "github.com/domainry/domainry-runtime/runtime/domain/report/service"
+	reportbusiness "github.com/domainry/domainry-runtime/runtime/domain/report/query"
 )
 
 type recordRuntimeState struct {
@@ -68,7 +71,7 @@ func initializeRecordApplications(s *runtimeAssembly) {
 		return projected, nil
 	})
 	s.recordMutations = recordruntime.NewRecordMutationApplicationService(s.recordApplicationService)
-	reportRecords := reportapplication.NewReportRecordAdapter(s.recordApplicationService, s.recordRepo, s.reportRecordSchemaMap)
+	reportRecords := reportadapter.NewReportRecordAdapter(s.recordApplicationService, s.recordRepo, s.reportRecordSchemaMap)
 	reportDomain := reportbusiness.NewReportDomainService(reportbusiness.ReportDependencies{
 		Reports: func(_ context.Context, principal principalmodel.Principal) []reportmodel.ReportSchema {
 			return appschemaservice.SnapshotForPrincipal(s.Schema(), principal).Reports
@@ -76,18 +79,21 @@ func initializeRecordApplications(s *runtimeAssembly) {
 		Access: reportRecords, Records: reportRecords, DatasetRows: s.reportDatasetRows, ObjectSQL: s.reportObjectSQL,
 		Snapshots: s.reportSnapshots, SnapshotSources: s.reportSnapshotSources,
 	})
-	s.reportsService = reportapplication.NewReportApplicationService(reportapplication.ReportApplicationDependencies{
-		ProductBrandName: s.productBrandName,
-		Domain:           reportDomain, ExportRecords: reportRecords, Audit: s.auditApplicationService,
-		DataExchange:          s.dataExchange,
-		DataExchangeProviders: s.dataExchangeProviders,
-		CursorKey:             s.auditExportTokenKey,
-		NotificationCompiler:  s.reportNotificationCompiler, NotificationCommitter: s.reportSnapshotNotificationCommitter,
-		ExportControls: func(_ context.Context, principal principalmodel.Principal) []reportmodel.ReportExportControlSchema {
+	s.reportSnapshotsService = reportsnapshot.NewReportSnapshotApplicationService(reportsnapshot.ReportSnapshotApplicationDependencies{
+		Domain: reportDomain, NotificationCompiler: s.reportNotificationCompiler,
+		NotificationCommitter: s.reportSnapshotNotificationCommitter,
+	})
+	s.reportQueriesService = reportquery.NewReportQueryApplicationService(reportquery.ReportQueryApplicationDependencies{
+		Domain: reportDomain, CursorKey: s.auditExportTokenKey,
+	})
+	s.reportExportsService = reportexportapplication.NewReportExportApplicationService(reportexportapplication.ReportExportApplicationDependencies{
+		ProductBrandName: s.productBrandName, Domain: reportDomain, Records: reportRecords, Audit: s.auditApplicationService,
+		DataExchange: s.dataExchange, DataExchangeProviders: s.dataExchangeProviders,
+		Controls: func(_ context.Context, principal principalmodel.Principal) []reportmodel.ReportExportControlSchema {
 			return append([]reportmodel.ReportExportControlSchema(nil), s.reportExportControls...)
 		},
 	})
-	s.schedulerService.UseReportSnapshotRuntime(s.reportsService)
+	s.schedulerService.UseReportSnapshotRuntime(s.reportSnapshotsService)
 	s.surfaceContextService = surfacecontextbusiness.NewSurfaceContextApplicationService(surfacecontextbusiness.SurfaceContextDependencies{
 		Objects:     func() map[string]definitionmodel.ObjectSchema { return schemaObjectMap(s.Schema().Objects) },
 		Reports:     func() []reportmodel.ReportSchema { return s.Schema().Reports },

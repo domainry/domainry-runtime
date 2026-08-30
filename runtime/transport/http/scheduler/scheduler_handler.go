@@ -89,53 +89,6 @@ func (h *SchedulerHandler) getTenantAdminSchedulerAuthoringContract(w http.Respo
 	h.writeJSON(w, http.StatusOK, contract)
 }
 
-func (h *SchedulerHandler) getOpsSchedulerState(w http.ResponseWriter, r *http.Request) {
-	state, err := h.service.OpsState(r.Context(), h.principal(r))
-	if err != nil {
-		h.writeServiceError(w, r, err)
-		return
-	}
-	if h.binding != nil {
-		runs, bindingErr := h.binding.Runs(r.Context(), 500)
-		if bindingErr != nil {
-			h.writeServiceError(w, r, bindingErr)
-			return
-		}
-		projected := make([]schedulerbusiness.OpsSchedulerRunDTO, 0, len(runs)+len(state.Runs))
-		owned := make(map[string]struct{}, len(runs))
-		for _, run := range runs {
-			projected = append(projected, projectSDKRun(run))
-			owned[run.Trigger.RunID] = struct{}{}
-		}
-		for _, run := range state.Runs {
-			if _, replaced := owned[run.ID]; replaced {
-				continue
-			}
-			projected = append(projected, run)
-		}
-		state.Provisioned = true
-		state.Runs = projected
-	}
-	h.writeJSON(w, http.StatusOK, state)
-}
-
-func projectSDKRun(run schedulersdk.Run) schedulerbusiness.OpsSchedulerRunDTO {
-	return schedulerbusiness.OpsSchedulerRunDTO{
-		ID: run.Trigger.RunID, DefinitionKey: run.Trigger.DefinitionKey, Status: run.Status,
-		Attempt: run.Trigger.Attempt, ScheduledFor: formatSchedulerTime(run.Trigger.ScheduledFor),
-		ErrorMessage: run.LastError, LeaseOwner: run.Lease.Owner, LeaseExpiresAt: formatSchedulerTime(run.Lease.ExpiresAt),
-		FencingToken: int(run.Lease.Token), CorrelationID: run.DownstreamReceipt.ID,
-		CreatedAt: formatSchedulerTime(run.CreatedAt), UpdatedAt: formatSchedulerTime(run.UpdatedAt),
-	}
-}
-
-func formatSchedulerTime(value time.Time) string {
-	if value.IsZero() {
-		return ""
-	}
-	return value.UTC().Format(time.RFC3339Nano)
-}
-
 type SchedulerDependencies struct {
 	Service             *schedulerbusiness.SchedulerApplicationService
 	Operations          *operationsapplication.OperationsApplicationService
@@ -227,7 +180,7 @@ func (h *SchedulerHandler) runSchedulerJob(w http.ResponseWriter, r *http.Reques
 		if bindErr != nil {
 			return nil, bindErr
 		}
-		return binding.TriggerNow(ctx, resourceID, "operator requested scheduler.job.run")
+		return triggerSchedulerNow(ctx, binding, resourceID)
 	})
 	operationshttp.WriteOwnerReceiptHeaders(w, operation)
 	if err != nil {
@@ -244,7 +197,7 @@ func (h *SchedulerHandler) runOpsSchedulerJob(w http.ResponseWriter, r *http.Req
 		if bindErr != nil {
 			return nil, bindErr
 		}
-		run, executeErr := binding.TriggerNow(ctx, resourceID, "operator requested scheduler.job.run")
+		run, executeErr := triggerSchedulerNow(ctx, binding, resourceID)
 		return projectSDKRun(run), executeErr
 	})
 	operationshttp.WriteOwnerReceiptHeaders(w, operation)

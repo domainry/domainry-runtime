@@ -18,7 +18,7 @@ import (
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
-	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/service"
+	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/query"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	. "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	querypersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/query"

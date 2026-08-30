@@ -263,6 +263,8 @@ domain/<owner>/
 | `model` | 纯结构、枚举、DTO、叶子契约 | 其他叶子 model/contract |
 | `validation` | 业务校验、规范化、issue 定位 | model/contract/policy |
 | `service` | 单 owner 业务行为与生命周期入口 | repository/validation/runtime/projection/policy/contract/model |
+| `query` | 大型 owner 的只读查询、聚合与分页执行入口 | snapshot/projection/policy/contract/model |
+| `snapshot` | 大型 owner 的物化快照 claim、刷新与 fencing 生命周期 | contract/model |
 | `repository` | owner 持有的持久化 port | model/contract |
 | `runtime` | executor、worker、dispatcher、engine | model/contract/policy |
 | `projection` | snapshot、view、permission/i18n/read model | model/contract/policy |
@@ -270,7 +272,9 @@ domain/<owner>/
 | `contract` | 跨包稳定 port 和 capability contract | model/leaf contract |
 | `testdata` | fixture/golden data | 无生产 Go package |
 
-`model`、`validation`、`repository`、`projection`、`policy` **MUST NOT** 反向引用同 owner `service`。
+`query` 和 `snapshot` 只用于已经形成独立测试闭包的大型 owner；不得把普通 service 文件按读写名称机械分包。`query` 只允许通过稳定合同读取数据，`snapshot` 只拥有物化生命周期；二者不得相互成环。
+
+`model`、`validation`、`repository`、`projection`、`policy` **MUST NOT** 反向引用同 owner `service`、`query` 或 `snapshot`。
 
 小 owner **SHOULD** 保持平铺，不为一个文件创建微型子包。
 
@@ -287,6 +291,13 @@ flowchart TD
     service --> policy["policy"]
     service --> contract["contract"]
     service --> model["model"]
+    query["query"] --> snapshot["snapshot"]
+    query --> projection
+    query --> policy
+    query --> contract
+    query --> model
+    snapshot --> contract
+    snapshot --> model
     validation --> policy
     validation --> contract
     validation --> model
@@ -315,6 +326,8 @@ flowchart TD
 | `projection` | `model/contract/policy` | `service/repository/runtime`；读取所需数据通过输入或 projection port 提供 |
 | `runtime` | `model/contract/policy` | `service/projection` 和具体 Store/Connector；执行所需 I/O 通过 `contract` port 注入 |
 | `service` | 同 owner 的 `model/contract/policy/validation/repository/projection/runtime` | Application、Transport、Infrastructure implementation、其他 owner 的 `service` |
+| `query` | 同 owner 的 `model/contract/policy/projection/snapshot/query` | Application、Transport、Infrastructure implementation、repository implementation、其他 owner 的行为包 |
+| `snapshot` | 同 owner 的 `model/contract/snapshot`；查询执行通过 `contract` port 注入 | `query/service/repository/runtime/projection` 和具体 Store implementation |
 
 补充规则：
 

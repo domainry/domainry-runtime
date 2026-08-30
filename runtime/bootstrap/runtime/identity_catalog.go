@@ -33,6 +33,7 @@ func runtimeIdentityCatalog(snapshot appschemamodel.ApplicationSchemaSnapshot, w
 			continue
 		}
 		resource := identitysdk.ResourceDefinition{Key: identitysdk.ResourceType(key), Fields: []string{"id", "created_at", "updated_at"}}
+		fieldSet := map[string]bool{"id": true, "created_at": true, "updated_at": true}
 		factSet := map[string]bool{
 			"id": true, "owner_id": true, "department_id": true, "department_path": true,
 			"team_id": true, "store_id": true, "territory_id": true, "warehouse_id": true,
@@ -42,7 +43,10 @@ func runtimeIdentityCatalog(snapshot appschemamodel.ApplicationSchemaSnapshot, w
 			if strings.TrimSpace(field.DisabledAt) != "" || strings.TrimSpace(field.Key) == "" {
 				continue
 			}
-			resource.Fields = append(resource.Fields, field.Key)
+			if !fieldSet[field.Key] {
+				resource.Fields = append(resource.Fields, field.Key)
+				fieldSet[field.Key] = true
+			}
 			factSet[field.Key] = true
 			if target := referenceTarget(field); target != "" {
 				reference := identitysdk.ReferenceDefinition{Key: field.Key, TargetResource: identitysdk.ResourceType(target)}

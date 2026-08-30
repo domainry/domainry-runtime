@@ -13,7 +13,6 @@ require (
 	github.com/domainry/domainry-audit v0.0.0-00010101000000-000000000000
 	github.com/domainry/domainry-audit-sdk v0.0.0
 	github.com/domainry/domainry-connector-sdk v0.1.0-dev.12
-	github.com/domainry/domainry-data-exchange v0.3.0
 	github.com/domainry/domainry-data-exchange-sdk v0.3.1-0.20260830024026-64866b01d3a6
 	github.com/domainry/domainry-foundation v0.1.0-dev.5
 	github.com/domainry/domainry-identity-sdk v0.1.0-dev8

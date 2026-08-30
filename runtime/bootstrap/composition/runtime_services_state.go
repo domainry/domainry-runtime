@@ -15,6 +15,7 @@ import (
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
+	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
@@ -25,7 +26,9 @@ import (
 	pipelineapplication "github.com/domainry/domainry-runtime/runtime/application/pipeline"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
-	reportapplication "github.com/domainry/domainry-runtime/runtime/application/report"
+	reportexportapplication "github.com/domainry/domainry-runtime/runtime/application/report/export/application"
+	reportquery "github.com/domainry/domainry-runtime/runtime/application/report/query"
+	reportsnapshot "github.com/domainry/domainry-runtime/runtime/application/report/snapshot"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	surfacecontextbusiness "github.com/domainry/domainry-runtime/runtime/application/surfacecontext"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
@@ -35,7 +38,6 @@ import (
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	metadata "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
-	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationrepository "github.com/domainry/domainry-runtime/runtime/domain/automation/repository"
@@ -125,7 +127,7 @@ type runtimeAssembly struct {
 	notificationIntentPublisher         func(context.Context, notificationmodel.NotificationIntent) error
 	recordNotificationCompiler          func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	reportNotificationCompiler          func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
-	reportSnapshotNotificationCommitter reportapplication.ReportSnapshotNotificationCommitter
+	reportSnapshotNotificationCommitter reportsnapshot.ReportSnapshotNotificationCommitter
 	automationNotificationCompiler      func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	automationNotificationCommitter     automationapplication.AutomationExecutionNotificationCommitter
 	applicationSchemaRepo               appschemarepository.ApplicationSchemaRepository
@@ -147,7 +149,9 @@ type runtimeAssembly struct {
 	authoringCapabilities               *capabilityapplication.CapabilityAuthoringApplicationService
 	businessReferences                  *changeplanapplication.ChangePlanReferenceApplicationService
 	businessChangePlans                 *changeplanapplication.ChangePlanApplicationService
-	reportsService                      *reportapplication.ReportApplicationService
+	reportSnapshotsService              *reportsnapshot.ReportSnapshotApplicationService
+	reportQueriesService                *reportquery.ReportQueryApplicationService
+	reportExportsService                *reportexportapplication.ReportExportApplicationService
 	reportExportControls                []reportmodel.ReportExportControlSchema
 	schedulerService                    *schedulerapplication.SchedulerApplicationService
 	recordTimerService                  *recordtimerapplication.RecordTimerApplicationService

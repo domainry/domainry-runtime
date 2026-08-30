@@ -1,7 +1,6 @@
 package record
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,8 +12,6 @@ import (
 	"github.com/domainry/domainry-data-exchange-sdk/modulehost"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
-
-const recordDataExchangeResultChunkBytes = 1 << 20
 
 // DataExchangeProviders is the Runtime-owned anti-corruption boundary exposed
 // to either the in-process Module or the SaaS Binding. It contains no file/job
@@ -143,25 +140,16 @@ func (p dataExchangeExportProvider) ReadExportPage(ctx context.Context, r dataex
 			return dataexchange.ExportPage{}, fmt.Errorf("invalid Record export cursor")
 		}
 	}
-	encoded, err := exporter.encodeExportPage(ctx, prepared, pageNumber, true, recordDataExchangeResultChunkBytes)
-	if err != nil {
-		return dataexchange.ExportPage{}, err
-	}
-	var columns []string
-	rows := make([][]string, 0, encoded.rows)
-	columns, err = dataexchange.DecodeCSV(ctx, bytes.NewReader(encoded.content), dataexchange.CSVDecodeLimits{MaxBytes: int64(len(encoded.content)), MaxRows: recordExportBatchSize, MaxColumns: recordImportMaxColumns}, func(_ []string, row dataexchange.CSVRecord) error {
-		rows = append(rows, row.Values)
-		return nil
-	})
+	page, err := exporter.projectExportPage(ctx, prepared, pageNumber)
 	if err != nil {
 		return dataexchange.ExportPage{}, err
 	}
 	next := ""
-	if encoded.hasNext {
+	if page.hasNext {
 		next = "record-page:" + strconv.Itoa(pageNumber+1)
-		return dataexchange.ExportPage{Columns: columns, Rows: rows, NextCursor: next, Total: pageNumber * recordExportBatchSize}, nil
+		return dataexchange.ExportPage{Columns: page.columns, Rows: page.rows, NextCursor: next, Total: pageNumber * recordExportBatchSize}, nil
 	}
-	return dataexchange.ExportPage{Columns: columns, Rows: rows, Total: (pageNumber-1)*recordExportBatchSize + len(rows)}, nil
+	return dataexchange.ExportPage{Columns: page.columns, Rows: page.rows, Total: (pageNumber-1)*recordExportBatchSize + len(page.rows)}, nil
 }
 
 var _ modulehost.Host = (*DataExchangeProviders)(nil)

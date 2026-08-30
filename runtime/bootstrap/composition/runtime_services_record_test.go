@@ -1488,8 +1488,8 @@ func TestRecordConsumersShareCanonicalApplicationService(t *testing.T) {
 	if service.Applications().Records != canonical {
 		t.Fatal("Runtime application facade does not expose the canonical Record application service")
 	}
-	if service.reportsService == nil {
-		t.Fatal("Report application service was not assembled")
+	if service.reportQueriesService == nil || service.reportSnapshotsService == nil || service.reportExportsService == nil {
+		t.Fatal("Report capability application services were not assembled")
 	}
 	if service.surfaceContextService == nil {
 		t.Fatal("Surface Context owner service was not assembled")

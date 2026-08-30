@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-connector-sdk"
-	dataexchangemodule "github.com/domainry/domainry-data-exchange/module"
 	notificationmodule "github.com/domainry/domainry-notification/module"
 	partymodule "github.com/domainry/domainry-party/module"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
+	dataexchangefixture "github.com/domainry/domainry-runtime/testsupport/dataexchangefixture"
 )
 
 func TestBootstrapEntrypointsAssembleRunnableGraphs(t *testing.T) {
@@ -30,7 +30,7 @@ func TestBootstrapEntrypointsAssembleRunnableGraphs(t *testing.T) {
 		SchedulerLeaseTTL:          time.Minute,
 		SchedulerMaxCatchupWindows: 1,
 	}
-	runtime := New(t.Context(), cfg, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangemodule.NewFactory(dataexchangemodule.Options{}))
+	runtime := New(t.Context(), cfg, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangefixture.NewFactory())
 	if runtime == nil || BindHTTP(t.Context(), runtime) != runtime {
 		t.Fatal("bootstrap runtime entrypoints did not preserve the assembled owner")
 	}
@@ -59,13 +59,13 @@ func TestBootstrapExtensionAndProjectFacadeEntrypoints(t *testing.T) {
 	connectors.Freeze()
 	constructors := []func(config.Config) *Runtime{
 		func(cfg config.Config) *Runtime {
-			return NewWithBusinessHandlers(t.Context(), cfg, handlers, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangemodule.NewFactory(dataexchangemodule.Options{}))
+			return NewWithBusinessHandlers(t.Context(), cfg, handlers, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangefixture.NewFactory())
 		},
 		func(cfg config.Config) *Runtime {
-			return NewWithExtensions(t.Context(), cfg, handlers, connectors, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangemodule.NewFactory(dataexchangemodule.Options{}))
+			return NewWithExtensions(t.Context(), cfg, handlers, connectors, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangefixture.NewFactory())
 		},
 		func(cfg config.Config) *Runtime {
-			return NewVerifiedProjectWithIdentity(t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, RuntimeReleaseArtifactEvidence{}, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangemodule.NewFactory(dataexchangemodule.Options{}))
+			return NewVerifiedProjectWithIdentity(t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, RuntimeReleaseArtifactEvidence{}, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangefixture.NewFactory())
 		},
 	}
 	for index, constructor := range constructors {

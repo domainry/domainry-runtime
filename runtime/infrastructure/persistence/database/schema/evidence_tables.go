@@ -72,6 +72,13 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		return err
 	}
 	for column, definition := range map[string]string{
+		"lease_owner": text + " NOT NULL DEFAULT ''", "lease_expires_at": text + " NOT NULL DEFAULT ''", "fencing_token": "BIGINT NOT NULL DEFAULT 0",
+	} {
+		if err := s.EnsureRuntimeColumn(ctx, "report_snapshots", column, definition); err != nil {
+			return err
+		}
+	}
+	for column, definition := range map[string]string{
 		"request_fingerprint": text + " NOT NULL DEFAULT ''",
 		"lease_owner":         text + " NOT NULL DEFAULT ''",
 		"lease_expires_at":    text + " NOT NULL DEFAULT ''",

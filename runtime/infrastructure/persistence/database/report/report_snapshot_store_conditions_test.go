@@ -11,7 +11,7 @@ import (
 )
 
 func reportSnapshotColumns() []string {
-	columns := make([]string, 12)
+	columns := make([]string, 15)
 	for index := range columns {
 		columns[index] = "column"
 	}
@@ -21,7 +21,7 @@ func reportSnapshotColumns() []string {
 func reportSnapshotQueryStep(status, summary, versions string) reportDatasetSQLStep {
 	return reportDatasetSQLStep{columns: reportSnapshotColumns(), rows: [][]driver.Value{{
 		"snapshot", "workspace-a", "operations", "scope-a", "window-1", status,
-		summary, "watermark", versions, "started", "refreshed", "",
+		summary, "watermark", versions, "started", "refreshed", "", "owner-a", "2099-01-01T00:00:00Z", int64(1),
 	}}}
 }
 
@@ -40,7 +40,7 @@ func reportSnapshotScriptedRepository(t *testing.T, state *reportDatasetSQLState
 }
 
 func reportSnapshotValidBeginRequest() reportcontract.ReportSnapshotBeginRequest {
-	return reportcontract.ReportSnapshotBeginRequest{WorkspaceID: "workspace-a", ReportKey: "operations", AccessScopeHash: "scope-a", IdempotencyKey: "window-1", StartedAt: "started"}
+	return reportcontract.ReportSnapshotBeginRequest{WorkspaceID: "workspace-a", ReportKey: "operations", AccessScopeHash: "scope-a", IdempotencyKey: "window-1", StartedAt: "2026-01-01T00:00:00Z", LeaseOwner: "owner-b", LeaseExpiresAt: "2026-01-01T00:02:00Z"}
 }
 
 func TestReportSnapshotBeginValidationAndSQLFailureConditions(t *testing.T) {
@@ -52,21 +52,21 @@ func TestReportSnapshotBeginValidationAndSQLFailureConditions(t *testing.T) {
 	invalid[3].IdempotencyKey = ""
 	invalid[4].StartedAt = ""
 	for index, request := range invalid {
-		if _, _, err := reportSnapshotScriptedRepository(t, &reportDatasetSQLState{}).BeginReportSnapshot(t.Context(), request); err == nil {
+		if _, err := reportSnapshotScriptedRepository(t, &reportDatasetSQLState{}).BeginReportSnapshot(t.Context(), request); err == nil {
 			t.Fatalf("invalid request %d accepted", index)
 		}
 	}
 
 	wantErr := errors.New("snapshot SQL failure")
 	repository := reportSnapshotScriptedRepository(t, &reportDatasetSQLState{steps: []reportDatasetSQLStep{{err: wantErr}}})
-	if _, _, err := repository.BeginReportSnapshot(t.Context(), base); !errors.Is(err, wantErr) {
+	if _, err := repository.BeginReportSnapshot(t.Context(), base); !errors.Is(err, wantErr) {
 		t.Fatalf("initial read error=%v", err)
 	}
 	repository = reportSnapshotScriptedRepository(t, &reportDatasetSQLState{
 		steps:     []reportDatasetSQLStep{reportSnapshotQueryStep("failed", `{}`, `{}`)},
 		execSteps: []reportDatasetSQLExecStep{{err: wantErr}},
 	})
-	if _, _, err := repository.BeginReportSnapshot(t.Context(), base); !errors.Is(err, wantErr) {
+	if _, err := repository.BeginReportSnapshot(t.Context(), base); !errors.Is(err, wantErr) {
 		t.Fatalf("refresh update error=%v", err)
 	}
 
@@ -79,10 +79,10 @@ func TestReportSnapshotBeginValidationAndSQLFailureConditions(t *testing.T) {
 			steps:     []reportDatasetSQLStep{reportSnapshotEmptyQueryStep(), reread},
 			execSteps: []reportDatasetSQLExecStep{{err: wantErr}},
 		})
-		snapshot, execute, err := repository.BeginReportSnapshot(t.Context(), base)
+		claim, err := repository.BeginReportSnapshot(t.Context(), base)
 		if reread.rows != nil {
-			if err != nil || execute || snapshot.Status != "succeeded" {
-				t.Fatalf("race reread snapshot=%#v execute=%v err=%v", snapshot, execute, err)
+			if err != nil || claim.Acquired() || claim.Snapshot.Status != "succeeded" {
+				t.Fatalf("race reread claim=%#v err=%v", claim, err)
 			}
 		} else if !errors.Is(err, wantErr) {
 			t.Fatalf("failed insert reread error=%v", err)
@@ -92,14 +92,14 @@ func TestReportSnapshotBeginValidationAndSQLFailureConditions(t *testing.T) {
 
 func TestReportSnapshotCompleteFailAndScanFailureConditions(t *testing.T) {
 	wantErr := errors.New("snapshot mutation failure")
-	snapshot := reportmodel.ReportSnapshot{ID: "snapshot", WorkspaceID: "workspace", Summary: reportmodel.ReportSummary{}, SourceVersions: map[string]string{}}
-	request := reportcontract.ReportSnapshotCompleteRequest{Snapshot: snapshot, ExpectedStatus: "refreshing"}
+	snapshot := reportmodel.ReportSnapshot{ID: "snapshot", WorkspaceID: "workspace", Summary: reportmodel.ReportSummary{}, SourceVersions: map[string]string{}, LeaseOwner: "owner", FencingToken: 1}
+	request := reportcontract.ReportSnapshotCompleteRequest{Snapshot: snapshot, ExpectedStatus: "refreshing", LeaseOwner: "owner", FencingToken: 1}
 	for _, call := range []func(*ReportSnapshotStore) error{
 		func(repository *ReportSnapshotStore) error {
 			return repository.CompleteReportSnapshot(t.Context(), request)
 		},
 		func(repository *ReportSnapshotStore) error {
-			return repository.FailReportSnapshot(t.Context(), reportcontract.ReportSnapshotFailRequest{WorkspaceID: "workspace", ID: "snapshot", ExpectedStatus: "refreshing", ErrorCode: "failed"})
+			return repository.FailReportSnapshot(t.Context(), reportcontract.ReportSnapshotFailRequest{WorkspaceID: "workspace", ID: "snapshot", ExpectedStatus: "refreshing", ErrorCode: "failed", LeaseOwner: "owner", FencingToken: 1})
 		},
 	} {
 		repository := reportSnapshotScriptedRepository(t, &reportDatasetSQLState{execSteps: []reportDatasetSQLExecStep{{err: wantErr}}})

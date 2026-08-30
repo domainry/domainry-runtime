@@ -417,7 +417,7 @@ func TestRecordInitializationAuditProjectorCoversPresentationAndFailures(t *test
 	if events[3].Before["name"] != "Before" || events[4].After["name"] != "After" || events[5].Before["name"] != "Old" || events[5].After["name"] != "New" {
 		t.Fatalf("projected events=%#v", events)
 	}
-	if _, err := runtime.reportsService.Summary(t.Context(), "missing", principal); apperror.CodeOf(err) != "backend.report.not_found" {
+	if _, err := runtime.reportQueriesService.Summary(t.Context(), "missing", principal); apperror.CodeOf(err) != "backend.report.not_found" {
 		t.Fatalf("missing report error=%v", err)
 	}
 

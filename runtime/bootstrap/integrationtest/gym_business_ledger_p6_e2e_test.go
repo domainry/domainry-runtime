@@ -75,7 +75,7 @@ func TestGymLedgerReplaysExactBalancesAndLocatesTampering(t *testing.T) {
 		Measures:   []reportmodel.ReportDatasetMeasure{{Key: "entries", Operation: "count", SourceAlias: "ledger"}, {Key: "amount", Operation: "sum", Field: func() *reportmodel.ReportDatasetField { value := field("amount"); return &value }()}},
 	}}
 	services := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "gym-ledger-report-p7", TemplateVersion: "1", Name: "Gym Ledger Report P7", Objects: []definitionmodel.ObjectSchema{object}, Reports: []reportmodel.ReportSchema{report}, Integrations: integrationmodel.IntegrationSchema{}, Store: store})
-	summary, err := services.Applications().Reports.Summary(t.Context(), report.Key, accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "finance", WorkspaceID: "default"}}, role))
+	summary, err := services.Applications().ReportQueries.Summary(t.Context(), report.Key, accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "finance", WorkspaceID: "default"}}, role))
 	if err != nil {
 		t.Fatal(err)
 	}

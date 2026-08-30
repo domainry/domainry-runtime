@@ -6,7 +6,6 @@ import (
 	"fmt"
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
-	"strings"
 	"time"
 
 	auditsdk "github.com/domainry/domainry-audit-sdk"
@@ -24,7 +23,6 @@ import (
 	schedulersaashost "github.com/domainry/domainry-scheduler-sdk/saashost"
 	"go.uber.org/zap"
 
-	"github.com/domainry/domainry-foundation/apperror"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
@@ -39,7 +37,6 @@ import (
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	runtimeauditmodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -54,80 +51,6 @@ import (
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 )
-
-type runtimeNotificationActionAuthorizerBinding struct {
-	authorize func(context.Context, string, principalmodel.Principal) error
-}
-
-type runtimeNotificationResolvedActionAuthorizerBinding struct {
-	authorize func(context.Context, notificationmodel.NotificationInboxResolvedAction, principalmodel.Principal) error
-}
-
-func (b *runtimeNotificationResolvedActionAuthorizerBinding) Authorize(ctx context.Context, action notificationmodel.NotificationInboxResolvedAction, principal principalmodel.Principal) error {
-	if b == nil || b.authorize == nil {
-		return &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.notification.inbox_action_unavailable"}
-	}
-	return b.authorize(ctx, action, principal)
-}
-
-func (b *runtimeNotificationActionAuthorizerBinding) Authorize(ctx context.Context, resourceID string, principal principalmodel.Principal) error {
-	if b == nil || b.authorize == nil {
-		return &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.notification.inbox_action_unavailable"}
-	}
-	return b.authorize(ctx, resourceID, principal)
-}
-
-func newProjectRecordNotificationActionAuthorizer(getRecord func(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error)) notificationfacade.InboxResolvedResourceAuthorizer {
-	return func(ctx context.Context, action notificationmodel.NotificationInboxResolvedAction, principal principalmodel.Principal) error {
-		objectKey, recordID := strings.TrimSpace(action.RouteParams["object_key"]), strings.TrimSpace(action.RouteParams["resource_id"])
-		if getRecord == nil || objectKey == "" || recordID == "" {
-			return &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.notification.inbox_action_unavailable"}
-		}
-		_, err := getRecord(ctx, objectKey, recordID, principal)
-		return err
-	}
-}
-
-type integrationNotificationResourceReader interface {
-	ListSecrets(context.Context, string) ([]integrationmodel.IntegrationSecret, error)
-	ListConnections(context.Context, string) ([]integrationmodel.IntegrationConnection, error)
-}
-
-func registerIntegrationNotificationActionAuthorizers(registry *notificationfacade.ActionAuthorizerRegistry, resources integrationNotificationResourceReader) {
-	if registry == nil || resources == nil {
-		return
-	}
-	registry.Register("integration_secret", func(ctx context.Context, resourceID string, principal principalmodel.Principal) error {
-		if !integrationapplication.HasPermission(principal, integrationapplication.PermissionSecretManage) {
-			return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.notification.inbox_action_forbidden"}
-		}
-		values, err := resources.ListSecrets(ctx, principal.WorkspaceID)
-		if err != nil {
-			return err
-		}
-		for _, value := range values {
-			if value.Key == resourceID {
-				return nil
-			}
-		}
-		return &apperror.AppError{Kind: apperror.KindNotFound, Code: "backend.notification.inbox_action_resource_not_found"}
-	})
-	registry.Register("integration_connection", func(ctx context.Context, resourceID string, principal principalmodel.Principal) error {
-		if !integrationapplication.HasPermission(principal, integrationapplication.PermissionConnectionManage) {
-			return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.notification.inbox_action_forbidden"}
-		}
-		values, err := resources.ListConnections(ctx, principal.WorkspaceID)
-		if err != nil {
-			return err
-		}
-		for _, value := range values {
-			if value.Key == resourceID {
-				return nil
-			}
-		}
-		return &apperror.AppError{Kind: apperror.KindNotFound, Code: "backend.notification.inbox_action_resource_not_found"}
-	})
-}
 
 func New(ctx context.Context, cfg config.Config, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, dataExchangeFactory dataexchangesdk.Factory) *Runtime {
 	businessHandlers := runtimeext.NewBusinessHandlerRegistry()

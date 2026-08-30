@@ -10,13 +10,91 @@ import (
 	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
+	notificationfacade "github.com/domainry/domainry-runtime/runtime/application/notificationfacade"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
+	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
+
+type runtimeNotificationActionAuthorizerBinding struct {
+	authorize func(context.Context, string, principalmodel.Principal) error
+}
+
+type runtimeNotificationResolvedActionAuthorizerBinding struct {
+	authorize func(context.Context, notificationmodel.NotificationInboxResolvedAction, principalmodel.Principal) error
+}
+
+func (b *runtimeNotificationResolvedActionAuthorizerBinding) Authorize(ctx context.Context, action notificationmodel.NotificationInboxResolvedAction, principal principalmodel.Principal) error {
+	if b == nil || b.authorize == nil {
+		return &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.notification.inbox_action_unavailable"}
+	}
+	return b.authorize(ctx, action, principal)
+}
+
+func (b *runtimeNotificationActionAuthorizerBinding) Authorize(ctx context.Context, resourceID string, principal principalmodel.Principal) error {
+	if b == nil || b.authorize == nil {
+		return &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.notification.inbox_action_unavailable"}
+	}
+	return b.authorize(ctx, resourceID, principal)
+}
+
+func newProjectRecordNotificationActionAuthorizer(getRecord func(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error)) notificationfacade.InboxResolvedResourceAuthorizer {
+	return func(ctx context.Context, action notificationmodel.NotificationInboxResolvedAction, principal principalmodel.Principal) error {
+		objectKey, recordID := strings.TrimSpace(action.RouteParams["object_key"]), strings.TrimSpace(action.RouteParams["resource_id"])
+		if getRecord == nil || objectKey == "" || recordID == "" {
+			return &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.notification.inbox_action_unavailable"}
+		}
+		_, err := getRecord(ctx, objectKey, recordID, principal)
+		return err
+	}
+}
+
+type integrationNotificationResourceReader interface {
+	ListSecrets(context.Context, string) ([]integrationmodel.IntegrationSecret, error)
+	ListConnections(context.Context, string) ([]integrationmodel.IntegrationConnection, error)
+}
+
+func registerIntegrationNotificationActionAuthorizers(registry *notificationfacade.ActionAuthorizerRegistry, resources integrationNotificationResourceReader) {
+	if registry == nil || resources == nil {
+		return
+	}
+	registry.Register("integration_secret", func(ctx context.Context, resourceID string, principal principalmodel.Principal) error {
+		if !integrationapplication.HasPermission(principal, integrationapplication.PermissionSecretManage) {
+			return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.notification.inbox_action_forbidden"}
+		}
+		values, err := resources.ListSecrets(ctx, principal.WorkspaceID)
+		if err != nil {
+			return err
+		}
+		for _, value := range values {
+			if value.Key == resourceID {
+				return nil
+			}
+		}
+		return &apperror.AppError{Kind: apperror.KindNotFound, Code: "backend.notification.inbox_action_resource_not_found"}
+	})
+	registry.Register("integration_connection", func(ctx context.Context, resourceID string, principal principalmodel.Principal) error {
+		if !integrationapplication.HasPermission(principal, integrationapplication.PermissionConnectionManage) {
+			return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.notification.inbox_action_forbidden"}
+		}
+		values, err := resources.ListConnections(ctx, principal.WorkspaceID)
+		if err != nil {
+			return err
+		}
+		for _, value := range values {
+			if value.Key == resourceID {
+				return nil
+			}
+		}
+		return &apperror.AppError{Kind: apperror.KindNotFound, Code: "backend.notification.inbox_action_resource_not_found"}
+	})
+}
 
 type workflowTaskLookup func(context.Context, string, string) (workflowmodel.WorkflowTask, bool, error)
 type schedulerDefinitionLookup func(context.Context, principalmodel.SystemScope, string, string) (appschemamodel.ApplicationDefinition, bool, error)

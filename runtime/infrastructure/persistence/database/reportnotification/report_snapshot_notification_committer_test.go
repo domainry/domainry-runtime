@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
-	reportapplication "github.com/domainry/domainry-runtime/runtime/application/report"
+	reportsnapshot "github.com/domainry/domainry-runtime/runtime/application/report/snapshot"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -17,7 +17,7 @@ import (
 	"github.com/domainry/domainry-runtime/testsupport/notificationsdkfixture"
 )
 
-var _ reportapplication.ReportSnapshotNotificationCommitter = ReportSnapshotNotificationCommitter{}
+var _ reportsnapshot.ReportSnapshotNotificationCommitter = ReportSnapshotNotificationCommitter{}
 
 func TestReportSnapshotCompletionAndNotificationAreAtomic(t *testing.T) {
 	store := openReportNotificationStore(t)
@@ -28,7 +28,7 @@ func TestReportSnapshotCompletionAndNotificationAreAtomic(t *testing.T) {
 	first := beginReportSnapshot(t, reports, "first")
 	first.Status, first.RefreshedAt = "succeeded", "2026-07-28T01:00:00Z"
 	event := reportNotificationEvent("report-event-first", "report-snapshot:shared:completed")
-	if err := committer.CompleteReportSnapshotWithNotification(t.Context(), reportcontract.ReportSnapshotCompleteRequest{Snapshot: first, ExpectedStatus: "refreshing"}, event); err != nil {
+	if err := committer.CompleteReportSnapshotWithNotification(t.Context(), reportcontract.ReportSnapshotCompleteRequest{Snapshot: first, ExpectedStatus: "refreshing", LeaseOwner: first.LeaseOwner, FencingToken: first.FencingToken}, event); err != nil {
 		t.Fatal(err)
 	}
 	assertReportSnapshotStatus(t, store, first.ID, "succeeded")
@@ -36,7 +36,7 @@ func TestReportSnapshotCompletionAndNotificationAreAtomic(t *testing.T) {
 	rollback := beginReportSnapshot(t, reports, "rollback")
 	rollback.Status, rollback.RefreshedAt = "succeeded", "2026-07-28T01:01:00Z"
 	duplicate := reportNotificationEvent("report-event-duplicate", event.SourceEventID)
-	if err := committer.CompleteReportSnapshotWithNotification(t.Context(), reportcontract.ReportSnapshotCompleteRequest{Snapshot: rollback, ExpectedStatus: "refreshing"}, duplicate); err == nil {
+	if err := committer.CompleteReportSnapshotWithNotification(t.Context(), reportcontract.ReportSnapshotCompleteRequest{Snapshot: rollback, ExpectedStatus: "refreshing", LeaseOwner: rollback.LeaseOwner, FencingToken: rollback.FencingToken}, duplicate); err == nil {
 		t.Fatal("expected duplicate notification identity to reject completion")
 	}
 	assertReportSnapshotStatus(t, store, rollback.ID, "refreshing")
@@ -50,14 +50,14 @@ func TestReportSnapshotFailureAndNotificationAreAtomic(t *testing.T) {
 
 	seed := beginReportSnapshot(t, reports, "seed")
 	event := reportNotificationEvent("report-failed-seed", "report-snapshot:shared:failed")
-	if err := committer.FailReportSnapshotWithNotification(t.Context(), reportcontract.ReportSnapshotFailRequest{WorkspaceID: seed.WorkspaceID, ID: seed.ID, ExpectedStatus: "refreshing", ErrorCode: "backend.report.snapshot_refresh_failed"}, event); err != nil {
+	if err := committer.FailReportSnapshotWithNotification(t.Context(), reportcontract.ReportSnapshotFailRequest{WorkspaceID: seed.WorkspaceID, ID: seed.ID, ExpectedStatus: "refreshing", ErrorCode: "backend.report.snapshot_refresh_failed", LeaseOwner: seed.LeaseOwner, FencingToken: seed.FencingToken}, event); err != nil {
 		t.Fatal(err)
 	}
 	assertReportSnapshotStatus(t, store, seed.ID, "failed")
 
 	rollback := beginReportSnapshot(t, reports, "failed-rollback")
 	duplicate := reportNotificationEvent("report-failed-duplicate", event.SourceEventID)
-	if err := committer.FailReportSnapshotWithNotification(t.Context(), reportcontract.ReportSnapshotFailRequest{WorkspaceID: rollback.WorkspaceID, ID: rollback.ID, ExpectedStatus: "refreshing", ErrorCode: "backend.report.snapshot_refresh_failed"}, duplicate); err == nil {
+	if err := committer.FailReportSnapshotWithNotification(t.Context(), reportcontract.ReportSnapshotFailRequest{WorkspaceID: rollback.WorkspaceID, ID: rollback.ID, ExpectedStatus: "refreshing", ErrorCode: "backend.report.snapshot_refresh_failed", LeaseOwner: rollback.LeaseOwner, FencingToken: rollback.FencingToken}, duplicate); err == nil {
 		t.Fatal("expected duplicate notification identity to roll failure back")
 	}
 	assertReportSnapshotStatus(t, store, rollback.ID, "refreshing")
@@ -104,13 +104,13 @@ func openReportNotificationStore(t *testing.T) *database.RuntimeStore {
 
 func beginReportSnapshot(t *testing.T, reports *reportpersistence.ReportSnapshotStore, key string) reportmodel.ReportSnapshot {
 	t.Helper()
-	snapshot, execute, err := reports.BeginReportSnapshot(t.Context(), reportcontract.ReportSnapshotBeginRequest{
-		WorkspaceID: "workspace-a", ReportKey: "revenue", AccessScopeHash: "scope", IdempotencyKey: key, StartedAt: "2026-07-28T00:00:00Z",
+	claim, err := reports.BeginReportSnapshot(t.Context(), reportcontract.ReportSnapshotBeginRequest{
+		WorkspaceID: "workspace-a", ReportKey: "revenue", AccessScopeHash: "scope", IdempotencyKey: key, StartedAt: "2026-07-28T00:00:00Z", LeaseOwner: "worker-" + key, LeaseExpiresAt: "2026-07-28T00:02:00Z",
 	})
-	if err != nil || !execute {
-		t.Fatalf("snapshot=%+v execute=%v err=%v", snapshot, execute, err)
+	if err != nil || !claim.Acquired() {
+		t.Fatalf("claim=%+v err=%v", claim, err)
 	}
-	return snapshot
+	return claim.Snapshot
 }
 
 func reportNotificationEvent(id, sourceID string) notificationmodel.NotificationEvent {

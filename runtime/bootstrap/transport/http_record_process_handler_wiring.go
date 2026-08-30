@@ -84,7 +84,7 @@ func (a *httpServerAssembly) wireRecordAndProcessHandlers() {
 		},
 	})
 	a.handlers.Reports = reporthttp.NewReportsHandler(reporthttp.ReportsDependencies{
-		Service: records.Applications().Reports, Principal: a.callbacks.Principal,
+		Queries: records.Applications().ReportQueries, Snapshots: records.Applications().ReportSnapshots, Exports: records.Applications().ReportExports, Principal: a.callbacks.Principal,
 		WriteJSON: a.callbacks.WriteJSON, WriteServiceError: a.callbacks.WriteServiceError,
 	})
 }

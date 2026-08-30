@@ -343,4 +343,29 @@ func TestSchemaAssemblerSeamMethods(t *testing.T) {
 	}
 }
 
+func TestLegacyAuditPrimaryKeyReplacementSQLIsDialectSpecific(t *testing.T) {
+	tests := map[string]string{
+		"postgres": `ALTER TABLE "runtime"."_audit_events" DROP CONSTRAINT "audit_events_pkey", ADD PRIMARY KEY ("workspace_id", "id")`,
+		"mysql":    "ALTER TABLE `runtime`.`_audit_events` DROP PRIMARY KEY, ADD PRIMARY KEY (`workspace_id`, `id`)",
+	}
+	for driver, expected := range tests {
+		t.Run(driver, func(t *testing.T) {
+			table, workspace, id, constraint := `"runtime"."_audit_events"`, `"workspace_id"`, `"id"`, `"audit_events_pkey"`
+			if driver == "mysql" {
+				table, workspace, id, constraint = "`runtime`.`_audit_events`", "`workspace_id`", "`id`", ""
+			}
+			actual, err := legacyAuditPrimaryKeyReplacementSQL(driver, table, workspace, id, constraint)
+			if err != nil || actual != expected {
+				t.Fatalf("statement=%q err=%v", actual, err)
+			}
+		})
+	}
+	if _, err := legacyAuditPrimaryKeyReplacementSQL("postgres", "audit", "workspace", "id", ""); err == nil {
+		t.Fatal("empty Postgres constraint was accepted")
+	}
+	if _, err := legacyAuditPrimaryKeyReplacementSQL("sqlite", "audit", "workspace", "id", ""); err == nil {
+		t.Fatal("SQLite rebuild was incorrectly represented as one ALTER statement")
+	}
+}
+
 var _ schemaDatabase = (*sql.DB)(nil)

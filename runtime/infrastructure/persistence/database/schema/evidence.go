@@ -28,6 +28,7 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"id " + text + " PRIMARY KEY", "workspace_id " + idempotencyScopeText + " NOT NULL", "report_key " + idempotencyScopeText + " NOT NULL", "access_scope_hash " + idempotencyScopeText + " NOT NULL", "idempotency_key " + idempotencyScopeText + " NOT NULL",
 			"status " + text + " NOT NULL", "summary_json TEXT NOT NULL", "watermark " + text + " NOT NULL DEFAULT ''", "source_versions_json TEXT NOT NULL", "row_count BIGINT NOT NULL DEFAULT 0", "source_row_count BIGINT NOT NULL DEFAULT 0",
 			"started_at " + text + " NOT NULL", "refreshed_at " + text + " NOT NULL DEFAULT ''", "error_code " + text + " NOT NULL DEFAULT ''",
+			"lease_owner " + text + " NOT NULL DEFAULT ''", "lease_expires_at " + text + " NOT NULL DEFAULT ''", "fencing_token BIGINT NOT NULL DEFAULT 0",
 		},
 		"_business_seed_provenance": {
 			"seed_key " + text + " PRIMARY KEY", "object_key " + text + " NOT NULL", "record_id " + text + " NOT NULL",

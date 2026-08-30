@@ -182,6 +182,71 @@ func (s *SchedulerApplicationService) UseNotificationCompiler(compiler func(noti
 	}
 }
 
+func schedulerOperationAllowed(principal principalmodel.Principal) error {
+	if err := schedulerAuthorizeCommand(principal); err != nil {
+		return err
+	}
+	if principal.HasPermission("workspace.admin") || principal.HasExactPermission("scheduler.command") {
+		return nil
+	}
+	return forbidden("backend.scheduler.permission_required")
+}
+
+func schedulerAuthorizeQuery(principal principalmodel.Principal) error {
+	if _, err := principalmodel.QueryScopeForPrincipal(principal); err != nil {
+		return schedulerError(apperror.KindForbidden, "backend.workspace_scope_required", err)
+	}
+	return nil
+}
+
+func schedulerAuthorizeCommand(principal principalmodel.Principal) error {
+	if _, err := principalmodel.CommandScopeForPrincipal(principal); err != nil {
+		return schedulerError(apperror.KindForbidden, "backend.workspace_scope_required", err)
+	}
+	return nil
+}
+
+func (s *SchedulerApplicationService) objectForPrincipal(ctx context.Context, principal principalmodel.Principal, objectKey string) (definitionmodel.ObjectSchema, error) {
+	if s == nil || s.schema == nil {
+		return definitionmodel.ObjectSchema{}, notFound("backend.scheduler.runtime_object_not_found", "object_key", objectKey)
+	}
+	for _, object := range s.schema.SchemaForPrincipal(ctx, principal).Objects {
+		if object.Key == objectKey {
+			return object, nil
+		}
+	}
+	return definitionmodel.ObjectSchema{}, notFound("backend.scheduler.runtime_object_not_found", "object_key", objectKey)
+}
+
+func schemaObjectMap(objects []definitionmodel.ObjectSchema) map[string]definitionmodel.ObjectSchema {
+	result := make(map[string]definitionmodel.ObjectSchema, len(objects))
+	for _, object := range objects {
+		result[object.Key] = object
+	}
+	return result
+}
+
+func existingStringBefore(record recordmodel.Record, key string) string {
+	value := strings.TrimSpace(fmt.Sprint(record.Data[key]))
+	if value == "<nil>" {
+		return ""
+	}
+	return value
+}
+
+func ExistingStringBefore(record recordmodel.Record, key string) string {
+	return existingStringBefore(record, key)
+}
+
+func firstNonNil(values ...any) any {
+	for _, value := range values {
+		if value != nil {
+			return value
+		}
+	}
+	return nil
+}
+
 func (s *SchedulerApplicationService) UseReportSnapshotRuntime(runtime ReportSnapshotRuntime) {
 	s.reportSnapshots = runtime
 }

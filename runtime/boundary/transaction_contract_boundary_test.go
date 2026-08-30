@@ -340,31 +340,24 @@ func TestPostgresAndMySQLUseRealDeadlockAndSerializableConflictProofs(t *testing
 	}
 }
 
-func TestSchedulerCallerCommandsCommitStateAndEventAtomically(t *testing.T) {
+func TestExtractedSchedulerRunLifecycleIsNotReimplementedInRuntime(t *testing.T) {
 	path := filepath.Join(runtimeRoot(t), "application", "scheduler", "scheduler_operations.go")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	content := string(raw)
-	functions := []string{"SimulateJob", "RetryRun", "CancelRun", "ResolveDeadLetter"}
-	for index, name := range functions {
-		start := strings.Index(content, "func (s *SchedulerApplicationService) "+name+"(")
-		if start < 0 {
-			t.Fatalf("scheduler command %s missing", name)
+	for _, removed := range []string{"RetryRun", "CancelRun", "ResolveDeadLetter", "schedulerRunEventRecord"} {
+		if strings.Contains(content, removed) {
+			t.Errorf("Runtime reimplements extracted Scheduler run lifecycle symbol %q", removed)
 		}
-		end := len(content)
-		if index+1 < len(functions) {
-			if next := strings.Index(content[start+1:], "func (s *SchedulerApplicationService) "+functions[index+1]+"("); next >= 0 {
-				end = start + 1 + next
-			}
-		}
-		body := content[start:end]
-		for _, required := range []string{"schedulerRunEventRecord", "CommitRecordMutationBatch"} {
-			if !strings.Contains(body, required) {
-				t.Errorf("scheduler command %s lacks atomic state/event boundary %q", name, required)
-			}
-		}
+	}
+	if !strings.Contains(content, "func (s *SchedulerApplicationService) SimulateJob(") ||
+		!strings.Contains(content, "return s.SimulateTenantAdminDefinition(") {
+		t.Fatal("Runtime must retain only the read-only Scheduler definition preview compatibility entrypoint")
+	}
+	if strings.Contains(content, "CommitRecordMutationBatch") {
+		t.Fatal("Scheduler definition preview must not persist Runtime run state")
 	}
 }
 

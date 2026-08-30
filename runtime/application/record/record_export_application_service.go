@@ -122,84 +122,30 @@ func (s *RecordExportApplicationService) exportWithAssurance(ctx context.Context
 	return buffer.Bytes(), objectKey + ".csv", nil
 }
 
-// encodeExportPage is the Record-owned projection boundary used by both sync
-// responses and the durable Data Exchange worker. It reuses Record policy and
-// emits at most one bounded repository page; callers own job/checkpoint state.
+// encodeExportPage is the synchronous compatibility encoder. Data Exchange
+// consumes projectExportPage directly so Runtime never encodes CSV only to
+// decode it back into the SDK page contract.
 func (s *RecordExportApplicationService) encodeExportPage(ctx context.Context, prepared recordExportPrepared, pageNumber int, includeHeader bool, maxBytes int64) (recordExportEncodedPage, error) {
-	if err := ctx.Err(); err != nil {
-		return recordExportEncodedPage{}, err
-	}
-	queryOptions := prepared.options.Query
-	queryOptions.Page, queryOptions.PageSize = pageNumber, recordExportBatchSize
-	query := queryOptions
-	if s.dependencies.NormalizeQuery != nil {
-		query = s.dependencies.NormalizeQuery(prepared.object, queryOptions, prepared.principal)
-	}
-	page, err := s.dependencies.Repository.ListRecords(ctx, prepared.principal.WorkspaceID, prepared.object, query)
+	page, err := s.projectExportPage(ctx, prepared, pageNumber)
 	if err != nil {
-		return recordExportEncodedPage{}, recordExportInternalError("export records", err)
+		return recordExportEncodedPage{}, err
 	}
 	var output bytes.Buffer
 	encoder := dataexchange.NewCSVEncoder(&output, maxBytes)
 	if includeHeader {
-		if err := encoder.Write(recordExportHeader(prepared.fields)); err != nil {
+		if err := encoder.Write(page.columns); err != nil {
 			return recordExportEncodedPage{}, err
 		}
 	}
-	relationLabels := s.relationLabels(ctx, prepared.object, prepared.fields, page.Items, prepared.principal)
-	projectedByID := map[string]recordmodel.Record{}
-	if s.dependencies.ProjectRecords != nil {
-		projectedRecords, projectErr := s.dependencies.ProjectRecords(ctx, prepared.principal, prepared.object, page.Items, "export")
-		if projectErr != nil {
-			return recordExportEncodedPage{}, projectErr
-		}
-		for _, projected := range projectedRecords {
-			projectedByID[projected.ID] = projected
-		}
-	}
-	rows := 0
-	for _, record := range page.Items {
-		if err := ctx.Err(); err != nil {
-			return recordExportEncodedPage{}, err
-		}
-		if query.ScopeExpression == nil && s.dependencies.CanAccess != nil && !s.dependencies.CanAccess(prepared.principal, prepared.object, record) {
-			continue
-		}
-		projected := record
-		if s.dependencies.ProjectRecords != nil {
-			projected = projectedByID[record.ID]
-		}
-		row := []string{record.ID, record.CreatedAt, record.UpdatedAt}
-		for _, field := range prepared.fields {
-			value := ""
-			if s.dependencies.ProjectRecords != nil {
-				if projectedValue, present := projected.Data[field.Key]; present && projectedValue != nil {
-					value = fmt.Sprint(projectedValue)
-				}
-			} else {
-				value, err = recordExportFieldValue(prepared.principal, prepared.object.Key, field, record.Data[field.Key])
-				if err != nil {
-					return recordExportEncodedPage{}, err
-				}
-			}
-			row = append(row, value)
-			if field.Type == "relation" {
-				display := ""
-				if _, visible := projected.Data[field.Key]; visible {
-					display = relationLabels[field.Key][strings.TrimSpace(fmt.Sprint(record.Data[field.Key]))]
-				}
-				row = append(row, display)
-			}
-		}
+	for _, row := range page.rows {
 		if err := encoder.Write(row); err != nil {
 			return recordExportEncodedPage{}, err
 		}
-		rows++
 	}
 	if err := encoder.Close(); err != nil {
 		return recordExportEncodedPage{}, recordExportError(apperror.KindBadRequest, "backend.export.output_too_large", err)
 	}
-	return recordExportEncodedPage{content: output.Bytes(), rows: rows, hasNext: page.HasNext}, nil
+	return recordExportEncodedPage{content: output.Bytes(), rows: len(page.rows), hasNext: page.hasNext}, nil
 }
 
 func recordExportHeader(fields []definitionmodel.FieldSchema) []string {
@@ -274,9 +220,7 @@ func (s *RecordExportApplicationService) prepareExport(ctx context.Context, obje
 	return object, fields, evidence, nil
 }
 
-// RecordExportAssuranceIntent is the canonical user-controlled export request
-// bound into an assurance grant. Runtime-derived RLS/CLS predicates are
-// deliberately excluded because they are re-evaluated at execution time.
+// RecordExportAssuranceIntent binds user input into a grant; Runtime RLS/CLS is re-evaluated at execution.
 func RecordExportAssuranceIntent(options RecordExportOptions) map[string]any {
 	fields := make([]string, 0, len(options.Fields))
 	for _, field := range options.Fields {
@@ -391,10 +335,10 @@ func (s *RecordExportApplicationService) identityLabels(ctx context.Context, ids
 }
 
 func (s *RecordExportApplicationService) objects() map[string]definitionmodel.ObjectSchema {
-	if s.dependencies.Objects == nil {
-		return nil
+	if s.dependencies.Objects != nil {
+		return s.dependencies.Objects()
 	}
-	return s.dependencies.Objects()
+	return nil
 }
 
 func (s *RecordExportApplicationService) audit(ctx context.Context, event, objectKey string, principal principalmodel.Principal, summary string, before, after, metadata map[string]any) {

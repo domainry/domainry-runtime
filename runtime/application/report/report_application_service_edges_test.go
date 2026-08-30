@@ -14,7 +14,8 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
-	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/service"
+	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/query"
+	reportsnapshotdomain "github.com/domainry/domainry-runtime/runtime/domain/report/snapshot"
 )
 
 type reportEmptyAccess struct{}
@@ -45,8 +46,9 @@ type reportSnapshotStoreStub struct {
 	failErr     error
 }
 
-func (s *reportSnapshotStoreStub) BeginReportSnapshot(_ context.Context, request reportcontract.ReportSnapshotBeginRequest) (reportmodel.ReportSnapshot, bool, error) {
-	return reportmodel.ReportSnapshot{ID: "snapshot-1", WorkspaceID: request.WorkspaceID, ReportKey: request.ReportKey, IdempotencyKey: request.IdempotencyKey, Status: "refreshing", StartedAt: request.StartedAt}, true, nil
+func (s *reportSnapshotStoreStub) BeginReportSnapshot(_ context.Context, request reportcontract.ReportSnapshotBeginRequest) (reportcontract.ReportSnapshotClaim, error) {
+	snapshot := reportmodel.ReportSnapshot{ID: "snapshot-1", WorkspaceID: request.WorkspaceID, ReportKey: request.ReportKey, IdempotencyKey: request.IdempotencyKey, Status: "refreshing", StartedAt: request.StartedAt, LeaseOwner: request.LeaseOwner, LeaseExpiresAt: request.LeaseExpiresAt, FencingToken: 1}
+	return reportcontract.ReportSnapshotClaim{Snapshot: snapshot, Disposition: reportcontract.ReportSnapshotClaimAcquired}, nil
 }
 func (s *reportSnapshotStoreStub) CompleteReportSnapshot(_ context.Context, request reportcontract.ReportSnapshotCompleteRequest) error {
 	s.completed = request.Snapshot
@@ -129,7 +131,7 @@ func TestReportSnapshotTerminalNotificationUsesTypedSafeIntent(t *testing.T) {
 		intents = append(intents, intent)
 		return notificationmodel.NotificationEvent{EventType: intent.EventType}, nil
 	}})
-	completed := reportservice.ReportSnapshotRefresh{Snapshot: reportmodel.ReportSnapshot{ID: "snapshot-1", Status: "succeeded"}, TerminalStatus: "succeeded"}
+	completed := reportsnapshotdomain.ReportSnapshotRefresh{Snapshot: reportmodel.ReportSnapshot{ID: "snapshot-1", Status: "succeeded"}, TerminalStatus: "succeeded"}
 	if _, notify, err := service.snapshotTerminalNotification(" revenue ", "refresh-1", completed, reportPrincipal()); err != nil || !notify {
 		t.Fatalf("notify=%v err=%v", notify, err)
 	}
@@ -139,14 +141,14 @@ func TestReportSnapshotTerminalNotificationUsesTypedSafeIntent(t *testing.T) {
 	if len(intents[0].Variables) != 3 || intents[0].Variables["report_key"] != "revenue" || intents[0].Variables["status"] != "completed" {
 		t.Fatalf("unsafe or incomplete variables=%+v", intents[0].Variables)
 	}
-	failed := reportservice.ReportSnapshotRefresh{Snapshot: reportmodel.ReportSnapshot{Status: "failed"}, TerminalStatus: "failed", ErrorCode: "backend.report.snapshot_refresh_failed"}
+	failed := reportsnapshotdomain.ReportSnapshotRefresh{Snapshot: reportmodel.ReportSnapshot{Status: "failed"}, TerminalStatus: "failed", ErrorCode: "backend.report.snapshot_refresh_failed"}
 	if _, notify, err := service.snapshotTerminalNotification("revenue", "refresh-2", failed, principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-a"}}); err != nil || notify {
 		t.Fatalf("recipient-free notify=%v err=%v", notify, err)
 	}
 	if len(intents) != 1 {
 		t.Fatalf("notification emitted without recipient: %+v", intents)
 	}
-	service.compileNotification = func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error) {
+	service.snapshotNotificationDependencies.compiler = func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error) {
 		return notificationmodel.NotificationEvent{}, errors.New("notification unavailable")
 	}
 	if _, _, err := service.snapshotTerminalNotification("revenue", "refresh-3", failed, reportPrincipal()); err == nil {
@@ -229,7 +231,7 @@ func TestReportRefreshRemainingNotificationCommitBoundaries(t *testing.T) {
 		t.Fatalf("domain commit err=%v", err)
 	}
 	service := NewReportApplicationService(ReportApplicationDependencies{})
-	if _, notify, err := service.snapshotTerminalNotification("empty", "key", reportservice.ReportSnapshotRefresh{}, reportPrincipal()); err != nil || notify {
+	if _, notify, err := service.snapshotTerminalNotification("empty", "key", reportsnapshotdomain.ReportSnapshotRefresh{}, reportPrincipal()); err != nil || notify {
 		t.Fatalf("nil compiler notify=%v err=%v", notify, err)
 	}
 	if got := reportSnapshotOccurredAt(reportmodel.ReportSnapshot{RefreshedAt: " refreshed "}); got != "refreshed" {

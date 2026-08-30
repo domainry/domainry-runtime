@@ -9,7 +9,8 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
-	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/service"
+	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/query"
+	reportobjectsql "github.com/domainry/domainry-runtime/runtime/domain/report/query/objectsql"
 )
 
 func NormalizeScope(report reportmodel.ReportSchema, objectKey string, control reportmodel.ReportExportControlSchema, request reportmodel.ReportExportScopeRequest, principal principalmodel.Principal) (reportmodel.ReportExportScopeRequest, reportmodel.ReportSchema, map[string]bool, error) {
@@ -245,7 +246,7 @@ func normalizeObjectSQLExportScope(report reportmodel.ReportSchema, objectKey st
 	}
 	scope.DataScopes = dataScopes
 
-	parameters, err := reportservice.NormalizeReportObjectSQLParameters(report.ObjectSQLV1.Parameters, scope.Parameters)
+	parameters, err := reportobjectsql.NormalizeParameters(report.ObjectSQLV1.Parameters, scope.Parameters)
 	if err != nil {
 		return scope, report, nil, err
 	}

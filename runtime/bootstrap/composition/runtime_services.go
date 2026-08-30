@@ -11,7 +11,7 @@ import (
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
 	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
-	reportapplication "github.com/domainry/domainry-runtime/runtime/application/report"
+	reportsnapshot "github.com/domainry/domainry-runtime/runtime/application/report/snapshot"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	agentrepository "github.com/domainry/domainry-runtime/runtime/domain/agent/repository"
 
@@ -99,7 +99,7 @@ type RuntimeServicesDependencies struct {
 	WorkflowTaskNotificationCommitter   workflowapplication.WorkflowTaskNotificationCommitter
 	RecordNotificationCompiler          func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	ReportNotificationCompiler          func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
-	ReportSnapshotNotificationCommitter reportapplication.ReportSnapshotNotificationCommitter
+	ReportSnapshotNotificationCommitter reportsnapshot.ReportSnapshotNotificationCommitter
 	AutomationNotificationCompiler      func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	AutomationNotificationCommitter     automationapplication.AutomationExecutionNotificationCommitter
 	NotificationIntentPublisher         func(context.Context, notificationmodel.NotificationIntent) error

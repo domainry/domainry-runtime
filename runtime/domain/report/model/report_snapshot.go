@@ -13,6 +13,9 @@ type ReportSnapshot struct {
 	StartedAt       string            `json:"started_at"`
 	RefreshedAt     string            `json:"refreshed_at,omitempty"`
 	ErrorCode       string            `json:"error_code,omitempty"`
+	LeaseOwner      string            `json:"-"`
+	LeaseExpiresAt  string            `json:"-"`
+	FencingToken    int64             `json:"-"`
 }
 
 type ReportSnapshotSourceVersion struct {

@@ -29,7 +29,7 @@ func TestGymSixDashboardsUseGenericReportRuntimeWithRLSAndSnapshots(t *testing.T
 	manager := environment.principals["manager"]
 	summaries := map[string]reportmodel.ReportSummary{}
 	for _, reportKey := range gymAnalyticsP7ReportKeys() {
-		summary, err := environment.service.Applications().Reports.Summary(t.Context(), reportKey, manager)
+		summary, err := environment.service.Applications().ReportQueries.Summary(t.Context(), reportKey, manager)
 		if err != nil {
 			t.Fatalf("realtime report %s: %v", reportKey, err)
 		}
@@ -50,11 +50,11 @@ func TestGymSixDashboardsUseGenericReportRuntimeWithRLSAndSnapshots(t *testing.T
 	environment.assertReportMatchesOwnedDetail(t, "gym_acquisition_funnel", "advisor", "acquisition")
 
 	for _, reportKey := range gymAnalyticsP7ReportKeys() {
-		snapshot, err := environment.service.Applications().Reports.RefreshSnapshot(t.Context(), reportKey, "p7-"+reportKey, manager)
+		snapshot, err := environment.service.Applications().ReportSnapshots.RefreshSnapshot(t.Context(), reportKey, "p7-"+reportKey, manager)
 		if err != nil || snapshot.Status != "succeeded" || snapshot.Watermark == "" || len(snapshot.SourceVersions) == 0 {
 			t.Fatalf("refresh %s snapshot=%#v err=%v", reportKey, snapshot, err)
 		}
-		summary, err := environment.service.Applications().Reports.SummaryMode(t.Context(), reportKey, "snapshot", manager)
+		summary, err := environment.service.Applications().ReportQueries.SummaryMode(t.Context(), reportKey, "snapshot", manager)
 		if err != nil || summary.ExecutionMode != "snapshot" || summary.Snapshot == nil || summary.Snapshot.SnapshotID != snapshot.ID || summary.Snapshot.Stale {
 			t.Fatalf("snapshot summary %s=%#v err=%v", reportKey, summary, err)
 		}
@@ -236,7 +236,7 @@ func (environment *gymAnalyticsP7Environment) assertReportMatchesOwnedDetail(t *
 			detailFacts++
 		}
 	}
-	summary, err := environment.service.Applications().Reports.Summary(t.Context(), reportKey, principal)
+	summary, err := environment.service.Applications().ReportQueries.Summary(t.Context(), reportKey, principal)
 	if err != nil || summary.SourceRowCount != detailFacts {
 		t.Fatalf("RLS parity report=%s source_rows=%d detail_rows=%d err=%v summary=%#v", reportKey, summary.SourceRowCount, detailFacts, err, summary)
 	}
@@ -333,7 +333,7 @@ func TestGymDashboardTargetVolumeP95IsUnderThreeSeconds(t *testing.T) {
 	// Realtime cards prove the indexed source path; the other cards prove the
 	// configured T+1 materialization path and expose freshness on every read.
 	for _, reportKey := range gymAnalyticsP7ReportKeys()[2:] {
-		if _, err := environment.service.Applications().Reports.RefreshSnapshot(t.Context(), reportKey, "performance-"+reportKey, manager); err != nil {
+		if _, err := environment.service.Applications().ReportSnapshots.RefreshSnapshot(t.Context(), reportKey, "performance-"+reportKey, manager); err != nil {
 			t.Fatalf("refresh %s: %v", reportKey, err)
 		}
 	}
@@ -346,7 +346,7 @@ func TestGymDashboardTargetVolumeP95IsUnderThreeSeconds(t *testing.T) {
 		}
 		for attempt := 0; attempt < 20; attempt++ {
 			started := time.Now()
-			summary, err := environment.service.Applications().Reports.SummaryMode(t.Context(), reportKey, mode, manager)
+			summary, err := environment.service.Applications().ReportQueries.SummaryMode(t.Context(), reportKey, mode, manager)
 			elapsed := time.Since(started)
 			if err != nil || summary.SourceRowCount == 0 || mode == "snapshot" && (summary.Snapshot == nil || summary.Snapshot.Stale) {
 				t.Fatalf("performance report=%s mode=%s summary=%#v err=%v", reportKey, mode, summary, err)

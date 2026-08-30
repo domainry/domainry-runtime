@@ -13,12 +13,12 @@ import (
 	"time"
 	"unicode"
 
-	dataexchangemodule "github.com/domainry/domainry-data-exchange/module"
 	notificationmodule "github.com/domainry/domainry-notification/module"
 	partymodule "github.com/domainry/domainry-party/module"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	bootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	dataexchangefixture "github.com/domainry/domainry-runtime/testsupport/dataexchangefixture"
 	schedulermodule "github.com/domainry/domainry-scheduler/module"
 )
 
@@ -239,7 +239,7 @@ func newIntegrationRuntime(t *testing.T, cfg config.Config) *bootstrap.Runtime {
 		}
 	}
 	if !hasBusinessHandlers {
-		return bootstrap.NewWithScheduler(t.Context(), cfg, identityBinding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()), dataexchangemodule.NewFactory(dataexchangemodule.Options{}))
+		return bootstrap.NewWithScheduler(t.Context(), cfg, identityBinding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory())
 	}
 	if strings.TrimSpace(cfg.RuntimeVersion) == "" {
 		cfg.RuntimeVersion = "integrationtest-runtime-v1"
@@ -253,7 +253,7 @@ func newIntegrationRuntime(t *testing.T, cfg config.Config) *bootstrap.Runtime {
 	if err := os.WriteFile(cfg.ManifestPath, normalized, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	return bootstrap.NewWithBusinessHandlersAndScheduler(t.Context(), cfg, registry, identityBinding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()), dataexchangemodule.NewFactory(dataexchangemodule.Options{}))
+	return bootstrap.NewWithBusinessHandlersAndScheduler(t.Context(), cfg, registry, identityBinding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory())
 }
 
 func sourceOwnedFixturePrecondition(actionKey string) (string, any) {
