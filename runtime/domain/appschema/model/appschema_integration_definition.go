@@ -1,8 +1,10 @@
 package appschemamodel
 
-import definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-
-import localizationmodel "github.com/domainry/domainry-runtime/runtime/domain/localization/model"
+import (
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	localizationmodel "github.com/domainry/domainry-runtime/runtime/domain/localization/model"
+)
 
 // ConnectorSchema is Runtime's narrow, transient anti-corruption projection
 // for validating application references. The source definition, lifecycle,
@@ -34,23 +36,11 @@ type ConnectorOperationSchema struct {
 	DryRunSupported       bool                               `json:"dry_run_supported,omitempty"`
 }
 
-type IntegrationExternalIdentityMappingSchema struct {
-	Provider    string `json:"provider,omitempty"`
-	SubjectPath string `json:"subject_path,omitempty"`
-	SubjectType string `json:"subject_type,omitempty"`
-	NamePath    string `json:"name_path,omitempty"`
-	OnUnmapped  string `json:"on_unmapped,omitempty"`
-}
-
-// IntegrationEventFieldSchema is the closed inbound payload contract for one
-// event mapping. Runtime validates authored bindings against its Action and
-// Workflow contracts; Integration validates each actual inbound payload.
-type IntegrationEventFieldSchema struct {
-	Path     string   `json:"path"`
-	Type     string   `json:"type"`
-	Options  []string `json:"options,omitempty"`
-	Required bool     `json:"required,omitempty"`
-}
+// These aliases preserve Runtime's application-schema compatibility while the
+// actual event payload and external-identity contracts remain Integration SDK
+// owned. Runtime adds only Action/Workflow reference validation around them.
+type IntegrationExternalIdentityMappingSchema = integrationsdk.ExternalIdentityMappingRequirement
+type IntegrationEventFieldSchema = integrationsdk.EventFieldRequirement
 
 type IntegrationEventMappingSchema struct {
 	Key              string                                   `json:"key"`
