@@ -13,7 +13,7 @@ require (
 	github.com/domainry/domainry-connector-sdk v0.1.0-dev.12
 	github.com/domainry/domainry-data-exchange-sdk v0.3.1
 	github.com/domainry/domainry-foundation v0.1.0-dev.6
-	github.com/domainry/domainry-identity-sdk v0.1.0-dev9
+	github.com/domainry/domainry-identity-sdk v0.1.1-dev1
 	github.com/domainry/domainry-integration v0.1.3
 	github.com/domainry/domainry-integration-sdk v0.1.0
 	github.com/domainry/domainry-lifecycle v0.1.6

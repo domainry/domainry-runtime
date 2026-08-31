@@ -82,6 +82,7 @@ type HTTPRouter struct {
 	workerControl           *workerplatform.Controller
 	businessEvents          *businesseventapplication.BusinessEventApplicationService
 	businessEventHTTP       *businesseventhttp.BusinessEventsHandler
+	workspaceProvisionHTTP  httpRouteRegistrar
 	serviceKind             string
 	productBrandName        string
 	runtimeVersion          string
@@ -216,6 +217,7 @@ func (s *HTTPRouter) Routes() http.Handler {
 	s.schedulerHTTP.RegisterRoutes(mux)
 	s.operationsHTTP.RegisterRoutes(mux)
 	runOptionalRouteRegistrar(s.lifecycleHTTP != nil, func() { s.lifecycleHTTP.RegisterRoutes(mux) })
+	runOptionalRouteRegistrar(s.workspaceProvisionHTTP != nil, func() { s.workspaceProvisionHTTP.RegisterRoutes(mux) })
 	s.registerFallbackRoutes(mux)
 	admitted := s.withAdmission(mux, mux)
 	controlled := s.withOperationalControls(mux, admitted)

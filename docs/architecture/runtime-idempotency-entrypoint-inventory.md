@@ -5,7 +5,7 @@
 
 Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `optimistic_only`, `not_applicable`.
 
-## HTTP mutation routes (136)
+## HTTP mutation routes (138)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -145,6 +145,8 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workflows` | `POST /tenant-admin/workflows/authoring-fragments/{capabilityKey}/validate` | `not_applicable` | none | `runtime/transport/http/workflows/workflows_routes.go` |
 | `workflows` | `POST /tenant-admin/workflows/{workflowKey}/simulate` | `not_applicable` | none | `runtime/transport/http/workflows/workflows_routes.go` |
 | `workflows` | `POST /tenant-admin/workflows/{workflowKey}/validate` | `not_applicable` | none | `runtime/transport/http/workflows/workflows_routes.go` |
+| `workspaceprovision` | `POST /tenant-admin/workspaces/provision` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
+| `workspaceprovision` | `POST /tenant-admin/workspaces/{workspaceID}/roles/reconcile` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 
 ## Application mutation commands (202)
 

@@ -25,7 +25,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-const CurrentRuntimeSchemaVersion = "018_application_schema_projection"
+const CurrentRuntimeSchemaVersion = "019_workspace_provisioning"
 
 const (
 	managedDatabaseCohortTable           = "_domainry_managed_runtime_database_cohort"
@@ -78,6 +78,9 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 		}
 	}
 	if err := s.ensureManagedDatabaseCohortMarker(ctx); err != nil {
+		return err
+	}
+	if err := runtimeschema.EnsureWorkspaceProvisioningSchema(ctx, s); err != nil {
 		return err
 	}
 	metadataMigrations, err := metadatamodule.SchemaMigrationsForDialect(s.SQLRenderer)
@@ -497,7 +500,7 @@ func (s *RuntimeStore) removeObsoleteMigrationLedgers(ctx context.Context) error
 }
 
 func currentRuntimeSchemaChecksum() string {
-	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":metadata_projection,object_fields,record_data,evidence,party,lifecycle,operations,indexes,_release_cohorts,_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,module_migrations"))
+	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":metadata_projection,object_fields,record_data,evidence,party,lifecycle,operations,indexes,_release_cohorts,_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,module_migrations,workspace_provisioning"))
 	return hex.EncodeToString(sum[:])
 }
 

@@ -22,6 +22,14 @@ SaaS mode keeps them in the remote Identity service.
 Registered schema tables:
 
 - `_schema_migrations` — `installation_scoped` and the sole host/module migration ledger
+- `_workspaces`, `_tenant_registry` — `runtime_global`; they are the platform
+  registries for canonical workspace and tenant identities, and their canonical
+  codes are globally unique rather than inferred from a caller workspace
+- `_workspace_configuration` — `workspace_scoped`; every row is keyed by the
+  newly provisioned workspace and is created in the same guarded transaction
+- `_workspace_provisioning_receipts` — `runtime_global`; request idempotency is
+  enforced for the platform-wide provisioning operation and never supplies an
+  implicit tenant scope
 - `_release_cohorts`, `_release_instances` — `installation_scoped`;
   they coordinate one process release identity across the whole Runtime
   installation and must never be partitioned by tenant workspace

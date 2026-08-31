@@ -23,6 +23,7 @@ import (
 	principalapplication "github.com/domainry/domainry-runtime/runtime/application/principal"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
+	workspaceprovisionapplication "github.com/domainry/domainry-runtime/runtime/application/workspaceprovision"
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
 
 	workerplatform "github.com/domainry/domainry-foundation/worker"
@@ -36,11 +37,13 @@ import (
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	operationspersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
 	publicationhandoffpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
+	workspaceprovisionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceprovision"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	integrationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/integrations"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
+	workspaceprovisionhttp "github.com/domainry/domainry-runtime/runtime/transport/http/workspaceprovision"
 )
 
 type HTTPServerDependencies struct {
@@ -171,11 +174,27 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	assembly.wireRecordAndProcessHandlers()
 	assembly.wireMetadataAndBusinessHandlers()
 	assembly.wireRuntimeIntegrationGateway()
+	assembly.wireWorkspaceProvisioning()
 	assembly.wireIntegrationAndAgentHandlers(dependencies.Config.AgentDialogRateLimitPerMinute)
 	server = runtimehttp.UseHandlers(server, assembly.handlers)
 	server = runtimehttp.UseServiceIdentity(server, dependencies.Config.RuntimeVersion)
 	server = runtimehttp.UseRuntimeReleaseIdentity(server, dependencies.ReleaseIdentity)
 	return runtimehttp.UseManifest(server, dependencies.Manifest)
+}
+
+func (a *httpServerAssembly) wireWorkspaceProvisioning() {
+	if a.dependencies.Store == nil || a.dependencies.IdentityBinding == nil {
+		return
+	}
+	repository := workspaceprovisionpersistence.NewWorkspaceProvisionStore(a.dependencies.Store, a.dependencies.IdentityBinding, a.dependencies.Manifest)
+	service := workspaceprovisionapplication.NewWorkspaceProvisionApplicationService(repository)
+	a.handlers.WorkspaceProvision = workspaceprovisionhttp.NewWorkspaceProvisionHandler(workspaceprovisionhttp.WorkspaceProvisionDependencies{
+		UseCases: service, Principal: a.callbacks.Principal, DecodeJSON: a.callbacks.DecodeJSON,
+		WriteJSON: a.callbacks.WriteJSON, WriteServiceError: a.callbacks.WriteServiceError,
+		ProvisionGuard: a.identityHTTP.PermissionFunc(workspaceprovisionapplication.Permission),
+		ReconcileGuard: a.identityHTTP.PermissionFunc(workspaceprovisionapplication.ReconcilePermission),
+		SecurityAudit:  a.callbacks.SecurityAudit,
+	})
 }
 
 // wireRuntimeIntegrationGateway exposes only Runtime-owned handoff reads and

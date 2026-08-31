@@ -25,7 +25,7 @@ var businessOwnerRootProductionBaselines = map[string]int{
 	"expression": 0,
 	"lifecycle":  0, "localization": 0, "manifest": 0, "appschema": 0,
 	"notification": 0, "operations": 0, "pipeline": 0, "principal": 0, "profilebinding": 0, "record": 0, "report": 0,
-	"scheduler": 0, "surfacecontext": 0, "transaction": 0, "workflow": 0,
+	"scheduler": 0, "surfacecontext": 0, "transaction": 0, "workflow": 0, "workspaceprovision": 0,
 	"surface": 0,
 }
 
@@ -38,7 +38,7 @@ var applicationTopLevelDirectories = technicalLayoutStringSet(
 	"action", "agent", "auditbinding", "automation", "businessevent", "businesssystem", "capability", "changeplan", "contractcheck",
 	"deployment", "integration", "lifecycle", "appschema", "notificationfacade", "operations", "pipeline", "principal", "record", "report", "scheduler",
 	"party",
-	"recordmutation", "recordtimer", "seed", "surfacecontext", "upload", "workflow",
+	"recordmutation", "recordtimer", "seed", "surfacecontext", "upload", "workflow", "workspaceprovision",
 	"publicationhandoff",
 )
 
@@ -46,7 +46,7 @@ var applicationProductionBaselines = map[string]int{
 	".": 0, "action": 43, "agent": 6, "auditbinding": 1, "automation": 8, "businesssystem": 4, "capability": 17,
 	"businessevent": 1, "changeplan": 14, "deployment": 5, "integration": 70, "lifecycle": 5, "appschema": 14, "notificationfacade": 4, "operations": 9,
 	"pipeline": 4, "record": 20, "recordmutation": 4, "recordtimer": 1, "report": 5, "scheduler": 12, "surfacecontext": 2, "workflow": 26,
-	"party": 3, "principal": 1,
+	"party": 3, "principal": 1, "workspaceprovision": 1,
 	"publicationhandoff": 1,
 	"upload":             4,
 	"seed":               0, "seed/automation": 2, "seed/business": 2,
@@ -85,7 +85,7 @@ var httpOwnerDirectories = technicalLayoutStringSet(
 	"capabilities", "discovery", "lifecycle",
 	"party",
 	"integrations", "appschema", "notifications", "openapi", "records", "reports",
-	"scheduler", "surfacecontext", "uploads", "workflows",
+	"scheduler", "surfacecontext", "uploads", "workflows", "workspaceprovision",
 	"operations",
 )
 
@@ -114,6 +114,7 @@ var httpOwnerExportNames = map[string]string{
 	"surfacecontext":     "SurfaceContext",
 	"uploads":            "Uploads",
 	"workflows":          "Workflows",
+	"workspaceprovision": "WorkspaceProvision",
 }
 
 var httpRootProductionFiles = technicalLayoutStringSet(
@@ -1635,6 +1636,8 @@ func assertBusinessTechnicalLayout(t *testing.T, runtimeRoot string) {
 			ownerPrefix = "surface_context_"
 		} else if owner == "appschema" {
 			alternateOwnerPrefix = "application_schema_"
+		} else if owner == "workspaceprovision" {
+			ownerPrefix = "workspace_provision_"
 		}
 		if walkErr := filepath.WalkDir(ownerRoot, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {

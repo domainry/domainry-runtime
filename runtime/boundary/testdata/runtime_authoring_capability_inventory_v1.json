@@ -7,6 +7,7 @@
     {"domain": "action", "capability_count": 1, "validation_endpoint_count": 1, "simulation_endpoint_count": 0, "configuration_route_count": 1, "example_count": 1},
     {"domain": "automation", "capability_count": 9, "validation_endpoint_count": 9, "simulation_endpoint_count": 1, "configuration_route_count": 1, "example_count": 9},
     {"domain": "integration", "capability_count": 16, "validation_endpoint_count": 6, "simulation_endpoint_count": 0, "configuration_route_count": 14, "example_count": 16},
+    {"domain": "identity", "capability_count": 1, "validation_endpoint_count": 0, "simulation_endpoint_count": 0, "configuration_route_count": 1, "example_count": 1},
     {"domain": "maintenance", "capability_count": 2, "validation_endpoint_count": 0, "simulation_endpoint_count": 0, "configuration_route_count": 2, "example_count": 2},
     {"domain": "principal", "capability_count": 1, "validation_endpoint_count": 1, "simulation_endpoint_count": 0, "configuration_route_count": 1, "example_count": 1},
     {"domain": "report", "capability_count": 1, "validation_endpoint_count": 1, "simulation_endpoint_count": 0, "configuration_route_count": 1, "example_count": 1},
@@ -15,6 +16,21 @@
     {"domain": "workflow", "capability_count": 10, "validation_endpoint_count": 10, "simulation_endpoint_count": 0, "configuration_route_count": 1, "example_count": 10}
   ],
   "owner_groups": [
+    {
+      "catalog_domain": "identity",
+      "owner": "workspaceprovision",
+      "ownership_status": "owner_owned",
+      "capabilities": ["identity.workspace_provision_guarded"],
+      "current_definition_files": ["runtime/domain/workspaceprovision/contract/workspace_provision_authoring.go"],
+      "target_contract_directory": "runtime/domain/workspaceprovision/contract",
+      "validation_anchors": ["runtime/domain/manifest/validation/manifest_workspace_provisioning_validation.go"],
+      "application_anchors": ["runtime/application/workspaceprovision/workspace_provision_application_service.go"],
+      "transport_anchors": ["runtime/transport/http/workspaceprovision/workspaceprovision_routes.go"],
+      "persistence_anchors": ["runtime/infrastructure/persistence/database/workspaceprovision/workspace_provision_store.go"],
+      "test_anchors": ["runtime/infrastructure/persistence/database/workspaceprovision/workspace_provision_store_test.go", "runtime/domain/manifest/validation/manifest_workspace_provisioning_validation_test.go"],
+      "schema_contract_status": "closed_platform_atomic_workspace_provisioning_contract",
+      "known_gaps": []
+    },
     {
       "catalog_domain": "schema",
       "owner": "appschema",

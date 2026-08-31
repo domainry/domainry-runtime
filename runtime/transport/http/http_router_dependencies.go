@@ -35,6 +35,7 @@ import (
 	surfacecontexthttp "github.com/domainry/domainry-runtime/runtime/transport/http/surfacecontext"
 	uploadhttp "github.com/domainry/domainry-runtime/runtime/transport/http/uploads"
 	workflowhttp "github.com/domainry/domainry-runtime/runtime/transport/http/workflows"
+	workspaceprovisionhttp "github.com/domainry/domainry-runtime/runtime/transport/http/workspaceprovision"
 )
 
 func cloneStringAnyMap(value map[string]any) map[string]any {
@@ -169,6 +170,7 @@ type HTTPRouterHandlers struct {
 	Operations         *operationshttp.OperationsHandler
 	Lifecycle          *lifecyclehttp.LifecycleHandler
 	BusinessEvents     *businesseventhttp.BusinessEventsHandler
+	WorkspaceProvision *workspaceprovisionhttp.WorkspaceProvisionHandler
 }
 
 type HandlerCallbacks struct {

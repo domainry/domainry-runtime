@@ -83,6 +83,7 @@ func TestFreshRuntimeSchemaUsesOwnedBusinessNamesAndOneHostLedger(t *testing.T) 
 		"_release_cohorts",
 		"_release_instances",
 		"_schema_migrations",
+		"_tenant_registry",
 		"_transaction_boundary_intents",
 		"_worker_queue_scopes",
 		"_workflow_definition_versions",
@@ -93,6 +94,9 @@ func TestFreshRuntimeSchemaUsesOwnedBusinessNamesAndOneHostLedger(t *testing.T) 
 		"_workflow_process_events",
 		"_workflow_process_instances",
 		"_workflow_tasks",
+		"_workspace_configuration",
+		"_workspace_provisioning_receipts",
+		"_workspaces",
 	}
 	if !reflect.DeepEqual(actual, expected) {
 		t.Fatalf("fresh Runtime table inventory changed\nactual:   %q\nexpected: %q", actual, expected)

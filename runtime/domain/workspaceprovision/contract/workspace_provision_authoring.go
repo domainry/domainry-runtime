@@ -1,0 +1,31 @@
+package contract
+
+import capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
+
+func AuthoringDomain() capabilitycontract.CapabilityAuthoringDomain {
+	return capabilitycontract.CapabilityAuthoringDomain{Key: "identity", Capabilities: []capabilitycontract.CapabilityAuthoringDefinition{workspaceProvisionAuthoringCapability()}}
+}
+
+func workspaceProvisionAuthoringCapability() capabilitycontract.CapabilityAuthoringDefinition {
+	closed, open := boolPointer(false), boolPointer(true)
+	input := &capabilitycontract.CapabilityAuthoringSchema{Schema: "https://json-schema.org/draft/2020-12/schema", Type: "object", AdditionalProperties: closed, Required: []string{"request_id", "tenant_code", "tenant_name", "admin_login_id", "admin_name", "store_configuration"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+		"request_id": {Type: "string", MinLength: intPointer(1)}, "tenant_code": {Type: "string", MinLength: intPointer(2)}, "tenant_name": {Type: "string", MinLength: intPointer(1)},
+		"admin_login_id": {Type: "string", Format: "email", MinLength: intPointer(1)}, "admin_name": {Type: "string", MinLength: intPointer(1)}, "store_configuration": {Type: "object", AdditionalProperties: open},
+	}}
+	output := &capabilitycontract.CapabilityAuthoringSchema{Schema: input.Schema, Type: "object", AdditionalProperties: closed, Required: []string{"tenant_registry_id", "workspace_id", "canonical_code", "admin_login_id", "initial_password", "must_change_password", "application_projection_ids", "replayed"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+		"tenant_registry_id": {Type: "string"}, "workspace_id": {Type: "string"}, "canonical_code": {Type: "string"}, "admin_login_id": {Type: "string"}, "initial_password": {Type: "string"}, "must_change_password": {Type: "boolean"}, "application_projection_ids": {Type: "object", AdditionalProperties: open}, "replayed": {Type: "boolean"},
+	}}
+	return capabilitycontract.CapabilityAuthoringDefinition{
+		Key: "identity.workspace_provision_guarded", Status: "supported", Lifecycle: "platform_atomic_operation", AllowedContexts: []string{"platform_handler"},
+		Parameters:  []capabilitycontract.CapabilityAuthoringParameter{{Key: "request_id", Type: "string", Required: true}, {Key: "tenant_code", Type: "string", Required: true}, {Key: "tenant_name", Type: "string", Required: true}, {Key: "admin_login_id", Type: "string", Format: "email", Required: true}, {Key: "admin_name", Type: "string", Required: true}, {Key: "store_configuration", Type: "object", Required: true}},
+		Permissions: []string{"platform.workspace.provision"}, AuditEvents: []string{"workspace.provisioned"}, ConfigurationRoutes: []string{"POST /tenant-admin/workspaces/provision"}, InputSchema: input, OutputSchema: output,
+		OutputVariables: []capabilitycontract.CapabilityAuthoringOutput{{Name: "workspace_id", JSONPointer: "/workspace_id", Type: "workspace_id", VisibleTo: "subsequent_capability_calls"}, {Name: "tenant_registry_id", JSONPointer: "/tenant_registry_id", Type: "tenant_registry_id", VisibleTo: "subsequent_capability_calls"}, {Name: "application_projection_ids", JSONPointer: "/application_projection_ids", Type: "application_projection_id_map", VisibleTo: "subsequent_capability_calls"}, {Name: "initial_password", JSONPointer: "/initial_password", Type: "one_time_secret", VisibleTo: "successful_caller_once"}},
+		Execution:       &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"runtime.workspace_registry", "runtime.provisioning_receipt"}, WriteSet: []string{"runtime.workspace", "runtime.tenant_registry", "identity.user", "identity.role", "identity.credential", "runtime.workspace_configuration"}, Transaction: "runtime_database_serializable_transaction", Idempotency: "request_id_and_canonical_payload", SideEffects: []string{"audit:workspace.provisioned"}, SideEffectLevel: "internal", Compensation: "transaction_rollback", PermissionModel: "platform.workspace.provision", ChangeControl: "platform_guarded"},
+		Errors:          []capabilitycontract.CapabilityAuthoringError{{Code: "auth.permission_denied", FieldPath: "@actor", MessageKey: "auth.permission_denied"}, {Code: "workspace.provision_request_invalid", FieldPath: "@request", MessageKey: "workspace.provision_request_invalid"}, {Code: "workspace.provision_idempotency_conflict", FieldPath: "request_id", MessageKey: "workspace.provision_idempotency_conflict"}, {Code: "workspace.canonical_code_conflict", FieldPath: "tenant_code", MessageKey: "workspace.canonical_code_conflict"}},
+		Examples:        []capabilitycontract.CapabilityAuthoringExample{{Name: "minimal_valid", Value: map[string]any{"request_id": "open-store-001", "tenant_code": "north-store", "tenant_name": "North Store", "admin_login_id": "owner@north.example", "admin_name": "Owner", "store_configuration": map[string]any{"currency": "CNY"}}}, {Name: "representative", Value: map[string]any{"request_id": "open-store-002", "tenant_code": "east-store", "tenant_name": "East Store", "admin_login_id": "owner@east.example", "admin_name": "East Owner", "store_configuration": map[string]any{"currency": "CNY", "timezone": "Asia/Shanghai"}}}, {Name: "invalid_with_repair", Value: map[string]any{"request_id": "open-store-003", "tenant_code": "INVALID CODE", "tenant_name": "Store", "admin_login_id": "owner@example.com", "admin_name": "Owner", "store_configuration": map[string]any{}}, ExpectedErrorCodes: []string{"workspace.provision_request_invalid"}}},
+		Sources:         []capabilitycontract.CapabilityAuthoringSource{{Kind: "service", Path: "runtime/application/workspaceprovision/workspace_provision_application_service.go", Symbol: "WorkspaceProvisionApplicationService.Provision"}, {Kind: "persistence", Path: "runtime/infrastructure/persistence/database/workspaceprovision/workspace_provision_store.go", Symbol: "WorkspaceProvisionStore.Provision"}, {Kind: "http", Path: "runtime/transport/http/workspaceprovision/workspaceprovision_routes.go", Symbol: "RegisterRoutes"}, {Kind: "contract", Path: "runtime/domain/workspaceprovision/contract/workspace_provision_authoring.go", Symbol: "AuthoringDomain"}},
+	}
+}
+
+func boolPointer(value bool) *bool { return &value }
+func intPointer(value int) *int    { return &value }

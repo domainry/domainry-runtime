@@ -5,25 +5,26 @@ import localizationmodel "github.com/domainry/domainry-runtime/runtime/domain/lo
 // RoleSchema transports application-authored policy to Identity. Runtime does
 // not derive a human AccessBundle from it; the SDK bundle remains authoritative.
 type RoleSchema struct {
-	Key                  string                             `json:"key"`
-	Name                 string                             `json:"name"`
-	I18n                 localizationmodel.LocalizedTextMap `json:"i18n,omitempty"`
-	Permissions          []string                           `json:"permissions"`
-	RecordScope          string                             `json:"record_scope"`
-	DataPermissions      []RoleDataPermission               `json:"data_permissions,omitempty"`
-	FieldPermissions     []RoleFieldPermission              `json:"field_permissions,omitempty"`
-	ReferencePermissions []RoleReferencePermission          `json:"reference_permissions,omitempty"`
-	ExportRules          []RoleExportRule                   `json:"export_rules,omitempty"`
-	Audience             string                             `json:"audience,omitempty"`
-	RequiredBindingKey   string                             `json:"required_binding_key,omitempty"`
-	AssignmentMode       string                             `json:"assignment_mode,omitempty"`
-	RiskLevel            string                             `json:"risk_level,omitempty"`
-	ConflictRoleKeys     []string                           `json:"conflict_role_keys,omitempty"`
-	GrantableRoleKeys    []string                           `json:"grantable_role_keys,omitempty"`
-	PermissionSetKeys    []string                           `json:"permission_set_keys,omitempty"`
-	PermissionSetGroups  []string                           `json:"permission_set_group_keys,omitempty"`
-	GuardrailKeys        []string                           `json:"guardrail_keys,omitempty"`
-	Guardrails           []RoleGuardrailPolicy              `json:"guardrails,omitempty"`
+	Key                   string                             `json:"key"`
+	Name                  string                             `json:"name"`
+	I18n                  localizationmodel.LocalizedTextMap `json:"i18n,omitempty"`
+	Permissions           []string                           `json:"permissions"`
+	RecordScope           string                             `json:"record_scope"`
+	DataPermissions       []RoleDataPermission               `json:"data_permissions,omitempty"`
+	FieldPermissions      []RoleFieldPermission              `json:"field_permissions,omitempty"`
+	ReferencePermissions  []RoleReferencePermission          `json:"reference_permissions,omitempty"`
+	ExportRules           []RoleExportRule                   `json:"export_rules,omitempty"`
+	Audience              string                             `json:"audience,omitempty"`
+	RequiredBindingKey    string                             `json:"required_binding_key,omitempty"`
+	AssignmentMode        string                             `json:"assignment_mode,omitempty"`
+	RiskLevel             string                             `json:"risk_level,omitempty"`
+	ConflictRoleKeys      []string                           `json:"conflict_role_keys,omitempty"`
+	GrantableRoleKeys     []string                           `json:"grantable_role_keys,omitempty"`
+	PermissionSetKeys     []string                           `json:"permission_set_keys,omitempty"`
+	PermissionSetGroups   []string                           `json:"permission_set_group_keys,omitempty"`
+	GuardrailKeys         []string                           `json:"guardrail_keys,omitempty"`
+	Guardrails            []RoleGuardrailPolicy              `json:"guardrails,omitempty"`
+	ProvisionToWorkspaces bool                               `json:"provision_to_workspaces,omitempty"`
 }
 
 type RoleGuardrailPolicy struct {

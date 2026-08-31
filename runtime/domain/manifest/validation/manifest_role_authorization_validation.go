@@ -19,6 +19,20 @@ func (state *validationState) validateRoles() {
 		if strings.TrimSpace(role.Name) == "" {
 			state.add(path+".name", "is required")
 		}
+		audience := strings.TrimSpace(role.Audience)
+		if audience == "" {
+			audience = "any"
+		}
+		assignmentMode := strings.TrimSpace(role.AssignmentMode)
+		if assignmentMode == "" {
+			assignmentMode = "manual"
+		}
+		if role.ProvisionToWorkspaces && audience != "any" && audience != "workforce" {
+			state.add(path+".provision_to_workspaces", "tenant login roles must use any or workforce audience")
+		}
+		if role.ProvisionToWorkspaces && assignmentMode == "system_managed" {
+			state.add(path+".provision_to_workspaces", "system-managed roles cannot be provisioned as tenant login roles")
+		}
 		permissions := map[string]bool{}
 		for permissionIndex, permission := range role.Permissions {
 			permission = strings.TrimSpace(permission)

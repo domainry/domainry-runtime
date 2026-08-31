@@ -38,6 +38,9 @@ func UseHandlers(router *HTTPRouter, handlers HTTPRouterHandlers) *HTTPRouter {
 	if handlers.BusinessEvents != nil {
 		router.businessEventHTTP = handlers.BusinessEvents
 	}
+	if handlers.WorkspaceProvision != nil {
+		router.workspaceProvisionHTTP = handlers.WorkspaceProvision
+	}
 	return router
 }
 

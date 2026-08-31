@@ -58,6 +58,7 @@ type ManifestSchema struct {
 	AgentEntrypoints          []agentsdk.AgentEntrypointAssignment            `json:"agent_entrypoints,omitempty"`
 	AgentServicePrincipals    []agentsdk.AgentServicePrincipalBinding         `json:"agent_service_principals,omitempty"`
 	SeedRecords               []businessseedmodel.SeedRecordSchema            `json:"seed_records,omitempty"`
+	WorkspaceProvisioning     []WorkspaceProvisionProjection                  `json:"workspace_provisioning,omitempty"`
 	AutomationExecutionSeeds  []automationmodel.AutomationRuleExecution       `json:"automation_execution_seeds,omitempty"`
 	BusinessLoops             []map[string]any                                `json:"business_loops,omitempty"`
 	StateMachines             []map[string]any                                `json:"state_machines,omitempty"`

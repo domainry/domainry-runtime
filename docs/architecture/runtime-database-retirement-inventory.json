@@ -7,6 +7,30 @@
       "object_kind": "table",
       "database": "runtime",
       "schema": "configured_runtime_schema",
+      "object_names": [
+        "_tenant_registry",
+        "_workspace_configuration",
+        "_workspace_provisioning_receipts",
+        "_workspaces"
+      ],
+      "owner": "workspaceprovision",
+      "replacement": "",
+      "read_paths": [
+        "runtime/infrastructure/persistence/database/workspaceprovision"
+      ],
+      "write_paths": [
+        "runtime/infrastructure/persistence/database/workspaceprovision"
+      ],
+      "migration": "current Runtime schema",
+      "retention": "workspace and tenant lifecycle plus provisioning idempotency evidence",
+      "backup_id": "required before destructive migration",
+      "observation_window": "not applicable while active",
+      "status": "active"
+    },
+    {
+      "object_kind": "table",
+      "database": "runtime",
+      "schema": "configured_runtime_schema",
       "object_names": ["_schema_migrations"],
       "owner": "database-migration",
       "replacement": "",
