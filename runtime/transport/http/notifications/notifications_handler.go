@@ -14,35 +14,35 @@ import (
 )
 
 type NotificationsHandler struct {
-	management         NotificationManagement
-	delivery           NotificationDelivery
-	inbox              NotificationInbox
-	deliveryLedger     NotificationDeliveryLedger
-	principal          func(*http.Request) principalmodel.Principal
-	writeJSON          func(http.ResponseWriter, int, any)
-	writeError         func(http.ResponseWriter, *http.Request, int, string, ...string)
-	writeServiceError  func(http.ResponseWriter, *http.Request, error)
-	decodeJSON         func(http.ResponseWriter, *http.Request, any) bool
-	authenticated      func(http.HandlerFunc) http.HandlerFunc
-	streamPollInterval time.Duration
-	streamHeartbeat    time.Duration
-	templateReadProxy  bool
+	management             NotificationManagement
+	delivery               NotificationDelivery
+	inbox                  NotificationInbox
+	deliveryLedger         NotificationDeliveryLedger
+	principal              func(*http.Request) principalmodel.Principal
+	writeJSON              func(http.ResponseWriter, int, any)
+	writeError             func(http.ResponseWriter, *http.Request, int, string, ...string)
+	writeServiceError      func(http.ResponseWriter, *http.Request, error)
+	decodeJSON             func(http.ResponseWriter, *http.Request, any) bool
+	authenticated          func(http.HandlerFunc) http.HandlerFunc
+	streamPollInterval     time.Duration
+	streamHeartbeat        time.Duration
+	moduleOwnsTemplateHTTP bool
 }
 
 type NotificationsDependencies struct {
-	Management         NotificationManagement
-	Delivery           NotificationDelivery
-	Inbox              NotificationInbox
-	DeliveryLedger     NotificationDeliveryLedger
-	Principal          func(*http.Request) principalmodel.Principal
-	WriteJSON          func(http.ResponseWriter, int, any)
-	WriteError         func(http.ResponseWriter, *http.Request, int, string, ...string)
-	WriteServiceError  func(http.ResponseWriter, *http.Request, error)
-	DecodeJSON         func(http.ResponseWriter, *http.Request, any) bool
-	Authenticated      func(http.HandlerFunc) http.HandlerFunc
-	StreamPollInterval time.Duration
-	StreamHeartbeat    time.Duration
-	TemplateReadProxy  bool
+	Management             NotificationManagement
+	Delivery               NotificationDelivery
+	Inbox                  NotificationInbox
+	DeliveryLedger         NotificationDeliveryLedger
+	Principal              func(*http.Request) principalmodel.Principal
+	WriteJSON              func(http.ResponseWriter, int, any)
+	WriteError             func(http.ResponseWriter, *http.Request, int, string, ...string)
+	WriteServiceError      func(http.ResponseWriter, *http.Request, error)
+	DecodeJSON             func(http.ResponseWriter, *http.Request, any) bool
+	Authenticated          func(http.HandlerFunc) http.HandlerFunc
+	StreamPollInterval     time.Duration
+	StreamHeartbeat        time.Duration
+	ModuleOwnsTemplateHTTP bool
 }
 
 func NewNotificationsHandler(deps NotificationsDependencies) *NotificationsHandler {
@@ -53,7 +53,7 @@ func NewNotificationsHandler(deps NotificationsDependencies) *NotificationsHandl
 	if heartbeat <= 0 {
 		heartbeat = 15 * time.Second
 	}
-	return &NotificationsHandler{management: deps.Management, delivery: deps.Delivery, inbox: deps.Inbox, deliveryLedger: deps.DeliveryLedger, principal: deps.Principal, writeJSON: deps.WriteJSON, writeError: deps.WriteError, writeServiceError: deps.WriteServiceError, decodeJSON: deps.DecodeJSON, authenticated: deps.Authenticated, streamPollInterval: poll, streamHeartbeat: heartbeat, templateReadProxy: deps.TemplateReadProxy}
+	return &NotificationsHandler{management: deps.Management, delivery: deps.Delivery, inbox: deps.Inbox, deliveryLedger: deps.DeliveryLedger, principal: deps.Principal, writeJSON: deps.WriteJSON, writeError: deps.WriteError, writeServiceError: deps.WriteServiceError, decodeJSON: deps.DecodeJSON, authenticated: deps.Authenticated, streamPollInterval: poll, streamHeartbeat: heartbeat, moduleOwnsTemplateHTTP: deps.ModuleOwnsTemplateHTTP}
 }
 
 type NotificationDeliveryLedger interface {

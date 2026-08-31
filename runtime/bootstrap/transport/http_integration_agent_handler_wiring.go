@@ -77,7 +77,7 @@ func (a *httpServerAssembly) wireIntegrationAndAgentHandlers(agentDialogRateLimi
 			Principal:      a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
 			WriteError: a.callbacks.WriteError, WriteServiceError: a.callbacks.WriteServiceError,
 			DecodeJSON: a.callbacks.DecodeJSON, Authenticated: a.identityHTTP.AuthenticatedFunc,
-			TemplateReadProxy: a.dependencies.NotificationMode == notificationsdk.DeploymentModeSaaS,
+			ModuleOwnsTemplateHTTP: a.dependencies.NotificationMode == notificationsdk.DeploymentModeModule,
 		})
 	}
 }
