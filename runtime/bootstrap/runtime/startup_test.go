@@ -127,6 +127,23 @@ func TestNewBuildsRunnableRuntimeAndClosesStartedWorkers(t *testing.T) {
 	if runtime.store == nil || runtime.records == nil || runtime.identityBinding == nil {
 		t.Fatal("runtime composition is incomplete")
 	}
+	inventory, err := runtime.ModuleInventory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inventory.Modules) != 9 {
+		t.Fatalf("module inventory=%+v", inventory.Modules)
+	}
+	wantModules := map[string]bool{"audit": true, "data_exchange": true, "identity": true, "integration": true, "lifecycle": true, "metadata": true, "notification": true, "party": true, "report": true}
+	for _, module := range inventory.Modules {
+		if !wantModules[module.Key] {
+			t.Fatalf("unexpected module in legacy constructor inventory: %+v", module)
+		}
+		delete(wantModules, module.Key)
+	}
+	if len(wantModules) != 0 {
+		t.Fatalf("module inventory is missing %v", wantModules)
+	}
 	if schema := runtime.records.Applications().Schema.ObjectMap(t.Context()); schema["customer"].Key == "" {
 		t.Fatalf("customer schema missing: %#v", schema)
 	}
@@ -400,7 +417,7 @@ func TestGlobalValidationAndDeliveryGateMoveOwnedRuntimeToReady(t *testing.T) {
 		permissions = append(permissions, object.Key+".read")
 		dataPermissions = append(dataPermissions, accessfixture.DataPolicyFixture{ObjectKey: object.Key, Scope: "all_records", Read: true})
 	}
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Key: "admin", Permissions: permissions, DataPolicies: dataPermissions})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "admin", Permissions: permissions, DataPolicies: dataPermissions})
 	for _, objectKey := range []string{"job_definition", "job_run", "job_dead_letter"} {
 		if !admin.Allows(objectKey, "read") {
 			t.Fatalf("test principal lacks %s.read: permissions=%#v bundle=%#v", objectKey, admin.PermissionKeys(), admin.AccessBundle)
@@ -528,7 +545,7 @@ func runtimeAuthoringRequest(t *testing.T, runtime *Runtime, method string, path
 	}
 	request := httptest.NewRequest(method, path, payload)
 	ctx := operationscontract.WithBuilderTaskID(request.Context(), "builder-task-e2e")
-	ctx = requestcontext.WithWorkspaceID(ctx, "default")
+	ctx = requestcontext.WithWorkspaceID(ctx, "workspace-primary")
 	request = request.WithContext(ctx)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Builder-Task-ID", "builder-task-e2e")
@@ -695,6 +712,14 @@ func bootstrapTestConfigForManifest(t *testing.T, manifestName string) config.Co
 	t.Helper()
 	return config.Config{
 		AppLocale:                  "en-US",
+		IdentityWorkspaceID:        "workspace-primary",
+		IdentityAudience:           "domainry-runtime",
+		NotificationTenantID:       "tenant-primary",
+		NotificationWorkspaceID:    "workspace-primary",
+		NotificationApplicationKey: "domainry-runtime",
+		PartyTenantID:              "tenant-primary",
+		PartyWorkspaceID:           "workspace-primary",
+		PartyApplicationKey:        "domainry-runtime",
 		DatabaseDriver:             "sqlite",
 		DBPath:                     filepath.Join(t.TempDir(), "runtime.db"),
 		ManifestPath:               filepath.Join("..", "..", "domain", "manifest", "testdata", "manifests", manifestName),

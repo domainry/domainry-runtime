@@ -21,7 +21,7 @@ func TestIntegrationUnmappedReadOnlyPrincipalIsStableAndLeastPrivilege(t *testin
 
 func TestIntegrationUnmappedReadOnlyPrincipalDefaultsEmptyIdentity(t *testing.T) {
 	principal := IntegrationUnmappedReadOnlyPrincipal(" ", "\t\n", nil)
-	if principal.WorkspaceID != "default" || principal.UserID != "integration:unmapped:unknown" {
+	if principal.WorkspaceID != "" || principal.UserID != "integration:unmapped:unknown" {
 		t.Fatalf("principal = %#v", principal)
 	}
 	if principal.Known || principal.AccessBundle != nil {

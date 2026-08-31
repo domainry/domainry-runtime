@@ -82,11 +82,11 @@ func agentTaskHTTPHandler(principal principalmodel.Principal, runs agentTaskRunS
 }
 
 func taskPrincipal(permissions ...string) principalmodel.Principal {
-	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "default"}}, accessfixture.Bundle{Key: "role", Permissions: permissions})
+	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "role", Permissions: permissions})
 }
 
 func TestAgentTaskListAndGetHTTPBranches(t *testing.T) {
-	run := agentmodel.AgentTaskRun{ID: "run", WorkspaceID: "default", Status: agentmodel.AgentTaskRunPending}
+	run := agentmodel.AgentTaskRun{ID: "run", WorkspaceID: "workspace-primary", Status: agentmodel.AgentTaskRunPending}
 	wantErr := errors.New("repository failure")
 	tests := []struct {
 		name   string
@@ -119,7 +119,7 @@ func TestAgentTaskListAndGetHTTPBranches(t *testing.T) {
 }
 
 func TestAgentTaskOperationHTTPBranches(t *testing.T) {
-	run := agentmodel.AgentTaskRun{ID: "run", WorkspaceID: "default", Status: agentmodel.AgentTaskRunFailed}
+	run := agentmodel.AgentTaskRun{ID: "run", WorkspaceID: "workspace-primary", Status: agentmodel.AgentTaskRunFailed}
 	wantErr := errors.New("operation failure")
 	test := func(name string, handler *AgentDialogHandler, header, body string, call func(*AgentDialogHandler, http.ResponseWriter, *http.Request), want int) {
 		t.Run(name, func(t *testing.T) {
@@ -149,8 +149,8 @@ func TestAgentTaskOperationHTTPBranches(t *testing.T) {
 
 func TestAgentTaskToolInvokeHTTPBranches(t *testing.T) {
 	now := time.Now().UTC()
-	valid := agentmodel.AgentTaskRun{ID: "run", WorkspaceID: "default", ProcessID: "process", TaskKey: "task", TaskVersion: "1", Status: agentmodel.AgentTaskRunRunning, Lease: agentmodel.AgentTaskLease{Owner: "worker", FencingToken: 2, ExpiresAt: now.Add(time.Minute)}, Identity: agentsdk.ExecutionIdentity{Initiator: agentsdk.PrincipalReference{UserID: "user", WorkspaceID: "default"}}}
-	body := `{"workspace_id":"default","task_run_id":"run","tool":"query_records","input":{},"idempotency_key":"key"}`
+	valid := agentmodel.AgentTaskRun{ID: "run", WorkspaceID: "workspace-primary", ProcessID: "process", TaskKey: "task", TaskVersion: "1", Status: agentmodel.AgentTaskRunRunning, Lease: agentmodel.AgentTaskLease{Owner: "worker", FencingToken: 2, ExpiresAt: now.Add(time.Minute)}, Identity: agentsdk.ExecutionIdentity{Initiator: agentsdk.PrincipalReference{UserID: "user", WorkspaceID: "workspace-primary"}}}
+	body := `{"workspace_id":"workspace-primary","task_run_id":"run","tool":"query_records","input":{},"idempotency_key":"key"}`
 	wantErr := errors.New("tool denied")
 	tests := []struct {
 		name   string
@@ -315,8 +315,8 @@ func TestAgentDialogLocalStatusAndResolverFailureBranches(t *testing.T) {
 }
 
 func TestAgentDialogGetTaskRunBranches(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "default", AuthorizationRevision: "auth-2"}}, accessfixture.Bundle{Key: "role"})
-	valid := agentmodel.AgentTaskRun{ID: "run", WorkspaceID: "default", Identity: agentsdk.ExecutionIdentity{Initiator: agentsdk.PrincipalReference{UserID: "user", RoleKey: "role", AuthorizationRevision: "auth-2"}}}
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "workspace-primary", AuthorizationRevision: "auth-2"}}, accessfixture.Bundle{Key: "role"})
+	valid := agentmodel.AgentTaskRun{ID: "run", WorkspaceID: "workspace-primary", Identity: agentsdk.ExecutionIdentity{Initiator: agentsdk.PrincipalReference{UserID: "user", RoleKey: "role", AuthorizationRevision: "auth-2"}}}
 	wantErr := errors.New("get failure")
 	for _, test := range []struct {
 		name string

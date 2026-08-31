@@ -266,10 +266,7 @@ func NormalizeOutboxStatus(value string) (string, error) {
 }
 
 func principalWorkspaceID(principal principalmodel.Principal) string {
-	if value := strings.TrimSpace(principal.WorkspaceID); value != "" {
-		return value
-	}
-	return "default"
+	return strings.TrimSpace(principal.WorkspaceID)
 }
 
 func badRequest(code string, values ...string) error {

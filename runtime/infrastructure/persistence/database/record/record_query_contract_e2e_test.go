@@ -22,7 +22,7 @@ func TestRecordQueryFilterProjectionAndLockOwnerContract(t *testing.T) {
 		{ID: "b", CreatedAt: now, UpdatedAt: now, Data: map[string]any{"status": "ready", "priority": 10, "secret": "hidden-b"}},
 		{ID: "c", CreatedAt: now, UpdatedAt: now, Data: map[string]any{"status": "done", "priority": 20, "secret": "hidden-c"}},
 	} {
-		if err := repository.InsertRecord(t.Context(), "default", object, record); err != nil {
+		if err := repository.InsertRecord(t.Context(), "workspace-primary", object, record); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -30,7 +30,7 @@ func TestRecordQueryFilterProjectionAndLockOwnerContract(t *testing.T) {
 		{Operator: "eq", Field: "status", Value: "ready"},
 		{Operator: "gte", Field: "priority", Value: "5"},
 	}}
-	page, err := repository.ListRecords(t.Context(), "default", object, recordmodel.RecordListQuery{Page: 1, PageSize: 1, FilterExpression: filter, Sort: []recordmodel.RecordSortRule{{Field: "priority", Direction: "desc"}}, SelectFields: []string{"status"}, LockIntent: recordmodel.RecordQueryLockNone})
+	page, err := repository.ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 1, FilterExpression: filter, Sort: []recordmodel.RecordSortRule{{Field: "priority", Direction: "desc"}}, SelectFields: []string{"status"}, LockIntent: recordmodel.RecordQueryLockNone})
 	if err != nil || page.Total != 2 || len(page.Items) != 1 || page.Items[0].ID != "b" || page.Items[0].Data["status"] != "ready" {
 		t.Fatalf("page=%+v err=%v", page, err)
 	}
@@ -38,7 +38,7 @@ func TestRecordQueryFilterProjectionAndLockOwnerContract(t *testing.T) {
 		t.Fatalf("projection leaked unselected field: %#v", page.Items[0].Data)
 	}
 	for _, lockIntent := range []string{recordmodel.RecordQueryLockForUpdate, recordmodel.RecordQueryLockForUpdateSkipLocked, "unknown"} {
-		if _, err := repository.ListRecords(t.Context(), "default", object, recordmodel.RecordListQuery{Page: 1, PageSize: 1, LockIntent: lockIntent}); err == nil {
+		if _, err := repository.ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 1, LockIntent: lockIntent}); err == nil {
 			t.Fatalf("ordinary list accepted transactional lock intent %q", lockIntent)
 		}
 	}

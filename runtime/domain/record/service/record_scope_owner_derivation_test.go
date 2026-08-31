@@ -32,7 +32,7 @@ func TestRecordScopeOwnerFactDerivationUsesScopeOwnersWorkforceDepartment(t *tes
 		IdentityUserID: "technician", OrganizationUnitID: "field-ops", OrganizationPath: "/operations/field-ops",
 	}}}})
 	data := map[string]any{"assignee_id": "technician", "owner_department_id": "spoof", "owner_department_path": "/spoof"}
-	if err := service.Apply(t.Context(), "default", scopeOwnerObject(), data, "request-1"); err != nil {
+	if err := service.Apply(t.Context(), "workspace-primary", scopeOwnerObject(), data, "request-1"); err != nil {
 		t.Fatal(err)
 	}
 	if data["owner_department_id"] != "field-ops" || data["owner_department_path"] != "/operations/field-ops" {
@@ -42,7 +42,7 @@ func TestRecordScopeOwnerFactDerivationUsesScopeOwnersWorkforceDepartment(t *tes
 
 func TestRecordScopeOwnerFactDerivationRejectsUnresolvedScopeOwner(t *testing.T) {
 	service := NewRecordScopeOwnerFactDerivationDomainService(RecordScopeOwnerFactDerivationDependencies{WorkforceDirectory: scopeOwnerWorkforceDirectory{}})
-	err := service.Apply(t.Context(), "default", scopeOwnerObject(), map[string]any{"assignee_id": "missing"}, "request-1")
+	err := service.Apply(t.Context(), "workspace-primary", scopeOwnerObject(), map[string]any{"assignee_id": "missing"}, "request-1")
 	if apperror.CodeOf(err) != "backend.record.scope_owner_department_unresolved" {
 		t.Fatalf("unresolved owner error=%v", err)
 	}

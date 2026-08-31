@@ -15,6 +15,7 @@ import (
 	"github.com/domainry/domainry-connector-sdk"
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/logging"
+	"github.com/domainry/domainry-foundation/modulehttp"
 	"github.com/domainry/domainry-foundation/telemetry"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
@@ -60,6 +61,10 @@ type runtimeSurfaceProcess interface {
 	RoutesForSurfaceGroup(runtimehttp.SurfaceRouteGroup) http.Handler
 }
 
+type runtimeModuleSurfaceProcess interface {
+	ModuleHTTPSurfaces() []modulehttp.Surface
+}
+
 type bootstrapRuntimeProcess struct{ *bootstrap.Runtime }
 
 func (r bootstrapRuntimeProcess) StartWorkers(ctx context.Context) {
@@ -68,6 +73,10 @@ func (r bootstrapRuntimeProcess) StartWorkers(ctx context.Context) {
 
 func (r bootstrapRuntimeProcess) RoutesForSurfaceGroup(group runtimehttp.SurfaceRouteGroup) http.Handler {
 	return bootstrap.RoutesForSurfaceGroup(r.Runtime, group)
+}
+
+func (r bootstrapRuntimeProcess) ModuleHTTPSurfaces() []modulehttp.Surface {
+	return r.Runtime.ModuleHTTPSurfaces()
 }
 
 func (r bootstrapRuntimeProcess) connectorGateway() runtimeConnectorGateway {
@@ -385,14 +394,14 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	}()
 	businessProfileProjection := newRuntimeBusinessProfileProjection(projectDatabase)
 	partyScopeProjection := &partyOrganizationScopeProjection{}
-	identityBinding, identityHTTPSurfaces, err := openProjectIdentity(lifecycleCtx, cfg, identityFactory, projectIdentityDatabaseHandle(projectDatabase, cfg.DBPath, businessProfileProjection, partyScopeProjection))
+	tenantManager, err := newProjectTenantManager(context.WithoutCancel(lifecycleCtx), cfg, identityFactory, projectDatabase, projectIdentityDatabaseHandle(projectDatabase, cfg.DBPath, businessProfileProjection, partyScopeProjection))
 	if err != nil {
 		return err
 	}
 	defer func() {
 		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(lifecycleCtx), cfg.HTTPShutdownTimeout)
 		defer cancel()
-		if err := identityBinding.Close(closeCtx); err != nil {
+		if err := tenantManager.Close(closeCtx); err != nil {
 			zap.L().Error("close Identity integration", zap.Error(err))
 		}
 	}()
@@ -401,6 +410,20 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	handlers := make(map[runtimehttp.SurfaceRouteGroup]*bootstrap.EntrypointMux, len(listenerDefinitions))
 	for _, listener := range listenerDefinitions {
 		handlers[listener.group] = &bootstrap.EntrypointMux{}
+	}
+	identityRouters := make(map[runtimehttp.SurfaceRouteGroup]*identitySurfaceRouter, len(handlers))
+	var initialModuleGuard moduleRouteGuard
+	if binding := tenantManager.Binding(); binding != nil {
+		initialModuleGuard, err = newModuleHTTPRouteGuard(binding)
+		if err != nil {
+			return err
+		}
+	}
+	for group, handler := range handlers {
+		identityRouters[group] = newIdentitySurfaceRouter(group, handler)
+		if err := identityRouters[group].Bind(tenantManager.Surfaces(), initialModuleGuard); err != nil {
+			return fmt.Errorf("mount initialized Identity HTTP surfaces: %w", err)
+		}
 	}
 	lifecycleState, lifecycleFound, lifecycleErr := provision.ReadLifecycle(cfg.ManifestPath)
 	if lifecycleErr != nil {
@@ -424,13 +447,38 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 			if err := validateDomainSDKTarget(options.Identity.DomainSDK, manifest.GeneratedDomainSDK); err != nil {
 				return nil, err
 			}
-			runtimeConfig := cfg
+			if err := tenantManager.Activate(context.WithoutCancel(lifecycleCtx), manifest); err != nil {
+				return nil, err
+			}
+			identityBinding := tenantManager.Binding()
+			if identityBinding == nil {
+				return nil, errors.New("initialized tenant returned no Identity binding")
+			}
+			moduleGuard, err := newModuleHTTPRouteGuard(identityBinding)
+			if err != nil {
+				return nil, err
+			}
+			for group, router := range identityRouters {
+				if err := router.Bind(tenantManager.Surfaces(), moduleGuard); err != nil {
+					return nil, fmt.Errorf("mount Identity HTTP surfaces on %s listener: %w", group, err)
+				}
+			}
+			runtimeConfig := tenantManager.Config()
 			if manifest.SourceBlueprintID == provision.DirectAuthoringSourceID && len(manifest.Objects) == 0 {
 				runtimeConfig.AllowEmptyAuthoringManifest = true
 			}
 			runtime := dependencies.newRuntime(lifecycleCtx, runtimeConfig, businessHandlers, connectorProviders, releaseIdentity, artifactEvidence, identityBinding, notificationFactory, partyFactory, monitoringFactory, schedulerFactory, dataExchangeFactory, agentFactory, integrationFactory, projectDatabase)
 			if runtime == nil {
 				return nil, errors.New("Runtime bootstrap returned no process")
+			}
+			moduleSurfaces := append([]modulehttp.Surface(nil), tenantManager.Surfaces()...)
+			if provider, ok := runtime.(runtimeModuleSurfaceProcess); ok {
+				moduleSurfaces = append(moduleSurfaces, provider.ModuleHTTPSurfaces()...)
+			}
+			for group, router := range identityRouters {
+				if err := router.Bind(moduleSurfaces); err != nil {
+					return nil, fmt.Errorf("mount module HTTP surfaces on %s listener: %w", group, err)
+				}
 			}
 			if provider, ok := runtime.(interface {
 				partyOrganizationScopes() partysdk.OrganizationScopes
@@ -491,13 +539,9 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 
 	servers := make([]*http.Server, 0, len(listenerDefinitions))
 	for _, listener := range listenerDefinitions {
-		listenerHandler := http.Handler(handlers[listener.group])
+		listenerHandler := http.Handler(identityRouters[listener.group])
 		if listener.group == runtimehttp.SurfaceRouteGroupPublic || listener.group == runtimehttp.SurfaceRouteGroupAll {
 			listenerHandler = frontendAssets.wrap(listenerHandler)
-		}
-		listenerHandler, err = mountIdentityHTTPSurfaces(listener.group, identityHTTPSurfaces, listenerHandler)
-		if err != nil {
-			return fmt.Errorf("mount Identity HTTP surfaces on %s listener: %w", listener.name, err)
 		}
 		endpointCount := runtimehttp.SurfaceRouteGroupEndpointCount(listener.group)
 		zap.L().Info("starting domain Runtime listener",

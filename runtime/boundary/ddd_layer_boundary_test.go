@@ -89,6 +89,8 @@ func TestBootstrapRuntimeExposesOnlyProcessAPI(t *testing.T) {
 		"StartIntegrationEventWorker":        true,
 		"StartIntegrationOutboxWorker":       true,
 		"StartNotificationPublicationWorker": true,
+		"ModuleHTTPSurfaces":                 true,
+		"ModuleInventory":                    true,
 	}
 	violations := []string{}
 	walkProductionGo(t, root, func(path string, file *ast.File) {

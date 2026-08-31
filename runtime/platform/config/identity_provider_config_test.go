@@ -19,16 +19,19 @@ func TestRuntimeValidatesOnlyIdentityApplicationScope(t *testing.T) {
 		}
 	}
 
-	for name, mutate := range map[string]func(*Config){
-		"IDENTITY_WORKSPACE_ID": func(value *Config) { value.IdentityWorkspaceID = "" },
-		"IDENTITY_AUDIENCE":     func(value *Config) { value.IdentityAudience = "" },
-	} {
-		t.Run(name, func(t *testing.T) {
-			invalid := cfg
-			mutate(&invalid)
-			if err := invalid.Validate(); err == nil || !strings.Contains(err.Error(), name) {
-				t.Fatalf("error=%v", err)
-			}
-		})
+	withoutWorkspace := cfg
+	withoutWorkspace.IdentityWorkspaceID = ""
+	if err := withoutWorkspace.Validate(); err != nil {
+		t.Fatalf("durable installation workspace may be unresolved before database startup: %v", err)
+	}
+	reserved := cfg
+	reserved.IdentityWorkspaceID = "default"
+	if err := reserved.Validate(); err == nil || !strings.Contains(err.Error(), "IDENTITY_WORKSPACE_ID") {
+		t.Fatalf("reserved workspace error=%v", err)
+	}
+	withoutAudience := cfg
+	withoutAudience.IdentityAudience = ""
+	if err := withoutAudience.Validate(); err == nil || !strings.Contains(err.Error(), "IDENTITY_AUDIENCE") {
+		t.Fatalf("missing audience error=%v", err)
 	}
 }

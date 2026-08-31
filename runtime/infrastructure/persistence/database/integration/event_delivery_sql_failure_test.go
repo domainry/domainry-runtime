@@ -31,11 +31,11 @@ func TestIntegrationEventDeliveryWorkerListSQLFailures(t *testing.T) {
 	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "integration worker")
 	calls := []func(IntegrationEventStore, IntegrationDeliveryStore, IntegrationWorkerStore) error{
 		func(e IntegrationEventStore, _ IntegrationDeliveryStore, _ IntegrationWorkerStore) error {
-			_, err := e.ListEvents(t.Context(), "default", "", "", 1)
+			_, err := e.ListEvents(t.Context(), "workspace-primary", "", "", 1)
 			return err
 		},
 		func(_ IntegrationEventStore, d IntegrationDeliveryStore, _ IntegrationWorkerStore) error {
-			_, err := d.ListInvocations(t.Context(), "default", "", "", "", "", 1)
+			_, err := d.ListInvocations(t.Context(), "workspace-primary", "", "", "", "", 1)
 			return err
 		},
 		func(_ IntegrationEventStore, d IntegrationDeliveryStore, _ IntegrationWorkerStore) error {
@@ -43,7 +43,7 @@ func TestIntegrationEventDeliveryWorkerListSQLFailures(t *testing.T) {
 			return err
 		},
 		func(_ IntegrationEventStore, d IntegrationDeliveryStore, _ IntegrationWorkerStore) error {
-			_, err := d.ListOutbox(t.Context(), "default", "", "", 1)
+			_, err := d.ListOutbox(t.Context(), "workspace-primary", "", "", 1)
 			return err
 		},
 		func(_ IntegrationEventStore, _ IntegrationDeliveryStore, w IntegrationWorkerStore) error {
@@ -59,7 +59,7 @@ func TestIntegrationEventDeliveryWorkerListSQLFailures(t *testing.T) {
 		for _, step := range []integrationSQLQueryStep{{err: wantErr}, {columns: []string{"bad"}, rows: [][]driver.Value{{"bad"}}}, {columns: []string{"bad"}, nextErr: wantErr}} {
 			querySteps := []integrationSQLQueryStep{step}
 			if index >= 4 && step.err == nil {
-				querySteps = []integrationSQLQueryStep{{columns: []string{"scope_key"}, rows: [][]driver.Value{{"default"}}}, step}
+				querySteps = []integrationSQLQueryStep{{columns: []string{"scope_key"}, rows: [][]driver.Value{{"workspace-primary"}}}, step}
 			}
 			events, delivery, worker := scriptedIntegrationStores(t, &integrationSQLState{querySteps: querySteps})
 			if err := call(events, delivery, worker); err == nil {
@@ -91,11 +91,11 @@ func TestIntegrationEventMutationSQLFailures(t *testing.T) {
 	wantErr := errors.New("event SQL failure")
 	updateCalls := []func(IntegrationEventStore) error{
 		func(r IntegrationEventStore) error {
-			_, err := r.UpdateEventStatus(t.Context(), "default", "event", "done", "")
+			_, err := r.UpdateEventStatus(t.Context(), "workspace-primary", "event", "done", "")
 			return err
 		},
 		func(r IntegrationEventStore) error {
-			_, err := r.ScheduleEventRetry(t.Context(), "default", "event", 1, "failed")
+			_, err := r.ScheduleEventRetry(t.Context(), "workspace-primary", "event", 1, "failed")
 			return err
 		},
 	}
@@ -113,17 +113,17 @@ func TestIntegrationEventMutationSQLFailures(t *testing.T) {
 	}
 
 	events, _, _ := scriptedIntegrationStores(t, &integrationSQLState{querySteps: []integrationSQLQueryStep{{err: wantErr}}})
-	if _, _, err := events.UpsertEvent(t.Context(), "default", integrationmodel.IntegrationEvent{Provider: "crm", ExternalID: "event"}); err == nil {
+	if _, _, err := events.UpsertEvent(t.Context(), "workspace-primary", integrationmodel.IntegrationEvent{Provider: "crm", ExternalID: "event"}); err == nil {
 		t.Fatal("event lookup failure ignored")
 	}
 	events, _, _ = scriptedIntegrationStores(t, &integrationSQLState{querySteps: []integrationSQLQueryStep{{}}, execSteps: []integrationSQLExecStep{{err: wantErr}}})
-	if _, _, err := events.UpsertEvent(t.Context(), "default", integrationmodel.IntegrationEvent{Provider: "crm", ExternalID: "event"}); err == nil {
+	if _, _, err := events.UpsertEvent(t.Context(), "workspace-primary", integrationmodel.IntegrationEvent{Provider: "crm", ExternalID: "event"}); err == nil {
 		t.Fatal("event insert failure ignored")
 	}
 	cyclic := map[string]any{}
 	cyclic["self"] = cyclic
 	events, _, _ = scriptedIntegrationStores(t, &integrationSQLState{querySteps: []integrationSQLQueryStep{{}}})
-	if _, _, err := events.UpsertEvent(t.Context(), "default", integrationmodel.IntegrationEvent{Provider: "crm", ExternalID: "event", Payload: cyclic}); err == nil {
+	if _, _, err := events.UpsertEvent(t.Context(), "workspace-primary", integrationmodel.IntegrationEvent{Provider: "crm", ExternalID: "event", Payload: cyclic}); err == nil {
 		t.Fatal("cyclic event payload encoded")
 	}
 
@@ -139,7 +139,7 @@ func TestIntegrationEventMutationSQLFailures(t *testing.T) {
 		{state: &integrationSQLState{execSteps: []integrationSQLExecStep{{rows: 1}, {err: wantErr}}, querySteps: []integrationSQLQueryStep{{}}}, wantError: true},
 	} {
 		events, _, _ = scriptedIntegrationStores(t, test.state)
-		duplicate, err := events.RecordWebhookNonce(t.Context(), "default", "connector", "nonce", "now", "later")
+		duplicate, err := events.RecordWebhookNonce(t.Context(), "workspace-primary", "connector", "nonce", "now", "later")
 		if (err != nil) != test.wantError || duplicate != test.duplicate {
 			t.Fatalf("nonce case %d duplicate=%v err=%v", index, duplicate, err)
 		}
@@ -152,11 +152,11 @@ func TestIntegrationEventAcceptanceFailureStages(t *testing.T) {
 	event := integrationmodel.IntegrationEvent{Provider: "crm", EventType: "customer.updated", ExternalID: "external"}
 	intent := integrationmodel.IntegrationEventMappingIntent{MappingKey: "mapping"}
 	eventColumns := []string{"id", "workspace_id", "provider", "event_type", "external_id", "status", "payload_json", "error", "attempt_count", "next_retry_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "received_at", "updated_at"}
-	eventValues := []driver.Value{"event", "default", "crm", "customer.updated", "external", "received", "{}", "", int64(0), "", "", "", "", int64(0), "now", "now"}
+	eventValues := []driver.Value{"event", "workspace-primary", "crm", "customer.updated", "external", "received", "{}", "", int64(0), "", "", "", "", int64(0), "now", "now"}
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 	events, _, _ := scriptedIntegrationStores(t, &integrationSQLState{})
-	if _, _, err := events.AcceptEvent(cancelled, "default", event, intent); !errors.Is(err, context.Canceled) {
+	if _, _, err := events.AcceptEvent(cancelled, "workspace-primary", event, intent); !errors.Is(err, context.Canceled) {
 		t.Fatalf("acceptance cancellation=%v", err)
 	}
 
@@ -168,7 +168,7 @@ func TestIntegrationEventAcceptanceFailureStages(t *testing.T) {
 		{querySteps: []integrationSQLQueryStep{{}}, execSteps: []integrationSQLExecStep{{rows: 1}, {rows: 1}}, commitErr: wantErr},
 	} {
 		events, _, _ = scriptedIntegrationStores(t, state)
-		if _, _, err := events.AcceptEvent(t.Context(), "default", event, intent); err == nil {
+		if _, _, err := events.AcceptEvent(t.Context(), "workspace-primary", event, intent); err == nil {
 			t.Fatalf("acceptance failure stage %d succeeded", index)
 		}
 	}
@@ -176,13 +176,13 @@ func TestIntegrationEventAcceptanceFailureStages(t *testing.T) {
 	cyclic["self"] = cyclic
 	events, _, _ = scriptedIntegrationStores(t, &integrationSQLState{querySteps: []integrationSQLQueryStep{{}}})
 	event.Payload = cyclic
-	if _, _, err := events.AcceptEvent(t.Context(), "default", event, intent); err == nil {
+	if _, _, err := events.AcceptEvent(t.Context(), "workspace-primary", event, intent); err == nil {
 		t.Fatal("cyclic event acceptance payload encoded")
 	}
 	event.Payload = nil
 	intent.Payload = cyclic
 	events, _, _ = scriptedIntegrationStores(t, &integrationSQLState{querySteps: []integrationSQLQueryStep{{}}, execSteps: []integrationSQLExecStep{{rows: 1}}})
-	if _, _, err := events.AcceptEvent(t.Context(), "default", event, intent); err == nil {
+	if _, _, err := events.AcceptEvent(t.Context(), "workspace-primary", event, intent); err == nil {
 		t.Fatal("cyclic mapping intent encoded")
 	}
 	intent.Payload = nil
@@ -199,7 +199,7 @@ func TestIntegrationEventAcceptanceFailureStages(t *testing.T) {
 		{state: &integrationSQLState{querySteps: []integrationSQLQueryStep{{columns: eventColumns, rows: [][]driver.Value{eventValues}}}, execSteps: []integrationSQLExecStep{{rows: 1}}}, duplicate: true},
 	} {
 		events, _, _ = scriptedIntegrationStores(t, test.state)
-		_, duplicate, err := events.AcceptEvent(t.Context(), "default", event, intent)
+		_, duplicate, err := events.AcceptEvent(t.Context(), "workspace-primary", event, intent)
 		if duplicate != test.duplicate || (err != nil) != test.wantError {
 			t.Fatalf("duplicate acceptance %d duplicate=%v err=%v", index, duplicate, err)
 		}
@@ -207,7 +207,7 @@ func TestIntegrationEventAcceptanceFailureStages(t *testing.T) {
 
 	event.Payload = map[string]any{"unsupported": func() {}}
 	events, _, _ = scriptedIntegrationStores(t, &integrationSQLState{querySteps: []integrationSQLQueryStep{{columns: eventColumns, rows: [][]driver.Value{eventValues}}}})
-	if _, _, err := events.AcceptEvent(t.Context(), "default", event, intent); err == nil {
+	if _, _, err := events.AcceptEvent(t.Context(), "workspace-primary", event, intent); err == nil {
 		t.Fatal("unsupported duplicate event content fingerprinted")
 	}
 	event.Payload = nil
@@ -218,7 +218,7 @@ func TestIntegrationEventAcceptanceFailureStages(t *testing.T) {
 		{querySteps: []integrationSQLQueryStep{{columns: eventColumns, rows: [][]driver.Value{conflictingValues}}}, execSteps: []integrationSQLExecStep{{rows: 1}}, commitErr: wantErr},
 	} {
 		events, _, _ = scriptedIntegrationStores(t, state)
-		if _, _, err := events.AcceptEvent(t.Context(), "default", event, intent); err == nil {
+		if _, _, err := events.AcceptEvent(t.Context(), "workspace-primary", event, intent); err == nil {
 			t.Fatal("conflicting event acceptance failure ignored")
 		}
 	}
@@ -226,12 +226,12 @@ func TestIntegrationEventAcceptanceFailureStages(t *testing.T) {
 
 func TestIntegrationEventInsertRaceAndMissingReload(t *testing.T) {
 	eventColumns := []string{"id", "workspace_id", "provider", "event_type", "external_id", "status", "payload_json", "error", "attempt_count", "next_retry_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "received_at", "updated_at"}
-	eventValues := []driver.Value{"event", "default", "crm", "customer.updated", "external", "received", "{}", "", int64(0), "", "", "", "", int64(0), "now", "now"}
+	eventValues := []driver.Value{"event", "workspace-primary", "crm", "customer.updated", "external", "received", "{}", "", int64(0), "", "", "", "", int64(0), "now", "now"}
 	events, _, _ := scriptedIntegrationStores(t, &integrationSQLState{
 		querySteps: []integrationSQLQueryStep{{}, {columns: eventColumns, rows: [][]driver.Value{eventValues}}},
 		execSteps:  []integrationSQLExecStep{{err: errors.New("unique constraint")}},
 	})
-	value, duplicate, err := events.UpsertEvent(t.Context(), "default", integrationmodel.IntegrationEvent{Provider: "crm", ExternalID: "external"})
+	value, duplicate, err := events.UpsertEvent(t.Context(), "workspace-primary", integrationmodel.IntegrationEvent{Provider: "crm", ExternalID: "external"})
 	if err != nil || !duplicate || value.ID != "event" {
 		t.Fatalf("insert race event=%+v duplicate=%v err=%v", value, duplicate, err)
 	}
@@ -239,16 +239,16 @@ func TestIntegrationEventInsertRaceAndMissingReload(t *testing.T) {
 		querySteps: []integrationSQLQueryStep{{}, {err: errors.New("reload failed")}},
 		execSteps:  []integrationSQLExecStep{{err: errors.New("insert failed")}},
 	})
-	if _, _, err := events.UpsertEvent(t.Context(), "default", integrationmodel.IntegrationEvent{Provider: "crm", ExternalID: "external"}); err == nil {
+	if _, _, err := events.UpsertEvent(t.Context(), "workspace-primary", integrationmodel.IntegrationEvent{Provider: "crm", ExternalID: "external"}); err == nil {
 		t.Fatal("event insert/reload failure ignored")
 	}
 	for index, call := range []func(IntegrationEventStore) error{
 		func(r IntegrationEventStore) error {
-			_, err := r.UpdateEventStatus(t.Context(), "default", "event", "done", "")
+			_, err := r.UpdateEventStatus(t.Context(), "workspace-primary", "event", "done", "")
 			return err
 		},
 		func(r IntegrationEventStore) error {
-			_, err := r.ScheduleEventRetry(t.Context(), "default", "event", 1, "failed")
+			_, err := r.ScheduleEventRetry(t.Context(), "workspace-primary", "event", 1, "failed")
 			return err
 		},
 	} {
@@ -263,23 +263,23 @@ func TestIntegrationDeliveryMutationSQLFailures(t *testing.T) {
 	wantErr := errors.New("delivery SQL failure")
 	calls := []func(IntegrationDeliveryStore) error{
 		func(r IntegrationDeliveryStore) error {
-			_, err := r.UpdateInvocationStatus(t.Context(), "default", "invocation", "done", 1, "", "")
+			_, err := r.UpdateInvocationStatus(t.Context(), "workspace-primary", "invocation", "done", 1, "", "")
 			return err
 		},
 		func(r IntegrationDeliveryStore) error {
-			_, err := r.CompleteInvocation(t.Context(), "default", "invocation", "done", 1, "", "", nil)
+			_, err := r.CompleteInvocation(t.Context(), "workspace-primary", "invocation", "done", 1, "", "", nil)
 			return err
 		},
 		func(r IntegrationDeliveryStore) error {
-			_, _, err := r.MarkInvocationReconciliationRequired(t.Context(), "default", "invocation", "now")
+			_, _, err := r.MarkInvocationReconciliationRequired(t.Context(), "workspace-primary", "invocation", "now")
 			return err
 		},
 		func(r IntegrationDeliveryStore) error {
-			_, err := r.UpdateOutboxStatus(t.Context(), "default", "outbox", "sent", "", "")
+			_, err := r.UpdateOutboxStatus(t.Context(), "workspace-primary", "outbox", "sent", "", "")
 			return err
 		},
 		func(r IntegrationDeliveryStore) error {
-			_, err := r.ScheduleOutboxRetry(t.Context(), "default", "outbox", 1, "failed")
+			_, err := r.ScheduleOutboxRetry(t.Context(), "workspace-primary", "outbox", 1, "failed")
 			return err
 		},
 	}
@@ -297,25 +297,25 @@ func TestIntegrationDeliveryMutationSQLFailures(t *testing.T) {
 	}
 
 	_, delivery, _ := scriptedIntegrationStores(t, &integrationSQLState{execSteps: []integrationSQLExecStep{{err: wantErr}}})
-	if _, err := delivery.InsertInvocation(t.Context(), "default", integrationmodel.IntegrationInvocation{ConnectorKey: "connector"}); err == nil {
+	if _, err := delivery.InsertInvocation(t.Context(), "workspace-primary", integrationmodel.IntegrationInvocation{ConnectorKey: "connector"}); err == nil {
 		t.Fatal("invocation insert failure ignored")
 	}
 	cyclic := map[string]any{}
 	cyclic["self"] = cyclic
 	_, delivery, _ = scriptedIntegrationStores(t, &integrationSQLState{})
-	if _, err := delivery.InsertInvocation(t.Context(), "default", integrationmodel.IntegrationInvocation{ConnectorKey: "connector", Metadata: cyclic}); err == nil {
+	if _, err := delivery.InsertInvocation(t.Context(), "workspace-primary", integrationmodel.IntegrationInvocation{ConnectorKey: "connector", Metadata: cyclic}); err == nil {
 		t.Fatal("cyclic invocation metadata encoded")
 	}
 	_, delivery, _ = scriptedIntegrationStores(t, &integrationSQLState{execSteps: []integrationSQLExecStep{{err: wantErr}}, querySteps: []integrationSQLQueryStep{{err: wantErr}}})
-	if _, err := delivery.InsertOutbox(t.Context(), "default", integrationmodel.IntegrationOutboxMessage{ConnectorKey: "connector", Operation: "send", DedupKey: "key"}); err == nil {
+	if _, err := delivery.InsertOutbox(t.Context(), "workspace-primary", integrationmodel.IntegrationOutboxMessage{ConnectorKey: "connector", Operation: "send", DedupKey: "key"}); err == nil {
 		t.Fatal("outbox insert failure ignored")
 	}
 	_, delivery, _ = scriptedIntegrationStores(t, &integrationSQLState{querySteps: []integrationSQLQueryStep{{err: wantErr}}})
-	if _, _, err := delivery.GetOutbox(t.Context(), "default", "outbox"); err == nil {
+	if _, _, err := delivery.GetOutbox(t.Context(), "workspace-primary", "outbox"); err == nil {
 		t.Fatal("outbox read failure ignored")
 	}
 	_, delivery, _ = scriptedIntegrationStores(t, &integrationSQLState{querySteps: []integrationSQLQueryStep{{err: wantErr}}})
-	if _, _, err := delivery.UpdateOutboxStatusByResponseRef(t.Context(), "default", "connection", "response", "sent", ""); err == nil {
+	if _, _, err := delivery.UpdateOutboxStatusByResponseRef(t.Context(), "workspace-primary", "connection", "response", "sent", ""); err == nil {
 		t.Fatal("response-ref read failure ignored")
 	}
 }
@@ -323,23 +323,23 @@ func TestIntegrationDeliveryMutationSQLFailures(t *testing.T) {
 func TestIntegrationDeliveryMissingReloadAndHelperEdges(t *testing.T) {
 	calls := []func(IntegrationDeliveryStore) error{
 		func(r IntegrationDeliveryStore) error {
-			_, err := r.UpdateInvocationStatus(t.Context(), "default", "invocation", "done", 1, "", "")
+			_, err := r.UpdateInvocationStatus(t.Context(), "workspace-primary", "invocation", "done", 1, "", "")
 			return err
 		},
 		func(r IntegrationDeliveryStore) error {
-			_, err := r.CompleteInvocation(t.Context(), "default", "invocation", "done", 1, "", "", nil)
+			_, err := r.CompleteInvocation(t.Context(), "workspace-primary", "invocation", "done", 1, "", "", nil)
 			return err
 		},
 		func(r IntegrationDeliveryStore) error {
-			_, _, err := r.MarkInvocationReconciliationRequired(t.Context(), "default", "invocation", "now")
+			_, _, err := r.MarkInvocationReconciliationRequired(t.Context(), "workspace-primary", "invocation", "now")
 			return err
 		},
 		func(r IntegrationDeliveryStore) error {
-			_, err := r.UpdateOutboxStatus(t.Context(), "default", "outbox", "sent", "", "")
+			_, err := r.UpdateOutboxStatus(t.Context(), "workspace-primary", "outbox", "sent", "", "")
 			return err
 		},
 		func(r IntegrationDeliveryStore) error {
-			_, err := r.ScheduleOutboxRetry(t.Context(), "default", "outbox", 1, "failed")
+			_, err := r.ScheduleOutboxRetry(t.Context(), "workspace-primary", "outbox", 1, "failed")
 			return err
 		},
 	}
@@ -350,17 +350,17 @@ func TestIntegrationDeliveryMissingReloadAndHelperEdges(t *testing.T) {
 		}
 	}
 	_, delivery, _ := scriptedIntegrationStores(t, &integrationSQLState{querySteps: []integrationSQLQueryStep{{}}})
-	if _, found, err := delivery.findOutboxByDedup(t.Context(), integrationmodel.IntegrationOutboxMessage{WorkspaceID: "default"}); err != nil || found {
+	if _, found, err := delivery.findOutboxByDedup(t.Context(), integrationmodel.IntegrationOutboxMessage{WorkspaceID: "workspace-primary"}); err != nil || found {
 		t.Fatalf("missing dedup found=%v err=%v", found, err)
 	}
-	if _, found, err := delivery.findInvocation(t.Context(), "default", "missing"); err != nil || found {
+	if _, found, err := delivery.findInvocation(t.Context(), "workspace-primary", "missing"); err != nil || found {
 		t.Fatalf("missing invocation found=%v err=%v", found, err)
 	}
-	if _, found, err := delivery.findOutbox(t.Context(), "default", "missing"); err != nil || found {
+	if _, found, err := delivery.findOutbox(t.Context(), "workspace-primary", "missing"); err != nil || found {
 		t.Fatalf("missing outbox found=%v err=%v", found, err)
 	}
 	_, delivery, _ = scriptedIntegrationStores(t, &integrationSQLState{execSteps: []integrationSQLExecStep{{err: errors.New("insert failed")}}, querySteps: []integrationSQLQueryStep{{}}})
-	if _, err := delivery.InsertOutbox(t.Context(), "default", integrationmodel.IntegrationOutboxMessage{ConnectorKey: "connector", Operation: "send", DedupKey: "missing"}); err == nil {
+	if _, err := delivery.InsertOutbox(t.Context(), "workspace-primary", integrationmodel.IntegrationOutboxMessage{ConnectorKey: "connector", Operation: "send", DedupKey: "missing"}); err == nil {
 		t.Fatal("outbox insert with missing dedup reload succeeded")
 	}
 }
@@ -369,35 +369,35 @@ func TestIntegrationWorkerMutationSQLFailures(t *testing.T) {
 	wantErr := errors.New("worker SQL failure")
 	calls := []func(IntegrationWorkerStore) error{
 		func(r IntegrationWorkerStore) error {
-			_, _, err := r.ClaimEvent(t.Context(), "default", "event", "owner", "2026-07-20T00:00:00Z")
+			_, _, err := r.ClaimEvent(t.Context(), "workspace-primary", "event", "owner", "2026-07-20T00:00:00Z")
 			return err
 		},
 		func(r IntegrationWorkerStore) error {
-			_, err := r.UpdateEventStatus(t.Context(), "default", "event", "owner", 1, "done", "", "2026-07-20T00:00:00Z")
+			_, err := r.UpdateEventStatus(t.Context(), "workspace-primary", "event", "owner", 1, "done", "", "2026-07-20T00:00:00Z")
 			return err
 		},
 		func(r IntegrationWorkerStore) error {
-			_, err := r.HeartbeatEvent(t.Context(), "default", "event", "owner", 1, "2026-07-20T00:00:00Z")
+			_, err := r.HeartbeatEvent(t.Context(), "workspace-primary", "event", "owner", 1, "2026-07-20T00:00:00Z")
 			return err
 		},
 		func(r IntegrationWorkerStore) error {
-			_, err := r.ScheduleEventRetry(t.Context(), "default", "event", "owner", 1, 1, "failed", "2026-07-20T00:00:00Z")
+			_, err := r.ScheduleEventRetry(t.Context(), "workspace-primary", "event", "owner", 1, 1, "failed", "2026-07-20T00:00:00Z")
 			return err
 		},
 		func(r IntegrationWorkerStore) error {
-			_, _, err := r.ClaimOutbox(t.Context(), "default", "outbox", "owner", "2026-07-20T00:00:00Z")
+			_, _, err := r.ClaimOutbox(t.Context(), "workspace-primary", "outbox", "owner", "2026-07-20T00:00:00Z")
 			return err
 		},
 		func(r IntegrationWorkerStore) error {
-			_, err := r.UpdateOutboxStatus(t.Context(), "default", "outbox", "owner", 1, "sent", "", "", "", "2026-07-20T00:00:00Z")
+			_, err := r.UpdateOutboxStatus(t.Context(), "workspace-primary", "outbox", "owner", 1, "sent", "", "", "", "2026-07-20T00:00:00Z")
 			return err
 		},
 		func(r IntegrationWorkerStore) error {
-			_, err := r.HeartbeatOutbox(t.Context(), "default", "outbox", "owner", 1, "2026-07-20T00:00:00Z")
+			_, err := r.HeartbeatOutbox(t.Context(), "workspace-primary", "outbox", "owner", 1, "2026-07-20T00:00:00Z")
 			return err
 		},
 		func(r IntegrationWorkerStore) error {
-			_, err := r.ScheduleOutboxRetry(t.Context(), "default", "outbox", "owner", 1, 1, "failed", "2026-07-20T00:00:00Z")
+			_, err := r.ScheduleOutboxRetry(t.Context(), "workspace-primary", "outbox", "owner", 1, 1, "failed", "2026-07-20T00:00:00Z")
 			return err
 		},
 	}
@@ -427,11 +427,11 @@ func TestIntegrationWorkerMissingAndConflictEdges(t *testing.T) {
 
 	for index, call := range []func(IntegrationWorkerStore) (bool, error){
 		func(r IntegrationWorkerStore) (bool, error) {
-			_, ok, err := r.ClaimEvent(t.Context(), "default", "event", "owner", "")
+			_, ok, err := r.ClaimEvent(t.Context(), "workspace-primary", "event", "owner", "")
 			return ok, err
 		},
 		func(r IntegrationWorkerStore) (bool, error) {
-			_, ok, err := r.ClaimOutbox(t.Context(), "default", "outbox", "owner", "")
+			_, ok, err := r.ClaimOutbox(t.Context(), "workspace-primary", "outbox", "owner", "")
 			return ok, err
 		},
 	} {
@@ -447,19 +447,19 @@ func TestIntegrationWorkerMissingAndConflictEdges(t *testing.T) {
 
 	updateCalls := []func(IntegrationWorkerStore) error{
 		func(r IntegrationWorkerStore) error {
-			_, err := r.UpdateEventStatus(t.Context(), "default", "event", "owner", 1, "done", "", "2026-07-20T00:00:00Z")
+			_, err := r.UpdateEventStatus(t.Context(), "workspace-primary", "event", "owner", 1, "done", "", "2026-07-20T00:00:00Z")
 			return err
 		},
 		func(r IntegrationWorkerStore) error {
-			_, err := r.ScheduleEventRetry(t.Context(), "default", "event", "owner", 1, 1, "failed", "2026-07-20T00:00:00Z")
+			_, err := r.ScheduleEventRetry(t.Context(), "workspace-primary", "event", "owner", 1, 1, "failed", "2026-07-20T00:00:00Z")
 			return err
 		},
 		func(r IntegrationWorkerStore) error {
-			_, err := r.UpdateOutboxStatus(t.Context(), "default", "outbox", "owner", 1, "sent", "", "", "", "2026-07-20T00:00:00Z")
+			_, err := r.UpdateOutboxStatus(t.Context(), "workspace-primary", "outbox", "owner", 1, "sent", "", "", "", "2026-07-20T00:00:00Z")
 			return err
 		},
 		func(r IntegrationWorkerStore) error {
-			_, err := r.ScheduleOutboxRetry(t.Context(), "default", "outbox", "owner", 1, 1, "failed", "2026-07-20T00:00:00Z")
+			_, err := r.ScheduleOutboxRetry(t.Context(), "workspace-primary", "outbox", "owner", 1, 1, "failed", "2026-07-20T00:00:00Z")
 			return err
 		},
 	}
@@ -475,11 +475,11 @@ func TestIntegrationWorkerMissingAndConflictEdges(t *testing.T) {
 	}
 	for index, call := range []func(IntegrationWorkerStore) error{
 		func(r IntegrationWorkerStore) error {
-			_, err := r.HeartbeatEvent(t.Context(), "default", "event", "owner", 1, "")
+			_, err := r.HeartbeatEvent(t.Context(), "workspace-primary", "event", "owner", 1, "")
 			return err
 		},
 		func(r IntegrationWorkerStore) error {
-			_, err := r.HeartbeatOutbox(t.Context(), "default", "outbox", "owner", 1, "")
+			_, err := r.HeartbeatOutbox(t.Context(), "workspace-primary", "outbox", "owner", 1, "")
 			return err
 		},
 	} {
@@ -489,10 +489,10 @@ func TestIntegrationWorkerMissingAndConflictEdges(t *testing.T) {
 		}
 	}
 	_, _, worker = scriptedIntegrationStores(t, &integrationSQLState{querySteps: []integrationSQLQueryStep{{}, {}}})
-	if _, found, err := worker.findEvent(t.Context(), "default", "missing"); err != nil || found {
+	if _, found, err := worker.findEvent(t.Context(), "workspace-primary", "missing"); err != nil || found {
 		t.Fatalf("worker missing event found=%v err=%v", found, err)
 	}
-	if _, found, err := worker.findOutbox(t.Context(), "default", "missing"); err != nil || found {
+	if _, found, err := worker.findOutbox(t.Context(), "workspace-primary", "missing"); err != nil || found {
 		t.Fatalf("worker missing outbox found=%v err=%v", found, err)
 	}
 }

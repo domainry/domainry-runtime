@@ -70,6 +70,25 @@ func (factory identityFactoryStub) Open(context.Context, identitysdk.Application
 	return identityBindingStub{}, nil
 }
 
+func (factory identityFactoryStub) OpenBootstrapWithDatabase(context.Context, identitysdk.ApplicationKey, identitysdk.DatabaseHandle) (identitysdk.BootstrapBinding, error) {
+	if factory.err != nil {
+		return nil, factory.err
+	}
+	return identityBootstrapBindingStub{}, nil
+}
+
+type identityBootstrapBindingStub struct{}
+
+func (identityBootstrapBindingStub) ProvisionWorkspaceIdentity(_ context.Context, request identitysdk.WorkspaceIdentityProvisionRequest, _ identitysdk.EmbeddedTransaction) (identitysdk.WorkspaceIdentityProvisionResult, error) {
+	return identitysdk.WorkspaceIdentityProvisionResult{AdminLoginID: request.AdminLoginID, InitialPassword: request.InitialPassword, MustChangePassword: true, ProvisionedRoles: 1}, nil
+}
+
+func (identityBootstrapBindingStub) ReconcileWorkspaceRoles(context.Context, identitysdk.WorkspaceRoleReconcileRequest, identitysdk.EmbeddedTransaction) (identitysdk.WorkspaceRoleReconcileResult, error) {
+	return identitysdk.WorkspaceRoleReconcileResult{}, nil
+}
+
+func (identityBootstrapBindingStub) Close(context.Context) error { return nil }
+
 type identityBindingStub struct {
 	runtimetestkit.IdentityBindingStub
 }
@@ -173,6 +192,9 @@ func manifestDomainSDKTarget(identity DomainSDKIdentity) *manifestmodel.Generate
 func serverTestConfig() config.Config {
 	return config.Config{
 		Port: ":0", ManifestPath: "runtime-manifest.json", TelemetryExportTimeout: time.Second,
+		IdentityAudience: "domainry-runtime", InitialTenantRequestID: "initial-tenant", InitialTenantCode: "primary",
+		InitialTenantName: "Primary", InitialTenantAdminLoginID: "admin@example.test", InitialTenantAdminName: "Admin",
+		InitialTenantAdminPassword: "BootstrapAdmin1!", InitialTenantStoreConfiguration: "{}",
 		HTTPReadHeaderTimeout: time.Second, HTTPReadTimeout: time.Second, HTTPWriteTimeout: time.Second,
 		HTTPIdleTimeout: time.Second, HTTPShutdownTimeout: time.Second, HTTPMaxHeaderBytes: 1024,
 	}

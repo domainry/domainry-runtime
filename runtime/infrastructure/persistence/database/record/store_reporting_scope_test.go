@@ -47,8 +47,8 @@ func TestReportingScopeQueryUsesPersistedPathAndOwnerIndexesAtScale(t *testing.T
 	seedReportingScopeScaleFixture(t, store, 10_000, 10)
 
 	reportingUserIDs := reportingScopeTeamUserIDs(42, 100)
-	query := recordmodel.RecordListQuery{Page: 1, PageSize: 20, Scope: "subordinates", PrincipalWorkspaceID: "default", PrincipalReportingUserIDs: reportingUserIDs, OwnerField: "owner"}
-	whereSQL, args, err := store.TenantListWhereClause("default", query)
+	query := recordmodel.RecordListQuery{Page: 1, PageSize: 20, Scope: "subordinates", PrincipalWorkspaceID: "workspace-primary", PrincipalReportingUserIDs: reportingUserIDs, OwnerField: "owner"}
+	whereSQL, args, err := store.TenantListWhereClause("workspace-primary", query)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestReportingScopeQueryUsesPersistedPathAndOwnerIndexesAtScale(t *testing.T
 	}
 
 	started := time.Now()
-	page, err := recordStore(store).ListRecords(t.Context(), "default", object, query)
+	page, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, query)
 	if err != nil {
 		t.Fatalf("list scale reporting scope: %v", err)
 	}
@@ -75,7 +75,7 @@ func seedReportingScopeScaleFixture(t *testing.T, store *RuntimeStore, userCount
 		t.Fatalf("begin scale fixture: %v", err)
 	}
 	now := "2026-01-01T00:00:00Z"
-	recordStatement, err := tx.Prepare(`INSERT INTO reporting_record (workspace_id, id, created_at, updated_at, name, owner) VALUES ('default', ?, ?, ?, ?, ?)`)
+	recordStatement, err := tx.Prepare(`INSERT INTO reporting_record (workspace_id, id, created_at, updated_at, name, owner) VALUES ('workspace-primary', ?, ?, ?, ?, ?)`)
 	if err != nil {
 		t.Fatalf("prepare records: %v", err)
 	}
@@ -146,14 +146,14 @@ func createReportingScopeTable(t *testing.T, store *RuntimeStore, object definit
 
 func insertReportingScopeRecord(t *testing.T, store *RuntimeStore, object definitionmodel.ObjectSchema, id, owner string) {
 	t.Helper()
-	if err := recordStore(store).InsertRecord(t.Context(), "default", object, recordmodel.Record{ID: id, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"name": id, "owner": owner}}); err != nil {
+	if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{ID: id, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"name": id, "owner": owner}}); err != nil {
 		t.Fatalf("insert reporting record %s: %v", id, err)
 	}
 }
 
 func listReportingScopeRecords(t *testing.T, store *RuntimeStore, object definitionmodel.ObjectSchema, scope string, reportingUserIDs []string) recordmodel.RecordPageResult {
 	t.Helper()
-	page, err := recordStore(store).ListRecords(t.Context(), "default", object, recordmodel.RecordListQuery{Page: 1, PageSize: 20, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}, Scope: scope, PrincipalWorkspaceID: "default", PrincipalReportingUserIDs: reportingUserIDs, OwnerField: "owner"})
+	page, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 20, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}, Scope: scope, PrincipalWorkspaceID: "workspace-primary", PrincipalReportingUserIDs: reportingUserIDs, OwnerField: "owner"})
 	if err != nil {
 		t.Fatalf("list %s records: %v", scope, err)
 	}

@@ -29,25 +29,25 @@ func TestRecordStoreImplementsContractAndCancelsSQL(t *testing.T) {
 	if _, err := store.DB().Exec(`CREATE TABLE context_record (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
 		t.Fatal(err)
 	}
-	if err := repository.InsertRecord(t.Context(), "default", object, recordmodel.Record{ID: "record_1", CreatedAt: "v1", UpdatedAt: "v1", Data: map[string]any{"status": "pending"}}); err != nil {
+	if err := repository.InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{ID: "record_1", CreatedAt: "v1", UpdatedAt: "v1", Data: map[string]any{"status": "pending"}}); err != nil {
 		t.Fatal(err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, _, err := repository.GetRecord(ctx, "default", object, "record_1"); !errors.Is(err, context.Canceled) {
+	if _, _, err := repository.GetRecord(ctx, "workspace-primary", object, "record_1"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected cancelled query, got %v", err)
 	}
 	expired, expiredCancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 	defer expiredCancel()
-	if _, err := repository.ListRecords(expired, "default", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10}); !errors.Is(err, context.DeadlineExceeded) {
+	if _, err := repository.ListRecords(expired, "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10}); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected SQL deadline error, got %v", err)
 	}
 	commit := transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: recordmodel.Record{ID: "record_1", CreatedAt: "v1", UpdatedAt: "v2", Data: map[string]any{"status": "approved"}}}
-	if err := repository.CommitRecordMutation(ctx, "default", commit); !errors.Is(err, context.Canceled) {
+	if err := repository.CommitRecordMutation(ctx, "workspace-primary", commit); !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected cancelled transaction, got %v", err)
 	}
-	record, found, err := repository.GetRecord(t.Context(), "default", object, "record_1")
+	record, found, err := repository.GetRecord(t.Context(), "workspace-primary", object, "record_1")
 	if err != nil || !found || record.Data["status"] != "pending" {
 		t.Fatalf("cancelled mutation changed record: record=%#v found=%v err=%v", record, found, err)
 	}

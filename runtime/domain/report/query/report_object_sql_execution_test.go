@@ -60,7 +60,7 @@ func TestCrossWorkspaceObjectSQLRequiresAuthorizedSuperadminAndSetsExplicitStore
 		return []reportmodel.ReportSchema{report}
 	}, Access: objectSQLAccessProbe{objects: map[string]definitionmodel.ObjectSchema{"sale": object}}, ObjectSQL: executor})
 	principal := func(role string, permissions ...string) principalmodel.Principal {
-		return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default", UserID: "root"}}, accessfixture.Bundle{Key: role, Permissions: permissions, RecordScope: "all_records"})
+		return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary", UserID: "root"}}, accessfixture.Bundle{Key: role, Permissions: permissions, RecordScope: "all_records"})
 	}
 	for _, denied := range []principalmodel.Principal{{}, principal("staff", "reports.hq.read"), principal("admin", "reports.hq.read"), principal("superadmin")} {
 		if _, err := service.Summary(t.Context(), report.Key, denied); apperror.CodeOf(err) != "backend.report.not_found" {

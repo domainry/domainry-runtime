@@ -15,4 +15,4 @@ CREATE TABLE _workflow_executions (
 );
 INSERT INTO _workflow_executions (
   workspace_id,id,workflow_key,name,trigger,status,action_json,payload_json,result_json,created_at,updated_at
-) VALUES ('default','workflow-001','fixture','Fixture','manual','completed','{}','{}','{}','2026-07-19T00:00:00Z','2026-07-19T00:00:00Z');
+) VALUES ('workspace-primary','workflow-001','fixture','Fixture','manual','completed','{}','{}','{}','2026-07-19T00:00:00Z','2026-07-19T00:00:00Z');

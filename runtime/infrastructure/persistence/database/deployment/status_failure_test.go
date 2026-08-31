@@ -41,10 +41,10 @@ func TestIdempotencyReceiptScopeAndStatusInputBoundaries(t *testing.T) {
 	if _, err := store.ListIdempotencyReceipts(t.Context(), "", "", 10); err == nil {
 		t.Fatal("empty receipt workspace accepted")
 	}
-	if changed, err := store.RetryIdempotencyReceipt(t.Context(), "default", "unknown", "id"); err != nil || changed {
+	if changed, err := store.RetryIdempotencyReceipt(t.Context(), "workspace-primary", "unknown", "id"); err != nil || changed {
 		t.Fatalf("unknown owner changed=%v err=%v", changed, err)
 	}
-	if changed, err := store.ResetIdempotencyReceipt(t.Context(), "default", "record", " "); err != nil || changed {
+	if changed, err := store.ResetIdempotencyReceipt(t.Context(), "workspace-primary", "record", " "); err != nil || changed {
 		t.Fatalf("empty id changed=%v err=%v", changed, err)
 	}
 }
@@ -65,7 +65,7 @@ func TestRuntimeStatusStagedQueryFailures(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			store, closeDB := scriptedDeploymentStore(base, &deploymentDBState{querySteps: test.steps})
 			defer closeDB()
-			if _, err := store.IdempotencyOperationalStatus(t.Context(), "default", time.Now()); err == nil {
+			if _, err := store.IdempotencyOperationalStatus(t.Context(), "workspace-primary", time.Now()); err == nil {
 				t.Fatal("status query failure ignored")
 			}
 		})
@@ -88,19 +88,19 @@ func TestReceiptListAndTransitionStagedFailures(t *testing.T) {
 	columns := []string{"id", "workspace", "scope", "target", "key", "fingerprint", "status", "fencing", "updated", "expires"}
 	for _, step := range []deploymentQueryStep{
 		{err: wantErr},
-		{columns: append(columns, "extra"), rows: [][]driver.Value{{"id", "default", "scope", "target", "key", "fingerprint", "status", int64(1), "updated", "expires", "extra"}}},
+		{columns: append(columns, "extra"), rows: [][]driver.Value{{"id", "workspace-primary", "scope", "target", "key", "fingerprint", "status", int64(1), "updated", "expires", "extra"}}},
 		{columns: columns, closeErr: wantErr},
 		{columns: columns, nextErr: wantErr},
 	} {
 		store, closeDB := scriptedDeploymentStore(base, &deploymentDBState{querySteps: []deploymentQueryStep{step}})
-		if _, err := store.ListIdempotencyReceipts(t.Context(), "default", " processing ", 10); err == nil {
+		if _, err := store.ListIdempotencyReceipts(t.Context(), "workspace-primary", " processing ", 10); err == nil {
 			t.Fatal("receipt list failure ignored")
 		}
 		closeDB()
 	}
 	for _, step := range []deploymentExecStep{{err: wantErr}, {rowsErr: wantErr}, {rows: 0}, {rows: 1}} {
 		store, closeDB := scriptedDeploymentStore(base, &deploymentDBState{execSteps: []deploymentExecStep{step}})
-		changed, err := store.RetryIdempotencyReceipt(t.Context(), "default", "record", "id")
+		changed, err := store.RetryIdempotencyReceipt(t.Context(), "workspace-primary", "record", "id")
 		closeDB()
 		if step.err == nil && step.rowsErr == nil && ((step.rows == 1) != changed || err != nil) {
 			t.Fatalf("step=%#v changed=%v err=%v", step, changed, err)
@@ -129,7 +129,7 @@ func TestRuntimeStatusCleanupStatesAndReceiptLimit(t *testing.T) {
 			steps := deploymentOperationalStatusSteps(test.row)
 			store, closeDB := scriptedDeploymentStore(base, &deploymentDBState{querySteps: steps})
 			defer closeDB()
-			status, err := store.IdempotencyOperationalStatus(t.Context(), "default", now)
+			status, err := store.IdempotencyOperationalStatus(t.Context(), "workspace-primary", now)
 			if err != nil || status.Cleanup.State != test.want {
 				t.Fatalf("state=%q want=%q err=%v", status.Cleanup.State, test.want, err)
 			}
@@ -140,13 +140,13 @@ func TestRuntimeStatusCleanupStatesAndReceiptLimit(t *testing.T) {
 	steps := make([]deploymentQueryStep, 0, len(idempotencyReceiptTables))
 	for index := range idempotencyReceiptTables {
 		steps = append(steps, deploymentQueryStep{columns: columns, rows: [][]driver.Value{{
-			"id", "default", "scope", "target", "key", "fingerprint", "processing", int64(index),
+			"id", "workspace-primary", "scope", "target", "key", "fingerprint", "processing", int64(index),
 			fmt.Sprintf("2026-07-20T12:00:0%dZ", index), "expires",
 		}}})
 	}
 	store, closeDB := scriptedDeploymentStore(base, &deploymentDBState{querySteps: steps})
 	defer closeDB()
-	values, err := store.ListIdempotencyReceipts(t.Context(), "default", "", 1)
+	values, err := store.ListIdempotencyReceipts(t.Context(), "workspace-primary", "", 1)
 	if err != nil || len(values) != 1 || values[0].FencingToken != int64(len(idempotencyReceiptTables)-1) {
 		t.Fatalf("values=%#v err=%v", values, err)
 	}

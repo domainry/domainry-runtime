@@ -166,7 +166,7 @@ func (h *BusinessSystemHandler) businessSystemSnapshot(w http.ResponseWriter, r 
 func builderSnapshotPrincipal(manifest manifestmodel.ManifestSchema) principalmodel.Principal {
 	_ = manifest
 	return principalmodel.Principal{
-		Principal:          identitysdk.Principal{Known: true, UserID: "builder-snapshot", WorkspaceID: "default", RoleKey: "builder-snapshot"},
+		Principal:          identitysdk.Principal{Known: true, UserID: "builder-snapshot", WorkspaceID: principalmodel.InstallationWorkspaceID, RoleKey: "builder-snapshot"},
 		SystemScope:        principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "builder_system_snapshot"),
 		SystemCapabilities: []string{"workspace.admin"},
 	}

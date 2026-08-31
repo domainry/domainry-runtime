@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	partysdk "github.com/domainry/domainry-party-sdk"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	partyapplication "github.com/domainry/domainry-runtime/runtime/application/party"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -21,7 +22,7 @@ func (a *httpServerAssembly) wirePartyAndIdentityReferences(constructionContext 
 }
 
 func (a *httpServerAssembly) wirePartyHandler() {
-	if a.dependencies.PartyBinding != nil {
+	if a.dependencies.PartyBinding != nil && a.dependencies.PartyBinding.Descriptor().Mode == partysdk.DeploymentModeSaaS {
 		a.handlers.Party = partyhttp.NewPartyHandler(partyhttp.PartyDependencies{
 			Service:       partyapplication.NewPartyApplicationService(a.dependencies.PartyBinding),
 			Catalog:       partyapplication.NewPartyCatalogApplicationService(a.dependencies.PartyBinding),

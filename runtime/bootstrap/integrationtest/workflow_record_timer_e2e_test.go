@@ -38,30 +38,30 @@ func TestWorkflowWaitDurationUsesDurableRecordTimerAndResumesAfterFire(t *testin
 		Edges: []definitionmodel.WorkflowGraphEdge{{ID: "trigger-wait", Source: "trigger", Target: "wait"}},
 	}}
 	service := newWorkflowProcessTestService(t, store, workflow, identityStore)
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "default"}}, accessfixture.Bundle{Key: "operator", Permissions: []string{"workflow.run"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "operator", Permissions: []string{"workflow.run"}})
 	process, err := runWorkflowProcess(t, store, service, workflow.Key, map[string]any{"object_key": "case", "record_id": "case-1"}, principal)
 	if err != nil || process.Status != "waiting" || len(process.CurrentNodeIDs) != 1 || process.CurrentNodeIDs[0] != "wait" {
 		t.Fatalf("waiting process=%#v err=%v", process, err)
 	}
 	timerObject := schedulerRuntimeObjectByKey(t, schedulerprojection.SchedulerSystemObjects(), "record_timer")
-	timers, err := recordLegacyStore(store).ListRecords(t.Context(), "default", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 10})
+	timers, err := recordLegacyStore(store).ListRecords(t.Context(), "workspace-primary", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 10})
 	if err != nil || timers.Total != 1 || timers.Items[0].Data["status"] != "scheduled" {
 		t.Fatalf("durable workflow timer page=%#v err=%v", timers, err)
 	}
 	now := time.Now().UTC().Add(2 * time.Second)
-	processed, err := service.Applications().Scheduler.ProcessDueRecordTimers(t.Context(), "default", now, 10, principal, schedulerRuntimeSystemScope())
+	processed, err := service.Applications().Scheduler.ProcessDueRecordTimers(t.Context(), "workspace-primary", now, 10, principal, schedulerRuntimeSystemScope())
 	if err != nil || processed != 1 {
 		t.Fatalf("process workflow timer count=%d err=%v", processed, err)
 	}
-	completed, found, err := workflowProcessStore(store).GetProcess(t.Context(), "default", process.ID)
+	completed, found, err := workflowProcessStore(store).GetProcess(t.Context(), "workspace-primary", process.ID)
 	if err != nil || !found || completed.Status != "completed" || completed.CompletedAt == "" {
 		t.Fatalf("completed process=%#v found=%v err=%v", completed, found, err)
 	}
-	timer, found, err := recordLegacyStore(store).GetRecord(t.Context(), "default", timerObject, timers.Items[0].ID)
+	timer, found, err := recordLegacyStore(store).GetRecord(t.Context(), "workspace-primary", timerObject, timers.Items[0].ID)
 	if err != nil || !found || timer.Data["status"] != "fired" || timer.Data["fired_at"] == "" {
 		t.Fatalf("fired timer=%#v found=%v err=%v", timer, found, err)
 	}
-	nodes, err := workflowProcessStore(store).ListNodes(t.Context(), "default", process.ID)
+	nodes, err := workflowProcessStore(store).ListNodes(t.Context(), "workspace-primary", process.ID)
 	if err != nil || len(nodes) != 2 || nodes[1].Status != "success" || nodes[1].Output["resumed"] != true {
 		t.Fatalf("timer node evidence=%#v err=%v", nodes, err)
 	}
@@ -91,25 +91,25 @@ func TestWorkflowApprovalDeadlineUsesDurableRecordTimerForEscalation(t *testing.
 		}, Edges: []definitionmodel.WorkflowGraphEdge{{ID: "trigger-approval", Source: "trigger", Target: "approval"}},
 	}}
 	service := newWorkflowProcessTestService(t, store, workflow, identityStore)
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "default"}}, accessfixture.Bundle{Key: "operator", Permissions: []string{"workflow.run"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "operator", Permissions: []string{"workflow.run"}})
 	process, err := runWorkflowProcess(t, store, service, workflow.Key, map[string]any{"object_key": "request", "record_id": "request-1"}, principal)
 	if err != nil || process.Status != "waiting" {
 		t.Fatalf("approval process=%#v err=%v", process, err)
 	}
 	timerObject := schedulerRuntimeObjectByKey(t, schedulerprojection.SchedulerSystemObjects(), "record_timer")
-	timers, err := recordLegacyStore(store).ListRecords(t.Context(), "default", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 10})
+	timers, err := recordLegacyStore(store).ListRecords(t.Context(), "workspace-primary", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 10})
 	if err != nil || timers.Total != 1 || timers.Items[0].Data["target_key"] != "approval_deadline" || timers.Items[0].Data["purpose"] != "approval_escalation" {
 		t.Fatalf("approval timers=%#v err=%v", timers, err)
 	}
-	processed, err := service.Applications().Scheduler.ProcessDueRecordTimers(t.Context(), "default", time.Now().UTC().Add(3*time.Second), 10, principal, schedulerRuntimeSystemScope())
+	processed, err := service.Applications().Scheduler.ProcessDueRecordTimers(t.Context(), "workspace-primary", time.Now().UTC().Add(3*time.Second), 10, principal, schedulerRuntimeSystemScope())
 	if err != nil || processed != 1 {
 		t.Fatalf("process approval timer count=%d err=%v", processed, err)
 	}
-	tasks, err := workflowProcessStore(store).ListTasks(t.Context(), "default", process.ID, "", "open", 10)
+	tasks, err := workflowProcessStore(store).ListTasks(t.Context(), "workspace-primary", process.ID, "", "open", 10)
 	if err != nil || len(tasks) != 1 || tasks[0].AssigneeUserID != "manager" {
 		t.Fatalf("escalated approval tasks=%#v err=%v", tasks, err)
 	}
-	timer, found, err := recordLegacyStore(store).GetRecord(t.Context(), "default", timerObject, timers.Items[0].ID)
+	timer, found, err := recordLegacyStore(store).GetRecord(t.Context(), "workspace-primary", timerObject, timers.Items[0].ID)
 	if err != nil || !found || timer.Data["status"] != "fired" {
 		t.Fatalf("approval timer=%#v found=%v err=%v", timer, found, err)
 	}

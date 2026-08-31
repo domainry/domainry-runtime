@@ -39,7 +39,7 @@ func TestIntegrationOutboxEnqueueDeduplicatesAndRejectsFingerprintConflict(t *te
 		t.Fatal(err)
 	}
 	repository := NewIntegrationDeliveryStore(store)
-	message := integrationmodel.IntegrationOutboxMessage{WorkspaceID: "default", ConnectorKey: "webhook", ConnectionKey: "primary", Operation: "notify", RequestRef: "order:one", DedupKey: "order:one", Payload: map[string]any{"order_id": "one"}}
+	message := integrationmodel.IntegrationOutboxMessage{WorkspaceID: "workspace-primary", ConnectorKey: "webhook", ConnectionKey: "primary", Operation: "notify", RequestRef: "order:one", DedupKey: "order:one", Payload: map[string]any{"order_id": "one"}}
 	start := make(chan struct{})
 	ids, errorsFound := make(chan string, 100), make(chan error, 100)
 	var group sync.WaitGroup
@@ -84,31 +84,31 @@ func TestIntegrationDeliveryStoreAppliesMonotonicDeliveryReceipts(t *testing.T) 
 		t.Fatal(err)
 	}
 	repository := NewIntegrationDeliveryStore(store)
-	message, err := repository.InsertOutbox(t.Context(), "default", integrationmodel.IntegrationOutboxMessage{WorkspaceID: "default", ConnectorKey: "whatsapp", ConnectionKey: "whatsapp-primary", Operation: "send_message", Status: "sent", ResponseRef: "whatsapp:wamid.1", CreatedBy: "worker"})
+	message, err := repository.InsertOutbox(t.Context(), "workspace-primary", integrationmodel.IntegrationOutboxMessage{WorkspaceID: "workspace-primary", ConnectorKey: "whatsapp", ConnectionKey: "whatsapp-primary", Operation: "send_message", Status: "sent", ResponseRef: "whatsapp:wamid.1", CreatedBy: "worker"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	delivered, found, err := repository.UpdateOutboxStatusByResponseRef(t.Context(), "default", "whatsapp-primary", "whatsapp:wamid.1", "delivered", "")
+	delivered, found, err := repository.UpdateOutboxStatusByResponseRef(t.Context(), "workspace-primary", "whatsapp-primary", "whatsapp:wamid.1", "delivered", "")
 	if err != nil || !found || delivered.ID != message.ID || delivered.Status != "delivered" {
 		t.Fatalf("delivered=%#v found=%v err=%v", delivered, found, err)
 	}
-	read, found, err := repository.UpdateOutboxStatusByResponseRef(t.Context(), "default", "whatsapp-primary", "whatsapp:wamid.1", "read", "")
+	read, found, err := repository.UpdateOutboxStatusByResponseRef(t.Context(), "workspace-primary", "whatsapp-primary", "whatsapp:wamid.1", "read", "")
 	if err != nil || !found || read.Status != "read" {
 		t.Fatalf("read=%#v found=%v err=%v", read, found, err)
 	}
-	regressed, found, err := repository.UpdateOutboxStatusByResponseRef(t.Context(), "default", "whatsapp-primary", "whatsapp:wamid.1", "delivered", "")
+	regressed, found, err := repository.UpdateOutboxStatusByResponseRef(t.Context(), "workspace-primary", "whatsapp-primary", "whatsapp:wamid.1", "delivered", "")
 	if err != nil || !found || regressed.Status != "read" {
 		t.Fatalf("regressed=%#v found=%v err=%v", regressed, found, err)
 	}
-	duplicate, found, err := repository.UpdateOutboxStatusByResponseRef(t.Context(), "default", "whatsapp-primary", "whatsapp:wamid.1", "read", "")
+	duplicate, found, err := repository.UpdateOutboxStatusByResponseRef(t.Context(), "workspace-primary", "whatsapp-primary", "whatsapp:wamid.1", "read", "")
 	if err != nil || !found || duplicate.Status != "read" {
 		t.Fatalf("duplicate=%#v found=%v err=%v", duplicate, found, err)
 	}
-	lateFailure, found, err := repository.UpdateOutboxStatusByResponseRef(t.Context(), "default", "whatsapp-primary", "whatsapp:wamid.1", "failed", "late")
+	lateFailure, found, err := repository.UpdateOutboxStatusByResponseRef(t.Context(), "workspace-primary", "whatsapp-primary", "whatsapp:wamid.1", "failed", "late")
 	if err != nil || !found || lateFailure.Status != "read" {
 		t.Fatalf("late failure=%#v found=%v err=%v", lateFailure, found, err)
 	}
-	if _, found, err := repository.UpdateOutboxStatusByResponseRef(t.Context(), "default", "whatsapp-primary", "whatsapp:missing", "read", ""); err != nil || found {
+	if _, found, err := repository.UpdateOutboxStatusByResponseRef(t.Context(), "workspace-primary", "whatsapp-primary", "whatsapp:missing", "read", ""); err != nil || found {
 		t.Fatalf("missing receipt found=%v err=%v", found, err)
 	}
 }
@@ -120,7 +120,7 @@ func TestIntegrationDeliveryStoreConvergesConcurrentDuplicateAndOutOfOrderReceip
 		t.Fatal(err)
 	}
 	repository := NewIntegrationDeliveryStore(store)
-	message, err := repository.InsertOutbox(t.Context(), "default", integrationmodel.IntegrationOutboxMessage{WorkspaceID: "default", ConnectorKey: "payment", ConnectionKey: "payment-primary", Operation: "capture", Status: "sent", ResponseRef: "provider:payment-1"})
+	message, err := repository.InsertOutbox(t.Context(), "workspace-primary", integrationmodel.IntegrationOutboxMessage{WorkspaceID: "workspace-primary", ConnectorKey: "payment", ConnectionKey: "payment-primary", Operation: "capture", Status: "sent", ResponseRef: "provider:payment-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestIntegrationDeliveryStoreConvergesConcurrentDuplicateAndOutOfOrderReceip
 		go func() {
 			defer group.Done()
 			<-start
-			_, found, updateErr := repository.UpdateOutboxStatusByResponseRef(t.Context(), "default", "payment-primary", "provider:payment-1", status, status)
+			_, found, updateErr := repository.UpdateOutboxStatusByResponseRef(t.Context(), "workspace-primary", "payment-primary", "provider:payment-1", status, status)
 			if updateErr != nil {
 				errorsFound <- updateErr
 				return
@@ -150,7 +150,7 @@ func TestIntegrationDeliveryStoreConvergesConcurrentDuplicateAndOutOfOrderReceip
 	for updateErr := range errorsFound {
 		t.Fatalf("concurrent callback: %v", updateErr)
 	}
-	final, found, err := repository.GetOutbox(t.Context(), "default", message.ID)
+	final, found, err := repository.GetOutbox(t.Context(), "workspace-primary", message.ID)
 	if err != nil || !found || final.Status != "read" {
 		t.Fatalf("final=%#v found=%v err=%v", final, found, err)
 	}
@@ -163,8 +163,8 @@ func TestIntegrationDeliveryStoreQuarantinesOverdueAcknowledgementOnceAndAccepts
 		t.Fatal(err)
 	}
 	repository := NewIntegrationDeliveryStore(store)
-	message, err := repository.InsertOutbox(t.Context(), "default", integrationmodel.IntegrationOutboxMessage{
-		WorkspaceID: "default", ConnectorKey: "callback-connector", ConnectionKey: "primary", Operation: "submit",
+	message, err := repository.InsertOutbox(t.Context(), "workspace-primary", integrationmodel.IntegrationOutboxMessage{
+		WorkspaceID: "workspace-primary", ConnectorKey: "callback-connector", ConnectionKey: "primary", Operation: "submit",
 		Status: "sent", ResponseRef: "external:42", AckDeadlineAt: "2026-07-20T00:00:00Z",
 	})
 	if err != nil {
@@ -175,14 +175,14 @@ func TestIntegrationDeliveryStoreQuarantinesOverdueAcknowledgementOnceAndAccepts
 	if err != nil || len(due) != 1 || due[0].ID != message.ID {
 		t.Fatalf("due=%#v err=%v", due, err)
 	}
-	marked, changed, err := repository.MarkOutboxAcknowledgementReconciliationRequired(t.Context(), "default", message.ID, "2026-07-20T00:00:01Z")
+	marked, changed, err := repository.MarkOutboxAcknowledgementReconciliationRequired(t.Context(), "workspace-primary", message.ID, "2026-07-20T00:00:01Z")
 	if err != nil || !changed || marked.Status != "quarantined" || marked.Error != "backend.integration.outbox.ack_timeout" || marked.AckDeadlineAt != "" {
 		t.Fatalf("marked=%#v changed=%v err=%v", marked, changed, err)
 	}
-	if _, changed, err := repository.MarkOutboxAcknowledgementReconciliationRequired(t.Context(), "default", message.ID, "2026-07-20T00:00:02Z"); err != nil || changed {
+	if _, changed, err := repository.MarkOutboxAcknowledgementReconciliationRequired(t.Context(), "workspace-primary", message.ID, "2026-07-20T00:00:02Z"); err != nil || changed {
 		t.Fatalf("duplicate mark changed=%v err=%v", changed, err)
 	}
-	late, found, err := repository.UpdateOutboxStatusByResponseRef(t.Context(), "default", "primary", "external:42", "delivered", "")
+	late, found, err := repository.UpdateOutboxStatusByResponseRef(t.Context(), "workspace-primary", "primary", "external:42", "delivered", "")
 	if err != nil || !found || late.Status != "delivered" || late.AckDeadlineAt != "" {
 		t.Fatalf("late authoritative receipt=%#v found=%v err=%v", late, found, err)
 	}
@@ -199,15 +199,15 @@ func TestIntegrationDeliveryStoreIdentifiesPreparedFactWithMissingExternalReceip
 		t.Fatal(err)
 	}
 	repository := NewIntegrationDeliveryStore(store)
-	missing, err := repository.InsertInvocation(t.Context(), "default", integrationmodel.IntegrationInvocation{
-		WorkspaceID: "default", ConnectorKey: "payments", ConnectionKey: "primary", Operation: "capture",
+	missing, err := repository.InsertInvocation(t.Context(), "workspace-primary", integrationmodel.IntegrationInvocation{
+		WorkspaceID: "workspace-primary", ConnectorKey: "payments", ConnectionKey: "primary", Operation: "capture",
 		Status: "prepared", RequestRef: "order:42", RecordID: "42",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	completed, err := repository.InsertInvocation(t.Context(), "default", integrationmodel.IntegrationInvocation{
-		WorkspaceID: "default", ConnectorKey: "payments", ConnectionKey: "primary", Operation: "capture",
+	completed, err := repository.InsertInvocation(t.Context(), "workspace-primary", integrationmodel.IntegrationInvocation{
+		WorkspaceID: "workspace-primary", ConnectorKey: "payments", ConnectionKey: "primary", Operation: "capture",
 		Status: "prepared", RequestRef: "order:43", RecordID: "43",
 	})
 	if err != nil {
@@ -244,20 +244,20 @@ func TestIntegrationDeliveryStoreContractAndCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationDeliveryStore(store)
-	message, err := repository.InsertOutbox(t.Context(), "default", integrationmodel.IntegrationOutboxMessage{WorkspaceID: "default", ConnectorKey: "webhook", Operation: "send", CreatedBy: "admin"})
+	message, err := repository.InsertOutbox(t.Context(), "workspace-primary", integrationmodel.IntegrationOutboxMessage{WorkspaceID: "workspace-primary", ConnectorKey: "webhook", Operation: "send", CreatedBy: "admin"})
 	if err != nil {
 		t.Fatalf("insert outbox: %v", err)
 	}
-	values, err := repository.ListOutbox(t.Context(), "default", "webhook", "queued", 10)
+	values, err := repository.ListOutbox(t.Context(), "workspace-primary", "webhook", "queued", 10)
 	if err != nil || len(values) != 1 || values[0].ID != message.ID {
 		t.Fatalf("list outbox=%#v err=%v", values, err)
 	}
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := repository.ListOutbox(cancelled, "default", "", "", 10); !errors.Is(err, context.Canceled) {
+	if _, err := repository.ListOutbox(cancelled, "workspace-primary", "", "", 10); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled list error=%v", err)
 	}
-	if _, err := repository.InsertInvocation(cancelled, "default", integrationmodel.IntegrationInvocation{WorkspaceID: "default", ConnectorKey: "never"}); !errors.Is(err, context.Canceled) {
+	if _, err := repository.InsertInvocation(cancelled, "workspace-primary", integrationmodel.IntegrationInvocation{WorkspaceID: "workspace-primary", ConnectorKey: "never"}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled insert error=%v", err)
 	}
 }

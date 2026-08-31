@@ -42,19 +42,19 @@ func TestUniquenessValidatorRejectsUniqueFieldAndComposite(t *testing.T) {
 	}
 	repository := &uniquenessRepositoryProbe{uniqueExists: true}
 	validator := NewRecordUniquenessValidator(repository)
-	err := validator.ValidateUnique(t.Context(), "default", object.Key, object, "", map[string]any{"email": "ada@example.com", "country": "CN"})
+	err := validator.ValidateUnique(t.Context(), "workspace-primary", object.Key, object, "", map[string]any{"email": "ada@example.com", "country": "CN"})
 	assertRecordAppError(t, err, apperror.KindBadRequest, "backend.unique.field", map[string]string{"field": "email"})
 
 	repository.uniqueExists = false
 	repository.page = recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "customer-2"}}}
-	err = validator.ValidateUnique(t.Context(), "default", object.Key, object, "customer-1", map[string]any{"email": "ada@example.com", "country": "CN"})
+	err = validator.ValidateUnique(t.Context(), "workspace-primary", object.Key, object, "customer-1", map[string]any{"email": "ada@example.com", "country": "CN"})
 	assertRecordAppError(t, err, apperror.KindBadRequest, "backend.unique.combination", map[string]string{"validation": "customer_country"})
 	if !reflect.DeepEqual(repository.lastFilters, map[string]any{"email": "ada@example.com", "country": "CN"}) {
 		t.Fatalf("composite filters = %#v", repository.lastFilters)
 	}
 
 	repository.page = recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "customer-1"}}}
-	if err := validator.ValidateUnique(t.Context(), "default", object.Key, object, "customer-1", map[string]any{"email": "ada@example.com", "country": "CN"}); err != nil {
+	if err := validator.ValidateUnique(t.Context(), "workspace-primary", object.Key, object, "customer-1", map[string]any{"email": "ada@example.com", "country": "CN"}); err != nil {
 		t.Fatalf("current record rejected by composite validation: %v", err)
 	}
 }
@@ -93,11 +93,11 @@ func TestUniquenessValidatorRejectsDuplicateIdentityAndSkipsDocumentVersion(t *t
 	repository := &uniquenessRepositoryProbe{uniqueExists: true}
 	validator := NewRecordUniquenessValidator(repository)
 	object := definitionmodel.ObjectSchema{Key: "contact", Fields: []definitionmodel.FieldSchema{{Key: "email"}}}
-	err := validator.ValidateDuplicateIdentity(t.Context(), "default", object, "", map[string]any{"email": "ada@example.com"})
+	err := validator.ValidateDuplicateIdentity(t.Context(), "workspace-primary", object, "", map[string]any{"email": "ada@example.com"})
 	assertRecordAppError(t, err, apperror.KindBadRequest, "backend.unique.duplicate_identity", map[string]string{"field": "email", "object": "contact"})
 
 	document := definitionmodel.ObjectSchema{Key: "document", Fields: []definitionmodel.FieldSchema{{Key: "name"}}}
-	if err := validator.ValidateDuplicateIdentity(t.Context(), "default", document, "", map[string]any{"name": "Policy", "previous_version_id": "doc-1"}); err != nil {
+	if err := validator.ValidateDuplicateIdentity(t.Context(), "workspace-primary", document, "", map[string]any{"name": "Policy", "previous_version_id": "doc-1"}); err != nil {
 		t.Fatalf("document version duplicate check was not skipped: %v", err)
 	}
 }
@@ -106,14 +106,14 @@ func TestUniquenessValidatorWrapsRepositoryErrors(t *testing.T) {
 	repository := &uniquenessRepositoryProbe{uniqueErr: errors.New("store unavailable")}
 	validator := NewRecordUniquenessValidator(repository)
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "email", Unique: true}}}
-	err := validator.ValidateUnique(t.Context(), "default", object.Key, object, "", map[string]any{"email": "ada@example.com"})
+	err := validator.ValidateUnique(t.Context(), "workspace-primary", object.Key, object, "", map[string]any{"email": "ada@example.com"})
 	assertRecordAppError(t, err, apperror.KindInternal, "backend.internal", map[string]string{"operation": "check unique field"})
 }
 
 func TestUniquenessValidatorUsesConstructorRepository(t *testing.T) {
 	validator := NewRecordUniquenessValidator(&uniquenessRepositoryProbe{})
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "email", Unique: true}}}
-	if err := validator.ValidateUnique(t.Context(), "default", object.Key, object, "", map[string]any{"email": "ada@example.com"}); err != nil {
+	if err := validator.ValidateUnique(t.Context(), "workspace-primary", object.Key, object, "", map[string]any{"email": "ada@example.com"}); err != nil {
 		t.Fatalf("constructor repository was not used: %v", err)
 	}
 }

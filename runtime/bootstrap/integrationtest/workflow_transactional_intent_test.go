@@ -40,18 +40,18 @@ func TestWorkflowPollingClaimsCommittedIntentWithoutWakeup(t *testing.T) {
 		ObjectKey: "pipeline_item", RecordID: "item_1", ActorID: "admin", MaxAttempts: 3,
 		Message: "workflow.message.queued", CreatedAt: now, UpdatedAt: now,
 	}
-	if err := workflowWorkerStore(store).InsertExecution(t.Context(), "default", intent); err != nil {
+	if err := workflowWorkerStore(store).InsertExecution(t.Context(), "workspace-primary", intent); err != nil {
 		t.Fatalf("insert intent: %v", err)
 	}
 
-	result, err := records.Applications().Workflows.ProcessDueWorkflowExecutions(t.Context(), 10, principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "system", WorkspaceID: "default"}})
+	result, err := records.Applications().Workflows.ProcessDueWorkflowExecutions(t.Context(), 10, principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "system", WorkspaceID: "workspace-primary"}})
 	if err != nil {
 		t.Fatalf("process intent: %v", err)
 	}
 	if result.Processed != 1 || len(result.Executions) != 1 {
 		t.Fatalf("expected one continued execution, got %#v", result)
 	}
-	persisted, ok, err := workflowWorkerStore(store).GetExecution(t.Context(), "default", intent.ID)
+	persisted, ok, err := workflowWorkerStore(store).GetExecution(t.Context(), "workspace-primary", intent.ID)
 	if err != nil || !ok {
 		t.Fatalf("get claimed intent: ok=%v err=%v", ok, err)
 	}

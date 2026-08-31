@@ -201,7 +201,7 @@ func (r *independentDeliveryRepository) InsertOutbox(_ context.Context, _ string
 func TestNotificationFallbackUsesDeterministicChildAndEvidenceChain(t *testing.T) {
 	repository := &independentDeliveryRepository{}
 	service := NewIntegrationApplicationService(ApplicationDependencies{DeliveryRepository: repository})
-	parent := integrationmodel.IntegrationOutboxMessage{ID: "primary-1", WorkspaceID: "default", Payload: map[string]any{
+	parent := integrationmodel.IntegrationOutboxMessage{ID: "primary-1", WorkspaceID: "workspace-primary", Payload: map[string]any{
 		"notification_fallback_hop":  0,
 		"notification_fallback_plan": []any{map[string]any{"connector_key": "email", "connection_key": "email-primary", "operation": "send_email", "payload": map[string]any{"to": []any{"user@example.com"}, "subject": "Fallback", "text": "Fallback body"}}},
 	}}

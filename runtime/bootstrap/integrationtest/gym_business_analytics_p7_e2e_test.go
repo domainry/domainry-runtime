@@ -99,7 +99,7 @@ func newGymAnalyticsP7Environment(t *testing.T) *gymAnalyticsP7Environment {
 		case "advisor":
 			userID = "advisor-1"
 		}
-		principals[role.Key] = accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: userID, WorkspaceID: "default"}}, role)
+		principals[role.Key] = accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: userID, WorkspaceID: "workspace-primary"}}, role)
 	}
 	service := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{
 		TemplateID: "gym-analytics-p7-fixture", TemplateVersion: "1", Name: "Gym Analytics P7 Fixture",
@@ -210,7 +210,7 @@ func (environment *gymAnalyticsP7Environment) seedAcceptanceFacts(t *testing.T) 
 		gymAnalyticsP7Fact("lead-5", "acquisition", "prospect-2", "trial", "2026-06-04T00:00:00Z", "advisor-2", "coupon", "0", "0", "", ""),
 	}
 	for _, fact := range facts {
-		if err := records.InsertRecord(t.Context(), "default", environment.object, fact); err != nil {
+		if err := records.InsertRecord(t.Context(), "workspace-primary", environment.object, fact); err != nil {
 			t.Fatalf("insert %s: %v", fact.ID, err)
 		}
 	}
@@ -395,7 +395,7 @@ func (environment *gymAnalyticsP7Environment) seedTargetVolume(t *testing.T, fac
 			}
 			owner := []string{"trainer-1", "trainer-2", "advisor-1", "advisor-2"}[index%4]
 			started := occurred.Add(-time.Duration(index%1800) * time.Second).Format(time.RFC3339)
-			if _, err := statement.ExecContext(t.Context(), "default", fmt.Sprintf("perf-%d-%d", metricIndex, index), occurred.Format(time.RFC3339), occurred.Format(time.RFC3339), metricType, fmt.Sprintf("entity-%d", index/3), event, occurred.Format(time.RFC3339), owner, []string{"cash", "online", "cardio", "private"}[index%4], fmt.Sprintf("%d.%02d", index%100+1, index%100), "0.500000", started, occurred.Format(time.RFC3339)); err != nil {
+			if _, err := statement.ExecContext(t.Context(), "workspace-primary", fmt.Sprintf("perf-%d-%d", metricIndex, index), occurred.Format(time.RFC3339), occurred.Format(time.RFC3339), metricType, fmt.Sprintf("entity-%d", index/3), event, occurred.Format(time.RFC3339), owner, []string{"cash", "online", "cardio", "private"}[index%4], fmt.Sprintf("%d.%02d", index%100+1, index%100), "0.500000", started, occurred.Format(time.RFC3339)); err != nil {
 				_ = tx.Rollback()
 				t.Fatalf("seed target volume: %v", err)
 			}

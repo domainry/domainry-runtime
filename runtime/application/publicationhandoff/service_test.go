@@ -76,7 +76,7 @@ func (*deliveryProbe) Query(context.Context, string) (integrationsdk.DeliveryRec
 func TestAcceptPersistsRuntimePublicationWithoutCallingOwner(t *testing.T) {
 	repository := &publicationRepositoryProbe{}
 	service := NewPublicationHandoffApplicationService(Dependencies{Repository: repository})
-	receipt, err := service.Accept(t.Context(), integrationsdk.DeliveryRequest{MessageID: "message-1", DeduplicationKey: "dedup-1", WorkspaceID: "default", ConnectorKey: "email", ConnectionKey: "primary", Operation: "send", Payload: json.RawMessage(`{"subject":"hello"}`)}, "scheduler")
+	receipt, err := service.Accept(t.Context(), integrationsdk.DeliveryRequest{MessageID: "message-1", DeduplicationKey: "dedup-1", WorkspaceID: "workspace-primary", ConnectorKey: "email", ConnectionKey: "primary", Operation: "send", Payload: json.RawMessage(`{"subject":"hello"}`)}, "scheduler")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,10 +100,10 @@ func TestDurableIntentValidationStopsAtRuntimeEnvelope(t *testing.T) {
 }
 
 func TestWorkerHandsStableIdentityToIntegrationOwner(t *testing.T) {
-	repository := &publicationWorkerProbe{publicationRepositoryProbe: publicationRepositoryProbe{inserted: integrationmodel.IntegrationOutboxMessage{ID: "message-1", DedupKey: "dedup-1", WorkspaceID: "default", ConnectorKey: "email", ConnectionKey: "primary", Operation: "send", Payload: map[string]any{"subject": "hello"}, Status: "queued"}}}
+	repository := &publicationWorkerProbe{publicationRepositoryProbe: publicationRepositoryProbe{inserted: integrationmodel.IntegrationOutboxMessage{ID: "message-1", DedupKey: "dedup-1", WorkspaceID: "workspace-primary", ConnectorKey: "email", ConnectionKey: "primary", Operation: "send", Payload: map[string]any{"subject": "hello"}, Status: "queued"}}}
 	delivery := &deliveryProbe{}
 	service := NewPublicationHandoffApplicationService(Dependencies{Repository: &repository.publicationRepositoryProbe, WorkerRepository: repository, Delivery: delivery})
-	if _, err := service.process(t.Context(), Locator{WorkspaceID: "default", MessageID: "message-1"}); err != nil {
+	if _, err := service.process(t.Context(), Locator{WorkspaceID: "workspace-primary", MessageID: "message-1"}); err != nil {
 		t.Fatal(err)
 	}
 	if delivery.request.MessageID != "message-1" || delivery.request.DeduplicationKey != "dedup-1" {

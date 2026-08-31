@@ -102,9 +102,9 @@ func TestWorkflowExecutionIdempotencyClaimDecisionMatrix(t *testing.T) {
 
 func TestWorkflowExecutionIdempotencyBypassFingerprintOwnerAndCompletion(t *testing.T) {
 	workflow := definitionmodel.WorkflowSchema{Key: "flow"}
-	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "", UserID: "user"}}
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary", UserID: "user"}}
 	audits := []string{}
-	worker := &workflowIdempotencyWorkerEdgeStub{workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}}, claim: workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionAcquired, Receipt: workflowmodel.WorkflowExecutionReceipt{ID: "receipt", WorkflowKey: "flow", WorkspaceID: "default", LeaseOwner: "owner", FencingToken: 2}}}
+	worker := &workflowIdempotencyWorkerEdgeStub{workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}}, claim: workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionAcquired, Receipt: workflowmodel.WorkflowExecutionReceipt{ID: "receipt", WorkflowKey: "flow", WorkspaceID: "workspace-primary", LeaseOwner: "owner", FencingToken: 2}}}
 	service := workflowIdempotencyService(worker, &audits)
 	if _, _, found, err := service.beginWorkflowExecution(t.Context(), workflow, nil, principal, "manual", "", 0, false); err != nil || found {
 		t.Fatalf("empty key found=%v err=%v", found, err)
@@ -119,7 +119,7 @@ func TestWorkflowExecutionIdempotencyBypassFingerprintOwnerAndCompletion(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(worker.claimRequests) != 1 || worker.claimRequests[0].LeaseOwner == "" || worker.claimRequests[0].Receipt.WorkspaceID != "default" {
+	if len(worker.claimRequests) != 1 || worker.claimRequests[0].LeaseOwner == "" || worker.claimRequests[0].Receipt.WorkspaceID != "workspace-primary" {
 		t.Fatalf("claim request=%+v", worker.claimRequests)
 	}
 	if err := service.completeWorkflowExecutionReceipt(t.Context(), workflowmodel.WorkflowExecutionClaimResult{}, workflowmodel.WorkflowExecution{}, principal); err != nil {
@@ -143,7 +143,7 @@ func TestWorkflowExecutionIdempotencyBypassFingerprintOwnerAndCompletion(t *test
 	service.auditMetadata = nil
 	service.auditWorkflowIdempotency(t.Context(), "flow", principal, claim, "replayed")
 	service.auditWorkflowIdempotency(t.Context(), "flow", principal, workflowmodel.WorkflowExecutionClaimResult{}, "replayed")
-	if workflowWorkspaceID(" workspace ") != "workspace" || workflowWorkspaceID(" ") != "default" {
+	if workflowWorkspaceID(" workspace ") != "workspace" || workflowWorkspaceID(" ") != "" {
 		t.Fatal("workspace normalization mismatch")
 	}
 }

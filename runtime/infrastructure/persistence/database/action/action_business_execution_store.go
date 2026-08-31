@@ -392,10 +392,7 @@ func businessActionShortHash(value string) string {
 }
 
 func integrationWorkspaceID(value string) string {
-	if value = strings.TrimSpace(value); value != "" {
-		return value
-	}
-	return "default"
+	return strings.TrimSpace(value)
 }
 
 func nonNilMap(value map[string]any) map[string]any {

@@ -20,7 +20,7 @@ import (
 )
 
 func TestReportAccessScopeHashCanonicalizesSetOrderingWithoutWeakeningFacts(t *testing.T) {
-	left := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default", UserID: "demo-user", AuthorizationRevision: "revision-1",
+	left := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary", UserID: "demo-user", AuthorizationRevision: "revision-1",
 		ReportingUserIDs: []string{"user-b", "user-a"}, OrganizationScopes: identitysdk.OrganizationScopes{StoreIDs: []string{"store-b", "store-a"}}},
 
 		BusinessProfiles: []profilebindingmodel.Reference{

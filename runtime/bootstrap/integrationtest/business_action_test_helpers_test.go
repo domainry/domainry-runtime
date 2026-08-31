@@ -153,7 +153,7 @@ func workflowDefinitionStore(store *persistence.RuntimeStore) workflowpersistenc
 
 func listWorkflowProcesses(t *testing.T, store *persistence.RuntimeStore, status, objectKey, recordID string, limit int) ([]workflowmodel.WorkflowProcessInstance, error) {
 	t.Helper()
-	return workflowProcessStore(store).ListProcesses(t.Context(), "default", workflowmodel.WorkflowProcessFilter{Status: status, ObjectKey: objectKey, RecordID: recordID, Limit: limit})
+	return workflowProcessStore(store).ListProcesses(t.Context(), "workspace-primary", workflowmodel.WorkflowProcessFilter{Status: status, ObjectKey: objectKey, RecordID: recordID, Limit: limit})
 }
 
 func mustUpsertIdentityUser(t *testing.T, directory *integrationTestIdentityDirectory, user identitysdk.User) {

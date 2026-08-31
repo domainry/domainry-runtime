@@ -6,6 +6,7 @@ import (
 	"errors"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -70,31 +71,31 @@ func TestWorkspaceProvisioningIsAtomicAndIdempotent(t *testing.T) {
 		return nil
 	})}
 	request := workspaceprovisionmodel.Request{RequestID: "request-failed", TenantCode: "North_Store", TenantName: "North Store", AdminLoginID: "OWNER@NORTH.EXAMPLE", AdminName: "Owner", StoreConfiguration: map[string]any{"currency": "CNY"}}
-	if _, err := failed.Provision(t.Context(), request); !errors.Is(err, failure) {
+	if _, err := failed.Initialize(t.Context(), request, "BootstrapAdmin1!"); !errors.Is(err, failure) {
 		t.Fatalf("failure=%v", err)
 	}
-	for _, table := range []string{"_workspaces", "_tenant_registry", "_workspace_configuration", "_workspace_provisioning_receipts", "identity_provision_probe"} {
+	for _, table := range []string{"_workspaces", "_tenant_registry", "_tenant_installation", "_workspace_configuration", "_workspace_provisioning_receipts", "identity_provision_probe"} {
 		assertWorkspaceProvisionRowCount(t, store, table, 0)
 	}
 
 	repository := &WorkspaceProvisionStore{runtime: store, identity: identityParticipantProbe{}}
 	request.RequestID = "request-success"
-	result, err := repository.Provision(t.Context(), request)
+	result, err := repository.Initialize(t.Context(), request, "BootstrapAdmin1!")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if result.CanonicalCode != "north-store" || result.InitialPassword != "OneTime1!" || result.Replayed || !result.MustChangePassword {
 		t.Fatalf("unexpected result: %#v", result)
 	}
-	for _, table := range []string{"_workspaces", "_tenant_registry", "_workspace_configuration", "_workspace_provisioning_receipts", "identity_provision_probe"} {
+	for _, table := range []string{"_workspaces", "_tenant_registry", "_tenant_installation", "_workspace_configuration", "_workspace_provisioning_receipts", "identity_provision_probe"} {
 		assertWorkspaceProvisionRowCount(t, store, table, 1)
 	}
-	replay, err := repository.Provision(t.Context(), request)
+	replay, err := repository.Initialize(t.Context(), request, "BootstrapAdmin1!")
 	if err != nil || !replay.Replayed || replay.WorkspaceID != result.WorkspaceID || replay.InitialPassword != result.InitialPassword {
 		t.Fatalf("replay=%#v err=%v", replay, err)
 	}
 	request.TenantName = "Different"
-	if _, err := repository.Provision(t.Context(), request); !errors.Is(err, workspaceprovisionmodel.ErrIdempotencyConflict) {
+	if _, err := repository.Initialize(t.Context(), request, "BootstrapAdmin1!"); !errors.Is(err, workspaceprovisionmodel.ErrIdempotencyConflict) {
 		t.Fatalf("conflict=%v", err)
 	}
 	reconciled, err := repository.ReconcileWorkspaceRoles(t.Context(), result.WorkspaceID)
@@ -103,10 +104,35 @@ func TestWorkspaceProvisioningIsAtomicAndIdempotent(t *testing.T) {
 	}
 }
 
+func TestTenantInitializationRejectsLegacyWorkspacesWithoutInstallationMarker(t *testing.T) {
+	store, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "legacy-workspace.db"), IntegrationSecretKey: "workspace-provisioning-test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.CloseContext(t.Context()) })
+	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO "_workspaces" ("id", "canonical_code", "name", "status", "created_at", "updated_at") VALUES ('workspace-legacy', 'legacy', 'Legacy', 'active', 'now', 'now')`); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, found, err := LoadInstallation(t.Context(), store); err == nil || found || !strings.Contains(err.Error(), "explicit migration is required") {
+		t.Fatalf("legacy installation found=%v error=%v", found, err)
+	}
+	request := workspaceprovisionmodel.Request{RequestID: "request-initial", TenantCode: "primary", TenantName: "Primary", AdminLoginID: "owner@example.test", AdminName: "Owner", StoreConfiguration: map[string]any{}}
+	if _, err := (&WorkspaceProvisionStore{runtime: store, identity: identityParticipantProbe{}}).Initialize(t.Context(), request, "BootstrapAdmin1!"); err == nil || !strings.Contains(err.Error(), "explicit migration is required") {
+		t.Fatalf("initialization error=%v", err)
+	}
+	assertWorkspaceProvisionRowCount(t, store, "_workspaces", 1)
+	assertWorkspaceProvisionRowCount(t, store, "_tenant_installation", 0)
+}
+
 func TestProvisionAcceptanceFailurePointsRollbackEveryBoundaryAndAllowCleanRetry(t *testing.T) {
 	points := []string{
 		FailureAfterWorkspace,
 		FailureAfterTenantRegistry,
+		FailureAfterInstallation,
 		FailureAfterIdentityUser,
 		FailureAfterIdentityRole,
 		FailureAfterRoleAssignment,
@@ -149,7 +175,7 @@ func TestProvisionAcceptanceFailurePointsRollbackEveryBoundaryAndAllowCleanRetry
 			}
 			request := workspaceprovisionmodel.Request{RequestID: "acceptance-failure", TenantCode: "acceptance-store", TenantName: "Acceptance Store", AdminLoginID: "owner@example.test", AdminName: "Owner", StoreConfiguration: map[string]any{"currency": "CNY"}}
 			failedRepository := &WorkspaceProvisionStore{runtime: store, identity: identityParticipantProbe{}, manifest: manifest, failures: NewAcceptanceFailureInjector(point)}
-			failedResult, err := failedRepository.Provision(t.Context(), request)
+			failedResult, err := failedRepository.Initialize(t.Context(), request, "BootstrapAdmin1!")
 			if !errors.Is(err, workspaceprovisionmodel.ErrAcceptanceFailure) || !reflect.DeepEqual(failedResult, workspaceprovisionmodel.Result{}) {
 				t.Fatalf("result=%#v error=%v", failedResult, err)
 			}
@@ -159,16 +185,16 @@ func TestProvisionAcceptanceFailurePointsRollbackEveryBoundaryAndAllowCleanRetry
 			if _, leaked := failedRepository.issued.Load(request.RequestID); leaked {
 				t.Fatal("failed transaction retained its one-time credential")
 			}
-			for _, table := range []string{"_workspaces", "_tenant_registry", "_workspace_configuration", "_workspace_provisioning_receipts", "identity_provision_probe", "tenant", "store_config"} {
+			for _, table := range []string{"_workspaces", "_tenant_registry", "_tenant_installation", "_workspace_configuration", "_workspace_provisioning_receipts", "identity_provision_probe", "tenant", "store_config"} {
 				assertWorkspaceProvisionRowCount(t, store, table, 0)
 			}
 
 			retryRepository := &WorkspaceProvisionStore{runtime: store, identity: identityParticipantProbe{}, manifest: manifest}
-			retried, err := retryRepository.Provision(t.Context(), request)
+			retried, err := retryRepository.Initialize(t.Context(), request, "BootstrapAdmin1!")
 			if err != nil || retried.WorkspaceID == "" || retried.TenantRegistryID == "" || retried.InitialPassword == "" || retried.Replayed || len(retried.ProjectionIDs) != 2 {
 				t.Fatalf("clean retry result=%#v error=%v", retried, err)
 			}
-			for _, table := range []string{"_workspaces", "_tenant_registry", "_workspace_configuration", "_workspace_provisioning_receipts", "identity_provision_probe", "tenant", "store_config"} {
+			for _, table := range []string{"_workspaces", "_tenant_registry", "_tenant_installation", "_workspace_configuration", "_workspace_provisioning_receipts", "identity_provision_probe", "tenant", "store_config"} {
 				assertWorkspaceProvisionRowCount(t, store, table, 1)
 			}
 		})
@@ -202,7 +228,7 @@ func TestProvisionReceiptRestoresExactProjectionIDsAfterDatabaseReopenAndManifes
 		WorkspaceProvisioning: []manifestmodel.WorkspaceProvisionProjection{{Key: "tenant", ObjectKey: "tenant", Scope: "headquarters", Data: map[string]any{"name": "$provision.tenant_name"}}},
 	}
 	request := workspaceprovisionmodel.Request{RequestID: "persistent-receipt", TenantCode: "persistent-store", TenantName: "Persistent Store", AdminLoginID: "owner@example.test", AdminName: "Owner", StoreConfiguration: map[string]any{}}
-	created, err := (&WorkspaceProvisionStore{runtime: store, identity: identityParticipantProbe{}, manifest: manifest}).Provision(t.Context(), request)
+	created, err := (&WorkspaceProvisionStore{runtime: store, identity: identityParticipantProbe{}, manifest: manifest}).Initialize(t.Context(), request, "BootstrapAdmin1!")
 	if err != nil || len(created.ProjectionIDs) != 1 {
 		_ = store.CloseContext(t.Context())
 		t.Fatalf("created=%#v error=%v", created, err)
@@ -221,7 +247,7 @@ func TestProvisionReceiptRestoresExactProjectionIDsAfterDatabaseReopenAndManifes
 	}
 	evolved := manifest
 	evolved.WorkspaceProvisioning = append(evolved.WorkspaceProvisioning, manifestmodel.WorkspaceProvisionProjection{Key: "workspace_config", ObjectKey: "store_config", Scope: "provisioned_workspace", Data: map[string]any{"name": "$provision.tenant_name"}})
-	replay, err := (&WorkspaceProvisionStore{runtime: reopened, identity: identityParticipantProbe{}, manifest: evolved}).Provision(t.Context(), request)
+	replay, err := (&WorkspaceProvisionStore{runtime: reopened, identity: identityParticipantProbe{}, manifest: evolved}).Initialize(t.Context(), request, "BootstrapAdmin1!")
 	if err != nil || !replay.Replayed || replay.InitialPassword != "" || !reflect.DeepEqual(replay.ProjectionIDs, created.ProjectionIDs) {
 		t.Fatalf("replay=%#v created=%#v error=%v", replay, created, err)
 	}

@@ -68,10 +68,10 @@ func TestIntegrationWebhookMatchAndIdentifierHelpers(t *testing.T) {
 	if _, err := requireIntegrationWorkspaceID(""); err == nil {
 		t.Fatal("empty workspace accepted")
 	}
-	if _, err := requireIntegrationMutationWorkspaceID("default", "other"); err == nil {
+	if _, err := requireIntegrationMutationWorkspaceID("workspace-primary", "other"); err == nil {
 		t.Fatal("workspace mismatch accepted")
 	}
-	if value, err := requireIntegrationMutationWorkspaceID("default", " "); err != nil || value != "default" {
+	if value, err := requireIntegrationMutationWorkspaceID("workspace-primary", " "); err != nil || value != "workspace-primary" {
 		t.Fatalf("workspace=%q err=%v", value, err)
 	}
 }

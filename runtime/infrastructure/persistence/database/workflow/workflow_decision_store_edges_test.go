@@ -22,7 +22,7 @@ func workflowDecisionEdgeTask(task workflowmodel.WorkflowTask) workflowmodel.Wor
 
 func workflowDecisionEdgeCommit(task workflowmodel.WorkflowTask) transactionmodel.WorkflowDecisionCommit {
 	return transactionmodel.WorkflowDecisionCommit{
-		WorkspaceID: "default", DecidedTask: workflowDecisionEdgeTask(task), ExpectedTaskStatus: "open", ExpectedAssigneeID: "manager",
+		WorkspaceID: "workspace-primary", DecidedTask: workflowDecisionEdgeTask(task), ExpectedTaskStatus: "open", ExpectedAssigneeID: "manager",
 	}
 }
 
@@ -45,7 +45,7 @@ func TestWorkflowDecisionRejectsWorkspaceBeginAndDecisionFailures(t *testing.T) 
 	if committed, err := decisionStore.CommitWorkflowDecision(t.Context(), workflowDecisionEdgeCommit(task)); err == nil || committed {
 		t.Fatalf("closed decision committed=%v error=%v", committed, err)
 	}
-	if err := decisionStore.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "default"}); err == nil {
+	if err := decisionStore.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "workspace-primary"}); err == nil {
 		t.Fatal("closed state transaction began")
 	}
 }
@@ -81,7 +81,7 @@ func TestWorkflowDecisionRollsBackEachTransactionalWriteFailure(t *testing.T) {
 		}},
 		{name: "insert event", configure: func(t *testing.T, fixture *workflowDecisionEdgeFixture, commit *transactionmodel.WorkflowDecisionCommit) {
 			event := workflowmodel.WorkflowProcessEvent{ID: "duplicate-event", ProcessID: fixture.process.ID, Event: "decided", CreatedAt: "v2"}
-			if err := NewWorkflowProcessStore(fixture.store).InsertEvent(t.Context(), "default", event); err != nil {
+			if err := NewWorkflowProcessStore(fixture.store).InsertEvent(t.Context(), "workspace-primary", event); err != nil {
 				t.Fatal(err)
 			}
 			commit.Events = []workflowmodel.WorkflowProcessEvent{event}
@@ -91,7 +91,7 @@ func TestWorkflowDecisionRollsBackEachTransactionalWriteFailure(t *testing.T) {
 		}},
 		{name: "insert execution duplicate", configure: func(t *testing.T, fixture *workflowDecisionEdgeFixture, commit *transactionmodel.WorkflowDecisionCommit) {
 			execution := workflowWorkerEdgeExecution("execution-duplicate")
-			if err := NewWorkflowWorkerStore(fixture.store).InsertExecution(t.Context(), "default", execution); err != nil {
+			if err := NewWorkflowWorkerStore(fixture.store).InsertExecution(t.Context(), "workspace-primary", execution); err != nil {
 				t.Fatal(err)
 			}
 			commit.InsertExecutions = []workflowmodel.WorkflowExecution{execution}
@@ -116,7 +116,7 @@ func TestWorkflowDecisionRollsBackEachTransactionalWriteFailure(t *testing.T) {
 				t.Fatalf("committed=%v error=%v", committed, err)
 			}
 			var status string
-			if err := fixture.store.DB().QueryRowContext(t.Context(), `SELECT status FROM _workflow_tasks WHERE workspace_id = ? AND id = ?`, "default", fixture.task.ID).Scan(&status); err != nil || status != "open" {
+			if err := fixture.store.DB().QueryRowContext(t.Context(), `SELECT status FROM _workflow_tasks WHERE workspace_id = ? AND id = ?`, "workspace-primary", fixture.task.ID).Scan(&status); err != nil || status != "open" {
 				t.Fatalf("rolled back task status=%q error=%v", status, err)
 			}
 		})
@@ -160,7 +160,7 @@ func TestWorkflowStateRollsBackEachTransactionalWriteFailure(t *testing.T) {
 		}},
 		{name: "insert event", configure: func(t *testing.T, fixture *workflowDecisionEdgeFixture, commit *transactionmodel.WorkflowStateCommit) {
 			event := workflowmodel.WorkflowProcessEvent{ID: "duplicate-state-event", ProcessID: fixture.process.ID, Event: "state", CreatedAt: "v2"}
-			if err := NewWorkflowProcessStore(fixture.store).InsertEvent(t.Context(), "default", event); err != nil {
+			if err := NewWorkflowProcessStore(fixture.store).InsertEvent(t.Context(), "workspace-primary", event); err != nil {
 				t.Fatal(err)
 			}
 			commit.Events = []workflowmodel.WorkflowProcessEvent{event}
@@ -178,7 +178,7 @@ func TestWorkflowStateRollsBackEachTransactionalWriteFailure(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			fixture := newWorkflowDecisionEdgeFixture(t)
-			commit := transactionmodel.WorkflowStateCommit{WorkspaceID: "default"}
+			commit := transactionmodel.WorkflowStateCommit{WorkspaceID: "workspace-primary"}
 			test.configure(t, fixture, &commit)
 			if err := newAgentWorkflowDecisionStore(fixture.store).CommitWorkflowState(t.Context(), commit); err == nil {
 				t.Fatal("state failure committed")
@@ -210,11 +210,11 @@ func TestWorkflowDecisionCommitsAllOptionalWorkflowWrites(t *testing.T) {
 	secondTask := fixture.task
 	secondTask.ID = "task-second"
 	secondTask.Sequence = 2
-	if err := processStore.InsertTask(t.Context(), "default", secondTask); err != nil {
+	if err := processStore.InsertTask(t.Context(), "workspace-primary", secondTask); err != nil {
 		t.Fatal(err)
 	}
 	existingExecution := workflowWorkerEdgeExecution("execution-existing")
-	if err := NewWorkflowWorkerStore(fixture.store).InsertExecution(t.Context(), "default", existingExecution); err != nil {
+	if err := NewWorkflowWorkerStore(fixture.store).InsertExecution(t.Context(), "workspace-primary", existingExecution); err != nil {
 		t.Fatal(err)
 	}
 
@@ -252,7 +252,7 @@ func TestWorkflowDecisionCommitsAllOptionalWorkflowWrites(t *testing.T) {
 		t.Fatalf("committed=%v error=%v", committed, err)
 	}
 
-	if err := newAgentWorkflowDecisionStore(fixture.store).CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "default"}); err != nil {
+	if err := newAgentWorkflowDecisionStore(fixture.store).CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "workspace-primary"}); err != nil {
 		t.Fatalf("empty state commit=%v", err)
 	}
 }

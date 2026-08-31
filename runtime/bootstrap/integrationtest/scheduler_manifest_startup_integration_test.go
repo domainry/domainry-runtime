@@ -148,7 +148,7 @@ func schedulerOperatorRequest(t *testing.T, handler http.Handler, method, path, 
 	t.Helper()
 	req := httptest.NewRequest(method, path, bytes.NewReader(nil))
 	req.Header.Set("Authorization", "Bearer "+integrationIdentityAccessTokenFor("scheduler-operator", "scheduler_operator"))
-	req.Header.Set("X-Workspace-ID", "default")
+	req.Header.Set("X-Workspace-ID", "workspace-primary")
 	req.Header.Set("X-Domainry-Product-Surface", "admin_console")
 	req.Header.Set("X-Operation-Reason", "scheduler contract integration verification")
 	if idempotencyKey != "" {

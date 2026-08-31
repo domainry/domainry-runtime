@@ -86,15 +86,43 @@ func (a *Runtime) close(ctx context.Context) error {
 		cancel()
 		a.partyBinding = nil
 	}
+	var integrationErr error
+	if a.integrationBinding != nil {
+		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), a.cfg.HTTPShutdownTimeout)
+		integrationErr = a.integrationBinding.Close(closeCtx)
+		cancel()
+		a.integrationBinding = nil
+	}
+	var auditErr error
+	if a.auditBinding != nil {
+		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), a.cfg.HTTPShutdownTimeout)
+		auditErr = a.auditBinding.Close(closeCtx)
+		cancel()
+		a.auditBinding = nil
+	}
+	var metadataErr error
+	if a.metadataBinding != nil {
+		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), a.cfg.HTTPShutdownTimeout)
+		metadataErr = a.metadataBinding.Close(closeCtx)
+		cancel()
+		a.metadataBinding = nil
+	}
+	var reportErr error
+	if a.reportBinding != nil {
+		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), a.cfg.HTTPShutdownTimeout)
+		reportErr = a.reportBinding.Close(closeCtx)
+		cancel()
+		a.reportBinding = nil
+	}
 	var rateLimiterErr error
 	if closer, ok := a.rateLimiter.(interface{ Close() error }); ok {
 		rateLimiterErr = closer.Close()
 		a.rateLimiter = nil
 	}
 	if a.borrowedStore {
-		return errors.Join(releaseErr, notificationErr, monitoringErr, schedulerErr, dataExchangeErr, agentErr, lifecycleErr, partyErr, rateLimiterErr)
+		return errors.Join(releaseErr, notificationErr, monitoringErr, schedulerErr, dataExchangeErr, agentErr, lifecycleErr, partyErr, integrationErr, auditErr, metadataErr, reportErr, rateLimiterErr)
 	}
-	return errors.Join(releaseErr, notificationErr, monitoringErr, schedulerErr, dataExchangeErr, agentErr, lifecycleErr, partyErr, rateLimiterErr, a.store.Close())
+	return errors.Join(releaseErr, notificationErr, monitoringErr, schedulerErr, dataExchangeErr, agentErr, lifecycleErr, partyErr, integrationErr, auditErr, metadataErr, reportErr, rateLimiterErr, a.store.Close())
 }
 
 func (a *Runtime) startTrackedWorker(parent context.Context, start func(context.Context) <-chan struct{}) {

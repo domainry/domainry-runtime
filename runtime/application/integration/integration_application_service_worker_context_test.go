@@ -23,11 +23,11 @@ type cancellingIntegrationWorkerRepository struct {
 }
 
 func (r *cancellingIntegrationWorkerRepository) ListDueOutbox(context.Context, principalmodel.SystemScope, int, string) ([]integrationmodel.IntegrationOutboxMessage, error) {
-	return []integrationmodel.IntegrationOutboxMessage{{ID: "message_1", WorkspaceID: "default", ConnectorKey: "cancel_sender", Status: "queued"}}, nil
+	return []integrationmodel.IntegrationOutboxMessage{{ID: "message_1", WorkspaceID: "workspace-primary", ConnectorKey: "cancel_sender", Status: "queued"}}, nil
 }
 
 func (r *cancellingIntegrationWorkerRepository) ClaimOutbox(_ context.Context, _, _, _, _ string) (integrationmodel.IntegrationOutboxMessage, bool, error) {
-	return integrationmodel.IntegrationOutboxMessage{ID: "message_1", WorkspaceID: "default", ConnectorKey: "cancel_sender", Status: "sending"}, true, nil
+	return integrationmodel.IntegrationOutboxMessage{ID: "message_1", WorkspaceID: "workspace-primary", ConnectorKey: "cancel_sender", Status: "sending"}, true, nil
 }
 func (r *cancellingIntegrationWorkerRepository) UpdateOutboxStatus(ctx context.Context, workspaceID, messageID, owner string, token int64, status, responseRef, errorText, ackDeadlineAt, now string) (integrationmodel.IntegrationOutboxMessage, error) {
 	r.updates++
@@ -52,7 +52,7 @@ func TestIntegrationOutboxCancellationReleasesClaimWithoutRecordingFailureOrRetr
 	service := NewIntegrationApplicationService(ApplicationDependencies{WorkerRepository: repository, Registry: NewConnectorRegistry(integrationmodel.IntegrationSchema{})})
 	ctx, cancel := context.WithCancel(context.Background())
 	service.RegisterIntegrationOutboxSender("cancel_sender", cancellingOutboxSender{cancel: cancel})
-	result, err := service.ProcessDueIntegrationOutbox(ctx, 1, integrationruntime.IntegrationWorkerPrincipal("default"))
+	result, err := service.ProcessDueIntegrationOutbox(ctx, 1, integrationruntime.IntegrationWorkerPrincipal("workspace-primary"))
 	if err != nil {
 		t.Fatalf("cancelled send error=%v", err)
 	}

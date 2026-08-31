@@ -58,12 +58,12 @@ func TestRuntimeBusinessProfileProjectionUsesActiveManifestWithoutRuntimeOwnedBi
 	if err := metadata.SyncManifest(t.Context(), principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "test Gym profile storage"), manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{member}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO member (workspace_id,id,created_at,updated_at,identity_user_id,risk,store_id) VALUES ('default','member_1787940383392750000','now','now','wechat-user','stable','store_seed')`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO member (workspace_id,id,created_at,updated_at,identity_user_id,risk,store_id) VALUES ('workspace-primary','member_1787940383392750000','now','now','wechat-user','stable','store_seed')`); err != nil {
 		t.Fatal(err)
 	}
 	projection := newRuntimeBusinessProfileProjection(store)
 	projection.Publish([]definitionmodel.ObjectSchema{member}, []profilebindingmodel.Binding{extension})
-	profiles, err := projection.Resolve(t.Context(), "default", "wechat-user")
+	profiles, err := projection.Resolve(t.Context(), "workspace-primary", "wechat-user")
 	if err != nil {
 		t.Fatal(err)
 	}

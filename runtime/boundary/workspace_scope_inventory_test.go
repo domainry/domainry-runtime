@@ -18,14 +18,10 @@ var workspaceFallbackLine = regexp.MustCompile(`(?i)workspace[^\n]{0,80}(==|!=)[
 var reviewedWorkspaceFallbackBaseline = map[string]int{
 	"runtime/application/seed/business/records.go":                                           1,
 	"runtime/application/seed/globalcapability/runtime.go":                                   1,
-	"runtime/application/automation/automation_definition_validation_application_service.go": 1,
-	"runtime/application/integration/integration_application_delivery_management.go":         2,
 	"runtime/application/integration/integration_application_execution_evidence.go":          1,
 	"runtime/application/integration/integration_application_failure_alerts.go":              3,
 	"runtime/application/integration/integration_application_inbound_webhooks.go":            2,
 	"runtime/application/appschema/appschema_localized_text_coverage_application_service.go": 1,
-	"runtime/application/workflow/workflow_execution_idempotency_application_service.go":     1,
-	"runtime/infrastructure/persistence/database/action/action_business_execution_store.go":  1,
 	"runtime/infrastructure/persistence/database/automation/sql_values.go":                   1,
 	"runtime/infrastructure/persistence/database/deployment/runtime_status_store.go":         3,
 	"runtime/infrastructure/persistence/database/integration/integration_worker_scope.go":    1,
@@ -128,6 +124,13 @@ func TestWorkspaceFallbackInventoryIsAnExactNonGrowingBaseline(t *testing.T) {
 				// This migration inspector names and reports legacy default values;
 				// it never substitutes one workspace for another.
 				if filepath.ToSlash(relative) == "runtime/infrastructure/persistence/database/workspace_scope_migration.go" {
+					continue
+				}
+				// Tenant initialization rejects the historical reserved value; these
+				// guards do not infer or substitute a workspace.
+				if (filepath.ToSlash(relative) == "runtime/infrastructure/persistence/database/workspaceprovision/runtime_installation.go" ||
+					filepath.ToSlash(relative) == "runtime/infrastructure/persistence/database/workspaceprovision/workspace_provision_store.go") &&
+					strings.Contains(line, `EqualFold`) && strings.Contains(line, `"default"`) {
 					continue
 				}
 				// The legacy Audit upgrade assigns pre-workspace rows to the historical

@@ -37,7 +37,7 @@ func TestApplicationDefinitionCompositionReusesOwnerValidationForSystemDraftCand
 	application, admin := newMetadataCompositionApp(t, "definition-validation", []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}, {Key: "order", Name: "Order"}}, nil)
 	defer application.CloseContext(t.Context())
 	metadata := application.records.Applications().ApplicationSchema
-	definitionsBeforePreview, err := metadata.ListApplicationDefinitions(t.Context(), "field", "default", admin)
+	definitionsBeforePreview, err := metadata.ListApplicationDefinitions(t.Context(), "field", "workspace-primary", admin)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestApplicationDefinitionCompositionReusesOwnerValidationForSystemDraftCand
 	if err != nil || result.Valid || result.Errors[0].FieldPath != "config.cardinality" {
 		t.Fatalf("field result=%#v err=%v", result, err)
 	}
-	definitions, err := metadata.ListApplicationDefinitions(t.Context(), "field", "default", admin)
+	definitions, err := metadata.ListApplicationDefinitions(t.Context(), "field", "workspace-primary", admin)
 	if err != nil || !metadataDefinitionsEqual(definitions, definitionsBeforePreview) {
 		t.Fatalf("preview changed persisted definitions: before=%#v after=%#v err=%v", definitionsBeforePreview, definitions, err)
 	}
@@ -138,7 +138,7 @@ func newMetadataCompositionAppWithManifest(t *testing.T, name string, objects []
 	handlers.Freeze()
 	connectors := connector.NewRegistry()
 	connectors.Freeze()
-	application := NewProjectWithIdentity(t.Context(), config.Config{AppLocale: "en-US", DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), name+".db"), ManifestPath: manifestPath, UploadDir: filepath.Join(t.TempDir(), "uploads")}, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+	application := NewProjectWithIdentity(t.Context(), config.Config{AppLocale: "en-US", IdentityWorkspaceID: "workspace-primary", IdentityAudience: "domainry-runtime", NotificationTenantID: "tenant-primary", NotificationWorkspaceID: "workspace-primary", NotificationApplicationKey: "domainry-runtime", PartyTenantID: "tenant-primary", PartyWorkspaceID: "workspace-primary", PartyApplicationKey: "domainry-runtime", DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), name+".db"), ManifestPath: manifestPath, UploadDir: filepath.Join(t.TempDir(), "uploads")}, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
 	adminRole := roles[0]
 	for _, role := range roles {
 		if role.Key == "admin" {
@@ -146,7 +146,7 @@ func newMetadataCompositionAppWithManifest(t *testing.T, name string, objects []
 			break
 		}
 	}
-	return application, accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, adminRole)
+	return application, accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, adminRole)
 }
 
 func metadataDefinitionsEqual(left, right []appschemamodel.ApplicationDefinition) bool {

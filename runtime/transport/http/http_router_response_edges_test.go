@@ -59,8 +59,8 @@ func TestPrincipalContextIgnoresUntrustedScopeHeadersAndUsesRequestSources(t *te
 		t.Fatal("workspace path fallback failed")
 	}
 	empty := httptest.NewRequest(http.MethodGet, "/", nil)
-	if workspaceIDFromRequest(empty) != "default" || explicitWorkspaceIDFromRequest(empty) != "" {
-		t.Fatal("default workspace projection failed")
+	if workspaceIDFromRequest(empty) != "workspace-primary" || explicitWorkspaceIDFromRequest(empty) != "" {
+		t.Fatal("request did not use the initialized installation workspace")
 	}
 	if authenticatedWorkspaceMatchesRequest(principalmodel.Principal{}, empty) || !authenticatedWorkspaceMatchesRequest(principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-1"}}, empty) {
 		t.Fatal("workspace authentication default mismatch")
@@ -123,7 +123,7 @@ func TestCloneAndAuditPrincipalContext(t *testing.T) {
 	request = httptest.NewRequest(http.MethodGet, "/", nil)
 	request.Header.Set("X-User-ID", "anonymous-user")
 	principal = router.auditPrincipalFromRequest(request)
-	if principal.Known || principal.UserID != "anonymous-user" || principal.WorkspaceID != "default" || principal.RequestID == "" {
+	if principal.Known || principal.UserID != "anonymous-user" || principal.WorkspaceID != "workspace-primary" || principal.RequestID == "" {
 		t.Fatalf("anonymous audit principal=%+v", principal)
 	}
 }

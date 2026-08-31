@@ -22,23 +22,23 @@ func TestAutomationExecutionStoreContractAndCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 	repository := NewAutomationExecutionStore(store)
-	value, err := repository.InsertExecution(t.Context(), "default", automationmodel.AutomationRuleExecution{WorkspaceID: "default", RuleKey: "notify", ObjectKey: "customer", RecordID: "c-1", Phase: "after", Operation: "update", Status: "succeeded", Trace: map[string]any{"connector_key": "webhook"}})
+	value, err := repository.InsertExecution(t.Context(), "workspace-primary", automationmodel.AutomationRuleExecution{WorkspaceID: "workspace-primary", RuleKey: "notify", ObjectKey: "customer", RecordID: "c-1", Phase: "after", Operation: "update", Status: "succeeded", Trace: map[string]any{"connector_key": "webhook"}})
 	if err != nil {
 		t.Fatalf("insert execution: %v", err)
 	}
-	values, err := repository.ListExecutions(t.Context(), "default", automationmodel.AutomationExecutionFilter{RuleKey: "notify", ConnectorKey: "webhook", Limit: 10})
+	values, err := repository.ListExecutions(t.Context(), "workspace-primary", automationmodel.AutomationExecutionFilter{RuleKey: "notify", ConnectorKey: "webhook", Limit: 10})
 	if err != nil || len(values) != 1 || values[0].ID != value.ID {
 		t.Fatalf("list executions=%#v err=%v", values, err)
 	}
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := repository.ListExecutions(cancelled, "default", automationmodel.AutomationExecutionFilter{}); !errors.Is(err, context.Canceled) {
+	if _, err := repository.ListExecutions(cancelled, "workspace-primary", automationmodel.AutomationExecutionFilter{}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled list error=%v", err)
 	}
-	if _, err := repository.InsertExecution(cancelled, "default", automationmodel.AutomationRuleExecution{RuleKey: "never"}); !errors.Is(err, context.Canceled) {
+	if _, err := repository.InsertExecution(cancelled, "workspace-primary", automationmodel.AutomationRuleExecution{RuleKey: "never"}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled insert error=%v", err)
 	}
-	if _, err := repository.InsertExecutionSeed(cancelled, "default", automationmodel.AutomationRuleExecution{ID: "never", RuleKey: "never"}); !errors.Is(err, context.Canceled) {
+	if _, err := repository.InsertExecutionSeed(cancelled, "workspace-primary", automationmodel.AutomationRuleExecution{ID: "never", RuleKey: "never"}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled seed insert error=%v", err)
 	}
 }

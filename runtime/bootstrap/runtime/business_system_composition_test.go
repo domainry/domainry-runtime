@@ -65,7 +65,7 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 	)
 	accessfixture.Set(&admin, adminAccess)
 	defer application.CloseContext(t.Context())
-	if _, err := publicationpersistence.NewPublicationStore(application.store).InsertOutbox(t.Context(), "default", integrationmodel.IntegrationOutboxMessage{ID: "outbox-1", WorkspaceID: "default", ConnectorKey: "crm", Operation: "sync", Status: "queued", CreatedBy: admin.UserID}); err != nil {
+	if _, err := publicationpersistence.NewPublicationStore(application.store).InsertOutbox(t.Context(), "workspace-primary", integrationmodel.IntegrationOutboxMessage{ID: "outbox-1", WorkspaceID: "workspace-primary", ConnectorKey: "crm", Operation: "sync", Status: "queued", CreatedBy: admin.UserID}); err != nil {
 		t.Fatal(err)
 	}
 	graph, err := application.records.Applications().BusinessReferences.Graph(t.Context(), admin)
@@ -94,7 +94,7 @@ func TestBusinessSystemSnapshotCompositionHidesGovernanceFacts(t *testing.T) {
 	}
 	application, _ := newMetadataCompositionApp(t, "visibility", objects, roles)
 	defer application.CloseContext(t.Context())
-	viewer := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "viewer", WorkspaceID: "default"}}, roles[1])
+	viewer := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "viewer", WorkspaceID: "workspace-primary"}}, roles[1])
 	snapshot, err := application.records.Applications().BusinessSystem.Snapshot(t.Context(), viewer)
 	if err != nil || snapshot.ResourceVisibility["schema"] != "visible" || len(snapshot.SeedRecords) != 0 || len(snapshot.ResourceSources) != 0 {
 		t.Fatalf("snapshot=%#v err=%v", snapshot, err)

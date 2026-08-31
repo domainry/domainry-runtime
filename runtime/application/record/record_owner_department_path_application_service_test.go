@@ -63,7 +63,7 @@ func TestOwnerDepartmentPathRebuilderUpdatesEligibleRecords(t *testing.T) {
 		return nil
 	})
 
-	updated, err := rebuilder.Rebuild(t.Context(), "default", []identitysdk.WorkforceEntry{
+	updated, err := rebuilder.Rebuild(t.Context(), "workspace-primary", []identitysdk.WorkforceEntry{
 		{IdentityUserID: "u1", OrganizationUnitID: "sales", OrganizationPath: "/company/sales"},
 		{IdentityUserID: "u2"},
 	})
@@ -98,7 +98,7 @@ func TestOwnerDepartmentPathRebuilderPreservesPartialCountAndErrors(t *testing.T
 		}
 		return nil
 	})
-	updated, err := rebuilder.Rebuild(t.Context(), "default", []identitysdk.WorkforceEntry{{IdentityUserID: "u1", OrganizationUnitID: "sales", OrganizationPath: "/company/sales"}})
+	updated, err := rebuilder.Rebuild(t.Context(), "workspace-primary", []identitysdk.WorkforceEntry{{IdentityUserID: "u1", OrganizationUnitID: "sales", OrganizationPath: "/company/sales"}})
 	if !errors.Is(err, updateErr) || updated != 1 {
 		t.Fatalf("updated=%d err=%v", updated, err)
 	}
@@ -107,7 +107,7 @@ func TestOwnerDepartmentPathRebuilderPreservesPartialCountAndErrors(t *testing.T
 	rebuilder = NewRecordOwnerDepartmentPathApplicationService(repository, func() map[string]definitionmodel.ObjectSchema {
 		return map[string]definitionmodel.ObjectSchema{"task": object}
 	}, nil)
-	updated, err = rebuilder.Rebuild(t.Context(), "default", []identitysdk.WorkforceEntry{{IdentityUserID: "u1", OrganizationUnitID: "sales", OrganizationPath: "/company/sales"}})
+	updated, err = rebuilder.Rebuild(t.Context(), "workspace-primary", []identitysdk.WorkforceEntry{{IdentityUserID: "u1", OrganizationUnitID: "sales", OrganizationPath: "/company/sales"}})
 	if updated != 0 {
 		t.Fatalf("updated before repository error = %d", updated)
 	}
@@ -119,7 +119,7 @@ func TestOwnerDepartmentPathRebuilderSkipsEmptyUsers(t *testing.T) {
 	rebuilder := NewRecordOwnerDepartmentPathApplicationService(repository, func() map[string]definitionmodel.ObjectSchema {
 		return map[string]definitionmodel.ObjectSchema{"task": ownerDepartmentObject("task")}
 	}, nil)
-	updated, err := rebuilder.Rebuild(t.Context(), "default", []identitysdk.WorkforceEntry{{IdentityUserID: ""}})
+	updated, err := rebuilder.Rebuild(t.Context(), "workspace-primary", []identitysdk.WorkforceEntry{{IdentityUserID: ""}})
 	if err != nil || updated != 0 || len(repository.queries) != 0 {
 		t.Fatalf("updated=%d queries=%#v err=%v", updated, repository.queries, err)
 	}
@@ -142,7 +142,7 @@ func TestOwnerDepartmentPathRebuilderConditionEdges(t *testing.T) {
 		updated++
 		return nil
 	})
-	count, err := rebuilder.Rebuild(t.Context(), "default", []identitysdk.WorkforceEntry{
+	count, err := rebuilder.Rebuild(t.Context(), "workspace-primary", []identitysdk.WorkforceEntry{
 		{IdentityUserID: "u1", OrganizationUnitID: "sales", OrganizationPath: "/company/sales"},
 		{IdentityUserID: "u2", OrganizationUnitID: "sales", OrganizationPath: " "},
 	})

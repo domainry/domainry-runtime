@@ -127,7 +127,7 @@ func TestManifestAutomationExecutionSeedSurvivesRestartWithoutDuplication(t *tes
 
 	for restart := 0; restart < 2; restart++ {
 		application := newIntegrationRuntime(t, cfg)
-		executions, err := automationpersistence.NewAutomationExecutionStore(store).ListExecutions(t.Context(), "default", automationmodel.AutomationExecutionFilter{
+		executions, err := automationpersistence.NewAutomationExecutionStore(store).ListExecutions(t.Context(), "workspace-primary", automationmodel.AutomationExecutionFilter{
 			RuleKey: "customer.verify_business_license", RecordID: "customer_customer_acme", Limit: 20,
 		})
 		if err != nil {

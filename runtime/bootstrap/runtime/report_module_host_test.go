@@ -29,7 +29,7 @@ func TestReportModuleAdoptsRuntimeSnapshotTableAndOwnsDefinitions(t *testing.T) 
 	if _, err := store.DB().ExecContext(t.Context(), `CREATE INDEX idx_report_snapshot_latest ON _report_snapshots (workspace_id, report_key, access_scope_hash, status, refreshed_at)`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _report_snapshots VALUES ('snapshot-1','default','summary','scope','request','succeeded','{}','','{}',1,1,'now','now','','','',0)`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _report_snapshots VALUES ('snapshot-1','workspace-primary','summary','scope','request','succeeded','{}','','{}',1,1,'now','now','','','',0)`); err != nil {
 		t.Fatal(err)
 	}
 	binding, err := reportmodule.NewFactory().OpenModule(t.Context(), reportsdk.ApplicationRef{RuntimeID: "runtime-a"}, runtimeReportModuleHost{store: store})

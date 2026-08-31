@@ -54,7 +54,7 @@ func TestContextualFieldPolicyEndToEndKeepsReadExportReportAuditAndWriteAligned(
 		{ObjectKey: "member", FieldKey: "phone", Read: true, Export: true, Policies: []accessfixture.FieldRuleFixture{allowRelated, maskOther}},
 		{ObjectKey: "member", FieldKey: "health_note", Read: true, Export: true, Policies: []accessfixture.FieldRuleFixture{allowRelated, hideOther}},
 	}}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default", UserID: "identity-coach-1"}, ActiveBusinessProfile: &profilebindingmodel.Reference{RecordID: "coach-1"}}, role)
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary", UserID: "identity-coach-1"}, ActiveBusinessProfile: &profilebindingmodel.Reference{RecordID: "coach-1"}}, role)
 	policy := recordservice.NewRecordQueryPolicyDomainService(recordservice.RecordQueryPolicyDependencies{Objects: func() []definitionmodel.ObjectSchema { return objects }})
 	fieldPolicy := recordservice.NewRecordContextualFieldPolicyDomainService(recordservice.RecordContextualFieldPolicyDependencies{Repository: repository, Objects: func() []definitionmodel.ObjectSchema { return objects }})
 	auditDenials := []string{}
@@ -126,7 +126,7 @@ func TestContextualFieldPolicyEndToEndKeepsReadExportReportAuditAndWriteAligned(
 		{ObjectKey: "member", FieldKey: "phone", Read: true, Export: true, Policies: []accessfixture.FieldRuleFixture{selfAllow, maskOther}},
 		{ObjectKey: "member", FieldKey: "health_note", Read: true, Export: true, Policies: []accessfixture.FieldRuleFixture{selfAllow, hideOther}},
 	}}
-	memberPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default", UserID: "identity-member-1"}, ActiveBusinessProfile: &profilebindingmodel.Reference{RecordID: "member-1"}}, memberRole)
+	memberPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary", UserID: "identity-member-1"}, ActiveBusinessProfile: &profilebindingmodel.Reference{RecordID: "member-1"}}, memberRole)
 	scopeDenials := []string{}
 	memberReader := recordservice.NewRecordReadDomainService(recordservice.RecordReadDependencies{
 		Repository: repository, Policy: policy, ContextualFieldPolicy: fieldPolicy,

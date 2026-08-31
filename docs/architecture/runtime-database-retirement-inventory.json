@@ -8,6 +8,7 @@
       "database": "runtime",
       "schema": "configured_runtime_schema",
       "object_names": [
+        "_tenant_installation",
         "_tenant_registry",
         "_workspace_configuration",
         "_workspace_provisioning_receipts",
@@ -22,7 +23,7 @@
         "runtime/infrastructure/persistence/database/workspaceprovision"
       ],
       "migration": "current Runtime schema",
-      "retention": "workspace and tenant lifecycle plus provisioning idempotency evidence",
+      "retention": "installation marker plus workspace and tenant lifecycle and provisioning idempotency evidence",
       "backup_id": "required before destructive migration",
       "observation_window": "not applicable while active",
       "status": "active"

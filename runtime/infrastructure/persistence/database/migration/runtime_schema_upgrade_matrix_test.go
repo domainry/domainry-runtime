@@ -31,6 +31,14 @@ func TestEverySupportedRuntimeSchemaVersionUpgradesToCurrent(t *testing.T) {
 			if _, err := store.DB().ExecContext(t.Context(), string(fixture)); err != nil {
 				t.Fatalf("apply %s fixture: %v", version, err)
 			}
+			// Schema 001 predates workspace ownership on Audit. The upgrade matrix
+			// models the required operator adjudication instead of asking Runtime to
+			// guess which real tenant owns historical global rows.
+			if version == "001_connector_runtime_lifecycle" {
+				if _, err := store.DB().ExecContext(t.Context(), `ALTER TABLE _audit_events ADD COLUMN workspace_id TEXT NOT NULL DEFAULT 'workspace-primary'`); err != nil {
+					t.Fatalf("adjudicate %s Audit workspace: %v", version, err)
+				}
+			}
 			if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 				t.Fatalf("upgrade %s: %v", version, err)
 			}
@@ -44,7 +52,7 @@ func TestEverySupportedRuntimeSchemaVersionUpgradesToCurrent(t *testing.T) {
 			var auditWorkspace, workflowLease string
 			auditID := "audit-" + strings.SplitN(version, "_", 2)[0]
 			workflowID := "workflow-" + strings.SplitN(version, "_", 2)[0]
-			if err := store.DB().QueryRowContext(t.Context(), `SELECT workspace_id FROM _audit_events WHERE id = ?`, auditID).Scan(&auditWorkspace); err != nil || auditWorkspace != "default" {
+			if err := store.DB().QueryRowContext(t.Context(), `SELECT workspace_id FROM _audit_events WHERE id = ?`, auditID).Scan(&auditWorkspace); err != nil || auditWorkspace != "workspace-primary" {
 				t.Fatalf("audit fixture %s workspace=%q err=%v", auditID, auditWorkspace, err)
 			}
 			if err := store.DB().QueryRowContext(t.Context(), `SELECT lease_owner FROM _workflow_executions WHERE id = ?`, workflowID).Scan(&workflowLease); err != nil || workflowLease != "" {

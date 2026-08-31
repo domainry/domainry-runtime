@@ -42,7 +42,7 @@ func TestWorkflowGraphFailureAndDeadLetterLinkToProcessAndNode(t *testing.T) {
 	}
 	role := accessfixture.Bundle{Key: "admin", Permissions: []string{"workflow.run"}, RecordScope: "all_records"}
 	records := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "workflow-links", TemplateVersion: "1", Name: "Workflow Links", Objects: nil, Actions: nil, Workflows: []definitionmodel.WorkflowSchema{workflow}, AutomationRules: nil, Dictionaries: nil, Integrations: integrationmodel.IntegrationSchema{}, Reports: nil, Skills: nil, Agents: nil, Store: store, WorkflowProcesses: workflowpersistence.NewWorkflowProcessStore(store), WorkflowWorker: workflowpersistence.NewWorkflowWorkerStore(store)})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, role)
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, role)
 
 	run, err := records.Applications().Workflows.RunWorkflow(t.Context(), workflow.Key, map[string]any{"request_id": "failure-1"}, principal)
 	if err != nil {
@@ -52,15 +52,15 @@ func TestWorkflowGraphFailureAndDeadLetterLinkToProcessAndNode(t *testing.T) {
 	if execution.Status != "dead_letter" || execution.ProcessID == "" || execution.NodeID != "broken_action" {
 		t.Fatalf("failure is not linked to process/node: %#v", execution)
 	}
-	process, ok, err := workflowProcessStore(store).GetProcess(t.Context(), "default", execution.ProcessID)
+	process, ok, err := workflowProcessStore(store).GetProcess(t.Context(), "workspace-primary", execution.ProcessID)
 	if err != nil || !ok || process.Status != "configuration_error" {
 		t.Fatalf("expected failed process evidence: process=%#v ok=%v err=%v", process, ok, err)
 	}
-	persisted, ok, err := workflowWorkerStore(store).GetExecution(t.Context(), "default", execution.ID)
+	persisted, ok, err := workflowWorkerStore(store).GetExecution(t.Context(), "workspace-primary", execution.ID)
 	if err != nil || !ok || persisted.ProcessID != process.ID || persisted.NodeID != "broken_action" {
 		t.Fatalf("expected persisted failure links: execution=%#v ok=%v err=%v", persisted, ok, err)
 	}
-	events, err := workflowProcessStore(store).ListEvents(t.Context(), "default", process.ID, 100)
+	events, err := workflowProcessStore(store).ListEvents(t.Context(), "workspace-primary", process.ID, 100)
 	if err != nil {
 		t.Fatalf("list process events: %v", err)
 	}

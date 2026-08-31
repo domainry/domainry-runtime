@@ -41,7 +41,7 @@ func TestWorkflowProcessWaitsForManagerAndResumesAfterRestart(t *testing.T) {
 
 	workflow := managerApprovalTestWorkflow()
 	records := newWorkflowProcessTestService(t, store, workflow, identityStore)
-	employee := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "employee", WorkspaceID: "default"}}, accessfixture.Bundle{Key: "employee", Permissions: []string{"workflow.run"}})
+	employee := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "employee", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "employee", Permissions: []string{"workflow.run"}})
 	process, err := runWorkflowProcess(t, store, records, workflow.Key, map[string]any{"object_key": "leave_request", "record_id": "leave_1", "employee_user": "employee"}, employee)
 	if err != nil {
 		t.Fatalf("start process: %v", err)
@@ -49,7 +49,7 @@ func TestWorkflowProcessWaitsForManagerAndResumesAfterRestart(t *testing.T) {
 	if process.Status != "waiting" || len(process.CurrentNodeIDs) != 1 || process.CurrentNodeIDs[0] != "manager_approval" {
 		t.Fatalf("expected waiting manager approval, got %#v", process)
 	}
-	tasks, err := workflowProcessStore(store).ListTasks(t.Context(), "default", process.ID, "manager", "open", 10)
+	tasks, err := workflowProcessStore(store).ListTasks(t.Context(), "workspace-primary", process.ID, "manager", "open", 10)
 	if err != nil || len(tasks) != 1 {
 		t.Fatalf("expected manager task: tasks=%#v err=%v", tasks, err)
 	}
@@ -61,15 +61,15 @@ func TestWorkflowProcessWaitsForManagerAndResumesAfterRestart(t *testing.T) {
 	modifiedWorkflow.Name = "Changed Definition"
 	modifiedWorkflow.Graph.Nodes[2].Name = "Changed Notification"
 	restarted := newWorkflowProcessTestService(t, store, modifiedWorkflow, identityStore)
-	outsider := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "outsider", WorkspaceID: "default"}}, accessfixture.Bundle{Key: "employee"})
+	outsider := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "outsider", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "employee"})
 	if _, err := restarted.Applications().Workflows.DecideTask(t.Context(), tasks[0].ID, workflowmodel.WorkflowTaskDecisionRequest{Decision: "approved"}, outsider); err == nil || serviceErrorCode(err) != "backend.workflow.task_assignee_required" {
 		t.Fatalf("expected non-assignee denial, got %v", err)
 	}
-	assignedWithoutPermission := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "manager", WorkspaceID: "default"}}, accessfixture.Bundle{Key: "restricted_manager"})
+	assignedWithoutPermission := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "manager", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "restricted_manager"})
 	if _, err := restarted.Applications().Workflows.DecideTask(t.Context(), tasks[0].ID, workflowmodel.WorkflowTaskDecisionRequest{Decision: "approved"}, assignedWithoutPermission); err == nil || serviceErrorCode(err) != "backend.workflow.task.act_permission_required" {
 		t.Fatalf("expected task permission denial, got %v", err)
 	}
-	manager := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "manager", WorkspaceID: "default"}}, accessfixture.Bundle{Key: "line_manager", Permissions: []string{"workflow.task.act"}})
+	manager := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "manager", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "line_manager", Permissions: []string{"workflow.task.act"}})
 	completed, err := restarted.Applications().Workflows.DecideTask(t.Context(), tasks[0].ID, workflowmodel.WorkflowTaskDecisionRequest{Decision: "approved", Comment: "Approved"}, manager)
 	if err != nil {
 		t.Fatalf("approve after restart: %v", err)
@@ -107,7 +107,7 @@ func TestWorkflowSimulationUsesProcessEngineAndResolvesManager(t *testing.T) {
 	mustUpsertWorkforceReportingLine(t, identityStore, "manager", "employee")
 	workflow := managerApprovalTestWorkflow()
 	records := newWorkflowProcessTestService(t, store, workflow, identityStore)
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "employee", WorkspaceID: "default"}}, accessfixture.Bundle{Key: "admin", Permissions: []string{"ops.workflow.simulate"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "employee", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "admin", Permissions: []string{"ops.workflow.simulate"}})
 	result, err := records.Applications().Workflows.SimulateWorkflow(t.Context(), workflow.Key, map[string]any{"object_key": "leave_request", "record_id": "leave_1", "employee_user": "employee"}, principal)
 	if err != nil {
 		t.Fatalf("simulate Workflow: %v", err)

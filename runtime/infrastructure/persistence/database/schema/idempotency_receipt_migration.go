@@ -93,9 +93,11 @@ func backfillIdempotencyReceiptRows(ctx context.Context, store Store, spec idemp
 			return fmt.Errorf("idempotency migration blocked: table=%s row has empty primary id", spec.table)
 		}
 		backfilled := append([]string(nil), row.values...)
-		if strings.TrimSpace(backfilled[0]) == "" {
-			backfilled[0] = "default"
+		workspaceID := strings.TrimSpace(backfilled[0])
+		if workspaceID == "" || strings.EqualFold(workspaceID, "default") {
+			return fmt.Errorf("idempotency migration blocked: table=%s row=%s has no initialized workspace ownership", spec.table, row.id)
 		}
+		backfilled[0] = workspaceID
 		for index := 1; index < len(backfilled); index++ {
 			if strings.TrimSpace(backfilled[index]) != "" {
 				continue

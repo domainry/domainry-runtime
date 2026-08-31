@@ -94,10 +94,7 @@ func (s *WorkflowApplicationService) auditWorkflowIdempotency(ctx context.Contex
 }
 
 func workflowWorkspaceID(value string) string {
-	if value = strings.TrimSpace(value); value != "" {
-		return value
-	}
-	return "default"
+	return strings.TrimSpace(value)
 }
 
 func workflowCommandKey(scope, target, callerKey string, payload any) string {

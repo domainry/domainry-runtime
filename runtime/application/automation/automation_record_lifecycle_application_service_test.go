@@ -21,8 +21,8 @@ func TestAutomationAfterOutboxUsesStableRequiredDedupIdentity(t *testing.T) {
 	}}
 	record := recordmodel.Record{ID: "proposal-1", Data: map[string]any{"status": "pending"}, CreatedAt: "2026-07-19T00:00:00Z", UpdatedAt: "2026-07-19T00:00:00Z"}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{UserID: "operator"}, RequestID: "request-1"}, accessfixture.Bundle{Key: "operator"})
-	first := AutomationAfterOutbox(rules, "proposal", "create", nil, record, principal, "default")
-	second := AutomationAfterOutbox(rules, "proposal", "create", nil, record, principal, "default")
+	first := AutomationAfterOutbox(rules, "proposal", "create", nil, record, principal, "workspace-primary")
+	second := AutomationAfterOutbox(rules, "proposal", "create", nil, record, principal, "workspace-primary")
 	if len(first) != 1 || len(second) != 1 {
 		t.Fatalf("outbox counts=%d/%d, want 1/1", len(first), len(second))
 	}

@@ -4,7 +4,7 @@ CREATE TABLE _audit_events (
   metadata_json TEXT NOT NULL, before_json TEXT NOT NULL, after_json TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
-INSERT INTO _audit_events VALUES ('audit-004', 'default', 'fixture.created', '', '', 'system', '', 'v004', '{}', '{}', '{}', '2026-07-25T00:00:00Z');
+INSERT INTO _audit_events VALUES ('audit-004', 'workspace-primary', 'fixture.created', '', '', 'system', '', 'v004', '{}', '{}', '{}', '2026-07-25T00:00:00Z');
 
 CREATE TABLE _workflow_executions (
   workspace_id TEXT NOT NULL, id TEXT NOT NULL, workflow_key TEXT NOT NULL,
@@ -19,7 +19,7 @@ CREATE TABLE _workflow_executions (
 );
 INSERT INTO _workflow_executions (
   workspace_id,id,workflow_key,name,trigger,status,action_json,payload_json,result_json,created_at,updated_at
-) VALUES ('default','workflow-004','fixture','Fixture','manual','completed','{}','{}','{}','2026-07-25T00:00:00Z','2026-07-25T00:00:00Z');
+) VALUES ('workspace-primary','workflow-004','fixture','Fixture','manual','completed','{}','{}','{}','2026-07-25T00:00:00Z','2026-07-25T00:00:00Z');
 
 CREATE TABLE _identity_users (
   id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, name TEXT NOT NULL, email TEXT NOT NULL,
@@ -34,7 +34,7 @@ CREATE INDEX idx_identity_users_department ON _identity_users(workspace_id, depa
 CREATE INDEX idx_identity_users_manager ON _identity_users(workspace_id, manager_id);
 CREATE INDEX idx_identity_users_manager_path ON _identity_users(workspace_id, manager_path);
 INSERT INTO _identity_users VALUES (
-  'fixture-user-004', 'default', 'Fixture Worker', 'worker@example.com', 'EMP-004', '', '',
+  'fixture-user-004', 'workspace-primary', 'Fixture Worker', 'worker@example.com', 'EMP-004', '', '',
   '2026-01-01', 'Operator', 'L2', 'full_time', 'active', 'operations', '/operations',
   NULL, '', '[]', 0, 'active', '2026-07-25T00:00:00Z', '2026-07-25T00:00:00Z'
 );

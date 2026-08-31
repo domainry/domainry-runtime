@@ -111,6 +111,11 @@ func (r *integrationWorkerBatchRepository) ScheduleOutboxRetry(ctx context.Conte
 }
 
 func TestIntegrationWorkerBatchGuardAndTickEdges(t *testing.T) {
+	previousInstallationWorkspaceID := principalmodel.InstallationWorkspaceID
+	if err := principalmodel.ConfigureInstallationWorkspaceID("workspace-primary"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { principalmodel.InstallationWorkspaceID = previousInstallationWorkspaceID })
 	event := integrationEventWorkerEdgeEvent()
 	repository := &integrationWorkerBatchRepository{eventEdge: &integrationEventWorkerEdgeRepository{claim: event, claimOK: true}, outboxEdge: &integrationOutboxWorkerEdgeRepository{}, eventListed: make(chan struct{}, 2), outboxListed: make(chan struct{}, 2)}
 	registry := NewConnectorRegistry(integrationmodel.IntegrationSchema{})

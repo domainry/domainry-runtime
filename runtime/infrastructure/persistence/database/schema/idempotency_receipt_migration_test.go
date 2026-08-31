@@ -9,32 +9,22 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-func TestIdempotencyReceiptMigrationBackfillsBeforeCreatingUniqueIndex(t *testing.T) {
+func TestIdempotencyReceiptMigrationBlocksRowsWithoutInitializedWorkspaceOwnership(t *testing.T) {
 	store := openIdempotencyMigrationStore(t, "backfill.db")
 	defer store.Close()
 	createLegacyActionExecutionTable(t, store)
 	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _action_executions (id, workspace_id, object_key, record_id, action_key, idempotency_key, status, result_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, "legacy-one", "", "", "", "", "", "", `{}`, "2026-07-19T00:00:00Z", "2026-07-19T00:00:00Z"); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.EnsureEvidenceSchema(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	var workspaceID, objectKey, recordID, actionKey, idempotencyKey, fingerprint, status string
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT workspace_id, object_key, record_id, action_key, idempotency_key, request_fingerprint, status FROM _action_executions WHERE id = ?`, "legacy-one").Scan(&workspaceID, &objectKey, &recordID, &actionKey, &idempotencyKey, &fingerprint, &status); err != nil {
-		t.Fatal(err)
-	}
-	if workspaceID != "default" || !strings.HasPrefix(objectKey, "legacy:object_key:") || !strings.HasPrefix(actionKey, "legacy:action_key:") || !strings.HasPrefix(idempotencyKey, "legacy:idempotency_key:") || !strings.HasPrefix(fingerprint, "legacy:request_fingerprint:") || status != "succeeded" {
-		t.Fatalf("backfill workspace=%q object=%q record=%q action=%q key=%q fingerprint=%q status=%q", workspaceID, objectKey, recordID, actionKey, idempotencyKey, fingerprint, status)
-	}
-	if recordID != "" {
-		t.Fatalf("optional object-level record scope was rewritten: %q", recordID)
+	if err := store.EnsureEvidenceSchema(t.Context()); err == nil || !strings.Contains(err.Error(), "has no initialized workspace ownership") {
+		t.Fatalf("migration error=%v", err)
 	}
 	var reportTableCount int
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_idempotency_migration_reports'`).Scan(&reportTableCount); err != nil || reportTableCount != 0 {
 		t.Fatalf("clean idempotency migration initialized historical report table: count=%d err=%v", reportTableCount, err)
 	}
 	var indexCount int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'uniq_business_action_execution_scope'`).Scan(&indexCount); err != nil || indexCount != 1 {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'uniq_business_action_execution_scope'`).Scan(&indexCount); err != nil || indexCount != 0 {
 		t.Fatalf("unique index count=%d err=%v", indexCount, err)
 	}
 }

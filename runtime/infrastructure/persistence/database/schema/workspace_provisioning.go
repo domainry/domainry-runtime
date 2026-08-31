@@ -35,6 +35,12 @@ func EnsureWorkspaceProvisioningSchema(ctx context.Context, store Store) error {
 			ormschema.Column("application_projection_ids_json", ormschema.LongText()).NotNull().DefaultValue("{}"),
 			ormschema.Column("created_at", ormschema.TextKey(64)).NotNull(),
 		}, primary: []string{"request_id"}},
+		{name: "_tenant_installation", columns: []ormschema.ColumnDefinition{
+			ormschema.Column("installation_key", ormschema.TextKey(64)).NotNull(),
+			ormschema.Column("tenant_registry_id", ormschema.TextKey(255)).NotNull(),
+			ormschema.Column("workspace_id", ormschema.TextKey(255)).NotNull(),
+			ormschema.Column("initialized_at", ormschema.TextKey(64)).NotNull(),
+		}, primary: []string{"installation_key"}},
 	}
 	for _, table := range tables {
 		statement, arguments, err := ormschema.NewTable(store.RuntimeRenderer(), table.name).IfNotExists().Columns(table.columns...).PrimaryKey(table.primary...).Build()
@@ -52,6 +58,8 @@ func EnsureWorkspaceProvisioningSchema(ctx context.Context, store Store) error {
 		{table: "_workspaces", name: "uniq_workspace_code", columns: []string{"canonical_code"}},
 		{table: "_tenant_registry", name: "uniq_tenant_code", columns: []string{"canonical_code"}},
 		{table: "_tenant_registry", name: "uniq_tenant_workspace", columns: []string{"workspace_id"}},
+		{table: "_tenant_installation", name: "uniq_tenant_installation_workspace", columns: []string{"workspace_id"}},
+		{table: "_tenant_installation", name: "uniq_tenant_installation_tenant", columns: []string{"tenant_registry_id"}},
 	} {
 		if err := store.CreateIndexIfMissing(ctx, index.table, index.name, true, index.columns...); err != nil {
 			return err

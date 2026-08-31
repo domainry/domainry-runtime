@@ -16,16 +16,12 @@ empty workspace comparisons, workspace/default proximity, and literal
 | ---: | --- |
 | 1 | `runtime/application/seed/business/records.go` |
 | 1 | `runtime/application/seed/globalcapability/runtime.go` |
-| 1 | `runtime/application/automation/automation_definition_validation_application_service.go` |
-| 2 | `runtime/application/integration/integration_application_delivery_management.go` |
 | 1 | `runtime/application/integration/integration_application_execution_evidence.go` |
 | 3 | `runtime/application/integration/integration_application_failure_alerts.go` |
 | 2 | `runtime/application/integration/integration_application_inbound_webhooks.go` |
 | 1 | `runtime/application/appschema/appschema_localized_text_coverage_application_service.go` |
-| 1 | `runtime/application/workflow/workflow_execution_idempotency_application_service.go` |
 | 3 | `runtime/infrastructure/connectors/delivery_operations/asana/asana_delivery_operations_adapter.go` |
 | 1 | `runtime/infrastructure/connectors/delivery_operations/asana/asana_delivery_operations_schema_adapter.go` |
-| 1 | `runtime/infrastructure/persistence/database/action/action_business_execution_store.go` |
 | 1 | `runtime/infrastructure/persistence/database/automation/sql_values.go` |
 | 3 | `runtime/infrastructure/persistence/database/deployment/runtime_status_store.go` |
 | 1 | `runtime/infrastructure/persistence/database/integration/integration_worker_scope.go` |

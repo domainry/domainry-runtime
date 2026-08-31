@@ -11,7 +11,7 @@ func TestRuntimeIdentityCatalogDeduplicatesAuthoredSystemFields(t *testing.T) {
 	snapshot := appschemamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{
 		Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "id"}, {Key: "created_at"}, {Key: "name"}},
 	}}}
-	catalog := runtimeIdentityCatalog(snapshot, "default", "runtime", nil)
+	catalog := runtimeIdentityCatalog(snapshot, "workspace-primary", "runtime", nil)
 	if err := catalog.ValidateContract(); err != nil {
 		t.Fatalf("catalog validation: %v", err)
 	}

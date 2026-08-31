@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent"
 	agentruntime "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
@@ -131,7 +132,10 @@ func workspaceIDFromRequest(r *http.Request) string {
 	if workspaceID := strings.TrimSpace(r.Header.Get("X-Workspace-ID")); workspaceID != "" {
 		return workspaceID
 	}
-	return "default"
+	if workspaceID := strings.TrimSpace(requestcontext.WorkspaceID(r.Context())); workspaceID != "" {
+		return workspaceID
+	}
+	return principalmodel.InstallationWorkspaceID
 }
 
 func cloneStringAnyMap(value map[string]any) map[string]any {

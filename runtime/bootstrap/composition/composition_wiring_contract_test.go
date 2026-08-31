@@ -69,7 +69,7 @@ func TestRecordPolicyWiringDelegatesEveryPort(t *testing.T) {
 		write:  true,
 	}
 	read := recordReadPolicyAdapter{policy: probe}
-	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}
 	object, err := read.ObjectForAction(principal, "customer", "read")
 	if err != nil || object.Key != "customer" {
 		t.Fatalf("object=%#v error=%v", object, err)
@@ -91,7 +91,7 @@ func TestRecordPolicyWiringDelegatesEveryPort(t *testing.T) {
 		Objects: []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}},
 	}})
 	queryPolicy := recordQueryPolicyAdapter{service: runtime.RecordQueryPolicyDomainService}
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
 	if got := queryPolicy.normalizeListQuery(object, recordmodel.RecordListQuery{Page: 1}, admin); got.Page != 1 {
 		t.Fatalf("query adapter result=%#v", got)
 	}
@@ -114,8 +114,8 @@ func TestRecordPolicyWiringDelegatesEveryPort(t *testing.T) {
 	_ = mutation.applyPipelineItemDefaults(t.Context(), object, data, admin, false)
 	_ = mutation.validateRelationReferences(t.Context(), object, data, admin)
 	_ = mutation.validateDomainPolicies(t.Context(), object, nil, data, "customer-1", "update", admin)
-	_ = mutation.validateUnique(t.Context(), "default", "customer", object, "customer-1", data)
-	_ = mutation.validateDuplicateIdentity(t.Context(), "default", object, "customer-1", data)
+	_ = mutation.validateUnique(t.Context(), "workspace-primary", "customer", object, "customer-1", data)
+	_ = mutation.validateDuplicateIdentity(t.Context(), "workspace-primary", object, "customer-1", data)
 }
 
 func TestWorkflowDependencyWiringCoversCancellationLookupAndMissingOwner(t *testing.T) {
@@ -133,7 +133,7 @@ func TestWorkflowDependencyWiringCoversCancellationLookupAndMissingOwner(t *test
 		Actions: []definitionmodel.ActionSchema{{Key: "customer.activate", ObjectKey: "customer", Kind: "record"}},
 	}})
 	dependencies := workflowDependencies(runtime)
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
 
 	if objects := dependencies.ObjectMap(t.Context()); objects["customer"].Key != "customer" {
 		t.Fatalf("workflow object map=%#v", objects)
@@ -222,7 +222,7 @@ func TestRecordApplicationDependencyClosuresUseCanonicalOwners(t *testing.T) {
 	if got := dependencies.IdentityProfileExtensions()[0].ObjectKey; got != "customer" {
 		t.Fatalf("identity profile extensions leaked caller mutation: %q", got)
 	}
-	if err := dependencies.UpdateInternal(t.Context(), "default", definitionmodel.ObjectSchema{Key: "customer"}, recordmodel.Record{ID: "customer-1"}, "test"); err == nil {
+	if err := dependencies.UpdateInternal(t.Context(), "workspace-primary", definitionmodel.ObjectSchema{Key: "customer"}, recordmodel.Record{ID: "customer-1"}, "test"); err == nil {
 		t.Fatal("missing record repository must reject internal update")
 	}
 }
@@ -242,7 +242,7 @@ func TestRecordDomainWiringInvokesSchemaWorkflowAndPipelinePorts(t *testing.T) {
 		Objects:   []definitionmodel.ObjectSchema{order, activity},
 		Workflows: []definitionmodel.WorkflowSchema{{Key: "order.follow_up", Name: "Follow up"}},
 	}})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
 
 	repository := &pipelineFailureRepository{records: map[string]map[string]recordmodel.Record{
 		"activity": {"activity-1": {ID: "activity-1", Data: map[string]any{"subject": "existing"}}},
@@ -276,7 +276,7 @@ func TestWorkflowSchemaWiringHandlesOptionalIdentityDirectory(t *testing.T) {
 	if snapshot := provider.WorkflowSchemaSnapshot(canceled, principalmodel.Principal{}); len(snapshot.Actions) != 0 {
 		t.Fatalf("canceled workflow snapshot=%#v", snapshot)
 	}
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
 	if snapshot := provider.WorkflowSchemaSnapshot(t.Context(), admin); len(snapshot.Actions) != 1 {
 		t.Fatalf("workflow snapshot=%#v", snapshot)
 	}
@@ -313,7 +313,7 @@ func TestWorkflowSchedulerTimerModeAndFailureEdges(t *testing.T) {
 	scheduler := runtimeWorkflowScheduler{recordTimers: runtime.recordTimerService}
 	createdAt := time.Date(2026, 7, 27, 10, 0, 0, 0, time.UTC)
 	request := workflowapplication.WorkflowWaitTimerRequest{
-		WorkspaceID: "default", ProcessID: "process", NodeID: "timer", ObjectKey: "order", RecordID: "order-1",
+		WorkspaceID: "workspace-primary", ProcessID: "process", NodeID: "timer", ObjectKey: "order", RecordID: "order-1",
 		CreatedAt: createdAt, Variables: map[string]any{"starts_at": createdAt.Format(time.RFC3339Nano)},
 	}
 
@@ -355,20 +355,20 @@ func TestWorkflowSchedulerTimerModeAndFailureEdges(t *testing.T) {
 	repository.failCommitAt = 0
 
 	if _, err := scheduler.ScheduleWorkflowApprovalDeadlineTimer(t.Context(), workflowapplication.WorkflowApprovalDeadlineTimerRequest{
-		WorkspaceID: "default", ProcessID: "process", NodeID: "approval", TaskID: "task-invalid",
+		WorkspaceID: "workspace-primary", ProcessID: "process", NodeID: "approval", TaskID: "task-invalid",
 		Phase: "invalid", DueAt: createdAt.Add(time.Hour), CreatedAt: createdAt,
 	}); err == nil {
 		t.Fatal("invalid approval deadline phase accepted")
 	}
 	if timerID, err := scheduler.ScheduleWorkflowApprovalDeadlineTimer(t.Context(), workflowapplication.WorkflowApprovalDeadlineTimerRequest{
-		WorkspaceID: "default", ProcessID: "process", NodeID: "approval", TaskID: "task-reminder",
+		WorkspaceID: "workspace-primary", ProcessID: "process", NodeID: "approval", TaskID: "task-reminder",
 		Phase: "reminder", DueAt: createdAt.Add(time.Hour), CreatedAt: createdAt,
 	}); err != nil || timerID == "" {
 		t.Fatalf("reminder timer=%q error=%v", timerID, err)
 	}
 	repository.failCommitAt = repository.commitCount + 1
 	if _, err := scheduler.ScheduleWorkflowApprovalDeadlineTimer(t.Context(), workflowapplication.WorkflowApprovalDeadlineTimerRequest{
-		WorkspaceID: "default", ProcessID: "process", NodeID: "approval", TaskID: "task-escalation",
+		WorkspaceID: "workspace-primary", ProcessID: "process", NodeID: "approval", TaskID: "task-escalation",
 		Phase: "escalation", DueAt: createdAt.Add(2 * time.Hour), CreatedAt: createdAt,
 	}); err == nil {
 		t.Fatal("approval timer persistence failure was ignored")

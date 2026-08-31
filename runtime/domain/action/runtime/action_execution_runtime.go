@@ -312,10 +312,7 @@ func decodeExecutionResult(values map[string]any, target any) error {
 }
 
 func actionWorkspaceID(principal principalmodel.Principal) string {
-	if workspaceID := strings.TrimSpace(principal.WorkspaceID); workspaceID != "" {
-		return workspaceID
-	}
-	return "default"
+	return strings.TrimSpace(principal.WorkspaceID)
 }
 
 func executionServiceError(operation string, err error) error {

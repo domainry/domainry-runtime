@@ -37,11 +37,11 @@ func TestTwoRuntimeInstancesShareAgentSessionAndReportHTTPState(t *testing.T) {
 		t.Fatalf("first runtime archived sessions=%#v", archived)
 	}
 
-	queryRef, key, now := "shared-query", "default:runtime_fixture_user:business_admin:shared-query", time.Now().UTC().UnixNano()
-	proposalPayload, _ := json.Marshal(map[string]any{"proposal_id": "shared-proposal", "workspace_id": "default", "user_id": "runtime_fixture_user", "role": "business_admin", "status": "draft", "title": "Shared proposal", "created_at": now, "updated_at": now, "audited": true})
-	queryPayload, _ := json.Marshal(map[string]any{"query_ref": queryRef, "workspace_id": "default", "user_id": "runtime_fixture_user", "role": "business_admin", "status": "completed", "execution_mode": "server", "created_at": now})
-	auditPayload, _ := json.Marshal(map[string]any{"query_ref": queryRef, "workspace_id": "default", "user_id": "runtime_fixture_user", "role": "business_admin", "status": "handoff_required", "handoff": "report_center_export_audit", "created_at": now})
-	taskPayload, _ := json.Marshal(map[string]any{"query_ref": queryRef, "workspace_id": "default", "user_id": "runtime_fixture_user", "role": "business_admin", "status": "pending_export_approval", "task_key": "download_task:" + queryRef, "handoff": "report_center_download_task", "created_at": now})
+	queryRef, key, now := "shared-query", "workspace-primary:runtime_fixture_user:business_admin:shared-query", time.Now().UTC().UnixNano()
+	proposalPayload, _ := json.Marshal(map[string]any{"proposal_id": "shared-proposal", "workspace_id": "workspace-primary", "user_id": "runtime_fixture_user", "role": "business_admin", "status": "draft", "title": "Shared proposal", "created_at": now, "updated_at": now, "audited": true})
+	queryPayload, _ := json.Marshal(map[string]any{"query_ref": queryRef, "workspace_id": "workspace-primary", "user_id": "runtime_fixture_user", "role": "business_admin", "status": "completed", "execution_mode": "server", "created_at": now})
+	auditPayload, _ := json.Marshal(map[string]any{"query_ref": queryRef, "workspace_id": "workspace-primary", "user_id": "runtime_fixture_user", "role": "business_admin", "status": "handoff_required", "handoff": "report_center_export_audit", "created_at": now})
+	taskPayload, _ := json.Marshal(map[string]any{"query_ref": queryRef, "workspace_id": "workspace-primary", "user_id": "runtime_fixture_user", "role": "business_admin", "status": "pending_export_approval", "task_key": "download_task:" + queryRef, "handoff": "report_center_download_task", "created_at": now})
 	binding, err := agentsdkfixture.Open(t.Context(), store, "multi-instance-agent-state-test")
 	if err != nil {
 		t.Fatal(err)
@@ -52,7 +52,7 @@ func TestTwoRuntimeInstancesShareAgentSessionAndReportHTTPState(t *testing.T) {
 		t.Fatal("Agent SDK Binding returned no state repository")
 	}
 	repository := repositories.AgentStateRepository()
-	if err := repository.PutBatch(t.Context(), "default", []agentmodel.AgentStateRecord{{Kind: "proposal", Key: "default:runtime_fixture_user:business_admin:shared-proposal", WorkspaceID: "default", UserID: "runtime_fixture_user", RoleKey: "business_admin", Payload: proposalPayload, UpdatedAt: now}, {Kind: "report_query_run", Key: key, WorkspaceID: "default", UserID: "runtime_fixture_user", RoleKey: "business_admin", Payload: queryPayload, UpdatedAt: now}, {Kind: "report_export_audit", Key: key, WorkspaceID: "default", UserID: "runtime_fixture_user", RoleKey: "business_admin", Payload: auditPayload, UpdatedAt: now}, {Kind: "report_download_task", Key: key, WorkspaceID: "default", UserID: "runtime_fixture_user", RoleKey: "business_admin", Payload: taskPayload, UpdatedAt: now}}); err != nil {
+	if err := repository.PutBatch(t.Context(), "workspace-primary", []agentmodel.AgentStateRecord{{Kind: "proposal", Key: "workspace-primary:runtime_fixture_user:business_admin:shared-proposal", WorkspaceID: "workspace-primary", UserID: "runtime_fixture_user", RoleKey: "business_admin", Payload: proposalPayload, UpdatedAt: now}, {Kind: "report_query_run", Key: key, WorkspaceID: "workspace-primary", UserID: "runtime_fixture_user", RoleKey: "business_admin", Payload: queryPayload, UpdatedAt: now}, {Kind: "report_export_audit", Key: key, WorkspaceID: "workspace-primary", UserID: "runtime_fixture_user", RoleKey: "business_admin", Payload: auditPayload, UpdatedAt: now}, {Kind: "report_download_task", Key: key, WorkspaceID: "workspace-primary", UserID: "runtime_fixture_user", RoleKey: "business_admin", Payload: taskPayload, UpdatedAt: now}}); err != nil {
 		t.Fatal(err)
 	}
 	query := runtimeFixtureRequest[map[string]any](t, second.Routes(), "business_admin", http.MethodGet, "/agent-dialog/report-query-runs/"+queryRef, nil)

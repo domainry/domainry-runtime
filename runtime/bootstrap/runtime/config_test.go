@@ -6,9 +6,9 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-func TestNormalizeRuntimeConfigSuppliesIdentityApplicationDefaults(t *testing.T) {
+func TestNormalizeRuntimeConfigDoesNotInventTenantScope(t *testing.T) {
 	cfg := normalizeRuntimeConfig(config.Config{})
-	if cfg.IdentityWorkspaceID != "default" || cfg.IdentityAudience != "domainry-runtime" {
+	if cfg.IdentityWorkspaceID != "" || cfg.NotificationTenantID != "" || cfg.NotificationWorkspaceID != "" || cfg.PartyTenantID != "" || cfg.PartyWorkspaceID != "" || cfg.IdentityAudience != "domainry-runtime" {
 		t.Fatalf("Identity defaults=%#v", cfg)
 	}
 }

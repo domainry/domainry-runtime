@@ -32,7 +32,7 @@ func TestBackfillIdempotencyReceiptRowsFailureAndLegacyEdges(t *testing.T) {
 			}
 		})
 	}
-	state := schemaSQLState{querySteps: []schemaSQLQueryStep{{columns: []string{"id", "workspace_id", "idempotency_key", "request_fingerprint", "status", "object_key"}, rows: [][]driver.Value{{"receipt", "", "", "", "", ""}}}}}
+	state := schemaSQLState{querySteps: []schemaSQLQueryStep{{columns: []string{"id", "workspace_id", "idempotency_key", "request_fingerprint", "status", "object_key"}, rows: [][]driver.Value{{"receipt", "workspace-primary", "", "", "", ""}}}}}
 	if err := backfillIdempotencyReceiptRows(t.Context(), scriptedMigrationStore(t, &state), spec); err != nil {
 		t.Fatalf("legacy backfill=%v", err)
 	}

@@ -174,7 +174,7 @@ func (s *HTTPRouter) observeHTTPRequest(r *http.Request, path string, status int
 	}
 	logging.FromContext(r.Context()).Info("http_request", logging.Fields(map[string]any{
 		"event":        "http_request",
-		"workspace_id": "default",
+		"workspace_id": workspaceIDFromRequest(r),
 		"actor_id":     s.actorIDFromRequest(r),
 		"role":         valueOrDefault(strings.TrimSpace(r.Header.Get("X-Preview-Role")), valueOrDefault(strings.TrimSpace(r.Header.Get("X-Role")), strings.TrimSpace(r.Header.Get("X-User-Role")))),
 		"method":       r.Method,

@@ -119,7 +119,14 @@ type Config struct {
 	BusinessSeedSyncDisabled                bool
 	// WorkspaceProvisionFailurePoint is a process-start acceptance control.
 	// Project, file, and remote configuration sources cannot set it.
-	WorkspaceProvisionFailurePoint string
+	WorkspaceProvisionFailurePoint  string
+	InitialTenantRequestID          string
+	InitialTenantCode               string
+	InitialTenantName               string
+	InitialTenantAdminLoginID       string
+	InitialTenantAdminName          string
+	InitialTenantAdminPassword      string
+	InitialTenantStoreConfiguration string
 	// AllowEmptyAuthoringManifest is set only by the trusted configuring
 	// Provision lifecycle. It is not loaded from environment configuration.
 	AllowEmptyAuthoringManifest    bool
@@ -260,6 +267,13 @@ func FromEnv() Config {
 		SkipManifestValidation:                  boolEnv("SKIP_MANIFEST_VALIDATION", false),
 		BusinessSeedSyncDisabled:                !boolEnv("BUSINESS_SEED_SYNC_ENABLED", true),
 		WorkspaceProvisionFailurePoint:          strings.TrimSpace(os.Getenv("WORKSPACE_PROVISION_FAILURE_POINT")),
+		InitialTenantRequestID:                  env("INITIAL_TENANT_REQUEST_ID", "initial-tenant"),
+		InitialTenantCode:                       strings.TrimSpace(os.Getenv("INITIAL_TENANT_CODE")),
+		InitialTenantName:                       strings.TrimSpace(os.Getenv("INITIAL_TENANT_NAME")),
+		InitialTenantAdminLoginID:               strings.TrimSpace(os.Getenv("INITIAL_TENANT_ADMIN_LOGIN_ID")),
+		InitialTenantAdminName:                  strings.TrimSpace(os.Getenv("INITIAL_TENANT_ADMIN_NAME")),
+		InitialTenantAdminPassword:              strings.TrimSpace(os.Getenv("INITIAL_TENANT_ADMIN_PASSWORD")),
+		InitialTenantStoreConfiguration:         env("INITIAL_TENANT_STORE_CONFIGURATION", "{}"),
 		UploadDir:                               env("UPLOAD_DIR", "../data/uploads"),
 		CORSAllowedOrigins:                      csvEnv("CORS_ALLOWED_ORIGINS", []string{"*"}),
 		SurfaceBusinessOrigins:                  csvEnv("SURFACE_BUSINESS_ORIGINS", nil),
@@ -268,13 +282,13 @@ func FromEnv() Config {
 		RuntimeAllowDevIdentityHeaders:          boolEnv("RUNTIME_ALLOW_DEV_IDENTITY_HEADERS", false),
 		AuditExportTokenKey:                     env("AUDIT_EXPORT_TOKEN_KEY", DevAuditExportTokenKey),
 		IdentityRedirectURLs:                    csvEnv("IDENTITY_REDIRECT_URLS", []string{"http://localhost:3100/auth/callback"}),
-		IdentityWorkspaceID:                     env("IDENTITY_WORKSPACE_ID", "default"),
+		IdentityWorkspaceID:                     strings.TrimSpace(os.Getenv("IDENTITY_WORKSPACE_ID")),
 		IdentityAudience:                        env("IDENTITY_AUDIENCE", "domainry-runtime"),
-		NotificationTenantID:                    env("NOTIFICATION_TENANT_ID", "default"),
-		NotificationWorkspaceID:                 env("NOTIFICATION_WORKSPACE_ID", "default"),
+		NotificationTenantID:                    strings.TrimSpace(os.Getenv("NOTIFICATION_TENANT_ID")),
+		NotificationWorkspaceID:                 strings.TrimSpace(os.Getenv("NOTIFICATION_WORKSPACE_ID")),
 		NotificationApplicationKey:              env("NOTIFICATION_APPLICATION_KEY", "domainry-runtime"),
-		PartyTenantID:                           env("PARTY_TENANT_ID", "default"),
-		PartyWorkspaceID:                        env("PARTY_WORKSPACE_ID", "default"),
+		PartyTenantID:                           strings.TrimSpace(os.Getenv("PARTY_TENANT_ID")),
+		PartyWorkspaceID:                        strings.TrimSpace(os.Getenv("PARTY_WORKSPACE_ID")),
 		PartyApplicationKey:                     env("PARTY_APPLICATION_KEY", "domainry-runtime"),
 		IntegrationSecretKey:                    env("INTEGRATION_SECRET_KEY", DevIntegrationSecret),
 		IntegrationActiveKeyID:                  env("INTEGRATION_ACTIVE_KEY_ID", "dev-v1"),
@@ -381,7 +395,8 @@ func (c Config) validateWorkspaceProvisionFailurePoint() error {
 	allowed := map[string]bool{
 		"after_workspace": true, "after_tenant_registry": true, "after_identity_user": true,
 		"after_identity_role": true, "after_role_assignment": true, "after_credential": true,
-		"after_workspace_configuration": true, "after_application_projections": true, "after_receipt": true,
+		"after_tenant_initialization": true, "after_workspace_configuration": true,
+		"after_application_projections": true, "after_receipt": true,
 	}
 	if allowed[point] {
 		return nil

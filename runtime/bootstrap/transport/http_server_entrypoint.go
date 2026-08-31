@@ -5,6 +5,7 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
@@ -22,7 +23,7 @@ func AssembleHTTPServer(ctx context.Context, records *composition.RuntimeService
 		Config: config.Config{
 			UploadDir: uploadDir, CORSAllowedOrigins: append([]string(nil), corsAllowedOrigins...),
 			RuntimeAllowDevIdentityHeaders: allowDevAuthHeaders,
-			IdentityWorkspaceID:            "default", IdentityAudience: "domainry-runtime",
+			IdentityWorkspaceID:            principalmodel.InstallationWorkspaceID, IdentityAudience: "domainry-runtime",
 			AgentDialogRateLimitPerMinute: 60,
 		},
 	})

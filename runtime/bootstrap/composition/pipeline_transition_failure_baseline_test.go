@@ -218,7 +218,7 @@ func pipelineFailureFixture(t *testing.T, failCommitAt int, failAudit, failWorkf
 		Manifest:     manifestmodel.ManifestSchema{TemplateID: "pipeline-failure", Version: "1", Name: "Pipeline Failure", Objects: objects, Actions: []definitionmodel.ActionSchema{pipelineAction()}, Workflows: workflows},
 		Dependencies: RuntimeServicesDependencies{Records: repo, ActionExecutions: &runtimeServicesActionExecutionRepository{records: repo}},
 	})
-	return service, repo, objects[0], cloneRecord(record), accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "tester", WorkspaceID: "default"}}, role)
+	return service, repo, objects[0], cloneRecord(record), accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "tester", WorkspaceID: "workspace-primary"}}, role)
 }
 
 func pipelineAction() definitionmodel.ActionSchema {

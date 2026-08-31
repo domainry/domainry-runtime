@@ -25,7 +25,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-const CurrentRuntimeSchemaVersion = "019_workspace_provisioning"
+const CurrentRuntimeSchemaVersion = "020_tenant_initialization"
 
 const (
 	managedDatabaseCohortTable           = "_domainry_managed_runtime_database_cohort"
@@ -135,9 +135,11 @@ func (s *RuntimeStore) ensureAuditModuleSchemaLocked(ctx context.Context) error 
 		return fmt.Errorf("inspect legacy Audit schema: %w", err)
 	}
 	if exists {
-		if err := s.EnsureRuntimeColumn(ctx, "_audit_events", "workspace_id", s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT 'default'"); err != nil {
-			return fmt.Errorf("prepare legacy Audit workspace ownership: %w", err)
+		rows, columnErr := s.schemaDatabase().QueryContext(ctx, "SELECT "+s.identifier("workspace_id")+" FROM "+s.tableIdentifier("_audit_events")+" WHERE 1 = 0")
+		if columnErr != nil {
+			return fmt.Errorf("legacy Audit workspace ownership is missing; initialize and adjudicate a real tenant before migration: %w", columnErr)
 		}
+		_ = rows.Close()
 	}
 	migrations, err := auditmodule.SchemaMigrations(s.RuntimeRenderer(), s.Driver())
 	if err != nil {
@@ -500,7 +502,7 @@ func (s *RuntimeStore) removeObsoleteMigrationLedgers(ctx context.Context) error
 }
 
 func currentRuntimeSchemaChecksum() string {
-	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":metadata_projection,object_fields,record_data,evidence,party,lifecycle,operations,indexes,_release_cohorts,_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,module_migrations,workspace_provisioning"))
+	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":metadata_projection,object_fields,record_data,evidence,party,lifecycle,operations,indexes,_release_cohorts,_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,module_migrations,workspace_provisioning,tenant_initialization"))
 	return hex.EncodeToString(sum[:])
 }
 

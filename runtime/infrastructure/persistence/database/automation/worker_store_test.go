@@ -20,7 +20,7 @@ func TestAutomationWorkerStoreImplementsContractAndCancelsSQL(t *testing.T) {
 	var _ automationcontract.AutomationWorkerStore = repository
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, _, err := repository.ClaimInstruction(ctx, "default", automationmodel.AutomationInstructionExecution{IdempotencyKey: "cancelled"}, "worker-a", "", "")
+	_, _, err := repository.ClaimInstruction(ctx, "workspace-primary", automationmodel.AutomationInstructionExecution{IdempotencyKey: "cancelled"}, "worker-a", "", "")
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("claim error=%v, want context.Canceled", err)
 	}
@@ -33,7 +33,7 @@ func TestAutomationInstructionConcurrentClaimHasSingleWinner(t *testing.T) {
 		t.Fatal(err)
 	}
 	repository := NewAutomationWorkerStore(store)
-	request := automationmodel.AutomationInstructionExecution{WorkspaceID: "default", IdempotencyKey: "concurrent-claim", RuleKey: "rule", ObjectKey: "customer", RecordID: "customer_1", RecordVersion: "v1", Operation: "update", InstructionKey: "notify"}
+	request := automationmodel.AutomationInstructionExecution{WorkspaceID: "workspace-primary", IdempotencyKey: "concurrent-claim", RuleKey: "rule", ObjectKey: "customer", RecordID: "customer_1", RecordVersion: "v1", Operation: "update", InstructionKey: "notify"}
 	start := make(chan struct{})
 	results := make(chan bool, 100)
 	errorsFound := make(chan error, 100)
@@ -76,7 +76,7 @@ func TestAutomationInstructionStaleLeaseCannotCompleteReclaimedWork(t *testing.T
 		t.Fatal(err)
 	}
 	repository := NewAutomationWorkerStore(store)
-	request := automationmodel.AutomationInstructionExecution{WorkspaceID: "default", IdempotencyKey: "rule:record:instruction", RuleKey: "rule", ObjectKey: "customer", RecordID: "customer_1", RecordVersion: "v1", Operation: "update", InstructionKey: "notify"}
+	request := automationmodel.AutomationInstructionExecution{WorkspaceID: "workspace-primary", IdempotencyKey: "rule:record:instruction", RuleKey: "rule", ObjectKey: "customer", RecordID: "customer_1", RecordVersion: "v1", Operation: "update", InstructionKey: "notify"}
 	first, claimed, err := repository.ClaimInstruction(t.Context(), request.WorkspaceID, request, "worker-a", "2026-01-01T00:00:00Z", "2026-01-01T00:01:00Z")
 	if err != nil || !claimed {
 		t.Fatalf("first claim: claimed=%v err=%v", claimed, err)

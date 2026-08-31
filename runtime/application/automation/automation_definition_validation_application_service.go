@@ -7,6 +7,7 @@ import (
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationvalidation "github.com/domainry/domainry-runtime/runtime/domain/automation/validation"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 type AutomationDefinitionValidationApplicationService struct {
@@ -20,7 +21,7 @@ func (s AutomationDefinitionValidationApplicationService) Validate(ctx context.C
 		catalog = s.Catalog()
 	}
 	if s.ListConnections != nil {
-		connections, err := s.ListConnections(ctx, "default")
+		connections, err := s.ListConnections(ctx, principalmodel.InstallationWorkspaceID)
 		if err != nil {
 			return &apperror.AppError{Kind: apperror.KindInternal, Code: "backend.internal", Params: map[string]string{"operation": "list automation connections"}, Err: err}
 		}

@@ -50,20 +50,20 @@ func TestGoogleOAuthAuthorizationActivatesManagedGmailIngestion(t *testing.T) {
 	defer tokenServer.Close()
 
 	connection := integrationmodel.IntegrationConnection{
-		Key: "gmail_primary", WorkspaceID: "default", ConnectorKey: "google_workspace", ProviderKey: "google", Status: "configured",
+		Key: "gmail_primary", WorkspaceID: "workspace-primary", ConnectorKey: "google_workspace", ProviderKey: "google", Status: "configured",
 		Config: map[string]any{"token_url": tokenServer.URL, "oauth_linked_connection_keys": []any{"google_calendar_primary", "google_calendar_primary"}}, SecretRefs: map[string]string{"client_id": "secret:google_client_id", "client_secret": "secret:google_client_secret"},
 	}
-	calendarConnection := integrationmodel.IntegrationConnection{Key: "google_calendar_primary", WorkspaceID: "default", ConnectorKey: "appointment_scheduling", ProviderKey: "google_calendar", Status: "configured", Config: map[string]any{}, SecretRefs: map[string]string{}}
+	calendarConnection := integrationmodel.IntegrationConnection{Key: "google_calendar_primary", WorkspaceID: "workspace-primary", ConnectorKey: "appointment_scheduling", ProviderKey: "google_calendar", Status: "configured", Config: map[string]any{}, SecretRefs: map[string]string{}}
 	repository := &independentConfigRepository{
 		connections: map[string]integrationmodel.IntegrationConnection{connection.Key: connection, calendarConnection.Key: calendarConnection},
 		secrets: map[string]integrationmodel.IntegrationSecret{
-			"google_client_id":     {Key: "google_client_id", WorkspaceID: "default", Kind: "identifier", Status: "active", ValueRef: "material:google_client_id"},
-			"google_client_secret": {Key: "google_client_secret", WorkspaceID: "default", Kind: "oauth_client_secret", Status: "active", ValueRef: "material:google_client_secret"},
+			"google_client_id":     {Key: "google_client_id", WorkspaceID: "workspace-primary", Kind: "identifier", Status: "active", ValueRef: "material:google_client_id"},
+			"google_client_secret": {Key: "google_client_secret", WorkspaceID: "workspace-primary", Kind: "oauth_client_secret", Status: "active", ValueRef: "material:google_client_secret"},
 		},
-		materials: map[string]string{"default:google_client_id": "client-id", "default:google_client_secret": "client-secret"},
+		materials: map[string]string{"workspace-primary:google_client_id": "client-id", "workspace-primary:google_client_secret": "client-secret"},
 	}
 	events := &googleOAuthNonceRepository{seen: map[string]bool{}}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{PermissionConnectionManage, PermissionSecretManage}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{PermissionConnectionManage, PermissionSecretManage}})
 	service := NewIntegrationApplicationService(ApplicationDependencies{
 		ConfigRepository: repository,
 		EventRepository:  events,
@@ -101,7 +101,7 @@ func TestGoogleOAuthAuthorizationActivatesManagedGmailIngestion(t *testing.T) {
 	if saved.Status != "active" || saved.Config["gmail_ingest_enabled"] != true || saved.Config["gmail_watch_enabled"] != false || saved.SecretRefs["access_token"] != "secret:gmail_primary_access_token" || saved.SecretRefs["refresh_token"] != "secret:gmail_primary_refresh_token" {
 		t.Fatalf("saved connection=%+v", saved)
 	}
-	if repository.materials["default:gmail_primary_access_token"] != "access-value" || repository.materials["default:gmail_primary_refresh_token"] != "refresh-value" {
+	if repository.materials["workspace-primary:gmail_primary_access_token"] != "access-value" || repository.materials["workspace-primary:gmail_primary_refresh_token"] != "refresh-value" {
 		t.Fatalf("stored token material keys=%v", repository.materials)
 	}
 	calendar := repository.connections[calendarConnection.Key]
@@ -125,28 +125,28 @@ func TestGoogleOAuthAuthorizationActivatesManagedGmailIngestion(t *testing.T) {
 }
 
 func TestGoogleOAuthAuthorizationRejectsInvalidLinkedConnection(t *testing.T) {
-	connection := integrationmodel.IntegrationConnection{Key: "gmail", WorkspaceID: "default", ConnectorKey: "google_workspace", ProviderKey: "google", Status: "active", Config: map[string]any{"oauth_linked_connection_keys": []any{"wrong"}}, SecretRefs: map[string]string{"access_token": "secret:access", "refresh_token": "secret:refresh", "client_id": "secret:id", "client_secret": "secret:secret"}}
-	wrong := integrationmodel.IntegrationConnection{Key: "wrong", WorkspaceID: "default", ConnectorKey: "appointment_scheduling", ProviderKey: "feishu_calendar", Status: "configured"}
+	connection := integrationmodel.IntegrationConnection{Key: "gmail", WorkspaceID: "workspace-primary", ConnectorKey: "google_workspace", ProviderKey: "google", Status: "active", Config: map[string]any{"oauth_linked_connection_keys": []any{"wrong"}}, SecretRefs: map[string]string{"access_token": "secret:access", "refresh_token": "secret:refresh", "client_id": "secret:id", "client_secret": "secret:secret"}}
+	wrong := integrationmodel.IntegrationConnection{Key: "wrong", WorkspaceID: "workspace-primary", ConnectorKey: "appointment_scheduling", ProviderKey: "feishu_calendar", Status: "configured"}
 	repository := &independentConfigRepository{connections: map[string]integrationmodel.IntegrationConnection{"gmail": connection, "wrong": wrong}}
 	service := NewIntegrationApplicationService(ApplicationDependencies{ConfigRepository: repository})
-	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}
 	if _, err := service.linkGoogleOAuthConnections(t.Context(), connection, "agent_worker", "agent_service", principal); apperror.CodeOf(err) != "backend.integration.google_oauth.linked_connection_invalid" {
 		t.Fatalf("invalid linked connection error=%v", err)
 	}
 }
 
 func TestGoogleOAuthAuthorizationRejectsUnsafeRedirectAndTamperedState(t *testing.T) {
-	connection := integrationmodel.IntegrationConnection{Key: "gmail", WorkspaceID: "default", ConnectorKey: "google_workspace", ProviderKey: "google", Status: "configured", SecretRefs: map[string]string{"client_id": "secret:id", "client_secret": "secret:secret"}}
+	connection := integrationmodel.IntegrationConnection{Key: "gmail", WorkspaceID: "workspace-primary", ConnectorKey: "google_workspace", ProviderKey: "google", Status: "configured", SecretRefs: map[string]string{"client_id": "secret:id", "client_secret": "secret:secret"}}
 	repository := &independentConfigRepository{
 		connections: map[string]integrationmodel.IntegrationConnection{"gmail": connection},
 		secrets: map[string]integrationmodel.IntegrationSecret{
-			"id":     {Key: "id", WorkspaceID: "default", Status: "active", ValueRef: "material:id"},
-			"secret": {Key: "secret", WorkspaceID: "default", Status: "active", ValueRef: "material:secret"},
+			"id":     {Key: "id", WorkspaceID: "workspace-primary", Status: "active", ValueRef: "material:id"},
+			"secret": {Key: "secret", WorkspaceID: "workspace-primary", Status: "active", ValueRef: "material:secret"},
 		},
-		materials: map[string]string{"default:id": "client", "default:secret": "signer"},
+		materials: map[string]string{"workspace-primary:id": "client", "workspace-primary:secret": "signer"},
 	}
 	service := NewIntegrationApplicationService(ApplicationDependencies{ConfigRepository: repository, EventRepository: &googleOAuthNonceRepository{seen: map[string]bool{}}})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{PermissionConnectionManage, PermissionSecretManage}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{PermissionConnectionManage, PermissionSecretManage}})
 	if _, err := service.StartGoogleOAuthAuthorization(t.Context(), "gmail", integrationmodel.IntegrationGoogleOAuthStartRequest{RedirectURI: "http://remote.example/callback"}, principal); apperror.CodeOf(err) != "backend.integration.google_oauth.redirect_uri_invalid" {
 		t.Fatalf("unsafe redirect error=%v", err)
 	}

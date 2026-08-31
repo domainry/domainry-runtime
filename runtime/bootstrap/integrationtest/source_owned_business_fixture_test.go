@@ -142,11 +142,31 @@ func (handler sourceOwnedIntegrationFixtureHandler) Invoke(ctx context.Context, 
 	return json.RawMessage(`{}`), nil
 }
 
+func initializedIntegrationRuntimeConfig(cfg config.Config) config.Config {
+	if strings.TrimSpace(cfg.IdentityWorkspaceID) == "" {
+		cfg.IdentityWorkspaceID = "workspace-primary"
+	}
+	if strings.TrimSpace(cfg.NotificationTenantID) == "" {
+		cfg.NotificationTenantID = "tenant-primary"
+	}
+	if strings.TrimSpace(cfg.NotificationWorkspaceID) == "" {
+		cfg.NotificationWorkspaceID = cfg.IdentityWorkspaceID
+	}
+	if strings.TrimSpace(cfg.PartyTenantID) == "" {
+		cfg.PartyTenantID = "tenant-primary"
+	}
+	if strings.TrimSpace(cfg.PartyWorkspaceID) == "" {
+		cfg.PartyWorkspaceID = cfg.IdentityWorkspaceID
+	}
+	return cfg
+}
+
 func newIntegrationRuntime(t *testing.T, cfg config.Config) *bootstrap.Runtime {
 	t.Helper()
 	// Header-based principals exist only in this in-process test harness. Runtime
 	// production configuration never infers or enables them.
 	cfg.RuntimeAllowDevIdentityHeaders = true
+	cfg = initializedIntegrationRuntimeConfig(cfg)
 	raw, err := os.ReadFile(cfg.ManifestPath)
 	if err != nil {
 		t.Fatal(err)

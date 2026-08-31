@@ -61,6 +61,10 @@ type executionTransactionalRepositoryEdgeStub struct {
 	beginErr    error
 }
 
+func initializedActionExecutionPrincipal() principalmodel.Principal {
+	return principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}
+}
+
 func (stub *executionTransactionalRepositoryEdgeStub) BeginExecutionTransaction(context.Context) (actioncontract.ActionExecutionTransaction, error) {
 	if stub.beginErr != nil {
 		return nil, stub.beginErr
@@ -83,11 +87,11 @@ func TestActionExecutionRuntimeDecisionAndRepositoryEdges(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			stub := &executionRepositoryEdgeStub{claim: actionmodel.ActionExecutionClaimResult{Decision: test.decision, Execution: actionmodel.ActionBusinessExecution{LeaseExpiresAt: "invalid"}}, claimErr: test.claimErr}
-			_, _, _, err := NewActionExecutionRuntime(stub).BeginRecord(t.Context(), " object ", " record ", " action ", " key ", idempotency.FingerprintInput{Payload: map[string]any{}}, principalmodel.Principal{})
+			_, _, _, err := NewActionExecutionRuntime(stub).BeginRecord(t.Context(), " object ", " record ", " action ", " key ", idempotency.FingerprintInput{Payload: map[string]any{}}, initializedActionExecutionPrincipal())
 			if err == nil || apperror.CodeOf(err) != test.wantCode {
 				t.Fatalf("error=%v code=%q", err, apperror.CodeOf(err))
 			}
-			if test.claimErr == nil && (stub.request.Execution.WorkspaceID != "default" || stub.request.LeaseOwner == "" || stub.request.Execution.ObjectKey != "object") {
+			if test.claimErr == nil && (stub.request.Execution.WorkspaceID != "workspace-primary" || stub.request.LeaseOwner == "" || stub.request.Execution.ObjectKey != "object") {
 				t.Fatalf("claim request=%#v", stub.request)
 			}
 		})
@@ -114,15 +118,15 @@ func TestActionExecutionRuntimeCompletionEncodingAndReplayEdges(t *testing.T) {
 
 	for _, begin := range []func(*ActionExecutionRuntime) error{
 		func(runtime *ActionExecutionRuntime) error {
-			_, _, _, err := runtime.BeginObject(t.Context(), "object", "action", "key", idempotency.FingerprintInput{}, principalmodel.Principal{})
+			_, _, _, err := runtime.BeginObject(t.Context(), "object", "action", "key", idempotency.FingerprintInput{}, initializedActionExecutionPrincipal())
 			return err
 		},
 		func(runtime *ActionExecutionRuntime) error {
-			_, _, _, err := runtime.BeginRecord(t.Context(), "object", "record", "action", "key", idempotency.FingerprintInput{}, principalmodel.Principal{})
+			_, _, _, err := runtime.BeginRecord(t.Context(), "object", "record", "action", "key", idempotency.FingerprintInput{}, initializedActionExecutionPrincipal())
 			return err
 		},
 		func(runtime *ActionExecutionRuntime) error {
-			_, _, _, err := runtime.BeginBulk(t.Context(), "object", "action", "key", actionmodel.ActionBulkRequest{}, principalmodel.Principal{})
+			_, _, _, err := runtime.BeginBulk(t.Context(), "object", "action", "key", actionmodel.ActionBulkRequest{}, initializedActionExecutionPrincipal())
 			return err
 		},
 	} {
@@ -132,7 +136,7 @@ func TestActionExecutionRuntimeCompletionEncodingAndReplayEdges(t *testing.T) {
 		}
 	}
 	bulkReplay := &executionRepositoryEdgeStub{claim: actionmodel.ActionExecutionClaimResult{Decision: idempotency.DecisionReplay, Execution: actionmodel.ActionBusinessExecution{Result: map[string]any{"action_key": "action"}}}}
-	result, _, replayed, err := NewActionExecutionRuntime(bulkReplay).BeginBulk(t.Context(), "object", "action", "key", actionmodel.ActionBulkRequest{}, principalmodel.Principal{})
+	result, _, replayed, err := NewActionExecutionRuntime(bulkReplay).BeginBulk(t.Context(), "object", "action", "key", actionmodel.ActionBulkRequest{}, initializedActionExecutionPrincipal())
 	if err != nil || !replayed || result.Message != "backend.action.idempotent_replay" {
 		t.Fatalf("bulk result=%#v replay=%v error=%v", result, replayed, err)
 	}
@@ -145,7 +149,7 @@ func TestActionExecutionRuntimeCompletionEncodingAndReplayEdges(t *testing.T) {
 		t.Fatalf("unencodable bulk replay=%v error=%v", replayed, err)
 	}
 	recordReplay := &executionRepositoryEdgeStub{claim: actionmodel.ActionExecutionClaimResult{Decision: idempotency.DecisionReplay, Execution: actionmodel.ActionBusinessExecution{Result: map[string]any{"action_key": "action"}}}}
-	recordResult, _, replayed, err := NewActionExecutionRuntime(recordReplay).BeginRecord(t.Context(), "object", "record", "action", "key", idempotency.FingerprintInput{}, principalmodel.Principal{})
+	recordResult, _, replayed, err := NewActionExecutionRuntime(recordReplay).BeginRecord(t.Context(), "object", "record", "action", "key", idempotency.FingerprintInput{}, initializedActionExecutionPrincipal())
 	if err != nil || !replayed || recordResult.Message != "backend.action.idempotent_replay" {
 		t.Fatalf("record result=%#v replay=%v error=%v", recordResult, replayed, err)
 	}
@@ -193,7 +197,7 @@ func TestActionExecutionRuntimeCompletionEncodingAndReplayEdges(t *testing.T) {
 		},
 	} {
 		failedReplay := &executionRepositoryEdgeStub{claim: actionmodel.ActionExecutionClaimResult{Decision: idempotency.DecisionReplay, Execution: execution}}
-		_, _, replayed, err := NewActionExecutionRuntime(failedReplay).BeginObject(t.Context(), "object", "action", "key", idempotency.FingerprintInput{}, principalmodel.Principal{})
+		_, _, replayed, err := NewActionExecutionRuntime(failedReplay).BeginObject(t.Context(), "object", "action", "key", idempotency.FingerprintInput{}, initializedActionExecutionPrincipal())
 		if replayed || apperror.CodeOf(err) != idempotency.ErrorCodeReceiptUnavailable {
 			t.Fatalf("malformed failed replay=%v error=%v", replayed, err)
 		}
@@ -313,7 +317,7 @@ func TestActionExecutionRuntimeValueHelpers(t *testing.T) {
 	if err := decodeExecutionResult(map[string]any{"value": 1}, make(chan int)); err == nil {
 		t.Fatal("invalid decode target accepted")
 	}
-	if actionWorkspaceID(principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: " workspace "}}) != "workspace" || actionWorkspaceID(principalmodel.Principal{}) != "default" {
+	if actionWorkspaceID(principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: " workspace "}}) != "workspace" || actionWorkspaceID(principalmodel.Principal{}) != "" {
 		t.Fatal("workspace normalization changed")
 	}
 	if apperror.CodeOf(executionServiceError("operation", backendSentinelError{})) != "backend.internal" {

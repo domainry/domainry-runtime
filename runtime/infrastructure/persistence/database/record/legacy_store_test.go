@@ -27,10 +27,10 @@ func TestRecordCompatibilityAPIsRejectCancelledContext(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := repository.ListRecords(ctx, "default", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10}); !errors.Is(err, context.Canceled) {
+	if _, err := repository.ListRecords(ctx, "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("ListRecords error = %v", err)
 	}
-	if _, err := repository.UniqueExists(ctx, "default", object.Key, "name", "", "never"); !errors.Is(err, context.Canceled) {
+	if _, err := repository.UniqueExists(ctx, "workspace-primary", object.Key, "name", "", "never"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("UniqueExists error = %v", err)
 	}
 }

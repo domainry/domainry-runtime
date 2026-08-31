@@ -15,7 +15,7 @@ import (
 
 func TestBoundaryIntentStagedDatabaseFailures(t *testing.T) {
 	wantErr := errors.New("injected boundary intent database failure")
-	current := []driver.Value{"intent-1", "default", "owner", "operation", "resource", "key", "executing", `{}`, `{}`, int64(0), "", "worker", "expiry", int64(1), "", "created", "updated"}
+	current := []driver.Value{"intent-1", "workspace-primary", "owner", "operation", "resource", "key", "executing", `{}`, `{}`, int64(0), "", "worker", "expiry", int64(1), "", "created", "updated"}
 	newStore := func(state *boundaryIntentDBState) (BoundaryIntentStore, func()) {
 		store := openBoundaryIntentStore(t)
 		db := sql.OpenDB(boundaryIntentConnector{state: state})
@@ -26,7 +26,7 @@ func TestBoundaryIntentStagedDatabaseFailures(t *testing.T) {
 	t.Run("claim read", func(t *testing.T) {
 		store, closeDB := newStore(&boundaryIntentDBState{execSteps: []boundaryIntentExecStep{{rows: 1}}, querySteps: []boundaryIntentQueryStep{{err: wantErr}}})
 		defer closeDB()
-		if _, _, err := store.ClaimBoundaryIntent(t.Context(), "default", "intent-1", "worker", time.Now().UTC().Format(time.RFC3339)); !errors.Is(err, wantErr) {
+		if _, _, err := store.ClaimBoundaryIntent(t.Context(), "workspace-primary", "intent-1", "worker", time.Now().UTC().Format(time.RFC3339)); !errors.Is(err, wantErr) {
 			t.Fatalf("claim read error=%v", err)
 		}
 	})
@@ -34,7 +34,7 @@ func TestBoundaryIntentStagedDatabaseFailures(t *testing.T) {
 	t.Run("transition read", func(t *testing.T) {
 		store, closeDB := newStore(&boundaryIntentDBState{querySteps: []boundaryIntentQueryStep{{err: wantErr}}})
 		defer closeDB()
-		if _, err := store.TransitionBoundaryIntent(t.Context(), "default", "intent-1", "worker", 1, transactionmodel.BoundaryIntentSucceeded, "", ""); !errors.Is(err, wantErr) {
+		if _, err := store.TransitionBoundaryIntent(t.Context(), "workspace-primary", "intent-1", "worker", 1, transactionmodel.BoundaryIntentSucceeded, "", ""); !errors.Is(err, wantErr) {
 			t.Fatalf("transition read error=%v", err)
 		}
 	})
@@ -42,7 +42,7 @@ func TestBoundaryIntentStagedDatabaseFailures(t *testing.T) {
 	t.Run("transition write", func(t *testing.T) {
 		store, closeDB := newStore(&boundaryIntentDBState{querySteps: []boundaryIntentQueryStep{{rows: [][]driver.Value{current}}}, execSteps: []boundaryIntentExecStep{{err: wantErr}}})
 		defer closeDB()
-		if _, err := store.TransitionBoundaryIntent(t.Context(), "default", "intent-1", "worker", 1, transactionmodel.BoundaryIntentSucceeded, "", ""); err == nil || !strings.Contains(err.Error(), "transition boundary intent") {
+		if _, err := store.TransitionBoundaryIntent(t.Context(), "workspace-primary", "intent-1", "worker", 1, transactionmodel.BoundaryIntentSucceeded, "", ""); err == nil || !strings.Contains(err.Error(), "transition boundary intent") {
 			t.Fatalf("transition write error=%v", err)
 		}
 	})
@@ -50,7 +50,7 @@ func TestBoundaryIntentStagedDatabaseFailures(t *testing.T) {
 	t.Run("transition final read", func(t *testing.T) {
 		store, closeDB := newStore(&boundaryIntentDBState{querySteps: []boundaryIntentQueryStep{{rows: [][]driver.Value{current}}, {err: wantErr}}, execSteps: []boundaryIntentExecStep{{rows: 1}}})
 		defer closeDB()
-		if _, err := store.TransitionBoundaryIntent(t.Context(), "default", "intent-1", "worker", 1, transactionmodel.BoundaryIntentSucceeded, "", ""); !errors.Is(err, wantErr) {
+		if _, err := store.TransitionBoundaryIntent(t.Context(), "workspace-primary", "intent-1", "worker", 1, transactionmodel.BoundaryIntentSucceeded, "", ""); !errors.Is(err, wantErr) {
 			t.Fatalf("transition final read error=%v", err)
 		}
 	})

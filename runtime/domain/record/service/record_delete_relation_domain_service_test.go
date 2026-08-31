@@ -44,7 +44,7 @@ func TestDeleteRelationServiceScansReferencesInStableObjectOrder(t *testing.T) {
 	}}
 	service := NewRecordDeleteRelationDomainService(repository, func() map[string]definitionmodel.ObjectSchema { return objects })
 
-	references, err := service.References(t.Context(), "default", "customer", "customer-1")
+	references, err := service.References(t.Context(), "workspace-primary", "customer", "customer-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestDeleteRelationServiceAppliesSetNullAndCascade(t *testing.T) {
 	// Both fields query the same fixture page, so each callback receives one reference.
 	service := NewRecordDeleteRelationDomainService(repository, func() map[string]definitionmodel.ObjectSchema { return objects })
 	setNull, cascade := []string{}, []string{}
-	err := service.Apply(t.Context(), "default", "customer", "customer-1", RecordDeleteRelationCallbacks{
+	err := service.Apply(t.Context(), "workspace-primary", "customer", "customer-1", RecordDeleteRelationCallbacks{
 		SetNull: func(_ context.Context, reference RecordDeleteReference) error {
 			setNull = append(setNull, reference.Field.Key+":"+reference.Record.ID)
 			return nil
@@ -105,7 +105,7 @@ func TestDeleteRelationServiceRejectsRestrictBeforeSideEffects(t *testing.T) {
 		return map[string]definitionmodel.ObjectSchema{"order": object}
 	})
 	called := false
-	err := service.Apply(t.Context(), "default", "customer", "customer-1", RecordDeleteRelationCallbacks{SetNull: func(context.Context, RecordDeleteReference) error {
+	err := service.Apply(t.Context(), "workspace-primary", "customer", "customer-1", RecordDeleteRelationCallbacks{SetNull: func(context.Context, RecordDeleteReference) error {
 		called = true
 		return nil
 	}})
@@ -122,13 +122,13 @@ func TestDeleteRelationServiceWrapsRepositoryErrorsAndUsesConstructorRepository(
 	service := NewRecordDeleteRelationDomainService(&deleteRelationRepositoryProbe{err: errors.New("store unavailable")}, func() map[string]definitionmodel.ObjectSchema {
 		return map[string]definitionmodel.ObjectSchema{"order": object}
 	})
-	_, err := service.References(t.Context(), "default", "customer", "customer-1")
+	_, err := service.References(t.Context(), "workspace-primary", "customer", "customer-1")
 	assertRecordAppError(t, err, apperror.KindInternal, "backend.internal", map[string]string{"operation": "list relation delete references"})
 
 	service = NewRecordDeleteRelationDomainService(&deleteRelationRepositoryProbe{pages: map[string][]recordmodel.RecordPageResult{"order": {{}}}}, func() map[string]definitionmodel.ObjectSchema {
 		return map[string]definitionmodel.ObjectSchema{"order": object}
 	})
-	if _, err := service.References(t.Context(), "default", "customer", "customer-1"); err != nil {
+	if _, err := service.References(t.Context(), "workspace-primary", "customer", "customer-1"); err != nil {
 		t.Fatalf("constructor repository was not used: %v", err)
 	}
 }

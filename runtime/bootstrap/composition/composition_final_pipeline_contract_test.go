@@ -52,7 +52,7 @@ func TestCompositionRegistriesListNonEmptyOwners(t *testing.T) {
 }
 
 func TestCompositionFinalNilAdapterEdges(t *testing.T) {
-	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default", UserID: "user-1"}}
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary", UserID: "user-1"}}
 	workflowAdapter := businessReferenceRuntimeAdapter{records: &runtimeAssembly{}, workflows: assembleWorkflowApplication(&runtimeAssembly{})}
 	if values, err := workflowAdapter.WorkflowProcesses(t.Context(), principal, workflowmodel.WorkflowProcessFilter{}); err != nil || len(values) != 0 {
 		t.Fatalf("workflow values=%#v err=%v", values, err)
@@ -70,7 +70,7 @@ func TestCompositionFinalNilAdapterEdges(t *testing.T) {
 func TestCompositionFinalRecordAssuranceEdges(t *testing.T) {
 	runtime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{})
 	validate := buildRecordApplicationDependencies(runtime).ValidateExportAssurance
-	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default", UserID: "user-1"}}
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary", UserID: "user-1"}}
 	for _, object := range []definitionmodel.ObjectSchema{
 		{Key: "nil-policy"},
 		{Key: "empty-policy", ExportAssurancePolicy: &definitionmodel.ActionAssurancePolicy{}},

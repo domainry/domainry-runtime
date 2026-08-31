@@ -45,7 +45,7 @@ func TestContextRecordMutationDialectContracts(t *testing.T) {
 			}
 			repository := store
 			for _, id := range []string{"first", "second"} {
-				if err := recordStore(repository).InsertRecord(t.Context(), "default", object, recordmodel.Record{ID: id, CreatedAt: "v1", UpdatedAt: "v1", Data: map[string]any{"status": "pending"}}); err != nil {
+				if err := recordStore(repository).InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{ID: id, CreatedAt: "v1", UpdatedAt: "v1", Data: map[string]any{"status": "pending"}}); err != nil {
 					t.Fatalf("insert %s: %v", id, err)
 				}
 			}
@@ -54,7 +54,7 @@ func TestContextRecordMutationDialectContracts(t *testing.T) {
 				{Operation: "update", Object: object, Record: recordmodel.Record{ID: "first", CreatedAt: "v1", UpdatedAt: "v2", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "v1", Audit: dialectAudit(driver, "first-conflict"), Outbox: []integrationmodel.IntegrationOutboxMessage{dialectOutbox(driver, "conflict")}, WorkflowIntents: []workflowmodel.WorkflowExecution{dialectWorkflowIntent(driver, "conflict")}},
 				{Operation: "update", Object: object, Record: recordmodel.Record{ID: "second", CreatedAt: "v1", UpdatedAt: "v2", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "stale", Audit: dialectAudit(driver, "second-conflict")},
 			}
-			if err := recordStore(repository).CommitRecordMutationBatch(t.Context(), "default", conflicting); !mutation.IsMutationConflict(err, mutation.MutationConflictOptimistic) {
+			if err := recordStore(repository).CommitRecordMutationBatch(t.Context(), "workspace-primary", conflicting); !mutation.IsMutationConflict(err, mutation.MutationConflictOptimistic) {
 				t.Fatalf("expected typed optimistic concurrency conflict, got %v", err)
 			}
 			assertDialectRecords(t, recordStore(repository), object, "pending", "v1")
@@ -66,7 +66,7 @@ func TestContextRecordMutationDialectContracts(t *testing.T) {
 				{Operation: "update", Object: object, Record: recordmodel.Record{ID: "first", CreatedAt: "v1", UpdatedAt: "v2", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "v1", Audit: dialectAudit(driver, "first-success"), Audits: []auditmodel.AuditEvent{*dialectAudit(driver, "first-mandatory-domain-event")}, Outbox: []integrationmodel.IntegrationOutboxMessage{dialectOutbox(driver, "success")}, WorkflowIntents: []workflowmodel.WorkflowExecution{dialectWorkflowIntent(driver, "success")}},
 				{Operation: "update", Object: object, Record: recordmodel.Record{ID: "second", CreatedAt: "v1", UpdatedAt: "v2", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "v1", Audit: dialectAudit(driver, "second-success")},
 			}
-			if err := recordStore(repository).CommitRecordMutationBatch(t.Context(), "default", successful); err != nil {
+			if err := recordStore(repository).CommitRecordMutationBatch(t.Context(), "workspace-primary", successful); err != nil {
 				t.Fatalf("commit successful batch: %v", err)
 			}
 			assertDialectRecords(t, recordStore(repository), object, "approved", "v2")
@@ -75,14 +75,14 @@ func TestContextRecordMutationDialectContracts(t *testing.T) {
 			assertDialectOutboxCount(t, store, driver, 1)
 
 			duplicateRecord := transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: recordmodel.Record{ID: "first", CreatedAt: "v3", UpdatedAt: "v3", Data: map[string]any{"status": "duplicate"}}}
-			if err := recordStore(repository).CommitRecordMutation(t.Context(), "default", duplicateRecord); !mutation.IsMutationConflict(err, mutation.MutationConflictUnique) {
+			if err := recordStore(repository).CommitRecordMutation(t.Context(), "workspace-primary", duplicateRecord); !mutation.IsMutationConflict(err, mutation.MutationConflictUnique) {
 				t.Fatalf("expected typed unique conflict, got %v", err)
 			}
 			duplicateIntent := transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: recordmodel.Record{ID: "first", CreatedAt: "v1", UpdatedAt: "v3", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "v2", WorkflowIntents: []workflowmodel.WorkflowExecution{dialectWorkflowIntent(driver, "success")}}
-			if err := recordStore(repository).CommitRecordMutation(t.Context(), "default", duplicateIntent); !mutation.IsMutationConflict(err, mutation.MutationConflictIdempotency) {
+			if err := recordStore(repository).CommitRecordMutation(t.Context(), "workspace-primary", duplicateIntent); !mutation.IsMutationConflict(err, mutation.MutationConflictIdempotency) {
 				t.Fatalf("expected typed idempotency conflict, got %v", err)
 			}
-			record, found, err := recordStore(repository).GetRecord(t.Context(), "default", object, "first")
+			record, found, err := recordStore(repository).GetRecord(t.Context(), "workspace-primary", object, "first")
 			if err != nil || !found || record.UpdatedAt != "v2" {
 				t.Fatalf("idempotency conflict did not roll back record update: %#v found=%v err=%v", record, found, err)
 			}
@@ -99,7 +99,7 @@ func dialectWorkflowIntent(driver, suffix string) workflowmodel.WorkflowExecutio
 }
 
 func dialectOutbox(driver, suffix string) integrationmodel.IntegrationOutboxMessage {
-	return integrationmodel.IntegrationOutboxMessage{ID: fmt.Sprintf("outbox_%s_%s", driver, suffix), WorkspaceID: "default", ConnectorKey: "test", Operation: "notify", DedupKey: "dialect:" + driver + ":" + suffix, Status: "queued", Payload: map[string]any{"record_id": "first"}, CreatedBy: "tester"}
+	return integrationmodel.IntegrationOutboxMessage{ID: fmt.Sprintf("outbox_%s_%s", driver, suffix), WorkspaceID: "workspace-primary", ConnectorKey: "test", Operation: "notify", DedupKey: "dialect:" + driver + ":" + suffix, Status: "queued", Payload: map[string]any{"record_id": "first"}, CreatedBy: "tester"}
 }
 
 func assertDialectRecords(t *testing.T, repository interface {
@@ -107,7 +107,7 @@ func assertDialectRecords(t *testing.T, repository interface {
 }, object definitionmodel.ObjectSchema, status, updatedAt string) {
 	t.Helper()
 	for _, id := range []string{"first", "second"} {
-		record, found, err := repository.GetRecord(t.Context(), "default", object, id)
+		record, found, err := repository.GetRecord(t.Context(), "workspace-primary", object, id)
 		if err != nil || !found {
 			t.Fatalf("get %s: found=%v err=%v", id, found, err)
 		}
@@ -161,7 +161,7 @@ func TestCommitRecordMutationBatchRollsBackEveryRecordOnConflict(t *testing.T) {
 		t.Fatalf("create table: %v", err)
 	}
 	for _, id := range []string{"first", "second"} {
-		if err := recordStore(store).InsertRecord(t.Context(), "default", object, recordmodel.Record{ID: id, CreatedAt: "created", UpdatedAt: "version-1", Data: map[string]any{"status": "pending"}}); err != nil {
+		if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{ID: id, CreatedAt: "created", UpdatedAt: "version-1", Data: map[string]any{"status": "pending"}}); err != nil {
 			t.Fatalf("insert %s: %v", id, err)
 		}
 	}
@@ -169,11 +169,11 @@ func TestCommitRecordMutationBatchRollsBackEveryRecordOnConflict(t *testing.T) {
 		{Operation: "update", Object: object, Record: recordmodel.Record{ID: "first", CreatedAt: "created", UpdatedAt: "version-2", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "version-1"},
 		{Operation: "update", Object: object, Record: recordmodel.Record{ID: "second", CreatedAt: "created", UpdatedAt: "version-2", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "stale-version"},
 	}
-	if err := recordStore(store).CommitRecordMutationBatch(t.Context(), "default", commits); !mutation.IsMutationConflict(err, mutation.MutationConflictOptimistic) {
+	if err := recordStore(store).CommitRecordMutationBatch(t.Context(), "workspace-primary", commits); !mutation.IsMutationConflict(err, mutation.MutationConflictOptimistic) {
 		t.Fatalf("expected typed optimistic concurrency conflict, got %v", err)
 	}
 	for _, id := range []string{"first", "second"} {
-		record, ok, err := recordStore(store).GetRecord(t.Context(), "default", object, id)
+		record, ok, err := recordStore(store).GetRecord(t.Context(), "workspace-primary", object, id)
 		if err != nil || !ok {
 			t.Fatalf("get %s: ok=%v err=%v", id, ok, err)
 		}
@@ -199,7 +199,7 @@ func TestConditionalMutationPredicateIsAtomicAcrossDialects(t *testing.T) {
 				t.Fatal(err)
 			}
 			initial := recordmodel.Record{ID: "class-1", CreatedAt: "v1", UpdatedAt: "v1", Data: map[string]any{"reserved": 19.0, "status": "open"}}
-			if err := recordStore(store).InsertRecord(t.Context(), "default", object, initial); err != nil {
+			if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", object, initial); err != nil {
 				t.Fatal(err)
 			}
 			commit := transactionmodel.RecordMutationCommit{
@@ -207,17 +207,17 @@ func TestConditionalMutationPredicateIsAtomicAcrossDialects(t *testing.T) {
 				Record:     recordmodel.Record{ID: initial.ID, CreatedAt: "v1", UpdatedAt: "v2", Data: map[string]any{"reserved": 20.0, "status": "open"}},
 				Predicates: []transactionmodel.MutationPredicate{{Field: "reserved", Operator: "lt", Value: 20.0, ErrorCode: "capacity_full"}, {Field: "status", Operator: "eq", Value: "open", ErrorCode: "capacity_closed"}},
 			}
-			if err := recordStore(store).CommitRecordMutation(t.Context(), "default", commit); err != nil {
+			if err := recordStore(store).CommitRecordMutation(t.Context(), "workspace-primary", commit); err != nil {
 				t.Fatalf("first conditional mutation: %v", err)
 			}
 			commit.Record.UpdatedAt = "v3"
 			commit.Record.Data["reserved"] = 21.0
-			err := recordStore(store).CommitRecordMutation(t.Context(), "default", commit)
+			err := recordStore(store).CommitRecordMutation(t.Context(), "workspace-primary", commit)
 			var conflict *mutation.PolicyConflictError
 			if !errors.As(err, &conflict) || conflict.Code != "capacity_full" || conflict.Field != "reserved" {
 				t.Fatalf("business conflict=%#v err=%v", conflict, err)
 			}
-			persisted, found, err := recordStore(store).GetRecord(t.Context(), "default", object, initial.ID)
+			persisted, found, err := recordStore(store).GetRecord(t.Context(), "workspace-primary", object, initial.ID)
 			if err != nil || !found || fmt.Sprint(persisted.Data["reserved"]) != "20" || persisted.UpdatedAt != "v2" {
 				t.Fatalf("predicate failure leaked mutation: record=%#v found=%v err=%v", persisted, found, err)
 			}
@@ -243,7 +243,7 @@ func TestMutationSideFactFailureWindowsRollbackRecordAuditOutboxAndWorkflowInten
 			if _, err := store.DB().Exec(`CREATE TABLE failure_window_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, status TEXT)`); err != nil {
 				t.Fatal(err)
 			}
-			if err := recordStore(store).InsertRecord(t.Context(), "default", object, recordmodel.Record{ID: "record-1", CreatedAt: "v1", UpdatedAt: "v1", Data: map[string]any{"status": "pending"}}); err != nil {
+			if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{ID: "record-1", CreatedAt: "v1", UpdatedAt: "v1", Data: map[string]any{"status": "pending"}}); err != nil {
 				t.Fatal(err)
 			}
 			trigger := "fail_" + failure.name
@@ -256,10 +256,10 @@ func TestMutationSideFactFailureWindowsRollbackRecordAuditOutboxAndWorkflowInten
 				Outbox:          []integrationmodel.IntegrationOutboxMessage{dialectOutbox(failure.name, "rollback")},
 				WorkflowIntents: []workflowmodel.WorkflowExecution{dialectWorkflowIntent(failure.name, "rollback")},
 			}
-			if err := recordStore(store).CommitRecordMutation(t.Context(), "default", commit); err == nil {
+			if err := recordStore(store).CommitRecordMutation(t.Context(), "workspace-primary", commit); err == nil {
 				t.Fatal("expected injected side fact failure")
 			}
-			record, found, err := recordStore(store).GetRecord(t.Context(), "default", object, "record-1")
+			record, found, err := recordStore(store).GetRecord(t.Context(), "workspace-primary", object, "record-1")
 			if err != nil || !found || record.Data["status"] != "pending" || record.UpdatedAt != "v1" {
 				t.Fatalf("record leaked through %s failure: record=%#v found=%v err=%v", failure.name, record, found, err)
 			}
@@ -285,10 +285,10 @@ func TestTemporalExclusionIsEnforcedInsideMutationTransaction(t *testing.T) {
 	commit := func(id, owner, start, end, status string) transactionmodel.RecordMutationCommit {
 		return transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: recordmodel.Record{ID: id, CreatedAt: "now", UpdatedAt: "now", Data: map[string]any{"owner": owner, "starts_at": start, "ends_at": end, "status": status}}}
 	}
-	if err := recordStore(store).CommitRecordMutation(t.Context(), "default", commit("one", "coach-1", "2026-07-21T10:00:00Z", "2026-07-21T11:00:00Z", "confirmed")); err != nil {
+	if err := recordStore(store).CommitRecordMutation(t.Context(), "workspace-primary", commit("one", "coach-1", "2026-07-21T10:00:00Z", "2026-07-21T11:00:00Z", "confirmed")); err != nil {
 		t.Fatal(err)
 	}
-	err := recordStore(store).CommitRecordMutation(t.Context(), "default", commit("overlap", "coach-1", "2026-07-21T10:30:00Z", "2026-07-21T11:30:00Z", "confirmed"))
+	err := recordStore(store).CommitRecordMutation(t.Context(), "workspace-primary", commit("overlap", "coach-1", "2026-07-21T10:30:00Z", "2026-07-21T11:30:00Z", "confirmed"))
 	var conflict *mutation.PolicyConflictError
 	if !errors.As(err, &conflict) || conflict.Code != "booking.owner_busy" || conflict.Field != "owner_schedule" {
 		t.Fatalf("temporal conflict=%#v err=%v", conflict, err)
@@ -298,7 +298,7 @@ func TestTemporalExclusionIsEnforcedInsideMutationTransaction(t *testing.T) {
 		commit("other-scope", "coach-2", "2026-07-21T10:30:00Z", "2026-07-21T11:30:00Z", "confirmed"),
 		commit("excluded", "coach-1", "2026-07-21T10:30:00Z", "2026-07-21T11:30:00Z", "cancelled"),
 	} {
-		if err := recordStore(store).CommitRecordMutation(t.Context(), "default", allowed); err != nil {
+		if err := recordStore(store).CommitRecordMutation(t.Context(), "workspace-primary", allowed); err != nil {
 			t.Fatalf("allowed temporal mutation %s: %v", allowed.Record.ID, err)
 		}
 	}
@@ -306,7 +306,7 @@ func TestTemporalExclusionIsEnforcedInsideMutationTransaction(t *testing.T) {
 		commit("batch-one", "coach-3", "2026-07-21T13:00:00Z", "2026-07-21T14:00:00Z", "confirmed"),
 		commit("batch-overlap", "coach-3", "2026-07-21T13:30:00Z", "2026-07-21T14:30:00Z", "confirmed"),
 	}
-	if err := recordStore(store).CommitRecordMutationBatch(t.Context(), "default", batch); !errors.As(err, &conflict) {
+	if err := recordStore(store).CommitRecordMutationBatch(t.Context(), "workspace-primary", batch); !errors.As(err, &conflict) {
 		t.Fatalf("batch temporal conflict=%#v err=%v", conflict, err)
 	}
 	for _, id := range []string{"overlap", "batch-one", "batch-overlap"} {
@@ -335,7 +335,7 @@ func TestRelatedAggregateInvariantLocksParentAndUsesExactCandidateAggregate(t *t
 	}
 	currency := definitionmodel.FieldSchema{Key: "amount", Type: "currency", Config: map[string]any{"precision": 12, "scale": 2}}
 	payment := definitionmodel.ObjectSchema{Key: "payment_limit", Fields: []definitionmodel.FieldSchema{{Key: "paid_amount", Type: "currency", Config: currency.Config}}}
-	if err := recordStore(store).InsertRecord(t.Context(), "default", payment, recordmodel.Record{ID: "payment-1", CreatedAt: "now", UpdatedAt: "now", Data: map[string]any{"paid_amount": "100.00"}}); err != nil {
+	if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", payment, recordmodel.Record{ID: "payment-1", CreatedAt: "now", UpdatedAt: "now", Data: map[string]any{"paid_amount": "100.00"}}); err != nil {
 		t.Fatal(err)
 	}
 	refund := definitionmodel.ObjectSchema{Key: "refund_fact", Fields: []definitionmodel.FieldSchema{
@@ -347,18 +347,18 @@ func TestRelatedAggregateInvariantLocksParentAndUsesExactCandidateAggregate(t *t
 		return transactionmodel.RecordMutationCommit{Operation: "create", Object: refund, Record: recordmodel.Record{ID: id, CreatedAt: "now", UpdatedAt: "now", Data: map[string]any{"payment_id": "payment-1", "amount": amount, "status": status}}}
 	}
 	for _, commit := range []transactionmodel.RecordMutationCommit{refundCommit("refund-60", "60.00", "approved"), refundCommit("refund-40", "40.00", "pending"), refundCommit("refund-cancelled", "50.00", "cancelled")} {
-		if err := recordStore(store).CommitRecordMutation(t.Context(), "default", commit); err != nil {
+		if err := recordStore(store).CommitRecordMutation(t.Context(), "workspace-primary", commit); err != nil {
 			t.Fatalf("allowed refund %s: %v", commit.Record.ID, err)
 		}
 	}
-	err := recordStore(store).CommitRecordMutation(t.Context(), "default", refundCommit("refund-over", "0.01", "approved"))
+	err := recordStore(store).CommitRecordMutation(t.Context(), "workspace-primary", refundCommit("refund-over", "0.01", "approved"))
 	var conflict *mutation.PolicyConflictError
 	if !errors.As(err, &conflict) || conflict.Code != "refund.amount_exceeds_paid" || conflict.Field != "refund_not_above_paid" {
 		t.Fatalf("refund aggregate conflict=%#v err=%v", conflict, err)
 	}
 
 	class := definitionmodel.ObjectSchema{Key: "class_limit", Fields: []definitionmodel.FieldSchema{{Key: "capacity", Type: "number"}}}
-	if err := recordStore(store).InsertRecord(t.Context(), "default", class, recordmodel.Record{ID: "class-1", CreatedAt: "now", UpdatedAt: "now", Data: map[string]any{"capacity": 2}}); err != nil {
+	if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", class, recordmodel.Record{ID: "class-1", CreatedAt: "now", UpdatedAt: "now", Data: map[string]any{"capacity": 2}}); err != nil {
 		t.Fatal(err)
 	}
 	booking := definitionmodel.ObjectSchema{Key: "class_booking", Fields: []definitionmodel.FieldSchema{
@@ -369,10 +369,10 @@ func TestRelatedAggregateInvariantLocksParentAndUsesExactCandidateAggregate(t *t
 	bookingCommit := func(id string) transactionmodel.RecordMutationCommit {
 		return transactionmodel.RecordMutationCommit{Operation: "create", Object: booking, Record: recordmodel.Record{ID: id, CreatedAt: "now", UpdatedAt: "now", Data: map[string]any{"class_id": "class-1", "status": "reserved"}}}
 	}
-	if err := recordStore(store).CommitRecordMutationBatch(t.Context(), "default", []transactionmodel.RecordMutationCommit{bookingCommit("booking-1"), bookingCommit("booking-2")}); err != nil {
+	if err := recordStore(store).CommitRecordMutationBatch(t.Context(), "workspace-primary", []transactionmodel.RecordMutationCommit{bookingCommit("booking-1"), bookingCommit("booking-2")}); err != nil {
 		t.Fatal(err)
 	}
-	if err := recordStore(store).CommitRecordMutation(t.Context(), "default", bookingCommit("booking-3")); !errors.As(err, &conflict) || conflict.Code != "business.capacity_full" {
+	if err := recordStore(store).CommitRecordMutation(t.Context(), "workspace-primary", bookingCommit("booking-3")); !errors.As(err, &conflict) || conflict.Code != "business.capacity_full" {
 		t.Fatalf("count aggregate conflict=%#v err=%v", conflict, err)
 	}
 	for _, id := range []string{"refund-over", "booking-3"} {

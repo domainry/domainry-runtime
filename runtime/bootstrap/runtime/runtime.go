@@ -6,6 +6,7 @@ import (
 	"time"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
+	auditsdk "github.com/domainry/domainry-audit-sdk"
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 
 	connector "github.com/domainry/domainry-connector-sdk"
@@ -13,9 +14,11 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
+	reportsdk "github.com/domainry/domainry-report-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
@@ -55,6 +58,9 @@ type Runtime struct {
 	monitoringBinding   monitoringsdk.Binding
 	schedulerBinding    schedulersdk.Binding
 	agentBinding        agentsdk.Binding
+	auditBinding        auditsdk.Binding
+	metadataBinding     metadatasdk.Binding
+	reportBinding       reportsdk.Binding
 	notificationWorkers notificationsdk.LocalWorkers
 	notificationRelay   *notificationpublication.Relay
 	worker              workerplatform.Dependencies

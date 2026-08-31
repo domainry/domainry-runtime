@@ -51,8 +51,8 @@ func (s *RecordMutationExecutionRuntime) BeginCreate(ctx context.Context, object
 		owner = requestcontext.NewRequestID()
 	}
 	workspaceID := strings.TrimSpace(principal.WorkspaceID)
-	if workspaceID == "" {
-		workspaceID = "default"
+	if _, err := principalmodel.NewWorkspaceID(workspaceID); err != nil {
+		return recordmodel.Record{}, recordmodel.RecordMutationClaimResult{}, false, apperror.New(apperror.KindForbidden, "backend.workspace_scope_required", err, nil)
 	}
 	claim, err := s.repository.TryBeginRecordMutation(ctx, recordmodel.RecordMutationClaimRequest{
 		Execution:          recordmodel.RecordMutationExecution{WorkspaceID: workspaceID, Operation: "create", ObjectKey: strings.TrimSpace(objectKey), IdempotencyKey: key, ActorID: principal.UserID},
@@ -125,8 +125,8 @@ func (s *RecordMutationExecutionRuntime) ReplayImport(ctx context.Context, objec
 		return recordmodel.RecordImportApplyResult{}, false, nil
 	}
 	workspaceID := strings.TrimSpace(principal.WorkspaceID)
-	if workspaceID == "" {
-		workspaceID = "default"
+	if _, err := principalmodel.NewWorkspaceID(workspaceID); err != nil {
+		return recordmodel.RecordImportApplyResult{}, false, apperror.New(apperror.KindForbidden, "backend.workspace_scope_required", err, nil)
 	}
 	execution, found, err := lookup.FindRecordMutationExecution(ctx, recordmodel.RecordMutationExecution{
 		WorkspaceID: workspaceID, Operation: "import", ObjectKey: strings.TrimSpace(objectKey), IdempotencyKey: strings.TrimSpace(key),
@@ -187,8 +187,8 @@ func (s *RecordMutationExecutionRuntime) beginOperationTarget(ctx context.Contex
 		owner = requestcontext.NewRequestID()
 	}
 	workspaceID := strings.TrimSpace(principal.WorkspaceID)
-	if workspaceID == "" {
-		workspaceID = "default"
+	if _, err := principalmodel.NewWorkspaceID(workspaceID); err != nil {
+		return recordmodel.RecordMutationClaimResult{}, false, apperror.New(apperror.KindForbidden, "backend.workspace_scope_required", err, nil)
 	}
 	claim, err := s.repository.TryBeginRecordMutation(ctx, recordmodel.RecordMutationClaimRequest{Execution: recordmodel.RecordMutationExecution{WorkspaceID: workspaceID, Operation: operation, ObjectKey: strings.TrimSpace(objectKey), TargetID: strings.TrimSpace(targetID), IdempotencyKey: key, ActorID: principal.UserID}, RequestFingerprint: fingerprint, LeaseOwner: owner, LeaseTTL: recordMutationLeaseTTL, Now: time.Now().UTC()})
 	if err != nil {

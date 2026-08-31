@@ -21,8 +21,8 @@ func TestRuntimeProjectRoleCatalogPreservesExternalAssignmentSafetyFacts(t *test
 		{Key: "member", Name: "Member", Audience: "business", RequiredBindingKey: "member", AssignmentMode: "system_managed", RiskLevel: "normal"},
 	}
 
-	catalog := runtimeProjectRoleCatalog(roles, " default ", " runtime ")
-	if catalog.Application.WorkspaceID != "default" || catalog.Application.ApplicationKey != "runtime" || len(catalog.Roles) != 3 {
+	catalog := runtimeProjectRoleCatalog(roles, " workspace-primary ", " runtime ")
+	if catalog.Application.WorkspaceID != "workspace-primary" || catalog.Application.ApplicationKey != "runtime" || len(catalog.Roles) != 3 {
 		t.Fatalf("catalog = %#v", catalog)
 	}
 	for index, want := range roles {
@@ -110,14 +110,14 @@ func containsRuntimeRolePermission(values []string, expected string) bool {
 
 func TestPublishRuntimeProjectRolesUsesOptionalBindingCapability(t *testing.T) {
 	binding := &runtimeProjectRolePublisherBinding{runtimeIdentityBindingStub: runtimeIdentityBindingStub{}}
-	err := publishRuntimeProjectRoles(t.Context(), binding, []manifestmodel.RoleSchema{{Key: "member_onboarding", Name: "Member onboarding", Audience: "any", AssignmentMode: "manual", RiskLevel: "normal"}}, "default", "runtime")
+	err := publishRuntimeProjectRoles(t.Context(), binding, []manifestmodel.RoleSchema{{Key: "member_onboarding", Name: "Member onboarding", Audience: "any", AssignmentMode: "manual", RiskLevel: "normal"}}, "workspace-primary", "runtime")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(binding.catalog.Roles) != 1 || binding.catalog.Roles[0].Key != "member_onboarding" {
 		t.Fatalf("published catalog = %#v", binding.catalog)
 	}
-	if err := publishRuntimeProjectRoles(t.Context(), &binding.runtimeIdentityBindingStub, nil, "default", "runtime"); err != nil {
+	if err := publishRuntimeProjectRoles(t.Context(), &binding.runtimeIdentityBindingStub, nil, "workspace-primary", "runtime"); err != nil {
 		t.Fatalf("binding without optional publisher failed: %v", err)
 	}
 }

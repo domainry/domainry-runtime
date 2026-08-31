@@ -51,12 +51,12 @@ func TestGymLedgerReplaysExactBalancesAndLocatesTampering(t *testing.T) {
 		if buildErr != nil {
 			t.Fatalf("build entry %d: %v", index+1, buildErr)
 		}
-		if insertErr := repository.InsertRecord(t.Context(), "default", object, record); insertErr != nil {
+		if insertErr := repository.InsertRecord(t.Context(), "workspace-primary", object, record); insertErr != nil {
 			t.Fatalf("insert entry %d: %v", index+1, insertErr)
 		}
 		previousHash = fmt.Sprint(record.Data["entry_hash"])
 	}
-	page, err := repository.ListRecords(t.Context(), "default", object, recordmodel.RecordListQuery{Page: 1, PageSize: 20, Sort: []recordmodel.RecordSortRule{{Field: "sequence", Direction: "asc"}}})
+	page, err := repository.ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 20, Sort: []recordmodel.RecordSortRule{{Field: "sequence", Direction: "asc"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestGymLedgerReplaysExactBalancesAndLocatesTampering(t *testing.T) {
 		Measures:   []reportmodel.ReportDatasetMeasure{{Key: "entries", Operation: "count", SourceAlias: "ledger"}, {Key: "amount", Operation: "sum", Field: func() *reportmodel.ReportDatasetField { value := field("amount"); return &value }()}},
 	}}
 	services := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "gym-ledger-report-p7", TemplateVersion: "1", Name: "Gym Ledger Report P7", Objects: []definitionmodel.ObjectSchema{object}, Reports: []reportmodel.ReportSchema{report}, Integrations: integrationmodel.IntegrationSchema{}, Store: store})
-	summary, err := services.Applications().ReportQueries.Summary(t.Context(), report.Key, accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "finance", WorkspaceID: "default"}}, role))
+	summary, err := services.Applications().ReportQueries.Summary(t.Context(), report.Key, accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "finance", WorkspaceID: "workspace-primary"}}, role))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,10 +103,10 @@ func TestGymLedgerReplaysExactBalancesAndLocatesTampering(t *testing.T) {
 	}
 	gymLedgerP6AssertBalances(t, partial, map[string]string{"bonus": "20.00", "principal": "70.00"})
 
-	if _, err := store.DB().ExecContext(t.Context(), `UPDATE gym_financial_ledger SET source_reference = ? WHERE workspace_id = ? AND id = ?`, "tampered-source", "default", "ledger-4"); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `UPDATE gym_financial_ledger SET source_reference = ? WHERE workspace_id = ? AND id = ?`, "tampered-source", "workspace-primary", "ledger-4"); err != nil {
 		t.Fatal(err)
 	}
-	tampered, err := repository.ListRecords(t.Context(), "default", object, recordmodel.RecordListQuery{Page: 1, PageSize: 20, Sort: []recordmodel.RecordSortRule{{Field: "sequence", Direction: "asc"}}})
+	tampered, err := repository.ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 20, Sort: []recordmodel.RecordSortRule{{Field: "sequence", Direction: "asc"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

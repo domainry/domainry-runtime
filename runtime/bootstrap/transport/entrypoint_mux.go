@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/domainry/domainry-foundation/requestcontext"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 // EntrypointMux switches the process between unauthenticated Provision transport
@@ -70,7 +71,7 @@ func (h *EntrypointMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			ctx := operationscontract.WithBuilderTaskID(r.Context(), builderTaskID)
-			ctx = requestcontext.WithWorkspaceID(ctx, "default")
+			ctx = requestcontext.WithWorkspaceID(ctx, principalmodel.InstallationWorkspaceID)
 			ctx = requestcontext.WithActorID(ctx, "runtime-builder:"+builderTaskID)
 			r = r.WithContext(ctx)
 		}

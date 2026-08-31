@@ -524,7 +524,7 @@ func TestAuditAppendHandlesNilAndConfiguredServices(t *testing.T) {
 
 	repository := &runtimeServicesAuditRepository{}
 	service = auditapplication.NewAuditApplicationService(repository)
-	service.Append(t.Context(), "created", "customer", "customer-1", principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, "Created customer", nil, map[string]any{"status": "new"})
+	service.Append(t.Context(), "created", "customer", "customer-1", principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, "Created customer", nil, map[string]any{"status": "new"})
 	if len(repository.events) != 1 || repository.events[0].Event != "created" || repository.events[0].RecordID != "customer-1" {
 		t.Fatalf("audit events=%#v", repository.events)
 	}
@@ -537,7 +537,7 @@ func TestRuntimeInitializationSupportsOptionalSurfacePorts(t *testing.T) {
 		Records: repository, IdentityDirectory: directory,
 	}})
 
-	page, err := listRuntimeSurfaceContextStoredRecords(t.Context(), services, "default", definitionmodel.ObjectSchema{Key: "customer"}, recordmodel.RecordListQuery{Page: 1, PageSize: 10})
+	page, err := listRuntimeSurfaceContextStoredRecords(t.Context(), services, "workspace-primary", definitionmodel.ObjectSchema{Key: "customer"}, recordmodel.RecordListQuery{Page: 1, PageSize: 10})
 	if err != nil || len(page.Items) != 1 || page.Items[0].ID != "record-1" {
 		t.Fatalf("stored records=%#v error=%v", page, err)
 	}
@@ -546,7 +546,7 @@ func TestRuntimeInitializationSupportsOptionalSurfacePorts(t *testing.T) {
 		t.Fatalf("users=%#v error=%v", users, err)
 	}
 	partial := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{})
-	if page, err = listRuntimeSurfaceContextStoredRecords(t.Context(), partial, "default", definitionmodel.ObjectSchema{Key: "customer"}, recordmodel.RecordListQuery{}); err != nil || len(page.Items) != 0 {
+	if page, err = listRuntimeSurfaceContextStoredRecords(t.Context(), partial, "workspace-primary", definitionmodel.ObjectSchema{Key: "customer"}, recordmodel.RecordListQuery{}); err != nil || len(page.Items) != 0 {
 		t.Fatalf("nil repository page=%#v error=%v", page, err)
 	}
 }
@@ -568,7 +568,7 @@ func TestMetadataSnapshotWatcherSupportsCanonicalAndFallbackOwners(t *testing.T)
 }
 
 func TestAutomationApplicationUsesCanonicalRuntimeServiceAndOwnerBoundaries(t *testing.T) {
-	historyPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"automation.rule.history.read"}})
+	historyPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"automation.rule.history.read"}})
 	emptyRuntime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{})
 	if emptyRuntime.Applications().Automations == nil || emptyRuntime.Applications().Automations != emptyRuntime.automationApplicationService {
 		t.Fatal("Runtime does not expose the canonical Automation application service")
@@ -578,7 +578,7 @@ func TestAutomationApplicationUsesCanonicalRuntimeServiceAndOwnerBoundaries(t *t
 	}
 	delivery := &runtimeServicesDeliveryRepository{}
 	config := &runtimeServicesAutomationConfigRepository{}
-	automationPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Key: "developer", Permissions: []string{"*"}})
+	automationPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "developer", Permissions: []string{"*"}})
 	configuredRuntime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
 		Manifest:     manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}},
 		Dependencies: RuntimeServicesDependencies{IntegrationDelivery: delivery, IntegrationConfig: config, AgentPrincipals: agentPrincipalDirectoryStub{principal: automationPrincipal}},
@@ -586,7 +586,7 @@ func TestAutomationApplicationUsesCanonicalRuntimeServiceAndOwnerBoundaries(t *t
 	if _, err := configuredRuntime.Applications().Automations.AutomationExecutions(t.Context(), automationmodel.AutomationExecutionFilter{}, historyPrincipal); err != nil {
 		t.Fatalf("configured Automation history error=%v", err)
 	}
-	readPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"automation.rule.read"}})
+	readPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"automation.rule.read"}})
 	if _, err := emptyRuntime.Applications().Automations.AutomationCapabilities(t.Context(), readPrincipal); err != nil {
 		t.Fatalf("empty Automation capabilities error=%v", err)
 	}
@@ -599,14 +599,14 @@ func TestAutomationApplicationUsesCanonicalRuntimeServiceAndOwnerBoundaries(t *t
 		Trigger:      automationmodel.AutomationTriggerSchema{Phase: "after", Operation: "update"},
 		Instructions: []automationmodel.AutomationInstructionSchema{{Key: "emit", Type: "emit_event", Config: map[string]any{"event": "customer.updated"}}},
 	}
-	if _, err := configuredRuntime.Applications().Automations.ValidateAutomationRule(t.Context(), baseRule, accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})); err != nil {
+	if _, err := configuredRuntime.Applications().Automations.ValidateAutomationRule(t.Context(), baseRule, accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})); err != nil {
 		t.Fatalf("Automation definition with configured Integration repository error=%v", err)
 	}
 	if _, err := emptyRuntime.Applications().Automations.ExecuteBeforeRule(t.Context(), automationmodel.AutomationRuleSchema{Key: "before", Trigger: automationmodel.AutomationTriggerSchema{Phase: "before"}}, nil, nil, map[string]any{}, historyPrincipal); err != nil {
 		t.Fatalf("before Automation execution error=%v", err)
 	}
 
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
 	automation := configuredRuntime.Applications().Automations
 	baseRule.Key = "customer.after_update"
 	rules := configuredRuntime.automationRules
@@ -625,7 +625,7 @@ func TestAutomationApplicationUsesCanonicalRuntimeServiceAndOwnerBoundaries(t *t
 	rules["before"] = automationmodel.AutomationRuleSchema{Key: "before", Enabled: true, Trigger: automationmodel.AutomationTriggerSchema{Phase: "before"}}
 	rules["after"] = automationmodel.AutomationRuleSchema{Key: "after", Enabled: true, ObjectKey: "customer", Trigger: automationmodel.AutomationTriggerSchema{Phase: "after", Operation: "update"}}
 	messageFor := func(ruleKey string) integrationmodel.IntegrationOutboxMessage {
-		return integrationmodel.IntegrationOutboxMessage{WorkspaceID: "default", Payload: automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{
+		return integrationmodel.IntegrationOutboxMessage{WorkspaceID: "workspace-primary", Payload: automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{
 			RuleKey: ruleKey, ObjectKey: "customer", Operation: "update", RecordID: "customer-1", RecordVersion: "v2",
 			Record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"status": "active"}}, ActorUserID: "admin", ActorRoleKey: "developer",
 		})}
@@ -646,7 +646,7 @@ func TestAutomationApplicationUsesCanonicalRuntimeServiceAndOwnerBoundaries(t *t
 		t.Fatalf("Automation Workflow result=%#v error=%v", result, err)
 	}
 
-	adminRuntimePrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	adminRuntimePrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
 	if _, err := (businessReferenceRuntimeAdapter{}).WorkflowProcesses(t.Context(), adminRuntimePrincipal, workflowmodel.WorkflowProcessFilter{}); err != nil {
 		t.Fatalf("nil Business Reference Workflow adapter error=%v", err)
 	}
@@ -672,7 +672,7 @@ func TestAutomationApplicationUsesCanonicalRuntimeServiceAndOwnerBoundaries(t *t
 }
 
 func TestAuthoringCapabilityHelpersCoverAbsentSchemaAndLookupFallbacks(t *testing.T) {
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
 	for _, service := range []*capabilityapplication.CapabilityAuthoringApplicationService{
 		newCapabilityAuthoringApplicationService(nil),
 		newCapabilityAuthoringApplicationService(newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{})),
@@ -778,7 +778,7 @@ Integration owner orchestration moved to domainry-integration Module/SaaS.
 			{Key: "invalid", Provider: "invalid", TargetType: "unsupported"},
 		}})
 		records := &runtimeServicesIntegrationEventRecords{}
-		resolvedPrincipal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "owner", WorkspaceID: "default"}}
+		resolvedPrincipal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "owner", WorkspaceID: "workspace-primary"}}
 		resolveEventIdentity := func(context.Context, integrationmodel.IntegrationExternalIdentityResolveRequest, principalmodel.Principal) (integrationmodel.IntegrationExternalIdentityResolveResult, principalmodel.Principal, error) {
 			return integrationmodel.IntegrationExternalIdentityResolveResult{Mapped: true}, resolvedPrincipal, nil
 		}
@@ -893,14 +893,14 @@ Integration owner orchestration moved to domainry-integration Module/SaaS.
 			{Key: "webhook", Provider: "webhook"},
 		}})
 		config := &runtimeServicesIntegrationConfigRepository{connections: []integrationmodel.IntegrationConnection{
-			{Key: "smtp-main", WorkspaceID: "default", ConnectorKey: "email", ProviderKey: "smtp"},
-			{Key: "wrong-main", WorkspaceID: "default", ConnectorKey: "webhook", ProviderKey: "webhook"},
+			{Key: "smtp-main", WorkspaceID: "workspace-primary", ConnectorKey: "email", ProviderKey: "smtp"},
+			{Key: "wrong-main", WorkspaceID: "workspace-primary", ConnectorKey: "webhook", ProviderKey: "webhook"},
 		}}
 		var schema appschemamodel.ApplicationSchemaSnapshot
 		service := newIntegrationApplicationServiceWithDependencies(IntegrationRuntimeWiringDependencies{ConnectorRegistry: registry, ConfigRepository: config, Schema: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 			return schema
 		}})
-		principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}
+		principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}
 		if references, err := service.IntegrationConnectionReferences(t.Context(), "smtp-main", principal); err != nil || len(references) != 0 {
 			t.Fatalf("nil-schema references=%#v error=%v", references, err)
 		}
@@ -913,19 +913,19 @@ Integration owner orchestration moved to domainry-integration Module/SaaS.
 		if references, err := service.IntegrationConnectionReferences(t.Context(), "smtp-main", principal); err != nil || len(references) == 0 {
 			t.Fatalf("schema references=%#v error=%v", references, err)
 		}
-		if _, err := service.ResolveIntegrationDeliveryProvider(t.Context(), "missing", "", "smtp", "default"); err == nil {
+		if _, err := service.ResolveIntegrationDeliveryProvider(t.Context(), "missing", "", "smtp", "workspace-primary"); err == nil {
 			t.Fatal("missing connector must be rejected")
 		}
-		if provider, err := service.ResolveIntegrationDeliveryProvider(t.Context(), "email", "", "postmark", "default"); err != nil || provider != "postmark" {
+		if provider, err := service.ResolveIntegrationDeliveryProvider(t.Context(), "email", "", "postmark", "workspace-primary"); err != nil || provider != "postmark" {
 			t.Fatalf("requested provider=%q error=%v", provider, err)
 		}
-		if _, err := service.ResolveIntegrationDeliveryProvider(t.Context(), "email", "absent", "", "default"); err == nil {
+		if _, err := service.ResolveIntegrationDeliveryProvider(t.Context(), "email", "absent", "", "workspace-primary"); err == nil {
 			t.Fatal("missing connection must be rejected")
 		}
-		if _, err := service.ResolveIntegrationDeliveryProvider(t.Context(), "email", "wrong-main", "", "default"); err == nil {
+		if _, err := service.ResolveIntegrationDeliveryProvider(t.Context(), "email", "wrong-main", "", "workspace-primary"); err == nil {
 			t.Fatal("connection connector mismatch must be rejected")
 		}
-		if provider, err := service.ResolveIntegrationDeliveryProvider(t.Context(), "email", "smtp-main", "", "default"); err != nil || provider != "smtp" {
+		if provider, err := service.ResolveIntegrationDeliveryProvider(t.Context(), "email", "smtp-main", "", "workspace-primary"); err != nil || provider != "smtp" {
 			t.Fatalf("connection provider=%q error=%v", provider, err)
 		}
 
@@ -970,7 +970,7 @@ Integration owner orchestration moved to domainry-integration Module/SaaS.
 				return appschemamodel.ApplicationSchemaSnapshot{Agents: agents, Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "email"}}}}
 			},
 		})
-		admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+		admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
 		adminWithRequest := admin
 		adminWithRequest.RequestID = "request-1"
 		validIdentity := integrationmodel.IntegrationExternalIdentityResolveRequest{Provider: "slack", ExternalSubject: "user-1", OnUnmapped: "read_only"}
@@ -1163,7 +1163,7 @@ func TestBusinessRuntimeProjectionPropagatesOwnerFailures(t *testing.T) {
 
 func TestBusinessSystemSnapshotUsesNarrowOwnerPorts(t *testing.T) {
 	failure := errors.New("owner projection failed")
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
 	limited := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "reader"}}
 	reader := accessfixture.Attach(limited, accessfixture.Bundle{Permissions: []string{"workflow.definition.read"}})
 
@@ -1288,7 +1288,7 @@ func TestRecordActionApplicationWiringCoversRoutingAndCoreValidationBoundaries(t
 	fixture := func(object definitionmodel.ObjectSchema, action definitionmodel.ActionSchema, role accessfixture.Bundle, repository *runtimeServicesRecordActionRepository) (*runtimeAssembly, principalmodel.Principal) {
 		manifest := manifestmodel.ManifestSchema{TemplateID: "action-execution", Version: "1", Name: "Action Execution", Objects: []definitionmodel.ObjectSchema{object}, Actions: []definitionmodel.ActionSchema{action}}
 		runtime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{Manifest: manifest, Dependencies: RuntimeServicesDependencies{Records: repository, ActionExecutions: &runtimeServicesActionExecutionRepository{records: repository}}})
-		return runtime, accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator-1", WorkspaceID: "default"}}, role)
+		return runtime, accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator-1", WorkspaceID: "workspace-primary"}}, role)
 	}
 	newRepository := func() *runtimeServicesRecordActionRepository {
 		return &runtimeServicesRecordActionRepository{record: cloneRecord(baseRecord), found: true}
@@ -1359,7 +1359,7 @@ func TestRecordActionApplicationWiringCoversRoutingAndCoreValidationBoundaries(t
 
 func TestBusinessReferenceProjectionSupportsOptionalPorts(t *testing.T) {
 	service := assembleChangePlanReferenceApplication(nil, nil, nil)
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
 	if graph, err := service.Graph(t.Context(), principal); err != nil || len(graph.Nodes) != 0 {
 		t.Fatalf("empty reference graph=%#v error=%v", graph, err)
 	}
@@ -1430,7 +1430,7 @@ func TestRecordExportSupportsOptionalIdentityDirectory(t *testing.T) {
 		}}},
 		Dependencies: RuntimeServicesDependencies{Records: repository},
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user-1", WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"task.export"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "task", Scope: "own", Read: true}}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user-1", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"task.export"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "task", Scope: "own", Read: true}}})
 	if _, _, err := services.Applications().Records.ExportRecords(t.Context(), "task", principal); err != nil {
 		t.Fatalf("export without Identity Directory error=%v", err)
 	}

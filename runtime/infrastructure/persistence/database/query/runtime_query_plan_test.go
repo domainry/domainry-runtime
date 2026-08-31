@@ -25,10 +25,10 @@ func TestRuntimeOperationalQueriesUseWorkflowAndHierarchyIndexes(t *testing.T) {
 		args  []any
 		index string
 	}{
-		{name: "approval inbox", query: `SELECT id FROM _workflow_tasks WHERE workspace_id = ? AND assignee_user_id = ? AND status = ? ORDER BY created_at DESC LIMIT 100`, args: []any{"default", "manager", "open"}, index: "idx_workflow_task_assignee"},
-		{name: "process by domain record", query: `SELECT id FROM _workflow_process_instances WHERE workspace_id = ? AND object_key = ? AND record_id = ? ORDER BY created_at DESC LIMIT 100`, args: []any{"default", "leave_request", "leave-1"}, index: "idx_workflow_process_business_record"},
-		{name: "process nodes", query: `SELECT id FROM _workflow_node_instances WHERE workspace_id = ? AND process_id = ? ORDER BY node_id`, args: []any{"default", "process-1"}, index: "idx_workflow_node_process"},
-		{name: "process timeline", query: `SELECT id FROM _workflow_process_events WHERE workspace_id = ? AND process_id = ? ORDER BY created_at`, args: []any{"default", "process-1"}, index: "idx_workflow_event_process"},
+		{name: "approval inbox", query: `SELECT id FROM _workflow_tasks WHERE workspace_id = ? AND assignee_user_id = ? AND status = ? ORDER BY created_at DESC LIMIT 100`, args: []any{"workspace-primary", "manager", "open"}, index: "idx_workflow_task_assignee"},
+		{name: "process by domain record", query: `SELECT id FROM _workflow_process_instances WHERE workspace_id = ? AND object_key = ? AND record_id = ? ORDER BY created_at DESC LIMIT 100`, args: []any{"workspace-primary", "leave_request", "leave-1"}, index: "idx_workflow_process_business_record"},
+		{name: "process nodes", query: `SELECT id FROM _workflow_node_instances WHERE workspace_id = ? AND process_id = ? ORDER BY node_id`, args: []any{"workspace-primary", "process-1"}, index: "idx_workflow_node_process"},
+		{name: "process timeline", query: `SELECT id FROM _workflow_process_events WHERE workspace_id = ? AND process_id = ? ORDER BY created_at`, args: []any{"workspace-primary", "process-1"}, index: "idx_workflow_event_process"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -46,8 +46,8 @@ func TestMySQLReportingScopeQueryUsesWorkforceResolvedUserIDs(t *testing.T) {
 	if err := store.SetEngineForTesting("mysql"); err != nil {
 		t.Fatal(err)
 	}
-	whereSQL, args, err := store.TenantListWhereClause("default", recordmodel.RecordListQuery{
-		Scope: "subordinates", PrincipalWorkspaceID: "default",
+	whereSQL, args, err := store.TenantListWhereClause("workspace-primary", recordmodel.RecordListQuery{
+		Scope: "subordinates", PrincipalWorkspaceID: "workspace-primary",
 		PrincipalReportingUserIDs: []string{"member-1", "member-2"}, OwnerField: "owner",
 	})
 	if err != nil {

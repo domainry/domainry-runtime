@@ -20,6 +20,11 @@ import (
 func TestBootstrapEntrypointsAssembleRunnableGraphs(t *testing.T) {
 	cfg := config.Config{
 		AppLocale:                  "en-US",
+		IdentityWorkspaceID:        "workspace-primary",
+		NotificationTenantID:       "tenant-primary",
+		NotificationWorkspaceID:    "workspace-primary",
+		PartyTenantID:              "tenant-primary",
+		PartyWorkspaceID:           "workspace-primary",
 		DatabaseDriver:             "sqlite",
 		DBPath:                     filepath.Join(t.TempDir(), "runtime.db"),
 		ManifestPath:               filepath.Join("..", "domain", "manifest", "testdata", "manifests", "domain-only-minimal.json"),
@@ -52,7 +57,11 @@ func TestBootstrapEntrypointsAssembleRunnableGraphs(t *testing.T) {
 }
 
 func TestBootstrapExtensionAndProjectFacadeEntrypoints(t *testing.T) {
-	base := config.Config{AppLocale: "en-US", DatabaseDriver: "sqlite", ManifestPath: filepath.Join("..", "domain", "manifest", "testdata", "manifests", "domain-only-minimal.json"), UploadDir: t.TempDir(), HTTPShutdownTimeout: time.Second}
+	base := config.Config{
+		AppLocale: "en-US", DatabaseDriver: "sqlite", ManifestPath: filepath.Join("..", "domain", "manifest", "testdata", "manifests", "domain-only-minimal.json"), UploadDir: t.TempDir(), HTTPShutdownTimeout: time.Second,
+		IdentityWorkspaceID: "workspace-primary", NotificationTenantID: "tenant-primary", NotificationWorkspaceID: "workspace-primary",
+		PartyTenantID: "tenant-primary", PartyWorkspaceID: "workspace-primary",
+	}
 	handlers := runtimeext.NewBusinessHandlerRegistry()
 	handlers.Freeze()
 	connectors := connector.NewRegistry()

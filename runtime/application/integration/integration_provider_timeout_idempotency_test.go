@@ -27,18 +27,18 @@ func (p *successfulFaultProbeProvider) SendIntegrationOutboxMessage(context.Cont
 
 func TestAccountingJournalFaultAfterProviderSuccessQuarantinesWithoutBlindResend(t *testing.T) {
 	repository := &providerTimeoutWorkerRepository{message: integrationmodel.IntegrationOutboxMessage{
-		ID: "message-fault", WorkspaceID: "default", ConnectorKey: "accounting", ConnectionKey: "freee-primary", Operation: "create_journal_entry",
+		ID: "message-fault", WorkspaceID: "workspace-primary", ConnectorKey: "accounting", ConnectionKey: "freee-primary", Operation: "create_journal_entry",
 		Status: "queued", RequestRef: "journal:42", DedupKey: "batch:5:batch:entry:5:entry", Payload: map[string]any{"batch_key": "batch", "entry_key": "entry"},
 	}}
 	provider := &successfulFaultProbeProvider{}
 	faults := workertestkit.NewScriptedFaultInjector(workertestkit.ConnectorUncertainSuccess())
 	service := NewIntegrationApplicationService(ApplicationDependencies{WorkerRepository: repository, Registry: NewConnectorRegistry(integrationmodel.IntegrationSchema{}), Worker: workerplatform.Dependencies{Faults: faults}})
 	service.RegisterIntegrationOutboxSender("accounting", provider)
-	result, err := service.ProcessDueIntegrationOutbox(t.Context(), 1, integrationruntime.IntegrationWorkerPrincipal("default"))
+	result, err := service.ProcessDueIntegrationOutbox(t.Context(), 1, integrationruntime.IntegrationWorkerPrincipal("workspace-primary"))
 	if err != nil || result.ReconciliationRequired != 1 || repository.message.Status != "quarantined" || provider.calls != 1 {
 		t.Fatalf("result=%#v message=%#v calls=%d err=%v", result, repository.message, provider.calls, err)
 	}
-	second, err := service.ProcessDueIntegrationOutbox(t.Context(), 1, integrationruntime.IntegrationWorkerPrincipal("default"))
+	second, err := service.ProcessDueIntegrationOutbox(t.Context(), 1, integrationruntime.IntegrationWorkerPrincipal("workspace-primary"))
 	if err != nil || provider.calls != 1 || second.Sent != 0 {
 		t.Fatalf("second=%#v calls=%d err=%v", second, provider.calls, err)
 	}
@@ -46,11 +46,11 @@ func TestAccountingJournalFaultAfterProviderSuccessQuarantinesWithoutBlindResend
 
 func TestIntegrationConnectorFaultsBeforeSendRetryWithoutProviderSideEffect(t *testing.T) {
 	for _, effect := range []workertestkit.FaultEffect{workertestkit.ConnectorTimeout(), workertestkit.Connector429(), workertestkit.Connector5xx()} {
-		repository := &providerTimeoutWorkerRepository{message: integrationmodel.IntegrationOutboxMessage{ID: "message-retry", WorkspaceID: "default", ConnectorKey: "payment", Operation: "charge", Status: "queued", RequestRef: "charge:retry", Payload: map[string]any{}}}
+		repository := &providerTimeoutWorkerRepository{message: integrationmodel.IntegrationOutboxMessage{ID: "message-retry", WorkspaceID: "workspace-primary", ConnectorKey: "payment", Operation: "charge", Status: "queued", RequestRef: "charge:retry", Payload: map[string]any{}}}
 		provider := &successfulFaultProbeProvider{}
 		service := NewIntegrationApplicationService(ApplicationDependencies{WorkerRepository: repository, Registry: NewConnectorRegistry(integrationmodel.IntegrationSchema{}), Worker: workerplatform.Dependencies{Faults: workertestkit.NewScriptedFaultInjector(effect)}})
 		service.RegisterIntegrationOutboxSender("payment", provider)
-		result, err := service.ProcessDueIntegrationOutbox(t.Context(), 1, integrationruntime.IntegrationWorkerPrincipal("default"))
+		result, err := service.ProcessDueIntegrationOutbox(t.Context(), 1, integrationruntime.IntegrationWorkerPrincipal("workspace-primary"))
 		if err != nil || result.Retried != 1 || provider.calls != 0 {
 			t.Fatalf("effect=%#v result=%#v calls=%d err=%v", effect, result, provider.calls, err)
 		}
@@ -114,13 +114,13 @@ func (p *idempotentProviderAfterTimeout) SendIntegrationOutboxMessage(_ context.
 func TestIntegrationProviderSuccessWithLocalTimeoutRequiresReconciliationWithoutResend(t *testing.T) {
 	const requestRef = "provider-idempotency:payment:one"
 	repository := &providerTimeoutWorkerRepository{message: integrationmodel.IntegrationOutboxMessage{
-		ID: "message-1", WorkspaceID: "default", ConnectorKey: "payment", ConnectionKey: "primary", Operation: "charge",
+		ID: "message-1", WorkspaceID: "workspace-primary", ConnectorKey: "payment", ConnectionKey: "primary", Operation: "charge",
 		Status: "queued", RequestRef: requestRef, DedupKey: "payment:one", Payload: map[string]any{"payment_id": "one"},
 	}}
 	provider := &idempotentProviderAfterTimeout{seenRequestRefs: map[string]bool{}}
 	service := NewIntegrationApplicationService(ApplicationDependencies{WorkerRepository: repository, Registry: NewConnectorRegistry(integrationmodel.IntegrationSchema{})})
 	service.RegisterIntegrationOutboxSender("payment", provider)
-	principal := integrationruntime.IntegrationWorkerPrincipal("default")
+	principal := integrationruntime.IntegrationWorkerPrincipal("workspace-primary")
 
 	first, err := service.ProcessDueIntegrationOutbox(t.Context(), 1, principal)
 	if err != nil || first.ReconciliationRequired != 1 || repository.message.Status != "quarantined" {

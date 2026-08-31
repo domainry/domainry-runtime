@@ -87,7 +87,7 @@ func (s *HTTPRouter) principalFromRequest(r *http.Request) principalmodel.Princi
 	}
 	if principal, ok := principalFromContext(r); ok {
 		principal.RequestID = requestID
-		if workspaceID != "default" {
+		if workspaceID != "" && !strings.EqualFold(workspaceID, "default") {
 			principal.WorkspaceID = workspaceID
 		}
 		return s.principalWithBusinessProfile(principal, r)
@@ -164,7 +164,10 @@ func (s *HTTPRouter) principalWithBusinessProfile(principal principalmodel.Princ
 func workspaceIDFromRequest(r *http.Request) string {
 	workspaceID := explicitWorkspaceIDFromRequest(r)
 	if workspaceID == "" {
-		return "default"
+		workspaceID = strings.TrimSpace(requestcontext.WorkspaceID(r.Context()))
+	}
+	if workspaceID == "" {
+		workspaceID = principalmodel.InstallationWorkspaceID
 	}
 	return workspaceID
 }

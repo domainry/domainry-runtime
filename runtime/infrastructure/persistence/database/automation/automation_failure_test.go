@@ -23,9 +23,9 @@ func TestAutomationExecutionWriteFailures(t *testing.T) {
 		value := automationmodel.AutomationRuleExecution{ID: "id", CreatedAt: "created"}
 		var err error
 		if seed {
-			_, err = copy.InsertExecutionSeed(t.Context(), "default", value)
+			_, err = copy.InsertExecutionSeed(t.Context(), "workspace-primary", value)
 		} else {
-			_, err = copy.InsertExecution(t.Context(), "default", value)
+			_, err = copy.InsertExecution(t.Context(), "workspace-primary", value)
 		}
 		db.Close()
 		if err == nil {
@@ -62,7 +62,7 @@ func TestAutomationWorkerStagedClaimFailures(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			worker, closeDB := scriptedAutomationWorker(base, test.state)
 			defer closeDB()
-			_, claimed, err := worker.ClaimInstruction(t.Context(), "default", request, "worker", "now", "later")
+			_, claimed, err := worker.ClaimInstruction(t.Context(), "workspace-primary", request, "worker", "now", "later")
 			if (err != nil) != test.wantError || claimed != test.wantClaim {
 				t.Fatalf("claimed=%v err=%v", claimed, err)
 			}
@@ -77,11 +77,11 @@ func TestAutomationWorkerCompletionHeartbeatFailures(t *testing.T) {
 	wantErr := errors.New("stage")
 	valid := automationQueryStep{columns: automationInstructionExecutionColumns(), rows: [][]driver.Value{automationInstructionRow("{}")}}
 	completion := func(worker AutomationWorkerStore) error {
-		_, err := worker.CompleteInstruction(t.Context(), "default", "key", "worker", 1, "ok", nil, "", "now")
+		_, err := worker.CompleteInstruction(t.Context(), "workspace-primary", "key", "worker", 1, "ok", nil, "", "now")
 		return err
 	}
 	heartbeat := func(worker AutomationWorkerStore) error {
-		_, err := worker.HeartbeatInstruction(t.Context(), "default", "key", "worker", 1, "later", "now")
+		_, err := worker.HeartbeatInstruction(t.Context(), "workspace-primary", "key", "worker", 1, "later", "now")
 		return err
 	}
 	for _, test := range []struct {
@@ -109,7 +109,7 @@ func TestAutomationWorkerCompletionHeartbeatFailures(t *testing.T) {
 	}
 	worker, closeDB := scriptedAutomationWorker(base, &automationDBState{execSteps: []automationExecStep{{rows: 1}}, querySteps: []automationQueryStep{valid}})
 	defer closeDB()
-	if _, err := worker.HeartbeatInstruction(t.Context(), "default", "key", "worker", 1, "later", "now"); err != nil {
+	if _, err := worker.HeartbeatInstruction(t.Context(), "workspace-primary", "key", "worker", 1, "later", "now"); err != nil {
 		t.Fatal(err)
 	}
 }

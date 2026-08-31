@@ -19,6 +19,7 @@ type integrationHTTPSurface struct {
 }
 
 func (integrationHTTPSurface) ContractVersion() string { return identityhttpapi.ContractVersion }
+func (integrationHTTPSurface) Owner() string           { return "identity" }
 func (surface integrationHTTPSurface) Name() string    { return surface.name }
 func (surface integrationHTTPSurface) Routes() []identityhttpapi.Route {
 	return append([]identityhttpapi.Route(nil), surface.routes...)
@@ -43,8 +44,8 @@ func TestProjectHostMountsModuleIdentityHTTPOutsideRuntime(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	surface := integrationHTTPSurface{name: "identity", handler: identityHandler, routes: []identityhttpapi.Route{
-		{Pattern: "POST /auth/login", Exposures: []identityhttpapi.Exposure{identityhttpapi.ExposurePublic, identityhttpapi.ExposureTenantAdmin}},
-		{Pattern: "GET /identity/users", Exposures: []identityhttpapi.Exposure{identityhttpapi.ExposureTenantAdmin}},
+		{Pattern: "POST /auth/login", Exposures: []identityhttpapi.Exposure{identityhttpapi.ExposurePublic, identityhttpapi.ExposureTenantAdmin}, Authentication: identityhttpapi.AuthenticationAnonymous},
+		{Pattern: "GET /identity/users", Exposures: []identityhttpapi.Exposure{identityhttpapi.ExposureTenantAdmin}, Authentication: identityhttpapi.AuthenticationAuthenticated, PrincipalOnly: true},
 	}}
 	runtimeHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("X-Owner", "runtime")
@@ -74,11 +75,11 @@ func TestProjectHostMountsModuleIdentityHTTPOutsideRuntime(t *testing.T) {
 }
 
 func TestProjectIdentityTopologyRejectsMissingModuleHTTPAndSaaSSurfaces(t *testing.T) {
-	cfg := config.Config{IdentityWorkspaceID: "default", IdentityAudience: "orders"}
+	cfg := config.Config{IdentityWorkspaceID: "workspace-primary", IdentityAudience: "orders"}
 	if _, _, err := openProjectIdentity(t.Context(), cfg, identityFactoryStub{binding: moduleBindingStub{}}); err == nil {
 		t.Fatal("module binding without HTTP surfaces was accepted")
 	}
-	surface := integrationHTTPSurface{name: "identity", handler: http.NotFoundHandler(), routes: []identityhttpapi.Route{{Pattern: "GET /identity/users", Exposures: []identityhttpapi.Exposure{identityhttpapi.ExposureTenantAdmin}}}}
+	surface := integrationHTTPSurface{name: "identity", handler: http.NotFoundHandler(), routes: []identityhttpapi.Route{{Pattern: "GET /identity/users", Exposures: []identityhttpapi.Exposure{identityhttpapi.ExposureTenantAdmin}, Authentication: identityhttpapi.AuthenticationAuthenticated, PrincipalOnly: true}}}
 	saasWithHTTP := saasHTTPBindingStub{surfaces: []identityhttpapi.Surface{surface}}
 	if _, _, err := openProjectIdentity(t.Context(), cfg, identityFactoryStub{binding: saasWithHTTP}); err == nil {
 		t.Fatal("SaaS binding with in-process HTTP surfaces was accepted")

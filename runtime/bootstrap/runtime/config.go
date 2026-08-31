@@ -12,26 +12,11 @@ func normalizeRuntimeConfig(cfg config.Config) config.Config {
 }
 
 func normalizeRuntimeConfigWithHostname(cfg config.Config, hostname func() (string, error)) config.Config {
-	if strings.TrimSpace(cfg.IdentityWorkspaceID) == "" {
-		cfg.IdentityWorkspaceID = "default"
-	}
 	if strings.TrimSpace(cfg.IdentityAudience) == "" {
 		cfg.IdentityAudience = "domainry-runtime"
 	}
-	if strings.TrimSpace(cfg.NotificationTenantID) == "" {
-		cfg.NotificationTenantID = "default"
-	}
-	if strings.TrimSpace(cfg.NotificationWorkspaceID) == "" {
-		cfg.NotificationWorkspaceID = "default"
-	}
 	if strings.TrimSpace(cfg.NotificationApplicationKey) == "" {
 		cfg.NotificationApplicationKey = "domainry-runtime"
-	}
-	if strings.TrimSpace(cfg.PartyTenantID) == "" {
-		cfg.PartyTenantID = "default"
-	}
-	if strings.TrimSpace(cfg.PartyWorkspaceID) == "" {
-		cfg.PartyWorkspaceID = cfg.IdentityWorkspaceID
 	}
 	if strings.TrimSpace(cfg.PartyApplicationKey) == "" {
 		cfg.PartyApplicationKey = "domainry-runtime"

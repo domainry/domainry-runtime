@@ -19,7 +19,6 @@ import (
 	ormbuilder "github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 	workspaceprovisionmodel "github.com/domainry/domainry-runtime/runtime/domain/workspaceprovision/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -39,6 +38,12 @@ func NewWorkspaceProvisionStore(store *database.RuntimeStore, binding identitysd
 	return &WorkspaceProvisionStore{runtime: store, identity: provisioner, manifest: manifest}
 }
 
+// NewTenantInitializationStore accepts only the narrow bootstrap Identity
+// binding used before any tenant-bound authentication or business API exists.
+func NewTenantInitializationStore(store *database.RuntimeStore, binding identitysdk.BootstrapBinding, manifest manifestmodel.ManifestSchema) *WorkspaceProvisionStore {
+	return &WorkspaceProvisionStore{runtime: store, identity: binding, manifest: manifest}
+}
+
 func NewWorkspaceProvisionStoreWithFailureInjector(store *database.RuntimeStore, binding identitysdk.Binding, manifest manifestmodel.ManifestSchema, failures FailureInjector) *WorkspaceProvisionStore {
 	result := NewWorkspaceProvisionStore(store, binding, manifest)
 	result.failures = failures
@@ -48,6 +53,18 @@ func NewWorkspaceProvisionStoreWithFailureInjector(store *database.RuntimeStore,
 var codePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{1,62}$`)
 
 func (store *WorkspaceProvisionStore) Provision(ctx context.Context, request workspaceprovisionmodel.Request) (workspaceprovisionmodel.Result, error) {
+	return store.provision(ctx, request, false)
+}
+
+// Initialize creates the first tenant, its administrator credential, Runtime
+// registry/configuration, application projections, receipt, and the singleton
+// installation marker under one host-owned database transaction.
+func (store *WorkspaceProvisionStore) Initialize(ctx context.Context, request workspaceprovisionmodel.Request, initialPassword string) (workspaceprovisionmodel.Result, error) {
+	request.InitialPassword = initialPassword
+	return store.provision(ctx, request, true)
+}
+
+func (store *WorkspaceProvisionStore) provision(ctx context.Context, request workspaceprovisionmodel.Request, initialize bool) (workspaceprovisionmodel.Result, error) {
 	request.RequestID = strings.TrimSpace(request.RequestID)
 	request.TenantCode = canonicalCode(request.TenantCode)
 	request.TenantName = strings.TrimSpace(request.TenantName)
@@ -56,7 +73,7 @@ func (store *WorkspaceProvisionStore) Provision(ctx context.Context, request wor
 	if store == nil || store.runtime == nil || store.identity == nil {
 		return workspaceprovisionmodel.Result{}, workspaceprovisionmodel.ErrIdentityUnavailable
 	}
-	if request.RequestID == "" || !codePattern.MatchString(request.TenantCode) || request.TenantName == "" || request.AdminLoginID == "" || request.AdminName == "" {
+	if request.RequestID == "" || !codePattern.MatchString(request.TenantCode) || strings.EqualFold(request.TenantCode, "default") || request.TenantName == "" || request.AdminLoginID == "" || request.AdminName == "" {
 		return workspaceprovisionmodel.Result{}, workspaceprovisionmodel.ErrInvalid
 	}
 	configuration, err := json.Marshal(request.StoreConfiguration)
@@ -73,6 +90,16 @@ func (store *WorkspaceProvisionStore) Provision(ctx context.Context, request wor
 		}
 		replay.Replayed = true
 		return replay, nil
+	}
+	installation, initialized, err := LoadInstallation(ctx, store.runtime)
+	if err != nil {
+		return workspaceprovisionmodel.Result{}, err
+	}
+	if initialize && initialized {
+		return workspaceprovisionmodel.Result{}, workspaceprovisionmodel.ErrAlreadyInitialized
+	}
+	if !initialize && !initialized {
+		return workspaceprovisionmodel.Result{}, workspaceprovisionmodel.ErrInitializationRequired
 	}
 	tenantRegistryID, err := randomID("tenant")
 	if err != nil {
@@ -97,13 +124,20 @@ func (store *WorkspaceProvisionStore) Provision(ctx context.Context, request wor
 		return store.afterFailedInsert(ctx, request, fingerprint, err)
 	}
 	identityResult, err := store.identity.ProvisionWorkspaceIdentity(ctx, identitysdk.WorkspaceIdentityProvisionRequest{
-		WorkspaceID: result.WorkspaceID, AdminLoginID: request.AdminLoginID, AdminName: request.AdminName,
+		WorkspaceID: result.WorkspaceID, AdminLoginID: request.AdminLoginID, AdminName: request.AdminName, InitialPassword: request.InitialPassword,
 	}, identitysdk.EmbeddedTransaction{Native: tx, WorkspaceProvisionFailures: store.identityFailureInjector()})
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, err
 	}
 	result.AdminLoginID, result.InitialPassword, result.MustChangePassword = identityResult.AdminLoginID, identityResult.InitialPassword, identityResult.MustChangePassword
-	if err := store.insertConfigurationProjectionsAndReceipt(ctx, tx, request, result, fingerprint, string(configuration)); err != nil {
+	headquartersWorkspaceID := installation.WorkspaceID
+	if initialize {
+		headquartersWorkspaceID = result.WorkspaceID
+		if err := store.insertInstallation(ctx, tx, result); err != nil {
+			return workspaceprovisionmodel.Result{}, err
+		}
+	}
+	if err := store.insertConfigurationProjectionsAndReceipt(ctx, tx, request, result, headquartersWorkspaceID, fingerprint, string(configuration)); err != nil {
 		_ = tx.Rollback()
 		return store.afterFailedInsert(ctx, request, fingerprint, err)
 	}
@@ -112,6 +146,16 @@ func (store *WorkspaceProvisionStore) Provision(ctx context.Context, request wor
 	}
 	store.issued.Store(request.RequestID, result.InitialPassword)
 	return result, nil
+}
+
+func (store *WorkspaceProvisionStore) insertInstallation(ctx context.Context, tx *sql.Tx, result workspaceprovisionmodel.Result) error {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	if err := insert(ctx, tx, ormbuilder.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_tenant_installation").
+		Columns("installation_key", "tenant_registry_id", "workspace_id", "initialized_at").
+		Values(installationKey, result.TenantRegistryID, result.WorkspaceID, now)); err != nil {
+		return workspaceprovisionmodel.ErrAlreadyInitialized
+	}
+	return store.inject(FailureAfterInstallation)
 }
 
 func (store *WorkspaceProvisionStore) ReconcileWorkspaceRoles(ctx context.Context, workspaceID string) (workspaceprovisionmodel.RoleReconciliationResult, error) {
@@ -158,7 +202,7 @@ func (store *WorkspaceProvisionStore) insertRuntimeWorkspace(ctx context.Context
 	return store.inject(FailureAfterTenantRegistry)
 }
 
-func (store *WorkspaceProvisionStore) insertConfigurationProjectionsAndReceipt(ctx context.Context, tx *sql.Tx, request workspaceprovisionmodel.Request, result workspaceprovisionmodel.Result, fingerprint, configuration string) error {
+func (store *WorkspaceProvisionStore) insertConfigurationProjectionsAndReceipt(ctx context.Context, tx *sql.Tx, request workspaceprovisionmodel.Request, result workspaceprovisionmodel.Result, headquartersWorkspaceID, fingerprint, configuration string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	if err := insert(ctx, tx, ormbuilder.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_workspace_configuration").Columns("workspace_id", "configuration_json", "created_at", "updated_at").Values(result.WorkspaceID, configuration, now, now)); err != nil {
 		return err
@@ -166,7 +210,7 @@ func (store *WorkspaceProvisionStore) insertConfigurationProjectionsAndReceipt(c
 	if err := store.inject(FailureAfterWorkspaceConfiguration); err != nil {
 		return err
 	}
-	if err := store.insertApplicationProjections(ctx, tx, request, result, now); err != nil {
+	if err := store.insertApplicationProjections(ctx, tx, request, result, headquartersWorkspaceID, now); err != nil {
 		return err
 	}
 	if err := store.inject(FailureAfterApplicationProjections); err != nil {
@@ -182,7 +226,7 @@ func (store *WorkspaceProvisionStore) insertConfigurationProjectionsAndReceipt(c
 	return store.inject(FailureAfterReceipt)
 }
 
-func (store *WorkspaceProvisionStore) insertApplicationProjections(ctx context.Context, tx *sql.Tx, request workspaceprovisionmodel.Request, result workspaceprovisionmodel.Result, now string) error {
+func (store *WorkspaceProvisionStore) insertApplicationProjections(ctx context.Context, tx *sql.Tx, request workspaceprovisionmodel.Request, result workspaceprovisionmodel.Result, headquartersWorkspaceID, now string) error {
 	objects := map[string]definitionmodel.ObjectSchema{}
 	for _, object := range store.manifest.Objects {
 		objects[object.Key] = object
@@ -194,7 +238,7 @@ func (store *WorkspaceProvisionStore) insertApplicationProjections(ctx context.C
 		}
 		workspaceID := result.WorkspaceID
 		if projection.Scope == "headquarters" {
-			workspaceID = principalmodel.InstallationWorkspaceID
+			workspaceID = headquartersWorkspaceID
 		}
 		columns := []string{"workspace_id", "id", "created_at", "updated_at"}
 		values := []any{workspaceID, result.ProjectionIDs[projection.Key], now, now}

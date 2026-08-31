@@ -32,8 +32,8 @@ func TestRuntimeBusinessAuditPaginationTraversesStableSQLitePagesOverHTTP(t *tes
 	audits := auditpersistence.NewAuditStoreFromRuntimeStore(t.Context(), store)
 	for index := 1; index <= 5; index++ {
 		id := fmt.Sprintf("pagination-%03d", index)
-		if err := audits.InsertAuditEvent(t.Context(), "default", auditmodel.AuditEvent{
-			ID: id, WorkspaceID: "default", Event: "pos.checkout.completed", ObjectKey: "pos_order",
+		if err := audits.InsertAuditEvent(t.Context(), "workspace-primary", auditmodel.AuditEvent{
+			ID: id, WorkspaceID: "workspace-primary", Event: "pos.checkout.completed", ObjectKey: "pos_order",
 			RecordID: id, ActorID: "admin", RoleKey: "admin", Summary: "pagination acceptance",
 			CreatedAt: "2026-08-18T08:00:00Z",
 		}); err != nil {
@@ -48,8 +48,8 @@ func TestRuntimeBusinessAuditPaginationTraversesStableSQLitePagesOverHTTP(t *tes
 
 	// A newer immutable event arriving between requests must not be repeated or
 	// injected behind the first page's descending keyset cursor.
-	if err := audits.InsertAuditEvent(t.Context(), "default", auditmodel.AuditEvent{
-		ID: "pagination-999", WorkspaceID: "default", Event: "pos.checkout.completed", ObjectKey: "pos_order",
+	if err := audits.InsertAuditEvent(t.Context(), "workspace-primary", auditmodel.AuditEvent{
+		ID: "pagination-999", WorkspaceID: "workspace-primary", Event: "pos.checkout.completed", ObjectKey: "pos_order",
 		RecordID: "pagination-999", ActorID: "admin", RoleKey: "admin", Summary: "arrived after page one",
 		CreatedAt: "2026-08-18T08:01:00Z",
 	}); err != nil {

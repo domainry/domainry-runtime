@@ -53,7 +53,7 @@ func TestIntegrationDeliveryQueryAndErrorHelperEdges(t *testing.T) {
 	if _, err := service.InspectIntegrationOutboxMessage(t.Context(), "message", principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("inspect authorization error=%v", err)
 	}
-	if principalWorkspaceID(principalmodel.Principal{}) != "default" || principalWorkspaceID(principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: " workspace "}}) != "workspace" {
+	if principalWorkspaceID(principalmodel.Principal{}) != "" || principalWorkspaceID(principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: " workspace "}}) != "workspace" {
 		t.Fatal("principal workspace normalization mismatch")
 	}
 	for _, err := range []error{

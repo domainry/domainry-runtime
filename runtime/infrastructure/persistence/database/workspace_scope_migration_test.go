@@ -40,7 +40,7 @@ func TestWorkspaceScopeMigrationReportsLegacyRowsWithoutBackfill(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = store.EnsureRuntimeSchema(t.Context())
-	if err == nil || !strings.Contains(err.Error(), "table=legacy_workspace_rows classification=missing_workspace row_count=2") || strings.Contains(err.Error(), "legacy_default_workspace") {
+	if err == nil || !strings.Contains(err.Error(), "table=legacy_workspace_rows classification=missing_workspace row_count=2") || !strings.Contains(err.Error(), "table=legacy_workspace_rows classification=legacy_default_workspace row_count=1") {
 		t.Fatalf("unexpected workspace migration error: %v", err)
 	}
 	var reportTableCount int

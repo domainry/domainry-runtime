@@ -16,7 +16,7 @@ func integrationOutboxScriptRow() integrationSQLQueryStep {
 	return integrationSQLQueryStep{
 		columns: columns,
 		rows: [][]driver.Value{{
-			"message", "default", "connector", "connection", "send", "sent", "{}",
+			"message", "workspace-primary", "connector", "connection", "send", "sent", "{}",
 			"", "request", "dedup", "fingerprint", "response", "", int64(0), "", "",
 			"", "", "", int64(0), "worker", "2026-07-20T00:00:00Z", "2026-07-20T00:00:00Z",
 		}},
@@ -59,7 +59,7 @@ func TestIntegrationDeliveryAcknowledgementReconciliationMutationFailures(t *tes
 		t.Fatal("blank workspace accepted")
 	}
 	for _, identity := range [][2]string{{"", "now"}, {"message", ""}} {
-		if _, _, err := delivery.MarkOutboxAcknowledgementReconciliationRequired(t.Context(), "default", identity[0], identity[1]); err == nil {
+		if _, _, err := delivery.MarkOutboxAcknowledgementReconciliationRequired(t.Context(), "workspace-primary", identity[0], identity[1]); err == nil {
 			t.Fatalf("invalid acknowledgement identity accepted: %q", identity)
 		}
 	}
@@ -67,7 +67,7 @@ func TestIntegrationDeliveryAcknowledgementReconciliationMutationFailures(t *tes
 	wantErr := errors.New("acknowledgement mutation failure")
 	for _, step := range []integrationSQLExecStep{{err: wantErr}, {rowsErr: wantErr}} {
 		_, delivery, _ = scriptedIntegrationStores(t, &integrationSQLState{execSteps: []integrationSQLExecStep{step}})
-		if _, _, err := delivery.MarkOutboxAcknowledgementReconciliationRequired(t.Context(), "default", "message", "now"); err == nil {
+		if _, _, err := delivery.MarkOutboxAcknowledgementReconciliationRequired(t.Context(), "workspace-primary", "message", "now"); err == nil {
 			t.Fatalf("mutation failure ignored: %+v", step)
 		}
 	}
@@ -76,7 +76,7 @@ func TestIntegrationDeliveryAcknowledgementReconciliationMutationFailures(t *tes
 			execSteps:  []integrationSQLExecStep{{rows: 1}},
 			querySteps: []integrationSQLQueryStep{query},
 		})
-		if _, _, err := delivery.MarkOutboxAcknowledgementReconciliationRequired(t.Context(), "default", "message", "now"); err == nil {
+		if _, _, err := delivery.MarkOutboxAcknowledgementReconciliationRequired(t.Context(), "workspace-primary", "message", "now"); err == nil {
 			t.Fatalf("reload failure ignored: %+v", query)
 		}
 	}
@@ -90,7 +90,7 @@ func TestIntegrationDeliveryResponseReferenceAdvanceFailuresAndContention(t *tes
 			execSteps:  []integrationSQLExecStep{step},
 			querySteps: []integrationSQLQueryStep{validRow},
 		})
-		if _, _, err := delivery.UpdateOutboxStatusByResponseRef(t.Context(), "default", "connection", "response", "delivered", ""); err == nil {
+		if _, _, err := delivery.UpdateOutboxStatusByResponseRef(t.Context(), "workspace-primary", "connection", "response", "delivered", ""); err == nil {
 			t.Fatalf("advance failure ignored: %+v", step)
 		}
 	}
@@ -99,7 +99,7 @@ func TestIntegrationDeliveryResponseReferenceAdvanceFailuresAndContention(t *tes
 			execSteps:  []integrationSQLExecStep{{rows: 1}},
 			querySteps: []integrationSQLQueryStep{validRow, reload},
 		})
-		if _, _, err := delivery.UpdateOutboxStatusByResponseRef(t.Context(), "default", "connection", "response", "delivered", ""); err == nil {
+		if _, _, err := delivery.UpdateOutboxStatusByResponseRef(t.Context(), "workspace-primary", "connection", "response", "delivered", ""); err == nil {
 			t.Fatalf("advance reload failure ignored: %+v", reload)
 		}
 	}
@@ -111,7 +111,7 @@ func TestIntegrationDeliveryResponseReferenceAdvanceFailuresAndContention(t *tes
 		execs[index] = integrationSQLExecStep{rows: 0}
 	}
 	_, delivery, _ := scriptedIntegrationStores(t, &integrationSQLState{execSteps: execs, querySteps: queries})
-	if _, found, err := delivery.UpdateOutboxStatusByResponseRef(t.Context(), "default", "connection", "response", "delivered", ""); err == nil || !found {
+	if _, found, err := delivery.UpdateOutboxStatusByResponseRef(t.Context(), "workspace-primary", "connection", "response", "delivered", ""); err == nil || !found {
 		t.Fatalf("contention result found=%v err=%v", found, err)
 	}
 }

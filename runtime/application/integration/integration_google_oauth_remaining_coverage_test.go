@@ -132,15 +132,15 @@ func TestGoogleOAuthExchangeBranches(t *testing.T) {
 }
 
 func TestGoogleOAuthStartAuthorizationGuardBranches(t *testing.T) {
-	baseConnection := integrationmodel.IntegrationConnection{Key: "gmail", WorkspaceID: "default", ConnectorKey: "google_workspace", ProviderKey: "google", Status: "configured", SecretRefs: map[string]string{"client_id": "secret:id", "client_secret": "secret:secret"}}
+	baseConnection := integrationmodel.IntegrationConnection{Key: "gmail", WorkspaceID: "workspace-primary", ConnectorKey: "google_workspace", ProviderKey: "google", Status: "configured", SecretRefs: map[string]string{"client_id": "secret:id", "client_secret": "secret:secret"}}
 	baseRepo := func(connection integrationmodel.IntegrationConnection) *independentConfigRepository {
-		return &independentConfigRepository{connections: map[string]integrationmodel.IntegrationConnection{connection.Key: connection}, secrets: map[string]integrationmodel.IntegrationSecret{"id": {Key: "id", WorkspaceID: "default", Status: "active", ValueRef: "material:id"}, "secret": {Key: "secret", WorkspaceID: "default", Status: "active", ValueRef: "material:secret"}}, materials: map[string]string{"default:id": "client", "default:secret": "signer"}}
+		return &independentConfigRepository{connections: map[string]integrationmodel.IntegrationConnection{connection.Key: connection}, secrets: map[string]integrationmodel.IntegrationSecret{"id": {Key: "id", WorkspaceID: "workspace-primary", Status: "active", ValueRef: "material:id"}, "secret": {Key: "secret", WorkspaceID: "workspace-primary", Status: "active", ValueRef: "material:secret"}}, materials: map[string]string{"workspace-primary:id": "client", "workspace-primary:secret": "signer"}}
 	}
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{PermissionConnectionManage, PermissionSecretManage}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{PermissionConnectionManage, PermissionSecretManage}})
 	for name, principal := range map[string]principalmodel.Principal{
 		"unknown":               principalmodel.Principal{},
-		"connection permission": accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{PermissionSecretManage}}),
-		"secret permission":     accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{PermissionConnectionManage}}),
+		"connection permission": accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{PermissionSecretManage}}),
+		"secret permission":     accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{PermissionConnectionManage}}),
 	} {
 		t.Run(name, func(t *testing.T) {
 			service := NewIntegrationApplicationService(ApplicationDependencies{ConfigRepository: baseRepo(baseConnection)})
@@ -163,13 +163,13 @@ func TestGoogleOAuthStartAuthorizationGuardBranches(t *testing.T) {
 		}
 	}
 	repo := baseRepo(baseConnection)
-	repo.materials["default:id"] = ""
+	repo.materials["workspace-primary:id"] = ""
 	service = NewIntegrationApplicationService(ApplicationDependencies{ConfigRepository: repo})
 	if _, err := service.StartGoogleOAuthAuthorization(t.Context(), "gmail", integrationmodel.IntegrationGoogleOAuthStartRequest{RedirectURI: "https://app.example/cb"}, admin); err == nil {
 		t.Fatal("empty client credentials accepted")
 	}
 	repo = baseRepo(baseConnection)
-	repo.materials["default:secret"] = ""
+	repo.materials["workspace-primary:secret"] = ""
 	service = NewIntegrationApplicationService(ApplicationDependencies{ConfigRepository: repo})
 	if _, err := service.StartGoogleOAuthAuthorization(t.Context(), "gmail", integrationmodel.IntegrationGoogleOAuthStartRequest{RedirectURI: "https://app.example/cb"}, admin); err == nil {
 		t.Fatal("empty client secret accepted")

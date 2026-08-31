@@ -40,7 +40,7 @@ func TestRuntimeBusinessSeedsDeriveScopeOwnerDepartment(t *testing.T) {
 		}},
 	}
 
-	derived, err := deriveRuntimeManifestScopeOwnerSeeds(t.Context(), "default", manifest, seedScopeOwnerWorkforceDirectory{entries: []identitysdk.WorkforceEntry{{
+	derived, err := deriveRuntimeManifestScopeOwnerSeeds(t.Context(), "workspace-primary", manifest, seedScopeOwnerWorkforceDirectory{entries: []identitysdk.WorkforceEntry{{
 		IdentityUserID: "technician", OrganizationUnitID: "field-ops", OrganizationPath: "/operations/field-ops",
 	}}})
 	if err != nil {

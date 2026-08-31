@@ -50,7 +50,7 @@ func TestSchedulerOperationRuntimeMethodBudget(t *testing.T) {
 func TestSchedulerServicePreviewDoesNotRequireRuntimeServices(t *testing.T) {
 	schema := schedulerSchemaStub{snapshot: appschemamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "job_definition"}}}}
 	service := NewSchedulerApplicationService(schema, nil, nil, nil)
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	preview, err := service.PreviewDefinition(t.Context(), map[string]any{"target_type": "workflow", "target_key": "scheduled:*", "schedule_type": "interval", "interval_seconds": 60}, principal)
 	if err != nil {
 		t.Fatal(err)
@@ -62,7 +62,7 @@ func TestSchedulerServicePreviewDoesNotRequireRuntimeServices(t *testing.T) {
 
 func TestSchedulerServicePreviewsLeafScheduleWithoutJobEnvelope(t *testing.T) {
 	service := NewSchedulerApplicationService(nil, nil, nil, nil)
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	preview, err := service.PreviewSchedule(t.Context(), map[string]any{"schedule_type": "weekly_at", "time_of_day": "09:30", "day_of_week": "monday", "timezone": "Asia/Shanghai"}, principal)
 	if err != nil {
 		t.Fatal(err)

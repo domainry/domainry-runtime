@@ -112,7 +112,7 @@ import (
 		}
 	}
 	for path, wantVersion := range map[string]string{
-		"github.com/domainry/domainry-identity-sdk":     "v0.1.1-dev2",
+		"github.com/domainry/domainry-identity-sdk":     "v0.1.1-dev5",
 		"github.com/domainry/domainry-notification-sdk": "v0.1.0-dev.5",
 		"github.com/domainry/domainry-notification":     "v0.1.0-dev.12",
 	} {

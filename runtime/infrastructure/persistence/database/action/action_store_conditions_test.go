@@ -23,12 +23,12 @@ func TestActionExecutionClaimRetryWaitAndDatabaseStages(t *testing.T) {
 	defer base.Close()
 	wantErr := errors.New("injected action execution failure")
 	now := time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)
-	request := actionmodel.ActionExecutionClaimRequest{Execution: actionmodel.ActionBusinessExecution{ObjectKey: " object ", RecordID: " record ", ActionKey: " action ", IdempotencyKey: " idem "}, RequestFingerprint: " fingerprint ", LeaseOwner: " owner ", Now: now}
+	request := actionmodel.ActionExecutionClaimRequest{Execution: actionmodel.ActionBusinessExecution{WorkspaceID: "workspace-primary", ObjectKey: " object ", RecordID: " record ", ActionKey: " action ", IdempotencyKey: " idem "}, RequestFingerprint: " fingerprint ", LeaseOwner: " owner ", Now: now}
 
 	candidate, closeDB := scriptedActionStore(base, &actionDBState{execSteps: []actionExecStep{{rows: 1}}})
 	claim, err := candidate.TryBeginExecution(t.Context(), request)
 	closeDB()
-	if err != nil || claim.Decision != idempotency.DecisionAcquired || claim.Execution.WorkspaceID != "default" || claim.Execution.LeaseExpiresAt != now.Add(30*time.Second).Format(time.RFC3339Nano) {
+	if err != nil || claim.Decision != idempotency.DecisionAcquired || claim.Execution.WorkspaceID != "workspace-primary" || claim.Execution.LeaseExpiresAt != now.Add(30*time.Second).Format(time.RFC3339Nano) {
 		t.Fatalf("claim=%#v err=%v", claim, err)
 	}
 	candidate, closeDB = scriptedActionStore(base, &actionDBState{execSteps: []actionExecStep{{rows: 1}}})
@@ -126,7 +126,7 @@ func TestActionExecutionAtomicCommitStages(t *testing.T) {
 	defer base.Close()
 	wantErr := errors.New("injected atomic action failure")
 	now := time.Date(2026, 7, 20, 13, 0, 0, 0, time.UTC)
-	completion := actionmodel.ActionExecutionCompletion{Execution: actionmodel.ActionBusinessExecution{WorkspaceID: "default"}, ExecutionID: "execution", LeaseOwner: "owner", FencingToken: 1, ExpiresAt: now.Add(time.Hour)}
+	completion := actionmodel.ActionExecutionCompletion{Execution: actionmodel.ActionBusinessExecution{WorkspaceID: "workspace-primary"}, ExecutionID: "execution", LeaseOwner: "owner", FencingToken: 1, ExpiresAt: now.Add(time.Hour)}
 	row := actionExecutionRow(now, string(idempotency.StatusSucceeded), "fingerprint")
 
 	tests := []struct {
@@ -182,7 +182,7 @@ func TestActionExecutionCompletionLeaseAndLookupStages(t *testing.T) {
 	defer base.Close()
 	wantErr := errors.New("injected action completion failure")
 	now := time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)
-	completion := actionmodel.ActionExecutionCompletion{Execution: actionmodel.ActionBusinessExecution{WorkspaceID: "default"}, ExecutionID: "execution", LeaseOwner: " owner ", FencingToken: 1, ResponseStatus: 500, ErrorCode: " failed ", ExpiresAt: now.Add(time.Hour)}
+	completion := actionmodel.ActionExecutionCompletion{Execution: actionmodel.ActionBusinessExecution{WorkspaceID: "workspace-primary"}, ExecutionID: "execution", LeaseOwner: " owner ", FencingToken: 1, ResponseStatus: 500, ErrorCode: " failed ", ExpiresAt: now.Add(time.Hour)}
 	if _, err := NewActionBusinessExecutionStore(base).CompleteExecution(t.Context(), actionmodel.ActionExecutionCompletion{Result: map[string]any{"bad": make(chan int)}}); err == nil {
 		t.Fatal("unencodable completion result accepted")
 	}
@@ -219,7 +219,7 @@ func TestActionExecutionCompletionLeaseAndLookupStages(t *testing.T) {
 	if err := store.actionLeaseMutationResult(t.Context(), nil, wantErr, "execution"); !errors.Is(err, wantErr) {
 		t.Fatalf("execution error=%v", err)
 	}
-	if integrationWorkspaceID(" ") != "default" || integrationWorkspaceID(" workspace ") != "workspace" || nonNilMap(nil) == nil || nonNilMap(map[string]any{"ok": true})["ok"] != true {
+	if integrationWorkspaceID(" ") != "" || integrationWorkspaceID(" workspace ") != "workspace" || nonNilMap(nil) == nil || nonNilMap(map[string]any{"ok": true})["ok"] != true {
 		t.Fatal("normalization helpers failed")
 	}
 	invalidJSON := actionExecutionRow(now, string(idempotency.StatusSucceeded), "fingerprint")
@@ -253,7 +253,7 @@ func TestActionExecutionWaitOutcomes(t *testing.T) {
 			store, closeDB := scriptedActionStore(base, test.state)
 			defer closeDB()
 			store.waitAttempts, store.waitDelay = 1, 0
-			_, found, err := store.waitForExecutionByScope(t.Context(), "default", "object", "record", "action", "idem")
+			_, found, err := store.waitForExecutionByScope(t.Context(), "workspace-primary", "object", "record", "action", "idem")
 			if found != test.found || !errors.Is(err, test.err) {
 				t.Fatalf("found=%v err=%v", found, err)
 			}
@@ -263,7 +263,7 @@ func TestActionExecutionWaitOutcomes(t *testing.T) {
 	store, closeDB := scriptedActionStore(base, &actionDBState{querySteps: []actionQueryStep{{columns: actionExecutionColumns(), hook: cancel}}})
 	defer closeDB()
 	store.waitAttempts, store.waitDelay = 1, time.Hour
-	if _, _, err := store.waitForExecutionByScope(ctx, "default", "object", "record", "action", "idem"); !errors.Is(err, context.Canceled) {
+	if _, _, err := store.waitForExecutionByScope(ctx, "workspace-primary", "object", "record", "action", "idem"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("wait cancellation=%v", err)
 	}
 }
@@ -325,7 +325,7 @@ func TestActionExecutionTransactionRollbackCommitAndResultEdges(t *testing.T) {
 	wantErr := errors.New("injected transaction edge")
 	now := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
 	completion := actionmodel.ActionExecutionCompletion{
-		Execution:   actionmodel.ActionBusinessExecution{WorkspaceID: "default"},
+		Execution:   actionmodel.ActionBusinessExecution{WorkspaceID: "workspace-primary"},
 		ExecutionID: "execution", LeaseOwner: "owner", FencingToken: 1,
 		ErrorCode: "retryable", Retryable: true, ExpiresAt: now.Add(time.Hour), Now: now,
 	}
@@ -436,7 +436,7 @@ func scriptedActionStore(runtimeStore *database.RuntimeStore, state *actionDBSta
 }
 
 func actionExecutionRow(now time.Time, status, fingerprint string) []driver.Value {
-	return []driver.Value{"execution", "default", "object", "record", "action", "idem", fingerprint, status, `{}`, "owner", now.Add(time.Minute).Format(time.RFC3339Nano), int64(1), int64(200), "", now.Add(time.Hour).Format(time.RFC3339Nano), "actor", "role", now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)}
+	return []driver.Value{"execution", "workspace-primary", "object", "record", "action", "idem", fingerprint, status, `{}`, "owner", now.Add(time.Minute).Format(time.RFC3339Nano), int64(1), int64(200), "", now.Add(time.Hour).Format(time.RFC3339Nano), "actor", "role", now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)}
 }
 
 type actionExecStep struct {

@@ -96,8 +96,8 @@ func TestOutboxPollingDiscoversCommittedMessageWithoutWakeup(t *testing.T) {
 	if err := ensureIntegrationTestSchema(t.Context(), store); err != nil {
 		t.Fatal(err)
 	}
-	committed, err := NewIntegrationDeliveryStore(store).InsertOutbox(t.Context(), "default", integrationmodel.IntegrationOutboxMessage{
-		ID: "outbox_poll_recovery", WorkspaceID: "default", ConnectorKey: "webhook", Operation: "notify",
+	committed, err := NewIntegrationDeliveryStore(store).InsertOutbox(t.Context(), "workspace-primary", integrationmodel.IntegrationOutboxMessage{
+		ID: "outbox_poll_recovery", WorkspaceID: "workspace-primary", ConnectorKey: "webhook", Operation: "notify",
 		Status: "queued", Payload: map[string]any{"event": "committed"}, CreatedAt: "2026-07-19T00:00:00Z", UpdatedAt: "2026-07-19T00:00:00Z",
 	})
 	if err != nil {
@@ -131,8 +131,8 @@ func TestOutboxCrashAfterCommitIsRecoveredByReopenedWorkerProcess(t *testing.T) 
 	traceID, _ := trace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
 	spanID, _ := trace.SpanIDFromHex("00f067aa0ba902b7")
 	producerContext := trace.ContextWithSpanContext(requestcontext.WithCorrelationID(t.Context(), "correlation-after-restart"), trace.NewSpanContext(trace.SpanContextConfig{TraceID: traceID, SpanID: spanID, TraceFlags: trace.FlagsSampled}))
-	committed, err := NewIntegrationDeliveryStore(producerStore).InsertOutbox(producerContext, "default", integrationmodel.IntegrationOutboxMessage{
-		ID: "outbox_crash_after_commit", WorkspaceID: "default", ConnectorKey: "webhook", Operation: "notify",
+	committed, err := NewIntegrationDeliveryStore(producerStore).InsertOutbox(producerContext, "workspace-primary", integrationmodel.IntegrationOutboxMessage{
+		ID: "outbox_crash_after_commit", WorkspaceID: "workspace-primary", ConnectorKey: "webhook", Operation: "notify",
 		Status: "queued", Payload: map[string]any{"event": "durable"}, CreatedAt: "2026-07-19T00:00:00Z", UpdatedAt: "2026-07-19T00:00:00Z",
 	})
 	if err != nil {
@@ -173,11 +173,11 @@ func TestIntegrationEventAndOutboxConcurrentClaimsHaveSingleWinner(t *testing.T)
 		t.Fatal(err)
 	}
 	repository := NewIntegrationWorkerStore(store)
-	event, _, err := NewIntegrationEventStore(store).UpsertEvent(t.Context(), "default", integrationmodel.IntegrationEvent{ID: "event_concurrent", WorkspaceID: "default", Provider: "webhook", EventType: "updated", ExternalID: "external_concurrent", Status: "received", Payload: map[string]any{}})
+	event, _, err := NewIntegrationEventStore(store).UpsertEvent(t.Context(), "workspace-primary", integrationmodel.IntegrationEvent{ID: "event_concurrent", WorkspaceID: "workspace-primary", Provider: "webhook", EventType: "updated", ExternalID: "external_concurrent", Status: "received", Payload: map[string]any{}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewIntegrationDeliveryStore(store).InsertOutbox(t.Context(), "default", integrationmodel.IntegrationOutboxMessage{ID: "outbox_concurrent", WorkspaceID: "default", ConnectorKey: "webhook", Operation: "notify", Status: "queued", Payload: map[string]any{}}); err != nil {
+	if _, err := NewIntegrationDeliveryStore(store).InsertOutbox(t.Context(), "workspace-primary", integrationmodel.IntegrationOutboxMessage{ID: "outbox_concurrent", WorkspaceID: "workspace-primary", ConnectorKey: "webhook", Operation: "notify", Status: "queued", Payload: map[string]any{}}); err != nil {
 		t.Fatal(err)
 	}
 	pollAt := time.Now().UTC().Add(time.Second).Format(time.RFC3339)
@@ -188,11 +188,11 @@ func TestIntegrationEventAndOutboxConcurrentClaimsHaveSingleWinner(t *testing.T)
 		}
 	}
 	assertSingleIntegrationClaimWinner(t, func() (bool, error) {
-		_, claimed, err := repository.ClaimEvent(t.Context(), "default", event.ID, "worker-concurrent", "2026-01-01T00:00:00Z")
+		_, claimed, err := repository.ClaimEvent(t.Context(), "workspace-primary", event.ID, "worker-concurrent", "2026-01-01T00:00:00Z")
 		return claimed, err
 	})
 	assertSingleIntegrationClaimWinner(t, func() (bool, error) {
-		_, claimed, err := repository.ClaimOutbox(t.Context(), "default", "outbox_concurrent", "worker-concurrent", "2026-01-01T00:00:00Z")
+		_, claimed, err := repository.ClaimOutbox(t.Context(), "workspace-primary", "outbox_concurrent", "worker-concurrent", "2026-01-01T00:00:00Z")
 		return claimed, err
 	})
 }
@@ -242,7 +242,7 @@ func TestIntegrationWorkersReclaimExpiredLeasesAndRejectStaleCompletion(t *testi
 	}
 	repository := NewIntegrationWorkerStore(store)
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	event, _, err := NewIntegrationEventStore(store).UpsertEvent(t.Context(), "default", integrationmodel.IntegrationEvent{ID: "event_lease", WorkspaceID: "default", Provider: "webhook", EventType: "updated", ExternalID: "external_lease", Status: "received", Payload: map[string]any{}, ReceivedAt: base.Format(time.RFC3339), UpdatedAt: base.Format(time.RFC3339)})
+	event, _, err := NewIntegrationEventStore(store).UpsertEvent(t.Context(), "workspace-primary", integrationmodel.IntegrationEvent{ID: "event_lease", WorkspaceID: "workspace-primary", Provider: "webhook", EventType: "updated", ExternalID: "external_lease", Status: "received", Payload: map[string]any{}, ReceivedAt: base.Format(time.RFC3339), UpdatedAt: base.Format(time.RFC3339)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +280,7 @@ func TestIntegrationWorkersReclaimExpiredLeasesAndRejectStaleCompletion(t *testi
 		t.Fatalf("complete current event lease: %#v err=%v", completed, err)
 	}
 
-	outbox, err := NewIntegrationDeliveryStore(store).InsertOutbox(t.Context(), "default", integrationmodel.IntegrationOutboxMessage{ID: "outbox_lease", WorkspaceID: "default", ConnectorKey: "webhook", Operation: "notify", Status: "queued", Payload: map[string]any{}, CreatedAt: base.Format(time.RFC3339), UpdatedAt: base.Format(time.RFC3339)})
+	outbox, err := NewIntegrationDeliveryStore(store).InsertOutbox(t.Context(), "workspace-primary", integrationmodel.IntegrationOutboxMessage{ID: "outbox_lease", WorkspaceID: "workspace-primary", ConnectorKey: "webhook", Operation: "notify", Status: "queued", Payload: map[string]any{}, CreatedAt: base.Format(time.RFC3339), UpdatedAt: base.Format(time.RFC3339)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,8 +319,8 @@ func TestOutboxRetryPreservesProviderIdempotencyKeyAfterUnknownOutcome(t *testin
 	}
 	delivery := NewIntegrationDeliveryStore(store)
 	worker := NewIntegrationWorkerStore(store)
-	message, err := delivery.InsertOutbox(t.Context(), "default", integrationmodel.IntegrationOutboxMessage{
-		WorkspaceID: "default", ConnectorKey: "payment", ConnectionKey: "primary", Operation: "capture",
+	message, err := delivery.InsertOutbox(t.Context(), "workspace-primary", integrationmodel.IntegrationOutboxMessage{
+		WorkspaceID: "workspace-primary", ConnectorKey: "payment", ConnectionKey: "primary", Operation: "capture",
 		RequestRef: "provider-idempotency:payment:one", DedupKey: "payment:one", Payload: map[string]any{"payment_id": "one"},
 	})
 	if err != nil {

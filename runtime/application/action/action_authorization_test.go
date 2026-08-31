@@ -30,7 +30,7 @@ func TestHandlerActionAuthorizationUsesWriteDataPolicyForExactCustomAction(t *te
 		Authorization: &definitionmodel.ActionAuthorization{AllowedRoles: []string{"member_onboarding"}},
 	}
 	principal := accessfixture.Attach(
-		principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "wechat-user", WorkspaceID: "default"}},
+		principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "wechat-user", WorkspaceID: "workspace-primary"}},
 		accessfixture.Bundle{
 			Key: "member_onboarding", Permissions: []string{"member.self_enroll"},
 			DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "member", Scope: "owned_records", Write: true}},

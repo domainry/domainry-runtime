@@ -168,7 +168,7 @@ func TestRecordMutationHundredConcurrentUpdatesHaveNoLostUpdateOrPartialCommit(t
 	repository := NewRecordStore(store)
 	object := definitionmodel.ObjectSchema{Key: "concurrent_record", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
 	initial := recordmodel.Record{ID: "shared", CreatedAt: "version-0", UpdatedAt: "version-1", Data: map[string]any{"name": "initial"}}
-	if err := repository.CommitRecordMutation(t.Context(), "default", transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: initial}); err != nil {
+	if err := repository.CommitRecordMutation(t.Context(), "workspace-primary", transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: initial}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -189,10 +189,10 @@ func TestRecordMutationHundredConcurrentUpdatesHaveNoLostUpdateOrPartialCommit(t
 				Record:            recordmodel.Record{ID: initial.ID, CreatedAt: initial.CreatedAt, UpdatedAt: "version-" + identity, Data: map[string]any{"name": identity}},
 				ExpectedUpdatedAt: initial.UpdatedAt,
 				Audit:             &auditmodel.AuditEvent{ID: "update-audit-" + identity, Event: "record_updated", ObjectKey: object.Key, RecordID: initial.ID, CreatedAt: "2026-07-19T00:00:00Z"},
-				Outbox:            []integrationmodel.IntegrationOutboxMessage{{ID: "update-outbox-" + identity, WorkspaceID: "default", ConnectorKey: "webhook", Operation: "concurrent.record.updated", DedupKey: identity}},
+				Outbox:            []integrationmodel.IntegrationOutboxMessage{{ID: "update-outbox-" + identity, WorkspaceID: "workspace-primary", ConnectorKey: "webhook", Operation: "concurrent.record.updated", DedupKey: identity}},
 				WorkflowIntents:   []workflowmodel.WorkflowExecution{{ID: "update-workflow-" + identity, WorkflowKey: "concurrent-record-updated", Trigger: "record_updated", Status: "pending", ObjectKey: object.Key, RecordID: initial.ID, CreatedAt: "2026-07-19T00:00:00Z", UpdatedAt: "2026-07-19T00:00:00Z"}},
 			}
-			err := repository.CommitRecordMutation(t.Context(), "default", commit)
+			err := repository.CommitRecordMutation(t.Context(), "workspace-primary", commit)
 			switch {
 			case err == nil:
 				succeeded.Add(1)
@@ -214,7 +214,7 @@ func TestRecordMutationHundredConcurrentUpdatesHaveNoLostUpdateOrPartialCommit(t
 	if succeeded.Load() != 1 || conflicted.Load()+transientlyRejected.Load() != 99 {
 		t.Fatalf("succeeded=%d conflicted=%d transiently_rejected=%d", succeeded.Load(), conflicted.Load(), transientlyRejected.Load())
 	}
-	current, found, err := repository.GetRecord(t.Context(), "default", object, initial.ID)
+	current, found, err := repository.GetRecord(t.Context(), "workspace-primary", object, initial.ID)
 	if err != nil || !found || current.UpdatedAt == initial.UpdatedAt || current.Data["name"] == "initial" {
 		t.Fatalf("current=%#v found=%v err=%v", current, found, err)
 	}

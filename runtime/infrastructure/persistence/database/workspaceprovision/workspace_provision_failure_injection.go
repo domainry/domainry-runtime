@@ -9,6 +9,7 @@ import (
 const (
 	FailureAfterWorkspace              = "after_workspace"
 	FailureAfterTenantRegistry         = "after_tenant_registry"
+	FailureAfterInstallation           = "after_tenant_initialization"
 	FailureAfterIdentityUser           = "after_identity_user"
 	FailureAfterIdentityRole           = "after_identity_role"
 	FailureAfterRoleAssignment         = "after_role_assignment"

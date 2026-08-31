@@ -25,17 +25,26 @@ func scriptedIntegrationConfig(t *testing.T, state *integrationSQLState) Integra
 func TestIntegrationConfigListSQLFailures(t *testing.T) {
 	wantErr := errors.New("list failure")
 	calls := []func(IntegrationConfigStore) error{
-		func(r IntegrationConfigStore) error { _, err := r.ListSecrets(t.Context(), "default"); return err },
-		func(r IntegrationConfigStore) error { _, err := r.ListConnections(t.Context(), "default"); return err },
 		func(r IntegrationConfigStore) error {
-			_, err := r.ListExternalIdentities(t.Context(), "default")
+			_, err := r.ListSecrets(t.Context(), "workspace-primary")
 			return err
 		},
 		func(r IntegrationConfigStore) error {
-			_, err := r.ListWebhookSubscriptions(t.Context(), "default", "", "", "", 1)
+			_, err := r.ListConnections(t.Context(), "workspace-primary")
 			return err
 		},
-		func(r IntegrationConfigStore) error { _, err := r.ListAPIKeys(t.Context(), "default"); return err },
+		func(r IntegrationConfigStore) error {
+			_, err := r.ListExternalIdentities(t.Context(), "workspace-primary")
+			return err
+		},
+		func(r IntegrationConfigStore) error {
+			_, err := r.ListWebhookSubscriptions(t.Context(), "workspace-primary", "", "", "", 1)
+			return err
+		},
+		func(r IntegrationConfigStore) error {
+			_, err := r.ListAPIKeys(t.Context(), "workspace-primary")
+			return err
+		},
 	}
 	for index, call := range calls {
 		for _, step := range []integrationSQLQueryStep{{err: wantErr}, {columns: []string{"bad"}, rows: [][]driver.Value{{"bad"}}}, {columns: []string{"bad"}, nextErr: wantErr}} {
@@ -57,12 +66,12 @@ func TestIntegrationConfigReplaceRowFailureStages(t *testing.T) {
 	}
 	for index, state := range states {
 		repository := scriptedIntegrationConfig(t, state)
-		if err := repository.replaceRow(t.Context(), "_integration_secrets", "secret_key", "default", "token", []string{"id"}, []any{"id"}, "integration secret"); err == nil {
+		if err := repository.replaceRow(t.Context(), "_integration_secrets", "secret_key", "workspace-primary", "token", []string{"id"}, []any{"id"}, "integration secret"); err == nil {
 			t.Fatalf("replace stage %d succeeded", index)
 		}
 	}
 	repository := scriptedIntegrationConfig(t, &integrationSQLState{execSteps: []integrationSQLExecStep{{rows: 1}, {rows: 1}}, rollbackErr: wantErr})
-	if err := repository.replaceRow(t.Context(), "_integration_secrets", "secret_key", "default", "token", []string{"id"}, []any{"id"}, "integration secret"); err != nil {
+	if err := repository.replaceRow(t.Context(), "_integration_secrets", "secret_key", "workspace-primary", "token", []string{"id"}, []any{"id"}, "integration secret"); err != nil {
 		t.Fatalf("successful replace: %v", err)
 	}
 }
@@ -75,7 +84,7 @@ func TestIntegrationConfigActionTransactionEdges(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := database.WithActionExecutionTransaction(t.Context(), tx)
-	if _, err := repository.ListSecrets(ctx, "default"); err == nil {
+	if _, err := repository.ListSecrets(ctx, "workspace-primary"); err == nil {
 		t.Fatal("action transaction list error was ignored")
 	}
 	_ = tx.Rollback()
@@ -90,7 +99,7 @@ func TestIntegrationConfigActionTransactionEdges(t *testing.T) {
 			t.Fatal(err)
 		}
 		ctx = database.WithActionExecutionTransaction(t.Context(), tx)
-		if err := repository.replaceRow(ctx, "_integration_secrets", "secret_key", "default", "token", []string{"id"}, []any{"id"}, "integration secret"); err == nil {
+		if err := repository.replaceRow(ctx, "_integration_secrets", "secret_key", "workspace-primary", "token", []string{"id"}, []any{"id"}, "integration secret"); err == nil {
 			t.Fatalf("action transaction replace stage %d succeeded", index)
 		}
 		_ = tx.Rollback()
@@ -101,23 +110,23 @@ func TestIntegrationConfigUpsertReadAndWriteFailures(t *testing.T) {
 	wantErr := errors.New("upsert failure")
 	calls := []func(IntegrationConfigStore) error{
 		func(r IntegrationConfigStore) error {
-			_, err := r.UpsertSecret(t.Context(), "default", integrationmodel.IntegrationSecret{Key: "token"})
+			_, err := r.UpsertSecret(t.Context(), "workspace-primary", integrationmodel.IntegrationSecret{Key: "token"})
 			return err
 		},
 		func(r IntegrationConfigStore) error {
-			_, err := r.UpsertConnection(t.Context(), "default", integrationmodel.IntegrationConnection{Key: "connection"})
+			_, err := r.UpsertConnection(t.Context(), "workspace-primary", integrationmodel.IntegrationConnection{Key: "connection"})
 			return err
 		},
 		func(r IntegrationConfigStore) error {
-			_, err := r.UpsertExternalIdentity(t.Context(), "default", integrationmodel.IntegrationExternalIdentity{Key: "identity"})
+			_, err := r.UpsertExternalIdentity(t.Context(), "workspace-primary", integrationmodel.IntegrationExternalIdentity{Key: "identity"})
 			return err
 		},
 		func(r IntegrationConfigStore) error {
-			_, err := r.UpsertWebhookSubscription(t.Context(), "default", integrationmodel.IntegrationWebhookSubscription{Key: "subscription"})
+			_, err := r.UpsertWebhookSubscription(t.Context(), "workspace-primary", integrationmodel.IntegrationWebhookSubscription{Key: "subscription"})
 			return err
 		},
 		func(r IntegrationConfigStore) error {
-			_, err := r.UpsertAPIKey(t.Context(), "default", integrationmodel.IntegrationAPIKey{Key: "key"})
+			_, err := r.UpsertAPIKey(t.Context(), "workspace-primary", integrationmodel.IntegrationAPIKey{Key: "key"})
 			return err
 		},
 	}
@@ -134,7 +143,7 @@ func TestIntegrationConfigUpsertReadAndWriteFailures(t *testing.T) {
 	cyclic := map[string]any{}
 	cyclic["self"] = cyclic
 	repository := scriptedIntegrationConfig(t, &integrationSQLState{querySteps: []integrationSQLQueryStep{{}}})
-	if _, err := repository.UpsertConnection(t.Context(), "default", integrationmodel.IntegrationConnection{Key: "connection", Config: cyclic}); err == nil {
+	if _, err := repository.UpsertConnection(t.Context(), "workspace-primary", integrationmodel.IntegrationConnection{Key: "connection", Config: cyclic}); err == nil {
 		t.Fatal("cyclic connection config encoded")
 	}
 }
@@ -142,19 +151,19 @@ func TestIntegrationConfigUpsertReadAndWriteFailures(t *testing.T) {
 func TestIntegrationConfigMutationSQLFailures(t *testing.T) {
 	wantErr := errors.New("mutation failure")
 	repository := scriptedIntegrationConfig(t, &integrationSQLState{execSteps: []integrationSQLExecStep{{err: wantErr}}})
-	if _, err := repository.UpdateAPIKeyLastUsed(t.Context(), "default", "key", "now"); err == nil {
+	if _, err := repository.UpdateAPIKeyLastUsed(t.Context(), "workspace-primary", "key", "now"); err == nil {
 		t.Fatal("api key update failure ignored")
 	}
 	repository = scriptedIntegrationConfig(t, &integrationSQLState{execSteps: []integrationSQLExecStep{{rows: 1}}, querySteps: []integrationSQLQueryStep{{err: wantErr}}})
-	if _, err := repository.UpdateAPIKeyLastUsed(t.Context(), "default", "key", "now"); err == nil {
+	if _, err := repository.UpdateAPIKeyLastUsed(t.Context(), "workspace-primary", "key", "now"); err == nil {
 		t.Fatal("api key reload failure ignored")
 	}
 	repository = scriptedIntegrationConfig(t, &integrationSQLState{execSteps: []integrationSQLExecStep{{err: wantErr}}})
-	if _, err := repository.DeleteConnection(t.Context(), "default", "connection"); err == nil {
+	if _, err := repository.DeleteConnection(t.Context(), "workspace-primary", "connection"); err == nil {
 		t.Fatal("connection delete failure ignored")
 	}
 	repository = scriptedIntegrationConfig(t, &integrationSQLState{execSteps: []integrationSQLExecStep{{rows: 1, rowsErr: wantErr}}})
-	if _, err := repository.DeleteConnection(t.Context(), "default", "connection"); err == nil {
+	if _, err := repository.DeleteConnection(t.Context(), "workspace-primary", "connection"); err == nil {
 		t.Fatal("connection affected-row failure ignored")
 	}
 }
@@ -162,16 +171,16 @@ func TestIntegrationConfigMutationSQLFailures(t *testing.T) {
 func TestIntegrationSecretAndCredentialLeaseSQLFailures(t *testing.T) {
 	wantErr := errors.New("secret and lease SQL failure")
 	repository := scriptedIntegrationConfig(t, &integrationSQLState{querySteps: []integrationSQLQueryStep{{err: wantErr}}})
-	if err := repository.PutSecretMaterial(t.Context(), "default", "token", "value"); err == nil {
+	if err := repository.PutSecretMaterial(t.Context(), "workspace-primary", "token", "value"); err == nil {
 		t.Fatal("secret metadata read failure ignored")
 	}
 	repository = scriptedIntegrationConfig(t, &integrationSQLState{querySteps: []integrationSQLQueryStep{{}}, beginErr: wantErr})
-	if err := repository.PutSecretMaterial(t.Context(), "default", "token", "value"); err == nil {
+	if err := repository.PutSecretMaterial(t.Context(), "workspace-primary", "token", "value"); err == nil {
 		t.Fatal("secret write failure ignored")
 	}
 
 	validLease := func(r IntegrationConfigStore) (bool, error) {
-		return r.TryAcquireCredentialRefreshLease(t.Context(), "default", "connection", "owner", "2026-07-20T00:00:00Z", "2026-07-20T00:01:00Z")
+		return r.TryAcquireCredentialRefreshLease(t.Context(), "workspace-primary", "connection", "owner", "2026-07-20T00:00:00Z", "2026-07-20T00:01:00Z")
 	}
 	for _, state := range []*integrationSQLState{
 		{execSteps: []integrationSQLExecStep{{err: wantErr}}},
@@ -191,7 +200,7 @@ func TestIntegrationSecretAndCredentialLeaseSQLFailures(t *testing.T) {
 		t.Fatalf("existing lease acquired=%v err=%v", acquired, err)
 	}
 	repository = scriptedIntegrationConfig(t, &integrationSQLState{execSteps: []integrationSQLExecStep{{err: wantErr}}})
-	if err := repository.ReleaseCredentialRefreshLease(t.Context(), "default", "connection", "owner"); err == nil {
+	if err := repository.ReleaseCredentialRefreshLease(t.Context(), "workspace-primary", "connection", "owner"); err == nil {
 		t.Fatal("release lease failure ignored")
 	}
 }

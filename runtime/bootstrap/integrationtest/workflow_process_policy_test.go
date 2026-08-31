@@ -36,11 +36,11 @@ func TestWorkflowApprovalSkipsWhenResolverFindsNobody(t *testing.T) {
 	if err != nil || process.Status != "completed" {
 		t.Fatalf("expected skipped approval to complete, process=%#v err=%v", process, err)
 	}
-	tasks, _ := workflowProcessStore(store).ListTasks(t.Context(), "default", process.ID, "", "", 10)
+	tasks, _ := workflowProcessStore(store).ListTasks(t.Context(), "workspace-primary", process.ID, "", "", 10)
 	if len(tasks) != 0 {
 		t.Fatalf("skip policy must not forge tasks: %#v", tasks)
 	}
-	nodes, _ := workflowProcessStore(store).ListNodes(t.Context(), "default", process.ID)
+	nodes, _ := workflowProcessStore(store).ListNodes(t.Context(), "workspace-primary", process.ID)
 	managerSkipped := false
 	for _, node := range nodes {
 		if node.NodeID == "manager" && node.Status == "skipped" {
@@ -80,18 +80,18 @@ func TestWorkflowApprovalDoesNotAssignInactiveManager(t *testing.T) {
 	if startErr != nil || process.ErrorCode != "backend.workflow.approval_assignee_not_found" || process.Status != "configuration_error" {
 		t.Fatalf("inactive manager must not receive an approval task: process=%#v err=%v", process, startErr)
 	}
-	tasks, _ := workflowProcessStore(store).ListTasks(t.Context(), "default", process.ID, "", "", 10)
+	tasks, _ := workflowProcessStore(store).ListTasks(t.Context(), "workspace-primary", process.ID, "", "", 10)
 	if len(tasks) != 0 {
 		t.Fatalf("inactive manager received tasks: %#v", tasks)
 	}
 	manager.Status = identitysdk.UserStatusActive
 	identity.upsertUser(manager)
-	operator := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workflow.process.operate"}})
+	operator := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workflow.process.operate"}})
 	retried, retryErr := records.Applications().Workflows.RetryWorkflowProcess(t.Context(), process.ID, operator)
 	if retryErr != nil || retried.Status != "waiting" || workflowpolicy.WorkflowRetryCount(retried.Result["retry_count"]) != 1 {
 		t.Fatalf("retry after fixing manager: process=%#v err=%v", retried, retryErr)
 	}
-	tasks, _ = workflowProcessStore(store).ListTasks(t.Context(), "default", process.ID, managerID, "open", 10)
+	tasks, _ = workflowProcessStore(store).ListTasks(t.Context(), "workspace-primary", process.ID, managerID, "open", 10)
 	if len(tasks) != 1 {
 		t.Fatalf("retry did not resume only the failed approval node: %#v", tasks)
 	}
@@ -113,7 +113,7 @@ func TestWorkflowActionContinuePolicyRecordsFailureAndContinues(t *testing.T) {
 	if err != nil || process.Status != "completed" {
 		t.Fatalf("expected continue policy to finish process, process=%#v err=%v", process, err)
 	}
-	nodes, _ := workflowProcessStore(store).ListNodes(t.Context(), "default", process.ID)
+	nodes, _ := workflowProcessStore(store).ListNodes(t.Context(), "workspace-primary", process.ID)
 	if len(nodes) != 2 || nodes[1].Status != "failed" || nodes[1].ErrorCode != "backend.action.not_found" {
 		t.Fatalf("expected failed action evidence, got %#v", nodes)
 	}
@@ -141,5 +141,5 @@ func workflowPolicyTestRuntime(t *testing.T, workflow definitionmodel.WorkflowSc
 }
 
 func workflowPolicyPrincipal(userID string) principalmodel.Principal {
-	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: userID, WorkspaceID: "default"}}, accessfixture.Bundle{Key: "employee", Permissions: []string{"workflow.run"}})
+	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: userID, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "employee", Permissions: []string{"workflow.run"}})
 }

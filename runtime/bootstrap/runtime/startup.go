@@ -181,6 +181,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		panic("bootstrap.NewWithExtensions requires an Integration SDK Factory")
 	}
 	cfg = normalizeRuntimeConfig(cfg)
+	mustCompleteRuntimeStartup(principalmodel.ConfigureInstallationWorkspaceID(cfg.IdentityWorkspaceID))
 	mustCompleteRuntimeStartup(cfg.ValidateSecurity())
 	seedManifest, err := prepareRuntimeManifest(ctx, cfg)
 	mustCompleteRuntimeStartup(err)
@@ -208,7 +209,6 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	mustCompleteRuntimeStartup(err)
 	metadataBinding, err := metadatamodule.NewFactory().OpenModule(ctx, metadatasdk.ApplicationRef{InstallationID: valueOrDefault(seedManifest.TemplateID, "domainry-runtime")}, runtimeMetadataModuleHost{store: store})
 	mustCompleteRuntimeStartup(err)
-	defer metadataBinding.Close(context.WithoutCancel(ctx))
 	reportBinding, err := reportmodule.NewFactory().OpenModule(ctx, reportsdk.ApplicationRef{RuntimeID: cfg.RuntimeInstanceID}, runtimeReportModuleHost{store: store})
 	mustCompleteRuntimeStartup(err)
 	mustCompleteRuntimeStartup(synchronizeReportDefinitions(ctx, reportBinding, seedManifest))
@@ -231,7 +231,6 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	if !ok || integrationWebPushBinding.WebPushSubscriptions() == nil {
 		mustCompleteRuntimeStartup(errors.New("Integration Binding returned no Web Push subscriptions port"))
 	}
-	defer integrationBinding.Close(context.WithoutCancel(ctx))
 	restoredMetadata, err := restoreRuntimeMetadata(ctx, store, seedManifest)
 	mustCompleteRuntimeStartup(err)
 	manifest := restoredMetadata.manifest
@@ -248,7 +247,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	partyApplication := partysdk.ApplicationRef{TenantID: cfg.PartyTenantID, WorkspaceID: cfg.PartyWorkspaceID, ApplicationKey: cfg.PartyApplicationKey}
 	var partyBinding partysdk.Binding
 	if moduleFactory, ok := partyFactory.(partymodulehost.Factory); ok {
-		partyBinding, err = moduleFactory.OpenModule(ctx, partyApplication, partySDKModuleHost{store: store, directory: identityDirectory})
+		partyBinding, err = moduleFactory.OpenModule(ctx, partyApplication, partySDKModuleHost{store: store, directory: identityDirectory, audit: auditBinding.Appender()})
 	} else {
 		partyBinding, err = partyFactory.Open(ctx, partyApplication)
 	}
@@ -477,6 +476,9 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		monitoringBinding:   monitoringBinding,
 		schedulerBinding:    schedulerBinding,
 		agentBinding:        agentBinding,
+		auditBinding:        auditBinding,
+		metadataBinding:     metadataBinding,
+		reportBinding:       reportBinding,
 		notificationWorkers: notificationWorkers,
 		notificationRelay:   notificationRelay,
 		worker:              serviceAssembly.worker,
@@ -524,10 +526,6 @@ func openIntegrationBinding(ctx context.Context, application integrationsdk.Appl
 	default:
 		return nil, fmt.Errorf("unsupported Integration deployment mode %q", factory.DeploymentMode())
 	}
-}
-
-type runtimeNotificationCompiler interface {
-	CompileInboxIntent(notificationmodel.NotificationIntent, principalmodel.SystemScope) (notificationmodel.NotificationEvent, error)
 }
 
 type runtimeStartupCallbacks struct {

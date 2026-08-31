@@ -124,14 +124,14 @@ func gymTimerFixtureService(t *testing.T) (*schedulerapplication.SchedulerApplic
 func gymTimerInsertRecord(t *testing.T, repository recordpersistence.RecordStore, object definitionmodel.ObjectSchema, id string, data map[string]any, now time.Time) {
 	t.Helper()
 	stamp := now.UTC().Format(time.RFC3339Nano)
-	if err := repository.InsertRecord(t.Context(), "default", object, recordmodel.Record{ID: id, Data: data, CreatedAt: stamp, UpdatedAt: stamp}); err != nil {
+	if err := repository.InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{ID: id, Data: data, CreatedAt: stamp, UpdatedAt: stamp}); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func gymTimerSchedule(t *testing.T, service *schedulerapplication.SchedulerApplicationService, now time.Time, request schedulerapplication.RecordTimerSchedule) recordmodel.Record {
 	t.Helper()
-	timer, err := service.ScheduleRecordTimer(t.Context(), "default", request, recordmodel.Record{ID: request.RecordID}, nil, now, schedulerRuntimeSystemScope())
+	timer, err := service.ScheduleRecordTimer(t.Context(), "workspace-primary", request, recordmodel.Record{ID: request.RecordID}, nil, now, schedulerRuntimeSystemScope())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,21 +146,21 @@ func TestGymWaitlistTimeoutAdvancesOnlyNextEntryAndRejectsLateConfirmation(t *te
 		gymTimerInsertRecord(t, repository, waitlist, fmt.Sprintf("wait-%d", index+1), map[string]any{"session_id": "class-1", "status": status, "position": index + 1}, now)
 	}
 	gymTimerSchedule(t, service, now, schedulerapplication.RecordTimerSchedule{TimerKey: "wait-1-timeout", ObjectKey: waitlist.Key, RecordID: "wait-1", Purpose: "offer_timeout", DueAt: now, TargetType: "action", TargetKey: "waitlist.offer_timeout", Sequence: 1})
-	processed, err := service.ProcessDueRecordTimers(t.Context(), "default", now, 10, schedulerRuntimePrincipal(), schedulerRuntimeSystemScope())
+	processed, err := service.ProcessDueRecordTimers(t.Context(), "workspace-primary", now, 10, schedulerRuntimePrincipal(), schedulerRuntimeSystemScope())
 	if err != nil || processed != 1 {
 		t.Fatalf("waitlist timer processed=%d err=%v", processed, err)
 	}
 	for id, want := range map[string]string{"wait-1": "expired", "wait-2": "notified", "wait-3": "waiting"} {
-		record, found, getErr := repository.GetRecord(t.Context(), "default", waitlist, id)
+		record, found, getErr := repository.GetRecord(t.Context(), "workspace-primary", waitlist, id)
 		if getErr != nil || !found || record.Data["status"] != want {
 			t.Fatalf("waitlist %s=%#v found=%v err=%v want=%s", id, record, found, getErr, want)
 		}
 	}
-	late, _, _ := repository.GetRecord(t.Context(), "default", waitlist, "wait-1")
+	late, _, _ := repository.GetRecord(t.Context(), "workspace-primary", waitlist, "wait-1")
 	late = gymTimerCloneRecord(late)
 	late.Data["status"] = "confirmed"
 	for attempt := range 2 {
-		updated, updateErr := repository.UpdateRecordWhere(t.Context(), "default", waitlist, late, map[string]any{"status": "notified"})
+		updated, updateErr := repository.UpdateRecordWhere(t.Context(), "workspace-primary", waitlist, late, map[string]any{"status": "notified"})
 		if updateErr != nil || updated {
 			t.Fatalf("late confirmation attempt %d updated=%v err=%v", attempt, updated, updateErr)
 		}
@@ -175,11 +175,11 @@ func TestGymClassCancellationCancelsEveryFutureAttendanceTimer(t *testing.T) {
 	for index, purpose := range []string{"check_in_open", "check_in_close", "no_show", "attendance_finalize"} {
 		gymTimerSchedule(t, service, now, schedulerapplication.RecordTimerSchedule{TimerKey: purpose, ObjectKey: classSession.Key, RecordID: "class-1", Purpose: purpose, DueAt: now.Add(time.Duration(index+1) * time.Hour), TargetType: "action", TargetKey: "attendance.window", Sequence: int64(index)})
 	}
-	cancelled, err := service.CancelRecordTimers(t.Context(), "default", classSession.Key, "class-1", "", now, schedulerRuntimeSystemScope())
+	cancelled, err := service.CancelRecordTimers(t.Context(), "workspace-primary", classSession.Key, "class-1", "", now, schedulerRuntimeSystemScope())
 	if err != nil || cancelled != 4 {
 		t.Fatalf("cancelled attendance timers=%d err=%v", cancelled, err)
 	}
-	page, err := repository.ListRecords(t.Context(), "default", schedulerRuntimeObjectByKey(t, objects, "record_timer"), recordmodel.RecordListQuery{Page: 1, PageSize: 10, Filters: map[string]any{"object_key": classSession.Key, "record_id": "class-1", "status": "scheduled"}})
+	page, err := repository.ListRecords(t.Context(), "workspace-primary", schedulerRuntimeObjectByKey(t, objects, "record_timer"), recordmodel.RecordListQuery{Page: 1, PageSize: 10, Filters: map[string]any{"object_key": classSession.Key, "record_id": "class-1", "status": "scheduled"}})
 	if err != nil || page.Total != 0 {
 		t.Fatalf("future attendance timers=%d err=%v", page.Total, err)
 	}
@@ -193,18 +193,18 @@ func TestGymUrgentTicketResponseCancelsAlertAndUnansweredEscalatesOnce(t *testin
 		gymTimerInsertRecord(t, repository, tickets, id, map[string]any{"status": "open"}, now)
 		gymTimerSchedule(t, service, now, schedulerapplication.RecordTimerSchedule{TimerKey: id + ":sla", ObjectKey: tickets.Key, RecordID: id, Purpose: "response_sla", DueAt: now.Add(2 * time.Hour), TargetType: "action", TargetKey: "ticket.escalate"})
 	}
-	responded, _, _ := repository.GetRecord(t.Context(), "default", tickets, "ticket-responded")
+	responded, _, _ := repository.GetRecord(t.Context(), "workspace-primary", tickets, "ticket-responded")
 	responded = gymTimerCloneRecord(responded)
 	responded.Data["status"], responded.UpdatedAt = "responded", now.Add(time.Hour).Format(time.RFC3339Nano)
-	updated, err := repository.UpdateRecordWhere(t.Context(), "default", tickets, responded, map[string]any{"status": "open"})
+	updated, err := repository.UpdateRecordWhere(t.Context(), "workspace-primary", tickets, responded, map[string]any{"status": "open"})
 	if err != nil || !updated {
 		t.Fatalf("respond ticket updated=%v err=%v", updated, err)
 	}
-	if cancelled, err := service.CancelRecordTimers(t.Context(), "default", tickets.Key, "ticket-responded", "response_sla", now.Add(time.Hour), schedulerRuntimeSystemScope()); err != nil || cancelled != 1 {
+	if cancelled, err := service.CancelRecordTimers(t.Context(), "workspace-primary", tickets.Key, "ticket-responded", "response_sla", now.Add(time.Hour), schedulerRuntimeSystemScope()); err != nil || cancelled != 1 {
 		t.Fatalf("cancel responded ticket timer=%d err=%v", cancelled, err)
 	}
 	for range 2 {
-		if _, err := service.ProcessDueRecordTimers(t.Context(), "default", now.Add(3*time.Hour), 10, schedulerRuntimePrincipal(), schedulerRuntimeSystemScope()); err != nil {
+		if _, err := service.ProcessDueRecordTimers(t.Context(), "workspace-primary", now.Add(3*time.Hour), 10, schedulerRuntimePrincipal(), schedulerRuntimeSystemScope()); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -231,7 +231,7 @@ func TestGymCardPackageExpiryAndNinetyDayReviewUseRelativeRecordTimers(t *testin
 		{key: "package-expiry", objectKey: "gym_training_package", field: "expires_at", base: now.Add(60 * 24 * time.Hour), want: now.Add(60 * 24 * time.Hour)},
 		{key: "inactive-review", objectKey: "gym_member", field: "last_entry_at", base: now, offset: 90 * 24 * 60 * 60, want: now.Add(90 * 24 * time.Hour)},
 	} {
-		timer, err := service.ScheduleRecordTimer(t.Context(), "default", schedulerapplication.RecordTimerSchedule{
+		timer, err := service.ScheduleRecordTimer(t.Context(), "workspace-primary", schedulerapplication.RecordTimerSchedule{
 			TimerKey: testCase.key, ObjectKey: testCase.objectKey, RecordID: testCase.key, Purpose: testCase.key,
 			ScheduleMode: "relative_field", SourceField: testCase.field, OffsetSeconds: testCase.offset,
 			TargetType: "action", TargetKey: "lifecycle.review",
@@ -243,7 +243,7 @@ func TestGymCardPackageExpiryAndNinetyDayReviewUseRelativeRecordTimers(t *testin
 			t.Fatalf("timer %s due_at=%v want=%s", testCase.key, timer.Data["due_at"], testCase.want.Format(time.RFC3339Nano))
 		}
 	}
-	page, err := repository.ListRecords(t.Context(), "default", schedulerRuntimeObjectByKey(t, objects, "record_timer"), recordmodel.RecordListQuery{Page: 1, PageSize: 10, Filters: map[string]any{"status": "scheduled"}})
+	page, err := repository.ListRecords(t.Context(), "workspace-primary", schedulerRuntimeObjectByKey(t, objects, "record_timer"), recordmodel.RecordListQuery{Page: 1, PageSize: 10, Filters: map[string]any{"status": "scheduled"}})
 	if err != nil || page.Total != 3 {
 		t.Fatalf("lifecycle timers=%d err=%v", page.Total, err)
 	}

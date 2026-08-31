@@ -158,7 +158,7 @@ func TestRuntimeBusinessOnlyManifestSeedsRuntimeOwnedNavigationAndLogin(t *testi
 
 	store := openRuntimePersistenceFixture(t, cfg)
 	defer store.Close()
-	globalExecutions, err := workflowpersistence.NewWorkflowWorkerStore(store).ListExecutions(t.Context(), "default", 100)
+	globalExecutions, err := workflowpersistence.NewWorkflowWorkerStore(store).ListExecutions(t.Context(), "workspace-primary", 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestRuntimeBusinessOnlyManifestSeedsRuntimeOwnedNavigationAndLogin(t *testi
 		t.Fatalf("expected seeded workflow execution, got %#v", globalExecutions)
 	}
 
-	globalAuditEvents, err := auditpersistence.NewAuditStoreFromRuntimeStore(t.Context(), store).ListAuditEvents(t.Context(), "default", auditmodel.AuditEventQuery{Limit: 100})
+	globalAuditEvents, err := auditpersistence.NewAuditStoreFromRuntimeStore(t.Context(), store).ListAuditEvents(t.Context(), "workspace-primary", auditmodel.AuditEventQuery{Limit: 100})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +361,7 @@ func TestRuntimeCRMOverdueWorkflowOnlyProcessesOverduePayments(t *testing.T) {
 	}
 	store := openRuntimePersistenceFixture(t, cfg)
 	defer store.Close()
-	persistedExecutions, err := workflowpersistence.NewWorkflowWorkerStore(store).ListExecutions(t.Context(), "default", 100)
+	persistedExecutions, err := workflowpersistence.NewWorkflowWorkerStore(store).ListExecutions(t.Context(), "workspace-primary", 100)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -22,11 +22,11 @@ func TestGenericOrderedClaimUsesPrioritySequenceCreatedAtAndAtomicCAS(t *testing
 		{ID: "high-second", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "ready", "priority": 10, "sequence": 2}},
 		{ID: "high-first", CreatedAt: now.Add(time.Minute).Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "ready", "priority": 10, "sequence": 1}},
 	} {
-		if err := repository.InsertRecord(t.Context(), "default", object, item); err != nil {
+		if err := repository.InsertRecord(t.Context(), "workspace-primary", object, item); err != nil {
 			t.Fatal(err)
 		}
 	}
-	request := recordservice.RecordOrderedClaimRequest{WorkspaceID: "default", Object: object, StatusField: "status", EligibleStatuses: []string{"ready"}, ClaimedStatus: "claimed", Now: now}
+	request := recordservice.RecordOrderedClaimRequest{WorkspaceID: "workspace-primary", Object: object, StatusField: "status", EligibleStatuses: []string{"ready"}, ClaimedStatus: "claimed", Now: now}
 	for _, expected := range []string{"high-first", "high-second", "low"} {
 		claimed, ok, err := recordservice.RecordClaimFirstEligible(t.Context(), repository, request)
 		if err != nil || !ok || claimed.ID != expected {
@@ -43,7 +43,7 @@ func TestGenericOrderedClaimUsesPrioritySequenceCreatedAtAndAtomicCAS(t *testing
 		wait.Add(1)
 		go func(worker int) {
 			defer wait.Done()
-			candidate, ok, err := recordservice.RecordClaimFirstEligible(t.Context(), repository, recordservice.RecordOrderedClaimRequest{WorkspaceID: "default", Object: object, StatusField: "status", EligibleStatuses: []string{"ready"}, ClaimedStatus: "claimed", ClaimPatch: map[string]any{"claimed_by": recordClaimIndex(worker)}, Now: now})
+			candidate, ok, err := recordservice.RecordClaimFirstEligible(t.Context(), repository, recordservice.RecordOrderedClaimRequest{WorkspaceID: "workspace-primary", Object: object, StatusField: "status", EligibleStatuses: []string{"ready"}, ClaimedStatus: "claimed", ClaimPatch: map[string]any{"claimed_by": recordClaimIndex(worker)}, Now: now})
 			if err != nil {
 				t.Errorf("worker %d: %v", worker, err)
 				return

@@ -18,7 +18,7 @@ func runWorkflowProcess(t *testing.T, store *persistence.RuntimeStore, records *
 	if run.Execution.ProcessID == "" {
 		return workflowmodel.WorkflowProcessInstance{}, err
 	}
-	process, _, getErr := workflowProcessStore(store).GetProcess(t.Context(), "default", run.Execution.ProcessID)
+	process, _, getErr := workflowProcessStore(store).GetProcess(t.Context(), "workspace-primary", run.Execution.ProcessID)
 	if err == nil {
 		err = getErr
 	}

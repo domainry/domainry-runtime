@@ -116,7 +116,7 @@ func (h *AgentDialogHandler) agentDialogExternalSessionID(r *http.Request, reque
 func agentDialogSessionPart(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
-		return "default"
+		return "unspecified"
 	}
 	var builder strings.Builder
 	for _, ch := range value {

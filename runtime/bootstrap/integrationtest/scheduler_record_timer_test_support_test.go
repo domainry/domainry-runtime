@@ -67,7 +67,7 @@ func schedulerRuntimeObjectByKey(t *testing.T, objects []definitionmodel.ObjectS
 
 func schedulerRuntimePrincipal() principalmodel.Principal {
 	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{
-		Known: true, UserID: "record-timer-worker", WorkspaceID: "default",
+		Known: true, UserID: "record-timer-worker", WorkspaceID: "workspace-primary",
 	}}, accessfixture.Bundle{
 		Key: "admin", Permissions: []string{"workspace.admin", "scheduler.command"}, RecordScope: "all_records",
 	})

@@ -40,13 +40,13 @@ func TestRecordTimerHundredThousandRestartClockDriftAndMultiInstanceNoLoss(t *te
 				"max_attempts": 10, "retry_delay_seconds": 1, "retry_max_delay_seconds": 60,
 			}}})
 		}
-		if err := recordLegacyStore(store).CommitRecordMutationBatch(t.Context(), "default", commits); err != nil {
+		if err := recordLegacyStore(store).CommitRecordMutationBatch(t.Context(), "workspace-primary", commits); err != nil {
 			t.Fatalf("seed timer batch %d: %v", start, err)
 		}
 	}
 	preRestart := newSchedulerRuntimeTestService(t, store, objects)
 	preRestart.Applications().Scheduler.ConfigureWorker(schedulerapplication.WorkerConfig{Enabled: true, LeaseTTL: 5 * time.Minute, BatchSize: 500})
-	lostLeases, err := preRestart.Applications().Scheduler.ClaimDueRecordTimers(t.Context(), "default", now.Add(2*time.Minute), 250, schedulerRuntimeSystemScope())
+	lostLeases, err := preRestart.Applications().Scheduler.ClaimDueRecordTimers(t.Context(), "workspace-primary", now.Add(2*time.Minute), 250, schedulerRuntimeSystemScope())
 	if err != nil || len(lostLeases) != 250 {
 		t.Fatalf("inject lease loss leases=%d err=%v", len(lostLeases), err)
 	}
@@ -64,7 +64,7 @@ func TestRecordTimerHundredThousandRestartClockDriftAndMultiInstanceNoLoss(t *te
 	for len(seen) < total {
 		instance := instances[batch%len(instances)]
 		drift := time.Duration(batch%5-2) * time.Second
-		leases, err := instance.Applications().Scheduler.ClaimDueRecordTimers(t.Context(), "default", now.Add(10*time.Minute).Add(drift), 500, schedulerRuntimeSystemScope())
+		leases, err := instance.Applications().Scheduler.ClaimDueRecordTimers(t.Context(), "workspace-primary", now.Add(10*time.Minute).Add(drift), 500, schedulerRuntimeSystemScope())
 		if err != nil {
 			t.Fatalf("claim batch %d: %v", batch, err)
 		}
@@ -77,16 +77,16 @@ func TestRecordTimerHundredThousandRestartClockDriftAndMultiInstanceNoLoss(t *te
 			}
 			seen[lease.Record.ID] = true
 		}
-		if err := instance.Applications().Scheduler.FinishRecordTimers(t.Context(), "default", leases, now.Add(10*time.Minute).Add(drift), schedulerRuntimeSystemScope()); err != nil {
+		if err := instance.Applications().Scheduler.FinishRecordTimers(t.Context(), "workspace-primary", leases, now.Add(10*time.Minute).Add(drift), schedulerRuntimeSystemScope()); err != nil {
 			t.Fatalf("finish timer batch %d: %v", batch, err)
 		}
 		batch++
 	}
-	page, err := recordLegacyStore(store).ListRecords(t.Context(), "default", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 1, Filters: map[string]any{"status": "fired"}})
+	page, err := recordLegacyStore(store).ListRecords(t.Context(), "workspace-primary", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 1, Filters: map[string]any{"status": "fired"}})
 	if err != nil || page.Total != total {
 		t.Fatalf("fired timers=%d err=%v want=%d", page.Total, err, total)
 	}
-	if err := instances[0].Applications().Scheduler.FinishRecordTimer(t.Context(), "default", lostLeases[0], now.Add(-2*time.Minute), schedulerRuntimeSystemScope()); !mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
+	if err := instances[0].Applications().Scheduler.FinishRecordTimer(t.Context(), "workspace-primary", lostLeases[0], now.Add(-2*time.Minute), schedulerRuntimeSystemScope()); !mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
 		t.Fatalf("lost worker stale completion error=%v", err)
 	}
 }

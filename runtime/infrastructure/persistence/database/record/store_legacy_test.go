@@ -55,7 +55,7 @@ func TestListRecordsComposesDepartmentScopeWithSearchFiltersPaginationAndSorting
 	insertGeneratedScopedRecord(t, store, object, "r6", "Aardvark South", "active", "/company/sales")
 	insertGeneratedScopedRecordWithDepartmentPath(t, store, object, "r10", "Null North", "active", nil)
 
-	page, err := recordStore(store).ListRecords(t.Context(), "default", object, recordmodel.RecordListQuery{
+	page, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
 		Page:                    2,
 		PageSize:                1,
 		AfterID:                 "r1",
@@ -80,7 +80,7 @@ func TestListRecordsComposesDepartmentScopeWithSearchFiltersPaginationAndSorting
 	insertGeneratedScopedRecord(t, store, object, "r7", "Special North", "active", "/company/sales_%")
 	insertGeneratedScopedRecord(t, store, object, "r8", "Special Child North", "active", "/company/sales_%/enterprise")
 	insertGeneratedScopedRecord(t, store, object, "r9", "Special Leak North", "active", "/company/sales-aa")
-	specialPage, err := recordStore(store).ListRecords(t.Context(), "default", object, recordmodel.RecordListQuery{
+	specialPage, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
 		Page:                    1,
 		PageSize:                10,
 		Search:                  "Special",
@@ -98,7 +98,7 @@ func TestListRecordsComposesDepartmentScopeWithSearchFiltersPaginationAndSorting
 		t.Fatalf("expected escaped LIKE query to include only exact and child special-character paths, got %#v", specialPage)
 	}
 
-	batchPage, err := recordStore(store).ListRecords(t.Context(), "default", object, recordmodel.RecordListQuery{
+	batchPage, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
 		Page: 1, PageSize: 10, Filters: map[string]any{"id__in": []any{"r1", "r3"}}, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}},
 	})
 	if err != nil {
@@ -107,24 +107,24 @@ func TestListRecordsComposesDepartmentScopeWithSearchFiltersPaginationAndSorting
 	if batchPage.Total != 2 || len(batchPage.Items) != 2 || batchPage.Items[0].ID != "r1" || batchPage.Items[1].ID != "r3" {
 		t.Fatalf("expected generic id__in batch filter, got %#v", batchPage)
 	}
-	firstWithoutTotal, err := recordStore(store).ListRecords(t.Context(), "default", object, recordmodel.RecordListQuery{
+	firstWithoutTotal, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
 		Page: 1, PageSize: 2, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}, SkipTotal: true,
 	})
 	if err != nil || firstWithoutTotal.Total != 0 || !firstWithoutTotal.HasNext || len(firstWithoutTotal.Items) != 2 {
 		t.Fatalf("expected count-free first page with lookahead, got %#v err=%v", firstWithoutTotal, err)
 	}
-	cursorPage, err := recordStore(store).ListRecords(t.Context(), "default", object, recordmodel.RecordListQuery{
+	cursorPage, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
 		Page: 99, PageSize: 2, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}, SkipTotal: true, AfterID: firstWithoutTotal.Items[len(firstWithoutTotal.Items)-1].ID,
 	})
 	if err != nil || len(cursorPage.Items) != 2 || cursorPage.Items[0].ID <= firstWithoutTotal.Items[1].ID {
 		t.Fatalf("expected keyset page strictly after cursor, got %#v err=%v", cursorPage, err)
 	}
-	if _, err := recordStore(store).ListRecords(t.Context(), "default", object, recordmodel.RecordListQuery{
+	if _, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
 		Page: 1, PageSize: 2, Sort: []recordmodel.RecordSortRule{{Field: "name", Direction: "asc"}}, SkipTotal: true, AfterID: "r1",
 	}); err == nil {
 		t.Fatal("expected non-id keyset sort to be rejected")
 	}
-	lastWithoutTotal, err := recordStore(store).ListRecords(t.Context(), "default", object, recordmodel.RecordListQuery{
+	lastWithoutTotal, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
 		Page: 5, PageSize: 2, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}, SkipTotal: true, AfterID: "r7",
 	})
 	if err != nil || lastWithoutTotal.Total != 0 || lastWithoutTotal.HasNext || len(lastWithoutTotal.Items) != 2 {
@@ -169,7 +169,7 @@ func TestUpdateRecordWherePreventsStaleSchedulerLeaseClaim(t *testing.T) {
 			"attempt":          1,
 		},
 	}
-	if err := recordStore(store).InsertRecord(t.Context(), "default", object, record); err != nil {
+	if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", object, record); err != nil {
 		t.Fatalf("insert job_run: %v", err)
 	}
 
@@ -178,7 +178,7 @@ func TestUpdateRecordWherePreventsStaleSchedulerLeaseClaim(t *testing.T) {
 	claimed.Data["status"] = "leased"
 	claimed.Data["lease_owner"] = "worker:a"
 	claimed.Data["lease_expires_at"] = "2026-01-01T00:05:01Z"
-	ok, err := recordStore(store).UpdateRecordWhere(t.Context(), "default", object, claimed, map[string]any{"status": "retrying", "lease_expires_at": ""})
+	ok, err := recordStore(store).UpdateRecordWhere(t.Context(), "workspace-primary", object, claimed, map[string]any{"status": "retrying", "lease_expires_at": ""})
 	if err != nil {
 		t.Fatalf("first conditional update: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestUpdateRecordWherePreventsStaleSchedulerLeaseClaim(t *testing.T) {
 	stale.Data["status"] = "leased"
 	stale.Data["lease_owner"] = "worker:b"
 	stale.Data["lease_expires_at"] = "2026-01-01T00:05:02Z"
-	ok, err = recordStore(store).UpdateRecordWhere(t.Context(), "default", object, stale, map[string]any{"status": "retrying", "lease_expires_at": ""})
+	ok, err = recordStore(store).UpdateRecordWhere(t.Context(), "workspace-primary", object, stale, map[string]any{"status": "retrying", "lease_expires_at": ""})
 	if err != nil {
 		t.Fatalf("second conditional update: %v", err)
 	}
@@ -325,7 +325,7 @@ func insertGeneratedScopedRecord(t *testing.T, store *RuntimeStore, object defin
 
 func insertGeneratedScopedRecordWithDepartmentPath(t *testing.T, store *RuntimeStore, object definitionmodel.ObjectSchema, id, name, status string, departmentPath any) {
 	t.Helper()
-	if err := recordStore(store).InsertRecord(t.Context(), "default", object, recordmodel.Record{
+	if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{
 		ID:        id,
 		CreatedAt: "2026-01-01T00:00:00Z",
 		UpdatedAt: "2026-01-01T00:00:00Z",

@@ -508,7 +508,7 @@ func TestPrincipalProjectionAPIKeyAndDevelopmentMatrix(t *testing.T) {
 		return r
 	}
 
-	router := &HTTPRouter{integrationAuth: routerIntegrationAuthStub{principal: principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "api-user", WorkspaceID: "default"}}}}
+	router := &HTTPRouter{integrationAuth: routerIntegrationAuthStub{principal: principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "api-user", WorkspaceID: "workspace-primary"}}}}
 	if principal := router.principalFromRequest(request(map[string]string{"X-API-Key": "key"})); principal.UserID != "api-user" {
 		t.Fatalf("api principal=%+v", principal)
 	}
@@ -704,7 +704,7 @@ func TestMetricsNormalizationSortingAndBounds(t *testing.T) {
 }
 
 func TestCompleteRouterCompositionSmokeAndCallbacks(t *testing.T) {
-	router := NewHTTPRouter(HTTPRouterConfig{AllowDevAuthHeaders: true}, HTTPRouterDependencies{IdentityAuthorization: routerIdentityAuthorizationStub{principal: principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "developer", WorkspaceID: "default"}}}})
+	router := NewHTTPRouter(HTTPRouterConfig{AllowDevAuthHeaders: true}, HTTPRouterDependencies{IdentityAuthorization: routerIdentityAuthorizationStub{principal: principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "developer", WorkspaceID: "workspace-primary"}}}})
 	returned := UseHandlers(router, HTTPRouterHandlers{})
 	if returned != router {
 		t.Fatal("UseHandlers did not return the configured router")
@@ -753,7 +753,7 @@ func TestAuthorizedHealthAndAuditPrincipalSources(t *testing.T) {
 		t.Fatalf("ready status=%d body=%s", ready.Code, ready.Body.String())
 	}
 
-	router.integrationAuth = routerIntegrationAuthStub{principal: principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "api-auditor", WorkspaceID: "default"}}}
+	router.integrationAuth = routerIntegrationAuthStub{principal: principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "api-auditor", WorkspaceID: "workspace-primary"}}}
 	request := httptest.NewRequest(http.MethodGet, "/", nil)
 	request.Header.Set("X-API-Key", "key")
 	if principal := router.auditPrincipalFromRequest(request); principal.UserID != "api-auditor" {
@@ -837,8 +837,8 @@ func TestLastRouterConditionEdges(t *testing.T) {
 	}
 
 	auditRouter := &HTTPRouter{}
-	auditRequest := requestWithPrincipal(httptest.NewRequest(http.MethodGet, "/", nil), principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "default-workspace", WorkspaceID: "default"}})
-	if principal := auditRouter.auditPrincipalFromRequest(auditRequest); principal.WorkspaceID != "default" {
+	auditRequest := requestWithPrincipal(httptest.NewRequest(http.MethodGet, "/", nil), principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "default-workspace", WorkspaceID: "workspace-primary"}})
+	if principal := auditRouter.auditPrincipalFromRequest(auditRequest); principal.WorkspaceID != "workspace-primary" {
 		t.Fatalf("default audit principal=%+v", principal)
 	}
 
@@ -847,10 +847,10 @@ func TestLastRouterConditionEdges(t *testing.T) {
 }
 
 func TestHTTPPrincipalBusinessProfileSelectionIsServerResolvedAndFailClosed(t *testing.T) {
-	resolved := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "default"}, SurfaceKey: "portal", BusinessClaims: map[string]profilebindingmodel.ClaimValue{"member_no": {Type: "text", Value: "M-1"}}}
+	resolved := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "workspace-primary"}, SurfaceKey: "portal", BusinessClaims: map[string]profilebindingmodel.ClaimValue{"member_no": {Type: "text", Value: "M-1"}}}
 	business := &routerBusinessPrincipalStub{principal: resolved}
 	router := &HTTPRouter{businessPrincipal: business}
-	request := requestWithPrincipal(httptest.NewRequest(http.MethodGet, "/", nil), principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "default"}})
+	request := requestWithPrincipal(httptest.NewRequest(http.MethodGet, "/", nil), principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "workspace-primary"}})
 	request.Header.Set("X-Surface-Key", "portal")
 	request.Header.Set("X-Business-Profile-Key", "member")
 	request.Header.Set("X-Business-Profile-ID", "member-1")

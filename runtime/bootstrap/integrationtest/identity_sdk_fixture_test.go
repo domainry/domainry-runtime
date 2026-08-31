@@ -85,7 +85,7 @@ func newIntegrationIdentityBinding(t *testing.T, cfg config.Config) identitysdk.
 	t.Helper()
 	workspaceID := strings.TrimSpace(cfg.IdentityWorkspaceID)
 	if workspaceID == "" {
-		workspaceID = "default"
+		workspaceID = "workspace-primary"
 	}
 	applicationKey := strings.TrimSpace(cfg.IdentityAudience)
 	if applicationKey == "" {
@@ -147,7 +147,7 @@ func roleForBusinessWorkflowRole(role string) string {
 
 func applyIntegrationIdentity(request *http.Request, role string) {
 	request.Header.Set("Authorization", "Bearer "+integrationIdentityAccessToken(role))
-	request.Header.Set("X-Workspace-ID", "default")
+	request.Header.Set("X-Workspace-ID", "workspace-primary")
 	path := request.URL.Path
 	switch {
 	case strings.HasPrefix(path, "/tenant-admin/"), strings.HasPrefix(path, "/operations/"), strings.HasPrefix(path, "/automation-rules"):

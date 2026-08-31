@@ -25,6 +25,9 @@ Registered schema tables:
 - `_workspaces`, `_tenant_registry` — `runtime_global`; they are the platform
   registries for canonical workspace and tenant identities, and their canonical
   codes are globally unique rather than inferred from a caller workspace
+- `_tenant_installation` — `installation_scoped`; its singleton row is written
+  atomically with the first tenant and binds this Runtime installation to that
+  real tenant/workspace before tenant-facing services are assembled
 - `_workspace_configuration` — `workspace_scoped`; every row is keyed by the
   newly provisioned workspace and is created in the same guarded transaction
 - `_workspace_provisioning_receipts` — `runtime_global`; request idempotency is

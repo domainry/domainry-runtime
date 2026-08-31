@@ -51,7 +51,7 @@ func TestWorkflowDefinitionAuthoringExamplesExecuteApplicationValidator(t *testi
 			return map[string]definitionmodel.ObjectSchema{"order": {Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}}
 		},
 	})
-	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}
 	var capabilityIndex int
 	domain := workflowpolicy.WorkflowAuthoringDomain()
 	for index := range domain.Capabilities {

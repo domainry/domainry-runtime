@@ -48,6 +48,7 @@ var bootstrapCompositionTestFiles = stringSet(
 	"runtime_services_record_test.go",
 	"scheduler_application_wiring_conditions_test.go",
 	"scheduler_sdk_module_host_wiring_test.go",
+	"test_workspace_initialization_test.go",
 )
 
 func TestBootstrapCompositionContainsOnlyReviewedFiles(t *testing.T) {

@@ -11,7 +11,7 @@ import (
 func TestLocalizedTextCSVExportsStableKeysAndText(t *testing.T) {
 	payload := localizedTextCSV([]appschemamodel.LocalizedText{
 		{
-			WorkspaceID: "default",
+			WorkspaceID: "workspace-primary",
 			EntityType:  "field",
 			EntityKey:   "customer.status.active",
 			Property:    "label",
@@ -22,7 +22,7 @@ func TestLocalizedTextCSVExportsStableKeysAndText(t *testing.T) {
 	got := string(payload)
 	want := strings.Join([]string{
 		"workspace_id,entity_type,entity_key,property,locale,text",
-		"default,field,customer.status.active,label,zh-CN,活跃",
+		"workspace-primary,field,customer.status.active,label,zh-CN,活跃",
 		"",
 	}, "\n")
 	if got != want {
@@ -33,7 +33,7 @@ func TestLocalizedTextCSVExportsStableKeysAndText(t *testing.T) {
 func TestLocalizedTextXLSXExportsStableKeysAndText(t *testing.T) {
 	payload := localizedTextXLSX([]appschemamodel.LocalizedText{
 		{
-			WorkspaceID: "default",
+			WorkspaceID: "workspace-primary",
 			EntityType:  "field",
 			EntityKey:   "customer.status.active",
 			Property:    "label",
@@ -69,7 +69,7 @@ func TestLocalizedTextXLSXExportsStableKeysAndText(t *testing.T) {
 func TestLocalizedTextCSVImportUsesHeaderOrderAndRejectsLocalizedKeys(t *testing.T) {
 	input := strings.Join([]string{
 		"text,locale,property,entity_key,entity_type,workspace_id",
-		"Active,en-US,label,customer.status.active,field,default",
+		"Active,en-US,label,customer.status.active,field,workspace-primary",
 	}, "\n")
 	requests, err := localizedTextUpsertRequestsFromCSV(bytes.NewBufferString(input))
 	if err != nil {
@@ -90,7 +90,7 @@ func TestLocalizedTextCSVImportUsesHeaderOrderAndRejectsLocalizedKeys(t *testing
 func TestLocalizedTextCSVImportRequiresStableColumns(t *testing.T) {
 	input := strings.Join([]string{
 		"workspace_id,entity_type,entity_key,property,locale,text",
-		"default,field,,label,zh-CN,活跃",
+		"workspace-primary,field,,label,zh-CN,活跃",
 	}, "\n")
 	if _, err := localizedTextUpsertRequestsFromCSV(bytes.NewBufferString(input)); err == nil {
 		t.Fatal("expected missing entity key to fail")
@@ -125,14 +125,14 @@ func TestLocalizedTextCSVImportStructuralFailures(t *testing.T) {
 	if _, err := localizedTextUpsertRequestsFromCSV(strings.NewReader("workspace_id,entity_type")); err == nil {
 		t.Fatal("expected missing columns")
 	}
-	short := "workspace_id,entity_type,entity_key,property,locale,text\ndefault,field,key,label,en-US\n"
+	short := "workspace_id,entity_type,entity_key,property,locale,text\nworkspace-primary,field,key,label,en-US\n"
 	if _, err := localizedTextUpsertRequestsFromCSV(strings.NewReader(short)); err == nil {
 		t.Fatal("expected short row")
 	}
 }
 
 func TestLocalizedTextCSVImportRequiresEachValue(t *testing.T) {
-	header := []string{"default", "field", "key", "label", "en-US", "Text"}
+	header := []string{"workspace-primary", "field", "key", "label", "en-US", "Text"}
 	for index := 1; index < len(header); index++ {
 		values := append([]string(nil), header...)
 		values[index] = ""

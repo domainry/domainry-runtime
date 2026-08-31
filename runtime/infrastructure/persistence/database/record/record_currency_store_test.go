@@ -16,18 +16,18 @@ func TestSQLiteCurrencyPersistsSortsAndFiltersWithoutBinaryFloat(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "exact_amount_record", Fields: []definitionmodel.FieldSchema{{Key: "amount", Type: "currency", Config: map[string]any{"precision": 8, "scale": 2, "currency_code": "USD"}}}}
 	repository := NewRecordStore(store)
 	for _, item := range []struct{ id, amount string }{{"ten", "10.00"}, {"two", "2.00"}, {"negative", "-2.00"}} {
-		if err := repository.InsertRecord(t.Context(), "default", object, recordmodel.Record{ID: item.id, CreatedAt: "2026-07-20T00:00:00Z", UpdatedAt: "2026-07-20T00:00:00Z", Data: map[string]any{"amount": item.amount}}); err != nil {
+		if err := repository.InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{ID: item.id, CreatedAt: "2026-07-20T00:00:00Z", UpdatedAt: "2026-07-20T00:00:00Z", Data: map[string]any{"amount": item.amount}}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	page, err := repository.ListRecords(t.Context(), "default", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, Sort: []recordmodel.RecordSortRule{{Field: "amount", Direction: "asc"}}})
+	page, err := repository.ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, Sort: []recordmodel.RecordSortRule{{Field: "amount", Direction: "asc"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(page.Items) != 3 || page.Items[0].Data["amount"] != "-2.00" || page.Items[1].Data["amount"] != "2.00" || page.Items[2].Data["amount"] != "10.00" {
 		t.Fatalf("sorted amounts=%#v", page.Items)
 	}
-	page, err = repository.ListRecords(t.Context(), "default", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, Filters: map[string]any{"amount__gte": "2.00"}, Sort: []recordmodel.RecordSortRule{{Field: "amount", Direction: "asc"}}})
+	page, err = repository.ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, Filters: map[string]any{"amount__gte": "2.00"}, Sort: []recordmodel.RecordSortRule{{Field: "amount", Direction: "asc"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

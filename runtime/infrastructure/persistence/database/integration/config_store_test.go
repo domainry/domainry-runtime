@@ -36,20 +36,20 @@ func TestIntegrationConfigStoreContractAndCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationConfigStore(store)
-	connection, err := repository.UpsertConnection(t.Context(), "default", integrationmodel.IntegrationConnection{Key: "webhook", WorkspaceID: "default", ConnectorKey: "generic_webhook", ProviderKey: "http", Status: "configured", CreatedBy: "admin"})
+	connection, err := repository.UpsertConnection(t.Context(), "workspace-primary", integrationmodel.IntegrationConnection{Key: "webhook", WorkspaceID: "workspace-primary", ConnectorKey: "generic_webhook", ProviderKey: "http", Status: "configured", CreatedBy: "admin"})
 	if err != nil {
 		t.Fatalf("upsert connection: %v", err)
 	}
-	values, err := repository.ListConnections(t.Context(), "default")
+	values, err := repository.ListConnections(t.Context(), "workspace-primary")
 	if err != nil || len(values) != 1 || values[0].Key != connection.Key || values[0].ProviderKey != "http" {
 		t.Fatalf("list connections=%#v err=%v", values, err)
 	}
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := repository.ListConnections(cancelled, "default"); !errors.Is(err, context.Canceled) {
+	if _, err := repository.ListConnections(cancelled, "workspace-primary"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled list error=%v", err)
 	}
-	if _, err := repository.UpsertAPIKey(cancelled, "default", integrationmodel.IntegrationAPIKey{Key: "never", WorkspaceID: "default"}); !errors.Is(err, context.Canceled) {
+	if _, err := repository.UpsertAPIKey(cancelled, "workspace-primary", integrationmodel.IntegrationAPIKey{Key: "never", WorkspaceID: "workspace-primary"}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled upsert error=%v", err)
 	}
 }
@@ -63,9 +63,9 @@ func TestListConnectionsReusesActionExecutionTransaction(t *testing.T) {
 	repository := NewIntegrationConfigStore(store)
 	if _, err := repository.UpsertConnection(
 		t.Context(),
-		"default",
+		"workspace-primary",
 		integrationmodel.IntegrationConnection{
-			Key: "primary", WorkspaceID: "default",
+			Key: "primary", WorkspaceID: "workspace-primary",
 			ConnectorKey: "member_center", ProviderKey: "project",
 			Status: "active",
 		},
@@ -84,7 +84,7 @@ func TestListConnectionsReusesActionExecutionTransaction(t *testing.T) {
 	defer connection.ExecContext(context.WithoutCancel(t.Context()), "ROLLBACK")
 	ctx := database.WithActionExecutionTransaction(t.Context(), connection)
 
-	values, err := repository.ListConnections(ctx, "default")
+	values, err := repository.ListConnections(ctx, "workspace-primary")
 	if err != nil || len(values) != 1 || values[0].Key != "primary" {
 		t.Fatalf("Action transaction connections=%+v error=%v", values, err)
 	}
@@ -108,8 +108,8 @@ func TestUpsertConnectionReusesActionExecutionTransaction(t *testing.T) {
 	defer connection.ExecContext(context.WithoutCancel(t.Context()), "ROLLBACK")
 	ctx := database.WithActionExecutionTransaction(t.Context(), connection)
 	repository := NewIntegrationConfigStore(store)
-	saved, err := repository.UpsertConnection(ctx, "default", integrationmodel.IntegrationConnection{
-		Key: "transactional", WorkspaceID: "default", ConnectorKey: "member_center", ProviderKey: "project", Status: "active",
+	saved, err := repository.UpsertConnection(ctx, "workspace-primary", integrationmodel.IntegrationConnection{
+		Key: "transactional", WorkspaceID: "workspace-primary", ConnectorKey: "member_center", ProviderKey: "project", Status: "active",
 	})
 	if err != nil || saved.Key != "transactional" {
 		t.Fatalf("transactional upsert=%+v error=%v", saved, err)
@@ -131,7 +131,7 @@ func TestEnsureEvidenceSchemaDoesNotMutateIntegrationOwnedConnectionTable(t *tes
 		t.Fatalf("migrate evidence schema: %v", err)
 	}
 	repository := NewIntegrationConfigStore(store)
-	_, err = repository.UpsertConnection(t.Context(), "default", integrationmodel.IntegrationConnection{Key: "hook", WorkspaceID: "default", ConnectorKey: "webhook", ProviderKey: "http", Status: "configured"})
+	_, err = repository.UpsertConnection(t.Context(), "workspace-primary", integrationmodel.IntegrationConnection{Key: "hook", WorkspaceID: "workspace-primary", ConnectorKey: "webhook", ProviderKey: "http", Status: "configured"})
 	if err == nil || !strings.Contains(err.Error(), "provider_key") {
 		t.Fatalf("Runtime unexpectedly migrated Integration-owned provider column: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestEnsureEvidenceSchemaDoesNotMutateIntegrationOwnedCredentialTable(t *tes
 		t.Fatal(err)
 	}
 	repository := NewIntegrationConfigStore(store)
-	_, err = repository.UpsertSecret(t.Context(), "default", integrationmodel.IntegrationSecret{Key: "token", WorkspaceID: "default", Kind: "bearer_token", Status: "active", ExpiresAt: "2030-01-01T00:00:00Z", RotatedAt: "2029-01-01T00:00:00Z", LastTestedAt: "2029-01-02T00:00:00Z", LastTestStatus: "succeeded"})
+	_, err = repository.UpsertSecret(t.Context(), "workspace-primary", integrationmodel.IntegrationSecret{Key: "token", WorkspaceID: "workspace-primary", Kind: "bearer_token", Status: "active", ExpiresAt: "2030-01-01T00:00:00Z", RotatedAt: "2029-01-01T00:00:00Z", LastTestedAt: "2029-01-02T00:00:00Z", LastTestStatus: "succeeded"})
 	if err == nil || !strings.Contains(err.Error(), "expires_at") {
 		t.Fatalf("Runtime unexpectedly migrated Integration-owned credential columns: %v", err)
 	}

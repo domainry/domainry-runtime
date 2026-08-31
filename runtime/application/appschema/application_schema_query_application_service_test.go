@@ -24,7 +24,7 @@ func (s metadataSchemaApplicationProviderStub) SchemaForPrincipal(context.Contex
 
 func TestApplicationSchemaQueryApplicationServiceOwnsFeaturePermissionProjection(t *testing.T) {
 	application := NewApplicationSchemaQueryApplicationService(metadataSchemaApplicationProviderStub{snapshot: appschemamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}}}}, nil)
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default", UserID: "admin"}}, accessfixture.Bundle{
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary", UserID: "admin"}}, accessfixture.Bundle{
 		Permissions:  []string{"customer.read"},
 		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true}},
 	})

@@ -18,22 +18,22 @@ func TestAutomationExecutionEncodingScanAndFilterEdges(t *testing.T) {
 		t.Fatal(err)
 	}
 	repository := NewAutomationExecutionStore(store)
-	if _, err := repository.InsertExecution(t.Context(), "default", automationmodel.AutomationRuleExecution{Candidate: map[string]any{"bad": make(chan int)}}); err == nil {
+	if _, err := repository.InsertExecution(t.Context(), "workspace-primary", automationmodel.AutomationRuleExecution{Candidate: map[string]any{"bad": make(chan int)}}); err == nil {
 		t.Fatal("candidate marshal succeeded")
 	}
-	if _, err := repository.InsertExecution(t.Context(), "default", automationmodel.AutomationRuleExecution{Trace: map[string]any{"bad": make(chan int)}}); err == nil {
+	if _, err := repository.InsertExecution(t.Context(), "workspace-primary", automationmodel.AutomationRuleExecution{Trace: map[string]any{"bad": make(chan int)}}); err == nil {
 		t.Fatal("trace marshal succeeded")
 	}
-	if _, err := repository.InsertExecutionSeed(t.Context(), "default", automationmodel.AutomationRuleExecution{}); err == nil {
+	if _, err := repository.InsertExecutionSeed(t.Context(), "workspace-primary", automationmodel.AutomationRuleExecution{}); err == nil {
 		t.Fatal("empty seed id accepted")
 	}
-	if _, err := repository.InsertExecutionSeed(t.Context(), "default", automationmodel.AutomationRuleExecution{ID: "bad-candidate", Candidate: map[string]any{"bad": make(chan int)}}); err == nil {
+	if _, err := repository.InsertExecutionSeed(t.Context(), "workspace-primary", automationmodel.AutomationRuleExecution{ID: "bad-candidate", Candidate: map[string]any{"bad": make(chan int)}}); err == nil {
 		t.Fatal("seed candidate marshal succeeded")
 	}
-	if _, err := repository.InsertExecutionSeed(t.Context(), "default", automationmodel.AutomationRuleExecution{ID: "bad-trace", Trace: map[string]any{"bad": make(chan int)}}); err == nil {
+	if _, err := repository.InsertExecutionSeed(t.Context(), "workspace-primary", automationmodel.AutomationRuleExecution{ID: "bad-trace", Trace: map[string]any{"bad": make(chan int)}}); err == nil {
 		t.Fatal("seed trace marshal succeeded")
 	}
-	if _, err := repository.InsertExecutionSeed(t.Context(), "default", automationmodel.AutomationRuleExecution{ID: "fixed-time", CreatedAt: "created", UpdatedAt: "updated"}); err != nil {
+	if _, err := repository.InsertExecutionSeed(t.Context(), "workspace-primary", automationmodel.AutomationRuleExecution{ID: "fixed-time", CreatedAt: "created", UpdatedAt: "updated"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SetEngineForTesting("mysql"); err != nil {
@@ -43,21 +43,21 @@ func TestAutomationExecutionEncodingScanAndFilterEdges(t *testing.T) {
 	mysqlDB := sql.OpenDB(automationConnector{state: &automationDBState{}})
 	defer mysqlDB.Close()
 	mysql.db = mysqlDB
-	if _, err := mysql.InsertExecutionSeed(t.Context(), "default", automationmodel.AutomationRuleExecution{ID: "mysql-seed"}); err != nil {
+	if _, err := mysql.InsertExecutionSeed(t.Context(), "workspace-primary", automationmodel.AutomationRuleExecution{ID: "mysql-seed"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SetEngineForTesting("sqlite"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repository.ListExecutions(t.Context(), "default", automationmodel.AutomationExecutionFilter{RuleKey: "x", ObjectKey: "x", RecordID: "x", Phase: "x", Status: "x", ConnectorKey: "x", From: "a", To: "z", Limit: 501}); err != nil {
+	if _, err := repository.ListExecutions(t.Context(), "workspace-primary", automationmodel.AutomationExecutionFilter{RuleKey: "x", ObjectKey: "x", RecordID: "x", Phase: "x", Status: "x", ConnectorKey: "x", From: "a", To: "z", Limit: 501}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repository.ListExecutions(t.Context(), "default", automationmodel.AutomationExecutionFilter{}); err != nil {
+	if _, err := repository.ListExecutions(t.Context(), "workspace-primary", automationmodel.AutomationExecutionFilter{}); err != nil {
 		t.Fatal(err)
 	}
 
 	columns := []string{"id", "workspace", "rule", "object", "record", "phase", "operation", "status", "actor", "role", "request", "correlation", "event", "duration", "error", "candidate", "trace", "created", "updated"}
-	valid := []driver.Value{"id", "default", "rule", "object", "record", "after", "update", "ok", "actor", "role", "request", "correlation", "event", int64(1), "", "{}", "{}", "created", "updated"}
+	valid := []driver.Value{"id", "workspace-primary", "rule", "object", "record", "after", "update", "ok", "actor", "role", "request", "correlation", "event", int64(1), "", "{}", "{}", "created", "updated"}
 	for _, test := range []struct {
 		name string
 		step automationQueryStep
@@ -73,7 +73,7 @@ func TestAutomationExecutionEncodingScanAndFilterEdges(t *testing.T) {
 			db := sql.OpenDB(automationConnector{state: &automationDBState{querySteps: []automationQueryStep{test.step}}})
 			copy.db = db
 			defer db.Close()
-			if _, err := copy.ListExecutions(t.Context(), "default", automationmodel.AutomationExecutionFilter{Limit: 1}); err == nil {
+			if _, err := copy.ListExecutions(t.Context(), "workspace-primary", automationmodel.AutomationExecutionFilter{Limit: 1}); err == nil {
 				t.Fatal("list failure ignored")
 			}
 		})
@@ -98,29 +98,29 @@ func TestAutomationWorkerInputRetryAndCodecEdges(t *testing.T) {
 	if err := waitAutomationClaimRetry(cancelled, time.Hour); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled wait=%v", err)
 	}
-	if _, _, err := repository.ClaimInstruction(t.Context(), "default", automationmodel.AutomationInstructionExecution{}, "worker", "", ""); err == nil {
+	if _, _, err := repository.ClaimInstruction(t.Context(), "workspace-primary", automationmodel.AutomationInstructionExecution{}, "worker", "", ""); err == nil {
 		t.Fatal("empty key accepted")
 	}
-	if _, _, err := repository.ClaimInstruction(t.Context(), "default", automationmodel.AutomationInstructionExecution{IdempotencyKey: "key"}, "", "", ""); err == nil {
+	if _, _, err := repository.ClaimInstruction(t.Context(), "workspace-primary", automationmodel.AutomationInstructionExecution{IdempotencyKey: "key"}, "", "", ""); err == nil {
 		t.Fatal("empty owner accepted")
 	}
-	if _, _, err := repository.ClaimInstruction(t.Context(), "default", automationmodel.AutomationInstructionExecution{IdempotencyKey: "bad", Result: map[string]any{"bad": make(chan int)}}, "worker", "", ""); err == nil {
+	if _, _, err := repository.ClaimInstruction(t.Context(), "workspace-primary", automationmodel.AutomationInstructionExecution{IdempotencyKey: "bad", Result: map[string]any{"bad": make(chan int)}}, "worker", "", ""); err == nil {
 		t.Fatal("bad result accepted")
 	}
-	claim, won, err := repository.ClaimInstruction(t.Context(), "default", automationmodel.AutomationInstructionExecution{IdempotencyKey: "defaults"}, "worker", "", "")
+	claim, won, err := repository.ClaimInstruction(t.Context(), "workspace-primary", automationmodel.AutomationInstructionExecution{IdempotencyKey: "defaults"}, "worker", "", "")
 	if err != nil || !won || claim.Result == nil {
 		t.Fatalf("claim=%#v won=%v err=%v", claim, won, err)
 	}
-	if _, err := repository.CompleteInstruction(t.Context(), "default", "defaults", "worker", claim.FencingToken, "ok", map[string]any{"bad": make(chan int)}, "", "now"); err == nil {
+	if _, err := repository.CompleteInstruction(t.Context(), "workspace-primary", "defaults", "worker", claim.FencingToken, "ok", map[string]any{"bad": make(chan int)}, "", "now"); err == nil {
 		t.Fatal("bad completion result accepted")
 	}
-	if _, err := repository.CompleteInstruction(t.Context(), "default", "defaults", "worker", claim.FencingToken, "ok", nil, "", " "); err == nil {
+	if _, err := repository.CompleteInstruction(t.Context(), "workspace-primary", "defaults", "worker", claim.FencingToken, "ok", nil, "", " "); err == nil {
 		t.Fatal("empty completion time accepted")
 	}
-	if _, err := repository.HeartbeatInstruction(t.Context(), "default", "defaults", "worker", claim.FencingToken, "later", " "); err == nil {
+	if _, err := repository.HeartbeatInstruction(t.Context(), "workspace-primary", "defaults", "worker", claim.FencingToken, "later", " "); err == nil {
 		t.Fatal("empty heartbeat time accepted")
 	}
-	if _, found, err := repository.find(t.Context(), "default", "missing"); err != nil || found {
+	if _, found, err := repository.find(t.Context(), "workspace-primary", "missing"); err != nil || found {
 		t.Fatalf("missing found=%v err=%v", found, err)
 	}
 	if _, _, err := repository.find(t.Context(), "", "missing"); err == nil {
@@ -147,7 +147,7 @@ func TestAutomationWorkerInputRetryAndCodecEdges(t *testing.T) {
 	state := &automationDBState{execSteps: []automationExecStep{{err: busy}, {rows: 1}}}
 	worker, closeDB := scriptedAutomationWorker(repository, state)
 	worker.wait = func(context.Context, time.Duration) error { return nil }
-	if _, won, err := worker.ClaimInstruction(t.Context(), "default", automationmodel.AutomationInstructionExecution{IdempotencyKey: "retry"}, "worker", "now", "later"); err != nil || !won {
+	if _, won, err := worker.ClaimInstruction(t.Context(), "workspace-primary", automationmodel.AutomationInstructionExecution{IdempotencyKey: "retry"}, "worker", "now", "later"); err != nil || !won {
 		t.Fatalf("retry won=%v err=%v", won, err)
 	}
 	closeDB()
@@ -157,13 +157,13 @@ func TestAutomationWorkerInputRetryAndCodecEdges(t *testing.T) {
 	}
 	worker, closeDB = scriptedAutomationWorker(repository, &automationDBState{execSteps: steps})
 	worker.wait = func(context.Context, time.Duration) error { return nil }
-	if _, _, err := worker.ClaimInstruction(t.Context(), "default", automationmodel.AutomationInstructionExecution{IdempotencyKey: "exhaust"}, "worker", "now", "later"); err == nil {
+	if _, _, err := worker.ClaimInstruction(t.Context(), "workspace-primary", automationmodel.AutomationInstructionExecution{IdempotencyKey: "exhaust"}, "worker", "now", "later"); err == nil {
 		t.Fatal("busy exhaustion succeeded")
 	}
 	closeDB()
 	worker, closeDB = scriptedAutomationWorker(repository, &automationDBState{execSteps: []automationExecStep{{err: busy}}})
 	worker.wait = func(context.Context, time.Duration) error { return context.Canceled }
-	if _, _, err := worker.ClaimInstruction(t.Context(), "default", automationmodel.AutomationInstructionExecution{IdempotencyKey: "cancel"}, "worker", "now", "later"); !errors.Is(err, context.Canceled) {
+	if _, _, err := worker.ClaimInstruction(t.Context(), "workspace-primary", automationmodel.AutomationInstructionExecution{IdempotencyKey: "cancel"}, "worker", "now", "later"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("wait error=%v", err)
 	}
 	closeDB()
@@ -204,5 +204,5 @@ func replaceAutomationValue(values []driver.Value, index int, value driver.Value
 	return out
 }
 func automationInstructionRow(result string) []driver.Value {
-	return []driver.Value{"id", "default", "key", "rule", "object", "record", "version", "operation", "instruction", "processing", result, "", "worker", "later", int64(1), "created", "updated"}
+	return []driver.Value{"id", "workspace-primary", "key", "rule", "object", "record", "version", "operation", "instruction", "processing", result, "", "worker", "later", int64(1), "created", "updated"}
 }

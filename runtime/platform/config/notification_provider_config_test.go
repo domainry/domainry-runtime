@@ -10,17 +10,25 @@ func TestNotificationApplicationScopeConfiguration(t *testing.T) {
 	if value.NotificationTenantID != "tenant-a" || value.NotificationWorkspaceID != "workspace-a" || value.NotificationApplicationKey != "orders-runtime" {
 		t.Fatalf("Notification application scope=%+v", value)
 	}
-	for name, clear := range map[string]func(*Config){
-		"NOTIFICATION_TENANT_ID":       func(value *Config) { value.NotificationTenantID = "" },
-		"NOTIFICATION_WORKSPACE_ID":    func(value *Config) { value.NotificationWorkspaceID = "" },
-		"NOTIFICATION_APPLICATION_KEY": func(value *Config) { value.NotificationApplicationKey = "" },
-	} {
-		t.Run(name+" required", func(t *testing.T) {
-			candidate := FromEnv()
-			clear(&candidate)
-			if err := candidate.Validate(); err == nil {
-				t.Fatalf("%s was optional", name)
-			}
-		})
+	for _, name := range []string{"NOTIFICATION_TENANT_ID", "NOTIFICATION_WORKSPACE_ID"} {
+		candidate := FromEnv()
+		if name == "NOTIFICATION_TENANT_ID" {
+			candidate.NotificationTenantID = ""
+		} else {
+			candidate.NotificationWorkspaceID = ""
+		}
+		if err := candidate.Validate(); err != nil {
+			t.Fatalf("%s must be resolved from the installation marker: %v", name, err)
+		}
+	}
+	reserved := FromEnv()
+	reserved.NotificationTenantID = "default"
+	if err := reserved.Validate(); err == nil {
+		t.Fatal("reserved Notification tenant was accepted")
+	}
+	missingApplication := FromEnv()
+	missingApplication.NotificationApplicationKey = ""
+	if err := missingApplication.Validate(); err == nil {
+		t.Fatal("NOTIFICATION_APPLICATION_KEY was optional")
 	}
 }

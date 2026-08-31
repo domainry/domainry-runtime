@@ -83,6 +83,7 @@ func TestFreshRuntimeSchemaUsesOwnedBusinessNamesAndOneHostLedger(t *testing.T) 
 		"_release_cohorts",
 		"_release_instances",
 		"_schema_migrations",
+		"_tenant_installation",
 		"_tenant_registry",
 		"_transaction_boundary_intents",
 		"_worker_queue_scopes",

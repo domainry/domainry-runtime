@@ -118,7 +118,7 @@ func runtimeRoleFixtureDo(t *testing.T, handler http.Handler, role string, metho
 		req.Header.Set("Idempotency-Key", method+":"+path+":"+time.Now().UTC().Format(time.RFC3339Nano))
 	}
 	req.Header.Set("Authorization", "Bearer "+integrationIdentityAccessTokenFor(runtimeRoleFixtureUser(role), role))
-	req.Header.Set("X-Workspace-ID", "default")
+	req.Header.Set("X-Workspace-ID", "workspace-primary")
 	req.Header.Set("X-Domainry-Product-Surface", "business_workspace")
 	res := httptest.NewRecorder()
 	handler.ServeHTTP(res, req)

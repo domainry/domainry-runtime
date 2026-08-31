@@ -19,7 +19,7 @@ func runtimeIdentityFixtureSession(t *testing.T, login, role string) identitysdk
 	}
 	return identitysdk.AuthSession{
 		SessionID:    "plane-testkit-session",
-		WorkspaceID:  "default",
+		WorkspaceID:  "workspace-primary",
 		AccessToken:  integrationIdentityAccessTokenFor(login, role),
 		RefreshToken: integrationIdentityAccessTokenFor(login, role),
 		TokenType:    "Bearer",

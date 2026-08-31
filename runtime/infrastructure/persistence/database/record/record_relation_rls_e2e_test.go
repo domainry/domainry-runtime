@@ -68,7 +68,7 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 			{ObjectKey: "card", Scope: "custom", Read: true, Predicate: cardPredicate},
 		},
 	}
-	memberPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default", UserID: "identity-member-1"}, ActiveBusinessProfile: &profilebindingmodel.Reference{RecordID: "member-1"}}, memberRole)
+	memberPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary", UserID: "identity-member-1"}, ActiveBusinessProfile: &profilebindingmodel.Reference{RecordID: "member-1"}}, memberRole)
 	compiled, err, handled := recordservice.RecordCompileSDKDataScopeExpression(objects[0], objects, memberPrincipal, "read")
 	if err != nil || !handled || compiled == nil {
 		t.Fatalf("compile SDK record scope handled=%v expression=%#v err=%v", handled, compiled, err)
@@ -80,14 +80,14 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 		{accountID: "account-1", want: true},
 		{accountID: "account-2", want: false},
 	} {
-		matched, matchErr := repository.CandidateScopeMatches(t.Context(), "default", recordmodel.Record{ID: "ledger-new", Data: map[string]any{"account_id": test.accountID, "status": "posted"}}, *compiled)
+		matched, matchErr := repository.CandidateScopeMatches(t.Context(), "workspace-primary", recordmodel.Record{ID: "ledger-new", Data: map[string]any{"account_id": test.accountID, "status": "posted"}}, *compiled)
 		if matchErr != nil || matched != test.want {
 			t.Fatalf("candidate account=%s matched=%v want=%v err=%v", test.accountID, matched, test.want, matchErr)
 		}
 	}
 	var permissionLookupSQL string
 	var permissionLookupArgs []any
-	resolved, err := querypersistence.ResolveScopeMembership(store, "default", *compiled, 1000, func(statement string, args ...any) ([]string, error) {
+	resolved, err := querypersistence.ResolveScopeMembership(store, "workspace-primary", *compiled, 1000, func(statement string, args ...any) ([]string, error) {
 		permissionLookupSQL = statement
 		permissionLookupArgs = append([]any(nil), args...)
 		rows, queryErr := store.DB().Query(statement, args...)
@@ -114,7 +114,7 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 			t.Fatalf("permission lookup did not use %s:\n%s", index, permissionPlan)
 		}
 	}
-	rootWhere, _, err := store.TenantListWhereClause("default", recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "ledger", ScopeExpression: &resolved})
+	rootWhere, _, err := store.TenantListWhereClause("workspace-primary", recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "ledger", ScopeExpression: &resolved})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 	assertRelationScopeAcrossReadExportAndReport(t, reader, exporter, policy, repository, memberPrincipal, "account", "account-1", "account-2", "card_id")
 
 	coachPredicate := &accessfixture.PredicateFixture{Operator: "eq", Path: []accessfixture.RelationSegmentFixture{{Direction: "reverse", RelationFieldKey: "member_id", TargetObjectKey: "package"}}, FieldKey: "coach_id", ValueSource: "actor_claim", ClaimKey: "business_profile_id"}
-	coachPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}, ActiveBusinessProfile: &profilebindingmodel.Reference{RecordID: "coach-1"}}, accessfixture.Bundle{Key: "coach", Permissions: []string{"member.read"}, RecordScope: "custom", DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "member", Scope: "custom", Read: true, Predicate: coachPredicate}}})
+	coachPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}, ActiveBusinessProfile: &profilebindingmodel.Reference{RecordID: "coach-1"}}, accessfixture.Bundle{Key: "coach", Permissions: []string{"member.read"}, RecordScope: "custom", DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "member", Scope: "custom", Read: true, Predicate: coachPredicate}}})
 	page, err = reader.ListRecords(t.Context(), "member", recordmodel.RecordListQuery{Page: 1, PageSize: 20}, coachPrincipal)
 	if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != "member-1" {
 		t.Fatalf("reverse existence scope page=%#v err=%v", page, err)
@@ -212,7 +212,7 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 	}
 
 	studentPredicate := &accessfixture.PredicateFixture{Operator: "eq", Path: []accessfixture.RelationSegmentFixture{{Direction: "forward", RelationFieldKey: "package_id", TargetObjectKey: "training_package"}, {Direction: "forward", RelationFieldKey: "student_id", TargetObjectKey: "student"}}, FieldKey: "id", ValueSource: "actor_claim", ClaimKey: "business_profile_id"}
-	studentPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}, ActiveBusinessProfile: &profilebindingmodel.Reference{RecordID: "student-1"}}, accessfixture.Bundle{Key: "student", Permissions: []string{"training_session.read", "training_session.export"}, RecordScope: "custom", DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "training_session", Scope: "custom", Read: true, Predicate: studentPredicate}}})
+	studentPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}, ActiveBusinessProfile: &profilebindingmodel.Reference{RecordID: "student-1"}}, accessfixture.Bundle{Key: "student", Permissions: []string{"training_session.read", "training_session.export"}, RecordScope: "custom", DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "training_session", Scope: "custom", Read: true, Predicate: studentPredicate}}})
 	page, err = reader.ListRecords(t.Context(), "training_session", recordmodel.RecordListQuery{Page: 1, PageSize: 20}, studentPrincipal)
 	if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != "training-session-1" {
 		t.Fatalf("session-package-student list scope mismatch: page=%#v err=%v", page, err)
@@ -328,7 +328,7 @@ func createRelationRLSTable(t *testing.T, store *RuntimeStore, object definition
 
 func insertRelationRLSRecord(t *testing.T, repository recordpersistence.RecordStore, object definitionmodel.ObjectSchema, id string, data map[string]any) {
 	t.Helper()
-	if err := repository.InsertRecord(t.Context(), "default", object, recordmodel.Record{ID: id, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: data}); err != nil {
+	if err := repository.InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{ID: id, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: data}); err != nil {
 		t.Fatalf("insert %s.%s: %v", object.Key, id, err)
 	}
 }

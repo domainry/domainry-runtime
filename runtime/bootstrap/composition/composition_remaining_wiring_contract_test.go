@@ -348,10 +348,10 @@ func TestCompositionSmallAdaptersCoverAllDelegationBranches(t *testing.T) {
 	if _, err := adapter.ProcessDueWorkflowExecutions(t.Context(), 1, principalmodel.Principal{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := adapter.InsertSchedulerRecord(t.Context(), "default", definitionmodel.ObjectSchema{}, recordmodel.Record{}, "test"); err != nil {
+	if err := adapter.InsertSchedulerRecord(t.Context(), "workspace-primary", definitionmodel.ObjectSchema{}, recordmodel.Record{}, "test"); err != nil {
 		t.Fatal(err)
 	}
-	if err := adapter.UpdateSchedulerRecord(t.Context(), "default", definitionmodel.ObjectSchema{}, recordmodel.Record{}, "test"); err != nil {
+	if err := adapter.UpdateSchedulerRecord(t.Context(), "workspace-primary", definitionmodel.ObjectSchema{}, recordmodel.Record{}, "test"); err != nil {
 		t.Fatal(err)
 	}
 	if executions != 1 || inserts != 1 || updates != 1 {
@@ -375,14 +375,14 @@ func TestRecordInitializationClosuresServeSurfaceContext(t *testing.T) {
 		},
 		Dependencies: RuntimeServicesDependencies{Records: repository, IdentityDirectory: compositionIdentityDirectory{}},
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
 	result := runtime.surfaceContextService.Context(t.Context(), surfacecontextmodel.SurfaceContextRequest{
 		Objects: []surfacecontextmodel.SurfaceContextObjectRequest{{ObjectKey: "customer", Page: 1, PageSize: 5}},
 	}, principal)
 	if result.Objects["customer"].ObjectKey != "customer" || len(result.Objects["customer"].Page.Items) != 1 {
 		t.Fatalf("surface context result=%#v", result)
 	}
-	limited := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "reader", WorkspaceID: "default"}}, accessfixture.Bundle{
+	limited := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "reader", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{
 		Permissions: []string{"customer.read"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true}},
 		ReferencePolicies: []accessfixture.ReferencePolicyFixture{{SourceObjectKey: "customer", RelationFieldKey: "company", TargetObjectKey: "company", DisplayFields: []string{"name"}, Mode: "label_only"}},
 	})
@@ -411,7 +411,7 @@ func TestRecordInitializationAuditProjectorCoversPresentationAndFailures(t *test
 			Audit:   auditRepository,
 		},
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "auditor", WorkspaceID: "default"}}, accessfixture.Bundle{
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "auditor", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{
 		Permissions:  []string{"identity.audit.view", "customer.audit"},
 		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true}},
 	})
@@ -523,7 +523,7 @@ Integration ownership moved behind the SDK Binding.
 			},
 			Dependencies: RuntimeServicesDependencies{IntegrationDelivery: delivery},
 		})
-		principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Key: "admin", Permissions: []string{"workspace.admin", "*", businessintegration.PermissionInvoke, businessintegration.PermissionRetry}})
+		principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "admin", Permissions: []string{"workspace.admin", "*", businessintegration.PermissionInvoke, businessintegration.PermissionRetry}})
 
 		invocation, err := runtime.integrationService.RecordIntegrationInvocation(t.Context(), integrationmodel.IntegrationInvocationRecordRequest{
 			ConnectorKey: "email", ProviderKey: "test", Operation: "send",
@@ -537,18 +537,18 @@ Integration ownership moved behind the SDK Binding.
 			t.Fatalf("connection references=%#v error=%v", references, err)
 		}
 
-		event := integrationmodel.IntegrationEvent{ID: "event-1", WorkspaceID: "default", Provider: "provider", EventType: "created", Payload: map[string]any{"title": "Follow up", "subject": "external-1"}}
+		event := integrationmodel.IntegrationEvent{ID: "event-1", WorkspaceID: "workspace-primary", Provider: "provider", EventType: "created", Payload: map[string]any{"title": "Follow up", "subject": "external-1"}}
 		if _, handled, err := runtime.integrationService.ExecuteIntegrationEventMapping(t.Context(), event, principal); !handled || err == nil {
 			t.Fatalf("owner task without Record repository handled=%t error=%v", handled, err)
 		}
 
 		records := &pipelineFailureRepository{records: map[string]map[string]recordmodel.Record{}}
 		config := &compositionIntegrationIdentityRepository{identities: []integrationmodel.IntegrationExternalIdentity{{
-			Key: "provider_external-2", WorkspaceID: "default", Provider: "provider", ExternalSubject: "external-2",
+			Key: "provider_external-2", WorkspaceID: "workspace-primary", Provider: "provider", ExternalSubject: "external-2",
 			ExternalSubjectType: "user", ActorID: "admin", RoleKey: "admin", Status: "active",
 		}}}
 		worker := &compositionIntegrationEventWorker{event: integrationmodel.IntegrationEvent{
-			ID: "event-2", WorkspaceID: "default", Provider: "provider", EventType: "created",
+			ID: "event-2", WorkspaceID: "workspace-primary", Provider: "provider", EventType: "created",
 			Payload: map[string]any{"title": "Follow up", "subject": "external-2"},
 		}}
 		snapshot := runtime.Schema()
@@ -602,7 +602,7 @@ func TestCompositionActionWithoutRegisteredHandlerFailsClosed(t *testing.T) {
 	actions := []definitionmodel.ActionSchema{{Key: "customer.call", ObjectKey: "customer", Kind: "object_operation"}}
 	delivery := &runtimeServicesDeliveryRepository{}
 	config := &runtimeServicesIntegrationConfigRepository{connections: []integrationmodel.IntegrationConnection{{
-		Key: "main", WorkspaceID: "default", ConnectorKey: "email", ProviderKey: "test", Status: "active",
+		Key: "main", WorkspaceID: "workspace-primary", ConnectorKey: "email", ProviderKey: "test", Status: "active",
 	}}}
 	processes := &runtimeServicesWorkflowProcessRepository{processes: []workflowmodel.WorkflowProcessInstance{{ID: "process-1", Status: "running", ObjectKey: "customer", RecordID: "customer-1"}}}
 	connector := integrationmodel.ConnectorSchema{Key: "email", Type: "email", Provider: "test", Operations: []integrationmodel.ConnectorOperationSchema{{Key: "send", SideEffect: "write", IdempotencySupported: true}}}
@@ -616,7 +616,7 @@ func TestCompositionActionWithoutRegisteredHandlerFailsClosed(t *testing.T) {
 			IntegrationConfig: config, IntegrationDelivery: delivery, WorkflowProcesses: processes, WorkflowWorker: &runtimeServicesWorkflowWorkerRepository{}, ConnectorProviders: providers,
 		},
 	})
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
 	if _, err := runtime.actionService.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: "customer.call", ObjectKey: "customer", Principal: admin}); apperror.CodeOf(err) != "backend.action.owner_unresolved" {
 		t.Fatalf("unregistered source-owned handler error=%v code=%q", err, apperror.CodeOf(err))
 	}

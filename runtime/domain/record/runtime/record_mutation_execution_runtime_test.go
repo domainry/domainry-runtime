@@ -61,6 +61,10 @@ func completionExecution(completion recordmodel.RecordMutationCompletion) record
 	return recordmodel.RecordMutationExecution{ID: completion.ExecutionID, WorkspaceID: completion.WorkspaceID}
 }
 
+func initializedMutationPrincipal() principalmodel.Principal {
+	return principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}
+}
+
 func TestBeginCreateValidatesDependenciesFingerprintAndClaimFailure(t *testing.T) {
 	var nilRuntime *RecordMutationExecutionRuntime
 	_, _, _, err := nilRuntime.BeginCreate(t.Context(), "customer", "key", nil, principalmodel.Principal{})
@@ -79,14 +83,14 @@ func TestBeginCreateValidatesDependenciesFingerprintAndClaimFailure(t *testing.T
 
 	claimErr := errors.New("claim failed")
 	store.beginErr = claimErr
-	_, _, _, err = runtime.BeginCreate(t.Context(), " customer ", " key ", map[string]any{"name": "Alice"}, principalmodel.Principal{})
+	_, _, _, err = runtime.BeginCreate(t.Context(), " customer ", " key ", map[string]any{"name": "Alice"}, initializedMutationPrincipal())
 	assertRecordAppError(t, err, apperror.KindInternal, "backend.internal", map[string]string{"operation": "claim record create"})
 	if !errors.Is(err, claimErr) {
 		t.Fatalf("claim error was not preserved: %v", err)
 	}
 	request := store.beginRequests[len(store.beginRequests)-1]
-	if request.Execution.WorkspaceID != "default" || request.Execution.ObjectKey != "customer" || request.Execution.IdempotencyKey != "key" || !strings.HasPrefix(request.LeaseOwner, "req_") || request.LeaseTTL != recordMutationLeaseTTL || request.RequestFingerprint == "" {
-		t.Fatalf("default claim request=%+v", request)
+	if request.Execution.WorkspaceID != "workspace-primary" || request.Execution.ObjectKey != "customer" || request.Execution.IdempotencyKey != "key" || !strings.HasPrefix(request.LeaseOwner, "req_") || request.LeaseTTL != recordMutationLeaseTTL || request.RequestFingerprint == "" {
+		t.Fatalf("initialized claim request=%+v", request)
 	}
 }
 
@@ -122,7 +126,7 @@ func TestBeginCreateClaimDecisionMatrixAndOwnerPrecedence(t *testing.T) {
 	}
 
 	store := &mutationExecutionStoreStub{claim: recordmodel.RecordMutationClaimResult{Decision: idempotency.DecisionAcquired}}
-	_, _, _, err := NewRecordMutationExecutionRuntime(store).BeginCreate(requestcontext.WithRequestID(t.Context(), "context-owner"), "customer", "key", nil, principalmodel.Principal{})
+	_, _, _, err := NewRecordMutationExecutionRuntime(store).BeginCreate(requestcontext.WithRequestID(t.Context(), "context-owner"), "customer", "key", nil, initializedMutationPrincipal())
 	if err != nil || store.beginRequests[0].LeaseOwner != "context-owner" {
 		t.Fatalf("context owner request=%+v err=%v", store.beginRequests[0], err)
 	}
@@ -194,7 +198,7 @@ func TestBeginImportDecisionReplayAndDecodeMatrix(t *testing.T) {
 		{decision: idempotency.Decision("unknown"), code: idempotency.ErrorCodeReceiptUnavailable},
 	} {
 		store := &mutationExecutionStoreStub{claim: recordmodel.RecordMutationClaimResult{Decision: test.decision, Execution: recordmodel.RecordMutationExecution{LeaseExpiresAt: time.Now().Add(time.Second).Format(time.RFC3339Nano)}}}
-		_, _, replay, err := NewRecordMutationExecutionRuntime(store).BeginImport(t.Context(), "customer", "key", []byte("csv"), principalmodel.Principal{})
+		_, _, replay, err := NewRecordMutationExecutionRuntime(store).BeginImport(t.Context(), "customer", "key", []byte("csv"), initializedMutationPrincipal())
 		if replay != test.replay || errorCodeFromRecordRuntime(err) != test.code {
 			t.Fatalf("decision=%q replay=%v err=%v", test.decision, replay, err)
 		}
@@ -205,14 +209,14 @@ func TestBeginImportDecisionReplayAndDecodeMatrix(t *testing.T) {
 		t.Fatalf("principal import owner request=%+v err=%v", ownerStore.beginRequests[0], err)
 	}
 	contextOwnerStore := &mutationExecutionStoreStub{claim: recordmodel.RecordMutationClaimResult{Decision: idempotency.DecisionAcquired}}
-	_, _, _, err = NewRecordMutationExecutionRuntime(contextOwnerStore).BeginImport(requestcontext.WithRequestID(t.Context(), "context-owner"), "customer", "key", []byte("csv"), principalmodel.Principal{})
+	_, _, _, err = NewRecordMutationExecutionRuntime(contextOwnerStore).BeginImport(requestcontext.WithRequestID(t.Context(), "context-owner"), "customer", "key", []byte("csv"), initializedMutationPrincipal())
 	if err != nil || contextOwnerStore.beginRequests[0].LeaseOwner != "context-owner" {
 		t.Fatalf("context import owner request=%+v err=%v", contextOwnerStore.beginRequests[0], err)
 	}
 
 	claimErr := errors.New("claim failed")
 	store := &mutationExecutionStoreStub{beginErr: claimErr}
-	_, _, _, err = NewRecordMutationExecutionRuntime(store).BeginImport(t.Context(), "customer", "key", []byte("csv"), principalmodel.Principal{})
+	_, _, _, err = NewRecordMutationExecutionRuntime(store).BeginImport(t.Context(), "customer", "key", []byte("csv"), initializedMutationPrincipal())
 	assertRecordAppError(t, err, apperror.KindInternal, "backend.internal", map[string]string{"operation": "claim record operation"})
 
 	runtime := NewRecordMutationExecutionRuntime(&mutationExecutionStoreStub{})
@@ -231,7 +235,7 @@ func TestBeginImportDecisionReplayAndDecodeMatrix(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			store := &mutationExecutionStoreStub{claim: recordmodel.RecordMutationClaimResult{Decision: idempotency.DecisionReplay, Execution: recordmodel.RecordMutationExecution{OperationResult: test.operation}}}
-			result, _, replay, err := NewRecordMutationExecutionRuntime(store).BeginImport(t.Context(), "customer", "key", []byte("csv"), principalmodel.Principal{})
+			result, _, replay, err := NewRecordMutationExecutionRuntime(store).BeginImport(t.Context(), "customer", "key", []byte("csv"), initializedMutationPrincipal())
 			if (err != nil) != test.wantError || replay != !test.wantError || result.ObjectKey != test.want.ObjectKey || result.Created != test.want.Created {
 				t.Fatalf("result=%#v replay=%v err=%v", result, replay, err)
 			}
@@ -253,9 +257,9 @@ func TestReplayImportLookupAndDecodeMatrix(t *testing.T) {
 
 	lookupErr := errors.New("lookup failed")
 	store := &mutationExecutionLookupStore{mutationExecutionStoreStub: &mutationExecutionStoreStub{}, err: lookupErr}
-	_, _, err := NewRecordMutationExecutionRuntime(store).ReplayImport(t.Context(), " customer ", " key ", []byte("csv"), principalmodel.Principal{})
+	_, _, err := NewRecordMutationExecutionRuntime(store).ReplayImport(t.Context(), " customer ", " key ", []byte("csv"), initializedMutationPrincipal())
 	assertRecordAppError(t, err, apperror.KindInternal, "backend.internal", map[string]string{"operation": "lookup record import replay"})
-	if !errors.Is(err, lookupErr) || store.scope.WorkspaceID != "default" || store.scope.ObjectKey != "customer" || store.scope.IdempotencyKey != "key" {
+	if !errors.Is(err, lookupErr) || store.scope.WorkspaceID != "workspace-primary" || store.scope.ObjectKey != "customer" || store.scope.IdempotencyKey != "key" {
 		t.Fatalf("scope=%+v err=%v", store.scope, err)
 	}
 

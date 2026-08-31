@@ -71,7 +71,7 @@ func TestIntegrationPermissionAuthorizedCallPreservesCallerCancellation(t *testi
 	application, _, _ := newSecretUpdateTestService("secret:oauth_access", rotatingSecretAdapter{})
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "tester", WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{PermissionConnectionTest}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "tester", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{PermissionConnectionTest}})
 	_, err := application.TestConnectorOperation(ctx, "oauth", ConnectorOperationTestRequest{Operation: "refresh", Confirm: true}, principal)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled authorized call error=%v", err)

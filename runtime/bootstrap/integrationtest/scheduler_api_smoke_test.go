@@ -66,7 +66,7 @@ func TestSchedulerAPISmokeVerifiesRuntimeOperationsAndEvidence(t *testing.T) {
 		t.Fatalf("Ops state did not expose source-owned run %q: %#v", runID, observed)
 	}
 	var operationCount int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _operation_requests WHERE workspace_id = ? AND status = 'succeeded'`, "default").Scan(&operationCount); err != nil || operationCount != 1 {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _operation_requests WHERE workspace_id = ? AND status = 'succeeded'`, "workspace-primary").Scan(&operationCount); err != nil || operationCount != 1 {
 		t.Fatalf("terminal scheduler Operations receipts=%d want=1 err=%v", operationCount, err)
 	}
 }

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 
+	"github.com/domainry/domainry-foundation/modulehttp"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityhttpapi "github.com/domainry/domainry-identity-sdk/httpapi"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -56,59 +56,16 @@ func openProjectIdentity(ctx context.Context, cfg config.Config, factory identit
 	return binding, append([]identityhttpapi.Surface(nil), surfaces...), nil
 }
 
+type identitySurfaceRouter = moduleSurfaceRouter
+
+func newIdentitySurfaceRouter(group runtimehttp.SurfaceRouteGroup, fallback http.Handler) *identitySurfaceRouter {
+	return newModuleSurfaceRouter(group, fallback)
+}
+
 func mountIdentityHTTPSurfaces(group runtimehttp.SurfaceRouteGroup, surfaces []identityhttpapi.Surface, fallback http.Handler) (http.Handler, error) {
-	if fallback == nil {
-		fallback = http.NotFoundHandler()
-	}
-	if len(surfaces) == 0 {
-		return fallback, nil
-	}
-	mux := http.NewServeMux()
-	seen := map[string]string{}
-	for _, surface := range surfaces {
-		if surface == nil || surface.Handler() == nil {
-			return nil, fmt.Errorf("Identity HTTP surface is incomplete")
-		}
-		name := strings.TrimSpace(surface.Name())
-		if name == "" || surface.ContractVersion() != identityhttpapi.ContractVersion {
-			return nil, fmt.Errorf("Identity HTTP surface contract is invalid")
-		}
-		for _, route := range surface.Routes() {
-			if !identityRouteVisible(group, route.Exposures) {
-				continue
-			}
-			pattern := strings.TrimSpace(route.Pattern)
-			if pattern == "" {
-				return nil, fmt.Errorf("Identity HTTP surface %q has an empty route", name)
-			}
-			if owner, duplicate := seen[pattern]; duplicate {
-				return nil, fmt.Errorf("Identity HTTP route %q is owned by both %q and %q", pattern, owner, name)
-			}
-			seen[pattern] = name
-			mux.Handle(pattern, surface.Handler())
-		}
-	}
-	mux.Handle("/", fallback)
-	return mux, nil
+	return mountModuleHTTPSurfaces(group, surfaces, fallback, func(_ modulehttp.Route, handler http.Handler) (http.Handler, error) { return handler, nil })
 }
 
 func identityRouteVisible(group runtimehttp.SurfaceRouteGroup, exposures []identityhttpapi.Exposure) bool {
-	if group == runtimehttp.SurfaceRouteGroupAll {
-		return true
-	}
-	want := identityhttpapi.Exposure("")
-	switch group {
-	case runtimehttp.SurfaceRouteGroupPublic:
-		want = identityhttpapi.ExposurePublic
-	case runtimehttp.SurfaceRouteGroupTenantAdmin:
-		want = identityhttpapi.ExposureTenantAdmin
-	default:
-		return false
-	}
-	for _, exposure := range exposures {
-		if exposure == want {
-			return true
-		}
-	}
-	return false
+	return moduleRouteVisible(group, []modulehttp.Exposure(exposures))
 }

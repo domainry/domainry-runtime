@@ -9,6 +9,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	automationseed "github.com/domainry/domainry-runtime/runtime/application/seed/automation"
 	businessseed "github.com/domainry/domainry-runtime/runtime/application/seed/business"
+	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	businessseedvalidation "github.com/domainry/domainry-runtime/runtime/domain/businessseed/validation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -33,6 +34,10 @@ func synchronizeRuntimeSeeds(ctx context.Context, store *persistence.RuntimeStor
 	for _, workspaceID := range workspaceIDs {
 		workspaceContext := requestcontext.WithWorkspaceID(ctx, workspaceID)
 		recordStore := recordpersistence.NewRecordStore(store)
+		automationExecutionSeeds := append([]automationmodel.AutomationRuleExecution(nil), manifest.AutomationExecutionSeeds...)
+		for index := range automationExecutionSeeds {
+			automationExecutionSeeds[index].WorkspaceID = workspaceID
+		}
 		if err := completeRuntimeSeedSynchronization(runtimeSeedSynchronizationOperations{
 			synchronizeBusiness: func() error {
 				if !businessSeedSyncEnabled {
@@ -45,7 +50,7 @@ func synchronizeRuntimeSeeds(ctx context.Context, store *persistence.RuntimeStor
 				return businessseed.SyncManifestBusinessSeeds(workspaceContext, recordStore, seedManifest, businessseed.ManifestBusinessSeedRowsFromManifest(seedManifest))
 			},
 			synchronizeAutomation: func() error {
-				return automationseed.SyncExecutionSeeds(workspaceContext, automationpersistence.NewAutomationExecutionStore(store), manifest.AutomationExecutionSeeds)
+				return automationseed.SyncExecutionSeeds(workspaceContext, automationpersistence.NewAutomationExecutionStore(store), automationExecutionSeeds)
 			},
 		}); err != nil {
 			return err

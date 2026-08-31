@@ -26,7 +26,7 @@ func TestSchedulerGlobalWorkflowProjectActionDurableEffectAndFailurePropagation(
 	succeeded := schedulerSmokeRequest(t, handler, http.MethodPost, "/operations/scheduler/definitions/business_config_activation_job/run", nil, http.StatusOK)
 	if succeeded["status"] != "succeeded" {
 		store := openRuntimePersistenceFixture(t, cfg)
-		executions, listErr := workflowpersistence.NewWorkflowWorkerStore(store).ListExecutions(t.Context(), "default", 100)
+		executions, listErr := workflowpersistence.NewWorkflowWorkerStore(store).ListExecutions(t.Context(), "workspace-primary", 100)
 		t.Fatalf("success workflow executions=%#v listErr=%v response=%#v", executions, listErr, succeeded)
 	}
 	assertSchedulerRunStatus(t, succeeded, "succeeded")
@@ -44,7 +44,7 @@ func TestSchedulerGlobalWorkflowProjectActionDurableEffectAndFailurePropagation(
 	failed := schedulerSmokeRequest(t, handler, http.MethodPost, "/operations/scheduler/definitions/lead_activation_failure_job/run", nil, http.StatusOK)
 	assertSchedulerRunStatus(t, failed, "succeeded")
 	store := openRuntimePersistenceFixture(t, cfg)
-	executions, err := workflowpersistence.NewWorkflowWorkerStore(store).ListExecutions(t.Context(), "default", 100)
+	executions, err := workflowpersistence.NewWorkflowWorkerStore(store).ListExecutions(t.Context(), "workspace-primary", 100)
 	if err != nil {
 		t.Fatal(err)
 	}

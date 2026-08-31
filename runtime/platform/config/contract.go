@@ -251,26 +251,19 @@ func (c Config) Validate() error {
 	default:
 		return fmt.Errorf("unsupported RATE_LIMIT_BACKEND %q", c.RateLimitBackend)
 	}
-	if strings.TrimSpace(c.IdentityWorkspaceID) == "" {
-		return fmt.Errorf("IDENTITY_WORKSPACE_ID is required")
-	}
 	if strings.TrimSpace(c.IdentityAudience) == "" {
 		return fmt.Errorf("IDENTITY_AUDIENCE is required")
-	}
-	if strings.TrimSpace(c.NotificationTenantID) == "" {
-		return fmt.Errorf("NOTIFICATION_TENANT_ID is required")
-	}
-	if strings.TrimSpace(c.NotificationWorkspaceID) == "" {
-		return fmt.Errorf("NOTIFICATION_WORKSPACE_ID is required")
 	}
 	if strings.TrimSpace(c.NotificationApplicationKey) == "" {
 		return fmt.Errorf("NOTIFICATION_APPLICATION_KEY is required")
 	}
-	if strings.TrimSpace(c.PartyTenantID) == "" {
-		return errors.New("PARTY_TENANT_ID is required")
-	}
-	if strings.TrimSpace(c.PartyWorkspaceID) == "" {
-		return errors.New("PARTY_WORKSPACE_ID is required")
+	for name, value := range map[string]string{
+		"IDENTITY_WORKSPACE_ID": c.IdentityWorkspaceID, "NOTIFICATION_TENANT_ID": c.NotificationTenantID,
+		"NOTIFICATION_WORKSPACE_ID": c.NotificationWorkspaceID, "PARTY_TENANT_ID": c.PartyTenantID, "PARTY_WORKSPACE_ID": c.PartyWorkspaceID,
+	} {
+		if strings.EqualFold(strings.TrimSpace(value), "default") {
+			return fmt.Errorf("%s cannot use the reserved default tenant", name)
+		}
 	}
 	if strings.TrimSpace(c.PartyApplicationKey) == "" {
 		return errors.New("PARTY_APPLICATION_KEY is required")

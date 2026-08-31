@@ -59,6 +59,9 @@ type reportCatalogLookup func(context.Context, principalmodel.Principal) []repor
 type automationRuleLookup func(context.Context, string, principalmodel.Principal) (automationmodel.AutomationRuleSchema, error)
 type notificationIntentPublisher func(context.Context, notificationmodel.NotificationIntent, principalmodel.SystemScope) (notificationmodel.NotificationEvent, bool, error)
 type notificationRecipientLookup func(context.Context, string) (identitysdk.User, bool, error)
+type runtimeNotificationCompiler interface {
+	CompileInboxIntent(notificationmodel.NotificationIntent, principalmodel.SystemScope) (notificationmodel.NotificationEvent, error)
+}
 
 func runtimeActionRevisions(manifest manifestmodel.ManifestSchema) (string, string) {
 	projectRevision, metadataRevision := manifest.ManifestHash, manifest.ManifestHash

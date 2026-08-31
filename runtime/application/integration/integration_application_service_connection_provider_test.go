@@ -26,12 +26,12 @@ func TestResolveConnectorProviderRequiresExplicitChoiceForMultiProvider(t *testi
 
 func TestListConnectionsBackfillsDeterministicProvider(t *testing.T) {
 	repository := &independentConfigRepository{connections: map[string]integrationmodel.IntegrationConnection{
-		"legacy": {Key: "legacy", WorkspaceID: "default", ConnectorKey: "webhook", Status: "error", Config: map[string]any{"value": true}},
+		"legacy": {Key: "legacy", WorkspaceID: "workspace-primary", ConnectorKey: "webhook", Status: "error", Config: map[string]any{"value": true}},
 	}, secrets: map[string]integrationmodel.IntegrationSecret{}, materials: map[string]string{}}
 	registry := NewConnectorRegistry(integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "webhook", Type: "webhook", Provider: "http", Providers: []integrationmodel.ConnectorProviderSchema{{Key: "http"}}}}})
 	migrator := NewIntegrationApplicationService(ApplicationDependencies{ConfigRepository: repository, Registry: registry})
 	service := NewIntegrationApplicationService(ApplicationDependencies{ConfigRepository: repository, Registry: registry, ConnectionNormalizer: migrator.MigratePersistedConnectionProvider})
-	connections, err := service.ListIntegrationConnections(t.Context(), integrationWorkspaceAdmin("admin", "default"))
+	connections, err := service.ListIntegrationConnections(t.Context(), integrationWorkspaceAdmin("admin", "workspace-primary"))
 	if err != nil || len(connections) != 1 || connections[0].ProviderKey != "http" || connections[0].Status != "degraded" {
 		t.Fatalf("backfilled connections=%#v err=%v", connections, err)
 	}

@@ -53,15 +53,15 @@ func (adapter rotatingSecretAdapter) Call(context.Context, integrationcontract.C
 
 func newSecretUpdateTestService(reference string, adapter integrationcontract.Adapter) (*IntegrationApplicationService, *independentConfigRepository, principalmodel.Principal) {
 	connection := integrationmodel.IntegrationConnection{
-		Key: "oauth", WorkspaceID: "default", ConnectorKey: "oauth_test", ProviderKey: "oauth",
+		Key: "oauth", WorkspaceID: "workspace-primary", ConnectorKey: "oauth_test", ProviderKey: "oauth",
 		Status: "active", SecretRefs: map[string]string{"access_token": reference},
 	}
 	repository := &independentConfigRepository{
 		connections: map[string]integrationmodel.IntegrationConnection{"oauth": connection},
 		secrets: map[string]integrationmodel.IntegrationSecret{"oauth_access": {
-			Key: "oauth_access", WorkspaceID: "default", Status: "active", ValueRef: "material:oauth_access",
+			Key: "oauth_access", WorkspaceID: "workspace-primary", Status: "active", ValueRef: "material:oauth_access",
 		}},
-		materials: map[string]string{"default:oauth_access": "old-token"},
+		materials: map[string]string{"workspace-primary:oauth_access": "old-token"},
 	}
 	delivery := &independentDeliveryRepository{}
 	registry := NewConnectorRegistry(integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{
@@ -77,7 +77,7 @@ func newSecretUpdateTestService(reference string, adapter integrationcontract.Ad
 		ConfigRepository: repository, DeliveryRepository: delivery, Registry: registry,
 	})
 	registerTestProviderAdapter(service, "oauth_test", "oauth", adapter)
-	principal := integrationWorkspaceAdmin("admin", "default")
+	principal := integrationWorkspaceAdmin("admin", "workspace-primary")
 	return service, repository, principal
 }
 
@@ -87,7 +87,7 @@ func TestAdapterSecretUpdatesPersistThroughCallerContext(t *testing.T) {
 	if err != nil || result.Response["rotated"] != true {
 		t.Fatalf("rotate operation result=%#v err=%v", result, err)
 	}
-	if got := repository.materials["default:oauth_access"]; got != "new-token" {
+	if got := repository.materials["workspace-primary:oauth_access"]; got != "new-token" {
 		t.Fatalf("rotated material=%q", got)
 	}
 	if secret := repository.secrets["oauth_access"]; secret.ValueRef != "material:oauth_access" || secret.Fingerprint == "" {
@@ -105,13 +105,13 @@ func TestSyncAndOutboxCallsUseRefreshCredentialLease(t *testing.T) {
 	if _, err := service.ExecuteIntegrationSyncCall(t.Context(), SyncCallRequest{ConnectorKey: "oauth_test", ConnectionKey: "oauth", Operation: "refresh"}, principal); err != nil {
 		t.Fatalf("sync refresh lease error=%v", err)
 	}
-	message := integrationmodel.IntegrationOutboxMessage{ID: "message", WorkspaceID: "default", ConnectorKey: "oauth_test", ConnectionKey: "oauth", Operation: "refresh", Payload: map[string]any{}}
+	message := integrationmodel.IntegrationOutboxMessage{ID: "message", WorkspaceID: "workspace-primary", ConnectorKey: "oauth_test", ConnectionKey: "oauth", Operation: "refresh", Payload: map[string]any{}}
 	if result, err := service.SendAdapterOutboxMessage(t.Context(), message, principal); err != nil || result.Status != "sent" {
 		t.Fatalf("outbox refresh lease result=%#v err=%v", result, err)
 	}
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
-	hold, err := service.registry.AcquireCredentialLease(t.Context(), "default:oauth")
+	hold, err := service.registry.AcquireCredentialLease(t.Context(), "workspace-primary:oauth")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,8 +142,8 @@ func TestAdapterSecretUpdatesDoNotPersistAfterCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	service, repository, principal := newSecretUpdateTestService("secret:oauth_access", rotatingSecretAdapter{cancel: cancel})
 	_, err := service.TestConnectorOperation(ctx, "oauth", ConnectorOperationTestRequest{Operation: "refresh", Confirm: true}, principal)
-	if err == nil || repository.materials["default:oauth_access"] != "old-token" {
-		t.Fatalf("canceled rotation err=%v material=%q", err, repository.materials["default:oauth_access"])
+	if err == nil || repository.materials["workspace-primary:oauth_access"] != "old-token" {
+		t.Fatalf("canceled rotation err=%v material=%q", err, repository.materials["workspace-primary:oauth_access"])
 	}
 }
 
@@ -154,7 +154,7 @@ func TestAdapterSecretUpdatesRejectEnvironmentReference(t *testing.T) {
 	if testErrorCode(err) != "backend.integration.secret.rotation_requires_runtime_secret" {
 		t.Fatalf("expected runtime-secret rotation error, got %v", err)
 	}
-	if repository.materials["default:oauth_access"] != "old-token" {
+	if repository.materials["workspace-primary:oauth_access"] != "old-token" {
 		t.Fatalf("environment reference must not mutate material")
 	}
 }
@@ -165,8 +165,8 @@ func TestCredentialRefreshLeaseSerializesCallsAndResolvesFreshToken(t *testing.T
 	connection := repository.connections["oauth"]
 	connection.SecretRefs["refresh_token"] = "secret:oauth_refresh"
 	repository.connections["oauth"] = connection
-	repository.secrets["oauth_refresh"] = integrationmodel.IntegrationSecret{Key: "oauth_refresh", WorkspaceID: "default", Status: "active", ValueRef: "material:oauth_refresh"}
-	repository.materials["default:oauth_refresh"] = "refresh-token"
+	repository.secrets["oauth_refresh"] = integrationmodel.IntegrationSecret{Key: "oauth_refresh", WorkspaceID: "workspace-primary", Status: "active", ValueRef: "material:oauth_refresh"}
+	repository.materials["workspace-primary:oauth_refresh"] = "refresh-token"
 	var wait sync.WaitGroup
 	wait.Add(2)
 	errors := make(chan error, 2)
@@ -184,8 +184,8 @@ func TestCredentialRefreshLeaseSerializesCallsAndResolvesFreshToken(t *testing.T
 			t.Fatal(err)
 		}
 	}
-	if adapter.refreshes.Load() != 1 || repository.materials["default:oauth_access"] != "new-token" {
-		t.Fatalf("refreshes=%d material=%q", adapter.refreshes.Load(), repository.materials["default:oauth_access"])
+	if adapter.refreshes.Load() != 1 || repository.materials["workspace-primary:oauth_access"] != "new-token" {
+		t.Fatalf("refreshes=%d material=%q", adapter.refreshes.Load(), repository.materials["workspace-primary:oauth_access"])
 	}
 }
 
@@ -205,13 +205,13 @@ func TestCredentialLeaseWaitHonorsCallerCancellation(t *testing.T) {
 
 func TestStaleCredentialRefreshCannotOverwriteNewerMaterial(t *testing.T) {
 	service, repository, _ := newSecretUpdateTestService("secret:oauth_access", rotatingSecretAdapter{})
-	repository.materials["default:oauth_access"] = "newer-token"
+	repository.materials["workspace-primary:oauth_access"] = "newer-token"
 	connection := repository.connections["oauth"]
 	if err := service.PersistAdapterSecretUpdates(t.Context(), connection, map[string]string{"access_token": "old-token"}, map[string]string{"access_token": "late-token"}); err != nil {
 		t.Fatal(err)
 	}
-	if repository.materials["default:oauth_access"] != "newer-token" {
-		t.Fatalf("stale refresh overwrote material: %q", repository.materials["default:oauth_access"])
+	if repository.materials["workspace-primary:oauth_access"] != "newer-token" {
+		t.Fatalf("stale refresh overwrote material: %q", repository.materials["workspace-primary:oauth_access"])
 	}
 }
 
@@ -220,8 +220,8 @@ func TestCredentialRefreshFailureDegradesConnectionAndAudits(t *testing.T) {
 	connection := repository.connections["oauth"]
 	connection.SecretRefs["refresh_token"] = "secret:oauth_refresh"
 	repository.connections["oauth"] = connection
-	repository.secrets["oauth_refresh"] = integrationmodel.IntegrationSecret{Key: "oauth_refresh", WorkspaceID: "default", Status: "active", ValueRef: "material:oauth_refresh"}
-	repository.materials["default:oauth_refresh"] = "refresh-token"
+	repository.secrets["oauth_refresh"] = integrationmodel.IntegrationSecret{Key: "oauth_refresh", WorkspaceID: "workspace-primary", Status: "active", ValueRef: "material:oauth_refresh"}
+	repository.materials["workspace-primary:oauth_refresh"] = "refresh-token"
 	audited := ""
 	service.audit = func(_ context.Context, event, _, _ string, _ principalmodel.Principal, _ string, _, _, _ map[string]any) {
 		if event == "integration_credential_refresh_failed" {

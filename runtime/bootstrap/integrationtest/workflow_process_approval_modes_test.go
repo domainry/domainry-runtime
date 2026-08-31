@@ -40,12 +40,12 @@ func TestWorkflowApprovalModesAggregateTasks(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			store, records := approvalModeTestRuntime(t, test.mode)
 			defer store.Close()
-			initiator := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "initiator", WorkspaceID: "default"}}, accessfixture.Bundle{Key: "employee", Permissions: []string{"workflow.run"}})
+			initiator := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "initiator", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "employee", Permissions: []string{"workflow.run"}})
 			process, err := runWorkflowProcess(t, store, records, "approval_modes", map[string]any{"record_id": "request_1"}, initiator)
 			if err != nil {
 				t.Fatalf("start: %v", err)
 			}
-			tasks, err := workflowProcessStore(store).ListTasks(t.Context(), "default", process.ID, "", "", 10)
+			tasks, err := workflowProcessStore(store).ListTasks(t.Context(), "workspace-primary", process.ID, "", "", 10)
 			if err != nil || len(tasks) != 2 {
 				t.Fatalf("tasks=%#v err=%v", tasks, err)
 			}
@@ -53,7 +53,7 @@ func TestWorkflowApprovalModesAggregateTasks(t *testing.T) {
 			if test.mode == "sequential" && (tasks[0].Status != "open" || tasks[1].Status != "pending") {
 				t.Fatalf("expected sequential open/pending tasks, got %#v", tasks)
 			}
-			first := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: tasks[0].AssigneeUserID, WorkspaceID: "default"}}, accessfixture.Bundle{Key: "approver", Permissions: []string{"workflow.task.act"}})
+			first := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: tasks[0].AssigneeUserID, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "approver", Permissions: []string{"workflow.task.act"}})
 			application := records.Applications().Workflows
 			afterFirst, err := application.DecideTask(t.Context(), tasks[0].ID, workflowmodel.WorkflowTaskDecisionRequest{Decision: test.firstDecision}, first)
 			if err != nil {
@@ -62,14 +62,14 @@ func TestWorkflowApprovalModesAggregateTasks(t *testing.T) {
 			if afterFirst.Status != test.wantAfterFirst {
 				t.Fatalf("expected %s after first decision, got %#v", test.wantAfterFirst, afterFirst)
 			}
-			second, _, err := workflowProcessStore(store).GetTask(t.Context(), "default", tasks[1].ID)
+			second, _, err := workflowProcessStore(store).GetTask(t.Context(), "workspace-primary", tasks[1].ID)
 			if err != nil || second.Status != test.wantSecondStatus {
 				t.Fatalf("expected second task %s, got %#v err=%v", test.wantSecondStatus, second, err)
 			}
 			if test.wantAfterFirst != "waiting" {
 				return
 			}
-			secondPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: second.AssigneeUserID, WorkspaceID: "default"}}, accessfixture.Bundle{Key: "approver", Permissions: []string{"workflow.task.act"}})
+			secondPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: second.AssigneeUserID, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "approver", Permissions: []string{"workflow.task.act"}})
 			final, err := application.DecideTask(t.Context(), second.ID, workflowmodel.WorkflowTaskDecisionRequest{Decision: "approved"}, secondPrincipal)
 			if err != nil || final.Status != test.wantFinal {
 				t.Fatalf("expected final %s, got %#v err=%v cause=%v", test.wantFinal, final, err, errors.Unwrap(err))

@@ -44,7 +44,10 @@ func (c *Controller) Acquire(ctx context.Context, request Request) (*Lease, Deci
 	if err := ctx.Err(); err != nil {
 		return nil, Decision{Allowed: false, State: c.State(), Code: "capacity.request_cancelled"}
 	}
-	request.WorkspaceID = boundedKey(request.WorkspaceID, "default")
+	request.WorkspaceID = boundedKey(request.WorkspaceID, "")
+	if request.WorkspaceID == "" || strings.EqualFold(request.WorkspaceID, "default") {
+		return nil, Decision{Allowed: false, State: c.State(), Code: "capacity.workspace_scope_required"}
+	}
 	request.UseCase = boundedKey(request.UseCase, "unknown")
 	c.mu.Lock()
 	now := c.now().UTC()

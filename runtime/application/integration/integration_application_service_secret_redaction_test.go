@@ -74,14 +74,14 @@ func (a blockingSyncAdapter) Call(ctx context.Context, _ integrationcontract.Cal
 }
 
 func TestSyncProviderCallDoesNotStartWithoutDurablePreparedInvocation(t *testing.T) {
-	repository := &independentConfigRepository{connections: map[string]integrationmodel.IntegrationConnection{"primary": {Key: "primary", WorkspaceID: "default", ConnectorKey: "probe", ProviderKey: "echo", Status: "active"}}}
+	repository := &independentConfigRepository{connections: map[string]integrationmodel.IntegrationConnection{"primary": {Key: "primary", WorkspaceID: "workspace-primary", ConnectorKey: "probe", ProviderKey: "echo", Status: "active"}}}
 	want := errors.New("injected invocation persistence failure")
 	delivery := &independentDeliveryRepository{insertInvocationErr: want}
 	registry := NewConnectorRegistry(integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{secretProbeConnector("echo")}})
 	application := NewIntegrationApplicationService(ApplicationDependencies{ConfigRepository: repository, DeliveryRepository: delivery, Registry: registry})
 	calls := 0
 	registerTestProviderAdapter(application, "probe", "echo", countingSyncAdapter{calls: &calls})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	if _, err := application.ExecuteIntegrationSyncCall(t.Context(), SyncCallRequest{ConnectorKey: "probe", ConnectionKey: "primary", Operation: "echo"}, principal); !errors.Is(err, want) {
 		t.Fatalf("error=%v", err)
 	}
@@ -148,9 +148,9 @@ func TestSlowProviderDoesNotConsumeAnotherProviderCapacity(t *testing.T) {
 
 func TestIntegrationSecretNeverLeavesThroughResponseInvocationOrAudit(t *testing.T) {
 	repository := &independentConfigRepository{
-		connections: map[string]integrationmodel.IntegrationConnection{"primary": {Key: "primary", WorkspaceID: "default", ConnectorKey: "probe", ProviderKey: "echo", Status: "active", SecretRefs: map[string]string{"api_key": "secret:credential"}}},
-		secrets:     map[string]integrationmodel.IntegrationSecret{"credential": {Key: "credential", WorkspaceID: "default", Kind: "api_key", Status: "active", ValueRef: "material:credential"}},
-		materials:   map[string]string{"default:credential": "literal-secret"},
+		connections: map[string]integrationmodel.IntegrationConnection{"primary": {Key: "primary", WorkspaceID: "workspace-primary", ConnectorKey: "probe", ProviderKey: "echo", Status: "active", SecretRefs: map[string]string{"api_key": "secret:credential"}}},
+		secrets:     map[string]integrationmodel.IntegrationSecret{"credential": {Key: "credential", WorkspaceID: "workspace-primary", Kind: "api_key", Status: "active", ValueRef: "material:credential"}},
+		materials:   map[string]string{"workspace-primary:credential": "literal-secret"},
 	}
 	delivery := &independentDeliveryRepository{}
 	audits := []map[string]any{}
@@ -162,7 +162,7 @@ func TestIntegrationSecretNeverLeavesThroughResponseInvocationOrAudit(t *testing
 		},
 	})
 	registerTestProviderAdapter(application, "probe", "echo", secretEchoAdapter{})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	result, err := application.ExecuteIntegrationSyncCall(t.Context(), SyncCallRequest{ConnectorKey: "probe", ConnectionKey: "primary", Operation: "echo", Request: map[string]any{"password": "literal-secret"}}, principal)
 	if err != nil {
 		t.Fatal(err)
@@ -183,15 +183,15 @@ func TestIntegrationSecretNeverLeavesThroughResponseInvocationOrAudit(t *testing
 
 func TestIntegrationSecretIsRedactedFromProviderErrorAndFailedInvocation(t *testing.T) {
 	repository := &independentConfigRepository{
-		connections: map[string]integrationmodel.IntegrationConnection{"primary": {Key: "primary", WorkspaceID: "default", ConnectorKey: "probe", ProviderKey: "error", Status: "active", SecretRefs: map[string]string{"api_key": "secret:credential"}}},
-		secrets:     map[string]integrationmodel.IntegrationSecret{"credential": {Key: "credential", WorkspaceID: "default", Kind: "api_key", Status: "active", ValueRef: "material:credential"}},
-		materials:   map[string]string{"default:credential": "literal-secret"},
+		connections: map[string]integrationmodel.IntegrationConnection{"primary": {Key: "primary", WorkspaceID: "workspace-primary", ConnectorKey: "probe", ProviderKey: "error", Status: "active", SecretRefs: map[string]string{"api_key": "secret:credential"}}},
+		secrets:     map[string]integrationmodel.IntegrationSecret{"credential": {Key: "credential", WorkspaceID: "workspace-primary", Kind: "api_key", Status: "active", ValueRef: "material:credential"}},
+		materials:   map[string]string{"workspace-primary:credential": "literal-secret"},
 	}
 	delivery := &independentDeliveryRepository{}
 	registry := NewConnectorRegistry(integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{secretProbeConnector("error")}})
 	application := NewIntegrationApplicationService(ApplicationDependencies{ConfigRepository: repository, DeliveryRepository: delivery, Registry: registry})
 	registerTestProviderAdapter(application, "probe", "error", secretErrorAdapter{})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	_, err := application.ExecuteIntegrationSyncCall(t.Context(), SyncCallRequest{ConnectorKey: "probe", ConnectionKey: "primary", Operation: "fail"}, principal)
 	if err == nil || strings.Contains(err.Error(), "literal-secret") {
 		t.Fatalf("Secret leaked through Provider error: %v", err)

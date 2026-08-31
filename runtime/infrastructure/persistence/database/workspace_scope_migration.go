@@ -20,6 +20,7 @@ func (s *RuntimeStore) ValidateLegacyWorkspaceScopes(ctx context.Context) error 
 	for _, table := range tables {
 		query := "SELECT COALESCE(" + s.identifier("workspace_id") + ", ''), COUNT(*) FROM " + s.tableIdentifier(table) +
 			" WHERE " + s.identifier("workspace_id") + " IS NULL OR TRIM(" + s.identifier("workspace_id") + ") = ''" +
+			" OR LOWER(TRIM(" + s.identifier("workspace_id") + ")) = 'default'" +
 			" GROUP BY " + s.identifier("workspace_id")
 		rows, queryErr := db.QueryContext(ctx, query)
 		if queryErr != nil {
@@ -34,6 +35,9 @@ func (s *RuntimeStore) ValidateLegacyWorkspaceScopes(ctx context.Context) error 
 				return err
 			}
 			classification := "missing_workspace"
+			if strings.EqualFold(strings.TrimSpace(observed), "default") {
+				classification = "legacy_default_workspace"
+			}
 			findingsByClassification[classification] += count
 		}
 		if err := rows.Err(); err != nil {

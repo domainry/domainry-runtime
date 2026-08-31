@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"strings"
 
+	auditcontract "github.com/domainry/domainry-audit-sdk/contract"
+	"github.com/domainry/domainry-foundation/modulehttp"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
@@ -15,6 +17,7 @@ import (
 type partySDKModuleHost struct {
 	store     *persistence.RuntimeStore
 	directory identitysdk.Directory
+	audit     auditcontract.Appender
 }
 
 func (h partySDKModuleHost) Database() *sql.DB { return h.store.DB() }
@@ -25,6 +28,20 @@ func (h partySDKModuleHost) Migrations() partymodulehost.MigrationRegistrar {
 }
 func (h partySDKModuleHost) WorkforceProfiles() partymodulehost.WorkforceProfileDirectory {
 	return partySDKWorkforceProfiles{h.directory}
+}
+func (h partySDKModuleHost) Audit() modulehttp.AuditRecorder {
+	return partySDKAuditRecorder{h.audit}
+}
+
+type partySDKAuditRecorder struct{ appender auditcontract.Appender }
+
+func (r partySDKAuditRecorder) Record(ctx context.Context, event modulehttp.AuditEvent) error {
+	_, err := r.appender.Append(ctx, auditcontract.AppendRequest{
+		Event: event.Event, ObjectKey: event.ObjectKey, RecordID: event.RecordID,
+		Actor:   auditcontract.Actor{WorkspaceID: event.WorkspaceID, SubjectID: event.ActorID, RoleKey: event.RoleKey, Kind: "user"},
+		Summary: event.Summary, Metadata: event.Metadata,
+	})
+	return err
 }
 
 type partySDKMigrationRegistrar struct{ store *persistence.RuntimeStore }

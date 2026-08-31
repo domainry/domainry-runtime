@@ -90,7 +90,7 @@ func TestIntegrationSecretMaterialCannotBeOpenedWithDifferentInstanceKey(t *test
 	if err := ensureIntegrationTestSchema(t.Context(), first); err != nil {
 		t.Fatal(err)
 	}
-	if err := NewIntegrationConfigStore(first).PutSecretMaterial(t.Context(), "default", "credential", "secret"); err != nil {
+	if err := NewIntegrationConfigStore(first).PutSecretMaterial(t.Context(), "workspace-primary", "credential", "secret"); err != nil {
 		t.Fatal(err)
 	}
 	_ = first.Close()
@@ -99,7 +99,7 @@ func TestIntegrationSecretMaterialCannotBeOpenedWithDifferentInstanceKey(t *test
 		t.Fatal(err)
 	}
 	defer second.Close()
-	if _, err := NewIntegrationConfigStore(second).ResolveSecretMaterial(t.Context(), "default", "credential"); err == nil {
+	if _, err := NewIntegrationConfigStore(second).ResolveSecretMaterial(t.Context(), "workspace-primary", "credential"); err == nil {
 		t.Fatal("ciphertext opened with a different instance key")
 	}
 }

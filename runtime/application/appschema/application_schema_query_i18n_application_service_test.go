@@ -94,7 +94,7 @@ func TestSchemaLocalizationAndCoveragePreserveStableValues(t *testing.T) {
 	}
 
 	service := NewApplicationSchemaApplicationService(ApplicationSchemaDependencies{Repository: repository, Runtime: localizedLifecycleRuntimeStub{snapshot: snapshot}})
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	coverage, err := service.LocalizedTextCoverage(t.Context(), "fr-FR", "en-US", admin)
 	if err != nil || coverage.MissingCount == 0 {
 		t.Fatalf("coverage=%#v err=%v", coverage, err)

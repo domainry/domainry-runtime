@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	"github.com/domainry/domainry-lifecycle-sdk/modulehost"
 	ormbuilder "github.com/domainry/domainry-orm/query"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
@@ -122,7 +122,7 @@ func (e OwnerExecutor) Preview(ctx context.Context, workspaceID string, policy l
 	}
 	preview := lifecyclecontract.CleanupPreview{}
 	for _, spec := range specs {
-		if spec.tenantColumn == "" && workspaceID != lifecycleaccess.InstallationWorkspaceID {
+		if spec.tenantColumn == "" && workspaceID != principalmodel.InstallationWorkspaceID {
 			return lifecyclecontract.CleanupPreview{}, fmt.Errorf("policy %s is installation scoped", policy.Policy.Key)
 		}
 		cutoff := now.Add(-lifecycleSpecRetention(policy.Policy, spec))
@@ -147,7 +147,7 @@ func (e OwnerExecutor) ProcessBatch(ctx context.Context, job lifecyclemodel.Clea
 	result := lifecyclemodel.CleanupBatchResult{Done: true}
 	remaining := batchSize
 	for _, spec := range specs {
-		if spec.tenantColumn == "" && job.WorkspaceID != lifecycleaccess.InstallationWorkspaceID {
+		if spec.tenantColumn == "" && job.WorkspaceID != principalmodel.InstallationWorkspaceID {
 			return result, fmt.Errorf("policy %s is installation scoped", policy.Policy.Key)
 		}
 		if remaining <= 0 {

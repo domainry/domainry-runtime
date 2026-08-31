@@ -25,7 +25,7 @@ func TestWorkflowValidationLocatesNodeAndEdgeFields(t *testing.T) {
 		return map[string]definitionmodel.ObjectSchema{}
 	}})
 	resolverWorkflow := definitionmodel.WorkflowSchema{Key: "approval", TriggerContract: &definitionmodel.WorkflowTriggerContract{Type: "manual"}, Graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{{ID: "start", Type: "trigger"}, {ID: "approve", Type: "approval", Contract: &definitionmodel.WorkflowNodeContract{Approval: &definitionmodel.WorkflowApprovalNodeContract{Mode: "any", Resolvers: []definitionmodel.WorkflowAssigneeResolver{{Type: "magic"}}}}}}, Edges: []definitionmodel.WorkflowGraphEdge{{ID: "to-approve", Source: "start", Target: "approve"}}}}
-	report, err := service.ValidateWorkflowDefinition(t.Context(), resolverWorkflow, principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}})
+	report, err := service.ValidateWorkflowDefinition(t.Context(), resolverWorkflow, principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestWorkflowValidationLocatesNodeAndEdgeFields(t *testing.T) {
 	}
 	edgeWorkflow := resolverWorkflow
 	edgeWorkflow.Graph = &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{{ID: "start", Type: "trigger"}, {ID: "end", Type: "cc", Contract: &definitionmodel.WorkflowNodeContract{CC: &definitionmodel.WorkflowCCNodeContract{NotificationActionKey: "notify", Resolvers: []definitionmodel.WorkflowAssigneeResolver{{Type: "role", RoleKey: "manager"}}}}}}, Edges: []definitionmodel.WorkflowGraphEdge{{ID: "broken-edge", Source: "start", Target: "missing"}}}
-	report, err = service.ValidateWorkflowDefinition(t.Context(), edgeWorkflow, principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default"}})
+	report, err = service.ValidateWorkflowDefinition(t.Context(), edgeWorkflow, principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}})
 	if err != nil {
 		t.Fatal(err)
 	}

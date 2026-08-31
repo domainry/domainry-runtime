@@ -26,28 +26,28 @@ func TestIntegrationEventStoreContractAndCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 	repository := NewIntegrationEventStore(store)
-	value, duplicate, err := repository.UpsertEvent(t.Context(), "default", integrationmodel.IntegrationEvent{WorkspaceID: "default", Provider: "crm", EventType: "customer.updated", ExternalID: "evt-1"})
+	value, duplicate, err := repository.UpsertEvent(t.Context(), "workspace-primary", integrationmodel.IntegrationEvent{WorkspaceID: "workspace-primary", Provider: "crm", EventType: "customer.updated", ExternalID: "evt-1"})
 	if err != nil || duplicate {
 		t.Fatalf("upsert event=%#v duplicate=%v err=%v", value, duplicate, err)
 	}
-	second, duplicate, err := repository.UpsertEvent(t.Context(), "default", integrationmodel.IntegrationEvent{WorkspaceID: "default", Provider: "crm", EventType: "customer.updated", ExternalID: "evt-1"})
+	second, duplicate, err := repository.UpsertEvent(t.Context(), "workspace-primary", integrationmodel.IntegrationEvent{WorkspaceID: "workspace-primary", Provider: "crm", EventType: "customer.updated", ExternalID: "evt-1"})
 	if err != nil || !duplicate || second.ID != value.ID {
 		t.Fatalf("duplicate event=%#v duplicate=%v err=%v", second, duplicate, err)
 	}
-	duplicate, err = repository.RecordWebhookNonce(t.Context(), "default", "webhook", "nonce-1", "1700000000", "2099-01-01T00:00:00Z")
+	duplicate, err = repository.RecordWebhookNonce(t.Context(), "workspace-primary", "webhook", "nonce-1", "1700000000", "2099-01-01T00:00:00Z")
 	if err != nil || duplicate {
 		t.Fatalf("first webhook nonce duplicate=%v err=%v", duplicate, err)
 	}
-	duplicate, err = repository.RecordWebhookNonce(t.Context(), "default", "webhook", "nonce-1", "1700000000", "2099-01-01T00:00:00Z")
+	duplicate, err = repository.RecordWebhookNonce(t.Context(), "workspace-primary", "webhook", "nonce-1", "1700000000", "2099-01-01T00:00:00Z")
 	if err != nil || !duplicate {
 		t.Fatalf("replayed webhook nonce duplicate=%v err=%v", duplicate, err)
 	}
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := repository.ListEvents(cancelled, "default", "", "", 10); !errors.Is(err, context.Canceled) {
+	if _, err := repository.ListEvents(cancelled, "workspace-primary", "", "", 10); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled list error=%v", err)
 	}
-	if _, _, err := repository.UpsertEvent(cancelled, "default", integrationmodel.IntegrationEvent{WorkspaceID: "default", Provider: "crm", ExternalID: "never"}); !errors.Is(err, context.Canceled) {
+	if _, _, err := repository.UpsertEvent(cancelled, "workspace-primary", integrationmodel.IntegrationEvent{WorkspaceID: "workspace-primary", Provider: "crm", ExternalID: "never"}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled upsert error=%v", err)
 	}
 }
@@ -62,7 +62,7 @@ func TestAcceptIntegrationEventRollsBackEventWhenMappingIntentFails(t *testing.T
 		t.Fatal(err)
 	}
 	repository := NewIntegrationEventStore(store)
-	event := integrationmodel.IntegrationEvent{WorkspaceID: "default", Provider: "crm", EventType: "customer.updated", ExternalID: "evt-atomic-failure"}
+	event := integrationmodel.IntegrationEvent{WorkspaceID: "workspace-primary", Provider: "crm", EventType: "customer.updated", ExternalID: "evt-atomic-failure"}
 	intent := integrationmodel.IntegrationEventMappingIntent{MappingKey: "customer-updated", TargetType: "workflow", Status: "pending"}
 	if _, _, err := repository.AcceptEvent(t.Context(), event.WorkspaceID, event, intent); err == nil {
 		t.Fatal("expected injected mapping intent failure")
@@ -86,7 +86,7 @@ func TestAcceptIntegrationEventCommitsEventAndMappingIntentTogether(t *testing.T
 		t.Fatal(err)
 	}
 	repository := NewIntegrationEventStore(store)
-	event := integrationmodel.IntegrationEvent{WorkspaceID: "default", Provider: "crm", EventType: "customer.updated", ExternalID: "evt-atomic-success"}
+	event := integrationmodel.IntegrationEvent{WorkspaceID: "workspace-primary", Provider: "crm", EventType: "customer.updated", ExternalID: "evt-atomic-success"}
 	intent := integrationmodel.IntegrationEventMappingIntent{MappingKey: "customer-updated", TargetType: "workflow", Status: "pending", Payload: map[string]any{"workflow_key": "sync-customer"}}
 	saved, duplicate, err := repository.AcceptEvent(t.Context(), event.WorkspaceID, event, intent)
 	if err != nil || duplicate {
@@ -111,7 +111,7 @@ func TestAcceptIntegrationEventQuarantinesExternalIDContentConflict(t *testing.T
 		t.Fatal(err)
 	}
 	repository := NewIntegrationEventStore(store)
-	event := integrationmodel.IntegrationEvent{WorkspaceID: "default", Provider: "adapter", EventType: "fact.created", ExternalID: "external-immutable-1", Payload: map[string]any{"amount": "10.00", "_integration_security": map[string]any{"nonce": "first"}}}
+	event := integrationmodel.IntegrationEvent{WorkspaceID: "workspace-primary", Provider: "adapter", EventType: "fact.created", ExternalID: "external-immutable-1", Payload: map[string]any{"amount": "10.00", "_integration_security": map[string]any{"nonce": "first"}}}
 	intent := integrationmodel.IntegrationEventMappingIntent{MappingKey: "fact-created", TargetType: "workflow", Status: "pending"}
 	saved, duplicate, err := repository.AcceptEvent(t.Context(), event.WorkspaceID, event, intent)
 	if err != nil || duplicate {

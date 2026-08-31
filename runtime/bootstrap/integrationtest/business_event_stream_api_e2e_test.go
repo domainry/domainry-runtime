@@ -30,6 +30,7 @@ func TestRuntimeBusinessEventStreamConnectsReplaysAndRejectsCrossTenant(t *testi
 		BusinessEventGlobalConnections: 8, BusinessEventWorkspaceConnections: 4, BusinessEventPrincipalConnections: 2,
 		BusinessEventHeartbeatInterval: time.Second, BusinessEventRetryInterval: 250 * time.Millisecond,
 	}
+	cfg = initializedIntegrationRuntimeConfig(cfg)
 	application := New(t.Context(), cfg, newIntegrationIdentityBinding(t, cfg), notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangefixture.NewFactory())
 	defer application.CloseContext(t.Context())
 	server := httptest.NewServer(application.Routes())
@@ -37,7 +38,7 @@ func TestRuntimeBusinessEventStreamConnectsReplaysAndRejectsCrossTenant(t *testi
 	client := server.Client()
 	token := runtimeIdentityFixtureSession(t, "admin", "admin").AccessToken
 
-	firstResponse, firstReader := openRuntimeEventStream(t, client, server.URL, token, "", "default")
+	firstResponse, firstReader := openRuntimeEventStream(t, client, server.URL, token, "", "workspace-primary")
 	heartbeat := readRuntimeSSELine(t, firstReader, func(line string) bool { return strings.HasPrefix(line, ": heartbeat") })
 	if !strings.HasPrefix(heartbeat, ": heartbeat") {
 		t.Fatalf("missing heartbeat: %q", heartbeat)
@@ -50,7 +51,7 @@ func TestRuntimeBusinessEventStreamConnectsReplaysAndRejectsCrossTenant(t *testi
 	_ = firstResponse.Body.Close()
 
 	createRuntimeCustomer(t, client, server.URL, token, "event-two", "Event Two")
-	secondResponse, secondReader := openRuntimeEventStream(t, client, server.URL, token, firstEvent.ID, "default")
+	secondResponse, secondReader := openRuntimeEventStream(t, client, server.URL, token, firstEvent.ID, "workspace-primary")
 	secondEvent := readRuntimeSSEEvent(t, secondReader)
 	if secondEvent.Type != "refresh" || secondEvent.ObjectKey != "customer" || secondEvent.ID == firstEvent.ID {
 		t.Fatalf("replay did not advance cursor: first=%+v second=%+v", firstEvent, secondEvent)
@@ -129,7 +130,7 @@ func createRuntimeCustomer(t *testing.T, client *http.Client, baseURL, token, re
 	payload, _ := json.Marshal(map[string]any{"data": map[string]any{"name": name, "owner": "admin"}})
 	request, _ := http.NewRequest(http.MethodPost, baseURL+"/objects/customer/records", bytes.NewReader(payload))
 	request.Header.Set("Authorization", "Bearer "+token)
-	request.Header.Set("X-Workspace-ID", "default")
+	request.Header.Set("X-Workspace-ID", "workspace-primary")
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Idempotency-Key", requestKey)
 	request.Header.Set("X-Domainry-Product-Surface", "business_workspace")

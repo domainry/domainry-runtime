@@ -59,37 +59,37 @@ func TestRecordTimerCommitsAtomicallyAndClaimsInStableOrderWithFencing(t *testin
 	now := time.Date(2026, 7, 21, 8, 0, 0, 0, time.UTC)
 	source := objects[len(objects)-1]
 	sourceRecord := recordmodel.Record{ID: "request-1", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "open"}}
-	timerCommit, err := service.BuildRecordTimerMutation(t.Context(), "default", schedulerapplication.RecordTimerSchedule{
+	timerCommit, err := service.BuildRecordTimerMutation(t.Context(), "workspace-primary", schedulerapplication.RecordTimerSchedule{
 		TimerKey: "response-deadline", ObjectKey: source.Key, RecordID: sourceRecord.ID, Purpose: "response", DueAt: now.Add(time.Minute), Timezone: "UTC", TargetType: "action", TargetKey: "request.escalate", Priority: 10, Sequence: 2,
 	}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := recordLegacyStore(store).CommitRecordMutationBatch(t.Context(), "default", []transactionmodel.RecordMutationCommit{{Operation: "create", Object: source, Record: sourceRecord}, timerCommit}); err != nil {
+	if err := recordLegacyStore(store).CommitRecordMutationBatch(t.Context(), "workspace-primary", []transactionmodel.RecordMutationCommit{{Operation: "create", Object: source, Record: sourceRecord}, timerCommit}); err != nil {
 		t.Fatalf("atomic source and timer commit: %v", err)
 	}
-	if _, found, err := recordLegacyStore(store).GetRecord(t.Context(), "default", timerCommit.Object, timerCommit.Record.ID); err != nil || !found {
+	if _, found, err := recordLegacyStore(store).GetRecord(t.Context(), "workspace-primary", timerCommit.Object, timerCommit.Record.ID); err != nil || !found {
 		t.Fatalf("durable timer missing: found=%v err=%v", found, err)
 	}
-	supersede, err := service.BuildRecordTimerSupersedeMutations(t.Context(), "default", timerCommit.Record, schedulerapplication.RecordTimerSchedule{
+	supersede, err := service.BuildRecordTimerSupersedeMutations(t.Context(), "workspace-primary", timerCommit.Record, schedulerapplication.RecordTimerSchedule{
 		TimerKey: "response-deadline-v2", ObjectKey: source.Key, RecordID: sourceRecord.ID, Purpose: "response", DueAt: now.Add(2 * time.Minute), TargetType: "action", TargetKey: "request.escalate", Priority: 10, Sequence: 2,
 	}, now.Add(time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := recordLegacyStore(store).CommitRecordMutationBatch(t.Context(), "default", supersede); err != nil {
+	if err := recordLegacyStore(store).CommitRecordMutationBatch(t.Context(), "workspace-primary", supersede); err != nil {
 		t.Fatalf("supersede timer atomically: %v", err)
 	}
-	oldTimer, _, _ := recordLegacyStore(store).GetRecord(t.Context(), "default", timerCommit.Object, timerCommit.Record.ID)
-	newTimer, found, _ := recordLegacyStore(store).GetRecord(t.Context(), "default", supersede[1].Object, supersede[1].Record.ID)
+	oldTimer, _, _ := recordLegacyStore(store).GetRecord(t.Context(), "workspace-primary", timerCommit.Object, timerCommit.Record.ID)
+	newTimer, found, _ := recordLegacyStore(store).GetRecord(t.Context(), "workspace-primary", supersede[1].Object, supersede[1].Record.ID)
 	if oldTimer.Data["status"] != "superseded" || !found || newTimer.Data["supersedes_timer_id"] != oldTimer.ID {
 		t.Fatalf("timer supersede graph old=%#v new=%#v", oldTimer, newTimer)
 	}
-	cancelled, err := service.CancelRecordTimers(t.Context(), "default", source.Key, sourceRecord.ID, "response", now.Add(2*time.Second), schedulerRuntimeSystemScope())
+	cancelled, err := service.CancelRecordTimers(t.Context(), "workspace-primary", source.Key, sourceRecord.ID, "response", now.Add(2*time.Second), schedulerRuntimeSystemScope())
 	if err != nil || cancelled != 1 {
 		t.Fatalf("cancel future source timers count=%d err=%v", cancelled, err)
 	}
-	newTimer, _, _ = recordLegacyStore(store).GetRecord(t.Context(), "default", supersede[1].Object, supersede[1].Record.ID)
+	newTimer, _, _ = recordLegacyStore(store).GetRecord(t.Context(), "workspace-primary", supersede[1].Object, supersede[1].Record.ID)
 	if newTimer.Data["status"] != "cancelled" {
 		t.Fatalf("future timer not cancelled after source completion: %#v", newTimer)
 	}
@@ -97,10 +97,10 @@ func TestRecordTimerCommitsAtomicallyAndClaimsInStableOrderWithFencing(t *testin
 	failedSource := sourceRecord
 	failedSource.Data = map[string]any{"status": "changed"}
 	failedSource.UpdatedAt = now.Add(time.Second).Format(time.RFC3339Nano)
-	if err := recordLegacyStore(store).CommitRecordMutationBatch(t.Context(), "default", []transactionmodel.RecordMutationCommit{{Operation: "update", Object: source, Record: failedSource, ExpectedUpdatedAt: sourceRecord.UpdatedAt}, timerCommit}); err == nil {
+	if err := recordLegacyStore(store).CommitRecordMutationBatch(t.Context(), "workspace-primary", []transactionmodel.RecordMutationCommit{{Operation: "update", Object: source, Record: failedSource, ExpectedUpdatedAt: sourceRecord.UpdatedAt}, timerCommit}); err == nil {
 		t.Fatal("duplicate timer should fail the whole source mutation batch")
 	}
-	current, _, _ := recordLegacyStore(store).GetRecord(t.Context(), "default", source, sourceRecord.ID)
+	current, _, _ := recordLegacyStore(store).GetRecord(t.Context(), "workspace-primary", source, sourceRecord.ID)
 	if current.Data["status"] != "open" {
 		t.Fatalf("source mutation survived timer failure: %#v", current)
 	}
@@ -110,33 +110,33 @@ func TestRecordTimerCommitsAtomicallyAndClaimsInStableOrderWithFencing(t *testin
 		{TimerKey: "high-later", ObjectKey: source.Key, RecordID: "request-high-later", Purpose: "notify", DueAt: now, TargetType: "workflow", TargetKey: "notify", Priority: 20, Sequence: 2},
 		{TimerKey: "high-first", ObjectKey: source.Key, RecordID: "request-high-first", Purpose: "notify", DueAt: now, TargetType: "workflow", TargetKey: "notify", Priority: 20, Sequence: 1},
 	} {
-		commit, buildErr := service.BuildRecordTimerMutation(t.Context(), "default", request, now)
+		commit, buildErr := service.BuildRecordTimerMutation(t.Context(), "workspace-primary", request, now)
 		if buildErr != nil {
 			t.Fatal(buildErr)
 		}
-		if err := recordLegacyStore(store).CommitRecordMutationBatch(t.Context(), "default", []transactionmodel.RecordMutationCommit{commit}); err != nil {
+		if err := recordLegacyStore(store).CommitRecordMutationBatch(t.Context(), "workspace-primary", []transactionmodel.RecordMutationCommit{commit}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	leases, err := service.ClaimDueRecordTimers(t.Context(), "default", now, 3, schedulerRuntimeSystemScope())
+	leases, err := service.ClaimDueRecordTimers(t.Context(), "workspace-primary", now, 3, schedulerRuntimeSystemScope())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(leases) != 3 || leases[0].Record.Data["timer_key"] != "high-first" || leases[1].Record.Data["timer_key"] != "high-later" || leases[2].Record.Data["timer_key"] != "low" {
 		t.Fatalf("ordered timer leases = %#v", leases)
 	}
-	if err := service.FinishRecordTimer(t.Context(), "default", leases[0], now.Add(time.Second), schedulerRuntimeSystemScope()); err != nil {
+	if err := service.FinishRecordTimer(t.Context(), "workspace-primary", leases[0], now.Add(time.Second), schedulerRuntimeSystemScope()); err != nil {
 		t.Fatal(err)
 	}
 
-	reclaimed, err := newSchedulerRuntimeTestService(t, store, objects).Applications().Scheduler.ClaimDueRecordTimers(t.Context(), "default", now.Add(2*time.Minute), 1, schedulerRuntimeSystemScope())
+	reclaimed, err := newSchedulerRuntimeTestService(t, store, objects).Applications().Scheduler.ClaimDueRecordTimers(t.Context(), "workspace-primary", now.Add(2*time.Minute), 1, schedulerRuntimeSystemScope())
 	if err != nil || len(reclaimed) != 1 {
 		t.Fatalf("expired timer reclaim = %#v err=%v", reclaimed, err)
 	}
-	if err := service.FinishRecordTimer(t.Context(), "default", leases[1], now.Add(2*time.Minute), schedulerRuntimeSystemScope()); !mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
+	if err := service.FinishRecordTimer(t.Context(), "workspace-primary", leases[1], now.Add(2*time.Minute), schedulerRuntimeSystemScope()); !mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
 		t.Fatalf("stale timer completion error = %v", err)
 	}
-	if err := service.FinishRecordTimer(t.Context(), "default", reclaimed[0], now.Add(2*time.Minute), schedulerRuntimeSystemScope()); err != nil {
+	if err := service.FinishRecordTimer(t.Context(), "workspace-primary", reclaimed[0], now.Add(2*time.Minute), schedulerRuntimeSystemScope()); err != nil {
 		t.Fatalf("reclaimed timer completion: %v", err)
 	}
 }
@@ -150,11 +150,11 @@ func TestRecordTimerConcurrentWorkersClaimOneTimerOnce(t *testing.T) {
 	}
 	now := time.Date(2026, 7, 21, 8, 0, 0, 0, time.UTC)
 	seed := newSchedulerRuntimeTestService(t, store, objects).Applications().Scheduler
-	commit, err := seed.BuildRecordTimerMutation(t.Context(), "default", schedulerapplication.RecordTimerSchedule{TimerKey: "once", ObjectKey: "record", RecordID: "one", Purpose: "fire", DueAt: now, TargetType: "action", TargetKey: "record.fire"}, now)
+	commit, err := seed.BuildRecordTimerMutation(t.Context(), "workspace-primary", schedulerapplication.RecordTimerSchedule{TimerKey: "once", ObjectKey: "record", RecordID: "one", Purpose: "fire", DueAt: now, TargetType: "action", TargetKey: "record.fire"}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := recordLegacyStore(store).CommitRecordMutationBatch(t.Context(), "default", []transactionmodel.RecordMutationCommit{commit}); err != nil {
+	if err := recordLegacyStore(store).CommitRecordMutationBatch(t.Context(), "workspace-primary", []transactionmodel.RecordMutationCommit{commit}); err != nil {
 		t.Fatal(err)
 	}
 	start := make(chan struct{})
@@ -166,7 +166,7 @@ func TestRecordTimerConcurrentWorkersClaimOneTimerOnce(t *testing.T) {
 			defer wait.Done()
 			<-start
 			service := newSchedulerRuntimeTestService(t, store, objects).Applications().Scheduler
-			leases, claimErr := service.ClaimDueRecordTimers(t.Context(), "default", now, 1, schedulerRuntimeSystemScope())
+			leases, claimErr := service.ClaimDueRecordTimers(t.Context(), "workspace-primary", now, 1, schedulerRuntimeSystemScope())
 			if claimErr != nil {
 				t.Errorf("claim timer: %v", claimErr)
 				return
@@ -197,7 +197,7 @@ func TestRecordTimerCancellationDrainsEveryPage(t *testing.T) {
 	service := newSchedulerRuntimeTestService(t, store, objects).Applications().Scheduler
 	commits := make([]transactionmodel.RecordMutationCommit, 0, 501)
 	for index := range 501 {
-		commit, err := service.BuildRecordTimerMutation(t.Context(), "default", schedulerapplication.RecordTimerSchedule{
+		commit, err := service.BuildRecordTimerMutation(t.Context(), "workspace-primary", schedulerapplication.RecordTimerSchedule{
 			TimerKey: fmt.Sprintf("future-%03d", index), ObjectKey: "source", RecordID: "source-1", Purpose: "future",
 			DueAt: now.Add(time.Duration(index+1) * time.Minute), TargetType: "action", TargetKey: "source.remind", Sequence: int64(index),
 		}, now)
@@ -206,14 +206,14 @@ func TestRecordTimerCancellationDrainsEveryPage(t *testing.T) {
 		}
 		commits = append(commits, commit)
 	}
-	if err := recordLegacyStore(store).CommitRecordMutationBatch(t.Context(), "default", commits); err != nil {
+	if err := recordLegacyStore(store).CommitRecordMutationBatch(t.Context(), "workspace-primary", commits); err != nil {
 		t.Fatal(err)
 	}
-	cancelled, err := service.CancelRecordTimers(t.Context(), "default", "source", "source-1", "future", now, schedulerRuntimeSystemScope())
+	cancelled, err := service.CancelRecordTimers(t.Context(), "workspace-primary", "source", "source-1", "future", now, schedulerRuntimeSystemScope())
 	if err != nil || cancelled != 501 {
 		t.Fatalf("cancelled=%d err=%v", cancelled, err)
 	}
-	page, err := recordLegacyStore(store).ListRecords(t.Context(), "default", schedulerRuntimeObjectByKey(t, objects, "record_timer"), recordmodel.RecordListQuery{Page: 1, PageSize: 1, Filters: map[string]any{"object_key": "source", "record_id": "source-1", "status": "scheduled"}})
+	page, err := recordLegacyStore(store).ListRecords(t.Context(), "workspace-primary", schedulerRuntimeObjectByKey(t, objects, "record_timer"), recordmodel.RecordListQuery{Page: 1, PageSize: 1, Filters: map[string]any{"object_key": "source", "record_id": "source-1", "status": "scheduled"}})
 	if err != nil || page.Total != 0 {
 		t.Fatalf("scheduled timers after cancellation=%d err=%v", page.Total, err)
 	}
@@ -229,18 +229,18 @@ func TestRecordTimerFailureReleasesEntireClaimBatchAndStopsAtAttemptLimit(t *tes
 	now := time.Date(2026, 7, 21, 8, 0, 0, 0, time.UTC)
 	service := newSchedulerRuntimeTestService(t, store, objects).Applications().Scheduler
 	for index, maxAttempts := range []int{1, 2} {
-		if _, err := service.ScheduleRecordTimer(t.Context(), "default", schedulerapplication.RecordTimerSchedule{
+		if _, err := service.ScheduleRecordTimer(t.Context(), "workspace-primary", schedulerapplication.RecordTimerSchedule{
 			TimerKey: fmt.Sprintf("failure-%d", index), ObjectKey: "service_request", RecordID: fmt.Sprintf("request-%d", index), Purpose: "failure_injection",
 			DueAt: now, TargetType: "action", TargetKey: "missing.action", Sequence: int64(index), MaxAttempts: maxAttempts,
 		}, recordmodel.Record{}, nil, now, schedulerRuntimeSystemScope()); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if processed, err := service.ProcessDueRecordTimers(t.Context(), "default", now, 10, schedulerRuntimePrincipal(), schedulerRuntimeSystemScope()); err == nil || processed != 0 {
+	if processed, err := service.ProcessDueRecordTimers(t.Context(), "workspace-primary", now, 10, schedulerRuntimePrincipal(), schedulerRuntimeSystemScope()); err == nil || processed != 0 {
 		t.Fatalf("first failed batch processed=%d err=%v", processed, err)
 	}
 	timerObject := schedulerRuntimeObjectByKey(t, objects, "record_timer")
-	page, err := recordLegacyStore(store).ListRecords(t.Context(), "default", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 10, Sort: []recordmodel.RecordSortRule{{Field: "sequence", Direction: "asc"}}})
+	page, err := recordLegacyStore(store).ListRecords(t.Context(), "workspace-primary", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 10, Sort: []recordmodel.RecordSortRule{{Field: "sequence", Direction: "asc"}}})
 	if err != nil || len(page.Items) != 2 {
 		t.Fatalf("failed timers=%#v err=%v", page, err)
 	}
@@ -252,10 +252,10 @@ func TestRecordTimerFailureReleasesEntireClaimBatchAndStopsAtAttemptLimit(t *tes
 	if page.Items[1].Data["status"] != "scheduled" || fmt.Sprint(page.Items[1].Data["last_error"]) == "" || retryHasLeaseOwner && fmt.Sprint(retryLeaseOwner) != "" {
 		t.Fatalf("retryable failure timer=%#v", page.Items[1])
 	}
-	if processed, err := service.ProcessDueRecordTimers(t.Context(), "default", now.Add(2*time.Second), 10, schedulerRuntimePrincipal(), schedulerRuntimeSystemScope()); err == nil || processed != 0 {
+	if processed, err := service.ProcessDueRecordTimers(t.Context(), "workspace-primary", now.Add(2*time.Second), 10, schedulerRuntimePrincipal(), schedulerRuntimeSystemScope()); err == nil || processed != 0 {
 		t.Fatalf("second failed attempt processed=%d err=%v", processed, err)
 	}
-	retried, found, err := recordLegacyStore(store).GetRecord(t.Context(), "default", timerObject, page.Items[1].ID)
+	retried, found, err := recordLegacyStore(store).GetRecord(t.Context(), "workspace-primary", timerObject, page.Items[1].ID)
 	if err != nil || !found || retried.Data["status"] != "failed" || fmt.Sprint(retried.Data["attempt"]) != "2" {
 		t.Fatalf("exhausted retry timer=%#v found=%v err=%v", retried, found, err)
 	}

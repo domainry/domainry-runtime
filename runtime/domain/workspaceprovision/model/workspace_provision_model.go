@@ -3,11 +3,13 @@ package workspaceprovisionmodel
 import "errors"
 
 var (
-	ErrInvalid             = errors.New("workspace provisioning request invalid")
-	ErrIdempotencyConflict = errors.New("workspace provisioning idempotency conflict")
-	ErrCodeConflict        = errors.New("workspace canonical code conflict")
-	ErrWorkspaceNotFound   = errors.New("workspace not found")
-	ErrIdentityUnavailable = errors.New("embedded Identity workspace provisioning is unavailable")
+	ErrInvalid                = errors.New("workspace provisioning request invalid")
+	ErrIdempotencyConflict    = errors.New("workspace provisioning idempotency conflict")
+	ErrCodeConflict           = errors.New("workspace canonical code conflict")
+	ErrWorkspaceNotFound      = errors.New("workspace not found")
+	ErrIdentityUnavailable    = errors.New("embedded Identity workspace provisioning is unavailable")
+	ErrInitializationRequired = errors.New("initial tenant must be initialized before workspace provisioning")
+	ErrAlreadyInitialized     = errors.New("initial tenant is already initialized")
 	// ErrAcceptanceFailure is intentionally stable and contains no generated
 	// workspace, registry, credential, or projection identity.
 	ErrAcceptanceFailure = errors.New("workspace provisioning acceptance failure")
@@ -20,6 +22,7 @@ type Request struct {
 	AdminLoginID       string         `json:"admin_login_id"`
 	AdminName          string         `json:"admin_name"`
 	StoreConfiguration map[string]any `json:"store_configuration"`
+	InitialPassword    string         `json:"-"`
 }
 
 type Result struct {

@@ -121,7 +121,7 @@ func TestAssembleRuntimeHTTPServerMinimalGraphWiresRoutesAndFallbackDependencies
 		Config: config.Config{
 			RuntimeAllowDevIdentityHeaders: true,
 			UploadDir:                      " ",
-			IdentityWorkspaceID:            "default",
+			IdentityWorkspaceID:            "workspace-primary",
 			IdentityAudience:               "domainry-runtime",
 		},
 	})
@@ -166,7 +166,7 @@ func TestSurfaceRouteGroupsRegisterOnlyTheirCompiledEndpointInventory(t *testing
 		IdentityBinding: transportIdentityBindingStub{},
 		Config: config.Config{
 			RuntimeAllowDevIdentityHeaders: true,
-			IdentityWorkspaceID:            "default",
+			IdentityWorkspaceID:            "workspace-primary",
 			IdentityAudience:               "domainry-runtime",
 			SurfaceBusinessOrigins:         []string{"https://app.example.com"},
 			SurfacePortalOrigins:           []string{"https://portal.example.com"},
@@ -280,7 +280,7 @@ func TestAssembleRuntimeHTTPServerPersistentGraphWiresOptionalOwners(t *testing.
 		Config: config.Config{
 			UploadDir:                      "uploads",
 			RuntimeAllowDevIdentityHeaders: true,
-			IdentityWorkspaceID:            "default",
+			IdentityWorkspaceID:            "workspace-primary",
 			IdentityAudience:               "domainry-runtime",
 		},
 		WorkerControl: workerplatform.NewController(),

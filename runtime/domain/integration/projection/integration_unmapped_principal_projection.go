@@ -15,7 +15,10 @@ import (
 // Runtime never fabricates a read-only role for an unknown identity.
 func IntegrationUnmappedReadOnlyPrincipal(workspaceID, externalPrincipal string, objects map[string]definitionmodel.ObjectSchema) principalmodel.Principal {
 	if strings.TrimSpace(workspaceID) == "" {
-		workspaceID = "default"
+		workspaceID = principalmodel.InstallationWorkspaceID
+	}
+	if _, err := principalmodel.NewWorkspaceID(workspaceID); err != nil {
+		workspaceID = ""
 	}
 	return principalmodel.Principal{Principal: identitysdk.Principal{UserID: "integration:unmapped:" + integrationSanitizePrincipalKey(externalPrincipal), WorkspaceID: workspaceID, Known: false}}
 }

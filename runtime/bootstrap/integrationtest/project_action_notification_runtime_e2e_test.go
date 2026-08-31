@@ -154,7 +154,7 @@ func projectNotificationRequest(handler http.Handler, userID, role, method, path
 	}
 	request := httptest.NewRequest(method, path, bytes.NewReader(payload))
 	request.Header.Set("Authorization", "Bearer "+integrationIdentityAccessTokenFor(userID, role))
-	request.Header.Set("X-Workspace-ID", "default")
+	request.Header.Set("X-Workspace-ID", "workspace-primary")
 	request.Header.Set("X-Domainry-Product-Surface", "business_workspace")
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")

@@ -32,7 +32,7 @@ func runtimeAuthoringEdgeDependencies() RuntimeAuthoringValidationDependencies {
 
 func TestRuntimeAuthoringValidationDependencyAndSourceErrors(t *testing.T) {
 	admin := runtimeAuthoringValidationAdmin()
-	knownNonAdmin := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "builder", WorkspaceID: "default"}}
+	knownNonAdmin := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "builder", WorkspaceID: "workspace-primary"}}
 	if _, err := NewRuntimeAuthoringValidationApplicationService(RuntimeAuthoringValidationDependencies{}).Validate(t.Context(), knownNonAdmin); err == nil {
 		t.Fatal("known non-admin accepted")
 	}

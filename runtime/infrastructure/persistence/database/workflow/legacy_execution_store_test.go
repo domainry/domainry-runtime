@@ -38,7 +38,7 @@ func TestUpdateWorkflowExecutionWherePreventsStaleRetryClaim(t *testing.T) {
 		UpdatedAt:      "2026-07-09T00:00:00Z",
 	}
 	workflowStore := NewWorkflowWorkerStore(store)
-	if err := workflowStore.InsertExecution(t.Context(), "default", execution); err != nil {
+	if err := workflowStore.InsertExecution(t.Context(), "workspace-primary", execution); err != nil {
 		t.Fatalf("insert workflow execution: %v", err)
 	}
 
@@ -47,7 +47,7 @@ func TestUpdateWorkflowExecutionWherePreventsStaleRetryClaim(t *testing.T) {
 	claimed.NextRunAt = ""
 	claimed.Message = "workflow.message.retryClaimed"
 	claimed.UpdatedAt = "2026-07-09T00:01:01Z"
-	ok, err := workflowStore.UpdateExecutionWhere(t.Context(), "default", claimed, map[string]any{"status": "failed", "updated_at": execution.UpdatedAt})
+	ok, err := workflowStore.UpdateExecutionWhere(t.Context(), "workspace-primary", claimed, map[string]any{"status": "failed", "updated_at": execution.UpdatedAt})
 	if err != nil {
 		t.Fatalf("first conditional workflow update: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestUpdateWorkflowExecutionWherePreventsStaleRetryClaim(t *testing.T) {
 	stale.NextRunAt = ""
 	stale.Message = "workflow.message.retryClaimed"
 	stale.UpdatedAt = "2026-07-09T00:01:02Z"
-	ok, err = workflowStore.UpdateExecutionWhere(t.Context(), "default", stale, map[string]any{"status": "failed", "updated_at": execution.UpdatedAt})
+	ok, err = workflowStore.UpdateExecutionWhere(t.Context(), "workspace-primary", stale, map[string]any{"status": "failed", "updated_at": execution.UpdatedAt})
 	if err != nil {
 		t.Fatalf("second conditional workflow update: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestWorkflowExecutionLeaseFencesConcurrentAndStaleWorkers(t *testing.T) {
 	}
 	repository := NewWorkflowWorkerStore(store)
 	execution := workflowmodel.WorkflowExecution{ID: "exec_fencing", WorkflowKey: "daily_task", Name: "Daily task", Trigger: "scheduled", Status: "failed", Action: map[string]any{}, Payload: map[string]any{}, Result: map[string]any{}, ActorID: "system", Attempt: 1, MaxAttempts: 3, NextRunAt: "2026-07-19T00:00:00Z", Message: "retry", CreatedAt: "2026-07-19T00:00:00Z", UpdatedAt: "2026-07-19T00:00:00Z"}
-	if err := repository.InsertExecution(t.Context(), "default", execution); err != nil {
+	if err := repository.InsertExecution(t.Context(), "workspace-primary", execution); err != nil {
 		t.Fatal(err)
 	}
 	start := make(chan struct{})
@@ -91,7 +91,7 @@ func TestWorkflowExecutionLeaseFencesConcurrentAndStaleWorkers(t *testing.T) {
 			<-start
 			candidate := execution
 			candidate.Status, candidate.LeaseOwner, candidate.LeaseExpiresAt, candidate.FencingToken = "running", fmt.Sprintf("runtime-%d", index), "2026-07-19T00:01:00Z", 1
-			won, err := repository.UpdateExecutionWhere(t.Context(), "default", candidate, map[string]any{"status": "failed", "updated_at": execution.UpdatedAt, "lease_owner": "", "fencing_token": int64(0)})
+			won, err := repository.UpdateExecutionWhere(t.Context(), "workspace-primary", candidate, map[string]any{"status": "failed", "updated_at": execution.UpdatedAt, "lease_owner": "", "fencing_token": int64(0)})
 			if err != nil {
 				errorsFound <- err
 			} else if won {
@@ -116,17 +116,17 @@ func TestWorkflowExecutionLeaseFencesConcurrentAndStaleWorkers(t *testing.T) {
 	}
 	second := first
 	second.LeaseOwner, second.LeaseExpiresAt, second.FencingToken = "runtime-restarted", "2026-07-19T00:03:00Z", 2
-	if won, err := repository.UpdateExecutionWhere(t.Context(), "default", second, map[string]any{"status": "running", "lease_owner": first.LeaseOwner, "fencing_token": first.FencingToken, "lease_expires_at": first.LeaseExpiresAt}); err != nil || !won {
+	if won, err := repository.UpdateExecutionWhere(t.Context(), "workspace-primary", second, map[string]any{"status": "running", "lease_owner": first.LeaseOwner, "fencing_token": first.FencingToken, "lease_expires_at": first.LeaseExpiresAt}); err != nil || !won {
 		t.Fatalf("workflow reclaim won=%v err=%v", won, err)
 	}
 	stale := first
 	stale.Status, stale.LeaseOwner, stale.LeaseExpiresAt = "succeeded", "", ""
-	if won, err := repository.UpdateExecutionWhere(t.Context(), "default", stale, map[string]any{"status": "running", "lease_owner": first.LeaseOwner, "fencing_token": first.FencingToken}); err != nil || won {
+	if won, err := repository.UpdateExecutionWhere(t.Context(), "workspace-primary", stale, map[string]any{"status": "running", "lease_owner": first.LeaseOwner, "fencing_token": first.FencingToken}); err != nil || won {
 		t.Fatalf("stale workflow terminal write won=%v err=%v", won, err)
 	}
 	completed := second
 	completed.Status, completed.LeaseOwner, completed.LeaseExpiresAt = "succeeded", "", ""
-	if won, err := repository.UpdateExecutionWhere(t.Context(), "default", completed, map[string]any{"status": "running", "lease_owner": second.LeaseOwner, "fencing_token": second.FencingToken}); err != nil || !won {
+	if won, err := repository.UpdateExecutionWhere(t.Context(), "workspace-primary", completed, map[string]any{"status": "running", "lease_owner": second.LeaseOwner, "fencing_token": second.FencingToken}); err != nil || !won {
 		t.Fatalf("current workflow terminal write won=%v err=%v", won, err)
 	}
 }

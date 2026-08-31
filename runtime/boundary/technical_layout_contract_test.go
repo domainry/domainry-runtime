@@ -69,6 +69,7 @@ var bootstrapRuntimeProductionFiles = technicalLayoutStringSet(
 	"integration_module_host.go", "metadata_module_host.go", "rate_limiter.go", "report_module_host.go",
 	"data_exchange_module_host.go",
 	"agent_sdk_binding.go",
+	"module_http_surfaces.go", "module_inventory.go",
 	"startup_errors.go", "store_preparation.go", "worker_dependencies.go", "worker_lifecycle.go", "worker_lifecycle_cleanup.go", "worker_registry.go", "operations_control_worker.go",
 )
 

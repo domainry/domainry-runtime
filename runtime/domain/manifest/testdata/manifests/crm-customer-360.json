@@ -2108,7 +2108,6 @@
   "automation_execution_seeds": [
     {
       "id": "automation_execution_seed_customer_verify_business_license",
-      "workspace_id": "default",
       "rule_key": "customer.verify_business_license",
       "object_key": "customer",
       "record_id": "customer_customer_acme",

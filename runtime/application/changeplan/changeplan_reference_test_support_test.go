@@ -17,7 +17,7 @@ func NewReferenceGraphBuilder() *ReferenceGraphBuilder {
 
 func changePlanAdmin() principalmodel.Principal {
 	return accessfixture.Attach(
-		principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "default"}},
+		principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}},
 		accessfixture.Bundle{Permissions: []string{"workspace.admin"}},
 	)
 }

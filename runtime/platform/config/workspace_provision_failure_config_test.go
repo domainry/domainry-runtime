@@ -29,7 +29,7 @@ func TestWorkspaceProvisionFailurePointValidatesClosedPointCatalog(t *testing.T)
 	t.Setenv("WORKSPACE_PROVISION_FAILURE_POINT", "")
 	valid := []string{
 		"after_workspace", "after_tenant_registry", "after_identity_user", "after_identity_role",
-		"after_role_assignment", "after_credential", "after_workspace_configuration",
+		"after_role_assignment", "after_credential", "after_tenant_initialization", "after_workspace_configuration",
 		"after_application_projection:store_config", "after_application_projections", "after_receipt",
 	}
 	for _, point := range valid {

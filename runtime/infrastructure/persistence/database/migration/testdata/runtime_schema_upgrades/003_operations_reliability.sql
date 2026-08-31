@@ -4,7 +4,7 @@ CREATE TABLE _audit_events (
   metadata_json TEXT NOT NULL, before_json TEXT NOT NULL, after_json TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
-INSERT INTO _audit_events VALUES ('audit-003', 'default', 'fixture.created', '', '', 'system', '', 'v003', '{}', '{}', '{}', '2026-07-19T00:00:00Z');
+INSERT INTO _audit_events VALUES ('audit-003', 'workspace-primary', 'fixture.created', '', '', 'system', '', 'v003', '{}', '{}', '{}', '2026-07-19T00:00:00Z');
 CREATE TABLE _workflow_executions (
   workspace_id TEXT NOT NULL, id TEXT NOT NULL, workflow_key TEXT NOT NULL,
   name TEXT NOT NULL, trigger TEXT NOT NULL, status TEXT NOT NULL, action_type TEXT,
@@ -18,4 +18,4 @@ CREATE TABLE _workflow_executions (
 );
 INSERT INTO _workflow_executions (
   workspace_id,id,workflow_key,name,trigger,status,action_json,payload_json,result_json,created_at,updated_at
-) VALUES ('default','workflow-003','fixture','Fixture','manual','completed','{}','{}','{}','2026-07-19T00:00:00Z','2026-07-19T00:00:00Z');
+) VALUES ('workspace-primary','workflow-003','fixture','Fixture','manual','completed','{}','{}','{}','2026-07-19T00:00:00Z','2026-07-19T00:00:00Z');

@@ -58,7 +58,7 @@ func TestInternalMutationServiceOwnsWriteAndAudit(t *testing.T) {
 	})
 	object := definitionmodel.ObjectSchema{Key: "record_timer_event"}
 	record := recordmodel.Record{ID: "event-1"}
-	if err := service.Insert(t.Context(), "default", RecordInternalMutationSchedulerRuntime, object, record, " scheduler evidence "); err != nil {
+	if err := service.Insert(t.Context(), "workspace-primary", RecordInternalMutationSchedulerRuntime, object, record, " scheduler evidence "); err != nil {
 		t.Fatal(err)
 	}
 	if repository.inserted.ID != "event-1" || event != "internal_record_mutation" || objectKey != "record_timer_event" || recordID != "event-1" || !principal.Known || principal.UserID != "system" {
