@@ -24,7 +24,7 @@ func newIntegrationCompositionApp(t *testing.T, name string, extraProviders ...c
 	t.Helper()
 	cfg := config.Config{
 		AppLocale: "en-US", DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), name+".db"),
-		IdentityWorkspaceID: "workspace-primary", IdentityAudience: "domainry-runtime", NotificationTenantID: "tenant-primary", NotificationWorkspaceID: "workspace-primary", NotificationApplicationKey: "domainry-runtime", PartyTenantID: "tenant-primary", PartyWorkspaceID: "workspace-primary", PartyApplicationKey: "domainry-runtime",
+		IdentityWorkspaceID: "workspace-primary", IdentityAudience: "domainry-runtime", NotificationTenantID: "tenant-primary", NotificationWorkspaceID: "workspace-primary", NotificationApplicationKey: "domainry-runtime", PartyTenantID: "tenant-primary", PartyWorkspaceID: "workspace-primary", PartyApplicationKey: "domainry-runtime", AuditExportTokenKey: "test-audit-export-signing-key",
 		ManifestPath: filepath.Join("..", "..", "domain", "manifest", "testdata", "manifests", "domain-only-minimal.json"), UploadDir: filepath.Join(t.TempDir(), "uploads"),
 	}
 	handlers := runtimeext.NewBusinessHandlerRegistry()

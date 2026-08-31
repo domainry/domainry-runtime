@@ -13,7 +13,7 @@ import (
 	"time"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
-	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
+	agentlifecycle "github.com/domainry/domainry-agent-sdk/lifecycle"
 
 	auditsdk "github.com/domainry/domainry-audit-sdk"
 	auditmoduleimpl "github.com/domainry/domainry-audit/module"
@@ -41,7 +41,6 @@ import (
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
-	agentlifecyclepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/agentlifecycle"
 	runtimeauditmodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	actionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/action"
@@ -172,16 +171,6 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	if err != nil {
 		return runtimeServiceAssembly{}, fmt.Errorf("open Data Exchange module: %w", err)
 	}
-	var agentLifecycle agentpersistence.AgentLifecycleRepository
-	if agentBinding != nil {
-		lifecycleBinding, _ := agentBinding.(agentpersistence.LifecycleBinding)
-		if lifecycleBinding != nil {
-			agentLifecycle = lifecycleBinding.AgentLifecycleRepository()
-		}
-		if agentLifecycle == nil {
-			return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding returned no lifecycle repository")
-		}
-	}
 	uploadDirectory := cfg.UploadDir
 	if uploadDirectory == "" {
 		uploadDirectory = "../data/uploads"
@@ -199,6 +188,23 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	if lifecycleArchives == nil {
 		_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
 		return runtimeServiceAssembly{}, fmt.Errorf("Lifecycle Binding is incomplete")
+	}
+	var agentLifecycleExecutor lifecyclecontract.OwnerLifecycleExecutor
+	if agentBinding != nil {
+		if !agentBinding.Descriptor().HasCapability(agentsdk.CapabilityLifecycleExecute) {
+			_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
+			return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding does not disclose lifecycle execution capability")
+		}
+		agentLifecycleBinding, ok := agentBinding.(agentlifecycle.Binding)
+		if !ok {
+			_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
+			return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding returned no lifecycle extension")
+		}
+		agentLifecycleExecutor = agentLifecycleBinding.LifecycleExecutor(lifecycleArchives)
+		if agentLifecycleExecutor == nil {
+			_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
+			return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding returned no lifecycle executor")
+		}
 	}
 	lifecycleArtifacts, err := lifecycleBinding.SubjectArtifacts(uploadDirectory)
 	if err != nil {
@@ -225,10 +231,10 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		workflowpersistence.LifecycleExecutor(store, lifecycleArchives),
 		automationpersistence.LifecycleExecutor(store, lifecycleArchives),
 		runtimeauditmodule.LifecycleExecutor(store, lifecycleArchives),
-		reportpersistence.LifecycleExecutor(store, lifecycleArchives, agentLifecycle, manifest.Objects...),
+		reportpersistence.LifecycleExecutor(store, lifecycleArchives, manifest.Objects...),
 	}
-	if agentLifecycle != nil {
-		lifecycleExecutors = append(lifecycleExecutors, agentlifecyclepersistence.NewExecutor(agentLifecycle, lifecycleArchives))
+	if agentLifecycleExecutor != nil {
+		lifecycleExecutors = append(lifecycleExecutors, agentLifecycleExecutor)
 	}
 	lifecycleExecutorPorts := append([]lifecyclecontract.OwnerLifecycleExecutor(nil), lifecycleExecutors...)
 	if notificationRetention != nil {

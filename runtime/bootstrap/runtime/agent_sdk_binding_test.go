@@ -68,7 +68,7 @@ func (f *agentSDKModuleFactoryStub) OpenModule(_ context.Context, application ag
 
 func TestOpenAgentBindingUsesModuleFactoryAndValidatesDescriptor(t *testing.T) {
 	runner := &agentSDKRunnerStub{}
-	binding := &agentSDKBindingStub{runner: runner, descriptor: agentsdk.Descriptor{ProtocolVersion: agentsdk.ProtocolVersionV1, Mode: agentsdk.DeploymentModeModule, Capabilities: []string{"task.start", "task.poll", "task.cancel", "interactive.run"}}}
+	binding := &agentSDKBindingStub{runner: runner, descriptor: agentsdk.Descriptor{ProtocolVersion: agentsdk.ProtocolVersionV1, Mode: agentsdk.DeploymentModeModule, Capabilities: []string{agentsdk.CapabilityTaskStart, agentsdk.CapabilityTaskPoll, agentsdk.CapabilityTaskCancel, agentsdk.CapabilityInteractiveRun, agentsdk.CapabilityLifecycleExecute}}}
 	factory := &agentSDKModuleFactoryStub{binding: binding}
 	store := openAgentBindingRuntimeStore(t)
 	opened, err := openAgentBinding(t.Context(), "runtime", store, factory)

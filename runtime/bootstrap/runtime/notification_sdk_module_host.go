@@ -54,7 +54,7 @@ func notificationSDKCatalog(defaultLocale string, manifest manifestmodel.Manifes
 	}
 	return modulehost.Catalog{
 		DefaultLocale:    defaultLocale,
-		Surfaces:         []string{"business", "portal"},
+		Surfaces:         []string{"business_workspace", "consumer_portal"},
 		ExternalChannels: notificationModuleChannels(manifest.NotificationRules), Templates: templates,
 		TemplateCapabilities: capabilities, EventTypes: events, Rules: rules,
 	}, nil

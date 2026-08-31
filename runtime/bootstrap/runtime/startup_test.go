@@ -139,7 +139,7 @@ func TestRuntimeStartupRegistryAndReadinessBoundaryGuards(t *testing.T) {
 }
 
 func TestNewBuildsRunnableRuntimeAndClosesStartedWorkers(t *testing.T) {
-	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 	if runtime.store == nil || runtime.records == nil || runtime.identityBinding == nil {
 		t.Fatal("runtime composition is incomplete")
 	}
@@ -373,7 +373,7 @@ func TestNewBuildsObjectlessConfiguringRuntimeForDirectAuthoring(t *testing.T) {
 	cfg.ManifestPath = writeManifestLoaderFixture(t, `{"schema_version":"2","template_id":"direct-authoring-project","version":"0.0.0-configuring","source_blueprint_id":"runtime-direct-authoring-v4","objects":[]}`)
 	cfg.AllowEmptyAuthoringManifest = true
 	cfg.RuntimeAllowDevIdentityHeaders = true
-	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 	defer runtime.CloseContext(t.Context())
 	for key, object := range runtime.records.Applications().Schema.ObjectMap(t.Context()) {
 		if runtimeOwned, _ := object.Config["runtime_owned"].(bool); !runtimeOwned {
@@ -417,7 +417,7 @@ func TestGlobalValidationAndDeliveryGateMoveOwnedRuntimeToReady(t *testing.T) {
 	if err := os.WriteFile(provision.LifecyclePath(cfg.ManifestPath), lifecycleRaw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 	defer runtime.CloseContext(t.Context())
 	permissions := []string{
 		"workspace.admin", "scheduler.definition.read", "ops.workflow.read", "workflow.process.read",
@@ -599,7 +599,7 @@ func TestNewRestoresPublishedNotificationTemplates(t *testing.T) {
 	if err := os.WriteFile(cfg.ManifestPath, raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 	if len(runtime.manifest.NotificationTemplates) == 0 {
 		t.Fatal("published notification templates were not restored")
 	}
@@ -614,21 +614,21 @@ func TestBindHTTPRejectsNilRuntime(t *testing.T) {
 
 func TestNewRejectsNilContextInvalidSecurityAndMissingManifest(t *testing.T) {
 	assertBootstrapPanic(t, func() {
-		New(nil, config.Config{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+		New(nil, config.Config{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 	})
 	assertBootstrapPanic(t, func() {
 		New(t.Context(), config.Config{
 			Environment:                    "production",
 			RuntimeAllowDevIdentityHeaders: true,
-		}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+		}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 	})
 	assertBootstrapPanic(t, func() {
-		New(t.Context(), config.Config{ManifestPath: filepath.Join(t.TempDir(), "missing.json")}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+		New(t.Context(), config.Config{ManifestPath: filepath.Join(t.TempDir(), "missing.json")}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 	})
 	assertBootstrapPanic(t, func() {
 		cfg := bootstrapTestConfig(t)
 		cfg.DatabaseDriver = "unsupported"
-		New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+		New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 	})
 }
 
@@ -641,7 +641,7 @@ func TestNewPropagatesNotificationAndServiceAssemblyFailures(t *testing.T) {
 	}`)
 	invalidNotification.SkipManifestValidation = true
 	assertBootstrapPanic(t, func() {
-		New(t.Context(), invalidNotification, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+		New(t.Context(), invalidNotification, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 	})
 
 }
@@ -736,6 +736,7 @@ func bootstrapTestConfigForManifest(t *testing.T, manifestName string) config.Co
 		PartyTenantID:              "tenant-primary",
 		PartyWorkspaceID:           "workspace-primary",
 		PartyApplicationKey:        "domainry-runtime",
+		AuditExportTokenKey:        "test-audit-export-signing-key",
 		DatabaseDriver:             "sqlite",
 		DBPath:                     filepath.Join(t.TempDir(), "runtime.db"),
 		ManifestPath:               filepath.Join("..", "..", "domain", "manifest", "testdata", "manifests", manifestName),

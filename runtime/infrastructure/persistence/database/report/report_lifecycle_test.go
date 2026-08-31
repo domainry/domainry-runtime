@@ -7,7 +7,7 @@ import (
 )
 
 func TestLifecycleExecutorIsReportOwned(t *testing.T) {
-	executor := LifecycleExecutor(nil, nil, nil)
+	executor := LifecycleExecutor(nil, nil)
 	if executor.Owner(t.Context()) != "report" {
 		t.Fatalf("owner=%q", executor.Owner(t.Context()))
 	}
