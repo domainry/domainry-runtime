@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -13,6 +14,8 @@ import (
 
 const DevIntegrationSecret = "dev-generated-integration-secret-change-me"
 const DevAuditExportTokenKey = "dev-generated-audit-export-token-change-me"
+
+var workspaceProvisionProjectionFailureKey = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 
 type Config struct {
 	RuntimeVersion                          string
@@ -114,6 +117,9 @@ type Config struct {
 	MigrationInstanceID                     string
 	SkipManifestValidation                  bool
 	BusinessSeedSyncDisabled                bool
+	// WorkspaceProvisionFailurePoint is a process-start acceptance control.
+	// Project, file, and remote configuration sources cannot set it.
+	WorkspaceProvisionFailurePoint string
 	// AllowEmptyAuthoringManifest is set only by the trusted configuring
 	// Provision lifecycle. It is not loaded from environment configuration.
 	AllowEmptyAuthoringManifest    bool
@@ -253,6 +259,7 @@ func FromEnv() Config {
 		MigrationInstanceID:                     strings.TrimSpace(os.Getenv("MIGRATION_INSTANCE_ID")),
 		SkipManifestValidation:                  boolEnv("SKIP_MANIFEST_VALIDATION", false),
 		BusinessSeedSyncDisabled:                !boolEnv("BUSINESS_SEED_SYNC_ENABLED", true),
+		WorkspaceProvisionFailurePoint:          strings.TrimSpace(os.Getenv("WORKSPACE_PROVISION_FAILURE_POINT")),
 		UploadDir:                               env("UPLOAD_DIR", "../data/uploads"),
 		CORSAllowedOrigins:                      csvEnv("CORS_ALLOWED_ORIGINS", []string{"*"}),
 		SurfaceBusinessOrigins:                  csvEnv("SURFACE_BUSINESS_ORIGINS", nil),
@@ -324,6 +331,9 @@ func (c Config) EffectiveDatabaseMigrationMode() string {
 }
 
 func (c Config) ValidateSecurity() error {
+	if err := c.validateWorkspaceProvisionFailurePoint(); err != nil {
+		return err
+	}
 	if !c.IsProduction() {
 		return nil
 	}
@@ -357,6 +367,30 @@ func (c Config) ValidateSecurity() error {
 		return fmt.Errorf("TELEMETRY_INSECURE must be false in production")
 	}
 	return nil
+}
+
+func (c Config) validateWorkspaceProvisionFailurePoint() error {
+	point := strings.TrimSpace(c.WorkspaceProvisionFailurePoint)
+	if point == "" {
+		return nil
+	}
+	environment := strings.ToLower(strings.TrimSpace(c.Environment))
+	if environment != "dev" && environment != "development" && environment != "acceptance" {
+		return fmt.Errorf("WORKSPACE_PROVISION_FAILURE_POINT is allowed only when APP_ENV is development or acceptance")
+	}
+	allowed := map[string]bool{
+		"after_workspace": true, "after_tenant_registry": true, "after_identity_user": true,
+		"after_identity_role": true, "after_role_assignment": true, "after_credential": true,
+		"after_workspace_configuration": true, "after_application_projections": true, "after_receipt": true,
+	}
+	if allowed[point] {
+		return nil
+	}
+	const projectionPrefix = "after_application_projection:"
+	if strings.HasPrefix(point, projectionPrefix) && workspaceProvisionProjectionFailureKey.MatchString(strings.TrimPrefix(point, projectionPrefix)) {
+		return nil
+	}
+	return fmt.Errorf("WORKSPACE_PROVISION_FAILURE_POINT is invalid")
 }
 
 func (c Config) validateProductionSurfaceListeners() error {

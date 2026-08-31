@@ -8,6 +8,9 @@ var (
 	ErrCodeConflict        = errors.New("workspace canonical code conflict")
 	ErrWorkspaceNotFound   = errors.New("workspace not found")
 	ErrIdentityUnavailable = errors.New("embedded Identity workspace provisioning is unavailable")
+	// ErrAcceptanceFailure is intentionally stable and contains no generated
+	// workspace, registry, credential, or projection identity.
+	ErrAcceptanceFailure = errors.New("workspace provisioning acceptance failure")
 )
 
 type Request struct {

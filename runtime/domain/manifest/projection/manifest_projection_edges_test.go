@@ -101,9 +101,12 @@ func TestManifestRestorationProjection(t *testing.T) {
 		Reports:              []reportmodel.ReportSchema{{Key: "summary"}},
 		Skills:               []agentsdk.SkillSchema{{Key: "lookup"}},
 		Agents:               []agentsdk.AgentSchema{{Key: "assistant"}},
+		WorkspaceProvisioning: []manifestmodel.WorkspaceProvisionProjection{{
+			Key: "baseline", ObjectKey: "store_config", Scope: "provisioned_workspace", Data: map[string]any{"name": "$provision.tenant_name"},
+		}},
 	}
 	merged := MergeInstalledEnvelope(persisted, installed, []notificationmodel.NotificationTemplate{{Key: "template"}})
-	if merged.ManifestHash != "hash" || merged.Description != "description" || len(merged.Dictionaries) != 2 || len(merged.AutomationRules) != 2 || len(merged.Workflows) != 2 || len(merged.NotificationTemplates) != 1 || len(merged.Integrations.Connectors) != 2 || len(merged.Integrations.Connections) != 1 || len(merged.SchedulerDefinitions) != 1 || len(merged.Reports) != 1 || len(merged.Skills) != 1 || len(merged.Agents) != 1 {
+	if merged.ManifestHash != "hash" || merged.Description != "description" || len(merged.Dictionaries) != 2 || len(merged.AutomationRules) != 2 || len(merged.Workflows) != 2 || len(merged.NotificationTemplates) != 1 || len(merged.Integrations.Connectors) != 2 || len(merged.Integrations.Connections) != 1 || len(merged.SchedulerDefinitions) != 1 || len(merged.Reports) != 1 || len(merged.Skills) != 1 || len(merged.Agents) != 1 || len(merged.WorkspaceProvisioning) != 1 || merged.WorkspaceProvisioning[0].Key != "baseline" {
 		t.Fatalf("merged envelope = %#v", merged)
 	}
 	merged = MergeConnectorValidationCatalog(merged, []integrationmodel.ConnectorSchema{{Key: "existing"}, {Key: "new"}, {Key: "new"}})

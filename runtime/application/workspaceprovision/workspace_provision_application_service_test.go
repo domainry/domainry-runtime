@@ -12,11 +12,22 @@ import (
 type workspaceProvisionRepositoryProbe struct {
 	provisionCalls int
 	reconcileCalls int
+	provisionErr   error
 }
 
 func (repository *workspaceProvisionRepositoryProbe) Provision(context.Context, workspaceprovisionmodel.Request) (workspaceprovisionmodel.Result, error) {
 	repository.provisionCalls++
-	return workspaceprovisionmodel.Result{WorkspaceID: "workspace-new"}, nil
+	return workspaceprovisionmodel.Result{WorkspaceID: "workspace-new"}, repository.provisionErr
+}
+
+func TestWorkspaceProvisionApplicationServiceMapsAcceptanceFailureToStableCode(t *testing.T) {
+	repository := &workspaceProvisionRepositoryProbe{provisionErr: workspaceprovisionmodel.ErrAcceptanceFailure}
+	service := NewWorkspaceProvisionApplicationService(repository)
+	principal := principalmodel.NewSystemPrincipal("platform-admin", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "workspace provisioning"), Permission)
+	result, err := service.Provision(t.Context(), principal, workspaceprovisionmodel.Request{RequestID: "secret-request"})
+	if result.WorkspaceID != "" || result.TenantRegistryID != "" || result.InitialPassword != "" || len(result.ProjectionIDs) != 0 || apperror.CodeOf(err) != "workspace.provision_failed" || apperror.KindOf(err) != apperror.KindInternal {
+		t.Fatalf("result=%#v code=%q kind=%q error=%v", result, apperror.CodeOf(err), apperror.KindOf(err), err)
+	}
 }
 
 func (repository *workspaceProvisionRepositoryProbe) ReconcileWorkspaceRoles(context.Context, string) (workspaceprovisionmodel.RoleReconciliationResult, error) {

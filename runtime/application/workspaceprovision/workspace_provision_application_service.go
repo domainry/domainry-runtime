@@ -31,6 +31,9 @@ func (service *WorkspaceProvisionApplicationService) Provision(ctx context.Conte
 		return workspaceprovisionmodel.Result{}, workspaceProvisionError(workspaceprovisionmodel.ErrIdentityUnavailable)
 	}
 	result, err := service.repository.Provision(ctx, request)
+	if errors.Is(err, workspaceprovisionmodel.ErrAcceptanceFailure) {
+		return workspaceprovisionmodel.Result{}, workspaceProvisionError(err)
+	}
 	return result, workspaceProvisionError(err)
 }
 
@@ -60,6 +63,8 @@ func workspaceProvisionError(err error) error {
 		return &apperror.AppError{Kind: apperror.KindNotFound, Code: "workspace.not_found", Err: err}
 	case errors.Is(err, workspaceprovisionmodel.ErrIdentityUnavailable):
 		return &apperror.AppError{Kind: apperror.KindUnavailable, Code: "workspace.identity_atomic_provisioning_unavailable", Err: err}
+	case errors.Is(err, workspaceprovisionmodel.ErrAcceptanceFailure):
+		return &apperror.AppError{Kind: apperror.KindInternal, Code: "workspace.provision_failed", Err: err}
 	default:
 		return err
 	}

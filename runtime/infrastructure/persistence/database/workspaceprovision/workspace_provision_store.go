@@ -98,14 +98,11 @@ func (store *WorkspaceProvisionStore) Provision(ctx context.Context, request wor
 	}
 	identityResult, err := store.identity.ProvisionWorkspaceIdentity(ctx, identitysdk.WorkspaceIdentityProvisionRequest{
 		WorkspaceID: result.WorkspaceID, AdminLoginID: request.AdminLoginID, AdminName: request.AdminName,
-	}, identitysdk.EmbeddedTransaction{Native: tx})
+	}, identitysdk.EmbeddedTransaction{Native: tx, WorkspaceProvisionFailures: store.identityFailureInjector()})
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, err
 	}
 	result.AdminLoginID, result.InitialPassword, result.MustChangePassword = identityResult.AdminLoginID, identityResult.InitialPassword, identityResult.MustChangePassword
-	if err := store.inject(FailureAfterIdentity); err != nil {
-		return workspaceprovisionmodel.Result{}, err
-	}
 	if err := store.insertConfigurationProjectionsAndReceipt(ctx, tx, request, result, fingerprint, string(configuration)); err != nil {
 		_ = tx.Rollback()
 		return store.afterFailedInsert(ctx, request, fingerprint, err)
@@ -229,6 +226,9 @@ func (store *WorkspaceProvisionStore) insertApplicationProjections(ctx context.C
 		if err := insert(ctx, tx, ormbuilder.NewInsertBuilder(store.runtime.RuntimeRenderer(), projection.ObjectKey).Columns(columns...).Values(values...)); err != nil {
 			return fmt.Errorf("insert workspace provisioning projection %s: %w", projection.Key, err)
 		}
+		if err := store.inject(FailureAfterApplicationProjection + projection.Key); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -288,6 +288,19 @@ func (store *WorkspaceProvisionStore) inject(point string) error {
 		return nil
 	}
 	return store.failures.Inject(point)
+}
+
+type identityFailureInjectorAdapter struct{ failures FailureInjector }
+
+func (adapter identityFailureInjectorAdapter) InjectWorkspaceProvisionFailure(point string) error {
+	return adapter.failures.Inject(point)
+}
+
+func (store *WorkspaceProvisionStore) identityFailureInjector() identitysdk.WorkspaceProvisionFailureInjector {
+	if store == nil || store.failures == nil {
+		return nil
+	}
+	return identityFailureInjectorAdapter{failures: store.failures}
 }
 
 func (store *WorkspaceProvisionStore) applicationProjectionIDs(workspaceID string) map[string]string {

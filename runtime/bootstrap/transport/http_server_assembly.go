@@ -183,10 +183,15 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 }
 
 func (a *httpServerAssembly) wireWorkspaceProvisioning() {
-	if a.dependencies.Store == nil || a.dependencies.IdentityBinding == nil {
+	if a.dependencies.Store == nil {
 		return
 	}
-	repository := workspaceprovisionpersistence.NewWorkspaceProvisionStore(a.dependencies.Store, a.dependencies.IdentityBinding, a.dependencies.Manifest)
+	repository := workspaceprovisionpersistence.NewWorkspaceProvisionStoreWithFailureInjector(
+		a.dependencies.Store,
+		a.dependencies.IdentityBinding,
+		a.dependencies.Manifest,
+		workspaceprovisionpersistence.NewAcceptanceFailureInjector(a.dependencies.Config.WorkspaceProvisionFailurePoint),
+	)
 	service := workspaceprovisionapplication.NewWorkspaceProvisionApplicationService(repository)
 	a.handlers.WorkspaceProvision = workspaceprovisionhttp.NewWorkspaceProvisionHandler(workspaceprovisionhttp.WorkspaceProvisionDependencies{
 		UseCases: service, Principal: a.callbacks.Principal, DecodeJSON: a.callbacks.DecodeJSON,

@@ -105,6 +105,9 @@ func LoadContract(sources ...Source) (Config, Snapshot, error) {
 			if !ok {
 				return Config{}, Snapshot{}, fmt.Errorf("unknown configuration %s from %s", name, source.Name)
 			}
+			if name == "WORKSPACE_PROVISION_FAILURE_POINT" && source.Name != "environment" {
+				return Config{}, Snapshot{}, fmt.Errorf("WORKSPACE_PROVISION_FAILURE_POINT is process-environment-only and cannot be loaded from %s", source.Name)
+			}
 			if err := setConfigField(&cfg, definition, raw); err != nil {
 				return Config{}, Snapshot{}, fmt.Errorf("invalid %s from %s: %w", name, source.Name, err)
 			}
