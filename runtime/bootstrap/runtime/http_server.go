@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	transportbootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap/transport"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 )
@@ -17,9 +17,9 @@ func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {
 	if runtime == nil {
 		panic("bootstrap.BindHTTP requires a non-nil Runtime")
 	}
-	var agentRepositories agentrepository.Binding
+	var agentRepositories agentpersistence.Binding
 	if runtime.agentBinding != nil {
-		agentRepositories, _ = runtime.agentBinding.(agentrepository.Binding)
+		agentRepositories, _ = runtime.agentBinding.(agentpersistence.Binding)
 	}
 	runtime.api = transportbootstrap.AssembleRuntimeHTTPServer(ctx, transportbootstrap.HTTPServerDependencies{
 		Config: runtime.cfg, Records: runtime.records,
@@ -31,7 +31,7 @@ func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {
 		LifecycleBinding:   runtime.lifecycleBinding,
 		Store:              runtime.store, RateLimiter: runtime.rateLimiter,
 		AgentRepositories: agentRepositories,
-		Notifications:     runtime.notificationHTTP, Manifest: runtime.manifest,
+		Notifications:     runtime.notificationHTTP, NotificationMode: runtime.notificationBinding.Descriptor().Mode, Manifest: runtime.manifest,
 		WorkerControl:     runtime.worker.Control,
 		Clock:             runtime.worker.Clock,
 		RuntimeInstanceID: runtime.worker.WorkerID.String(),

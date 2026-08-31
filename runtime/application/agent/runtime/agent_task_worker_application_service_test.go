@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
@@ -45,7 +45,7 @@ func (s *agentTaskCancellableExecutorStub) CancelAgentTask(context.Context, agen
 
 func agentTaskWorkerFixture(now time.Time, execute agentTaskExecutorFunc) (*AgentTaskWorker, *agentTaskRunRepositoryStub) {
 	run, owner, _ := runningAgentTaskRun(now)
-	repository := &agentTaskRunRepositoryStub{found: true, claim: agentrepository.AgentTaskClaim{Run: run, Lease: run.Lease}, listed: []agentmodel.AgentTaskRun{{CreatedAt: now.Add(-2 * time.Second)}}}
+	repository := &agentTaskRunRepositoryStub{found: true, claim: agentpersistence.AgentTaskClaim{Run: run, Lease: run.Lease}, listed: []agentmodel.AgentTaskRun{{CreatedAt: now.Add(-2 * time.Second)}}}
 	dependencies := workerplatform.NormalizeDependencies(workerplatform.Dependencies{Clock: agentTaskClock{now: now}, WorkerID: owner, Control: workerplatform.NewController()})
 	return NewAgentTaskWorker(NewAgentTaskRunApplicationService(repository, agentTaskClock{now: now}), execute, dependencies, AgentTaskWorkerConfig{WorkspaceID: run.WorkspaceID, LeaseTTL: time.Minute, HeartbeatInterval: 10 * time.Millisecond, RetryBaseDelay: time.Second}), repository
 }
@@ -105,7 +105,7 @@ func TestAgentTaskWorkerCompletesRetriesDeadLettersAndCancels(t *testing.T) {
 		run, owner, _ := runningAgentTaskRun(now)
 		requested := now.Add(-time.Second)
 		run.CancelRequestedAt = &requested
-		repository := &agentTaskRunRepositoryStub{found: true, claim: agentrepository.AgentTaskClaim{Run: run, Lease: run.Lease}}
+		repository := &agentTaskRunRepositoryStub{found: true, claim: agentpersistence.AgentTaskClaim{Run: run, Lease: run.Lease}}
 		executor := &agentTaskCancellableExecutorStub{}
 		dependencies := workerplatform.NormalizeDependencies(workerplatform.Dependencies{Clock: agentTaskClock{now: now}, WorkerID: owner, Control: workerplatform.NewController()})
 		worker := NewAgentTaskWorker(NewAgentTaskRunApplicationService(repository, agentTaskClock{now: now}), executor, dependencies, AgentTaskWorkerConfig{WorkspaceID: run.WorkspaceID, LeaseTTL: time.Minute})
@@ -201,7 +201,7 @@ func TestAgentTaskWorkerConfigurationErrorAndCancellationBoundaries(t *testing.T
 			})
 		},
 	} {
-		repo := &agentTaskRunRepositoryStub{found: true, claim: agentrepository.AgentTaskClaim{Run: run, Lease: run.Lease}}
+		repo := &agentTaskRunRepositoryStub{found: true, claim: agentpersistence.AgentTaskClaim{Run: run, Lease: run.Lease}}
 		executor := setup(repo)
 		dependencies := workerplatform.NormalizeDependencies(workerplatform.Dependencies{Clock: agentTaskClock{now}, WorkerID: owner, Control: workerplatform.NewController()})
 		candidate := NewAgentTaskWorker(NewAgentTaskRunApplicationService(repo, agentTaskClock{now}), executor, dependencies, AgentTaskWorkerConfig{WorkspaceID: run.WorkspaceID, LeaseTTL: time.Minute})
@@ -334,7 +334,7 @@ func TestAgentTaskWorkerQueueRetryMetricsAndUsageBoundaries(t *testing.T) {
 		t.Fatalf("caused=%q/%v", caused.Error(), caused.Unwrap())
 	}
 	run, owner, _ := runningAgentTaskRun(now)
-	repository := &agentTaskRunRepositoryStub{found: true, claim: agentrepository.AgentTaskClaim{Run: run, Lease: run.Lease}}
+	repository := &agentTaskRunRepositoryStub{found: true, claim: agentpersistence.AgentTaskClaim{Run: run, Lease: run.Lease}}
 	clock := &advancingAgentTaskClock{now: now}
 	dependencies := workerplatform.NormalizeDependencies(workerplatform.Dependencies{Clock: clock, WorkerID: owner, Control: workerplatform.NewController()})
 	durationWorker := NewAgentTaskWorker(NewAgentTaskRunApplicationService(repository, clock), agentTaskExecutorFunc(func(context.Context, agentmodel.AgentTaskRun) (AgentTaskRunCompletion, error) {

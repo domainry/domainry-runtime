@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 )
 
 func (e OwnerExecutor) archiveCandidate(ctx context.Context, job lifecyclemodel.CleanupJob, policy lifecyclemodel.PolicyVersion, spec cleanupSpec, resourceID string) (bool, error) {
@@ -20,16 +20,16 @@ func (e OwnerExecutor) archiveCandidate(ctx context.Context, job lifecyclemodel.
 	if exists {
 		return false, nil
 	}
-	predicate := ormbuilder.Predicate(ormbuilder.Equal(spec.idColumn, resourceID))
-	builder := ormbuilder.NewSelectBuilder(e.renderer, spec.table).Projections(ormbuilder.Project(ormbuilder.Star()))
+	predicate := query.Predicate(query.Equal(spec.idColumn, resourceID))
+	builder := query.NewSelectBuilder(e.renderer, spec.table).Projections(query.Project(query.Star()))
 	if spec.tenantColumn != "" {
-		builder = ormbuilder.NewWorkspaceSelectBuilder(e.renderer, spec.table, job.WorkspaceID).Projections(ormbuilder.Project(ormbuilder.Star()))
+		builder = query.NewWorkspaceSelectBuilder(e.renderer, spec.table, job.WorkspaceID).Projections(query.Project(query.Star()))
 	}
-	query, args, buildErr := builder.Where(predicate).Build()
+	queryValue, args, buildErr := builder.Where(predicate).Build()
 	if buildErr != nil {
 		return false, buildErr
 	}
-	rows, err := e.database(ctx).QueryContext(ctx, query, args...)
+	rows, err := e.database(ctx).QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return false, err
 	}

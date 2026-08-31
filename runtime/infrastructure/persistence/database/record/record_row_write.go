@@ -1,7 +1,7 @@
 package record
 
 import (
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	recordschema "github.com/domainry/domainry-orm/recordschema"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
@@ -43,7 +43,7 @@ func appendRecordInsertMetadata(columns []string, values []any, record recordmod
 	return columns, values, nil
 }
 
-func applyRecordUpdateBuilder(builder *ormbuilder.UpdateBuilder, record recordmodel.Record, writeDeleted bool) error {
+func applyRecordUpdateBuilder(builder *query.UpdateBuilder, record recordmodel.Record, writeDeleted bool) error {
 	if writeDeleted {
 		builder.Set("deleted", record.Deleted)
 	}

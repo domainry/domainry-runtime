@@ -1,13 +1,13 @@
 package agent
 
 import (
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 )
 
 type AgentApplicationService struct {
-	repository agentrepository.AgentStateRepository
+	repository agentpersistence.AgentStateRepository
 }
 
-func NewAgentApplicationService(repository agentrepository.AgentStateRepository) *AgentApplicationService {
+func NewAgentApplicationService(repository agentpersistence.AgentStateRepository) *AgentApplicationService {
 	return &AgentApplicationService{repository: repository}
 }

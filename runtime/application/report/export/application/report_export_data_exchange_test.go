@@ -10,12 +10,12 @@ import (
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	reportexport "github.com/domainry/domainry-runtime/runtime/application/report/export"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/query"
 )
 

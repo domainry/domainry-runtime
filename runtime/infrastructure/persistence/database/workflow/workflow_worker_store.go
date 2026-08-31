@@ -1,4 +1,3 @@
-// Workflow worker persistence.
 package workflow
 
 import (
@@ -9,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 
@@ -59,7 +58,7 @@ func (r WorkflowWorkerStore) InsertExecution(ctx context.Context, workspaceID st
 	if err != nil {
 		return err
 	}
-	statement, args, err := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_executions", workspaceID).Columns(scopedColumns...).Values(scopedValues...).Build()
+	statement, args, err := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_executions", workspaceID).Columns(scopedColumns...).Values(scopedValues...).Build()
 	if err != nil {
 		return fmt.Errorf("build workflow execution insert: %w", err)
 	}
@@ -84,11 +83,11 @@ func (r WorkflowWorkerStore) GetExecution(ctx context.Context, workspaceID, exec
 	if err != nil {
 		return workflowmodel.WorkflowExecution{}, false, err
 	}
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_executions", workspaceID).Columns(workflowExecutionColumns()...).Where(ormbuilder.Equal("id", executionID)).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_executions", workspaceID).Columns(workflowExecutionColumns()...).Where(query.Equal("id", executionID)).Build()
 	if err != nil {
 		return workflowmodel.WorkflowExecution{}, false, fmt.Errorf("build workflow execution lookup: %w", err)
 	}
-	row := r.database().QueryRowContext(ctx, query, args...)
+	row := r.database().QueryRowContext(ctx, queryValue, args...)
 	execution, err := scanWorkflowExecution(row)
 	if err == sql.ErrNoRows {
 		return workflowmodel.WorkflowExecution{}, false, nil
@@ -106,11 +105,11 @@ func (r WorkflowWorkerStore) ListExecutions(ctx context.Context, workspaceID str
 	} else if limit > 1000 {
 		limit = 1000
 	}
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_executions", workspaceID).Columns(workflowExecutionColumns()...).OrderBy(ormbuilder.Descending("created_at")).Limit(limit).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_executions", workspaceID).Columns(workflowExecutionColumns()...).OrderBy(query.Descending("created_at")).Limit(limit).Build()
 	if err != nil {
 		return nil, fmt.Errorf("build workflow execution list: %w", err)
 	}
-	rows, err := r.database().QueryContext(ctx, query, args...)
+	rows, err := r.database().QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list workflow executions: %w", err)
 	}
@@ -152,20 +151,20 @@ func (r WorkflowWorkerStore) UpdateExecutionWhere(ctx context.Context, workspace
 	if err != nil {
 		return false, err
 	}
-	builder := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_executions", workspaceID)
+	builder := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_executions", workspaceID)
 	for i, column := range columns {
 		builder.Set(column, values[i])
 	}
-	predicates := []ormbuilder.Predicate{ormbuilder.Equal("id", execution.ID)}
+	predicates := []query.Predicate{query.Equal("id", execution.ID)}
 	keys := make([]string, 0, len(conditions))
 	for key := range conditions {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		predicates = append(predicates, ormbuilder.Equal(key, workflowExecutionConditionValue(key, conditions[key])))
+		predicates = append(predicates, query.Equal(key, workflowExecutionConditionValue(key, conditions[key])))
 	}
-	statement, args, buildErr := builder.Where(ormbuilder.And(predicates...)).Build()
+	statement, args, buildErr := builder.Where(query.And(predicates...)).Build()
 	if buildErr != nil {
 		return false, fmt.Errorf("build conditional workflow execution update: %w", buildErr)
 	}
@@ -188,22 +187,22 @@ func (r WorkflowWorkerStore) ListTasks(ctx context.Context, workspaceID, process
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	predicates := []ormbuilder.Predicate{}
+	predicates := []query.Predicate{}
 	filters := []struct{ column, value string }{{"process_id", processID}, {"assignee_user_id", assigneeUserID}, {"status", status}}
 	for _, filter := range filters {
 		if strings.TrimSpace(filter.value) != "" {
-			predicates = append(predicates, ormbuilder.Equal(filter.column, strings.TrimSpace(filter.value)))
+			predicates = append(predicates, query.Equal(filter.column, strings.TrimSpace(filter.value)))
 		}
 	}
-	builder := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_tasks", workspaceID).Columns(workflowTaskColumns()...).OrderBy(ormbuilder.Descending("created_at")).Limit(limit)
+	builder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_tasks", workspaceID).Columns(workflowTaskColumns()...).OrderBy(query.Descending("created_at")).Limit(limit)
 	if len(predicates) > 0 {
-		builder.Where(ormbuilder.And(predicates...))
+		builder.Where(query.And(predicates...))
 	}
-	query, args, err := builder.Build()
+	queryValue, args, err := builder.Build()
 	if err != nil {
 		return nil, fmt.Errorf("build workflow task list: %w", err)
 	}
-	rows, err := r.database().QueryContext(ctx, query, args...)
+	rows, err := r.database().QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -225,11 +224,11 @@ func (r WorkflowWorkerStore) GetProcess(ctx context.Context, workspaceID, proces
 		return workflowmodel.WorkflowProcessInstance{}, false, err
 	}
 	columns := workflowProcessColumns
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Columns(columns...).Where(ormbuilder.Equal("id", processID)).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Columns(columns...).Where(query.Equal("id", processID)).Build()
 	if err != nil {
 		return workflowmodel.WorkflowProcessInstance{}, false, fmt.Errorf("build workflow process lookup: %w", err)
 	}
-	row := r.database().QueryRowContext(ctx, query, args...)
+	row := r.database().QueryRowContext(ctx, queryValue, args...)
 	process, err := scanWorkflowProcess(row)
 	if err == sql.ErrNoRows {
 		return workflowmodel.WorkflowProcessInstance{}, false, nil
@@ -246,11 +245,11 @@ func (r WorkflowWorkerStore) ListProcessEvents(ctx context.Context, workspaceID,
 		limit = 200
 	}
 	columns := workflowEventColumns
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_process_events", workspaceID).Columns(columns...).Where(ormbuilder.Equal("process_id", processID)).OrderBy(ormbuilder.Ascending("created_at")).Limit(limit).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_process_events", workspaceID).Columns(columns...).Where(query.Equal("process_id", processID)).OrderBy(query.Ascending("created_at")).Limit(limit).Build()
 	if err != nil {
 		return nil, fmt.Errorf("build workflow process event list: %w", err)
 	}
-	rows, err := r.database().QueryContext(ctx, query, args...)
+	rows, err := r.database().QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -294,9 +293,9 @@ func (r WorkflowWorkerStore) InsertProcessEvent(ctx context.Context, workspaceID
 	if err != nil {
 		return err
 	}
-	query, args, err := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_process_events", workspaceID).Columns(scopedColumns...).Values(scopedValues...).Build()
+	queryValue, args, err := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_process_events", workspaceID).Columns(scopedColumns...).Values(scopedValues...).Build()
 	if err == nil {
-		_, err = r.database().ExecContext(ctx, query, args...)
+		_, err = r.database().ExecContext(ctx, queryValue, args...)
 	}
 	if err != nil {
 		return fmt.Errorf("insert _workflow_process_events: %w", err)
@@ -308,15 +307,15 @@ func (r WorkflowWorkerStore) updateRow(ctx context.Context, table, workspaceID, 
 	if len(columns) != len(values) {
 		return fmt.Errorf("update %s: columns=%d values=%d", table, len(columns), len(values))
 	}
-	builder := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, table, workspaceID)
+	builder := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, table, workspaceID)
 	for i, column := range columns {
 		builder.Set(column, values[i])
 	}
-	query, args, err := builder.Where(ormbuilder.Equal("id", id)).Build()
+	queryValue, args, err := builder.Where(query.Equal("id", id)).Build()
 	if err != nil {
 		return fmt.Errorf("build %s update: %w", table, err)
 	}
-	result, err := r.database().ExecContext(ctx, query, args...)
+	result, err := r.database().ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return fmt.Errorf("update %s: %w", table, err)
 	}

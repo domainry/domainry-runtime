@@ -7,7 +7,7 @@ import (
 	"errors"
 	"testing"
 
-	metadatarepository "github.com/domainry/domainry-metadata-sdk/repository"
+	metadatapersistence "github.com/domainry/domainry-metadata-sdk/persistence"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
@@ -16,7 +16,7 @@ func TestLegacyManifestLoadEveryReadStageFailure(t *testing.T) {
 	baseDB := openStoreForGeneratedListTest(t)
 	t.Cleanup(func() { _ = baseDB.Close() })
 	base := NewApplicationSchemaStore(baseDB)
-	base.metadataDefinitions = manifestLoadMetadataRepository{snapshot: metadatarepository.Snapshot{Definitions: []metadatarepository.Definition{{ResourceType: "object", Key: "account", Payload: json.RawMessage(`{"key":"account","name":"Account"}`)}}}}
+	base.metadataDefinitions = manifestLoadMetadataRepository{snapshot: metadatapersistence.Snapshot{Definitions: []metadatapersistence.Definition{{ResourceType: "object", Key: "account", Payload: json.RawMessage(`{"key":"account","name":"Account"}`)}}}}
 	for stage := 0; stage < 5; stage++ {
 		steps := []metadataSQLQueryStep{metadataCatalogQueryStep()}
 		for len(steps) < 5 {
@@ -48,14 +48,14 @@ func TestLegacyManifestLoadEveryReadStageFailure(t *testing.T) {
 }
 
 type manifestLoadMetadataRepository struct {
-	snapshot metadatarepository.Snapshot
+	snapshot metadatapersistence.Snapshot
 	err      error
 }
 
-func (r manifestLoadMetadataRepository) SyncDefinitions(context.Context, metadatarepository.Snapshot) error {
+func (r manifestLoadMetadataRepository) SyncDefinitions(context.Context, metadatapersistence.Snapshot) error {
 	return r.err
 }
-func (r manifestLoadMetadataRepository) DefinitionSnapshot(context.Context) (metadatarepository.Snapshot, error) {
+func (r manifestLoadMetadataRepository) DefinitionSnapshot(context.Context) (metadatapersistence.Snapshot, error) {
 	return r.snapshot, r.err
 }
 

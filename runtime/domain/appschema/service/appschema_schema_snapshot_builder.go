@@ -11,7 +11,7 @@ import (
 
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"sort"

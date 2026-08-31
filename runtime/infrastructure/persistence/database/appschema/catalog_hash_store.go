@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	metadatarepository "github.com/domainry/domainry-metadata-sdk/repository"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	metadatapersistence "github.com/domainry/domainry-metadata-sdk/persistence"
+	"github.com/domainry/domainry-orm/query"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
@@ -39,7 +39,7 @@ func (r ApplicationSchemaStore) refreshCatalogHashWithExecutorAt(
 	if metadataDefinitions == nil && r.store != nil {
 		metadataDefinitions = r.store.MetadataDefinitions()
 	}
-	executorRepository, ok := metadataDefinitions.(metadatarepository.ExecutorSnapshotRepository)
+	executorRepository, ok := metadataDefinitions.(metadatapersistence.ExecutorSnapshotRepository)
 	if !ok {
 		return fmt.Errorf("Metadata executor snapshot repository is unavailable")
 	}
@@ -52,12 +52,12 @@ func (r ApplicationSchemaStore) refreshCatalogHashWithExecutorAt(
 		hash.Write([]byte(definition.ResourceType + ":" + definition.Key + ":" + definition.SchemaHash + "|"))
 	}
 	for _, table := range tables {
-		query, args, err := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, table).
-			Columns("resource_key", "schema_hash").OrderBy(ormbuilder.Ascending("resource_key")).Build()
+		queryValue, args, err := query.NewSelectBuilder(r.store.SQLRenderer, table).
+			Columns("resource_key", "schema_hash").OrderBy(query.Ascending("resource_key")).Build()
 		if err != nil {
 			return err
 		}
-		rows, err := executor.QueryContext(ctx, query, args...)
+		rows, err := executor.QueryContext(ctx, queryValue, args...)
 		if err != nil {
 			return err
 		}
@@ -77,20 +77,20 @@ func (r ApplicationSchemaStore) refreshCatalogHashWithExecutorAt(
 		rows.Close()
 	}
 	value := hex.EncodeToString(hash.Sum(nil))
-	insert := ormbuilder.NewInsertBuilder(r.store.SQLRenderer, "_application_schema_projection").
+	insert := query.NewInsertBuilder(r.store.SQLRenderer, "_application_schema_projection").
 		Columns("id", "schema_hash", "materialized_at").Values("current", value, now)
 	insert, err = r.store.Engine.ApplyUpsert(insert, []string{"id"},
-		ormbuilder.AssignExpression("schema_hash", ormbuilder.InsertedValue("schema_hash")),
-		ormbuilder.AssignExpression("materialized_at", ormbuilder.InsertedValue("materialized_at")),
+		query.AssignExpression("schema_hash", query.InsertedValue("schema_hash")),
+		query.AssignExpression("materialized_at", query.InsertedValue("materialized_at")),
 	)
 	if err != nil {
 		return err
 	}
-	query, args, err := insert.Build()
+	queryValue, args, err := insert.Build()
 	if err != nil {
 		return err
 	}
-	_, err = executor.ExecContext(ctx, query, args...)
+	_, err = executor.ExecContext(ctx, queryValue, args...)
 	return err
 }
 

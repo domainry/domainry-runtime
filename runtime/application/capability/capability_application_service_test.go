@@ -15,8 +15,8 @@ import (
 	"reflect"
 	"testing"
 
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 func TestAuthoringCapabilityServiceProjectsInstanceSchema(t *testing.T) {

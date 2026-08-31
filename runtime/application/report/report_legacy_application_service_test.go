@@ -7,6 +7,7 @@ import (
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	reportadapter "github.com/domainry/domainry-runtime/runtime/application/report/adapter"
@@ -14,7 +15,6 @@ import (
 	reportquery "github.com/domainry/domainry-runtime/runtime/application/report/query"
 	reportsnapshot "github.com/domainry/domainry-runtime/runtime/application/report/snapshot"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/query"
 	reportsnapshotdomain "github.com/domainry/domainry-runtime/runtime/domain/report/snapshot"
 )

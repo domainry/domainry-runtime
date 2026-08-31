@@ -8,12 +8,12 @@ import (
 	"strings"
 	"testing"
 
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	agent "github.com/domainry/domainry-runtime/runtime/application/agent"
 )
 
 func TestHTTPRouterDoesNotRetainAgentStateRepository(t *testing.T) {
-	repositoryType := reflect.TypeOf((*agentrepository.AgentStateRepository)(nil)).Elem()
+	repositoryType := reflect.TypeOf((*agentpersistence.AgentStateRepository)(nil)).Elem()
 	routerType := reflect.TypeOf(HTTPRouter{})
 	for index := 0; index < routerType.NumField(); index++ {
 		field := routerType.Field(index)
@@ -42,7 +42,7 @@ func TestAgentStateApplicationServiceMethodBudget(t *testing.T) {
 	if typeOf.NumMethod() > 15 {
 		t.Fatalf("agent state application service has %d exported methods", typeOf.NumMethod())
 	}
-	if typeOf.Implements(reflect.TypeOf((*agentrepository.AgentStateRepository)(nil)).Elem()) {
+	if typeOf.Implements(reflect.TypeOf((*agentpersistence.AgentStateRepository)(nil)).Elem()) {
 		t.Fatal("agent application service must not masquerade as its repository contract")
 	}
 }

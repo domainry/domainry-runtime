@@ -8,7 +8,7 @@ import (
 	"time"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -29,7 +29,7 @@ func TestRecordActionTransactionContextAndLockSQLMatrix(t *testing.T) {
 		{"mysql", false, " FOR UPDATE"},
 		{"postgres", true, " FOR UPDATE SKIP LOCKED"},
 	} {
-		builder, err := testEngineProfile(test.driver).ApplyClaimLock(ormbuilder.NewSelectBuilder(store.store.SQLRenderer, "records").Columns("id"), test.skip)
+		builder, err := testEngineProfile(test.driver).ApplyClaimLock(query.NewSelectBuilder(store.store.SQLRenderer, "records").Columns("id"), test.skip)
 		if err != nil {
 			t.Fatal(err)
 		}

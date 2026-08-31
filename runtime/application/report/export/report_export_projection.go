@@ -4,7 +4,7 @@ import (
 	"bytes"
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 )
 
 func Rows(summary reportmodel.ReportSummary, analysisKey string) ([]reportmodel.ReportResultRow, error) {

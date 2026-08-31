@@ -7,13 +7,13 @@ import (
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 func TestRenderManifestReviewMarkdownEmptyAndFallbackTitles(t *testing.T) {

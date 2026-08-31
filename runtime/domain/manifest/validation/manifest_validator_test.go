@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 
 	connectorcatalog "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
 )

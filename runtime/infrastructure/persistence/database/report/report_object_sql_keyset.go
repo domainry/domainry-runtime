@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 )
 
 const reportObjectSQLPageCTE = "domainry_report_page"

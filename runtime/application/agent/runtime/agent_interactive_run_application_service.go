@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
@@ -15,7 +15,7 @@ import (
 )
 
 type AgentInteractiveRunApplicationService struct {
-	repository agentrepository.AgentInteractiveRunRepository
+	repository agentpersistence.AgentInteractiveRunRepository
 	clock      workerplatform.Clock
 	ids        workerplatform.IdentifierGenerator
 	wakeup     AgentTaskWakeup
@@ -28,7 +28,7 @@ type AgentInteractiveRunMetrics struct {
 	LatencyMilliseconds                                        uint64
 }
 
-func NewAgentInteractiveRunApplicationService(repository agentrepository.AgentInteractiveRunRepository, clock workerplatform.Clock, ids workerplatform.IdentifierGenerator) *AgentInteractiveRunApplicationService {
+func NewAgentInteractiveRunApplicationService(repository agentpersistence.AgentInteractiveRunRepository, clock workerplatform.Clock, ids workerplatform.IdentifierGenerator) *AgentInteractiveRunApplicationService {
 	if clock == nil {
 		clock = workerplatform.SystemClock{}
 	}
@@ -95,7 +95,7 @@ func (s *AgentInteractiveRunApplicationService) Get(ctx context.Context, runID s
 	return run, true, nil
 }
 
-func (s *AgentInteractiveRunApplicationService) List(ctx context.Context, principal principalmodel.Principal, filter agentrepository.AgentInteractiveRunFilter) ([]agentmodel.AgentInteractiveRun, error) {
+func (s *AgentInteractiveRunApplicationService) List(ctx context.Context, principal principalmodel.Principal, filter agentpersistence.AgentInteractiveRunFilter) ([]agentmodel.AgentInteractiveRun, error) {
 	workspace, err := principalmodel.NewWorkspaceID(principal.WorkspaceID)
 	if s == nil || s.repository == nil || err != nil || !principal.Known {
 		return nil, apperror.New(apperror.KindForbidden, "agent.interactive.principal_denied", err, nil)

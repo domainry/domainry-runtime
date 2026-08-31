@@ -7,14 +7,14 @@ import (
 	"strings"
 	"unicode"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 )
 
-func (ApplicationSchemaStorageProfile) ExactDecimalCreateShadowTableSQL(renderer ormbuilder.Renderer, table, body, suffix string) string {
+func (ApplicationSchemaStorageProfile) ExactDecimalCreateShadowTableSQL(renderer query.Renderer, table, body, suffix string) string {
 	return "CREATE TABLE " + renderer.Table(table) + " (" + body + ")" + suffix
 }
 
-func (ApplicationSchemaStorageProfile) ExactDecimalCopySQL(renderer ormbuilder.Renderer, target, source string, columns, expressions []string) string {
+func (ApplicationSchemaStorageProfile) ExactDecimalCopySQL(renderer query.Renderer, target, source string, columns, expressions []string) string {
 	quoted := make([]string, len(columns))
 	for index, column := range columns {
 		quoted[index] = renderer.Identifier(column)
@@ -22,11 +22,11 @@ func (ApplicationSchemaStorageProfile) ExactDecimalCopySQL(renderer ormbuilder.R
 	return "INSERT INTO " + renderer.Table(target) + " (" + strings.Join(quoted, ", ") + ") SELECT " + strings.Join(expressions, ", ") + " FROM " + renderer.Table(source)
 }
 
-func (ApplicationSchemaStorageProfile) ExactDecimalDropTableSQL(renderer ormbuilder.Renderer, table string) string {
+func (ApplicationSchemaStorageProfile) ExactDecimalDropTableSQL(renderer query.Renderer, table string) string {
 	return "DROP TABLE " + renderer.Table(table)
 }
 
-func (ApplicationSchemaStorageProfile) ExactDecimalRenameTableSQL(renderer ormbuilder.Renderer, from, to string) string {
+func (ApplicationSchemaStorageProfile) ExactDecimalRenameTableSQL(renderer query.Renderer, from, to string) string {
 	return "ALTER TABLE " + renderer.Table(from) + " RENAME TO " + renderer.Identifier(to)
 }
 
@@ -61,7 +61,7 @@ func (ApplicationSchemaStorageProfile) VerifyExactDecimalForeignKeys(ctx context
 	return rows.Err()
 }
 
-func (ApplicationSchemaStorageProfile) ExactDecimalEncodeExpression(renderer ormbuilder.Renderer, column string, precision, scale int, roundingMode string) string {
+func (ApplicationSchemaStorageProfile) ExactDecimalEncodeExpression(renderer query.Renderer, column string, precision, scale int, roundingMode string) string {
 	return "runtime_exact_decimal_encode(" + renderer.Identifier(column) + ", " + fmt.Sprint(precision) + ", " + fmt.Sprint(scale) + ", '" + strings.ReplaceAll(roundingMode, "'", "''") + "')"
 }
 

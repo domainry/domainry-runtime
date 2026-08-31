@@ -8,10 +8,10 @@ import (
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 type changePlanReferenceStringer string

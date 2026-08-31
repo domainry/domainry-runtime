@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationsrepository "github.com/domainry/domainry-runtime/runtime/domain/operations/repository"
 )
@@ -53,18 +53,18 @@ func (s OperationsStore) OperationsLeaseSnapshot(ctx context.Context, instanceID
 
 func (s OperationsStore) operationsLeaseCounts(ctx context.Context, table, instanceID string, now time.Time) (int64, int64, error) {
 	nowText := now.Format(time.RFC3339Nano)
-	predicate := ormbuilder.Predicate(ormbuilder.NotEqual("lease_owner", ""))
+	predicate := query.Predicate(query.NotEqual("lease_owner", ""))
 	if instanceID != "" {
-		predicate = ormbuilder.And(predicate, ormbuilder.Or(ormbuilder.Equal("lease_owner", instanceID), ormbuilder.Like("lease_owner", instanceID+":%"), ormbuilder.Like("lease_owner", instanceID+"-%")))
+		predicate = query.And(predicate, query.Or(query.Equal("lease_owner", instanceID), query.Like("lease_owner", instanceID+":%"), query.Like("lease_owner", instanceID+"-%")))
 	}
-	liveCount := ormbuilder.Coalesce(ormbuilder.Sum(ormbuilder.CaseWhen(ormbuilder.GreaterThan("lease_expires_at", nowText), 1).Else(0)), ormbuilder.Value(0))
-	expiredCount := ormbuilder.Coalesce(ormbuilder.Sum(ormbuilder.CaseWhen(ormbuilder.And(ormbuilder.NotEqual("lease_expires_at", ""), ormbuilder.LessThanOrEqual("lease_expires_at", nowText)), 1).Else(0)), ormbuilder.Value(0))
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, table).Projections(ormbuilder.Project(liveCount), ormbuilder.Project(expiredCount)).Where(predicate).Build()
+	liveCount := query.Coalesce(query.Sum(query.CaseWhen(query.GreaterThan("lease_expires_at", nowText), 1).Else(0)), query.Value(0))
+	expiredCount := query.Coalesce(query.Sum(query.CaseWhen(query.And(query.NotEqual("lease_expires_at", ""), query.LessThanOrEqual("lease_expires_at", nowText)), 1).Else(0)), query.Value(0))
+	queryValue, args, buildErr := query.NewSelectBuilder(s.store.SQLRenderer, table).Projections(query.Project(liveCount), query.Project(expiredCount)).Where(predicate).Build()
 	if buildErr != nil {
 		return 0, 0, buildErr
 	}
 	var live, expired sql.NullInt64
-	if err := s.database().QueryRowContext(ctx, query, args...).Scan(&live, &expired); err != nil {
+	if err := s.database().QueryRowContext(ctx, queryValue, args...).Scan(&live, &expired); err != nil {
 		return 0, 0, err
 	}
 	return live.Int64, expired.Int64, nil

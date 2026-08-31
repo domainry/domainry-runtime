@@ -11,6 +11,7 @@ import (
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
+	reportsdk "github.com/domainry/domainry-report-sdk"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
@@ -27,6 +28,9 @@ type Options struct {
 	// IntegrationFactory selects the source-owned in-process Module or SaaS
 	// Binding. Runtime owns only the durable outbound handoff.
 	IntegrationFactory integrationsdk.Factory
+	// ReportFactory selects the Report Module or SaaS Binding. Report-owned
+	// definitions and snapshot state are never assembled inside Runtime.
+	ReportFactory reportsdk.Factory
 	// NotificationFactory is selected by generated composition. Module builds
 	// inject domainry-notification/module; SaaS builds inject the SDK Remote
 	// Factory. Runtime never switches topology from environment at startup.

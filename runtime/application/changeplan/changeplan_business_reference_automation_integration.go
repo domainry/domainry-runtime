@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"strings"
 
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 )
 
 func AddAutomationReferences(builder *changeplanprojection.ChangePlanReferenceGraphBuilder, snapshot ReferenceSchema) {

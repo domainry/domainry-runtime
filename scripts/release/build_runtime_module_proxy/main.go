@@ -296,11 +296,12 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 		{path: "github.com/domainry/domainry-data-exchange-sdk", rootEnvironment: "DOMAINRY_DATA_EXCHANGE_SDK_REPO_ROOT", label: "Data Exchange SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-data-exchange", rootEnvironment: "DOMAINRY_DATA_EXCHANGE_REPO_ROOT", label: "Data Exchange", patterns: []string{"./module", "./remote"}},
 		{path: "github.com/domainry/domainry-report-sdk", rootEnvironment: "DOMAINRY_REPORT_SDK_REPO_ROOT", label: "Report SDK", patterns: []string{"./..."}},
-		{path: "github.com/domainry/domainry-report", rootEnvironment: "DOMAINRY_REPORT_REPO_ROOT", label: "Report", patterns: []string{"./module"}},
+		{path: "github.com/domainry/domainry-report", rootEnvironment: "DOMAINRY_REPORT_REPO_ROOT", label: "Report", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-metadata-sdk", rootEnvironment: "DOMAINRY_METADATA_SDK_REPO_ROOT", label: "Metadata SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-metadata", rootEnvironment: "DOMAINRY_METADATA_REPO_ROOT", label: "Metadata", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-integration-sdk", rootEnvironment: "DOMAINRY_INTEGRATION_SDK_REPO_ROOT", label: "Integration SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-integration", rootEnvironment: "DOMAINRY_INTEGRATION_REPO_ROOT", label: "Integration", patterns: []string{"./module"}},
+		{path: "github.com/domainry/domainry-lifecycle-sdk", rootEnvironment: "DOMAINRY_LIFECYCLE_SDK_REPO_ROOT", label: "Lifecycle SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-lifecycle", rootEnvironment: "DOMAINRY_LIFECYCLE_REPO_ROOT", label: "Lifecycle", patterns: []string{"./..."}},
 	} {
 		root := strings.TrimSpace(os.Getenv(local.rootEnvironment))
@@ -417,11 +418,12 @@ func dependencyModule(repository, path, version string) (downloadedModule, error
 		{path: "github.com/domainry/domainry-data-exchange-sdk", rootEnvironment: "DOMAINRY_DATA_EXCHANGE_SDK_REPO_ROOT", label: "Data Exchange SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-data-exchange", rootEnvironment: "DOMAINRY_DATA_EXCHANGE_REPO_ROOT", label: "Data Exchange", patterns: []string{"./module", "./remote"}},
 		{path: "github.com/domainry/domainry-report-sdk", rootEnvironment: "DOMAINRY_REPORT_SDK_REPO_ROOT", label: "Report SDK", patterns: []string{"./..."}},
-		{path: "github.com/domainry/domainry-report", rootEnvironment: "DOMAINRY_REPORT_REPO_ROOT", label: "Report", patterns: []string{"./module"}},
+		{path: "github.com/domainry/domainry-report", rootEnvironment: "DOMAINRY_REPORT_REPO_ROOT", label: "Report", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-metadata-sdk", rootEnvironment: "DOMAINRY_METADATA_SDK_REPO_ROOT", label: "Metadata SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-metadata", rootEnvironment: "DOMAINRY_METADATA_REPO_ROOT", label: "Metadata", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-integration-sdk", rootEnvironment: "DOMAINRY_INTEGRATION_SDK_REPO_ROOT", label: "Integration SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-integration", rootEnvironment: "DOMAINRY_INTEGRATION_REPO_ROOT", label: "Integration", patterns: []string{"./module"}},
+		{path: "github.com/domainry/domainry-lifecycle-sdk", rootEnvironment: "DOMAINRY_LIFECYCLE_SDK_REPO_ROOT", label: "Lifecycle SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-lifecycle", rootEnvironment: "DOMAINRY_LIFECYCLE_REPO_ROOT", label: "Lifecycle", patterns: []string{"./..."}},
 	} {
 		root := strings.TrimSpace(os.Getenv(candidate.rootEnvironment))
@@ -453,6 +455,25 @@ func localReplacementRoot(repository, path string) string {
 			root = filepath.Join(repository, root)
 		}
 		return filepath.Clean(root)
+	}
+	localSibling := map[string]bool{
+		"github.com/domainry/domainry-agent-sdk": true, "github.com/domainry/domainry-agent": true,
+		"github.com/domainry/domainry-lifecycle-sdk": true, "github.com/domainry/domainry-lifecycle": true,
+		"github.com/domainry/domainry-metadata-sdk": true, "github.com/domainry/domainry-metadata": true,
+		"github.com/domainry/domainry-report-sdk": true, "github.com/domainry/domainry-report": true,
+		"github.com/domainry/domainry-scheduler-sdk": true, "github.com/domainry/domainry-scheduler": true,
+	}
+	if !localSibling[path] {
+		return ""
+	}
+	candidate := filepath.Join(filepath.Dir(repository), strings.TrimPrefix(path, "github.com/domainry/"))
+	candidateGoMod, err := os.ReadFile(filepath.Join(candidate, "go.mod"))
+	if err != nil {
+		return ""
+	}
+	candidateModule, err := modfile.Parse("go.mod", candidateGoMod, nil)
+	if err == nil && candidateModule.Module != nil && candidateModule.Module.Mod.Path == path {
+		return filepath.Clean(candidate)
 	}
 	return ""
 }
@@ -653,9 +674,21 @@ func runtimeBuildClosure(repository string) ([]string, error) {
 }
 
 func moduleBuildClosure(repository string, patterns ...string) ([]string, error) {
-	arguments := append([]string{"list", "-deps", "-json"}, patterns...)
+	arguments := []string{"list", "-deps", "-json"}
+	localModFile, cleanup, err := localDependencyModFile(repository)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+	if localModFile != "" {
+		arguments = append(arguments, "-modfile="+localModFile, "-mod=mod")
+	}
+	arguments = append(arguments, patterns...)
 	command := exec.Command("go", arguments...)
 	command.Dir = repository
+	if localModFile != "" {
+		command.Env = append(os.Environ(), "GOWORK=off")
+	}
 	output, err := command.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -712,6 +745,74 @@ func moduleBuildClosure(repository string, patterns ...string) ([]string, error)
 	}
 	sort.Strings(result)
 	return result, nil
+}
+
+func localDependencyModFile(repository string) (string, func(), error) {
+	replacements := []struct{ path, environment string }{
+		{path: "github.com/domainry/domainry-agent-sdk", environment: "DOMAINRY_AGENT_SDK_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-agent", environment: "DOMAINRY_AGENT_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-lifecycle-sdk", environment: "DOMAINRY_LIFECYCLE_SDK_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-lifecycle", environment: "DOMAINRY_LIFECYCLE_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-metadata-sdk", environment: "DOMAINRY_METADATA_SDK_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-metadata", environment: "DOMAINRY_METADATA_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-report-sdk", environment: "DOMAINRY_REPORT_SDK_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-report", environment: "DOMAINRY_REPORT_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-scheduler-sdk", environment: "DOMAINRY_SCHEDULER_SDK_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-scheduler", environment: "DOMAINRY_SCHEDULER_REPO_ROOT"},
+	}
+	contents, err := os.ReadFile(filepath.Join(repository, "go.mod"))
+	if err != nil {
+		return "", func() {}, err
+	}
+	parsed, err := modfile.Parse("go.mod", contents, nil)
+	if err != nil {
+		return "", func() {}, err
+	}
+	for _, replacement := range replacements {
+		root := strings.TrimSpace(os.Getenv(replacement.environment))
+		if root == "" {
+			candidate := filepath.Join(filepath.Dir(repository), strings.TrimPrefix(replacement.path, "github.com/domainry/"))
+			if _, statErr := os.Stat(filepath.Join(candidate, "go.mod")); statErr != nil {
+				continue
+			}
+			root = candidate
+		}
+		if err := parsed.AddReplace(replacement.path, "", filepath.Clean(root), ""); err != nil {
+			return "", func() {}, err
+		}
+	}
+	formatted, err := parsed.Format()
+	if err != nil {
+		return "", func() {}, err
+	}
+	file, err := os.CreateTemp("", "domainry-build-closure-*.mod")
+	if err != nil {
+		return "", func() {}, err
+	}
+	path := file.Name()
+	cleanup := func() {
+		_ = os.Remove(path)
+		_ = os.Remove(strings.TrimSuffix(path, ".mod") + ".sum")
+	}
+	if _, err := file.Write(formatted); err != nil {
+		_ = file.Close()
+		cleanup()
+		return "", func() {}, err
+	}
+	if err := file.Close(); err != nil {
+		cleanup()
+		return "", func() {}, err
+	}
+	if sums, err := os.ReadFile(filepath.Join(repository, "go.sum")); err == nil {
+		if err := os.WriteFile(strings.TrimSuffix(path, ".mod")+".sum", sums, 0o600); err != nil {
+			cleanup()
+			return "", func() {}, err
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		cleanup()
+		return "", func() {}, err
+	}
+	return path, cleanup, nil
 }
 
 func forbiddenRuntimeModulePath(path string) bool {

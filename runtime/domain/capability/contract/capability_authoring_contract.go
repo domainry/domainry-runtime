@@ -10,7 +10,7 @@ import (
 	"encoding/json"
 	"sort"
 
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
 )
 
@@ -18,7 +18,7 @@ const (
 	RuntimeAuthoringContractVersion = "runtime-authoring-v1"
 	// RuntimeAuthoringContractHash identifies the published, canonical authoring catalog.
 	// The Application catalog test fails whenever catalog content changes without updating it.
-	RuntimeAuthoringContractHash = "b0ff7e64054f8f74016bdcffeb7269a20dca16ca50fe6f8ab99b87e999efd687"
+	RuntimeAuthoringContractHash = "797a77cacc661dde3623b541d648d243291dae25a629656e301f67a194f0519c"
 )
 
 type CapabilityRuntimeAuthoringContract struct {

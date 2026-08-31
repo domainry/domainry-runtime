@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )
 
@@ -121,19 +121,19 @@ func manifestLocalizedTextSeeds(seed manifestmodel.ManifestSchema) []appschemamo
 	}
 	for _, report := range seed.Reports {
 		addDefault("report", report.Key, "name", report.Name)
-		addI18n("report", report.Key, report.I18n)
+		addI18n("report", report.Key, localizationmodel.LocalizedTextMap(report.I18n))
 	}
 	for _, example := range seed.OperationStateExamples {
 		addDefault("operation_state_example", example.Key, "name", example.Name)
-		addI18n("operation_state_example", example.Key, example.I18n)
+		addI18n("operation_state_example", example.Key, localizationmodel.LocalizedTextMap(example.I18n))
 	}
 	for _, policy := range seed.SensitiveFieldPolicies {
 		addDefault("sensitive_field_policy", policy.Key, "name", policy.Name)
-		addI18n("sensitive_field_policy", policy.Key, policy.I18n)
+		addI18n("sensitive_field_policy", policy.Key, localizationmodel.LocalizedTextMap(policy.I18n))
 	}
 	for _, control := range seed.ReportExportControls {
 		addDefault("report_export_control", control.Key, "name", control.Name)
-		addI18n("report_export_control", control.Key, control.I18n)
+		addI18n("report_export_control", control.Key, localizationmodel.LocalizedTextMap(control.I18n))
 	}
 	for _, skill := range seed.Skills {
 		addDefault("skill", skill.Key, "name", skill.Name)
@@ -279,13 +279,13 @@ func (s ApplicationSchemaStore) syncLocalizedText(ctx context.Context, tx *sql.T
 		return nil
 	}
 	predicate := localizedTextIdentityPredicate(seed.EntityType, seed.EntityKey, seed.Property, seed.Locale)
-	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_application_schema_localized_texts", seed.WorkspaceID).Columns("text", "source_kind").Where(predicate).Build()
+	queryValue, args, buildErr := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_application_schema_localized_texts", seed.WorkspaceID).Columns("text", "source_kind").Where(predicate).Build()
 	if buildErr != nil {
 		return fmt.Errorf("build localized text lookup: %w", buildErr)
 	}
 	var currentText string
 	var sourceKind string
-	err := tx.QueryRowContext(ctx, query, args...).Scan(&currentText, &sourceKind)
+	err := tx.QueryRowContext(ctx, queryValue, args...).Scan(&currentText, &sourceKind)
 	if err == sql.ErrNoRows {
 		insert, insertArgs, buildErr := localizedTextInsertBuilder(s, seed, now).Build()
 		if buildErr != nil {
@@ -302,7 +302,7 @@ func (s ApplicationSchemaStore) syncLocalizedText(ctx context.Context, tx *sql.T
 	if strings.TrimSpace(sourceKind) != "generated" || currentText == seed.Text {
 		return nil
 	}
-	update, updateArgs, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_application_schema_localized_texts", seed.WorkspaceID).Set("text", seed.Text).Set("source_id", seed.SourceID).Set("updated_at", now).Where(predicate).Build()
+	update, updateArgs, buildErr := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_application_schema_localized_texts", seed.WorkspaceID).Set("text", seed.Text).Set("source_id", seed.SourceID).Set("updated_at", now).Where(predicate).Build()
 	if buildErr != nil {
 		return fmt.Errorf("build localized text update: %w", buildErr)
 	}
@@ -314,12 +314,12 @@ func (s ApplicationSchemaStore) syncLocalizedText(ctx context.Context, tx *sql.T
 
 func (s ApplicationSchemaStore) upsertLocalizedText(ctx context.Context, tx *sql.Tx, text appschemamodel.LocalizedText, now string) error {
 	predicate := localizedTextIdentityPredicate(text.EntityType, text.EntityKey, text.Property, text.Locale)
-	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_application_schema_localized_texts", text.WorkspaceID).Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(predicate).Build()
+	queryValue, args, buildErr := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_application_schema_localized_texts", text.WorkspaceID).Projections(query.Project(query.CountAll())).Where(predicate).Build()
 	if buildErr != nil {
 		return fmt.Errorf("build localized text upsert lookup: %w", buildErr)
 	}
 	var count int
-	if err := tx.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+	if err := tx.QueryRowContext(ctx, queryValue, args...).Scan(&count); err != nil {
 		return fmt.Errorf("read localized text for upsert: %w", err)
 	}
 	if count == 0 {
@@ -332,7 +332,7 @@ func (s ApplicationSchemaStore) upsertLocalizedText(ctx context.Context, tx *sql
 		}
 		return nil
 	}
-	update, updateArgs, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_application_schema_localized_texts", text.WorkspaceID).Set("text", text.Text).Set("source_kind", text.SourceKind).Set("source_id", text.SourceID).Set("updated_at", now).Where(predicate).Build()
+	update, updateArgs, buildErr := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_application_schema_localized_texts", text.WorkspaceID).Set("text", text.Text).Set("source_kind", text.SourceKind).Set("source_id", text.SourceID).Set("updated_at", now).Where(predicate).Build()
 	if buildErr != nil {
 		return fmt.Errorf("build localized text update: %w", buildErr)
 	}
@@ -342,27 +342,27 @@ func (s ApplicationSchemaStore) upsertLocalizedText(ctx context.Context, tx *sql
 	return nil
 }
 
-func (s ApplicationSchemaStore) ListLocalizedTexts(ctx context.Context, workspaceID string, query appschemamodel.LocalizedTextQuery) ([]appschemamodel.LocalizedText, error) {
-	workspaceID, err := requireMetadataWorkspaceID(workspaceID, query.WorkspaceID)
+func (s ApplicationSchemaStore) ListLocalizedTexts(ctx context.Context, workspaceID string, queryValue appschemamodel.LocalizedTextQuery) ([]appschemamodel.LocalizedText, error) {
+	workspaceID, err := requireMetadataWorkspaceID(workspaceID, queryValue.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}
-	query.WorkspaceID = workspaceID
-	predicates := []ormbuilder.Predicate{}
+	queryValue.WorkspaceID = workspaceID
+	predicates := []query.Predicate{}
 	add := func(column string, value string) {
 		value = strings.TrimSpace(value)
 		if value == "" {
 			return
 		}
-		predicates = append(predicates, ormbuilder.Equal(column, value))
+		predicates = append(predicates, query.Equal(column, value))
 	}
-	add("entity_type", query.EntityType)
-	add("entity_key", query.EntityKey)
-	add("property", query.Property)
-	add("locale", query.Locale)
-	selectBuilder := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_application_schema_localized_texts", workspaceID).Columns("workspace_id", "entity_type", "entity_key", "property", "locale", "text", "source_kind", "source_id", "created_at", "updated_at").OrderBy(ormbuilder.Ascending("entity_type"), ormbuilder.Ascending("entity_key"), ormbuilder.Ascending("property"), ormbuilder.Ascending("locale"))
+	add("entity_type", queryValue.EntityType)
+	add("entity_key", queryValue.EntityKey)
+	add("property", queryValue.Property)
+	add("locale", queryValue.Locale)
+	selectBuilder := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_application_schema_localized_texts", workspaceID).Columns("workspace_id", "entity_type", "entity_key", "property", "locale", "text", "source_kind", "source_id", "created_at", "updated_at").OrderBy(query.Ascending("entity_type"), query.Ascending("entity_key"), query.Ascending("property"), query.Ascending("locale"))
 	if len(predicates) > 0 {
-		selectBuilder.Where(ormbuilder.And(predicates...))
+		selectBuilder.Where(query.And(predicates...))
 	}
 	sqlQuery, args, buildErr := selectBuilder.Build()
 	if buildErr != nil {
@@ -384,17 +384,17 @@ func (s ApplicationSchemaStore) ListLocalizedTexts(ctx context.Context, workspac
 	return out, rows.Err()
 }
 
-func localizedTextIdentityPredicate(entityType, entityKey, property, locale string) ormbuilder.Predicate {
-	return ormbuilder.And(
-		ormbuilder.Equal("entity_type", entityType),
-		ormbuilder.Equal("entity_key", entityKey),
-		ormbuilder.Equal("property", property),
-		ormbuilder.Equal("locale", locale),
+func localizedTextIdentityPredicate(entityType, entityKey, property, locale string) query.Predicate {
+	return query.And(
+		query.Equal("entity_type", entityType),
+		query.Equal("entity_key", entityKey),
+		query.Equal("property", property),
+		query.Equal("locale", locale),
 	)
 }
 
-func localizedTextInsertBuilder(s ApplicationSchemaStore, text appschemamodel.LocalizedText, now string) *ormbuilder.InsertBuilder {
-	return ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "_application_schema_localized_texts", text.WorkspaceID).
+func localizedTextInsertBuilder(s ApplicationSchemaStore, text appschemamodel.LocalizedText, now string) *query.InsertBuilder {
+	return query.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "_application_schema_localized_texts", text.WorkspaceID).
 		Columns("id", "entity_type", "entity_key", "property", "locale", "text", "source_kind", "source_id", "created_at", "updated_at").
 		Values(localizedTextID(text), text.EntityType, text.EntityKey, text.Property, text.Locale, text.Text, text.SourceKind, text.SourceID, now, now)
 }

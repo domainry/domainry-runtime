@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 func (state *validationState) validateSeedRecords() {

@@ -1,4 +1,3 @@
-// Automation execution persistence.
 package automation
 
 import (
@@ -9,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -70,7 +69,7 @@ func (r AutomationExecutionStore) InsertExecution(ctx context.Context, workspace
 	}
 	columns := []string{"id", "rule_key", "object_key", "record_id", "phase", "operation", "status", "actor_id", "role_key", "request_id", "correlation_id", "event_id", "duration_ms", "error_code", "candidate_json", "trace_json", "created_at", "updated_at"}
 	values := []any{value.ID, value.RuleKey, value.ObjectKey, value.RecordID, value.Phase, value.Operation, value.Status, value.ActorID, value.RoleKey, value.RequestID, value.CorrelationID, value.EventID, value.DurationMS, value.ErrorCode, string(candidateJSON), string(traceJSON), value.CreatedAt, value.UpdatedAt}
-	statement, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_automation_rule_executions", workspaceID).Columns(columns...).Values(values...).Build()
+	statement, args, buildErr := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_automation_rule_executions", workspaceID).Columns(columns...).Values(values...).Build()
 	if buildErr != nil {
 		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("build automation rule execution insert: %w", buildErr)
 	}
@@ -91,7 +90,6 @@ func (r AutomationExecutionStore) executor(ctx context.Context) automationExecut
 	return r.db
 }
 
-// InsertExecutionSeed inserts immutable fixture evidence once.
 func (r AutomationExecutionStore) InsertExecutionSeed(ctx context.Context, workspaceID string, value automationmodel.AutomationRuleExecution) (automationmodel.AutomationRuleExecution, error) {
 	workspaceID, err := automationExecutionWorkspaceID(workspaceID, value.WorkspaceID)
 	if err != nil {
@@ -118,7 +116,7 @@ func (r AutomationExecutionStore) InsertExecutionSeed(ctx context.Context, works
 	}
 	columns := []string{"id", "rule_key", "object_key", "record_id", "phase", "operation", "status", "actor_id", "role_key", "request_id", "correlation_id", "event_id", "duration_ms", "error_code", "candidate_json", "trace_json", "created_at", "updated_at"}
 	values := []any{value.ID, value.RuleKey, value.ObjectKey, value.RecordID, value.Phase, value.Operation, value.Status, value.ActorID, value.RoleKey, value.RequestID, value.CorrelationID, value.EventID, value.DurationMS, value.ErrorCode, string(candidateJSON), string(traceJSON), value.CreatedAt, value.UpdatedAt}
-	statement, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_automation_rule_executions", workspaceID).
+	statement, args, buildErr := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_automation_rule_executions", workspaceID).
 		Columns(columns...).Values(values...).OnConflictDoNothing("workspace_id", "id").Build()
 	if buildErr != nil {
 		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("build automation execution seed insert: %w", buildErr)
@@ -134,10 +132,10 @@ func (r AutomationExecutionStore) ListExecutions(ctx context.Context, workspaceI
 	if err != nil {
 		return nil, err
 	}
-	predicates := make([]ormbuilder.Predicate, 0, 9)
+	predicates := make([]query.Predicate, 0, 9)
 	addEqual := func(column, value string) {
 		if value = strings.TrimSpace(value); value != "" {
-			predicates = append(predicates, ormbuilder.Equal(column, value))
+			predicates = append(predicates, query.Equal(column, value))
 		}
 	}
 	addEqual("rule_key", filter.RuleKey)
@@ -146,23 +144,23 @@ func (r AutomationExecutionStore) ListExecutions(ctx context.Context, workspaceI
 	addEqual("phase", filter.Phase)
 	addEqual("status", filter.Status)
 	if value := strings.TrimSpace(filter.ConnectorKey); value != "" {
-		predicates = append(predicates, ormbuilder.Like("trace_json", "%\"connector_key\":\""+value+"\"%"))
+		predicates = append(predicates, query.Like("trace_json", "%\"connector_key\":\""+value+"\"%"))
 	}
 	if value := strings.TrimSpace(filter.From); value != "" {
-		predicates = append(predicates, ormbuilder.GreaterThanOrEqual("created_at", value))
+		predicates = append(predicates, query.GreaterThanOrEqual("created_at", value))
 	}
 	if value := strings.TrimSpace(filter.To); value != "" {
-		predicates = append(predicates, ormbuilder.LessThanOrEqual("created_at", value))
+		predicates = append(predicates, query.LessThanOrEqual("created_at", value))
 	}
 	limit := filter.Limit
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	builder := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_automation_rule_executions", workspaceID).
+	builder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_automation_rule_executions", workspaceID).
 		Columns("id", "workspace_id", "rule_key", "object_key", "record_id", "phase", "operation", "status", "actor_id", "role_key", "request_id", "correlation_id", "event_id", "duration_ms", "error_code", "candidate_json", "trace_json", "created_at", "updated_at").
-		OrderBy(ormbuilder.Descending("created_at")).Limit(limit)
+		OrderBy(query.Descending("created_at")).Limit(limit)
 	if len(predicates) > 0 {
-		builder.Where(ormbuilder.And(predicates...))
+		builder.Where(query.And(predicates...))
 	}
 	statement, args, buildErr := builder.Build()
 	if buildErr != nil {

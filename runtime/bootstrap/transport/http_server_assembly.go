@@ -3,7 +3,7 @@ package transport
 import (
 	"context"
 
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	"time"
 
@@ -13,6 +13,7 @@ import (
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
+	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 
@@ -55,10 +56,11 @@ type HTTPServerDependencies struct {
 	SchedulerBinding       schedulersdk.Binding
 	Store                  *persistence.RuntimeStore
 	IntegrationBinding     integrationsdk.Binding
-	AgentRepositories      agentrepository.Binding
+	AgentRepositories      agentpersistence.Binding
 	LifecycleBinding       lifecyclesdk.Binding
 	RateLimiter            ratelimit.Limiter
 	Notifications          notificationhttp.NotificationApplication
+	NotificationMode       notificationsdk.DeploymentMode
 	Manifest               manifestmodel.ManifestSchema
 	WorkerControl          *workerplatform.Controller
 	Clock                  identitysdk.Clock
@@ -224,6 +226,7 @@ func (a *httpServerAssembly) wireRuntimeIntegrationGateway() {
 		WriteServiceError: a.callbacks.WriteServiceError,
 		DecodeJSON:        a.callbacks.DecodeJSON, Admin: a.identityHTTP.PermissionFunc("workspace.admin"),
 		Authenticated: a.identityHTTP.AuthenticatedFunc,
+		WebPushProxy:  a.dependencies.IntegrationBinding.Descriptor().Mode == integrationsdk.DeploymentModeSaaS,
 	})
 }
 

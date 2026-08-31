@@ -107,7 +107,7 @@ func (runtime *Runtime) ModuleInventory() (moduleinfo.Inventory, error) {
 	}
 	if binding := runtime.reportBinding; binding != nil {
 		d := binding.Descriptor()
-		add("report", d.Mode, []string{"definition_repository", "artifact_store"}, binding)
+		add("report", string(d.Mode), append([]string(nil), d.Capabilities...), binding)
 	}
 	return moduleinfo.NewInventory(modules)
 }

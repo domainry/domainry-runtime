@@ -7,9 +7,9 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 type schedulerReportSnapshotRuntime struct {

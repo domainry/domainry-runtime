@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
@@ -14,7 +15,6 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
 

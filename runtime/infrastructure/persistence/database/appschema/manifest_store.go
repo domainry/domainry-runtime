@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/requestcontext"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -123,29 +123,25 @@ func (s ApplicationSchemaStore) upsertMetadataProjection(ctx context.Context, tx
 	}
 	columns := []string{"id", "contract_version", "source_hash", "schema_hash", "artifact_version", "materializer_version", "status", "template_id", "default_locale", "name", "materialized_at"}
 	values := []any{"current", contractVersion, sourceHash, "", strings.TrimSpace(seed.Version), "runtime-materializer-v1", "materialized", strings.TrimSpace(seed.TemplateID), manifestDefaultLocale(seed), strings.TrimSpace(seed.Name), now}
-	insert := ormbuilder.NewInsertBuilder(s.store.SQLRenderer, "_application_schema_projection").Columns(columns...).Values(values...)
-	assignments := make([]ormbuilder.Assignment, 0, len(columns)-1)
+	insert := query.NewInsertBuilder(s.store.SQLRenderer, "_application_schema_projection").Columns(columns...).Values(values...)
+	assignments := make([]query.Assignment, 0, len(columns)-1)
 	for _, column := range columns[1:] {
-		assignments = append(assignments, ormbuilder.AssignExpression(column, ormbuilder.InsertedValue(column)))
+		assignments = append(assignments, query.AssignExpression(column, query.InsertedValue(column)))
 	}
 	insert, err = s.store.Engine.ApplyUpsert(insert, []string{"id"}, assignments...)
 	if err != nil {
 		return fmt.Errorf("build metadata projection upsert: %w", err)
 	}
-	query, args, err := insert.Build()
+	queryValue, args, err := insert.Build()
 	if err != nil {
 		return fmt.Errorf("build metadata projection: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+	if _, err := tx.ExecContext(ctx, queryValue, args...); err != nil {
 		return fmt.Errorf("upsert metadata projection: %w", err)
 	}
 	return nil
 }
 
-// manifestMetadataContext binds installation-owned manifest metadata to the
-// compatibility workspace when startup does not run inside an HTTP request.
-// An explicit caller workspace is preserved so request-scoped sync cannot be
-// silently redirected to another tenant.
 func manifestMetadataContext(ctx context.Context) context.Context {
 	if requestcontext.WorkspaceID(ctx) != "" {
 		return ctx
@@ -153,8 +149,6 @@ func manifestMetadataContext(ctx context.Context) context.Context {
 	return requestcontext.WithWorkspaceID(ctx, principalmodel.InstallationWorkspaceID)
 }
 
-// removeDeletedGeneratedAutomationRules makes the current projection exactly
-// match source-controlled JSON. Runtime does not retain tombstones or history.
 func (s ApplicationSchemaStore) removeDeletedGeneratedAutomationRules(ctx context.Context, tx *sql.Tx, manifest manifestmodel.ManifestSchema) error {
 	activeKeys := make(map[string]bool, len(manifest.AutomationRules))
 	for _, rule := range manifest.AutomationRules {
@@ -173,11 +167,11 @@ func manifestGeneratedSourceID(manifest manifestmodel.ManifestSchema) string {
 }
 
 func (s ApplicationSchemaStore) removeDeletedGeneratedDefinitions(ctx context.Context, tx *sql.Tx, table, sourceID string, activeKeys map[string]bool) error {
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, table).Columns("resource_key").Where(ormbuilder.And(ormbuilder.Equal("source_kind", "generated"), ormbuilder.Equal("source_id", sourceID))).Build()
+	queryValue, args, buildErr := query.NewSelectBuilder(s.store.SQLRenderer, table).Columns("resource_key").Where(query.And(query.Equal("source_kind", "generated"), query.Equal("source_id", sourceID))).Build()
 	if buildErr != nil {
 		return fmt.Errorf("build generated %s manifest sync list: %w", table, buildErr)
 	}
-	rows, err := tx.QueryContext(ctx, query, args...)
+	rows, err := tx.QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return fmt.Errorf("list generated %s for manifest sync: %w", table, err)
 	}
@@ -200,7 +194,7 @@ func (s ApplicationSchemaStore) removeDeletedGeneratedDefinitions(ctx context.Co
 		return fmt.Errorf("close generated %s for manifest sync: %w", table, err)
 	}
 	for _, key := range removedKeys {
-		remove, removeArgs, buildErr := ormbuilder.NewDeleteBuilder(s.store.SQLRenderer, table).Where(ormbuilder.Equal("resource_key", key)).Build()
+		remove, removeArgs, buildErr := query.NewDeleteBuilder(s.store.SQLRenderer, table).Where(query.Equal("resource_key", key)).Build()
 		if buildErr != nil {
 			return fmt.Errorf("build deleted generated %s entry %s removal: %w", table, key, buildErr)
 		}

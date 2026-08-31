@@ -6,22 +6,23 @@ import (
 	"fmt"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	reportsdkpersistence "github.com/domainry/domainry-report-sdk/persistence"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	notificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notification"
-	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
+	reportstore "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
 )
 
 type ReportSnapshotNotificationCommitter struct {
 	store         *database.RuntimeStore
-	reports       *reportpersistence.ReportSnapshotStore
+	reports       *reportstore.ModuleReportSnapshotStore
 	notifications notificationpersistence.InboxEventWriter
 	commitTx      func(*sql.Tx) error
 }
 
-func NewReportSnapshotNotificationCommitter(store *database.RuntimeStore) ReportSnapshotNotificationCommitter {
+func NewReportSnapshotNotificationCommitter(store *database.RuntimeStore, snapshots reportsdkpersistence.SnapshotRepository) ReportSnapshotNotificationCommitter {
 	return ReportSnapshotNotificationCommitter{
-		store: store, reports: reportpersistence.NewReportSnapshotStore(store), notifications: notificationpersistence.NewInboxEventWriter(store),
+		store: store, reports: reportstore.NewModuleReportSnapshotStore(snapshots), notifications: notificationpersistence.NewInboxEventWriter(store),
 	}
 }
 

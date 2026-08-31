@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	metadatarepository "github.com/domainry/domainry-metadata-sdk/repository"
+	metadatapersistence "github.com/domainry/domainry-metadata-sdk/persistence"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )
 
@@ -17,19 +17,19 @@ func metadataModuleOwnsDefinition(resourceType string) bool {
 	}
 }
 
-func (s ApplicationSchemaStore) metadataModuleDefinitionStore() (metadatarepository.ExecutorDefinitionRepository, error) {
+func (s ApplicationSchemaStore) metadataModuleDefinitionStore() (metadatapersistence.ExecutorDefinitionRepository, error) {
 	repository := s.metadataDefinitions
 	if repository == nil && s.store != nil {
 		repository = s.store.MetadataDefinitions()
 	}
-	result, ok := repository.(metadatarepository.ExecutorDefinitionRepository)
+	result, ok := repository.(metadatapersistence.ExecutorDefinitionRepository)
 	if !ok {
 		return nil, fmt.Errorf("Metadata executor definition repository is unavailable")
 	}
 	return result, nil
 }
 
-func applicationDefinitionFromMetadata(value metadatarepository.StoredDefinition) appschemamodel.ApplicationDefinition {
+func applicationDefinitionFromMetadata(value metadatapersistence.StoredDefinition) appschemamodel.ApplicationDefinition {
 	return appschemamodel.ApplicationDefinition{
 		ResourceType: value.ResourceType, ResourceKey: value.Key, ObjectKey: value.ObjectKey, Name: value.Name,
 		Payload: append([]byte(nil), value.Payload...), SchemaVersion: value.SchemaVersion, SchemaHash: value.SchemaHash,

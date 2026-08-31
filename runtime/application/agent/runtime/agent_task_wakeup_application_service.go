@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
@@ -42,17 +42,17 @@ func (s *AgentTaskRunApplicationService) wake(run agentmodel.AgentTaskRun) {
 	s.wakeup(AgentTaskLocator{WorkspaceID: workspace.String(), RunID: strings.TrimSpace(run.ID)})
 }
 
-func (s *AgentTaskRunApplicationService) ClaimTask(ctx context.Context, locator AgentTaskLocator, owner workerplatform.WorkerID, leaseDuration time.Duration) (agentrepository.AgentTaskClaim, bool, error) {
+func (s *AgentTaskRunApplicationService) ClaimTask(ctx context.Context, locator AgentTaskLocator, owner workerplatform.WorkerID, leaseDuration time.Duration) (agentpersistence.AgentTaskClaim, bool, error) {
 	if s == nil {
-		return agentrepository.AgentTaskClaim{}, false, apperror.New(apperror.KindUnavailable, "agent.task.worker_unavailable", nil, nil)
+		return agentpersistence.AgentTaskClaim{}, false, apperror.New(apperror.KindUnavailable, "agent.task.worker_unavailable", nil, nil)
 	}
-	repository, ok := s.repository.(agentrepository.AgentTaskRunDirectClaimRepository)
+	repository, ok := s.repository.(agentpersistence.AgentTaskRunDirectClaimRepository)
 	workspace, workspaceErr := principalmodel.NewWorkspaceID(locator.WorkspaceID)
 	if !ok || workspaceErr != nil {
-		return agentrepository.AgentTaskClaim{}, false, apperror.New(apperror.KindBadRequest, "agent.task.claim_invalid", nil, nil)
+		return agentpersistence.AgentTaskClaim{}, false, apperror.New(apperror.KindBadRequest, "agent.task.claim_invalid", nil, nil)
 	}
 	if strings.TrimSpace(locator.RunID) == "" || strings.TrimSpace(owner.String()) == "" || leaseDuration <= 0 {
-		return agentrepository.AgentTaskClaim{}, false, apperror.New(apperror.KindBadRequest, "agent.task.claim_invalid", nil, nil)
+		return agentpersistence.AgentTaskClaim{}, false, apperror.New(apperror.KindBadRequest, "agent.task.claim_invalid", nil, nil)
 	}
 	return repository.ClaimAgentTaskRun(ctx, workspace.String(), strings.TrimSpace(locator.RunID), owner.String(), s.clock.Now().UTC(), leaseDuration)
 }

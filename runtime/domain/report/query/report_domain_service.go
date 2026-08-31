@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	reportsnapshot "github.com/domainry/domainry-runtime/runtime/domain/report/snapshot"
 )
 

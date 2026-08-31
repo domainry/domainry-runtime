@@ -1,9 +1,9 @@
 package contract
 
 import (
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	appschemacontract "github.com/domainry/domainry-runtime/runtime/domain/appschema/contract"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 // ReportAuthoringDomain publishes the Report-owned shape while Metadata owns
@@ -42,7 +42,7 @@ func ReportAuthoringDomain() capabilitycontract.CapabilityAuthoringDomain {
 		Execution: appschemacontract.VersionedApplicationDefinitionExecution("report.definition"),
 		Errors:    reportAuthoringErrors(), Examples: reportAuthoringExamples(),
 		Sources: []capabilitycontract.CapabilityAuthoringSource{
-			{Kind: "model", Path: "runtime/domain/report/model/report_schema.go", Symbol: "ReportSchema"},
+			{Kind: "model", Path: "../domainry-report-sdk/model/report_schema.go", Symbol: "ReportSchema"},
 			{Kind: "validation", Path: "runtime/domain/appschema/validation/appschema_report_validation.go", Symbol: "ApplicationSchemaValidateReportDefinitionContract"},
 			{Kind: "service", Path: "runtime/application/appschema/appschema_definition_validation_application_service.go", Symbol: "ApplicationSchemaApplicationService.ValidateApplicationDefinitionPayload"},
 		},

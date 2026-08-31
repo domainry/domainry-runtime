@@ -1,4 +1,3 @@
-// Workflow definition persistence.
 package workflow
 
 import (
@@ -7,7 +6,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
@@ -34,11 +33,11 @@ func (r WorkflowDefinitionStore) InsertDefinition(ctx context.Context, definitio
 		return err
 	}
 	defer tx.Rollback()
-	query, args, err := ormbuilder.NewInsertBuilder(r.store.SQLRenderer, "_workflow_definitions").Columns(workflowDefinitionColumns()...).Values(definition.ID, definition.Key, definition.Name, database.NullableText(definition.OwnerUserID), database.BoolInt(definition.Enabled), database.NullableText(draft.ID), nil, definition.CreatedAt, definition.UpdatedAt).Build()
+	queryValue, args, err := query.NewInsertBuilder(r.store.SQLRenderer, "_workflow_definitions").Columns(workflowDefinitionColumns()...).Values(definition.ID, definition.Key, definition.Name, database.NullableText(definition.OwnerUserID), database.BoolInt(definition.Enabled), database.NullableText(draft.ID), nil, definition.CreatedAt, definition.UpdatedAt).Build()
 	if err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
+	if _, err = tx.ExecContext(ctx, queryValue, args...); err != nil {
 		return err
 	}
 	if err = r.insertVersion(ctx, tx, draft, ""); err != nil {
@@ -48,11 +47,11 @@ func (r WorkflowDefinitionStore) InsertDefinition(ctx context.Context, definitio
 }
 
 func (r WorkflowDefinitionStore) GetDefinitionByKey(ctx context.Context, key string) (workflowmodel.WorkflowDefinition, bool, error) {
-	query, args, err := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "_workflow_definitions").Columns(workflowDefinitionColumns()...).Where(ormbuilder.Equal("workflow_key", strings.TrimSpace(key))).Build()
+	queryValue, args, err := query.NewSelectBuilder(r.store.SQLRenderer, "_workflow_definitions").Columns(workflowDefinitionColumns()...).Where(query.Equal("workflow_key", strings.TrimSpace(key))).Build()
 	if err != nil {
 		return workflowmodel.WorkflowDefinition{}, false, err
 	}
-	row := r.database().QueryRowContext(ctx, query, args...)
+	row := r.database().QueryRowContext(ctx, queryValue, args...)
 	definition, err := scanWorkflowDefinition(row)
 	if err == sql.ErrNoRows {
 		return workflowmodel.WorkflowDefinition{}, false, nil
@@ -61,11 +60,11 @@ func (r WorkflowDefinitionStore) GetDefinitionByKey(ctx context.Context, key str
 }
 
 func (r WorkflowDefinitionStore) ListDefinitions(ctx context.Context) ([]workflowmodel.WorkflowDefinition, error) {
-	query, args, err := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "_workflow_definitions").Columns(workflowDefinitionColumns()...).OrderBy(ormbuilder.Ascending("workflow_key"), ormbuilder.Ascending("id")).Build()
+	queryValue, args, err := query.NewSelectBuilder(r.store.SQLRenderer, "_workflow_definitions").Columns(workflowDefinitionColumns()...).OrderBy(query.Ascending("workflow_key"), query.Ascending("id")).Build()
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.database().QueryContext(ctx, query, args...)
+	rows, err := r.database().QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -82,11 +81,11 @@ func (r WorkflowDefinitionStore) ListDefinitions(ctx context.Context) ([]workflo
 }
 
 func (r WorkflowDefinitionStore) GetVersion(ctx context.Context, versionID string) (workflowmodel.WorkflowDefinitionVersion, bool, error) {
-	query, args, err := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Columns(workflowDefinitionVersionColumns()...).Where(ormbuilder.Equal("id", versionID)).Build()
+	queryValue, args, err := query.NewSelectBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Columns(workflowDefinitionVersionColumns()...).Where(query.Equal("id", versionID)).Build()
 	if err != nil {
 		return workflowmodel.WorkflowDefinitionVersion{}, false, err
 	}
-	row := r.database().QueryRowContext(ctx, query, args...)
+	row := r.database().QueryRowContext(ctx, queryValue, args...)
 	version, err := scanWorkflowDefinitionVersion(row)
 	if err == sql.ErrNoRows {
 		return workflowmodel.WorkflowDefinitionVersion{}, false, nil
@@ -95,15 +94,15 @@ func (r WorkflowDefinitionStore) GetVersion(ctx context.Context, versionID strin
 }
 
 func (r WorkflowDefinitionStore) ListVersions(ctx context.Context, definitionID string) ([]workflowmodel.WorkflowDefinitionVersion, error) {
-	builder := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Columns(workflowDefinitionVersionColumns()...).OrderBy(ormbuilder.Descending("version_no"), ormbuilder.Descending("id"))
+	builder := query.NewSelectBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Columns(workflowDefinitionVersionColumns()...).OrderBy(query.Descending("version_no"), query.Descending("id"))
 	if definitionID = strings.TrimSpace(definitionID); definitionID != "" {
-		builder.Where(ormbuilder.Equal("definition_id", definitionID))
+		builder.Where(query.Equal("definition_id", definitionID))
 	}
-	query, args, err := builder.Build()
+	queryValue, args, err := builder.Build()
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.database().QueryContext(ctx, query, args...)
+	rows, err := r.database().QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -122,11 +121,11 @@ func (r WorkflowDefinitionStore) ListVersions(ctx context.Context, definitionID 
 func (r WorkflowDefinitionStore) UpdateDraft(ctx context.Context, version workflowmodel.WorkflowDefinitionVersion, expectedRevision int) (bool, error) {
 	workflowJSON, _ := json.Marshal(version.Workflow)
 	reportJSON, _ := json.Marshal(version.ValidationReport)
-	query, args, err := ormbuilder.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Set("workflow_json", string(workflowJSON)).Set("validation_report_json", string(reportJSON)).SetExpression("revision", ormbuilder.Add(ormbuilder.Column("revision"), ormbuilder.Value(1))).Set("updated_at", version.UpdatedAt).Where(ormbuilder.And(ormbuilder.Equal("id", version.ID), ormbuilder.Equal("status", workflowmodel.WorkflowVersionDraft), ormbuilder.Equal("revision", expectedRevision))).Build()
+	queryValue, args, err := query.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Set("workflow_json", string(workflowJSON)).Set("validation_report_json", string(reportJSON)).SetExpression("revision", query.Add(query.Column("revision"), query.Value(1))).Set("updated_at", version.UpdatedAt).Where(query.And(query.Equal("id", version.ID), query.Equal("status", workflowmodel.WorkflowVersionDraft), query.Equal("revision", expectedRevision))).Build()
 	if err != nil {
 		return false, err
 	}
-	result, err := r.database().ExecContext(ctx, query, args...)
+	result, err := r.database().ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return false, err
 	}
@@ -140,11 +139,11 @@ func (r WorkflowDefinitionStore) InsertDraftVersion(ctx context.Context, definit
 		return false, err
 	}
 	defer tx.Rollback()
-	query, args, err := ormbuilder.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definitions").Set("current_draft_version_id", draft.ID).Set("updated_at", draft.UpdatedAt).Where(ormbuilder.And(ormbuilder.Equal("id", definitionID), ormbuilder.IsNull("current_draft_version_id"))).Build()
+	queryValue, args, err := query.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definitions").Set("current_draft_version_id", draft.ID).Set("updated_at", draft.UpdatedAt).Where(query.And(query.Equal("id", definitionID), query.IsNull("current_draft_version_id"))).Build()
 	if err != nil {
 		return false, err
 	}
-	result, err := tx.ExecContext(ctx, query, args...)
+	result, err := tx.ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return false, err
 	}
@@ -167,11 +166,11 @@ func (r WorkflowDefinitionStore) DeleteDraft(ctx context.Context, definitionID, 
 		return false, err
 	}
 	defer tx.Rollback()
-	query, args, err := ormbuilder.NewDeleteBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Where(ormbuilder.And(ormbuilder.Equal("id", versionID), ormbuilder.Equal("definition_id", definitionID), ormbuilder.Equal("status", workflowmodel.WorkflowVersionDraft))).Build()
+	queryValue, args, err := query.NewDeleteBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Where(query.And(query.Equal("id", versionID), query.Equal("definition_id", definitionID), query.Equal("status", workflowmodel.WorkflowVersionDraft))).Build()
 	if err != nil {
 		return false, err
 	}
-	result, err := tx.ExecContext(ctx, query, args...)
+	result, err := tx.ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return false, err
 	}
@@ -182,11 +181,11 @@ func (r WorkflowDefinitionStore) DeleteDraft(ctx context.Context, definitionID, 
 	if count != 1 {
 		return false, nil
 	}
-	query, args, err = ormbuilder.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definitions").Set("current_draft_version_id", nil).Where(ormbuilder.And(ormbuilder.Equal("id", definitionID), ormbuilder.Equal("current_draft_version_id", versionID))).Build()
+	queryValue, args, err = query.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definitions").Set("current_draft_version_id", nil).Where(query.And(query.Equal("id", definitionID), query.Equal("current_draft_version_id", versionID))).Build()
 	if err != nil {
 		return false, err
 	}
-	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
+	if _, err = tx.ExecContext(ctx, queryValue, args...); err != nil {
 		return false, err
 	}
 	return true, tx.Commit()
@@ -200,11 +199,11 @@ func (r WorkflowDefinitionStore) PublishDraft(ctx context.Context, definition wo
 	defer tx.Rollback()
 	report, _ := json.Marshal(version.ValidationReport)
 	workflowJSON, _ := json.Marshal(version.Workflow)
-	query, args, err := ormbuilder.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Set("status", workflowmodel.WorkflowVersionPublished).Set("content_hash", version.ContentHash).Set("validation_report_json", string(report)).Set("publish_note", version.PublishNote).Set("published_by", version.PublishedBy).Set("publish_idempotency_key", idempotencyKey).Set("published_at", version.PublishedAt).Set("updated_at", version.UpdatedAt).Where(ormbuilder.And(ormbuilder.Equal("id", version.ID), ormbuilder.Equal("status", workflowmodel.WorkflowVersionDraft), ormbuilder.Equal("revision", version.Revision), ormbuilder.Equal("workflow_json", string(workflowJSON)))).Build()
+	queryValue, args, err := query.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Set("status", workflowmodel.WorkflowVersionPublished).Set("content_hash", version.ContentHash).Set("validation_report_json", string(report)).Set("publish_note", version.PublishNote).Set("published_by", version.PublishedBy).Set("publish_idempotency_key", idempotencyKey).Set("published_at", version.PublishedAt).Set("updated_at", version.UpdatedAt).Where(query.And(query.Equal("id", version.ID), query.Equal("status", workflowmodel.WorkflowVersionDraft), query.Equal("revision", version.Revision), query.Equal("workflow_json", string(workflowJSON)))).Build()
 	if err != nil {
 		return false, err
 	}
-	result, err := tx.ExecContext(ctx, query, args...)
+	result, err := tx.ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return false, err
 	}
@@ -215,23 +214,23 @@ func (r WorkflowDefinitionStore) PublishDraft(ctx context.Context, definition wo
 	if count != 1 {
 		return false, nil
 	}
-	query, args, err = ormbuilder.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definitions").Set("current_draft_version_id", nil).Set("current_published_version_id", version.ID).Set("updated_at", definition.UpdatedAt).Where(ormbuilder.Equal("id", definition.ID)).Build()
+	queryValue, args, err = query.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definitions").Set("current_draft_version_id", nil).Set("current_published_version_id", version.ID).Set("updated_at", definition.UpdatedAt).Where(query.Equal("id", definition.ID)).Build()
 	if err != nil {
 		return false, err
 	}
-	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
+	if _, err = tx.ExecContext(ctx, queryValue, args...); err != nil {
 		return false, err
 	}
 	return true, tx.Commit()
 }
 
 func (r WorkflowDefinitionStore) ArchiveVersion(ctx context.Context, definitionID, versionID, archivedAt string) (bool, error) {
-	current := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "_workflow_definitions").Columns("current_published_version_id").Where(ormbuilder.Equal("id", definitionID))
-	query, args, err := ormbuilder.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Set("status", workflowmodel.WorkflowVersionArchived).Set("archived_at", archivedAt).Set("updated_at", archivedAt).Where(ormbuilder.And(ormbuilder.Equal("id", versionID), ormbuilder.Equal("definition_id", definitionID), ormbuilder.Equal("status", workflowmodel.WorkflowVersionPublished), ormbuilder.NotInSubquery("id", current))).Build()
+	current := query.NewSelectBuilder(r.store.SQLRenderer, "_workflow_definitions").Columns("current_published_version_id").Where(query.Equal("id", definitionID))
+	queryValue, args, err := query.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Set("status", workflowmodel.WorkflowVersionArchived).Set("archived_at", archivedAt).Set("updated_at", archivedAt).Where(query.And(query.Equal("id", versionID), query.Equal("definition_id", definitionID), query.Equal("status", workflowmodel.WorkflowVersionPublished), query.NotInSubquery("id", current))).Build()
 	if err != nil {
 		return false, err
 	}
-	result, err := r.database().ExecContext(ctx, query, args...)
+	result, err := r.database().ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return false, err
 	}
@@ -240,11 +239,11 @@ func (r WorkflowDefinitionStore) ArchiveVersion(ctx context.Context, definitionI
 }
 
 func (r WorkflowDefinitionStore) SetDefinitionEnabled(ctx context.Context, definitionID string, enabled bool, updatedAt string) (bool, error) {
-	query, args, err := ormbuilder.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definitions").Set("enabled", database.BoolInt(enabled)).Set("updated_at", updatedAt).Where(ormbuilder.Equal("id", definitionID)).Build()
+	queryValue, args, err := query.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definitions").Set("enabled", database.BoolInt(enabled)).Set("updated_at", updatedAt).Where(query.Equal("id", definitionID)).Build()
 	if err != nil {
 		return false, err
 	}
-	result, err := r.database().ExecContext(ctx, query, args...)
+	result, err := r.database().ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return false, err
 	}
@@ -256,10 +255,10 @@ func (r WorkflowDefinitionStore) insertVersion(ctx context.Context, tx *sql.Tx, 
 	workflowJSON, _ := json.Marshal(version.Workflow)
 	reportJSON, _ := json.Marshal(version.ValidationReport)
 	values := []any{version.ID, version.DefinitionID, version.Version, version.Status, version.Revision, database.NullableText(version.ContentHash), string(workflowJSON), string(reportJSON), database.NullableText(version.PublishNote), version.CreatedBy, database.NullableText(version.PublishedBy), database.NullableText(idempotencyKey), version.CreatedAt, version.UpdatedAt, database.NullableText(version.PublishedAt), database.NullableText(version.ArchivedAt)}
-	query, args, err := ormbuilder.NewInsertBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Columns(workflowDefinitionVersionColumns()...).Values(values...).Build()
+	queryValue, args, err := query.NewInsertBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Columns(workflowDefinitionVersionColumns()...).Values(values...).Build()
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, query, args...)
+	_, err = tx.ExecContext(ctx, queryValue, args...)
 	return err
 }

@@ -9,7 +9,7 @@ import (
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
-	reportrepository "github.com/domainry/domainry-report-sdk/repository"
+	reportpersistence "github.com/domainry/domainry-report-sdk/persistence"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
@@ -17,7 +17,13 @@ import (
 type runtimeReportModuleHost struct{ store *persistence.RuntimeStore }
 
 func (h runtimeReportModuleHost) Database() reportmodulehost.Database { return h.store.DB() }
-func (h runtimeReportModuleHost) Dialect() reportmodulehost.Dialect   { return h.store.SQLRenderer }
+func (h runtimeReportModuleHost) DatabaseFor(ctx context.Context) reportmodulehost.DBTX {
+	if tx := persistence.ActionExecutionTransaction(ctx); tx != nil {
+		return tx
+	}
+	return h.store.DB()
+}
+func (h runtimeReportModuleHost) Dialect() reportmodulehost.Dialect { return h.store.SQLRenderer }
 func (h runtimeReportModuleHost) Migrations() reportmodulehost.MigrationRegistrar {
 	return runtimeReportMigrationRegistrar{store: h.store}
 }
@@ -35,17 +41,17 @@ func (r runtimeReportMigrationRegistrar) ApplyOwnedMigrations(ctx context.Contex
 }
 
 func synchronizeReportDefinitions(ctx context.Context, binding reportsdk.Binding, manifest manifestmodel.ManifestSchema) error {
-	repositories, ok := binding.(reportrepository.Binding)
-	if !ok || repositories.DefinitionRepository() == nil {
+	repository := binding.Definitions()
+	if repository == nil {
 		return fmt.Errorf("Report Binding returned no definition repository")
 	}
-	definitions := make([]reportrepository.Definition, 0, len(manifest.Reports)+len(manifest.OperationStateExamples)+len(manifest.SensitiveFieldPolicies)+len(manifest.ReportExportControls))
+	definitions := make([]reportpersistence.Definition, 0, len(manifest.Reports)+len(manifest.OperationStateExamples)+len(manifest.SensitiveFieldPolicies)+len(manifest.ReportExportControls))
 	appendDefinition := func(resourceType, key, objectKey, name string, value any) error {
 		payload, err := json.Marshal(value)
 		if err != nil {
 			return err
 		}
-		definitions = append(definitions, reportrepository.Definition{ResourceType: resourceType, Key: strings.TrimSpace(key), ObjectKey: strings.TrimSpace(objectKey), Name: strings.TrimSpace(name), Payload: payload})
+		definitions = append(definitions, reportpersistence.Definition{ResourceType: resourceType, Key: strings.TrimSpace(key), ObjectKey: strings.TrimSpace(objectKey), Name: strings.TrimSpace(name), Payload: payload})
 		return nil
 	}
 	for _, value := range manifest.Reports {
@@ -76,5 +82,5 @@ func synchronizeReportDefinitions(ctx context.Context, binding reportsdk.Binding
 	if sourceID == "" {
 		sourceID = "generated-template"
 	}
-	return repositories.DefinitionRepository().SyncDefinitions(ctx, reportrepository.DefinitionSnapshot{SchemaVersion: version, SourceKind: "manifest", SourceID: sourceID, Definitions: definitions})
+	return repository.SyncDefinitions(ctx, reportpersistence.DefinitionSnapshot{SchemaVersion: version, SourceKind: "manifest", SourceID: sourceID, Definitions: definitions})
 }

@@ -10,7 +10,7 @@ import (
 
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	ormdialect "github.com/domainry/domainry-orm/dialect"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 )
 
 type lifecycleSQLStore interface {
@@ -31,12 +31,12 @@ func (s *IntegrationSubjectLifecycleStore) Owner(context.Context) string { retur
 
 func (s *IntegrationSubjectLifecycleStore) PreviewSubject(ctx context.Context, workspaceID, identity string) (json.RawMessage, error) {
 	var count int64
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(s.store.RuntimeRenderer(), "_integration_external_identities", workspaceID).
-		Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(ormbuilder.Equal("actor_id", identity)).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(s.store.RuntimeRenderer(), "_integration_external_identities", workspaceID).
+		Projections(query.Project(query.CountAll())).Where(query.Equal("actor_id", identity)).Build()
 	if err != nil {
 		return nil, err
 	}
-	if err := s.store.DB().QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+	if err := s.store.DB().QueryRowContext(ctx, queryValue, args...).Scan(&count); err != nil {
 		return nil, err
 	}
 	return json.Marshal(map[string]int64{"external_identity_mappings": count})
@@ -44,11 +44,11 @@ func (s *IntegrationSubjectLifecycleStore) PreviewSubject(ctx context.Context, w
 
 func (s *IntegrationSubjectLifecycleStore) ExportSubject(ctx context.Context, workspaceID, identity string) (json.RawMessage, error) {
 	columns := []string{"provider", "external_subject", "external_subject_type", "external_name", "external_organization", "external_department", "external_group", "status"}
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(s.store.RuntimeRenderer(), "_integration_external_identities", workspaceID).Columns(columns...).Where(ormbuilder.Equal("actor_id", identity)).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(s.store.RuntimeRenderer(), "_integration_external_identities", workspaceID).Columns(columns...).Where(query.Equal("actor_id", identity)).Build()
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.store.DB().QueryContext(ctx, query, args...)
+	rows, err := s.store.DB().QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -69,13 +69,13 @@ func (s *IntegrationSubjectLifecycleStore) ExportSubject(ctx context.Context, wo
 
 func (s *IntegrationSubjectLifecycleStore) EraseSubject(ctx context.Context, workspaceID, identity string, _ []lifecyclemodel.LegalHold) (json.RawMessage, error) {
 	anonymous := integrationAnonymousSubject(workspaceID, identity)
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(s.store.RuntimeRenderer(), "_integration_external_identities", workspaceID).
+	queryValue, args, err := query.NewWorkspaceUpdateBuilder(s.store.RuntimeRenderer(), "_integration_external_identities", workspaceID).
 		Set("external_subject", anonymous).Set("external_name", "").Set("external_organization", "").Set("external_department", "").Set("external_group", "").Set("external_bot_id", "").Set("status", "erased").Set("updated_at", time.Now().UTC().Format(time.RFC3339Nano)).
-		Where(ormbuilder.Equal("actor_id", identity)).Build()
+		Where(query.Equal("actor_id", identity)).Build()
 	if err != nil {
 		return nil, err
 	}
-	result, err := s.store.DB().ExecContext(ctx, query, args...)
+	result, err := s.store.DB().ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -87,11 +87,11 @@ func (s *IntegrationSubjectLifecycleStore) EraseSubject(ctx context.Context, wor
 }
 
 func (s *IntegrationSubjectLifecycleStore) RequestExternalErasure(ctx context.Context, request lifecyclemodel.SubjectRequest) ([]lifecyclemodel.ExternalErasure, error) {
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(s.store.RuntimeRenderer(), "_integration_external_identities", request.WorkspaceID).Columns("provider", "external_subject").Where(ormbuilder.Equal("actor_id", request.ResolvedIdentity)).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(s.store.RuntimeRenderer(), "_integration_external_identities", request.WorkspaceID).Columns("provider", "external_subject").Where(query.Equal("actor_id", request.ResolvedIdentity)).Build()
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.store.DB().QueryContext(ctx, query, args...)
+	rows, err := s.store.DB().QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, err
 	}

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 )
 
 func validReportExportFilter(operator string, values int) bool {

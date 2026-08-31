@@ -1,5 +1,3 @@
-// Package storage defines the physical schema strategy required by the
-// Metadata persistence owner. Implementations live in sibling engine packages.
 package storage
 
 import (
@@ -11,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
@@ -90,13 +88,13 @@ type Executor interface {
 type Profile interface {
 	IDColumnType() string
 	FieldColumnType(definitionmodel.FieldSchema, bool) string
-	Columns(context.Context, Queryer, ormbuilder.Renderer, string, string) (map[string]bool, error)
-	ColumnTypes(context.Context, Queryer, ormbuilder.Renderer, string, string) (map[string]string, error)
-	Indexes(context.Context, Queryer, ormbuilder.Renderer, string, string) (map[string]bool, error)
-	DropIndex(context.Context, Executor, ormbuilder.Renderer, string, string) error
-	ConditionalUniquePlan(ormbuilder.Renderer, string, string, recordvalidation.RecordConditionalUniquePolicy) ConditionalUniquePlan
+	Columns(context.Context, Queryer, query.Renderer, string, string) (map[string]bool, error)
+	ColumnTypes(context.Context, Queryer, query.Renderer, string, string) (map[string]string, error)
+	Indexes(context.Context, Queryer, query.Renderer, string, string) (map[string]bool, error)
+	DropIndex(context.Context, Executor, query.Renderer, string, string) error
+	ConditionalUniquePlan(query.Renderer, string, string, recordvalidation.RecordConditionalUniquePolicy) ConditionalUniquePlan
 	ConditionalUniqueGuard(string) string
-	DropColumn(context.Context, Executor, ormbuilder.Renderer, string, string) error
+	DropColumn(context.Context, Executor, query.Renderer, string, string) error
 	ExactDecimalUpgradeAllowed(string, definitionmodel.FieldSchema) bool
 }
 
@@ -120,7 +118,7 @@ func ConditionalUniqueFields(policy recordvalidation.RecordConditionalUniquePoli
 	return append([]string{"workspace_id"}, policy.Fields...)
 }
 
-func ConditionalUniqueCondition(renderer ormbuilder.Renderer, policy recordvalidation.RecordConditionalUniquePolicy) string {
+func ConditionalUniqueCondition(renderer query.Renderer, policy recordvalidation.RecordConditionalUniquePolicy) string {
 	values := make([]string, len(policy.ConditionValues))
 	for index, value := range policy.ConditionValues {
 		values[index] = "'" + strings.ReplaceAll(value, "'", "''") + "'"
@@ -128,7 +126,7 @@ func ConditionalUniqueCondition(renderer ormbuilder.Renderer, policy recordvalid
 	return renderer.Identifier(policy.ConditionField) + " IN (" + strings.Join(values, ", ") + ")"
 }
 
-func PartialConditionalUniquePlan(renderer ormbuilder.Renderer, table, indexName string, policy recordvalidation.RecordConditionalUniquePolicy) ConditionalUniquePlan {
+func PartialConditionalUniquePlan(renderer query.Renderer, table, indexName string, policy recordvalidation.RecordConditionalUniquePolicy) ConditionalUniquePlan {
 	fields := ConditionalUniqueFields(policy)
 	quoted := make([]string, len(fields))
 	for index, field := range fields {

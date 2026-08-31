@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"testing"
 
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	appschemavalidation "github.com/domainry/domainry-runtime/runtime/domain/appschema/validation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 func TestReportAuthoringExamplesExecuteRuntimeReportValidator(t *testing.T) {

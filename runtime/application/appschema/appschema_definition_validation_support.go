@@ -3,6 +3,7 @@ package appschema
 import (
 	"context"
 
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	appschemavalidation "github.com/domainry/domainry-runtime/runtime/domain/appschema/validation"
@@ -12,7 +13,6 @@ import (
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 func newApplicationDefinitionValidationIssue(code, fieldPath, stepKey, operationKey string, params map[string]string) appschemamodel.ApplicationDefinitionValidationIssue {

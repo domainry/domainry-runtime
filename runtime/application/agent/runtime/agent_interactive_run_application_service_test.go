@@ -10,7 +10,7 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -41,7 +41,7 @@ func (s *agentInteractiveRunRepositoryStub) CreateInteractiveRun(_ context.Conte
 func (s *agentInteractiveRunRepositoryStub) GetInteractiveRun(context.Context, string, string) (agentmodel.AgentInteractiveRun, bool, error) {
 	return s.run, s.run.ID != "", s.getErr
 }
-func (s *agentInteractiveRunRepositoryStub) ListInteractiveRuns(context.Context, string, string, string, agentrepository.AgentInteractiveRunFilter) ([]agentmodel.AgentInteractiveRun, error) {
+func (s *agentInteractiveRunRepositoryStub) ListInteractiveRuns(context.Context, string, string, string, agentpersistence.AgentInteractiveRunFilter) ([]agentmodel.AgentInteractiveRun, error) {
 	return []agentmodel.AgentInteractiveRun{s.run}, s.listErr
 }
 func (s *agentInteractiveRunRepositoryStub) SaveInteractiveRun(_ context.Context, run agentmodel.AgentInteractiveRun, _ int64) (bool, error) {
@@ -81,7 +81,7 @@ func TestAgentInteractiveRunLifecycleAndPrincipalIsolation(t *testing.T) {
 	if _, _, err := service.Get(t.Context(), run.ID, revoked); apperror.CodeOf(err) != "agent.interactive.principal_denied" {
 		t.Fatalf("stale authorization restored history=%v", err)
 	}
-	if listed, err := service.List(t.Context(), revoked, agentrepository.AgentInteractiveRunFilter{}); err != nil || len(listed) != 0 {
+	if listed, err := service.List(t.Context(), revoked, agentpersistence.AgentInteractiveRunFilter{}); err != nil || len(listed) != 0 {
 		t.Fatalf("stale authorization listed history=%#v err=%v", listed, err)
 	}
 	run.CreatedAt = now.Add(-2 * time.Second)
@@ -233,31 +233,31 @@ func TestAgentInteractiveRunBoundaryMatrix(t *testing.T) {
 			}
 		})
 	}
-	if _, err := (*AgentInteractiveRunApplicationService)(nil).List(t.Context(), principal, agentrepository.AgentInteractiveRunFilter{}); apperror.CodeOf(err) != "agent.interactive.principal_denied" {
+	if _, err := (*AgentInteractiveRunApplicationService)(nil).List(t.Context(), principal, agentpersistence.AgentInteractiveRunFilter{}); apperror.CodeOf(err) != "agent.interactive.principal_denied" {
 		t.Fatalf("nil list=%v", err)
 	}
-	if _, err := NewAgentInteractiveRunApplicationService(nil, nil, nil).List(t.Context(), principal, agentrepository.AgentInteractiveRunFilter{}); apperror.CodeOf(err) != "agent.interactive.principal_denied" {
+	if _, err := NewAgentInteractiveRunApplicationService(nil, nil, nil).List(t.Context(), principal, agentpersistence.AgentInteractiveRunFilter{}); apperror.CodeOf(err) != "agent.interactive.principal_denied" {
 		t.Fatalf("missing repository list=%v", err)
 	}
 	unknown := principal
 	unknown.Known = false
-	if _, err := NewAgentInteractiveRunApplicationService(&agentInteractiveRunRepositoryStub{}, nil, nil).List(t.Context(), unknown, agentrepository.AgentInteractiveRunFilter{}); apperror.CodeOf(err) != "agent.interactive.principal_denied" {
+	if _, err := NewAgentInteractiveRunApplicationService(&agentInteractiveRunRepositoryStub{}, nil, nil).List(t.Context(), unknown, agentpersistence.AgentInteractiveRunFilter{}); apperror.CodeOf(err) != "agent.interactive.principal_denied" {
 		t.Fatalf("unknown list=%v", err)
 	}
 	badWorkspace := principal
 	badWorkspace.WorkspaceID = ""
-	if _, err := NewAgentInteractiveRunApplicationService(&agentInteractiveRunRepositoryStub{}, nil, nil).List(t.Context(), badWorkspace, agentrepository.AgentInteractiveRunFilter{}); apperror.CodeOf(err) != "agent.interactive.principal_denied" {
+	if _, err := NewAgentInteractiveRunApplicationService(&agentInteractiveRunRepositoryStub{}, nil, nil).List(t.Context(), badWorkspace, agentpersistence.AgentInteractiveRunFilter{}); apperror.CodeOf(err) != "agent.interactive.principal_denied" {
 		t.Fatalf("invalid workspace list=%v", err)
 	}
-	if _, err := NewAgentInteractiveRunApplicationService(&agentInteractiveRunRepositoryStub{listErr: wantErr}, nil, nil).List(t.Context(), principal, agentrepository.AgentInteractiveRunFilter{}); !errors.Is(err, wantErr) {
+	if _, err := NewAgentInteractiveRunApplicationService(&agentInteractiveRunRepositoryStub{listErr: wantErr}, nil, nil).List(t.Context(), principal, agentpersistence.AgentInteractiveRunFilter{}); !errors.Is(err, wantErr) {
 		t.Fatalf("list repository=%v", err)
 	}
 	offSurface := run
 	offSurface.Surface = "other"
-	if listed, err := NewAgentInteractiveRunApplicationService(&agentInteractiveRunRepositoryStub{run: offSurface}, nil, nil).List(t.Context(), principal, agentrepository.AgentInteractiveRunFilter{}); err != nil || len(listed) != 0 {
+	if listed, err := NewAgentInteractiveRunApplicationService(&agentInteractiveRunRepositoryStub{run: offSurface}, nil, nil).List(t.Context(), principal, agentpersistence.AgentInteractiveRunFilter{}); err != nil || len(listed) != 0 {
 		t.Fatalf("off surface list=%#v err=%v", listed, err)
 	}
-	if listed, err := NewAgentInteractiveRunApplicationService(&agentInteractiveRunRepositoryStub{run: run}, nil, nil).List(t.Context(), principal, agentrepository.AgentInteractiveRunFilter{}); err != nil || len(listed) != 1 {
+	if listed, err := NewAgentInteractiveRunApplicationService(&agentInteractiveRunRepositoryStub{run: run}, nil, nil).List(t.Context(), principal, agentpersistence.AgentInteractiveRunFilter{}); err != nil || len(listed) != 1 {
 		t.Fatalf("visible list=%#v err=%v", listed, err)
 	}
 

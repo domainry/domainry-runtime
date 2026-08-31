@@ -4,25 +4,16 @@ import (
 	"fmt"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
-// ScopeMembershipINThreshold is the single Runtime authorization threshold:
-// resolved permission sets up to this size use a bounded root-field IN;
-// larger sets keep the indexed correlated EXISTS plan.
 const ScopeMembershipINThreshold = 1000
 
-// ScopeMembershipLookup executes the indexed authorization lookup that turns a
-// relation path into IDs accepted by a field on the protected root table.
 type ScopeMembershipLookup func(statement string, args ...any) ([]string, error)
 
-// CandidateScopeLookup reports whether an indexed relation lookup matched.
 type CandidateScopeLookup func(statement string, args ...any) (bool, error)
 
-// ResolveScopeMembership removes every relation path from an authorization
-// expression. The returned expression contains direct root-table predicates
-// only, so count/list/export/report queries never execute relation traversal.
 func ResolveScopeMembership(s Store, workspace string, expression recordmodel.RecordScopeExpression, inThreshold int, lookup ScopeMembershipLookup) (recordmodel.RecordScopeExpression, error) {
 	if inThreshold < 1 {
 		return recordmodel.RecordScopeExpression{}, fmt.Errorf("scope membership IN threshold must be positive")
@@ -80,10 +71,6 @@ func ScopeExpressionHasRelation(expression recordmodel.RecordScopeExpression) bo
 	return false
 }
 
-// CandidateScopeMatches evaluates an authorization expression for a root
-// record that is not persisted yet. Direct leaves use candidate data; relation
-// leaves constrain the indexed permission lookup to the candidate's real
-// forward relation ID (or candidate ID for a reverse relation).
 func CandidateScopeMatches(s Store, workspace string, candidate recordmodel.Record, expression recordmodel.RecordScopeExpression, lookup CandidateScopeLookup) (bool, error) {
 	switch expression.Operator {
 	case "and":
@@ -201,51 +188,49 @@ func buildScopeMembershipLookup(s Store, workspace string, expression recordmode
 func buildScopeMembershipLookupWithAnchor(s Store, workspace string, expression recordmodel.RecordScopeExpression, limit int, candidateAnchorField string, candidateAnchor any) (string, []any, error) {
 	first := expression.Path[0]
 	firstAlias := "permission_0"
-	anchorColumn := ormbuilder.QualifiedColumn(firstAlias, "id")
+	anchorColumn := query.QualifiedColumn(firstAlias, "id")
 	if first.Direction == "reverse" {
-		anchorColumn = ormbuilder.QualifiedColumn(firstAlias, first.RelationFieldKey)
+		anchorColumn = query.QualifiedColumn(firstAlias, first.RelationFieldKey)
 	} else if first.Direction != "forward" {
 		return "", nil, fmt.Errorf("unsupported compiled relation direction %q", first.Direction)
 	}
 	lastIndex := len(expression.Path) - 1
 	lastAlias := fmt.Sprintf("permission_%d", lastIndex)
-	joins := make([]ormbuilder.Join, 0, len(expression.Path)-1)
-	relationConditions := make([]ormbuilder.Predicate, 0, 2*(len(expression.Path)-1))
+	joins := make([]query.Join, 0, len(expression.Path)-1)
+	relationConditions := make([]query.Predicate, 0, 2*(len(expression.Path)-1))
 	currentReference := lastAlias
 	for pathIndex := lastIndex; pathIndex > 0; pathIndex-- {
 		segment := expression.Path[pathIndex]
 		previousAlias := fmt.Sprintf("permission_%d", pathIndex-1)
-		previousColumn := func(field string) ormbuilder.Expression { return ormbuilder.QualifiedColumn(previousAlias, field) }
-		currentColumn := func(field string) ormbuilder.Expression { return ormbuilder.QualifiedColumn(currentReference, field) }
-		var relation ormbuilder.Predicate
+		previousColumn := func(field string) query.Expression { return query.QualifiedColumn(previousAlias, field) }
+		currentColumn := func(field string) query.Expression { return query.QualifiedColumn(currentReference, field) }
+		var relation query.Predicate
 		switch segment.Direction {
 		case "forward":
-			relation = ormbuilder.EqualExpressions(previousColumn(segment.RelationFieldKey), currentColumn("id"))
+			relation = query.EqualExpressions(previousColumn(segment.RelationFieldKey), currentColumn("id"))
 		case "reverse":
-			relation = ormbuilder.EqualExpressions(previousColumn("id"), currentColumn(segment.RelationFieldKey))
+			relation = query.EqualExpressions(previousColumn("id"), currentColumn(segment.RelationFieldKey))
 		default:
 			return "", nil, fmt.Errorf("unsupported compiled relation direction %q", segment.Direction)
 		}
-		// CROSS JOIN fixes SQLite's loop order at the actor anchor. The join
-		// predicates stay explicit in WHERE, while PostgreSQL remains free to
-		// choose its cost-based plan for the same inner-join semantics.
-		joins = append(joins, ormbuilder.CrossJoin(expression.Path[pathIndex-1].TargetObjectKey, previousAlias))
+
+		joins = append(joins, query.CrossJoin(expression.Path[pathIndex-1].TargetObjectKey, previousAlias))
 		relationConditions = append(relationConditions,
-			ormbuilder.EqualExpressions(previousColumn("workspace_id"), currentColumn("workspace_id")), relation,
+			query.EqualExpressions(previousColumn("workspace_id"), currentColumn("workspace_id")), relation,
 		)
 		currentReference = previousAlias
 	}
-	conditions := []ormbuilder.Predicate{
-		ormbuilder.EqualValue(ormbuilder.QualifiedColumn(lastAlias, "workspace_id"), workspace),
-		ormbuilder.IsNotNullExpression(anchorColumn),
-		scopeComparisonPredicate(ormbuilder.QualifiedColumn(lastAlias, expression.FieldKey), expression.Operator, expression.Values),
+	conditions := []query.Predicate{
+		query.EqualValue(query.QualifiedColumn(lastAlias, "workspace_id"), workspace),
+		query.IsNotNullExpression(anchorColumn),
+		scopeComparisonPredicate(query.QualifiedColumn(lastAlias, expression.FieldKey), expression.Operator, expression.Values),
 	}
 	conditions = append(conditions, relationConditions...)
 	if strings.TrimSpace(candidateAnchorField) != "" {
-		conditions = append(conditions, ormbuilder.EqualValue(ormbuilder.QualifiedColumn(firstAlias, candidateAnchorField), candidateAnchor))
+		conditions = append(conditions, query.EqualValue(query.QualifiedColumn(firstAlias, candidateAnchorField), candidateAnchor))
 	}
-	return ormbuilder.NewSelectBuilder(storeRenderer{s}, expression.Path[lastIndex].TargetObjectKey).Alias(lastAlias).
-		Distinct().Projections(ormbuilder.Project(anchorColumn)).Join(joins...).Where(ormbuilder.And(conditions...)).Limit(limit).Build()
+	return query.NewSelectBuilder(storeRenderer{s}, expression.Path[lastIndex].TargetObjectKey).Alias(lastAlias).
+		Distinct().Projections(query.Project(anchorColumn)).Join(joins...).Where(query.And(conditions...)).Limit(limit).Build()
 }
 
 func uniqueScopeIDs(values []string) []string {
@@ -270,7 +255,7 @@ func buildScopeRelationExists(s Store, rootTable string, expression recordmodel.
 	if err != nil {
 		return "", err
 	}
-	prepared, bound, err := ormbuilder.PreparePredicate(storeRenderer{s}, predicate, len(*args))
+	prepared, bound, err := query.PreparePredicate(storeRenderer{s}, predicate, len(*args))
 	if err != nil {
 		return "", err
 	}
@@ -278,53 +263,53 @@ func buildScopeRelationExists(s Store, rootTable string, expression recordmodel.
 	return prepared, nil
 }
 
-func scopeRelationExistsPredicate(s Store, rootTable string, expression recordmodel.RecordScopeExpression) (ormbuilder.Predicate, error) {
+func scopeRelationExistsPredicate(s Store, rootTable string, expression recordmodel.RecordScopeExpression) (query.Predicate, error) {
 	if len(expression.Path) == 0 {
 		return nil, fmt.Errorf("relation EXISTS requires a relation path")
 	}
 	first := expression.Path[0]
 	firstAlias := "permission_0"
-	anchorColumn := ormbuilder.QualifiedColumn(firstAlias, "id")
-	rootAnchor := ormbuilder.TableColumn(rootTable, "id")
+	anchorColumn := query.QualifiedColumn(firstAlias, "id")
+	rootAnchor := query.TableColumn(rootTable, "id")
 	if first.Direction == "forward" {
-		rootAnchor = ormbuilder.TableColumn(rootTable, first.RelationFieldKey)
+		rootAnchor = query.TableColumn(rootTable, first.RelationFieldKey)
 	} else if first.Direction == "reverse" {
-		anchorColumn = ormbuilder.QualifiedColumn(firstAlias, first.RelationFieldKey)
+		anchorColumn = query.QualifiedColumn(firstAlias, first.RelationFieldKey)
 	} else {
 		return nil, fmt.Errorf("unsupported compiled relation direction %q", first.Direction)
 	}
 	lastIndex := len(expression.Path) - 1
 	lastAlias := fmt.Sprintf("permission_%d", lastIndex)
-	joins := make([]ormbuilder.Join, 0, len(expression.Path)-1)
-	relationConditions := make([]ormbuilder.Predicate, 0, 2*len(expression.Path))
+	joins := make([]query.Join, 0, len(expression.Path)-1)
+	relationConditions := make([]query.Predicate, 0, 2*len(expression.Path))
 	currentReference := lastAlias
 	for pathIndex := lastIndex; pathIndex > 0; pathIndex-- {
 		segment := expression.Path[pathIndex]
 		previousAlias := fmt.Sprintf("permission_%d", pathIndex-1)
-		previousColumn := func(field string) ormbuilder.Expression { return ormbuilder.QualifiedColumn(previousAlias, field) }
-		currentColumn := func(field string) ormbuilder.Expression { return ormbuilder.QualifiedColumn(currentReference, field) }
-		var relation ormbuilder.Predicate
+		previousColumn := func(field string) query.Expression { return query.QualifiedColumn(previousAlias, field) }
+		currentColumn := func(field string) query.Expression { return query.QualifiedColumn(currentReference, field) }
+		var relation query.Predicate
 		switch segment.Direction {
 		case "forward":
-			relation = ormbuilder.EqualExpressions(previousColumn(segment.RelationFieldKey), currentColumn("id"))
+			relation = query.EqualExpressions(previousColumn(segment.RelationFieldKey), currentColumn("id"))
 		case "reverse":
-			relation = ormbuilder.EqualExpressions(previousColumn("id"), currentColumn(segment.RelationFieldKey))
+			relation = query.EqualExpressions(previousColumn("id"), currentColumn(segment.RelationFieldKey))
 		default:
 			return nil, fmt.Errorf("unsupported compiled relation direction %q", segment.Direction)
 		}
-		joins = append(joins, ormbuilder.CrossJoin(expression.Path[pathIndex-1].TargetObjectKey, previousAlias))
+		joins = append(joins, query.CrossJoin(expression.Path[pathIndex-1].TargetObjectKey, previousAlias))
 		relationConditions = append(relationConditions,
-			ormbuilder.EqualExpressions(previousColumn("workspace_id"), currentColumn("workspace_id")), relation,
+			query.EqualExpressions(previousColumn("workspace_id"), currentColumn("workspace_id")), relation,
 		)
 		currentReference = previousAlias
 	}
-	conditions := []ormbuilder.Predicate{
-		ormbuilder.EqualExpressions(ormbuilder.QualifiedColumn(lastAlias, "workspace_id"), ormbuilder.TableColumn(rootTable, "workspace_id")),
-		ormbuilder.EqualExpressions(anchorColumn, rootAnchor),
-		scopeComparisonPredicate(ormbuilder.QualifiedColumn(lastAlias, expression.FieldKey), expression.Operator, expression.Values),
+	conditions := []query.Predicate{
+		query.EqualExpressions(query.QualifiedColumn(lastAlias, "workspace_id"), query.TableColumn(rootTable, "workspace_id")),
+		query.EqualExpressions(anchorColumn, rootAnchor),
+		scopeComparisonPredicate(query.QualifiedColumn(lastAlias, expression.FieldKey), expression.Operator, expression.Values),
 	}
 	conditions = append(conditions, relationConditions...)
-	subquery := ormbuilder.NewSelectBuilder(storeRenderer{s}, expression.Path[lastIndex].TargetObjectKey).Alias(lastAlias).
-		Projections(ormbuilder.Project(ormbuilder.AllColumns())).Join(joins...).Where(ormbuilder.And(conditions...))
-	return ormbuilder.ExistsSubquery(subquery), nil
+	subquery := query.NewSelectBuilder(storeRenderer{s}, expression.Path[lastIndex].TargetObjectKey).Alias(lastAlias).
+		Projections(query.Project(query.AllColumns())).Join(joins...).Where(query.And(conditions...))
+	return query.ExistsSubquery(subquery), nil
 }

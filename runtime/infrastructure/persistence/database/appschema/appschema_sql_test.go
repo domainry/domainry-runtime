@@ -8,7 +8,7 @@ import (
 	"io"
 	"testing"
 
-	metadatarepository "github.com/domainry/domainry-metadata-sdk/repository"
+	metadatapersistence "github.com/domainry/domainry-metadata-sdk/persistence"
 	metadatamodule "github.com/domainry/domainry-metadata/module"
 )
 
@@ -130,56 +130,56 @@ func scriptedApplicationSchemaStore(t *testing.T, state *metadataSQLState, store
 	store.db = openMetadataScriptedDB(state)
 	store.schemaDB = store.db
 	moduleRepository := metadatamodule.NewDefinitionRepository(store.db, store.store.SQLRenderer)
-	store.metadataDefinitions = scriptedMetadataRepository{delegate: store.metadataDefinitions, crud: moduleRepository.(metadatarepository.ExecutorDefinitionRepository)}
+	store.metadataDefinitions = scriptedMetadataRepository{delegate: store.metadataDefinitions, crud: moduleRepository.(metadatapersistence.ExecutorDefinitionRepository)}
 	t.Cleanup(func() { _ = store.db.Close() })
 	return store
 }
 
 type scriptedMetadataRepository struct {
-	delegate metadatarepository.DefinitionRepository
-	crud     metadatarepository.ExecutorDefinitionRepository
+	delegate metadatapersistence.DefinitionRepository
+	crud     metadatapersistence.ExecutorDefinitionRepository
 }
 
-func (r scriptedMetadataRepository) SyncDefinitions(ctx context.Context, snapshot metadatarepository.Snapshot) error {
+func (r scriptedMetadataRepository) SyncDefinitions(ctx context.Context, snapshot metadatapersistence.Snapshot) error {
 	if r.delegate != nil {
 		return r.delegate.SyncDefinitions(ctx, snapshot)
 	}
 	return nil
 }
-func (r scriptedMetadataRepository) DefinitionSnapshot(ctx context.Context) (metadatarepository.Snapshot, error) {
+func (r scriptedMetadataRepository) DefinitionSnapshot(ctx context.Context) (metadatapersistence.Snapshot, error) {
 	if r.delegate != nil {
 		return r.delegate.DefinitionSnapshot(ctx)
 	}
-	return metadatarepository.Snapshot{}, nil
+	return metadatapersistence.Snapshot{}, nil
 }
-func (scriptedMetadataRepository) DefinitionSnapshotWithExecutor(context.Context, metadatarepository.QueryExecutor) (metadatarepository.Snapshot, error) {
-	return metadatarepository.Snapshot{}, nil
+func (scriptedMetadataRepository) DefinitionSnapshotWithExecutor(context.Context, metadatapersistence.QueryExecutor) (metadatapersistence.Snapshot, error) {
+	return metadatapersistence.Snapshot{}, nil
 }
-func (r scriptedMetadataRepository) GetDefinitionWithExecutor(ctx context.Context, executor metadatarepository.QueryExecutor, resourceType, key string) (metadatarepository.StoredDefinition, bool, error) {
+func (r scriptedMetadataRepository) GetDefinitionWithExecutor(ctx context.Context, executor metadatapersistence.QueryExecutor, resourceType, key string) (metadatapersistence.StoredDefinition, bool, error) {
 	return r.crud.GetDefinitionWithExecutor(ctx, executor, resourceType, key)
 }
-func (r scriptedMetadataRepository) ListDefinitionsWithExecutor(ctx context.Context, executor metadatarepository.QueryExecutor, resourceType, sourceID string) ([]metadatarepository.StoredDefinition, error) {
+func (r scriptedMetadataRepository) ListDefinitionsWithExecutor(ctx context.Context, executor metadatapersistence.QueryExecutor, resourceType, sourceID string) ([]metadatapersistence.StoredDefinition, error) {
 	return r.crud.ListDefinitionsWithExecutor(ctx, executor, resourceType, sourceID)
 }
-func (r scriptedMetadataRepository) ReplaceDefinitionWithExecutor(ctx context.Context, executor metadatarepository.ExecutionExecutor, value metadatarepository.StoredDefinition, expected *string) (metadatarepository.ReplaceResult, error) {
+func (r scriptedMetadataRepository) ReplaceDefinitionWithExecutor(ctx context.Context, executor metadatapersistence.ExecutionExecutor, value metadatapersistence.StoredDefinition, expected *string) (metadatapersistence.ReplaceResult, error) {
 	return r.crud.ReplaceDefinitionWithExecutor(ctx, executor, value, expected)
 }
-func (r scriptedMetadataRepository) DisableDefinitionWithExecutor(ctx context.Context, executor metadatarepository.ExecutionExecutor, resourceType, key, at string, expected *string) (bool, error) {
+func (r scriptedMetadataRepository) DisableDefinitionWithExecutor(ctx context.Context, executor metadatapersistence.ExecutionExecutor, resourceType, key, at string, expected *string) (bool, error) {
 	return r.crud.DisableDefinitionWithExecutor(ctx, executor, resourceType, key, at, expected)
 }
 
-func (r scriptedMetadataRepository) CountDefinitionVersionsWithExecutor(ctx context.Context, executor metadatarepository.QueryExecutor, resourceType, key string) (int, error) {
+func (r scriptedMetadataRepository) CountDefinitionVersionsWithExecutor(ctx context.Context, executor metadatapersistence.QueryExecutor, resourceType, key string) (int, error) {
 	return r.crud.CountDefinitionVersionsWithExecutor(ctx, executor, resourceType, key)
 }
 
-func (r scriptedMetadataRepository) InsertDefinitionVersionWithExecutor(ctx context.Context, executor metadatarepository.ExecutionExecutor, value metadatarepository.DefinitionVersion) error {
+func (r scriptedMetadataRepository) InsertDefinitionVersionWithExecutor(ctx context.Context, executor metadatapersistence.ExecutionExecutor, value metadatapersistence.DefinitionVersion) error {
 	return r.crud.InsertDefinitionVersionWithExecutor(ctx, executor, value)
 }
 
-func (r scriptedMetadataRepository) ListDefinitionVersionsWithExecutor(ctx context.Context, executor metadatarepository.QueryExecutor, resourceType, key string) ([]metadatarepository.DefinitionVersion, error) {
+func (r scriptedMetadataRepository) ListDefinitionVersionsWithExecutor(ctx context.Context, executor metadatapersistence.QueryExecutor, resourceType, key string) ([]metadatapersistence.DefinitionVersion, error) {
 	return r.crud.ListDefinitionVersionsWithExecutor(ctx, executor, resourceType, key)
 }
 
-func (r scriptedMetadataRepository) GetDefinitionVersionWithExecutor(ctx context.Context, executor metadatarepository.QueryExecutor, resourceType, key, version string) (metadatarepository.DefinitionVersion, bool, error) {
+func (r scriptedMetadataRepository) GetDefinitionVersionWithExecutor(ctx context.Context, executor metadatapersistence.QueryExecutor, resourceType, key, version string) (metadatapersistence.DefinitionVersion, bool, error) {
 	return r.crud.GetDefinitionVersionWithExecutor(ctx, executor, resourceType, key, version)
 }

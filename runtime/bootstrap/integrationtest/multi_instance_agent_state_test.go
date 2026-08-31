@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	agentsdkfixture "github.com/domainry/domainry-runtime/testsupport/agentsdkfixture"
@@ -47,7 +47,7 @@ func TestTwoRuntimeInstancesShareAgentSessionAndReportHTTPState(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = binding.Close(t.Context()) })
-	repositories, ok := binding.(agentrepository.Binding)
+	repositories, ok := binding.(agentpersistence.Binding)
 	if !ok || repositories.AgentStateRepository() == nil {
 		t.Fatal("Agent SDK Binding returned no state repository")
 	}

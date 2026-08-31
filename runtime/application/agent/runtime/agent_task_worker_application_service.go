@@ -10,7 +10,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/logging"
@@ -144,7 +144,7 @@ func (w *AgentTaskWorker) process(ctx context.Context, locator AgentTaskLocator,
 	}
 	defer w.worker.Control.End()
 	w.observeQueue(ctx)
-	var claim agentrepository.AgentTaskClaim
+	var claim agentpersistence.AgentTaskClaim
 	var found bool
 	if direct {
 		claim, found, err = w.runs.ClaimTask(ctx, locator, w.worker.WorkerID, w.config.LeaseTTL)
@@ -259,7 +259,7 @@ func (w *AgentTaskWorker) process(ctx context.Context, locator AgentTaskLocator,
 	return true, nil
 }
 
-func (w *AgentTaskWorker) claimNext(ctx context.Context) (agentrepository.AgentTaskClaim, bool, error) {
+func (w *AgentTaskWorker) claimNext(ctx context.Context) (agentpersistence.AgentTaskClaim, bool, error) {
 	if w.config.SystemScope.Valid() {
 		return w.runs.ClaimNextForWorker(ctx, w.config.SystemScope, w.worker.WorkerID, w.config.LeaseTTL)
 	}
@@ -296,7 +296,7 @@ func (w *AgentTaskWorker) Metrics() AgentTaskWorkerMetrics {
 }
 
 func (w *AgentTaskWorker) observeQueue(ctx context.Context) {
-	filter := agentrepository.AgentTaskRunFilter{Statuses: []agentmodel.AgentTaskRunStatus{agentmodel.AgentTaskRunPending, agentmodel.AgentTaskRunRetryScheduled}, Limit: 500}
+	filter := agentpersistence.AgentTaskRunFilter{Statuses: []agentmodel.AgentTaskRunStatus{agentmodel.AgentTaskRunPending, agentmodel.AgentTaskRunRetryScheduled}, Limit: 500}
 	var runs []agentmodel.AgentTaskRun
 	var err error
 	if w.config.SystemScope.Valid() {

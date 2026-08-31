@@ -10,10 +10,10 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 type reportEdgeAccess struct {
@@ -154,26 +154,8 @@ func TestReportExportLookupAndHelperBoundaries(t *testing.T) {
 	if objects := reportUniqueSourceObjects(reportmodel.ReportSchema{Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: " "}}}); len(objects) != 0 {
 		t.Fatalf("blank objects=%#v", objects)
 	}
-	for _, test := range []struct {
-		value any
-		want  string
-		ok    bool
-	}{{float64(1.5), "1.5", true}, {float32(2.5), "2.5", true}, {3, "3", true}, {int64(4), "4", true}, {"5.5", "5.5", true}, {"bad", "", false}, {nil, "", false}} {
-		got, _, err := reportNumericValue(definitionmodel.FieldSchema{Type: "number"}, test.value)
-		if (test.ok && got.String() != test.want) || (err == nil) != test.ok {
-			t.Fatalf("numeric(%#v)=(%v,%v) want=(%v,%v)", test.value, got, err, test.want, test.ok)
-		}
-	}
-	if _, _, err := reportNumericValue(definitionmodel.FieldSchema{Type: "currency", Config: map[string]any{"scale": -1}}, "1"); err == nil {
-		t.Fatal("invalid currency config was aggregated")
-	}
-	if _, _, err := reportNumericValue(definitionmodel.FieldSchema{Type: "currency", Config: map[string]any{"precision": 2, "scale": 0}}, "123"); err == nil {
-		t.Fatal("overflowing currency was aggregated")
-	}
-	for _, binaryFloat := range []any{float32(0.1), float64(0.1)} {
-		if _, _, err := reportNumericValue(definitionmodel.FieldSchema{Type: "currency"}, binaryFloat); err == nil {
-			t.Fatalf("binary floating currency was aggregated: %T", binaryFloat)
-		}
+	if _, err := reportEngineObjects(map[string]definitionmodel.ObjectSchema{"entry": {Fields: []definitionmodel.FieldSchema{{Key: "amount", Type: "currency", Config: map[string]any{"scale": -1}}}}}); err == nil {
+		t.Fatal("invalid currency metadata was adapted")
 	}
 }
 

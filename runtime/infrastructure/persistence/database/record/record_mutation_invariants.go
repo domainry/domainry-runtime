@@ -1,7 +1,7 @@
 package record
 
 import (
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
@@ -37,7 +37,7 @@ func (r RecordStore) validateRelatedAggregateInvariantsTx(ctx context.Context, t
 			continue
 		}
 		relationID := strings.TrimSpace(fmt.Sprint(commit.Record.Data[policy.RelationField]))
-		limitBuilder := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, policy.TargetObjectKey, workspaceID).Columns(policy.LimitField).Where(ormbuilder.Equal("id", relationID)).Limit(1)
+		limitBuilder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, policy.TargetObjectKey, workspaceID).Columns(policy.LimitField).Where(query.Equal("id", relationID)).Limit(1)
 		if r.store.RuntimeEngine.Capabilities().RowLock {
 			limitBuilder.ForUpdate()
 		}
@@ -59,23 +59,23 @@ func (r RecordStore) validateRelatedAggregateInvariantsTx(ctx context.Context, t
 		if policy.StatusField != "" {
 			columns = append(columns, policy.StatusField)
 		}
-		predicates := []ormbuilder.Predicate{ormbuilder.Equal(policy.RelationField, relationID), ormbuilder.NotEqual("id", commit.Record.ID)}
+		predicates := []query.Predicate{query.Equal(policy.RelationField, relationID), query.NotEqual("id", commit.Record.ID)}
 		if policy.StatusField != "" && len(policy.IncludedStatuses) > 0 {
 			statuses := make([]any, 0, len(policy.IncludedStatuses))
 			for _, status := range policy.IncludedStatuses {
 				statuses = append(statuses, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, policy.StatusField, status))
 			}
-			predicates = append(predicates, ormbuilder.In(policy.StatusField, statuses...))
+			predicates = append(predicates, query.In(policy.StatusField, statuses...))
 		}
-		aggregateBuilder := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, commit.Object.Key, workspaceID).Columns(columns...).Where(ormbuilder.And(predicates...))
+		aggregateBuilder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, commit.Object.Key, workspaceID).Columns(columns...).Where(query.And(predicates...))
 		if r.store.RuntimeEngine.Capabilities().RowLock {
 			aggregateBuilder.ForUpdate()
 		}
-		query, args, buildErr := aggregateBuilder.Build()
+		queryValue, args, buildErr := aggregateBuilder.Build()
 		if buildErr != nil {
 			return buildErr
 		}
-		rows, err := tx.QueryContext(ctx, query, args...)
+		rows, err := tx.QueryContext(ctx, queryValue, args...)
 		if err != nil {
 			return fmt.Errorf("read related aggregate %s: %w", policy.Key, err)
 		}
@@ -195,7 +195,7 @@ func recordAggregateCompare(total, limit any, field definitionmodel.FieldSchema,
 		if err != nil {
 			return false, err
 		}
-		// RecordNormalizeDecimal already guarantees canonical decimal strings.
+
 		leftDecimal := decimal.RequireFromString(left)
 		rightDecimal := decimal.RequireFromString(right)
 		comparison := leftDecimal.Cmp(rightDecimal)
@@ -252,29 +252,29 @@ func (r RecordStore) validateTemporalExclusionTx(ctx context.Context, tx Transac
 		if !applies {
 			continue
 		}
-		predicates := []ormbuilder.Predicate{ormbuilder.NotEqual("id", commit.Record.ID)}
+		predicates := []query.Predicate{query.NotEqual("id", commit.Record.ID)}
 		for _, field := range policy.ScopeFields {
-			predicates = append(predicates, ormbuilder.Equal(field, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, field, commit.Record.Data[field])))
+			predicates = append(predicates, query.Equal(field, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, field, commit.Record.Data[field])))
 		}
-		predicates = append(predicates, ormbuilder.LessThan(policy.StartField, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, policy.StartField, commit.Record.Data[policy.EndField])))
-		predicates = append(predicates, ormbuilder.GreaterThan(policy.EndField, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, policy.EndField, commit.Record.Data[policy.StartField])))
+		predicates = append(predicates, query.LessThan(policy.StartField, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, policy.StartField, commit.Record.Data[policy.EndField])))
+		predicates = append(predicates, query.GreaterThan(policy.EndField, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, policy.EndField, commit.Record.Data[policy.StartField])))
 		if policy.StatusField != "" && len(policy.ExcludedStatuses) > 0 {
 			statuses := make([]any, 0, len(policy.ExcludedStatuses))
 			for _, status := range policy.ExcludedStatuses {
 				statuses = append(statuses, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, policy.StatusField, status))
 			}
-			predicates = append(predicates, ormbuilder.Or(ormbuilder.IsNull(policy.StatusField), ormbuilder.NotIn(policy.StatusField, statuses...)))
+			predicates = append(predicates, query.Or(query.IsNull(policy.StatusField), query.NotIn(policy.StatusField, statuses...)))
 		}
-		conflictBuilder := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, commit.Object.Key, workspaceID).Columns("id").Where(ormbuilder.And(predicates...)).Limit(1)
+		conflictBuilder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, commit.Object.Key, workspaceID).Columns("id").Where(query.And(predicates...)).Limit(1)
 		if r.store.RuntimeEngine.Capabilities().RowLock {
 			conflictBuilder.ForUpdate()
 		}
-		query, args, buildErr := conflictBuilder.Build()
+		queryValue, args, buildErr := conflictBuilder.Build()
 		if buildErr != nil {
 			return buildErr
 		}
 		var conflictingID string
-		err = tx.QueryRowContext(ctx, query, args...).Scan(&conflictingID)
+		err = tx.QueryRowContext(ctx, queryValue, args...).Scan(&conflictingID)
 		if errors.Is(err, sql.ErrNoRows) {
 			continue
 		}
@@ -291,10 +291,10 @@ func recordMutationPredicateSQL(store *database.RuntimeStore, object definitionm
 	if err != nil {
 		return "", nil, err
 	}
-	return ormbuilder.PreparePredicate(store.SQLRenderer, prepared, placeholder-1)
+	return query.PreparePredicate(store.SQLRenderer, prepared, placeholder-1)
 }
 
-func recordMutationPredicate(object definitionmodel.ObjectSchema, predicate transactionmodel.MutationPredicate, profile persistencedriver.EngineProfile) (ormbuilder.Predicate, error) {
+func recordMutationPredicate(object definitionmodel.ObjectSchema, predicate transactionmodel.MutationPredicate, profile persistencedriver.EngineProfile) (query.Predicate, error) {
 	field := strings.TrimSpace(predicate.Field)
 	allowed := field == "updated_at"
 	for _, schemaField := range object.Fields {
@@ -310,9 +310,9 @@ func recordMutationPredicate(object definitionmodel.ObjectSchema, predicate tran
 	if predicate.Value == nil {
 		switch operator {
 		case "eq":
-			return ormbuilder.IsNull(field), nil
+			return query.IsNull(field), nil
 		case "ne":
-			return ormbuilder.IsNotNull(field), nil
+			return query.IsNotNull(field), nil
 		default:
 			return nil, fmt.Errorf("nil predicate only supports eq/ne for field %q", field)
 		}
@@ -320,17 +320,17 @@ func recordMutationPredicate(object definitionmodel.ObjectSchema, predicate tran
 	value := recordConditionDBValue(profile, object, field, predicate.Value)
 	switch operator {
 	case "eq":
-		return ormbuilder.Equal(field, value), nil
+		return query.Equal(field, value), nil
 	case "ne":
-		return ormbuilder.NotEqual(field, value), nil
+		return query.NotEqual(field, value), nil
 	case "lt":
-		return ormbuilder.LessThan(field, value), nil
+		return query.LessThan(field, value), nil
 	case "lte":
-		return ormbuilder.LessThanOrEqual(field, value), nil
+		return query.LessThanOrEqual(field, value), nil
 	case "gt":
-		return ormbuilder.GreaterThan(field, value), nil
+		return query.GreaterThan(field, value), nil
 	case "gte":
-		return ormbuilder.GreaterThanOrEqual(field, value), nil
+		return query.GreaterThanOrEqual(field, value), nil
 	default:
 		return nil, fmt.Errorf("invalid record mutation predicate operator %q", operator)
 	}

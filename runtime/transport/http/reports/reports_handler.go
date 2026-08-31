@@ -10,10 +10,10 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/logging"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	reportexport "github.com/domainry/domainry-runtime/runtime/application/report/export"
 	reportexportapplication "github.com/domainry/domainry-runtime/runtime/application/report/export/application"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 type ReportsHandler struct {

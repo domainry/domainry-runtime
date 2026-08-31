@@ -3,7 +3,7 @@ package composition
 import (
 	"context"
 
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
@@ -20,8 +20,9 @@ import (
 	connector "github.com/domainry/domainry-connector-sdk"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
-	lifecyclerepository "github.com/domainry/domainry-lifecycle-sdk/repository"
+	lifecyclepersistence "github.com/domainry/domainry-lifecycle-sdk/persistence"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
@@ -37,7 +38,6 @@ import (
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	resilience "github.com/domainry/domainry-runtime/runtime/platform/resilience"
@@ -116,7 +116,7 @@ type RuntimeServicesDependencies struct {
 	BusinessEvidence                    changeplanrepository.ChangePlanEvidenceRepository
 	ActionExecutions                    actioncontract.ActionExecutionStore
 	ActionAssurance                     actioncontract.ActionAssuranceStore
-	AgentTaskRuns                       agentrepository.AgentTaskRunRepository
+	AgentTaskRuns                       agentpersistence.AgentTaskRunRepository
 	AgentPrincipals                     identitysdk.PrincipalResolver
 	AgentTaskRunner                     agentsdk.TaskRunner
 	AgentInteractiveRunner              agentsdk.InteractiveRunner
@@ -132,7 +132,7 @@ type RuntimeServicesDependencies struct {
 	PartyDirectory                      partysdk.Directory
 	IntegrationAPILimiter               ratelimit.Limiter
 	IntegrationPolicyStore              resilience.Store
-	Lifecycle                           lifecyclerepository.LifecycleRepository
+	Lifecycle                           lifecyclepersistence.LifecycleRepository
 	LifecycleExecutors                  []lifecyclecontract.OwnerLifecycleExecutor
 	LifecycleSubjectResolver            lifecyclecontract.SubjectIdentityResolver
 	LifecycleSubjectHandlers            []lifecyclecontract.SubjectDataHandler

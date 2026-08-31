@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	workflowvalidation "github.com/domainry/domainry-runtime/runtime/domain/workflow/validation"
 )
 

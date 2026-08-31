@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 type reportAuditAppenderProbe struct {

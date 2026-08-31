@@ -1,4 +1,3 @@
-// Integration configuration persistence.
 package integration
 
 import (
@@ -10,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
@@ -36,11 +35,11 @@ func (r IntegrationConfigStore) ListSecrets(ctx context.Context, workspaceID str
 		executor = actionExecutor
 	}
 	columns := []string{"secret_key", "workspace_id", "kind", "status", "description", "value_ref", "fingerprint", "created_by", "created_at", "updated_at", "disabled_at", "expires_at", "rotated_at", "revoked_at", "last_tested_at", "last_test_status", "last_test_error"}
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_secrets", workspaceID).Columns(columns...).OrderBy(ormbuilder.Ascending("secret_key")).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_secrets", workspaceID).Columns(columns...).OrderBy(query.Ascending("secret_key")).Build()
 	if err != nil {
 		return nil, fmt.Errorf("build integration secret list: %w", err)
 	}
-	rows, err := executor.QueryContext(ctx, query, args...)
+	rows, err := executor.QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list integration secrets: %w", err)
 	}
@@ -89,11 +88,11 @@ func (r IntegrationConfigStore) ListConnections(ctx context.Context, workspaceID
 		executor = actionExecutor
 	}
 	columns := []string{"connection_key", "workspace_id", "connector_key", "provider_key", "name", "status", "config_json", "secret_refs_json", "created_by", "created_at", "updated_at"}
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_connections", workspaceID).Columns(columns...).OrderBy(ormbuilder.Ascending("connection_key")).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_connections", workspaceID).Columns(columns...).OrderBy(query.Ascending("connection_key")).Build()
 	if err != nil {
 		return nil, fmt.Errorf("build integration connection list: %w", err)
 	}
-	rows, err := executor.QueryContext(ctx, query, args...)
+	rows, err := executor.QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list integration connections: %w", err)
 	}
@@ -143,11 +142,11 @@ func (r IntegrationConfigStore) ListExternalIdentities(ctx context.Context, work
 		return nil, err
 	}
 	columns := []string{"identity_key", "workspace_id", "provider", "external_subject", "external_subject_type", "external_name", "external_organization", "external_department", "external_group", "external_bot_id", "actor_id", "role_key", "status", "last_resolved_at", "created_by", "created_at", "updated_at", "disabled_at"}
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_external_identities", workspaceID).Columns(columns...).OrderBy(ormbuilder.Ascending("provider"), ormbuilder.Ascending("external_subject")).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_external_identities", workspaceID).Columns(columns...).OrderBy(query.Ascending("provider"), query.Ascending("external_subject")).Build()
 	if err != nil {
 		return nil, fmt.Errorf("build integration external identity list: %w", err)
 	}
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := r.db.QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list integration external identities: %w", err)
 	}
@@ -192,11 +191,11 @@ func (r IntegrationConfigStore) createdMetadata(ctx context.Context, table, keyC
 	if actionExecutor := database.ActionExecutionTransaction(ctx); actionExecutor != nil {
 		executor = actionExecutor
 	}
-	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, table, workspaceID).Columns("created_at", "created_by").Where(ormbuilder.Equal(keyColumn, key)).Build()
+	queryValue, args, buildErr := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, table, workspaceID).Columns("created_at", "created_by").Where(query.Equal(keyColumn, key)).Build()
 	if buildErr != nil {
 		return "", "", fmt.Errorf("build integration created metadata lookup: %w", buildErr)
 	}
-	err := executor.QueryRowContext(ctx, query, args...).Scan(&existingAt, &existingBy)
+	err := executor.QueryRowContext(ctx, queryValue, args...).Scan(&existingAt, &existingBy)
 	if errors.Is(err, sql.ErrNoRows) {
 		return now, createdBy, nil
 	}
@@ -214,12 +213,12 @@ func (r IntegrationConfigStore) replaceRow(ctx context.Context, table, keyColumn
 	if err != nil {
 		return fmt.Errorf("build %s replacement: %w", label, err)
 	}
-	deleteStatement, deleteArgs, err := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, table, workspaceID).
-		Where(ormbuilder.Equal(keyColumn, key)).Build()
+	deleteStatement, deleteArgs, err := query.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, table, workspaceID).
+		Where(query.Equal(keyColumn, key)).Build()
 	if err != nil {
 		return fmt.Errorf("build %s replacement delete: %w", label, err)
 	}
-	insertStatement, insertArgs, err := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, table, workspaceID).
+	insertStatement, insertArgs, err := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, table, workspaceID).
 		Columns(insertColumns...).Values(insertValues...).Build()
 	if err != nil {
 		return fmt.Errorf("build %s replacement insert: %w", label, err)
@@ -277,25 +276,25 @@ func (r IntegrationConfigStore) ListWebhookSubscriptions(ctx context.Context, wo
 	if limit <= 0 || limit > 500 {
 		limit = 200
 	}
-	predicates := []ormbuilder.Predicate{}
+	predicates := []query.Predicate{}
 	if connectorKey = strings.TrimSpace(connectorKey); connectorKey != "" {
-		predicates = append(predicates, ormbuilder.Equal("connector_key", connectorKey))
+		predicates = append(predicates, query.Equal("connector_key", connectorKey))
 	}
 	if status = strings.TrimSpace(status); status != "" {
-		predicates = append(predicates, ormbuilder.Equal("status", status))
+		predicates = append(predicates, query.Equal("status", status))
 	}
-	builder := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_webhook_subscriptions", workspaceID).
+	builder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_webhook_subscriptions", workspaceID).
 		Columns(integrationWebhookSubscriptionColumns...).
-		OrderBy(ormbuilder.Ascending("subscription_key")).
+		OrderBy(query.Ascending("subscription_key")).
 		Limit(limit)
 	if len(predicates) != 0 {
-		builder.Where(ormbuilder.And(predicates...))
+		builder.Where(query.And(predicates...))
 	}
-	query, args, buildErr := builder.Build()
+	queryValue, args, buildErr := builder.Build()
 	if buildErr != nil {
 		return nil, fmt.Errorf("build integration webhook subscription query: %w", buildErr)
 	}
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := r.db.QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list integration webhook subscriptions: %w", err)
 	}
@@ -342,11 +341,11 @@ func (r IntegrationConfigStore) ListAPIKeys(ctx context.Context, workspaceID str
 	if err != nil {
 		return nil, err
 	}
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_api_keys", workspaceID).Columns(integrationAPIKeyColumns...).OrderBy(ormbuilder.Descending("created_at")).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_api_keys", workspaceID).Columns(integrationAPIKeyColumns...).OrderBy(query.Descending("created_at")).Build()
 	if err != nil {
 		return nil, fmt.Errorf("build integration api key list: %w", err)
 	}
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := r.db.QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list integration api keys: %w", err)
 	}
@@ -391,11 +390,11 @@ func (r IntegrationConfigStore) FindAPIKeyByTokenHash(ctx context.Context, works
 	if err != nil {
 		return integrationmodel.IntegrationAPIKey{}, false, err
 	}
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_api_keys", workspaceID).Columns(integrationAPIKeyColumns...).Where(ormbuilder.Equal("token_hash", strings.TrimSpace(tokenHash))).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_api_keys", workspaceID).Columns(integrationAPIKeyColumns...).Where(query.Equal("token_hash", strings.TrimSpace(tokenHash))).Build()
 	if err != nil {
 		return integrationmodel.IntegrationAPIKey{}, false, fmt.Errorf("build integration api key token lookup: %w", err)
 	}
-	row := r.db.QueryRowContext(ctx, query, args...)
+	row := r.db.QueryRowContext(ctx, queryValue, args...)
 	value, err := scanIntegrationAPIKey(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return integrationmodel.IntegrationAPIKey{}, false, nil
@@ -416,18 +415,18 @@ func (r IntegrationConfigStore) UpdateAPIKeyLastUsed(ctx context.Context, worksp
 	if strings.TrimSpace(lastUsedAt) == "" {
 		lastUsedAt = time.Now().UTC().Format(time.RFC3339)
 	}
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_integration_api_keys", workspaceID).Set("last_used_at", lastUsedAt).Set("updated_at", lastUsedAt).Where(ormbuilder.Equal("api_key", key)).Build()
+	queryValue, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_integration_api_keys", workspaceID).Set("last_used_at", lastUsedAt).Set("updated_at", lastUsedAt).Where(query.Equal("api_key", key)).Build()
 	if err != nil {
 		return integrationmodel.IntegrationAPIKey{}, fmt.Errorf("build integration api key last-used update: %w", err)
 	}
-	if _, err := r.db.ExecContext(ctx, query, args...); err != nil {
+	if _, err := r.db.ExecContext(ctx, queryValue, args...); err != nil {
 		return integrationmodel.IntegrationAPIKey{}, fmt.Errorf("update integration api key last used: %w", err)
 	}
-	query, args, err = ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_api_keys", workspaceID).Columns(integrationAPIKeyColumns...).Where(ormbuilder.Equal("api_key", key)).Build()
+	queryValue, args, err = query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_api_keys", workspaceID).Columns(integrationAPIKeyColumns...).Where(query.Equal("api_key", key)).Build()
 	if err != nil {
 		return integrationmodel.IntegrationAPIKey{}, fmt.Errorf("build integration api key lookup: %w", err)
 	}
-	row := r.db.QueryRowContext(ctx, query, args...)
+	row := r.db.QueryRowContext(ctx, queryValue, args...)
 	value, err := scanIntegrationAPIKey(row)
 	return value, err
 }

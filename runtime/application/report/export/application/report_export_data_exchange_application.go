@@ -11,9 +11,9 @@ import (
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	reportexport "github.com/domainry/domainry-runtime/runtime/application/report/export"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/query"
 )
 

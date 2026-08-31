@@ -35,6 +35,7 @@ func TestProjectMainCompilesUsingOnlyGeneratedCompositionAndRuntimehost(t *testi
 	metadataModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-metadata")
 	integrationSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-integration-sdk")
 	integrationModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-integration")
+	lifecycleSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-lifecycle-sdk")
 	lifecycleModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-lifecycle")
 	partySDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-party-sdk")
 	partyModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-party")
@@ -47,7 +48,7 @@ func TestProjectMainCompilesUsingOnlyGeneratedCompositionAndRuntimehost(t *testi
 	goMod = append(goMod, []byte("replace github.com/domainry/domainry-report-sdk => "+reportSDKRoot+"\nreplace github.com/domainry/domainry-report => "+reportModuleRoot+"\n")...)
 	goMod = append(goMod, []byte("replace github.com/domainry/domainry-metadata-sdk => "+metadataSDKRoot+"\nreplace github.com/domainry/domainry-metadata => "+metadataModuleRoot+"\n")...)
 	goMod = append(goMod, []byte("replace github.com/domainry/domainry-integration-sdk => "+integrationSDKRoot+"\nreplace github.com/domainry/domainry-integration => "+integrationModuleRoot+"\n")...)
-	goMod = append(goMod, []byte("replace github.com/domainry/domainry-lifecycle => "+lifecycleModuleRoot+"\n")...)
+	goMod = append(goMod, []byte("replace github.com/domainry/domainry-lifecycle-sdk => "+lifecycleSDKRoot+"\nreplace github.com/domainry/domainry-lifecycle => "+lifecycleModuleRoot+"\n")...)
 	if err := os.WriteFile(filepath.Join(externalRoot, "go.mod"), goMod, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -120,6 +121,7 @@ func TestProjectMainCompilesUsingSaaSFactoryWithoutIdentityModule(t *testing.T) 
 	metadataModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-metadata")
 	integrationSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-integration-sdk")
 	integrationModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-integration")
+	lifecycleSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-lifecycle-sdk")
 	lifecycleModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-lifecycle")
 	foundationRoot := siblingModuleRoot(t, repositoryRoot, "domainry-foundation")
 	ormRoot := siblingModuleRoot(t, repositoryRoot, "domainry-orm")
@@ -130,7 +132,7 @@ func TestProjectMainCompilesUsingSaaSFactoryWithoutIdentityModule(t *testing.T) 
 	goMod = append(goMod, []byte("replace github.com/domainry/domainry-report-sdk => "+reportSDKRoot+"\nreplace github.com/domainry/domainry-report => "+reportModuleRoot+"\n")...)
 	goMod = append(goMod, []byte("replace github.com/domainry/domainry-metadata-sdk => "+metadataSDKRoot+"\nreplace github.com/domainry/domainry-metadata => "+metadataModuleRoot+"\n")...)
 	goMod = append(goMod, []byte("replace github.com/domainry/domainry-integration-sdk => "+integrationSDKRoot+"\nreplace github.com/domainry/domainry-integration => "+integrationModuleRoot+"\n")...)
-	goMod = append(goMod, []byte("replace github.com/domainry/domainry-lifecycle => "+lifecycleModuleRoot+"\n")...)
+	goMod = append(goMod, []byte("replace github.com/domainry/domainry-lifecycle-sdk => "+lifecycleSDKRoot+"\nreplace github.com/domainry/domainry-lifecycle => "+lifecycleModuleRoot+"\n")...)
 	if err := os.WriteFile(filepath.Join(externalRoot, "go.mod"), goMod, 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -111,7 +111,7 @@ func TestBootstrapTestkitIsAnExactFocusedFixtureBoundary(t *testing.T) {
 	root := filepath.Join(runtimeRoot(t), "bootstrap", "testkit")
 	expected := stringSet(
 		"identity_sdk.go", "manifest_identity_sdk.go",
-		"runtime_services.go", "runtime_services_fixture.go",
+		"runtime_services.go", "runtime_services_fixture.go", "report_module_binding.go",
 	)
 	seen := map[string]bool{}
 	entries, err := os.ReadDir(root)

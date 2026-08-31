@@ -12,7 +12,7 @@ import (
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 
 	"context"
 	"testing"
@@ -144,26 +144,6 @@ func TestReportServiceFiltersInaccessibleRecordsAndAggregatesSelectedMetrics(t *
 }
 
 func TestReportMetricHelpersCoverAllNumericAndFieldModes(t *testing.T) {
-	for name, test := range map[string]struct {
-		value any
-		want  string
-		ok    bool
-	}{
-		"float64": {value: float64(1.5), want: "1.5", ok: true},
-		"float32": {value: float32(2.5), want: "2.5", ok: true},
-		"int":     {value: 3, want: "3", ok: true},
-		"int64":   {value: int64(4), want: "4", ok: true},
-		"string":  {value: "5.5", want: "5.5", ok: true},
-		"invalid": {value: "bad"},
-		"other":   {value: true},
-	} {
-		t.Run(name, func(t *testing.T) {
-			got, _, err := reportNumericValue(definitionmodel.FieldSchema{Type: "number"}, test.value)
-			if (test.ok && got.String() != test.want) || (err == nil) != test.ok {
-				t.Fatalf("numeric value=(%v,%v) want=(%v,%v)", got, err, test.want, test.ok)
-			}
-		})
-	}
 	if got := reportStableValue(nil); got != "" {
 		t.Fatalf("nil report text=%q", got)
 	}

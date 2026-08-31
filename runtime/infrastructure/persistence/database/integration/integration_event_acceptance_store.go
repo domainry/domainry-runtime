@@ -8,14 +8,11 @@ import (
 	"strings"
 	"time"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationpolicy "github.com/domainry/domainry-runtime/runtime/domain/integration/policy"
 )
 
-// AcceptEvent persists the inbound event and its durable mapping intent in one
-// commit. A caller can therefore never observe an accepted event without the
-// dispatch fact needed to reconcile later processing.
 func (r IntegrationEventStore) AcceptEvent(ctx context.Context, workspaceID string, event integrationmodel.IntegrationEvent, intent integrationmodel.IntegrationEventMappingIntent) (integrationmodel.IntegrationEvent, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return integrationmodel.IntegrationEvent{}, false, err
@@ -40,8 +37,7 @@ func (r IntegrationEventStore) AcceptEvent(ctx context.Context, workspaceID stri
 		return integrationmodel.IntegrationEvent{}, false, err
 	}
 	if found {
-		// The persisted payload has just been decoded from JSON, so it cannot
-		// contain a value that the canonical fingerprint encoder rejects.
+
 		existingFingerprint, _ := integrationpolicy.IntegrationEventContentFingerprint(existing)
 		incomingFingerprint, fingerprintErr := integrationpolicy.IntegrationEventContentFingerprint(event)
 		if fingerprintErr != nil {
@@ -49,11 +45,11 @@ func (r IntegrationEventStore) AcceptEvent(ctx context.Context, workspaceID stri
 		}
 		if existingFingerprint != incomingFingerprint {
 			now := time.Now().UTC().Format(time.RFC3339)
-			query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_integration_events", existing.WorkspaceID).Set("status", "quarantined").Set("error", "backend.integration.event.external_id_conflict").Set("next_retry_at", "").Set("updated_at", now).Where(ormbuilder.Equal("id", existing.ID)).Build()
+			queryValue, args, buildErr := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_integration_events", existing.WorkspaceID).Set("status", "quarantined").Set("error", "backend.integration.event.external_id_conflict").Set("next_retry_at", "").Set("updated_at", now).Where(query.Equal("id", existing.ID)).Build()
 			if buildErr != nil {
 				return integrationmodel.IntegrationEvent{}, false, fmt.Errorf("build conflicting integration event quarantine: %w", buildErr)
 			}
-			if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+			if _, err := tx.ExecContext(ctx, queryValue, args...); err != nil {
 				return integrationmodel.IntegrationEvent{}, false, fmt.Errorf("quarantine conflicting integration event: %w", err)
 			}
 			existing.Status, existing.Error, existing.NextRetryAt, existing.UpdatedAt = "quarantined", "backend.integration.event.external_id_conflict", "", now
@@ -84,11 +80,11 @@ func (r IntegrationEventStore) AcceptEvent(ctx context.Context, workspaceID stri
 	if err != nil {
 		return integrationmodel.IntegrationEvent{}, false, err
 	}
-	query, insertArgs, err := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_integration_events", workspaceID).Columns(insertColumns...).Values(insertValues...).Build()
+	queryValue, insertArgs, err := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_integration_events", workspaceID).Columns(insertColumns...).Values(insertValues...).Build()
 	if err != nil {
 		return integrationmodel.IntegrationEvent{}, false, fmt.Errorf("build accepted integration event insert: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, query, insertArgs...); err != nil {
+	if _, err := tx.ExecContext(ctx, queryValue, insertArgs...); err != nil {
 		return integrationmodel.IntegrationEvent{}, false, fmt.Errorf("insert accepted integration event: %w", err)
 	}
 	if err := r.insertMappingIntentTx(ctx, tx, event, intent); err != nil {
@@ -125,11 +121,11 @@ func (r IntegrationEventStore) insertMappingIntentTx(ctx context.Context, tx *sq
 	if err != nil {
 		return err
 	}
-	query, insertArgs, err := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_integration_event_mapping_intents", intent.WorkspaceID).Columns(insertColumns...).Values(insertValues...).Build()
+	queryValue, insertArgs, err := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_integration_event_mapping_intents", intent.WorkspaceID).Columns(insertColumns...).Values(insertValues...).Build()
 	if err != nil {
 		return fmt.Errorf("build integration event mapping intent insert: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, query, insertArgs...); err != nil {
+	if _, err := tx.ExecContext(ctx, queryValue, insertArgs...); err != nil {
 		if isUniqueConstraintError(err) {
 			return nil
 		}
@@ -139,11 +135,11 @@ func (r IntegrationEventStore) insertMappingIntentTx(ctx context.Context, tx *sq
 }
 
 func (r IntegrationEventStore) findByExternalIDTx(ctx context.Context, tx *sql.Tx, workspaceID, provider, externalID string) (integrationmodel.IntegrationEvent, bool, error) {
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_events", workspaceID).Columns(integrationEventColumns...).Where(ormbuilder.And(ormbuilder.Equal("provider", strings.TrimSpace(provider)), ormbuilder.Equal("external_id", strings.TrimSpace(externalID)))).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_events", workspaceID).Columns(integrationEventColumns...).Where(query.And(query.Equal("provider", strings.TrimSpace(provider)), query.Equal("external_id", strings.TrimSpace(externalID)))).Build()
 	if err != nil {
 		return integrationmodel.IntegrationEvent{}, false, err
 	}
-	row := tx.QueryRowContext(ctx, query, args...)
+	row := tx.QueryRowContext(ctx, queryValue, args...)
 	value, err := scanIntegrationEvent(row)
 	if err == sql.ErrNoRows {
 		return integrationmodel.IntegrationEvent{}, false, nil

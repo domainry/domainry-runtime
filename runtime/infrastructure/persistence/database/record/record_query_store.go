@@ -1,7 +1,7 @@
 package record
 
 import (
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
@@ -17,20 +17,20 @@ import (
 	querypersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/query"
 )
 
-func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
+func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object definitionmodel.ObjectSchema, queryValue recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
 	workspaceID, err := requireRecordWorkspaceID(workspaceID)
 	if err != nil {
 		return recordmodel.RecordPageResult{}, err
 	}
-	query.FilterExpression, err = recordvalidation.RecordNormalizeFilterExpression(object, query.FilterExpression)
+	queryValue.FilterExpression, err = recordvalidation.RecordNormalizeFilterExpression(object, queryValue.FilterExpression)
 	if err != nil {
 		return recordmodel.RecordPageResult{}, fmt.Errorf("normalize record filter: %w", err)
 	}
-	query.SelectFields, err = recordvalidation.RecordNormalizeSelectFields(object, query.SelectFields)
+	queryValue.SelectFields, err = recordvalidation.RecordNormalizeSelectFields(object, queryValue.SelectFields)
 	if err != nil {
 		return recordmodel.RecordPageResult{}, fmt.Errorf("normalize record projection: %w", err)
 	}
-	lockIntent := strings.TrimSpace(query.LockIntent)
+	lockIntent := strings.TrimSpace(queryValue.LockIntent)
 	if lockIntent == "" {
 		lockIntent = recordmodel.RecordQueryLockNone
 	}
@@ -45,13 +45,13 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 		return recordmodel.RecordPageResult{}, fmt.Errorf("record query lock intent %q is invalid", lockIntent)
 	}
 	s := r.store
-	if query.ScopeDiagnostic != nil {
-		return recordmodel.RecordPageResult{}, &apperror.AppError{Kind: apperror.KindForbidden, Code: query.ScopeDiagnostic.Code, Params: map[string]string{"object_key": query.ScopeDiagnostic.ObjectKey, "detail": query.ScopeDiagnostic.Detail}}
+	if queryValue.ScopeDiagnostic != nil {
+		return recordmodel.RecordPageResult{}, &apperror.AppError{Kind: apperror.KindForbidden, Code: queryValue.ScopeDiagnostic.Code, Params: map[string]string{"object_key": queryValue.ScopeDiagnostic.ObjectKey, "detail": queryValue.ScopeDiagnostic.Detail}}
 	}
-	query = recordQueryDBValues(s.RuntimeEngine, object, query)
+	queryValue = recordQueryDBValues(s.RuntimeEngine, object, queryValue)
 	executor := r.queryExecutor(ctx)
 	var readTx *sql.Tx
-	if query.ScopeExpression != nil && querypersistence.ScopeExpressionHasRelation(*query.ScopeExpression) {
+	if queryValue.ScopeExpression != nil && querypersistence.ScopeExpressionHasRelation(*queryValue.ScopeExpression) {
 		if actionTx == nil {
 			readTx, err = r.database().BeginTx(ctx, recordScopeReadTxOptions(s.RuntimeEngine))
 			if err != nil {
@@ -60,7 +60,7 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 			defer readTx.Rollback()
 			executor = readTx
 		}
-		resolved, resolveErr := querypersistence.ResolveScopeMembership(s, workspaceID, *query.ScopeExpression, querypersistence.ScopeMembershipINThreshold, func(statement string, args ...any) ([]string, error) {
+		resolved, resolveErr := querypersistence.ResolveScopeMembership(s, workspaceID, *queryValue.ScopeExpression, querypersistence.ScopeMembershipINThreshold, func(statement string, args ...any) ([]string, error) {
 			rows, queryErr := executor.QueryContext(ctx, statement, args...)
 			if queryErr != nil {
 				return nil, queryErr
@@ -79,25 +79,25 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 		if resolveErr != nil {
 			return recordmodel.RecordPageResult{}, resolveErr
 		}
-		query.ScopeExpression = &resolved
+		queryValue.ScopeExpression = &resolved
 	}
-	predicate, err := recordLocalizedSearchPredicate(s, workspaceID, object, query)
+	predicate, err := recordLocalizedSearchPredicate(s, workspaceID, object, queryValue)
 	if err != nil {
 		return recordmodel.RecordPageResult{}, err
 	}
 	countPredicate := predicate
-	if afterID := strings.TrimSpace(query.AfterID); afterID != "" {
-		if !recordQueryUsesAscendingIDOrder(query.Sort) {
+	if afterID := strings.TrimSpace(queryValue.AfterID); afterID != "" {
+		if !recordQueryUsesAscendingIDOrder(queryValue.Sort) {
 			return recordmodel.RecordPageResult{}, fmt.Errorf("record keyset cursor requires ascending id sort")
 		}
-		predicate = ormbuilder.And(predicate, ormbuilder.GreaterThan("id", afterID))
+		predicate = query.And(predicate, query.GreaterThan("id", afterID))
 	}
-	if query.Page > 1 && strings.TrimSpace(query.AfterID) == "" {
+	if queryValue.Page > 1 && strings.TrimSpace(queryValue.AfterID) == "" {
 		return recordmodel.RecordPageResult{}, fmt.Errorf("record deep pagination requires an id cursor")
 	}
 	var total int
-	if !query.SkipTotal {
-		countSQL, countArgs, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.SQLRenderer, object.Key, workspaceID).Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(countPredicate).Build()
+	if !queryValue.SkipTotal {
+		countSQL, countArgs, buildErr := query.NewWorkspaceSelectBuilder(s.SQLRenderer, object.Key, workspaceID).Projections(query.Project(query.CountAll())).Where(countPredicate).Build()
 		if buildErr != nil {
 			return recordmodel.RecordPageResult{}, buildErr
 		}
@@ -105,14 +105,14 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 			return recordmodel.RecordPageResult{}, fmt.Errorf("count records: %w", err)
 		}
 	}
-	fetchLimit := query.PageSize
-	if query.SkipTotal || strings.TrimSpace(query.AfterID) != "" {
+	fetchLimit := queryValue.PageSize
+	if queryValue.SkipTotal || strings.TrimSpace(queryValue.AfterID) != "" {
 		fetchLimit++
 	}
-	selectBuilder := ormbuilder.NewWorkspaceSelectBuilder(s.SQLRenderer, object.Key, workspaceID).
-		Projections(recordListProjections(query.SelectFields)...).
+	selectBuilder := query.NewWorkspaceSelectBuilder(s.SQLRenderer, object.Key, workspaceID).
+		Projections(recordListProjections(queryValue.SelectFields)...).
 		Where(predicate).
-		OrderBy(recordLocalizedOrders(workspaceID, object, query)...).
+		OrderBy(recordLocalizedOrders(workspaceID, object, queryValue)...).
 		Limit(fetchLimit)
 	if lockIntent != recordmodel.RecordQueryLockNone {
 		selectBuilder, err = s.RuntimeEngine.ApplyClaimLock(selectBuilder, lockIntent == recordmodel.RecordQueryLockForUpdateSkipLocked)
@@ -135,10 +135,10 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 	}
 	_ = rows.Close()
 	hasNext := len(records) < total
-	if query.SkipTotal || strings.TrimSpace(query.AfterID) != "" {
-		hasNext = len(records) > query.PageSize
+	if queryValue.SkipTotal || strings.TrimSpace(queryValue.AfterID) != "" {
+		hasNext = len(records) > queryValue.PageSize
 		if hasNext {
-			records = records[:query.PageSize]
+			records = records[:queryValue.PageSize]
 		}
 	}
 	records, err = r.applyRecordLocalization(
@@ -146,9 +146,9 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 		workspaceID,
 		object,
 		records,
-		query.SelectFields,
-		query.Locale,
-		query.FallbackLocale,
+		queryValue.SelectFields,
+		queryValue.Locale,
+		queryValue.FallbackLocale,
 	)
 	if err != nil {
 		return recordmodel.RecordPageResult{}, err
@@ -158,7 +158,7 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 			return recordmodel.RecordPageResult{}, fmt.Errorf("commit record scope snapshot: %w", err)
 		}
 	}
-	return recordmodel.RecordPageResult{Items: records, Page: query.Page, PageSize: query.PageSize, Total: total, HasNext: hasNext}, nil
+	return recordmodel.RecordPageResult{Items: records, Page: queryValue.Page, PageSize: queryValue.PageSize, Total: total, HasNext: hasNext}, nil
 }
 
 func recordQueryUsesAscendingIDOrder(sortRules []recordmodel.RecordSortRule) bool {

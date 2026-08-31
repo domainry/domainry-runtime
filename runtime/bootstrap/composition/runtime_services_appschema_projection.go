@@ -6,6 +6,7 @@ import (
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	appschemaprojection "github.com/domainry/domainry-runtime/runtime/domain/appschema/projection"
 	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
@@ -13,7 +14,6 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 // applyManifestMetadata replaces the RuntimeServices-owned schema indexes. It is

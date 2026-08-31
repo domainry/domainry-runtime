@@ -17,7 +17,7 @@ import (
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 
 	"context"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"

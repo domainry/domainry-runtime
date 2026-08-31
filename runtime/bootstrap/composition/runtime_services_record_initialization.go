@@ -5,6 +5,7 @@ import (
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordruntime "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	reportadapter "github.com/domainry/domainry-runtime/runtime/application/report/adapter"
@@ -18,7 +19,6 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordexecutionruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	reportbusiness "github.com/domainry/domainry-runtime/runtime/domain/report/query"
 )
 

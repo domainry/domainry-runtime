@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 type ReportSnapshotRefresh struct {

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 )
 
 func (e OwnerExecutor) previewSpec(ctx context.Context, workspaceID string, spec cleanupSpec, policyKey string, cutoff time.Time) (int64, time.Time, error) {
@@ -13,15 +13,15 @@ func (e OwnerExecutor) previewSpec(ctx context.Context, workspaceID string, spec
 		return 0, time.Time{}, fmt.Errorf("Lifecycle archive store is unavailable")
 	}
 	const candidateAlias = "candidate"
-	builder := ormbuilder.NewSelectBuilder(e.renderer, spec.table).Alias(candidateAlias).Columns(spec.idColumn, spec.timeColumn)
+	builder := query.NewSelectBuilder(e.renderer, spec.table).Alias(candidateAlias).Columns(spec.idColumn, spec.timeColumn)
 	if spec.tenantColumn != "" {
-		builder = ormbuilder.NewWorkspaceSelectBuilder(e.renderer, spec.table, workspaceID).Alias(candidateAlias).Columns(spec.idColumn, spec.timeColumn)
+		builder = query.NewWorkspaceSelectBuilder(e.renderer, spec.table, workspaceID).Alias(candidateAlias).Columns(spec.idColumn, spec.timeColumn)
 	}
-	query, args, err := builder.Where(cleanupPredicate(spec, cutoff, candidateAlias)).OrderBy(ormbuilder.Ascending(spec.timeColumn), ormbuilder.Ascending(spec.idColumn)).Build()
+	queryValue, args, err := builder.Where(cleanupPredicate(spec, cutoff, candidateAlias)).OrderBy(query.Ascending(spec.timeColumn), query.Ascending(spec.idColumn)).Build()
 	if err != nil {
 		return 0, time.Time{}, err
 	}
-	rows, err := e.database(ctx).QueryContext(ctx, query, args...)
+	rows, err := e.database(ctx).QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return 0, time.Time{}, err
 	}

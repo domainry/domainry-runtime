@@ -67,6 +67,7 @@ type OperationsHandler struct {
 	decodeJSON         func(http.ResponseWriter, *http.Request, any) bool
 	securityAudit      func(*http.Request, principalmodel.Principal, string, string, map[string]any)
 	authenticated      func(http.HandlerFunc) http.HandlerFunc
+	monitoringProxy    bool
 }
 
 type OperationsDependencies struct {
@@ -82,6 +83,7 @@ type OperationsDependencies struct {
 	SecurityAudit      func(*http.Request, principalmodel.Principal, string, string, map[string]any)
 	Admin              func(http.HandlerFunc) http.HandlerFunc
 	Authenticated      func(http.HandlerFunc) http.HandlerFunc
+	MonitoringProxy    bool
 }
 
 func NewOperationsHandler(deps OperationsDependencies) *OperationsHandler {
@@ -89,7 +91,7 @@ func NewOperationsHandler(deps OperationsDependencies) *OperationsHandler {
 	if authenticated == nil {
 		authenticated = deps.Admin
 	}
-	return &OperationsHandler{service: deps.Service, controls: deps.Controls, leases: deps.Leases, databaseRetirement: deps.DatabaseRetirement, monitoring: deps.Monitoring, principal: deps.Principal, writeJSON: deps.WriteJSON, writeServiceError: deps.WriteServiceError, decodeJSON: deps.DecodeJSON, securityAudit: deps.SecurityAudit, authenticated: authenticated}
+	return &OperationsHandler{service: deps.Service, controls: deps.Controls, leases: deps.Leases, databaseRetirement: deps.DatabaseRetirement, monitoring: deps.Monitoring, principal: deps.Principal, writeJSON: deps.WriteJSON, writeServiceError: deps.WriteServiceError, decodeJSON: deps.DecodeJSON, securityAudit: deps.SecurityAudit, authenticated: authenticated, monitoringProxy: deps.MonitoringProxy}
 }
 
 func (h *OperationsHandler) receipts(w http.ResponseWriter, r *http.Request) {

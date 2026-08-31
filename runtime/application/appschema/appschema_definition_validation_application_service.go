@@ -20,7 +20,7 @@ import (
 	"io"
 	"strings"
 
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )

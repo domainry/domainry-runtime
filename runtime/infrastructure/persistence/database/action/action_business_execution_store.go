@@ -1,4 +1,3 @@
-// Business action execution persistence.
 package action
 
 import (
@@ -14,7 +13,7 @@ import (
 	"time"
 
 	ormdriver "github.com/domainry/domainry-orm/driver"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -79,7 +78,7 @@ func (r ActionBusinessExecutionStore) tryBeginExecutionOnce(ctx context.Context,
 	columns := actionExecutionColumns()
 	values := actionExecutionValues(value, "{}")
 	columns, values = slices.Delete(columns, 1, 2), slices.Delete(values, 1, 2)
-	insertQuery, insertArgs, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_action_executions", value.WorkspaceID).Columns(columns...).Values(values...).Build()
+	insertQuery, insertArgs, buildErr := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_action_executions", value.WorkspaceID).Columns(columns...).Values(values...).Build()
 	if buildErr != nil {
 		return actionmodel.ActionExecutionClaimResult{}, fmt.Errorf("build business action execution insert: %w", buildErr)
 	}
@@ -100,22 +99,22 @@ func (r ActionBusinessExecutionStore) tryBeginExecutionOnce(ctx context.Context,
 		r.store.ObserveIdempotency(ctx, value.WorkspaceID, "action.execute", idempotency.OutcomeForDecision(decision, false))
 		return actionmodel.ActionExecutionClaimResult{Decision: decision, Execution: current}, nil
 	}
-	query, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_action_executions", value.WorkspaceID).
+	queryValue, args, buildErr := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_action_executions", value.WorkspaceID).
 		Set("status", string(idempotency.StatusProcessing)).Set("lease_owner", value.LeaseOwner).
 		Set("lease_expires_at", value.LeaseExpiresAt).
-		SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).
+		SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).
 		Set("updated_at", value.UpdatedAt).
-		Where(ormbuilder.And(
-			ormbuilder.Equal("id", value.ID), ormbuilder.Equal("request_fingerprint", value.RequestFingerprint),
-			ormbuilder.Or(
-				ormbuilder.And(ormbuilder.Equal("status", string(idempotency.StatusProcessing)), ormbuilder.LessThanOrEqual("lease_expires_at", now.Format(time.RFC3339Nano))),
-				ormbuilder.Equal("status", string(idempotency.StatusFailedRetryable)),
+		Where(query.And(
+			query.Equal("id", value.ID), query.Equal("request_fingerprint", value.RequestFingerprint),
+			query.Or(
+				query.And(query.Equal("status", string(idempotency.StatusProcessing)), query.LessThanOrEqual("lease_expires_at", now.Format(time.RFC3339Nano))),
+				query.Equal("status", string(idempotency.StatusFailedRetryable)),
 			),
 		)).Build()
 	if buildErr != nil {
 		return actionmodel.ActionExecutionClaimResult{}, fmt.Errorf("build business action reclaim: %w", buildErr)
 	}
-	result, err := r.db.ExecContext(ctx, query, args...)
+	result, err := r.db.ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return actionmodel.ActionExecutionClaimResult{}, err
 	}
@@ -154,12 +153,12 @@ func (r ActionBusinessExecutionStore) waitForExecutionByScope(ctx context.Contex
 }
 
 func (r ActionBusinessExecutionStore) HeartbeatExecution(ctx context.Context, executionID, leaseOwner string, fencingToken int64, expiresAt, now time.Time) error {
-	query, args, err := actionExecutionLeaseUpdate(r.store, executionID, leaseOwner, fencingToken).
+	queryValue, args, err := actionExecutionLeaseUpdate(r.store, executionID, leaseOwner, fencingToken).
 		Set("lease_expires_at", expiresAt.UTC().Format(time.RFC3339Nano)).Set("updated_at", now.UTC().Format(time.RFC3339Nano)).Build()
 	if err != nil {
 		return fmt.Errorf("build business action heartbeat: %w", err)
 	}
-	result, err := r.db.ExecContext(ctx, query, args...)
+	result, err := r.db.ExecContext(ctx, queryValue, args...)
 	return r.actionLeaseMutationResult(ctx, result, err, executionID)
 }
 
@@ -179,11 +178,11 @@ func (r ActionBusinessExecutionStore) CompleteExecution(ctx context.Context, com
 			status = idempotency.StatusFailedRetryable
 		}
 	}
-	query, args, err := actionExecutionCompletionUpdate(r.store, completion, status, string(resultJSON), now)
+	queryValue, args, err := actionExecutionCompletionUpdate(r.store, completion, status, string(resultJSON), now)
 	if err != nil {
 		return actionmodel.ActionBusinessExecution{}, err
 	}
-	result, err := r.db.ExecContext(ctx, query, args...)
+	result, err := r.db.ExecContext(ctx, queryValue, args...)
 	if err := r.actionLeaseMutationResult(ctx, result, err, completion.ExecutionID); err != nil {
 		return actionmodel.ActionBusinessExecution{}, err
 	}
@@ -261,11 +260,11 @@ func (t *actionExecutionTransaction) Commit(ctx context.Context, commits []trans
 			status = idempotency.StatusFailedRetryable
 		}
 	}
-	query, args, err := actionExecutionCompletionUpdate(t.owner.store, completion, status, string(resultJSON), now)
+	queryValue, args, err := actionExecutionCompletionUpdate(t.owner.store, completion, status, string(resultJSON), now)
 	if err != nil {
 		return actionmodel.ActionBusinessExecution{}, err
 	}
-	result, err := t.executor.ExecContext(ctx, query, args...)
+	result, err := t.executor.ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return actionmodel.ActionBusinessExecution{}, database.MutationTransactionError(err, "business_action_execution", completion.ExecutionID)
 	}
@@ -300,14 +299,14 @@ func (t *actionExecutionTransaction) commitSQL(ctx context.Context) error {
 }
 
 func (r ActionBusinessExecutionStore) findExecutionByScope(ctx context.Context, workspaceID, objectKey, recordID, actionKey, idempotencyKey string) (actionmodel.ActionBusinessExecution, bool, error) {
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_action_executions", workspaceID).Columns(actionExecutionColumns()...).Where(ormbuilder.And(
-		ormbuilder.Equal("object_key", objectKey), ormbuilder.Equal("record_id", recordID),
-		ormbuilder.Equal("action_key", actionKey), ormbuilder.Equal("idempotency_key", idempotencyKey),
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_action_executions", workspaceID).Columns(actionExecutionColumns()...).Where(query.And(
+		query.Equal("object_key", objectKey), query.Equal("record_id", recordID),
+		query.Equal("action_key", actionKey), query.Equal("idempotency_key", idempotencyKey),
 	)).Limit(1).Build()
 	if err != nil {
 		return actionmodel.ActionBusinessExecution{}, false, err
 	}
-	value, err := actionScanBusinessActionExecution(r.db.QueryRowContext(ctx, query, args...))
+	value, err := actionScanBusinessActionExecution(r.db.QueryRowContext(ctx, queryValue, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return actionmodel.ActionBusinessExecution{}, false, nil
 	}
@@ -315,24 +314,24 @@ func (r ActionBusinessExecutionStore) findExecutionByScope(ctx context.Context, 
 }
 
 func (r ActionBusinessExecutionStore) findExecutionByID(ctx context.Context, executionID string) (actionmodel.ActionBusinessExecution, error) {
-	query, args, err := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "_action_executions").Columns(actionExecutionColumns()...).Where(ormbuilder.Equal("id", executionID)).Limit(1).Build()
+	queryValue, args, err := query.NewSelectBuilder(r.store.SQLRenderer, "_action_executions").Columns(actionExecutionColumns()...).Where(query.Equal("id", executionID)).Limit(1).Build()
 	if err != nil {
 		return actionmodel.ActionBusinessExecution{}, err
 	}
-	return actionScanBusinessActionExecution(r.db.QueryRowContext(ctx, query, args...))
+	return actionScanBusinessActionExecution(r.db.QueryRowContext(ctx, queryValue, args...))
 }
 
-func actionExecutionLeaseUpdate(store *database.RuntimeStore, executionID, leaseOwner string, fencingToken int64) *ormbuilder.UpdateBuilder {
-	return ormbuilder.NewUpdateBuilder(store.SQLRenderer, "_action_executions").Where(ormbuilder.And(
-		ormbuilder.Equal("id", executionID), ormbuilder.Equal("lease_owner", strings.TrimSpace(leaseOwner)),
-		ormbuilder.Equal("fencing_token", fencingToken), ormbuilder.Equal("status", string(idempotency.StatusProcessing)),
+func actionExecutionLeaseUpdate(store *database.RuntimeStore, executionID, leaseOwner string, fencingToken int64) *query.UpdateBuilder {
+	return query.NewUpdateBuilder(store.SQLRenderer, "_action_executions").Where(query.And(
+		query.Equal("id", executionID), query.Equal("lease_owner", strings.TrimSpace(leaseOwner)),
+		query.Equal("fencing_token", fencingToken), query.Equal("status", string(idempotency.StatusProcessing)),
 	))
 }
 
 func actionExecutionCompletionUpdate(store *database.RuntimeStore, completion actionmodel.ActionExecutionCompletion, status idempotency.Status, resultJSON string, now time.Time) (string, []any, error) {
-	return ormbuilder.NewWorkspaceUpdateBuilder(store.SQLRenderer, "_action_executions", completion.Execution.WorkspaceID).Where(ormbuilder.And(
-		ormbuilder.Equal("id", completion.ExecutionID), ormbuilder.Equal("lease_owner", strings.TrimSpace(completion.LeaseOwner)),
-		ormbuilder.Equal("fencing_token", completion.FencingToken), ormbuilder.Equal("status", string(idempotency.StatusProcessing)),
+	return query.NewWorkspaceUpdateBuilder(store.SQLRenderer, "_action_executions", completion.Execution.WorkspaceID).Where(query.And(
+		query.Equal("id", completion.ExecutionID), query.Equal("lease_owner", strings.TrimSpace(completion.LeaseOwner)),
+		query.Equal("fencing_token", completion.FencingToken), query.Equal("status", string(idempotency.StatusProcessing)),
 	)).
 		Set("status", string(status)).Set("result_json", resultJSON).Set("response_status", completion.ResponseStatus).
 		Set("error_code", strings.TrimSpace(completion.ErrorCode)).Set("expires_at", completion.ExpiresAt.UTC().Format(time.RFC3339Nano)).

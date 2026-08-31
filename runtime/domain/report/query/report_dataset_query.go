@@ -2,18 +2,17 @@ package query
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sort"
 	"strings"
 
-	"github.com/shopspring/decimal"
-
 	"github.com/domainry/domainry-foundation/apperror"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
+	reportengine "github.com/domainry/domainry-report/query/engine"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 func (s *ReportDomainService) executeReportDataset(ctx context.Context, report reportmodel.ReportSchema, plan reportmodel.ReportDatasetPlan, principal principalmodel.Principal) (reportmodel.ReportSummary, error) {
@@ -98,28 +97,19 @@ func (s *ReportDomainService) executeReportDataset(ctx context.Context, report r
 		return reportmodel.ReportSummary{}, reportAppError(apperror.KindBadRequest, "backend.report.analysis_invalid", err)
 	}
 
-	groups, err := reportAggregateDatasetRows(rows, report.Dataset, objects)
+	engineObjects, err := reportEngineObjects(objects)
 	if err != nil {
 		return reportmodel.ReportSummary{}, reportAppError(apperror.KindBadRequest, "backend.report.execution_invalid", err)
 	}
-	resultRows := reportFinalizeGroups(groups, report.Dataset)
-	if err := reportApplyDatasetComparisons(resultRows, report.Dataset); err != nil {
-		return reportmodel.ReportSummary{}, reportAppError(apperror.KindBadRequest, "backend.report.comparison_invalid", err)
-	}
-	reportSortResultRows(resultRows, report.Dataset.Sort)
-	if report.Dataset.Limit > 0 && len(resultRows) > report.Dataset.Limit {
-		resultRows = resultRows[:report.Dataset.Limit]
-	}
-	visibleSourceRows := len(rows)
-	if report.Dataset.Privacy != nil {
-		visibleSourceRows = 0
-		for _, group := range groups {
-			if len(group.privacyEntities) >= report.Dataset.Privacy.MinimumGroupSize {
-				visibleSourceRows += group.sourceRows
-			}
+	aggregated, err := reportengine.Aggregate(reportEngineRows(rows), report.Dataset, engineObjects)
+	if err != nil {
+		var calculation *reportengine.CalculationError
+		if errors.As(err, &calculation) && calculation.Stage == "comparison" {
+			return reportmodel.ReportSummary{}, reportAppError(apperror.KindBadRequest, "backend.report.comparison_invalid", err)
 		}
+		return reportmodel.ReportSummary{}, reportAppError(apperror.KindBadRequest, "backend.report.execution_invalid", err)
 	}
-	return reportmodel.ReportSummary{Key: report.Key, Name: report.Name, Rows: resultRows, RowCount: len(resultRows), SourceRowCount: visibleSourceRows, Analyses: analysisResults}, nil
+	return reportmodel.ReportSummary{Key: report.Key, Name: report.Name, Rows: aggregated.Rows, RowCount: len(aggregated.Rows), SourceRowCount: aggregated.VisibleSourceRows, Analyses: analysisResults}, nil
 }
 
 func reportDatasetPushdownAllowed(ctx context.Context, access reportcontract.ReportRecordAccess, principal principalmodel.Principal, objects map[string]definitionmodel.ObjectSchema) bool {
@@ -319,114 +309,21 @@ func reportDatasetAliasOrder(dataset reportmodel.ReportDatasetSchema) []string {
 }
 
 func reportJoinDatasetRows(leftRows []reportDatasetRow, rightRecords []recordmodel.Record, join reportmodel.ReportDatasetJoin) []reportDatasetRow {
-	index := map[string][]*recordmodel.Record{}
-	for recordIndex := range rightRecords {
-		record := &rightRecords[recordIndex]
-		key, ok := reportJoinRecordKey(record, join.Equalities(), false)
-		if ok {
-			index[key] = append(index[key], record)
-		}
-	}
-	result := []reportDatasetRow{}
-	for _, row := range leftRows {
-		left := row[strings.TrimSpace(join.LeftAlias)]
-		leftKey, ok := reportJoinRecordKey(left, join.Equalities(), true)
-		matches := index[leftKey]
-		if !ok || len(matches) == 0 {
-			if strings.TrimSpace(join.Type) == "left" {
-				copyRow := reportCopyDatasetRow(row)
-				copyRow[strings.TrimSpace(join.Alias)] = nil
-				result = append(result, copyRow)
-			}
-			continue
-		}
-		for _, match := range matches {
-			copyRow := reportCopyDatasetRow(row)
-			copyRow[strings.TrimSpace(join.Alias)] = match
-			result = append(result, copyRow)
-		}
-	}
-	return result
+	return reportRuntimeRows(reportengine.JoinRows(reportEngineRows(leftRows), reportEngineRecords(rightRecords), join))
 }
 
 func reportDatasetRowMatchesFilters(row reportDatasetRow, filters []reportmodel.ReportDatasetFilter) bool {
-	for _, filter := range filters {
-		actual, exists := reportDatasetFieldValue(row, filter.Field)
-		if !reportFilterMatches(actual, exists, filter) {
-			return false
-		}
-	}
-	return true
+	return reportengine.RowMatchesFilters(reportEngineRows([]reportDatasetRow{row})[0], filters)
 }
 
 func reportFilterMatches(actual any, exists bool, filter reportmodel.ReportDatasetFilter) bool {
-	operator := strings.TrimSpace(filter.Operator)
-	if operator == "is_null" {
-		return !exists || actual == nil
-	}
-	if operator == "not_null" {
-		return exists && actual != nil
-	}
-	if !exists || actual == nil {
-		return false
-	}
-	compare := func(expected any) int { return reportCompareValues(actual, expected) }
-	switch operator {
-	case "eq":
-		return compare(filter.Value) == 0
-	case "ne":
-		return compare(filter.Value) != 0
-	case "gt":
-		return compare(filter.Value) > 0
-	case "gte":
-		return compare(filter.Value) >= 0
-	case "lt":
-		return compare(filter.Value) < 0
-	case "lte":
-		return compare(filter.Value) <= 0
-	case "in", "not_in":
-		matched := false
-		for _, expected := range filter.Values {
-			matched = matched || compare(expected) == 0
-		}
-		return matched == (operator == "in")
-	case "between":
-		return len(filter.Values) == 2 && compare(filter.Values[0]) >= 0 && compare(filter.Values[1]) <= 0
-	case "contains":
-		return strings.Contains(reportStableValue(actual), reportStableValue(filter.Value))
-	case "starts_with":
-		return strings.HasPrefix(reportStableValue(actual), reportStableValue(filter.Value))
-	case "ends_with":
-		return strings.HasSuffix(reportStableValue(actual), reportStableValue(filter.Value))
-	default:
-		return false
-	}
+	return reportengine.FilterMatches(actual, exists, filter)
 }
 
 func reportCompareValues(left, right any) int {
-	leftText, rightText := reportStableValue(left), reportStableValue(right)
-	leftTime, leftTimeErr := reportParseTime(leftText)
-	rightTime, rightTimeErr := reportParseTime(rightText)
-	if leftTimeErr == nil && rightTimeErr == nil {
-		if leftTime.Before(rightTime) {
-			return -1
-		}
-		if leftTime.After(rightTime) {
-			return 1
-		}
-		return 0
-	}
-	leftNumber, leftErr := decimal.NewFromString(leftText)
-	rightNumber, rightErr := decimal.NewFromString(rightText)
-	if leftErr == nil && rightErr == nil {
-		return leftNumber.Cmp(rightNumber)
-	}
-	return strings.Compare(leftText, rightText)
+	return reportengine.CompareValues(left, right)
 }
 
 func reportStableValue(value any) string {
-	if value == nil {
-		return ""
-	}
-	return strings.TrimSpace(fmt.Sprint(value))
+	return reportengine.StableValue(value)
 }

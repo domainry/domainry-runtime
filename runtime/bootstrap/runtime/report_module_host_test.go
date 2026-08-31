@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	reportsdk "github.com/domainry/domainry-report-sdk"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	reportmodule "github.com/domainry/domainry-report/module"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 func TestReportModuleAdoptsRuntimeSnapshotTableAndOwnsDefinitions(t *testing.T) {
@@ -32,7 +32,7 @@ func TestReportModuleAdoptsRuntimeSnapshotTableAndOwnsDefinitions(t *testing.T) 
 	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _report_snapshots VALUES ('snapshot-1','workspace-primary','summary','scope','request','succeeded','{}','','{}',1,1,'now','now','','','',0)`); err != nil {
 		t.Fatal(err)
 	}
-	binding, err := reportmodule.NewFactory().OpenModule(t.Context(), reportsdk.ApplicationRef{RuntimeID: "runtime-a"}, runtimeReportModuleHost{store: store})
+	binding, err := reportmodule.NewFactory().Open(t.Context(), reportsdk.ApplicationRef{RuntimeID: "runtime-a"}, runtimeReportModuleHost{store: store})
 	if err != nil {
 		t.Fatal(err)
 	}

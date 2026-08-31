@@ -17,7 +17,7 @@ import (
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 )
 
 type ManifestSchema struct {

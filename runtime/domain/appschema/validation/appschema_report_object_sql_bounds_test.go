@@ -3,9 +3,9 @@ package validation
 import (
 	"testing"
 
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 func objectSQLBoundsSnapshot() appschemamodel.ApplicationSchemaSnapshot {

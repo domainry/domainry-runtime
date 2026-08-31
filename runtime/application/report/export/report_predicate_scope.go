@@ -3,7 +3,7 @@ package export
 import (
 	"strings"
 
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 )
 
 // ApplyDeclaredPredicates resolves public selector keys exclusively through

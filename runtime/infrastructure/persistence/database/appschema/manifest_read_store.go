@@ -17,14 +17,12 @@ import (
 
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
-// ApplicationSchemaStore is the request-aware storage boundary for metadata.
-// Compatibility methods on Store remain available while callers migrate.
 func (r ApplicationSchemaStore) LoadManifest(ctx context.Context, scope principalmodel.SystemScope) (manifestmodel.ManifestSchema, error) {
 	if err := requireMetadataInstallationScope(scope); err != nil {
 		return manifestmodel.ManifestSchema{}, err
@@ -77,12 +75,12 @@ func (r ApplicationSchemaStore) LoadManifest(ctx context.Context, scope principa
 }
 
 func (r ApplicationSchemaStore) loadCatalog(ctx context.Context) (map[string]string, error) {
-	query, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "_application_schema_projection").Columns("template_id", "artifact_version", "default_locale", "name", "contract_version", "schema_hash", "source_hash").Where(ormbuilder.Equal("id", "current")).Build()
+	queryValue, args, buildErr := query.NewSelectBuilder(r.store.SQLRenderer, "_application_schema_projection").Columns("template_id", "artifact_version", "default_locale", "name", "contract_version", "schema_hash", "source_hash").Where(query.Equal("id", "current")).Build()
 	if buildErr != nil {
 		return nil, fmt.Errorf("build metadata catalog load: %w", buildErr)
 	}
 	var templateID, artifactVersion, defaultLocale, name, contractVersion, schemaHash, sourceHash string
-	if err := r.database().QueryRowContext(ctx, query, args...).Scan(&templateID, &artifactVersion, &defaultLocale, &name, &contractVersion, &schemaHash, &sourceHash); err != nil {
+	if err := r.database().QueryRowContext(ctx, queryValue, args...).Scan(&templateID, &artifactVersion, &defaultLocale, &name, &contractVersion, &schemaHash, &sourceHash); err != nil {
 		return nil, fmt.Errorf("load metadata projection: %w", err)
 	}
 	out := map[string]string{"template_id": templateID, "template_version": artifactVersion, "default_locale": defaultLocale, "name": name, "schema_version": contractVersion, "schema_hash": schemaHash, "source_hash": sourceHash}
@@ -93,11 +91,11 @@ func (r ApplicationSchemaStore) loadCatalog(ctx context.Context) (map[string]str
 }
 
 func loadMetadataSliceContext[T any](ctx context.Context, db *sql.DB, store *database.RuntimeStore, table string) ([]T, error) {
-	query, args, buildErr := ormbuilder.NewSelectBuilder(store.SQLRenderer, table).Columns("payload_json").Where(ormbuilder.IsNull("disabled_at")).OrderBy(ormbuilder.Ascending("resource_key")).Build()
+	queryValue, args, buildErr := query.NewSelectBuilder(store.SQLRenderer, table).Columns("payload_json").Where(query.IsNull("disabled_at")).OrderBy(query.Ascending("resource_key")).Build()
 	if buildErr != nil {
 		return nil, fmt.Errorf("build %s load: %w", table, buildErr)
 	}
-	rows, err := db.QueryContext(ctx, query, args...)
+	rows, err := db.QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, fmt.Errorf("load %s: %w", table, err)
 	}
@@ -131,11 +129,11 @@ func (r ApplicationSchemaStore) ListDefinitions(ctx context.Context, scope princ
 	if err != nil {
 		return nil, err
 	}
-	query, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, table).Columns("resource_key", "object_key", "name", "payload_json", "schema_version", "schema_hash", "source_kind", "source_id", "disabled_at", "created_at", "updated_at").Where(ormbuilder.IsNull("disabled_at")).OrderBy(ormbuilder.Ascending("resource_key")).Build()
+	queryValue, args, buildErr := query.NewSelectBuilder(r.store.SQLRenderer, table).Columns("resource_key", "object_key", "name", "payload_json", "schema_version", "schema_hash", "source_kind", "source_id", "disabled_at", "created_at", "updated_at").Where(query.IsNull("disabled_at")).OrderBy(query.Ascending("resource_key")).Build()
 	if buildErr != nil {
 		return nil, fmt.Errorf("build %s definition list: %w", resourceType, buildErr)
 	}
-	rows, err := r.database().QueryContext(ctx, query, args...)
+	rows, err := r.database().QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list %s definitions: %w", resourceType, err)
 	}
@@ -162,11 +160,11 @@ func (r ApplicationSchemaStore) GetDefinition(ctx context.Context, scope princip
 	if err != nil {
 		return appschemamodel.ApplicationDefinition{}, false, err
 	}
-	query, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, table).Columns("resource_key", "object_key", "name", "payload_json", "schema_version", "schema_hash", "source_kind", "source_id", "disabled_at", "created_at", "updated_at").Where(ormbuilder.Equal("resource_key", resourceKey)).Build()
+	queryValue, args, buildErr := query.NewSelectBuilder(r.store.SQLRenderer, table).Columns("resource_key", "object_key", "name", "payload_json", "schema_version", "schema_hash", "source_kind", "source_id", "disabled_at", "created_at", "updated_at").Where(query.Equal("resource_key", resourceKey)).Build()
 	if buildErr != nil {
 		return appschemamodel.ApplicationDefinition{}, false, fmt.Errorf("build %s definition lookup: %w", resourceType, buildErr)
 	}
-	definition, err := scanApplicationDefinition(r.database().QueryRowContext(ctx, query, args...), resourceType)
+	definition, err := scanApplicationDefinition(r.database().QueryRowContext(ctx, queryValue, args...), resourceType)
 	if err == sql.ErrNoRows {
 		return appschemamodel.ApplicationDefinition{}, false, nil
 	}

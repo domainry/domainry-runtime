@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	"github.com/shopspring/decimal"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -161,11 +161,11 @@ func (r ApplicationSchemaStore) migrateSQLiteExactDecimalTableInTransaction(ctx 
 		RewriteExactDecimalDDL(string, map[string]string) (string, string, error)
 		ExactDecimalSchemaArtifacts(context.Context, appschemasqlite.ExactDecimalQueryer, string) ([]string, error)
 		ExactDecimalWritableColumns(context.Context, appschemasqlite.ExactDecimalQueryer, string) ([]string, error)
-		ExactDecimalCreateShadowTableSQL(ormbuilder.Renderer, string, string, string) string
-		ExactDecimalCopySQL(ormbuilder.Renderer, string, string, []string, []string) string
-		ExactDecimalDropTableSQL(ormbuilder.Renderer, string) string
-		ExactDecimalRenameTableSQL(ormbuilder.Renderer, string, string) string
-		ExactDecimalEncodeExpression(ormbuilder.Renderer, string, int, int, string) string
+		ExactDecimalCreateShadowTableSQL(query.Renderer, string, string, string) string
+		ExactDecimalCopySQL(query.Renderer, string, string, []string, []string) string
+		ExactDecimalDropTableSQL(query.Renderer, string) string
+		ExactDecimalRenameTableSQL(query.Renderer, string, string) string
+		ExactDecimalEncodeExpression(query.Renderer, string, int, int, string) string
 	})
 	if !ok {
 		return fmt.Errorf("sqlite exact decimal SQL profile is required")
@@ -249,8 +249,8 @@ func (r ApplicationSchemaStore) exactDecimalSourceHash(ctx context.Context, exec
 	for _, column := range columns {
 		selected = append(selected, column.field.Key)
 	}
-	query := "SELECT " + quotedMetadataIdentifiers(r.store, selected) + " FROM " + r.store.TableIdentifier(table) + " ORDER BY " + r.store.Identifier("workspace_id") + ", " + r.store.Identifier("id")
-	rows, err := executor.QueryContext(ctx, query)
+	queryValue := "SELECT " + quotedMetadataIdentifiers(r.store, selected) + " FROM " + r.store.TableIdentifier(table) + " ORDER BY " + r.store.Identifier("workspace_id") + ", " + r.store.Identifier("id")
+	rows, err := executor.QueryContext(ctx, queryValue)
 	if err != nil {
 		return 0, "", err
 	}
@@ -331,10 +331,7 @@ func (r ApplicationSchemaStore) migrateMySQLExactDecimalTable(ctx context.Contex
 	if !ok {
 		return fmt.Errorf("mysql exact decimal SQL profile is required")
 	}
-	// MySQL atomic DDL commits as one server-side operation. Preflight all values
-	// before issuing the ALTER so failure leaves the original table untouched;
-	// MODIFY preserves indexes and foreign keys; the MySQL profile retains each
-	// column's NULL/default definition.
+
 	beforeRows, beforeHash, err := r.exactDecimalLogicalHash(ctx, r.store.SchemaDB(), table, columns, false)
 	if err != nil {
 		return fmt.Errorf("preflight mysql exact decimal values for %s: %w", table, err)
@@ -385,9 +382,9 @@ func (r ApplicationSchemaStore) preflightMySQLExactDecimalTable(ctx context.Cont
 		return fmt.Errorf("preflight mysql exact decimal values for %s: %w", table, err)
 	}
 	for _, column := range columns {
-		query := profile.ExactDecimalPreflightSQL(r.store.TableIdentifier(table), r.store.Identifier(column.field.Key), column.target)
+		queryValue := profile.ExactDecimalPreflightSQL(r.store.TableIdentifier(table), r.store.Identifier(column.field.Key), column.target)
 		var incompatible int64
-		if err := r.store.SchemaDB().QueryRowContext(ctx, query).Scan(&incompatible); err != nil || incompatible != 0 {
+		if err := r.store.SchemaDB().QueryRowContext(ctx, queryValue).Scan(&incompatible); err != nil || incompatible != 0 {
 			return fmt.Errorf("mysql exact decimal preflight failed for %s.%s: incompatible_rows=%d: %w", table, column.field.Key, incompatible, err)
 		}
 	}
@@ -399,16 +396,12 @@ func (r ApplicationSchemaStore) exactDecimalLogicalHash(ctx context.Context, exe
 	for _, column := range columns {
 		selected = append(selected, column.field.Key)
 	}
-	query := "SELECT " + quotedMetadataIdentifiers(r.store, selected) + " FROM " + r.store.TableIdentifier(table) + " ORDER BY " + r.store.Identifier("workspace_id") + ", " + r.store.Identifier("id")
-	// PostgreSQL invalidates a prepared statement's result type when ALTER
-	// COLUMN changes NUMERIC precision. Give the post-DDL verification query a
-	// distinct statement-cache identity while keeping the logical read exactly
-	// the same; otherwise pgx returns "cached plan must not change result type"
-	// and rolls back an otherwise valid migration.
+	queryValue := "SELECT " + quotedMetadataIdentifiers(r.store, selected) + " FROM " + r.store.TableIdentifier(table) + " ORDER BY " + r.store.Identifier("workspace_id") + ", " + r.store.Identifier("id")
+
 	if len(postSchemaChange) > 0 && postSchemaChange[0] {
-		query += " /* domainry_exact_decimal_post_schema_change */"
+		queryValue += " /* domainry_exact_decimal_post_schema_change */"
 	}
-	rows, err := executor.QueryContext(ctx, query)
+	rows, err := executor.QueryContext(ctx, queryValue)
 	if err != nil {
 		return 0, "", err
 	}
@@ -466,8 +459,8 @@ func (r ApplicationSchemaStore) recordExactDecimalEvidence(ctx context.Context, 
 	identity := metadataExactDecimalMigrationContract + "|" + table + "|" + strings.Join(keys, ",") + "|" + strings.Join(toTypes, ",")
 	idHash := sha256.Sum256([]byte(identity))
 	id := hex.EncodeToString(idHash[:])
-	query := "INSERT INTO " + r.store.TableIdentifier("_application_schema_exact_decimal_migration_receipts") + " (" + quotedMetadataIdentifiers(r.store, []string{"id", "contract_version", "object_key", "column_keys", "from_types", "to_types", "row_count", "before_hash", "after_hash", "applied_at"}) + ") VALUES (" + strings.Join(placeholders(r.store, 10), ", ") + ")"
-	if _, err := executor.ExecContext(ctx, query, id, metadataExactDecimalMigrationContract, table, strings.Join(keys, ","), strings.Join(fromTypes, ","), strings.Join(toTypes, ","), rowCount, beforeHash, afterHash, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+	queryValue := "INSERT INTO " + r.store.TableIdentifier("_application_schema_exact_decimal_migration_receipts") + " (" + quotedMetadataIdentifiers(r.store, []string{"id", "contract_version", "object_key", "column_keys", "from_types", "to_types", "row_count", "before_hash", "after_hash", "applied_at"}) + ") VALUES (" + strings.Join(placeholders(r.store, 10), ", ") + ")"
+	if _, err := executor.ExecContext(ctx, queryValue, id, metadataExactDecimalMigrationContract, table, strings.Join(keys, ","), strings.Join(fromTypes, ","), strings.Join(toTypes, ","), rowCount, beforeHash, afterHash, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 		return fmt.Errorf("record exact decimal migration evidence for %s: %w", table, err)
 	}
 	return nil

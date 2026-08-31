@@ -10,7 +10,7 @@ import (
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	agentmodulehost "github.com/domainry/domainry-agent-sdk/modulehost"
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	agentsaashost "github.com/domainry/domainry-agent-sdk/saashost"
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -23,7 +23,7 @@ type runtimeAgentHost struct {
 }
 
 func synchronizeAgentDefinitions(ctx context.Context, binding agentsdk.Binding, manifest *manifestmodel.ManifestSchema) error {
-	repositories, ok := binding.(agentrepository.DefinitionBinding)
+	repositories, ok := binding.(agentpersistence.DefinitionBinding)
 	if !ok || repositories.DefinitionRepository() == nil {
 		if len(manifest.Skills) == 0 && len(manifest.Agents) == 0 && len(manifest.AgentTasks) == 0 && len(manifest.AgentEntrypoints) == 0 && len(manifest.AgentServicePrincipals) == 0 {
 			return nil
@@ -38,7 +38,7 @@ func synchronizeAgentDefinitions(ctx context.Context, binding agentsdk.Binding, 
 	if version == "" {
 		version = "1"
 	}
-	snapshot := agentrepository.DefinitionSnapshot{
+	snapshot := agentpersistence.DefinitionSnapshot{
 		SchemaVersion: version, SourceKind: "manifest", SourceID: sourceID,
 		Skills: manifest.Skills, Agents: manifest.Agents, Tasks: manifest.AgentTasks,
 		Entrypoints: manifest.AgentEntrypoints, Principals: manifest.AgentServicePrincipals,

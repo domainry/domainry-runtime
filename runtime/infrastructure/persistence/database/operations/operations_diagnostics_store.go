@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/pagination"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationsrepository "github.com/domainry/domainry-runtime/runtime/domain/operations/repository"
 )
@@ -43,13 +43,13 @@ func (s OperationsStore) operationsMigrationDiagnostics(ctx context.Context) ope
 	status := "ready"
 	for _, table := range []string{"_schema_migrations"} {
 		var total, dirty int64
-		dirtyCount := ormbuilder.Coalesce(ormbuilder.Sum(ormbuilder.CaseWhen(ormbuilder.Equal("dirty", true), 1).Else(0)), ormbuilder.Value(0))
-		query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, table).Projections(ormbuilder.Project(ormbuilder.CountAll()), ormbuilder.Project(dirtyCount)).Build()
+		dirtyCount := query.Coalesce(query.Sum(query.CaseWhen(query.Equal("dirty", true), 1).Else(0)), query.Value(0))
+		queryValue, args, buildErr := query.NewSelectBuilder(s.store.SQLRenderer, table).Projections(query.Project(query.CountAll()), query.Project(dirtyCount)).Build()
 		if buildErr != nil {
 			return diagnosticFailure("backend.operations.diagnostics.migration_unavailable")
 		}
 		var dirtyValue sql.NullInt64
-		if err := s.database().QueryRowContext(ctx, query, args...).Scan(&total, &dirtyValue); err != nil {
+		if err := s.database().QueryRowContext(ctx, queryValue, args...).Scan(&total, &dirtyValue); err != nil {
 			return diagnosticFailure("backend.operations.diagnostics.migration_unavailable")
 		}
 		dirty = dirtyValue.Int64
@@ -118,13 +118,13 @@ func (s OperationsStore) operationsDLQDiagnostics(ctx context.Context, request o
 }
 
 func (s OperationsStore) operationsQueueCount(ctx context.Context, spec operationsQueueSpec, workspaceID string) (int64, string, error) {
-	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, spec.table, workspaceID).Projections(ormbuilder.Project(ormbuilder.CountAll()), ormbuilder.Project(ormbuilder.Min(ormbuilder.Column(spec.timestamp)))).Where(ormbuilder.In("status", spec.states...)).Build()
+	queryValue, args, buildErr := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, spec.table, workspaceID).Projections(query.Project(query.CountAll()), query.Project(query.Min(query.Column(spec.timestamp)))).Where(query.In("status", spec.states...)).Build()
 	if buildErr != nil {
 		return 0, "", buildErr
 	}
 	var count int64
 	var oldest sql.NullString
-	err := s.database().QueryRowContext(ctx, query, args...).Scan(&count, &oldest)
+	err := s.database().QueryRowContext(ctx, queryValue, args...).Scan(&count, &oldest)
 	return count, oldest.String, err
 }
 

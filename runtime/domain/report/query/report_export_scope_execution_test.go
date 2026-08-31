@@ -3,8 +3,8 @@ package query
 import (
 	"testing"
 
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 func TestReportExportRuntimeQueryAndTagsNarrowAndDeduplicateRows(t *testing.T) {

@@ -11,15 +11,13 @@ import (
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	sdkcontract "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	transactioncontract "github.com/domainry/domainry-runtime/runtime/domain/transaction/contract"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	notificationpublication "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
 )
 
-// InboxEventWriter writes an already compiled module event through a
-// producer-owned transaction. It does not compile intents or own commits.
 type InboxEventWriter struct{ runtimeStore *database.RuntimeStore }
 
 func NewInboxEventWriter(store *database.RuntimeStore) InboxEventWriter {
@@ -94,16 +92,16 @@ func (w InboxEventWriter) CommittedCount(ctx context.Context, event notification
 	}
 	var count int
 	if scope, saas := w.runtimeStore.NotificationSaaSPublications(); saas {
-		query, args, err := ormbuilder.NewWorkspaceSelectBuilder(w.runtimeStore.SQLRenderer, "_publication_outbox", event.WorkspaceID).
-			Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(ormbuilder.And(
-			ormbuilder.Equal("publication_type", "notification.saas"),
-			ormbuilder.Equal("tenant_id", scope.TenantID),
-			ormbuilder.Equal("application_key", scope.ApplicationKey), ormbuilder.Equal("source_event_id", event.SourceEventID),
+		queryValue, args, err := query.NewWorkspaceSelectBuilder(w.runtimeStore.SQLRenderer, "_publication_outbox", event.WorkspaceID).
+			Projections(query.Project(query.CountAll())).Where(query.And(
+			query.Equal("publication_type", "notification.saas"),
+			query.Equal("tenant_id", scope.TenantID),
+			query.Equal("application_key", scope.ApplicationKey), query.Equal("source_event_id", event.SourceEventID),
 		)).Build()
 		if err != nil {
 			return 0, fmt.Errorf("build Notification publication commit inspection: %w", err)
 		}
-		err = w.runtimeStore.DB().QueryRowContext(ctx, query, args...).Scan(&count)
+		err = w.runtimeStore.DB().QueryRowContext(ctx, queryValue, args...).Scan(&count)
 		return count, err
 	}
 	transactions := w.runtimeStore.NotificationTransactions()

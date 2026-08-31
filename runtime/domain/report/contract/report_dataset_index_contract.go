@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 const ReportRequiredIndexMissingCode = "backend.report.required_index_missing"

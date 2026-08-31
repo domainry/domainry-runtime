@@ -26,6 +26,7 @@ type NotificationsHandler struct {
 	authenticated      func(http.HandlerFunc) http.HandlerFunc
 	streamPollInterval time.Duration
 	streamHeartbeat    time.Duration
+	templateReadProxy  bool
 }
 
 type NotificationsDependencies struct {
@@ -41,6 +42,7 @@ type NotificationsDependencies struct {
 	Authenticated      func(http.HandlerFunc) http.HandlerFunc
 	StreamPollInterval time.Duration
 	StreamHeartbeat    time.Duration
+	TemplateReadProxy  bool
 }
 
 func NewNotificationsHandler(deps NotificationsDependencies) *NotificationsHandler {
@@ -51,7 +53,7 @@ func NewNotificationsHandler(deps NotificationsDependencies) *NotificationsHandl
 	if heartbeat <= 0 {
 		heartbeat = 15 * time.Second
 	}
-	return &NotificationsHandler{management: deps.Management, delivery: deps.Delivery, inbox: deps.Inbox, deliveryLedger: deps.DeliveryLedger, principal: deps.Principal, writeJSON: deps.WriteJSON, writeError: deps.WriteError, writeServiceError: deps.WriteServiceError, decodeJSON: deps.DecodeJSON, authenticated: deps.Authenticated, streamPollInterval: poll, streamHeartbeat: heartbeat}
+	return &NotificationsHandler{management: deps.Management, delivery: deps.Delivery, inbox: deps.Inbox, deliveryLedger: deps.DeliveryLedger, principal: deps.Principal, writeJSON: deps.WriteJSON, writeError: deps.WriteError, writeServiceError: deps.WriteServiceError, decodeJSON: deps.DecodeJSON, authenticated: deps.Authenticated, streamPollInterval: poll, streamHeartbeat: heartbeat, templateReadProxy: deps.TemplateReadProxy}
 }
 
 type NotificationDeliveryLedger interface {

@@ -12,6 +12,7 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
@@ -21,7 +22,6 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 type agentAnalysisRecordRepository struct {

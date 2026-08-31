@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	metadatarepository "github.com/domainry/domainry-metadata-sdk/repository"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	metadatapersistence "github.com/domainry/domainry-metadata-sdk/persistence"
+	"github.com/domainry/domainry-orm/query"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -21,13 +21,13 @@ func (s ApplicationSchemaStore) syncMetadataModuleDefinitions(ctx context.Contex
 	if repository == nil {
 		return fmt.Errorf("Metadata definition repository is unavailable")
 	}
-	definitions := []metadatarepository.Definition{}
+	definitions := []metadatapersistence.Definition{}
 	appendDefinition := func(resourceType, key, objectKey, name string, value any) error {
 		payload, err := json.Marshal(value)
 		if err != nil {
 			return err
 		}
-		definitions = append(definitions, metadatarepository.Definition{ResourceType: resourceType, Key: strings.TrimSpace(key), ObjectKey: strings.TrimSpace(objectKey), Name: strings.TrimSpace(name), Payload: payload})
+		definitions = append(definitions, metadatapersistence.Definition{ResourceType: resourceType, Key: strings.TrimSpace(key), ObjectKey: strings.TrimSpace(objectKey), Name: strings.TrimSpace(name), Payload: payload})
 		return nil
 	}
 	for _, object := range manifest.Objects {
@@ -75,7 +75,7 @@ func (s ApplicationSchemaStore) syncMetadataModuleDefinitions(ctx context.Contex
 	if sourceID == "" {
 		sourceID = "generated-template"
 	}
-	if err := repository.SyncDefinitions(ctx, metadatarepository.Snapshot{SchemaVersion: version, SourceKind: "generated", SourceID: sourceID, Definitions: definitions}); err != nil {
+	if err := repository.SyncDefinitions(ctx, metadatapersistence.Snapshot{SchemaVersion: version, SourceKind: "generated", SourceID: sourceID, Definitions: definitions}); err != nil {
 		return err
 	}
 	return s.purgeRetiredMetadataProjectionRows(ctx, "generated", sourceID)
@@ -83,8 +83,8 @@ func (s ApplicationSchemaStore) syncMetadataModuleDefinitions(ctx context.Contex
 
 func (s ApplicationSchemaStore) purgeRetiredMetadataProjectionRows(ctx context.Context, sourceKind, sourceID string) error {
 	for _, table := range []string{"_metadata_object_definitions", "_metadata_field_definitions", "_metadata_validation_definitions", "_metadata_action_definitions", "_metadata_dictionary_definitions"} {
-		statement, args, err := ormbuilder.NewDeleteBuilder(s.store.SQLRenderer, table).Where(ormbuilder.And(
-			ormbuilder.Equal("source_kind", sourceKind), ormbuilder.Equal("source_id", sourceID), ormbuilder.IsNotNull("disabled_at"),
+		statement, args, err := query.NewDeleteBuilder(s.store.SQLRenderer, table).Where(query.And(
+			query.Equal("source_kind", sourceKind), query.Equal("source_id", sourceID), query.IsNotNull("disabled_at"),
 		)).Build()
 		if err != nil {
 			return fmt.Errorf("build retired %s projection cleanup: %w", table, err)

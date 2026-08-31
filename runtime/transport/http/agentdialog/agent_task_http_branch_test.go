@@ -15,7 +15,7 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	agentruntime "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
@@ -31,7 +31,7 @@ type agentTaskHTTPRuns struct {
 	operateErr error
 }
 
-func (f *agentTaskHTTPRuns) List(context.Context, string, agentrepository.AgentTaskRunFilter) ([]agentmodel.AgentTaskRun, error) {
+func (f *agentTaskHTTPRuns) List(context.Context, string, agentpersistence.AgentTaskRunFilter) ([]agentmodel.AgentTaskRun, error) {
 	return f.runs, f.listErr
 }
 func (f *agentTaskHTTPRuns) Get(context.Context, string, string) (agentmodel.AgentTaskRun, bool, error) {

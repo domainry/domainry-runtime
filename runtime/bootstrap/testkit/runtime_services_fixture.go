@@ -61,6 +61,10 @@ func focusedPersistenceDependencies(ctx context.Context, config RuntimeServicesC
 	}
 	records := recordpersistence.NewRecordStore(config.Store)
 	reportDataset := reportpersistence.NewReportDatasetStore(config.Store)
+	reportBinding, err := openTestkitReportBinding(ctx, config.Store)
+	if err != nil {
+		panic("open Report test module: " + err.Error())
+	}
 	lifecycleBinding, err := lifecyclemoduleimpl.NewFactory().OpenModule(ctx, lifecyclesdk.ApplicationRef{RuntimeID: "runtime-testkit"}, lifecyclemodule.NewHost(config.Store))
 	if err != nil {
 		panic("open Lifecycle test module: " + err.Error())
@@ -69,7 +73,7 @@ func focusedPersistenceDependencies(ctx context.Context, config RuntimeServicesC
 		Records: records, RecordExecutions: records,
 		ReportDatasetRows:     reportDataset,
 		ReportObjectSQL:       reportDataset,
-		ReportSnapshots:       reportpersistence.NewReportSnapshotStore(config.Store),
+		ReportSnapshots:       reportpersistence.NewModuleReportSnapshotStore(reportBinding.Snapshots()),
 		ReportSnapshotSources: reportDataset,
 		Audit:                 auditpersistence.NewAuditStoreFromRuntimeStore(ctx, config.Store),
 		IntegrationConfig:     integrationpersistence.NewIntegrationConfigStore(config.Store),

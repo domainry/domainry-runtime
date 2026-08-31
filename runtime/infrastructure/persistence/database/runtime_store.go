@@ -15,15 +15,14 @@ import (
 	"github.com/domainry/domainry-foundation/secrets"
 	"github.com/domainry/domainry-foundation/telemetry"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
-	metadatarepository "github.com/domainry/domainry-metadata-sdk/repository"
+	metadatapersistence "github.com/domainry/domainry-metadata-sdk/persistence"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/base"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-// RuntimeStore owns the Runtime database connection and selected engine.
 type RuntimeStore struct {
 	*base.SQLDatabase
 	db                   *sql.DB
@@ -54,10 +53,10 @@ type RuntimeStore struct {
 	schemaAssembler      runtimeSchemaAssembler
 	backupChecksum       func(string) (string, error)
 	migrationReadDir     func(string) ([]os.DirEntry, error)
-	metadataDefinitions  metadatarepository.DefinitionRepository
+	metadataDefinitions  metadatapersistence.DefinitionRepository
 }
 
-func (s *RuntimeStore) MetadataDefinitions() metadatarepository.DefinitionRepository {
+func (s *RuntimeStore) MetadataDefinitions() metadatapersistence.DefinitionRepository {
 	if s == nil {
 		return nil
 	}
@@ -94,10 +93,6 @@ func (s *RuntimeStore) NotificationSaaSPublications() (NotificationSaaSPublicati
 	return *s.notificationSaaS, true
 }
 
-// BindNotificationTransactions installs the embedded Notification transaction
-// capability after the Module Binding is opened. The store owns neither the
-// capability nor its lifecycle; it only makes the exact publisher available
-// to producer-owned persistence adapters that already share this database.
 func (s *RuntimeStore) BindNotificationTransactions(publisher modulehost.TransactionalPublisher) error {
 	if s == nil || publisher == nil {
 		return fmt.Errorf("Notification transaction publisher is required")
@@ -150,8 +145,6 @@ type WorkerScopeExecutor interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 }
 
-// RegisterWorkerQueueScope records a payload-free Workspace discovery hint.
-// The owner task remains the source of truth and all claims stay scoped.
 func (s *RuntimeStore) RegisterWorkerQueueScope(ctx context.Context, executor WorkerScopeExecutor, queueKind, workspaceID, updatedAt string) error {
 	if s == nil || executor == nil {
 		return fmt.Errorf("worker queue scope store is required")
@@ -168,10 +161,10 @@ func (s *RuntimeStore) RegisterWorkerQueueScope(ctx context.Context, executor Wo
 	}
 	digest := sha256.Sum256([]byte(queueKind + "\x00" + workspaceID))
 	id := "worker_scope:" + hex.EncodeToString(digest[:12])
-	insert := ormbuilder.NewInsertBuilder(s.SQLRenderer, "_worker_queue_scopes").
+	insert := query.NewInsertBuilder(s.SQLRenderer, "_worker_queue_scopes").
 		Columns("id", "queue_kind", "scope_key", "updated_at").Values(id, queueKind, workspaceID, updatedAt)
 	insert, err := s.Engine.ApplyUpsert(insert, []string{"id"},
-		ormbuilder.AssignExpression("updated_at", ormbuilder.InsertedValue("updated_at")),
+		query.AssignExpression("updated_at", query.InsertedValue("updated_at")),
 	)
 	if err != nil {
 		return fmt.Errorf("build worker queue scope upsert: %w", err)
@@ -184,9 +177,6 @@ func (s *RuntimeStore) RegisterWorkerQueueScope(ctx context.Context, executor Wo
 	return err
 }
 
-// WorkerQueueScopePage returns a bounded, round-robin page of active workspace
-// scopes. Queue payload reads remain workspace-scoped; this registry is the
-// Runtime-global discovery boundary.
 func (s *RuntimeStore) WorkerQueueScopePage(ctx context.Context, queryer WorkerScopeQueryer, queueKind string, limit int) ([]string, error) {
 	if s == nil || queryer == nil {
 		return nil, fmt.Errorf("worker queue scope store is required")
@@ -219,10 +209,10 @@ func (s *RuntimeStore) WorkerQueueScopePage(ctx context.Context, queryer WorkerS
 	cursor.mu.Lock()
 	defer cursor.mu.Unlock()
 	after := cursor.after
-	selectBuilder := ormbuilder.NewSelectBuilder(s.SQLRenderer, "_worker_queue_scopes").
+	selectBuilder := query.NewSelectBuilder(s.SQLRenderer, "_worker_queue_scopes").
 		Columns("scope_key").
-		Where(ormbuilder.And(ormbuilder.Equal("queue_kind", queueKind), ormbuilder.GreaterThan("scope_key", after))).
-		OrderBy(ormbuilder.Ascending("scope_key")).Limit(limit + 1)
+		Where(query.And(query.Equal("queue_kind", queueKind), query.GreaterThan("scope_key", after))).
+		OrderBy(query.Ascending("scope_key")).Limit(limit + 1)
 	statement, args, err := selectBuilder.Build()
 	if err != nil {
 		return nil, fmt.Errorf("build worker queue scope page: %w", err)
@@ -315,8 +305,6 @@ func openContextWithDependencies(ctx context.Context, cfg config.Config, depende
 	return store, nil
 }
 
-// OpenContextWithKeyProvider replaces the local env/file key ring with a
-// production KMS, Vault, or Secret Manager adapter before secret access.
 func OpenContextWithKeyProvider(ctx context.Context, cfg config.Config, provider secrets.KeyProvider) (*RuntimeStore, error) {
 	if provider == nil {
 		return nil, fmt.Errorf("secret key provider is required")
@@ -349,8 +337,6 @@ func (s *RuntimeStore) Close() error {
 	return first
 }
 
-// CloseContext stops accepting new work and lets database/sql drain operations
-// already in flight, bounded by the caller's shutdown deadline.
 func (s *RuntimeStore) CloseContext(ctx context.Context) error {
 	if s == nil {
 		return nil

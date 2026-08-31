@@ -1,7 +1,3 @@
-// Package publicationhandoff owns Runtime's durable local handoff to external
-// delivery owners. It is intentionally limited to _publication_outbox;
-// Connector, connection, credential, webhook, event and invocation state are
-// outside this package and belong to Integration Module/SaaS.
 package publicationhandoff
 
 import (
@@ -18,7 +14,7 @@ import (
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
 	"github.com/domainry/domainry-foundation/telemetry"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationpolicy "github.com/domainry/domainry-runtime/runtime/domain/integration/policy"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
@@ -26,9 +22,6 @@ import (
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
-// Store is the Runtime-owned publication ledger. The legacy delegate is a
-// temporary data-compatibility adapter while its outbox SQL is moved here; the
-// public surface cannot access Integration owner invocation state.
 type PublicationStore struct {
 	store *database.RuntimeStore
 	db    *sql.DB
@@ -43,11 +36,11 @@ func (s PublicationStore) GetOutbox(ctx context.Context, workspaceID, id string)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, false, err
 	}
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).Columns(publicationColumns...).Where(publicationPredicate(ormbuilder.Equal("id", strings.TrimSpace(id)))).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).Columns(publicationColumns...).Where(publicationPredicate(query.Equal("id", strings.TrimSpace(id)))).Build()
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, false, err
 	}
-	message, err := scanPublication(s.db.QueryRowContext(ctx, query, args...))
+	message, err := scanPublication(s.db.QueryRowContext(ctx, queryValue, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return integrationmodel.IntegrationOutboxMessage{}, false, nil
 	}
@@ -61,18 +54,18 @@ func (s PublicationStore) ListOutbox(ctx context.Context, workspaceID, connector
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	predicates := []ormbuilder.Predicate{ormbuilder.Equal("publication_type", "integration.connector")}
+	predicates := []query.Predicate{query.Equal("publication_type", "integration.connector")}
 	if connectorKey = strings.TrimSpace(connectorKey); connectorKey != "" {
-		predicates = append(predicates, ormbuilder.Equal("connector_key", connectorKey))
+		predicates = append(predicates, query.Equal("connector_key", connectorKey))
 	}
 	if status = strings.TrimSpace(status); status != "" {
-		predicates = append(predicates, ormbuilder.Equal("status", status))
+		predicates = append(predicates, query.Equal("status", status))
 	}
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).Columns(publicationColumns...).Where(ormbuilder.And(predicates...)).OrderBy(ormbuilder.Descending("created_at")).Limit(limit).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).Columns(publicationColumns...).Where(query.And(predicates...)).OrderBy(query.Descending("created_at")).Limit(limit).Build()
 	if err != nil {
 		return nil, fmt.Errorf("build Runtime publication query: %w", err)
 	}
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := s.db.QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list Runtime publications: %w", err)
 	}
@@ -135,11 +128,11 @@ func (s PublicationStore) InsertOutbox(ctx context.Context, workspaceID string, 
 	}
 	columns := []string{"id", "publication_type", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "ack_deadline_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at"}
 	values := []any{value.ID, "integration.connector", value.ConnectorKey, value.ConnectionKey, value.Operation, value.Status, string(payload), value.EventID, value.RequestRef, value.DedupKey, value.RequestFingerprint, value.ResponseRef, value.Error, value.AttemptCount, value.NextAttemptAt, value.AckDeadlineAt, value.LastAttemptAt, value.LeaseOwner, value.LeaseExpiresAt, value.FencingToken, value.CreatedBy, value.CreatedAt, value.UpdatedAt}
-	query, args, err := ormbuilder.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).Columns(columns...).Values(values...).Build()
+	queryValue, args, err := query.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).Columns(columns...).Values(values...).Build()
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("build Runtime publication insert: %w", err)
 	}
-	if _, err := s.db.ExecContext(ctx, query, args...); err != nil {
+	if _, err := s.db.ExecContext(ctx, queryValue, args...); err != nil {
 		existing, found, readErr := s.findByDedup(ctx, value)
 		if readErr == nil && found {
 			if existing.RequestFingerprint != value.RequestFingerprint {
@@ -169,13 +162,13 @@ func (s PublicationStore) UpdateOutboxStatus(ctx context.Context, workspaceID, i
 		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("Runtime publication id is required")
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
+	queryValue, args, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
 		Set("status", strings.TrimSpace(status)).Set("response_ref", strings.TrimSpace(responseRef)).Set("error", strings.TrimSpace(errorText)).Set("next_attempt_at", "").Set("updated_at", now).
-		Where(publicationPredicate(ormbuilder.Equal("id", id))).Build()
+		Where(publicationPredicate(query.Equal("id", id))).Build()
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("build Runtime publication status update: %w", err)
 	}
-	result, err := s.db.ExecContext(ctx, query, args...)
+	result, err := s.db.ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("update Runtime publication status: %w", err)
 	}
@@ -204,11 +197,11 @@ func (s PublicationStore) UpdateOutboxStatusByResponseRef(ctx context.Context, w
 		return integrationmodel.IntegrationOutboxMessage{}, false, nil
 	}
 	for attempt := 0; attempt < 4; attempt++ {
-		query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).Columns(publicationColumns...).Where(publicationPredicate(ormbuilder.And(ormbuilder.Equal("connection_key", connectionKey), ormbuilder.Equal("response_ref", responseRef)))).OrderBy(ormbuilder.Descending("created_at"), ormbuilder.Descending("id")).Limit(1).Build()
+		queryValue, args, buildErr := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).Columns(publicationColumns...).Where(publicationPredicate(query.And(query.Equal("connection_key", connectionKey), query.Equal("response_ref", responseRef)))).OrderBy(query.Descending("created_at"), query.Descending("id")).Limit(1).Build()
 		if buildErr != nil {
 			return integrationmodel.IntegrationOutboxMessage{}, false, buildErr
 		}
-		existing, scanErr := scanPublication(s.db.QueryRowContext(ctx, query, args...))
+		existing, scanErr := scanPublication(s.db.QueryRowContext(ctx, queryValue, args...))
 		if errors.Is(scanErr, sql.ErrNoRows) {
 			return integrationmodel.IntegrationOutboxMessage{}, false, nil
 		}
@@ -219,13 +212,13 @@ func (s PublicationStore) UpdateOutboxStatusByResponseRef(ctx context.Context, w
 			return existing, true, nil
 		}
 		now := time.Now().UTC().Format(time.RFC3339)
-		query, args, buildErr = ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
+		queryValue, args, buildErr = query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
 			Set("status", strings.TrimSpace(status)).Set("error", strings.TrimSpace(errorText)).Set("next_attempt_at", "").Set("ack_deadline_at", "").Set("updated_at", now).
-			Where(publicationPredicate(ormbuilder.And(ormbuilder.Equal("id", existing.ID), ormbuilder.Equal("status", existing.Status)))).Build()
+			Where(publicationPredicate(query.And(query.Equal("id", existing.ID), query.Equal("status", existing.Status)))).Build()
 		if buildErr != nil {
 			return integrationmodel.IntegrationOutboxMessage{}, true, buildErr
 		}
-		result, updateErr := s.db.ExecContext(ctx, query, args...)
+		result, updateErr := s.db.ExecContext(ctx, queryValue, args...)
 		if updateErr != nil {
 			return integrationmodel.IntegrationOutboxMessage{}, true, fmt.Errorf("advance Runtime publication delivery status: %w", updateErr)
 		}
@@ -260,16 +253,16 @@ func (s PublicationStore) ScheduleOutboxRetry(ctx context.Context, workspaceID, 
 	}
 	now := time.Now().UTC()
 	nowText, next := now.Format(time.RFC3339), now.Add(time.Duration(delay)*time.Second).Format(time.RFC3339)
-	builder := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
-		Set("status", "queued").SetExpression("attempt_count", ormbuilder.Add(ormbuilder.Column("attempt_count"), ormbuilder.Value(1))).Set("next_attempt_at", next).Set("last_attempt_at", nowText).Set("updated_at", nowText)
+	builder := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
+		Set("status", "queued").SetExpression("attempt_count", query.Add(query.Column("attempt_count"), query.Value(1))).Set("next_attempt_at", next).Set("last_attempt_at", nowText).Set("updated_at", nowText)
 	if errorText = strings.TrimSpace(errorText); errorText != "" {
 		builder.Set("error", errorText)
 	}
-	query, args, err := builder.Where(publicationPredicate(ormbuilder.Equal("id", id))).Build()
+	queryValue, args, err := builder.Where(publicationPredicate(query.Equal("id", id))).Build()
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("build Runtime publication retry: %w", err)
 	}
-	result, err := s.db.ExecContext(ctx, query, args...)
+	result, err := s.db.ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("schedule Runtime publication retry: %w", err)
 	}
@@ -298,11 +291,11 @@ func (s PublicationStore) ListOverdueOutboxAcknowledgements(ctx context.Context,
 	if now = strings.TrimSpace(now); now == "" {
 		return nil, fmt.Errorf("Runtime publication acknowledgement cutoff is required")
 	}
-	query, args, err := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_publication_outbox").Columns(publicationColumns...).Where(publicationPredicate(ormbuilder.And(ormbuilder.Equal("status", "sent"), ormbuilder.NotEqual("ack_deadline_at", ""), ormbuilder.LessThanOrEqual("ack_deadline_at", now)))).OrderBy(ormbuilder.Ascending("ack_deadline_at"), ormbuilder.Ascending("workspace_id"), ormbuilder.Ascending("id")).Limit(limit).Build()
+	queryValue, args, err := query.NewSelectBuilder(s.store.SQLRenderer, "_publication_outbox").Columns(publicationColumns...).Where(publicationPredicate(query.And(query.Equal("status", "sent"), query.NotEqual("ack_deadline_at", ""), query.LessThanOrEqual("ack_deadline_at", now)))).OrderBy(query.Ascending("ack_deadline_at"), query.Ascending("workspace_id"), query.Ascending("id")).Limit(limit).Build()
 	if err != nil {
 		return nil, fmt.Errorf("build overdue Runtime publication acknowledgement list: %w", err)
 	}
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := s.db.QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list overdue Runtime publication acknowledgements: %w", err)
 	}
@@ -326,13 +319,13 @@ func (s PublicationStore) MarkOutboxAcknowledgementReconciliationRequired(ctx co
 	if messageID == "" || detectedAt == "" {
 		return integrationmodel.IntegrationOutboxMessage{}, false, fmt.Errorf("Runtime publication acknowledgement identity is required")
 	}
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
+	queryValue, args, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
 		Set("status", "quarantined").Set("error", "backend.integration.outbox.ack_timeout").Set("ack_deadline_at", "").Set("next_attempt_at", "").Set("updated_at", detectedAt).
-		Where(publicationPredicate(ormbuilder.And(ormbuilder.Equal("id", messageID), ormbuilder.Equal("status", "sent"), ormbuilder.NotEqual("ack_deadline_at", ""), ormbuilder.LessThanOrEqual("ack_deadline_at", detectedAt)))).Build()
+		Where(publicationPredicate(query.And(query.Equal("id", messageID), query.Equal("status", "sent"), query.NotEqual("ack_deadline_at", ""), query.LessThanOrEqual("ack_deadline_at", detectedAt)))).Build()
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, false, fmt.Errorf("build Runtime publication acknowledgement reconciliation: %w", err)
 	}
-	result, err := s.db.ExecContext(ctx, query, args...)
+	result, err := s.db.ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, false, fmt.Errorf("mark Runtime publication acknowledgement: %w", err)
 	}
@@ -387,8 +380,8 @@ func publicationWorkspaceID(value string) (string, error) {
 	return workspaceID.String(), nil
 }
 
-func publicationPredicate(predicate ormbuilder.Predicate) ormbuilder.Predicate {
-	return ormbuilder.And(ormbuilder.Equal("publication_type", "integration.connector"), predicate)
+func publicationPredicate(predicate query.Predicate) query.Predicate {
+	return query.And(query.Equal("publication_type", "integration.connector"), predicate)
 }
 
 func publicationIdentity(workspaceID, connectorKey, connectionKey, operation, dedupKey string) string {
@@ -396,23 +389,18 @@ func publicationIdentity(workspaceID, connectorKey, connectionKey, operation, de
 	return "integration_outbox:" + hex.EncodeToString(digest[:])[:24]
 }
 
-// WorkspaceID normalizes the workspace component used by transaction-owned
-// publication producers. Validation still occurs at repository boundaries.
 func WorkspaceID(value string) string { return strings.TrimSpace(value) }
 
-// OutboxDedupID is shared with Record/Action transaction writers so the row ID
-// is stable whether the publication is inserted through the repository or an
-// existing business transaction.
 func OutboxDedupID(workspaceID, connectorKey, connectionKey, operation, dedupKey string) string {
 	return publicationIdentity(strings.TrimSpace(workspaceID), strings.TrimSpace(connectorKey), strings.TrimSpace(connectionKey), strings.TrimSpace(operation), strings.TrimSpace(dedupKey))
 }
 
 func (s PublicationStore) findByDedup(ctx context.Context, value integrationmodel.IntegrationOutboxMessage) (integrationmodel.IntegrationOutboxMessage, bool, error) {
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_publication_outbox", value.WorkspaceID).Columns(publicationColumns...).Where(publicationPredicate(ormbuilder.And(ormbuilder.Equal("connector_key", value.ConnectorKey), ormbuilder.Equal("connection_key", value.ConnectionKey), ormbuilder.Equal("operation", value.Operation), ormbuilder.Equal("dedup_key", value.DedupKey)))).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_publication_outbox", value.WorkspaceID).Columns(publicationColumns...).Where(publicationPredicate(query.And(query.Equal("connector_key", value.ConnectorKey), query.Equal("connection_key", value.ConnectionKey), query.Equal("operation", value.Operation), query.Equal("dedup_key", value.DedupKey)))).Build()
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, false, err
 	}
-	existing, err := scanPublication(s.db.QueryRowContext(ctx, query, args...))
+	existing, err := scanPublication(s.db.QueryRowContext(ctx, queryValue, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return integrationmodel.IntegrationOutboxMessage{}, false, nil
 	}
@@ -433,7 +421,7 @@ func registerPublicationWorkerScope(ctx context.Context, store *database.Runtime
 	}
 	digest := sha256.Sum256([]byte("integration_outbox\x00" + workspaceID))
 	id := "worker_scope:" + hex.EncodeToString(digest[:12])
-	update, updateArgs, err := ormbuilder.NewUpdateBuilder(store.SQLRenderer, "_worker_queue_scopes").Set("updated_at", updatedAt).Where(ormbuilder.Equal("id", id)).Build()
+	update, updateArgs, err := query.NewUpdateBuilder(store.SQLRenderer, "_worker_queue_scopes").Set("updated_at", updatedAt).Where(query.Equal("id", id)).Build()
 	if err != nil {
 		return fmt.Errorf("build Runtime publication worker scope refresh: %w", err)
 	}
@@ -446,7 +434,7 @@ func registerPublicationWorkerScope(ctx context.Context, store *database.Runtime
 	} else if affected > 0 {
 		return nil
 	}
-	insert, insertArgs, err := ormbuilder.NewInsertBuilder(store.SQLRenderer, "_worker_queue_scopes").Columns("id", "queue_kind", "scope_key", "updated_at").Values(id, "integration_outbox", workspaceID, updatedAt).Build()
+	insert, insertArgs, err := query.NewInsertBuilder(store.SQLRenderer, "_worker_queue_scopes").Columns("id", "queue_kind", "scope_key", "updated_at").Values(id, "integration_outbox", workspaceID, updatedAt).Build()
 	if err != nil {
 		return fmt.Errorf("build Runtime publication worker scope registration: %w", err)
 	}

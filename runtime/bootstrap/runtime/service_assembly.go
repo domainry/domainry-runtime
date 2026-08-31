@@ -12,7 +12,7 @@ import (
 	"time"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 
 	auditsdk "github.com/domainry/domainry-audit-sdk"
 	auditmoduleimpl "github.com/domainry/domainry-audit/module"
@@ -27,6 +27,7 @@ import (
 	lifecyclemoduleimpl "github.com/domainry/domainry-lifecycle/module"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	partysdk "github.com/domainry/domainry-party-sdk"
+	reportsdk "github.com/domainry/domainry-report-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
@@ -88,6 +89,7 @@ type runtimeExtensionRegistries struct {
 	auditSubjectLifecycle        lifecyclecontract.SubjectDataHandler
 	dataExchangeFactory          dataexchangesdk.Factory
 	agentBinding                 agentsdk.Binding
+	reportBinding                reportsdk.Binding
 }
 
 func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest manifestmodel.ManifestSchema, notifications composition.NotificationRenderer, store *persistence.RuntimeStore, identityDirectory identitysdk.Directory, identityPrincipals identitysdk.PrincipalResolver, partyDirectory partysdk.Directory, auditApplication *auditapplication.AuditApplicationService, apiLimiter ratelimit.Limiter, workerDependencies workerplatform.Dependencies, extensionRegistries ...runtimeExtensionRegistries) (runtimeServiceAssembly, error) {
@@ -104,6 +106,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	var auditSubjectLifecycle lifecyclecontract.SubjectDataHandler
 	var dataExchangeFactory dataexchangesdk.Factory
 	var agentBinding agentsdk.Binding
+	var reportBinding reportsdk.Binding
 	var dataExchangeProviderKey string
 	var dataExchangeImportProvider dataexchangemodulehost.ImportProvider
 	var dataExchangeExportProvider dataexchangemodulehost.ExportProvider
@@ -133,6 +136,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		}
 		dataExchangeFactory = extensionRegistries[0].dataExchangeFactory
 		agentBinding = extensionRegistries[0].agentBinding
+		reportBinding = extensionRegistries[0].reportBinding
 		dataExchangeProviderKey = extensionRegistries[0].dataExchangeProviderKey
 		dataExchangeImportProvider = extensionRegistries[0].dataExchangeImportProvider
 		dataExchangeExportProvider = extensionRegistries[0].dataExchangeExportProvider
@@ -163,23 +167,23 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	if err != nil {
 		return runtimeServiceAssembly{}, fmt.Errorf("open Data Exchange module: %w", err)
 	}
-	var agentTaskRuns agentrepository.AgentTaskRunRepository
-	var agentTaskTransactions agentrepository.AgentTaskTransactionRepository
-	var agentLifecycle agentrepository.AgentLifecycleRepository
+	var agentTaskRuns agentpersistence.AgentTaskRunRepository
+	var agentTaskTransactions agentpersistence.AgentTaskTransactionRepository
+	var agentLifecycle agentpersistence.AgentLifecycleRepository
 	if agentBinding != nil {
-		persistenceBinding, ok := agentBinding.(agentrepository.Binding)
+		persistenceBinding, ok := agentBinding.(agentpersistence.Binding)
 		if !ok || persistenceBinding.AgentTaskRunRepository() == nil {
 			return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding returned no owned task repository")
 		}
 		agentTaskRuns = persistenceBinding.AgentTaskRunRepository()
-		lifecycleBinding, _ := agentBinding.(agentrepository.LifecycleBinding)
+		lifecycleBinding, _ := agentBinding.(agentpersistence.LifecycleBinding)
 		if lifecycleBinding != nil {
 			agentLifecycle = lifecycleBinding.AgentLifecycleRepository()
 		}
 		if agentLifecycle == nil {
 			return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding returned no lifecycle repository")
 		}
-		agentTaskTransactions, _ = agentTaskRuns.(agentrepository.AgentTaskTransactionRepository)
+		agentTaskTransactions, _ = agentTaskRuns.(agentpersistence.AgentTaskTransactionRepository)
 		if agentTaskTransactions == nil {
 			return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding returned no transaction repository")
 		}
@@ -268,7 +272,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			Records:                             records,
 			ReportDatasetRows:                   reportDatasetStore,
 			ReportObjectSQL:                     reportDatasetStore,
-			ReportSnapshots:                     reportpersistence.NewReportSnapshotStore(store),
+			ReportSnapshots:                     reportpersistence.NewModuleReportSnapshotStore(reportBinding.Snapshots()),
 			ReportSnapshotSources:               reportDatasetStore,
 			RecordExecutions:                    records,
 			DataExchange:                        dataExchangeBinding,
@@ -291,7 +295,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			WorkflowTaskNotificationCommitter:   taskNotificationCommitter,
 			RecordNotificationCompiler:          notificationCompiler,
 			ReportNotificationCompiler:          notificationCompiler,
-			ReportSnapshotNotificationCommitter: reportnotification.NewReportSnapshotNotificationCommitter(store),
+			ReportSnapshotNotificationCommitter: reportnotification.NewReportSnapshotNotificationCommitter(store, reportBinding.Snapshots()),
 			AutomationNotificationCompiler:      notificationCompiler,
 			AutomationNotificationCommitter:     automationnotification.NewAutomationExecutionNotificationCommitter(store),
 			NotificationIntentPublisher:         notificationIntentPublisherCallback(notificationPublisher),

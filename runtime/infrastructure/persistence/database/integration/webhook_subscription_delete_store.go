@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 )
 
 func (r IntegrationConfigStore) DeleteWebhookSubscription(ctx context.Context, workspaceID, subscriptionKey string) (bool, error) {
@@ -17,8 +17,8 @@ func (r IntegrationConfigStore) DeleteWebhookSubscription(ctx context.Context, w
 	if subscriptionKey == "" {
 		return false, fmt.Errorf("integration webhook subscription key is required")
 	}
-	statement, args, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, "_integration_webhook_subscriptions", workspaceID).
-		Where(ormbuilder.Equal("subscription_key", subscriptionKey)).Build()
+	statement, args, buildErr := query.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, "_integration_webhook_subscriptions", workspaceID).
+		Where(query.Equal("subscription_key", subscriptionKey)).Build()
 	if buildErr != nil {
 		return false, fmt.Errorf("build integration webhook subscription delete: %w", buildErr)
 	}

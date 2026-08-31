@@ -1,4 +1,3 @@
-// Workflow decision persistence.
 package workflow
 
 import (
@@ -11,12 +10,12 @@ import (
 
 	"strings"
 
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	notificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notification"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 )
@@ -24,10 +23,10 @@ import (
 type WorkflowDecisionStore struct {
 	store      *database.RuntimeStore
 	db         workflowDatabase
-	agentTasks agentrepository.AgentTaskTransactionRepository
+	agentTasks agentpersistence.AgentTaskTransactionRepository
 }
 
-func NewWorkflowDecisionStore(store *database.RuntimeStore, agentTasks ...agentrepository.AgentTaskTransactionRepository) WorkflowDecisionStore {
+func NewWorkflowDecisionStore(store *database.RuntimeStore, agentTasks ...agentpersistence.AgentTaskTransactionRepository) WorkflowDecisionStore {
 	value := WorkflowDecisionStore{store: store}
 	if len(agentTasks) > 0 {
 		value.agentTasks = agentTasks[0]
@@ -214,8 +213,8 @@ func (r WorkflowDecisionStore) CommitWorkflowState(ctx context.Context, commit t
 	return nil
 }
 
-func agentTaskMutation(run transactionmodel.WorkflowAgentTaskCommit) agentrepository.AgentTaskMutation {
-	return agentrepository.AgentTaskMutation{
+func agentTaskMutation(run transactionmodel.WorkflowAgentTaskCommit) agentpersistence.AgentTaskMutation {
+	return agentpersistence.AgentTaskMutation{
 		WorkspaceID: run.WorkspaceID, RunID: run.RunID, IdempotencyKey: run.IdempotencyKey,
 		TaskKey: run.TaskKey, ProcessID: run.ProcessID, Status: run.Status, ExpectedStatus: run.ExpectedStatus,
 		LeaseOwner: run.LeaseOwner, FencingToken: run.FencingToken, LeaseExpiresAt: run.LeaseExpiresAt,
@@ -258,14 +257,14 @@ func (r WorkflowDecisionStore) decideTaskTx(ctx context.Context, tx *sql.Tx, com
 	if status == "" {
 		status = "open"
 	}
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_tasks", commit.WorkspaceID).
+	queryValue, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_tasks", commit.WorkspaceID).
 		Set("status", task.Status).Set("decision", task.Decision).Set("comment", task.Comment).Set("completed_by", task.CompletedBy).
 		Set("completed_at", database.NullableText(task.CompletedAt)).Set("updated_at", task.UpdatedAt).
-		Where(ormbuilder.And(ormbuilder.Equal("id", task.ID), ormbuilder.Equal("assignee_user_id", commit.ExpectedAssigneeID), ormbuilder.Equal("status", status))).Build()
+		Where(query.And(query.Equal("id", task.ID), query.Equal("assignee_user_id", commit.ExpectedAssigneeID), query.Equal("status", status))).Build()
 	if err != nil {
 		return false, fmt.Errorf("build workflow task decision: %w", err)
 	}
-	result, err := tx.ExecContext(ctx, query, args...)
+	result, err := tx.ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return false, fmt.Errorf("decide workflow task: %w", err)
 	}
@@ -329,11 +328,11 @@ func (r WorkflowDecisionStore) insertTx(ctx context.Context, tx *sql.Tx, table s
 	if err != nil {
 		return err
 	}
-	query, args, err := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, table, workspaceID).Columns(scopedColumns...).Values(scopedValues...).Build()
+	queryValue, args, err := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, table, workspaceID).Columns(scopedColumns...).Values(scopedValues...).Build()
 	if err != nil {
 		return fmt.Errorf("build %s insert: %w", table, err)
 	}
-	_, err = tx.ExecContext(ctx, query, args...)
+	_, err = tx.ExecContext(ctx, queryValue, args...)
 	return err
 }
 
@@ -341,15 +340,15 @@ func (r WorkflowDecisionStore) updateTx(ctx context.Context, tx *sql.Tx, table, 
 	if len(columns) != len(values) {
 		return fmt.Errorf("build %s update: columns=%d values=%d", table, len(columns), len(values))
 	}
-	builder := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, table, workspaceID)
+	builder := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, table, workspaceID)
 	for index, column := range columns {
 		builder.Set(column, values[index])
 	}
-	query, args, err := builder.Where(ormbuilder.Equal("id", id)).Build()
+	queryValue, args, err := builder.Where(query.Equal("id", id)).Build()
 	if err != nil {
 		return fmt.Errorf("build %s update: %w", table, err)
 	}
-	result, err := tx.ExecContext(ctx, query, args...)
+	result, err := tx.ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return err
 	}

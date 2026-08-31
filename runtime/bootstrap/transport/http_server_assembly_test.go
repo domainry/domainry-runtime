@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
@@ -28,13 +28,13 @@ import (
 )
 
 type transportAgentRepositoryBinding struct {
-	state agentrepository.AgentStateRepository
+	state agentpersistence.AgentStateRepository
 }
 
-func (b transportAgentRepositoryBinding) AgentStateRepository() agentrepository.AgentStateRepository {
+func (b transportAgentRepositoryBinding) AgentStateRepository() agentpersistence.AgentStateRepository {
 	return b.state
 }
-func (transportAgentRepositoryBinding) AgentTaskRunRepository() agentrepository.AgentTaskRunRepository {
+func (transportAgentRepositoryBinding) AgentTaskRunRepository() agentpersistence.AgentTaskRunRepository {
 	return nil
 }
 

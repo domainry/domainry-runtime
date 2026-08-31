@@ -28,9 +28,9 @@ ambient environment variables.
 | Identity | Authentication, browser session and Identity management | Project provisioning orchestration | Borrowed pool; Identity-owned schema |
 | Party | Party directory and Party foundation catalog | SaaS proxy facade only | Borrowed pool; Party-owned schema |
 | Notification | None yet | Inbox product projections, SSE, publication orchestration and delivery governance | Borrowed pool; Notification-owned schema |
-| Integration | None | Durable handoff, connection governance and Web Push BFF | Borrowed pool; Integration-owned schema |
+| Integration | Web Push readiness and subscription self-service | Durable Runtime outbox handoff query; SaaS compatibility proxy | Borrowed pool; Integration-owned schema |
 | Scheduler | None | Runtime definition authoring, operation receipts and trigger acceptance | Borrowed pool; Scheduler-owned schema |
-| Monitoring | None | Runtime operations projection | None |
+| Monitoring | Operations metrics | Process liveness/readiness/startup probes; SaaS compatibility proxy | None |
 | Data Exchange | None | Record import/export and artifact orchestration | Borrowed pool; Data Exchange-owned schema |
 | Agent | None | Dialog, task and proposal orchestration | Borrowed pool; Agent-owned schema |
 | Lifecycle | None | Cross-owner retention, legal hold and subject-request orchestration | Borrowed pool; Lifecycle-owned schema |

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	metadatarepository "github.com/domainry/domainry-metadata-sdk/repository"
+	metadatapersistence "github.com/domainry/domainry-metadata-sdk/persistence"
 	ormdialect "github.com/domainry/domainry-orm/dialect"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -27,7 +27,7 @@ type ApplicationSchemaStore struct {
 	createIndex          func(context.Context, string, string, bool, ...string) error
 	storage              appschemastorage.Profile
 	exactDecimalMigrator metadataExactDecimalMigrator
-	metadataDefinitions  metadatarepository.DefinitionRepository
+	metadataDefinitions  metadatapersistence.DefinitionRepository
 }
 
 type metadataProfileFactory func() (appschemastorage.Profile, metadataExactDecimalMigrator)

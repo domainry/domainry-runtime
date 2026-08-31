@@ -6,12 +6,12 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
+	reportobjectsql "github.com/domainry/domainry-report/query/objectsql"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
-	reportobjectsql "github.com/domainry/domainry-runtime/runtime/domain/report/query/objectsql"
 )
 
 func (s *ReportDomainService) executeReportObjectSQL(ctx context.Context, report reportmodel.ReportSchema, rawParameters map[string]any, principal principalmodel.Principal) (reportmodel.ReportSummary, error) {
@@ -26,7 +26,7 @@ func (s *ReportDomainService) executeReportObjectSQLPage(ctx context.Context, re
 	if err != nil {
 		return reportmodel.ReportSummary{}, err
 	}
-	if reportmodel.ReportCrossWorkspaceAggregate(report) && !safeCrossWorkspaceAggregatePlan(plan) {
+	if reportmodel.ReportCrossWorkspaceAggregate(report) && !reportobjectsql.SafeCrossWorkspaceAggregatePlan(plan) {
 		return reportmodel.ReportSummary{}, reportAppError(apperror.KindForbidden, "backend.report.cross_workspace_raw_projection_forbidden", nil)
 	}
 	parameters, err := reportobjectsql.NormalizeDeclaredParameters(plan.Parameters, rawParameters)
@@ -84,47 +84,6 @@ func (s *ReportDomainService) executeReportObjectSQLPage(ctx context.Context, re
 	}
 	summary.ExecutionCursor = result.NextCursor
 	return summary, nil
-}
-
-func safeCrossWorkspaceAggregatePlan(plan reportmodel.ReportObjectSQLPlan) bool {
-	for _, projection := range plan.Projections {
-		if reportExpressionHasAggregate(projection.Expression) || (projection.Expression.Kind == "field" && projection.Expression.FieldKey == "workspace_id") || (projection.Expression.Kind == "function" && projection.Expression.Name == "date_bucket") {
-			continue
-		}
-		return false
-	}
-	for _, group := range plan.GroupBy {
-		if (group.Kind == "field" && group.FieldKey == "workspace_id") || (group.Kind == "function" && group.Name == "date_bucket") {
-			continue
-		}
-		return false
-	}
-	if len(plan.GroupBy) == 0 {
-		for _, projection := range plan.Projections {
-			if reportExpressionHasAggregate(projection.Expression) {
-				return true
-			}
-		}
-		return false
-	}
-	return true
-}
-
-func reportExpressionHasAggregate(expression reportmodel.ReportObjectSQLExpression) bool {
-	if expression.Kind == "aggregate" {
-		return true
-	}
-	for _, argument := range expression.Arguments {
-		if reportExpressionHasAggregate(argument) {
-			return true
-		}
-	}
-	for _, when := range expression.Whens {
-		if reportExpressionHasAggregate(when.Condition) || reportExpressionHasAggregate(when.Value) {
-			return true
-		}
-	}
-	return expression.Else != nil && reportExpressionHasAggregate(*expression.Else)
 }
 
 func (s *ReportDomainService) reportObjectSQLExecutionInputs(ctx context.Context, report reportmodel.ReportSchema, principal principalmodel.Principal) (reportmodel.ReportObjectSQLPlan, map[string]definitionmodel.ObjectSchema, map[string]recordmodel.RecordListQuery, error) {

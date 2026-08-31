@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 )
 
 type metadataSQLDialect interface {
@@ -17,26 +17,26 @@ type metadataSQLDialect interface {
 }
 
 func (s ApplicationSchemaStore) manifestMetadataSeeded(ctx context.Context) (bool, error) {
-	query, args, err := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_application_schema_projection").
-		Projections(ormbuilder.Project(ormbuilder.CountAll())).Where(ormbuilder.Equal("id", "current")).Build()
+	queryValue, args, err := query.NewSelectBuilder(s.store.SQLRenderer, "_application_schema_projection").
+		Projections(query.Project(query.CountAll())).Where(query.Equal("id", "current")).Build()
 	if err != nil {
 		return false, fmt.Errorf("build metadata projection seed query: %w", err)
 	}
 	var count int
-	if err := s.database().QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+	if err := s.database().QueryRowContext(ctx, queryValue, args...).Scan(&count); err != nil {
 		return false, fmt.Errorf("read metadata projection: %w", err)
 	}
 	return count > 0, nil
 }
 
 func (s ApplicationSchemaStore) ManifestIdentitySeedSyncedVersion(ctx context.Context) (string, error) {
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_application_schema_seed_checkpoints").
-		Columns("value").Where(ormbuilder.Equal("key", "identity_seed_synced_version")).Build()
+	queryValue, args, buildErr := query.NewSelectBuilder(s.store.SQLRenderer, "_application_schema_seed_checkpoints").
+		Columns("value").Where(query.Equal("key", "identity_seed_synced_version")).Build()
 	if buildErr != nil {
 		return "", fmt.Errorf("build identity seed version query: %w", buildErr)
 	}
 	var value string
-	if err := s.database().QueryRowContext(ctx, query, args...).Scan(&value); err != nil {
+	if err := s.database().QueryRowContext(ctx, queryValue, args...).Scan(&value); err != nil {
 		if err == sql.ErrNoRows {
 			return "", nil
 		}
@@ -47,24 +47,24 @@ func (s ApplicationSchemaStore) ManifestIdentitySeedSyncedVersion(ctx context.Co
 
 func (s ApplicationSchemaStore) SetManifestIdentitySeedSyncedVersion(ctx context.Context, version string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
-	query, args, err := buildSeedCheckpointUpsert(s, "identity_seed_synced_version", strings.TrimSpace(version), now)
+	queryValue, args, err := buildSeedCheckpointUpsert(s, "identity_seed_synced_version", strings.TrimSpace(version), now)
 	if err != nil {
 		return fmt.Errorf("build identity seed version upsert: %w", err)
 	}
-	if _, err := s.database().ExecContext(ctx, query, args...); err != nil {
+	if _, err := s.database().ExecContext(ctx, queryValue, args...); err != nil {
 		return fmt.Errorf("set identity seed synced version: %w", err)
 	}
 	return nil
 }
 
 func (s ApplicationSchemaStore) ManifestOrganizationScopeSeedState(ctx context.Context) (string, error) {
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_application_schema_seed_checkpoints").
-		Columns("value").Where(ormbuilder.Equal("key", "organization_scope_seed_state")).Build()
+	queryValue, args, buildErr := query.NewSelectBuilder(s.store.SQLRenderer, "_application_schema_seed_checkpoints").
+		Columns("value").Where(query.Equal("key", "organization_scope_seed_state")).Build()
 	if buildErr != nil {
 		return "", fmt.Errorf("build organization scope seed query: %w", buildErr)
 	}
 	var value string
-	if err := s.database().QueryRowContext(ctx, query, args...).Scan(&value); err != nil {
+	if err := s.database().QueryRowContext(ctx, queryValue, args...).Scan(&value); err != nil {
 		if err == sql.ErrNoRows {
 			return "", nil
 		}
@@ -75,22 +75,22 @@ func (s ApplicationSchemaStore) ManifestOrganizationScopeSeedState(ctx context.C
 
 func (s ApplicationSchemaStore) SetManifestOrganizationScopeSeedState(ctx context.Context, state string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
-	query, args, err := buildSeedCheckpointUpsert(s, "organization_scope_seed_state", strings.TrimSpace(state), now)
+	queryValue, args, err := buildSeedCheckpointUpsert(s, "organization_scope_seed_state", strings.TrimSpace(state), now)
 	if err != nil {
 		return fmt.Errorf("build organization scope seed upsert: %w", err)
 	}
-	if _, err := s.database().ExecContext(ctx, query, args...); err != nil {
+	if _, err := s.database().ExecContext(ctx, queryValue, args...); err != nil {
 		return fmt.Errorf("set organization scope seed state: %w", err)
 	}
 	return nil
 }
 
 func buildSeedCheckpointUpsert(store ApplicationSchemaStore, key, value, now string) (string, []any, error) {
-	insert := ormbuilder.NewInsertBuilder(store.store.SQLRenderer, "_application_schema_seed_checkpoints").
+	insert := query.NewInsertBuilder(store.store.SQLRenderer, "_application_schema_seed_checkpoints").
 		Columns("key", "value", "updated_at").Values(key, value, now)
 	insert, err := store.store.Engine.ApplyUpsert(insert, []string{"key"},
-		ormbuilder.AssignExpression("value", ormbuilder.InsertedValue("value")),
-		ormbuilder.AssignExpression("updated_at", ormbuilder.InsertedValue("updated_at")),
+		query.AssignExpression("value", query.InsertedValue("value")),
+		query.AssignExpression("updated_at", query.InsertedValue("updated_at")),
 	)
 	if err != nil {
 		return "", nil, err
@@ -98,9 +98,6 @@ func buildSeedCheckpointUpsert(store ApplicationSchemaStore, key, value, now str
 	return insert.Build()
 }
 
-// refreshMetadataCatalogHash uses the same content-addressed projection algorithm
-// as transactional definition publication. Timestamps and publication order
-// are deliberately excluded so package replays converge on the same hash.
 func (s ApplicationSchemaStore) refreshMetadataCatalogHash(ctx context.Context) error {
 	return s.refreshCatalogHash(ctx)
 }

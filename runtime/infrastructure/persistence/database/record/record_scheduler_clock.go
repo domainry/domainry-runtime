@@ -1,7 +1,7 @@
 package record
 
 import (
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
 	"context"
@@ -13,8 +13,6 @@ import (
 	"time"
 )
 
-// SchedulerNow returns the database server clock so lease arbitration does not
-// depend on clock synchronization between Runtime processes.
 func (r RecordStore) SchedulerNow(ctx context.Context) (time.Time, error) {
 	if err := ctx.Err(); err != nil {
 		return time.Time{}, err
@@ -26,9 +24,9 @@ func (r RecordStore) SchedulerNow(ctx context.Context) (time.Time, error) {
 	if r.store == nil {
 		return time.Time{}, fmt.Errorf("record database profile is unavailable")
 	}
-	query := r.store.RuntimeProfile().DatabaseCurrentTimeQuery()
+	queryValue := r.store.RuntimeProfile().DatabaseCurrentTimeQuery()
 	var raw any
-	if err := database.QueryRowContext(ctx, query.Statement, query.Arguments...).Scan(&raw); err != nil {
+	if err := database.QueryRowContext(ctx, queryValue.Statement, queryValue.Arguments...).Scan(&raw); err != nil {
 		return time.Time{}, fmt.Errorf("read database current timestamp: %w", err)
 	}
 	switch value := raw.(type) {
@@ -75,15 +73,15 @@ func (r RecordStore) ListDueRecordTimerWorkspaces(ctx context.Context, object de
 	}
 	s := r.store
 	nowValue := now.UTC().Format(time.RFC3339Nano)
-	predicate := ormbuilder.Or(
-		ormbuilder.And(ormbuilder.Equal("status", "scheduled"), ormbuilder.LessThanOrEqual("due_at", nowValue)),
-		ormbuilder.And(ormbuilder.Equal("status", "leased"), ormbuilder.LessThanOrEqual("due_at", nowValue), ormbuilder.LessThanOrEqual("lease_expires_at", nowValue)),
+	predicate := query.Or(
+		query.And(query.Equal("status", "scheduled"), query.LessThanOrEqual("due_at", nowValue)),
+		query.And(query.Equal("status", "leased"), query.LessThanOrEqual("due_at", nowValue), query.LessThanOrEqual("lease_expires_at", nowValue)),
 	)
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.SQLRenderer, object.Key).Columns("workspace_id").Distinct().Where(predicate).OrderBy(ormbuilder.Ascending("workspace_id")).Build()
+	queryValue, args, buildErr := query.NewSelectBuilder(s.SQLRenderer, object.Key).Columns("workspace_id").Distinct().Where(predicate).OrderBy(query.Ascending("workspace_id")).Build()
 	if buildErr != nil {
 		return nil, buildErr
 	}
-	rows, err := r.database().QueryContext(ctx, query, args...)
+	rows, err := r.database().QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list record workspaces: %w", err)
 	}

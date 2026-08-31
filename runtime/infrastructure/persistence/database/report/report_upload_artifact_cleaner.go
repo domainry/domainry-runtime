@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
@@ -36,13 +36,13 @@ func (c *UploadArtifactCleaner) ExpireUploadReferences(ctx context.Context, now 
 		return 0, nil
 	}
 	cutoff := now.Add(-7 * 24 * time.Hour).UTC().Format(time.RFC3339Nano)
-	query, args, buildErr := ormbuilder.NewSelectBuilder(c.store.SQLRenderer, "download_task").Columns("workspace_id", "id").
-		Where(ormbuilder.And(ormbuilder.Equal("token_status", "active"), ormbuilder.LessThanOrEqual("updated_at", cutoff))).
-		OrderBy(ormbuilder.Ascending("updated_at"), ormbuilder.Ascending("id")).Limit(limit).Build()
+	queryValue, args, buildErr := query.NewSelectBuilder(c.store.SQLRenderer, "download_task").Columns("workspace_id", "id").
+		Where(query.And(query.Equal("token_status", "active"), query.LessThanOrEqual("updated_at", cutoff))).
+		OrderBy(query.Ascending("updated_at"), query.Ascending("id")).Limit(limit).Build()
 	if buildErr != nil {
 		return 0, fmt.Errorf("build expired download task query: %w", buildErr)
 	}
-	rows, err := c.store.DB().QueryContext(ctx, query, args...)
+	rows, err := c.store.DB().QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -63,9 +63,9 @@ func (c *UploadArtifactCleaner) ExpireUploadReferences(ctx context.Context, now 
 	_ = rows.Close()
 	expired := 0
 	for _, item := range identities {
-		update, updateArgs, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(c.store.SQLRenderer, "download_task", item.workspaceID).
+		update, updateArgs, buildErr := query.NewWorkspaceUpdateBuilder(c.store.SQLRenderer, "download_task", item.workspaceID).
 			Set("token_status", "expired").Set("status", "expired").Set("file_name", "").Set("updated_at", now.UTC().Format(time.RFC3339Nano)).
-			Where(ormbuilder.And(ormbuilder.Equal("id", item.id), ormbuilder.Equal("token_status", "active"))).Build()
+			Where(query.And(query.Equal("id", item.id), query.Equal("token_status", "active"))).Build()
 		if buildErr != nil {
 			return expired, fmt.Errorf("build download task expiration: %w", buildErr)
 		}

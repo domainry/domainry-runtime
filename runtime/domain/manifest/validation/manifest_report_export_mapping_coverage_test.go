@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 func TestReportExportRecordMappingRejectsEmptyUnknownStatusAndInvalidFields(t *testing.T) {

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"unicode"
 
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 func agentAnalysisRenderedReport(cardType, htmlFragment, queryRef, reportKey string) map[string]any {

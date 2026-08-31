@@ -18,7 +18,7 @@ import (
 	lifecyclecore "github.com/domainry/domainry-lifecycle-sdk/application"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
-	lifecyclerepository "github.com/domainry/domainry-lifecycle-sdk/repository"
+	lifecyclepersistence "github.com/domainry/domainry-lifecycle-sdk/persistence"
 	lifecycleapplication "github.com/domainry/domainry-runtime/runtime/application/lifecycle"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -135,7 +135,7 @@ func TestLifecycleGovernanceHandlersRejectMalformedJSON(t *testing.T) {
 	}
 }
 
-func newLifecycleGovernanceHTTPMux(t *testing.T) (*http.ServeMux, lifecyclerepository.LifecycleRepository) {
+func newLifecycleGovernanceHTTPMux(t *testing.T) (*http.ServeMux, lifecyclepersistence.LifecycleRepository) {
 	t.Helper()
 	runtimeStore, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "lifecycle-governance-http.db")})
 	if err != nil {

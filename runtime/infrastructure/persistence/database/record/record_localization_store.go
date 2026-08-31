@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -25,16 +25,16 @@ func (r RecordStore) ListRecordLocalizedValues(ctx context.Context, workspaceID 
 	if len(recordIDs) == 0 || len(fieldKeys) == 0 || len(locales) == 0 {
 		return nil, nil
 	}
-	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, recordLocalizedValueTable, workspaceID).Columns("record_id", "field_key", "locale", "text_value").Where(ormbuilder.And(
-		ormbuilder.Equal("object_key", strings.TrimSpace(object.Key)),
-		ormbuilder.In("record_id", recordLocalizationAny(recordIDs)...),
-		ormbuilder.In("field_key", recordLocalizationAny(fieldKeys)...),
-		ormbuilder.In("locale", recordLocalizationAny(locales)...),
+	queryValue, args, buildErr := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, recordLocalizedValueTable, workspaceID).Columns("record_id", "field_key", "locale", "text_value").Where(query.And(
+		query.Equal("object_key", strings.TrimSpace(object.Key)),
+		query.In("record_id", recordLocalizationAny(recordIDs)...),
+		query.In("field_key", recordLocalizationAny(fieldKeys)...),
+		query.In("locale", recordLocalizationAny(locales)...),
 	)).Build()
 	if buildErr != nil {
 		return nil, buildErr
 	}
-	rows, err := r.queryExecutor(ctx).QueryContext(ctx, query, args...)
+	rows, err := r.queryExecutor(ctx).QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list record localized values: %w", err)
 	}
@@ -114,8 +114,8 @@ func (r RecordStore) applyRecordLocalizedMutationsTx(ctx context.Context, tx Tra
 		return nil
 	}
 	for _, value := range mutations {
-		predicate := ormbuilder.And(ormbuilder.Equal("object_key", commitObject.Key), ormbuilder.Equal("record_id", recordID), ormbuilder.Equal("field_key", value.FieldKey), ormbuilder.Equal("locale", value.Locale))
-		deleteSQL, deleteArgs, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, recordLocalizedValueTable, workspaceID).Where(predicate).Build()
+		predicate := query.And(query.Equal("object_key", commitObject.Key), query.Equal("record_id", recordID), query.Equal("field_key", value.FieldKey), query.Equal("locale", value.Locale))
+		deleteSQL, deleteArgs, buildErr := query.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, recordLocalizedValueTable, workspaceID).Where(predicate).Build()
 		if buildErr != nil {
 			return buildErr
 		}
@@ -125,7 +125,7 @@ func (r RecordStore) applyRecordLocalizedMutationsTx(ctx context.Context, tx Tra
 		if strings.TrimSpace(value.TextValue) == "" {
 			continue
 		}
-		insert, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, recordLocalizedValueTable, workspaceID).Columns("object_key", "record_id", "field_key", "locale", "text_value", "created_at", "updated_at").Values(commitObject.Key, recordID, value.FieldKey, value.Locale, value.TextValue, changedAt, changedAt).Build()
+		insert, args, buildErr := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, recordLocalizedValueTable, workspaceID).Columns("object_key", "record_id", "field_key", "locale", "text_value", "created_at", "updated_at").Values(commitObject.Key, recordID, value.FieldKey, value.Locale, value.TextValue, changedAt, changedAt).Build()
 		if buildErr != nil {
 			return buildErr
 		}
@@ -137,11 +137,11 @@ func (r RecordStore) applyRecordLocalizedMutationsTx(ctx context.Context, tx Tra
 }
 
 func (r RecordStore) deleteRecordLocalizedValuesTx(ctx context.Context, tx TransactionExecutor, workspaceID, objectKey, recordID string) error {
-	query, args, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, recordLocalizedValueTable, workspaceID).Where(ormbuilder.And(ormbuilder.Equal("object_key", objectKey), ormbuilder.Equal("record_id", recordID))).Build()
+	queryValue, args, buildErr := query.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, recordLocalizedValueTable, workspaceID).Where(query.And(query.Equal("object_key", objectKey), query.Equal("record_id", recordID))).Build()
 	if buildErr != nil {
 		return buildErr
 	}
-	_, err := tx.ExecContext(ctx, query, args...)
+	_, err := tx.ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return fmt.Errorf("delete record localized values: %w", err)
 	}
@@ -156,73 +156,73 @@ func recordLocalizationAny(values []string) []any {
 	return result
 }
 
-func recordLocalizedSearchPredicate(s *database.RuntimeStore, workspaceID string, object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (ormbuilder.Predicate, error) {
-	localized := localizedSearchFields(object, query.SearchFields)
-	if strings.TrimSpace(query.Locale) == "" || strings.TrimSpace(query.Search) == "" || len(localized) == 0 {
-		return s.TenantListPredicate(workspaceID, query)
+func recordLocalizedSearchPredicate(s *database.RuntimeStore, workspaceID string, object definitionmodel.ObjectSchema, queryValue recordmodel.RecordListQuery) (query.Predicate, error) {
+	localized := localizedSearchFields(object, queryValue.SearchFields)
+	if strings.TrimSpace(queryValue.Locale) == "" || strings.TrimSpace(queryValue.Search) == "" || len(localized) == 0 {
+		return s.TenantListPredicate(workspaceID, queryValue)
 	}
-	baseQuery := query
+	baseQuery := queryValue
 	baseQuery.Search = ""
 	baseQuery.SearchFields = nil
 	basePredicate, err := s.TenantListPredicate(workspaceID, baseQuery)
 	if err != nil {
 		return nil, err
 	}
-	searchValue := "%" + strings.ToLower(strings.TrimSpace(query.Search)) + "%"
-	searchPredicates := make([]ormbuilder.Predicate, 0, len(query.SearchFields)+1)
-	for _, field := range query.SearchFields {
-		searchPredicates = append(searchPredicates, ormbuilder.LikeValue(ormbuilder.Lower(ormbuilder.Column(field)), searchValue))
+	searchValue := "%" + strings.ToLower(strings.TrimSpace(queryValue.Search)) + "%"
+	searchPredicates := make([]query.Predicate, 0, len(queryValue.SearchFields)+1)
+	for _, field := range queryValue.SearchFields {
+		searchPredicates = append(searchPredicates, query.LikeValue(query.Lower(query.Column(field)), searchValue))
 	}
 	const alias = "record_i18n_search"
 	localizedValues := recordLocalizationAny(localized)
-	locales := recordLocalizationAny(recordmodel.RecordLocalizationLocales(query.Locale, query.FallbackLocale))
-	conditions := []ormbuilder.Predicate{
-		ormbuilder.EqualValue(ormbuilder.QualifiedColumn(alias, "workspace_id"), workspaceID),
-		ormbuilder.EqualValue(ormbuilder.QualifiedColumn(alias, "object_key"), object.Key),
-		ormbuilder.EqualExpressions(ormbuilder.QualifiedColumn(alias, "record_id"), ormbuilder.TableColumn(object.Key, "id")),
-		ormbuilder.InExpression(ormbuilder.QualifiedColumn(alias, "field_key"), localizedValues...),
-		ormbuilder.InExpression(ormbuilder.QualifiedColumn(alias, "locale"), locales...),
-		ormbuilder.LikeValue(ormbuilder.Lower(ormbuilder.QualifiedColumn(alias, "text_value")), searchValue),
+	locales := recordLocalizationAny(recordmodel.RecordLocalizationLocales(queryValue.Locale, queryValue.FallbackLocale))
+	conditions := []query.Predicate{
+		query.EqualValue(query.QualifiedColumn(alias, "workspace_id"), workspaceID),
+		query.EqualValue(query.QualifiedColumn(alias, "object_key"), object.Key),
+		query.EqualExpressions(query.QualifiedColumn(alias, "record_id"), query.TableColumn(object.Key, "id")),
+		query.InExpression(query.QualifiedColumn(alias, "field_key"), localizedValues...),
+		query.InExpression(query.QualifiedColumn(alias, "locale"), locales...),
+		query.LikeValue(query.Lower(query.QualifiedColumn(alias, "text_value")), searchValue),
 	}
-	subquery := ormbuilder.NewSelectBuilder(s.SQLRenderer, recordLocalizedValueTable).Alias(alias).Projections(ormbuilder.Project(ormbuilder.Value(1))).Where(ormbuilder.And(conditions...))
-	searchPredicates = append(searchPredicates, ormbuilder.ExistsSubquery(subquery))
-	return ormbuilder.And(basePredicate, ormbuilder.Or(searchPredicates...)), nil
+	subquery := query.NewSelectBuilder(s.SQLRenderer, recordLocalizedValueTable).Alias(alias).Projections(query.Project(query.Value(1))).Where(query.And(conditions...))
+	searchPredicates = append(searchPredicates, query.ExistsSubquery(subquery))
+	return query.And(basePredicate, query.Or(searchPredicates...)), nil
 }
 
-func recordLocalizedOrders(workspaceID string, object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) []ormbuilder.Order {
+func recordLocalizedOrders(workspaceID string, object definitionmodel.ObjectSchema, queryValue recordmodel.RecordListQuery) []query.Order {
 	localizedSet := map[string]bool{}
 	for _, field := range recordmodel.RecordLocalizedFieldKeys(object) {
 		localizedSet[field] = true
 	}
-	orders := make([]ormbuilder.Order, 0, len(query.Sort)+1)
-	for _, rule := range query.Sort {
+	orders := make([]query.Order, 0, len(queryValue.Sort)+1)
+	for _, rule := range queryValue.Sort {
 		direction := strings.ToUpper(strings.TrimSpace(rule.Direction))
-		if strings.TrimSpace(query.Locale) == "" || !localizedSet[rule.Field] {
+		if strings.TrimSpace(queryValue.Locale) == "" || !localizedSet[rule.Field] {
 			if direction == "DESC" {
-				orders = append(orders, ormbuilder.Descending(rule.Field))
+				orders = append(orders, query.Descending(rule.Field))
 			} else {
-				orders = append(orders, ormbuilder.Ascending(rule.Field))
+				orders = append(orders, query.Ascending(rule.Field))
 			}
 			continue
 		}
-		values := []ormbuilder.Expression{}
-		for _, locale := range recordmodel.RecordLocalizationLocales(query.Locale, query.FallbackLocale) {
-			values = append(values, ormbuilder.ScalarSubquery(recordLocalizedValueTable, ormbuilder.Column("text_value"), ormbuilder.And(
-				ormbuilder.Equal("workspace_id", workspaceID), ormbuilder.Equal("object_key", object.Key),
-				ormbuilder.EqualExpressions(ormbuilder.Column("record_id"), ormbuilder.TableColumn(object.Key, "id")),
-				ormbuilder.Equal("field_key", rule.Field), ormbuilder.Equal("locale", locale),
+		values := []query.Expression{}
+		for _, locale := range recordmodel.RecordLocalizationLocales(queryValue.Locale, queryValue.FallbackLocale) {
+			values = append(values, query.ScalarSubquery(recordLocalizedValueTable, query.Column("text_value"), query.And(
+				query.Equal("workspace_id", workspaceID), query.Equal("object_key", object.Key),
+				query.EqualExpressions(query.Column("record_id"), query.TableColumn(object.Key, "id")),
+				query.Equal("field_key", rule.Field), query.Equal("locale", locale),
 			)))
 		}
-		values = append(values, ormbuilder.Column(rule.Field))
-		expression := ormbuilder.Coalesce(values...)
+		values = append(values, query.Column(rule.Field))
+		expression := query.Coalesce(values...)
 		if direction == "DESC" {
-			orders = append(orders, ormbuilder.DescendingExpression(expression))
+			orders = append(orders, query.DescendingExpression(expression))
 		} else {
-			orders = append(orders, ormbuilder.AscendingExpression(expression))
+			orders = append(orders, query.AscendingExpression(expression))
 		}
 	}
 	if len(orders) == 0 {
-		orders = append(orders, ormbuilder.Ascending("id"))
+		orders = append(orders, query.Ascending("id"))
 	}
 	return orders
 }

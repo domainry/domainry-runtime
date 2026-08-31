@@ -13,7 +13,7 @@ import (
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
@@ -34,7 +34,7 @@ type AgentInteractiveRunReader interface {
 }
 
 type agentTaskRunService interface {
-	List(context.Context, string, agentrepository.AgentTaskRunFilter) ([]agentmodel.AgentTaskRun, error)
+	List(context.Context, string, agentpersistence.AgentTaskRunFilter) ([]agentmodel.AgentTaskRun, error)
 	Get(context.Context, string, string) (agentmodel.AgentTaskRun, bool, error)
 	RequestCancel(context.Context, string, string, string) (agentmodel.AgentTaskRun, bool, error)
 	Operate(context.Context, string, string, string, string, string, principalmodel.Principal) (agentmodel.AgentTaskRun, bool, error)

@@ -12,7 +12,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
@@ -51,7 +51,7 @@ func (r WorkflowWorkerStore) tryBeginExecutionOnce(ctx context.Context, request 
 	receipt.LeaseExpiresAt = now.Add(request.LeaseTTL).Format(time.RFC3339Nano)
 	receipt.CreatedAt, receipt.UpdatedAt = now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)
 	columns, values := workflowReceiptColumns(), workflowReceiptValues(receipt)
-	statement, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_execution_receipts", workspaceID).
+	statement, args, buildErr := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_execution_receipts", workspaceID).
 		Columns(append(columns[:1], columns[2:]...)...).Values(append(values[:1], values[2:]...)...).Build()
 	if buildErr != nil {
 		return workflowmodel.WorkflowExecutionClaimResult{}, fmt.Errorf("build workflow execution receipt insert: %w", buildErr)
@@ -73,17 +73,17 @@ func (r WorkflowWorkerStore) tryBeginExecutionOnce(ctx context.Context, request 
 		r.store.ObserveIdempotency(ctx, receipt.WorkspaceID, "workflow.execute", idempotency.OutcomeForDecision(decision, false))
 		return workflowmodel.WorkflowExecutionClaimResult{Decision: decision, Receipt: current}, nil
 	}
-	statement, args, buildErr = ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_execution_receipts", receipt.WorkspaceID).
+	statement, args, buildErr = query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_execution_receipts", receipt.WorkspaceID).
 		Set("status", string(idempotency.StatusProcessing)).
 		Set("lease_owner", receipt.LeaseOwner).
 		Set("lease_expires_at", receipt.LeaseExpiresAt).
-		SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).
+		SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).
 		Set("updated_at", receipt.UpdatedAt).
-		Where(ormbuilder.And(
-			ormbuilder.Equal("id", receipt.ID),
-			ormbuilder.Equal("request_fingerprint", receipt.RequestFingerprint),
-			ormbuilder.Equal("status", string(idempotency.StatusProcessing)),
-			ormbuilder.LessThanOrEqual("lease_expires_at", now.Format(time.RFC3339Nano)),
+		Where(query.And(
+			query.Equal("id", receipt.ID),
+			query.Equal("request_fingerprint", receipt.RequestFingerprint),
+			query.Equal("status", string(idempotency.StatusProcessing)),
+			query.LessThanOrEqual("lease_expires_at", now.Format(time.RFC3339Nano)),
 		)).Build()
 	if buildErr != nil {
 		return workflowmodel.WorkflowExecutionClaimResult{}, fmt.Errorf("build workflow execution receipt reclaim: %w", buildErr)
@@ -117,16 +117,16 @@ func (r WorkflowWorkerStore) CompleteExecutionReceipt(ctx context.Context, compl
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	statement, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_execution_receipts", workspaceID).
+	statement, args, buildErr := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_execution_receipts", workspaceID).
 		Set("status", string(idempotency.StatusSucceeded)).
 		Set("execution_id", strings.TrimSpace(completion.ExecutionID)).
 		Set("expires_at", completion.ExpiresAt.UTC().Format(time.RFC3339Nano)).
 		Set("updated_at", now.Format(time.RFC3339Nano)).
-		Where(ormbuilder.And(
-			ormbuilder.Equal("id", completion.ReceiptID),
-			ormbuilder.Equal("lease_owner", strings.TrimSpace(completion.LeaseOwner)),
-			ormbuilder.Equal("fencing_token", completion.FencingToken),
-			ormbuilder.Equal("status", string(idempotency.StatusProcessing)),
+		Where(query.And(
+			query.Equal("id", completion.ReceiptID),
+			query.Equal("lease_owner", strings.TrimSpace(completion.LeaseOwner)),
+			query.Equal("fencing_token", completion.FencingToken),
+			query.Equal("status", string(idempotency.StatusProcessing)),
 		)).Build()
 	if buildErr != nil {
 		return fmt.Errorf("build workflow execution receipt completion: %w", buildErr)
@@ -151,13 +151,13 @@ func (r WorkflowWorkerStore) findExecutionReceipt(ctx context.Context, workspace
 	if err != nil {
 		return workflowmodel.WorkflowExecutionReceipt{}, false, err
 	}
-	query, args, err := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_execution_receipts", workspaceID).
-		Columns(workflowReceiptColumns()...).Where(ormbuilder.And(ormbuilder.Equal("workflow_key", strings.TrimSpace(workflowKey)), ormbuilder.Equal("idempotency_key", strings.TrimSpace(key)))).Limit(1).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_execution_receipts", workspaceID).
+		Columns(workflowReceiptColumns()...).Where(query.And(query.Equal("workflow_key", strings.TrimSpace(workflowKey)), query.Equal("idempotency_key", strings.TrimSpace(key)))).Limit(1).Build()
 	if err != nil {
 		return workflowmodel.WorkflowExecutionReceipt{}, false, fmt.Errorf("build workflow execution receipt lookup: %w", err)
 	}
 	var value workflowmodel.WorkflowExecutionReceipt
-	err = r.database().QueryRowContext(ctx, query, args...).Scan(workflowReceiptScanTargets(&value)...)
+	err = r.database().QueryRowContext(ctx, queryValue, args...).Scan(workflowReceiptScanTargets(&value)...)
 	if errors.Is(err, sql.ErrNoRows) {
 		return workflowmodel.WorkflowExecutionReceipt{}, false, nil
 	}

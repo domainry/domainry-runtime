@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	"github.com/shopspring/decimal"
 
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	querypersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/query"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
@@ -168,13 +168,13 @@ func crossWorkspaceJoinSafePlan(plan reportmodel.ReportObjectSQLPlan) reportmode
 func (s *ReportDatasetStore) reportObjectSQLSources(ctx context.Context, tx *sql.Tx, request reportcontract.ReportObjectSQLExecutionRequest) ([]string, []any, error) {
 	cteParts, args := make([]string, 0, len(request.Plan.Sources)), []any{}
 	for index, source := range request.Plan.Sources {
-		object, query := request.Objects[source.Alias], request.Queries[source.Alias]
+		object, queryValue := request.Objects[source.Alias], request.Queries[source.Alias]
 		if request.CrossWorkspaceAggregate {
-			query = recordmodel.RecordListQuery{SelectFields: append([]string(nil), source.Fields...)}
-			query.SelectFields = append(query.SelectFields, "workspace_id")
+			queryValue = recordmodel.RecordListQuery{SelectFields: append([]string(nil), source.Fields...)}
+			queryValue.SelectFields = append(queryValue.SelectFields, "workspace_id")
 		}
-		if query.ScopeExpression != nil && querypersistence.ScopeExpressionHasRelation(*query.ScopeExpression) {
-			resolved, err := querypersistence.ResolveScopeMembership(s.store, request.WorkspaceID, *query.ScopeExpression, querypersistence.ScopeMembershipINThreshold, func(statement string, lookupArgs ...any) ([]string, error) {
+		if queryValue.ScopeExpression != nil && querypersistence.ScopeExpressionHasRelation(*queryValue.ScopeExpression) {
+			resolved, err := querypersistence.ResolveScopeMembership(s.store, request.WorkspaceID, *queryValue.ScopeExpression, querypersistence.ScopeMembershipINThreshold, func(statement string, lookupArgs ...any) ([]string, error) {
 				rows, queryErr := tx.QueryContext(ctx, statement, lookupArgs...)
 				if queryErr != nil {
 					return nil, queryErr
@@ -193,13 +193,13 @@ func (s *ReportDatasetStore) reportObjectSQLSources(ctx context.Context, tx *sql
 			if err != nil {
 				return nil, nil, err
 			}
-			query.ScopeExpression = &resolved
+			queryValue.ScopeExpression = &resolved
 		}
-		query = recordpersistence.RecordQueryDatabaseValues(s.store.RuntimeEngine, object, query)
-		columns := reportStoreSourceColumns(query.SelectFields)
-		builder := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, object.Key).Columns(columns...)
+		queryValue = recordpersistence.RecordQueryDatabaseValues(s.store.RuntimeEngine, object, queryValue)
+		columns := reportStoreSourceColumns(queryValue.SelectFields)
+		builder := query.NewSelectBuilder(s.store.SQLRenderer, object.Key).Columns(columns...)
 		if !request.CrossWorkspaceAggregate {
-			predicate, err := querypersistence.BuildTenantPredicate(s.store, request.WorkspaceID, query)
+			predicate, err := querypersistence.BuildTenantPredicate(s.store, request.WorkspaceID, queryValue)
 			if err != nil {
 				return nil, nil, fmt.Errorf("build report object SQL source %s scope: %w", source.Alias, err)
 			}

@@ -8,8 +8,8 @@ import (
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 type ReviewArtifactOptions struct {

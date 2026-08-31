@@ -6,19 +6,19 @@ import (
 	"fmt"
 	"time"
 
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 )
 
 type Executor struct {
-	repository agentrepository.AgentLifecycleRepository
+	repository agentpersistence.AgentLifecycleRepository
 	archives   lifecyclecontract.ArchiveWriter
 }
 
 const lifecycleResource = "agent.state"
 
-func NewExecutor(repository agentrepository.AgentLifecycleRepository, archives lifecyclecontract.ArchiveWriter) lifecyclecontract.OwnerLifecycleExecutor {
+func NewExecutor(repository agentpersistence.AgentLifecycleRepository, archives lifecyclecontract.ArchiveWriter) lifecyclecontract.OwnerLifecycleExecutor {
 	return Executor{repository: repository, archives: archives}
 }
 
@@ -87,11 +87,11 @@ func (e Executor) ProcessBatch(ctx context.Context, job lifecyclemodel.CleanupJo
 	return result, nil
 }
 
-func (e Executor) candidates(ctx context.Context, workspaceID string, policy lifecyclemodel.RetentionPolicy, now time.Time, limit int) ([]agentrepository.LifecycleCandidate, error) {
+func (e Executor) candidates(ctx context.Context, workspaceID string, policy lifecyclemodel.RetentionPolicy, now time.Time, limit int) ([]agentpersistence.LifecycleCandidate, error) {
 	if e.repository == nil {
 		return nil, fmt.Errorf("Agent lifecycle repository is unavailable")
 	}
-	return e.repository.ListLifecycleCandidates(ctx, workspaceID, agentrepository.LifecycleQuery{Owner: "agent", PolicyKey: policy.Key, Now: now, Retention: policy.DefaultRetention, StatusRetention: policy.StatusRetention, Limit: limit})
+	return e.repository.ListLifecycleCandidates(ctx, workspaceID, agentpersistence.LifecycleQuery{Owner: "agent", PolicyKey: policy.Key, Now: now, Retention: policy.DefaultRetention, StatusRetention: policy.StatusRetention, Limit: limit})
 }
 
 func held(holds []lifecyclemodel.LegalHold, owner, resourceType, resourceID string, now time.Time) bool {

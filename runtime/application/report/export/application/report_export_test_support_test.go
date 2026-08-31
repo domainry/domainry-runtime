@@ -7,13 +7,13 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
 

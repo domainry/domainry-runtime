@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/mutation"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
@@ -50,9 +50,6 @@ func (r BoundaryIntentStore) CreateBoundaryIntent(ctx context.Context, intent tr
 	return intent, false, nil
 }
 
-// InsertBoundaryIntentTx lets another infrastructure owner enlist a boundary
-// intent in an existing local transaction without duplicating its physical
-// schema, defaults or parameterized insert contract.
 func (r BoundaryIntentStore) InsertBoundaryIntentTx(ctx context.Context, tx BoundaryIntentTransaction, intent transactionmodel.BoundaryIntent) (transactionmodel.BoundaryIntent, error) {
 	if tx == nil {
 		return transactionmodel.BoundaryIntent{}, fmt.Errorf("boundary intent transaction is required")
@@ -99,7 +96,7 @@ func (r BoundaryIntentStore) boundaryIntentInsert(intent transactionmodel.Bounda
 	}
 	columns := []string{"id", "owner", "operation", "resource_id", "idempotency_key", "status", "payload_json", "compensation_payload_json", "attempt_count", "next_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "last_error", "created_at", "updated_at"}
 	values := []any{intent.ID, intent.Owner, intent.Operation, intent.ResourceID, intent.IdempotencyKey, intent.Status, string(payload), string(compensation), intent.AttemptCount, intent.NextAttemptAt, intent.LeaseOwner, intent.LeaseExpiresAt, intent.FencingToken, intent.LastError, intent.CreatedAt, intent.UpdatedAt}
-	statement, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_transaction_boundary_intents", intent.WorkspaceID).Columns(columns...).Values(values...).Build()
+	statement, args, buildErr := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_transaction_boundary_intents", intent.WorkspaceID).Columns(columns...).Values(values...).Build()
 	if buildErr != nil {
 		return transactionmodel.BoundaryIntent{}, "", nil, fmt.Errorf("build boundary intent insert: %w", buildErr)
 	}
@@ -123,12 +120,12 @@ func (r BoundaryIntentStore) ClaimBoundaryIntent(ctx context.Context, workspaceI
 		return transactionmodel.BoundaryIntent{}, false, fmt.Errorf("parse boundary intent claim time: %w", err)
 	}
 	expires := now.Add(90 * time.Second).Format(time.RFC3339Nano)
-	statement, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_transaction_boundary_intents", workspaceID).
+	statement, args, buildErr := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_transaction_boundary_intents", workspaceID).
 		Set("status", transactionmodel.BoundaryIntentExecuting).Set("lease_owner", owner).Set("lease_expires_at", expires).
-		SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).Set("updated_at", nowText).
-		Where(ormbuilder.And(ormbuilder.Equal("id", id), ormbuilder.Or(
-			ormbuilder.And(ormbuilder.In("status", transactionmodel.BoundaryIntentPending, transactionmodel.BoundaryIntentReconciliationRequired), ormbuilder.Or(ormbuilder.Equal("next_attempt_at", ""), ormbuilder.LessThanOrEqual("next_attempt_at", nowText))),
-			ormbuilder.And(ormbuilder.Equal("status", transactionmodel.BoundaryIntentExecuting), ormbuilder.LessThanOrEqual("lease_expires_at", nowText)),
+		SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).Set("updated_at", nowText).
+		Where(query.And(query.Equal("id", id), query.Or(
+			query.And(query.In("status", transactionmodel.BoundaryIntentPending, transactionmodel.BoundaryIntentReconciliationRequired), query.Or(query.Equal("next_attempt_at", ""), query.LessThanOrEqual("next_attempt_at", nowText))),
+			query.And(query.Equal("status", transactionmodel.BoundaryIntentExecuting), query.LessThanOrEqual("lease_expires_at", nowText)),
 		))).Build()
 	if buildErr != nil {
 		return transactionmodel.BoundaryIntent{}, false, fmt.Errorf("build boundary intent claim: %w", buildErr)
@@ -165,11 +162,11 @@ func (r BoundaryIntentStore) TransitionBoundaryIntent(ctx context.Context, works
 	if next == transactionmodel.BoundaryIntentReconciliationRequired || next == transactionmodel.BoundaryIntentManualReview {
 		attemptIncrement = 1
 	}
-	statement, args, buildErr := ormbuilder.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_transaction_boundary_intents", workspaceID).
+	statement, args, buildErr := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_transaction_boundary_intents", workspaceID).
 		Set("status", next).Set("last_error", strings.TrimSpace(errorText)).Set("next_attempt_at", strings.TrimSpace(nextAttemptAt)).
-		SetExpression("attempt_count", ormbuilder.Add(ormbuilder.Column("attempt_count"), ormbuilder.Value(attemptIncrement))).
+		SetExpression("attempt_count", query.Add(query.Column("attempt_count"), query.Value(attemptIncrement))).
 		Set("lease_owner", "").Set("lease_expires_at", "").Set("updated_at", now).
-		Where(ormbuilder.And(ormbuilder.Equal("id", id), ormbuilder.Equal("status", current.Status), ormbuilder.Equal("lease_owner", strings.TrimSpace(expectedLeaseOwner)), ormbuilder.Equal("fencing_token", expectedFencingToken))).Build()
+		Where(query.And(query.Equal("id", id), query.Equal("status", current.Status), query.Equal("lease_owner", strings.TrimSpace(expectedLeaseOwner)), query.Equal("fencing_token", expectedFencingToken))).Build()
 	if buildErr != nil {
 		return transactionmodel.BoundaryIntent{}, fmt.Errorf("build boundary intent transition: %w", buildErr)
 	}
@@ -193,8 +190,8 @@ func requireBoundaryIntentWorkspaceID(workspaceID string) (string, error) {
 }
 
 func (r BoundaryIntentStore) GetBoundaryIntent(ctx context.Context, workspaceID, id string) (transactionmodel.BoundaryIntent, bool, error) {
-	statement, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_transaction_boundary_intents", workspaceID).
-		Columns(boundaryIntentColumnNames...).Where(ormbuilder.Equal("id", strings.TrimSpace(id))).Limit(1).Build()
+	statement, args, buildErr := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_transaction_boundary_intents", workspaceID).
+		Columns(boundaryIntentColumnNames...).Where(query.Equal("id", strings.TrimSpace(id))).Limit(1).Build()
 	if buildErr != nil {
 		return transactionmodel.BoundaryIntent{}, false, fmt.Errorf("build boundary intent lookup: %w", buildErr)
 	}
@@ -207,8 +204,8 @@ func (r BoundaryIntentStore) GetBoundaryIntent(ctx context.Context, workspaceID,
 }
 
 func (r BoundaryIntentStore) findByIdentity(ctx context.Context, workspaceID, owner, operation, key string) (transactionmodel.BoundaryIntent, bool, error) {
-	statement, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_transaction_boundary_intents", workspaceID).
-		Columns(boundaryIntentColumnNames...).Where(ormbuilder.And(ormbuilder.Equal("owner", owner), ormbuilder.Equal("operation", operation), ormbuilder.Equal("idempotency_key", key))).Limit(1).Build()
+	statement, args, buildErr := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_transaction_boundary_intents", workspaceID).
+		Columns(boundaryIntentColumnNames...).Where(query.And(query.Equal("owner", owner), query.Equal("operation", operation), query.Equal("idempotency_key", key))).Limit(1).Build()
 	if buildErr != nil {
 		return transactionmodel.BoundaryIntent{}, false, fmt.Errorf("build boundary intent identity lookup: %w", buildErr)
 	}

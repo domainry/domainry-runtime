@@ -9,7 +9,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
@@ -24,7 +24,7 @@ func (clock agentTaskClock) Now() time.Time { return clock.now }
 type agentTaskRunRepositoryStub struct {
 	created                                                                       agentmodel.AgentTaskRun
 	saved                                                                         agentmodel.AgentTaskRun
-	claim                                                                         agentrepository.AgentTaskClaim
+	claim                                                                         agentpersistence.AgentTaskClaim
 	found                                                                         bool
 	heartbeat                                                                     workerplatform.HeartbeatResult
 	listed                                                                        []agentmodel.AgentTaskRun
@@ -39,17 +39,17 @@ type agentTaskRunRepositoryStub struct {
 
 type agentTaskSystemRepositoryStub struct {
 	*agentTaskRunRepositoryStub
-	systemClaim agentrepository.AgentTaskClaim
+	systemClaim agentpersistence.AgentTaskClaim
 	systemRuns  []agentmodel.AgentTaskRun
 	systemFound bool
 	systemErr   error
 }
 
-func (s *agentTaskSystemRepositoryStub) ClaimNextAgentTaskRunForWorker(context.Context, agentrepository.SystemScope, string, time.Time, time.Duration) (agentrepository.AgentTaskClaim, bool, error) {
+func (s *agentTaskSystemRepositoryStub) ClaimNextAgentTaskRunForWorker(context.Context, agentpersistence.SystemScope, string, time.Time, time.Duration) (agentpersistence.AgentTaskClaim, bool, error) {
 	return s.systemClaim, s.systemFound, s.systemErr
 }
 
-func (s *agentTaskSystemRepositoryStub) ListAgentTaskRunsForWorker(context.Context, agentrepository.SystemScope, agentrepository.AgentTaskRunFilter) ([]agentmodel.AgentTaskRun, error) {
+func (s *agentTaskSystemRepositoryStub) ListAgentTaskRunsForWorker(context.Context, agentpersistence.SystemScope, agentpersistence.AgentTaskRunFilter) ([]agentmodel.AgentTaskRun, error) {
 	return s.systemRuns, s.systemErr
 }
 
@@ -96,19 +96,19 @@ func (s *agentTaskRunRepositoryStub) Get(context.Context, string, string) (agent
 	}
 	return s.current, s.current.ID != "", s.getErr
 }
-func (s *agentTaskRunRepositoryStub) List(context.Context, string, agentrepository.AgentTaskRunFilter) ([]agentmodel.AgentTaskRun, error) {
+func (s *agentTaskRunRepositoryStub) List(context.Context, string, agentpersistence.AgentTaskRunFilter) ([]agentmodel.AgentTaskRun, error) {
 	return append([]agentmodel.AgentTaskRun(nil), s.listed...), s.listErr
 }
-func (s *agentTaskRunRepositoryStub) ClaimNext(context.Context, string, string, time.Time, time.Duration) (agentrepository.AgentTaskClaim, bool, error) {
+func (s *agentTaskRunRepositoryStub) ClaimNext(context.Context, string, string, time.Time, time.Duration) (agentpersistence.AgentTaskClaim, bool, error) {
 	return s.claim, s.found, s.claimErr
 }
-func (s *agentTaskRunRepositoryStub) ClaimAgentTaskRun(_ context.Context, workspaceID, runID, _ string, _ time.Time, _ time.Duration) (agentrepository.AgentTaskClaim, bool, error) {
+func (s *agentTaskRunRepositoryStub) ClaimAgentTaskRun(_ context.Context, workspaceID, runID, _ string, _ time.Time, _ time.Duration) (agentpersistence.AgentTaskClaim, bool, error) {
 	s.directCalls++
 	s.directWorkspaceID, s.directRunID = workspaceID, runID
 	return s.claim, s.found, s.claimErr
 }
-func (s *agentTaskRunRepositoryStub) Heartbeat(context.Context, string, string, string, int64, time.Time, time.Duration) (agentrepository.AgentTaskHeartbeatResult, error) {
-	return agentrepository.AgentTaskHeartbeatResult{Lost: s.heartbeat.State == workerplatform.HeartbeatLeaseLost, Lease: agentmodel.AgentTaskLease{Owner: s.heartbeat.Lease.Owner.String(), FencingToken: int64(s.heartbeat.Lease.Token), ExpiresAt: s.heartbeat.Lease.ExpiresAt}}, s.heartbeatErr
+func (s *agentTaskRunRepositoryStub) Heartbeat(context.Context, string, string, string, int64, time.Time, time.Duration) (agentpersistence.AgentTaskHeartbeatResult, error) {
+	return agentpersistence.AgentTaskHeartbeatResult{Lost: s.heartbeat.State == workerplatform.HeartbeatLeaseLost, Lease: agentmodel.AgentTaskLease{Owner: s.heartbeat.Lease.Owner.String(), FencingToken: int64(s.heartbeat.Lease.Token), ExpiresAt: s.heartbeat.Lease.ExpiresAt}}, s.heartbeatErr
 }
 func (s *agentTaskRunRepositoryStub) SaveRunning(_ context.Context, run agentmodel.AgentTaskRun, _ string, _ int64) error {
 	s.saved, s.current = run, run
@@ -473,7 +473,7 @@ func runningAgentTaskRunValue(now time.Time) agentmodel.AgentTaskRun {
 
 func TestAgentTaskRunApplicationClaimHeartbeatAndCancelValidation(t *testing.T) {
 	now := time.Date(2026, 8, 4, 10, 0, 0, 0, time.UTC)
-	repository := &agentTaskRunRepositoryStub{found: true, claim: agentrepository.AgentTaskClaim{Run: agentmodel.AgentTaskRun{ID: "run"}}}
+	repository := &agentTaskRunRepositoryStub{found: true, claim: agentpersistence.AgentTaskClaim{Run: agentmodel.AgentTaskRun{ID: "run"}}}
 	service := NewAgentTaskRunApplicationService(repository, agentTaskClock{now: now})
 	if _, _, err := service.ClaimNext(t.Context(), "", "", 0); apperror.CodeOf(err) != "agent.task.claim_invalid" {
 		t.Fatalf("claim validation err=%v", err)
@@ -513,7 +513,7 @@ func TestAgentTaskRunApplicationServiceBoundaryMatrix(t *testing.T) {
 		if _, _, err := service.Get(t.Context(), "workspace", "run"); apperror.CodeOf(err) != "agent.task.repository_unavailable" {
 			t.Fatalf("get unavailable=%v", err)
 		}
-		if _, err := service.List(t.Context(), "workspace", agentrepository.AgentTaskRunFilter{}); apperror.CodeOf(err) != "agent.task.repository_unavailable" {
+		if _, err := service.List(t.Context(), "workspace", agentpersistence.AgentTaskRunFilter{}); apperror.CodeOf(err) != "agent.task.repository_unavailable" {
 			t.Fatalf("list unavailable=%v", err)
 		}
 		if _, _, err := service.ClaimNext(t.Context(), "workspace", "worker", time.Minute); apperror.CodeOf(err) != "agent.task.repository_unavailable" {
@@ -531,11 +531,11 @@ func TestAgentTaskRunApplicationServiceBoundaryMatrix(t *testing.T) {
 	if _, _, err := service.Get(t.Context(), "workspace", " "); apperror.CodeOf(err) != "agent.task.query_invalid" {
 		t.Fatalf("invalid get run=%v", err)
 	}
-	if _, err := service.List(t.Context(), "", agentrepository.AgentTaskRunFilter{}); apperror.CodeOf(err) != "agent.task.query_invalid" {
+	if _, err := service.List(t.Context(), "", agentpersistence.AgentTaskRunFilter{}); apperror.CodeOf(err) != "agent.task.query_invalid" {
 		t.Fatalf("invalid list workspace=%v", err)
 	}
 	for _, limit := range []int{-1, 501} {
-		if runs, err := service.List(t.Context(), "workspace", agentrepository.AgentTaskRunFilter{Limit: limit}); err != nil || len(runs) != 1 {
+		if runs, err := service.List(t.Context(), "workspace", agentpersistence.AgentTaskRunFilter{Limit: limit}); err != nil || len(runs) != 1 {
 			t.Fatalf("list limit %d runs=%v err=%v", limit, runs, err)
 		}
 	}
@@ -560,7 +560,7 @@ func TestAgentTaskRunApplicationServiceBoundaryMatrix(t *testing.T) {
 	if _, _, err := service.ClaimNextForWorker(t.Context(), principalmodel.SystemScope{}, "worker", time.Minute); apperror.CodeOf(err) != "agent.task.system_worker_unavailable" {
 		t.Fatalf("unsupported system claim=%v", err)
 	}
-	system := &agentTaskSystemRepositoryStub{agentTaskRunRepositoryStub: repository, systemClaim: agentrepository.AgentTaskClaim{Run: valid}, systemFound: true}
+	system := &agentTaskSystemRepositoryStub{agentTaskRunRepositoryStub: repository, systemClaim: agentpersistence.AgentTaskClaim{Run: valid}, systemFound: true}
 	systemService := NewAgentTaskRunApplicationService(system, agentTaskClock{now})
 	validScope := principalmodel.SystemScope{Kind: principalmodel.SystemScopeRuntimeGlobal, Purpose: "agent task worker"}
 	for _, input := range []struct {
@@ -575,19 +575,19 @@ func TestAgentTaskRunApplicationServiceBoundaryMatrix(t *testing.T) {
 	if claim, found, err := systemService.ClaimNextForWorker(t.Context(), validScope, "worker", time.Minute); err != nil || !found || claim.Run.ID != "run" {
 		t.Fatalf("system claim=%#v found=%v err=%v", claim, found, err)
 	}
-	if _, err := (*AgentTaskRunApplicationService)(nil).ListForWorker(t.Context(), validScope, agentrepository.AgentTaskRunFilter{}); apperror.CodeOf(err) != "agent.task.system_worker_unavailable" {
+	if _, err := (*AgentTaskRunApplicationService)(nil).ListForWorker(t.Context(), validScope, agentpersistence.AgentTaskRunFilter{}); apperror.CodeOf(err) != "agent.task.system_worker_unavailable" {
 		t.Fatalf("nil system list=%v", err)
 	}
-	if _, err := service.ListForWorker(t.Context(), validScope, agentrepository.AgentTaskRunFilter{}); apperror.CodeOf(err) != "agent.task.system_worker_unavailable" {
+	if _, err := service.ListForWorker(t.Context(), validScope, agentpersistence.AgentTaskRunFilter{}); apperror.CodeOf(err) != "agent.task.system_worker_unavailable" {
 		t.Fatalf("unsupported system list=%v", err)
 	}
 	for _, scope := range []principalmodel.SystemScope{{}, {Kind: principalmodel.SystemScopeBootstrap, Purpose: "bootstrap"}} {
-		if _, err := systemService.ListForWorker(t.Context(), scope, agentrepository.AgentTaskRunFilter{}); apperror.CodeOf(err) != "agent.task.query_invalid" {
+		if _, err := systemService.ListForWorker(t.Context(), scope, agentpersistence.AgentTaskRunFilter{}); apperror.CodeOf(err) != "agent.task.query_invalid" {
 			t.Fatalf("invalid system list scope=%#v err=%v", scope, err)
 		}
 	}
 	system.systemRuns = []agentmodel.AgentTaskRun{valid}
-	if runs, err := systemService.ListForWorker(t.Context(), validScope, agentrepository.AgentTaskRunFilter{}); err != nil || len(runs) != 1 {
+	if runs, err := systemService.ListForWorker(t.Context(), validScope, agentpersistence.AgentTaskRunFilter{}); err != nil || len(runs) != 1 {
 		t.Fatalf("system list=%v err=%v", runs, err)
 	}
 }

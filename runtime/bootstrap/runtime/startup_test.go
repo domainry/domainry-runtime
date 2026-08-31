@@ -21,7 +21,7 @@ import (
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	monitoringremote "github.com/domainry/domainry-monitoring-sdk/remote"
 	monitoringmodule "github.com/domainry/domainry-monitoring/module"
-	monitoringserver "github.com/domainry/domainry-monitoring/server"
+	monitoringserver "github.com/domainry/domainry-monitoring/saas"
 	notificationmodule "github.com/domainry/domainry-notification/module"
 	partymodule "github.com/domainry/domainry-party/module"
 	dataexchangefixture "github.com/domainry/domainry-runtime/testsupport/dataexchangefixture"

@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/telemetry"
@@ -79,7 +79,7 @@ type AgentToolGatewayDependencies struct {
 	Actions         AgentToolActionPort
 	Proposals       AgentToolProposalPort
 	Risk            AgentToolRiskPolicy
-	Ledger          agentrepository.AgentToolCallLedger
+	Ledger          agentpersistence.AgentToolCallLedger
 	RateLimiter     ratelimit.Limiter
 	InteractiveRuns *AgentInteractiveRunApplicationService
 	TaskRuns        *AgentTaskRunApplicationService
@@ -156,7 +156,7 @@ func (g *AgentToolGateway) Invoke(ctx context.Context, request AgentToolInvocati
 			return result, apperror.New(apperror.KindRateLimited, "agent.tool.rate_limited", nil, nil)
 		}
 	}
-	callRef, _, err := g.dependencies.Ledger.BeginAgentToolCall(ctx, agentrepository.AgentToolCallStart{WorkspaceID: request.WorkspaceID, ProcessID: request.ProcessID, TaskRunID: request.TaskRunID, Tool: request.Tool, InputHash: agentStableHash(request.Input), Owner: request.Owner.String(), FencingToken: int64(request.FencingToken), MaxToolCalls: maxAgentToolCalls(authorization.Task), CostUnits: agentToolCostUnits(request.Tool), MaxCostUnits: agentTaskCostBudgetUnits(authorization.Task.ExecutionLimits.CostBudget), Authorization: authorization.Evidence})
+	callRef, _, err := g.dependencies.Ledger.BeginAgentToolCall(ctx, agentpersistence.AgentToolCallStart{WorkspaceID: request.WorkspaceID, ProcessID: request.ProcessID, TaskRunID: request.TaskRunID, Tool: request.Tool, InputHash: agentStableHash(request.Input), Owner: request.Owner.String(), FencingToken: int64(request.FencingToken), MaxToolCalls: maxAgentToolCalls(authorization.Task), CostUnits: agentToolCostUnits(request.Tool), MaxCostUnits: agentTaskCostBudgetUnits(authorization.Task.ExecutionLimits.CostBudget), Authorization: authorization.Evidence})
 	if err != nil {
 		return result, err
 	}
@@ -171,7 +171,7 @@ func (g *AgentToolGateway) Invoke(ctx context.Context, request AgentToolInvocati
 		if err != nil {
 			status = "failed"
 		}
-		finishErr := g.dependencies.Ledger.FinishAgentToolCall(ctx, agentrepository.AgentToolCallFinish{WorkspaceID: request.WorkspaceID, TaskRunID: request.TaskRunID, CallRef: callRef, Status: status, ErrorCode: code, Owner: request.Owner.String(), FencingToken: int64(request.FencingToken), Evidence: map[string]any{"output_hash": agentStableHash(map[string]any{"output": result.Output, "proposal": result.Proposal})}})
+		finishErr := g.dependencies.Ledger.FinishAgentToolCall(ctx, agentpersistence.AgentToolCallFinish{WorkspaceID: request.WorkspaceID, TaskRunID: request.TaskRunID, CallRef: callRef, Status: status, ErrorCode: code, Owner: request.Owner.String(), FencingToken: int64(request.FencingToken), Evidence: map[string]any{"output_hash": agentStableHash(map[string]any{"output": result.Output, "proposal": result.Proposal})}})
 		ledgerFinished = finishErr == nil
 		return finishErr
 	}

@@ -10,11 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -259,22 +259,22 @@ func TestReportDatasetStoreResolvesRelationScopes(t *testing.T) {
 	}
 	expression := recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "id", Values: []string{"owner-1"}, Path: []recordmodel.RecordScopePathSegment{{SourceObjectKey: "event", TargetObjectKey: "permission", Direction: "forward", RelationFieldKey: "owner_id"}}}
 	object := definitionmodel.ObjectSchema{Key: "event", Fields: []definitionmodel.FieldSchema{{Key: "owner_id", Type: "relation"}}}
-	query := recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "event", ScopeExpression: &expression, SelectFields: []string{"owner_id"}}
+	queryValue := recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "event", ScopeExpression: &expression, SelectFields: []string{"owner_id"}}
 	rows, err := NewReportDatasetStore(store).ReadReportDatasetRows(t.Context(), reportcontract.ReportDatasetRowReadRequest{
 		WorkspaceID: "workspace", Plan: reportmodel.ReportDatasetPlan{Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{Alias: "events", ObjectKey: "event"}}},
-		Objects: map[string]definitionmodel.ObjectSchema{"events": object}, Queries: map[string]recordmodel.RecordListQuery{"events": query},
+		Objects: map[string]definitionmodel.ObjectSchema{"events": object}, Queries: map[string]recordmodel.RecordListQuery{"events": queryValue},
 	})
 	if err != nil || len(rows) != 1 || rows[0].Records["events"].ID != "event-1" {
 		t.Fatalf("rows=%#v err=%v", rows, err)
 	}
 	version, err := NewReportDatasetStore(store).ReadReportSnapshotSourceVersion(t.Context(), reportcontract.ReportSnapshotSourceVersionRequest{
-		WorkspaceID: "workspace", Objects: map[string]definitionmodel.ObjectSchema{"events": object}, Queries: map[string]recordmodel.RecordListQuery{"events": query},
+		WorkspaceID: "workspace", Objects: map[string]definitionmodel.ObjectSchema{"events": object}, Queries: map[string]recordmodel.RecordListQuery{"events": queryValue},
 	})
 	if err != nil || version.SourceVersions["events"] == "" {
 		t.Fatalf("version=%#v err=%v", version, err)
 	}
 	direct := recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "id", Values: []string{"event-1"}}
-	directQuery := query
+	directQuery := queryValue
 	directQuery.ScopeExpression = &direct
 	if rows, err := NewReportDatasetStore(store).ReadReportDatasetRows(t.Context(), reportcontract.ReportDatasetRowReadRequest{
 		WorkspaceID: "workspace", Plan: reportmodel.ReportDatasetPlan{Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{Alias: "events", ObjectKey: "event"}}},
@@ -369,7 +369,7 @@ func TestReportDatasetStoreHelperEdges(t *testing.T) {
 		if err != nil || predicate == nil {
 			t.Fatalf("operator %s predicate=%#v err=%v", operator, predicate, err)
 		}
-		if _, _, err := ormbuilder.PreparePredicate(store.SQLRenderer, predicate, 2); err != nil {
+		if _, _, err := query.PreparePredicate(store.SQLRenderer, predicate, 2); err != nil {
 			t.Fatalf("operator %s compile err=%v", operator, err)
 		}
 	}
@@ -379,7 +379,7 @@ func TestReportDatasetStoreHelperEdges(t *testing.T) {
 		if err != nil || predicate == nil {
 			t.Fatalf("operator %s predicate=%#v err=%v", operator, predicate, err)
 		}
-		if _, args, err := ormbuilder.PreparePredicate(store.SQLRenderer, predicate, 0); err != nil || len(args) != 2 {
+		if _, args, err := query.PreparePredicate(store.SQLRenderer, predicate, 0); err != nil || len(args) != 2 {
 			t.Fatalf("operator %s args=%#v err=%v", operator, args, err)
 		}
 	}
@@ -397,7 +397,7 @@ func TestReportDatasetStoreHelperEdges(t *testing.T) {
 	if err != nil || predicate == nil {
 		t.Fatalf("between predicate=%#v err=%v", predicate, err)
 	}
-	if _, args, err := ormbuilder.PreparePredicate(store.SQLRenderer, predicate, 0); err != nil || len(args) != 2 {
+	if _, args, err := query.PreparePredicate(store.SQLRenderer, predicate, 0); err != nil || len(args) != 2 {
 		t.Fatalf("between args=%#v err=%v", args, err)
 	}
 	for _, key := range []string{"id", "created_at", "updated_at", "amount", "missing"} {

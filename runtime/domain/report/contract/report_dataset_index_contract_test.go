@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 func TestReportDatasetIndexDiagnosticsCoverJoinFilterTimeAndAnalysis(t *testing.T) {

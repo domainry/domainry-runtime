@@ -11,7 +11,7 @@ import (
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
@@ -41,13 +41,13 @@ func (s PublicationOutboxStore) InsertIntentTx(ctx context.Context, executor mod
 	}
 	digest := sha256.Sum256(payload)
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.runtime.SQLRenderer, "_publication_outbox", scope.WorkspaceID).
+	queryValue, args, buildErr := query.NewWorkspaceInsertBuilder(s.runtime.SQLRenderer, "_publication_outbox", scope.WorkspaceID).
 		Columns("id", "publication_type", "tenant_id", "application_key", "source_event_id", "event_type", "intent_json", "connector_key", "operation", "payload_json", "dedup_key", "request_fingerprint", "status", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "remote_event_id", "last_error_code", "last_error", "terminal_at", "created_at", "updated_at").
 		Values(intent.ID, "notification.saas", scope.TenantID, scope.ApplicationKey, intent.SourceEventID, intent.EventType, string(payload), "notification", "publish_intent", string(payload), intent.SourceEventID, hex.EncodeToString(digest[:]), "queued", 0, "", "", "", "", 0, "", "", "", "", now, now).Build()
 	if buildErr != nil {
 		return fmt.Errorf("build Notification SaaS publication outbox insert: %w", buildErr)
 	}
-	if _, err := executor.ExecContext(ctx, query, args...); err != nil {
+	if _, err := executor.ExecContext(ctx, queryValue, args...); err != nil {
 		return fmt.Errorf("insert Notification SaaS publication outbox: %w", err)
 	}
 	return nil

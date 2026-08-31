@@ -8,7 +8,7 @@ import (
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 )
 
 func (s ApplicationSchemaStore) ListApplicationDefinitions(ctx context.Context, resourceType string, workspaceID string) ([]appschemamodel.ApplicationDefinition, error) {
@@ -32,15 +32,15 @@ func (s ApplicationSchemaStore) ListApplicationDefinitions(ctx context.Context, 
 		return nil, err
 	}
 	workspaceID = strings.TrimSpace(workspaceID)
-	predicates := []ormbuilder.Predicate{ormbuilder.IsNull("disabled_at")}
+	predicates := []query.Predicate{query.IsNull("disabled_at")}
 	if workspaceID != "" {
-		predicates = append(predicates, ormbuilder.Equal("source_id", workspaceID))
+		predicates = append(predicates, query.Equal("source_id", workspaceID))
 	}
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, table).Columns("resource_key", "object_key", "name", "payload_json", "schema_version", "schema_hash", "source_kind", "source_id", "disabled_at", "created_at", "updated_at").Where(ormbuilder.And(predicates...)).OrderBy(ormbuilder.Ascending("resource_key")).Build()
+	queryValue, args, buildErr := query.NewSelectBuilder(s.store.SQLRenderer, table).Columns("resource_key", "object_key", "name", "payload_json", "schema_version", "schema_hash", "source_kind", "source_id", "disabled_at", "created_at", "updated_at").Where(query.And(predicates...)).OrderBy(query.Ascending("resource_key")).Build()
 	if buildErr != nil {
 		return nil, fmt.Errorf("build %s definition list: %w", resourceType, buildErr)
 	}
-	rows, err := s.database().QueryContext(ctx, query, args...)
+	rows, err := s.database().QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list %s definitions: %w", resourceType, err)
 	}
@@ -63,7 +63,6 @@ func (s ApplicationSchemaStore) ListApplicationDefinitions(ctx context.Context, 
 	return out, rows.Err()
 }
 
-// GetApplicationDefinition returns a single definition by type and key.
 func (s ApplicationSchemaStore) GetApplicationDefinition(ctx context.Context, resourceType string, resourceKey string) (appschemamodel.ApplicationDefinition, bool, error) {
 	if metadataModuleOwnsDefinition(resourceType) {
 		repository, err := s.metadataModuleDefinitionStore()
@@ -83,14 +82,14 @@ func (s ApplicationSchemaStore) GetApplicationDefinition(ctx context.Context, re
 	if err != nil {
 		return appschemamodel.ApplicationDefinition{}, false, err
 	}
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, table).Columns("resource_key", "object_key", "name", "payload_json", "schema_version", "schema_hash", "source_kind", "source_id", "disabled_at", "created_at", "updated_at").Where(ormbuilder.Equal("resource_key", resourceKey)).Build()
+	queryValue, args, buildErr := query.NewSelectBuilder(s.store.SQLRenderer, table).Columns("resource_key", "object_key", "name", "payload_json", "schema_version", "schema_hash", "source_kind", "source_id", "disabled_at", "created_at", "updated_at").Where(query.Equal("resource_key", resourceKey)).Build()
 	if buildErr != nil {
 		return appschemamodel.ApplicationDefinition{}, false, fmt.Errorf("build %s definition lookup: %w", resourceType, buildErr)
 	}
 	var d appschemamodel.ApplicationDefinition
 	var payloadJSON string
 	var disabledAt sql.NullString
-	err = s.database().QueryRowContext(ctx, query, args...).Scan(&d.ResourceKey, &d.ObjectKey, &d.Name, &payloadJSON, &d.SchemaVersion, &d.SchemaHash, &d.SourceKind, &d.SourceID, &disabledAt, &d.CreatedAt, &d.UpdatedAt)
+	err = s.database().QueryRowContext(ctx, queryValue, args...).Scan(&d.ResourceKey, &d.ObjectKey, &d.Name, &payloadJSON, &d.SchemaVersion, &d.SchemaHash, &d.SourceKind, &d.SourceID, &disabledAt, &d.CreatedAt, &d.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return appschemamodel.ApplicationDefinition{}, false, nil
 	}

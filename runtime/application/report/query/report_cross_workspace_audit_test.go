@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 type crossWorkspaceAuditProbe struct {

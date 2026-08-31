@@ -1,7 +1,7 @@
 package record
 
 import (
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
@@ -19,11 +19,11 @@ func (r RecordStore) GetRecord(ctx context.Context, workspaceID string, object d
 		return recordmodel.Record{}, false, err
 	}
 	s := r.store
-	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.SQLRenderer, object.Key, workspaceID).Projections(ormbuilder.Project(ormbuilder.Star())).Where(ormbuilder.Equal("id", recordID)).Limit(1).Build()
+	queryValue, args, buildErr := query.NewWorkspaceSelectBuilder(s.SQLRenderer, object.Key, workspaceID).Projections(query.Project(query.Star())).Where(query.Equal("id", recordID)).Limit(1).Build()
 	if buildErr != nil {
 		return recordmodel.Record{}, false, buildErr
 	}
-	rows, err := r.queryExecutor(ctx).QueryContext(ctx, query, args...)
+	rows, err := r.queryExecutor(ctx).QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return recordmodel.Record{}, false, fmt.Errorf("get record: %w", err)
 	}
@@ -59,11 +59,11 @@ func (r RecordStore) InsertRecord(ctx context.Context, workspaceID string, objec
 			values = append(values, dbFieldValue(s.RuntimeEngine, field, value))
 		}
 	}
-	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.SQLRenderer, object.Key, workspaceID).Columns(columns...).Values(values...).Build()
+	queryValue, args, buildErr := query.NewWorkspaceInsertBuilder(s.SQLRenderer, object.Key, workspaceID).Columns(columns...).Values(values...).Build()
 	if buildErr != nil {
 		return buildErr
 	}
-	if _, err := r.database().ExecContext(ctx, query, args...); err != nil {
+	if _, err := r.database().ExecContext(ctx, queryValue, args...); err != nil {
 		return fmt.Errorf("insert record: %w", err)
 	}
 	return nil
@@ -75,7 +75,7 @@ func (r RecordStore) UpdateRecord(ctx context.Context, workspaceID string, objec
 		return err
 	}
 	s := r.store
-	builder := ormbuilder.NewWorkspaceUpdateBuilder(s.SQLRenderer, object.Key, workspaceID).Set("updated_at", record.UpdatedAt)
+	builder := query.NewWorkspaceUpdateBuilder(s.SQLRenderer, object.Key, workspaceID).Set("updated_at", record.UpdatedAt)
 	if err := applyRecordUpdateBuilder(builder, record, record.Deleted); err != nil {
 		return err
 	}
@@ -87,11 +87,11 @@ func (r RecordStore) UpdateRecord(ctx context.Context, workspaceID string, objec
 			builder.Set(field.Key, dbFieldValue(s.RuntimeEngine, field, value))
 		}
 	}
-	query, args, buildErr := builder.Where(ormbuilder.Equal("id", record.ID)).Build()
+	queryValue, args, buildErr := builder.Where(query.Equal("id", record.ID)).Build()
 	if buildErr != nil {
 		return buildErr
 	}
-	if _, err := r.database().ExecContext(ctx, query, args...); err != nil {
+	if _, err := r.database().ExecContext(ctx, queryValue, args...); err != nil {
 		return fmt.Errorf("update record: %w", err)
 	}
 	return nil
@@ -103,7 +103,7 @@ func (r RecordStore) UpdateRecordWhere(ctx context.Context, workspaceID string, 
 		return false, err
 	}
 	s := r.store
-	builder := ormbuilder.NewWorkspaceUpdateBuilder(s.SQLRenderer, object.Key, workspaceID).Set("updated_at", record.UpdatedAt)
+	builder := query.NewWorkspaceUpdateBuilder(s.SQLRenderer, object.Key, workspaceID).Set("updated_at", record.UpdatedAt)
 	if err := applyRecordUpdateBuilder(builder, record, record.Deleted); err != nil {
 		return false, err
 	}
@@ -115,20 +115,20 @@ func (r RecordStore) UpdateRecordWhere(ctx context.Context, workspaceID string, 
 			builder.Set(field.Key, dbFieldValue(s.RuntimeEngine, field, value))
 		}
 	}
-	predicates := []ormbuilder.Predicate{ormbuilder.Equal("id", record.ID)}
+	predicates := []query.Predicate{query.Equal("id", record.ID)}
 	keys := make([]string, 0, len(conditions))
 	for key := range conditions {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		predicates = append(predicates, ormbuilder.Equal(key, recordConditionDBValue(s.RuntimeEngine, object, key, conditions[key])))
+		predicates = append(predicates, query.Equal(key, recordConditionDBValue(s.RuntimeEngine, object, key, conditions[key])))
 	}
-	query, args, buildErr := builder.Where(ormbuilder.And(predicates...)).Build()
+	queryValue, args, buildErr := builder.Where(query.And(predicates...)).Build()
 	if buildErr != nil {
 		return false, buildErr
 	}
-	result, err := r.database().ExecContext(ctx, query, args...)
+	result, err := r.database().ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return false, fmt.Errorf("update record with conditions: %w", err)
 	}
@@ -150,11 +150,11 @@ func (r RecordStore) DeleteRecord(ctx context.Context, workspaceID string, objec
 		return fmt.Errorf("begin record delete: %w", err)
 	}
 	defer tx.Rollback()
-	query, args, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(s.SQLRenderer, object.Key, workspaceID).Where(ormbuilder.Equal("id", recordID)).Build()
+	queryValue, args, buildErr := query.NewWorkspaceDeleteBuilder(s.SQLRenderer, object.Key, workspaceID).Where(query.Equal("id", recordID)).Build()
 	if buildErr != nil {
 		return buildErr
 	}
-	result, err := tx.ExecContext(ctx, query, args...)
+	result, err := tx.ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return fmt.Errorf("delete record: %w", err)
 	}
@@ -182,16 +182,16 @@ func (r RecordStore) UniqueExists(ctx context.Context, workspaceID, objectKey, f
 		return false, err
 	}
 	s := r.store
-	predicate := ormbuilder.Predicate(ormbuilder.Equal(fieldKey, dbValue(value)))
+	predicate := query.Predicate(query.Equal(fieldKey, dbValue(value)))
 	if strings.TrimSpace(currentID) != "" {
-		predicate = ormbuilder.And(predicate, ormbuilder.NotEqual("id", currentID))
+		predicate = query.And(predicate, query.NotEqual("id", currentID))
 	}
-	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.SQLRenderer, objectKey, workspaceID).Columns("id").Where(predicate).Limit(1).Build()
+	queryValue, args, buildErr := query.NewWorkspaceSelectBuilder(s.SQLRenderer, objectKey, workspaceID).Columns("id").Where(predicate).Limit(1).Build()
 	if buildErr != nil {
 		return false, buildErr
 	}
 	var id string
-	err = r.queryExecutor(ctx).QueryRowContext(ctx, query, args...).Scan(&id)
+	err = r.queryExecutor(ctx).QueryRowContext(ctx, queryValue, args...).Scan(&id)
 	if err == nil {
 		return true, nil
 	}

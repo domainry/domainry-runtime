@@ -4,7 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
+	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -31,9 +32,9 @@ func (a *httpServerAssembly) wireIntegrationAndAgentHandlers(agentDialogRateLimi
 	// assembleAgentApplicationPorts owns the pair invariant: both ports are
 	// either available from one persistent store or both absent.
 	if state != nil {
-		var toolLedger agentrepository.AgentToolCallLedger
+		var toolLedger agentpersistence.AgentToolCallLedger
 		if a.dependencies.AgentRepositories != nil {
-			toolLedger, _ = a.dependencies.AgentRepositories.AgentTaskRunRepository().(agentrepository.AgentToolCallLedger)
+			toolLedger, _ = a.dependencies.AgentRepositories.AgentTaskRunRepository().(agentpersistence.AgentToolCallLedger)
 		}
 		contextResolver := agentapplication.NewAgentAuthorizationApplicationService(agentapplication.AgentAuthorizationDependencies{
 			Principals: a.principals,
@@ -76,6 +77,7 @@ func (a *httpServerAssembly) wireIntegrationAndAgentHandlers(agentDialogRateLimi
 			Principal:      a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
 			WriteError: a.callbacks.WriteError, WriteServiceError: a.callbacks.WriteServiceError,
 			DecodeJSON: a.callbacks.DecodeJSON, Authenticated: a.identityHTTP.AuthenticatedFunc,
+			TemplateReadProxy: a.dependencies.NotificationMode == notificationsdk.DeploymentModeSaaS,
 		})
 	}
 }

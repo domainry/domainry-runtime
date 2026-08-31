@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
-// UploadArtifactReferences owns knowledge of dynamic record tables and fields.
 type UploadArtifactReferences struct {
 	store   *database.RuntimeStore
 	objects map[string]definitionmodel.ObjectSchema
@@ -30,13 +29,13 @@ func (r *UploadArtifactReferences) UploadArtifactReferenced(ctx context.Context,
 		return false, nil
 	}
 	reference := "/uploads/" + filename
-	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, objectKey, workspaceID).Projections(ormbuilder.Project(ormbuilder.CountAll())).
-		Where(ormbuilder.Or(ormbuilder.Equal(fieldKey, reference), ormbuilder.Like(fieldKey, "%\""+reference+"\"%"))).Build()
+	queryValue, args, buildErr := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, objectKey, workspaceID).Projections(query.Project(query.CountAll())).
+		Where(query.Or(query.Equal(fieldKey, reference), query.Like(fieldKey, "%\""+reference+"\"%"))).Build()
 	if buildErr != nil {
 		return false, fmt.Errorf("build upload artifact reference query: %w", buildErr)
 	}
 	var count int
-	if err := r.store.DB().QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+	if err := r.store.DB().QueryRowContext(ctx, queryValue, args...).Scan(&count); err != nil {
 		return false, err
 	}
 	return count > 0, nil

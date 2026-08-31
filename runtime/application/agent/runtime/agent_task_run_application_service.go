@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
@@ -16,14 +16,14 @@ import (
 )
 
 type AgentTaskRunApplicationService struct {
-	repository agentrepository.AgentTaskRunRepository
+	repository agentpersistence.AgentTaskRunRepository
 	clock      workerplatform.Clock
 	terminal   AgentTaskTerminalCommitter
 	audit      auditcontract.AuditAppender
 	wakeup     AgentTaskWakeup
 }
 
-func NewAgentTaskRunApplicationServiceWithAudit(repository agentrepository.AgentTaskRunRepository, clock workerplatform.Clock, terminal AgentTaskTerminalCommitter, audit auditcontract.AuditAppender) *AgentTaskRunApplicationService {
+func NewAgentTaskRunApplicationServiceWithAudit(repository agentpersistence.AgentTaskRunRepository, clock workerplatform.Clock, terminal AgentTaskTerminalCommitter, audit auditcontract.AuditAppender) *AgentTaskRunApplicationService {
 	service := NewAgentTaskRunApplicationService(repository, clock, terminal)
 	service.audit = audit
 	return service
@@ -34,7 +34,7 @@ type AgentTaskTerminalCommitter interface {
 	CommitAgentTaskApprovalTerminal(context.Context, agentmodel.AgentTaskRun) error
 }
 
-func NewAgentTaskRunApplicationService(repository agentrepository.AgentTaskRunRepository, clock workerplatform.Clock, terminal ...AgentTaskTerminalCommitter) *AgentTaskRunApplicationService {
+func NewAgentTaskRunApplicationService(repository agentpersistence.AgentTaskRunRepository, clock workerplatform.Clock, terminal ...AgentTaskTerminalCommitter) *AgentTaskRunApplicationService {
 	if clock == nil {
 		clock = workerplatform.SystemClock{}
 	}
@@ -80,7 +80,7 @@ func (s *AgentTaskRunApplicationService) Get(ctx context.Context, workspaceID, r
 	return s.repository.Get(ctx, workspace.String(), strings.TrimSpace(runID))
 }
 
-func (s *AgentTaskRunApplicationService) List(ctx context.Context, workspaceID string, filter agentrepository.AgentTaskRunFilter) ([]agentmodel.AgentTaskRun, error) {
+func (s *AgentTaskRunApplicationService) List(ctx context.Context, workspaceID string, filter agentpersistence.AgentTaskRunFilter) ([]agentmodel.AgentTaskRun, error) {
 	if s == nil || s.repository == nil {
 		return nil, apperror.New(apperror.KindUnavailable, "agent.task.repository_unavailable", nil, nil)
 	}
@@ -94,46 +94,46 @@ func (s *AgentTaskRunApplicationService) List(ctx context.Context, workspaceID s
 	return s.repository.List(ctx, workspace.String(), filter)
 }
 
-func (s *AgentTaskRunApplicationService) ClaimNext(ctx context.Context, workspaceID string, owner workerplatform.WorkerID, leaseDuration time.Duration) (agentrepository.AgentTaskClaim, bool, error) {
+func (s *AgentTaskRunApplicationService) ClaimNext(ctx context.Context, workspaceID string, owner workerplatform.WorkerID, leaseDuration time.Duration) (agentpersistence.AgentTaskClaim, bool, error) {
 	if s == nil || s.repository == nil {
-		return agentrepository.AgentTaskClaim{}, false, apperror.New(apperror.KindUnavailable, "agent.task.repository_unavailable", nil, nil)
+		return agentpersistence.AgentTaskClaim{}, false, apperror.New(apperror.KindUnavailable, "agent.task.repository_unavailable", nil, nil)
 	}
 	workspace, workspaceErr := principalmodel.NewWorkspaceID(workspaceID)
 	if workspaceErr != nil {
-		return agentrepository.AgentTaskClaim{}, false, apperror.New(apperror.KindBadRequest, "agent.task.claim_invalid", nil, nil)
+		return agentpersistence.AgentTaskClaim{}, false, apperror.New(apperror.KindBadRequest, "agent.task.claim_invalid", nil, nil)
 	}
 	if strings.TrimSpace(owner.String()) == "" || leaseDuration <= 0 {
-		return agentrepository.AgentTaskClaim{}, false, apperror.New(apperror.KindBadRequest, "agent.task.claim_invalid", nil, nil)
+		return agentpersistence.AgentTaskClaim{}, false, apperror.New(apperror.KindBadRequest, "agent.task.claim_invalid", nil, nil)
 	}
 	return s.repository.ClaimNext(ctx, workspace.String(), owner.String(), s.clock.Now().UTC(), leaseDuration)
 }
 
-func (s *AgentTaskRunApplicationService) ClaimNextForWorker(ctx context.Context, scope principalmodel.SystemScope, owner workerplatform.WorkerID, leaseDuration time.Duration) (agentrepository.AgentTaskClaim, bool, error) {
+func (s *AgentTaskRunApplicationService) ClaimNextForWorker(ctx context.Context, scope principalmodel.SystemScope, owner workerplatform.WorkerID, leaseDuration time.Duration) (agentpersistence.AgentTaskClaim, bool, error) {
 	if s == nil {
-		return agentrepository.AgentTaskClaim{}, false, apperror.New(apperror.KindUnavailable, "agent.task.system_worker_unavailable", nil, nil)
+		return agentpersistence.AgentTaskClaim{}, false, apperror.New(apperror.KindUnavailable, "agent.task.system_worker_unavailable", nil, nil)
 	}
-	repository, ok := s.repository.(agentrepository.AgentTaskRunSystemWorkerRepository)
+	repository, ok := s.repository.(agentpersistence.AgentTaskRunSystemWorkerRepository)
 	if !ok {
-		return agentrepository.AgentTaskClaim{}, false, apperror.New(apperror.KindUnavailable, "agent.task.system_worker_unavailable", nil, nil)
+		return agentpersistence.AgentTaskClaim{}, false, apperror.New(apperror.KindUnavailable, "agent.task.system_worker_unavailable", nil, nil)
 	}
 	if !scope.Valid() || scope.Kind != principalmodel.SystemScopeRuntimeGlobal || strings.TrimSpace(owner.String()) == "" || leaseDuration <= 0 {
-		return agentrepository.AgentTaskClaim{}, false, apperror.New(apperror.KindBadRequest, "agent.task.claim_invalid", nil, nil)
+		return agentpersistence.AgentTaskClaim{}, false, apperror.New(apperror.KindBadRequest, "agent.task.claim_invalid", nil, nil)
 	}
-	return repository.ClaimNextAgentTaskRunForWorker(ctx, agentrepository.SystemScope{Kind: string(scope.Kind), Purpose: scope.Purpose}, owner.String(), s.clock.Now().UTC(), leaseDuration)
+	return repository.ClaimNextAgentTaskRunForWorker(ctx, agentpersistence.SystemScope{Kind: string(scope.Kind), Purpose: scope.Purpose}, owner.String(), s.clock.Now().UTC(), leaseDuration)
 }
 
-func (s *AgentTaskRunApplicationService) ListForWorker(ctx context.Context, scope principalmodel.SystemScope, filter agentrepository.AgentTaskRunFilter) ([]agentmodel.AgentTaskRun, error) {
+func (s *AgentTaskRunApplicationService) ListForWorker(ctx context.Context, scope principalmodel.SystemScope, filter agentpersistence.AgentTaskRunFilter) ([]agentmodel.AgentTaskRun, error) {
 	if s == nil {
 		return nil, apperror.New(apperror.KindUnavailable, "agent.task.system_worker_unavailable", nil, nil)
 	}
-	repository, ok := s.repository.(agentrepository.AgentTaskRunSystemWorkerRepository)
+	repository, ok := s.repository.(agentpersistence.AgentTaskRunSystemWorkerRepository)
 	if !ok {
 		return nil, apperror.New(apperror.KindUnavailable, "agent.task.system_worker_unavailable", nil, nil)
 	}
 	if !scope.Valid() || scope.Kind != principalmodel.SystemScopeRuntimeGlobal {
 		return nil, apperror.New(apperror.KindBadRequest, "agent.task.query_invalid", nil, nil)
 	}
-	return repository.ListAgentTaskRunsForWorker(ctx, agentrepository.SystemScope{Kind: string(scope.Kind), Purpose: scope.Purpose}, filter)
+	return repository.ListAgentTaskRunsForWorker(ctx, agentpersistence.SystemScope{Kind: string(scope.Kind), Purpose: scope.Purpose}, filter)
 }
 
 func (s *AgentTaskRunApplicationService) Heartbeat(ctx context.Context, workspaceID, runID string, owner workerplatform.WorkerID, token workerplatform.FencingToken, leaseDuration time.Duration) (workerplatform.HeartbeatResult, error) {
@@ -338,7 +338,7 @@ func (s *AgentTaskRunApplicationService) RequestCancel(ctx context.Context, work
 }
 
 func (s *AgentTaskRunApplicationService) ExpireApprovals(ctx context.Context, workspaceID string, before time.Time) (int, error) {
-	runs, err := s.List(ctx, workspaceID, agentrepository.AgentTaskRunFilter{Statuses: []agentmodel.AgentTaskRunStatus{agentmodel.AgentTaskRunWaitingApproval}, Limit: 500})
+	runs, err := s.List(ctx, workspaceID, agentpersistence.AgentTaskRunFilter{Statuses: []agentmodel.AgentTaskRunStatus{agentmodel.AgentTaskRunWaitingApproval}, Limit: 500})
 	if err != nil {
 		return 0, err
 	}

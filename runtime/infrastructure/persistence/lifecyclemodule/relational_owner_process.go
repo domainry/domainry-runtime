@@ -6,21 +6,21 @@ import (
 	"time"
 
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 )
 
 func (e OwnerExecutor) processSpec(ctx context.Context, job lifecyclemodel.CleanupJob, policy lifecyclemodel.PolicyVersion, spec cleanupSpec, holds []lifecyclemodel.LegalHold, cutoff time.Time, limit int) (lifecyclemodel.CleanupBatchResult, error) {
 	const candidateAlias = "candidate"
 	predicate := cleanupPredicate(spec, cutoff, candidateAlias)
-	builder := ormbuilder.NewSelectBuilder(e.renderer, spec.table).Alias(candidateAlias).Columns(spec.idColumn, spec.timeColumn)
+	builder := query.NewSelectBuilder(e.renderer, spec.table).Alias(candidateAlias).Columns(spec.idColumn, spec.timeColumn)
 	if spec.tenantColumn != "" {
-		builder = ormbuilder.NewWorkspaceSelectBuilder(e.renderer, spec.table, job.WorkspaceID).Alias(candidateAlias).Columns(spec.idColumn, spec.timeColumn)
+		builder = query.NewWorkspaceSelectBuilder(e.renderer, spec.table, job.WorkspaceID).Alias(candidateAlias).Columns(spec.idColumn, spec.timeColumn)
 	}
-	query, args, buildErr := builder.Where(predicate).OrderBy(ormbuilder.Ascending(spec.timeColumn), ormbuilder.Ascending(spec.idColumn)).Limit(limit).Build()
+	queryValue, args, buildErr := builder.Where(predicate).OrderBy(query.Ascending(spec.timeColumn), query.Ascending(spec.idColumn)).Limit(limit).Build()
 	if buildErr != nil {
 		return lifecyclemodel.CleanupBatchResult{}, buildErr
 	}
-	rows, err := e.database(ctx).QueryContext(ctx, query, args...)
+	rows, err := e.database(ctx).QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return lifecyclemodel.CleanupBatchResult{}, err
 	}
@@ -105,14 +105,14 @@ func (e OwnerExecutor) processSpec(ctx context.Context, job lifecyclemodel.Clean
 		if job.Operation == lifecyclemodel.OperationArchive {
 			continue
 		}
-		deletePredicate := ormbuilder.Predicate(ormbuilder.Equal(spec.idColumn, candidate.id))
+		deletePredicate := query.Predicate(query.Equal(spec.idColumn, candidate.id))
 		var deleteQuery string
 		var deleteArgs []any
 		var buildErr error
 		if spec.tenantColumn != "" {
-			deleteQuery, deleteArgs, buildErr = ormbuilder.NewWorkspaceDeleteBuilder(e.renderer, spec.table, job.WorkspaceID).Where(deletePredicate).Build()
+			deleteQuery, deleteArgs, buildErr = query.NewWorkspaceDeleteBuilder(e.renderer, spec.table, job.WorkspaceID).Where(deletePredicate).Build()
 		} else {
-			deleteQuery, deleteArgs, buildErr = ormbuilder.NewDeleteBuilder(e.renderer, spec.table).Where(deletePredicate).Build()
+			deleteQuery, deleteArgs, buildErr = query.NewDeleteBuilder(e.renderer, spec.table).Where(deletePredicate).Build()
 		}
 		if buildErr != nil {
 			result.Failed++
@@ -135,20 +135,20 @@ func (e OwnerExecutor) processSpec(ctx context.Context, job lifecyclemodel.Clean
 
 func (e OwnerExecutor) cleanupCandidateReferenced(ctx context.Context, workspaceID, resourceID string, checks []cleanupReferenceCheck) (bool, error) {
 	for _, check := range checks {
-		predicate := ormbuilder.Predicate(ormbuilder.Equal(check.referenceColumn, resourceID))
-		builder := ormbuilder.NewSelectBuilder(e.renderer, check.table).Projections(ormbuilder.Project(ormbuilder.CountAll()))
+		predicate := query.Predicate(query.Equal(check.referenceColumn, resourceID))
+		builder := query.NewSelectBuilder(e.renderer, check.table).Projections(query.Project(query.CountAll()))
 		if check.tenantColumn != "" {
-			builder = ormbuilder.NewWorkspaceSelectBuilder(e.renderer, check.table, workspaceID).Projections(ormbuilder.Project(ormbuilder.CountAll()))
+			builder = query.NewWorkspaceSelectBuilder(e.renderer, check.table, workspaceID).Projections(query.Project(query.CountAll()))
 		}
 		if check.fixedColumn != "" {
-			predicate = ormbuilder.And(predicate, ormbuilder.Equal(check.fixedColumn, check.fixedValue))
+			predicate = query.And(predicate, query.Equal(check.fixedColumn, check.fixedValue))
 		}
-		query, args, buildErr := builder.Where(predicate).Build()
+		queryValue, args, buildErr := builder.Where(predicate).Build()
 		if buildErr != nil {
 			return false, buildErr
 		}
 		var count int
-		if err := e.database(ctx).QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+		if err := e.database(ctx).QueryRowContext(ctx, queryValue, args...).Scan(&count); err != nil {
 			return false, err
 		}
 		if count > 0 {

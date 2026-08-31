@@ -8,11 +8,12 @@ import (
 	"testing"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
+	reportsdkpersistence "github.com/domainry/domainry-report-sdk/persistence"
 	reportsnapshot "github.com/domainry/domainry-runtime/runtime/application/report/snapshot"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
+	reportstore "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/testsupport/notificationsdkfixture"
 	"github.com/domainry/domainry-runtime/testsupport/reportmodulefixture"
@@ -23,8 +24,8 @@ var _ reportsnapshot.ReportSnapshotNotificationCommitter = ReportSnapshotNotific
 func TestReportSnapshotCompletionAndNotificationAreAtomic(t *testing.T) {
 	store := openReportNotificationStore(t)
 	defer store.Close()
-	reports := reportpersistence.NewReportSnapshotStore(store)
-	committer := NewReportSnapshotNotificationCommitter(store)
+	reports, snapshots := openReportSnapshotRepository(t, store)
+	committer := NewReportSnapshotNotificationCommitter(store, snapshots)
 
 	first := beginReportSnapshot(t, reports, "first")
 	first.Status, first.RefreshedAt = "succeeded", "2026-07-28T01:00:00Z"
@@ -46,8 +47,8 @@ func TestReportSnapshotCompletionAndNotificationAreAtomic(t *testing.T) {
 func TestReportSnapshotFailureAndNotificationAreAtomic(t *testing.T) {
 	store := openReportNotificationStore(t)
 	defer store.Close()
-	reports := reportpersistence.NewReportSnapshotStore(store)
-	committer := NewReportSnapshotNotificationCommitter(store)
+	reports, snapshots := openReportSnapshotRepository(t, store)
+	committer := NewReportSnapshotNotificationCommitter(store, snapshots)
 
 	seed := beginReportSnapshot(t, reports, "seed")
 	event := reportNotificationEvent("report-failed-seed", "report-snapshot:shared:failed")
@@ -67,7 +68,8 @@ func TestReportSnapshotFailureAndNotificationAreAtomic(t *testing.T) {
 func TestReportSnapshotNotificationCommitStagesFailClosed(t *testing.T) {
 	wantErr := errors.New("commit stage unavailable")
 	closed := openReportNotificationStore(t)
-	committer := NewReportSnapshotNotificationCommitter(closed)
+	_, closedSnapshots := openReportSnapshotRepository(t, closed)
+	committer := NewReportSnapshotNotificationCommitter(closed, closedSnapshots)
 	if err := closed.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +78,8 @@ func TestReportSnapshotNotificationCommitStagesFailClosed(t *testing.T) {
 	}
 	store := openReportNotificationStore(t)
 	defer store.Close()
-	committer = NewReportSnapshotNotificationCommitter(store)
+	_, snapshots := openReportSnapshotRepository(t, store)
+	committer = NewReportSnapshotNotificationCommitter(store, snapshots)
 	if err := committer.commit(t.Context(), reportNotificationEvent("update", "update"), func(context.Context) error { return wantErr }); !errors.Is(err, wantErr) {
 		t.Fatalf("update error=%v", err)
 	}
@@ -107,7 +110,17 @@ func openReportNotificationStore(t *testing.T) *database.RuntimeStore {
 	return store
 }
 
-func beginReportSnapshot(t *testing.T, reports *reportpersistence.ReportSnapshotStore, key string) reportmodel.ReportSnapshot {
+func openReportSnapshotRepository(t *testing.T, store *database.RuntimeStore) (*reportstore.ModuleReportSnapshotStore, reportsdkpersistence.SnapshotRepository) {
+	t.Helper()
+	binding, err := reportmodulefixture.Open(t.Context(), store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = binding.Close(context.WithoutCancel(t.Context())) })
+	return reportstore.NewModuleReportSnapshotStore(binding.Snapshots()), binding.Snapshots()
+}
+
+func beginReportSnapshot(t *testing.T, reports *reportstore.ModuleReportSnapshotStore, key string) reportmodel.ReportSnapshot {
 	t.Helper()
 	claim, err := reports.BeginReportSnapshot(t.Context(), reportcontract.ReportSnapshotBeginRequest{
 		WorkspaceID: "workspace-a", ReportKey: "revenue", AccessScopeHash: "scope", IdempotencyKey: key, StartedAt: "2026-07-28T00:00:00Z", LeaseOwner: "worker-" + key, LeaseExpiresAt: "2026-07-28T00:02:00Z",

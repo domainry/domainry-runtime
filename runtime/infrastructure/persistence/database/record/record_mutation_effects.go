@@ -2,7 +2,7 @@ package record
 
 import (
 	auditmoduleimpl "github.com/domainry/domainry-audit/module"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 
 	"github.com/domainry/domainry-foundation/mutation"
 	"github.com/domainry/domainry-foundation/telemetry"
@@ -40,11 +40,11 @@ func (r RecordStore) insertWorkflowIntentTx(ctx context.Context, tx TransactionE
 	}
 	columns = append([]string{}, columns[1:]...)
 	values = append([]any{}, values[1:]...)
-	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_executions", intent.WorkspaceID).Columns(columns...).Values(values...).Build()
+	queryValue, args, buildErr := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_executions", intent.WorkspaceID).Columns(columns...).Values(values...).Build()
 	if buildErr != nil {
 		return buildErr
 	}
-	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+	if _, err := tx.ExecContext(ctx, queryValue, args...); err != nil {
 		return fmt.Errorf("insert mutation workflow intent: %w", database.MutationConstraintError(err, "workflow_execution", intent.ID, mutation.MutationConflictIdempotency))
 	}
 	return nil
@@ -100,11 +100,11 @@ func (r RecordStore) insertIntegrationOutboxTx(ctx context.Context, tx Transacti
 	if err != nil {
 		return fmt.Errorf("encode mutation outbox payload: %w", err)
 	}
-	query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.SQLRenderer, "_publication_outbox", message.WorkspaceID).Columns("id", "publication_type", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at").Values(message.ID, "integration.connector", message.ConnectorKey, message.ConnectionKey, message.Operation, message.Status, string(payload), message.EventID, message.RequestRef, message.DedupKey, message.RequestFingerprint, message.ResponseRef, message.Error, message.AttemptCount, message.NextAttemptAt, message.LastAttemptAt, message.LeaseOwner, message.LeaseExpiresAt, message.FencingToken, message.CreatedBy, message.CreatedAt, message.UpdatedAt).Build()
+	queryValue, args, buildErr := query.NewWorkspaceInsertBuilder(s.SQLRenderer, "_publication_outbox", message.WorkspaceID).Columns("id", "publication_type", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at").Values(message.ID, "integration.connector", message.ConnectorKey, message.ConnectionKey, message.Operation, message.Status, string(payload), message.EventID, message.RequestRef, message.DedupKey, message.RequestFingerprint, message.ResponseRef, message.Error, message.AttemptCount, message.NextAttemptAt, message.LastAttemptAt, message.LeaseOwner, message.LeaseExpiresAt, message.FencingToken, message.CreatedBy, message.CreatedAt, message.UpdatedAt).Build()
 	if buildErr != nil {
 		return buildErr
 	}
-	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+	if _, err := tx.ExecContext(ctx, queryValue, args...); err != nil {
 		return fmt.Errorf("insert mutation outbox: %w", database.MutationConstraintError(err, "integration_outbox", message.ID, mutation.MutationConflictIdempotency))
 	}
 	if err := publicationhandoff.RegisterWorkerScope(ctx, r.store, tx, message.WorkspaceID, now); err != nil {

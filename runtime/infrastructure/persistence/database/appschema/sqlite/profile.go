@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 	appschemastorage "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema/storage"
@@ -27,7 +27,7 @@ func (ApplicationSchemaStorageProfile) FieldColumnType(field definitionmodel.Fie
 		return "TEXT"
 	}
 }
-func (ApplicationSchemaStorageProfile) Columns(ctx context.Context, queryer appschemastorage.Queryer, renderer ormbuilder.Renderer, _ string, table string) (map[string]bool, error) {
+func (ApplicationSchemaStorageProfile) Columns(ctx context.Context, queryer appschemastorage.Queryer, renderer query.Renderer, _ string, table string) (map[string]bool, error) {
 	rows, err := queryer.QueryContext(ctx, "PRAGMA table_info("+renderer.Identifier(table)+")")
 	if err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func (ApplicationSchemaStorageProfile) Columns(ctx context.Context, queryer apps
 	}
 	return result, rows.Err()
 }
-func (ApplicationSchemaStorageProfile) ColumnTypes(ctx context.Context, queryer appschemastorage.Queryer, renderer ormbuilder.Renderer, _ string, table string) (map[string]string, error) {
+func (ApplicationSchemaStorageProfile) ColumnTypes(ctx context.Context, queryer appschemastorage.Queryer, renderer query.Renderer, _ string, table string) (map[string]string, error) {
 	rows, err := queryer.QueryContext(ctx, "PRAGMA table_info("+renderer.Identifier(table)+")")
 	if err != nil {
 		return nil, err
@@ -69,19 +69,19 @@ func (ApplicationSchemaStorageProfile) ColumnTypes(ctx context.Context, queryer 
 	}
 	return result, rows.Err()
 }
-func (ApplicationSchemaStorageProfile) Indexes(ctx context.Context, queryer appschemastorage.Queryer, renderer ormbuilder.Renderer, _ string, table string) (map[string]bool, error) {
+func (ApplicationSchemaStorageProfile) Indexes(ctx context.Context, queryer appschemastorage.Queryer, renderer query.Renderer, _ string, table string) (map[string]bool, error) {
 	rows, err := queryer.QueryContext(ctx, "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name="+renderer.Placeholder(1), table)
 	return appschemastorage.ReadIndexes(rows, err)
 }
-func (ApplicationSchemaStorageProfile) DropIndex(ctx context.Context, executor appschemastorage.Executor, renderer ormbuilder.Renderer, _, index string) error {
+func (ApplicationSchemaStorageProfile) DropIndex(ctx context.Context, executor appschemastorage.Executor, renderer query.Renderer, _, index string) error {
 	_, err := executor.ExecContext(ctx, "DROP INDEX IF EXISTS "+renderer.Identifier(index))
 	return err
 }
-func (ApplicationSchemaStorageProfile) ConditionalUniquePlan(renderer ormbuilder.Renderer, table, index string, policy recordvalidation.RecordConditionalUniquePolicy) appschemastorage.ConditionalUniquePlan {
+func (ApplicationSchemaStorageProfile) ConditionalUniquePlan(renderer query.Renderer, table, index string, policy recordvalidation.RecordConditionalUniquePolicy) appschemastorage.ConditionalUniquePlan {
 	return appschemastorage.PartialConditionalUniquePlan(renderer, table, index, policy)
 }
 func (ApplicationSchemaStorageProfile) ConditionalUniqueGuard(string) string { return "" }
-func (ApplicationSchemaStorageProfile) DropColumn(ctx context.Context, executor appschemastorage.Executor, renderer ormbuilder.Renderer, table, column string) error {
+func (ApplicationSchemaStorageProfile) DropColumn(ctx context.Context, executor appschemastorage.Executor, renderer query.Renderer, table, column string) error {
 	_, err := executor.ExecContext(ctx, "ALTER TABLE "+renderer.Table(table)+" DROP COLUMN "+renderer.Identifier(column))
 	return err
 }

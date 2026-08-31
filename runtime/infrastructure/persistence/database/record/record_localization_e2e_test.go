@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -53,8 +53,8 @@ func TestRecordLocalizationCreateSearchSortFallbackAndDelete(t *testing.T) {
 	create("workspace-a", "p2", "P-2", "Default tablet", recordmodel.RecordTranslations{"en-US": {"name": "Tablet"}, "zh-CN": {"name": "平板电脑"}})
 	create("workspace-b", "p1", "P-1", "Private phone", recordmodel.RecordTranslations{"zh-CN": {"name": "其他租户商品"}})
 
-	query := recordmodel.RecordListQuery{Page: 1, PageSize: 10, Search: "苹果", SearchFields: []string{"name"}, Locale: "zh-CN", FallbackLocale: "en-US"}
-	page, err := repository.ListRecords(t.Context(), "workspace-a", object, query)
+	queryValue := recordmodel.RecordListQuery{Page: 1, PageSize: 10, Search: "苹果", SearchFields: []string{"name"}, Locale: "zh-CN", FallbackLocale: "en-US"}
+	page, err := repository.ListRecords(t.Context(), "workspace-a", object, queryValue)
 	if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != "p1" || page.Items[0].Data["name"] != "苹果手机" {
 		t.Fatalf("localized search page=%+v err=%v", page, err)
 	}
@@ -62,16 +62,16 @@ func TestRecordLocalizationCreateSearchSortFallbackAndDelete(t *testing.T) {
 		t.Fatalf("localization evidence=%+v", page.Items[0].Localization)
 	}
 
-	query.Search = "iPhone"
-	page, err = repository.ListRecords(t.Context(), "workspace-a", object, query)
+	queryValue.Search = "iPhone"
+	page, err = repository.ListRecords(t.Context(), "workspace-a", object, queryValue)
 	if err != nil || page.Total != 1 || page.Items[0].ID != "p1" {
 		t.Fatalf("fallback search page=%+v err=%v", page, err)
 	}
 
-	query.Search = ""
-	query.Locale = "en-US"
-	query.Sort = []recordmodel.RecordSortRule{{Field: "name", Direction: "desc"}}
-	page, err = repository.ListRecords(t.Context(), "workspace-a", object, query)
+	queryValue.Search = ""
+	queryValue.Locale = "en-US"
+	queryValue.Sort = []recordmodel.RecordSortRule{{Field: "name", Direction: "desc"}}
+	page, err = repository.ListRecords(t.Context(), "workspace-a", object, queryValue)
 	if err != nil || len(page.Items) != 2 || page.Items[0].ID != "p2" || page.Items[1].ID != "p1" {
 		t.Fatalf("localized sort page=%+v err=%v", page, err)
 	}
@@ -128,18 +128,18 @@ func TestRecordLocalizationCreateSearchSortFallbackAndDelete(t *testing.T) {
 
 func TestRecordLocalizedQuerySQLIsDialectAwareAndNonMultiplying(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "product", Fields: []definitionmodel.FieldSchema{{Key: "sku", Type: "text"}, {Key: "name", Type: "text", Config: map[string]any{"localized": true}}}}
-	query := recordmodel.RecordListQuery{Search: "phone", SearchFields: []string{"sku", "name"}, Sort: []recordmodel.RecordSortRule{{Field: "name", Direction: "asc"}}, Locale: "zh-CN", FallbackLocale: "en-US"}
+	queryValue := recordmodel.RecordListQuery{Search: "phone", SearchFields: []string{"sku", "name"}, Sort: []recordmodel.RecordSortRule{{Field: "name", Direction: "asc"}}, Locale: "zh-CN", FallbackLocale: "en-US"}
 	for _, driver := range []string{"sqlite", "postgres", "mysql"} {
 		t.Run(driver, func(t *testing.T) {
 			store := openRuntimeStore(t)
 			if err := store.SetEngineForTesting(driver); err != nil {
 				t.Fatal(err)
 			}
-			predicate, err := recordLocalizedSearchPredicate(store, "workspace-a", object, query)
+			predicate, err := recordLocalizedSearchPredicate(store, "workspace-a", object, queryValue)
 			if err != nil {
 				t.Fatal(err)
 			}
-			statement, args, err := ormbuilder.NewWorkspaceSelectBuilder(store.SQLRenderer, object.Key, "workspace-a").Columns("id").Where(predicate).OrderBy(recordLocalizedOrders("workspace-a", object, query)...).Build()
+			statement, args, err := query.NewWorkspaceSelectBuilder(store.SQLRenderer, object.Key, "workspace-a").Columns("id").Where(predicate).OrderBy(recordLocalizedOrders("workspace-a", object, queryValue)...).Build()
 			if err != nil {
 				t.Fatal(err)
 			}

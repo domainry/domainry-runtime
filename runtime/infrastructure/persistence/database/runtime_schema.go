@@ -19,7 +19,7 @@ import (
 	lifecyclemodule "github.com/domainry/domainry-lifecycle/module"
 	metadatamodule "github.com/domainry/domainry-metadata/module"
 	ormmigration "github.com/domainry/domainry-orm/migration"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/base"
 	runtimeschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/schema"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -170,10 +170,6 @@ func (s *RuntimeStore) ensureAuditModuleSchemaLocked(ctx context.Context) error 
 	return s.applyOwnedMigrationsLocked(ctx, "audit", values)
 }
 
-// migrateLegacyAuditPrimaryKey retires the pre-module global Audit key before
-// the source-owned migration registrar proves the Audit baseline. The ORM has
-// no cross-dialect primary-key alteration or INSERT...SELECT schema-rebuild
-// equivalent, so this bounded DDL is intentionally local to migration code.
 func (s *RuntimeStore) migrateLegacyAuditPrimaryKey(ctx context.Context, migration auditmodulehost.SchemaMigration) error {
 	if migration.Baseline == nil || len(migration.Baseline.Tables) != 1 || len(migration.Statements) == 0 {
 		return nil
@@ -220,8 +216,8 @@ func (s *RuntimeStore) migrateLegacyAuditPrimaryKey(ctx context.Context, migrati
 		}
 	case "postgres", "postgresql", "pgx":
 		var constraint string
-		query := "SELECT constraint_name FROM information_schema.table_constraints WHERE table_schema = current_schema() AND table_name = '_audit_events' AND constraint_type = 'PRIMARY KEY'"
-		if err := tx.QueryRowContext(ctx, query).Scan(&constraint); err != nil {
+		queryValue := "SELECT constraint_name FROM information_schema.table_constraints WHERE table_schema = current_schema() AND table_name = '_audit_events' AND constraint_type = 'PRIMARY KEY'"
+		if err := tx.QueryRowContext(ctx, queryValue).Scan(&constraint); err != nil {
 			return fmt.Errorf("inspect legacy Audit primary key: %w", err)
 		}
 		statement, _ := legacyAuditPrimaryKeyReplacementSQL(s.Driver(), table, workspace, id, s.Identifier(constraint))
@@ -294,8 +290,8 @@ func (s *RuntimeStore) recordRuntimeSchemaMigrationIfPending(ctx context.Context
 func (s *RuntimeStore) verifyRuntimeSchema(ctx context.Context) error {
 	var checksum string
 	var dirty bool
-	query := "SELECT " + s.identifier("checksum") + ", " + s.identifier("dirty") + " FROM " + s.tableIdentifier("_schema_migrations") + " WHERE " + s.identifier("path") + " = " + s.placeholder(1)
-	if err := s.db.QueryRowContext(ctx, query, runtimeSchemaMigrationPath(CurrentRuntimeSchemaVersion)).Scan(&checksum, &dirty); err != nil {
+	queryValue := "SELECT " + s.identifier("checksum") + ", " + s.identifier("dirty") + " FROM " + s.tableIdentifier("_schema_migrations") + " WHERE " + s.identifier("path") + " = " + s.placeholder(1)
+	if err := s.db.QueryRowContext(ctx, queryValue, runtimeSchemaMigrationPath(CurrentRuntimeSchemaVersion)).Scan(&checksum, &dirty); err != nil {
 		return fmt.Errorf("verify runtime schema compatibility: %w", err)
 	}
 	if dirty {
@@ -327,8 +323,6 @@ func (s *RuntimeStore) schemaDatabase() schemaDatabase {
 	return s.db
 }
 
-// SchemaDB returns the advisory-lock-owning migration connection when schema
-// assembly is running, so a one-connection migrator pool cannot self-deadlock.
 func (s *RuntimeStore) SchemaDB() runtimeschema.SQLDatabase {
 	return s.schemaDatabase()
 }
@@ -473,8 +467,8 @@ func (s *RuntimeStore) runtimeSchemaMigrationPending(ctx context.Context, versio
 
 func (s *RuntimeStore) startRuntimeSchemaMigration(ctx context.Context, version string) error {
 	columns := []string{"path", "version", "name", "kind", "checksum", "dirty", "applied_at", "runtime_version", "duration_ms", "operator", "instance_id", "backup_id"}
-	query := "INSERT INTO " + s.tableIdentifier("_schema_migrations") + " (" + strings.Join(quotedColumns(s, columns), ", ") + ") VALUES (" + strings.Join(placeholders(s, len(columns)), ", ") + ")"
-	_, err := s.schemaDatabase().ExecContext(ctx, query, runtimeSchemaMigrationPath(version), version, "managed_database_cohort", "runtime_schema", currentRuntimeSchemaChecksum(), true, time.Now().UTC().Format(time.RFC3339), s.config.RuntimeVersion, 0, migrationOperator(s.config), migrationInstanceID(s.config), s.migrationBackupID)
+	queryValue := "INSERT INTO " + s.tableIdentifier("_schema_migrations") + " (" + strings.Join(quotedColumns(s, columns), ", ") + ") VALUES (" + strings.Join(placeholders(s, len(columns)), ", ") + ")"
+	_, err := s.schemaDatabase().ExecContext(ctx, queryValue, runtimeSchemaMigrationPath(version), version, "managed_database_cohort", "runtime_schema", currentRuntimeSchemaChecksum(), true, time.Now().UTC().Format(time.RFC3339), s.config.RuntimeVersion, 0, migrationOperator(s.config), migrationInstanceID(s.config), s.migrationBackupID)
 	return err
 }
 
@@ -491,8 +485,7 @@ func runtimeSchemaMigrationPath(version string) string {
 }
 
 func (s *RuntimeStore) removeObsoleteMigrationLedgers(ctx context.Context) error {
-	// domainry-orm has no DROP TABLE builder. These never-launched private
-	// ledgers carry no business data and are removed rather than adopted.
+
 	for _, table := range []string{"_schema_materializations", "_runtime_schema_migrations", "_party_schema_migrations"} {
 		if _, err := s.schemaDatabase().ExecContext(ctx, "DROP TABLE IF EXISTS "+s.tableIdentifier(table)); err != nil {
 			return fmt.Errorf("remove obsolete migration ledger %s: %w", table, err)
@@ -521,7 +514,7 @@ func (s *RuntimeStore) ensureManagedDatabaseCohortMarker(ctx context.Context) er
 		return fmt.Errorf("generate managed database cohort marker: %w", err)
 	}
 	identity := sha256.Sum256(seed)
-	insert, arguments, err := ormbuilder.NewInsertBuilder(s.sqlBase().SQLRenderer, managedDatabaseCohortTable).
+	insert, arguments, err := query.NewInsertBuilder(s.sqlBase().SQLRenderer, managedDatabaseCohortTable).
 		Columns("marker_id", "contract_version", "database_identity_sha256").
 		Values(1, managedDatabaseCohortContractVersion, hex.EncodeToString(identity[:])).
 		OnConflictDoNothing("marker_id").Build()
@@ -543,8 +536,8 @@ func (s *RuntimeStore) verifyManagedDatabaseCohortMarker(ctx context.Context) er
 
 func (s *RuntimeStore) verifyManagedDatabaseCohortMarkerWith(ctx context.Context, database schemaDatabase) error {
 	var contractVersion, identity string
-	query := "SELECT " + s.identifier("contract_version") + ", " + s.identifier("database_identity_sha256") + " FROM " + s.tableIdentifier(managedDatabaseCohortTable) + " WHERE " + s.identifier("marker_id") + " = " + s.placeholder(1)
-	if err := database.QueryRowContext(ctx, query, 1).Scan(&contractVersion, &identity); err != nil {
+	queryValue := "SELECT " + s.identifier("contract_version") + ", " + s.identifier("database_identity_sha256") + " FROM " + s.tableIdentifier(managedDatabaseCohortTable) + " WHERE " + s.identifier("marker_id") + " = " + s.placeholder(1)
+	if err := database.QueryRowContext(ctx, queryValue, 1).Scan(&contractVersion, &identity); err != nil {
 		return fmt.Errorf("verify managed database cohort marker: %w", err)
 	}
 	if contractVersion != managedDatabaseCohortContractVersion || len(identity) != 64 {

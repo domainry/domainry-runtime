@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
@@ -170,20 +170,20 @@ func TestRecordMutationPredicateAndQueryProjectionBoundaries(t *testing.T) {
 		{Operator: "eq", Field: "amount", Value: "1.20", Values: []any{"2.30"}},
 		{Operator: "eq", Field: "status", Value: "open"},
 	}}
-	query := RecordQueryDatabaseValues(testEngineProfile("sqlite"), object, recordmodel.RecordListQuery{FilterExpression: &expression})
-	if query.FilterExpression == nil || query.FilterExpression.Children[0].Value == "1.20" || query.FilterExpression.Children[0].Values[0] == "2.30" || query.FilterExpression.Children[1].Value != "open" {
-		t.Fatalf("encoded expression=%#v", query.FilterExpression)
+	queryValue := RecordQueryDatabaseValues(testEngineProfile("sqlite"), object, recordmodel.RecordListQuery{FilterExpression: &expression})
+	if queryValue.FilterExpression == nil || queryValue.FilterExpression.Children[0].Value == "1.20" || queryValue.FilterExpression.Children[0].Values[0] == "2.30" || queryValue.FilterExpression.Children[1].Value != "open" {
+		t.Fatalf("encoded expression=%#v", queryValue.FilterExpression)
 	}
 	nilValue := recordFilterDBValues(testEngineProfile("sqlite"), map[string]definitionmodel.FieldSchema{"amount": currency}, recordmodel.RecordFilterExpression{Field: "amount", Value: nil, Values: []any{"1.00"}})
 	if nilValue.Value != nil || nilValue.Values[0] == "1.00" {
 		t.Fatalf("nil currency expression=%#v", nilValue)
 	}
 
-	defaultSQL, _, err := ormbuilder.NewSelectBuilder(store.store.SQLRenderer, "records").Projections(recordListProjections(nil)...).Build()
+	defaultSQL, _, err := query.NewSelectBuilder(store.store.SQLRenderer, "records").Projections(recordListProjections(nil)...).Build()
 	if err != nil || !strings.HasPrefix(defaultSQL, "SELECT * FROM") {
 		t.Fatalf("default projection SQL=%q err=%v", defaultSQL, err)
 	}
-	projection, _, err := ormbuilder.NewSelectBuilder(store.store.SQLRenderer, "records").Projections(recordListProjections([]string{"id", "status", "status", "updated_at"})...).Build()
+	projection, _, err := query.NewSelectBuilder(store.store.SQLRenderer, "records").Projections(recordListProjections([]string{"id", "status", "status", "updated_at"})...).Build()
 	if err != nil {
 		t.Fatal(err)
 	}

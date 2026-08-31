@@ -12,7 +12,7 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
@@ -238,7 +238,7 @@ func TestRuntimeCompositionWiresPersistentAgentWorkersAndInteractiveFactory(t *t
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = binding.Close(context.Background()) })
-	repositories, ok := binding.(agentrepository.Binding)
+	repositories, ok := binding.(agentpersistence.Binding)
 	if !ok || repositories.AgentTaskRunRepository() == nil {
 		t.Fatal("Agent SDK Binding returned no task-run repository")
 	}

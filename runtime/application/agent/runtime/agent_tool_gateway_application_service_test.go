@@ -8,7 +8,7 @@ import (
 	"time"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
@@ -17,17 +17,17 @@ import (
 )
 
 type agentToolLedgerStub struct {
-	starts    []agentrepository.AgentToolCallStart
+	starts    []agentpersistence.AgentToolCallStart
 	finishes  int
 	beginErr  error
 	finishErr error
 }
 
-func (s *agentToolLedgerStub) BeginAgentToolCall(_ context.Context, start agentrepository.AgentToolCallStart) (string, int, error) {
+func (s *agentToolLedgerStub) BeginAgentToolCall(_ context.Context, start agentpersistence.AgentToolCallStart) (string, int, error) {
 	s.starts = append(s.starts, start)
 	return "call-1", len(s.starts), s.beginErr
 }
-func (s *agentToolLedgerStub) FinishAgentToolCall(context.Context, agentrepository.AgentToolCallFinish) error {
+func (s *agentToolLedgerStub) FinishAgentToolCall(context.Context, agentpersistence.AgentToolCallFinish) error {
 	s.finishes++
 	return s.finishErr
 }

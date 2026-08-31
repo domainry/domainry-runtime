@@ -7,14 +7,12 @@ import (
 	"fmt"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
 const installationKey = "primary"
 
-// Installation is the single durable tenant boundary that must exist before
-// Runtime opens tenant-bound modules, HTTP APIs, or workers.
 type Installation struct {
 	TenantRegistryID string
 	WorkspaceID      string
@@ -25,16 +23,16 @@ func LoadInstallation(ctx context.Context, store *database.RuntimeStore) (Instal
 	if store == nil {
 		return Installation{}, false, fmt.Errorf("Runtime installation store is required")
 	}
-	statement, arguments, err := ormbuilder.NewSelectBuilder(store.RuntimeRenderer(), "_tenant_installation").
+	statement, arguments, err := query.NewSelectBuilder(store.RuntimeRenderer(), "_tenant_installation").
 		Columns("tenant_registry_id", "workspace_id", "initialized_at").
-		Where(ormbuilder.Equal("installation_key", installationKey)).Build()
+		Where(query.Equal("installation_key", installationKey)).Build()
 	if err != nil {
 		return Installation{}, false, err
 	}
 	var result Installation
 	err = store.DB().QueryRowContext(ctx, statement, arguments...).Scan(&result.TenantRegistryID, &result.WorkspaceID, &result.InitializedAt)
 	if errors.Is(err, sql.ErrNoRows) {
-		legacyStatement, legacyArguments, buildErr := ormbuilder.NewSelectBuilder(store.RuntimeRenderer(), "_workspaces").
+		legacyStatement, legacyArguments, buildErr := query.NewSelectBuilder(store.RuntimeRenderer(), "_workspaces").
 			Columns("id").Build()
 		if buildErr != nil {
 			return Installation{}, false, buildErr

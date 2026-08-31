@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"strings"
 
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	appschemacontract "github.com/domainry/domainry-runtime/runtime/domain/appschema/contract"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 func ApplicationSchemaValidateReportDefinition(ctx context.Context, workspaceID string, snapshot appschemamodel.ApplicationSchemaSnapshot, records appschemacontract.ApplicationSchemaReportEvidenceReader, report reportmodel.ReportSchema) error {

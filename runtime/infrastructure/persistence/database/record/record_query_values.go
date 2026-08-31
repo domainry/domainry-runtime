@@ -1,7 +1,7 @@
 package record
 
 import (
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	recordschema "github.com/domainry/domainry-orm/recordschema"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -13,16 +13,16 @@ import (
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 )
 
-func recordQueryDBValues(profile persistencedriver.EngineProfile, object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) recordmodel.RecordListQuery {
+func recordQueryDBValues(profile persistencedriver.EngineProfile, object definitionmodel.ObjectSchema, queryValue recordmodel.RecordListQuery) recordmodel.RecordListQuery {
 	if !profile.OrderedDecimalTextStorage() {
-		return query
+		return queryValue
 	}
 	fields := make(map[string]definitionmodel.FieldSchema, len(object.Fields))
 	for _, field := range object.Fields {
 		fields[field.Key] = field
 	}
-	filters := make(map[string]any, len(query.Filters))
-	for key, value := range query.Filters {
+	filters := make(map[string]any, len(queryValue.Filters))
+	for key, value := range queryValue.Filters {
 		fieldKey := key
 		if index := strings.LastIndex(fieldKey, "__"); index > 0 {
 			fieldKey = fieldKey[:index]
@@ -49,18 +49,16 @@ func recordQueryDBValues(profile persistencedriver.EngineProfile, object definit
 			filters[key] = dbFieldValue(profile, field, value)
 		}
 	}
-	query.Filters = filters
-	if query.FilterExpression != nil {
-		encoded := recordFilterDBValues(profile, fields, *query.FilterExpression)
-		query.FilterExpression = &encoded
+	queryValue.Filters = filters
+	if queryValue.FilterExpression != nil {
+		encoded := recordFilterDBValues(profile, fields, *queryValue.FilterExpression)
+		queryValue.FilterExpression = &encoded
 	}
-	return query
+	return queryValue
 }
 
-// RecordQueryDatabaseValues converts canonical query values to the physical
-// representation used by a database-backed Record table.
-func RecordQueryDatabaseValues(profile persistencedriver.EngineProfile, object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) recordmodel.RecordListQuery {
-	return recordQueryDBValues(profile, object, query)
+func RecordQueryDatabaseValues(profile persistencedriver.EngineProfile, object definitionmodel.ObjectSchema, queryValue recordmodel.RecordListQuery) recordmodel.RecordListQuery {
+	return recordQueryDBValues(profile, object, queryValue)
 }
 
 func recordFilterDBValues(profile persistencedriver.EngineProfile, fields map[string]definitionmodel.FieldSchema, expression recordmodel.RecordFilterExpression) recordmodel.RecordFilterExpression {
@@ -80,25 +78,22 @@ func recordFilterDBValues(profile persistencedriver.EngineProfile, fields map[st
 	return expression
 }
 
-func recordListProjections(selectFields []string) []ormbuilder.Projection {
+func recordListProjections(selectFields []string) []query.Projection {
 	if len(selectFields) == 0 {
-		return []ormbuilder.Projection{ormbuilder.Project(ormbuilder.Star())}
+		return []query.Projection{query.Project(query.Star())}
 	}
 	fields := recordschema.SystemColumnNames()
 	seen := make(map[string]bool, len(fields)+len(selectFields))
-	projections := make([]ormbuilder.Projection, 0, len(fields)+len(selectFields))
+	projections := make([]query.Projection, 0, len(fields)+len(selectFields))
 	for _, field := range fields {
 		seen[field] = true
-		projections = append(projections, ormbuilder.Project(ormbuilder.Column(field)))
+		projections = append(projections, query.Project(query.Column(field)))
 	}
 	for _, field := range selectFields {
 		if !seen[field] {
 			seen[field] = true
-			projections = append(projections, ormbuilder.Project(ormbuilder.Column(field)))
+			projections = append(projections, query.Project(query.Column(field)))
 		}
 	}
 	return projections
 }
-
-// ApplyRecordMutationTx lets the workflow decision adapter participate in the
-// same SQL transaction without moving record mutation rules back to database.

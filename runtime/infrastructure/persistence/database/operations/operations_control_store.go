@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationsrepository "github.com/domainry/domainry-runtime/runtime/domain/operations/repository"
 )
@@ -18,11 +18,11 @@ func (s OperationsStore) GetOperationsControl(ctx context.Context, purpose strin
 	if s.database() == nil {
 		return operationsmodel.OperationsControl{}, false, fmt.Errorf("operations store unavailable")
 	}
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_operation_controls").Columns(operationsControlColumns()...).Where(ormbuilder.And(ormbuilder.Equal("system_purpose", strings.TrimSpace(purpose)), ormbuilder.Equal("control_kind", string(kind)), ormbuilder.Equal("owner", strings.TrimSpace(owner)))).Build()
+	queryValue, args, buildErr := query.NewSelectBuilder(s.store.SQLRenderer, "_operation_controls").Columns(operationsControlColumns()...).Where(query.And(query.Equal("system_purpose", strings.TrimSpace(purpose)), query.Equal("control_kind", string(kind)), query.Equal("owner", strings.TrimSpace(owner)))).Build()
 	if buildErr != nil {
 		return operationsmodel.OperationsControl{}, false, buildErr
 	}
-	control, err := operationsScanControl(s.database().QueryRowContext(ctx, query, args...))
+	control, err := operationsScanControl(s.database().QueryRowContext(ctx, queryValue, args...))
 	if err == sql.ErrNoRows {
 		return operationsmodel.OperationsControl{}, false, nil
 	}
@@ -36,15 +36,15 @@ func (s OperationsStore) ListOperationsControls(ctx context.Context, purpose str
 	if limit <= 0 || limit > 200 {
 		limit = 100
 	}
-	predicate := ormbuilder.Predicate(ormbuilder.Equal("system_purpose", strings.TrimSpace(purpose)))
+	predicate := query.Predicate(query.Equal("system_purpose", strings.TrimSpace(purpose)))
 	if kind != "" {
-		predicate = ormbuilder.And(predicate, ormbuilder.Equal("control_kind", string(kind)))
+		predicate = query.And(predicate, query.Equal("control_kind", string(kind)))
 	}
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_operation_controls").Columns(operationsControlColumns()...).Where(predicate).OrderBy(ormbuilder.Ascending("control_kind"), ormbuilder.Ascending("owner")).Limit(limit).Build()
+	queryValue, args, buildErr := query.NewSelectBuilder(s.store.SQLRenderer, "_operation_controls").Columns(operationsControlColumns()...).Where(predicate).OrderBy(query.Ascending("control_kind"), query.Ascending("owner")).Limit(limit).Build()
 	if buildErr != nil {
 		return nil, buildErr
 	}
-	rows, err := s.database().QueryContext(ctx, query, args...)
+	rows, err := s.database().QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -68,11 +68,11 @@ func (s OperationsStore) PutOperationsControl(ctx context.Context, control opera
 		return false, fmt.Errorf("operations.control_revision_invalid")
 	}
 	if expectedRevision == 0 {
-		query, args, buildErr := ormbuilder.NewInsertBuilder(s.store.SQLRenderer, "_operation_controls").Columns(operationsControlColumns()...).Values(control.SystemPurpose, string(control.Kind), control.Owner, string(control.State), control.Reason, control.Reference, control.UpdatedBy, control.Revision, control.UpdatedAt.UTC().Format(time.RFC3339Nano)).Build()
+		queryValue, args, buildErr := query.NewInsertBuilder(s.store.SQLRenderer, "_operation_controls").Columns(operationsControlColumns()...).Values(control.SystemPurpose, string(control.Kind), control.Owner, string(control.State), control.Reason, control.Reference, control.UpdatedBy, control.Revision, control.UpdatedAt.UTC().Format(time.RFC3339Nano)).Build()
 		if buildErr != nil {
 			return false, buildErr
 		}
-		_, err := s.database().ExecContext(ctx, query, args...)
+		_, err := s.database().ExecContext(ctx, queryValue, args...)
 		if err != nil {
 			_, found, readErr := s.GetOperationsControl(ctx, control.SystemPurpose, control.Kind, control.Owner)
 			if readErr == nil && found {
@@ -82,11 +82,11 @@ func (s OperationsStore) PutOperationsControl(ctx context.Context, control opera
 		}
 		return true, nil
 	}
-	query, args, buildErr := ormbuilder.NewUpdateBuilder(s.store.SQLRenderer, "_operation_controls").Set("state", string(control.State)).Set("reason", control.Reason).Set("reference", control.Reference).Set("updated_by", control.UpdatedBy).Set("revision", control.Revision).Set("updated_at", control.UpdatedAt.UTC().Format(time.RFC3339Nano)).Where(ormbuilder.And(ormbuilder.Equal("system_purpose", control.SystemPurpose), ormbuilder.Equal("control_kind", string(control.Kind)), ormbuilder.Equal("owner", control.Owner), ormbuilder.Equal("revision", expectedRevision))).Build()
+	queryValue, args, buildErr := query.NewUpdateBuilder(s.store.SQLRenderer, "_operation_controls").Set("state", string(control.State)).Set("reason", control.Reason).Set("reference", control.Reference).Set("updated_by", control.UpdatedBy).Set("revision", control.Revision).Set("updated_at", control.UpdatedAt.UTC().Format(time.RFC3339Nano)).Where(query.And(query.Equal("system_purpose", control.SystemPurpose), query.Equal("control_kind", string(control.Kind)), query.Equal("owner", control.Owner), query.Equal("revision", expectedRevision))).Build()
 	if buildErr != nil {
 		return false, buildErr
 	}
-	result, err := s.database().ExecContext(ctx, query, args...)
+	result, err := s.database().ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return false, err
 	}

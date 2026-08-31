@@ -212,11 +212,10 @@ func TestWorkspaceFallbackInventoryIsAnExactNonGrowingBaseline(t *testing.T) {
 				// invalid persisted scope; none supplies a replacement workspace.
 				if (relativePath == "runtime/infrastructure/persistence/postgres/rls/profile.go" ||
 					relativePath == "runtime/infrastructure/persistence/database/appschema/change_plan_store.go" ||
-					relativePath == "runtime/infrastructure/persistence/database/appschema/definition_context_store.go" ||
-					relativePath == "runtime/infrastructure/persistence/database/report/report_snapshot_store.go") &&
+					relativePath == "runtime/infrastructure/persistence/database/appschema/definition_context_store.go") &&
 					(strings.Contains(line, `workspaceID == ""`) || strings.Contains(line, `workspaceID != ""`) ||
 						strings.Contains(line, `strings.TrimSpace(workspaceID) == ""`) || strings.Contains(line, `strings.TrimSpace(event.WorkspaceID) == ""`) ||
-						strings.Contains(line, `strings.TrimSpace(request.Snapshot.WorkspaceID) == ""`)) {
+						strings.Contains(line, `strings.TrimSpace(event.WorkspaceID) == ""`)) {
 					continue
 				}
 				if workspaceFallbackLine.MatchString(line) {

@@ -16,7 +16,7 @@ import (
 
 	"context"
 
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 
 	"testing"
 

@@ -9,7 +9,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/mutation"
 	"github.com/domainry/domainry-foundation/requestcontext"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -17,7 +17,6 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/capacity"
 )
 
-// WorkerStore owns leasing and retry state for the Runtime handoff only.
 type WorkerStore struct {
 	store *database.RuntimeStore
 	db    *sql.DB
@@ -47,11 +46,11 @@ func (s WorkerStore) ListDueOutbox(ctx context.Context, scope principalmodel.Sys
 	values := []integrationmodel.IntegrationOutboxMessage{}
 	for _, workspaceID := range workspaces {
 		workspaceCtx := publicationWorkerContext(ctx, workspaceID, "runtime-publication-worker")
-		query, args, err := ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).Columns(publicationColumns...).Where(publicationDuePredicate(now)).OrderBy(ormbuilder.Ascending("created_at"), ormbuilder.Ascending("id")).Limit(limit).Build()
+		queryValue, args, err := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).Columns(publicationColumns...).Where(publicationDuePredicate(now)).OrderBy(query.Ascending("created_at"), query.Ascending("id")).Limit(limit).Build()
 		if err != nil {
 			return nil, fmt.Errorf("build due Runtime publications for workspace %s: %w", workspaceID, err)
 		}
-		rows, err := s.db.QueryContext(workspaceCtx, query, args...)
+		rows, err := s.db.QueryContext(workspaceCtx, queryValue, args...)
 		if err != nil {
 			return nil, fmt.Errorf("list due Runtime publications for workspace %s: %w", workspaceID, err)
 		}
@@ -84,14 +83,14 @@ func (s WorkerStore) ClaimOutbox(ctx context.Context, workspaceID, messageID, ow
 		now = time.Now().UTC().Format(time.RFC3339)
 	}
 	ctx = publicationWorkerContext(ctx, workspaceID, owner)
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
+	queryValue, args, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
 		Set("status", "sending").Set("next_attempt_at", "").Set("last_attempt_at", now).Set("lease_owner", owner).Set("lease_expires_at", publicationLeaseExpiry(now)).
-		SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).Set("updated_at", now).
-		Where(ormbuilder.And(ormbuilder.Equal("id", messageID), publicationDuePredicate(now))).Build()
+		SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).Set("updated_at", now).
+		Where(query.And(query.Equal("id", messageID), publicationDuePredicate(now))).Build()
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, false, err
 	}
-	result, err := s.db.ExecContext(ctx, query, args...)
+	result, err := s.db.ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, false, fmt.Errorf("claim Runtime publication: %w", err)
 	}
@@ -122,13 +121,13 @@ func (s WorkerStore) HeartbeatOutbox(ctx context.Context, workspaceID, messageID
 		now = time.Now().UTC().Format(time.RFC3339)
 	}
 	ctx = publicationWorkerContext(ctx, workspaceID, leaseOwner)
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
+	queryValue, args, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
 		Set("lease_expires_at", publicationLeaseExpiry(now)).Set("updated_at", now).
 		Where(publicationPredicate(publicationLeasePredicate(messageID, leaseOwner, fencingToken))).Build()
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, err
 	}
-	result, err := s.db.ExecContext(ctx, query, args...)
+	result, err := s.db.ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, err
 	}
@@ -148,13 +147,13 @@ func (s WorkerStore) UpdateOutboxStatus(ctx context.Context, workspaceID, messag
 		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("Runtime publication update identity is required")
 	}
 	ctx = publicationWorkerContext(ctx, workspaceID, leaseOwner)
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
+	queryValue, args, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
 		Set("status", strings.TrimSpace(status)).Set("response_ref", strings.TrimSpace(responseRef)).Set("error", strings.TrimSpace(errorText)).Set("next_attempt_at", "").Set("ack_deadline_at", strings.TrimSpace(ackDeadlineAt)).Set("lease_owner", "").Set("lease_expires_at", "").Set("updated_at", now).
 		Where(publicationPredicate(publicationLeasePredicate(messageID, leaseOwner, fencingToken))).Build()
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, err
 	}
-	result, err := s.db.ExecContext(ctx, query, args...)
+	result, err := s.db.ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, err
 	}
@@ -189,13 +188,13 @@ func (s WorkerStore) ScheduleOutboxRetry(ctx context.Context, workspaceID, messa
 	now = parsed.UTC().Format(time.RFC3339)
 	ctx = publicationWorkerContext(ctx, workspaceID, leaseOwner)
 	next := parsed.Add(time.Duration(delaySeconds) * time.Second).Format(time.RFC3339)
-	query, args, err := ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
-		Set("status", "queued").Set("error", strings.TrimSpace(errorText)).SetExpression("attempt_count", ormbuilder.Add(ormbuilder.Column("attempt_count"), ormbuilder.Value(1))).Set("next_attempt_at", next).Set("last_attempt_at", now).Set("lease_owner", "").Set("lease_expires_at", "").Set("updated_at", now).
+	queryValue, args, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
+		Set("status", "queued").Set("error", strings.TrimSpace(errorText)).SetExpression("attempt_count", query.Add(query.Column("attempt_count"), query.Value(1))).Set("next_attempt_at", next).Set("last_attempt_at", now).Set("lease_owner", "").Set("lease_expires_at", "").Set("updated_at", now).
 		Where(publicationPredicate(publicationLeasePredicate(messageID, leaseOwner, fencingToken))).Build()
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, err
 	}
-	result, err := s.db.ExecContext(ctx, query, args...)
+	result, err := s.db.ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return integrationmodel.IntegrationOutboxMessage{}, err
 	}
@@ -222,15 +221,15 @@ func publicationWorkerContext(ctx context.Context, workspaceID, actorID string) 
 	return ctx
 }
 
-func publicationDuePredicate(now string) ormbuilder.Predicate {
-	return publicationPredicate(ormbuilder.Or(
-		ormbuilder.And(ormbuilder.Equal("status", "queued"), ormbuilder.Or(ormbuilder.Equal("next_attempt_at", ""), ormbuilder.LessThanOrEqual("next_attempt_at", now))),
-		ormbuilder.And(ormbuilder.Equal("status", "sending"), ormbuilder.LessThanOrEqual("lease_expires_at", now)),
+func publicationDuePredicate(now string) query.Predicate {
+	return publicationPredicate(query.Or(
+		query.And(query.Equal("status", "queued"), query.Or(query.Equal("next_attempt_at", ""), query.LessThanOrEqual("next_attempt_at", now))),
+		query.And(query.Equal("status", "sending"), query.LessThanOrEqual("lease_expires_at", now)),
 	))
 }
 
-func publicationLeasePredicate(messageID, owner string, token int64) ormbuilder.Predicate {
-	return ormbuilder.And(ormbuilder.Equal("id", strings.TrimSpace(messageID)), ormbuilder.Equal("status", "sending"), ormbuilder.Equal("lease_owner", strings.TrimSpace(owner)), ormbuilder.Equal("fencing_token", token))
+func publicationLeasePredicate(messageID, owner string, token int64) query.Predicate {
+	return query.And(query.Equal("id", strings.TrimSpace(messageID)), query.Equal("status", "sending"), query.Equal("lease_owner", strings.TrimSpace(owner)), query.Equal("fencing_token", token))
 }
 
 func publicationLeaseExpiry(now string) string {

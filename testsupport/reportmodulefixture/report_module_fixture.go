@@ -14,17 +14,27 @@ import (
 // exercise the same source-owned migration registration used at Runtime
 // startup. EnsureRuntimeSchema intentionally cannot create Report-owned tables.
 func EnsureSchema(ctx context.Context, store *database.RuntimeStore) error {
-	binding, err := reportmodule.NewFactory().OpenModule(ctx, reportsdk.ApplicationRef{RuntimeID: "report-module-fixture"}, host{store: store})
+	binding, err := Open(ctx, store)
 	if err != nil {
 		return err
 	}
 	return binding.Close(context.WithoutCancel(ctx))
 }
 
+func Open(ctx context.Context, store *database.RuntimeStore) (reportsdk.Binding, error) {
+	return reportmodule.NewFactory().Open(ctx, reportsdk.ApplicationRef{RuntimeID: "report-module-fixture"}, host{store: store})
+}
+
 type host struct{ store *database.RuntimeStore }
 
 func (h host) Database() reportmodulehost.Database { return h.store.DB() }
-func (h host) Dialect() reportmodulehost.Dialect   { return h.store.SQLRenderer }
+func (h host) DatabaseFor(ctx context.Context) reportmodulehost.DBTX {
+	if tx := database.ActionExecutionTransaction(ctx); tx != nil {
+		return tx
+	}
+	return h.store.DB()
+}
+func (h host) Dialect() reportmodulehost.Dialect { return h.store.SQLRenderer }
 func (h host) Migrations() reportmodulehost.MigrationRegistrar {
 	return registrar{store: h.store}
 }

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 	appschemastorage "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema/storage"
@@ -38,23 +38,23 @@ func (ApplicationSchemaStorageProfile) FieldColumnType(field definitionmodel.Fie
 		return "TEXT"
 	}
 }
-func (ApplicationSchemaStorageProfile) Columns(ctx context.Context, queryer appschemastorage.Queryer, renderer ormbuilder.Renderer, _ string, table string) (map[string]bool, error) {
+func (ApplicationSchemaStorageProfile) Columns(ctx context.Context, queryer appschemastorage.Queryer, renderer query.Renderer, _ string, table string) (map[string]bool, error) {
 	rows, err := queryer.QueryContext(ctx, "SELECT column_name FROM information_schema.columns WHERE table_name = "+renderer.Placeholder(1)+" AND table_schema = DATABASE()", table)
 	return appschemastorage.ReadColumns(rows, err, table)
 }
-func (ApplicationSchemaStorageProfile) ColumnTypes(ctx context.Context, queryer appschemastorage.Queryer, renderer ormbuilder.Renderer, _ string, table string) (map[string]string, error) {
+func (ApplicationSchemaStorageProfile) ColumnTypes(ctx context.Context, queryer appschemastorage.Queryer, renderer query.Renderer, _ string, table string) (map[string]string, error) {
 	rows, err := queryer.QueryContext(ctx, "SELECT column_name, data_type, numeric_precision, numeric_scale FROM information_schema.columns WHERE table_name = "+renderer.Placeholder(1)+" AND table_schema = DATABASE()", table)
 	return appschemastorage.ReadColumnTypes(rows, err, table)
 }
-func (ApplicationSchemaStorageProfile) Indexes(ctx context.Context, queryer appschemastorage.Queryer, renderer ormbuilder.Renderer, _ string, table string) (map[string]bool, error) {
+func (ApplicationSchemaStorageProfile) Indexes(ctx context.Context, queryer appschemastorage.Queryer, renderer query.Renderer, _ string, table string) (map[string]bool, error) {
 	rows, err := queryer.QueryContext(ctx, "SELECT DISTINCT index_name FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = "+renderer.Placeholder(1), table)
 	return appschemastorage.ReadIndexes(rows, err)
 }
-func (ApplicationSchemaStorageProfile) DropIndex(ctx context.Context, executor appschemastorage.Executor, renderer ormbuilder.Renderer, table, index string) error {
+func (ApplicationSchemaStorageProfile) DropIndex(ctx context.Context, executor appschemastorage.Executor, renderer query.Renderer, table, index string) error {
 	_, err := executor.ExecContext(ctx, "DROP INDEX "+renderer.Identifier(index)+" ON "+renderer.Table(table))
 	return err
 }
-func (ApplicationSchemaStorageProfile) ConditionalUniquePlan(renderer ormbuilder.Renderer, table, index string, policy recordvalidation.RecordConditionalUniquePolicy) appschemastorage.ConditionalUniquePlan {
+func (ApplicationSchemaStorageProfile) ConditionalUniquePlan(renderer query.Renderer, table, index string, policy recordvalidation.RecordConditionalUniquePolicy) appschemastorage.ConditionalUniquePlan {
 	guard := appschemastorage.GuardColumn(index)
 	fields := append(appschemastorage.ConditionalUniqueFields(policy), guard)
 	statement := "ALTER TABLE " + renderer.Table(table) + " ADD COLUMN " + renderer.Identifier(guard) + " TINYINT GENERATED ALWAYS AS (CASE WHEN " + appschemastorage.ConditionalUniqueCondition(renderer, policy) + " THEN 1 ELSE NULL END) STORED"
@@ -63,7 +63,7 @@ func (ApplicationSchemaStorageProfile) ConditionalUniquePlan(renderer ormbuilder
 func (ApplicationSchemaStorageProfile) ConditionalUniqueGuard(index string) string {
 	return appschemastorage.GuardColumn(index)
 }
-func (ApplicationSchemaStorageProfile) DropColumn(ctx context.Context, executor appschemastorage.Executor, renderer ormbuilder.Renderer, table, column string) error {
+func (ApplicationSchemaStorageProfile) DropColumn(ctx context.Context, executor appschemastorage.Executor, renderer query.Renderer, table, column string) error {
 	_, err := executor.ExecContext(ctx, "ALTER TABLE "+renderer.Table(table)+" DROP COLUMN "+renderer.Identifier(column))
 	return err
 }

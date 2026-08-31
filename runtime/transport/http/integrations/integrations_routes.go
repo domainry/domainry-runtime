@@ -9,6 +9,9 @@ func (h *IntegrationsHandler) RegisterRoutes(mux *http.ServeMux) {
 		h.authenticated = authenticated
 	}
 	mux.HandleFunc("GET /business/integration-intents/{messageID}", h.authenticated(h.getBusinessIntegrationIntent))
+	if !h.webPushProxy {
+		return
+	}
 	mux.HandleFunc("GET /business/notifications/web-push/readiness", h.authenticated(h.webPushReadiness))
 	mux.HandleFunc("GET /business/notifications/web-push/subscriptions", h.authenticated(h.listWebPushSubscriptions))
 	mux.HandleFunc("PUT /business/notifications/web-push/subscriptions/{subscriptionID}", h.authenticated(h.upsertWebPushSubscription))

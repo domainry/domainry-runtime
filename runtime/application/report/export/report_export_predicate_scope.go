@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 )
 
 func reportExportControlOwnsSource(control reportmodel.ReportExportControlSchema, objectKey string) bool {

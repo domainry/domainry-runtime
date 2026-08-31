@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/idempotency"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
@@ -32,7 +32,7 @@ func (h *AgentDialogHandler) listAgentTaskRuns(w http.ResponseWriter, r *http.Re
 		}
 	}
 	limit, _ := strconv.Atoi(query.Get("limit"))
-	runs, err := h.taskRuns.List(r.Context(), principal.WorkspaceID, agentrepository.AgentTaskRunFilter{Statuses: statuses, ProcessID: strings.TrimSpace(query.Get("process_id")), TaskKey: strings.TrimSpace(query.Get("task_key")), Limit: limit})
+	runs, err := h.taskRuns.List(r.Context(), principal.WorkspaceID, agentpersistence.AgentTaskRunFilter{Statuses: statuses, ProcessID: strings.TrimSpace(query.Get("process_id")), TaskKey: strings.TrimSpace(query.Get("task_key")), Limit: limit})
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return

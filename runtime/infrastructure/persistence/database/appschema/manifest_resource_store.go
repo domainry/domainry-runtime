@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 )
 
 func (s ApplicationSchemaStore) insertMetadataResource(ctx context.Context, tx *sql.Tx, seed metadataResourceSeed, now string) error {
@@ -29,12 +29,12 @@ func (s ApplicationSchemaStore) insertMetadataResource(ctx context.Context, tx *
 		now,
 		now,
 	}
-	insert := ormbuilder.NewInsertBuilder(s.store.SQLRenderer, seed.Table).Columns(columns...).Values(values...)
-	query, args, buildErr := insert.Build()
+	insert := query.NewInsertBuilder(s.store.SQLRenderer, seed.Table).Columns(columns...).Values(values...)
+	queryValue, args, buildErr := insert.Build()
 	if buildErr != nil {
 		return fmt.Errorf("build %s %s insert: %w", seed.ResourceType, seed.Key, buildErr)
 	}
-	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+	if _, err := tx.ExecContext(ctx, queryValue, args...); err != nil {
 		return fmt.Errorf("insert %s %s: %w", seed.ResourceType, seed.Key, err)
 	}
 	return nil
@@ -45,14 +45,14 @@ func (s ApplicationSchemaStore) syncMetadataResource(ctx context.Context, tx *sq
 	if err != nil {
 		return fmt.Errorf("encode %s %s: %w", seed.ResourceType, seed.Key, err)
 	}
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, seed.Table).Columns("schema_hash", "source_kind", "disabled_at").Where(ormbuilder.Equal("resource_key", seed.Key)).Build()
+	queryValue, args, buildErr := query.NewSelectBuilder(s.store.SQLRenderer, seed.Table).Columns("schema_hash", "source_kind", "disabled_at").Where(query.Equal("resource_key", seed.Key)).Build()
 	if buildErr != nil {
 		return fmt.Errorf("build %s %s sync lookup: %w", seed.ResourceType, seed.Key, buildErr)
 	}
 	var currentHash string
 	var sourceKind string
 	var disabledAt sql.NullString
-	err = tx.QueryRowContext(ctx, query, args...).Scan(&currentHash, &sourceKind, &disabledAt)
+	err = tx.QueryRowContext(ctx, queryValue, args...).Scan(&currentHash, &sourceKind, &disabledAt)
 	if err == sql.ErrNoRows {
 		return s.insertMetadataResource(ctx, tx, seed, now)
 	}
@@ -65,9 +65,9 @@ func (s ApplicationSchemaStore) syncMetadataResource(ctx context.Context, tx *sq
 	if currentHash == hash {
 		return nil
 	}
-	updateQuery, updateArgs, buildErr := ormbuilder.NewUpdateBuilder(s.store.SQLRenderer, seed.Table).
+	updateQuery, updateArgs, buildErr := query.NewUpdateBuilder(s.store.SQLRenderer, seed.Table).
 		Set("object_key", seed.ObjectKey).Set("name", seed.Name).Set("payload_json", string(raw)).Set("schema_version", seed.SchemaVersion).
-		Set("schema_hash", hash).Set("source_id", seed.SourceID).Set("updated_at", now).Where(ormbuilder.Equal("resource_key", seed.Key)).Build()
+		Set("schema_hash", hash).Set("source_id", seed.SourceID).Set("updated_at", now).Where(query.Equal("resource_key", seed.Key)).Build()
 	if buildErr != nil {
 		return fmt.Errorf("build %s %s sync update: %w", seed.ResourceType, seed.Key, buildErr)
 	}

@@ -246,7 +246,7 @@ func TestExternalReceiptReconciliationRecognizesDurableBusinessFact(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, required := range []string{`ormbuilder.Equal("status", "prepared")`, `ormbuilder.Equal("response_ref", "")`, "backend.integration.invocation.external_receipt_missing"} {
+	for _, required := range []string{`query.Equal("status", "prepared")`, `query.Equal("response_ref", "")`, "backend.integration.invocation.external_receipt_missing"} {
 		if !strings.Contains(string(persistence), required) {
 			t.Errorf("external receipt reconciliation persistence missing %q", required)
 		}

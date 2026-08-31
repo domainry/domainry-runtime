@@ -3,7 +3,7 @@ package composition
 import (
 	"context"
 
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	lifecyclecore "github.com/domainry/domainry-lifecycle-sdk/application"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
@@ -113,7 +113,7 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 	services.RecordSchemaSnapshotProvider = &RecordSchemaSnapshotProvider{snapshot: func() appschemamodel.ApplicationSchemaSnapshot { return recordSchemaSnapshot(services) }}
 	services.ActionExecutionRuntime = actionruntime.NewActionExecutionRuntime(deps.ActionExecutions)
 	services.agentTaskRunService = agentapplication.NewAgentTaskRunApplicationServiceWithAudit(deps.AgentTaskRuns, services.workerDependencies.Clock, runtimeAgentTaskTerminalCommitter{records: services}, auditApplicationService)
-	if interactiveRuns, ok := deps.AgentTaskRuns.(agentrepository.AgentInteractiveRunRepository); ok {
+	if interactiveRuns, ok := deps.AgentTaskRuns.(agentpersistence.AgentInteractiveRunRepository); ok {
 		services.agentInteractiveRunService = agentapplication.NewAgentInteractiveRunApplicationService(interactiveRuns, services.workerDependencies.Clock, services.workerDependencies.IDs)
 	}
 	agentPrincipals := deps.AgentPrincipals

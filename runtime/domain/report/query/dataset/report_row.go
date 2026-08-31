@@ -3,8 +3,8 @@ package dataset
 import (
 	"strings"
 
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 // Row is the authorized, alias-addressed record tuple consumed by Dataset

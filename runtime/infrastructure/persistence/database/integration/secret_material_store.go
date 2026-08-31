@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/secrets"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
@@ -39,12 +39,12 @@ func (r IntegrationConfigStore) PutSecretMaterial(ctx context.Context, workspace
 	if actionExecutor := database.ActionExecutionTransaction(ctx); actionExecutor != nil {
 		executor = actionExecutor
 	}
-	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_secret_materials", workspaceID).
-		Columns("created_at").Where(ormbuilder.Equal("secret_key", secretKey)).Limit(1).Build()
+	queryValue, args, buildErr := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_secret_materials", workspaceID).
+		Columns("created_at").Where(query.Equal("secret_key", secretKey)).Limit(1).Build()
 	if buildErr != nil {
 		return fmt.Errorf("build integration secret material read: %w", buildErr)
 	}
-	err = executor.QueryRowContext(ctx, query, args...).Scan(&createdAt)
+	err = executor.QueryRowContext(ctx, queryValue, args...).Scan(&createdAt)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("read integration secret material: %w", err)
 	}
@@ -64,12 +64,12 @@ func (r IntegrationConfigStore) ResolveSecretMaterial(ctx context.Context, works
 	}
 	secretKey = strings.TrimSpace(secretKey)
 	var ciphertext string
-	query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_secret_materials", workspaceID).
-		Columns("ciphertext").Where(ormbuilder.Equal("secret_key", secretKey)).Limit(1).Build()
+	queryValue, args, buildErr := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_integration_secret_materials", workspaceID).
+		Columns("ciphertext").Where(query.Equal("secret_key", secretKey)).Limit(1).Build()
 	if buildErr != nil {
 		return "", fmt.Errorf("build integration secret material resolution: %w", buildErr)
 	}
-	if err := r.db.QueryRowContext(ctx, query, args...).Scan(&ciphertext); err != nil {
+	if err := r.db.QueryRowContext(ctx, queryValue, args...).Scan(&ciphertext); err != nil {
 		return "", fmt.Errorf("resolve integration secret material: %w", err)
 	}
 	return r.decryptSecretMaterial(ctx, workspaceID, secretKey, ciphertext)

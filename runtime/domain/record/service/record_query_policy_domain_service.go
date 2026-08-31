@@ -14,7 +14,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	collectionplatform "github.com/domainry/domainry-foundation/collection"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 )
 
 type RecordQueryPolicyDependencies struct {

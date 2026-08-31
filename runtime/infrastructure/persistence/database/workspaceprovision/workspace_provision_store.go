@@ -16,7 +16,7 @@ import (
 	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
@@ -38,8 +38,6 @@ func NewWorkspaceProvisionStore(store *database.RuntimeStore, binding identitysd
 	return &WorkspaceProvisionStore{runtime: store, identity: provisioner, manifest: manifest}
 }
 
-// NewTenantInitializationStore accepts only the narrow bootstrap Identity
-// binding used before any tenant-bound authentication or business API exists.
 func NewTenantInitializationStore(store *database.RuntimeStore, binding identitysdk.BootstrapBinding, manifest manifestmodel.ManifestSchema) *WorkspaceProvisionStore {
 	return &WorkspaceProvisionStore{runtime: store, identity: binding, manifest: manifest}
 }
@@ -56,9 +54,6 @@ func (store *WorkspaceProvisionStore) Provision(ctx context.Context, request wor
 	return store.provision(ctx, request, false)
 }
 
-// Initialize creates the first tenant, its administrator credential, Runtime
-// registry/configuration, application projections, receipt, and the singleton
-// installation marker under one host-owned database transaction.
 func (store *WorkspaceProvisionStore) Initialize(ctx context.Context, request workspaceprovisionmodel.Request, initialPassword string) (workspaceprovisionmodel.Result, error) {
 	request.InitialPassword = initialPassword
 	return store.provision(ctx, request, true)
@@ -150,7 +145,7 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 
 func (store *WorkspaceProvisionStore) insertInstallation(ctx context.Context, tx *sql.Tx, result workspaceprovisionmodel.Result) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	if err := insert(ctx, tx, ormbuilder.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_tenant_installation").
+	if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_tenant_installation").
 		Columns("installation_key", "tenant_registry_id", "workspace_id", "initialized_at").
 		Values(installationKey, result.TenantRegistryID, result.WorkspaceID, now)); err != nil {
 		return workspaceprovisionmodel.ErrAlreadyInitialized
@@ -168,12 +163,12 @@ func (store *WorkspaceProvisionStore) ReconcileWorkspaceRoles(ctx context.Contex
 		return workspaceprovisionmodel.RoleReconciliationResult{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	query, arguments, err := ormbuilder.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspaces").Columns("id").Where(ormbuilder.Equal("id", workspaceID)).Build()
+	queryValue, arguments, err := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspaces").Columns("id").Where(query.Equal("id", workspaceID)).Build()
 	if err != nil {
 		return workspaceprovisionmodel.RoleReconciliationResult{}, err
 	}
 	var found string
-	if err := tx.QueryRowContext(ctx, query, arguments...).Scan(&found); errors.Is(err, sql.ErrNoRows) {
+	if err := tx.QueryRowContext(ctx, queryValue, arguments...).Scan(&found); errors.Is(err, sql.ErrNoRows) {
 		return workspaceprovisionmodel.RoleReconciliationResult{}, workspaceprovisionmodel.ErrWorkspaceNotFound
 	} else if err != nil {
 		return workspaceprovisionmodel.RoleReconciliationResult{}, err
@@ -190,13 +185,13 @@ func (store *WorkspaceProvisionStore) ReconcileWorkspaceRoles(ctx context.Contex
 
 func (store *WorkspaceProvisionStore) insertRuntimeWorkspace(ctx context.Context, tx *sql.Tx, request workspaceprovisionmodel.Request, result workspaceprovisionmodel.Result, configuration string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	if err := insert(ctx, tx, ormbuilder.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_workspaces").Columns("id", "canonical_code", "name", "status", "created_at", "updated_at").Values(result.WorkspaceID, result.CanonicalCode, request.TenantName, "active", now, now)); err != nil {
+	if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_workspaces").Columns("id", "canonical_code", "name", "status", "created_at", "updated_at").Values(result.WorkspaceID, result.CanonicalCode, request.TenantName, "active", now, now)); err != nil {
 		return err
 	}
 	if err := store.inject(FailureAfterWorkspace); err != nil {
 		return err
 	}
-	if err := insert(ctx, tx, ormbuilder.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_tenant_registry").Columns("id", "workspace_id", "canonical_code", "created_at", "updated_at").Values(result.TenantRegistryID, result.WorkspaceID, result.CanonicalCode, now, now)); err != nil {
+	if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_tenant_registry").Columns("id", "workspace_id", "canonical_code", "created_at", "updated_at").Values(result.TenantRegistryID, result.WorkspaceID, result.CanonicalCode, now, now)); err != nil {
 		return err
 	}
 	return store.inject(FailureAfterTenantRegistry)
@@ -204,7 +199,7 @@ func (store *WorkspaceProvisionStore) insertRuntimeWorkspace(ctx context.Context
 
 func (store *WorkspaceProvisionStore) insertConfigurationProjectionsAndReceipt(ctx context.Context, tx *sql.Tx, request workspaceprovisionmodel.Request, result workspaceprovisionmodel.Result, headquartersWorkspaceID, fingerprint, configuration string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	if err := insert(ctx, tx, ormbuilder.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_workspace_configuration").Columns("workspace_id", "configuration_json", "created_at", "updated_at").Values(result.WorkspaceID, configuration, now, now)); err != nil {
+	if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_workspace_configuration").Columns("workspace_id", "configuration_json", "created_at", "updated_at").Values(result.WorkspaceID, configuration, now, now)); err != nil {
 		return err
 	}
 	if err := store.inject(FailureAfterWorkspaceConfiguration); err != nil {
@@ -220,7 +215,7 @@ func (store *WorkspaceProvisionStore) insertConfigurationProjectionsAndReceipt(c
 	if err != nil {
 		return err
 	}
-	if err := insert(ctx, tx, ormbuilder.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_workspace_provisioning_receipts").Columns("request_id", "request_fingerprint", "tenant_registry_id", "workspace_id", "canonical_code", "admin_login_id", "must_change_password", "application_projection_ids_json", "created_at").Values(request.RequestID, fingerprint, result.TenantRegistryID, result.WorkspaceID, result.CanonicalCode, result.AdminLoginID, result.MustChangePassword, string(projectionIDs), now)); err != nil {
+	if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_workspace_provisioning_receipts").Columns("request_id", "request_fingerprint", "tenant_registry_id", "workspace_id", "canonical_code", "admin_login_id", "must_change_password", "application_projection_ids_json", "created_at").Values(request.RequestID, fingerprint, result.TenantRegistryID, result.WorkspaceID, result.CanonicalCode, result.AdminLoginID, result.MustChangePassword, string(projectionIDs), now)); err != nil {
 		return err
 	}
 	return store.inject(FailureAfterReceipt)
@@ -267,7 +262,7 @@ func (store *WorkspaceProvisionStore) insertApplicationProjections(ctx context.C
 		if err := recordvalidation.RecordValidateData(object, normalized, false); err != nil {
 			return workspaceprovisionmodel.ErrInvalid
 		}
-		if err := insert(ctx, tx, ormbuilder.NewInsertBuilder(store.runtime.RuntimeRenderer(), projection.ObjectKey).Columns(columns...).Values(values...)); err != nil {
+		if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), projection.ObjectKey).Columns(columns...).Values(values...)); err != nil {
 			return fmt.Errorf("insert workspace provisioning projection %s: %w", projection.Key, err)
 		}
 		if err := store.inject(FailureAfterApplicationProjection + projection.Key); err != nil {
@@ -277,7 +272,7 @@ func (store *WorkspaceProvisionStore) insertApplicationProjections(ctx context.C
 	return nil
 }
 
-func insert(ctx context.Context, tx *sql.Tx, builder *ormbuilder.InsertBuilder) error {
+func insert(ctx context.Context, tx *sql.Tx, builder *query.InsertBuilder) error {
 	statement, arguments, err := builder.Build()
 	if err != nil {
 		return err
@@ -287,7 +282,7 @@ func insert(ctx context.Context, tx *sql.Tx, builder *ormbuilder.InsertBuilder) 
 }
 
 func (store *WorkspaceProvisionStore) receipt(ctx context.Context, requestID, fingerprint string) (workspaceprovisionmodel.Result, bool, error) {
-	statement, arguments, err := ormbuilder.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspace_provisioning_receipts").Columns("request_fingerprint", "tenant_registry_id", "workspace_id", "canonical_code", "admin_login_id", "must_change_password", "application_projection_ids_json").Where(ormbuilder.Equal("request_id", requestID)).Build()
+	statement, arguments, err := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspace_provisioning_receipts").Columns("request_fingerprint", "tenant_registry_id", "workspace_id", "canonical_code", "admin_login_id", "must_change_password", "application_projection_ids_json").Where(query.Equal("request_id", requestID)).Build()
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, false, err
 	}
@@ -317,7 +312,7 @@ func (store *WorkspaceProvisionStore) afterFailedInsert(ctx context.Context, req
 		replay.Replayed = true
 		return replay, nil
 	}
-	statement, arguments, err := ormbuilder.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspaces").Columns("id").Where(ormbuilder.Equal("canonical_code", request.TenantCode)).Build()
+	statement, arguments, err := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspaces").Columns("id").Where(query.Equal("canonical_code", request.TenantCode)).Build()
 	if err == nil {
 		var id string
 		if scanErr := store.runtime.DB().QueryRowContext(ctx, statement, arguments...).Scan(&id); scanErr == nil && id != "" {

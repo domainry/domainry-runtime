@@ -12,7 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"strings"
 )
@@ -26,7 +26,7 @@ func (s ApplicationSchemaStore) ApplicationSchemaMigrationPlan(ctx context.Conte
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
 			}
-			// Table does not exist yet.
+
 			steps = append(steps, appschemamodel.ApplicationSchemaMigrationStep{
 				ObjectKey:   object.Key,
 				Table:       table,
@@ -109,12 +109,12 @@ func (s ApplicationSchemaStore) LoadManifestMetadata(ctx context.Context) (manif
 }
 
 func (s ApplicationSchemaStore) loadMetadataCatalog(ctx context.Context) (map[string]string, error) {
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, "_application_schema_projection").Columns("template_id", "artifact_version", "default_locale", "name", "contract_version", "schema_hash", "source_hash").Where(ormbuilder.Equal("id", "current")).Build()
+	queryValue, args, buildErr := query.NewSelectBuilder(s.store.SQLRenderer, "_application_schema_projection").Columns("template_id", "artifact_version", "default_locale", "name", "contract_version", "schema_hash", "source_hash").Where(query.Equal("id", "current")).Build()
 	if buildErr != nil {
 		return nil, fmt.Errorf("build metadata catalog load: %w", buildErr)
 	}
 	var templateID, artifactVersion, defaultLocale, name, contractVersion, schemaHash, sourceHash string
-	if err := s.database().QueryRowContext(ctx, query, args...).Scan(&templateID, &artifactVersion, &defaultLocale, &name, &contractVersion, &schemaHash, &sourceHash); err != nil {
+	if err := s.database().QueryRowContext(ctx, queryValue, args...).Scan(&templateID, &artifactVersion, &defaultLocale, &name, &contractVersion, &schemaHash, &sourceHash); err != nil {
 		return nil, fmt.Errorf("load metadata projection: %w", err)
 	}
 	out := map[string]string{"template_id": templateID, "template_version": artifactVersion, "default_locale": defaultLocale, "name": name, "schema_version": contractVersion, "schema_hash": schemaHash, "source_hash": sourceHash}
@@ -125,11 +125,11 @@ func (s ApplicationSchemaStore) loadMetadataCatalog(ctx context.Context) (map[st
 }
 
 func loadMetadataSlice[T any](ctx context.Context, s ApplicationSchemaStore, table string) ([]T, error) {
-	query, args, buildErr := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, table).Columns("payload_json").Where(ormbuilder.IsNull("disabled_at")).OrderBy(ormbuilder.Ascending("resource_key")).Build()
+	queryValue, args, buildErr := query.NewSelectBuilder(s.store.SQLRenderer, table).Columns("payload_json").Where(query.IsNull("disabled_at")).OrderBy(query.Ascending("resource_key")).Build()
 	if buildErr != nil {
 		return nil, fmt.Errorf("build %s load: %w", table, buildErr)
 	}
-	rows, err := s.database().QueryContext(ctx, query, args...)
+	rows, err := s.database().QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, fmt.Errorf("load %s: %w", table, err)
 	}

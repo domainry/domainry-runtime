@@ -3,8 +3,8 @@ package query
 import (
 	"context"
 
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	reportsnapshot "github.com/domainry/domainry-runtime/runtime/domain/report/snapshot"
 )
 

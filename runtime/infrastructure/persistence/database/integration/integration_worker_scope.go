@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/requestcontext"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
@@ -23,17 +23,10 @@ type integrationWorkerQueueScopeExecutor interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 }
 
-// RegisterEventWorkerQueueScope makes one workspace discoverable by the
-// Runtime-global integration event worker. The registry itself is deliberately
-// not workspace-scoped, while the actual queue read remains protected by RLS.
 func RegisterEventWorkerQueueScope(ctx context.Context, store *database.RuntimeStore, executor integrationWorkerQueueScopeExecutor, workspaceID, updatedAt string) error {
 	return registerIntegrationWorkerQueueScope(ctx, store, executor, integrationEventWorkerQueueKind, workspaceID, updatedAt)
 }
 
-// RegisterOutboxWorkerQueueScope makes one workspace discoverable by the
-// Runtime-global integration outbox worker. Callers that already own a business
-// transaction pass that transaction so the queue row and discovery scope commit
-// together.
 func RegisterOutboxWorkerQueueScope(ctx context.Context, store *database.RuntimeStore, executor integrationWorkerQueueScopeExecutor, workspaceID, updatedAt string) error {
 	return registerIntegrationWorkerQueueScope(ctx, store, executor, integrationOutboxWorkerQueueKind, workspaceID, updatedAt)
 }
@@ -52,8 +45,8 @@ func registerIntegrationWorkerQueueScope(ctx context.Context, store *database.Ru
 	}
 	digest := sha256.Sum256([]byte(queueKind + "\x00" + workspaceID))
 	id := "worker_scope:" + hex.EncodeToString(digest[:12])
-	update, updateArgs, buildErr := ormbuilder.NewUpdateBuilder(store.SQLRenderer, "_worker_queue_scopes").
-		Set("updated_at", updatedAt).Where(ormbuilder.Equal("id", id)).Build()
+	update, updateArgs, buildErr := query.NewUpdateBuilder(store.SQLRenderer, "_worker_queue_scopes").
+		Set("updated_at", updatedAt).Where(query.Equal("id", id)).Build()
 	if buildErr != nil {
 		return fmt.Errorf("build %s worker queue scope refresh: %w", queueKind, buildErr)
 	}
@@ -66,15 +59,13 @@ func registerIntegrationWorkerQueueScope(ctx context.Context, store *database.Ru
 	} else if affected > 0 {
 		return nil
 	}
-	insert, insertArgs, buildErr := ormbuilder.NewInsertBuilder(store.SQLRenderer, "_worker_queue_scopes").
+	insert, insertArgs, buildErr := query.NewInsertBuilder(store.SQLRenderer, "_worker_queue_scopes").
 		Columns("id", "queue_kind", "scope_key", "updated_at").Values(id, queueKind, workspaceID, updatedAt).Build()
 	if buildErr != nil {
 		return fmt.Errorf("build %s worker queue scope registration: %w", queueKind, buildErr)
 	}
 	if _, err := executor.ExecContext(ctx, insert, insertArgs...); err != nil {
-		// A concurrent producer may have inserted the deterministic scope after
-		// our update. A second update distinguishes that harmless race from a
-		// real insert failure without relying on driver-specific error strings.
+
 		retried, retryErr := executor.ExecContext(ctx, update, updateArgs...)
 		if retryErr == nil {
 			if affected, rowsErr := retried.RowsAffected(); rowsErr == nil && affected > 0 {
@@ -87,12 +78,12 @@ func registerIntegrationWorkerQueueScope(ctx context.Context, store *database.Ru
 }
 
 func (r IntegrationWorkerStore) integrationWorkerQueueScopes(ctx context.Context, queueKind string) ([]string, error) {
-	query, args, buildErr := ormbuilder.NewSelectBuilder(r.store.SQLRenderer, "_worker_queue_scopes").
-		Columns("scope_key").Where(ormbuilder.Equal("queue_kind", queueKind)).OrderBy(ormbuilder.Ascending("scope_key")).Build()
+	queryValue, args, buildErr := query.NewSelectBuilder(r.store.SQLRenderer, "_worker_queue_scopes").
+		Columns("scope_key").Where(query.Equal("queue_kind", queueKind)).OrderBy(query.Ascending("scope_key")).Build()
 	if buildErr != nil {
 		return nil, fmt.Errorf("build %s worker queue scope list: %w", queueKind, buildErr)
 	}
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := r.db.QueryContext(ctx, queryValue, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list %s worker queue scopes: %w", queueKind, err)
 	}

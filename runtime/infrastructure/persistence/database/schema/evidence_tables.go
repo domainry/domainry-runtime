@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 )
 
 func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]string, text string) error {
@@ -25,7 +25,7 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 	if err := ensureWorkspaceScopedIdentities(ctx, s, workspaceIdentities); err != nil {
 		return err
 	}
-	// Backfill uses an engine-native upsert on this business key.
+
 	if err := s.CreateIndexIfMissing(ctx, "_worker_queue_scopes", "uniq_runtime_worker_queue_scope", true, "queue_kind", "scope_key"); err != nil {
 		return fmt.Errorf("create uniq_runtime_worker_queue_scope: %w", err)
 	}
@@ -132,11 +132,7 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		{name: "idx_runtime_publication_due", table: "_publication_outbox", columns: []string{"publication_type", "status", "next_attempt_at", "lease_expires_at", "created_at"}},
 		{name: "idx_runtime_publication_ack_due", table: "_publication_outbox", columns: []string{"publication_type", "status", "ack_deadline_at"}},
 		{name: "uniq_runtime_publication_dedup", table: "_publication_outbox", columns: []string{"workspace_id", "publication_type", "connector_key", "connection_key", "operation", "dedup_key"}, unique: true},
-		// Keep the notification source identity unique without collapsing every
-		// non-notification publication onto the same all-empty notification
-		// columns. The destination identity is empty for notifications, so the
-		// extended key preserves their original source uniqueness; Connector
-		// publications vary by their existing destination/dedup identity.
+
 		{name: "uniq_runtime_notification_publication_source", table: "_publication_outbox", columns: []string{"publication_type", "tenant_id", "workspace_id", "application_key", "source_event_id", "connector_key", "connection_key", "operation", "dedup_key"}, unique: true},
 		{name: "idx_automation_execution_rule", table: "_automation_rule_executions", columns: []string{"workspace_id", "rule_key", "created_at"}},
 		{name: "idx_automation_execution_record", table: "_automation_rule_executions", columns: []string{"workspace_id", "object_key", "record_id", "created_at"}},
@@ -175,8 +171,8 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 
 func backfillWorkerQueueScopes(ctx context.Context, s Store, queueKind, table string) error {
 	queueKind, table = strings.TrimSpace(queueKind), strings.TrimSpace(table)
-	query := "SELECT " + s.Identifier("workspace_id") + ", MAX(" + s.Identifier("updated_at") + ") FROM " + s.TableIdentifier(table) + " GROUP BY " + s.Identifier("workspace_id")
-	rows, err := s.SchemaDB().QueryContext(ctx, query)
+	queryValue := "SELECT " + s.Identifier("workspace_id") + ", MAX(" + s.Identifier("updated_at") + ") FROM " + s.TableIdentifier(table) + " GROUP BY " + s.Identifier("workspace_id")
+	rows, err := s.SchemaDB().QueryContext(ctx, queryValue)
 	if err != nil {
 		return fmt.Errorf("inventory %s worker queue scopes: %w", queueKind, err)
 	}
@@ -201,10 +197,10 @@ func backfillWorkerQueueScopes(ctx context.Context, s Store, queueKind, table st
 	for _, value := range values {
 		digest := sha256.Sum256([]byte(queueKind + "\x00" + value.workspaceID))
 		id := "worker_scope:" + hex.EncodeToString(digest[:12])
-		insert := ormbuilder.NewInsertBuilder(s.RuntimeRenderer(), "_worker_queue_scopes").
+		insert := query.NewInsertBuilder(s.RuntimeRenderer(), "_worker_queue_scopes").
 			Columns("id", "queue_kind", "scope_key", "updated_at").
 			Values(id, queueKind, value.workspaceID, value.updatedAt)
-		insert, err = s.RuntimeProfile().ApplyUpsert(insert, []string{"queue_kind", "scope_key"}, ormbuilder.Assign("updated_at", value.updatedAt))
+		insert, err = s.RuntimeProfile().ApplyUpsert(insert, []string{"queue_kind", "scope_key"}, query.Assign("updated_at", value.updatedAt))
 		if err != nil {
 			return fmt.Errorf("build %s worker queue scope upsert: %w", queueKind, err)
 		}

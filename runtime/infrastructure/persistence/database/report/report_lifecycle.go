@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	agentrepository "github.com/domainry/domainry-agent-sdk/repository"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -16,13 +16,13 @@ import (
 type lifecycleExecutor struct {
 	relational         lifecyclecontract.OwnerLifecycleExecutor
 	relationalPolicies map[string]bool
-	repository         agentrepository.AgentLifecycleRepository
+	repository         agentpersistence.AgentLifecycleRepository
 	archives           lifecyclecontract.ArchiveWriter
 }
 
 const reportStateResource = "agent.state"
 
-func LifecycleExecutor(store *database.RuntimeStore, archives lifecyclecontract.ArchiveStore, repository agentrepository.AgentLifecycleRepository, objects ...definitionmodel.ObjectSchema) lifecyclecontract.OwnerLifecycleExecutor {
+func LifecycleExecutor(store *database.RuntimeStore, archives lifecyclecontract.ArchiveStore, repository agentpersistence.AgentLifecycleRepository, objects ...definitionmodel.ObjectSchema) lifecyclecontract.OwnerLifecycleExecutor {
 	available := make(map[string]bool, len(objects))
 	for _, object := range objects {
 		available[object.Key] = true
@@ -143,11 +143,11 @@ func (e lifecycleExecutor) ProcessBatch(ctx context.Context, job lifecyclemodel.
 	return result, nil
 }
 
-func (e lifecycleExecutor) states(ctx context.Context, workspaceID string, policy lifecyclemodel.RetentionPolicy, now time.Time, limit int) ([]agentrepository.LifecycleCandidate, error) {
+func (e lifecycleExecutor) states(ctx context.Context, workspaceID string, policy lifecyclemodel.RetentionPolicy, now time.Time, limit int) ([]agentpersistence.LifecycleCandidate, error) {
 	if e.repository == nil {
 		return nil, nil
 	}
-	return e.repository.ListLifecycleCandidates(ctx, workspaceID, agentrepository.LifecycleQuery{Owner: "report", PolicyKey: policy.Key, Now: now, Retention: policy.DefaultRetention, StatusRetention: policy.StatusRetention, Limit: limit})
+	return e.repository.ListLifecycleCandidates(ctx, workspaceID, agentpersistence.LifecycleQuery{Owner: "report", PolicyKey: policy.Key, Now: now, Retention: policy.DefaultRetention, StatusRetention: policy.StatusRetention, Limit: limit})
 }
 
 func reportLifecycleHeld(holds []lifecyclemodel.LegalHold, resourceType, resourceID string, now time.Time) bool {

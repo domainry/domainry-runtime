@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationspolicy "github.com/domainry/domainry-runtime/runtime/domain/operations/policy"
 )
@@ -48,17 +48,17 @@ func (s OperationsStore) ForceReleaseOperationsLease(ctx context.Context, reques
 	}
 	defer func() { _ = tx.Rollback() }()
 	predicate := operationsLeaseReleasePredicate(spec, request)
-	selectBuilder := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, spec.table).Columns("lease_owner", "lease_expires_at", "fencing_token")
+	selectBuilder := query.NewSelectBuilder(s.store.SQLRenderer, spec.table).Columns("lease_owner", "lease_expires_at", "fencing_token")
 	if spec.workspaceColumn != "" {
-		selectBuilder = ormbuilder.NewWorkspaceSelectBuilder(s.store.SQLRenderer, spec.table, request.WorkspaceID).Columns("lease_owner", "lease_expires_at", "fencing_token")
+		selectBuilder = query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, spec.table, request.WorkspaceID).Columns("lease_owner", "lease_expires_at", "fencing_token")
 	}
-	query, args, buildErr := selectBuilder.Where(predicate).Build()
+	queryValue, args, buildErr := selectBuilder.Where(predicate).Build()
 	if buildErr != nil {
 		return operationsmodel.OperationsLeaseReleaseResult{}, false, buildErr
 	}
 	var currentOwner, expiresAt string
 	var currentToken int64
-	if err := tx.QueryRowContext(ctx, query, args...).Scan(&currentOwner, &expiresAt, &currentToken); err != nil {
+	if err := tx.QueryRowContext(ctx, queryValue, args...).Scan(&currentOwner, &expiresAt, &currentToken); err != nil {
 		if err == sql.ErrNoRows {
 			return operationsmodel.OperationsLeaseReleaseResult{}, false, nil
 		}
@@ -78,12 +78,12 @@ func (s OperationsStore) ForceReleaseOperationsLease(ctx context.Context, reques
 		}
 		eligibility = "verified_stuck"
 	}
-	updatePredicate := ormbuilder.And(predicate, ormbuilder.Equal("lease_owner", request.ExpectedLeaseOwner), ormbuilder.Equal("fencing_token", request.ExpectedFencingToken))
-	updateBuilder := ormbuilder.NewUpdateBuilder(s.store.SQLRenderer, spec.table)
+	updatePredicate := query.And(predicate, query.Equal("lease_owner", request.ExpectedLeaseOwner), query.Equal("fencing_token", request.ExpectedFencingToken))
+	updateBuilder := query.NewUpdateBuilder(s.store.SQLRenderer, spec.table)
 	if spec.workspaceColumn != "" {
-		updateBuilder = ormbuilder.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, spec.table, request.WorkspaceID)
+		updateBuilder = query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, spec.table, request.WorkspaceID)
 	}
-	update, updateArgs, buildErr := updateBuilder.Set("lease_owner", "").Set("lease_expires_at", "").SetExpression("fencing_token", ormbuilder.Add(ormbuilder.Column("fencing_token"), ormbuilder.Value(1))).Set("updated_at", request.Now.UTC().Format(time.RFC3339Nano)).Where(updatePredicate).Build()
+	update, updateArgs, buildErr := updateBuilder.Set("lease_owner", "").Set("lease_expires_at", "").SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).Set("updated_at", request.Now.UTC().Format(time.RFC3339Nano)).Where(updatePredicate).Build()
 	if buildErr != nil {
 		return operationsmodel.OperationsLeaseReleaseResult{}, false, buildErr
 	}
@@ -101,10 +101,10 @@ func (s OperationsStore) ForceReleaseOperationsLease(ctx context.Context, reques
 	return operationsmodel.OperationsLeaseReleaseResult{Owner: request.Owner, WorkspaceID: request.WorkspaceID, ResourceID: request.ResourceID, PreviousLeaseOwner: currentOwner, PreviousFencingToken: currentToken, NextFencingToken: currentToken + 1, PreviousExpiresAt: expires, ReleasedAt: request.Now.UTC(), Eligibility: eligibility}, true, nil
 }
 
-func operationsLeaseReleasePredicate(spec operationsLeaseReleaseSpec, request operationsmodel.OperationsLeaseReleaseRequest) ormbuilder.Predicate {
-	predicate := ormbuilder.Predicate(ormbuilder.Equal(spec.idColumn, request.ResourceID))
+func operationsLeaseReleasePredicate(spec operationsLeaseReleaseSpec, request operationsmodel.OperationsLeaseReleaseRequest) query.Predicate {
+	predicate := query.Predicate(query.Equal(spec.idColumn, request.ResourceID))
 	if spec.publicationType != "" {
-		predicate = ormbuilder.And(ormbuilder.Equal("publication_type", spec.publicationType), predicate)
+		predicate = query.And(query.Equal("publication_type", spec.publicationType), predicate)
 	}
 	return predicate
 }

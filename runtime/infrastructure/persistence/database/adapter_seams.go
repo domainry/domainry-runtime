@@ -2,7 +2,7 @@ package database
 
 import (
 	"github.com/domainry/domainry-foundation/mutation"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
 	"context"
@@ -22,19 +22,16 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-// The methods and functions in this file are the narrow SQL seams used by
-// domain-owned repository adapter packages. They keep Store internals private
-// while allowing adapters to leave the database root package.
-func (s *RuntimeStore) TenantListWhereClause(workspaceID string, query recordmodel.RecordListQuery) (string, []any, error) {
-	return querypersistence.BuildTenantWhere(s, workspaceID, query)
+func (s *RuntimeStore) TenantListWhereClause(workspaceID string, queryValue recordmodel.RecordListQuery) (string, []any, error) {
+	return querypersistence.BuildTenantWhere(s, workspaceID, queryValue)
 }
 
-func (s *RuntimeStore) TenantListPredicate(workspaceID string, query recordmodel.RecordListQuery) (ormbuilder.Predicate, error) {
-	return querypersistence.BuildTenantPredicate(s, workspaceID, query)
+func (s *RuntimeStore) TenantListPredicate(workspaceID string, queryValue recordmodel.RecordListQuery) (query.Predicate, error) {
+	return querypersistence.BuildTenantPredicate(s, workspaceID, queryValue)
 }
 
-func (s *RuntimeStore) ListOrderClause(query recordmodel.RecordListQuery) string {
-	return querypersistence.BuildOrder(s, query)
+func (s *RuntimeStore) ListOrderClause(queryValue recordmodel.RecordListQuery) string {
+	return querypersistence.BuildOrder(s, queryValue)
 }
 
 func MutationConstraintError(err error, resource, identifier string, kind mutation.MutationConflictKind) error {
@@ -85,12 +82,12 @@ func (s *RuntimeStore) EnsureRuntimeColumn(ctx context.Context, table, column, d
 func (s *RuntimeStore) ApplicationSchemaIDColumnType() string { return s.metadataIDColumnType() }
 func (s *RuntimeStore) RuntimeTableExists(ctx context.Context, table string) (bool, error) {
 	base := s.sqlBase()
-	query := base.RuntimeEngine.TableExistsQuery(base.SQLRenderer, base.DatabaseSchema, strings.TrimSpace(table))
-	if strings.TrimSpace(query.Statement) == "" {
+	queryValue := base.RuntimeEngine.TableExistsQuery(base.SQLRenderer, base.DatabaseSchema, strings.TrimSpace(table))
+	if strings.TrimSpace(queryValue.Statement) == "" {
 		return false, fmt.Errorf("database engine does not support table inspection")
 	}
 	var count int
-	if err := s.schemaDatabase().QueryRowContext(ctx, query.Statement, query.Arguments...).Scan(&count); err != nil {
+	if err := s.schemaDatabase().QueryRowContext(ctx, queryValue.Statement, queryValue.Arguments...).Scan(&count); err != nil {
 		return false, err
 	}
 	return count > 0, nil

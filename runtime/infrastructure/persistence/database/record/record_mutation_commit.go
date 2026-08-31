@@ -1,7 +1,7 @@
 package record
 
 import (
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
 	"github.com/domainry/domainry-foundation/mutation"
@@ -56,9 +56,7 @@ func (r RecordStore) CommitRecordMutationBatch(ctx context.Context, workspaceID 
 }
 
 func recordMutationTxOptions() *sql.TxOptions {
-	// Record UoWs may span multiple aggregate tables (record, audit, outbox,
-	// workflow intent). Serializable plus explicit optimistic predicates gives
-	// SQLite, MySQL, and Postgres one fail-closed conflict contract.
+
 	return &sql.TxOptions{Isolation: sql.LevelSerializable}
 }
 
@@ -90,15 +88,15 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 				values = append(values, dbFieldValue(s.RuntimeEngine, field, value))
 			}
 		}
-		query, args, buildErr := ormbuilder.NewWorkspaceInsertBuilder(s.SQLRenderer, commit.Object.Key, workspaceID).Columns(columns...).Values(values...).Build()
+		queryValue, args, buildErr := query.NewWorkspaceInsertBuilder(s.SQLRenderer, commit.Object.Key, workspaceID).Columns(columns...).Values(values...).Build()
 		if buildErr != nil {
 			return buildErr
 		}
-		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+		if _, err := tx.ExecContext(ctx, queryValue, args...); err != nil {
 			return fmt.Errorf("insert record mutation: %w", database.MutationConstraintError(err, commit.Object.Key, commit.Record.ID, mutation.MutationConflictUnique))
 		}
 	case "update", "restore":
-		builder := ormbuilder.NewWorkspaceUpdateBuilder(s.SQLRenderer, commit.Object.Key, workspaceID).Set("updated_at", commit.Record.UpdatedAt)
+		builder := query.NewWorkspaceUpdateBuilder(s.SQLRenderer, commit.Object.Key, workspaceID).Set("updated_at", commit.Record.UpdatedAt)
 		if metadataErr := applyRecordUpdateBuilder(builder, commit.Record, operation == "restore" || commit.Record.Deleted); metadataErr != nil {
 			return metadataErr
 		}
@@ -110,7 +108,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 				builder.Set(field.Key, dbFieldValue(s.RuntimeEngine, field, value))
 			}
 		}
-		predicates := []ormbuilder.Predicate{ormbuilder.Equal("id", commit.Record.ID)}
+		predicates := []query.Predicate{query.Equal("id", commit.Record.ID)}
 		conditionKeys := make([]string, 0, len(commit.Conditions))
 		for key := range commit.Conditions {
 			if strings.TrimSpace(key) != "" && key != "id" && key != "updated_at" {
@@ -119,7 +117,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 		}
 		sort.Strings(conditionKeys)
 		for _, key := range conditionKeys {
-			predicates = append(predicates, ormbuilder.Equal(key, recordConditionDBValue(s.RuntimeEngine, commit.Object, key, commit.Conditions[key])))
+			predicates = append(predicates, query.Equal(key, recordConditionDBValue(s.RuntimeEngine, commit.Object, key, commit.Conditions[key])))
 		}
 		for _, mutationPredicate := range commit.Predicates {
 			predicate, err := recordMutationPredicate(commit.Object, mutationPredicate, s.RuntimeEngine)
@@ -129,13 +127,13 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 			predicates = append(predicates, predicate)
 		}
 		if expected := strings.TrimSpace(commit.OptimisticUpdatedAt()); expected != "" {
-			predicates = append(predicates, ormbuilder.Equal("updated_at", expected))
+			predicates = append(predicates, query.Equal("updated_at", expected))
 		}
-		query, args, buildErr := builder.Where(ormbuilder.And(predicates...)).Build()
+		queryValue, args, buildErr := builder.Where(query.And(predicates...)).Build()
 		if buildErr != nil {
 			return buildErr
 		}
-		result, err := tx.ExecContext(ctx, query, args...)
+		result, err := tx.ExecContext(ctx, queryValue, args...)
 		if err != nil {
 			return fmt.Errorf("update record mutation: %w", database.MutationConstraintError(err, commit.Object.Key, commit.Record.ID, mutation.MutationConflictUnique))
 		}
@@ -146,7 +144,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 		if affected == 0 {
 			if expected := strings.TrimSpace(commit.OptimisticUpdatedAt()); expected != "" {
 				var current string
-				lookup, lookupArgs, buildErr := ormbuilder.NewWorkspaceSelectBuilder(s.SQLRenderer, commit.Object.Key, workspaceID).Columns("updated_at").Where(ormbuilder.Equal("id", commit.Record.ID)).Limit(1).Build()
+				lookup, lookupArgs, buildErr := query.NewWorkspaceSelectBuilder(s.SQLRenderer, commit.Object.Key, workspaceID).Columns("updated_at").Where(query.Equal("id", commit.Record.ID)).Limit(1).Build()
 				if buildErr != nil {
 					return buildErr
 				}
@@ -169,15 +167,15 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 		if id == "" {
 			id = commit.Record.ID
 		}
-		predicate := ormbuilder.Predicate(ormbuilder.Equal("id", id))
+		predicate := query.Predicate(query.Equal("id", id))
 		if expected := strings.TrimSpace(commit.OptimisticUpdatedAt()); expected != "" {
-			predicate = ormbuilder.And(predicate, ormbuilder.Equal("updated_at", expected))
+			predicate = query.And(predicate, query.Equal("updated_at", expected))
 		}
-		query, args, buildErr := ormbuilder.NewWorkspaceDeleteBuilder(s.SQLRenderer, commit.Object.Key, workspaceID).Where(predicate).Build()
+		queryValue, args, buildErr := query.NewWorkspaceDeleteBuilder(s.SQLRenderer, commit.Object.Key, workspaceID).Where(predicate).Build()
 		if buildErr != nil {
 			return buildErr
 		}
-		result, err := tx.ExecContext(ctx, query, args...)
+		result, err := tx.ExecContext(ctx, queryValue, args...)
 		if err != nil {
 			return fmt.Errorf("delete record mutation: %w", err)
 		}

@@ -20,6 +20,7 @@ import (
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	"golang.org/x/mod/modfile"
 )
 
 type genericRuntimeDependency struct {
@@ -93,7 +94,12 @@ func TestGenericRuntimeBuildClosureExcludesProjectOwnedSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	command := exec.Command("go", "list", "-deps", "-json", "./runtime/cmd/server")
+	arguments := []string{"list", "-deps", "-json"}
+	if localModFile := genericRuntimeLocalModFile(t, repositoryRoot); localModFile != "" {
+		arguments = append(arguments, "-modfile="+localModFile, "-mod=mod")
+	}
+	arguments = append(arguments, "./runtime/cmd/server")
+	command := exec.Command("go", arguments...)
 	command.Dir = repositoryRoot
 	command.Env = append(os.Environ(), "GOWORK=off")
 	var stderr bytes.Buffer
@@ -125,6 +131,60 @@ func TestGenericRuntimeBuildClosureExcludesProjectOwnedSource(t *testing.T) {
 	if err := validateGenericRuntimeBuildClosure(repositoryRoot, append(dependencies, projectDependency)); err == nil || !strings.Contains(err.Error(), "actions") {
 		t.Fatalf("project-owned dependency was not rejected: %v", err)
 	}
+}
+
+func genericRuntimeLocalModFile(t *testing.T, repositoryRoot string) string {
+	t.Helper()
+	replacements := []struct{ path, environment string }{
+		{path: "github.com/domainry/domainry-agent-sdk", environment: "DOMAINRY_AGENT_SDK_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-agent", environment: "DOMAINRY_AGENT_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-lifecycle-sdk", environment: "DOMAINRY_LIFECYCLE_SDK_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-lifecycle", environment: "DOMAINRY_LIFECYCLE_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-metadata-sdk", environment: "DOMAINRY_METADATA_SDK_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-metadata", environment: "DOMAINRY_METADATA_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-report-sdk", environment: "DOMAINRY_REPORT_SDK_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-report", environment: "DOMAINRY_REPORT_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-scheduler-sdk", environment: "DOMAINRY_SCHEDULER_SDK_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-scheduler", environment: "DOMAINRY_SCHEDULER_REPO_ROOT"},
+	}
+	contents, err := os.ReadFile(filepath.Join(repositoryRoot, "go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := modfile.Parse("go.mod", contents, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, replacement := range replacements {
+		root := strings.TrimSpace(os.Getenv(replacement.environment))
+		if root == "" {
+			candidate := filepath.Join(filepath.Dir(repositoryRoot), strings.TrimPrefix(replacement.path, "github.com/domainry/"))
+			if _, statErr := os.Stat(filepath.Join(candidate, "go.mod")); statErr != nil {
+				continue
+			}
+			root = candidate
+		}
+		if err := parsed.AddReplace(replacement.path, "", filepath.Clean(root), ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	formatted, err := parsed.Format()
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := t.TempDir()
+	path := filepath.Join(directory, "runtime-local.mod")
+	if err := os.WriteFile(path, formatted, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if sums, err := os.ReadFile(filepath.Join(repositoryRoot, "go.sum")); err == nil {
+		if err := os.WriteFile(filepath.Join(directory, "runtime-local.sum"), sums, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
+	}
+	return path
 }
 
 func validateGenericRuntimeBuildClosure(repositoryRoot string, dependencies []genericRuntimeDependency) error {

@@ -5,17 +5,17 @@ import (
 	"fmt"
 
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
-	ormbuilder "github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/query"
 )
 
 func (e OwnerExecutor) archiveChildCollections(ctx context.Context, job lifecyclemodel.CleanupJob, policy lifecyclemodel.PolicyVersion, parentID string, children []relationalChildCollection, purge bool) (int64, int64, error) {
 	var archived, purged int64
 	for _, child := range children {
-		query, args, buildErr := ormbuilder.NewWorkspaceSelectBuilder(e.renderer, child.table, job.WorkspaceID).Columns(child.idColumn).Where(ormbuilder.Equal(child.parentColumn, parentID)).OrderBy(ormbuilder.Ascending(child.idColumn)).Build()
+		queryValue, args, buildErr := query.NewWorkspaceSelectBuilder(e.renderer, child.table, job.WorkspaceID).Columns(child.idColumn).Where(query.Equal(child.parentColumn, parentID)).OrderBy(query.Ascending(child.idColumn)).Build()
 		if buildErr != nil {
 			return archived, purged, buildErr
 		}
-		rows, err := e.database(ctx).QueryContext(ctx, query, args...)
+		rows, err := e.database(ctx).QueryContext(ctx, queryValue, args...)
 		if err != nil {
 			return archived, purged, err
 		}
@@ -45,11 +45,11 @@ func (e OwnerExecutor) archiveChildCollections(ctx context.Context, job lifecycl
 		if !purge || len(ids) == 0 {
 			continue
 		}
-		query, args, buildErr = ormbuilder.NewWorkspaceDeleteBuilder(e.renderer, child.table, job.WorkspaceID).Where(ormbuilder.Equal(child.parentColumn, parentID)).Build()
+		queryValue, args, buildErr = query.NewWorkspaceDeleteBuilder(e.renderer, child.table, job.WorkspaceID).Where(query.Equal(child.parentColumn, parentID)).Build()
 		if buildErr != nil {
 			return archived, purged, buildErr
 		}
-		result, err := e.database(ctx).ExecContext(ctx, query, args...)
+		result, err := e.database(ctx).ExecContext(ctx, queryValue, args...)
 		if err != nil {
 			return archived, purged, fmt.Errorf("purge child collection %s: %w", child.table, err)
 		}
