@@ -577,19 +577,12 @@ func distributionGoModWithVersions(content []byte, versions map[string]string) (
 			return nil, err
 		}
 	}
-	// The Runtime production closure depends only on the deployment-neutral
-	// Notification SDK. The implementation module is published beside Runtime
-	// for Module compositions, but must be selected by the generated project;
-	// keeping this test-only source requirement would force SaaS consumers to
-	// download and trust an implementation they never link.
+	// Party remains selected by generated Module compositions rather than the
+	// Runtime distribution itself. HTTP surface adapters for Notification,
+	// Integration, and Monitoring are production Runtime dependencies because
+	// they expose the same module-owned surface for remote SaaS bindings.
 	if parsed.Module != nil && parsed.Module.Mod.Path == runtimeModulePath {
-		if err := parsed.DropRequire("github.com/domainry/domainry-notification"); err != nil {
-			return nil, err
-		}
 		if err := parsed.DropRequire("github.com/domainry/domainry-party"); err != nil {
-			return nil, err
-		}
-		if err := parsed.DropRequire("github.com/domainry/domainry-monitoring"); err != nil {
 			return nil, err
 		}
 	}
@@ -597,13 +590,7 @@ func distributionGoModWithVersions(content []byte, versions map[string]string) (
 		if strings.TrimSpace(version) == "" {
 			continue
 		}
-		if parsed.Module != nil && parsed.Module.Mod.Path == runtimeModulePath && path == "github.com/domainry/domainry-notification" {
-			continue
-		}
 		if parsed.Module != nil && parsed.Module.Mod.Path == runtimeModulePath && path == "github.com/domainry/domainry-party" {
-			continue
-		}
-		if parsed.Module != nil && parsed.Module.Mod.Path == runtimeModulePath && path == "github.com/domainry/domainry-monitoring" {
 			continue
 		}
 		if err := parsed.AddRequire(path, version); err != nil {

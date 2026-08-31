@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 
 	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
-	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -77,7 +76,6 @@ func (a *httpServerAssembly) wireIntegrationAndAgentHandlers(agentDialogRateLimi
 			Principal:      a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
 			WriteError: a.callbacks.WriteError, WriteServiceError: a.callbacks.WriteServiceError,
 			DecodeJSON: a.callbacks.DecodeJSON, Authenticated: a.identityHTTP.AuthenticatedFunc,
-			ModuleOwnsTemplateHTTP: a.dependencies.NotificationMode == notificationsdk.DeploymentModeModule,
 		})
 	}
 }

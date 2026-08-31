@@ -31,7 +31,7 @@ func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {
 		LifecycleBinding:   runtime.lifecycleBinding,
 		Store:              runtime.store, RateLimiter: runtime.rateLimiter,
 		AgentRepositories: agentRepositories,
-		Notifications:     runtime.notificationHTTP, NotificationMode: runtime.notificationBinding.Descriptor().Mode, Manifest: runtime.manifest,
+		Notifications:     runtime.notificationHTTP, Manifest: runtime.manifest,
 		WorkerControl:     runtime.worker.Control,
 		Clock:             runtime.worker.Clock,
 		RuntimeInstanceID: runtime.worker.WorkerID.String(),

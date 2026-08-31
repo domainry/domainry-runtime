@@ -51,23 +51,17 @@ type DatabaseRetirementService interface {
 	Execute(context.Context, string, principalmodel.Principal) (operationscontract.DatabaseRetirementExecutionResult, error)
 }
 
-type MonitoringMetricsService interface {
-	Metrics(context.Context) map[string]any
-}
-
 type OperationsHandler struct {
 	service            OperationsService
 	controls           OperationsControlService
 	leases             OperationsLeaseService
 	databaseRetirement DatabaseRetirementService
-	monitoring         MonitoringMetricsService
 	principal          func(*http.Request) principalmodel.Principal
 	writeJSON          func(http.ResponseWriter, int, any)
 	writeServiceError  func(http.ResponseWriter, *http.Request, error)
 	decodeJSON         func(http.ResponseWriter, *http.Request, any) bool
 	securityAudit      func(*http.Request, principalmodel.Principal, string, string, map[string]any)
 	authenticated      func(http.HandlerFunc) http.HandlerFunc
-	monitoringProxy    bool
 }
 
 type OperationsDependencies struct {
@@ -75,7 +69,6 @@ type OperationsDependencies struct {
 	Controls           OperationsControlService
 	Leases             OperationsLeaseService
 	DatabaseRetirement DatabaseRetirementService
-	Monitoring         MonitoringMetricsService
 	Principal          func(*http.Request) principalmodel.Principal
 	WriteJSON          func(http.ResponseWriter, int, any)
 	WriteServiceError  func(http.ResponseWriter, *http.Request, error)
@@ -83,7 +76,6 @@ type OperationsDependencies struct {
 	SecurityAudit      func(*http.Request, principalmodel.Principal, string, string, map[string]any)
 	Admin              func(http.HandlerFunc) http.HandlerFunc
 	Authenticated      func(http.HandlerFunc) http.HandlerFunc
-	MonitoringProxy    bool
 }
 
 func NewOperationsHandler(deps OperationsDependencies) *OperationsHandler {
@@ -91,7 +83,7 @@ func NewOperationsHandler(deps OperationsDependencies) *OperationsHandler {
 	if authenticated == nil {
 		authenticated = deps.Admin
 	}
-	return &OperationsHandler{service: deps.Service, controls: deps.Controls, leases: deps.Leases, databaseRetirement: deps.DatabaseRetirement, monitoring: deps.Monitoring, principal: deps.Principal, writeJSON: deps.WriteJSON, writeServiceError: deps.WriteServiceError, decodeJSON: deps.DecodeJSON, securityAudit: deps.SecurityAudit, authenticated: authenticated, monitoringProxy: deps.MonitoringProxy}
+	return &OperationsHandler{service: deps.Service, controls: deps.Controls, leases: deps.Leases, databaseRetirement: deps.DatabaseRetirement, principal: deps.Principal, writeJSON: deps.WriteJSON, writeServiceError: deps.WriteServiceError, decodeJSON: deps.DecodeJSON, securityAudit: deps.SecurityAudit, authenticated: authenticated}
 }
 
 func (h *OperationsHandler) receipts(w http.ResponseWriter, r *http.Request) {

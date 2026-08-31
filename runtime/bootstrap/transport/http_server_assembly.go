@@ -13,7 +13,6 @@ import (
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
-	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 
@@ -60,7 +59,6 @@ type HTTPServerDependencies struct {
 	LifecycleBinding       lifecyclesdk.Binding
 	RateLimiter            ratelimit.Limiter
 	Notifications          notificationhttp.NotificationApplication
-	NotificationMode       notificationsdk.DeploymentMode
 	Manifest               manifestmodel.ManifestSchema
 	WorkerControl          *workerplatform.Controller
 	Clock                  identitysdk.Clock
@@ -226,7 +224,6 @@ func (a *httpServerAssembly) wireRuntimeIntegrationGateway() {
 		WriteServiceError: a.callbacks.WriteServiceError,
 		DecodeJSON:        a.callbacks.DecodeJSON, Admin: a.identityHTTP.PermissionFunc("workspace.admin"),
 		Authenticated: a.identityHTTP.AuthenticatedFunc,
-		WebPushProxy:  a.dependencies.IntegrationBinding.Descriptor().Mode == integrationsdk.DeploymentModeSaaS,
 	})
 }
 

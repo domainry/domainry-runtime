@@ -87,11 +87,6 @@ import (
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("consumer compile: %v\n%s", err, output)
 	}
-	if matches, err := filepath.Glob(filepath.Join(moduleCache, "github.com", "domainry", "domainry-notification@*")); err != nil {
-		t.Fatal(err)
-	} else if len(matches) != 0 {
-		t.Fatalf("SDK-only Runtime consumer downloaded optional Notification implementation: %v", matches)
-	}
 	dependencyVersions := map[string]string{}
 	for _, dependency := range result.DependencyModules {
 		dependencyVersions[dependency.Path] = dependency.Version
@@ -114,7 +109,7 @@ import (
 	for path, wantVersion := range map[string]string{
 		"github.com/domainry/domainry-identity-sdk":     "v0.1.1-dev7",
 		"github.com/domainry/domainry-notification-sdk": "v0.1.0-dev.7",
-		"github.com/domainry/domainry-notification":     "v0.1.0-dev.14",
+		"github.com/domainry/domainry-notification":     "v0.1.0-dev.16",
 	} {
 		if version := dependencyVersions[path]; version != wantVersion {
 			t.Fatalf("released dependency %s version=%q, want %q", path, version, wantVersion)
@@ -129,8 +124,19 @@ import (
 			t.Fatalf("Runtime distribution go.mod does not reference %s@%s", path, version)
 		}
 	}
-	if strings.Contains(string(runtimeMod), "github.com/domainry/domainry-notification ") {
-		t.Fatal("Runtime distribution go.mod retained the optional Notification implementation module")
+	parsedRuntimeMod, err := modfile.Parse("go.mod", runtimeMod, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hasNotificationImplementation := false
+	for _, requirement := range parsedRuntimeMod.Require {
+		if requirement.Mod.Path == "github.com/domainry/domainry-notification" && requirement.Mod.Version == dependencyVersions["github.com/domainry/domainry-notification"] {
+			hasNotificationImplementation = true
+			break
+		}
+	}
+	if !hasNotificationImplementation {
+		t.Fatal("Runtime distribution go.mod omitted the Notification HTTP surface implementation")
 	}
 	moduleFiles, err := filepath.Glob(filepath.Join(proxy, "github.com", "domainry", "*", "@v", "*.mod"))
 	if err != nil {

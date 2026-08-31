@@ -3,7 +3,6 @@ package transport
 import (
 	"net/http"
 
-	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
@@ -49,8 +48,6 @@ func (a *httpServerAssembly) wireMetadataAndBusinessHandlers() {
 	})
 	a.handlers.Operations = operationshttp.NewOperationsHandler(operationshttp.OperationsDependencies{
 		Service: operationsService, Controls: operationsapplication.NewOperationsControlApplicationService(operationsStore, operationsService, operationsStore, nil), Leases: operationsapplication.NewOperationsLeaseApplicationService(operationsStore, operationsService, nil), Principal: a.callbacks.Principal,
-		Monitoring:      runtimeMonitoringMetricsProvider(a.dependencies),
-		MonitoringProxy: a.dependencies.MonitoringBinding != nil && a.dependencies.MonitoringBinding.Descriptor().Mode == monitoringsdk.DeploymentModeSaaS,
 		DatabaseRetirement: operationsapplication.NewDatabaseRetirementApplicationService(
 			operationspersistence.NewOperationsStore(a.dependencies.Store),
 			operationspersistence.NewDatabaseRetirementSQLExecutor(a.dependencies.Store, nil, nil),
@@ -99,11 +96,6 @@ func (a *httpServerAssembly) wireMetadataAndBusinessHandlers() {
 		CompleteValidation: completeAuthoringValidationCallback(a.dependencies.Config.ManifestPath),
 		CompleteDelivery:   completeAuthoringDeliveryCallback(a.dependencies.Config.ManifestPath),
 	})
-}
-
-func runtimeMonitoringMetricsProvider(dependencies HTTPServerDependencies) operationshttp.MonitoringMetricsService {
-	provider, _ := runtimeStatusProvider(dependencies).(operationshttp.MonitoringMetricsService)
-	return provider
 }
 
 func runtimeObjectSchemas(records *composition.RuntimeServices) func() []definitionmodel.ObjectSchema {

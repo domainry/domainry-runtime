@@ -28,7 +28,4 @@ func (h *OperationsHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /operations/idempotency/receipts", h.authenticated(h.receipts))
 	mux.HandleFunc("POST /operations/idempotency/receipts/{owner}/{receiptID}/retry", h.authenticated(h.retry))
 	mux.HandleFunc("POST /operations/idempotency/receipts/{owner}/{receiptID}/reset", h.authenticated(h.reset))
-	if h.monitoringProxy {
-		mux.HandleFunc("GET /operations/monitoring/metrics", h.authenticated(h.monitoringMetrics))
-	}
 }

@@ -32,18 +32,18 @@ func TestLegacyPublishEndpointCannotBypassPublicationApproval(t *testing.T) {
 	}
 }
 
-func TestNotificationRoutesBindMethodsAndPaths(t *testing.T) {
+func TestNotificationTemplateRoutesAreOwnedByModuleSurface(t *testing.T) {
 	handler, capture, _ := newNotificationHTTPHandler(&notificationHTTPRepository{})
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/notifications/templates", nil))
-	if capture.status != http.StatusOK {
-		t.Fatalf("template list route status=%d error=%v", capture.status, capture.err)
+	if response.Code != http.StatusNotFound || capture.status != 0 {
+		t.Fatalf("legacy template route = (%d, %d, %v), want module-owned 404", response.Code, capture.status, capture.err)
 	}
 	response = httptest.NewRecorder()
 	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPatch, "/notifications/templates/order-ready", nil))
-	if response.Code != http.StatusMethodNotAllowed {
+	if response.Code != http.StatusNotFound {
 		t.Fatalf("method route status=%d", response.Code)
 	}
 }

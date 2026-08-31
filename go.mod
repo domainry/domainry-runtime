@@ -14,15 +14,15 @@ require (
 	github.com/domainry/domainry-data-exchange-sdk v0.3.2
 	github.com/domainry/domainry-foundation v0.1.0-dev.7
 	github.com/domainry/domainry-identity-sdk v0.1.1-dev7
-	github.com/domainry/domainry-integration v0.1.5
+	github.com/domainry/domainry-integration v0.1.7
 	github.com/domainry/domainry-integration-sdk v0.1.2
 	github.com/domainry/domainry-lifecycle v0.1.7
 	github.com/domainry/domainry-lifecycle-sdk v0.1.6
 	github.com/domainry/domainry-metadata v0.1.4
 	github.com/domainry/domainry-metadata-sdk v0.1.1
-	github.com/domainry/domainry-monitoring v0.1.2
+	github.com/domainry/domainry-monitoring v0.1.5
 	github.com/domainry/domainry-monitoring-sdk v0.1.1
-	github.com/domainry/domainry-notification v0.1.0-dev.14
+	github.com/domainry/domainry-notification v0.1.0-dev.16
 	github.com/domainry/domainry-notification-sdk v0.1.0-dev.7
 	github.com/domainry/domainry-report v0.1.4
 	github.com/domainry/domainry-report-sdk v0.1.1

@@ -16,7 +16,6 @@ type IntegrationsHandler struct {
 	decodeJSON        func(http.ResponseWriter, *http.Request, any) bool
 	admin             func(http.HandlerFunc) http.HandlerFunc
 	authenticated     func(http.HandlerFunc) http.HandlerFunc
-	webPushProxy      bool
 }
 
 type IntegrationsDependencies struct {
@@ -28,7 +27,6 @@ type IntegrationsDependencies struct {
 	DecodeJSON        func(http.ResponseWriter, *http.Request, any) bool
 	Admin             func(http.HandlerFunc) http.HandlerFunc
 	Authenticated     func(http.HandlerFunc) http.HandlerFunc
-	WebPushProxy      bool
 }
 
 func NewIntegrationsHandler(deps IntegrationsDependencies) *IntegrationsHandler {
@@ -36,6 +34,6 @@ func NewIntegrationsHandler(deps IntegrationsDependencies) *IntegrationsHandler 
 		connections: deps.Connections, runtimeExecution: deps.RuntimeExecution,
 		principal: deps.Principal,
 		writeJSON: deps.WriteJSON, writeServiceError: deps.WriteServiceError,
-		decodeJSON: deps.DecodeJSON, admin: deps.Admin, authenticated: deps.Authenticated, webPushProxy: deps.WebPushProxy,
+		decodeJSON: deps.DecodeJSON, admin: deps.Admin, authenticated: deps.Authenticated,
 	}
 }
