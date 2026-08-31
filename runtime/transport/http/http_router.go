@@ -53,7 +53,6 @@ type HTTPRouter struct {
 	capabilityHTTP          httpRouteRegistrar
 	applicationSchemaHTTP   httpRouteRegistrar
 	notificationHTTP        httpRouteRegistrar
-	partyHTTP               httpRouteRegistrar
 	identityAuthorization   identitysdk.PrincipalResolver
 	businessPrincipal       BusinessPrincipalResolver
 	identityAuthentication  IdentityRequestMiddleware
@@ -197,7 +196,6 @@ func (s *HTTPRouter) Routes() http.Handler {
 	mux.HandleFunc("GET /metrics", s.metrics)
 	mux.HandleFunc("GET /", s.apiInfo)
 	s.registerProbeRoutes(mux)
-	runOptionalRouteRegistrar(s.partyHTTP != nil, func() { s.partyHTTP.RegisterRoutes(mux) })
 	s.discoveryHTTP.RegisterRoutes(mux)
 	s.openAPIHTTP.RegisterRoutes(mux)
 	s.reportHTTP.RegisterRoutes(mux)

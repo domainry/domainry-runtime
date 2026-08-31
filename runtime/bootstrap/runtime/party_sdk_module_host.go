@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 
 	auditcontract "github.com/domainry/domainry-audit-sdk/contract"
@@ -10,7 +11,9 @@ import (
 	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
+	partysdk "github.com/domainry/domainry-party-sdk"
 	partymodulehost "github.com/domainry/domainry-party-sdk/modulehost"
+	partysaashost "github.com/domainry/domainry-party-sdk/saashost"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
@@ -18,6 +21,32 @@ type partySDKModuleHost struct {
 	store     *persistence.RuntimeStore
 	directory identitysdk.Directory
 	audit     auditcontract.Appender
+}
+
+func openPartyBinding(ctx context.Context, factory partysdk.Factory, application partysdk.ApplicationRef, host partySDKModuleHost) (partysdk.Binding, error) {
+	var binding partysdk.Binding
+	var err error
+	if moduleFactory, ok := factory.(partymodulehost.Factory); ok {
+		binding, err = moduleFactory.OpenModule(ctx, application, host)
+	} else if saasFactory, ok := factory.(partysaashost.Factory); ok {
+		binding, err = saasFactory.OpenSaaS(ctx, application, host)
+	} else {
+		binding, err = factory.Open(ctx, application)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if binding == nil {
+		return nil, fmt.Errorf("Party SDK Factory returned no Binding")
+	}
+	if err := binding.Descriptor().Validate(); err != nil {
+		return nil, err
+	}
+	provider, ok := binding.(modulehttp.Provider)
+	if !ok || len(provider.HTTPSurfaces()) == 0 {
+		return nil, fmt.Errorf("Party Binding returned no product HTTP Surface")
+	}
+	return binding, nil
 }
 
 func (h partySDKModuleHost) Database() *sql.DB { return h.store.DB() }
@@ -85,3 +114,6 @@ func (d partySDKWorkforceProfiles) Exists(ctx context.Context, workspaceID, id s
 	}
 	return false, nil
 }
+
+var _ partymodulehost.Host = partySDKModuleHost{}
+var _ partysaashost.Host = partySDKModuleHost{}

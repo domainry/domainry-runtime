@@ -5,7 +5,7 @@
 
 Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `optimistic_only`, `not_applicable`.
 
-## HTTP mutation routes (101)
+## HTTP mutation routes (96)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -58,11 +58,6 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `operations` | `POST /operations/idempotency/receipts/{owner}/{receiptID}/retry` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/operations/operations_routes.go` |
 | `operations` | `POST /operations/leases/{owner}/{resourceID}/force-release` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/operations/operations_routes.go` |
 | `operations` | `PUT /operations/controls/{controlKind}/{owner}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/operations/operations_routes.go` |
-| `party` | `PUT /foundation/jobs/{jobID}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/party/party_routes.go` |
-| `party` | `PUT /foundation/organization-extensions/{extensionID}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/party/party_routes.go` |
-| `party` | `PUT /foundation/organization-memberships/{membershipID}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/party/party_routes.go` |
-| `party` | `PUT /foundation/positions/{positionID}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/party/party_routes.go` |
-| `party` | `PUT /party/{partyID}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/party/party_routes.go` |
 | `records` | `DELETE /objects/{objectKey}/records/{recordID}` | `optimistic_only` | workspace plus resource identity and expected version | `runtime/transport/http/records/records_routes.go` |
 | `records` | `PATCH /objects/{objectKey}/records/{recordID}` | `optimistic_only` | workspace plus resource identity and expected version | `runtime/transport/http/records/records_routes.go` |
 | `records` | `POST /business/audit-event-exports` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
@@ -111,7 +106,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workspaceprovision` | `POST /tenant-admin/workspaces/provision` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 | `workspaceprovision` | `POST /tenant-admin/workspaces/{workspaceID}/roles/reconcile` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 
-## Application mutation commands (202)
+## Application mutation commands (197)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -229,11 +224,6 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `operations` | `ResetLegacyReceipt` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/operations/operations_application_service.go` |
 | `operations` | `RetryLegacyReceipt` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/operations/operations_application_service.go` |
 | `operations` | `Set` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/operations/operations_control_application_service.go` |
-| `party` | `Upsert` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/party/party_application_service.go` |
-| `party` | `UpsertJob` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/party/party_catalog_application_service.go` |
-| `party` | `UpsertOrganizationExtension` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/party/party_catalog_application_service.go` |
-| `party` | `UpsertOrganizationExtensionMembership` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/party/party_catalog_application_service.go` |
-| `party` | `UpsertPosition` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/party/party_catalog_application_service.go` |
 | `pipeline` | `ApplyItemDefaults` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/pipeline/pipeline_application_service.go` |
 | `pipeline` | `Execute` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/pipeline/pipeline_transition_application_service.go` |
 | `principal` | `ResolveBusinessPrincipal` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/principal/business_principal_application_service.go` |

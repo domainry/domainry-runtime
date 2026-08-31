@@ -143,7 +143,6 @@ func completeRouterForSurfaceGroupTests(config HTTPRouterConfig) *HTTPRouter {
 	router.workflowHTTP, router.automationHTTP, router.schedulerHTTP, router.reportHTTP = registrar, registrar, registrar, registrar
 	router.businessReferenceHTTP, router.businessSystemHTTP, router.capabilityHTTP = registrar, registrar, registrar
 	router.applicationSchemaHTTP, router.operationsHTTP = registrar, registrar
-	router.partyHTTP = registrar
 	return router
 }
 

@@ -77,6 +77,8 @@ func TestNotificationAndPartyHistoricalOwnersStayRetired(t *testing.T) {
 	for _, retired := range []string{
 		"domain/notification/contract",
 		"infrastructure/persistence/database/party",
+		"application/party",
+		"transport/http/party",
 	} {
 		if info, err := os.Stat(filepath.Join(root, filepath.FromSlash(retired))); err == nil && info.IsDir() {
 			t.Errorf("retired extracted-owner implementation directory still exists: %s", retired)
@@ -96,26 +98,4 @@ func TestNotificationAndPartyHistoricalOwnersStayRetired(t *testing.T) {
 		}
 	}
 
-	partyApplication := filepath.Join(root, "application", "party")
-	err = filepath.WalkDir(partyApplication, func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry.IsDir() || filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
-		raw, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return readErr
-		}
-		for _, forbidden := range []string{"infrastructure/persistence", "database/", "github.com/domainry/domainry-party/"} {
-			if strings.Contains(string(raw), forbidden) {
-				t.Errorf("Party application contains implementation dependency %q in %s", forbidden, filepath.ToSlash(path))
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
 }

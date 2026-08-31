@@ -204,7 +204,6 @@ func declaredRuntimeRoutes(t *testing.T) map[string]bool {
 	_, current, _, _ := runtime.Caller(0)
 	files := []string{filepath.Join(filepath.Dir(current), "http_router.go"), filepath.Join(filepath.Dir(current), "routes.go")}
 	files = append(files, filepath.Join(filepath.Dir(current), "records", "records_routes.go"))
-	files = append(files, filepath.Join(filepath.Dir(current), "party", "party_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "agentdialog", "agentdialog_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "surfacecontext", "surfacecontext_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "uploads", "uploads_routes.go"))

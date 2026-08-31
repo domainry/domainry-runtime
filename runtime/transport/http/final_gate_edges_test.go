@@ -6,7 +6,6 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
-	partyhttp "github.com/domainry/domainry-runtime/runtime/transport/http/party"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -109,7 +108,7 @@ func TestFinalAdmissionMetricsAndHandlerWiringEdges(t *testing.T) {
 	metrics := NewMemoryHTTPMetricsCollector(1)
 	metrics.RegisterSurfaceGroup(string(SurfaceRouteGroupPublic), 1)
 	metrics.RegisterSurfaceGroup(string(SurfaceRouteGroupPublic), 2)
-	UseHandlers(&HTTPRouter{}, HTTPRouterHandlers{Party: &partyhttp.PartyHandler{}})
+	UseHandlers(&HTTPRouter{}, HTTPRouterHandlers{})
 }
 
 func TestFinalCompiledEndpointContractFailures(t *testing.T) {

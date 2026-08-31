@@ -28,7 +28,6 @@ import (
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 	openapihttp "github.com/domainry/domainry-runtime/runtime/transport/http/openapi"
 	operationshttp "github.com/domainry/domainry-runtime/runtime/transport/http/operations"
-	partyhttp "github.com/domainry/domainry-runtime/runtime/transport/http/party"
 	recordhttp "github.com/domainry/domainry-runtime/runtime/transport/http/records"
 	reporthttp "github.com/domainry/domainry-runtime/runtime/transport/http/reports"
 	schedulerhttp "github.com/domainry/domainry-runtime/runtime/transport/http/scheduler"
@@ -165,7 +164,6 @@ type HTTPRouterHandlers struct {
 	Capabilities       *capabilityhttp.CapabilitiesHandler
 	ApplicationSchema  *appschemahttp.ApplicationSchemaHandler
 	Notifications      *notificationhttp.NotificationsHandler
-	Party              *partyhttp.PartyHandler
 	AgentDialog        *agentdialoghttp.AgentDialogHandler
 	Operations         *operationshttp.OperationsHandler
 	Lifecycle          *lifecyclehttp.LifecycleHandler

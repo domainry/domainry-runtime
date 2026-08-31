@@ -6,31 +6,14 @@ import (
 	"strings"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	partysdk "github.com/domainry/domainry-party-sdk"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
-	partyapplication "github.com/domainry/domainry-runtime/runtime/application/party"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	partyhttp "github.com/domainry/domainry-runtime/runtime/transport/http/party"
 )
 
 func (a *httpServerAssembly) wirePartyAndIdentityReferences(constructionContext context.Context) {
 	records := a.dependencies.Records
-	a.wirePartyHandler()
 	if directory := a.dependencies.IdentityBinding.Directory(); directory != nil {
 		records.Applications().AuthoringCapabilities.UseIdentityReferenceSource(constructionContext, identitySDKCapabilityReferenceSource(directory))
-	}
-}
-
-func (a *httpServerAssembly) wirePartyHandler() {
-	if a.dependencies.PartyBinding != nil && a.dependencies.PartyBinding.Descriptor().Mode == partysdk.DeploymentModeSaaS {
-		a.handlers.Party = partyhttp.NewPartyHandler(partyhttp.PartyDependencies{
-			Service:       partyapplication.NewPartyApplicationService(a.dependencies.PartyBinding),
-			Catalog:       partyapplication.NewPartyCatalogApplicationService(a.dependencies.PartyBinding),
-			Authenticated: a.identityHTTP.AuthenticatedFunc, Principal: a.callbacks.Principal,
-			WriteJSON: a.callbacks.WriteJSON, WriteError: a.callbacks.WriteError,
-			WriteServiceError: a.callbacks.WriteServiceError, DecodeJSON: a.callbacks.DecodeJSON,
-			SecurityAudit: a.callbacks.SecurityAudit,
-		})
 	}
 }
 

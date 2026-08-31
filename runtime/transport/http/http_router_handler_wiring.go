@@ -22,10 +22,6 @@ func UseHandlers(router *HTTPRouter, handlers HTTPRouterHandlers) *HTTPRouter {
 	if handlers.Notifications != nil {
 		router.notificationHTTP = handlers.Notifications
 	}
-	router.partyHTTP = nil
-	if handlers.Party != nil {
-		router.partyHTTP = handlers.Party
-	}
 	router.agentDialogHTTP = nil
 	if handlers.AgentDialog != nil {
 		router.agentDialogHTTP = handlers.AgentDialog

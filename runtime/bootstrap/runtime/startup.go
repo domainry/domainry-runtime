@@ -25,7 +25,6 @@ import (
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
 	partysdk "github.com/domainry/domainry-party-sdk"
-	partymodulehost "github.com/domainry/domainry-party-sdk/modulehost"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodule "github.com/domainry/domainry-report/module"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
@@ -241,19 +240,9 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	}
 	identityDataExchangeKey, identityDataExchangeImport, identityDataExchangeExport := identityDataExchangeProviders(identityBinding)
 	partyApplication := partysdk.ApplicationRef{TenantID: cfg.PartyTenantID, WorkspaceID: cfg.PartyWorkspaceID, ApplicationKey: cfg.PartyApplicationKey}
-	var partyBinding partysdk.Binding
-	if moduleFactory, ok := partyFactory.(partymodulehost.Factory); ok {
-		partyBinding, err = moduleFactory.OpenModule(ctx, partyApplication, partySDKModuleHost{store: store, directory: identityDirectory, audit: auditBinding.Appender()})
-	} else {
-		partyBinding, err = partyFactory.Open(ctx, partyApplication)
-	}
+	partyHost := partySDKModuleHost{store: store, directory: identityDirectory, audit: auditBinding.Appender()}
+	partyBinding, err := openPartyBinding(ctx, partyFactory, partyApplication, partyHost)
 	mustCompleteRuntimeStartup(err)
-	if partyBinding == nil {
-		mustCompleteRuntimeStartup(errors.New("Party SDK Factory returned no Binding"))
-	}
-	if err := partyBinding.Descriptor().Validate(); err != nil {
-		mustCompleteRuntimeStartup(err)
-	}
 	if partyBinding.Descriptor().Mode == partysdk.DeploymentModeSaaS && identityBinding.Descriptor().Mode != identitysdk.DeploymentModeSaaS {
 		mustCompleteRuntimeStartup(errors.New("Party SaaS requires Identity SaaS"))
 	}

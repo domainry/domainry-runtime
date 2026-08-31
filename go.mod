@@ -53,8 +53,8 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/domainry/domainry-orm v0.1.29
-	github.com/domainry/domainry-party v0.1.0-dev.8
-	github.com/domainry/domainry-party-sdk v0.1.0-dev.5
+	github.com/domainry/domainry-party v0.1.0-dev.9
+	github.com/domainry/domainry-party-sdk v0.1.0-dev.6
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
