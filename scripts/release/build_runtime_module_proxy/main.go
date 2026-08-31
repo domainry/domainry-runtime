@@ -74,7 +74,7 @@ type downloadedModule struct {
 	Path, Version, Info, GoMod, Zip, Error string
 }
 
-const identityModuleVersion = "v0.2.0-dev27"
+const identityModuleVersion = "v0.2.0-dev29"
 
 func main() {
 	repository := flag.String("repo", "", "Runtime repository root")
