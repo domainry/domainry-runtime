@@ -9,9 +9,34 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
+
+type notificationHTTPRepository struct{}
+type notificationHTTPResponse struct {
+	status int
+	code   string
+	value  any
+	err    error
+}
+
+func newNotificationHTTPHandler(_ *notificationHTTPRepository) (*NotificationsHandler, *notificationHTTPResponse, *principalmodel.Principal) {
+	response := &notificationHTTPResponse{}
+	principal := accessfixture.AttachPointer(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "reviewer", WorkspaceID: "workspace-1"}}, accessfixture.Bundle{})
+	return NewNotificationsHandler(NotificationsDependencies{
+		Principal: func(*http.Request) principalmodel.Principal { return *principal },
+		WriteJSON: func(_ http.ResponseWriter, status int, value any) { response.status, response.value = status, value },
+		WriteError: func(_ http.ResponseWriter, _ *http.Request, status int, code string, _ ...string) {
+			response.status, response.code = status, code
+		},
+		WriteServiceError: func(_ http.ResponseWriter, _ *http.Request, err error) {
+			response.status, response.err = http.StatusInternalServerError, err
+		},
+		Authenticated: func(next http.HandlerFunc) http.HandlerFunc { return next },
+	}), response, principal
+}
 
 type notificationDeliveryLedgerStub struct {
 	values []integrationmodel.IntegrationOutboxMessage

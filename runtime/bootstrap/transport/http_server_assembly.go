@@ -4,6 +4,7 @@ import (
 	"context"
 
 	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
+	"github.com/domainry/domainry-foundation/modulehttp"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	"time"
 
@@ -42,7 +43,6 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	integrationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/integrations"
-	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 	workspaceprovisionhttp "github.com/domainry/domainry-runtime/runtime/transport/http/workspaceprovision"
 )
 
@@ -58,7 +58,6 @@ type HTTPServerDependencies struct {
 	AgentRepositories      agentpersistence.Binding
 	LifecycleBinding       lifecyclesdk.Binding
 	RateLimiter            ratelimit.Limiter
-	Notifications          notificationhttp.NotificationApplication
 	Manifest               manifestmodel.ManifestSchema
 	WorkerControl          *workerplatform.Controller
 	Clock                  identitysdk.Clock
@@ -67,6 +66,7 @@ type HTTPServerDependencies struct {
 	ReleaseAdmission       runtimehttp.RuntimeReleaseAdmissionProvider
 	ReleaseIntegrity       runtimehttp.RuntimeReleaseIntegrityProvider
 	BusinessEventBackplane businesseventcontract.Backplane
+	ModuleHTTPSurfaces     []modulehttp.Surface
 }
 
 type httpServerAssembly struct {

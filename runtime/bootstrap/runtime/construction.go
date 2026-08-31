@@ -16,6 +16,7 @@ import (
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
+	notificationfacade "github.com/domainry/domainry-runtime/runtime/application/notificationfacade"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -25,7 +26,6 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
-	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
@@ -45,7 +45,7 @@ type runtimeConstructionInput struct {
 	manifest            manifestmodel.ManifestSchema
 	recordRepository    recordrepository.RecordRepository
 	rateLimiter         ratelimit.Limiter
-	notificationHTTP    notificationhttp.NotificationApplication
+	notificationHTTP    *notificationfacade.NotificationApplicationService
 	notificationBinding notificationsdk.Binding
 	monitoringBinding   monitoringsdk.Binding
 	schedulerBinding    schedulersdk.Binding

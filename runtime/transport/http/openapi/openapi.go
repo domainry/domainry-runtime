@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/modulehttp"
 	"github.com/domainry/domainry-runtime/runtime/platform/productbrand"
 )
 
@@ -15,6 +16,10 @@ func Build(snapshot appschemamodel.ApplicationSchemaSnapshot) map[string]any {
 }
 
 func BuildWithProductBrand(snapshot appschemamodel.ApplicationSchemaSnapshot, productBrandName string) map[string]any {
+	return BuildWithModuleHTTPSurfaces(snapshot, productBrandName, nil)
+}
+
+func BuildWithModuleHTTPSurfaces(snapshot appschemamodel.ApplicationSchemaSnapshot, productBrandName string, surfaces []modulehttp.Surface) map[string]any {
 	productBrandName = productbrand.ResolveName(productBrandName)
 	paths := map[string]any{}
 	components := map[string]any{
@@ -127,7 +132,7 @@ func BuildWithProductBrand(snapshot appschemamodel.ApplicationSchemaSnapshot, pr
 	addIntegrationOpenAPIPaths(paths, snapshot)
 	paths["/v1/scheduler-triggers:accept"] = map[string]any{"post": openAPIOperation("acceptSchedulerTrigger", "Scheduler Dispatch Gateway", "Identity-authenticated execution callback for one Scheduler-owned run", openAPIProtocolAudience("scheduler_service_service"), openAPIServiceCredentialSecurity(), openAPIJSONRequest(openAPIObject(nil)), openAPIJSONResponse("Stable downstream receipt", openAPIObject(nil)))}
 	addOwnerOperationsReceiptOpenAPIContracts(paths)
-	annotateModuleOwnedOpenAPIPaths(paths)
+	annotateModuleOwnedOpenAPIPaths(paths, surfaces)
 	applyCompiledEndpointSurfaceContracts(paths)
 	return map[string]any{
 		"openapi": "3.1.0",
@@ -145,26 +150,20 @@ func BuildWithProductBrand(snapshot appschemamodel.ApplicationSchemaSnapshot, pr
 	}
 }
 
-func annotateModuleOwnedOpenAPIPaths(paths map[string]any) {
-	for path, raw := range paths {
-		owner := ""
-		switch {
-		case path == "/operations/monitoring/metrics":
-			owner = "monitoring"
-		case strings.HasPrefix(path, "/business/notifications/web-push/"), path == "/integrations/web-push/subscriptions/cleanup-expired":
-			owner = "integration"
-		case strings.HasPrefix(path, "/notifications/") && path != "/notifications/deliveries":
-			owner = "notification"
-		}
-		if owner == "" {
+func annotateModuleOwnedOpenAPIPaths(paths map[string]any, surfaces []modulehttp.Surface) {
+	for _, surface := range surfaces {
+		if surface == nil {
 			continue
 		}
-		pathSpec, _ := raw.(map[string]any)
-		for method, rawOperation := range pathSpec {
-			if !isOpenAPIHTTPMethod(method) {
+		owner := strings.TrimSpace(surface.Owner())
+		for _, route := range surface.Routes() {
+			method, path, found := strings.Cut(strings.TrimSpace(route.Pattern), " ")
+			if !found || owner == "" || !isOpenAPIHTTPMethod(method) {
 				continue
 			}
-			if operation, ok := rawOperation.(map[string]any); ok {
+			pathSpec, _ := paths[strings.TrimSpace(path)].(map[string]any)
+			operation, _ := pathSpec[strings.ToLower(strings.TrimSpace(method))].(map[string]any)
+			if operation != nil {
 				operation["x-domainry-module-owner"] = owner
 			}
 		}

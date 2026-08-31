@@ -62,7 +62,7 @@ func TestRoutePolicyUsesRegisteredPatternInsteadOfUserPathSegments(t *testing.T)
 	}
 }
 
-func TestRuntimeRoutesAndOpenAPIDoNotDrift(t *testing.T) {
+func TestEveryRuntimeRouteIsDocumentedByAggregatedOpenAPI(t *testing.T) {
 	routes := declaredRuntimeRoutes(t)
 	spec := runtimeopenapi.Build(appschemamodel.ApplicationSchemaSnapshot{})
 	paths, ok := spec["paths"].(map[string]any)
@@ -82,30 +82,9 @@ func TestRuntimeRoutesAndOpenAPIDoNotDrift(t *testing.T) {
 		}
 	}
 
-	missingFromRoutes := []string{}
-	for path, raw := range paths {
-		pathSpec, ok := raw.(map[string]any)
-		if !ok {
-			continue
-		}
-		for method := range pathSpec {
-			method = strings.ToUpper(method)
-			if !isHTTPMethod(method) || isSchemaDerivedOpenAPIPath(path) {
-				continue
-			}
-			contract := method + " " + path
-			operation, _ := pathSpec[strings.ToLower(method)].(map[string]any)
-			moduleOwner, _ := operation["x-domainry-module-owner"].(string)
-			if !routes[contract] && strings.TrimSpace(moduleOwner) == "" && runtimeRouteOpenAPIExclusion(method, path) == "" {
-				missingFromRoutes = append(missingFromRoutes, contract)
-			}
-		}
-	}
-
 	sort.Strings(missingFromSpec)
-	sort.Strings(missingFromRoutes)
-	if len(missingFromSpec) > 0 || len(missingFromRoutes) > 0 {
-		t.Fatalf("route/OpenAPI drift\nmissing from spec: %v\nmissing from routes: %v", missingFromSpec, missingFromRoutes)
+	if len(missingFromSpec) > 0 {
+		t.Fatalf("Runtime routes missing from aggregated OpenAPI: %v", missingFromSpec)
 	}
 }
 

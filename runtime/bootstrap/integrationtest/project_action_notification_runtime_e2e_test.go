@@ -7,10 +7,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/modulehttp"
+	identitysdk "github.com/domainry/domainry-identity-sdk"
 	bootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -22,7 +25,7 @@ func TestProjectActionNotificationDispatchRealRuntimeReplayConcurrencyLifecycleA
 	cfg := config.Config{AppLocale: "en-US", DatabaseDriver: "sqlite", DBPath: databasePath, ManifestPath: manifestPath, UploadDir: filepath.Join(temp, "uploads")}
 	runtime := newIntegrationRuntime(t, cfg)
 	bootstrap.StartWorkers(t.Context(), runtime)
-	handler := runtime.Routes()
+	handler := notificationModuleRoutes(t, runtime)
 	leadID := firstRuntimeFixtureRecordID(t, handler, "sales_manager", "lead")
 	path := "/objects/lead/records/" + leadID + "/actions/lead.qualify"
 
@@ -106,10 +109,33 @@ func TestProjectActionNotificationDispatchRealRuntimeReplayConcurrencyLifecycleA
 	restarted := newIntegrationRuntime(t, cfg)
 	bootstrap.StartWorkers(t.Context(), restarted)
 	defer restarted.CloseContext(t.Context())
-	reloaded := projectNotificationList(t, restarted.Routes(), "admin")
+	reloaded := projectNotificationList(t, notificationModuleRoutes(t, restarted), "admin")
 	if len(reloaded) != 1 || reloaded[0]["id"] != notificationID || reloaded[0]["read_at"] == "" || reloaded[0]["alert_state"] != "acknowledged" {
 		t.Fatalf("cold restart inbox=%#v", reloaded)
 	}
+}
+
+func notificationModuleRoutes(t *testing.T, runtime *bootstrap.Runtime) http.Handler {
+	t.Helper()
+	mux := http.NewServeMux()
+	for _, surface := range runtime.ModuleHTTPSurfaces() {
+		if surface.Owner() != "notification" {
+			continue
+		}
+		if err := modulehttp.ValidateSurface(surface); err != nil {
+			t.Fatal(err)
+		}
+		for _, route := range surface.Routes() {
+			next := surface.Handler()
+			mux.Handle(route.Pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				token := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+				ctx := identitysdk.WithRequestIdentity(r.Context(), identitysdk.RequestIdentity{Principal: identitysdk.Principal{Known: true}, AccessToken: token})
+				next.ServeHTTP(w, r.WithContext(ctx))
+			}))
+		}
+	}
+	mux.Handle("/", runtime.Routes())
+	return mux
 }
 
 func projectNotificationManifest(t *testing.T, directory string) string {

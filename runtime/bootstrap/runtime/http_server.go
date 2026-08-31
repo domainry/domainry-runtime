@@ -30,14 +30,15 @@ func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {
 		IntegrationBinding: runtime.integrationBinding,
 		LifecycleBinding:   runtime.lifecycleBinding,
 		Store:              runtime.store, RateLimiter: runtime.rateLimiter,
-		AgentRepositories: agentRepositories,
-		Notifications:     runtime.notificationHTTP, Manifest: runtime.manifest,
-		WorkerControl:     runtime.worker.Control,
-		Clock:             runtime.worker.Clock,
-		RuntimeInstanceID: runtime.worker.WorkerID.String(),
-		ReleaseIdentity:   runtime.releaseIdentity,
-		ReleaseAdmission:  runtime.releaseAdmission.Check,
-		ReleaseIntegrity:  runtime.releaseIntegrity,
+		AgentRepositories:  agentRepositories,
+		Manifest:           runtime.manifest,
+		WorkerControl:      runtime.worker.Control,
+		Clock:              runtime.worker.Clock,
+		RuntimeInstanceID:  runtime.worker.WorkerID.String(),
+		ReleaseIdentity:    runtime.releaseIdentity,
+		ReleaseAdmission:   runtime.releaseAdmission.Check,
+		ReleaseIntegrity:   runtime.releaseIntegrity,
+		ModuleHTTPSurfaces: runtime.ModuleHTTPSurfaces(),
 	})
 	return runtime
 }

@@ -57,7 +57,6 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/localization"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
-	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 )
 
 func New(ctx context.Context, cfg config.Config, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, dataExchangeFactory dataexchangesdk.Factory) *Runtime {
@@ -290,7 +289,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	notificationActionAuthorizers.Register("scheduler_job", newSchedulerNotificationActionAuthorizer(restoredMetadata.metadataStore.GetDefinition))
 	notificationActionAuthorizers.Freeze()
 	var templateRenderer composition.NotificationRenderer
-	var notificationHTTP notificationhttp.NotificationApplication
+	var notificationHTTP *notificationfacade.NotificationApplicationService
 	var notificationCompiler runtimeNotificationCompiler
 	var notificationPublisher notificationIntentPublisher
 	var sdkDeliveryGateway *notificationSDKDeliveryGateway

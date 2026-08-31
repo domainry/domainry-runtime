@@ -5,7 +5,7 @@
 
 Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `optimistic_only`, `not_applicable`.
 
-## HTTP mutation routes (123)
+## HTTP mutation routes (101)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -43,28 +43,6 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `lifecycle` | `POST /operations/lifecycle/subjects/{requestID}/execute` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
 | `lifecycle` | `POST /operations/lifecycle/subjects/{requestID}/preview` | `not_applicable` | none | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
 | `lifecycle` | `POST /operations/lifecycle/subjects/{requestID}/verify` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
-| `notifications` | `DELETE /business/notifications/delegations/{delegationID}` | `natural_key` | workspace plus current user, Surface, notification or saved-view identity, and target mailbox state | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `DELETE /business/notifications/saved-views/{viewKey}` | `natural_key` | workspace plus current user, Surface, notification or saved-view identity, and target mailbox state | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `DELETE /portal/notifications/delegations/{delegationID}` | `natural_key` | workspace plus current user, Surface, notification or saved-view identity, and target mailbox state | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `DELETE /portal/notifications/saved-views/{viewKey}` | `natural_key` | workspace plus current user, Surface, notification or saved-view identity, and target mailbox state | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /business/notifications/read-all` | `natural_key` | workspace plus current user, Surface, notification or saved-view identity, and target mailbox state | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /business/notifications/{notificationID}/acknowledge` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /business/notifications/{notificationID}/archive` | `natural_key` | workspace plus current user, Surface, notification or saved-view identity, and target mailbox state | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /business/notifications/{notificationID}/read` | `natural_key` | workspace plus current user, Surface, notification or saved-view identity, and target mailbox state | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /business/notifications/{notificationID}/restore` | `natural_key` | workspace plus current user, Surface, notification or saved-view identity, and target mailbox state | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /business/notifications/{notificationID}/unread` | `natural_key` | workspace plus current user, Surface, notification or saved-view identity, and target mailbox state | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /portal/notifications/read-all` | `natural_key` | workspace plus current user, Surface, notification or saved-view identity, and target mailbox state | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /portal/notifications/{notificationID}/acknowledge` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /portal/notifications/{notificationID}/archive` | `natural_key` | workspace plus current user, Surface, notification or saved-view identity, and target mailbox state | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /portal/notifications/{notificationID}/read` | `natural_key` | workspace plus current user, Surface, notification or saved-view identity, and target mailbox state | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /portal/notifications/{notificationID}/restore` | `natural_key` | workspace plus current user, Surface, notification or saved-view identity, and target mailbox state | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /portal/notifications/{notificationID}/unread` | `natural_key` | workspace plus current user, Surface, notification or saved-view identity, and target mailbox state | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `PUT /business/notification-preferences` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `PUT /business/notifications/delegations/{delegationID}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `PUT /business/notifications/saved-views/{viewKey}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `PUT /portal/notification-preferences` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `PUT /portal/notifications/delegations/{delegationID}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `PUT /portal/notifications/saved-views/{viewKey}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/notifications/notifications_routes.go` |
 | `operations` | `POST /operations` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/operations/operations_routes.go` |
 | `operations` | `POST /operations/break-glass` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/operations/operations_routes.go` |
 | `operations` | `POST /operations/break-glass/{grantID}/disable` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/operations/operations_routes.go` |

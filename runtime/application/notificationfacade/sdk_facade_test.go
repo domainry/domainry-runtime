@@ -7,10 +7,7 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
-	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 )
-
-var _ notificationhttp.NotificationApplication = (*NotificationApplicationService)(nil)
 
 func TestAuthorityUsesOriginalIdentityRequestToken(t *testing.T) {
 	ctx := identitysdk.WithRequestIdentity(t.Context(), identitysdk.RequestIdentity{Principal: identitysdk.Principal{Known: true}, AccessToken: " bearer-token "})

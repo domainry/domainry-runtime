@@ -44,7 +44,6 @@ Process polling loops must use `domainry-foundation/worker.StartNamedLoop`. The 
 
 - `domainry-foundation/worker/lifecycle.go`: shared named loop implementation;
 - `domainry-foundation/worker/heartbeat.go`: shared per-claim heartbeat implementation;
-- `runtime/transport/http/notifications/notifications_inbox_stream_handler.go`: request-scoped SSE invalidation polling and heartbeat; not a process worker.
 - `runtime/transport/http/records/records_stream_handler.go`: request-scoped content-free Business Workspace SSE invalidation polling and heartbeat; not a process worker.
 
 Adding another raw ticker requires updating this inventory and its architecture gate in the same reviewed change.

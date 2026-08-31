@@ -69,13 +69,12 @@ func (a *httpServerAssembly) wireIntegrationAndAgentHandlers(agentDialogRateLimi
 			SecurityAuditForPrincipal: a.callbacks.SecurityAuditForPrincipal,
 		})
 	}
-	if a.dependencies.Notifications != nil {
+	if a.publications != nil {
 		a.handlers.Notifications = notificationhttp.NewNotificationsHandler(notificationhttp.NotificationsDependencies{
-			Inbox:          a.dependencies.Notifications,
 			DeliveryLedger: a.publications,
 			Principal:      a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
 			WriteError: a.callbacks.WriteError, WriteServiceError: a.callbacks.WriteServiceError,
-			DecodeJSON: a.callbacks.DecodeJSON, Authenticated: a.identityHTTP.AuthenticatedFunc,
+			Authenticated: a.identityHTTP.AuthenticatedFunc,
 		})
 	}
 }

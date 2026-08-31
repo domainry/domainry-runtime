@@ -72,8 +72,7 @@ func TestRuntimeNamedLoopsAreRegisteredInWorkerInventory(t *testing.T) {
 func TestRuntimeRawTickerBaselineIsExact(t *testing.T) {
 	repositoryRoot := filepath.Clean(filepath.Join(runtimeRoot(t), ".."))
 	expected := map[string]bool{
-		"runtime/transport/http/notifications/notifications_inbox_stream_handler.go": false,
-		"runtime/transport/http/records/records_stream_handler.go":                   false,
+		"runtime/transport/http/records/records_stream_handler.go": false,
 	}
 	err := filepath.WalkDir(filepath.Join(repositoryRoot, "runtime"), func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
