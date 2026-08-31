@@ -69,9 +69,10 @@ func (a *httpServerAssembly) wireIntegrationAndAgentHandlers(agentDialogRateLimi
 			SecurityAuditForPrincipal: a.callbacks.SecurityAuditForPrincipal,
 		})
 	}
-	if a.publications != nil {
+	if a.publications != nil || a.dependencies.NotificationInboxActions != nil {
 		a.handlers.Notifications = notificationhttp.NewNotificationsHandler(notificationhttp.NotificationsDependencies{
 			DeliveryLedger: a.publications,
+			ActionResolver: a.dependencies.NotificationInboxActions,
 			Principal:      a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
 			WriteError: a.callbacks.WriteError, WriteServiceError: a.callbacks.WriteServiceError,
 			Authenticated: a.identityHTTP.AuthenticatedFunc,

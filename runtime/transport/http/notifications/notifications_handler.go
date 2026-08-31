@@ -12,6 +12,7 @@ import (
 // ledger. Notification product administration and Inbox HTTP are module-owned.
 type NotificationsHandler struct {
 	deliveryLedger    NotificationDeliveryLedger
+	actionResolver    NotificationInboxActionResolver
 	principal         func(*http.Request) principalmodel.Principal
 	writeJSON         func(http.ResponseWriter, int, any)
 	writeError        func(http.ResponseWriter, *http.Request, int, string, ...string)
@@ -21,6 +22,7 @@ type NotificationsHandler struct {
 
 type NotificationsDependencies struct {
 	DeliveryLedger    NotificationDeliveryLedger
+	ActionResolver    NotificationInboxActionResolver
 	Principal         func(*http.Request) principalmodel.Principal
 	WriteJSON         func(http.ResponseWriter, int, any)
 	WriteError        func(http.ResponseWriter, *http.Request, int, string, ...string)
@@ -30,8 +32,8 @@ type NotificationsDependencies struct {
 
 func NewNotificationsHandler(deps NotificationsDependencies) *NotificationsHandler {
 	return &NotificationsHandler{
-		deliveryLedger: deps.DeliveryLedger,
-		principal:      deps.Principal, writeJSON: deps.WriteJSON, writeError: deps.WriteError,
+		deliveryLedger: deps.DeliveryLedger, actionResolver: deps.ActionResolver,
+		principal: deps.Principal, writeJSON: deps.WriteJSON, writeError: deps.WriteError,
 		writeServiceError: deps.WriteServiceError, authenticated: deps.Authenticated,
 	}
 }

@@ -43,30 +43,32 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	integrationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/integrations"
+	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 	workspaceprovisionhttp "github.com/domainry/domainry-runtime/runtime/transport/http/workspaceprovision"
 )
 
 type HTTPServerDependencies struct {
-	Config                 config.Config
-	Records                *composition.RuntimeServices
-	IdentityBinding        identitysdk.Binding
-	PartyBinding           partysdk.Binding
-	MonitoringBinding      monitoringsdk.Binding
-	SchedulerBinding       schedulersdk.Binding
-	Store                  *persistence.RuntimeStore
-	IntegrationBinding     integrationsdk.Binding
-	AgentRepositories      agentpersistence.Binding
-	LifecycleBinding       lifecyclesdk.Binding
-	RateLimiter            ratelimit.Limiter
-	Manifest               manifestmodel.ManifestSchema
-	WorkerControl          *workerplatform.Controller
-	Clock                  identitysdk.Clock
-	RuntimeInstanceID      string
-	ReleaseIdentity        runtimehttp.RuntimeReleaseIdentity
-	ReleaseAdmission       runtimehttp.RuntimeReleaseAdmissionProvider
-	ReleaseIntegrity       runtimehttp.RuntimeReleaseIntegrityProvider
-	BusinessEventBackplane businesseventcontract.Backplane
-	ModuleHTTPSurfaces     []modulehttp.Surface
+	Config                   config.Config
+	Records                  *composition.RuntimeServices
+	IdentityBinding          identitysdk.Binding
+	PartyBinding             partysdk.Binding
+	MonitoringBinding        monitoringsdk.Binding
+	SchedulerBinding         schedulersdk.Binding
+	Store                    *persistence.RuntimeStore
+	IntegrationBinding       integrationsdk.Binding
+	AgentRepositories        agentpersistence.Binding
+	LifecycleBinding         lifecyclesdk.Binding
+	RateLimiter              ratelimit.Limiter
+	Manifest                 manifestmodel.ManifestSchema
+	WorkerControl            *workerplatform.Controller
+	Clock                    identitysdk.Clock
+	RuntimeInstanceID        string
+	ReleaseIdentity          runtimehttp.RuntimeReleaseIdentity
+	ReleaseAdmission         runtimehttp.RuntimeReleaseAdmissionProvider
+	ReleaseIntegrity         runtimehttp.RuntimeReleaseIntegrityProvider
+	BusinessEventBackplane   businesseventcontract.Backplane
+	ModuleHTTPSurfaces       []modulehttp.Surface
+	NotificationInboxActions notificationhttp.NotificationInboxActionResolver
 }
 
 type httpServerAssembly struct {
