@@ -12,6 +12,8 @@ github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal v1.2.0 h1:nCYfg
 github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal v1.2.0/go.mod h1:ucUjca2JtSZboY8IoUqyQyuuXvwbMBVwFOm0vdQPNhA=
 github.com/AzureAD/microsoft-authentication-library-for-go v1.6.0 h1:XRzhVemXdgvJqCH0sFfrBUTnUJSBrBf7++ypk+twtRs=
 github.com/AzureAD/microsoft-authentication-library-for-go v1.6.0/go.mod h1:HKpQxkWaGLJ+D/5H8QRpyQXA1eKjxkFlOMwck5+33Jk=
+github.com/DATA-DOG/go-sqlmock v1.5.2 h1:OcvFkGmslmlZibjAjaHm3L//6LiuBgolP7OputlJIzU=
+github.com/DATA-DOG/go-sqlmock v1.5.2/go.mod h1:88MAG/4G7SMwSE3CeA0ZKzrT5CiOU3OJ+JlNzwDqpNU=
 github.com/alicebob/miniredis/v2 v2.38.0 h1:nZAzCR+Lj+Vxk4ZXzm2NuKq2O33RXj1XxJ2e2uP9jiw=
 github.com/alicebob/miniredis/v2 v2.38.0/go.mod h1:TcL7YfarKPGDAthEtl5NBeHZfeUQj6OXMm/+iu5cLMM=
 github.com/bsm/ginkgo/v2 v2.12.0 h1:Ny8MWAHyOepLGlLKYmXG4IEkioBysk6GpaRTLC8zwWs=
@@ -41,8 +43,8 @@ github.com/domainry/domainry-foundation v0.1.0-dev.7 h1:RCHmQ9UmP0hzgztMoYh29eUv
 github.com/domainry/domainry-foundation v0.1.0-dev.7/go.mod h1:+BYiJIIQbc1Z9Xfmo7EQCkfcB8uNV6Fcd+RHFigAW4o=
 github.com/domainry/domainry-identity-sdk v0.1.1-dev7 h1:pegB7MZWi4fuopt9VmmBbFNFOlYUCAowUO+sXw9GO40=
 github.com/domainry/domainry-identity-sdk v0.1.1-dev7/go.mod h1:TnqESeZbDTAkPTeoC+bIJN4M4Cu7qnjnAr/R223Ix1c=
-github.com/domainry/domainry-integration v0.1.7 h1:ejkqbbGm+Smw+2N8IGvSYGXLEAGDoYCkEBn4Sh6Cm00=
-github.com/domainry/domainry-integration v0.1.7/go.mod h1:KXKKKEL2yWhSp4Ipf9a3S9J36JHBLqAwCGDmLd/R7vE=
+github.com/domainry/domainry-integration v0.1.9 h1:42D7dfOiHEy7quMD7ZbFm6uvKXu0wNMXW7g/xstWA9w=
+github.com/domainry/domainry-integration v0.1.9/go.mod h1:KXKKKEL2yWhSp4Ipf9a3S9J36JHBLqAwCGDmLd/R7vE=
 github.com/domainry/domainry-integration-sdk v0.1.2 h1:JiuejzZ6szz1bA58VDKxohMglytCDHcoa9DJRQLiH90=
 github.com/domainry/domainry-integration-sdk v0.1.2/go.mod h1:oUt0i2OwWKHBsi0aTGysWPIxpQEKNLveX8kYFLAdIyE=
 github.com/domainry/domainry-lifecycle v0.1.7 h1:A+vyVMxL4uElE61I9LsQ8wxvkxFkxC7iavm6m8uqMCg=
@@ -53,12 +55,12 @@ github.com/domainry/domainry-metadata v0.1.4 h1:5DzRQO3p1v0z5dkVGzEW1b7TkSgZ6mVT
 github.com/domainry/domainry-metadata v0.1.4/go.mod h1:caek5xM8A7Gffj+6HKOTB2Pxx5mZIdMzzWiRlQwQIyk=
 github.com/domainry/domainry-metadata-sdk v0.1.1 h1:5y2hVGULEWlOmn6mF11ALtnnw+GWUTM+l6zb37LweKg=
 github.com/domainry/domainry-metadata-sdk v0.1.1/go.mod h1:5UsehfM1lMTDu/YYi7Swc4rZ8PolMwSNQ/r1119PccI=
-github.com/domainry/domainry-monitoring v0.1.5 h1:RyEUDhmERa4MSJPR/dDC/IZQ6LKvFD4DkefBGS9w184=
-github.com/domainry/domainry-monitoring v0.1.5/go.mod h1:4UkyYXRiny9wmYVbfRC6+U5g5A1XWdx0RyGkBHpD+YY=
+github.com/domainry/domainry-monitoring v0.1.7 h1:ub9nxV3UCdbYSriOGegGZRW6v+SnDYVmPhWfVtUerFk=
+github.com/domainry/domainry-monitoring v0.1.7/go.mod h1:4UkyYXRiny9wmYVbfRC6+U5g5A1XWdx0RyGkBHpD+YY=
 github.com/domainry/domainry-monitoring-sdk v0.1.1 h1:OvlyZ1JasSEsmyn29MALXmcNFrs/jM10WTuVpVHoZE0=
 github.com/domainry/domainry-monitoring-sdk v0.1.1/go.mod h1:rFQ3pNRvmwaxfovXiZ1VMn7fdtTdrQ4oUaOp04ddxt4=
-github.com/domainry/domainry-notification v0.1.0-dev.16 h1:QL3+wfN4h51wxYFjT+6KvH1Vwy9X/BPVMvLRWnDBU+Q=
-github.com/domainry/domainry-notification v0.1.0-dev.16/go.mod h1:ekmxLU+DtfRJKG7vVNif2jhIxsl6SN5NDj4XtWvVBrI=
+github.com/domainry/domainry-notification v0.1.0-dev.18 h1:HekCLHpIxLzPia6fqWm+2Cgngttol44lnJvUIcXwL/c=
+github.com/domainry/domainry-notification v0.1.0-dev.18/go.mod h1:ekmxLU+DtfRJKG7vVNif2jhIxsl6SN5NDj4XtWvVBrI=
 github.com/domainry/domainry-notification-sdk v0.1.0-dev.7 h1:5jnJZTBe4NQbqA4KBJkYPib4RACPHdT7qCB7rsRg1ak=
 github.com/domainry/domainry-notification-sdk v0.1.0-dev.7/go.mod h1:fC0kpRZJ5bJruvMmAEZDupG9vZfLTyKaThd+L3oV+Hg=
 github.com/domainry/domainry-orm v0.1.29 h1:cJLNjxCDmqQfY3//5l25T51tbrPUw30cO3aandF5VCw=

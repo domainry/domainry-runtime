@@ -202,28 +202,21 @@ func (a *httpServerAssembly) wireWorkspaceProvisioning() {
 	})
 }
 
-// wireRuntimeIntegrationGateway exposes only Runtime-owned handoff reads and
-// the backwards-compatible Web Push self-service proxy. Integration management,
-// provider webhooks and owner workers are exposed by the Integration deployment.
+// wireRuntimeIntegrationGateway exposes only the Runtime-owned Integration
+// Outbox handoff read. Product HTTP is exposed by the Integration deployment.
 func (a *httpServerAssembly) wireRuntimeIntegrationGateway() {
 	if a.dependencies.Store == nil || a.dependencies.IntegrationBinding == nil {
 		return
 	}
-	webPushBinding, ok := a.dependencies.IntegrationBinding.(integrationsdk.WebPushBinding)
-	if !ok || webPushBinding.WebPushSubscriptions() == nil {
-		return
-	}
 	service := integrationapplication.NewIntegrationApplicationService(integrationapplication.ApplicationDependencies{
-		PublicationRepository:     publicationhandoffpersistence.NewPublicationStore(a.dependencies.Store),
-		OwnerCatalog:              a.dependencies.IntegrationBinding.Catalog(),
-		OwnerWebPushSubscriptions: webPushBinding.WebPushSubscriptions(),
+		PublicationRepository: publicationhandoffpersistence.NewPublicationStore(a.dependencies.Store),
 	})
 	a.handlers.Integrations = integrationhttp.NewIntegrationsHandler(integrationhttp.IntegrationsDependencies{
-		Connections: service, RuntimeExecution: service,
-		Principal: a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
+		RuntimeExecution: service,
+		Principal:        a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
 		WriteServiceError: a.callbacks.WriteServiceError,
-		DecodeJSON:        a.callbacks.DecodeJSON, Admin: a.identityHTTP.PermissionFunc("workspace.admin"),
-		Authenticated: a.identityHTTP.AuthenticatedFunc,
+		Admin:             a.identityHTTP.PermissionFunc("workspace.admin"),
+		Authenticated:     a.identityHTTP.AuthenticatedFunc,
 	})
 }
 

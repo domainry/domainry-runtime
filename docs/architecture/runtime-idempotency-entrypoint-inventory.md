@@ -5,7 +5,7 @@
 
 Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `optimistic_only`, `not_applicable`.
 
-## HTTP mutation routes (138)
+## HTTP mutation routes (123)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -31,9 +31,6 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `automation` | `POST /automation-rules/{ruleKey}/simulate` | `not_applicable` | none | `runtime/transport/http/automation/automation_routes.go` |
 | `businesssystem` | `POST /domain-system-delivery-verification` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/businesssystem/businesssystem_routes.go` |
 | `businesssystem` | `POST /domain-system-validation` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/businesssystem/businesssystem_routes.go` |
-| `integrations` | `POST /business/notifications/web-push/subscriptions/{subscriptionID}/revoke` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/integrations/integrations_routes.go` |
-| `integrations` | `POST /integrations/web-push/subscriptions/cleanup-expired` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/integrations/integrations_routes.go` |
-| `integrations` | `PUT /business/notifications/web-push/subscriptions/{subscriptionID}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/integrations/integrations_routes.go` |
 | `lifecycle` | `POST /operations/lifecycle/cleanup/jobs` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
 | `lifecycle` | `POST /operations/lifecycle/cleanup/jobs/{jobID}/run` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
 | `lifecycle` | `POST /operations/lifecycle/deletions/replay` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
@@ -56,15 +53,6 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `notifications` | `POST /business/notifications/{notificationID}/read` | `natural_key` | workspace plus current user, Surface, notification or saved-view identity, and target mailbox state | `runtime/transport/http/notifications/notifications_routes.go` |
 | `notifications` | `POST /business/notifications/{notificationID}/restore` | `natural_key` | workspace plus current user, Surface, notification or saved-view identity, and target mailbox state | `runtime/transport/http/notifications/notifications_routes.go` |
 | `notifications` | `POST /business/notifications/{notificationID}/unread` | `natural_key` | workspace plus current user, Surface, notification or saved-view identity, and target mailbox state | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /notifications/publications/{publicationID}/approve` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /notifications/publications/{publicationID}/cancel` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /notifications/publications/{publicationID}/reject` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /notifications/templates/preview` | `not_applicable` | none | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /notifications/templates/{templateKey}/disable` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /notifications/templates/{templateKey}/preview` | `not_applicable` | none | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /notifications/templates/{templateKey}/publication-requests` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /notifications/templates/{templateKey}/publish` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `POST /notifications/templates/{templateKey}/versions/{version}/restore-draft` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/notifications/notifications_routes.go` |
 | `notifications` | `POST /portal/notifications/read-all` | `natural_key` | workspace plus current user, Surface, notification or saved-view identity, and target mailbox state | `runtime/transport/http/notifications/notifications_routes.go` |
 | `notifications` | `POST /portal/notifications/{notificationID}/acknowledge` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/notifications/notifications_routes.go` |
 | `notifications` | `POST /portal/notifications/{notificationID}/archive` | `natural_key` | workspace plus current user, Surface, notification or saved-view identity, and target mailbox state | `runtime/transport/http/notifications/notifications_routes.go` |
@@ -74,9 +62,6 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `notifications` | `PUT /business/notification-preferences` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/notifications/notifications_routes.go` |
 | `notifications` | `PUT /business/notifications/delegations/{delegationID}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/notifications/notifications_routes.go` |
 | `notifications` | `PUT /business/notifications/saved-views/{viewKey}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `PUT /notifications/policy` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `PUT /notifications/preferences/{recipientKey}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/notifications/notifications_routes.go` |
-| `notifications` | `PUT /notifications/templates/{templateKey}/draft` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/notifications/notifications_routes.go` |
 | `notifications` | `PUT /portal/notification-preferences` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/notifications/notifications_routes.go` |
 | `notifications` | `PUT /portal/notifications/delegations/{delegationID}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/notifications/notifications_routes.go` |
 | `notifications` | `PUT /portal/notifications/saved-views/{viewKey}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/notifications/notifications_routes.go` |

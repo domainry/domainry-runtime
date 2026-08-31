@@ -5,10 +5,8 @@ import (
 	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
 )
 
-// addIntegrationOpenAPIPaths publishes only Runtime-owned durable handoff
-// reads and the backwards-compatible Web Push proxy. Integration management,
-// provider webhook/OAuth ingress, credentials, invocations and owner workers
-// are advertised by the selected Integration Module/SaaS deployment.
+// addIntegrationOpenAPIPaths aggregates Runtime's durable handoff read and the
+// Integration module-owned Web Push product contract into one product schema.
 func addIntegrationOpenAPIPaths(paths map[string]any, _ appschemamodel.ApplicationSchemaSnapshot) {
 	paths["/business/integration-intents/{messageID}"] = map[string]any{
 		"get": openAPIOperation("getBusinessIntegrationIntent", "Integration Business", "Read the current user's redacted Runtime publication handoff result", openAPIAdminSecurity(), openAPIPathParameter("messageID", "Runtime publication message ID"), openAPIJSONResponse("Integration intent", openAPIObject(nil))),

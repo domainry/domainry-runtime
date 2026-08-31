@@ -563,12 +563,7 @@ func newNotificationHTTPHandler(repo *notificationHTTPRepository) (*Notification
 	}}}
 	application := &notificationHTTPApplication{repo: repo, catalog: catalog}
 	response := &notificationHTTPResponse{}
-	principal := accessfixture.AttachPointer(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "reviewer", WorkspaceID: "workspace-1"}}, accessfixture.Bundle{Permissions: []string{
-		PermissionTemplateRead, PermissionTemplateManage,
-		PermissionTemplatePublish, PermissionTemplateApprove, PermissionTemplateTest,
-		PermissionPolicyRead, PermissionPolicyManage,
-	}},
-	)
+	principal := accessfixture.AttachPointer(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "reviewer", WorkspaceID: "workspace-1"}}, accessfixture.Bundle{})
 	if repo.record.Key == "" {
 		repo.record = notificationmodel.NotificationTemplateRecord{Key: template.Key, Draft: &template, Status: "draft", UpdatedAt: "revision-1"}
 	}
@@ -576,7 +571,7 @@ func newNotificationHTTPHandler(repo *notificationHTTPRepository) (*Notification
 		repo.version = notificationmodel.NotificationTemplateVersion{TemplateKey: template.Key, Version: 1, Template: template}
 	}
 	return NewNotificationsHandler(NotificationsDependencies{
-		Management: application, Delivery: application, Inbox: application,
+		Inbox:     application,
 		Principal: func(*http.Request) principalmodel.Principal { return *principal },
 		WriteJSON: func(_ http.ResponseWriter, status int, value any) { response.status, response.value = status, value },
 		WriteError: func(_ http.ResponseWriter, _ *http.Request, status int, code string, _ ...string) {

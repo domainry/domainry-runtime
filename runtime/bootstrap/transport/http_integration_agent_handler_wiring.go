@@ -71,7 +71,7 @@ func (a *httpServerAssembly) wireIntegrationAndAgentHandlers(agentDialogRateLimi
 	}
 	if a.dependencies.Notifications != nil {
 		a.handlers.Notifications = notificationhttp.NewNotificationsHandler(notificationhttp.NotificationsDependencies{
-			Management: a.dependencies.Notifications, Delivery: a.dependencies.Notifications, Inbox: a.dependencies.Notifications,
+			Inbox:          a.dependencies.Notifications,
 			DeliveryLedger: a.publications,
 			Principal:      a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
 			WriteError: a.callbacks.WriteError, WriteServiceError: a.callbacks.WriteServiceError,

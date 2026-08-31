@@ -127,6 +127,7 @@ func BuildWithProductBrand(snapshot appschemamodel.ApplicationSchemaSnapshot, pr
 	addIntegrationOpenAPIPaths(paths, snapshot)
 	paths["/v1/scheduler-triggers:accept"] = map[string]any{"post": openAPIOperation("acceptSchedulerTrigger", "Scheduler Dispatch Gateway", "Identity-authenticated execution callback for one Scheduler-owned run", openAPIProtocolAudience("scheduler_service_service"), openAPIServiceCredentialSecurity(), openAPIJSONRequest(openAPIObject(nil)), openAPIJSONResponse("Stable downstream receipt", openAPIObject(nil)))}
 	addOwnerOperationsReceiptOpenAPIContracts(paths)
+	annotateModuleOwnedOpenAPIPaths(paths)
 	applyCompiledEndpointSurfaceContracts(paths)
 	return map[string]any{
 		"openapi": "3.1.0",
@@ -141,6 +142,41 @@ func BuildWithProductBrand(snapshot appschemamodel.ApplicationSchemaSnapshot, pr
 		},
 		"paths":      paths,
 		"components": components,
+	}
+}
+
+func annotateModuleOwnedOpenAPIPaths(paths map[string]any) {
+	for path, raw := range paths {
+		owner := ""
+		switch {
+		case path == "/operations/monitoring/metrics":
+			owner = "monitoring"
+		case strings.HasPrefix(path, "/business/notifications/web-push/"), path == "/integrations/web-push/subscriptions/cleanup-expired":
+			owner = "integration"
+		case strings.HasPrefix(path, "/notifications/") && path != "/notifications/deliveries":
+			owner = "notification"
+		}
+		if owner == "" {
+			continue
+		}
+		pathSpec, _ := raw.(map[string]any)
+		for method, rawOperation := range pathSpec {
+			if !isOpenAPIHTTPMethod(method) {
+				continue
+			}
+			if operation, ok := rawOperation.(map[string]any); ok {
+				operation["x-domainry-module-owner"] = owner
+			}
+		}
+	}
+}
+
+func isOpenAPIHTTPMethod(method string) bool {
+	switch strings.ToLower(method) {
+	case "get", "post", "put", "patch", "delete", "head", "options":
+		return true
+	default:
+		return false
 	}
 }
 

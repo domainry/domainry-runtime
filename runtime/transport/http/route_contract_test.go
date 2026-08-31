@@ -94,7 +94,9 @@ func TestRuntimeRoutesAndOpenAPIDoNotDrift(t *testing.T) {
 				continue
 			}
 			contract := method + " " + path
-			if !routes[contract] && runtimeRouteOpenAPIExclusion(method, path) == "" {
+			operation, _ := pathSpec[strings.ToLower(method)].(map[string]any)
+			moduleOwner, _ := operation["x-domainry-module-owner"].(string)
+			if !routes[contract] && strings.TrimSpace(moduleOwner) == "" && runtimeRouteOpenAPIExclusion(method, path) == "" {
 				missingFromRoutes = append(missingFromRoutes, contract)
 			}
 		}
