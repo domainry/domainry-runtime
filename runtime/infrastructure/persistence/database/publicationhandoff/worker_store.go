@@ -4,17 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
+	publicationrepository "github.com/domainry/domainry-runtime/runtime/domain/publication/repository"
 	"strings"
 	"time"
 
 	"github.com/domainry/domainry-foundation/mutation"
 	"github.com/domainry/domainry-foundation/requestcontext"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 	"github.com/domainry/domainry-orm/query"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	"github.com/domainry/domainry-runtime/runtime/platform/capacity"
 )
 
 type WorkerStore struct {
@@ -26,7 +26,7 @@ func NewWorkerStore(store *database.RuntimeStore) WorkerStore {
 	return WorkerStore{store: store, db: store.DB()}
 }
 
-func (s WorkerStore) ListDueOutbox(ctx context.Context, scope principalmodel.SystemScope, limit int, now string) ([]integrationmodel.IntegrationOutboxMessage, error) {
+func (s WorkerStore) ListDueOutbox(ctx context.Context, scope principalmodel.SystemScope, limit int, now string) ([]publicationmodel.Message, error) {
 	if _, err := principalmodel.NewSystemQueryScope(scope); err != nil || scope.Kind != principalmodel.SystemScopeRuntimeGlobal {
 		if err == nil {
 			err = principalmodel.ErrSystemScopeRequired
@@ -39,11 +39,11 @@ func (s WorkerStore) ListDueOutbox(ctx context.Context, scope principalmodel.Sys
 	if now = strings.TrimSpace(now); now == "" {
 		now = time.Now().UTC().Format(time.RFC3339)
 	}
-	workspaces, err := s.store.WorkerQueueScopePage(ctx, s.db, "integration_outbox", min(256, max(32, limit*2)))
+	workspaces, err := s.store.WorkerQueueScopePage(ctx, s.db, "runtime_publication_outbox", min(256, max(32, limit*2)))
 	if err != nil {
 		return nil, err
 	}
-	values := []integrationmodel.IntegrationOutboxMessage{}
+	values := []publicationmodel.Message{}
 	for _, workspaceID := range workspaces {
 		workspaceCtx := publicationWorkerContext(ctx, workspaceID, "runtime-publication-worker")
 		queryValue, args, err := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).Columns(publicationColumns...).Where(publicationDuePredicate(now)).OrderBy(query.Ascending("created_at"), query.Ascending("id")).Limit(limit).Build()
@@ -68,16 +68,16 @@ func (s WorkerStore) ListDueOutbox(ctx context.Context, scope principalmodel.Sys
 		}
 		_ = rows.Close()
 	}
-	return capacity.FairOrder(values, limit, func(value integrationmodel.IntegrationOutboxMessage) string { return value.WorkspaceID }), nil
+	return workerplatform.FairOrder(values, limit, func(value publicationmodel.Message) string { return value.WorkspaceID }), nil
 }
-func (s WorkerStore) ClaimOutbox(ctx context.Context, workspaceID, messageID, owner, now string) (integrationmodel.IntegrationOutboxMessage, bool, error) {
+func (s WorkerStore) ClaimOutbox(ctx context.Context, workspaceID, messageID, owner, now string) (publicationmodel.Message, bool, error) {
 	workspaceID, err := publicationWorkspaceID(workspaceID)
 	if err != nil {
-		return integrationmodel.IntegrationOutboxMessage{}, false, err
+		return publicationmodel.Message{}, false, err
 	}
 	messageID, owner, now = strings.TrimSpace(messageID), strings.TrimSpace(owner), strings.TrimSpace(now)
 	if messageID == "" || owner == "" {
-		return integrationmodel.IntegrationOutboxMessage{}, false, fmt.Errorf("Runtime publication claim identity is required")
+		return publicationmodel.Message{}, false, fmt.Errorf("Runtime publication claim identity is required")
 	}
 	if now == "" {
 		now = time.Now().UTC().Format(time.RFC3339)
@@ -88,15 +88,15 @@ func (s WorkerStore) ClaimOutbox(ctx context.Context, workspaceID, messageID, ow
 		SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).Set("updated_at", now).
 		Where(query.And(query.Equal("id", messageID), publicationDuePredicate(now))).Build()
 	if err != nil {
-		return integrationmodel.IntegrationOutboxMessage{}, false, err
+		return publicationmodel.Message{}, false, err
 	}
 	result, err := s.db.ExecContext(ctx, queryValue, args...)
 	if err != nil {
-		return integrationmodel.IntegrationOutboxMessage{}, false, fmt.Errorf("claim Runtime publication: %w", err)
+		return publicationmodel.Message{}, false, fmt.Errorf("claim Runtime publication: %w", err)
 	}
 	count, err := result.RowsAffected()
 	if err != nil {
-		return integrationmodel.IntegrationOutboxMessage{}, false, err
+		return publicationmodel.Message{}, false, err
 	}
 	reader := PublicationStore{store: s.store, db: s.db}
 	if count == 0 {
@@ -106,16 +106,16 @@ func (s WorkerStore) ClaimOutbox(ctx context.Context, workspaceID, messageID, ow
 	value, found, err := reader.GetOutbox(ctx, workspaceID, messageID)
 	if err != nil || !found {
 		if err != nil {
-			return integrationmodel.IntegrationOutboxMessage{}, false, err
+			return publicationmodel.Message{}, false, err
 		}
-		return integrationmodel.IntegrationOutboxMessage{}, false, fmt.Errorf("Runtime publication not found")
+		return publicationmodel.Message{}, false, fmt.Errorf("Runtime publication not found")
 	}
 	return value, true, nil
 }
-func (s WorkerStore) HeartbeatOutbox(ctx context.Context, workspaceID, messageID, leaseOwner string, fencingToken int64, now string) (integrationmodel.IntegrationOutboxMessage, error) {
+func (s WorkerStore) HeartbeatOutbox(ctx context.Context, workspaceID, messageID, leaseOwner string, fencingToken int64, now string) (publicationmodel.Message, error) {
 	workspaceID, err := publicationWorkspaceID(workspaceID)
 	if err != nil {
-		return integrationmodel.IntegrationOutboxMessage{}, err
+		return publicationmodel.Message{}, err
 	}
 	if now = strings.TrimSpace(now); now == "" {
 		now = time.Now().UTC().Format(time.RFC3339)
@@ -125,65 +125,65 @@ func (s WorkerStore) HeartbeatOutbox(ctx context.Context, workspaceID, messageID
 		Set("lease_expires_at", publicationLeaseExpiry(now)).Set("updated_at", now).
 		Where(publicationPredicate(publicationLeasePredicate(messageID, leaseOwner, fencingToken))).Build()
 	if err != nil {
-		return integrationmodel.IntegrationOutboxMessage{}, err
+		return publicationmodel.Message{}, err
 	}
 	result, err := s.db.ExecContext(ctx, queryValue, args...)
 	if err != nil {
-		return integrationmodel.IntegrationOutboxMessage{}, err
+		return publicationmodel.Message{}, err
 	}
 	if count, rowsErr := result.RowsAffected(); rowsErr != nil || count != 1 {
-		return integrationmodel.IntegrationOutboxMessage{}, mutation.MutationConflict("runtime_publication", messageID, mutation.MutationConflictLeaseLost, rowsErr)
+		return publicationmodel.Message{}, mutation.MutationConflict("runtime_publication", messageID, mutation.MutationConflictLeaseLost, rowsErr)
 	}
 	value, _, err := (PublicationStore{store: s.store, db: s.db}).GetOutbox(ctx, workspaceID, messageID)
 	return value, err
 }
-func (s WorkerStore) UpdateOutboxStatus(ctx context.Context, workspaceID, messageID, leaseOwner string, fencingToken int64, status, responseRef, errorText, ackDeadlineAt, now string) (integrationmodel.IntegrationOutboxMessage, error) {
+func (s WorkerStore) UpdateOutboxStatus(ctx context.Context, workspaceID, messageID, leaseOwner string, fencingToken int64, status, responseRef, errorText, now string) (publicationmodel.Message, error) {
 	workspaceID, err := publicationWorkspaceID(workspaceID)
 	if err != nil {
-		return integrationmodel.IntegrationOutboxMessage{}, err
+		return publicationmodel.Message{}, err
 	}
 	messageID, now = strings.TrimSpace(messageID), strings.TrimSpace(now)
 	if messageID == "" || now == "" {
-		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("Runtime publication update identity is required")
+		return publicationmodel.Message{}, fmt.Errorf("Runtime publication update identity is required")
 	}
 	ctx = publicationWorkerContext(ctx, workspaceID, leaseOwner)
 	queryValue, args, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
-		Set("status", strings.TrimSpace(status)).Set("response_ref", strings.TrimSpace(responseRef)).Set("error", strings.TrimSpace(errorText)).Set("next_attempt_at", "").Set("ack_deadline_at", strings.TrimSpace(ackDeadlineAt)).Set("lease_owner", "").Set("lease_expires_at", "").Set("updated_at", now).
+		Set("status", strings.TrimSpace(status)).Set("response_ref", strings.TrimSpace(responseRef)).Set("error", strings.TrimSpace(errorText)).Set("next_attempt_at", "").Set("lease_owner", "").Set("lease_expires_at", "").Set("updated_at", now).
 		Where(publicationPredicate(publicationLeasePredicate(messageID, leaseOwner, fencingToken))).Build()
 	if err != nil {
-		return integrationmodel.IntegrationOutboxMessage{}, err
+		return publicationmodel.Message{}, err
 	}
 	result, err := s.db.ExecContext(ctx, queryValue, args...)
 	if err != nil {
-		return integrationmodel.IntegrationOutboxMessage{}, err
+		return publicationmodel.Message{}, err
 	}
 	if count, rowsErr := result.RowsAffected(); rowsErr != nil || count == 0 {
-		return integrationmodel.IntegrationOutboxMessage{}, mutation.MutationConflict("runtime_publication", messageID, mutation.MutationConflictLeaseLost, rowsErr)
+		return publicationmodel.Message{}, mutation.MutationConflict("runtime_publication", messageID, mutation.MutationConflictLeaseLost, rowsErr)
 	}
 	value, found, err := (PublicationStore{store: s.store, db: s.db}).GetOutbox(ctx, workspaceID, messageID)
 	if err != nil || !found {
 		if err != nil {
-			return integrationmodel.IntegrationOutboxMessage{}, err
+			return publicationmodel.Message{}, err
 		}
-		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("Runtime publication not found")
+		return publicationmodel.Message{}, fmt.Errorf("Runtime publication not found")
 	}
 	return value, nil
 }
-func (s WorkerStore) ScheduleOutboxRetry(ctx context.Context, workspaceID, messageID, leaseOwner string, fencingToken int64, delaySeconds int, errorText, now string) (integrationmodel.IntegrationOutboxMessage, error) {
+func (s WorkerStore) ScheduleOutboxRetry(ctx context.Context, workspaceID, messageID, leaseOwner string, fencingToken int64, delaySeconds int, errorText, now string) (publicationmodel.Message, error) {
 	workspaceID, err := publicationWorkspaceID(workspaceID)
 	if err != nil {
-		return integrationmodel.IntegrationOutboxMessage{}, err
+		return publicationmodel.Message{}, err
 	}
 	messageID = strings.TrimSpace(messageID)
 	if messageID == "" {
-		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("Runtime publication id is required")
+		return publicationmodel.Message{}, fmt.Errorf("Runtime publication id is required")
 	}
 	if delaySeconds < 0 {
 		delaySeconds = 60
 	}
 	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(now))
 	if err != nil {
-		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("Runtime publication retry time is invalid: %w", err)
+		return publicationmodel.Message{}, fmt.Errorf("Runtime publication retry time is invalid: %w", err)
 	}
 	now = parsed.UTC().Format(time.RFC3339)
 	ctx = publicationWorkerContext(ctx, workspaceID, leaseOwner)
@@ -192,26 +192,26 @@ func (s WorkerStore) ScheduleOutboxRetry(ctx context.Context, workspaceID, messa
 		Set("status", "queued").Set("error", strings.TrimSpace(errorText)).SetExpression("attempt_count", query.Add(query.Column("attempt_count"), query.Value(1))).Set("next_attempt_at", next).Set("last_attempt_at", now).Set("lease_owner", "").Set("lease_expires_at", "").Set("updated_at", now).
 		Where(publicationPredicate(publicationLeasePredicate(messageID, leaseOwner, fencingToken))).Build()
 	if err != nil {
-		return integrationmodel.IntegrationOutboxMessage{}, err
+		return publicationmodel.Message{}, err
 	}
 	result, err := s.db.ExecContext(ctx, queryValue, args...)
 	if err != nil {
-		return integrationmodel.IntegrationOutboxMessage{}, err
+		return publicationmodel.Message{}, err
 	}
 	if count, rowsErr := result.RowsAffected(); rowsErr != nil || count == 0 {
-		return integrationmodel.IntegrationOutboxMessage{}, mutation.MutationConflict("runtime_publication", messageID, mutation.MutationConflictLeaseLost, rowsErr)
+		return publicationmodel.Message{}, mutation.MutationConflict("runtime_publication", messageID, mutation.MutationConflictLeaseLost, rowsErr)
 	}
 	value, found, err := (PublicationStore{store: s.store, db: s.db}).GetOutbox(ctx, workspaceID, messageID)
 	if err != nil || !found {
 		if err != nil {
-			return integrationmodel.IntegrationOutboxMessage{}, err
+			return publicationmodel.Message{}, err
 		}
-		return integrationmodel.IntegrationOutboxMessage{}, fmt.Errorf("Runtime publication not found")
+		return publicationmodel.Message{}, fmt.Errorf("Runtime publication not found")
 	}
 	return value, nil
 }
 
-var _ integrationrepository.RuntimePublicationWorkerRepository = WorkerStore{}
+var _ publicationrepository.WorkerRepository = WorkerStore{}
 
 func publicationWorkerContext(ctx context.Context, workspaceID, actorID string) context.Context {
 	ctx = requestcontext.WithWorkspaceID(ctx, strings.TrimSpace(workspaceID))

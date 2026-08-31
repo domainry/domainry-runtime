@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
+	publicationrepository "github.com/domainry/domainry-runtime/runtime/domain/publication/repository"
 	"strings"
 	"time"
 
@@ -16,13 +18,11 @@ import (
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 const queueKind = "runtime_publication_outbox"
-const maxDeliveryAttempts = 10
+const maxHandoffAttempts = 10
 
 type Locator struct {
 	WorkspaceID string
@@ -30,8 +30,8 @@ type Locator struct {
 }
 
 type PublicationHandoffApplicationService struct {
-	repository integrationrepository.RuntimePublicationRepository
-	workerRepo integrationrepository.RuntimePublicationWorkerRepository
+	repository publicationrepository.Repository
+	workerRepo publicationrepository.WorkerRepository
 	delivery   integrationsdk.Delivery
 	worker     workerplatform.Dependencies
 	wakeups    <-chan workerplatform.DurableTaskLocator
@@ -39,11 +39,11 @@ type PublicationHandoffApplicationService struct {
 	prepare    PayloadPreparer
 }
 
-type PayloadPreparer func(context.Context, integrationmodel.IntegrationOutboxMessage, map[string]any) (map[string]any, error)
+type PayloadPreparer func(context.Context, publicationmodel.Message, map[string]any) (map[string]any, error)
 
 type Dependencies struct {
-	Repository       integrationrepository.RuntimePublicationRepository
-	WorkerRepository integrationrepository.RuntimePublicationWorkerRepository
+	Repository       publicationrepository.Repository
+	WorkerRepository publicationrepository.WorkerRepository
 	Delivery         integrationsdk.Delivery
 	Worker           workerplatform.Dependencies
 	Wakeups          *workerplatform.WakeupBroker
@@ -64,7 +64,7 @@ func (s *PublicationHandoffApplicationService) Accept(ctx context.Context, reque
 		return integrationsdk.DeliveryReceipt{}, err
 	}
 	fingerprint := sha256.Sum256(request.Payload)
-	message, err := s.repository.InsertOutbox(ctx, request.WorkspaceID, integrationmodel.IntegrationOutboxMessage{
+	message, err := s.repository.InsertOutbox(ctx, request.WorkspaceID, publicationmodel.Message{
 		ID: request.MessageID, WorkspaceID: request.WorkspaceID, ConnectorKey: request.ConnectorKey,
 		ConnectionKey: request.ConnectionKey, Operation: request.Operation, Status: "queued", Payload: payload,
 		DedupKey: request.DeduplicationKey, RequestFingerprint: fmt.Sprintf("%x", fingerprint[:]), CreatedBy: strings.TrimSpace(createdBy),
@@ -91,7 +91,7 @@ func (s *PublicationHandoffApplicationService) ValidateActionDurableIntent(_ con
 	return nil
 }
 
-func (s *PublicationHandoffApplicationService) ListIntegrationOutboxMessages(ctx context.Context, connectorKey, status string, limit int, principal principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error) {
+func (s *PublicationHandoffApplicationService) ListPublicationMessages(ctx context.Context, connectorKey, status string, limit int, principal principalmodel.Principal) ([]publicationmodel.Message, error) {
 	if s == nil || s.repository == nil {
 		return nil, apperror.New(apperror.KindUnavailable, "backend.runtime.publication.repository_unavailable", nil, nil)
 	}
@@ -105,36 +105,62 @@ func (s *PublicationHandoffApplicationService) ListIntegrationOutboxMessages(ctx
 	return s.repository.ListOutbox(ctx, workspaceID, strings.TrimSpace(connectorKey), strings.TrimSpace(status), limit)
 }
 
-func (s *PublicationHandoffApplicationService) InspectIntegrationOutboxMessage(ctx context.Context, messageID string, principal principalmodel.Principal) (integrationmodel.IntegrationOutboxMessage, error) {
-	reader, ok := s.repository.(integrationrepository.IntegrationOutboxReader)
+func (s *PublicationHandoffApplicationService) InspectPublicationMessage(ctx context.Context, messageID string, principal principalmodel.Principal) (publicationmodel.Message, error) {
+	reader, ok := s.repository.(publicationrepository.Reader)
 	if !ok {
-		return integrationmodel.IntegrationOutboxMessage{}, apperror.New(apperror.KindUnavailable, "backend.runtime.publication.reader_unavailable", nil, nil)
+		return publicationmodel.Message{}, apperror.New(apperror.KindUnavailable, "backend.runtime.publication.reader_unavailable", nil, nil)
 	}
 	message, found, err := reader.GetOutbox(ctx, strings.TrimSpace(principal.WorkspaceID), strings.TrimSpace(messageID))
 	if err != nil {
 		return message, err
 	}
 	if !found {
-		return message, apperror.New(apperror.KindNotFound, "backend.integration.outbox.not_found", nil, nil)
+		return message, apperror.New(apperror.KindNotFound, "backend.runtime.publication.not_found", nil, nil)
 	}
 	return message, nil
 }
 
-func (s *PublicationHandoffApplicationService) UpdateIntegrationOutboxStatus(ctx context.Context, messageID string, request integrationmodel.IntegrationOutboxStatusRequest, principal principalmodel.Principal) (integrationmodel.IntegrationOutboxMessage, error) {
+// GetBusinessPublicationHandoff projects only the caller-owned Runtime handoff.
+// Provider execution evidence remains Integration-owned and is referenced by
+// response_ref rather than joined through owner tables.
+func (s *PublicationHandoffApplicationService) GetBusinessPublicationHandoff(ctx context.Context, messageID string, principal principalmodel.Principal) (publicationmodel.Handoff, error) {
+	workspaceID, userID := strings.TrimSpace(principal.WorkspaceID), strings.TrimSpace(principal.UserID)
+	if workspaceID == "" || userID == "" {
+		return publicationmodel.Handoff{}, apperror.New(apperror.KindBadRequest, "backend.workspace_scope_required", nil, nil)
+	}
+	reader, ok := s.repository.(publicationrepository.Reader)
+	if !ok {
+		return publicationmodel.Handoff{}, apperror.New(apperror.KindUnavailable, "backend.runtime.publication.reader_unavailable", nil, nil)
+	}
+	message, found, err := reader.GetOutbox(ctx, workspaceID, strings.TrimSpace(messageID))
+	if err != nil {
+		return publicationmodel.Handoff{}, err
+	}
+	if !found || strings.TrimSpace(message.CreatedBy) == "" || strings.TrimSpace(message.CreatedBy) != userID {
+		return publicationmodel.Handoff{}, apperror.New(apperror.KindNotFound, "backend.runtime.publication.handoff_not_found", nil, nil)
+	}
+	return publicationmodel.Handoff{
+		ID: message.ID, ConnectorKey: message.ConnectorKey, ConnectionKey: message.ConnectionKey,
+		Operation: message.Operation, Status: message.Status, ResponseRef: message.ResponseRef,
+		Error: message.Error, AttemptCount: message.AttemptCount, CreatedAt: message.CreatedAt, UpdatedAt: message.UpdatedAt,
+	}, nil
+}
+
+func (s *PublicationHandoffApplicationService) UpdatePublicationStatus(ctx context.Context, messageID string, request publicationmodel.StatusRequest, principal principalmodel.Principal) (publicationmodel.Message, error) {
 	status := strings.TrimSpace(request.Status)
-	if status != "cancelled" && status != "queued" && status != "sent" && status != "failed" && status != "dead_letter" {
-		return integrationmodel.IntegrationOutboxMessage{}, apperror.New(apperror.KindBadRequest, "backend.integration.outbox.invalid_status", nil, nil)
+	if status != "cancelled" && status != "queued" && status != "accepted" && status != "failed" && status != "dead_letter" {
+		return publicationmodel.Message{}, apperror.New(apperror.KindBadRequest, "backend.runtime.publication.invalid_status", nil, nil)
 	}
 	return s.repository.UpdateOutboxStatus(ctx, strings.TrimSpace(principal.WorkspaceID), strings.TrimSpace(messageID), status, strings.TrimSpace(request.ResponseRef), strings.TrimSpace(request.Error))
 }
 
-func (s *PublicationHandoffApplicationService) ScheduleIntegrationOutboxRetry(ctx context.Context, messageID string, request integrationmodel.IntegrationOutboxRetryRequest, principal principalmodel.Principal) (integrationmodel.IntegrationOutboxMessage, error) {
-	message, err := s.InspectIntegrationOutboxMessage(ctx, messageID, principal)
+func (s *PublicationHandoffApplicationService) SchedulePublicationRetry(ctx context.Context, messageID string, request publicationmodel.RetryRequest, principal principalmodel.Principal) (publicationmodel.Message, error) {
+	message, err := s.InspectPublicationMessage(ctx, messageID, principal)
 	if err != nil {
 		return message, err
 	}
 	if message.Status != "failed" && message.Status != "dead_letter" && message.Status != "cancelled" {
-		return message, apperror.New(apperror.KindBadRequest, "backend.integration.outbox.not_retryable", nil, nil)
+		return message, apperror.New(apperror.KindBadRequest, "backend.runtime.publication.not_retryable", nil, nil)
 	}
 	return s.repository.ScheduleOutboxRetry(ctx, message.WorkspaceID, message.ID, 0, strings.TrimSpace(request.Error))
 }
@@ -182,13 +208,16 @@ func (s *PublicationHandoffApplicationService) recoverLocators(ctx context.Conte
 	return result, nil
 }
 
-func (s *PublicationHandoffApplicationService) process(ctx context.Context, locator Locator) (integrationmodel.IntegrationOutboxMessage, error) {
-	reader, ok := s.repository.(integrationrepository.IntegrationOutboxReader)
+func (s *PublicationHandoffApplicationService) process(ctx context.Context, locator Locator) (publicationmodel.Message, error) {
+	reader, ok := s.repository.(publicationrepository.Reader)
 	if !ok {
-		return integrationmodel.IntegrationOutboxMessage{}, errors.New("Runtime publication reader unavailable")
+		return publicationmodel.Message{}, errors.New("Runtime publication reader unavailable")
 	}
 	message, found, err := reader.GetOutbox(ctx, locator.WorkspaceID, locator.MessageID)
 	if err != nil || !found {
+		return message, err
+	}
+	if err = workerplatform.CheckFault(ctx, s.worker.Faults, workerplatform.FaultWorkerClaim); err != nil {
 		return message, err
 	}
 	now := s.worker.Clock.Now()
@@ -197,6 +226,9 @@ func (s *PublicationHandoffApplicationService) process(ctx context.Context, loca
 		return claimed, err
 	}
 	workCtx, stopHeartbeat := workerplatform.WithHeartbeat(ctx, 90*time.Second, func(heartbeatCtx context.Context) error {
+		if heartbeatErr := workerplatform.CheckFault(heartbeatCtx, s.worker.Faults, workerplatform.FaultWorkerHeartbeat); heartbeatErr != nil {
+			return heartbeatErr
+		}
 		_, heartbeatErr := s.workerRepo.HeartbeatOutbox(heartbeatCtx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, s.worker.Clock.Now().Format(time.RFC3339))
 		return heartbeatErr
 	})
@@ -209,6 +241,9 @@ func (s *PublicationHandoffApplicationService) process(ctx context.Context, loca
 		payload, err = json.Marshal(prepared)
 	}
 	if err == nil {
+		err = workerplatform.CheckFault(workCtx, s.worker.Faults, workerplatform.FaultProviderBeforeSend)
+	}
+	if err == nil {
 		dedup := strings.TrimSpace(claimed.DedupKey)
 		if dedup == "" {
 			dedup = claimed.ID
@@ -216,9 +251,19 @@ func (s *PublicationHandoffApplicationService) process(ctx context.Context, loca
 		var receipt integrationsdk.DeliveryReceipt
 		receipt, err = s.delivery.Accept(workCtx, integrationsdk.DeliveryRequest{MessageID: claimed.ID, DeduplicationKey: dedup, WorkspaceID: claimed.WorkspaceID, ConnectorKey: claimed.ConnectorKey, ConnectionKey: claimed.ConnectionKey, Operation: claimed.Operation, Payload: payload})
 		if err == nil {
+			err = workerplatform.CheckFault(workCtx, s.worker.Faults, workerplatform.FaultProviderAfterSend)
+		}
+		if err == nil {
 			err = stopHeartbeat()
 			if err == nil {
-				return s.workerRepo.UpdateOutboxStatus(ctx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, "sent", strings.TrimSpace(receipt.InvocationID), "", "", s.worker.Clock.Now().Format(time.RFC3339))
+				if err = workerplatform.CheckFault(ctx, s.worker.Faults, workerplatform.FaultWorkerBeforeComplete); err == nil {
+					var completed publicationmodel.Message
+					completed, err = s.workerRepo.UpdateOutboxStatus(ctx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, "accepted", strings.TrimSpace(receipt.InvocationID), "", s.worker.Clock.Now().Format(time.RFC3339))
+					if err == nil {
+						err = workerplatform.CheckFault(ctx, s.worker.Faults, workerplatform.FaultWorkerAfterComplete)
+					}
+					return completed, err
+				}
 			}
 		}
 	}
@@ -228,10 +273,10 @@ func (s *PublicationHandoffApplicationService) process(ctx context.Context, loca
 	if ctx.Err() != nil {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		return s.workerRepo.UpdateOutboxStatus(cleanupCtx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, "queued", "", "", "", s.worker.Clock.Now().Format(time.RFC3339))
+		return s.workerRepo.UpdateOutboxStatus(cleanupCtx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, "queued", "", "", s.worker.Clock.Now().Format(time.RFC3339))
 	}
-	if claimed.AttemptCount >= maxDeliveryAttempts {
-		return s.workerRepo.UpdateOutboxStatus(ctx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, "dead_letter", "", stableError(err), "", s.worker.Clock.Now().Format(time.RFC3339))
+	if claimed.AttemptCount >= maxHandoffAttempts {
+		return s.workerRepo.UpdateOutboxStatus(ctx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, "dead_letter", "", stableError(err), s.worker.Clock.Now().Format(time.RFC3339))
 	}
 	// Delivery.Accept is idempotent by message/deduplication key, so an unknown
 	// transport outcome is safely retried without Runtime interpreting provider state.
@@ -244,12 +289,12 @@ func (s *PublicationHandoffApplicationService) process(ctx context.Context, loca
 
 func stableError(err error) string {
 	if err == nil {
-		return "backend.runtime.publication.delivery_failed"
+		return "backend.runtime.publication.handoff_failed"
 	}
 	if code := apperror.CodeOf(err); strings.TrimSpace(code) != "" {
 		return code
 	}
-	return "backend.runtime.publication.delivery_failed"
+	return "backend.runtime.publication.handoff_failed"
 }
 
 func retryDelay(attempt int) int {

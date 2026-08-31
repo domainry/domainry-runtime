@@ -1,12 +1,12 @@
 package publicationhandoff
 
 import (
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/domainry/domainry-foundation/mutation"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -50,7 +50,7 @@ func TestWorkerStoreOwnsClaimFencingAndCompletion(t *testing.T) {
 		t.Fatal(err)
 	}
 	ledger := NewPublicationStore(runtimeStore)
-	message, err := ledger.InsertOutbox(t.Context(), "workspace-a", integrationmodel.IntegrationOutboxMessage{WorkspaceID: "workspace-a", ConnectorKey: "crm", Operation: "upsert", RequestRef: "record:worker", DedupKey: "record:worker", Payload: map[string]any{"id": "1"}})
+	message, err := ledger.InsertOutbox(t.Context(), "workspace-a", publicationmodel.Message{WorkspaceID: "workspace-a", ConnectorKey: "crm", Operation: "upsert", RequestRef: "record:worker", DedupKey: "record:worker", Payload: map[string]any{"id": "1"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,8 +67,8 @@ func TestWorkerStoreOwnsClaimFencingAndCompletion(t *testing.T) {
 	if _, err := worker.HeartbeatOutbox(t.Context(), message.WorkspaceID, message.ID, "worker-a", claimed.FencingToken+1, now); !mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
 		t.Fatalf("stale fencing heartbeat=%v", err)
 	}
-	completed, err := worker.UpdateOutboxStatus(t.Context(), message.WorkspaceID, message.ID, "worker-a", claimed.FencingToken, "sent", "invocation-1", "", "", now)
-	if err != nil || completed.Status != "sent" || completed.LeaseOwner != "" || completed.ResponseRef != "invocation-1" {
+	completed, err := worker.UpdateOutboxStatus(t.Context(), message.WorkspaceID, message.ID, "worker-a", claimed.FencingToken, "accepted", "invocation-1", "", now)
+	if err != nil || completed.Status != "accepted" || completed.LeaseOwner != "" || completed.ResponseRef != "invocation-1" {
 		t.Fatalf("completed=%#v err=%v", completed, err)
 	}
 }
@@ -83,7 +83,7 @@ func TestStoreOwnsIdempotentPublicationMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := NewPublicationStore(runtimeStore)
-	message := integrationmodel.IntegrationOutboxMessage{WorkspaceID: "workspace-a", ConnectorKey: "crm", ConnectionKey: "primary", Operation: "upsert", RequestRef: "record:1", DedupKey: "record:1", Payload: map[string]any{"id": "1"}}
+	message := publicationmodel.Message{WorkspaceID: "workspace-a", ConnectorKey: "crm", ConnectionKey: "primary", Operation: "upsert", RequestRef: "record:1", DedupKey: "record:1", Payload: map[string]any{"id": "1"}}
 	first, err := store.InsertOutbox(t.Context(), message.WorkspaceID, message)
 	if err != nil {
 		t.Fatal(err)
@@ -96,12 +96,51 @@ func TestStoreOwnsIdempotentPublicationMutation(t *testing.T) {
 	if _, err := store.InsertOutbox(t.Context(), message.WorkspaceID, message); !mutation.IsMutationConflict(err, mutation.MutationConflictIdempotency) {
 		t.Fatalf("fingerprint conflict=%v", err)
 	}
-	updated, err := store.UpdateOutboxStatus(t.Context(), message.WorkspaceID, first.ID, "sent", "invocation-1", "")
-	if err != nil || updated.Status != "sent" || updated.ResponseRef != "invocation-1" {
+	updated, err := store.UpdateOutboxStatus(t.Context(), message.WorkspaceID, first.ID, "accepted", "invocation-1", "")
+	if err != nil || updated.Status != "accepted" || updated.ResponseRef != "invocation-1" {
 		t.Fatalf("updated=%#v err=%v", updated, err)
 	}
 	retried, err := store.ScheduleOutboxRetry(t.Context(), message.WorkspaceID, first.ID, 1, "retry")
 	if err != nil || retried.Status != "queued" || retried.AttemptCount != 1 || retried.NextAttemptAt == "" {
 		t.Fatalf("retried=%#v err=%v", retried, err)
+	}
+}
+
+func TestOutboxCrashAfterCommitIsRecoveredByReopenedWorkerProcess(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "crash-after-commit.db")
+	open := func() *database.RuntimeStore {
+		store, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: databasePath})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return store
+	}
+	producerStore := open()
+	if err := producerStore.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	committed, err := NewPublicationStore(producerStore).InsertOutbox(t.Context(), "workspace-a", publicationmodel.Message{
+		ID: "outbox-crash-after-commit", WorkspaceID: "workspace-a", ConnectorKey: "crm", Operation: "upsert", DedupKey: "record:1", Payload: map[string]any{"id": "1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Closing the producer connection before any wakeup/claim models the
+	// process disappearing immediately after the database commit.
+	if err := producerStore.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	recoveredStore := open()
+	defer recoveredStore.Close()
+	worker := NewWorkerStore(recoveredStore)
+	pollAt := time.Now().UTC().Add(time.Second).Format(time.RFC3339)
+	due, err := worker.ListDueOutbox(t.Context(), principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "recover Runtime publication after restart"), 10, pollAt)
+	if err != nil || len(due) != 1 || due[0].ID != committed.ID {
+		t.Fatalf("reopened worker did not recover committed Outbox: due=%#v err=%v", due, err)
+	}
+	claimed, ok, err := worker.ClaimOutbox(t.Context(), committed.WorkspaceID, committed.ID, "worker-b", pollAt)
+	if err != nil || !ok || claimed.Status != "sending" {
+		t.Fatalf("reopened worker could not claim durable Outbox: claimed=%#v ok=%v err=%v", claimed, ok, err)
 	}
 }

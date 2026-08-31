@@ -14,8 +14,8 @@ ambient environment variables.
   `modulehttp.Provider`. Runtime validates exposure, authentication,
   permissions and route collisions before mounting it.
 - SaaS Bindings never contribute in-process HTTP Surfaces.
-- Runtime orchestration and BFF endpoints stay in Runtime even when they call a
-  module Binding. Remote SDK `/v1` service protocols are not product HTTP and
+- Runtime orchestration and host-owned HTTP endpoints stay in Runtime even when
+  they call a module Binding. Remote SDK `/v1` service protocols are not product HTTP and
   are never mounted into the Runtime listener.
 - The active result is available from `GET /operations/modules` using the
   `domainry-module-inventory-v1` contract. Plane validates this handshake; it
@@ -33,7 +33,7 @@ ambient environment variables.
 | Monitoring | Operations metrics | Process liveness/readiness/startup probes; SaaS compatibility proxy | None |
 | Data Exchange | None | Record import/export and artifact orchestration | Borrowed pool; Data Exchange-owned schema |
 | Agent | None | Dialog, task and proposal orchestration | Borrowed pool; Agent-owned schema |
-| Lifecycle | None | Cross-owner retention, legal hold and subject-request orchestration | Borrowed pool; Lifecycle-owned schema |
+| Lifecycle | Policy, legal hold, cleanup creation/preview, metrics, archive evidence, subject request, external erasure and deletion replay | Durable cleanup-job run through Runtime Operations receipts | Borrowed pool; Lifecycle-owned schema and migrations |
 | Audit | None | Business, tenant-governance and operations projections | Borrowed pool; Audit-owned schema |
 | Metadata | None | Runtime authoring and schema projection | Borrowed pool; Metadata-owned schema |
 | Report | None | Query, export, notification and download orchestration | Borrowed pool; Report-owned schema |
