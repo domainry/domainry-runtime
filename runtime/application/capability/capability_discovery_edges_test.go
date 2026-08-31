@@ -2,6 +2,7 @@ package capability
 
 import (
 	"context"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -10,7 +11,6 @@ import (
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -19,9 +19,9 @@ func capabilityDiscoveryEdgeService() (*CapabilityAuthoringApplicationService, p
 		return capabilitycontract.CapabilityInstanceSchema{
 			Objects:   []definitionmodel.ObjectSchema{{Key: "object-a", Fields: []definitionmodel.FieldSchema{{Key: "field-a"}}}},
 			Workflows: []definitionmodel.WorkflowSchema{{Key: "workflow-a"}}, Reports: []reportmodel.ReportSchema{{Key: "report-a"}},
-			Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{
+			Integrations: connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{
 				{Key: "first"},
-				{Key: "connector", Providers: []integrationmodel.ConnectorProviderSchema{{Key: "first-provider"}, {Key: "provider"}}, Operations: []integrationmodel.ConnectorOperationSchema{{Key: "first-operation"}, {Key: "operation"}}},
+				{Key: "connector", Providers: []connectormodel.ConnectorProviderSchema{{Key: "first-provider"}, {Key: "provider"}}, Operations: []connectormodel.ConnectorOperationSchema{{Key: "first-operation"}, {Key: "operation"}}},
 			}},
 		}
 	})
@@ -121,7 +121,7 @@ func TestCapabilityDiscoveryLookupAndReferenceEdges(t *testing.T) {
 	service, admin := capabilityDiscoveryEdgeService()
 	snapshot := capabilitycontract.CapabilityInstanceSchema{
 		Objects:      []definitionmodel.ObjectSchema{{Key: "first"}, {Key: "target"}},
-		Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "first"}, {Key: "target", Providers: []integrationmodel.ConnectorProviderSchema{{Key: "first"}, {Key: "target"}}, Operations: []integrationmodel.ConnectorOperationSchema{{Key: "first"}, {Key: "target"}}}}},
+		Integrations: connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{{Key: "first"}, {Key: "target", Providers: []connectormodel.ConnectorProviderSchema{{Key: "first"}, {Key: "target"}}, Operations: []connectormodel.ConnectorOperationSchema{{Key: "first"}, {Key: "target"}}}}},
 	}
 	if object, found := capabilityObjectByKey(snapshot, "target"); !found || object.Key != "target" {
 		t.Fatalf("object=%#v found=%v", object, found)

@@ -2,6 +2,7 @@ package changeplan
 
 import (
 	"fmt"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"reflect"
 	"testing"
 
@@ -11,7 +12,6 @@ import (
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 )
 
 type changePlanReferenceStringer string
@@ -56,7 +56,7 @@ func TestChangePlanRichReferenceSchemaCoversGenericResourceRelationships(t *test
 			},
 		}},
 		Reports:      []reportmodel.ReportSchema{{Key: "orders", Name: "Orders", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "order", Alias: "order"}, Joins: []reportmodel.ReportDatasetJoin{{ObjectKey: "missing", Alias: "missing"}}}, RequiredPermissions: []string{"order.read"}}},
-		Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "erp", Name: "", Source: "builtin", Operations: []integrationmodel.ConnectorOperationSchema{{Key: "send", Name: "", CompensationOperation: "cancel"}, {Key: "cancel", Name: "Cancel"}}}}},
+		Integrations: connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{{Key: "erp", Name: "", Source: "builtin", Operations: []connectormodel.ConnectorOperationSchema{{Key: "send", Name: "", CompensationOperation: "cancel"}, {Key: "cancel", Name: "Cancel"}}}}},
 		Agents:       []agentsdk.AgentSchema{{Key: "sales_agent", Name: "Sales", Config: map[string]any{"report_keys": []any{"orders", "pipeline"}}}},
 	}
 

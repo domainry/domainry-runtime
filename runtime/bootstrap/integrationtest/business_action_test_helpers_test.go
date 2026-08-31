@@ -22,7 +22,7 @@ import (
 	automationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automation"
 
 	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
-	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
+	publicationhandoffpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
 
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 
@@ -96,34 +96,24 @@ func objectActionTestDependencies(ctx context.Context, store *persistence.Runtim
 		return RuntimeServicesDependencies{}
 	}
 	return RuntimeServicesDependencies{
-		Records:              recordpersistence.NewRecordStore(store),
-		Audit:                auditpersistence.NewAuditStoreFromRuntimeStore(ctx, store),
-		IntegrationConfig:    integrationpersistence.NewIntegrationConfigStore(store),
-		IntegrationEvents:    integrationpersistence.NewIntegrationEventStore(store),
-		IntegrationDelivery:  integrationpersistence.NewIntegrationDeliveryStore(store),
-		IntegrationWorker:    integrationpersistence.NewIntegrationWorkerStore(store),
-		ApplicationSchema:    appschemapersistence.NewApplicationSchemaStore(store),
-		WorkflowWorker:       workflowpersistence.NewWorkflowWorkerStore(store),
-		WorkflowDefinitions:  workflowpersistence.NewWorkflowDefinitionStore(store),
-		WorkflowProcesses:    workflowpersistence.NewWorkflowProcessStore(store),
-		WorkflowDecisions:    workflowpersistence.NewWorkflowDecisionStore(store),
-		AutomationWorker:     automationpersistence.NewAutomationWorkerStore(store),
-		AutomationExecutions: automationpersistence.NewAutomationExecutionStore(store),
-		BusinessEvidence:     nil,
-		ActionExecutions:     actionpersistence.NewActionBusinessExecutionStore(store),
+		Records:                      recordpersistence.NewRecordStore(store),
+		Audit:                        auditpersistence.NewAuditStoreFromRuntimeStore(ctx, store),
+		IntegrationPublication:       publicationhandoffpersistence.NewPublicationStore(store),
+		IntegrationPublicationWorker: publicationhandoffpersistence.NewWorkerStore(store),
+		ApplicationSchema:            appschemapersistence.NewApplicationSchemaStore(store),
+		WorkflowWorker:               workflowpersistence.NewWorkflowWorkerStore(store),
+		WorkflowDefinitions:          workflowpersistence.NewWorkflowDefinitionStore(store),
+		WorkflowProcesses:            workflowpersistence.NewWorkflowProcessStore(store),
+		WorkflowDecisions:            workflowpersistence.NewWorkflowDecisionStore(store),
+		AutomationWorker:             automationpersistence.NewAutomationWorkerStore(store),
+		AutomationExecutions:         automationpersistence.NewAutomationExecutionStore(store),
+		BusinessEvidence:             nil,
+		ActionExecutions:             actionpersistence.NewActionBusinessExecutionStore(store),
 	}
 }
 
 func recordLegacyStore(store *persistence.RuntimeStore) recordpersistence.RecordStore {
 	return recordpersistence.NewRecordStore(store)
-}
-
-func integrationConfigRepository(store *persistence.RuntimeStore) integrationpersistence.IntegrationConfigStore {
-	return integrationpersistence.NewIntegrationConfigStore(store)
-}
-
-func integrationDeliveryRepository(store *persistence.RuntimeStore) integrationpersistence.IntegrationDeliveryStore {
-	return integrationpersistence.NewIntegrationDeliveryStore(store)
 }
 
 func serviceErrorCode(err error) string {

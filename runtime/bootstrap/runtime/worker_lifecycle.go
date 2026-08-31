@@ -32,7 +32,11 @@ func StartWorkers(ctx context.Context, runtime *Runtime) {
 	runtime.startRecordTimerWorker(ctx)
 	runtime.startAgentTaskWorker(ctx)
 	runtime.StartWorkflowWorker(ctx)
-	runtime.StartIntegrationOutboxWorker(ctx)
+	runtime.StartIntegrationEventWorker(ctx)
+	runtime.StartPublicationHandoffWorker(ctx)
+	runtime.startConnectorProviderBackgroundWorker(ctx)
+	runtime.startIntegrationInvocationReconciliationWorker(ctx)
+	runtime.startIntegrationCredentialExpiryWorker(ctx)
 	runtime.StartNotificationPublicationWorker(ctx)
 	runtime.startNotificationInboxWorker(ctx)
 	runtime.startNotificationChannelWorker(ctx)
@@ -243,25 +247,56 @@ func startWorkflowContinuationWorkerLoop(
 }
 
 func (a *Runtime) StartIntegrationEventWorker(ctx context.Context) {
-	// Inbound event processing belongs to Integration Module/SaaS.
+	if a == nil || a.integrationWorkers == nil {
+		return
+	}
+	a.startIntegrationOwnerLoop(ctx, "integration_event", "Integration event worker failed", a.integrationWorkers.ProcessDueEvents)
 }
 
-func (a *Runtime) StartIntegrationOutboxWorker(ctx context.Context) {
-	a.startControlledWorker(ctx, "integration_outbox", func(workerCtx context.Context) <-chan struct{} {
+func (a *Runtime) StartPublicationHandoffWorker(ctx context.Context) {
+	a.startControlledWorker(ctx, "runtime_publication_outbox", func(workerCtx context.Context) <-chan struct{} {
 		return a.records.Applications().PublicationHandoff.StartWorker(workerCtx, time.Second, 25)
 	})
 }
 
 func (a *Runtime) startConnectorProviderBackgroundWorker(ctx context.Context) {
-	// Provider workers belong to Integration Module/SaaS.
+	if a == nil || a.integrationWorkers == nil {
+		return
+	}
+	a.startIntegrationOwnerLoop(ctx, "integration_provider", "Integration Provider worker failed", a.integrationWorkers.ProcessDueProviderTasks)
 }
 
 func (a *Runtime) startIntegrationInvocationReconciliationWorker(ctx context.Context) {
-	// Invocation evidence and reconciliation belong to Integration Module/SaaS.
+	if a == nil || a.integrationWorkers == nil {
+		return
+	}
+	a.startIntegrationOwnerLoop(ctx, "integration_reconciliation", "Integration reconciliation worker failed", a.integrationWorkers.ProcessDueReconciliations)
 }
 
 func (a *Runtime) startIntegrationCredentialExpiryWorker(ctx context.Context) {
-	// Credential lifecycle belongs to Integration Module/SaaS.
+	if a == nil || a.integrationWorkers == nil {
+		return
+	}
+	a.startIntegrationOwnerLoop(ctx, "integration_credentials", "Integration credential worker failed", a.integrationWorkers.ProcessDueCredentialExpirations)
+}
+
+func (a *Runtime) startIntegrationOwnerLoop(ctx context.Context, name, failure string, process func(context.Context, int) (int, error)) {
+	a.startControlledWorker(ctx, name, func(workerCtx context.Context) <-chan struct{} {
+		interval := a.cfg.EffectiveWorkerPollInterval()
+		if interval <= 0 {
+			interval = time.Second
+		}
+		batch := a.cfg.EffectiveWorkerBatchSize()
+		if batch <= 0 || batch > 500 {
+			batch = 25
+		}
+		return workerplatform.StartAdaptiveLoop(workerCtx, name, interval, max(30*time.Second, interval*30), func() bool {
+			return runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, failure, func() (bool, error) {
+				processed, err := process(workerCtx, batch)
+				return processed > 0, err
+			})
+		})
+	})
 }
 
 func (a *Runtime) StartNotificationPublicationWorker(ctx context.Context) {

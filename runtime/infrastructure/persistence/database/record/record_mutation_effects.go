@@ -3,6 +3,7 @@ package record
 import (
 	auditmoduleimpl "github.com/domainry/domainry-audit/module"
 	"github.com/domainry/domainry-orm/query"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 
 	"github.com/domainry/domainry-foundation/mutation"
 	"github.com/domainry/domainry-foundation/telemetry"
@@ -20,8 +21,6 @@ import (
 
 	"strings"
 	"time"
-
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 
 	runtimeauditmodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -79,7 +78,7 @@ func (r RecordStore) insertAuditEventTx(ctx context.Context, tx TransactionExecu
 	return nil
 }
 
-func (r RecordStore) insertIntegrationOutboxTx(ctx context.Context, tx TransactionExecutor, message integrationmodel.IntegrationOutboxMessage) error {
+func (r RecordStore) insertPublicationHandoffTx(ctx context.Context, tx TransactionExecutor, message publicationmodel.Message) error {
 	s := r.store
 	message.Payload = telemetry.EnsureAsyncPayload(ctx, message.Payload)
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -105,13 +104,13 @@ func (r RecordStore) insertIntegrationOutboxTx(ctx context.Context, tx Transacti
 		return buildErr
 	}
 	if _, err := tx.ExecContext(ctx, queryValue, args...); err != nil {
-		return fmt.Errorf("insert mutation outbox: %w", database.MutationConstraintError(err, "integration_outbox", message.ID, mutation.MutationConflictIdempotency))
+		return fmt.Errorf("insert mutation outbox: %w", database.MutationConstraintError(err, "runtime_publication_outbox", message.ID, mutation.MutationConflictIdempotency))
 	}
 	if err := publicationhandoff.RegisterWorkerScope(ctx, r.store, tx, message.WorkspaceID, now); err != nil {
 		return err
 	}
 	if transactioncontract.ActiveTransaction(ctx) {
-		locator := workerplatform.DurableTaskLocator{QueueKind: "integration_outbox", WorkspaceID: message.WorkspaceID, TaskID: message.ID}
+		locator := workerplatform.DurableTaskLocator{QueueKind: "runtime_publication_outbox", WorkspaceID: message.WorkspaceID, TaskID: message.ID}
 		if err := transactioncontract.RegisterAfterCommit(ctx, transactioncontract.AfterCommitHook{
 			Name: "wake integration outbox " + message.ID, Purpose: transactioncontract.AfterCommitDurableWorkWakeup, DurableRecovery: true,
 			Run: func(context.Context) error { r.store.WorkerWakeups().Publish(locator); return nil },
@@ -125,7 +124,7 @@ func (r RecordStore) insertIntegrationOutboxTx(ctx context.Context, tx Transacti
 func (r RecordStore) PublishCommittedOutboxWakeups(_ context.Context, workspaceID string, commits []transactionmodel.RecordMutationCommit) {
 	for _, commit := range commits {
 		for _, message := range commit.Outbox {
-			r.publishIntegrationOutboxWakeup(workspaceID, message)
+			r.publishPublicationHandoffWakeup(workspaceID, message)
 		}
 	}
 }
@@ -140,7 +139,7 @@ func (r RecordStore) PublishCommittedNotificationWakeups(ctx context.Context, wo
 	}
 }
 
-func (r RecordStore) publishIntegrationOutboxWakeup(workspaceID string, message integrationmodel.IntegrationOutboxMessage) {
+func (r RecordStore) publishPublicationHandoffWakeup(workspaceID string, message publicationmodel.Message) {
 	resolvedWorkspace := strings.TrimSpace(message.WorkspaceID)
 	if len(resolvedWorkspace) == 0 {
 		resolvedWorkspace = workspaceID
@@ -149,5 +148,5 @@ func (r RecordStore) publishIntegrationOutboxWakeup(workspaceID string, message 
 	if strings.TrimSpace(message.ID) == "" {
 		message.ID = publicationhandoff.OutboxDedupID(message.WorkspaceID, message.ConnectorKey, message.ConnectionKey, message.Operation, message.DedupKey)
 	}
-	r.store.WorkerWakeups().Publish(workerplatform.DurableTaskLocator{QueueKind: "integration_outbox", WorkspaceID: message.WorkspaceID, TaskID: message.ID})
+	r.store.WorkerWakeups().Publish(workerplatform.DurableTaskLocator{QueueKind: "runtime_publication_outbox", WorkspaceID: message.WorkspaceID, TaskID: message.ID})
 }

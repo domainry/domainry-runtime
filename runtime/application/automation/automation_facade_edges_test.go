@@ -3,6 +3,8 @@ package automation
 import (
 	"context"
 	"errors"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -17,7 +19,6 @@ import (
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationbusiness "github.com/domainry/domainry-runtime/runtime/domain/automation/service"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -53,12 +54,12 @@ func (r *automationFacadeRegistry) Get(key string) (automationmodel.AutomationRu
 }
 
 type automationFacadeConnectorCatalog struct {
-	schema integrationmodel.IntegrationSchema
+	schema connectormodel.IntegrationSchema
 }
 
 type automationFacadeMetadataProbe struct{}
 
-func (c automationFacadeConnectorCatalog) Schema() integrationmodel.IntegrationSchema {
+func (c automationFacadeConnectorCatalog) Schema() connectormodel.IntegrationSchema {
 	return c.schema
 }
 
@@ -78,9 +79,9 @@ func automationFacadePrincipal() principalmodel.Principal {
 func newAutomationFacade(registry *automationFacadeRegistry, metadata *automationFacadeMetadataProbe) *AutomationApplicationService {
 	return NewAutomationApplicationService(AutomationApplicationDependencies{
 		Rules:      registry,
-		Connectors: automationFacadeConnectorCatalog{schema: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "erp"}}}},
+		Connectors: automationFacadeConnectorCatalog{schema: connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{{Key: "erp"}}}},
 		Schema: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
-			return appschemamodel.ApplicationSchemaSnapshot{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "erp"}}}}
+			return appschemamodel.ApplicationSchemaSnapshot{Integrations: connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{{Key: "erp"}}}}
 		},
 		Principal: func(_ context.Context, userID, roleKey, _ string) principalmodel.Principal {
 			return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: userID}}, accessfixture.Bundle{Key: roleKey, Permissions: []string{"workspace.admin"}})
@@ -195,7 +196,7 @@ func TestAutomationFacadeExecuteOutboxValidatesScopeRuleAndExecutes(t *testing.T
 		return notificationmodel.NotificationEvent{EventType: intent.EventType}, nil
 	}
 	service.commitNotification = automationNotificationCommitterStub{}
-	message := integrationmodel.IntegrationOutboxMessage{WorkspaceID: "workspace-1", Payload: automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{RuleKey: "after", RecordVersion: "v2", Record: recordmodel.Record{ID: "record-1", Data: map[string]any{"status": "ready"}}, ActorUserID: "user", ActorRoleKey: "role", RequestID: "request"})}
+	message := publicationmodel.Message{WorkspaceID: "workspace-1", Payload: automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{RuleKey: "after", RecordVersion: "v2", Record: recordmodel.Record{ID: "record-1", Data: map[string]any{"status": "ready"}}, ActorUserID: "user", ActorRoleKey: "role", RequestID: "request"})}
 	if err := service.ExecuteOutboxMessage(t.Context(), message); err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +250,7 @@ func TestAutomationAfterInstructionCanRenderStableEventID(t *testing.T) {
 		},
 	})
 	eventID := "automation:after:order:order-1:update:v1"
-	message := integrationmodel.IntegrationOutboxMessage{WorkspaceID: "workspace-1", Payload: automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{
+	message := publicationmodel.Message{WorkspaceID: "workspace-1", Payload: automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{
 		ID: eventID, RuleKey: rule.Key, RecordVersion: "v1", Record: recordmodel.Record{ID: "order-1", Data: map[string]any{"status": "ready"}, UpdatedAt: "v1"},
 		ActorUserID: "user", ActorRoleKey: "role", RequestID: "request", IdentityPolicy: "revalidate_initiator",
 	})}
@@ -271,14 +272,14 @@ func TestAutomationAfterOutboxRevalidatesIdentityAndRejectsLoopsAndDepth(t *test
 			return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: known, UserID: userID}}, accessfixture.Bundle{Key: roleKey})
 		},
 	})
-	message := func(event automationmodel.AutomationLifecycleEvent) integrationmodel.IntegrationOutboxMessage {
+	message := func(event automationmodel.AutomationLifecycleEvent) publicationmodel.Message {
 		event.RuleKey, event.RecordVersion = "after", "v1"
 		event.Record = recordmodel.Record{ID: "record", Data: map[string]any{}}
 		event.ActorUserID, event.ActorRoleKey = "user", "operator"
 		if event.IdentityPolicy == "" {
 			event.IdentityPolicy = "revalidate_initiator"
 		}
-		return integrationmodel.IntegrationOutboxMessage{WorkspaceID: "workspace", Payload: automationbusiness.LifecycleEventPayload(event)}
+		return publicationmodel.Message{WorkspaceID: "workspace", Payload: automationbusiness.LifecycleEventPayload(event)}
 	}
 	known = false
 	if err := service.ExecuteOutboxMessage(t.Context(), message(automationmodel.AutomationLifecycleEvent{})); apperror.CodeOf(err) != "backend.automation.identity_revoked" {
@@ -334,7 +335,7 @@ func TestQueuedAutomationRevalidatesCurrentActionPermissionInsteadOfFreezingRole
 		RuleKey: rule.Key, RecordVersion: "v1", Record: recordmodel.Record{ID: "order-1", Data: map[string]any{"status": "ready"}},
 		ActorUserID: "operator-a", ActorRoleKey: "operator", IdentityPolicy: "revalidate_initiator",
 	}
-	message := integrationmodel.IntegrationOutboxMessage{WorkspaceID: "workspace-a", Payload: automationbusiness.LifecycleEventPayload(event)}
+	message := publicationmodel.Message{WorkspaceID: "workspace-a", Payload: automationbusiness.LifecycleEventPayload(event)}
 	if err := service.ExecuteOutboxMessage(t.Context(), message); apperror.CodeOf(err) != "backend.action.permission_denied" || invocations != 1 {
 		t.Fatalf("revoked queued Action err=%v invocations=%d", err, invocations)
 	}

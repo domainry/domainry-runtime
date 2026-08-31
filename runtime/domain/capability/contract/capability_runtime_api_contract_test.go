@@ -397,3 +397,39 @@ func TestRuntimeAPIContractPublishesGovernedBusinessAuditExport(t *testing.T) {
 		}
 	}
 }
+
+func TestRuntimeAPIContractKeepsOnlyRuntimePublicationHandoff(t *testing.T) {
+	var document struct {
+		AdminBusinessReuse struct {
+			Routes []struct {
+				EndpointIdentity string `json:"endpoint_identity"`
+				SourceOwner      string `json:"source_owner"`
+			} `json:"routes"`
+		} `json:"admin_business_reuse"`
+		Routes map[string]struct {
+			Path string `json:"path"`
+		} `json:"routes"`
+		Schemas map[string]json.RawMessage `json:"schemas"`
+	}
+	if err := json.Unmarshal(RuntimeAPIContractDocument(), &document); err != nil {
+		t.Fatal(err)
+	}
+	if route := document.Routes["publication_handoff_result"]; route.Path != "/business/publication-handoffs/{messageID}" {
+		t.Fatalf("publication handoff route=%+v", route)
+	}
+	for key, route := range document.Routes {
+		if strings.Contains(key, "web_push") || strings.Contains(route.Path, "/integration-intents") || strings.Contains(route.Path, "/notifications/web-push") {
+			t.Errorf("Integration-owned route leaked into Runtime API contract: %s=%s", key, route.Path)
+		}
+	}
+	for key := range document.Schemas {
+		if strings.Contains(key, "web_push") || key == "integration_intent_result" {
+			t.Errorf("Integration-owned schema leaked into Runtime API contract: %s", key)
+		}
+	}
+	for _, route := range document.AdminBusinessReuse.Routes {
+		if route.SourceOwner == "integrations" || strings.Contains(route.EndpointIdentity, "/notifications/web-push") {
+			t.Errorf("Integration-owned admin reuse leaked into Runtime API contract: %+v", route)
+		}
+	}
+}

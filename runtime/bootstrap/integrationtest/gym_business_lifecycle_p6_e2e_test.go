@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -16,7 +17,6 @@ import (
 	runtimecomposition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -67,7 +67,7 @@ func newGymLifecycleP6Environment(t *testing.T) (*runtimecomposition.RuntimeServ
 	role := accessfixture.Bundle{Key: "gym_finance_fixture_operator", Permissions: []string{"gym_financial_entry.*", "gym_commission_lock.*"}, RecordScope: "all_records", DataPolicies: []accessfixture.DataPolicyFixture{
 		{ObjectKey: "gym_financial_entry", Scope: "all_records", Read: true, Write: true}, {ObjectKey: "gym_commission_lock", Scope: "all_records", Read: true, Write: true},
 	}}
-	service := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "gym-lifecycle-p6-fixture", TemplateVersion: "1", Name: "Gym Lifecycle P6 Fixture", Objects: objects, Integrations: integrationmodel.IntegrationSchema{}, Store: store})
+	service := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "gym-lifecycle-p6-fixture", TemplateVersion: "1", Name: "Gym Lifecycle P6 Fixture", Objects: objects, Integrations: connectormodel.IntegrationSchema{}, Store: store})
 	return service, accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "finance-operator", WorkspaceID: "workspace-primary"}}, role)
 }
 

@@ -3,6 +3,7 @@ package record
 import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	recordruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
@@ -29,7 +30,6 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 )
 
 type createRepositoryProbe struct {
@@ -327,9 +327,9 @@ func TestCreateServiceOwnsCompleteCreateTransaction(t *testing.T) {
 			calls = append(calls, "duplicate")
 			return nil
 		},
-		AfterOutbox: func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []integrationmodel.IntegrationOutboxMessage {
+		AfterOutbox: func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []publicationmodel.Message {
 			calls = append(calls, "outbox")
-			return []integrationmodel.IntegrationOutboxMessage{{ID: "outbox-1"}}
+			return []publicationmodel.Message{{ID: "outbox-1"}}
 		},
 		PrepareWorkflow: func(context.Context, string, recordmodel.Record, map[string]any, principalmodel.Principal, string) ([]workflowmodel.WorkflowExecution, error) {
 			calls = append(calls, "workflow_prepare")

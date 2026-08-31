@@ -49,8 +49,8 @@ func TestRuntimeSurfaceContractV2(t *testing.T) {
 	}
 }
 
-func TestIntegrationIntentOutcomeIsAvailableToItsConsumerOwner(t *testing.T) {
-	const endpoint = "GET /business/integration-intents/{messageID}"
+func TestPublicationHandoffOutcomeIsAvailableToItsConsumerOwner(t *testing.T) {
+	const endpoint = "GET /business/publication-handoffs/{messageID}"
 	surfaces := RoutePolicies[endpoint]
 	want := map[ProductSurface]bool{
 		ProductSurfaceBusinessWorkspace: true,
@@ -60,7 +60,7 @@ func TestIntegrationIntentOutcomeIsAvailableToItsConsumerOwner(t *testing.T) {
 		delete(want, surface)
 	}
 	if len(want) != 0 {
-		t.Fatalf("integration intent route is missing owner surfaces: %v", want)
+		t.Fatalf("publication handoff route is missing owner surfaces: %v", want)
 	}
 }
 

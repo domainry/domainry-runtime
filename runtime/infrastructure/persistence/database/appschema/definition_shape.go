@@ -3,8 +3,6 @@ package appschema
 import (
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -35,10 +33,6 @@ func metadataDefinitionTable(resourceType string) (string, error) {
 		return "_application_schema_workflow_definitions", nil
 	case "automation_rule":
 		return "_application_schema_automation_rule_definitions", nil
-	case "connector":
-		return "_application_schema_connector_requirements", nil
-	case "integration_event_mapping":
-		return "_application_schema_integration_event_mapping_requirements", nil
 	default:
 		return "", fmt.Errorf("unsupported metadata resource type %q", resourceType)
 	}
@@ -143,30 +137,6 @@ func metadataDefinitionShape(ctx context.Context, resourceType string, resourceK
 		key := valueOrFirstNonEmpty(resourceKey, payload.Key)
 		payload.Key = key
 		return metadataDefinitionPayloadShape{Key: key, Name: valueOrFirstNonEmpty(req.Name, payload.Name), Payload: payload}, metadataDefinitionKeyError("dictionary", key)
-	case "connector":
-		var payload integrationmodel.ConnectorSchema
-		if err := json.Unmarshal(req.Payload, &payload); err != nil {
-			return metadataDefinitionPayloadShape{}, err
-		}
-		key := valueOrFirstNonEmpty(resourceKey, payload.Key)
-		payload.Key = key
-		if strings.TrimSpace(payload.Type) == "" {
-			return metadataDefinitionPayloadShape{}, fmt.Errorf("metadata.connector.missingType")
-		}
-		if strings.TrimSpace(payload.Provider) == "" {
-			return metadataDefinitionPayloadShape{}, fmt.Errorf("metadata.connector.missingProvider")
-		}
-		return metadataDefinitionPayloadShape{Key: key, Name: valueOrFirstNonEmpty(req.Name, payload.Name), Payload: payload}, metadataDefinitionKeyError("connector", key)
-	case "integration_event_mapping":
-		var payload integrationmodel.IntegrationEventMappingSchema
-		if err := json.Unmarshal(req.Payload, &payload); err != nil {
-			return metadataDefinitionPayloadShape{}, err
-		}
-		key := valueOrFirstNonEmpty(resourceKey, payload.Key)
-		payload.Key = key
-		objectKey := valueOrFirstNonEmpty(req.ObjectKey, payload.ObjectKey)
-		payload.ObjectKey = objectKey
-		return metadataDefinitionPayloadShape{Key: key, ObjectKey: objectKey, Name: valueOrFirstNonEmpty(req.Name, payload.Provider), Payload: payload}, metadataDefinitionKeyError("integration_event_mapping", key)
 	case "report":
 		var payload reportmodel.ReportSchema
 		if err := json.Unmarshal(req.Payload, &payload); err != nil {

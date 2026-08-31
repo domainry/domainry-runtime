@@ -3,6 +3,7 @@ package record
 import (
 	"context"
 	"errors"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"testing"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
@@ -73,7 +73,7 @@ func TestRecordUpdatePipelineStageAndOptionalShortCircuitEdges(t *testing.T) {
 	regularRepository := &updateEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"name": "before", "status": "open", "version": float64(1)}}}
 	regular := recordUpdateEdgeDependencies(regularRepository)
 	regular.RunBefore = nil
-	regular.AfterOutbox = func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []integrationmodel.IntegrationOutboxMessage {
+	regular.AfterOutbox = func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []publicationmodel.Message {
 		return nil
 	}
 	regular.UpdatedTriggers = func(string, map[string]any, map[string]any) []string {

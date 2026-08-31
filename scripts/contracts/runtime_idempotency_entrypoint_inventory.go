@@ -175,21 +175,22 @@ func classifyApplicationCommand(name string) (string, string) {
 func workerEntries() []inventoryEntry {
 	return []inventoryEntry{
 		{kind: "worker", owner: "workflow", entrypoint: "StartWorkflowWorker", source: "runtime/bootstrap/runtime/worker_lifecycle.go", decision: "system_key_required", keySource: "workflow execution/process/node attempt identity"},
-		{kind: "worker", owner: "scheduler", entrypoint: "SchedulerApplicationService.StartWorker", source: "runtime/application/scheduler/scheduler_runtime.go", decision: "system_key_required", keySource: "definition/window/manual-run/retry identity"},
-		{kind: "worker", owner: "integration", entrypoint: "StartIntegrationEventWorker", source: "runtime/bootstrap/runtime/worker_lifecycle.go", decision: "system_key_required", keySource: "workspace/provider/external event identity"},
-		{kind: "worker", owner: "integration", entrypoint: "StartIntegrationOutboxWorker", source: "runtime/bootstrap/runtime/worker_lifecycle.go", decision: "system_key_required", keySource: "outbox message request_ref"},
+		{kind: "worker", owner: "scheduler", entrypoint: "SchedulerBinding.Start", source: "runtime/bootstrap/runtime/worker_lifecycle.go", decision: "system_key_required", keySource: "Scheduler-owned definition/window/run identity"},
+		{kind: "worker", owner: "recordtimer", entrypoint: "startRecordTimerWorker -> RecordTimers.ProcessDueForAllWorkspaces", source: "runtime/bootstrap/runtime/worker_lifecycle.go", decision: "system_key_required", keySource: "Record Timer identity plus fencing token"},
+		{kind: "worker", owner: "integration", entrypoint: "StartIntegrationEventWorker -> LocalWorkers.ProcessDueEvents", source: "runtime/bootstrap/runtime/worker_lifecycle.go", decision: "system_key_required", keySource: "Integration-owned workspace/provider/external event identity"},
+		{kind: "worker", owner: "runtime", entrypoint: "StartPublicationHandoffWorker", source: "runtime/bootstrap/runtime/worker_lifecycle.go", decision: "system_key_required", keySource: "Runtime publication message and deduplication identity"},
 		{kind: "worker", owner: "notification", entrypoint: "StartNotificationPublicationWorker", source: "runtime/bootstrap/runtime/worker_lifecycle.go", decision: "system_key_required", keySource: "publication request identity"},
 		{kind: "worker", owner: "notification", entrypoint: "startNotificationInboxWorker", source: "runtime/bootstrap/runtime/worker_lifecycle.go", decision: "system_key_required", keySource: "workspace plus source and source_event_id materialization identity"},
-		{kind: "worker", owner: "integration", entrypoint: "StartIntegrationPluginWorkers", source: "runtime/bootstrap/runtime/worker_lifecycle.go", decision: "system_key_required", keySource: "provider-specific durable work identity"},
+		{kind: "worker", owner: "integration", entrypoint: "startConnectorProviderBackgroundWorker -> LocalWorkers.ProcessDueProviderTasks", source: "runtime/bootstrap/runtime/worker_lifecycle.go", decision: "system_key_required", keySource: "Integration-owned Provider task and fencing identity"},
+		{kind: "worker", owner: "integration", entrypoint: "startIntegrationInvocationReconciliationWorker -> LocalWorkers.ProcessDueReconciliations", source: "runtime/bootstrap/runtime/worker_lifecycle.go", decision: "system_key_required", keySource: "Integration-owned invocation and reconciliation attempt identity"},
+		{kind: "worker", owner: "integration", entrypoint: "startIntegrationCredentialExpiryWorker -> LocalWorkers.ProcessDueCredentialExpirations", source: "runtime/bootstrap/runtime/worker_lifecycle.go", decision: "natural_key", keySource: "Integration-owned workspace and secret identity"},
 		{kind: "worker", owner: "metadata", entrypoint: "startMetadataSnapshotWatcher", source: "runtime/bootstrap/runtime/worker_lifecycle.go", decision: "natural_key", keySource: "latest durable metadata revision"},
 	}
 }
 
 func externalEffectEntries() []inventoryEntry {
 	return []inventoryEntry{
-		{kind: "external_effect", owner: "integration", entrypoint: "ActionConnectorGateway.Call", source: "runtime/application/integration/integration_application_sync_call.go", decision: "caller_key_required", keySource: "Action execution identity plus generated operation identity and stable request_ref"},
-		{kind: "external_effect", owner: "integration", entrypoint: "outbox_provider_send", source: "runtime/application/integration/integration_application_outbox_send.go", decision: "system_key_required", keySource: "persisted outbox request_ref reused across retries"},
-		{kind: "external_effect", owner: "integration", entrypoint: "webhook_publish", source: "runtime/application/integration/integration_application_webhook_lifecycle.go", decision: "caller_key_required", keySource: "stable publish request reference"},
+		{kind: "external_effect", owner: "publicationhandoff", entrypoint: "Integration Delivery.Accept", source: "runtime/application/publicationhandoff/publication_handoff_application_service.go", decision: "system_key_required", keySource: "persisted publication message and deduplication identity reused across retries"},
 		{kind: "external_effect", owner: "notification", entrypoint: "notification_delivery", source: "runtime/domain/notification/runtime/notification_outbox_payload.go", decision: "system_key_required", keySource: "recipient/template/channel/dedupe key through Outbox"},
 		{kind: "external_effect", owner: "auth", entrypoint: "identity_provider_exchange", source: "runtime/domain/auth/service/auth_external_identity.go", decision: "not_applicable", keySource: "provider security protocol state and nonce"},
 	}

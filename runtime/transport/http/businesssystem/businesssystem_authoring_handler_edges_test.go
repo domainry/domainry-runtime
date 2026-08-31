@@ -3,6 +3,7 @@ package businesssystem
 import (
 	"context"
 	"errors"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	"net/http"
 	"net/http/httptest"
@@ -13,7 +14,6 @@ import (
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
@@ -27,7 +27,7 @@ func authoringHandlerValidation() *businesssystemapplication.RuntimeAuthoringVal
 		CurrentSnapshot: func(context.Context, principalmodel.Principal) (changeplanprojection.BusinessSystemSnapshot, error) {
 			return businessSystemCompleteValidationSnapshot(), nil
 		},
-		ValidateDefinitions: func(context.Context, []integrationmodel.ConnectorSchema) error { return nil },
+		ValidateDefinitions: func(context.Context, []connectormodel.ConnectorSchema) error { return nil },
 	})
 }
 

@@ -4,6 +4,7 @@ import (
 	connector "github.com/domainry/domainry-connector-sdk"
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
@@ -13,7 +14,6 @@ import (
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
@@ -30,7 +30,7 @@ type RuntimeServicesConfig struct {
 	Workflows                   []definitionmodel.WorkflowSchema
 	AutomationRules             []automationmodel.AutomationRuleSchema
 	Dictionaries                []appschemamodel.DictionarySchema
-	Integrations                integrationmodel.IntegrationSchema
+	Integrations                connectormodel.IntegrationSchema
 	Reports                     []reportmodel.ReportSchema
 	Skills                      []agentsdk.SkillSchema
 	Agents                      []agentsdk.AgentSchema

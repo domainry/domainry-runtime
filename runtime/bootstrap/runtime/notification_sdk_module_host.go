@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
+	publicationrepository "github.com/domainry/domainry-runtime/runtime/domain/publication/repository"
+	"sort"
 	"strings"
 	"time"
 
@@ -12,16 +14,12 @@ import (
 	"github.com/domainry/domainry-foundation/requestcontext"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	"github.com/domainry/domainry-notification-sdk/contract"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
-	"github.com/domainry/domainry-runtime/pkg/runtimeext"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	integrationnotification "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integrationnotification"
-	notificationbinding "github.com/domainry/domainry-runtime/runtime/platform/notificationbinding"
 )
 
 type notificationSDKModuleHost struct {
@@ -153,24 +151,130 @@ func (a notificationSDKWorkflowAudience) ResolveAudience(ctx context.Context, ke
 }
 
 type notificationSDKDeliveryMetrics struct {
-	store integrationnotification.DeliveryMetricsStore
+	operations integrationsdk.Operations
+	clock      modulehost.Clock
 }
 
 func (m notificationSDKDeliveryMetrics) Metrics(ctx context.Context, workspaceID, since string) (contract.NotificationDeliveryMetrics, error) {
-	value, err := m.store.DeliveryMetrics(ctx, workspaceID, since)
+	if m.operations == nil {
+		return contract.NotificationDeliveryMetrics{}, fmt.Errorf("Integration owner operations are unavailable for Notification delivery metrics")
+	}
+	invocations, err := m.operations.ListInvocations(ctx, integrationsdk.InvocationQuery{
+		WorkspaceID: strings.TrimSpace(workspaceID),
+		CreatedFrom: strings.TrimSpace(since),
+		Limit:       500,
+	})
 	if err != nil {
 		return contract.NotificationDeliveryMetrics{}, err
 	}
-	return notificationSDKConvert[contract.NotificationDeliveryMetrics](value)
+	now := time.Now().UTC()
+	if m.clock != nil {
+		now = m.clock.Now().UTC()
+	}
+	result := contract.NotificationDeliveryMetrics{
+		Since:       strings.TrimSpace(since),
+		GeneratedAt: now.Format(time.RFC3339),
+		Summary:     contract.NotificationDeliveryMetricBucket{Key: "all"},
+	}
+	channels := map[string]*contract.NotificationDeliveryMetricBucket{}
+	templates := map[string]*contract.NotificationDeliveryMetricBucket{}
+	failures := map[string]int{}
+	for _, invocation := range invocations {
+		payload := notificationInvocationPayload(invocation.Metadata)
+		templateKey, _ := payload["template_key"].(string)
+		templateKey = strings.TrimSpace(templateKey)
+		if templateKey == "" {
+			continue
+		}
+		channel, _ := payload["notification_channel"].(string)
+		channel = strings.TrimSpace(channel)
+		if channel == "" {
+			channel = "unknown"
+		}
+		if channels[channel] == nil {
+			channels[channel] = &contract.NotificationDeliveryMetricBucket{Key: channel}
+		}
+		if templates[templateKey] == nil {
+			templates[templateKey] = &contract.NotificationDeliveryMetricBucket{Key: templateKey}
+		}
+		fallback := payload["notification_fallback_root_id"] != nil
+		for _, bucket := range []*contract.NotificationDeliveryMetricBucket{&result.Summary, channels[channel], templates[templateKey]} {
+			addIntegrationInvocationMetric(bucket, invocation.Status, fallback)
+		}
+		if strings.TrimSpace(invocation.Error) != "" {
+			failures[strings.TrimSpace(invocation.Error)]++
+		}
+	}
+	for _, bucket := range channels {
+		result.ByChannel = append(result.ByChannel, *bucket)
+	}
+	for _, bucket := range templates {
+		result.ByTemplate = append(result.ByTemplate, *bucket)
+	}
+	sort.Slice(result.ByChannel, func(i, j int) bool { return result.ByChannel[i].Key < result.ByChannel[j].Key })
+	sort.Slice(result.ByTemplate, func(i, j int) bool {
+		if result.ByTemplate[i].Total == result.ByTemplate[j].Total {
+			return result.ByTemplate[i].Key < result.ByTemplate[j].Key
+		}
+		return result.ByTemplate[i].Total > result.ByTemplate[j].Total
+	})
+	for failure, count := range failures {
+		result.Failures = append(result.Failures, contract.NotificationDeliveryFailureMetric{Error: failure, Count: count})
+	}
+	sort.Slice(result.Failures, func(i, j int) bool {
+		if result.Failures[i].Count == result.Failures[j].Count {
+			return result.Failures[i].Error < result.Failures[j].Error
+		}
+		return result.Failures[i].Count > result.Failures[j].Count
+	})
+	if len(result.Failures) > 10 {
+		result.Failures = result.Failures[:10]
+	}
+	return result, nil
+}
+
+func notificationInvocationPayload(metadata map[string]any) map[string]any {
+	if payload, ok := metadata["payload"].(map[string]any); ok {
+		return payload
+	}
+	var raw []byte
+	switch value := metadata["payload"].(type) {
+	case json.RawMessage:
+		raw = value
+	case []byte:
+		raw = value
+	case string:
+		raw = []byte(value)
+	}
+	result := map[string]any{}
+	_ = json.Unmarshal(raw, &result)
+	return result
+}
+
+func addIntegrationInvocationMetric(bucket *contract.NotificationDeliveryMetricBucket, status string, fallback bool) {
+	bucket.Total++
+	if fallback {
+		bucket.Fallbacks++
+	}
+	switch strings.TrimSpace(status) {
+	case "prepared", "running", "reconciling":
+		bucket.Queued++
+	case "succeeded":
+		bucket.Sent++
+	case "failed":
+		bucket.Failed++
+	case "reconciliation_required":
+		bucket.DeadLetter++
+	}
 }
 
 type notificationSDKDeliveryGateway struct {
-	repository  integrationrepository.RuntimePublicationRepository
+	repository  publicationrepository.Repository
 	productName string
-	wakeup      func(integrationmodel.IntegrationOutboxMessage)
+	wakeup      func(publicationmodel.Message)
 }
 
-func (g *notificationSDKDeliveryGateway) BindWakeup(wakeup func(integrationmodel.IntegrationOutboxMessage)) {
+func (g *notificationSDKDeliveryGateway) BindWakeup(wakeup func(publicationmodel.Message)) {
 	if g != nil {
 		g.wakeup = wakeup
 	}
@@ -202,7 +306,7 @@ func (g *notificationSDKDeliveryGateway) Dispatch(ctx context.Context, request m
 	if createdAt == "" {
 		createdAt = time.Now().UTC().Format(time.RFC3339Nano)
 	}
-	message, err := g.repository.InsertOutbox(ctx, request.WorkspaceID, integrationmodel.IntegrationOutboxMessage{
+	message, err := g.repository.InsertOutbox(ctx, request.WorkspaceID, publicationmodel.Message{
 		WorkspaceID: request.WorkspaceID, ConnectorKey: request.ConnectorKey, ConnectionKey: request.ConnectionKey,
 		Operation: request.Operation, Status: "queued", Payload: payload, EventID: request.EventID,
 		DedupKey: request.DedupeKey, CreatedBy: "notification", CreatedAt: createdAt,

@@ -69,7 +69,8 @@ deterministic_gate() {
     ./runtime/infrastructure/persistence/database/operations
   run_test foundation-worker go -C ../domainry-foundation test -count=1 -timeout=5m ./worker/...
   run_test worker-recovery go test -count=1 -timeout=5m \
-    ./runtime/application/integration \
+    ./runtime/application/publicationhandoff \
+    ./runtime/infrastructure/persistence/database/publicationhandoff \
     ./runtime/bootstrap/runtime
   run_test protocol-observability go test -count=1 -timeout=5m \
     ./runtime/transport/http \
@@ -118,12 +119,13 @@ real_dialect_gate() {
 
 load_soak_gate() {
   : "${RUNTIME_POSTGRES_TEST_DSN:?RUNTIME_POSTGRES_TEST_DSN is required}"
-  run_test state-soak go test -count=1 -timeout=5m \
-    ./runtime/platform/capacity \
-    -run '^TestBoundedRuntimeStateSoakDoesNotGrow$'
-	run_test queue-retry-backlog go test -count=1 -timeout=5m \
-		./runtime/application/integration \
-		-run '^(TestIntegrationWorkerPriorityQuotasKeepNewRetryAndReplayMoving|TestIntegrationQueuePressureActivatesAndRecoversAtThresholds)$'
+  run_test state-soak go -C ../domainry-foundation test -count=1 -timeout=5m \
+    ./capacity \
+    -run '^TestBoundedFoundationStateSoakDoesNotGrow$'
+	run_test publication-recovery-backlog go test -count=1 -timeout=5m \
+		./runtime/infrastructure/persistence/database/publicationhandoff \
+		./runtime/infrastructure/persistence/database/record \
+		-run '^(TestOutboxCrashAfterCommitIsRecoveredByReopenedWorkerProcess|TestRecordBatchJobStoreFairClaimHeartbeatRetryAndQueueStats)$'
   run_test postgres-pool-soak env RUNTIME_REQUIRE_REAL_DIALECTS=1 go test -count=1 -timeout=10m \
     ./runtime/infrastructure/persistence/database/dialecttest \
     -run '^TestPostgresPoolSoakHasNoLeakIdleTransactionsOrRetryStorm$'

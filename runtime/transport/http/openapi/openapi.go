@@ -129,7 +129,7 @@ func BuildWithModuleHTTPSurfaces(snapshot appschemamodel.ApplicationSchemaSnapsh
 	for _, action := range snapshot.Actions {
 		addActionOpenAPIPath(paths, action)
 	}
-	addIntegrationOpenAPIPaths(paths, snapshot)
+	addPublicationHandoffOpenAPIPaths(paths)
 	paths["/v1/scheduler-triggers:accept"] = map[string]any{"post": openAPIOperation("acceptSchedulerTrigger", "Scheduler Dispatch Gateway", "Identity-authenticated execution callback for one Scheduler-owned run", openAPIProtocolAudience("scheduler_service_service"), openAPIServiceCredentialSecurity(), openAPIJSONRequest(openAPIObject(nil)), openAPIJSONResponse("Stable downstream receipt", openAPIObject(nil)))}
 	addOwnerOperationsReceiptOpenAPIContracts(paths)
 	annotateModuleOwnedOpenAPIPaths(paths, surfaces)

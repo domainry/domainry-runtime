@@ -2,6 +2,7 @@ package integrationtest
 
 import (
 	"fmt"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"path/filepath"
 	"testing"
 	"time"
@@ -14,7 +15,6 @@ import (
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
@@ -74,8 +74,8 @@ func TestGymLedgerReplaysExactBalancesAndLocatesTampering(t *testing.T) {
 		Dimensions: []reportmodel.ReportDatasetDimension{{Key: "bucket", Field: field("balance_bucket")}, {Key: "direction", Field: field("direction")}},
 		Measures:   []reportmodel.ReportDatasetMeasure{{Key: "entries", Operation: "count", SourceAlias: "ledger"}, {Key: "amount", Operation: "sum", Field: func() *reportmodel.ReportDatasetField { value := field("amount"); return &value }()}},
 	}}
-	services := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "gym-ledger-report-p7", TemplateVersion: "1", Name: "Gym Ledger Report P7", Objects: []definitionmodel.ObjectSchema{object}, Reports: []reportmodel.ReportSchema{report}, Integrations: integrationmodel.IntegrationSchema{}, Store: store})
-	summary, err := services.Applications().ReportQueries.Summary(t.Context(), report.Key, accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "finance", WorkspaceID: "workspace-primary"}}, role))
+	services := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "gym-ledger-report-p7", TemplateVersion: "1", Name: "Gym Ledger Report P7", Objects: []definitionmodel.ObjectSchema{object}, Reports: []reportmodel.ReportSchema{report}, Integrations: connectormodel.IntegrationSchema{}, Store: store})
+	summary, err := integrationReportSummary(t.Context(), services, report.Key, "realtime", accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "finance", WorkspaceID: "workspace-primary"}}, role))
 	if err != nil {
 		t.Fatal(err)
 	}

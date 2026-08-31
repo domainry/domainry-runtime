@@ -1,13 +1,15 @@
 package automation
 
-import integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
-
 import actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 
 import automationruntime "github.com/domainry/domainry-runtime/runtime/domain/automation/runtime"
 
 import (
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
+	publicationrepository "github.com/domainry/domainry-runtime/runtime/domain/publication/repository"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 
@@ -24,7 +26,6 @@ import (
 	automationrepository "github.com/domainry/domainry-runtime/runtime/domain/automation/repository"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 
 	"strings"
 	"time"
@@ -40,7 +41,7 @@ import (
 )
 
 type AutomationConnectorCatalog interface {
-	Schema() integrationmodel.IntegrationSchema
+	Schema() connectormodel.IntegrationSchema
 }
 
 type AutomationWorkflowRunner interface {
@@ -53,7 +54,9 @@ type AutomationApplicationDependencies struct {
 	RecordRepository      recordrepository.RecordRepository
 	WorkerStore           automationcontract.AutomationWorkerStore
 	ExecutionRepository   automationrepository.AutomationExecutionRepository
-	DeliveryRepository    integrationrepository.RuntimePublicationRepository
+	DeliveryRepository    publicationrepository.Repository
+	IntegrationManagement integrationsdk.Management
+	IntegrationOperations integrationsdk.Operations
 	Audit                 func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
 	Principal             func(context.Context, string, string, string) principalmodel.Principal
 	Schema                func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
@@ -82,7 +85,7 @@ type AutomationApplicationService struct {
 	recordRepo          recordrepository.RecordRepository
 	workerRepo          automationcontract.AutomationWorkerStore
 	executionRepo       automationrepository.AutomationExecutionRepository
-	deliveryRepo        integrationrepository.RuntimePublicationRepository
+	deliveryRepo        publicationrepository.Repository
 	audit               func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
 	principal           func(context.Context, string, string, string) principalmodel.Principal
 	schema              func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
@@ -109,23 +112,30 @@ func NewAutomationApplicationService(dependencies AutomationApplicationDependenc
 	}
 	service.management = NewAutomationManagementApplicationService(AutomationManagementDependencies{
 		Rules: service.rules, Executions: service.executionRepo,
-		ListInvocations: func(ctx context.Context, workspaceID string, filter automationmodel.AutomationExecutionFilter) ([]integrationmodel.IntegrationInvocation, error) {
+		ListInvocations: func(ctx context.Context, workspaceID string, filter automationmodel.AutomationExecutionFilter) ([]integrationsdk.Invocation, error) {
 			// Provider invocation evidence is owned by Integration and is not
 			// mirrored into Runtime automation state.
-			return []integrationmodel.IntegrationInvocation{}, nil
+			if dependencies.IntegrationOperations == nil {
+				return []integrationsdk.Invocation{}, nil
+			}
+			return dependencies.IntegrationOperations.ListInvocations(ctx, integrationsdk.InvocationQuery{
+				WorkspaceID: workspaceID, ConnectorKey: filter.ConnectorKey,
+				Status: filter.Status, Limit: filter.Limit,
+			})
 		},
-		ListOutbox: func(ctx context.Context, workspaceID string) ([]integrationmodel.IntegrationOutboxMessage, error) {
+		ListOutbox: func(ctx context.Context, workspaceID string) ([]publicationmodel.Message, error) {
 			if service.deliveryRepo == nil {
-				return []integrationmodel.IntegrationOutboxMessage{}, nil
+				return []publicationmodel.Message{}, nil
 			}
 			return service.deliveryRepo.ListOutbox(ctx, workspaceID, "__automation__", "", 500)
 		},
-		ListConnections: func(ctx context.Context, workspaceID string) ([]integrationmodel.IntegrationConnection, error) {
-			// Connection state is owned by Integration Module/SaaS and is not
-			// mirrored into Runtime automation projections.
-			return []integrationmodel.IntegrationConnection{}, nil
+		ListConnections: func(ctx context.Context, workspaceID string) ([]integrationsdk.Connection, error) {
+			if dependencies.IntegrationManagement == nil {
+				return []integrationsdk.Connection{}, nil
+			}
+			return dependencies.IntegrationManagement.ListConnections(ctx, workspaceID)
 		},
-		Connectors: func(ctx context.Context, principal principalmodel.Principal) []integrationmodel.ConnectorSchema {
+		Connectors: func(ctx context.Context, principal principalmodel.Principal) []connectormodel.ConnectorSchema {
 			return service.schema(ctx, principal).Integrations.Connectors
 		},
 		AuthoringProjection: dependencies.AuthoringProjection,
@@ -187,7 +197,7 @@ func (s *AutomationApplicationService) FindBeforeCreateReplay(ctx context.Contex
 	return AutomationFindBeforeCreateReplay(ctx, s.rules.List(), s.recordRepo, object, input, principal, s.canAccess)
 }
 
-func (s *AutomationApplicationService) AfterOutbox(objectKey, operation string, before map[string]any, record recordmodel.Record, principal principalmodel.Principal) []integrationmodel.IntegrationOutboxMessage {
+func (s *AutomationApplicationService) AfterOutbox(objectKey, operation string, before map[string]any, record recordmodel.Record, principal principalmodel.Principal) []publicationmodel.Message {
 	if automationAuthorizeCommand(principal) != nil {
 		return nil
 	}

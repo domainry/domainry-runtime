@@ -3,6 +3,7 @@ package capabilities
 import (
 	"context"
 	"encoding/json"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,7 +16,6 @@ import (
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -69,7 +69,7 @@ func TestCapabilityDiscoveryRoutesLoadIndexDomainDetailAndReferences(t *testing.
 	service := capabilityapplication.NewCapabilityAuthoringApplicationService(func(context.Context, principalmodel.Principal) capabilitycontract.CapabilityInstanceSchema {
 		return capabilitycontract.CapabilityInstanceSchema{
 			Objects:      []definitionmodel.ObjectSchema{{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "status"}}}},
-			Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "webhook", Providers: []integrationmodel.ConnectorProviderSchema{{Key: "generic", ConfigFields: []definitionmodel.FieldSchema{{Key: "url", Name: "URL", Type: "text", Required: true}}}}}}},
+			Integrations: connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{{Key: "webhook", Providers: []connectormodel.ConnectorProviderSchema{{Key: "generic", ConfigFields: []definitionmodel.FieldSchema{{Key: "url", Name: "URL", Type: "text", Required: true}}}}}}},
 		}
 	})
 	handler := NewCapabilitiesHandler(CapabilitiesDependencies{

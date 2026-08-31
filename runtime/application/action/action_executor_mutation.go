@@ -3,6 +3,7 @@ package action
 import (
 	"context"
 	"fmt"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"strings"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -92,7 +92,7 @@ func (e *businessActionExecution) canonicalCommits() ([]transactionmodel.RecordM
 		if dedupKey == "" {
 			dedupKey = fmt.Sprintf("%s:intent:%d", e.identity.ExecutionID, index)
 		}
-		commits[len(commits)-1].Outbox = append(commits[len(commits)-1].Outbox, integrationmodel.IntegrationOutboxMessage{
+		commits[len(commits)-1].Outbox = append(commits[len(commits)-1].Outbox, publicationmodel.Message{
 			ID:          intent.IntentID,
 			WorkspaceID: e.workspace.ID, ConnectorKey: intent.ConsumerKey, ConnectionKey: intent.ConnectionKey, Operation: intent.OperationKey,
 			Payload: intent.Payload, DedupKey: dedupKey, RequestFingerprint: intent.ContractSHA256,

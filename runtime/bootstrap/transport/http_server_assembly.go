@@ -19,7 +19,6 @@ import (
 
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
-	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	principalapplication "github.com/domainry/domainry-runtime/runtime/application/principal"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
@@ -37,13 +36,12 @@ import (
 	businesseventmemory "github.com/domainry/domainry-runtime/runtime/infrastructure/broadcast/memory"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	operationspersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
-	publicationhandoffpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
 	workspaceprovisionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceprovision"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
-	integrationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/integrations"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
+	publicationhandoffhttp "github.com/domainry/domainry-runtime/runtime/transport/http/publicationhandoff"
 	workspaceprovisionhttp "github.com/domainry/domainry-runtime/runtime/transport/http/workspaceprovision"
 )
 
@@ -175,7 +173,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	assembly.wirePartyAndIdentityReferences(ctx)
 	assembly.wireRecordAndProcessHandlers()
 	assembly.wireMetadataAndBusinessHandlers()
-	assembly.wireRuntimeIntegrationGateway()
+	assembly.wireRuntimePublicationHandoff()
 	assembly.wireWorkspaceProvisioning()
 	assembly.wireIntegrationAndAgentHandlers(dependencies.Config.AgentDialogRateLimitPerMinute)
 	server = runtimehttp.UseHandlers(server, assembly.handlers)
@@ -204,18 +202,15 @@ func (a *httpServerAssembly) wireWorkspaceProvisioning() {
 	})
 }
 
-// wireRuntimeIntegrationGateway exposes only the Runtime-owned Integration
-// Outbox handoff read. Product HTTP is exposed by the Integration deployment.
-func (a *httpServerAssembly) wireRuntimeIntegrationGateway() {
+// wireRuntimePublicationHandoff exposes only the Runtime-owned publication
+// handoff read. Product HTTP is exposed by the Integration deployment.
+func (a *httpServerAssembly) wireRuntimePublicationHandoff() {
 	if a.dependencies.Store == nil || a.dependencies.IntegrationBinding == nil {
 		return
 	}
-	service := integrationapplication.NewIntegrationApplicationService(integrationapplication.ApplicationDependencies{
-		PublicationRepository: publicationhandoffpersistence.NewPublicationStore(a.dependencies.Store),
-	})
-	a.handlers.Integrations = integrationhttp.NewIntegrationsHandler(integrationhttp.IntegrationsDependencies{
-		RuntimeExecution: service,
-		Principal:        a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
+	a.handlers.PublicationHandoff = publicationhandoffhttp.NewHandler(publicationhandoffhttp.Dependencies{
+		Intents:   a.publications,
+		Principal: a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
 		WriteServiceError: a.callbacks.WriteServiceError,
 		Admin:             a.identityHTTP.PermissionFunc("workspace.admin"),
 		Authenticated:     a.identityHTTP.AuthenticatedFunc,

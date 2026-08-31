@@ -3,6 +3,7 @@ package record
 import (
 	"context"
 	"fmt"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -12,7 +13,6 @@ import (
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/idempotency"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -205,7 +205,7 @@ func TestRecordIdempotencyCrashWindowRollsBackBusinessWriteBeforeReceiptCompleti
 	commit := transactionmodel.RecordMutationCommit{
 		Operation: "create", Object: object, Record: record,
 		Audit:           &auditmodel.AuditEvent{ID: "crash-audit-1", Event: "record_created", ObjectKey: object.Key, RecordID: record.ID, CreatedAt: now.Format(time.RFC3339Nano)},
-		Outbox:          []integrationmodel.IntegrationOutboxMessage{{ID: "crash-outbox-1", WorkspaceID: "workspace-a", ConnectorKey: "webhook", Operation: "record.created", DedupKey: "crash-record-created"}},
+		Outbox:          []publicationmodel.Message{{ID: "crash-outbox-1", WorkspaceID: "workspace-a", ConnectorKey: "webhook", Operation: "record.created", DedupKey: "crash-record-created"}},
 		WorkflowIntents: []workflowmodel.WorkflowExecution{{ID: "crash-workflow-1", WorkflowKey: "crash-created", Trigger: "record_created", Status: "pending", ObjectKey: object.Key, RecordID: record.ID, ActorID: "admin", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
 	}
 	if _, err := repository.CommitRecordMutationExecution(t.Context(), commit, recordmodel.RecordMutationCompletion{

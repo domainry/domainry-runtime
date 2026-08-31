@@ -5,11 +5,11 @@ import accessfixture "github.com/domainry/domainry-runtime/testsupport/identitys
 import (
 	"context"
 	"errors"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
@@ -97,8 +97,8 @@ func TestRecordHardDeleteRelationFailureCancellationNilUpdateAndOutbox(t *testin
 	dependencies = recordDeleteEdgeDependencies(repository, root)
 	dependencies.Relations = recordservice.NewRecordDeleteRelationDomainService(repository, func() map[string]definitionmodel.ObjectSchema { return schema })
 	dependencies.PlanUpdateReference = nil
-	dependencies.AfterOutbox = func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []integrationmodel.IntegrationOutboxMessage {
-		return []integrationmodel.IntegrationOutboxMessage{{ID: "outbox"}}
+	dependencies.AfterOutbox = func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []publicationmodel.Message {
+		return []publicationmodel.Message{{ID: "outbox"}}
 	}
 	if err := NewRecordDeleteApplicationService(dependencies).Delete(t.Context(), root.Key, "root-1", principal); apperror.CodeOf(err) != "backend.internal" || len(repository.commits) != 0 {
 		t.Fatalf("missing relation planner commits=%#v err=%v", repository.commits, err)

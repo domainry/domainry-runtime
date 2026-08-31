@@ -14,79 +14,9 @@ import (
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
-
-func TestConnectorValidationEdges(t *testing.T) {
-	validOperation := integrationmodel.ConnectorOperationSchema{
-		Key: "read", Method: "GET", ExecutionMode: "sync", SideEffect: "read",
-		TimeoutDefaultSeconds: 1, TimeoutMaxSeconds: 2,
-		Input:  []definitionmodel.FieldSchema{{Key: "id", Type: "text"}},
-		Output: []definitionmodel.FieldSchema{{Key: "result", Type: "json"}},
-	}
-	valid := integrationmodel.ConnectorSchema{Key: "api", Type: "http", Provider: "api", Operations: []integrationmodel.ConnectorOperationSchema{validOperation}}
-	if err := ApplicationSchemaValidateConnectorDefinition(valid); err != nil {
-		t.Fatalf("valid connector: %v", err)
-	}
-	declaredSecret := valid
-	declaredSecret.SecretRefs = []string{"token"}
-	declaredSecret.Config = map[string]any{"required_secret_refs": "token"}
-	if issues := ApplicationSchemaValidateConnectorDefinitionIssues(declaredSecret); len(issues) != 0 {
-		t.Fatalf("declared secret: %#v", issues)
-	}
-	reserve := valid
-	reserve.Operations = []integrationmodel.ConnectorOperationSchema{validOperation, validOperation}
-	reserve.Operations[0].Key, reserve.Operations[0].SideEffect, reserve.Operations[0].IdempotencySupported, reserve.Operations[0].CompensationOperation = "reserve", "reserve", true, "read"
-	if issues := ApplicationSchemaValidateConnectorDefinitionIssues(reserve); len(issues) != 0 {
-		t.Fatalf("complete reserve: %#v", issues)
-	}
-	reserve.Operations[0].CompensationOperation = ""
-	if !hasMetadataIssue(ApplicationSchemaValidateConnectorDefinitionIssues(reserve), "backend.integration.connector.reserve_contract_incomplete") {
-		t.Fatal("missing reserve compensation issue")
-	}
-
-	cases := []struct {
-		name string
-		edit func(*integrationmodel.ConnectorSchema)
-		code string
-	}{
-		{"invalid type and identities", func(c *integrationmodel.ConnectorSchema) { c.Type, c.Key, c.Provider = "bad", " ", "" }, "backend.integration.connector.type_invalid"},
-		{"operations required", func(c *integrationmodel.ConnectorSchema) { c.Operations = nil }, "backend.integration.connector.operation_required"},
-		{"legacy suffixed providers", func(c *integrationmodel.ConnectorSchema) { c.Config = map[string]any{" oauth_providers ": true} }, "backend.integration.connector.legacy_provider_config_forbidden"},
-		{"unknown secret", func(c *integrationmodel.ConnectorSchema) { c.Config = map[string]any{"required_secret_refs": "token"} }, "backend.integration.connector.required_secret_ref_unknown"},
-		{"empty operation key", func(c *integrationmodel.ConnectorSchema) { c.Operations[0].Key = " " }, "backend.integration.connector.operation_key_invalid"},
-		{"duplicate operation key", func(c *integrationmodel.ConnectorSchema) { c.Operations = append(c.Operations, c.Operations[0]) }, "backend.integration.connector.operation_key_invalid"},
-		{"missing compensation", func(c *integrationmodel.ConnectorSchema) { c.Operations[0].CompensationOperation = "undo" }, "backend.integration.connector.compensation_operation_not_found"},
-		{"incomplete reserve", func(c *integrationmodel.ConnectorSchema) { c.Operations[0].SideEffect = "reserve" }, "backend.integration.connector.reserve_contract_incomplete"},
-		{"invalid input key", func(c *integrationmodel.ConnectorSchema) {
-			c.Operations[0].Input = []definitionmodel.FieldSchema{{Key: "", Type: "text"}}
-		}, "backend.integration.connector.protocol_field_key_invalid"},
-		{"duplicate output key", func(c *integrationmodel.ConnectorSchema) {
-			c.Operations[0].Output = []definitionmodel.FieldSchema{{Key: "x", Type: "text"}, {Key: "x", Type: "text"}}
-		}, "backend.integration.connector.protocol_field_key_invalid"},
-		{"zero default timeout", func(c *integrationmodel.ConnectorSchema) { c.Operations[0].TimeoutDefaultSeconds = 0 }, "backend.integration.connector.operation_timeout_invalid"},
-		{"zero max timeout", func(c *integrationmodel.ConnectorSchema) { c.Operations[0].TimeoutMaxSeconds = 0 }, "backend.integration.connector.operation_timeout_invalid"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			connector := valid
-			connector.Operations = append([]integrationmodel.ConnectorOperationSchema(nil), valid.Operations...)
-			tc.edit(&connector)
-			issues := ApplicationSchemaValidateConnectorDefinitionIssues(connector)
-			if !hasMetadataIssue(issues, tc.code) {
-				t.Fatalf("missing %s in %#v", tc.code, issues)
-			}
-		})
-	}
-	if issue := connectorIssue("code", "path", "op", nil); issue.Params["field"] != "path" {
-		t.Fatalf("nil params were not initialized: %#v", issue)
-	}
-	if enumContains([]string{"a", "b"}, "c") {
-		t.Fatal("unexpected enum match")
-	}
-}
 
 func TestFieldMutationNormalizationEdges(t *testing.T) {
 	objects := []definitionmodel.ObjectSchema{{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "owner", Type: "relation", Required: true}, {Key: "optional", Type: "text"}}}, {Key: "customer"}}
@@ -234,8 +164,8 @@ func TestDefinitionValidationUtilityEdges(t *testing.T) {
 		}
 	}
 	for code, capability := range map[string]string{
-		"backend.integration.connector.operation_unknown": "integration.connector_operation",
-		"backend.integration.connector.unknown":           "integration.connector_definition",
+		"backend.integration.connector.operation_unknown": "integration.catalog",
+		"backend.integration.connector.unknown":           "integration.catalog",
 	} {
 		if got := NewApplicationDefinitionValidationIssue(code, "field", "", "", nil).CapabilityKey; got != capability {
 			t.Fatalf("%s capability=%q", code, got)

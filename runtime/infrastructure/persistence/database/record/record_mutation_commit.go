@@ -214,7 +214,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 	}
 	for _, message := range commit.Outbox {
 		message.WorkspaceID = workspaceID
-		if err := r.insertIntegrationOutboxTx(ctx, tx, message); err != nil {
+		if err := r.insertPublicationHandoffTx(ctx, tx, message); err != nil {
 			return err
 		}
 	}

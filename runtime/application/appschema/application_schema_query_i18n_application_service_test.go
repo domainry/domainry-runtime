@@ -1,14 +1,7 @@
 package appschema
 
 import (
-	identitysdk "github.com/domainry/domainry-identity-sdk"
-	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
-
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
-
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-
-	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
@@ -55,8 +48,6 @@ type localizedLifecycleRuntimeStub struct {
 
 func (s localizedLifecycleRuntimeStub) Schema() appschemamodel.ApplicationSchemaSnapshot {
 	return s.snapshot
-}
-func (localizedLifecycleRuntimeStub) ApplyManifestMetadata(string, string, string, []definitionmodel.ObjectSchema, []definitionmodel.ActionSchema, []definitionmodel.WorkflowSchema, []automationmodel.AutomationRuleSchema, []appschemamodel.DictionarySchema, integrationmodel.IntegrationSchema, []reportmodel.ReportSchema, []agentsdk.SkillSchema, []agentsdk.AgentSchema, []profilebindingmodel.Binding) {
 }
 
 func TestSchemaLocalizationAndCoveragePreserveStableValues(t *testing.T) {

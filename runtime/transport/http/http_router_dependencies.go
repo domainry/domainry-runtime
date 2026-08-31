@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	"net/http"
 	"strings"
 	"time"
@@ -13,7 +14,6 @@ import (
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	agentdialoghttp "github.com/domainry/domainry-runtime/runtime/transport/http/agentdialog"
 	appschemahttp "github.com/domainry/domainry-runtime/runtime/transport/http/appschema"
@@ -23,11 +23,11 @@ import (
 	businesssystemhttp "github.com/domainry/domainry-runtime/runtime/transport/http/businesssystem"
 	capabilityhttp "github.com/domainry/domainry-runtime/runtime/transport/http/capabilities"
 	discoveryhttp "github.com/domainry/domainry-runtime/runtime/transport/http/discovery"
-	integrationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/integrations"
 	lifecyclehttp "github.com/domainry/domainry-runtime/runtime/transport/http/lifecycle"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 	openapihttp "github.com/domainry/domainry-runtime/runtime/transport/http/openapi"
 	operationshttp "github.com/domainry/domainry-runtime/runtime/transport/http/operations"
+	publicationhandoffhttp "github.com/domainry/domainry-runtime/runtime/transport/http/publicationhandoff"
 	recordhttp "github.com/domainry/domainry-runtime/runtime/transport/http/records"
 	reporthttp "github.com/domainry/domainry-runtime/runtime/transport/http/reports"
 	schedulerhttp "github.com/domainry/domainry-runtime/runtime/transport/http/scheduler"
@@ -112,7 +112,7 @@ type IdentityRequestMiddleware interface {
 type IdentityPrincipalProjection func(identitysdk.Principal, string) principalmodel.Principal
 
 type IntegrationAuthenticationPrincipalProvider interface {
-	PrincipalFromIntegrationAPIKey(context.Context, string, string, string) (principalmodel.Principal, integrationmodel.IntegrationAPIKey, error)
+	PrincipalFromIntegrationAPIKey(context.Context, string, string, string) (principalmodel.Principal, integrationsdk.APIKey, error)
 }
 
 type BusinessPrincipalResolver interface {
@@ -159,7 +159,7 @@ type HTTPRouterHandlers struct {
 	Scheduler          *schedulerhttp.SchedulerHandler
 	Reports            *reporthttp.ReportsHandler
 	BusinessReferences *businessreferencehttp.BusinessReferencesHandler
-	Integrations       *integrationhttp.IntegrationsHandler
+	PublicationHandoff *publicationhandoffhttp.Handler
 	BusinessSystem     *businesssystemhttp.BusinessSystemHandler
 	Capabilities       *capabilityhttp.CapabilitiesHandler
 	ApplicationSchema  *appschemahttp.ApplicationSchemaHandler

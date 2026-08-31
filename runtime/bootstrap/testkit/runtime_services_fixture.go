@@ -12,7 +12,7 @@ import (
 	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	automationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/automation"
 	deploymentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/deployment"
-	integrationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integration"
+	publicationhandoffpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
@@ -71,26 +71,23 @@ func focusedPersistenceDependencies(ctx context.Context, config RuntimeServicesC
 	}
 	return composition.RuntimeServicesDependencies{
 		Records: records, RecordExecutions: records,
-		ReportDatasetRows:     reportDataset,
-		ReportObjectSQL:       reportDataset,
-		ReportSnapshots:       reportpersistence.NewModuleReportSnapshotStore(reportBinding.Snapshots()),
-		ReportSnapshotSources: reportDataset,
-		Audit:                 auditpersistence.NewAuditStoreFromRuntimeStore(ctx, config.Store),
-		IntegrationConfig:     integrationpersistence.NewIntegrationConfigStore(config.Store),
-		IntegrationEvents:     integrationpersistence.NewIntegrationEventStore(config.Store),
-		IntegrationDelivery:   integrationpersistence.NewIntegrationDeliveryStore(config.Store),
-		IntegrationWorker:     integrationpersistence.NewIntegrationWorkerStore(config.Store),
-		WorkflowWorker:        workflowpersistence.NewWorkflowWorkerStore(config.Store),
-		WorkflowDefinitions:   workflowpersistence.NewWorkflowDefinitionStore(config.Store),
-		WorkflowProcesses:     workflowpersistence.NewWorkflowProcessStore(config.Store),
-		WorkflowDecisions:     workflowpersistence.NewWorkflowDecisionStore(config.Store),
-		ApplicationSchema:     appschemapersistence.NewApplicationSchemaStore(config.Store),
-		AutomationWorker:      automationpersistence.NewAutomationWorkerStore(config.Store),
-		AutomationExecutions:  automationpersistence.NewAutomationExecutionStore(config.Store),
-		BusinessEvidence:      nil,
-		ActionExecutions:      actionpersistence.NewActionBusinessExecutionStore(config.Store),
-		ActionAssurance:       actionpersistence.NewActionAssuranceStore(config.Store),
-		RuntimeStatus:         deploymentpersistence.NewRuntimeStatusStore(config.Store),
-		Lifecycle:             lifecycleBinding.Repository(),
-	}
+		ReportDatasetRows:            reportDataset,
+		ReportObjectSQL:              reportDataset,
+		ReportSnapshots:              reportpersistence.NewModuleReportSnapshotReader(reportBinding.Snapshots()),
+		ReportSnapshotSources:        reportDataset,
+		Audit:                        auditpersistence.NewAuditStoreFromRuntimeStore(ctx, config.Store),
+		IntegrationPublication:       publicationhandoffpersistence.NewPublicationStore(config.Store),
+		IntegrationPublicationWorker: publicationhandoffpersistence.NewWorkerStore(config.Store),
+		WorkflowWorker:               workflowpersistence.NewWorkflowWorkerStore(config.Store),
+		WorkflowDefinitions:          workflowpersistence.NewWorkflowDefinitionStore(config.Store),
+		WorkflowProcesses:            workflowpersistence.NewWorkflowProcessStore(config.Store),
+		WorkflowDecisions:            workflowpersistence.NewWorkflowDecisionStore(config.Store),
+		ApplicationSchema:            appschemapersistence.NewApplicationSchemaStore(config.Store),
+		AutomationWorker:             automationpersistence.NewAutomationWorkerStore(config.Store),
+		AutomationExecutions:         automationpersistence.NewAutomationExecutionStore(config.Store),
+		BusinessEvidence:             nil,
+		ActionExecutions:             actionpersistence.NewActionBusinessExecutionStore(config.Store),
+		ActionAssurance:              actionpersistence.NewActionAssuranceStore(config.Store),
+		RuntimeStatus:                deploymentpersistence.NewRuntimeStatusStore(config.Store),
+	}, reportBinding
 }

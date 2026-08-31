@@ -1,7 +1,7 @@
 package contract
 
 import (
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
@@ -18,7 +18,7 @@ const (
 	RuntimeAuthoringContractVersion = "runtime-authoring-v1"
 	// RuntimeAuthoringContractHash identifies the published, canonical authoring catalog.
 	// The Application catalog test fails whenever catalog content changes without updating it.
-	RuntimeAuthoringContractHash = "797a77cacc661dde3623b541d648d243291dae25a629656e301f67a194f0519c"
+	RuntimeAuthoringContractHash = "d5b235b171f28720393e8b0759bc2b25264314d7ef0a770b41323de98327f9d9"
 )
 
 type CapabilityRuntimeAuthoringContract struct {
@@ -256,7 +256,7 @@ type CapabilityInstanceSchema struct {
 	Actions      []definitionmodel.ActionSchema
 	Workflows    []definitionmodel.WorkflowSchema
 	Reports      []reportmodel.ReportSchema
-	Integrations integrationmodel.IntegrationSchema
+	Integrations connectormodel.IntegrationSchema
 }
 
 func authoringContractHash(contract CapabilityRuntimeAuthoringContract) string {

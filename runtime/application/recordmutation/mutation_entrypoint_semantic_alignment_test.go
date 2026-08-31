@@ -2,6 +2,7 @@ package recordmutation
 
 import (
 	"context"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"reflect"
 	"testing"
 
@@ -9,7 +10,6 @@ import (
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -23,7 +23,7 @@ func TestMutationEntrypointSourcesPreserveCanonicalCommitSemantics(t *testing.T)
 	audit := auditmodel.AuditEvent{ID: "audit-1", Event: "record_updated", Before: map[string]any{"status": "draft"}, After: map[string]any{"status": "active"}}
 	base := transactionmodel.RecordMutationCommit{
 		Object: object, Record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"status": "active"}}, Audit: &audit,
-		Outbox:          []integrationmodel.IntegrationOutboxMessage{{ID: "outbox-1", Payload: map[string]any{"status": "active"}}},
+		Outbox:          []publicationmodel.Message{{ID: "outbox-1", Payload: map[string]any{"status": "active"}}},
 		WorkflowIntents: []workflowmodel.WorkflowExecution{{ID: "workflow-1", WorkflowKey: "customer.after_update", Status: "pending"}},
 	}
 	before := map[string]any{"status": "draft"}

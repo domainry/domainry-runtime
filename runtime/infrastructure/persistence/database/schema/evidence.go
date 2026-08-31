@@ -298,7 +298,6 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"error TEXT",
 			"attempt_count INTEGER NOT NULL DEFAULT 0",
 			"next_attempt_at " + text + " NOT NULL DEFAULT ''",
-			"ack_deadline_at " + text + " NOT NULL DEFAULT ''",
 			"last_attempt_at " + text + " NOT NULL DEFAULT ''",
 			"lease_owner " + text + " NOT NULL DEFAULT ''",
 			"lease_expires_at " + text + " NOT NULL DEFAULT ''",

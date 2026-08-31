@@ -12,27 +12,11 @@ import (
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
-	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
-	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	recordruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
 	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	resilience "github.com/domainry/domainry-runtime/runtime/platform/resilience"
 )
-
-func firstIntegrationPublicationRepository(primary integrationrepository.RuntimePublicationRepository, legacy integrationrepository.IntegrationDeliveryRepository) integrationrepository.RuntimePublicationRepository {
-	if primary != nil {
-		return primary
-	}
-	return legacy
-}
-
-func firstIntegrationPublicationWorkerRepository(primary integrationrepository.RuntimePublicationWorkerRepository, legacy integrationrepository.IntegrationWorkerRepository) integrationrepository.RuntimePublicationWorkerRepository {
-	if primary != nil {
-		return primary
-	}
-	return legacy
-}
 
 // newRuntimeServicesState allocates state before ordered service initialization.
 func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.ManifestSchema, deps RuntimeServicesDependencies) *runtimeAssembly {
@@ -68,12 +52,8 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 		reportSnapshots:                     deps.ReportSnapshots,
 		reportSnapshotSources:               deps.ReportSnapshotSources,
 		auditRepo:                           deps.Audit,
-		integrationConfigRepo:               deps.IntegrationConfig,
-		integrationEventRepo:                deps.IntegrationEvents,
-		integrationPublicationRepo:          firstIntegrationPublicationRepository(deps.IntegrationPublication, deps.IntegrationDelivery),
-		integrationDeliveryRepo:             deps.IntegrationDelivery,
-		integrationWorkerRepo:               deps.IntegrationWorker,
-		integrationPublicationWorkerRepo:    firstIntegrationPublicationWorkerRepository(deps.IntegrationPublicationWorker, deps.IntegrationWorker),
+		publicationRepository:               deps.IntegrationPublication,
+		integrationPublicationWorkerRepo:    deps.IntegrationPublicationWorker,
 		workerWakeups:                       deps.WorkerWakeups,
 		integrationOwnerDelivery:            deps.IntegrationOwnerDelivery,
 		integrationOwnerCatalog:             deps.IntegrationOwnerCatalog,

@@ -139,64 +139,6 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `deployment` | `ProcessIdempotencyCleanup` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/deployment/deployment_runtime_status_application_service.go` |
 | `deployment` | `ResetIdempotencyReceipt` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/deployment/deployment_runtime_status_application_service.go` |
 | `deployment` | `RetryIdempotencyReceipt` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/deployment/deployment_runtime_status_application_service.go` |
-| `integration` | `CreateIntegrationAPIKey` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_api_keys.go` |
-| `integration` | `DeleteIntegrationConnection` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/integration/integration_application_connection_delete.go` |
-| `integration` | `DeleteIntegrationWebhookSubscription` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/integration/integration_application_webhook_lifecycle.go` |
-| `integration` | `DisableIntegrationAPIKey` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/integration/integration_application_api_keys.go` |
-| `integration` | `DisableIntegrationConnection` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/integration/integration_application_connection_resolution.go` |
-| `integration` | `DisableIntegrationExternalIdentity` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/integration/integration_application_external_identities.go` |
-| `integration` | `DisableIntegrationSecret` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/integration/integration_application_secret_lifecycle.go` |
-| `integration` | `DisableIntegrationWebhookSubscription` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/integration/integration_application_webhook_lifecycle.go` |
-| `integration` | `EnqueueIntegrationOutboxMessage` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_delivery_commands.go` |
-| `integration` | `ExecuteIntegrationAction` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_entrypoint_orchestration_application_service.go` |
-| `integration` | `ExecuteIntegrationEventMapping` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_event_orchestration_application_service.go` |
-| `integration` | `ExecuteIntegrationSyncCall` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_sync_call.go` |
-| `integration` | `ExpireIntegrationSecret` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_secret_lifecycle.go` |
-| `integration` | `InvokeIntegrationAgentTool` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_entrypoint_orchestration_application_service.go` |
-| `integration` | `ProcessCredentialExpiryNotifications` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/integration/integration_application_credential_lease.go` |
-| `integration` | `ProcessDueConnectorBackground` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/integration/integration_connector_background_worker.go` |
-| `integration` | `ProcessDueIntegrationEvents` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/integration/integration_application_workers.go` |
-| `integration` | `ProcessDueIntegrationOutbox` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/integration/integration_observability.go` |
-| `integration` | `ProcessIntegrationEvent` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/integration/integration_event_context.go` |
-| `integration` | `ProcessIntegrationOutbox` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/integration/integration_application_outbox_send.go` |
-| `integration` | `PublishIntegrationWebhookEvent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_webhook_lifecycle.go` |
-| `integration` | `PublishProviderResourceHealth` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_connection_provider.go` |
-| `integration` | `RecordConnectionTestStatus` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_connection_evidence.go` |
-| `integration` | `RecordCredentialRefreshFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_connection_resolution.go` |
-| `integration` | `RecordCredentialRefreshRecovery` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_connection_resolution.go` |
-| `integration` | `RecordCredentialTestEvidence` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_connection_evidence.go` |
-| `integration` | `RecordIntegrationEvent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_events.go` |
-| `integration` | `RecordIntegrationExecutionEvidence` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_execution_evidence.go` |
-| `integration` | `RecordIntegrationInvocation` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_delivery_commands.go` |
-| `integration` | `ReplayIntegrationEvent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_events.go` |
-| `integration` | `ResolveAdapterSecrets` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_secret_material.go` |
-| `integration` | `ResolveIntegrationDeliveryProvider` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_runtime_orchestration_application_service.go` |
-| `integration` | `ResolveIntegrationExternalIdentity` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_external_identity_resolution.go` |
-| `integration` | `ResolveSecretMaterial` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_secret_material.go` |
-| `integration` | `RevokeIntegrationSecret` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_secret_lifecycle.go` |
-| `integration` | `RevokeWebPushSubscription` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_web_push.go` |
-| `integration` | `RotateIntegrationAPIKey` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_api_keys.go` |
-| `integration` | `RotateIntegrationConnection` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_connection_rotation.go` |
-| `integration` | `RotateIntegrationSecret` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_secret_commands.go` |
-| `integration` | `RunIntegrationWorkflow` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_entrypoint_orchestration_application_service.go` |
-| `integration` | `UpdateIntegrationEventStatus` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/integration/integration_application_events.go` |
-| `integration` | `UpdateIntegrationInvocationStatus` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/integration/integration_application_delivery_management.go` |
-| `integration` | `UpdateIntegrationOutboxStatus` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/integration/integration_application_delivery_management.go` |
-| `integration` | `UpsertIntegrationConnection` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/integration/integration_application_connection_upsert.go` |
-| `integration` | `UpsertIntegrationExternalIdentity` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/integration/integration_application_external_identities.go` |
-| `integration` | `UpsertIntegrationSecret` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/integration/integration_application_secret_commands.go` |
-| `integration` | `UpsertIntegrationWebhookSubscription` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/integration/integration_application_webhook_lifecycle.go` |
-| `integration` | `UpsertWebPushSubscription` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/integration/integration_application_web_push.go` |
-| `integration` | `WritebackWebhookExternalIdentity` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/integration/integration_application_external_identity_writeback.go` |
-| `lifecycle` | `ApproveSubjectRequest` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/lifecycle/lifecycle_application_service.go` |
-| `lifecycle` | `CreateCleanupJob` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/lifecycle/lifecycle_application_service.go` |
-| `lifecycle` | `CreateLegalHold` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/lifecycle/lifecycle_application_service.go` |
-| `lifecycle` | `CreateSubjectRequest` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/lifecycle/lifecycle_application_service.go` |
-| `lifecycle` | `ExecuteSubjectRequest` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/lifecycle/lifecycle_application_service.go` |
-| `lifecycle` | `ProcessCleanupJob` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/lifecycle/lifecycle_application_service.go` |
-| `lifecycle` | `ProcessRunnableCleanupJobs` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/lifecycle/lifecycle_application_service.go` |
-| `lifecycle` | `PublishPolicy` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/lifecycle/lifecycle_application_service.go` |
-| `lifecycle` | `ReplayRegisteredDeletions` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/lifecycle/lifecycle_application_service.go` |
 | `notificationfacade` | `ApprovePublication` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/notificationfacade/notification_application_service.go` |
 | `notificationfacade` | `CancelPublication` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/notificationfacade/notification_application_service.go` |
 | `notificationfacade` | `DeleteInboxSavedView` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/notificationfacade/notification_inbox_application.go` |
@@ -227,7 +169,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `pipeline` | `ApplyItemDefaults` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/pipeline/pipeline_application_service.go` |
 | `pipeline` | `Execute` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/pipeline/pipeline_transition_application_service.go` |
 | `principal` | `ResolveBusinessPrincipal` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/principal/business_principal_application_service.go` |
-| `publicationhandoff` | `UpdateIntegrationOutboxStatus` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/publicationhandoff/publication_handoff_application_service.go` |
+| `publicationhandoff` | `UpdatePublicationStatus` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/publicationhandoff/publication_handoff_application_service.go` |
 | `record` | `Apply` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_application_service.go` |
 | `record` | `ApplyIdempotent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_application_service.go` |
 | `record` | `ApplyImport` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
@@ -313,20 +255,21 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
 | `workflow` | `StartWorkflowWorker` | `system_key_required` | workflow execution/process/node attempt identity | `runtime/bootstrap/runtime/worker_lifecycle.go` |
-| `scheduler` | `SchedulerApplicationService.StartWorker` | `system_key_required` | definition/window/manual-run/retry identity | `runtime/application/scheduler/scheduler_runtime.go` |
-| `integration` | `StartIntegrationEventWorker` | `system_key_required` | workspace/provider/external event identity | `runtime/bootstrap/runtime/worker_lifecycle.go` |
-| `integration` | `StartIntegrationOutboxWorker` | `system_key_required` | outbox message request_ref | `runtime/bootstrap/runtime/worker_lifecycle.go` |
+| `scheduler` | `SchedulerBinding.Start` | `system_key_required` | Scheduler-owned definition/window/run identity | `runtime/bootstrap/runtime/worker_lifecycle.go` |
+| `recordtimer` | `startRecordTimerWorker -> RecordTimers.ProcessDueForAllWorkspaces` | `system_key_required` | Record Timer identity plus fencing token | `runtime/bootstrap/runtime/worker_lifecycle.go` |
+| `integration` | `StartIntegrationEventWorker -> LocalWorkers.ProcessDueEvents` | `system_key_required` | Integration-owned workspace/provider/external event identity | `runtime/bootstrap/runtime/worker_lifecycle.go` |
+| `runtime` | `StartPublicationHandoffWorker` | `system_key_required` | Runtime publication message and deduplication identity | `runtime/bootstrap/runtime/worker_lifecycle.go` |
 | `notification` | `StartNotificationPublicationWorker` | `system_key_required` | publication request identity | `runtime/bootstrap/runtime/worker_lifecycle.go` |
 | `notification` | `startNotificationInboxWorker` | `system_key_required` | workspace plus source and source_event_id materialization identity | `runtime/bootstrap/runtime/worker_lifecycle.go` |
-| `integration` | `StartIntegrationPluginWorkers` | `system_key_required` | provider-specific durable work identity | `runtime/bootstrap/runtime/worker_lifecycle.go` |
+| `integration` | `startConnectorProviderBackgroundWorker -> LocalWorkers.ProcessDueProviderTasks` | `system_key_required` | Integration-owned Provider task and fencing identity | `runtime/bootstrap/runtime/worker_lifecycle.go` |
+| `integration` | `startIntegrationInvocationReconciliationWorker -> LocalWorkers.ProcessDueReconciliations` | `system_key_required` | Integration-owned invocation and reconciliation attempt identity | `runtime/bootstrap/runtime/worker_lifecycle.go` |
+| `integration` | `startIntegrationCredentialExpiryWorker -> LocalWorkers.ProcessDueCredentialExpirations` | `natural_key` | Integration-owned workspace and secret identity | `runtime/bootstrap/runtime/worker_lifecycle.go` |
 | `metadata` | `startMetadataSnapshotWatcher` | `natural_key` | latest durable metadata revision | `runtime/bootstrap/runtime/worker_lifecycle.go` |
 
 ## External side effects (5)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
-| `integration` | `ActionConnectorGateway.Call` | `caller_key_required` | Action execution identity plus generated operation identity and stable request_ref | `runtime/application/integration/integration_application_sync_call.go` |
-| `integration` | `outbox_provider_send` | `system_key_required` | persisted outbox request_ref reused across retries | `runtime/application/integration/integration_application_outbox_send.go` |
-| `integration` | `webhook_publish` | `caller_key_required` | stable publish request reference | `runtime/application/integration/integration_application_webhook_lifecycle.go` |
+| `publicationhandoff` | `Integration Delivery.Accept` | `system_key_required` | persisted publication message and deduplication identity reused across retries | `runtime/application/publicationhandoff/publication_handoff_application_service.go` |
 | `notification` | `notification_delivery` | `system_key_required` | recipient/template/channel/dedupe key through Outbox | `runtime/domain/notification/runtime/notification_outbox_payload.go` |
 | `auth` | `identity_provider_exchange` | `not_applicable` | provider security protocol state and nonce | `runtime/domain/auth/service/auth_external_identity.go` |

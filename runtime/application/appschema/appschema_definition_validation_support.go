@@ -2,6 +2,8 @@ package appschema
 
 import (
 	"context"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
@@ -10,7 +12,6 @@ import (
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationvalidation "github.com/domainry/domainry-runtime/runtime/domain/automation/validation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 )
@@ -45,9 +46,9 @@ func (s *ApplicationSchemaApplicationService) ValidateAutomationRuleDefinition(c
 			snapshot := s.runtime.Schema()
 			return automationvalidation.AutomationDefinitionCatalog{Objects: snapshot.Objects, Actions: snapshot.Actions, Workflows: snapshot.Workflows, Connectors: snapshot.Integrations.Connectors}
 		},
-		ListConnections: func(ctx context.Context, scope string) ([]integrationmodel.IntegrationConnection, error) {
+		ListConnections: func(ctx context.Context, scope string) ([]integrationsdk.Connection, error) {
 			if s.integrations == nil {
-				return []integrationmodel.IntegrationConnection{}, nil
+				return []integrationsdk.Connection{}, nil
 			}
 			return s.integrations.ListConnections(ctx, scope)
 		},
@@ -62,11 +63,11 @@ func validateAutomationTriggerFilters(trigger automationmodel.AutomationTriggerS
 	return automationvalidation.AutomationValidateTriggerFilters(trigger, object)
 }
 
-func automationConnectorOperation(connector integrationmodel.ConnectorSchema, operationKey string) *integrationmodel.ConnectorOperationSchema {
+func automationConnectorOperation(connector connectormodel.ConnectorSchema, operationKey string) *connectormodel.ConnectorOperationSchema {
 	return automationvalidation.AutomationConnectorOperation(connector, operationKey)
 }
 
-func validateAutomationOperationInput(operation integrationmodel.ConnectorOperationSchema, input map[string]any, object definitionmodel.ObjectSchema, outputs map[string]map[string]string) error {
+func validateAutomationOperationInput(operation connectormodel.ConnectorOperationSchema, input map[string]any, object definitionmodel.ObjectSchema, outputs map[string]map[string]string) error {
 	return automationvalidation.AutomationValidateOperationInput(operation, input, object, outputs)
 }
 

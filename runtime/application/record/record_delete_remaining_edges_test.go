@@ -3,11 +3,11 @@ package record
 import (
 	"context"
 	"errors"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
@@ -85,8 +85,8 @@ func TestRecordHardDeleteOutboxAndCanonicalPlanRejection(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
 	repository := &deleteEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"name": "Acme"}}}
 	dependencies := recordDeleteEdgeDependencies(repository, object)
-	dependencies.AfterOutbox = func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []integrationmodel.IntegrationOutboxMessage {
-		return []integrationmodel.IntegrationOutboxMessage{{ID: "outbox"}}
+	dependencies.AfterOutbox = func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []publicationmodel.Message {
+		return []publicationmodel.Message{{ID: "outbox"}}
 	}
 	if err := NewRecordDeleteApplicationService(dependencies).Delete(t.Context(), object.Key, "customer-1", principal); err != nil || len(repository.commits) != 1 || len(repository.commits[0].Outbox) != 1 {
 		t.Fatalf("commits=%+v err=%v", repository.commits, err)

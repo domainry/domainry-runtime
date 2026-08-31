@@ -1,11 +1,10 @@
 package notifications
 
 import (
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"net/http"
 	"strconv"
 	"strings"
-
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 )
 
 type notificationDeliveryProjection struct {
@@ -35,7 +34,7 @@ func (h *NotificationsHandler) listDeliveries(w http.ResponseWriter, r *http.Req
 	if limit <= 0 || limit > 200 {
 		limit = 100
 	}
-	values, err := h.deliveryLedger.ListIntegrationOutboxMessages(r.Context(), "", strings.TrimSpace(r.URL.Query().Get("status")), limit, h.principal(r))
+	values, err := h.deliveryLedger.ListPublicationMessages(r.Context(), "", strings.TrimSpace(r.URL.Query().Get("status")), limit, h.principal(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
@@ -50,12 +49,12 @@ func (h *NotificationsHandler) listDeliveries(w http.ResponseWriter, r *http.Req
 	h.writeJSON(w, http.StatusOK, map[string]any{"deliveries": projected, "count": len(projected)})
 }
 
-func notificationOutboxMessage(value integrationmodel.IntegrationOutboxMessage) bool {
+func notificationOutboxMessage(value publicationmodel.Message) bool {
 	templateKey, _ := value.Payload["template_key"].(string)
 	return strings.TrimSpace(templateKey) != ""
 }
 
-func projectNotificationDelivery(value integrationmodel.IntegrationOutboxMessage) notificationDeliveryProjection {
+func projectNotificationDelivery(value publicationmodel.Message) notificationDeliveryProjection {
 	return notificationDeliveryProjection{
 		ID: value.ID, ConnectorKey: value.ConnectorKey, ConnectionKey: value.ConnectionKey,
 		Operation: value.Operation, Status: value.Status, Payload: value.Payload,

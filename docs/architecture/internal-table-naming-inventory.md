@@ -104,12 +104,12 @@ handoff uses the Runtime-owned `_publication_outbox` table.
 
 ### Metadata
 
-`_metadata_object_definitions`, `_metadata_field_definitions`,
-`_metadata_validation_definitions`, `_metadata_action_definitions`,
-`_metadata_dictionary_definitions`, `_metadata_role_definitions`,
-`_metadata_definition_versions`.
+`_metadata_definitions`, `_metadata_definition_versions`,
+`_metadata_localized_texts`, `_metadata_projection`.
 
-Identity Profile Binding definitions are intentionally absent from Metadata.
+The generic catalog owns every manifest-backed Metadata resource type. The
+SDK exposes business ports only. Identity role definitions and Identity
+Profile Binding runtime state remain Identity-owned.
 
 ### Notification
 

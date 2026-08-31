@@ -1,33 +1,34 @@
 package composition
 
 import (
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"sync"
 
 	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 )
 
-// runtimeConnectorCatalog is the application-authored connector requirement
-// catalog. It contains no Provider adapters or Integration owner state.
+// runtimeConnectorCatalog is a transient read projection of the
+// Connectors-owned catalog received through Integration. It contains no
+// Provider adapters or Integration owner state and is never persisted.
 type runtimeConnectorCatalog struct {
 	mu     sync.RWMutex
-	schema integrationmodel.IntegrationSchema
+	schema connectormodel.IntegrationSchema
 }
 
-func newRuntimeConnectorCatalog(schema integrationmodel.IntegrationSchema) *runtimeConnectorCatalog {
+func newRuntimeConnectorCatalog(schema connectormodel.IntegrationSchema) *runtimeConnectorCatalog {
 	return &runtimeConnectorCatalog{schema: appschemaservice.CloneIntegrationSchema(schema)}
 }
 
-func (c *runtimeConnectorCatalog) Schema() integrationmodel.IntegrationSchema {
+func (c *runtimeConnectorCatalog) Schema() connectormodel.IntegrationSchema {
 	if c == nil {
-		return integrationmodel.IntegrationSchema{}
+		return connectormodel.IntegrationSchema{}
 	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return appschemaservice.CloneIntegrationSchema(c.schema)
 }
 
-func (c *runtimeConnectorCatalog) ReplaceSchema(schema integrationmodel.IntegrationSchema) {
+func (c *runtimeConnectorCatalog) ReplaceSchema(schema connectormodel.IntegrationSchema) {
 	if c == nil {
 		return
 	}

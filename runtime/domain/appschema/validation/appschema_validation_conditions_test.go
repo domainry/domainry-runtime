@@ -13,44 +13,9 @@ import (
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
-
-func TestConnectorValidationConditionOutcomes(t *testing.T) {
-	operation := func(key string) integrationmodel.ConnectorOperationSchema {
-		return integrationmodel.ConnectorOperationSchema{Key: key, Method: "POST", ExecutionMode: "sync", SideEffect: "write", TimeoutDefaultSeconds: 1, TimeoutMaxSeconds: 2}
-	}
-	connector := integrationmodel.ConnectorSchema{
-		Key: "api", Type: "http", Provider: "api", SecretRefs: []string{"token"},
-		Config: map[string]any{"required_secret_refs": "token"}, Operations: []integrationmodel.ConnectorOperationSchema{operation("write")},
-	}
-	if issues := ApplicationSchemaValidateConnectorDefinitionIssues(connector); len(issues) != 0 {
-		t.Fatalf("declared secret: %#v", issues)
-	}
-
-	connector.Operations = []integrationmodel.ConnectorOperationSchema{operation("write"), operation("undo")}
-	connector.Operations[0].CompensationOperation = "undo"
-	if issues := ApplicationSchemaValidateConnectorDefinitionIssues(connector); len(issues) != 0 {
-		t.Fatalf("known compensation: %#v", issues)
-	}
-	connector.Operations[0].SideEffect = "reserve"
-	connector.Operations[0].IdempotencySupported = true
-	connector.Operations[0].CompensationOperation = ""
-	if issues := ApplicationSchemaValidateConnectorDefinitionIssues(connector); !hasMetadataIssue(issues, "backend.integration.connector.reserve_contract_incomplete") {
-		t.Fatalf("missing compensation: %#v", issues)
-	}
-
-	for _, timeout := range []struct{ defaultSeconds, maxSeconds int }{{0, 1}, {1, 0}} {
-		connector.Operations = []integrationmodel.ConnectorOperationSchema{operation("write")}
-		connector.Operations[0].TimeoutDefaultSeconds = timeout.defaultSeconds
-		connector.Operations[0].TimeoutMaxSeconds = timeout.maxSeconds
-		if issues := ApplicationSchemaValidateConnectorDefinitionIssues(connector); !hasMetadataIssue(issues, "backend.integration.connector.operation_timeout_invalid") {
-			t.Fatalf("timeout=%#v issues=%#v", timeout, issues)
-		}
-	}
-}
 
 func TestDefinitionAndErrorConditionOutcomes(t *testing.T) {
 	knownNonAdmin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"record.read"}})

@@ -3,6 +3,7 @@ package capability
 import (
 	"context"
 	"errors"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -12,7 +13,6 @@ import (
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -23,9 +23,9 @@ func TestCapabilityDiscoveryProgressivelyLoadsAndBindsReferences(t *testing.T) {
 			Actions:   []definitionmodel.ActionSchema{{Key: "order.confirm"}},
 			Workflows: []definitionmodel.WorkflowSchema{{Key: "order.approval"}},
 			Reports:   []reportmodel.ReportSchema{{Key: "orders.daily"}},
-			Integrations: integrationmodel.IntegrationSchema{
-				Connectors:  []integrationmodel.ConnectorSchema{{Key: "erp", Operations: []integrationmodel.ConnectorOperationSchema{{Key: "sync"}}}},
-				Connections: []integrationmodel.ConnectionSchema{{Key: "erp-primary", ConnectorKey: "erp", Status: "ready"}},
+			Integrations: connectormodel.IntegrationSchema{
+				Connectors:  []connectormodel.ConnectorSchema{{Key: "erp", Operations: []connectormodel.ConnectorOperationSchema{{Key: "sync"}}}},
+				Connections: []connectormodel.ConnectionSchema{{Key: "erp-primary", ConnectorKey: "erp", Status: "ready"}},
 			},
 		}
 	})
@@ -97,10 +97,10 @@ func TestCapabilityDetailSpecializesIntegrationConnectionForSelectedProvider(t *
 	loads := 0
 	service := NewCapabilityAuthoringApplicationService(func(context.Context, principalmodel.Principal) capabilitycontract.CapabilityInstanceSchema {
 		loads++
-		return capabilitycontract.CapabilityInstanceSchema{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{
-			Key: "webhook", Providers: []integrationmodel.ConnectorProviderSchema{{Key: "generic", ConfigFields: []definitionmodel.FieldSchema{
+		return capabilitycontract.CapabilityInstanceSchema{Integrations: connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{{
+			Key: "webhook", Providers: []connectormodel.ConnectorProviderSchema{{Key: "generic", ConfigFields: []definitionmodel.FieldSchema{
 				{Key: "url", Name: "URL", Type: "text", Required: true}, {Key: "timeout_seconds", Name: "Timeout", Type: "integer", Required: false},
-			}, SecretFields: []definitionmodel.FieldSchema{{Key: "signing_secret", Name: "Signing Secret", Type: "opaque", Required: true}}}}, Operations: []integrationmodel.ConnectorOperationSchema{{
+			}, SecretFields: []definitionmodel.FieldSchema{{Key: "signing_secret", Name: "Signing Secret", Type: "opaque", Required: true}}}}, Operations: []connectormodel.ConnectorOperationSchema{{
 				Key: "send", Method: "POST", ExecutionMode: "sync", SideEffect: "write", TimeoutDefaultSeconds: 10, TimeoutMaxSeconds: 30,
 				Input: []definitionmodel.FieldSchema{{Key: "payload", Name: "Payload", Type: "json", Required: true}, {Key: "trace_id", Name: "Trace ID", Type: "text"}}, Output: []definitionmodel.FieldSchema{{Key: "status_code", Name: "Status", Type: "integer", Required: true}},
 			}},

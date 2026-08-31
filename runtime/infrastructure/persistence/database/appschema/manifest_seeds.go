@@ -57,16 +57,6 @@ func manifestMetadataSeeds(seed manifestmodel.ManifestSchema) ([]metadataResourc
 			return nil, err
 		}
 	}
-	for _, connector := range seed.Integrations.Connectors {
-		if err := appendSeed("connector", "_application_schema_connector_requirements", connector.Key, "", connector.Name, connector); err != nil {
-			return nil, err
-		}
-	}
-	for _, mapping := range seed.Integrations.EventMappings {
-		if err := appendSeed("integration_event_mapping", "_application_schema_integration_event_mapping_requirements", mapping.Key, "", mapping.Provider, mapping); err != nil {
-			return nil, err
-		}
-	}
 	return seeds, nil
 }
 

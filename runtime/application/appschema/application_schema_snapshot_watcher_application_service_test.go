@@ -1,10 +1,9 @@
 package appschema
 
 import (
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
-
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 
@@ -61,7 +60,7 @@ type metadataWatcherRuntime struct {
 	names []string
 }
 
-func (r *metadataWatcherRuntime) ApplyManifestMetadata(_ string, _ string, name string, _ []definitionmodel.ObjectSchema, _ []definitionmodel.ActionSchema, _ []definitionmodel.WorkflowSchema, _ []automationmodel.AutomationRuleSchema, _ []appschemamodel.DictionarySchema, _ integrationmodel.IntegrationSchema, _ []reportmodel.ReportSchema, _ []agentsdk.SkillSchema, _ []agentsdk.AgentSchema, _ []profilebindingmodel.Binding) {
+func (r *metadataWatcherRuntime) ApplyManifestMetadata(_ string, _ string, name string, _ []definitionmodel.ObjectSchema, _ []definitionmodel.ActionSchema, _ []definitionmodel.WorkflowSchema, _ []automationmodel.AutomationRuleSchema, _ []appschemamodel.DictionarySchema, _ connectormodel.IntegrationSchema, _ []reportmodel.ReportSchema, _ []agentsdk.SkillSchema, _ []agentsdk.AgentSchema, _ []profilebindingmodel.Binding) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.names = append(r.names, name)

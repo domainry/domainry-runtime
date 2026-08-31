@@ -1,14 +1,15 @@
 package projection
 
 import (
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
-
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 
 	"sort"
 	"strings"
@@ -27,7 +28,7 @@ func ProjectWorkflowProcesses(processes []workflowmodel.WorkflowProcessInstance)
 	return items
 }
 
-func ProjectIntegrationConnections(connections []integrationmodel.IntegrationConnection, ready func(integrationmodel.IntegrationConnection) bool) []IntegrationConnectionSummary {
+func ProjectIntegrationConnections(connections []integrationsdk.Connection, ready func(integrationsdk.Connection) bool) []IntegrationConnectionSummary {
 	items := make([]IntegrationConnectionSummary, 0, len(connections))
 	for _, connection := range connections {
 		isReady := false
@@ -40,25 +41,25 @@ func ProjectIntegrationConnections(connections []integrationmodel.IntegrationCon
 	return items
 }
 
-func ProjectIntegrationOutbox(messages []integrationmodel.IntegrationOutboxMessage) []IntegrationOutboxSummary {
-	items := make([]IntegrationOutboxSummary, 0, len(messages))
+func ProjectPublicationHandoff(messages []publicationmodel.Message) []PublicationHandoffSummary {
+	items := make([]PublicationHandoffSummary, 0, len(messages))
 	for _, message := range messages {
-		items = append(items, IntegrationOutboxSummary{ID: message.ID, ConnectorKey: message.ConnectorKey, ConnectionKey: message.ConnectionKey, Operation: message.Operation, Status: message.Status, AttemptCount: message.AttemptCount, NextAttemptAt: message.NextAttemptAt, UpdatedAt: message.UpdatedAt})
+		items = append(items, PublicationHandoffSummary{ID: message.ID, ConnectorKey: message.ConnectorKey, ConnectionKey: message.ConnectionKey, Operation: message.Operation, Status: message.Status, AttemptCount: message.AttemptCount, NextAttemptAt: message.NextAttemptAt, UpdatedAt: message.UpdatedAt})
 	}
 	sort.Slice(items, func(i, j int) bool { return strings.Compare(items[i].UpdatedAt, items[j].UpdatedAt) > 0 })
 	return items
 }
 
 type BusinessRuntimeStateSnapshot struct {
-	RunningWorkflowProcesses []WorkflowProcessSummary                     `json:"running_workflow_processes"`
-	AutomationRules          []automationmodel.AutomationRuleSchema       `json:"automation_rules"`
-	RecentAutomationRuns     []automationmodel.AutomationRuleExecution    `json:"recent_automation_runs"`
-	Scheduler                SchedulerStateSnapshot                       `json:"scheduler"`
-	Reports                  []reportmodel.ReportSchema                   `json:"reports"`
-	Connectors               []integrationmodel.ConnectorSchema           `json:"connectors"`
-	Connections              []IntegrationConnectionSummary               `json:"connections"`
-	RecentOutboxMessages     []IntegrationOutboxSummary                   `json:"recent_outbox_messages"`
-	Idempotency              deploymentmodel.IdempotencyOperationalStatus `json:"idempotency"`
+	RunningWorkflowProcesses  []WorkflowProcessSummary                     `json:"running_workflow_processes"`
+	AutomationRules           []automationmodel.AutomationRuleSchema       `json:"automation_rules"`
+	RecentAutomationRuns      []automationmodel.AutomationRuleExecution    `json:"recent_automation_runs"`
+	Scheduler                 SchedulerStateSnapshot                       `json:"scheduler"`
+	Reports                   []reportmodel.ReportSchema                   `json:"reports"`
+	Connectors                []connectormodel.ConnectorSchema             `json:"connectors"`
+	Connections               []IntegrationConnectionSummary               `json:"connections"`
+	RecentPublicationHandoffs []PublicationHandoffSummary                  `json:"recent_publication_handoffs"`
+	Idempotency               deploymentmodel.IdempotencyOperationalStatus `json:"idempotency"`
 }
 
 type WorkflowProcessSummary struct {
@@ -90,7 +91,7 @@ type IntegrationConnectionSummary struct {
 	UpdatedAt    string `json:"updated_at,omitempty"`
 }
 
-type IntegrationOutboxSummary struct {
+type PublicationHandoffSummary struct {
 	ID            string `json:"id"`
 	ConnectorKey  string `json:"connector_key"`
 	ConnectionKey string `json:"connection_key,omitempty"`
@@ -127,13 +128,13 @@ func (snapshot *BusinessRuntimeStateSnapshot) Normalize() {
 		snapshot.Reports = []reportmodel.ReportSchema{}
 	}
 	if snapshot.Connectors == nil {
-		snapshot.Connectors = []integrationmodel.ConnectorSchema{}
+		snapshot.Connectors = []connectormodel.ConnectorSchema{}
 	}
 	if snapshot.Connections == nil {
 		snapshot.Connections = []IntegrationConnectionSummary{}
 	}
-	if snapshot.RecentOutboxMessages == nil {
-		snapshot.RecentOutboxMessages = []IntegrationOutboxSummary{}
+	if snapshot.RecentPublicationHandoffs == nil {
+		snapshot.RecentPublicationHandoffs = []PublicationHandoffSummary{}
 	}
 	sort.Slice(snapshot.RunningWorkflowProcesses, func(i, j int) bool {
 		return snapshot.RunningWorkflowProcesses[i].ID < snapshot.RunningWorkflowProcesses[j].ID

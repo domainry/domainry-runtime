@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	"io"
 	"net/http"
@@ -16,7 +17,6 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
@@ -80,8 +80,8 @@ type routerIntegrationAuthStub struct {
 	error     error
 }
 
-func (s routerIntegrationAuthStub) PrincipalFromIntegrationAPIKey(context.Context, string, string, string) (principalmodel.Principal, integrationmodel.IntegrationAPIKey, error) {
-	return s.principal, integrationmodel.IntegrationAPIKey{}, s.error
+func (s routerIntegrationAuthStub) PrincipalFromIntegrationAPIKey(context.Context, string, string, string) (principalmodel.Principal, integrationsdk.APIKey, error) {
+	return s.principal, integrationsdk.APIKey{}, s.error
 }
 
 type routerIdentityAuthorizationStub struct {

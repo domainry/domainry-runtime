@@ -2,6 +2,7 @@ package validation
 
 import (
 	"fmt"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	"strings"
 	"testing"
@@ -12,7 +13,6 @@ import (
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
 
@@ -85,10 +85,10 @@ func TestManifestRejectsStateMachineExternalEffects(t *testing.T) {
 }
 
 func TestManifestAutomationValidationEdges(t *testing.T) {
-	connector := integrationmodel.ConnectorSchema{Key: "mail", Operations: []integrationmodel.ConnectorOperationSchema{{Key: "send"}}}
+	connector := connectormodel.ConnectorSchema{Key: "mail", Operations: []connectormodel.ConnectorOperationSchema{{Key: "send"}}}
 	manifest := manifestmodel.ManifestSchema{
 		Objects:      []definitionmodel.ObjectSchema{{Key: "customer"}},
-		Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{connector}},
+		Integrations: connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{connector}},
 		AutomationRules: []automationmodel.AutomationRuleSchema{
 			{Key: "", ObjectKey: "missing", Trigger: automationmodel.AutomationTriggerSchema{Phase: "during", Operation: "read"}, Execution: automationmodel.AutomationExecutionPolicy{RunAs: "system"}},
 			{Key: "same", ObjectKey: "customer", Trigger: automationmodel.AutomationTriggerSchema{Phase: "before", Operation: "create"}, Execution: automationmodel.AutomationExecutionPolicy{Mode: "async"}, Instructions: []automationmodel.AutomationInstructionSchema{
@@ -251,13 +251,13 @@ func TestManifestObjectViewReferenceActionAndConnectionEdges(t *testing.T) {
 			{Key: "source", Fields: []definitionmodel.FieldSchema{{Key: "plain", Type: "text"}, {Key: "relation-no-target", Type: "relation"}, {Key: "relation", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "target"}}}}, {Key: "target", Fields: []definitionmodel.FieldSchema{{Key: "label"}}},
 		},
 		Actions: []definitionmodel.ActionSchema{{Key: "", ObjectKey: "missing"}, {Key: "same", ObjectKey: "source"}, {Key: "same", ObjectKey: "source", RequiresPermission: "source.write"}},
-		Integrations: integrationmodel.IntegrationSchema{
-			Connectors: []integrationmodel.ConnectorSchema{
-				{Key: "family", Provider: "multi", Providers: []integrationmodel.ConnectorProviderSchema{{Key: "real"}}},
-				{Key: "legacy", Provider: "local"},
-				{Key: "multi-empty", Provider: "multi"}, {Key: "generated-empty", Provider: "generated"}, {Key: "blank-family"},
+		Integrations: connectormodel.IntegrationSchema{
+			Connectors: []connectormodel.ConnectorSchema{
+				{Key: "family", Providers: []connectormodel.ConnectorProviderSchema{{Key: "real"}}},
+				{Key: "legacy", Providers: []connectormodel.ConnectorProviderSchema{{Key: "local"}}},
+				{Key: "multi-empty"}, {Key: "generated-empty"}, {Key: "blank-family"},
 			},
-			Connections: []integrationmodel.ConnectionSchema{
+			Connections: []connectormodel.ConnectionSchema{
 				{Key: "", ConnectorKey: ""}, {Key: "same", ConnectorKey: "missing"},
 				{Key: "same", ConnectorKey: "family"}, {Key: "invalid-provider", ConnectorKey: "family", ProviderKey: "multi"},
 				{Key: "unknown-provider", ConnectorKey: "family", ProviderKey: "missing"},
@@ -276,7 +276,7 @@ func TestManifestObjectViewReferenceActionAndConnectionEdges(t *testing.T) {
 	if len(state.errs) < 10 {
 		t.Fatalf("object/integration diagnostics = %#v", state.errs)
 	}
-	if manifestConnectorHasProvider(integrationmodel.ConnectorSchema{Provider: "local"}, "local") || manifestConnectorHasProvider(integrationmodel.ConnectorSchema{Providers: []integrationmodel.ConnectorProviderSchema{{Key: "one"}}}, "missing") {
+	if manifestConnectorHasProvider(connectormodel.ConnectorSchema{}, "local") || manifestConnectorHasProvider(connectormodel.ConnectorSchema{Providers: []connectormodel.ConnectorProviderSchema{{Key: "one"}}}, "missing") {
 		t.Fatal("connector provider lookup")
 	}
 	paths := inlineSecretConfigPaths(map[string]any{"password": "secret:ref", "token": "env:TOKEN", "secret": "vault:key", "safe": "value"}, "prefix")
@@ -332,13 +332,13 @@ func TestManifestIntegrationEventContractTypesInvocationPaths(t *testing.T) {
 			Key: "order.intake", Enabled: true, TriggerContract: &definitionmodel.WorkflowTriggerContract{Type: "integration_event"},
 			InputFields: []definitionmodel.WorkflowInputField{{Key: "count", Type: "integer", Required: true}},
 		}},
-		Integrations: integrationmodel.IntegrationSchema{
-			Connections: []integrationmodel.ConnectionSchema{{Key: "source", ProviderKey: "provider"}},
-			EventMappings: []integrationmodel.IntegrationEventMappingSchema{{
+		Integrations: connectormodel.IntegrationSchema{
+			Connections: []connectormodel.ConnectionSchema{{Key: "source", ProviderKey: "provider"}},
+			EventMappings: []connectormodel.IntegrationEventMappingSchema{{
 				Key: "incoming", Provider: "provider", TargetType: "workflow", WorkflowKey: "order.intake",
 				WorkflowInput:    map[string]string{"count": "payload.count"},
-				EventFields:      []integrationmodel.IntegrationEventFieldSchema{{Path: "payload.count", Type: "integer", Required: true}},
-				ExternalIdentity: integrationmodel.IntegrationExternalIdentityMappingSchema{SubjectPath: "actor.id"},
+				EventFields:      []connectormodel.IntegrationEventFieldSchema{{Path: "payload.count", Type: "integer", Required: true}},
+				ExternalIdentity: connectormodel.IntegrationExternalIdentityMappingSchema{SubjectPath: "actor.id"},
 			}},
 		},
 	}
@@ -373,7 +373,7 @@ func TestManifestIdentityProfileExtensionAndRemainingCoreEdges(t *testing.T) {
 			{ObjectKey: "profile", IdentityRelationField: "plain", ProfileTabs: []string{"tab"}, ProfileTabRelatedObjects: map[string][]string{"tab": {"profile"}}},
 		},
 	}
-	state := newValidationState(manifest, []integrationmodel.ConnectorSchema{{Key: ""}, {Key: " catalog "}})
+	state := newValidationState(manifest, []connectormodel.ConnectorSchema{{Key: ""}, {Key: " catalog "}})
 	state.validateIdentityProfileExtensions()
 	if len(state.errs) < 12 {
 		t.Fatalf("profile diagnostics = %#v", state.errs)
@@ -429,9 +429,9 @@ func TestManifestValidatorConditionOutcomes(t *testing.T) {
 	state := newValidationState(manifestmodel.ManifestSchema{
 		SchemaVersion:        manifestmodel.CurrentManifestSchemaVersion,
 		SourceIntentCoverage: &manifestmodel.ManifestSourceIntentCoverage{Version: "1"},
-		Integrations:         integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: ""}, {Key: "zero"}, {Key: "with-op", Operations: []integrationmodel.ConnectorOperationSchema{{Key: "send"}}}}},
+		Integrations:         connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{{Key: ""}, {Key: "zero"}, {Key: "with-op", Operations: []connectormodel.ConnectorOperationSchema{{Key: "send"}}}}},
 		SeedRecords:          []businessseedmodel.SeedRecordSchema{{ObjectKey: "object", Data: map[string]any{"__seed_key": "explicit"}}, {ObjectKey: "object"}, {}},
-	}, []integrationmodel.ConnectorSchema{{Key: "catalog"}})
+	}, []connectormodel.ConnectorSchema{{Key: "catalog"}})
 	state.validateRequiredShell()
 	state.validateSourceIntentCoverage()
 	if mapString(map[string]any{"nil": nil}, "nil") != "" {

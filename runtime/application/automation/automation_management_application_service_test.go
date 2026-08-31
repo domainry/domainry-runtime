@@ -2,7 +2,10 @@ package automation
 
 import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -17,7 +20,6 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	capability "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 )
 
 type managementExecutionRepository struct {
@@ -28,15 +30,15 @@ func TestAutomationApplicationAuthorizesWorkspaceBeforeRepositoryAccess(t *testi
 	calls := 0
 	service := NewAutomationManagementApplicationService(AutomationManagementDependencies{
 		Rules: managementRuleRegistry{},
-		ListConnections: func(context.Context, string) ([]integrationmodel.IntegrationConnection, error) {
+		ListConnections: func(context.Context, string) ([]integrationsdk.Connection, error) {
 			calls++
 			return nil, nil
 		},
-		ListInvocations: func(context.Context, string, automationmodel.AutomationExecutionFilter) ([]integrationmodel.IntegrationInvocation, error) {
+		ListInvocations: func(context.Context, string, automationmodel.AutomationExecutionFilter) ([]integrationsdk.Invocation, error) {
 			calls++
 			return nil, nil
 		},
-		ListOutbox: func(context.Context, string) ([]integrationmodel.IntegrationOutboxMessage, error) {
+		ListOutbox: func(context.Context, string) ([]publicationmodel.Message, error) {
 			calls++
 			return nil, nil
 		},
@@ -86,17 +88,17 @@ func TestManagementServiceOwnsSortedRulesCapabilitiesAndHistory(t *testing.T) {
 	rules := managementRuleRegistry{rules: []automationmodel.AutomationRuleSchema{{Key: "z"}, {Key: "a"}}}
 	service := NewAutomationManagementApplicationService(AutomationManagementDependencies{
 		Rules: rules, Executions: managementExecutionRepository{items: []automationmodel.AutomationRuleExecution{{ID: "execution-1"}}},
-		ListInvocations: func(context.Context, string, automationmodel.AutomationExecutionFilter) ([]integrationmodel.IntegrationInvocation, error) {
-			return []integrationmodel.IntegrationInvocation{}, nil
+		ListInvocations: func(context.Context, string, automationmodel.AutomationExecutionFilter) ([]integrationsdk.Invocation, error) {
+			return []integrationsdk.Invocation{}, nil
 		},
-		ListOutbox: func(context.Context, string) ([]integrationmodel.IntegrationOutboxMessage, error) {
-			return []integrationmodel.IntegrationOutboxMessage{}, nil
+		ListOutbox: func(context.Context, string) ([]publicationmodel.Message, error) {
+			return []publicationmodel.Message{}, nil
 		},
-		ListConnections: func(context.Context, string) ([]integrationmodel.IntegrationConnection, error) {
-			return []integrationmodel.IntegrationConnection{{Key: "primary"}}, nil
+		ListConnections: func(context.Context, string) ([]integrationsdk.Connection, error) {
+			return []integrationsdk.Connection{{Key: "primary"}}, nil
 		},
-		Connectors: func(context.Context, principalmodel.Principal) []integrationmodel.ConnectorSchema {
-			return []integrationmodel.ConnectorSchema{{Key: "crm"}}
+		Connectors: func(context.Context, principalmodel.Principal) []connectormodel.ConnectorSchema {
+			return []connectormodel.ConnectorSchema{{Key: "crm"}}
 		},
 		AuthoringProjection: func() capability.CapabilityAuthoringProjection {
 			return capability.CapabilityAuthoringProjection{

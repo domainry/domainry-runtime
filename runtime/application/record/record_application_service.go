@@ -4,6 +4,7 @@ import (
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	pipelineapplication "github.com/domainry/domainry-runtime/runtime/application/pipeline"
@@ -20,7 +21,6 @@ import (
 
 	"context"
 
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
 	"github.com/domainry/domainry-foundation/apperror"
@@ -65,7 +65,7 @@ type RecordApplicationDependencies struct {
 	IdentityProfileExtensions    func() []profilebindingmodel.Binding
 	FindBeforeCreateReplay       func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) (recordmodel.Record, bool, error)
 	RunBefore                    func(context.Context, string, string, string, map[string]any, map[string]any, map[string]any, principalmodel.Principal) error
-	AfterOutbox                  func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []integrationmodel.IntegrationOutboxMessage
+	AfterOutbox                  func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []publicationmodel.Message
 	BuildAudit                   func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any) auditmodel.AuditEvent
 	RecordMutationExecution      *recordruntime.RecordMutationExecutionRuntime
 	DataExchange                 dataexchange.Binding

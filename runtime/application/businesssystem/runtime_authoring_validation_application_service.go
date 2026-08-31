@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
@@ -13,7 +14,6 @@ import (
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
 	changeplanvalidation "github.com/domainry/domainry-runtime/runtime/domain/changeplan/validation"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	manifestvalidation "github.com/domainry/domainry-runtime/runtime/domain/manifest/validation"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -24,7 +24,7 @@ type RuntimeAuthoringValidationDependencies struct {
 	CurrentSnapshot     func(context.Context, principalmodel.Principal) (changeplanprojection.BusinessSystemSnapshot, error)
 	CurrentSeedRecords  func(context.Context, []businessseedmodel.BusinessSeedProvenance, principalmodel.Principal) ([]businessseedmodel.SeedRecordSchema, error)
 	BaseManifest        manifestmodel.ManifestSchema
-	ValidateDefinitions func(context.Context, []integrationmodel.ConnectorSchema) error
+	ValidateDefinitions func(context.Context, []connectormodel.ConnectorSchema) error
 	StorageReadiness    func(context.Context) error
 	MigrationReadiness  func(context.Context) error
 }

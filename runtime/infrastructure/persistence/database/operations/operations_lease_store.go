@@ -27,7 +27,7 @@ var operationsLeaseSpecs = []operationsLeaseSpec{
 	{owner: "record_mutation", table: "_record_mutation_executions"},
 	{owner: "idempotency_cleanup", table: "_idempotency_cleanup_leases"},
 	{owner: "automation", table: "_automation_instruction_executions"},
-	{owner: "integration_outbox", table: "_publication_outbox"},
+	{owner: "runtime_publication_outbox", table: "_publication_outbox"},
 	{owner: "transaction_boundary", table: "_transaction_boundary_intents"},
 }
 

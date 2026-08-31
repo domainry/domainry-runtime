@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"strings"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
@@ -11,7 +12,6 @@ import (
 	appschemavalidation "github.com/domainry/domainry-runtime/runtime/domain/appschema/validation"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	manifestvalidation "github.com/domainry/domainry-runtime/runtime/domain/manifest/validation"
 )
@@ -27,11 +27,11 @@ func (s *ApplicationSchemaApplicationService) ValidateMetadataCandidate(ctx cont
 // ValidateCurrentRuntimeDefinitions reuses the Change Plan candidate boundary
 // for the active graph while resolving connector references against the live
 // Runtime catalog, matching bootstrap and manifest validation semantics.
-func (s *ApplicationSchemaApplicationService) ValidateCurrentRuntimeDefinitions(ctx context.Context, connectorCatalog []integrationmodel.ConnectorSchema) error {
+func (s *ApplicationSchemaApplicationService) ValidateCurrentRuntimeDefinitions(ctx context.Context, connectorCatalog []connectormodel.ConnectorSchema) error {
 	return s.validateMetadataCandidateWithConnectorCatalog(ctx, nil, connectorCatalog)
 }
 
-func (s *ApplicationSchemaApplicationService) validateMetadataCandidateWithConnectorCatalog(ctx context.Context, mutations []appschemamodel.ApplicationDefinitionMutation, connectorCatalog []integrationmodel.ConnectorSchema) error {
+func (s *ApplicationSchemaApplicationService) validateMetadataCandidateWithConnectorCatalog(ctx context.Context, mutations []appschemamodel.ApplicationDefinitionMutation, connectorCatalog []connectormodel.ConnectorSchema) error {
 	if s == nil || s.repository == nil {
 		return badRequest("backend.metadata.candidate_invalid", "diagnostic", "metadata repository is unavailable")
 	}
@@ -100,10 +100,8 @@ func applyMetadataCandidateMutation(candidate *manifestmodel.ManifestSchema, mut
 		return candidateApplySlice(&candidate.AutomationRules, resourceKey, payload, remove, func(value automationmodel.AutomationRuleSchema) string { return value.Key })
 	case "dictionary":
 		return candidateApplySlice(&candidate.Dictionaries, resourceKey, payload, remove, func(value appschemamodel.DictionarySchema) string { return value.Key })
-	case "connector":
-		return candidateApplySlice(&candidate.Integrations.Connectors, resourceKey, payload, remove, func(value integrationmodel.ConnectorSchema) string { return value.Key })
 	case "integration_event_mapping":
-		return candidateApplySlice(&candidate.Integrations.EventMappings, resourceKey, payload, remove, func(value integrationmodel.IntegrationEventMappingSchema) string { return value.Key })
+		return candidateApplySlice(&candidate.Integrations.EventMappings, resourceKey, payload, remove, func(value connectormodel.IntegrationEventMappingSchema) string { return value.Key })
 	case "skill":
 		return candidateApplySlice(&candidate.Skills, resourceKey, payload, remove, func(value agentsdk.SkillSchema) string { return value.Key })
 	case "agent":

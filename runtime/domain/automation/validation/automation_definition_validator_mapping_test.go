@@ -2,16 +2,16 @@ package validation
 
 import (
 	"encoding/json"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"math"
 	"testing"
 
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 )
 
 func TestAutomationConnectorOperation(t *testing.T) {
-	connector := integrationmodel.ConnectorSchema{Operations: []integrationmodel.ConnectorOperationSchema{{Key: " create "}, {Key: "delete"}}}
+	connector := connectormodel.ConnectorSchema{Operations: []connectormodel.ConnectorOperationSchema{{Key: " create "}, {Key: "delete"}}}
 	if operation := AutomationConnectorOperation(connector, "create"); operation == nil || operation.Key != " create " {
 		t.Fatalf("unexpected operation: %#v", operation)
 	}
@@ -21,7 +21,7 @@ func TestAutomationConnectorOperation(t *testing.T) {
 }
 
 func TestAutomationValidateOperationInputContracts(t *testing.T) {
-	operation := integrationmodel.ConnectorOperationSchema{Key: "send", Input: []definitionmodel.FieldSchema{
+	operation := connectormodel.ConnectorOperationSchema{Key: "send", Input: []definitionmodel.FieldSchema{
 		{Key: "amount", Type: "decimal", Required: true},
 		{Key: "recipient", Type: "email"},
 	}}

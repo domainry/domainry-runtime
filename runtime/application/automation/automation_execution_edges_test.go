@@ -3,6 +3,7 @@ package automation
 import (
 	"context"
 	"errors"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
@@ -10,7 +11,6 @@ import (
 	automationprojection "github.com/domainry/domainry-runtime/runtime/domain/automation/projection"
 	automationvalidation "github.com/domainry/domainry-runtime/runtime/domain/automation/validation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
@@ -24,8 +24,8 @@ func TestAutomationDefinitionValidationUsesEmptyAndResolvedCatalog(t *testing.T)
 		Catalog: func() automationvalidation.AutomationDefinitionCatalog {
 			return automationvalidation.AutomationDefinitionCatalog{Objects: []definitionmodel.ObjectSchema{{Key: "order"}}}
 		},
-		ListConnections: func(context.Context, string) ([]integrationmodel.IntegrationConnection, error) {
-			return []integrationmodel.IntegrationConnection{}, nil
+		ListConnections: func(context.Context, string) ([]integrationsdk.Connection, error) {
+			return []integrationsdk.Connection{}, nil
 		},
 	}
 	rule := automationmodel.AutomationRuleSchema{Key: "rule", Name: "Rule", ObjectKey: "order", Trigger: automationmodel.AutomationTriggerSchema{Phase: "before", Operation: "create"}}

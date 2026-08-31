@@ -14,7 +14,7 @@ import (
 
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 
-	connectorcatalog "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	businessmanifest "github.com/domainry/domainry-runtime/runtime/domain/manifest/validation"
 )
 
@@ -37,7 +37,10 @@ var (
 	provisionOpenAuditFile = func(name string, flag int, perm os.FileMode) (provisionAuditFile, error) {
 		return os.OpenFile(name, flag, perm)
 	}
-	provisionCatalog = connectorcatalog.Builtin
+	// Provisioning may inject the Integration-owned Catalog projection. The
+	// default validates connector declarations already carried by the manifest
+	// and never restores a Runtime-owned provider catalog.
+	provisionCatalog = func() ([]connectormodel.ConnectorSchema, error) { return nil, nil }
 )
 
 func (s *Server) decodeRequest(w http.ResponseWriter, r *http.Request) (manifestRequest, bool) {

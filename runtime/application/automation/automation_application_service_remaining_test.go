@@ -3,6 +3,7 @@ package automation
 import (
 	"context"
 	"errors"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -14,7 +15,6 @@ import (
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationprojection "github.com/domainry/domainry-runtime/runtime/domain/automation/projection"
 	automationbusiness "github.com/domainry/domainry-runtime/runtime/domain/automation/service"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
@@ -126,7 +126,7 @@ func TestAutomationOutboxRejectsRevalidatedRoleMismatch(t *testing.T) {
 		RuleKey: "after", ActorUserID: "operator", ActorRoleKey: "original-role",
 		Record: recordmodel.Record{ID: "order-1"},
 	}
-	message := integrationmodel.IntegrationOutboxMessage{
+	message := publicationmodel.Message{
 		WorkspaceID: "workspace-1",
 		Payload:     automationbusiness.LifecycleEventPayload(event),
 	}

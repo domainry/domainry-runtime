@@ -1,7 +1,7 @@
 package manifestmodel
 
 import (
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
@@ -46,7 +46,7 @@ type ManifestSchema struct {
 	NotificationEventTypes    []notificationmodel.NotificationEventType       `json:"notification_event_types,omitempty"`
 	NotificationRules         []notificationmodel.NotificationRule            `json:"notification_rules,omitempty"`
 	Dictionaries              []appschemamodel.DictionarySchema               `json:"dictionaries,omitempty"`
-	Integrations              integrationmodel.IntegrationSchema              `json:"integrations,omitempty"`
+	Integrations              connectormodel.IntegrationSchema                `json:"integrations,omitempty"`
 	Reports                   []reportmodel.ReportSchema                      `json:"reports,omitempty"`
 	IdentityProfileExtensions []profilebindingmodel.Binding                   `json:"identity_profile_extensions,omitempty"`
 	OperationStateExamples    []reportmodel.ReportOperationStateExampleSchema `json:"operation_state_examples,omitempty"`

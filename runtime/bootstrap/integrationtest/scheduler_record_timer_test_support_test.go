@@ -8,8 +8,8 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	. "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	schedulerprojection "github.com/domainry/domainry-runtime/runtime/domain/scheduler/projection"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -77,6 +77,6 @@ func newSchedulerRuntimeTestService(t *testing.T, store *persistence.RuntimeStor
 	t.Helper()
 	return runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{
 		TemplateID: "record-timer-runtime-test", TemplateVersion: "1", Name: "Record Timer Runtime Test",
-		Objects: objects, Integrations: integrationmodel.IntegrationSchema{}, Store: store,
+		Objects: objects, Integrations: appschemamodel.IntegrationSchema{}, Store: store,
 	})
 }

@@ -13,17 +13,14 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
-	integrationnotification "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/integrationnotification"
 )
 
 type restoredRuntimeMetadata struct {
-	manifest             manifestmodel.ManifestSchema
-	metadataStore        appschemapersistence.ApplicationSchemaStore
-	deliveryMetricsStore integrationnotification.DeliveryMetricsStore
+	manifest      manifestmodel.ManifestSchema
+	metadataStore appschemapersistence.ApplicationSchemaStore
 }
 
 func restoreRuntimeMetadata(ctx context.Context, store *persistence.RuntimeStore, seedManifest manifestmodel.ManifestSchema) (restoredRuntimeMetadata, error) {
-	deliveryMetricsStore := integrationnotification.NewDeliveryMetricsStore(store)
 	metadataStore := appschemapersistence.NewApplicationSchemaStore(store)
 	manifest, err := restoreRuntimeManifest(ctx, &installedNotificationTemplateCatalog{}, metadataStore, seedManifest)
 	if err != nil {

@@ -3,13 +3,13 @@ package record
 import (
 	"context"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -57,9 +57,9 @@ func TestNewRecordApplicationServiceWiresOptionalCallbacks(t *testing.T) {
 			counts["before"]++
 			return nil
 		},
-		AfterOutbox: func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []integrationmodel.IntegrationOutboxMessage {
+		AfterOutbox: func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []publicationmodel.Message {
 			counts["outbox"]++
-			return []integrationmodel.IntegrationOutboxMessage{{ID: "outbox-1"}}
+			return []publicationmodel.Message{{ID: "outbox-1"}}
 		},
 		BuildAudit: func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any) auditmodel.AuditEvent {
 			counts["build_audit"]++

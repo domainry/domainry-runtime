@@ -1,9 +1,8 @@
 package service
 
 import (
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
-
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 
@@ -24,7 +23,7 @@ type SchemaSnapshotState struct {
 	Workflows                         []definitionmodel.WorkflowSchema
 	AutomationRules                   []automationmodel.AutomationRuleSchema
 	Dictionaries                      []appschemamodel.DictionarySchema
-	Integrations                      integrationmodel.IntegrationSchema
+	Integrations                      connectormodel.IntegrationSchema
 	Reports                           []reportmodel.ReportSchema
 	Skills                            []agentsdk.SkillSchema
 	Agents                            []agentsdk.AgentSchema

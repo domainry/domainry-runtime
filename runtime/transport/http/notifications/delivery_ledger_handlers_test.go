@@ -5,12 +5,12 @@ import accessfixture "github.com/domainry/domainry-runtime/testsupport/identitys
 import (
 	"context"
 	"errors"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -39,15 +39,15 @@ func newNotificationHTTPHandler(_ *notificationHTTPRepository) (*NotificationsHa
 }
 
 type notificationDeliveryLedgerStub struct {
-	values []integrationmodel.IntegrationOutboxMessage
+	values []publicationmodel.Message
 	status string
 	limit  int
 	err    error
 }
 
-func (s *notificationDeliveryLedgerStub) ListIntegrationOutboxMessages(_ context.Context, _ string, status string, limit int, _ principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error) {
+func (s *notificationDeliveryLedgerStub) ListPublicationMessages(_ context.Context, _ string, status string, limit int, _ principalmodel.Principal) ([]publicationmodel.Message, error) {
 	s.status, s.limit = status, limit
-	return append([]integrationmodel.IntegrationOutboxMessage(nil), s.values...), s.err
+	return append([]publicationmodel.Message(nil), s.values...), s.err
 }
 
 func TestNotificationDeliveryLedgerProjectsOnlyNotificationOutbox(t *testing.T) {
@@ -55,7 +55,7 @@ func TestNotificationDeliveryLedgerProjectsOnlyNotificationOutbox(t *testing.T) 
 	accessfixture.Mutate(principal, func(role *accessfixture.Bundle) {
 		role.Permissions = append(role.Permissions, "integration.audit.view")
 	})
-	ledger := &notificationDeliveryLedgerStub{values: []integrationmodel.IntegrationOutboxMessage{
+	ledger := &notificationDeliveryLedgerStub{values: []publicationmodel.Message{
 		{ID: "notification-1", WorkspaceID: "workspace-1", ConnectorKey: "email", ConnectionKey: "primary", Operation: "send_email", Status: "delivered", Payload: map[string]any{"template_key": "account.welcome", "recipient": "person@example.com"}, ResponseRef: "provider-1", AttemptCount: 1},
 		{ID: "automation-1", ConnectorKey: "__automation__", Operation: "record.after_create", Status: "queued", Payload: map[string]any{"rule_key": "rule-1"}},
 	}}
@@ -127,10 +127,10 @@ func TestNotificationDeliveryLedgerPermissionAndFailureBoundaries(t *testing.T) 
 }
 
 func TestNotificationDeliveryProjectionRejectsBlankTemplateKeys(t *testing.T) {
-	if notificationOutboxMessage(integrationmodel.IntegrationOutboxMessage{Payload: map[string]any{"template_key": " "}}) {
+	if notificationOutboxMessage(publicationmodel.Message{Payload: map[string]any{"template_key": " "}}) {
 		t.Fatal("blank template key must not enter the notification ledger")
 	}
-	projected := projectNotificationDelivery(integrationmodel.IntegrationOutboxMessage{ID: "delivery", ConnectorKey: "email", Status: "sent", Payload: map[string]any{"template_key": "notice"}})
+	projected := projectNotificationDelivery(publicationmodel.Message{ID: "delivery", ConnectorKey: "email", Status: "sent", Payload: map[string]any{"template_key": "notice"}})
 	if projected.ID != "delivery" || projected.ConnectorKey != "email" || projected.Status != "sent" {
 		t.Fatalf("projection = %#v", projected)
 	}

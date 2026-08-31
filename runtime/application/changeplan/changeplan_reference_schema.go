@@ -1,10 +1,9 @@
 package changeplan
 
 import (
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
-
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 
@@ -23,7 +22,7 @@ type ReferenceSchema struct {
 	Workflows       []definitionmodel.WorkflowSchema
 	AutomationRules []automationmodel.AutomationRuleSchema
 	Reports         []reportmodel.ReportSchema
-	Integrations    integrationmodel.IntegrationSchema
+	Integrations    connectormodel.IntegrationSchema
 	Agents          []agentsdk.AgentSchema
 	ProfileBindings []profilebindingmodel.Binding
 }

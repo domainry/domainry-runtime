@@ -25,7 +25,7 @@ func (s *ChangePlanReferenceApplicationService) addRuntimeEvidenceReferences(ctx
 		builder.Node("workflow_process", process.ID, process.ObjectKey, process.WorkflowName, "runtime")
 		builder.Edge("workflow_process", process.ID, "workflow", process.WorkflowKey, "runs_workflow_snapshot", "workflow_key")
 	}
-	messages, err := s.runtime.ListIntegrationOutboxMessages(ctx, "", "", 500, principal)
+	messages, err := s.runtime.ListPublicationMessages(ctx, "", "", 500, principal)
 	if err != nil {
 		return err
 	}

@@ -7,25 +7,25 @@ import definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/defi
 import (
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
 
 type RecordMutationCommit struct {
-	Operation          string                                      `json:"operation"`
-	Object             definitionmodel.ObjectSchema                `json:"object"`
-	Record             recordmodel.Record                          `json:"record"`
-	RecordID           string                                      `json:"record_id,omitempty"`
-	ExpectedUpdatedAt  string                                      `json:"expected_updated_at,omitempty"`
-	Optimistic         OptimisticPrecondition                      `json:"optimistic,omitempty"`
-	Conditions         map[string]any                              `json:"conditions,omitempty"`
-	Predicates         []MutationPredicate                         `json:"predicates,omitempty"`
-	Audit              *auditmodel.AuditEvent                      `json:"audit,omitempty"`
-	Audits             []auditmodel.AuditEvent                     `json:"audits,omitempty"`
-	Outbox             []integrationmodel.IntegrationOutboxMessage `json:"outbox,omitempty"`
-	WorkflowIntents    []workflowmodel.WorkflowExecution           `json:"workflow_intents,omitempty"`
-	NotificationEvents []notificationmodel.NotificationEvent       `json:"notification_events,omitempty"`
-	LocalizedValues    []recordmodel.RecordLocalizedValueMutation  `json:"localized_values,omitempty"`
+	Operation          string                                     `json:"operation"`
+	Object             definitionmodel.ObjectSchema               `json:"object"`
+	Record             recordmodel.Record                         `json:"record"`
+	RecordID           string                                     `json:"record_id,omitempty"`
+	ExpectedUpdatedAt  string                                     `json:"expected_updated_at,omitempty"`
+	Optimistic         OptimisticPrecondition                     `json:"optimistic,omitempty"`
+	Conditions         map[string]any                             `json:"conditions,omitempty"`
+	Predicates         []MutationPredicate                        `json:"predicates,omitempty"`
+	Audit              *auditmodel.AuditEvent                     `json:"audit,omitempty"`
+	Audits             []auditmodel.AuditEvent                    `json:"audits,omitempty"`
+	Outbox             []publicationmodel.Message                 `json:"outbox,omitempty"`
+	WorkflowIntents    []workflowmodel.WorkflowExecution          `json:"workflow_intents,omitempty"`
+	NotificationEvents []notificationmodel.NotificationEvent      `json:"notification_events,omitempty"`
+	LocalizedValues    []recordmodel.RecordLocalizedValueMutation `json:"localized_values,omitempty"`
 }
 
 // MutationPredicate is a storage-neutral compare-and-set condition evaluated

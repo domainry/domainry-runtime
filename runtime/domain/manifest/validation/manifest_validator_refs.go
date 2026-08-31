@@ -1,10 +1,10 @@
 package validation
 
 import (
+	appschemacontract "github.com/domainry/domainry-runtime/runtime/domain/appschema/contract"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitioncontract "github.com/domainry/domainry-runtime/runtime/domain/definition/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	invocationcontract "github.com/domainry/domainry-runtime/runtime/domain/manifest/contract/invocation"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -242,11 +242,6 @@ func (state *validationState) validateIntegrationConnections() {
 				state.add(path+".config."+configKey, "Provider selection must use provider_key")
 			}
 		}
-		if providerKey != "" && exists && manifestConnectorHasProvider(connector, providerKey) {
-			if err := integrationcontract.IntegrationValidateProviderConfig(connector, providerKey, connection.Config); err != nil {
-				state.add(path+".config", "%s", err)
-			}
-		}
 		for _, secretPath := range inlineSecretConfigPaths(connection.Config, "") {
 			state.add(path+".config."+secretPath, "inline Connector secrets are not allowed in Runtime metadata; store a secret reference instead")
 		}
@@ -266,7 +261,7 @@ func (state *validationState) validateIntegrationEventMappings() {
 	seen := map[string]bool{}
 	for index, mapping := range state.manifest.Integrations.EventMappings {
 		path := fmt.Sprintf("integrations.event_mappings[%d]", index)
-		eventBindings, eventContractIssues := integrationcontract.IntegrationEventBindings(mapping)
+		eventBindings, eventContractIssues := appschemacontract.IntegrationEventBindings(mapping)
 		for _, issue := range eventContractIssues {
 			state.add(path+".event_fields", "%s field=%s path=%s expected=%s actual=%s", issue.Code, issue.Field, issue.Path, issue.Expected, issue.Actual)
 		}
@@ -302,10 +297,8 @@ func (state *validationState) validateIntegrationEventMappings() {
 			if strings.TrimSpace(mapping.RecordID) == "" && strings.TrimSpace(mapping.RecordIDPath) == "" {
 				state.add(path+".record_id", "record_id or record_id_path is required")
 			}
-		case "owner_task":
-			state.validateOwnerTaskActivity(path)
 		default:
-			state.add(path+".target_type", "must be action, workflow, or owner_task")
+			state.add(path+".target_type", "must be action or workflow")
 		}
 	}
 }
@@ -322,12 +315,6 @@ func manifestMappedInvocationInput(paths map[string]string, payload map[string]a
 		}
 	}
 	return input
-}
-
-func (state *validationState) validateOwnerTaskActivity(path string) {
-	for _, issue := range integrationcontract.IntegrationValidateOwnerTaskActivity(state.objects["activity"]) {
-		state.add(path+".target_type", "%s field=%s", issue.Code, issue.Field)
-	}
 }
 
 func inlineSecretConfigPaths(value map[string]any, prefix string) []string {
@@ -357,7 +344,7 @@ func inlineSecretConfigPaths(value map[string]any, prefix string) []string {
 	return paths
 }
 
-func manifestConnectorHasProvider(connector integrationmodel.ConnectorSchema, providerKey string) bool {
+func manifestConnectorHasProvider(connector connectormodel.ConnectorSchema, providerKey string) bool {
 	for _, provider := range connector.Providers {
 		if strings.TrimSpace(provider.Key) == providerKey {
 			return true

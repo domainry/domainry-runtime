@@ -5,9 +5,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-
-	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
-	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
 )
 
 func TestSupportedAuthoringCapabilitiesDeclareDirectPermissionsAndValidation(t *testing.T) {
@@ -35,20 +32,6 @@ func hasMutationRoute(routes []string) bool {
 		}
 	}
 	return false
-}
-
-func TestConnectorOperationAuthoringContractPublishesEditorOptions(t *testing.T) {
-	checks := map[string][]string{
-		"method": integrationcontract.RuntimeConnectorMethods(), "execution_mode": integrationcontract.RuntimeConnectorExecutionModes(),
-		"side_effect": integrationcontract.RuntimeConnectorSideEffects(), "protocol_field_type": integrationcontract.RuntimeConnectorProtocolFieldTypes(),
-	}
-	contract := RuntimeAuthoringCapabilities()
-	for key, expected := range checks {
-		sort.Strings(expected)
-		if actual := authoringParameterEnumForTest(t, contract, "integration.connector_operation", key); !reflect.DeepEqual(actual, expected) {
-			t.Errorf("parameter %s=%v want=%v", key, actual, expected)
-		}
-	}
 }
 
 func TestRuntimeAuthoringCapabilitiesRejectUnknownDependencies(t *testing.T) {
@@ -83,22 +66,4 @@ func TestRuntimeAuthoringCapabilitiesDoNotPublishActionStepDSL(t *testing.T) {
 	if !reflect.DeepEqual(automationInstructions, want) {
 		t.Fatalf("automation instruction contract drifted: got=%v want=%v", automationInstructions, want)
 	}
-}
-
-func authoringParameterEnumForTest(t *testing.T, contract capabilitycontract.CapabilityRuntimeAuthoringContract, capabilityKey, parameterKey string) []string {
-	t.Helper()
-	for _, domainContract := range contract.Domains {
-		for _, item := range domainContract.Capabilities {
-			if item.Key != capabilityKey {
-				continue
-			}
-			for _, parameter := range item.Parameters {
-				if parameter.Key == parameterKey {
-					return parameter.Enum
-				}
-			}
-		}
-	}
-	t.Fatalf("missing authoring parameter %s/%s", capabilityKey, parameterKey)
-	return nil
 }

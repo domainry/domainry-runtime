@@ -5,6 +5,7 @@ import accessfixture "github.com/domainry/domainry-runtime/testsupport/identitys
 import (
 	"context"
 	"errors"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	"reflect"
 	"testing"
 	"time"
@@ -16,7 +17,6 @@ import (
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -33,7 +33,7 @@ type deploymentStatusFixture struct {
 	migrationErr      error
 	workflowValues    []workflowmodel.WorkflowExecution
 	workflowErr       error
-	invocationValues  []integrationmodel.IntegrationInvocation
+	invocationValues  []integrationsdk.Invocation
 	invocationErr     error
 	auditValues       []auditmodel.AuditEvent
 	auditErr          error
@@ -65,7 +65,7 @@ func (f *deploymentStatusFixture) MigrationStatus(context.Context) (deploymentmo
 func (f *deploymentStatusFixture) ListExecutions(context.Context, string, int) ([]workflowmodel.WorkflowExecution, error) {
 	return f.workflowValues, f.workflowErr
 }
-func (f *deploymentStatusFixture) ListInvocations(context.Context, string, string, string, string, string, int) ([]integrationmodel.IntegrationInvocation, error) {
+func (f *deploymentStatusFixture) ListInvocations(context.Context, string, string, string, string, string, int) ([]integrationsdk.Invocation, error) {
 	return f.invocationValues, f.invocationErr
 }
 func (f *deploymentStatusFixture) ListAuditEvents(context.Context, string, auditmodel.AuditEventQuery) ([]auditmodel.AuditEvent, error) {
@@ -273,7 +273,7 @@ func TestDeploymentMetricOwnersSuccessAndFailure(t *testing.T) {
 	objects := []definitionmodel.ObjectSchema{{Key: "z"}, {Key: "a"}}
 	fixture := &deploymentStatusFixture{
 		snapshot:       appschemamodel.ApplicationSchemaSnapshot{Objects: objects, Actions: []definitionmodel.ActionSchema{{Key: "action"}}, Workflows: []definitionmodel.WorkflowSchema{{Key: "workflow"}}},
-		workflowValues: []workflowmodel.WorkflowExecution{{}}, invocationValues: []integrationmodel.IntegrationInvocation{{}}, auditValues: []auditmodel.AuditEvent{{}},
+		workflowValues: []workflowmodel.WorkflowExecution{{}}, invocationValues: []integrationsdk.Invocation{{}}, auditValues: []auditmodel.AuditEvent{{}},
 		recordTotals: map[string]int{"a": 1, "z": 2}, recordErrors: map[string]error{}, migration: deploymentmodel.MigrationStatus{Current: true}, schedulerStatus: map[string]any{},
 	}
 	service := deploymentStatusService(fixture)

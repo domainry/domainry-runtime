@@ -3,6 +3,7 @@ package record
 import (
 	"database/sql/driver"
 	"errors"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"sort"
 	"strings"
 	"testing"
@@ -10,7 +11,6 @@ import (
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -309,7 +309,7 @@ func TestRecordMutationSQLFailureAndSideEffectEdges(t *testing.T) {
 	for name, commit := range map[string]transactionmodel.RecordMutationCommit{
 		"audit":    {Operation: "create", Object: object, Record: value, Audit: &auditmodel.AuditEvent{ID: "audit"}},
 		"audits":   {Operation: "create", Object: object, Record: value, Audits: []auditmodel.AuditEvent{{ID: "audit"}}},
-		"outbox":   {Operation: "create", Object: object, Record: value, Outbox: []integrationmodel.IntegrationOutboxMessage{{ID: "outbox", WorkspaceID: "workspace", DedupKey: "key"}}},
+		"outbox":   {Operation: "create", Object: object, Record: value, Outbox: []publicationmodel.Message{{ID: "outbox", WorkspaceID: "workspace", DedupKey: "key"}}},
 		"workflow": {Operation: "create", Object: object, Record: value, WorkflowIntents: []workflowmodel.WorkflowExecution{{ID: "workflow"}}},
 	} {
 		t.Run(name+"-insert", func(t *testing.T) {
@@ -350,7 +350,7 @@ func TestRecordMutationSQLFailureAndSideEffectEdges(t *testing.T) {
 	}
 	store = scriptedRecordStore(t, &recordSQLState{})
 	tx, _ = store.database().BeginTx(t.Context(), nil)
-	if err := store.insertIntegrationOutboxTx(t.Context(), tx, integrationmodel.IntegrationOutboxMessage{WorkspaceID: "workspace", DedupKey: "key", Payload: map[string]any{"bad": bad}}); err == nil {
+	if err := store.insertPublicationHandoffTx(t.Context(), tx, publicationmodel.Message{WorkspaceID: "workspace", DedupKey: "key", Payload: map[string]any{"bad": bad}}); err == nil {
 		t.Fatal("invalid outbox payload accepted")
 	}
 	_ = tx.Rollback()

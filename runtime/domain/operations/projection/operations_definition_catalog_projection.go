@@ -21,7 +21,7 @@ var operationsDefinitionCatalog = []operationsmodel.OperationsDefinition{
 	operationsDefinition("automation.rule.disable", "automation", "automation_rule", false, []string{"automation.rule.write"}, "rule exists"),
 	operationsDefinition("integration.event.retry", "integration", "integration_event", false, []string{"integration.retry"}, "event is retryable and current connector configuration is ready"),
 	operationsDefinition("integration.event.replay", "integration", "integration_event", false, []string{"integration.retry"}, "event workspace, connector, configuration, and secret readiness are rechecked"),
-	operationsDefinition("integration.outbox.retry", "integration", "integration_outbox", false, []string{"integration.retry"}, "message is failed and provider result is not uncertain"),
+	operationsDefinition("runtime.publication.retry", "runtime", "runtime_publication_outbox", false, []string{"integration.retry"}, "Runtime publication handoff is failed and the owner result is not uncertain"),
 	operationsDefinition("integration.invocation.reconcile", "integration", "integration_invocation", true, []string{"integration.retry"}, "invocation is stale and provider evidence can be queried"),
 	operationsSystemDefinition("metadata.migration.apply", "metadata", "metadata_migration", true, []string{"metadata.write"}, "migration plan is current, reviewed, and backup readiness passes"),
 	operationsSystemDefinition("backup.create", "persistence", "database", true, []string{"runtime.backup.create"}, "target is immutable, encryption key is ready, and capacity budget permits"),

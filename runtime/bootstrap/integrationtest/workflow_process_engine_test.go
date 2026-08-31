@@ -2,7 +2,7 @@ package integrationtest
 
 import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -138,5 +138,5 @@ func managerApprovalTestWorkflow() definitionmodel.WorkflowSchema {
 
 func newWorkflowProcessTestService(t *testing.T, store *persistence.RuntimeStore, workflow definitionmodel.WorkflowSchema, identityStore identitysdk.Directory) *RuntimeServices {
 	t.Helper()
-	return runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "workflow-process-test", TemplateVersion: "1", Name: "Workflow Process Test", Objects: schedulerprojection.SchedulerSystemObjects(), Actions: nil, Workflows: []definitionmodel.WorkflowSchema{workflow}, AutomationRules: nil, Dictionaries: nil, Integrations: integrationmodel.IntegrationSchema{}, Reports: nil, Skills: nil, Agents: nil, Store: store, IdentityDirectory: identityStore, WorkflowProcesses: workflowpersistence.NewWorkflowProcessStore(store), WorkflowDecisions: workflowpersistence.NewWorkflowDecisionStore(store), WorkflowWorker: workflowpersistence.NewWorkflowWorkerStore(store)})
+	return runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "workflow-process-test", TemplateVersion: "1", Name: "Workflow Process Test", Objects: recordtimerprojection.RecordTimerSystemObjects(), Actions: nil, Workflows: []definitionmodel.WorkflowSchema{workflow}, AutomationRules: nil, Dictionaries: nil, Integrations: connectormodel.IntegrationSchema{}, Reports: nil, Skills: nil, Agents: nil, Store: store, IdentityDirectory: identityStore, WorkflowProcesses: workflowpersistence.NewWorkflowProcessStore(store), WorkflowDecisions: workflowpersistence.NewWorkflowDecisionStore(store), WorkflowWorker: workflowpersistence.NewWorkflowWorkerStore(store)})
 }

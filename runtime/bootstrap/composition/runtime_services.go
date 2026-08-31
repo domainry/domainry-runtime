@@ -2,6 +2,7 @@ package composition
 
 import (
 	"context"
+	publicationrepository "github.com/domainry/domainry-runtime/runtime/domain/publication/repository"
 
 	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
@@ -32,7 +33,6 @@ import (
 	automationrepository "github.com/domainry/domainry-runtime/runtime/domain/automation/repository"
 	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
 	deploymentrepository "github.com/domainry/domainry-runtime/runtime/domain/deployment/repository"
-	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
@@ -73,28 +73,23 @@ type NotificationRenderRequest struct {
 // RuntimeServicesDependencies declares every explicit repository and external
 // port required by the Runtime composition root.
 type RuntimeServicesDependencies struct {
-	ProductBrandName       string
-	ActionRuntimeRevision  string
-	ActionProjectRevision  string
-	ActionMetadataRevision string
-	Records                recordrepository.RecordRepository
-	ReportDatasetRows      reportcontract.ReportDatasetRowReader
-	ReportObjectSQL        reportcontract.ReportObjectSQLExecutor
-	ReportSnapshots        reportcontract.ReportSnapshotStore
-	ReportSnapshotSources  reportcontract.ReportSnapshotSourceVersionReader
-	RecordExecutions       recordcontract.RecordMutationExecutionStore
-	DataExchange           dataexchange.Binding
-	DataExchangeProviders  *recordapplication.DataExchangeProviders
-	Audit                  auditrepository.AuditRepository
-	AuditApplication       *auditapplication.AuditApplicationService
-	AuditExportTokenKey    []byte
-	IntegrationConfig      integrationrepository.IntegrationConfigRepository
-	IntegrationEvents      integrationrepository.IntegrationEventRepository
-	IntegrationPublication integrationrepository.RuntimePublicationRepository
-	// IntegrationDelivery is the deprecated combined test/compatibility port.
-	IntegrationDelivery                 integrationrepository.IntegrationDeliveryRepository
-	IntegrationWorker                   integrationrepository.IntegrationWorkerRepository
-	IntegrationPublicationWorker        integrationrepository.RuntimePublicationWorkerRepository
+	ProductBrandName                    string
+	ActionRuntimeRevision               string
+	ActionProjectRevision               string
+	ActionMetadataRevision              string
+	Records                             recordrepository.RecordRepository
+	ReportDatasetRows                   reportcontract.ReportDatasetRowReader
+	ReportObjectSQL                     reportcontract.ReportObjectSQLExecutor
+	ReportSnapshots                     reportcontract.ReportSnapshotReader
+	ReportSnapshotSources               reportcontract.ReportSnapshotSourceVersionReader
+	RecordExecutions                    recordcontract.RecordMutationExecutionStore
+	DataExchange                        dataexchange.Binding
+	DataExchangeProviders               *recordapplication.DataExchangeProviders
+	Audit                               auditrepository.AuditRepository
+	AuditApplication                    *auditapplication.AuditApplicationService
+	AuditExportTokenKey                 []byte
+	IntegrationPublication              publicationrepository.Repository
+	IntegrationPublicationWorker        publicationrepository.WorkerRepository
 	IntegrationOwnerDelivery            integrationsdk.Delivery
 	IntegrationOwnerCatalog             integrationsdk.Catalog
 	WorkerWakeups                       *workerplatform.WakeupBroker
@@ -110,6 +105,8 @@ type RuntimeServicesDependencies struct {
 	AutomationNotificationCompiler      func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	AutomationNotificationCommitter     automationapplication.AutomationExecutionNotificationCommitter
 	NotificationIntentPublisher         func(context.Context, notificationmodel.NotificationIntent) error
+	IntegrationOwnerManagement          integrationsdk.Management
+	IntegrationOwnerOperations          integrationsdk.Operations
 	ApplicationSchema                   appschemarepository.ApplicationSchemaRepository
 	AutomationWorker                    automationcontract.AutomationWorkerStore
 	AutomationExecutions                automationrepository.AutomationExecutionRepository

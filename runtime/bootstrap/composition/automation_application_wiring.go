@@ -16,13 +16,15 @@ import (
 func assembleAutomationApplication(records *runtimeAssembly) *automationapplication.AutomationApplicationService {
 	metadata := records.applicationSchemaService
 	return automationapplication.NewAutomationApplicationService(automationapplication.AutomationApplicationDependencies{
-		Rules:               runtimeAutomationRuleRegistry{records: records},
-		Connectors:          records.connectorRegistry,
-		RecordRepository:    records.recordRepo,
-		WorkerStore:         records.automationWorkerRepo,
-		ExecutionRepository: records.automationExecutionRepo,
-		DeliveryRepository:  records.integrationPublicationRepo,
-		Audit:               records.auditApplicationService.AppendWithMetadata,
+		Rules:                 runtimeAutomationRuleRegistry{records: records},
+		Connectors:            records.connectorRegistry,
+		RecordRepository:      records.recordRepo,
+		WorkerStore:           records.automationWorkerRepo,
+		ExecutionRepository:   records.automationExecutionRepo,
+		DeliveryRepository:    records.publicationRepository,
+		IntegrationManagement: records.integrationOwnerManagement,
+		IntegrationOperations: records.integrationOwnerOperations,
+		Audit:                 records.auditApplicationService.AppendWithMetadata,
 		Principal: func(ctx context.Context, userID, roleKey, fallbackRoleKey string) principalmodel.Principal {
 			if roleKey == "" {
 				roleKey = fallbackRoleKey

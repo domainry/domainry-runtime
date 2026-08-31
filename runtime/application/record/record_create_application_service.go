@@ -3,6 +3,7 @@ package record
 import (
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	recordruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
@@ -29,7 +30,6 @@ import (
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/logging"
 	"github.com/domainry/domainry-foundation/mutation"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 )
 
 type RecordCreateDependencies struct {
@@ -48,7 +48,7 @@ type RecordCreateDependencies struct {
 	ValidateFields        func(context.Context, definitionmodel.ObjectSchema, recordmodel.Record, map[string]any, principalmodel.Principal) error
 	ValidateUnique        func(context.Context, string, string, definitionmodel.ObjectSchema, string, map[string]any) error
 	ValidateDuplicate     func(context.Context, string, definitionmodel.ObjectSchema, string, map[string]any) error
-	AfterOutbox           func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []integrationmodel.IntegrationOutboxMessage
+	AfterOutbox           func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []publicationmodel.Message
 	PrepareWorkflow       func(context.Context, string, recordmodel.Record, map[string]any, principalmodel.Principal, string) ([]workflowmodel.WorkflowExecution, error)
 	ExecuteWorkflow       func(context.Context, []workflowmodel.WorkflowExecution, principalmodel.Principal)
 	Audit                 func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,7 +38,6 @@ import (
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
@@ -79,6 +79,8 @@ type runtimeExtensionRegistries struct {
 	notificationPublisher        notificationIntentPublisher
 	integrationOwnerDelivery     integrationsdk.Delivery
 	integrationOwnerCatalog      integrationsdk.Catalog
+	integrationOwnerManagement   integrationsdk.Management
+	integrationOwnerOperations   integrationsdk.Operations
 	dataExchangeProviderKey      string
 	dataExchangeImportProvider   dataexchangemodulehost.ImportProvider
 	dataExchangeExportProvider   dataexchangemodulehost.ExportProvider
@@ -100,7 +102,9 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	var notificationPublisher notificationIntentPublisher
 	var integrationOwnerDelivery integrationsdk.Delivery
 	var integrationOwnerCatalog integrationsdk.Catalog
-	var notificationSubjectLifecycle lifecyclecontract.SubjectDataHandler
+	var integrationOwnerManagement integrationsdk.Management
+	var integrationOwnerOperations integrationsdk.Operations
+	var notificationSubjectLifecycle lifecyclecontract.SubjectExecutionHandler
 	var notificationRetention lifecyclecontract.OwnerLifecycleExecutor
 	var auditRepository auditrepository.AuditRepository
 	var auditSubjectLifecycle lifecyclecontract.SubjectDataHandler
@@ -312,7 +316,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 				}
 				return runtimeext.FileVerificationEvidence{FileID: evidence.FileID, ContentSHA256: evidence.SHA256, Size: evidence.Size, Status: evidence.Status, Provider: evidence.Provider, EvidenceRef: evidence.EvidenceRef}, nil
 			},
-			PrepareOutboxPayload: func(ctx context.Context, message integrationmodel.IntegrationOutboxMessage, payload map[string]any) (map[string]any, error) {
+			PrepareOutboxPayload: func(ctx context.Context, message publicationmodel.Message, payload map[string]any) (map[string]any, error) {
 				if strings.TrimSpace(message.ConnectorKey) != "email" || strings.TrimSpace(message.Operation) != "send_file_email" {
 					return payload, nil
 				}

@@ -20,15 +20,15 @@ type operationsLeaseReleaseSpec struct {
 }
 
 var operationsLeaseReleaseSpecs = map[string]operationsLeaseReleaseSpec{
-	"workflow":             {table: "_workflow_execution_receipts", idColumn: "id", workspaceColumn: "workspace_id"},
-	"workflow_execution":   {table: "_workflow_executions", idColumn: "id", workspaceColumn: "workspace_id"},
-	"workflow_deadline":    {table: "_workflow_tasks", idColumn: "id", workspaceColumn: "workspace_id"},
-	"business_action":      {table: "_action_executions", idColumn: "id", workspaceColumn: "workspace_id"},
-	"record_mutation":      {table: "_record_mutation_executions", idColumn: "id", workspaceColumn: "workspace_id"},
-	"idempotency_cleanup":  {table: "_idempotency_cleanup_leases", idColumn: "id"},
-	"automation":           {table: "_automation_instruction_executions", idColumn: "id", workspaceColumn: "workspace_id"},
-	"integration_outbox":   {table: "_publication_outbox", idColumn: "id", workspaceColumn: "workspace_id", publicationType: "integration.connector"},
-	"transaction_boundary": {table: "_transaction_boundary_intents", idColumn: "id", workspaceColumn: "workspace_id"},
+	"workflow":                   {table: "_workflow_execution_receipts", idColumn: "id", workspaceColumn: "workspace_id"},
+	"workflow_execution":         {table: "_workflow_executions", idColumn: "id", workspaceColumn: "workspace_id"},
+	"workflow_deadline":          {table: "_workflow_tasks", idColumn: "id", workspaceColumn: "workspace_id"},
+	"business_action":            {table: "_action_executions", idColumn: "id", workspaceColumn: "workspace_id"},
+	"record_mutation":            {table: "_record_mutation_executions", idColumn: "id", workspaceColumn: "workspace_id"},
+	"idempotency_cleanup":        {table: "_idempotency_cleanup_leases", idColumn: "id"},
+	"automation":                 {table: "_automation_instruction_executions", idColumn: "id", workspaceColumn: "workspace_id"},
+	"runtime_publication_outbox": {table: "_publication_outbox", idColumn: "id", workspaceColumn: "workspace_id", publicationType: "integration.connector"},
+	"transaction_boundary":       {table: "_transaction_boundary_intents", idColumn: "id", workspaceColumn: "workspace_id"},
 }
 
 func (s OperationsStore) ForceReleaseOperationsLease(ctx context.Context, request operationsmodel.OperationsLeaseReleaseRequest) (operationsmodel.OperationsLeaseReleaseResult, bool, error) {

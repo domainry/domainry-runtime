@@ -18,6 +18,8 @@ import (
 	connector "github.com/domainry/domainry-connector-sdk"
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	integrationmodule "github.com/domainry/domainry-integration/module"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	monitoringremote "github.com/domainry/domainry-monitoring-sdk/remote"
 	monitoringmodule "github.com/domainry/domainry-monitoring/module"
@@ -34,6 +36,7 @@ import (
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -48,6 +51,10 @@ func runtimeTestNotificationFactory() *notificationmodule.Factory {
 	return factory
 }
 
+func runtimeTestIntegrationFactory() integrationsdk.Factory {
+	return integrationmodule.NewFactory()
+}
+
 func runtimeTestPartyFactory() *partymodule.Factory {
 	return partymodule.NewFactory(partymodule.Options{})
 }
@@ -57,6 +64,15 @@ func runtimeTestDataExchangeFactory() dataexchangesdk.Factory {
 }
 
 type startupContractMismatchHandler struct{}
+
+type startupIntegrationCatalogStub struct {
+	definitions []integrationsdk.ConnectorDefinition
+	err         error
+}
+
+func (s startupIntegrationCatalogStub) ListConnectorDefinitions(context.Context) ([]integrationsdk.ConnectorDefinition, error) {
+	return append([]integrationsdk.ConnectorDefinition(nil), s.definitions...), s.err
+}
 
 func (startupContractMismatchHandler) Descriptor() runtimeext.HandlerDescriptor {
 	return runtimeext.HandlerDescriptor{
@@ -106,16 +122,16 @@ func TestRuntimeStartupRegistryAndReadinessBoundaryGuards(t *testing.T) {
 	frozenConnectors.Freeze()
 	for name, run := range map[string]func(){
 		"nil handlers": func() {
-			newWithExtensions(t.Context(), bootstrapTestConfig(t), nil, frozenConnectors, runtimehttp.RuntimeReleaseIdentity{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+			newWithExtensions(t.Context(), bootstrapTestConfig(t), nil, frozenConnectors, runtimehttp.RuntimeReleaseIdentity{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 		},
 		"unfrozen handlers": func() {
-			newWithExtensions(t.Context(), bootstrapTestConfig(t), runtimeext.NewBusinessHandlerRegistry(), frozenConnectors, runtimehttp.RuntimeReleaseIdentity{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+			newWithExtensions(t.Context(), bootstrapTestConfig(t), runtimeext.NewBusinessHandlerRegistry(), frozenConnectors, runtimehttp.RuntimeReleaseIdentity{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 		},
 		"nil connectors": func() {
-			newWithExtensions(t.Context(), bootstrapTestConfig(t), frozenHandlers, nil, runtimehttp.RuntimeReleaseIdentity{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+			newWithExtensions(t.Context(), bootstrapTestConfig(t), frozenHandlers, nil, runtimehttp.RuntimeReleaseIdentity{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 		},
 		"unfrozen connectors": func() {
-			newWithExtensions(t.Context(), bootstrapTestConfig(t), frozenHandlers, connector.NewRegistry(), runtimehttp.RuntimeReleaseIdentity{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+			newWithExtensions(t.Context(), bootstrapTestConfig(t), frozenHandlers, connector.NewRegistry(), runtimehttp.RuntimeReleaseIdentity{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 		},
 	} {
 		t.Run(name, func(t *testing.T) { assertBootstrapPanic(t, run) })
@@ -170,7 +186,7 @@ func TestNewBuildsRunnableRuntimeAndClosesStartedWorkers(t *testing.T) {
 func TestNewWithBusinessHandlersBuildsRuntime(t *testing.T) {
 	handlers := runtimeext.NewBusinessHandlerRegistry()
 	handlers.Freeze()
-	runtime := NewWithBusinessHandlers(t.Context(), bootstrapTestConfig(t), handlers, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+	runtime := NewWithBusinessHandlers(t.Context(), bootstrapTestConfig(t), handlers, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 	if runtime.businessHandlers != handlers {
 		t.Fatal("Runtime did not retain supplied business handlers")
 	}
@@ -187,7 +203,7 @@ func TestProjectRuntimeOpensOneNotificationModuleBinding(t *testing.T) {
 	runtime := NewProjectWithFactoriesAndDatabase(
 		t.Context(), bootstrapTestConfig(t), handlers, connectors,
 		runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{},
-		runtimeIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), nil,
+		runtimeIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory(), nil,
 	)
 	if runtime.notificationBinding == nil || runtime.notificationBinding.Descriptor().Mode != "module" || runtime.notificationWorkers == nil || runtime.notificationHTTP == nil {
 		t.Fatalf("Notification Module composition is incomplete: binding=%v workers=%v http=%v", runtime.notificationBinding, runtime.notificationWorkers, runtime.notificationHTTP)
@@ -209,7 +225,7 @@ func TestProjectRuntimeOpensMonitoringModuleAndSaaSBindings(t *testing.T) {
 		connectors.Freeze()
 		cfg := bootstrapTestConfig(t)
 		cfg.RuntimeInstanceID = "monitoring-runtime"
-		return NewProjectWithAllFactoriesAndDatabase(t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), nil, factory)
+		return NewProjectWithAllFactoriesAndDatabase(t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory(), nil, factory)
 	}
 
 	moduleRuntime := build(t, monitoringmodule.NewFactory(monitoringmodule.Options{}))
@@ -244,7 +260,7 @@ func TestProjectRuntimeOpensExtractedSchedulerModuleBinding(t *testing.T) {
 	connectors.Freeze()
 	cfg := bootstrapTestConfig(t)
 	cfg.RuntimeInstanceID = "scheduler-runtime"
-	runtime := NewProjectWithOwnerFactoriesAndDatabase(t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), nil, schedulermodule.NewFactory(schedulermodule.Options{}), dataexchangefixture.NewFactory(), nil)
+	runtime := NewProjectWithOwnerFactoriesAndDatabase(t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), nil, schedulermodule.NewFactory(schedulermodule.Options{}), dataexchangefixture.NewFactory(), runtimeTestIntegrationFactory(), nil)
 	if runtime.schedulerBinding == nil || runtime.schedulerBinding.Descriptor().Mode != schedulersdk.DeploymentModeModule {
 		t.Fatalf("scheduler binding=%#v", runtime.schedulerBinding)
 	}
@@ -261,7 +277,7 @@ func TestProjectRuntimeJoinsSharedReleaseCohortBeforeServingTraffic(t *testing.T
 	handlers.Freeze()
 	connectors := connector.NewRegistry()
 	connectors.Freeze()
-	first := NewProjectWithIdentity(t.Context(), cfg, handlers, connectors, identity, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+	first := NewProjectWithIdentity(t.Context(), cfg, handlers, connectors, identity, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 	t.Cleanup(func() { _ = first.CloseContext(t.Context()) })
 	firstLease := first.runtimeReleaseLease()
 	if firstLease.InstanceID != cfg.RuntimeInstanceID || firstLease.Generation == 0 || first.releaseAdmission.Check() != nil {
@@ -270,7 +286,7 @@ func TestProjectRuntimeJoinsSharedReleaseCohortBeforeServingTraffic(t *testing.T
 
 	matchingConfig := cfg
 	matchingConfig.RuntimeInstanceID = "runtime-release-b"
-	matching := NewProjectWithIdentity(t.Context(), matchingConfig, handlers, connectors, identity, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+	matching := NewProjectWithIdentity(t.Context(), matchingConfig, handlers, connectors, identity, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 	matchingLease := matching.runtimeReleaseLease()
 	if matchingLease.Generation != firstLease.Generation {
 		t.Fatalf("matching generations first=%d second=%d", firstLease.Generation, matchingLease.Generation)
@@ -295,7 +311,7 @@ func TestProjectRuntimeJoinsSharedReleaseCohortBeforeServingTraffic(t *testing.T
 			t.Fatalf("conflicting Runtime startup panic=%v", value)
 		}
 	}()
-	NewProjectWithIdentity(t.Context(), conflictConfig, handlers, connectors, conflicting, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+	NewProjectWithIdentity(t.Context(), conflictConfig, handlers, connectors, conflicting, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 }
 
 func bootstrapRuntimeReleaseIdentity(t *testing.T, marker byte) deploymentmodel.RuntimeReleaseIdentity {
@@ -336,7 +352,7 @@ func TestProjectRuntimeReleaseIntegrityTracksLiveSchemaAndFrozenRegistries(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime := NewProjectWithIdentity(t.Context(), cfg, handlers, connectors, identity, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+	runtime := NewProjectWithIdentity(t.Context(), cfg, handlers, connectors, identity, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 	t.Cleanup(func() { _ = runtime.CloseContext(t.Context()) })
 	if err := runtime.releaseIntegrity.SchemaReadiness(t.Context()); err != nil {
 		t.Fatalf("initial Schema readiness=%v", err)
@@ -654,7 +670,9 @@ func TestPrepareRuntimeManifestValidatesAndCanSkipDomainValidation(t *testing.T)
 	if _, err := prepareRuntimeManifest(t.Context(), cfg); err != nil {
 		t.Fatal(err)
 	}
-	withCatalog, err := addRuntimeConnectorValidationCatalog(manifest)
+	catalog := startupIntegrationCatalogStub{definitions: []integrationsdk.ConnectorDefinition{{Key: "owner_connector", Definition: json.RawMessage(`{"key":"owner_connector"}`)}}}
+	manifest.Integrations.Connectors = []connectormodel.ConnectorSchema{{Key: "manifest_must_not_own_catalog"}}
+	withCatalog, err := addIntegrationOwnerValidationCatalog(t.Context(), manifest, catalog)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -671,7 +689,7 @@ func TestPrepareRuntimeManifestRejectsInvalidDomainManifest(t *testing.T) {
 }
 
 func TestManifestValidationCatalogPropagatesCatalogFailure(t *testing.T) {
-	if _, err := mergeRuntimeConnectorValidationCatalog(manifestmodel.ManifestSchema{}, nil, errors.New("catalog unavailable")); err == nil {
+	if _, err := replaceIntegrationConnectorValidationProjection(manifestmodel.ManifestSchema{}, nil, errors.New("catalog unavailable")); err == nil {
 		t.Fatal("catalog failure must propagate")
 	}
 }

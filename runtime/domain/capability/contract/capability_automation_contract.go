@@ -1,22 +1,23 @@
 package contract
 
 import (
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )
 
 type CapabilityAutomationCatalog struct {
-	Phases                  []string                                 `json:"phases"`
-	Operations              []string                                 `json:"operations"`
-	ExecutionModes          []string                                 `json:"execution_modes"`
-	RunAsModes              []string                                 `json:"run_as_modes"`
-	ResultNotificationModes []string                                 `json:"result_notification_modes"`
-	InstructionTypes        []string                                 `json:"instruction_types"`
-	BeforeInstructionTypes  []string                                 `json:"before_instruction_types"`
-	AfterInstructionTypes   []string                                 `json:"after_instruction_types"`
-	Capabilities            []CapabilityAutomationInstruction        `json:"capabilities"`
-	Connectors              []integrationmodel.ConnectorSchema       `json:"connectors"`
-	Connections             []integrationmodel.IntegrationConnection `json:"connections"`
-	AuthoringProjection     *CapabilityAuthoringProjection           `json:"authoring_projection,omitempty"`
+	Phases                  []string                          `json:"phases"`
+	Operations              []string                          `json:"operations"`
+	ExecutionModes          []string                          `json:"execution_modes"`
+	RunAsModes              []string                          `json:"run_as_modes"`
+	ResultNotificationModes []string                          `json:"result_notification_modes"`
+	InstructionTypes        []string                          `json:"instruction_types"`
+	BeforeInstructionTypes  []string                          `json:"before_instruction_types"`
+	AfterInstructionTypes   []string                          `json:"after_instruction_types"`
+	Capabilities            []CapabilityAutomationInstruction `json:"capabilities"`
+	Connectors              []connectormodel.ConnectorSchema  `json:"connectors"`
+	Connections             []integrationsdk.Connection       `json:"connections"`
+	AuthoringProjection     *CapabilityAuthoringProjection    `json:"authoring_projection,omitempty"`
 }
 
 type CapabilityAutomationInstruction struct {

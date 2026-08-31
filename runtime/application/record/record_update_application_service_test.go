@@ -4,6 +4,7 @@ package record
 import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	recordruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
@@ -29,7 +30,6 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 )
 
 type updateRepositoryProbe struct {
@@ -129,9 +129,9 @@ func TestUpdateServiceOwnsCompleteUpdateTransaction(t *testing.T) {
 			return nil
 		},
 		ValidateDuplicate: func(context.Context, string, definitionmodel.ObjectSchema, string, map[string]any) error { return nil },
-		AfterOutbox: func(_ string, operation string, _ map[string]any, _ recordmodel.Record, _ principalmodel.Principal) []integrationmodel.IntegrationOutboxMessage {
+		AfterOutbox: func(_ string, operation string, _ map[string]any, _ recordmodel.Record, _ principalmodel.Principal) []publicationmodel.Message {
 			outboxOperations = append(outboxOperations, operation)
-			return []integrationmodel.IntegrationOutboxMessage{{ID: "outbox-" + operation}}
+			return []publicationmodel.Message{{ID: "outbox-" + operation}}
 		},
 		UpdatedTriggers: func(string, map[string]any, map[string]any) []string { return []string{"record_updated:case.status"} },
 		PrepareWorkflow: func(_ context.Context, _ string, _ recordmodel.Record, _ map[string]any, _ principalmodel.Principal, trigger string) ([]workflowmodel.WorkflowExecution, error) {

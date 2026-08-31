@@ -1,6 +1,7 @@
 package projection
 
 import (
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"reflect"
 	"strings"
 	"testing"
@@ -12,7 +13,6 @@ import (
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
 
@@ -86,15 +86,15 @@ func TestManifestArtifactHelpers(t *testing.T) {
 func TestManifestRestorationProjection(t *testing.T) {
 	persisted := manifestmodel.ManifestSchema{
 		Dictionaries: []appschemamodel.DictionarySchema{{Key: "existing"}}, AutomationRules: []automationmodel.AutomationRuleSchema{{Key: "existing"}}, Workflows: []definitionmodel.WorkflowSchema{{Key: "existing"}},
-		Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "existing"}}},
+		Integrations: connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{{Key: "existing"}}},
 	}
 	installed := manifestmodel.ManifestSchema{
 		ManifestHash: "hash", Description: "description", Dictionaries: []appschemamodel.DictionarySchema{{Key: ""}, {Key: " existing "}, {Key: "new"}, {Key: "new"}},
 		AutomationRules: []automationmodel.AutomationRuleSchema{{Key: ""}, {Key: " existing "}, {Key: "new"}, {Key: "new"}},
 		Workflows:       []definitionmodel.WorkflowSchema{{Key: ""}, {Key: " existing "}, {Key: "new"}, {Key: "new"}},
-		Integrations: integrationmodel.IntegrationSchema{
-			Connectors:  []integrationmodel.ConnectorSchema{{Key: "new"}},
-			Connections: []integrationmodel.ConnectionSchema{{Key: "connection"}},
+		Integrations: connectormodel.IntegrationSchema{
+			Connectors:  []connectormodel.ConnectorSchema{{Key: "new"}},
+			Connections: []connectormodel.ConnectionSchema{{Key: "connection"}},
 		},
 		SeedRecords:          []businessseedmodel.SeedRecordSchema{{ObjectKey: "order"}},
 		SchedulerDefinitions: []map[string]any{{"key": "nightly"}},
@@ -106,11 +106,7 @@ func TestManifestRestorationProjection(t *testing.T) {
 		}},
 	}
 	merged := MergeInstalledEnvelope(persisted, installed, []notificationmodel.NotificationTemplate{{Key: "template"}})
-	if merged.ManifestHash != "hash" || merged.Description != "description" || len(merged.Dictionaries) != 2 || len(merged.AutomationRules) != 2 || len(merged.Workflows) != 2 || len(merged.NotificationTemplates) != 1 || len(merged.Integrations.Connectors) != 2 || len(merged.Integrations.Connections) != 1 || len(merged.SchedulerDefinitions) != 1 || len(merged.Reports) != 1 || len(merged.Skills) != 1 || len(merged.Agents) != 1 || len(merged.WorkspaceProvisioning) != 1 || merged.WorkspaceProvisioning[0].Key != "baseline" {
+	if merged.ManifestHash != "hash" || merged.Description != "description" || len(merged.Dictionaries) != 2 || len(merged.AutomationRules) != 2 || len(merged.Workflows) != 2 || len(merged.NotificationTemplates) != 1 || len(merged.Integrations.Connectors) != 1 || merged.Integrations.Connectors[0].Key != "new" || len(merged.Integrations.Connections) != 1 || len(merged.SchedulerDefinitions) != 1 || len(merged.Reports) != 1 || len(merged.Skills) != 1 || len(merged.Agents) != 1 || len(merged.WorkspaceProvisioning) != 1 || merged.WorkspaceProvisioning[0].Key != "baseline" {
 		t.Fatalf("merged envelope = %#v", merged)
-	}
-	merged = MergeConnectorValidationCatalog(merged, []integrationmodel.ConnectorSchema{{Key: "existing"}, {Key: "new"}, {Key: "new"}})
-	if len(merged.Integrations.Connectors) != 2 {
-		t.Fatalf("connectors = %#v", merged.Integrations.Connectors)
 	}
 }

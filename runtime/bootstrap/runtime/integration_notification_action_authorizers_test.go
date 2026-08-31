@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"errors"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -10,16 +11,14 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
-	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	notificationfacade "github.com/domainry/domainry-runtime/runtime/application/notificationfacade"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
 type integrationNotificationResourceReaderStub struct {
-	secrets     []integrationmodel.IntegrationSecret
-	connections []integrationmodel.IntegrationConnection
+	secrets     []integrationsdk.Secret
+	connections []integrationsdk.Connection
 	err         error
 }
 
@@ -28,7 +27,7 @@ func registerIntegrationNotificationActionAuthorizers(registry *notificationfaca
 		return
 	}
 	registry.Register("integration_secret", func(ctx context.Context, id string, principal principalmodel.Principal) error {
-		if !integrationapplication.HasPermission(principal, integrationapplication.PermissionSecretManage) {
+		if !principal.HasPermission("integration.secret.manage") {
 			return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.notification.inbox_action_forbidden"}
 		}
 		values, err := resources.ListSecrets(ctx, principal.WorkspaceID)
@@ -43,7 +42,7 @@ func registerIntegrationNotificationActionAuthorizers(registry *notificationfaca
 		return &apperror.AppError{Kind: apperror.KindNotFound, Code: "backend.notification.inbox_action_resource_not_found"}
 	})
 	registry.Register("integration_connection", func(ctx context.Context, id string, principal principalmodel.Principal) error {
-		if !integrationapplication.HasPermission(principal, integrationapplication.PermissionConnectionManage) {
+		if !principal.HasPermission("integration.connection.manage") {
 			return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.notification.inbox_action_forbidden"}
 		}
 		values, err := resources.ListConnections(ctx, principal.WorkspaceID)
@@ -59,11 +58,11 @@ func registerIntegrationNotificationActionAuthorizers(registry *notificationfaca
 	})
 }
 
-func (s integrationNotificationResourceReaderStub) ListSecrets(context.Context, string) ([]integrationmodel.IntegrationSecret, error) {
+func (s integrationNotificationResourceReaderStub) ListSecrets(context.Context, string) ([]integrationsdk.Secret, error) {
 	return s.secrets, s.err
 }
 
-func (s integrationNotificationResourceReaderStub) ListConnections(context.Context, string) ([]integrationmodel.IntegrationConnection, error) {
+func (s integrationNotificationResourceReaderStub) ListConnections(context.Context, string) ([]integrationsdk.Connection, error) {
 	return s.connections, s.err
 }
 
@@ -78,14 +77,14 @@ func TestIntegrationNotificationActionsReauthorizeTenantAdminResourceAccess(t *t
 		wantCode     string
 		wantErr      error
 	}{
-		{name: "secret allowed", resourceType: "integration_secret", resourceID: "secret", permissions: []string{integrationapplication.PermissionSecretManage}, reader: integrationNotificationResourceReaderStub{secrets: []integrationmodel.IntegrationSecret{{Key: "secret"}}}},
-		{name: "secret missing permission", resourceType: "integration_secret", resourceID: "secret", permissions: nil, reader: integrationNotificationResourceReaderStub{secrets: []integrationmodel.IntegrationSecret{{Key: "secret"}}}, wantCode: "backend.notification.inbox_action_forbidden"},
-		{name: "secret missing resource", resourceType: "integration_secret", resourceID: "missing", permissions: []string{integrationapplication.PermissionSecretManage}, reader: integrationNotificationResourceReaderStub{secrets: []integrationmodel.IntegrationSecret{{Key: "secret"}}}, wantCode: "backend.notification.inbox_action_resource_not_found"},
-		{name: "secret lookup failure", resourceType: "integration_secret", resourceID: "secret", permissions: []string{integrationapplication.PermissionSecretManage}, reader: integrationNotificationResourceReaderStub{err: failure}, wantErr: failure},
-		{name: "connection allowed", resourceType: "integration_connection", resourceID: "erp", permissions: []string{integrationapplication.PermissionConnectionManage}, reader: integrationNotificationResourceReaderStub{connections: []integrationmodel.IntegrationConnection{{Key: "erp"}}}},
-		{name: "connection missing manage", resourceType: "integration_connection", resourceID: "erp", permissions: nil, reader: integrationNotificationResourceReaderStub{connections: []integrationmodel.IntegrationConnection{{Key: "erp"}}}, wantCode: "backend.notification.inbox_action_forbidden"},
-		{name: "connection missing resource", resourceType: "integration_connection", resourceID: "missing", permissions: []string{integrationapplication.PermissionConnectionManage}, reader: integrationNotificationResourceReaderStub{connections: []integrationmodel.IntegrationConnection{{Key: "erp"}}}, wantCode: "backend.notification.inbox_action_resource_not_found"},
-		{name: "connection lookup failure", resourceType: "integration_connection", resourceID: "erp", permissions: []string{integrationapplication.PermissionConnectionManage}, reader: integrationNotificationResourceReaderStub{err: failure}, wantErr: failure},
+		{name: "secret allowed", resourceType: "integration_secret", resourceID: "secret", permissions: []string{"integration.secret.manage"}, reader: integrationNotificationResourceReaderStub{secrets: []integrationsdk.Secret{{Key: "secret"}}}},
+		{name: "secret missing permission", resourceType: "integration_secret", resourceID: "secret", permissions: nil, reader: integrationNotificationResourceReaderStub{secrets: []integrationsdk.Secret{{Key: "secret"}}}, wantCode: "backend.notification.inbox_action_forbidden"},
+		{name: "secret missing resource", resourceType: "integration_secret", resourceID: "missing", permissions: []string{"integration.secret.manage"}, reader: integrationNotificationResourceReaderStub{secrets: []integrationsdk.Secret{{Key: "secret"}}}, wantCode: "backend.notification.inbox_action_resource_not_found"},
+		{name: "secret lookup failure", resourceType: "integration_secret", resourceID: "secret", permissions: []string{"integration.secret.manage"}, reader: integrationNotificationResourceReaderStub{err: failure}, wantErr: failure},
+		{name: "connection allowed", resourceType: "integration_connection", resourceID: "erp", permissions: []string{"integration.connection.manage"}, reader: integrationNotificationResourceReaderStub{connections: []integrationsdk.Connection{{Key: "erp"}}}},
+		{name: "connection missing manage", resourceType: "integration_connection", resourceID: "erp", permissions: nil, reader: integrationNotificationResourceReaderStub{connections: []integrationsdk.Connection{{Key: "erp"}}}, wantCode: "backend.notification.inbox_action_forbidden"},
+		{name: "connection missing resource", resourceType: "integration_connection", resourceID: "missing", permissions: []string{"integration.connection.manage"}, reader: integrationNotificationResourceReaderStub{connections: []integrationsdk.Connection{{Key: "erp"}}}, wantCode: "backend.notification.inbox_action_resource_not_found"},
+		{name: "connection lookup failure", resourceType: "integration_connection", resourceID: "erp", permissions: []string{"integration.connection.manage"}, reader: integrationNotificationResourceReaderStub{err: failure}, wantErr: failure},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			registry := notificationfacade.NewActionAuthorizerRegistry()

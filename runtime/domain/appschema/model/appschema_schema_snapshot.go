@@ -5,7 +5,6 @@ import (
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 )
 
@@ -21,7 +20,7 @@ type ApplicationSchemaSnapshot struct {
 	Workflows                 []definitionmodel.WorkflowSchema        `json:"workflows"`
 	AutomationRules           []automationmodel.AutomationRuleSchema  `json:"automation_rules,omitempty"`
 	Dictionaries              []DictionarySchema                      `json:"dictionaries,omitempty"`
-	Integrations              integrationmodel.IntegrationSchema      `json:"integrations,omitempty"`
+	Integrations              IntegrationSchema                       `json:"integrations,omitempty"`
 	Reports                   []reportmodel.ReportSchema              `json:"reports,omitempty"`
 	Skills                    []agentsdk.SkillSchema                  `json:"skills,omitempty"`
 	Agents                    []agentsdk.AgentSchema                  `json:"agents,omitempty"`

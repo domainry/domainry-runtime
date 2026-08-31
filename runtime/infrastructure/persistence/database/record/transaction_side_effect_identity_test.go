@@ -1,12 +1,12 @@
 package record
 
 import (
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	transactioncontract "github.com/domainry/domainry-runtime/runtime/domain/transaction/contract"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -47,19 +47,19 @@ func TestTransactionalSideEffectsRequireStableIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := repository.insertIntegrationOutboxTx(t.Context(), tx, integrationmodel.IntegrationOutboxMessage{WorkspaceID: "workspace-a", ConnectorKey: "webhook", Operation: "notify"}); err == nil || !strings.Contains(err.Error(), "stable dedup key") {
+	if err := repository.insertPublicationHandoffTx(t.Context(), tx, publicationmodel.Message{WorkspaceID: "workspace-a", ConnectorKey: "webhook", Operation: "notify"}); err == nil || !strings.Contains(err.Error(), "stable dedup key") {
 		t.Fatalf("missing outbox dedup identity error=%v", err)
 	}
 	_ = tx.Rollback()
 
-	message := integrationmodel.IntegrationOutboxMessage{WorkspaceID: "workspace-a", ConnectorKey: "webhook", ConnectionKey: "primary", Operation: "notify", DedupKey: "record:1", Payload: map[string]any{}}
-	wakeups := store.WorkerWakeups().Subscribe("integration_outbox", 1)
+	message := publicationmodel.Message{WorkspaceID: "workspace-a", ConnectorKey: "webhook", ConnectionKey: "primary", Operation: "notify", DedupKey: "record:1", Payload: map[string]any{}}
+	wakeups := store.WorkerWakeups().Subscribe("runtime_publication_outbox", 1)
 	operationContext, afterCommit := transactioncontract.WithAfterCommitRegistry(transactioncontract.WithActiveTransaction(t.Context()))
 	tx, err = store.DB().BeginTx(t.Context(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := repository.insertIntegrationOutboxTx(operationContext, tx, message); err != nil {
+	if err := repository.insertPublicationHandoffTx(operationContext, tx, message); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -80,7 +80,7 @@ func TestTransactionalSideEffectsRequireStableIdentity(t *testing.T) {
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _publication_outbox WHERE id = ?`, wantID).Scan(&stored); err != nil || stored != 1 {
 		t.Fatalf("deterministic outbox id=%q stored=%d err=%v", wantID, stored, err)
 	}
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _worker_queue_scopes WHERE queue_kind = ? AND scope_key = ?`, "integration_outbox", message.WorkspaceID).Scan(&stored); err != nil || stored != 1 {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _worker_queue_scopes WHERE queue_kind = ? AND scope_key = ?`, "runtime_publication_outbox", message.WorkspaceID).Scan(&stored); err != nil || stored != 1 {
 		t.Fatalf("transactional outbox workspace recovery scope stored=%d err=%v", stored, err)
 	}
 	select {

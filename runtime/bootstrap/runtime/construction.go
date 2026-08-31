@@ -39,6 +39,7 @@ type runtimeConstructionInput struct {
 	identityPrincipals  identitysdk.PrincipalResolver
 	integrationMode     integrationsdk.DeploymentMode
 	integrationBinding  integrationsdk.Binding
+	integrationWorkers  integrationsdk.LocalWorkers
 	partyBinding        partysdk.Binding
 	dataExchangeBinding dataexchangesdk.Binding
 	lifecycleBinding    lifecyclesdk.Binding
@@ -76,6 +77,7 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		identityPrincipals:  input.identityPrincipals,
 		integrationMode:     input.integrationMode,
 		integrationBinding:  input.integrationBinding,
+		integrationWorkers:  input.integrationWorkers,
 		partyBinding:        input.partyBinding,
 		dataExchangeBinding: input.dataExchangeBinding,
 		lifecycleBinding:    input.lifecycleBinding,

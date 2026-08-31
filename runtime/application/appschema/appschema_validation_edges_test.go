@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -15,7 +16,6 @@ import (
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
@@ -51,11 +51,11 @@ func TestStructuredApplicationDefinitionAndValidationDelegates(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = validateAutomationTriggerFilters(automationmodel.AutomationTriggerSchema{}, definitionmodel.ObjectSchema{})
-	connector := integrationmodel.ConnectorSchema{Operations: []integrationmodel.ConnectorOperationSchema{{Key: "send"}}}
+	connector := connectormodel.ConnectorSchema{Operations: []connectormodel.ConnectorOperationSchema{{Key: "send"}}}
 	if automationConnectorOperation(connector, "send") == nil || automationConnectorOperation(connector, "missing") != nil {
 		t.Fatal("connector operation lookup mismatch")
 	}
-	operation := integrationmodel.ConnectorOperationSchema{Key: "send"}
+	operation := connectormodel.ConnectorOperationSchema{Key: "send"}
 	if err := validateAutomationOperationInput(operation, nil, definitionmodel.ObjectSchema{}, nil); err != nil {
 		t.Fatal(err)
 	}

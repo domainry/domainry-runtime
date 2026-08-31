@@ -2,6 +2,7 @@ package openapi
 
 import (
 	"context"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -9,7 +10,6 @@ import (
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/productbrand"
 )
@@ -97,9 +97,9 @@ func TestObjectActionPathsAndConnectorWebhookConfigCannotPublishRuntimeRoute(t *
 		t.Fatalf("record paths=%v", paths)
 	}
 
-	spec := Build(appschemamodel.ApplicationSchemaSnapshot{Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{
-		{Key: "empty", Config: nil},
-		{Key: "webhook", Name: "Webhook", Config: map[string]any{"webhook_path": " /hooks/provider "}},
+	spec := Build(appschemamodel.ApplicationSchemaSnapshot{Integrations: connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{
+		{Key: "empty"},
+		{Key: "webhook", Name: "Webhook"},
 	}}})
 	paths = spec["paths"].(map[string]any)
 	if paths["/hooks/provider"] != nil {

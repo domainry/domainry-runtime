@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"os"
 	"testing"
 
@@ -15,7 +16,6 @@ import (
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -37,7 +37,7 @@ func TestRuntimeAuthoringValidationAcceptsCanonicalRuntimeManifest(t *testing.T)
 		},
 		BaseManifest: manifest,
 		CurrentSnapshot: func(context.Context, principalmodel.Principal) (changeplanprojection.BusinessSystemSnapshot, error) {
-			snapshot := runtimeAuthoringCompleteConfigurationSnapshot([]integrationmodel.ConnectorSchema{{Key: "file_storage"}})
+			snapshot := runtimeAuthoringCompleteConfigurationSnapshot([]connectormodel.ConnectorSchema{{Key: "file_storage"}})
 			snapshot.Schema.Objects = append([]definitionmodel.ObjectSchema(nil), manifest.Objects...)
 			snapshot.SeedRecords = []businessseedmodel.BusinessSeedProvenance{{SeedKey: "customer.primary", ObjectKey: "customer", RecordID: "customer-1", ContentHash: "hash"}}
 			snapshot.CapabilityKeys = []string{"schema.object"}
@@ -51,7 +51,7 @@ func TestRuntimeAuthoringValidationAcceptsCanonicalRuntimeManifest(t *testing.T)
 			}
 			return manifest.SeedRecords, nil
 		},
-		ValidateDefinitions: func(context.Context, []integrationmodel.ConnectorSchema) error { return nil },
+		ValidateDefinitions: func(context.Context, []connectormodel.ConnectorSchema) error { return nil },
 	})
 	coverage := &changeplanmodel.RuntimeAuthoringCoverageLedger{Version: changeplanmodel.RuntimeAuthoringCoverageLedgerVersion, Requirements: []changeplanmodel.RuntimeAuthoringCoverageRequirement{{
 		RequirementID: "customer-management", CapabilityKeys: []string{"schema.object"},
@@ -81,7 +81,7 @@ func TestRuntimeAuthoringValidationMapsOwnerDiagnosticsAndReadiness(t *testing.T
 		CurrentSnapshot: func(context.Context, principalmodel.Principal) (changeplanprojection.BusinessSystemSnapshot, error) {
 			return runtimeAuthoringCompleteConfigurationSnapshot(nil), nil
 		},
-		ValidateDefinitions: func(context.Context, []integrationmodel.ConnectorSchema) error { return nil },
+		ValidateDefinitions: func(context.Context, []connectormodel.ConnectorSchema) error { return nil },
 		StorageReadiness:    func(context.Context) error { return errors.New("storage unavailable") },
 	})
 	report, err := service.Validate(t.Context(), runtimeAuthoringValidationAdmin())
@@ -115,7 +115,7 @@ func TestRuntimeAuthoringValidationRejectsIncompleteConfigurationSnapshot(t *tes
 		CurrentSnapshot: func(context.Context, principalmodel.Principal) (changeplanprojection.BusinessSystemSnapshot, error) {
 			return snapshot, nil
 		},
-		ValidateDefinitions: func(context.Context, []integrationmodel.ConnectorSchema) error { return nil },
+		ValidateDefinitions: func(context.Context, []connectormodel.ConnectorSchema) error { return nil },
 	})
 	report, err := service.Validate(t.Context(), runtimeAuthoringValidationAdmin())
 	if err != nil {
@@ -178,7 +178,7 @@ func runtimeAuthoringValidationAdmin() principalmodel.Principal {
 	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "builder", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "builder", Permissions: []string{"workspace.admin"}})
 }
 
-func runtimeAuthoringCompleteConfigurationSnapshot(connectors []integrationmodel.ConnectorSchema) changeplanprojection.BusinessSystemSnapshot {
+func runtimeAuthoringCompleteConfigurationSnapshot(connectors []connectormodel.ConnectorSchema) changeplanprojection.BusinessSystemSnapshot {
 	visibility := map[string]string{}
 	for _, category := range runtimeAuthoringRequiredConfigurationCategories {
 		visibility[category] = "visible"

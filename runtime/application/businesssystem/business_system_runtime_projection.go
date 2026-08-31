@@ -6,9 +6,10 @@ import deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/depl
 // This file projects Runtime execution state into the business-system snapshot.
 
 import (
-	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
@@ -30,9 +31,9 @@ type businessRuntimeProjectionPorts struct {
 	workflowProcesses      func(context.Context, principalmodel.Principal, workflowmodel.WorkflowProcessFilter) ([]workflowmodel.WorkflowProcessInstance, error)
 	automationRules        func(context.Context, principalmodel.Principal) ([]automationmodel.AutomationRuleSchema, error)
 	automationExecutions   func(context.Context, automationmodel.AutomationExecutionFilter, principalmodel.Principal) (automationprojection.AutomationExecutionHistory, error)
-	connectorCatalog       func(context.Context, principalmodel.Principal) ([]integrationmodel.ConnectorSchema, error)
-	integrationConnections func(context.Context, principalmodel.Principal) ([]integrationmodel.IntegrationConnection, error)
-	integrationOutbox      func(context.Context, string, string, int, principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error)
+	connectorCatalog       func(context.Context, principalmodel.Principal) ([]connectormodel.ConnectorSchema, error)
+	integrationConnections func(context.Context, principalmodel.Principal) ([]integrationsdk.Connection, error)
+	publicationHandoff     func(context.Context, string, string, int, principalmodel.Principal) ([]publicationmodel.Message, error)
 	schedulerDefinitions   func(context.Context, principalmodel.Principal) ([]recordmodel.Record, error)
 	schemaForPrincipal     func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
 	schemaObjectMap        func(context.Context) map[string]definitionmodel.ObjectSchema
@@ -44,9 +45,9 @@ type BusinessSystemRuntimeProjectionDependencies struct {
 	WorkflowProcesses      func(context.Context, principalmodel.Principal, workflowmodel.WorkflowProcessFilter) ([]workflowmodel.WorkflowProcessInstance, error)
 	AutomationRules        func(context.Context, principalmodel.Principal) ([]automationmodel.AutomationRuleSchema, error)
 	AutomationExecutions   func(context.Context, automationmodel.AutomationExecutionFilter, principalmodel.Principal) (automationprojection.AutomationExecutionHistory, error)
-	ConnectorCatalog       func(context.Context, principalmodel.Principal) ([]integrationmodel.ConnectorSchema, error)
-	IntegrationConnections func(context.Context, principalmodel.Principal) ([]integrationmodel.IntegrationConnection, error)
-	IntegrationOutbox      func(context.Context, string, string, int, principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error)
+	ConnectorCatalog       func(context.Context, principalmodel.Principal) ([]connectormodel.ConnectorSchema, error)
+	IntegrationConnections func(context.Context, principalmodel.Principal) ([]integrationsdk.Connection, error)
+	PublicationHandoff     func(context.Context, string, string, int, principalmodel.Principal) ([]publicationmodel.Message, error)
 	SchedulerDefinitions   func(context.Context, principalmodel.Principal) ([]recordmodel.Record, error)
 	SchemaForPrincipal     func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
 	SchemaObjectMap        func(context.Context) map[string]definitionmodel.ObjectSchema
@@ -58,7 +59,7 @@ func newBusinessSystemRuntimeProjectionPorts(dependencies BusinessSystemRuntimeP
 	return businessRuntimeProjectionPorts{
 		workflowProcesses: dependencies.WorkflowProcesses, automationRules: dependencies.AutomationRules,
 		automationExecutions: dependencies.AutomationExecutions, connectorCatalog: dependencies.ConnectorCatalog,
-		integrationConnections: dependencies.IntegrationConnections, integrationOutbox: dependencies.IntegrationOutbox,
+		integrationConnections: dependencies.IntegrationConnections, publicationHandoff: dependencies.PublicationHandoff,
 		schedulerDefinitions: dependencies.SchedulerDefinitions,
 		schemaForPrincipal:   dependencies.SchemaForPrincipal, schemaObjectMap: dependencies.SchemaObjectMap, listRecords: dependencies.ListRecords, idempotencyStatus: dependencies.IdempotencyStatus,
 	}
@@ -85,7 +86,7 @@ func (s *BusinessSystemApplicationService) RuntimeStateSnapshot(ctx context.Cont
 	if err != nil {
 		return changeplanprojection.BusinessRuntimeStateSnapshot{}, err
 	}
-	outbox, err := s.runtimeProjection.integrationOutbox(ctx, "", "", 100, principal)
+	outbox, err := s.runtimeProjection.publicationHandoff(ctx, "", "", 100, principal)
 	if err != nil {
 		return changeplanprojection.BusinessRuntimeStateSnapshot{}, err
 	}
@@ -103,9 +104,9 @@ func (s *BusinessSystemApplicationService) RuntimeStateSnapshot(ctx context.Cont
 	return changeplanprojection.BusinessRuntimeStateSnapshot{
 		RunningWorkflowProcesses: changeplanprojection.ProjectWorkflowProcesses(processes), AutomationRules: rules,
 		RecentAutomationRuns: automation.Items, Scheduler: scheduler, Reports: append([]reportmodel.ReportSchema(nil), s.runtimeProjection.schemaForPrincipal(ctx, principal).Reports...),
-		Connectors: connectors, Connections: changeplanprojection.ProjectIntegrationConnections(connections, func(connection integrationmodel.IntegrationConnection) bool {
+		Connectors: connectors, Connections: changeplanprojection.ProjectIntegrationConnections(connections, func(connection integrationsdk.Connection) bool {
 			return connection.Status == "active" || connection.Status == "verified" || connection.Status == "degraded"
-		}), RecentOutboxMessages: changeplanprojection.ProjectIntegrationOutbox(outbox),
+		}), RecentPublicationHandoffs: changeplanprojection.ProjectPublicationHandoff(outbox),
 		Idempotency: idempotencyStatus,
 	}, nil
 }

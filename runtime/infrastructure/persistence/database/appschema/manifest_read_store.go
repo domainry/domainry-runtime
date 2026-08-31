@@ -1,7 +1,6 @@
 package appschema
 
 import (
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
@@ -43,14 +42,6 @@ func (r ApplicationSchemaStore) LoadManifest(ctx context.Context, scope principa
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
-	connectors, err := loadMetadataSliceContext[integrationmodel.ConnectorSchema](ctx, r.database(), r.store, "_application_schema_connector_requirements")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
-	eventMappings, err := loadMetadataSliceContext[integrationmodel.IntegrationEventMappingSchema](ctx, r.database(), r.store, "_application_schema_integration_event_mapping_requirements")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
 	fieldsByObject := map[string][]definitionmodel.FieldSchema{}
 	for _, field := range fields {
 		fieldsByObject[metadataFieldObjectKey(field)] = append(fieldsByObject[metadataFieldObjectKey(field)], field)
@@ -70,7 +61,6 @@ func (r ApplicationSchemaStore) LoadManifest(ctx context.Context, scope principa
 		TemplateID: catalog["template_id"], Version: catalog["template_version"], DefaultLocale: catalog["default_locale"], Name: catalog["name"],
 		Objects: objects, Actions: actions, Workflows: workflows, AutomationRules: automations,
 		Dictionaries: dictionaries,
-		Integrations: integrationmodel.IntegrationSchema{Connectors: connectors, EventMappings: eventMappings},
 	}, nil
 }
 

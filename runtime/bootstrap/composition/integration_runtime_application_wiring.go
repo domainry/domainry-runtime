@@ -7,7 +7,7 @@ func publicationHandoffApplication(records *runtimeAssembly) *publicationhandoff
 		return publicationhandoff.NewPublicationHandoffApplicationService(publicationhandoff.Dependencies{})
 	}
 	return publicationhandoff.NewPublicationHandoffApplicationService(publicationhandoff.Dependencies{
-		Repository:       records.integrationPublicationRepo,
+		Repository:       records.publicationRepository,
 		WorkerRepository: records.integrationPublicationWorkerRepo,
 		Delivery:         records.integrationOwnerDelivery,
 		Worker:           records.workerDependencies,

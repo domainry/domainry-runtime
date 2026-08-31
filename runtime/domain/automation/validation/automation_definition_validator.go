@@ -1,6 +1,8 @@
 package validation
 
 import (
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	bindingcontract "github.com/domainry/domainry-runtime/runtime/domain/manifest/contract/binding"
 	invocationcontract "github.com/domainry/domainry-runtime/runtime/domain/manifest/contract/invocation"
@@ -16,7 +18,6 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 )
 
 // AutomationDefinitionCatalog is the read-only metadata surface needed to validate an
@@ -26,8 +27,8 @@ type AutomationDefinitionCatalog struct {
 	Objects     []definitionmodel.ObjectSchema
 	Actions     []definitionmodel.ActionSchema
 	Workflows   []definitionmodel.WorkflowSchema
-	Connectors  []integrationmodel.ConnectorSchema
-	Connections []integrationmodel.IntegrationConnection
+	Connectors  []connectormodel.ConnectorSchema
+	Connections []integrationsdk.Connection
 }
 
 type AutomationDefinitionValidator struct {
@@ -221,7 +222,7 @@ func AutomationValidateTriggerFilters(trigger automationmodel.AutomationTriggerS
 	return nil
 }
 
-func AutomationConnectorOperation(connector integrationmodel.ConnectorSchema, operationKey string) *integrationmodel.ConnectorOperationSchema {
+func AutomationConnectorOperation(connector connectormodel.ConnectorSchema, operationKey string) *connectormodel.ConnectorOperationSchema {
 	for index := range connector.Operations {
 		if strings.TrimSpace(connector.Operations[index].Key) == strings.TrimSpace(operationKey) {
 			return &connector.Operations[index]
@@ -230,7 +231,7 @@ func AutomationConnectorOperation(connector integrationmodel.ConnectorSchema, op
 	return nil
 }
 
-func AutomationValidateOperationInput(operation integrationmodel.ConnectorOperationSchema, input map[string]any, object definitionmodel.ObjectSchema, outputs map[string]map[string]string) error {
+func AutomationValidateOperationInput(operation connectormodel.ConnectorOperationSchema, input map[string]any, object definitionmodel.ObjectSchema, outputs map[string]map[string]string) error {
 	fields := map[string]definitionmodel.FieldSchema{}
 	for _, field := range operation.Input {
 		fields[strings.TrimSpace(field.Key)] = field

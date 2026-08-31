@@ -2,6 +2,8 @@ package changeplan
 
 import (
 	"context"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
@@ -10,8 +12,6 @@ import (
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 
 	"testing"
 
@@ -55,11 +55,11 @@ func TestRuntimeStateProjectionsFilterAndSortOwnerFacts(t *testing.T) {
 	if len(processes) != 1 || processes[0].ID != "running" || processes[0].CurrentNodeIDs[0] != "review" {
 		t.Fatalf("workflow projection=%#v", processes)
 	}
-	connections := changeplanprojection.ProjectIntegrationConnections([]integrationmodel.IntegrationConnection{{Key: "z", Status: "disabled"}, {Key: "a", Status: "active"}}, func(value integrationmodel.IntegrationConnection) bool { return value.Status == "active" })
+	connections := changeplanprojection.ProjectIntegrationConnections([]integrationsdk.Connection{{Key: "z", Status: "disabled"}, {Key: "a", Status: "active"}}, func(value integrationsdk.Connection) bool { return value.Status == "active" })
 	if len(connections) != 2 || connections[0].Key != "a" || !connections[0].Ready || connections[1].Ready {
 		t.Fatalf("connection projection=%#v", connections)
 	}
-	outbox := changeplanprojection.ProjectIntegrationOutbox([]integrationmodel.IntegrationOutboxMessage{{ID: "old", UpdatedAt: "2026-01-01T00:00:00Z"}, {ID: "new", UpdatedAt: "2026-02-01T00:00:00Z"}})
+	outbox := changeplanprojection.ProjectPublicationHandoff([]publicationmodel.Message{{ID: "old", UpdatedAt: "2026-01-01T00:00:00Z"}, {ID: "new", UpdatedAt: "2026-02-01T00:00:00Z"}})
 	if len(outbox) != 2 || outbox[0].ID != "new" {
 		t.Fatalf("outbox projection=%#v", outbox)
 	}

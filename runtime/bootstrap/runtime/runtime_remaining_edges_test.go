@@ -188,10 +188,10 @@ func TestRuntimeStartsConfiguredWorkerOwners(t *testing.T) {
 	const shutdownTimeout = 10 * time.Second
 
 	cfg := bootstrapTestConfig(t)
-	cfg.SchedulerPollInterval = 0
-	cfg.SchedulerBatchSize = 0
-	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
-	if RoutesForSurfaceGroup(runtime, runtimehttp.SurfaceRouteGroupAll) == nil {
+	cfg.WorkerPollInterval = 0
+	cfg.WorkerBatchSize = 0
+	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
+	if RoutesForListenerGroup(runtime, runtimehttp.ListenerRouteGroupAll) == nil {
 		t.Fatal("assembled Runtime helpers were unavailable")
 	}
 	StartWorkers(t.Context(), runtime)
@@ -203,9 +203,9 @@ func TestRuntimeStartsConfiguredWorkerOwners(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	highBatch := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
-	highBatch.cfg.SchedulerPollInterval = time.Millisecond
-	highBatch.cfg.SchedulerBatchSize = 26
+	highBatch := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
+	highBatch.cfg.WorkerPollInterval = time.Millisecond
+	highBatch.cfg.WorkerBatchSize = 26
 	highBatch.startDataExchangeWorker(t.Context())
 	highBatch.StartNotificationPublicationWorker(t.Context())
 	time.Sleep(20 * time.Millisecond)
@@ -216,9 +216,9 @@ func TestRuntimeStartsConfiguredWorkerOwners(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mediumBatch := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
-	mediumBatch.cfg.SchedulerPollInterval = time.Millisecond
-	mediumBatch.cfg.SchedulerBatchSize = 10
+	mediumBatch := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
+	mediumBatch.cfg.WorkerPollInterval = time.Millisecond
+	mediumBatch.cfg.WorkerBatchSize = 10
 	mediumBatch.startDataExchangeWorker(t.Context())
 	time.Sleep(20 * time.Millisecond)
 	if err := mediumBatch.stopWorkers(shutdownTimeout); err != nil {
@@ -247,9 +247,9 @@ func TestRuntimeStartupNamedCallbacks(t *testing.T) {
 
 func TestRuntimeNotificationWorkerBoundsAndLiveErrors(t *testing.T) {
 	for _, batch := range []int{10, 101} {
-		runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
-		runtime.cfg.SchedulerPollInterval = time.Millisecond
-		runtime.cfg.SchedulerBatchSize = batch
+		runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
+		runtime.cfg.WorkerPollInterval = time.Millisecond
+		runtime.cfg.WorkerBatchSize = batch
 		runtime.startNotificationChannelWorker(t.Context())
 		runtime.startNotificationInboxWorker(t.Context())
 		time.Sleep(20 * time.Millisecond)
@@ -261,9 +261,9 @@ func TestRuntimeNotificationWorkerBoundsAndLiveErrors(t *testing.T) {
 		}
 	}
 
-	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
-	runtime.cfg.SchedulerPollInterval = time.Millisecond
-	runtime.cfg.SchedulerBatchSize = 10
+	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
+	runtime.cfg.WorkerPollInterval = time.Millisecond
+	runtime.cfg.WorkerBatchSize = 10
 	if err := runtime.store.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +387,7 @@ func TestRuntimeWorkerTickErrorAndCancellationOutcomes(t *testing.T) {
 }
 
 func TestControlledWorkerObservesChildCompletion(t *testing.T) {
-	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
 	started := make(chan int, 2)

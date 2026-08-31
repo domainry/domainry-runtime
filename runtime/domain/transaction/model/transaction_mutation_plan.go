@@ -2,12 +2,12 @@ package transactionmodel
 
 import (
 	"fmt"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"reflect"
 	"slices"
 	"strings"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
@@ -176,7 +176,7 @@ func mutationCloneCommit(commit RecordMutationCommit) RecordMutationCommit {
 		result.Audits[index].After = mutationCloneMap(commit.Audits[index].After)
 		result.Audits[index].Metadata = mutationCloneMap(commit.Audits[index].Metadata)
 	}
-	result.Outbox = append([]integrationmodel.IntegrationOutboxMessage(nil), commit.Outbox...)
+	result.Outbox = append([]publicationmodel.Message(nil), commit.Outbox...)
 	for index := range result.Outbox {
 		result.Outbox[index].Payload = mutationCloneMap(commit.Outbox[index].Payload)
 	}

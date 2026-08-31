@@ -2,12 +2,12 @@ package projection
 
 import (
 	"fmt"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	"strings"
 	"time"
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
 
@@ -62,7 +62,7 @@ func DeploymentWorkflowMetrics(configured int, executions []workflowmodel.Workfl
 
 // DeploymentBusinessActionMetrics projects delivery invocation snapshots into
 // action execution metrics without reading infrastructure state.
-func DeploymentBusinessActionMetrics(configured int, invocations []integrationmodel.IntegrationInvocation, limit int) map[string]any {
+func DeploymentBusinessActionMetrics(configured int, invocations []integrationsdk.Invocation, limit int) map[string]any {
 	statusCounts, failureCounts := map[string]int{}, map[string]int{}
 	actionCounts, invocationCounts, connectorCounts := map[string]int{}, map[string]int{}, map[string]int{}
 	duration := newDeploymentDurationAccumulator()

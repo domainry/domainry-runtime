@@ -2,12 +2,12 @@ package transactionmodel
 
 import (
 	"errors"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"reflect"
 	"testing"
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
@@ -21,7 +21,7 @@ func TestMutationPlanSnapshotsCommitAndBuildsDeterministicWriteSet(t *testing.T)
 		Conditions:      map[string]any{"status": map[string]any{"eq": "draft"}},
 		Audit:           &auditmodel.AuditEvent{After: map[string]any{"status": "paid"}},
 		Audits:          []auditmodel.AuditEvent{{Metadata: map[string]any{"sequence": []any{map[string]any{"value": 1}}}}},
-		Outbox:          []integrationmodel.IntegrationOutboxMessage{{Payload: map[string]any{"order": map[string]any{"id": "order-1"}}}},
+		Outbox:          []publicationmodel.Message{{Payload: map[string]any{"order": map[string]any{"id": "order-1"}}}},
 		WorkflowIntents: []workflowmodel.WorkflowExecution{{Action: map[string]any{"type": "notify"}, Payload: map[string]any{"id": "order-1"}, Result: map[string]any{"queued": true}}},
 	}
 	plan, err := NewMutationPlan(context, commit, map[string]any{"status": "draft"})

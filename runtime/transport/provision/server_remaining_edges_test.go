@@ -2,6 +2,7 @@ package provision
 
 import (
 	"errors"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
 
@@ -166,7 +166,7 @@ func TestBuilderV1RemainingDecodeBlockerAndNoopEdges(t *testing.T) {
 func TestProvisionValidationAndFilesystemFailureSeams(t *testing.T) {
 	manifest := provisionTestManifest(t)
 	originalCatalog := provisionCatalog
-	provisionCatalog = func() ([]integrationmodel.ConnectorSchema, error) { return nil, errors.New("catalog failed") }
+	provisionCatalog = func() ([]connectormodel.ConnectorSchema, error) { return nil, errors.New("catalog failed") }
 	if _, err := validateAndHash(manifest, testContractIdentity()); err == nil || !strings.Contains(err.Error(), "catalog failed") {
 		t.Fatalf("catalog error=%v", err)
 	}

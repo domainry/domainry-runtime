@@ -4,12 +4,11 @@ import (
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 
 	"context"
 
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 
 	"strconv"
 
@@ -20,8 +19,7 @@ import (
 type ReferenceRuntime interface {
 	WorkflowProcesses(context.Context, principalmodel.Principal, workflowmodel.WorkflowProcessFilter) ([]workflowmodel.WorkflowProcessInstance, error)
 	PublishedSchedulerDefinitions(context.Context, principalmodel.Principal) ([]recordmodel.Record, error)
-	SnapshotObjectRecords(context.Context, string, principalmodel.Principal, int) ([]recordmodel.Record, error)
-	ListIntegrationOutboxMessages(context.Context, string, string, int, principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error)
+	ListPublicationMessages(context.Context, string, string, int, principalmodel.Principal) ([]publicationmodel.Message, error)
 }
 
 // ChangePlanReferenceApplicationService resolves change-plan dependency graphs.

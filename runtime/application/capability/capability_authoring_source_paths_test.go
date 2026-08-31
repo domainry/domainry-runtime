@@ -15,9 +15,9 @@ func TestRuntimeAuthoringCapabilitySourcePathsAreCurrentAndExist(t *testing.T) {
 	for _, domain := range contract.Domains {
 		for _, definition := range domain.Capabilities {
 			for _, source := range definition.Sources {
-				// UI evidence is owned by domainry-plane and intentionally lives
-				// outside this independently buildable Runtime repository.
-				if source.Kind == "ui" {
+				// Owner evidence lives in independently buildable modules and is
+				// addressed by module import path rather than Runtime filesystem path.
+				if source.Kind == "ui" || source.Kind == "owner_module" || source.Kind == "owner_sdk" || source.Kind == "owner_catalog" {
 					continue
 				}
 				path := filepath.Join(repoRoot, filepath.FromSlash(source.Path))

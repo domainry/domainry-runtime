@@ -33,7 +33,7 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		kind  string
 		table string
 	}{
-		{kind: "integration_outbox", table: "_publication_outbox"},
+		{kind: "runtime_publication_outbox", table: "_publication_outbox"},
 		{kind: "workflow_continuation", table: "_workflow_executions"},
 	} {
 		exists, existsErr := runtimeSchemaTableExists(ctx, s, queue.table)
@@ -46,7 +46,7 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 			}
 		}
 	}
-	if _, err := s.SchemaDB().ExecContext(ctx, "DELETE FROM "+s.TableIdentifier("_worker_queue_scopes")+" WHERE "+s.Identifier("queue_kind")+" = "+s.Placeholder(1), "integration_outbox_task"); err != nil {
+	if _, err := s.SchemaDB().ExecContext(ctx, "DELETE FROM "+s.TableIdentifier("_worker_queue_scopes")+" WHERE "+s.Identifier("queue_kind")+" = "+s.Placeholder(1), "runtime_publication_outbox"); err != nil {
 		return fmt.Errorf("remove legacy integration outbox worker tasks: %w", err)
 	}
 	for _, table := range []string{"_automation_instruction_executions", "_publication_outbox"} {
@@ -74,7 +74,6 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		return err
 	}
 	for column, definition := range map[string]string{
-		"ack_deadline_at":     text + " NOT NULL DEFAULT ''",
 		"dedup_key":           text + " NOT NULL DEFAULT ''",
 		"request_fingerprint": text + " NOT NULL DEFAULT ''",
 		"fencing_token":       "BIGINT NOT NULL DEFAULT 0",
@@ -130,7 +129,6 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		{name: "idx_transaction_boundary_intent_due", table: "_transaction_boundary_intents", columns: []string{"status", "next_attempt_at", "lease_expires_at"}},
 		{name: "idx_runtime_publication_destination", table: "_publication_outbox", columns: []string{"publication_type", "workspace_id", "connector_key", "status"}},
 		{name: "idx_runtime_publication_due", table: "_publication_outbox", columns: []string{"publication_type", "status", "next_attempt_at", "lease_expires_at", "created_at"}},
-		{name: "idx_runtime_publication_ack_due", table: "_publication_outbox", columns: []string{"publication_type", "status", "ack_deadline_at"}},
 		{name: "uniq_runtime_publication_dedup", table: "_publication_outbox", columns: []string{"workspace_id", "publication_type", "connector_key", "connection_key", "operation", "dedup_key"}, unique: true},
 
 		{name: "uniq_runtime_notification_publication_source", table: "_publication_outbox", columns: []string{"publication_type", "tenant_id", "workspace_id", "application_key", "source_event_id", "connector_key", "connection_key", "operation", "dedup_key"}, unique: true},

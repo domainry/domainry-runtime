@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 )
 
 // NotificationsHandler exposes only Runtime's Integration Outbox delivery
@@ -39,7 +39,7 @@ func NewNotificationsHandler(deps NotificationsDependencies) *NotificationsHandl
 }
 
 type NotificationDeliveryLedger interface {
-	ListIntegrationOutboxMessages(context.Context, string, string, int, principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error)
+	ListPublicationMessages(context.Context, string, string, int, principalmodel.Principal) ([]publicationmodel.Message, error)
 }
 
 func (h *NotificationsHandler) require(w http.ResponseWriter, r *http.Request, permission string) bool {

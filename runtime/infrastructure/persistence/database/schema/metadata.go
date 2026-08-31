@@ -114,7 +114,5 @@ func metadataDefinitionTables() []string {
 	return []string{
 		"_application_schema_workflow_definitions",
 		"_application_schema_automation_rule_definitions",
-		"_application_schema_connector_requirements",
-		"_application_schema_integration_event_mapping_requirements",
 	}
 }

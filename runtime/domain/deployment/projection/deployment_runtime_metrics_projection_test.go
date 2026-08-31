@@ -1,13 +1,13 @@
 package projection
 
 import (
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	"reflect"
 	"testing"
 	"time"
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
 
@@ -33,7 +33,7 @@ func TestDeploymentWorkflowMetrics(t *testing.T) {
 }
 
 func TestDeploymentBusinessActionMetrics(t *testing.T) {
-	invocations := []integrationmodel.IntegrationInvocation{
+	invocations := []integrationsdk.Invocation{
 		{Metadata: nil},
 		{Metadata: map[string]any{"action_key": "action"}, Status: "", ConnectorKey: " c ", DurationMS: -1},
 		{Metadata: map[string]any{"invocation_key": "send"}, Status: "failed", Error: "", DurationMS: 50},

@@ -10,14 +10,95 @@ import (
 
 	connector "github.com/domainry/domainry-connector-sdk"
 	"github.com/domainry/domainry-foundation/secrets"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	integrationmodulehost "github.com/domainry/domainry-integration-sdk/modulehost"
+	integrationsaashost "github.com/domainry/domainry-integration-sdk/saashost"
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
+type openedRuntimeIntegration struct {
+	Binding      integrationsdk.Binding
+	Delivery     integrationsdk.Delivery
+	Catalog      integrationsdk.Catalog
+	Requirements integrationsdk.Requirements
+	Management   integrationsdk.Management
+	Operations   integrationsdk.Operations
+	Workers      integrationsdk.LocalWorkers
+}
+
+func openRuntimeIntegration(ctx context.Context, application integrationsdk.ApplicationRef, factory integrationsdk.Factory, host runtimeIntegrationModuleHost) (openedRuntimeIntegration, error) {
+	binding, err := openIntegrationBinding(ctx, application, factory, host)
+	if err != nil {
+		return openedRuntimeIntegration{}, err
+	}
+	if binding == nil {
+		return openedRuntimeIntegration{}, fmt.Errorf("Integration Factory returned no Binding")
+	}
+	if err := binding.Descriptor().Validate(); err != nil {
+		return openedRuntimeIntegration{}, err
+	}
+	result := openedRuntimeIntegration{Binding: binding, Delivery: binding.Delivery(), Catalog: binding.Catalog(), Requirements: binding.Requirements()}
+	if result.Delivery == nil {
+		return openedRuntimeIntegration{}, fmt.Errorf("Integration Binding returned no Delivery port")
+	}
+	if result.Catalog == nil {
+		return openedRuntimeIntegration{}, fmt.Errorf("Integration Binding returned no Catalog port")
+	}
+	if result.Requirements == nil {
+		return openedRuntimeIntegration{}, fmt.Errorf("Integration Binding returned no Requirements port")
+	}
+	management, ok := binding.(integrationsdk.ManagementBinding)
+	if !ok || management.Management() == nil {
+		return openedRuntimeIntegration{}, fmt.Errorf("Integration Binding returned no Management port")
+	}
+	result.Management = management.Management()
+	operations, ok := binding.(integrationsdk.OperationsBinding)
+	if !ok || operations.Operations() == nil {
+		return openedRuntimeIntegration{}, fmt.Errorf("Integration Binding returned no Operations port")
+	}
+	result.Operations = operations.Operations()
+	if binding.Descriptor().Mode == integrationsdk.DeploymentModeModule {
+		workers, ok := binding.(integrationsdk.LocalWorkerBinding)
+		if !ok {
+			return openedRuntimeIntegration{}, fmt.Errorf("Integration Module Binding returned no local worker boundary")
+		}
+		var found bool
+		result.Workers, found = workers.LocalWorkers()
+		if !found || result.Workers == nil {
+			return openedRuntimeIntegration{}, fmt.Errorf("Integration Module Binding returned no local workers")
+		}
+	}
+	webPush, ok := binding.(integrationsdk.WebPushBinding)
+	if !ok || webPush.WebPushSubscriptions() == nil {
+		return openedRuntimeIntegration{}, fmt.Errorf("Integration Binding returned no Web Push subscriptions port")
+	}
+	return result, nil
+}
+
+func openIntegrationBinding(ctx context.Context, application integrationsdk.ApplicationRef, factory integrationsdk.Factory, moduleHost integrationmodulehost.Host) (integrationsdk.Binding, error) {
+	switch factory.DeploymentMode() {
+	case integrationsdk.DeploymentModeModule:
+		moduleFactory, ok := factory.(integrationmodulehost.Factory)
+		if !ok {
+			return nil, fmt.Errorf("Integration Module factory does not implement modulehost.Factory")
+		}
+		return moduleFactory.OpenModule(ctx, application, moduleHost)
+	case integrationsdk.DeploymentModeSaaS:
+		saasFactory, ok := factory.(integrationsaashost.Factory)
+		if !ok {
+			return nil, fmt.Errorf("Integration SaaS factory does not implement saashost.Factory")
+		}
+		return saasFactory.OpenSaaS(ctx, application, struct{}{})
+	default:
+		return nil, fmt.Errorf("unsupported Integration deployment mode %q", factory.DeploymentMode())
+	}
+}
+
 type runtimeIntegrationModuleHost struct {
 	store     *persistence.RuntimeStore
 	providers *connector.Registry
+	triggers  integrationsdk.TriggerSink
 }
 
 func (h runtimeIntegrationModuleHost) Database() integrationmodulehost.Database { return h.store.DB() }
@@ -32,6 +113,10 @@ func (h runtimeIntegrationModuleHost) Providers() integrationmodulehost.Provider
 }
 func (h runtimeIntegrationModuleHost) SecretCipher() integrationmodulehost.SecretMaterialCipher {
 	return h
+}
+func (h runtimeIntegrationModuleHost) RuntimeTriggers() integrationsdk.TriggerSink { return h.triggers }
+func (h runtimeIntegrationModuleHost) EncryptSecretMaterial(ctx context.Context, workspaceID, secretKey, plaintext string) (string, error) {
+	return (secrets.Cipher{Keys: h.store.SecretKeyProvider(), Purpose: "integration-secret"}).Encrypt(ctx, workspaceID, secretKey, []byte(plaintext))
 }
 func (h runtimeIntegrationModuleHost) DecryptSecretMaterial(ctx context.Context, workspaceID, secretKey, encoded string) (string, error) {
 	if strings.HasPrefix(encoded, secrets.EnvelopeVersion+":") {

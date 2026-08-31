@@ -1,7 +1,7 @@
 package validation
 
 import (
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
@@ -15,8 +15,6 @@ import (
 	"testing"
 
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
-
-	connectorcatalog "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
 )
 
 func TestValidateManifestAcceptsRuntimeFixtures(t *testing.T) {
@@ -81,7 +79,8 @@ func TestValidateManifestEnforcesReportFieldAndSeedEvidenceContract(t *testing.T
 
 func TestValidateManifestRequiresConcreteProviderForRuntimeConnection(t *testing.T) {
 	manifest := loadFixtureManifest(t, "domain-only-minimal.json")
-	manifest.Integrations.Connections = []integrationmodel.ConnectionSchema{{Key: "files", ConnectorKey: "file_storage"}}
+	manifest.Integrations.Connectors = append(manifest.Integrations.Connectors, connectormodel.ConnectorSchema{Key: "file_storage", Providers: []connectormodel.ConnectorProviderSchema{{Key: "multi"}, {Key: "local"}}})
+	manifest.Integrations.Connections = []connectormodel.ConnectionSchema{{Key: "files", ConnectorKey: "file_storage"}}
 	if err := ValidateManifest(manifest); err == nil || !strings.Contains(err.Error(), "concrete Provider is required") {
 		t.Fatalf("missing Provider error=%v", err)
 	}
@@ -232,8 +231,8 @@ func TestValidateManifestRejectsInvalidArtifacts(t *testing.T) {
 		{
 			name: "inline connector secret",
 			mutate: func(manifest *manifestmodel.ManifestSchema) {
-				manifest.Integrations.Connectors = append(manifest.Integrations.Connectors, integrationmodel.ConnectorSchema{Key: "private_api", Type: "http", Provider: "generic"})
-				manifest.Integrations.Connections = append(manifest.Integrations.Connections, integrationmodel.ConnectionSchema{Key: "private_api_default", ConnectorKey: "private_api", ProviderKey: "generic", Config: map[string]any{"api_token": "plaintext-secret"}})
+				manifest.Integrations.Connectors = append(manifest.Integrations.Connectors, connectormodel.ConnectorSchema{Key: "private_api", Providers: []connectormodel.ConnectorProviderSchema{{Key: "generic"}}})
+				manifest.Integrations.Connections = append(manifest.Integrations.Connections, connectormodel.ConnectionSchema{Key: "private_api_default", ConnectorKey: "private_api", ProviderKey: "generic", Config: map[string]any{"api_token": "plaintext-secret"}})
 			},
 			wantErr: "inline Connector secrets are not allowed",
 		},
@@ -264,9 +263,14 @@ func loadFixtureManifest(t *testing.T, name string) manifestmodel.ManifestSchema
 	if err := json.Unmarshal(raw, &manifest); err != nil {
 		t.Fatalf("decode fixture %s: %v", name, err)
 	}
-	builtins, err := connectorcatalog.Builtin()
-	if err != nil {
-		t.Fatalf("load Runtime Connector validation catalog: %v", err)
+	for _, connection := range manifest.Integrations.Connections {
+		found := false
+		for _, connector := range manifest.Integrations.Connectors {
+			found = found || connector.Key == connection.ConnectorKey
+		}
+		if !found {
+			manifest.Integrations.Connectors = append(manifest.Integrations.Connectors, connectormodel.ConnectorSchema{Key: connection.ConnectorKey, Providers: []connectormodel.ConnectorProviderSchema{{Key: connection.ProviderKey}}})
+		}
 	}
 	manifest.Integrations.Connectors = append(builtins, manifest.Integrations.Connectors...)
 	return manifest

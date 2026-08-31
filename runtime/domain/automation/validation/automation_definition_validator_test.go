@@ -2,6 +2,7 @@ package validation
 
 import (
 	"errors"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
@@ -16,7 +17,6 @@ import (
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 )
 
 func TestValidateConditionGroupReturnsFieldPath(t *testing.T) {
@@ -27,7 +27,7 @@ func TestValidateConditionGroupReturnsFieldPath(t *testing.T) {
 }
 
 func TestValidateOperationInputRejectsProtocolTypeMismatch(t *testing.T) {
-	err := AutomationValidateOperationInput(integrationmodel.ConnectorOperationSchema{
+	err := AutomationValidateOperationInput(connectormodel.ConnectorOperationSchema{
 		Key: "charge",
 		Input: []definitionmodel.FieldSchema{{
 			Key:  "amount",

@@ -7,6 +7,8 @@
 
 Work that cannot share the owner database transaction must never begin from an in-memory-only decision. The local owner first persists one durable fact, then performs the external/process-local step. Completion, unknown outcome, reconciliation, compensation, and manual review are explicit persisted states.
 
+Connector delivery uses two owner-local facts. Runtime atomically commits `_publication_outbox` with the business mutation and retains only handoff status plus an opaque Integration receipt reference. Integration accepts that handoff idempotently, owns provider invocation evidence and reconciles uncertain provider outcomes in its own database. Runtime never reads or writes Integration tables.
+
 The reusable `_transaction_boundary_intents` state machine is:
 
 `pending -> executing -> succeeded`
@@ -23,7 +25,7 @@ Claims use a lease owner, expiry, and monotonically increasing fencing token. `(
 
 | Profile | Durable fact before boundary | Reconciliation | Compensation/manual outcome |
 | --- | --- | --- | --- |
-| T04 Action external step | `_integration_invocations(status=prepared)` is inserted before the Provider call; request and compensation metadata are redacted and durable | the reconciliation worker scans stale `prepared` facts with an empty `response_ref`, then uses a prepared-state compare-and-swap to mark exactly one `reconciliation_required` fact with `backend.integration.invocation.external_receipt_missing`; normal completion atomically replaces status/outcome metadata | reserve steps retain compensation operation/request and persist the compensation invocation/evidence; unresolved outcome requires manual review |
+| T04 Action external step | Runtime commits `_publication_outbox(status=queued)` in the same transaction as the business mutation, then its fenced publication worker calls `Integration Delivery.Accept` with the message/deduplication key | Runtime safely retries owner acceptance by message identity; Integration persists and reconciles its own invocation/receipt evidence without exposing provider state to Runtime | Runtime can cancel or dead-letter the publication handoff; provider compensation and uncertain-outcome review belong to Integration |
 | T05 Bulk | bulk operation receipt plus deterministic row keys | retry resumes/replays row units without repeating completed receipts | already committed rows are reviewed/compensated; no false all-or-nothing claim |
 | T06 Import | import receipt plus deterministic row keys | retry resumes from durable row/operation evidence | partial imports remain explicit and require compensating mutations when reversal is required |
 | T11 Metadata Runtime refresh | the definition publication transaction inserts `_transaction_boundary_intents(owner=metadata, operation=runtime_refresh, status=executing)` with definition/version/Audit/active revision | inline refresh failure moves the intent to `reconciliation_required`; an expired/incomplete execution can be claimed with a newer fencing token | repeated unsafe failure can move to `manual_review`; publication history remains immutable |
@@ -33,8 +35,8 @@ Claims use a lease owner, expiry, and monotonically increasing fencing token. `(
 
 ## Proof obligations
 
-- A persistence failure for a prepared external invocation must prevent the Provider call.
-- A stale prepared invocation with no external receipt must be detected and marked once; completed invocations and concurrent/repeated scans must not be reported.
+- A Runtime business transaction failure must prevent `_publication_outbox` creation and therefore prevent any Integration owner call.
+- Integration must durably accept a message identity before a Provider call and reconcile stale prepared invocations inside the Integration owner.
 - Crash-after-commit recovery must close the producer database/process owner, reopen the same durable database through a new worker owner, and prove that polling can still discover and claim the committed Outbox row without any in-memory wakeup.
 - A metadata active-revision failure must roll back definition, version, Audit, and refresh intent.
 - A process-local refresh failure must leave a claimable `reconciliation_required` intent.

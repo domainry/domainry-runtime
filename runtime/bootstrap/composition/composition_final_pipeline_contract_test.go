@@ -2,6 +2,7 @@ package composition
 
 import (
 	"context"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"testing"
 	"time"
 
@@ -10,7 +11,6 @@ import (
 	actionservice "github.com/domainry/domainry-runtime/runtime/domain/action/service"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -26,8 +26,8 @@ func TestPipelineCompositionAllowsMissingOptionalAutomation(t *testing.T) {
 }
 
 func TestCompositionDeclaredConnectorPorts(t *testing.T) {
-	registry := newRuntimeConnectorCatalog(integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{
-		{Key: "other", Provider: "missing"}, {Key: "declared", Provider: "missing"},
+	registry := newRuntimeConnectorCatalog(connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{
+		{Key: "other"}, {Key: "declared"},
 	}})
 	provider := runtimeWorkflowSchemaProvider{records: &runtimeAssembly{connectorRegistry: registry}}
 	if !provider.ConnectorAdapterExists(t.Context(), "declared") {

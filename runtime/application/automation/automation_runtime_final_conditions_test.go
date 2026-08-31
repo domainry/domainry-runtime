@@ -3,6 +3,7 @@ package automation
 import (
 	"context"
 	"errors"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
@@ -11,7 +12,6 @@ import (
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationprojection "github.com/domainry/domainry-runtime/runtime/domain/automation/projection"
 	automationbusiness "github.com/domainry/domainry-runtime/runtime/domain/automation/service"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
@@ -112,7 +112,7 @@ func TestAutomationFailingNotificationCommitterImplementsBothPaths(t *testing.T)
 func TestAutomationOutboxCoversTerminalCommitMatrix(t *testing.T) {
 	rule := automationmodel.AutomationRuleSchema{Key: "after", ObjectKey: "order", Enabled: true, Trigger: automationmodel.AutomationTriggerSchema{Phase: "after"}}
 	registry := &automationFacadeRegistry{rules: map[string]automationmodel.AutomationRuleSchema{"after": rule}}
-	message := integrationmodel.IntegrationOutboxMessage{WorkspaceID: "workspace-1", Payload: automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{
+	message := publicationmodel.Message{WorkspaceID: "workspace-1", Payload: automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{
 		RuleKey: "after", RecordVersion: "v1", Record: recordmodel.Record{ID: "order-1"}, ActorUserID: "operator", ActorRoleKey: "admin",
 	})}
 

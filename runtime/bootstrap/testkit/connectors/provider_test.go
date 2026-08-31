@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"testing"
 
 	"github.com/domainry/domainry-connector-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 )
 
 type testCallAdapter struct {
@@ -23,7 +23,7 @@ func (a *testCallAdapter) Call(context.Context, integrationcontract.CallRequest)
 
 type testFullAdapter struct {
 	testCallAdapter
-	schema        integrationmodel.ConnectorProviderSchema
+	schema        ProviderSchema
 	validateErr   error
 	testResult    integrationcontract.CallResult
 	testErr       error
@@ -31,11 +31,11 @@ type testFullAdapter struct {
 	webhookErr    error
 }
 
-func (a *testFullAdapter) ProviderSchema() integrationmodel.ConnectorProviderSchema { return a.schema }
-func (a *testFullAdapter) ValidateConfig(integrationmodel.IntegrationConnection) error {
+func (a *testFullAdapter) ProviderSchema() ProviderSchema { return a.schema }
+func (a *testFullAdapter) ValidateConfig(integrationsdk.Connection) error {
 	return a.validateErr
 }
-func (a *testFullAdapter) TestConnection(context.Context, integrationcontract.CallRequest) (integrationcontract.CallResult, error) {
+func (a *testFullAdapter) TestConnection(context.Context, CallRequest) (CallResult, error) {
 	return a.testResult, a.testErr
 }
 func (a *testFullAdapter) VerifyWebhook(context.Context, integrationcontract.InboundWebhookRequest) (integrationcontract.VerifiedInboundWebhook, error) {
@@ -46,11 +46,11 @@ func TestProviderCallAndOptionalContracts(t *testing.T) {
 	delegate := &testFullAdapter{
 		testCallAdapter: testCallAdapter{result: integrationcontract.CallResult{
 			Response: map[string]any{"ok": true}, ResponseRef: "response", SecretUpdates: map[string]string{"token": "next"},
-			ResourceHealth: &integrationmodel.IntegrationProviderResourceHealth{ObservationID: "observation", State: "healthy"},
+			ResourceHealth: &integrationsdk.ProviderResourceHealth{ObservationID: "observation", State: "healthy"},
 		}},
-		schema: integrationmodel.ConnectorProviderSchema{ProviderRevision: " revision ", OperationKeys: []string{"read", "missing"}},
+		schema: ProviderSchema{ProviderRevision: " revision ", OperationKeys: []string{"read", "missing"}},
 	}
-	provider := Provider("connector", "provider", delegate, []integrationmodel.ConnectorOperationSchema{{Key: "read", Method: "GET"}})
+	provider := Provider("connector", "provider", delegate, []connectormodel.ConnectorOperationSchema{{Key: "read", Method: "GET"}})
 	descriptor := provider.Descriptor()
 	if descriptor.ProviderRevision != "revision" || len(descriptor.Operations) != 2 {
 		t.Fatalf("descriptor=%#v", descriptor)
@@ -137,7 +137,7 @@ func TestProviderCallAndOptionalContracts(t *testing.T) {
 
 func TestProviderDescriptorFieldsAndHelpers(t *testing.T) {
 	minimum, maximum := 1.0, 10.0
-	schema := integrationmodel.ConnectorProviderSchema{
+	schema := ProviderSchema{
 		ConfigFields: []definitionmodel.FieldSchema{
 			{Key: "limit", Type: "decimal", Validation: definitionmodel.FieldValidation{Min: &minimum, Max: &maximum}, Default: 2, Config: map[string]any{"required_with": []any{"account", 2}}},
 			{Key: "mode", Name: "Mode", Type: "text", Validation: definitionmodel.FieldValidation{Options: []string{"fast"}}, I18n: map[string]map[string]string{"en": {"name": "Mode"}}},
@@ -154,7 +154,7 @@ func TestProviderDescriptorFieldsAndHelpers(t *testing.T) {
 		t.Fatal("validation float pointers were not cloned")
 	}
 
-	operations := []integrationmodel.ConnectorOperationSchema{{}, {Key: "async", ExecutionMode: "async", SideEffect: "write"}, {Key: "read"}}
+	operations := []connectormodel.ConnectorOperationSchema{{}, {Key: "async", ExecutionMode: "async", SideEffect: "write"}, {Key: "read"}}
 	operationProvider := Provider("connector", "operations", &testCallAdapter{}, operations)
 	if len(operationProvider.Descriptor().Operations) != 2 || operationProvider.Descriptor().Operations[0].Mode != connector.ModeEnqueue || operationProvider.Descriptor().Operations[1].Reliability.Idempotency.Strategy != connector.IdempotencyNatural {
 		t.Fatalf("operations=%#v", operationProvider.Descriptor().Operations)

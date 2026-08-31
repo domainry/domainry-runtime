@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -13,7 +14,6 @@ import (
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -26,7 +26,7 @@ func runtimeAuthoringEdgeDependencies() RuntimeAuthoringValidationDependencies {
 		CurrentSnapshot: func(context.Context, principalmodel.Principal) (changeplanprojection.BusinessSystemSnapshot, error) {
 			return runtimeAuthoringCompleteConfigurationSnapshot(nil), nil
 		},
-		ValidateDefinitions: func(context.Context, []integrationmodel.ConnectorSchema) error { return nil },
+		ValidateDefinitions: func(context.Context, []connectormodel.ConnectorSchema) error { return nil },
 	}
 }
 
@@ -103,7 +103,7 @@ func TestRuntimeAuthoringValidationDependencyAndSourceErrors(t *testing.T) {
 
 func TestRuntimeAuthoringValidationReusesCurrentDefinitionValidation(t *testing.T) {
 	dependencies := runtimeAuthoringEdgeDependencies()
-	dependencies.ValidateDefinitions = func(context.Context, []integrationmodel.ConnectorSchema) error {
+	dependencies.ValidateDefinitions = func(context.Context, []connectormodel.ConnectorSchema) error {
 		return apperror.New(apperror.KindBadRequest, "backend.metadata.candidate_invalid", nil, map[string]string{
 			"resource_type": "scheduler", "resource_key": "daily-refresh", "diagnostic": "unknown workflow target",
 		})
@@ -126,7 +126,7 @@ func TestRuntimeAuthoringValidationReusesCurrentDefinitionValidation(t *testing.
 	}
 
 	want := errors.New("definition source unavailable")
-	dependencies.ValidateDefinitions = func(context.Context, []integrationmodel.ConnectorSchema) error { return want }
+	dependencies.ValidateDefinitions = func(context.Context, []connectormodel.ConnectorSchema) error { return want }
 	if _, err := NewRuntimeAuthoringValidationApplicationService(dependencies).Validate(t.Context(), runtimeAuthoringValidationAdmin()); !errors.Is(err, want) {
 		t.Fatalf("definition source error=%v", err)
 	}

@@ -45,7 +45,7 @@ func TestRuntimeAuthoringCapabilitiesAreValidAndDeterministic(t *testing.T) {
 
 func TestRuntimeAuthoringErrorContractClassification(t *testing.T) {
 	contract := RuntimeAuthoringErrorContract("backend.integration.connector.operation_method_invalid", map[string]string{"field": "operations[0].method"})
-	if contract.CapabilityKey != "integration.connector_operation" || contract.FieldPath != "operations[0].method" {
+	if contract.CapabilityKey != "integration.catalog" || contract.FieldPath != "operations[0].method" {
 		t.Fatalf("unexpected authoring error contract: %#v", contract)
 	}
 }

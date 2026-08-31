@@ -1,6 +1,6 @@
 package changeplanmodel
 
-import integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
+import connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 const (
 	RuntimeAuthoringCoverageLedgerVersion   = "runtime-authoring-coverage-v1"
@@ -120,7 +120,7 @@ type ResourceSource struct {
 
 type RuntimeState struct {
 	RunningWorkflowProcesses []WorkflowProcess
-	Connectors               []integrationmodel.ConnectorSchema
+	Connectors               []connectormodel.ConnectorSchema
 	Connections              []IntegrationConnection
 }
 

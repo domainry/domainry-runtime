@@ -47,6 +47,7 @@ type Runtime struct {
 	identityPrincipals  identitysdk.PrincipalResolver
 	integrationMode     integrationsdk.DeploymentMode
 	integrationBinding  integrationsdk.Binding
+	integrationWorkers  integrationsdk.LocalWorkers
 	partyBinding        partysdk.Binding
 	dataExchangeBinding dataexchangesdk.Binding
 	lifecycleBinding    lifecyclesdk.Binding

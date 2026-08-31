@@ -1,14 +1,14 @@
 package appschema
 
 import (
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
-	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
@@ -42,7 +42,7 @@ type ApplicationSchemaApplicationService struct {
 	version           string
 	name              string
 	records           recordrepository.RecordRepository
-	integrations      integrationrepository.IntegrationConfigRepository
+	integrations      integrationsdk.Management
 	references        ApplicationSchemaReferenceGraphProvider
 	auditAppender     ApplicationSchemaAuditAppender
 	actionDefinitions func() []definitionmodel.ActionSchema
@@ -84,7 +84,7 @@ type ApplicationSchemaReferenceGraphProvider interface {
 type ApplicationSchemaAuditAppender func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
 
 type LifecycleRuntime interface {
-	ApplyManifestMetadata(string, string, string, []definitionmodel.ObjectSchema, []definitionmodel.ActionSchema, []definitionmodel.WorkflowSchema, []automationmodel.AutomationRuleSchema, []appschemamodel.DictionarySchema, integrationmodel.IntegrationSchema, []reportmodel.ReportSchema, []agentsdk.SkillSchema, []agentsdk.AgentSchema, []profilebindingmodel.Binding)
+	ApplyManifestMetadata(string, string, string, []definitionmodel.ObjectSchema, []definitionmodel.ActionSchema, []definitionmodel.WorkflowSchema, []automationmodel.AutomationRuleSchema, []appschemamodel.DictionarySchema, connectormodel.IntegrationSchema, []reportmodel.ReportSchema, []agentsdk.SkillSchema, []agentsdk.AgentSchema, []profilebindingmodel.Binding)
 	Schema() appschemamodel.ApplicationSchemaSnapshot
 }
 
@@ -117,7 +117,7 @@ type ApplicationSchemaDependencies struct {
 	Version       string
 	Name          string
 	Records       recordrepository.RecordRepository
-	Integrations  integrationrepository.IntegrationConfigRepository
+	Integrations  integrationsdk.Management
 	References    ApplicationSchemaReferenceGraphProvider
 	AuditAppender ApplicationSchemaAuditAppender
 }

@@ -2,7 +2,7 @@ package runtime
 
 import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
@@ -57,7 +57,7 @@ func TestApplicationDefinitionCompositionReusesOwnerValidationForSystemDraftCand
 		value                      any
 	}{
 		{"action", "order.submit", "order", "backend.action.kind_invalid", definitionmodel.ActionSchema{Key: "order.submit", ObjectKey: "order", Kind: "legacy_step_action", RequiresPermission: "order.update", AuditEvent: "order.submitted"}},
-		{"connector", "finance", "", "backend.integration.connector.operation_execution_mode_invalid", integrationmodel.ConnectorSchema{Key: "finance", Type: "http", Provider: "finance", Operations: []integrationmodel.ConnectorOperationSchema{{Key: "push", Method: "POST", ExecutionMode: "later", SideEffect: "write"}}}},
+		{"connector", "finance", "", "backend.integration.connector.operation_execution_mode_invalid", connectormodel.ConnectorSchema{Key: "finance", Providers: []connectormodel.ConnectorProviderSchema{{Key: "finance"}}, Operations: []connectormodel.ConnectorOperationSchema{{Key: "push", Method: "POST", ExecutionMode: "later", SideEffect: "write"}}}},
 		{"report", "order_summary", "", "backend.report.source_object_not_found", reportmodel.ReportSchema{Key: "order_summary", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "missing", Alias: "missing"}}}},
 	}
 	for _, tc := range cases {
@@ -138,7 +138,7 @@ func newMetadataCompositionAppWithManifest(t *testing.T, name string, objects []
 	handlers.Freeze()
 	connectors := connector.NewRegistry()
 	connectors.Freeze()
-	application := NewProjectWithIdentity(t.Context(), config.Config{AppLocale: "en-US", IdentityWorkspaceID: "workspace-primary", IdentityAudience: "domainry-runtime", NotificationTenantID: "tenant-primary", NotificationWorkspaceID: "workspace-primary", NotificationApplicationKey: "domainry-runtime", PartyTenantID: "tenant-primary", PartyWorkspaceID: "workspace-primary", PartyApplicationKey: "domainry-runtime", DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), name+".db"), ManifestPath: manifestPath, UploadDir: filepath.Join(t.TempDir(), "uploads")}, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory())
+	application := NewProjectWithIdentity(t.Context(), config.Config{AppLocale: "en-US", IdentityWorkspaceID: "workspace-primary", IdentityAudience: "domainry-runtime", NotificationTenantID: "tenant-primary", NotificationWorkspaceID: "workspace-primary", NotificationApplicationKey: "domainry-runtime", PartyTenantID: "tenant-primary", PartyWorkspaceID: "workspace-primary", PartyApplicationKey: "domainry-runtime", DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), name+".db"), ManifestPath: manifestPath, UploadDir: filepath.Join(t.TempDir(), "uploads")}, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 	adminRole := roles[0]
 	for _, role := range roles {
 		if role.Key == "admin" {

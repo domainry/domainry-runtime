@@ -2,9 +2,11 @@ package runtime
 
 import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
@@ -15,8 +17,6 @@ import (
 	"testing"
 
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
-
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 
@@ -54,7 +54,7 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 			{ID: "qualify", Type: "action", Name: "Qualify", Contract: &definitionmodel.WorkflowNodeContract{Action: &definitionmodel.WorkflowBusinessActionNodeContract{ActionKey: "customer.qualify", ObjectKey: "customer", OnError: "fail"}}},
 		}, Edges: []definitionmodel.WorkflowGraphEdge{{ID: "start-qualify", Source: "started", Target: "qualify"}}}}}
 		manifest.AutomationRules = []automationmodel.AutomationRuleSchema{{Key: "customer.after_update", Name: "Customer updated", ObjectKey: "customer", Enabled: true, Trigger: automationmodel.AutomationTriggerSchema{Phase: "after", Operation: "update", ChangedFields: []string{"status"}, FromState: "new", ToState: "qualified"}, Instructions: []automationmodel.AutomationInstructionSchema{{Key: "start", Type: "start_workflow", Config: map[string]any{"workflow_key": "customer.approval"}}}}}
-		manifest.Integrations = integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "crm", Type: "mock", Provider: "test", Operations: []integrationmodel.ConnectorOperationSchema{{Key: "sync", Method: "POST", ExecutionMode: "sync", SideEffect: "write", TimeoutDefaultSeconds: 10, TimeoutMaxSeconds: 30}}}}}
+		manifest.Integrations = connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{{Key: "crm", Providers: []connectormodel.ConnectorProviderSchema{{Key: "test"}}, Operations: []connectormodel.ConnectorOperationSchema{{Key: "sync", Method: "POST", ExecutionMode: "sync", SideEffect: "write", TimeoutDefaultSeconds: 10, TimeoutMaxSeconds: 30}}}}}
 		manifest.Reports = []reportmodel.ReportSchema{{Key: "customer.summary", Name: "Customer summary", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "customer", Alias: "customer"}}, RequiredPermissions: []string{"customer.read"}}}
 	})
 	adminAccess := accessfixture.FromPrincipal(admin)
@@ -65,7 +65,7 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 	)
 	accessfixture.Set(&admin, adminAccess)
 	defer application.CloseContext(t.Context())
-	if _, err := publicationpersistence.NewPublicationStore(application.store).InsertOutbox(t.Context(), "workspace-primary", integrationmodel.IntegrationOutboxMessage{ID: "outbox-1", WorkspaceID: "workspace-primary", ConnectorKey: "crm", Operation: "sync", Status: "queued", CreatedBy: admin.UserID}); err != nil {
+	if _, err := publicationpersistence.NewPublicationStore(application.store).InsertOutbox(t.Context(), "workspace-primary", publicationmodel.Message{ID: "outbox-1", WorkspaceID: "workspace-primary", ConnectorKey: "crm", Operation: "sync", Status: "queued", CreatedBy: admin.UserID}); err != nil {
 		t.Fatal(err)
 	}
 	graph, err := application.records.Applications().BusinessReferences.Graph(t.Context(), admin)

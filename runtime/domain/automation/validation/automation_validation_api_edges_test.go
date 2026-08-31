@@ -3,13 +3,13 @@ package validation
 import (
 	"context"
 	"errors"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"math"
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 )
 
 func TestAutomationValidateRuleForAuthoringCallbackAndDistinctEdges(t *testing.T) {
@@ -166,7 +166,7 @@ func TestAutomationDefinitionValidatorConditionEdges(t *testing.T) {
 }
 
 func TestAutomationMappingAndOperationInputConditionEdges(t *testing.T) {
-	operation := integrationmodel.ConnectorOperationSchema{Key: "send", Input: []definitionmodel.FieldSchema{{Key: "value", Type: "text"}}}
+	operation := connectormodel.ConnectorOperationSchema{Key: "send", Input: []definitionmodel.FieldSchema{{Key: "value", Type: "text"}}}
 	object := automationValidatorCatalog().Objects[0]
 	for _, input := range []map[string]any{{"value": "plain"}, {"value": nil}} {
 		if err := AutomationValidateOperationInput(operation, input, object, nil); err != nil {

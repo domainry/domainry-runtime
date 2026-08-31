@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	connectorcatalog "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
 
@@ -44,10 +43,5 @@ func loadFixtureManifest(t *testing.T, name string) manifestmodel.ManifestSchema
 	if err := json.Unmarshal(raw, &manifest); err != nil {
 		t.Fatalf("decode fixture %s: %v", name, err)
 	}
-	builtins, err := connectorcatalog.Builtin()
-	if err != nil {
-		t.Fatalf("load Runtime Connector validation catalog: %v", err)
-	}
-	manifest.Integrations.Connectors = append(builtins, manifest.Integrations.Connectors...)
 	return manifest
 }

@@ -1,6 +1,7 @@
 package record_test
 
 import (
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -17,8 +18,6 @@ import (
 	"strings"
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
-
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 
 	"testing"
 
@@ -51,7 +50,7 @@ func TestContextRecordMutationDialectContracts(t *testing.T) {
 			}
 
 			conflicting := []transactionmodel.RecordMutationCommit{
-				{Operation: "update", Object: object, Record: recordmodel.Record{ID: "first", CreatedAt: "v1", UpdatedAt: "v2", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "v1", Audit: dialectAudit(driver, "first-conflict"), Outbox: []integrationmodel.IntegrationOutboxMessage{dialectOutbox(driver, "conflict")}, WorkflowIntents: []workflowmodel.WorkflowExecution{dialectWorkflowIntent(driver, "conflict")}},
+				{Operation: "update", Object: object, Record: recordmodel.Record{ID: "first", CreatedAt: "v1", UpdatedAt: "v2", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "v1", Audit: dialectAudit(driver, "first-conflict"), Outbox: []publicationmodel.Message{dialectOutbox(driver, "conflict")}, WorkflowIntents: []workflowmodel.WorkflowExecution{dialectWorkflowIntent(driver, "conflict")}},
 				{Operation: "update", Object: object, Record: recordmodel.Record{ID: "second", CreatedAt: "v1", UpdatedAt: "v2", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "stale", Audit: dialectAudit(driver, "second-conflict")},
 			}
 			if err := recordStore(repository).CommitRecordMutationBatch(t.Context(), "workspace-primary", conflicting); !mutation.IsMutationConflict(err, mutation.MutationConflictOptimistic) {
@@ -63,7 +62,7 @@ func TestContextRecordMutationDialectContracts(t *testing.T) {
 			assertDialectOutboxCount(t, store, driver, 0)
 
 			successful := []transactionmodel.RecordMutationCommit{
-				{Operation: "update", Object: object, Record: recordmodel.Record{ID: "first", CreatedAt: "v1", UpdatedAt: "v2", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "v1", Audit: dialectAudit(driver, "first-success"), Audits: []auditmodel.AuditEvent{*dialectAudit(driver, "first-mandatory-domain-event")}, Outbox: []integrationmodel.IntegrationOutboxMessage{dialectOutbox(driver, "success")}, WorkflowIntents: []workflowmodel.WorkflowExecution{dialectWorkflowIntent(driver, "success")}},
+				{Operation: "update", Object: object, Record: recordmodel.Record{ID: "first", CreatedAt: "v1", UpdatedAt: "v2", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "v1", Audit: dialectAudit(driver, "first-success"), Audits: []auditmodel.AuditEvent{*dialectAudit(driver, "first-mandatory-domain-event")}, Outbox: []publicationmodel.Message{dialectOutbox(driver, "success")}, WorkflowIntents: []workflowmodel.WorkflowExecution{dialectWorkflowIntent(driver, "success")}},
 				{Operation: "update", Object: object, Record: recordmodel.Record{ID: "second", CreatedAt: "v1", UpdatedAt: "v2", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "v1", Audit: dialectAudit(driver, "second-success")},
 			}
 			if err := recordStore(repository).CommitRecordMutationBatch(t.Context(), "workspace-primary", successful); err != nil {
@@ -98,8 +97,8 @@ func dialectWorkflowIntent(driver, suffix string) workflowmodel.WorkflowExecutio
 	return workflowmodel.WorkflowExecution{ID: fmt.Sprintf("workflow_intent_%s_%s", driver, suffix), WorkflowKey: "notify", Name: "Notify", Trigger: "record_updated:dialect_record", Status: "pending", ActionType: "workflow_graph", Action: map[string]any{}, Payload: map[string]any{"record_id": "first"}, Result: map[string]any{"transactional_intent": true}, ObjectKey: "dialect_record", RecordID: "first", ActorID: "tester", Attempt: 0, MaxAttempts: 3, Message: "workflow.message.queued", CreatedAt: "v2", UpdatedAt: "v2"}
 }
 
-func dialectOutbox(driver, suffix string) integrationmodel.IntegrationOutboxMessage {
-	return integrationmodel.IntegrationOutboxMessage{ID: fmt.Sprintf("outbox_%s_%s", driver, suffix), WorkspaceID: "workspace-primary", ConnectorKey: "test", Operation: "notify", DedupKey: "dialect:" + driver + ":" + suffix, Status: "queued", Payload: map[string]any{"record_id": "first"}, CreatedBy: "tester"}
+func dialectOutbox(driver, suffix string) publicationmodel.Message {
+	return publicationmodel.Message{ID: fmt.Sprintf("outbox_%s_%s", driver, suffix), WorkspaceID: "workspace-primary", ConnectorKey: "test", Operation: "notify", DedupKey: "dialect:" + driver + ":" + suffix, Status: "queued", Payload: map[string]any{"record_id": "first"}, CreatedBy: "tester"}
 }
 
 func assertDialectRecords(t *testing.T, repository interface {
@@ -253,7 +252,7 @@ func TestMutationSideFactFailureWindowsRollbackRecordAuditOutboxAndWorkflowInten
 			commit := transactionmodel.RecordMutationCommit{
 				Operation: "update", Object: object, Record: recordmodel.Record{ID: "record-1", CreatedAt: "v1", UpdatedAt: "v2", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "v1",
 				Audit:           dialectAudit(failure.name, "rollback"),
-				Outbox:          []integrationmodel.IntegrationOutboxMessage{dialectOutbox(failure.name, "rollback")},
+				Outbox:          []publicationmodel.Message{dialectOutbox(failure.name, "rollback")},
 				WorkflowIntents: []workflowmodel.WorkflowExecution{dialectWorkflowIntent(failure.name, "rollback")},
 			}
 			if err := recordStore(store).CommitRecordMutation(t.Context(), "workspace-primary", commit); err == nil {

@@ -1,6 +1,7 @@
 package projection
 
 import (
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"strings"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
@@ -8,7 +9,6 @@ import (
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
 
@@ -49,8 +49,10 @@ func MergeInstalledEnvelope(persisted, installed manifestmodel.ManifestSchema, p
 	persisted.NotificationTemplates = append([]notificationmodel.NotificationTemplate(nil), publishedTemplates...)
 	persisted.NotificationEventTypes = append([]notificationmodel.NotificationEventType(nil), installed.NotificationEventTypes...)
 	persisted.NotificationRules = append([]notificationmodel.NotificationRule(nil), installed.NotificationRules...)
-	persisted = MergeConnectorValidationCatalog(persisted, installed.Integrations.Connectors)
-	persisted.Integrations.Connections = append([]integrationmodel.ConnectionSchema(nil), installed.Integrations.Connections...)
+	// Connector definitions are projected transiently from Integration's
+	// Connectors-owned catalog after restoration; Metadata never persists them.
+	persisted.Integrations.Connectors = append([]connectormodel.ConnectorSchema(nil), installed.Integrations.Connectors...)
+	persisted.Integrations.Connections = append([]connectormodel.ConnectionSchema(nil), installed.Integrations.Connections...)
 	return persisted
 }
 
@@ -97,20 +99,4 @@ func MergeWorkflows(existing, installed []definitionmodel.WorkflowSchema) []defi
 		}
 	}
 	return result
-}
-
-func MergeConnectorValidationCatalog(manifest manifestmodel.ManifestSchema, validationCatalog []integrationmodel.ConnectorSchema) manifestmodel.ManifestSchema {
-	seen := make(map[string]bool, len(manifest.Integrations.Connectors))
-	connectors := append([]integrationmodel.ConnectorSchema(nil), manifest.Integrations.Connectors...)
-	for _, connector := range connectors {
-		seen[connector.Key] = true
-	}
-	for _, connector := range validationCatalog {
-		if !seen[connector.Key] {
-			seen[connector.Key] = true
-			connectors = append(connectors, connector)
-		}
-	}
-	manifest.Integrations.Connectors = connectors
-	return manifest
 }

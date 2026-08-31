@@ -2,6 +2,7 @@ package record
 
 import (
 	"fmt"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -13,7 +14,6 @@ import (
 	"github.com/domainry/domainry-foundation/mutation"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -62,7 +62,7 @@ func TestRecordMutationExecutionClaimCommitReplayConflictAndRollback(t *testing.
 	commit := transactionmodel.RecordMutationCommit{
 		Operation: "create", Object: object, Record: record,
 		Audit:              &auditmodel.AuditEvent{ID: "create-audit-1", Event: "record_created", ObjectKey: object.Key, RecordID: record.ID, CreatedAt: now.Format(time.RFC3339Nano)},
-		Outbox:             []integrationmodel.IntegrationOutboxMessage{{ID: "create-outbox-1", WorkspaceID: "workspace-a", ConnectorKey: "webhook", Operation: "record.created", DedupKey: "record-1-created"}},
+		Outbox:             []publicationmodel.Message{{ID: "create-outbox-1", WorkspaceID: "workspace-a", ConnectorKey: "webhook", Operation: "record.created", DedupKey: "record-1-created"}},
 		WorkflowIntents:    []workflowmodel.WorkflowExecution{{ID: "create-workflow-1", WorkflowKey: "customer-created", Trigger: "record_created", Status: "pending", ObjectKey: object.Key, RecordID: record.ID, ActorID: "admin", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
 		NotificationEvents: []notificationmodel.NotificationEvent{{ID: "create-notification-1", WorkspaceID: "workspace-a", Source: "record", SourceEventID: "record-1-created", EventType: "record.created", Category: "business", Severity: "info", Surface: "business_workspace", RecipientUserIDs: []string{"admin"}, ActionState: "none", OccurredAt: now.Format(time.RFC3339Nano), Snapshot: notificationmodel.NotificationInboxSnapshot{Title: "Record created", Body: "The record was created."}, Status: "queued", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
 	}
@@ -189,7 +189,7 @@ func TestRecordMutationHundredConcurrentUpdatesHaveNoLostUpdateOrPartialCommit(t
 				Record:            recordmodel.Record{ID: initial.ID, CreatedAt: initial.CreatedAt, UpdatedAt: "version-" + identity, Data: map[string]any{"name": identity}},
 				ExpectedUpdatedAt: initial.UpdatedAt,
 				Audit:             &auditmodel.AuditEvent{ID: "update-audit-" + identity, Event: "record_updated", ObjectKey: object.Key, RecordID: initial.ID, CreatedAt: "2026-07-19T00:00:00Z"},
-				Outbox:            []integrationmodel.IntegrationOutboxMessage{{ID: "update-outbox-" + identity, WorkspaceID: "workspace-primary", ConnectorKey: "webhook", Operation: "concurrent.record.updated", DedupKey: identity}},
+				Outbox:            []publicationmodel.Message{{ID: "update-outbox-" + identity, WorkspaceID: "workspace-primary", ConnectorKey: "webhook", Operation: "concurrent.record.updated", DedupKey: identity}},
 				WorkflowIntents:   []workflowmodel.WorkflowExecution{{ID: "update-workflow-" + identity, WorkflowKey: "concurrent-record-updated", Trigger: "record_updated", Status: "pending", ObjectKey: object.Key, RecordID: initial.ID, CreatedAt: "2026-07-19T00:00:00Z", UpdatedAt: "2026-07-19T00:00:00Z"}},
 			}
 			err := repository.CommitRecordMutation(t.Context(), "workspace-primary", commit)

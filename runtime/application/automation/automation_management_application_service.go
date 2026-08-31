@@ -1,7 +1,10 @@
 package automation
 
 import (
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -20,7 +23,6 @@ import (
 
 	apperror "github.com/domainry/domainry-foundation/apperror"
 	capability "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 )
 
 type AutomationRuleExecutor func(context.Context, automationmodel.AutomationRuleSchema, string, map[string]any, map[string]any, map[string]any, *recordmodel.Record, principalmodel.Principal) (automationprojection.AutomationRuleTrace, error)
@@ -28,10 +30,10 @@ type AutomationRuleExecutor func(context.Context, automationmodel.AutomationRule
 type AutomationManagementDependencies struct {
 	Rules               automationcontract.AutomationRuleRegistry
 	Executions          automationrepository.AutomationExecutionRepository
-	ListInvocations     func(context.Context, string, automationmodel.AutomationExecutionFilter) ([]integrationmodel.IntegrationInvocation, error)
-	ListOutbox          func(context.Context, string) ([]integrationmodel.IntegrationOutboxMessage, error)
-	ListConnections     func(context.Context, string) ([]integrationmodel.IntegrationConnection, error)
-	Connectors          func(context.Context, principalmodel.Principal) []integrationmodel.ConnectorSchema
+	ListInvocations     func(context.Context, string, automationmodel.AutomationExecutionFilter) ([]integrationsdk.Invocation, error)
+	ListOutbox          func(context.Context, string) ([]publicationmodel.Message, error)
+	ListConnections     func(context.Context, string) ([]integrationsdk.Connection, error)
+	Connectors          func(context.Context, principalmodel.Principal) []connectormodel.ConnectorSchema
 	AuthoringProjection func() capability.CapabilityAuthoringProjection
 	ValidateDefinition  func(context.Context, automationmodel.AutomationRuleSchema) error
 	ExecuteRule         AutomationRuleExecutor
@@ -54,7 +56,7 @@ func (s *AutomationManagementApplicationService) Capabilities(ctx context.Contex
 		return capability.CapabilityAutomationCatalog{}, managementError(apperror.KindForbidden, "auth.permission_denied", nil)
 	}
 	workspaceID := automationWorkspaceID(principal)
-	connections := []integrationmodel.IntegrationConnection{}
+	connections := []integrationsdk.Connection{}
 	if s.dependencies.ListConnections != nil {
 		var err error
 		connections, err = s.dependencies.ListConnections(ctx, workspaceID)
@@ -122,7 +124,7 @@ func (s *AutomationManagementApplicationService) ExecutionHistory(ctx context.Co
 			return automationprojection.AutomationExecutionHistory{}, managementError(apperror.KindInternal, "backend.automation.history_failed", fmt.Errorf("list automation executions: %w", err))
 		}
 	}
-	invocations := []integrationmodel.IntegrationInvocation{}
+	invocations := []integrationsdk.Invocation{}
 	if s.dependencies.ListInvocations != nil {
 		var err error
 		invocations, err = s.dependencies.ListInvocations(ctx, workspaceID, filter)
@@ -130,7 +132,7 @@ func (s *AutomationManagementApplicationService) ExecutionHistory(ctx context.Co
 			return automationprojection.AutomationExecutionHistory{}, managementError(apperror.KindInternal, "backend.automation.history_failed", fmt.Errorf("list automation connector invocations: %w", err))
 		}
 	}
-	outbox := []integrationmodel.IntegrationOutboxMessage{}
+	outbox := []publicationmodel.Message{}
 	if s.dependencies.ListOutbox != nil {
 		var err error
 		outbox, err = s.dependencies.ListOutbox(ctx, workspaceID)

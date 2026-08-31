@@ -7,15 +7,6 @@ import (
 )
 
 func TestRuntimeAuthoringErrorContractMappings(t *testing.T) {
-	for name, values := range map[string][]string{
-		"types": RuntimeConnectorTypes(), "methods": RuntimeConnectorMethods(), "execution_modes": RuntimeConnectorExecutionModes(),
-		"side_effects": RuntimeConnectorSideEffects(), "field_types": RuntimeConnectorProtocolFieldTypes(),
-		"connection_statuses": RuntimeIntegrationConnectionStatuses(), "outbox_statuses": RuntimeIntegrationOutboxStatuses(),
-	} {
-		if len(values) == 0 {
-			t.Fatalf("%s inventory is empty", name)
-		}
-	}
 	tests := map[string]string{
 		"backend.action.invalid":                                    "action.definition",
 		"backend.automation.invalid":                                "automation.rule",
@@ -24,15 +15,15 @@ func TestRuntimeAuthoringErrorContractMappings(t *testing.T) {
 		"backend.report.invalid":                                    "report.definition",
 		"backend.change_plan.invalid":                               "",
 		"backend.integration.binding.invalid":                       "integration.binding_validation",
-		"backend.integration.connector.operation_invalid":           "integration.connector_operation",
-		"backend.integration.connector.protocol_field_invalid":      "integration.connector_operation",
-		"backend.integration.connector.compensation_invalid":        "integration.connector_operation",
-		"backend.integration.connector.reserve_contract_incomplete": "integration.connector_operation",
-		"backend.integration.connector.invalid":                     "integration.connector_definition",
+		"backend.integration.connector.operation_invalid":           "integration.catalog",
+		"backend.integration.connector.protocol_field_invalid":      "integration.catalog",
+		"backend.integration.connector.compensation_invalid":        "integration.catalog",
+		"backend.integration.connector.reserve_contract_incomplete": "integration.catalog",
+		"backend.integration.connector.invalid":                     "integration.catalog",
 		"backend.integration.connection.invalid":                    "integration.connection",
 		"backend.integration.secret_missing":                        "integration.connection",
 		"backend.integration.webhook_signature.invalid":             "integration.connection",
-		"backend.integration.outbox.invalid":                        "integration.outbox",
+		"backend.runtime.publication.invalid":                       "",
 		"backend.unknown":                                           "",
 	}
 	for code, want := range tests {
@@ -41,7 +32,7 @@ func TestRuntimeAuthoringErrorContractMappings(t *testing.T) {
 			t.Fatalf("code=%q result=%#v want capability=%q", code, result, want)
 		}
 	}
-	resources := map[string]string{"field": "schema.field", "action": "action.definition", "automation_rule": "automation.rule", "connector": "integration.connector_definition", "report": "report.definition", "unknown": ""}
+	resources := map[string]string{"field": "schema.field", "action": "action.definition", "automation_rule": "automation.rule", "connector": "", "report": "report.definition", "unknown": ""}
 	for resource, want := range resources {
 		result := RuntimeAuthoringErrorContract("backend.metadata.definition_version_conflict", map[string]string{"resource_type": " " + resource + " ", "parameter_path": "definition.version"})
 		if result.CapabilityKey != want || result.FieldPath != "definition.version" {
@@ -164,15 +155,6 @@ func TestCapabilityAuthoringEnumsPointersAndHashes(t *testing.T) {
 	if *floatPointer(1.5) != 1.5 || *intPointer(3) != 3 {
 		t.Fatal("pointer helpers changed values")
 	}
-	for name, values := range map[string][]string{
-		"protocol fields": RuntimeConnectorProtocolFieldTypes(),
-		"connections":     RuntimeIntegrationConnectionStatuses(),
-		"outbox":          RuntimeIntegrationOutboxStatuses(),
-	} {
-		if len(values) == 0 {
-			t.Fatalf("%s is empty", name)
-		}
-	}
 	instance := CapabilityAuthoringInstance{ObjectKeys: []string{"object"}}
 	if CapabilityAuthoringInstanceHash(instance) != authoringInstanceHash(instance) || len(authoringInstanceHash(instance)) != 64 {
 		t.Fatal("instance hash is unstable")
@@ -184,9 +166,6 @@ func TestCapabilityAuthoringEnumsPointersAndHashes(t *testing.T) {
 	copy.Instance = instance
 	if ContractHash(copy) != ContractHash(contract) {
 		t.Fatal("contract hash included derived fields")
-	}
-	if !reflect.DeepEqual(RuntimeConnectorMethods(), []string{"DELETE", "GET", "PATCH", "POST", "PUT", "SMTP"}) {
-		t.Fatal("connector method contract changed")
 	}
 	unsorted := validAuthoringContractForTest()
 	unsorted.Domains[0].Capabilities[0].Examples = []CapabilityAuthoringExample{

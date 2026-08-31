@@ -2,12 +2,12 @@ package projection
 
 import (
 	"fmt"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 
 	"strings"
-
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 )
 
 type AutomationExecutionMetrics struct {
@@ -35,7 +35,7 @@ type AutomationExecutionHistory struct {
 	Metrics AutomationExecutionMetrics                `json:"metrics"`
 }
 
-func BuildAutomationExecutionMetrics(items []automationmodel.AutomationRuleExecution, invocations []integrationmodel.IntegrationInvocation, outbox []integrationmodel.IntegrationOutboxMessage) AutomationExecutionMetrics {
+func BuildAutomationExecutionMetrics(items []automationmodel.AutomationRuleExecution, invocations []integrationsdk.Invocation, outbox []publicationmodel.Message) AutomationExecutionMetrics {
 	metrics := AutomationExecutionMetrics{Total: len(items), ByStatus: map[string]int{}}
 	var totalDuration int64
 	eventIDs, invocationIDs := map[string]bool{}, map[string]bool{}

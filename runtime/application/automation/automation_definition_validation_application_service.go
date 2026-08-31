@@ -2,17 +2,17 @@ package automation
 
 import (
 	"context"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationvalidation "github.com/domainry/domainry-runtime/runtime/domain/automation/validation"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 type AutomationDefinitionValidationApplicationService struct {
 	Catalog         func() automationvalidation.AutomationDefinitionCatalog
-	ListConnections func(context.Context, string) ([]integrationmodel.IntegrationConnection, error)
+	ListConnections func(context.Context, string) ([]integrationsdk.Connection, error)
 }
 
 func (s AutomationDefinitionValidationApplicationService) Validate(ctx context.Context, rule automationmodel.AutomationRuleSchema) error {

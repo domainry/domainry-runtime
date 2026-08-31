@@ -3,65 +3,23 @@ package transport
 import (
 	"context"
 	"errors"
-	"fmt"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	integrationapplication "github.com/domainry/domainry-runtime/runtime/application/integration"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
+	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
-type deadLetterEventRepository struct {
-	event     integrationmodel.IntegrationEvent
-	found     bool
-	err       error
-	status    string
-	errorText string
-	delay     int
-}
-
-func (*deadLetterEventRepository) ListEvents(context.Context, string, string, string, int) ([]integrationmodel.IntegrationEvent, error) {
-	return nil, nil
-}
-func (r *deadLetterEventRepository) GetEvent(context.Context, string, string) (integrationmodel.IntegrationEvent, bool, error) {
-	return r.event, r.found, r.err
-}
-func (*deadLetterEventRepository) UpsertEvent(context.Context, string, integrationmodel.IntegrationEvent) (integrationmodel.IntegrationEvent, bool, error) {
-	return integrationmodel.IntegrationEvent{}, false, nil
-}
-func (*deadLetterEventRepository) AcceptEvent(context.Context, string, integrationmodel.IntegrationEvent, integrationmodel.IntegrationEventMappingIntent) (integrationmodel.IntegrationEvent, bool, error) {
-	return integrationmodel.IntegrationEvent{}, false, nil
-}
-func (r *deadLetterEventRepository) UpdateEventStatus(_ context.Context, _ string, _ string, status, errorText string) (integrationmodel.IntegrationEvent, error) {
-	r.status, r.errorText = status, errorText
-	if r.err != nil {
-		return integrationmodel.IntegrationEvent{}, r.err
-	}
-	r.event.Status, r.event.Error = status, errorText
-	return r.event, nil
-}
-func (r *deadLetterEventRepository) ScheduleEventRetry(_ context.Context, _ string, _ string, delay int, errorText string) (integrationmodel.IntegrationEvent, error) {
-	r.delay, r.errorText = delay, errorText
-	if r.err != nil {
-		return integrationmodel.IntegrationEvent{}, r.err
-	}
-	r.event.Status, r.event.Error, r.event.NextRetryAt = "retrying", errorText, "later"
-	return r.event, nil
-}
-func (*deadLetterEventRepository) RecordWebhookNonce(context.Context, string, string, string, string, string) (bool, error) {
-	return true, nil
-}
-
 type deadLetterDeliveryRepository struct {
-	message   integrationmodel.IntegrationOutboxMessage
+	message   publicationmodel.Message
 	found     bool
 	err       error
 	status    string
@@ -69,65 +27,50 @@ type deadLetterDeliveryRepository struct {
 	delay     int
 }
 
-func (*deadLetterDeliveryRepository) ListInvocations(context.Context, string, string, string, string, string, int) ([]integrationmodel.IntegrationInvocation, error) {
+func (*deadLetterDeliveryRepository) ListOutbox(context.Context, string, string, string, int) ([]publicationmodel.Message, error) {
 	return nil, nil
 }
-func (*deadLetterDeliveryRepository) InsertInvocation(context.Context, string, integrationmodel.IntegrationInvocation) (integrationmodel.IntegrationInvocation, error) {
-	return integrationmodel.IntegrationInvocation{}, nil
+func (*deadLetterDeliveryRepository) InsertOutbox(context.Context, string, publicationmodel.Message) (publicationmodel.Message, error) {
+	return publicationmodel.Message{}, nil
 }
-func (*deadLetterDeliveryRepository) UpdateInvocationStatus(context.Context, string, string, string, int64, string, string) (integrationmodel.IntegrationInvocation, error) {
-	return integrationmodel.IntegrationInvocation{}, nil
-}
-func (*deadLetterDeliveryRepository) ListOutbox(context.Context, string, string, string, int) ([]integrationmodel.IntegrationOutboxMessage, error) {
-	return nil, nil
-}
-func (*deadLetterDeliveryRepository) InsertOutbox(context.Context, string, integrationmodel.IntegrationOutboxMessage) (integrationmodel.IntegrationOutboxMessage, error) {
-	return integrationmodel.IntegrationOutboxMessage{}, nil
-}
-func (r *deadLetterDeliveryRepository) UpdateOutboxStatus(_ context.Context, _ string, _ string, status, _ string, errorText string) (integrationmodel.IntegrationOutboxMessage, error) {
+func (r *deadLetterDeliveryRepository) UpdateOutboxStatus(_ context.Context, _ string, _ string, status, _ string, errorText string) (publicationmodel.Message, error) {
 	r.status, r.errorText = status, errorText
 	if r.err != nil {
-		return integrationmodel.IntegrationOutboxMessage{}, r.err
+		return publicationmodel.Message{}, r.err
 	}
 	r.message.Status, r.message.Error = status, errorText
 	return r.message, nil
 }
-func (*deadLetterDeliveryRepository) UpdateOutboxStatusByResponseRef(context.Context, string, string, string, string, string) (integrationmodel.IntegrationOutboxMessage, bool, error) {
-	return integrationmodel.IntegrationOutboxMessage{}, false, nil
-}
-func (r *deadLetterDeliveryRepository) ScheduleOutboxRetry(_ context.Context, _ string, _ string, delay int, errorText string) (integrationmodel.IntegrationOutboxMessage, error) {
+func (r *deadLetterDeliveryRepository) ScheduleOutboxRetry(_ context.Context, _ string, _ string, delay int, errorText string) (publicationmodel.Message, error) {
 	r.delay, r.errorText = delay, errorText
 	if r.err != nil {
-		return integrationmodel.IntegrationOutboxMessage{}, r.err
+		return publicationmodel.Message{}, r.err
 	}
 	r.message.Status, r.message.Error, r.message.NextAttemptAt = "retrying", errorText, "later"
 	return r.message, nil
 }
-func (r *deadLetterDeliveryRepository) GetOutbox(context.Context, string, string) (integrationmodel.IntegrationOutboxMessage, bool, error) {
+func (r *deadLetterDeliveryRepository) GetOutbox(context.Context, string, string) (publicationmodel.Message, bool, error) {
 	return r.message, r.found, r.err
 }
 
 func deadLetterPrincipal() principalmodel.Principal {
-	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "operator"}}, accessfixture.Bundle{Permissions: []string{
-		integrationapplication.PermissionRetry,
-		integrationapplication.PermissionInvoke,
-	}})
+	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "operator"}}, accessfixture.Bundle{})
 }
 
-func TestIntegrationOutboxDeadLetterOwnerInspectRetryResolveAndProjectionFallbacks(t *testing.T) {
-	repository := &deadLetterDeliveryRepository{found: true, message: integrationmodel.IntegrationOutboxMessage{
+func TestPublicationHandoffDeadLetterOwnerInspectRetryResolveAndProjectionFallbacks(t *testing.T) {
+	repository := &deadLetterDeliveryRepository{found: true, message: publicationmodel.Message{
 		ID: "message", WorkspaceID: "workspace", ConnectorKey: "__automation__", Operation: "run", Status: "dead_letter", Error: "failed", EventID: "event", DedupKey: "dedup", AttemptCount: 2, UpdatedAt: "now",
 	}}
-	service := integrationapplication.NewIntegrationApplicationService(integrationapplication.ApplicationDependencies{DeliveryRepository: repository})
-	owner := integrationOutboxDeadLetterOwner{service: service}
+	service := publicationhandoff.NewPublicationHandoffApplicationService(publicationhandoff.Dependencies{Repository: repository})
+	owner := publicationHandoffDeadLetterOwner{service: service}
 	principal := deadLetterPrincipal()
 
 	item, err := owner.Inspect(t.Context(), " message ", principal)
-	if err != nil || item.BusinessKey != "dedup" || item.EvidenceRef != "integration_outbox:message" || item.Details["connector_key"] != "__automation__" {
+	if err != nil || item.BusinessKey != "dedup" || item.EvidenceRef != "publication_handoff:message" || item.Details["connector_key"] != "__automation__" {
 		t.Fatalf("item=%#v err=%v", item, err)
 	}
 	repository.message.RequestRef, repository.message.ResponseRef = "request", " receipt "
-	item = integrationOutboxDeadLetterItem(repository.message)
+	item = publicationHandoffDeadLetterItem(repository.message)
 	if item.BusinessKey != "request" || item.EvidenceRef != "receipt" {
 		t.Fatalf("explicit projection=%#v", item)
 	}

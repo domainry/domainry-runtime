@@ -2,6 +2,7 @@ package capability
 
 import (
 	"context"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"net/url"
 	"sort"
 	"strings"
@@ -11,8 +12,6 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
 )
@@ -118,7 +117,7 @@ func (s *CapabilityAuthoringApplicationService) CapabilityDetailSelected(ctx con
 						if !found {
 							return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryNotFound("backend.capability.connector_not_found", "connector_key", selection.ConnectorKey)
 						}
-						specialized, found := integrationcontract.SpecializeIntegrationConnectionAuthoringCapability(capabilityKey, connector, selection.ProviderKey)
+						specialized, found := specializeIntegrationAuthoringCapability(capabilityKey, connector, selection.ProviderKey, "")
 						if !found {
 							return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryNotFound("backend.capability.provider_not_found", "provider_key", selection.ProviderKey)
 						}
@@ -134,7 +133,7 @@ func (s *CapabilityAuthoringApplicationService) CapabilityDetailSelected(ctx con
 					if !found {
 						return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryNotFound("backend.capability.connector_not_found", "connector_key", selection.ConnectorKey)
 					}
-					specialized, found := integrationcontract.SpecializeIntegrationOperationTestAuthoringCapability(connector, selection.OperationKey)
+					specialized, found := specializeIntegrationAuthoringCapability(capabilityKey, connector, "", selection.OperationKey)
 					if !found {
 						return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryNotFound("backend.capability.operation_not_found", "operation_key", selection.OperationKey)
 					}
@@ -149,21 +148,32 @@ func (s *CapabilityAuthoringApplicationService) CapabilityDetailSelected(ctx con
 					if !found {
 						return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryNotFound("backend.capability.connector_not_found", "connector_key", selection.ConnectorKey)
 					}
-					var provider *integrationmodel.ConnectorProviderSchema
+					var provider *connectormodel.ConnectorProviderSchema
 					if selection.ProviderKey != "" {
 						provider = capabilityConnectorProviderByKey(&connector, selection.ProviderKey)
 						if provider == nil {
 							return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryNotFound("backend.capability.provider_not_found", "provider_key", selection.ProviderKey)
 						}
 					}
-					var operation *integrationmodel.ConnectorOperationSchema
+					var operation *connectormodel.ConnectorOperationSchema
 					if selection.OperationKey != "" {
 						operation = capabilityConnectorOperationByKey(&connector, selection.OperationKey)
 						if operation == nil {
 							return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryNotFound("backend.capability.operation_not_found", "operation_key", selection.OperationKey)
 						}
 					}
-					definition = integrationcontract.SpecializeIntegrationBindingValidationAuthoringCapability(connector, provider, operation)
+					providerKey, operationKey := "", ""
+					if provider != nil {
+						providerKey = provider.Key
+					}
+					if operation != nil {
+						operationKey = operation.Key
+					}
+					var specialized bool
+					definition, specialized = specializeIntegrationAuthoringCapability(capabilityKey, connector, providerKey, operationKey)
+					if !specialized {
+						return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryBadRequest("backend.capability.integration_authoring_contract_invalid", "capability", capabilityKey)
+					}
 					selected = map[string]string{"connector_key": selection.ConnectorKey}
 					if selection.ProviderKey != "" {
 						selected["provider_key"] = selection.ProviderKey
@@ -191,16 +201,16 @@ func capabilityObjectByKey(snapshot capabilitycontract.CapabilityInstanceSchema,
 	return definitionmodel.ObjectSchema{}, false
 }
 
-func capabilityConnectorByKey(snapshot capabilitycontract.CapabilityInstanceSchema, connectorKey string) (integrationmodel.ConnectorSchema, bool) {
+func capabilityConnectorByKey(snapshot capabilitycontract.CapabilityInstanceSchema, connectorKey string) (connectormodel.ConnectorSchema, bool) {
 	for _, connector := range snapshot.Integrations.Connectors {
 		if connector.Key == connectorKey {
 			return connector, true
 		}
 	}
-	return integrationmodel.ConnectorSchema{}, false
+	return connectormodel.ConnectorSchema{}, false
 }
 
-func capabilityConnectorProviderByKey(connector *integrationmodel.ConnectorSchema, providerKey string) *integrationmodel.ConnectorProviderSchema {
+func capabilityConnectorProviderByKey(connector *connectormodel.ConnectorSchema, providerKey string) *connectormodel.ConnectorProviderSchema {
 	for index := range connector.Providers {
 		if connector.Providers[index].Key == providerKey {
 			return &connector.Providers[index]
@@ -209,7 +219,7 @@ func capabilityConnectorProviderByKey(connector *integrationmodel.ConnectorSchem
 	return nil
 }
 
-func capabilityConnectorOperationByKey(connector *integrationmodel.ConnectorSchema, operationKey string) *integrationmodel.ConnectorOperationSchema {
+func capabilityConnectorOperationByKey(connector *connectormodel.ConnectorSchema, operationKey string) *connectormodel.ConnectorOperationSchema {
 	for index := range connector.Operations {
 		if connector.Operations[index].Key == operationKey {
 			return &connector.Operations[index]

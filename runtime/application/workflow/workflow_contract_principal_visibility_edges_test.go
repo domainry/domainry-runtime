@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"reflect"
 	"testing"
 	"time"
@@ -13,7 +14,6 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -108,7 +108,7 @@ func TestWorkflowContractHelpersCoverSuccessAndFailureOutcomes(t *testing.T) {
 		t.Fatal("default normalization mismatch")
 	}
 
-	schema := integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "connector"}}}
+	schema := connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{{Key: "connector"}}}
 	cloned := cloneIntegrationSchema(schema)
 	cloned.Connectors[0].Key = "changed"
 	if schema.Connectors[0].Key != "connector" {

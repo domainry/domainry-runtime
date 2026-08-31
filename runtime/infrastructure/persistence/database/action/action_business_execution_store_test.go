@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,7 +20,6 @@ import (
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -251,7 +251,7 @@ func TestBusinessActionExecutionStoreCommitsFactsAndReceiptInOneTransaction(t *t
 		Operation: "create", Object: object,
 		Record:          recordmodel.Record{ID: "record-1", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "created"}},
 		Audit:           &auditmodel.AuditEvent{ID: "audit-1", Event: "record_created", ObjectKey: object.Key, RecordID: "record-1", ActorID: "admin", RoleKey: "admin", Summary: "created", CreatedAt: now.Format(time.RFC3339Nano)},
-		Outbox:          []integrationmodel.IntegrationOutboxMessage{{ID: "durable_intent:execution-1:0", WorkspaceID: "workspace-a", ConnectorKey: "webhook", ConnectionKey: "primary", Operation: "notify", RequestRef: "atomic-commit", DedupKey: "atomic-commit", RequestFingerprint: strings.Repeat("a", 64), Payload: map[string]any{"record_id": "record-1"}}},
+		Outbox:          []publicationmodel.Message{{ID: "durable_intent:execution-1:0", WorkspaceID: "workspace-a", ConnectorKey: "webhook", ConnectionKey: "primary", Operation: "notify", RequestRef: "atomic-commit", DedupKey: "atomic-commit", RequestFingerprint: strings.Repeat("a", 64), Payload: map[string]any{"record_id": "record-1"}}},
 		WorkflowIntents: []workflowmodel.WorkflowExecution{{ID: "workflow-1", WorkflowKey: "on_create", Trigger: "record_created:action_atomic_record", Status: "pending", ActionType: "record", ObjectKey: object.Key, RecordID: "record-1", ActorID: "admin", IdempotencyKey: "atomic-commit", MaxAttempts: 3, CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
 	}
 	completed, err := commitBusinessActionExecution(t.Context(), repository, []transactionmodel.RecordMutationCommit{commit}, actionmodel.ActionExecutionCompletion{
@@ -377,7 +377,7 @@ func TestBookClassPersistsClassBookingAuditsOutboxAndReceiptInOneTransaction(t *
 				ID: bookingAuditID, WorkspaceID: "workspace-a", Event: "record_created",
 				ObjectKey: classBooking.Key, RecordID: "booking-1", ActorID: "member-1", CreatedAt: stamp,
 			},
-			Outbox: []integrationmodel.IntegrationOutboxMessage{{
+			Outbox: []publicationmodel.Message{{
 				ID: outboxID, WorkspaceID: "workspace-a",
 				ConnectorKey: "member_center", ConnectionKey: "primary", Operation: "send_notice",
 				RequestRef: claim.Execution.ID, DedupKey: claim.Execution.ID + ":intent:0",
@@ -650,7 +650,7 @@ func TestBusinessActionConditionalMutationCommitsPredicateFactsAndReceiptInOneUo
 		Operation: "update", Object: object, Record: recordmodel.Record{ID: "class-1", CreatedAt: "v1", UpdatedAt: "v2", Data: map[string]any{"reserved": 20.0, "status": "open"}},
 		Predicates:      []transactionmodel.MutationPredicate{{Field: "reserved", Operator: "lt", Value: 20.0, ErrorCode: "capacity_full"}, {Field: "status", Operator: "eq", Value: "open", ErrorCode: "capacity_closed"}},
 		Audit:           &auditmodel.AuditEvent{ID: "capacity-audit-success", Event: "capacity_reserved", ObjectKey: object.Key, RecordID: "class-1", CreatedAt: now.Format(time.RFC3339Nano)},
-		Outbox:          []integrationmodel.IntegrationOutboxMessage{{ID: "capacity-outbox-success", WorkspaceID: "workspace-a", ConnectorKey: "test", Operation: "notify", DedupKey: "reserve-20", Payload: map[string]any{"record_id": "class-1"}}},
+		Outbox:          []publicationmodel.Message{{ID: "capacity-outbox-success", WorkspaceID: "workspace-a", ConnectorKey: "test", Operation: "notify", DedupKey: "reserve-20", Payload: map[string]any{"record_id": "class-1"}}},
 		WorkflowIntents: []workflowmodel.WorkflowExecution{{ID: "capacity-workflow-success", WorkflowKey: "capacity_reserved", Trigger: "record_updated:action_capacity", Status: "pending", ActionType: "workflow_graph", ObjectKey: object.Key, RecordID: "class-1", MaxAttempts: 3, CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
 	}
 	completed, err := commitBusinessActionExecution(t.Context(), repository, []transactionmodel.RecordMutationCommit{commit}, actionmodel.ActionExecutionCompletion{Execution: claim.Execution, ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken, Result: map[string]any{"reserved": 20}, ResponseStatus: 200, ExpiresAt: now.Add(time.Hour), Now: now})
@@ -714,7 +714,7 @@ func TestBusinessActionExecutionStoreRollsBackAuditIntentOutboxAndReceiptOnCompl
 		Operation: "create", Object: object,
 		Record:          recordmodel.Record{ID: "record-rollback", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "created"}},
 		Audit:           &auditmodel.AuditEvent{ID: "audit-rollback", Event: "record_created", ObjectKey: object.Key, RecordID: "record-rollback", CreatedAt: now.Format(time.RFC3339Nano)},
-		Outbox:          []integrationmodel.IntegrationOutboxMessage{{ID: "outbox-rollback", WorkspaceID: "workspace-a", ConnectorKey: "webhook", ConnectionKey: "primary", Operation: "notify", RequestRef: "completion-rollback", DedupKey: "completion-rollback", RequestFingerprint: "fingerprint", Payload: map[string]any{"record_id": "record-rollback"}}},
+		Outbox:          []publicationmodel.Message{{ID: "outbox-rollback", WorkspaceID: "workspace-a", ConnectorKey: "webhook", ConnectionKey: "primary", Operation: "notify", RequestRef: "completion-rollback", DedupKey: "completion-rollback", RequestFingerprint: "fingerprint", Payload: map[string]any{"record_id": "record-rollback"}}},
 		WorkflowIntents: []workflowmodel.WorkflowExecution{{ID: "workflow-rollback", WorkflowKey: "on_create", Trigger: "record_created:action_completion_rollback", Status: "pending", ActionType: "record", ObjectKey: object.Key, RecordID: "record-rollback", IdempotencyKey: "completion-rollback", MaxAttempts: 3, CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
 	}
 	if _, err := commitBusinessActionExecution(t.Context(), repository, []transactionmodel.RecordMutationCommit{commit}, actionmodel.ActionExecutionCompletion{
@@ -765,7 +765,7 @@ func TestBusinessActionExecutionStoreRollsBackMutationAndDurableIntentWhenAction
 		Operation: "create", Object: object,
 		Record: recordmodel.Record{ID: "record-audit-rollback", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "created"}},
 		Audit:  &auditmodel.AuditEvent{ID: "mutation-audit-rollback", Event: "record_created", ObjectKey: object.Key, RecordID: "record-audit-rollback", CreatedAt: now.Format(time.RFC3339Nano)},
-		Outbox: []integrationmodel.IntegrationOutboxMessage{{ID: "durable-intent-rollback", WorkspaceID: "workspace-a", ConnectorKey: "email", ConnectionKey: "primary", Operation: "send", RequestRef: "audit-rollback", DedupKey: "audit-rollback", RequestFingerprint: "fingerprint", Payload: map[string]any{"record_id": "record-audit-rollback"}}},
+		Outbox: []publicationmodel.Message{{ID: "durable-intent-rollback", WorkspaceID: "workspace-a", ConnectorKey: "email", ConnectionKey: "primary", Operation: "send", RequestRef: "audit-rollback", DedupKey: "audit-rollback", RequestFingerprint: "fingerprint", Payload: map[string]any{"record_id": "record-audit-rollback"}}},
 	}
 	if _, err := commitBusinessActionExecution(t.Context(), repository, []transactionmodel.RecordMutationCommit{commit}, actionmodel.ActionExecutionCompletion{
 		Execution: claim.Execution, ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,

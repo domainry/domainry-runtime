@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,7 +23,6 @@ import (
 	automationprojection "github.com/domainry/domainry-runtime/runtime/domain/automation/projection"
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
@@ -50,14 +52,14 @@ func businessSystemHandlerApplication(featureErr error) *businesssystemapplicati
 			AutomationExecutions: func(context.Context, automationmodel.AutomationExecutionFilter, principalmodel.Principal) (automationprojection.AutomationExecutionHistory, error) {
 				return automationprojection.AutomationExecutionHistory{}, nil
 			},
-			ConnectorCatalog: func(context.Context, principalmodel.Principal) ([]integrationmodel.ConnectorSchema, error) {
-				return []integrationmodel.ConnectorSchema{}, nil
+			ConnectorCatalog: func(context.Context, principalmodel.Principal) ([]connectormodel.ConnectorSchema, error) {
+				return []connectormodel.ConnectorSchema{}, nil
 			},
-			IntegrationConnections: func(context.Context, principalmodel.Principal) ([]integrationmodel.IntegrationConnection, error) {
-				return []integrationmodel.IntegrationConnection{}, nil
+			IntegrationConnections: func(context.Context, principalmodel.Principal) ([]integrationsdk.Connection, error) {
+				return []integrationsdk.Connection{}, nil
 			},
-			IntegrationOutbox: func(context.Context, string, string, int, principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error) {
-				return []integrationmodel.IntegrationOutboxMessage{}, nil
+			PublicationHandoff: func(context.Context, string, string, int, principalmodel.Principal) ([]publicationmodel.Message, error) {
+				return []publicationmodel.Message{}, nil
 			},
 			SchemaForPrincipal: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 				return schema
@@ -120,7 +122,7 @@ func TestRuntimeAuthoringValidationDrivesTrustedLifecycleCallbacks(t *testing.T)
 		CurrentSnapshot: func(context.Context, principalmodel.Principal) (changeplanprojection.BusinessSystemSnapshot, error) {
 			return businessSystemCompleteValidationSnapshot(), nil
 		},
-		ValidateDefinitions: func(context.Context, []integrationmodel.ConnectorSchema) error { return nil },
+		ValidateDefinitions: func(context.Context, []connectormodel.ConnectorSchema) error { return nil },
 	})
 	events := []string{}
 	handler := NewBusinessSystemHandler(BusinessSystemDependencies{

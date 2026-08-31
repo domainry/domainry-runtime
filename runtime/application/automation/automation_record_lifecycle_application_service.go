@@ -3,6 +3,7 @@ package automation
 import (
 	"context"
 	"fmt"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"strings"
 	"time"
 
@@ -14,7 +15,6 @@ import (
 	automationprojection "github.com/domainry/domainry-runtime/runtime/domain/automation/projection"
 	automationdomain "github.com/domainry/domainry-runtime/runtime/domain/automation/service"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -57,9 +57,9 @@ func AutomationFindBeforeCreateReplay(ctx context.Context, rules []automationmod
 	return recordmodel.Record{}, false, nil
 }
 
-func AutomationAfterOutbox(rules []automationmodel.AutomationRuleSchema, objectKey, operation string, before map[string]any, record recordmodel.Record, principal principalmodel.Principal, workspaceID string) []integrationmodel.IntegrationOutboxMessage {
+func AutomationAfterOutbox(rules []automationmodel.AutomationRuleSchema, objectKey, operation string, before map[string]any, record recordmodel.Record, principal principalmodel.Principal, workspaceID string) []publicationmodel.Message {
 	matched := automationdomain.MatchingRules(rules, objectKey, "after", operation, before, record.Data)
-	messages := make([]integrationmodel.IntegrationOutboxMessage, 0, len(matched))
+	messages := make([]publicationmodel.Message, 0, len(matched))
 	for _, rule := range matched {
 		recordVersion := automationdomain.MutationVersion(before, record)
 		eventID := fmt.Sprintf("automation:%s:%s:%s:%s:%s", rule.Key, objectKey, record.ID, operation, recordVersion)
@@ -71,12 +71,12 @@ func AutomationAfterOutbox(rules []automationmodel.AutomationRuleSchema, objectK
 			RequestID: principal.RequestID, CorrelationID: correlationID, CausationID: causationID, IdentityPolicy: "revalidate_initiator",
 			AutomationDepth: principal.AutomationDepth, VisitedRuleKeys: append([]string(nil), principal.VisitedRuleKeys...), OccurredAt: time.Now().UTC().Format(time.RFC3339),
 		}
-		messages = append(messages, integrationmodel.IntegrationOutboxMessage{ID: eventID, WorkspaceID: workspaceID, ConnectorKey: "__automation__", Operation: rule.Key, Status: "queued", EventID: eventID, RequestRef: principal.RequestID, DedupKey: eventID, CreatedBy: principal.UserID, Payload: automationdomain.LifecycleEventPayload(event)})
+		messages = append(messages, publicationmodel.Message{ID: eventID, WorkspaceID: workspaceID, ConnectorKey: "__automation__", Operation: rule.Key, Status: "queued", EventID: eventID, RequestRef: principal.RequestID, DedupKey: eventID, CreatedBy: principal.UserID, Payload: automationdomain.LifecycleEventPayload(event)})
 	}
 	return messages
 }
 
-func (s *AutomationApplicationService) ExecuteOutboxMessage(ctx context.Context, message integrationmodel.IntegrationOutboxMessage) error {
+func (s *AutomationApplicationService) ExecuteOutboxMessage(ctx context.Context, message publicationmodel.Message) error {
 	workspaceID, err := principalmodel.NewWorkspaceID(message.WorkspaceID)
 	if err != nil {
 		return automationError(apperror.KindForbidden, "backend.workspace_scope_required", err)

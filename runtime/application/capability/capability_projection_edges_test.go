@@ -2,6 +2,7 @@ package capability
 
 import (
 	"context"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"reflect"
 	"testing"
 
@@ -12,7 +13,6 @@ import (
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -25,12 +25,12 @@ func TestCapabilityAuthoringInstanceSortsAndKeepsAnyReadyConnection(t *testing.T
 			Actions:   []definitionmodel.ActionSchema{{Key: "z_action"}, {Key: "a_action"}},
 			Workflows: []definitionmodel.WorkflowSchema{{Key: "z_workflow"}, {Key: "a_workflow"}},
 			Reports:   []reportmodel.ReportSchema{{Key: "z_report"}, {Key: "a_report"}},
-			Integrations: integrationmodel.IntegrationSchema{
-				Connectors: []integrationmodel.ConnectorSchema{
+			Integrations: connectormodel.IntegrationSchema{
+				Connectors: []connectormodel.ConnectorSchema{
 					{Key: "z_connector"},
-					{Key: "a_connector", Providers: []integrationmodel.ConnectorProviderSchema{{Key: "z_provider"}, {Key: "a_provider"}}, Operations: []integrationmodel.ConnectorOperationSchema{{Key: "z_operation"}, {Key: "a_operation"}}},
+					{Key: "a_connector", Providers: []connectormodel.ConnectorProviderSchema{{Key: "z_provider"}, {Key: "a_provider"}}, Operations: []connectormodel.ConnectorOperationSchema{{Key: "z_operation"}, {Key: "a_operation"}}},
 				},
-				Connections: []integrationmodel.ConnectionSchema{
+				Connections: []connectormodel.ConnectionSchema{
 					{ConnectorKey: "a_connector", Status: "ready"},
 					{ConnectorKey: "a_connector", Status: "disabled"},
 					{ConnectorKey: "z_connector", Status: "draft"},

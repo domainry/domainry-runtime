@@ -3,6 +3,7 @@ package transport
 import (
 	"context"
 	"fmt"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"strings"
 	"time"
 
@@ -10,7 +11,6 @@ import (
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -22,7 +22,7 @@ func registerOperationsDeadLetterOwners(service *operationsapplication.Operation
 		return
 	}
 	if publications != nil {
-		_ = service.RegisterDeadLetterOwner("integration_outbox", integrationOutboxDeadLetterOwner{service: publications})
+		_ = service.RegisterDeadLetterOwner("runtime_publication_outbox", publicationHandoffDeadLetterOwner{service: publications})
 	}
 	if workflows != nil {
 		_ = service.RegisterDeadLetterOwner("workflow_execution", workflowDeadLetterOwner{service: workflows})
@@ -81,42 +81,42 @@ func valueString(data map[string]any, key string) string {
 
 var _ recordTimerDeadLetterService = (*recordtimerapplication.RecordTimerApplicationService)(nil)
 
-type integrationOutboxDeadLetterOwner struct {
+type publicationHandoffDeadLetterOwner struct {
 	service runtimePublicationDeadLetterService
 }
 
 type runtimePublicationDeadLetterService interface {
-	InspectIntegrationOutboxMessage(context.Context, string, principalmodel.Principal) (integrationmodel.IntegrationOutboxMessage, error)
-	ScheduleIntegrationOutboxRetry(context.Context, string, integrationmodel.IntegrationOutboxRetryRequest, principalmodel.Principal) (integrationmodel.IntegrationOutboxMessage, error)
-	UpdateIntegrationOutboxStatus(context.Context, string, integrationmodel.IntegrationOutboxStatusRequest, principalmodel.Principal) (integrationmodel.IntegrationOutboxMessage, error)
+	InspectPublicationMessage(context.Context, string, principalmodel.Principal) (publicationmodel.Message, error)
+	SchedulePublicationRetry(context.Context, string, publicationmodel.RetryRequest, principalmodel.Principal) (publicationmodel.Message, error)
+	UpdatePublicationStatus(context.Context, string, publicationmodel.StatusRequest, principalmodel.Principal) (publicationmodel.Message, error)
 }
 
-func (o integrationOutboxDeadLetterOwner) Inspect(ctx context.Context, id string, principal principalmodel.Principal) (operationsapplication.OperationsDeadLetterItem, error) {
-	message, err := o.service.InspectIntegrationOutboxMessage(ctx, id, principal)
+func (o publicationHandoffDeadLetterOwner) Inspect(ctx context.Context, id string, principal principalmodel.Principal) (operationsapplication.OperationsDeadLetterItem, error) {
+	message, err := o.service.InspectPublicationMessage(ctx, id, principal)
 	if err != nil {
 		return operationsapplication.OperationsDeadLetterItem{}, err
 	}
-	return integrationOutboxDeadLetterItem(message), nil
+	return publicationHandoffDeadLetterItem(message), nil
 }
-func (o integrationOutboxDeadLetterOwner) Act(ctx context.Context, id, action, reason, _ string, principal principalmodel.Principal) (operationsapplication.OperationsDeadLetterItem, error) {
-	var message integrationmodel.IntegrationOutboxMessage
+func (o publicationHandoffDeadLetterOwner) Act(ctx context.Context, id, action, reason, _ string, principal principalmodel.Principal) (operationsapplication.OperationsDeadLetterItem, error) {
+	var message publicationmodel.Message
 	var err error
 	switch action {
 	case operationsapplication.OperationsDeadLetterRetry:
-		message, err = o.service.ScheduleIntegrationOutboxRetry(ctx, id, integrationmodel.IntegrationOutboxRetryRequest{Error: reason}, principal)
+		message, err = o.service.SchedulePublicationRetry(ctx, id, publicationmodel.RetryRequest{Error: reason}, principal)
 	case operationsapplication.OperationsDeadLetterResolve, operationsapplication.OperationsDeadLetterAck:
-		message, err = o.service.UpdateIntegrationOutboxStatus(ctx, id, integrationmodel.IntegrationOutboxStatusRequest{Status: "cancelled", Error: reason}, principal)
+		message, err = o.service.UpdatePublicationStatus(ctx, id, publicationmodel.StatusRequest{Status: "cancelled", Error: reason}, principal)
 	default:
 		err = deadLetterActionUnsupported()
 	}
-	return integrationOutboxDeadLetterItem(message), err
+	return publicationHandoffDeadLetterItem(message), err
 }
-func integrationOutboxDeadLetterItem(message integrationmodel.IntegrationOutboxMessage) operationsapplication.OperationsDeadLetterItem {
+func publicationHandoffDeadLetterItem(message publicationmodel.Message) operationsapplication.OperationsDeadLetterItem {
 	businessKey := message.RequestRef
 	if businessKey == "" {
 		businessKey = message.DedupKey
 	}
-	return operationsapplication.OperationsDeadLetterItem{Owner: "integration_outbox", ID: message.ID, ResourceType: "integration_outbox", Status: message.Status, FailureCode: message.Error, CorrelationID: message.EventID, BusinessKey: businessKey, EvidenceRef: valueOr(message.ResponseRef, "integration_outbox:"+message.ID), AllowedActions: []string{"resolve", "retry", "ack"}, Details: map[string]any{"connector_key": message.ConnectorKey, "operation": message.Operation, "attempt_count": message.AttemptCount}, UpdatedAt: message.UpdatedAt}
+	return operationsapplication.OperationsDeadLetterItem{Owner: "runtime_publication_outbox", ID: message.ID, ResourceType: "runtime_publication_outbox", Status: message.Status, FailureCode: message.Error, CorrelationID: message.EventID, BusinessKey: businessKey, EvidenceRef: valueOr(message.ResponseRef, "publication_handoff:"+message.ID), AllowedActions: []string{"resolve", "retry", "ack"}, Details: map[string]any{"connector_key": message.ConnectorKey, "operation": message.Operation, "attempt_count": message.AttemptCount}, UpdatedAt: message.UpdatedAt}
 }
 
 type workflowDeadLetterOwner struct {

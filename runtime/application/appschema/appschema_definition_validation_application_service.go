@@ -5,7 +5,6 @@ import (
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
 	appschemavalidation "github.com/domainry/domainry-runtime/runtime/domain/appschema/validation"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestvalidation "github.com/domainry/domainry-runtime/runtime/domain/manifest/validation"
 
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
@@ -176,12 +175,6 @@ func (s *ApplicationSchemaApplicationService) ValidateApplicationDefinitionPaylo
 			return req, badRequest("backend.identity.profile_binding_invalid", "diagnostic", err.Error())
 		}
 		return req, nil
-	case "connector":
-		var connector integrationmodel.ConnectorSchema
-		if err := json.Unmarshal(req.Payload, &connector); err != nil {
-			return req, badRequest("backend.integration.connector.definition_invalid")
-		}
-		return req, appschemavalidation.ApplicationSchemaValidateConnectorDefinition(connector)
 	case "action":
 		action, err := decodeActionDefinitionPayload(req.Payload)
 		if err != nil {

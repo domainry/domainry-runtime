@@ -3,13 +3,13 @@ package appschema
 import (
 	"context"
 	"errors"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	"strings"
 	"testing"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	manifestprojection "github.com/domainry/domainry-runtime/runtime/domain/manifest/projection"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -26,7 +26,7 @@ func TestMergeInstalledManifestEnvelopePreservesPublishedMetadataIdentityBinding
 		AuthoringContractHash:     "authoring-hash",
 		Description:               "installed",
 		IdentityProfileExtensions: []profilebindingmodel.Binding{{ObjectKey: "installed-profile"}},
-		Integrations: integrationmodel.IntegrationSchema{Connections: []integrationmodel.ConnectionSchema{{
+		Integrations: connectormodel.IntegrationSchema{Connections: []connectormodel.ConnectionSchema{{
 			Key: "primary", ConnectorKey: "file_storage", ProviderKey: "local",
 		}}},
 	}

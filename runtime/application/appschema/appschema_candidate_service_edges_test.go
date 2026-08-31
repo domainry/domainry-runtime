@@ -7,7 +7,6 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 )
 
 func candidateDefinition(resourceType, resourceKey, payload string) appschemamodel.ApplicationDefinition {
@@ -33,27 +32,6 @@ func TestMetadataCandidateServiceAvailabilityAndRepositoryFailures(t *testing.T)
 	service = NewApplicationSchemaApplicationService(ApplicationSchemaDependencies{Repository: metadataCandidateRepository{manifest: invalid}})
 	if code := apperror.CodeOf(service.ValidateMetadataCandidate(t.Context(), nil)); code != "backend.metadata.candidate_invalid" {
 		t.Fatalf("invalid graph code=%q", code)
-	}
-
-	invalidConnector := loadMetadataCandidateFixture(t)
-	invalidConnector.Integrations.Connectors = []integrationmodel.ConnectorSchema{{Key: "broken"}}
-	service = NewApplicationSchemaApplicationService(ApplicationSchemaDependencies{Repository: metadataCandidateRepository{manifest: invalidConnector}})
-	if code := apperror.CodeOf(service.ValidateMetadataCandidate(t.Context(), nil)); code != "backend.metadata.candidate_invalid" {
-		t.Fatalf("invalid connector code=%q", code)
-	}
-	validConnector := loadMetadataCandidateFixture(t)
-	validConnector.Integrations.Connectors = []integrationmodel.ConnectorSchema{{
-		Key: "api", Type: "http", Provider: "api",
-		Operations: []integrationmodel.ConnectorOperationSchema{{
-			Key: "read", Method: "GET", ExecutionMode: "sync", SideEffect: "read",
-			TimeoutDefaultSeconds: 1, TimeoutMaxSeconds: 2,
-			Input:  []definitionmodel.FieldSchema{{Key: "id", Type: "text"}},
-			Output: []definitionmodel.FieldSchema{{Key: "result", Type: "json"}},
-		}},
-	}}
-	service = NewApplicationSchemaApplicationService(ApplicationSchemaDependencies{Repository: metadataCandidateRepository{manifest: validConnector}})
-	if err := service.ValidateMetadataCandidate(t.Context(), nil); err != nil {
-		t.Fatalf("valid connector candidate: %v", err)
 	}
 
 	invalidAction := loadMetadataCandidateFixture(t)

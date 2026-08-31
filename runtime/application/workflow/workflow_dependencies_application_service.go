@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"time"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
@@ -11,7 +12,6 @@ import (
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
@@ -81,7 +81,7 @@ type WorkflowSchemaSnapshot struct {
 	AgentTasks             []agentsdk.AgentTaskDefinition
 	AgentServicePrincipals []agentsdk.AgentServicePrincipalBinding
 	Dictionaries           []appschemamodel.DictionarySchema
-	Integrations           integrationmodel.IntegrationSchema
+	Integrations           connectormodel.IntegrationSchema
 }
 
 type WorkflowSchemaProvider interface {

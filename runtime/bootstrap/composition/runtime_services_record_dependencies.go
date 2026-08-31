@@ -3,6 +3,7 @@ package composition
 import (
 	"context"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"strings"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -15,7 +16,6 @@ import (
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	actionservice "github.com/domainry/domainry-runtime/runtime/domain/action/service"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -110,7 +110,7 @@ func buildRecordApplicationDependencies(s *runtimeAssembly) recordapplication.Re
 			_, err := s.automationApplicationService.RunBefore(ctx, objectKey, operation, recordID, input, before, candidate, principal)
 			return err
 		},
-		AfterOutbox: func(objectKey, operation string, before map[string]any, record recordmodel.Record, principal principalmodel.Principal) []integrationmodel.IntegrationOutboxMessage {
+		AfterOutbox: func(objectKey, operation string, before map[string]any, record recordmodel.Record, principal principalmodel.Principal) []publicationmodel.Message {
 			if s.automationApplicationService == nil {
 				return nil
 			}
@@ -156,6 +156,6 @@ func initializeIntegrationAndBusinessSystem(ctx context.Context, s *runtimeAssem
 	s.runtimeStatusService.ConfigureLifecycleHealth(ctx, s.lifecycleService)
 	s.workflowProcesses = assembleWorkflowProcessEngine(s)
 	integrationsService := publicationHandoffApplication(s)
-	s.integrationService = integrationsService
-	s.businessSystemService = assembleBusinessSystemApplication(s.schemaService, s.applicationSchemaService, s.workflowApplicationService, s.automationApplicationService, integrationsService, s.recordApplicationService, s.schedulerService, s.runtimeStatusService, s.businessEvidenceRepo)
+	s.publicationHandoffService = integrationsService
+	s.businessSystemService = assembleBusinessSystemApplication(s.schemaService, s.metadataDefinitions, s.workflowApplicationService, s.automationApplicationService, integrationsService, s.recordApplicationService, s.schedulerService, s.runtimeStatusService, s.businessEvidenceRepo)
 }

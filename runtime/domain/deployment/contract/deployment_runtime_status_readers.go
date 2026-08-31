@@ -2,9 +2,9 @@ package contract
 
 import (
 	"context"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
@@ -18,5 +18,5 @@ type DeploymentWorkflowExecutionReader interface {
 }
 
 type DeploymentDeliveryReader interface {
-	ListInvocations(context.Context, string, string, string, string, string, int) ([]integrationmodel.IntegrationInvocation, error)
+	ListInvocations(context.Context, string, string, string, string, string, int) ([]integrationsdk.Invocation, error)
 }

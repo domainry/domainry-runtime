@@ -79,10 +79,10 @@ func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthor
 			PlanDeleteMutation:    records.recordApplicationService.PlanDeleteMutation,
 			PlanRestoreMutation:   records.recordApplicationService.PlanRestoreMutation,
 			ValidateDurableIntent: func(ctx context.Context, intent runtimeext.DurableIntent, principal principalmodel.Principal) error {
-				if records.integrationService == nil {
+				if records.publicationHandoffService == nil {
 					return apperror.New(apperror.KindInternal, "backend.action.durable_intent_validator_required", nil, nil)
 				}
-				return records.integrationService.ValidateActionDurableIntent(ctx, intent, principal)
+				return records.publicationHandoffService.ValidateActionDurableIntent(ctx, intent, principal)
 			},
 			CompileNotification: compileActionNotification(records),
 			VerifyFileClean:     records.verifyFileClean,

@@ -1,7 +1,6 @@
 package appschema
 
 import (
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
@@ -70,14 +69,6 @@ func (s ApplicationSchemaStore) LoadManifestMetadata(ctx context.Context) (manif
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
-	connectors, err := loadMetadataSlice[integrationmodel.ConnectorSchema](ctx, s, "_application_schema_connector_requirements")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
-	eventMappings, err := loadMetadataSlice[integrationmodel.IntegrationEventMappingSchema](ctx, s, "_application_schema_integration_event_mapping_requirements")
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
 	fieldsByObject := map[string][]definitionmodel.FieldSchema{}
 	for _, field := range fields {
 		objectKey := metadataFieldObjectKey(field)
@@ -104,7 +95,6 @@ func (s ApplicationSchemaStore) LoadManifestMetadata(ctx context.Context) (manif
 		Workflows:       workflows,
 		AutomationRules: automationRules,
 		Dictionaries:    dictionaries,
-		Integrations:    integrationmodel.IntegrationSchema{Connectors: connectors, EventMappings: eventMappings},
 	}, nil
 }
 

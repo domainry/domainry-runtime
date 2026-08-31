@@ -1,7 +1,7 @@
 package validation
 
 import (
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
@@ -69,9 +69,10 @@ func ValidateRuntimeDefinitionGraph(manifest manifestmodel.ManifestSchema) error
 }
 
 // ValidateRuntimeDefinitionGraphWithConnectorCatalog validates the active
-// definition graph against the same Runtime Connector catalog used by manifest
-// bootstrap. Manifest-owned connectors retain precedence in validationState.
-func ValidateRuntimeDefinitionGraphWithConnectorCatalog(manifest manifestmodel.ManifestSchema, connectorCatalog []integrationmodel.ConnectorSchema) error {
+// definition graph against the same Integration-projected Connector catalog
+// used by manifest bootstrap. Application requirements retain precedence in
+// validationState without becoming Connector source definitions.
+func ValidateRuntimeDefinitionGraphWithConnectorCatalog(manifest manifestmodel.ManifestSchema, connectorCatalog []connectormodel.ConnectorSchema) error {
 	state := newValidationState(manifest, connectorCatalog)
 	state.validateObjects()
 	state.validateRoles()
@@ -95,9 +96,9 @@ func ValidateRuntimeDefinitionGraphWithConnectorCatalog(manifest manifestmodel.M
 }
 
 // ValidateManifestWithConnectorCatalog validates a manifest against an
-// explicitly composed Runtime Connector catalog. Manifest-owned connector
-// definitions take precedence over catalog entries with the same key.
-func ValidateManifestWithConnectorCatalog(manifest manifestmodel.ManifestSchema, connectorCatalog []integrationmodel.ConnectorSchema) error {
+// explicitly composed Integration-projected Connector catalog. Manifest
+// requirements take precedence over catalog entries with the same key.
+func ValidateManifestWithConnectorCatalog(manifest manifestmodel.ManifestSchema, connectorCatalog []connectormodel.ConnectorSchema) error {
 	state := newValidationState(manifest, connectorCatalog)
 	state.validateRequiredShell()
 	state.validateSourceIntentCoverage()
@@ -360,19 +361,19 @@ type validationState struct {
 	actions    map[string]definitionmodel.ActionSchema
 	fields     map[string]map[string]definitionmodel.FieldSchema
 	dicts      map[string]appschemamodel.DictionarySchema
-	connectors map[string]integrationmodel.ConnectorSchema
+	connectors map[string]connectormodel.ConnectorSchema
 	seeds      map[string]string
 	seeded     map[string]bool
 }
 
-func newValidationState(manifest manifestmodel.ManifestSchema, connectorCatalog []integrationmodel.ConnectorSchema) *validationState {
+func newValidationState(manifest manifestmodel.ManifestSchema, connectorCatalog []connectormodel.ConnectorSchema) *validationState {
 	state := &validationState{
 		manifest:   manifest,
 		objects:    map[string]definitionmodel.ObjectSchema{},
 		actions:    map[string]definitionmodel.ActionSchema{},
 		fields:     map[string]map[string]definitionmodel.FieldSchema{},
 		dicts:      map[string]appschemamodel.DictionarySchema{},
-		connectors: map[string]integrationmodel.ConnectorSchema{},
+		connectors: map[string]connectormodel.ConnectorSchema{},
 		seeds:      map[string]string{},
 		seeded:     map[string]bool{},
 	}

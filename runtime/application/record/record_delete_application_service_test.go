@@ -4,6 +4,7 @@ package record
 import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 
@@ -24,7 +25,6 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 )
 
 type deleteRepositoryProbe struct {
@@ -160,8 +160,8 @@ func TestDeleteServiceOwnsSoftDeleteTransaction(t *testing.T) {
 			policyCalled = operation == "delete"
 			return nil
 		},
-		AfterOutbox: func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []integrationmodel.IntegrationOutboxMessage {
-			return []integrationmodel.IntegrationOutboxMessage{{ID: "outbox-1"}}
+		AfterOutbox: func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []publicationmodel.Message {
+			return []publicationmodel.Message{{ID: "outbox-1"}}
 		},
 		UpdatedTriggers: func(string, map[string]any, map[string]any) []string {
 			return []string{"record_updated:customer.status"}

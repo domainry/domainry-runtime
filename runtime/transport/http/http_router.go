@@ -48,7 +48,7 @@ type HTTPRouter struct {
 	schedulerHTTP           httpRouteRegistrar
 	reportHTTP              httpRouteRegistrar
 	businessReferenceHTTP   httpRouteRegistrar
-	integrationHTTP         httpRouteRegistrar
+	publicationHandoffHTTP  httpRouteRegistrar
 	businessSystemHTTP      httpRouteRegistrar
 	capabilityHTTP          httpRouteRegistrar
 	applicationSchemaHTTP   httpRouteRegistrar
@@ -205,7 +205,7 @@ func (s *HTTPRouter) Routes() http.Handler {
 	s.capabilityHTTP.RegisterRoutes(mux)
 	s.businessSystemHTTP.RegisterRoutes(mux)
 	s.businessReferenceHTTP.RegisterRoutes(mux)
-	runOptionalRouteRegistrar(s.integrationHTTP != nil, func() { s.integrationHTTP.RegisterRoutes(mux) })
+	runOptionalRouteRegistrar(s.publicationHandoffHTTP != nil, func() { s.publicationHandoffHTTP.RegisterRoutes(mux) })
 	runOptionalRouteRegistrar(s.notificationHTTP != nil, func() { s.notificationHTTP.RegisterRoutes(mux) })
 	s.uploadHTTP.RegisterRoutes(mux)
 	s.surfaceContextHTTP.RegisterRoutes(mux)

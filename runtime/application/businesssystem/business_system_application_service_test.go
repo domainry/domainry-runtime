@@ -3,6 +3,9 @@ package businesssystem
 import (
 	"context"
 	"errors"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -15,7 +18,6 @@ import (
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -53,13 +55,13 @@ func businessSystemTestDependencies() BusinessSystemApplicationDependencies {
 			AutomationExecutions: func(context.Context, automationmodel.AutomationExecutionFilter, principalmodel.Principal) (automationprojection.AutomationExecutionHistory, error) {
 				return automationprojection.AutomationExecutionHistory{}, nil
 			},
-			ConnectorCatalog: func(context.Context, principalmodel.Principal) ([]integrationmodel.ConnectorSchema, error) {
+			ConnectorCatalog: func(context.Context, principalmodel.Principal) ([]connectormodel.ConnectorSchema, error) {
 				return nil, nil
 			},
-			IntegrationConnections: func(context.Context, principalmodel.Principal) ([]integrationmodel.IntegrationConnection, error) {
+			IntegrationConnections: func(context.Context, principalmodel.Principal) ([]integrationsdk.Connection, error) {
 				return nil, nil
 			},
-			IntegrationOutbox: func(context.Context, string, string, int, principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error) {
+			PublicationHandoff: func(context.Context, string, string, int, principalmodel.Principal) ([]publicationmodel.Message, error) {
 				return nil, nil
 			},
 			SchedulerDefinitions: func(context.Context, principalmodel.Principal) ([]recordmodel.Record, error) {
@@ -169,17 +171,17 @@ func TestBusinessSystemRuntimeStatePropagatesEveryOwnerFailure(t *testing.T) {
 			}
 		}},
 		{name: "connectors", mutate: func(deps *BusinessSystemApplicationDependencies) {
-			deps.Runtime.ConnectorCatalog = func(context.Context, principalmodel.Principal) ([]integrationmodel.ConnectorSchema, error) {
+			deps.Runtime.ConnectorCatalog = func(context.Context, principalmodel.Principal) ([]connectormodel.ConnectorSchema, error) {
 				return nil, want
 			}
 		}},
 		{name: "connections", mutate: func(deps *BusinessSystemApplicationDependencies) {
-			deps.Runtime.IntegrationConnections = func(context.Context, principalmodel.Principal) ([]integrationmodel.IntegrationConnection, error) {
+			deps.Runtime.IntegrationConnections = func(context.Context, principalmodel.Principal) ([]integrationsdk.Connection, error) {
 				return nil, want
 			}
 		}},
 		{name: "outbox", mutate: func(deps *BusinessSystemApplicationDependencies) {
-			deps.Runtime.IntegrationOutbox = func(context.Context, string, string, int, principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error) {
+			deps.Runtime.PublicationHandoff = func(context.Context, string, string, int, principalmodel.Principal) ([]publicationmodel.Message, error) {
 				return nil, want
 			}
 		}},

@@ -4,10 +4,6 @@ import appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appsc
 
 import (
 	"context"
-	"fmt"
-	appschemavalidation "github.com/domainry/domainry-runtime/runtime/domain/appschema/validation"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-
 	"encoding/json"
 	"strings"
 
@@ -33,12 +29,6 @@ func ValidateStructuredApplicationDefinition(resourceType string, payload json.R
 			return []appschemamodel.ApplicationDefinitionValidationIssue{newApplicationDefinitionValidationIssue("backend.action.definition_invalid", "definition", "", "", nil)}, true
 		}
 		return validateBusinessActionDefinitionIssues(action), true
-	case "connector":
-		var connector integrationmodel.ConnectorSchema
-		if err := json.Unmarshal(payload, &connector); err != nil {
-			return []appschemamodel.ApplicationDefinitionValidationIssue{newApplicationDefinitionValidationIssue("backend.integration.connector.definition_invalid", "definition", "", "", nil)}, true
-		}
-		return appschemavalidation.ApplicationSchemaValidateConnectorDefinitionIssues(connector), true
 	default:
 		return nil, false
 	}

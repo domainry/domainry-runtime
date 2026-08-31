@@ -3,6 +3,8 @@ package automation
 import (
 	"context"
 	"errors"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -18,8 +20,6 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -94,7 +94,7 @@ func TestAutomationManagementAuthorizationContextAndDependencyFailures(t *testin
 		t.Fatalf("missing rule err=%v", err)
 	}
 
-	service = NewAutomationManagementApplicationService(AutomationManagementDependencies{Rules: registry, ListConnections: func(context.Context, string) ([]integrationmodel.IntegrationConnection, error) {
+	service = NewAutomationManagementApplicationService(AutomationManagementDependencies{Rules: registry, ListConnections: func(context.Context, string) ([]integrationsdk.Connection, error) {
 		return nil, errAutomationFacadeProbe
 	}})
 	if _, err := service.Capabilities(t.Context(), principal); !errors.Is(err, errAutomationFacadeProbe) {
@@ -105,10 +105,10 @@ func TestAutomationManagementAuthorizationContextAndDependencyFailures(t *testin
 		deps AutomationManagementDependencies
 	}{
 		{"executions", AutomationManagementDependencies{Rules: registry, Executions: automationManagementExecutionErrorProbe{err: errAutomationFacadeProbe}}},
-		{"invocations", AutomationManagementDependencies{Rules: registry, ListInvocations: func(context.Context, string, automationmodel.AutomationExecutionFilter) ([]integrationmodel.IntegrationInvocation, error) {
+		{"invocations", AutomationManagementDependencies{Rules: registry, ListInvocations: func(context.Context, string, automationmodel.AutomationExecutionFilter) ([]integrationsdk.Invocation, error) {
 			return nil, errAutomationFacadeProbe
 		}}},
-		{"outbox", AutomationManagementDependencies{Rules: registry, ListOutbox: func(context.Context, string) ([]integrationmodel.IntegrationOutboxMessage, error) {
+		{"outbox", AutomationManagementDependencies{Rules: registry, ListOutbox: func(context.Context, string) ([]publicationmodel.Message, error) {
 			return nil, errAutomationFacadeProbe
 		}}},
 	} {

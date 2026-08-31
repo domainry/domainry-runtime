@@ -2,6 +2,7 @@ package integrationtest
 
 import (
 	"fmt"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"path/filepath"
 	"sort"
 	"testing"
@@ -14,7 +15,6 @@ import (
 	runtimecomposition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -104,7 +104,7 @@ func newGymAnalyticsP7Environment(t *testing.T) *gymAnalyticsP7Environment {
 	service := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{
 		TemplateID: "gym-analytics-p7-fixture", TemplateVersion: "1", Name: "Gym Analytics P7 Fixture",
 		Objects: []definitionmodel.ObjectSchema{object}, Reports: gymAnalyticsP7Reports(),
-		Integrations: integrationmodel.IntegrationSchema{}, Store: store,
+		Integrations: connectormodel.IntegrationSchema{}, Store: store,
 	})
 	return &gymAnalyticsP7Environment{store: store, service: service, object: object, principals: principals}
 }

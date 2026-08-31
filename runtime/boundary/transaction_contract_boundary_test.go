@@ -166,13 +166,13 @@ func TestAsyncEffectsHaveDurableFactsBeforePostCommitDispatch(t *testing.T) {
 			t.Errorf("%s must persist Workflow intent before commit and dispatch only after commit", relative)
 		}
 	}
-	outbox, err := os.ReadFile(filepath.Join(root, "application", "integration", "integration_application_delivery_commands.go"))
+	outbox, err := os.ReadFile(filepath.Join(root, "application", "publicationhandoff", "publication_handoff_application_service.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, required := range []string{"IntegrationOutboxMessage", "Status: \"queued\"", "publicationRepo.InsertOutbox(ctx", "RequestRef:"} {
+	for _, required := range []string{"repository.InsertOutbox(ctx", "Status: \"queued\"", "DeliveryStatusAccepted", "DeduplicationKey"} {
 		if !strings.Contains(string(outbox), required) {
-			t.Errorf("Integration async delivery path missing durable Outbox evidence %q", required)
+			t.Errorf("Runtime publication handoff path missing durable outbox evidence %q", required)
 		}
 	}
 	workflow, err := os.ReadFile(filepath.Join(root, "application", "workflow", "workflow_record_execution_application_service.go"))
@@ -205,7 +205,7 @@ func TestWorkerLifecycleRetainsPollingRecoveryWhenWakeupIsLost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, required := range []string{"StartWorkflowWorker", "StartIntegrationEventWorker", "StartIntegrationOutboxWorker", "startIntegrationInvocationReconciliationWorker", "StartNotificationPublicationWorker"} {
+	for _, required := range []string{"StartWorkflowWorker", "StartIntegrationEventWorker", "StartPublicationHandoffWorker", "startIntegrationInvocationReconciliationWorker", "StartNotificationPublicationWorker"} {
 		if !strings.Contains(string(lifecycle), required) {
 			t.Errorf("Runtime worker lifecycle missing durable polling loop %q", required)
 		}
@@ -218,37 +218,6 @@ func TestWorkerLifecycleRetainsPollingRecoveryWhenWakeupIsLost(t *testing.T) {
 	for _, required := range []string{"runTick(ctx, name, tick)", "time.NewTicker(interval)", "case <-ticker.C"} {
 		if !strings.Contains(string(loop), required) {
 			t.Errorf("worker polling recovery contract missing %q", required)
-		}
-	}
-}
-
-func TestExternalReceiptReconciliationRecognizesDurableBusinessFact(t *testing.T) {
-	root := runtimeRoot(t)
-	repository, err := os.ReadFile(filepath.Join(root, "domain", "integration", "repository", "integration_repository.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, required := range []string{"IntegrationInvocationReconciliationRepository", "ListPreparedInvocationsForReconciliation", "MarkInvocationReconciliationRequired", "compare-and-swap"} {
-		if !strings.Contains(string(repository), required) {
-			t.Errorf("external receipt reconciliation repository contract missing %q", required)
-		}
-	}
-	application, err := os.ReadFile(filepath.Join(root, "application", "integration", "integration_invocation_reconciliation_application_service.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, required := range []string{"ReconcileMissingIntegrationReceipts", "reconciliation_required", "business_fact_exists", "external_receipt_missing", "StartNamedLoop"} {
-		if !strings.Contains(string(application), required) {
-			t.Errorf("external receipt reconciliation task missing %q", required)
-		}
-	}
-	persistence, err := os.ReadFile(filepath.Join(root, "infrastructure", "persistence", "database", "integration", "integration_delivery_store.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, required := range []string{`query.Equal("status", "prepared")`, `query.Equal("response_ref", "")`, "backend.integration.invocation.external_receipt_missing"} {
-		if !strings.Contains(string(persistence), required) {
-			t.Errorf("external receipt reconciliation persistence missing %q", required)
 		}
 	}
 }
@@ -276,7 +245,7 @@ func TestEveryCriticalTransactionChainHasFourFailureWindows(t *testing.T) {
 	for _, required := range []string{
 		"TestCriticalTransactionChainsCoverEveryFailureWindow",
 		"record_mutation", "workflow_task_decision", "action_execution", "scheduler_run_state",
-		"integration_event_acceptance", "metadata_publication", "cross_boundary_durable_intent",
+		"runtime_publication_handoff", "metadata_publication", "cross_boundary_durable_intent",
 		"first_write", "middle_write", "before_commit", "after_commit",
 	} {
 		if !strings.Contains(content, required) {
@@ -418,7 +387,7 @@ func TestUpperLayersNeverOwnDatabaseTransactions(t *testing.T) {
 }
 
 func TestCrashAfterCommitRecoveryReopensStoreBeforeWorkerClaim(t *testing.T) {
-	path := filepath.Join(runtimeRoot(t), "infrastructure", "persistence", "database", "integration", "worker_store_test.go")
+	path := filepath.Join(runtimeRoot(t), "infrastructure", "persistence", "database", "publicationhandoff", "store_test.go")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -431,28 +400,6 @@ func TestCrashAfterCommitRecoveryReopensStoreBeforeWorkerClaim(t *testing.T) {
 		if !strings.Contains(string(raw), required) {
 			t.Errorf("crash-after-commit recovery proof missing %q", required)
 		}
-	}
-}
-
-func TestCrossBoundaryConsistencyContractHasDurableIntentBeforeSideEffect(t *testing.T) {
-	root := runtimeRoot(t)
-	document, err := os.ReadFile(filepath.Join(root, "..", "docs", "architecture", "runtime-cross-boundary-consistency-contract.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, required := range []string{"_transaction_boundary_intents", "reconciliation_required", "compensating", "compensated", "manual_review", "fencing token", "_integration_invocations(status=prepared)"} {
-		if !strings.Contains(string(document), required) {
-			t.Errorf("cross-boundary contract missing %q", required)
-		}
-	}
-	source, err := os.ReadFile(filepath.Join(root, "application", "integration", "integration_application_sync_call.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	prepared := strings.Index(string(source), "InsertInvocation(ctx, invocation.WorkspaceID, invocation)")
-	external := strings.Index(string(source), "prepared.Execute(")
-	if prepared < 0 || external < 0 || prepared >= external {
-		t.Fatal("sync Provider call must follow durable prepared invocation persistence")
 	}
 }
 

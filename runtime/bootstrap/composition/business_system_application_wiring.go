@@ -2,6 +2,8 @@ package composition
 
 import (
 	"context"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
@@ -10,8 +12,8 @@ import (
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -32,15 +34,18 @@ func assembleBusinessSystemApplication(
 		Runtime: businesssystemapplication.BusinessSystemRuntimeProjectionDependencies{
 			WorkflowProcesses: workflows.WorkflowProcesses, AutomationRules: automations.AutomationRules,
 			AutomationExecutions: automations.AutomationExecutions,
-			ConnectorCatalog: func(ctx context.Context, principal principalmodel.Principal) ([]integrationmodel.ConnectorSchema, error) {
+			ConnectorCatalog: func(ctx context.Context, principal principalmodel.Principal) ([]connectormodel.ConnectorSchema, error) {
 				return schema.ForPrincipal(ctx, principal).Integrations.Connectors, nil
 			},
-			IntegrationConnections: func(context.Context, principalmodel.Principal) ([]integrationmodel.IntegrationConnection, error) {
-				return []integrationmodel.IntegrationConnection{}, nil
+			IntegrationConnections: func(context.Context, principalmodel.Principal) ([]integrationsdk.Connection, error) {
+				return []integrationsdk.Connection{}, nil
 			},
-			IntegrationOutbox:    publications.ListIntegrationOutboxMessages,
-			SchedulerDefinitions: scheduler.PublishedDefinitions,
-			SchemaForPrincipal:   schema.ForPrincipal, SchemaObjectMap: schema.ObjectMap, ListRecords: records.ListRecords, IdempotencyStatus: runtimeStatus.IdempotencyOperationalStatus,
+			PublicationHandoff: publications.ListPublicationMessages,
+			SchedulerDefinitions: func(ctx context.Context, principal principalmodel.Principal) ([]recordmodel.Record, error) {
+				definitions, err := scheduler.PublishedDefinitions(ctx, principal)
+				return schedulerPublishedDefinitionRecords(definitions), err
+			},
+			SchemaForPrincipal: schema.ForPrincipal, ListRecords: records.ListRecords, IdempotencyStatus: runtimeStatus.IdempotencyOperationalStatus,
 		},
 	})
 }

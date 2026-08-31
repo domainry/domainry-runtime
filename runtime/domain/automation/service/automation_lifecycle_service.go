@@ -1,6 +1,7 @@
 package service
 
 import (
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 
@@ -10,10 +11,9 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 )
 
-func ValidateIntegrationOutput(connectors []integrationmodel.ConnectorSchema, action automationmodel.AutomationInstructionSchema, output map[string]any) error {
+func ValidateIntegrationOutput(connectors []connectormodel.ConnectorSchema, action automationmodel.AutomationInstructionSchema, output map[string]any) error {
 	for _, connector := range connectors {
 		if strings.TrimSpace(connector.Key) != strings.TrimSpace(action.ConnectorKey) {
 			continue
@@ -67,7 +67,7 @@ func ChangedFieldsMatch(required []string, before, candidate map[string]any) boo
 	return false
 }
 
-func connectorOperation(connector integrationmodel.ConnectorSchema, operationKey string) *integrationmodel.ConnectorOperationSchema {
+func connectorOperation(connector connectormodel.ConnectorSchema, operationKey string) *connectormodel.ConnectorOperationSchema {
 	for index := range connector.Operations {
 		if strings.TrimSpace(connector.Operations[index].Key) == strings.TrimSpace(operationKey) {
 			return &connector.Operations[index]

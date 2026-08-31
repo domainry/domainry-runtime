@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
@@ -110,9 +110,9 @@ func valueOrDefault(value, fallback string) string {
 	return fallback
 }
 
-func cloneIntegrationSchema(value integrationmodel.IntegrationSchema) integrationmodel.IntegrationSchema {
+func cloneIntegrationSchema(value connectormodel.IntegrationSchema) connectormodel.IntegrationSchema {
 	encoded, _ := json.Marshal(value)
-	var cloned integrationmodel.IntegrationSchema
+	var cloned connectormodel.IntegrationSchema
 	_ = json.Unmarshal(encoded, &cloned)
 	return cloned
 }

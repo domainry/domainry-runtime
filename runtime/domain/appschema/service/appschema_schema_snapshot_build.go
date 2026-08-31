@@ -2,7 +2,7 @@ package service
 
 import (
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 	"crypto/sha256"
 	"encoding/json"
@@ -18,11 +18,11 @@ func SchemaSnapshotHash(snapshot appschemamodel.ApplicationSchemaSnapshot) strin
 	return fmt.Sprintf("%x", hash[:])[:16]
 }
 
-func CloneIntegrationSchema(value integrationmodel.IntegrationSchema) integrationmodel.IntegrationSchema {
-	return integrationmodel.IntegrationSchema{
-		Connectors:    append([]integrationmodel.ConnectorSchema(nil), value.Connectors...),
-		Connections:   append([]integrationmodel.ConnectionSchema(nil), value.Connections...),
-		EventMappings: append([]integrationmodel.IntegrationEventMappingSchema(nil), value.EventMappings...),
+func CloneIntegrationSchema(value connectormodel.IntegrationSchema) connectormodel.IntegrationSchema {
+	return connectormodel.IntegrationSchema{
+		Connectors:    append([]connectormodel.ConnectorSchema(nil), value.Connectors...),
+		Connections:   append([]connectormodel.ConnectionSchema(nil), value.Connections...),
+		EventMappings: append([]connectormodel.IntegrationEventMappingSchema(nil), value.EventMappings...),
 	}
 }
 

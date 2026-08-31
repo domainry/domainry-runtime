@@ -2,6 +2,7 @@ package action
 
 import (
 	"fmt"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"strings"
 	"testing"
 	"time"
@@ -10,7 +11,6 @@ import (
 	"github.com/domainry/domainry-foundation/idempotency"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
@@ -139,7 +139,7 @@ func testBookClassAtomicStageRollback(t *testing.T, stage string) {
 				ID: bookingAuditID, WorkspaceID: "workspace-a", Event: "record_created",
 				ObjectKey: classBooking.Key, RecordID: "booking-1", ActorID: "member-1", CreatedAt: stamp,
 			},
-			Outbox: []integrationmodel.IntegrationOutboxMessage{{
+			Outbox: []publicationmodel.Message{{
 				ID: outboxID, WorkspaceID: "workspace-a",
 				ConnectorKey: "member_center", ConnectionKey: "primary", Operation: "send_notice",
 				RequestRef: claim.Execution.ID, DedupKey: claim.Execution.ID + ":intent:0",

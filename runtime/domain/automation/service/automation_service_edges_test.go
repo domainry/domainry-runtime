@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"strings"
 	"testing"
 
@@ -9,7 +10,6 @@ import (
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationprojection "github.com/domainry/domainry-runtime/runtime/domain/automation/projection"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
@@ -47,24 +47,24 @@ func TestProtocolValueMatchesTypeMatrix(t *testing.T) {
 
 func TestValidateIntegrationOutputBoundaries(t *testing.T) {
 	action := automationmodel.AutomationInstructionSchema{ConnectorKey: "crm", Operation: "create"}
-	operation := integrationmodel.ConnectorOperationSchema{Key: "create", Output: []definitionmodel.FieldSchema{
+	operation := connectormodel.ConnectorOperationSchema{Key: "create", Output: []definitionmodel.FieldSchema{
 		{Key: "id", Type: "text", Required: true},
 		{Key: "count", Type: "integer"},
 	}}
-	connector := integrationmodel.ConnectorSchema{Key: "crm", Operations: []integrationmodel.ConnectorOperationSchema{operation}}
+	connector := connectormodel.ConnectorSchema{Key: "crm", Operations: []connectormodel.ConnectorOperationSchema{operation}}
 	for _, test := range []struct {
 		name       string
-		connectors []integrationmodel.ConnectorSchema
+		connectors []connectormodel.ConnectorSchema
 		output     map[string]any
 		wantCode   string
 	}{
 		{name: "connector missing", wantCode: "backend.automation.connector_not_found"},
-		{name: "operation missing", connectors: []integrationmodel.ConnectorSchema{{Key: "crm", Operations: []integrationmodel.ConnectorOperationSchema{{Key: "update"}}}}, wantCode: "backend.automation.connector_operation_not_found"},
-		{name: "required missing", connectors: []integrationmodel.ConnectorSchema{connector}, output: map[string]any{}, wantCode: "backend.automation.operation_output_required"},
-		{name: "required empty", connectors: []integrationmodel.ConnectorSchema{connector}, output: map[string]any{"id": " "}, wantCode: "backend.automation.operation_output_required"},
-		{name: "wrong type", connectors: []integrationmodel.ConnectorSchema{connector}, output: map[string]any{"id": "1", "count": 1.5}, wantCode: "backend.automation.operation_output_type_invalid"},
-		{name: "valid", connectors: []integrationmodel.ConnectorSchema{{Key: "other"}, connector}, output: map[string]any{"id": "1", "count": 2}},
-		{name: "legacy connector", connectors: []integrationmodel.ConnectorSchema{{Key: "crm"}}},
+		{name: "operation missing", connectors: []connectormodel.ConnectorSchema{{Key: "crm", Operations: []connectormodel.ConnectorOperationSchema{{Key: "update"}}}}, wantCode: "backend.automation.connector_operation_not_found"},
+		{name: "required missing", connectors: []connectormodel.ConnectorSchema{connector}, output: map[string]any{}, wantCode: "backend.automation.operation_output_required"},
+		{name: "required empty", connectors: []connectormodel.ConnectorSchema{connector}, output: map[string]any{"id": " "}, wantCode: "backend.automation.operation_output_required"},
+		{name: "wrong type", connectors: []connectormodel.ConnectorSchema{connector}, output: map[string]any{"id": "1", "count": 1.5}, wantCode: "backend.automation.operation_output_type_invalid"},
+		{name: "valid", connectors: []connectormodel.ConnectorSchema{{Key: "other"}, connector}, output: map[string]any{"id": "1", "count": 2}},
+		{name: "legacy connector", connectors: []connectormodel.ConnectorSchema{{Key: "crm"}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			err := ValidateIntegrationOutput(test.connectors, action, test.output)

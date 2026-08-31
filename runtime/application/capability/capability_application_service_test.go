@@ -3,9 +3,9 @@ package capability
 
 import (
 	"context"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -26,9 +26,9 @@ func TestAuthoringCapabilityServiceProjectsInstanceSchema(t *testing.T) {
 			Actions:   []definitionmodel.ActionSchema{{Key: "invoice.issue"}},
 			Workflows: []definitionmodel.WorkflowSchema{{Key: "invoice_approval"}},
 			Reports:   []reportmodel.ReportSchema{{Key: "invoice_summary"}},
-			Integrations: integrationmodel.IntegrationSchema{
-				Connectors:  []integrationmodel.ConnectorSchema{{Key: "erp", Operations: []integrationmodel.ConnectorOperationSchema{{Key: "post_invoice"}}}},
-				Connections: []integrationmodel.ConnectionSchema{{ConnectorKey: "erp", Status: "ready"}},
+			Integrations: connectormodel.IntegrationSchema{
+				Connectors:  []connectormodel.ConnectorSchema{{Key: "erp", Operations: []connectormodel.ConnectorOperationSchema{{Key: "post_invoice"}}}},
+				Connections: []connectormodel.ConnectionSchema{{ConnectorKey: "erp", Status: "ready"}},
 			},
 		}
 	})

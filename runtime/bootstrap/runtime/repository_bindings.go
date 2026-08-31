@@ -7,7 +7,7 @@ import (
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationrepository "github.com/domainry/domainry-runtime/runtime/domain/automation/repository"
 	deploymentrepository "github.com/domainry/domainry-runtime/runtime/domain/deployment/repository"
-	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
+	publicationrepository "github.com/domainry/domainry-runtime/runtime/domain/publication/repository"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 	workflowrepository "github.com/domainry/domainry-runtime/runtime/domain/workflow/repository"
@@ -25,24 +25,24 @@ import (
 // outside service/storage so neither package needs to import the other and
 // create an implementation-detail dependency cycle.
 var (
-	_ recordrepository.RecordRepository                        = recordpersistence.RecordStore{}
-	_ recordrepository.RecordBusinessSeedRepository            = recordpersistence.RecordStore{}
-	_ auditrepository.AuditRepository                          = (*auditpersistence.AuditStore)(nil)
-	_ auditrepository.AuditEventWriterRepository               = (*auditpersistence.AuditStore)(nil)
-	_ auditrepository.AuditEventRepository                     = (*auditpersistence.AuditStore)(nil)
-	_ appschemarepository.ApplicationSchemaRepository          = appschemapersistence.ApplicationSchemaStore{}
-	_ integrationrepository.RuntimePublicationRepository       = publicationhandoffpersistence.PublicationStore{}
-	_ integrationrepository.RuntimePublicationWorkerRepository = publicationhandoffpersistence.WorkerStore{}
-	_ workflowcontract.WorkflowWorkerStore                     = workflowpersistence.WorkflowWorkerStore{}
-	_ workflowcontract.WorkflowDefinitionStore                 = workflowpersistence.WorkflowDefinitionStore{}
-	_ workflowcontract.WorkflowProcessStore                    = workflowpersistence.WorkflowProcessStore{}
-	_ workflowcontract.WorkflowDecisionStore                   = workflowpersistence.WorkflowDecisionStore{}
-	_ automationcontract.AutomationWorkerStore                 = automationpersistence.AutomationWorkerStore{}
-	_ automationrepository.AutomationExecutionRepository       = automationpersistence.AutomationExecutionStore{}
-	_ automationrepository.ExecutionSeedRepository             = automationpersistence.AutomationExecutionStore{}
-	_ workflowrepository.WorkflowExecutionRepository           = workflowpersistence.WorkflowWorkerStore{}
-	_ actioncontract.ActionExecutionStore                      = actionpersistence.ActionBusinessExecutionStore{}
-	_ actioncontract.ActionExecutionTransactionStore           = actionpersistence.ActionBusinessExecutionStore{}
-	_ actioncontract.ActionAssuranceStore                      = actionpersistence.ActionAssuranceStore{}
-	_ deploymentrepository.DeploymentRuntimeStatusRepository   = deploymentpersistence.RuntimeStatusStore{}
+	_ recordrepository.RecordRepository                      = recordpersistence.RecordStore{}
+	_ recordrepository.RecordBusinessSeedRepository          = recordpersistence.RecordStore{}
+	_ auditrepository.AuditRepository                        = (*auditpersistence.AuditStore)(nil)
+	_ auditrepository.AuditEventWriterRepository             = (*auditpersistence.AuditStore)(nil)
+	_ auditrepository.AuditEventRepository                   = (*auditpersistence.AuditStore)(nil)
+	_ appschemarepository.ApplicationSchemaRepository        = appschemapersistence.ApplicationSchemaStore{}
+	_ publicationrepository.Repository                       = publicationhandoffpersistence.PublicationStore{}
+	_ publicationrepository.WorkerRepository                 = publicationhandoffpersistence.WorkerStore{}
+	_ workflowcontract.WorkflowWorkerStore                   = workflowpersistence.WorkflowWorkerStore{}
+	_ workflowcontract.WorkflowDefinitionStore               = workflowpersistence.WorkflowDefinitionStore{}
+	_ workflowcontract.WorkflowProcessStore                  = workflowpersistence.WorkflowProcessStore{}
+	_ workflowcontract.WorkflowDecisionStore                 = workflowpersistence.WorkflowDecisionStore{}
+	_ automationcontract.AutomationWorkerStore               = automationpersistence.AutomationWorkerStore{}
+	_ automationrepository.AutomationExecutionRepository     = automationpersistence.AutomationExecutionStore{}
+	_ automationrepository.ExecutionSeedRepository           = automationpersistence.AutomationExecutionStore{}
+	_ workflowrepository.WorkflowExecutionRepository         = workflowpersistence.WorkflowWorkerStore{}
+	_ actioncontract.ActionExecutionStore                    = actionpersistence.ActionBusinessExecutionStore{}
+	_ actioncontract.ActionExecutionTransactionStore         = actionpersistence.ActionBusinessExecutionStore{}
+	_ actioncontract.ActionAssuranceStore                    = actionpersistence.ActionAssuranceStore{}
+	_ deploymentrepository.DeploymentRuntimeStatusRepository = deploymentpersistence.RuntimeStatusStore{}
 )

@@ -3,13 +3,13 @@ package automation
 import (
 	"context"
 	"errors"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationvalidation "github.com/domainry/domainry-runtime/runtime/domain/automation/validation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 )
 
 func TestAutomationDefinitionValidationApplicationServiceWrapsConnectionCatalogFailure(t *testing.T) {
@@ -18,7 +18,7 @@ func TestAutomationDefinitionValidationApplicationServiceWrapsConnectionCatalogF
 		Catalog: func() automationvalidation.AutomationDefinitionCatalog {
 			return automationvalidation.AutomationDefinitionCatalog{Objects: []definitionmodel.ObjectSchema{{Key: "order"}}}
 		},
-		ListConnections: func(context.Context, string) ([]integrationmodel.IntegrationConnection, error) {
+		ListConnections: func(context.Context, string) ([]integrationsdk.Connection, error) {
 			return nil, want
 		},
 	}

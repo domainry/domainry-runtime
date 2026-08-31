@@ -10,6 +10,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"strings"
 	"time"
 
@@ -17,16 +19,13 @@ import (
 
 	connector "github.com/domainry/domainry-connector-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationcontract "github.com/domainry/domainry-runtime/runtime/domain/integration/contract"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	integrationprojection "github.com/domainry/domainry-runtime/runtime/domain/integration/projection"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 type providerAdapter struct {
 	descriptor connector.ProviderDescriptor
-	operations map[string]integrationmodel.ConnectorOperationSchema
-	delegate   integrationcontract.Adapter
+	operations map[string]connectormodel.ConnectorOperationSchema
+	delegate   Adapter
 }
 
 type configValidator func(connector.Connection) error
@@ -71,7 +70,7 @@ func (p *providerAdapter) Call(ctx context.Context, request connector.CallReques
 	return connector.CallResult{Payload: response, ResponseRef: result.ResponseRef, SecretUpdates: cloneStrings(result.SecretUpdates), ResourceHealth: resourceHealth(result.ResourceHealth)}, callErr
 }
 
-func resourceHealth(report *integrationmodel.IntegrationProviderResourceHealth) *connector.ResourceHealthReport {
+func resourceHealth(report *integrationsdk.ProviderResourceHealth) *connector.ResourceHealthReport {
 	if report == nil {
 		return nil
 	}
@@ -93,8 +92,8 @@ func (p *providerAdapter) operation(key string) (connector.OperationDescriptor, 
 
 // Provider wraps one internal test double as a public provider. Operations
 // should come from the same Integration schema exercised by the test.
-func Provider(connectorKey, providerKey string, adapter integrationcontract.Adapter, operations []integrationmodel.ConnectorOperationSchema, fallbackSchemas ...integrationmodel.ConnectorProviderSchema) connector.Adapter {
-	providerSchema := integrationmodel.ConnectorProviderSchema{Key: providerKey}
+func Provider(connectorKey, providerKey string, adapter Adapter, operations []connectormodel.ConnectorOperationSchema, fallbackSchemas ...ProviderSchema) connector.Adapter {
+	providerSchema := ProviderSchema{}
 	if len(fallbackSchemas) > 0 {
 		providerSchema = fallbackSchemas[0]
 	}
@@ -102,7 +101,7 @@ func Provider(connectorKey, providerKey string, adapter integrationcontract.Adap
 		providerSchema = integrationprojection.IntegrationMergeConnectorProviderSchema(providerSchema, schemaProvider.ProviderSchema())
 	}
 	if len(providerSchema.OperationKeys) > 0 {
-		available := make(map[string]integrationmodel.ConnectorOperationSchema, len(operations))
+		available := make(map[string]connectormodel.ConnectorOperationSchema, len(operations))
 		for _, operation := range operations {
 			available[operation.Key] = operation
 		}
@@ -110,20 +109,20 @@ func Provider(connectorKey, providerKey string, adapter integrationcontract.Adap
 		for _, key := range providerSchema.OperationKeys {
 			operation, ok := available[key]
 			if !ok {
-				operation = integrationmodel.ConnectorOperationSchema{Key: key, ExecutionMode: "sync", SideEffect: "read"}
+				operation = connectormodel.ConnectorOperationSchema{Key: key, ExecutionMode: "sync", SideEffect: "read"}
 			}
 			operations = append(operations, operation)
 		}
 	}
 	if len(operations) == 0 {
-		operations = []integrationmodel.ConnectorOperationSchema{{Key: "test_connection", ExecutionMode: "sync", SideEffect: "read"}}
+		operations = []connectormodel.ConnectorOperationSchema{{Key: "test_connection", ExecutionMode: "sync", SideEffect: "read"}}
 	}
 	revision := strings.TrimSpace(providerSchema.ProviderRevision)
 	if revision == "" {
 		revision = "test-v1"
 	}
 	descriptor := connector.ProviderDescriptor{ConnectorKey: connectorKey, ProviderKey: providerKey, ProviderRevision: revision, ConfigFields: configFields(providerSchema.ConfigFields), SecretFields: secretFields(providerSchema.SecretFields)}
-	byKey := make(map[string]integrationmodel.ConnectorOperationSchema, len(operations))
+	byKey := make(map[string]connectormodel.ConnectorOperationSchema, len(operations))
 	for _, operation := range operations {
 		if operation.Key == "" {
 			continue
@@ -287,8 +286,8 @@ func Registry(providers ...connector.Adapter) *connector.Registry {
 	return registry
 }
 
-func fromConnection(connection connector.Connection) integrationmodel.IntegrationConnection {
-	return integrationmodel.IntegrationConnection{Key: connection.Key, WorkspaceID: connection.WorkspaceID, ConnectorKey: connection.ConnectorKey, ProviderKey: connection.ProviderKey, Name: connection.Name, Status: connection.Status, Config: cloneAny(connection.Config), SecretRefs: cloneStrings(connection.SecretRefs), CreatedBy: connection.CreatedBy, CreatedAt: connection.CreatedAt, UpdatedAt: connection.UpdatedAt}
+func fromConnection(connection connector.Connection) integrationsdk.Connection {
+	return integrationsdk.Connection{Key: connection.Key, WorkspaceID: connection.WorkspaceID, ConnectorKey: connection.ConnectorKey, ProviderKey: connection.ProviderKey, Name: connection.Name, Status: connection.Status, Config: cloneAny(connection.Config), SecretRefs: cloneStrings(connection.SecretRefs), CreatedBy: connection.CreatedBy, CreatedAt: connection.CreatedAt, UpdatedAt: connection.UpdatedAt}
 }
 
 func fromPrincipal(principal connector.Principal) principalmodel.Principal {

@@ -2,6 +2,8 @@ package composition
 
 import (
 	"context"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	publicationrepository "github.com/domainry/domainry-runtime/runtime/domain/publication/repository"
 	"sync"
 
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
@@ -47,8 +49,6 @@ import (
 	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	deploymentrepository "github.com/domainry/domainry-runtime/runtime/domain/deployment/repository"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
-	integrationrepository "github.com/domainry/domainry-runtime/runtime/domain/integration/repository"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
@@ -70,7 +70,7 @@ type runtimeAssembly struct {
 	schedulerDefinitions              []map[string]any
 	automationRules                   map[string]automationmodel.AutomationRuleSchema
 	dictionaries                      []appschemamodel.DictionarySchema
-	integrations                      integrationmodel.IntegrationSchema
+	integrations                      connectormodel.IntegrationSchema
 	reports                           []reportmodel.ReportSchema
 	reportObjects                     map[string]struct{}
 	skills                            []agentsdk.SkillSchema
@@ -105,15 +105,12 @@ type runtimeAssembly struct {
 	*actionruntime.ActionExecutionRuntime
 	internalMutations                   *recordapplication.RecordInternalMutationApplicationService
 	businessSystemService               *businesssystemapplication.BusinessSystemApplicationService
-	integrationService                  *publicationhandoff.PublicationHandoffApplicationService
-	lifecycleService                    *lifecycleapplication.LifecycleApplicationService
-	integrationWorkerRepo               integrationrepository.IntegrationWorkerRepository
-	integrationPublicationWorkerRepo    integrationrepository.RuntimePublicationWorkerRepository
+	publicationHandoffService           *publicationhandoff.PublicationHandoffApplicationService
+	integrationPublicationWorkerRepo    publicationrepository.WorkerRepository
+	integrationOwnerManagement          integrationsdk.Management
+	integrationOwnerOperations          integrationsdk.Operations
 	workerWakeups                       *workerplatform.WakeupBroker
-	integrationConfigRepo               integrationrepository.IntegrationConfigRepository
-	integrationEventRepo                integrationrepository.IntegrationEventRepository
-	integrationPublicationRepo          integrationrepository.RuntimePublicationRepository
-	integrationDeliveryRepo             integrationrepository.IntegrationDeliveryRepository
+	publicationRepository               publicationrepository.Repository
 	integrationOwnerDelivery            integrationsdk.Delivery
 	integrationOwnerCatalog             integrationsdk.Catalog
 	workflowWorkerRepo                  workflowcontract.WorkflowWorkerStore

@@ -1,7 +1,7 @@
 package validation
 
 import (
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 	"fmt"
 	"strings"
@@ -94,7 +94,7 @@ func (state *validationState) validateAutomationInstructions(path string, rule a
 	}
 }
 
-func connectorHasOperation(connector integrationmodel.ConnectorSchema, operationKey string) bool {
+func connectorHasOperation(connector connectormodel.ConnectorSchema, operationKey string) bool {
 	for _, operation := range connector.Operations {
 		if strings.TrimSpace(operation.Key) == strings.TrimSpace(operationKey) {
 			return true

@@ -2,11 +2,11 @@ package composition
 
 import (
 	"context"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 
 	changeplanbusiness "github.com/domainry/domainry-runtime/runtime/application/changeplan"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -31,22 +31,17 @@ func (a businessReferenceRuntimeAdapter) PublishedSchedulerDefinitions(ctx conte
 	return a.records.schedulerService.PublishedDefinitions(ctx, principal)
 }
 
-func (a businessReferenceRuntimeAdapter) snapshotObjectRecords(ctx context.Context, objectKey string, principal principalmodel.Principal, limit int) ([]recordmodel.Record, error) {
-	return a.records.businessSystemService.SnapshotObjectRecords(ctx, objectKey, principal, limit)
-}
-
-func (a businessReferenceRuntimeAdapter) ListIntegrationOutboxMessages(ctx context.Context, status, connectorKey string, limit int, principal principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error) {
-	if a.records == nil || a.records.integrationService == nil || a.records.integrationPublicationRepo == nil {
-		return []integrationmodel.IntegrationOutboxMessage{}, nil
+func (a businessReferenceRuntimeAdapter) ListPublicationMessages(ctx context.Context, status, connectorKey string, limit int, principal principalmodel.Principal) ([]publicationmodel.Message, error) {
+	if a.records == nil || a.records.publicationHandoffService == nil || a.records.publicationRepository == nil {
+		return []publicationmodel.Message{}, nil
 	}
-	return a.records.integrationService.ListIntegrationOutboxMessages(ctx, connectorKey, status, limit, principal)
+	return a.records.publicationHandoffService.ListPublicationMessages(ctx, connectorKey, status, limit, principal)
 }
 
 type BusinessReferenceRuntimeProvider interface {
 	WorkflowProcesses(context.Context, principalmodel.Principal, workflowmodel.WorkflowProcessFilter) ([]workflowmodel.WorkflowProcessInstance, error)
 	PublishedSchedulerDefinitions(context.Context, principalmodel.Principal) ([]recordmodel.Record, error)
-	snapshotObjectRecords(context.Context, string, principalmodel.Principal, int) ([]recordmodel.Record, error)
-	ListIntegrationOutboxMessages(context.Context, string, string, int, principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error)
+	ListPublicationMessages(context.Context, string, string, int, principalmodel.Principal) ([]publicationmodel.Message, error)
 }
 
 type businessReferenceRuntimePortAdapter struct {
@@ -61,12 +56,8 @@ func (runtime businessReferenceRuntimePortAdapter) PublishedSchedulerDefinitions
 	return runtime.source.PublishedSchedulerDefinitions(ctx, principal)
 }
 
-func (runtime businessReferenceRuntimePortAdapter) SnapshotObjectRecords(ctx context.Context, objectKey string, principal principalmodel.Principal, limit int) ([]recordmodel.Record, error) {
-	return runtime.source.snapshotObjectRecords(ctx, objectKey, principal, limit)
-}
-
-func (runtime businessReferenceRuntimePortAdapter) ListIntegrationOutboxMessages(ctx context.Context, status, connectorKey string, limit int, principal principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error) {
-	return runtime.source.ListIntegrationOutboxMessages(ctx, status, connectorKey, limit, principal)
+func (runtime businessReferenceRuntimePortAdapter) ListPublicationMessages(ctx context.Context, status, connectorKey string, limit int, principal principalmodel.Principal) ([]publicationmodel.Message, error) {
+	return runtime.source.ListPublicationMessages(ctx, status, connectorKey, limit, principal)
 }
 
 func assembleChangePlanReferenceApplication(schema CapabilityAuthoringSchemaProvider, runtime BusinessReferenceRuntimeProvider, evidence changeplanrepository.ChangePlanEvidenceRepository) *changeplanbusiness.ChangePlanReferenceApplicationService {

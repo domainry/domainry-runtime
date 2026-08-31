@@ -2,7 +2,7 @@ package integrationtest
 
 import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -41,7 +41,7 @@ func TestWorkflowGraphFailureAndDeadLetterLinkToProcessAndNode(t *testing.T) {
 		},
 	}
 	role := accessfixture.Bundle{Key: "admin", Permissions: []string{"workflow.run"}, RecordScope: "all_records"}
-	records := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "workflow-links", TemplateVersion: "1", Name: "Workflow Links", Objects: nil, Actions: nil, Workflows: []definitionmodel.WorkflowSchema{workflow}, AutomationRules: nil, Dictionaries: nil, Integrations: integrationmodel.IntegrationSchema{}, Reports: nil, Skills: nil, Agents: nil, Store: store, WorkflowProcesses: workflowpersistence.NewWorkflowProcessStore(store), WorkflowWorker: workflowpersistence.NewWorkflowWorkerStore(store)})
+	records := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "workflow-links", TemplateVersion: "1", Name: "Workflow Links", Objects: nil, Actions: nil, Workflows: []definitionmodel.WorkflowSchema{workflow}, AutomationRules: nil, Dictionaries: nil, Integrations: connectormodel.IntegrationSchema{}, Reports: nil, Skills: nil, Agents: nil, Store: store, WorkflowProcesses: workflowpersistence.NewWorkflowProcessStore(store), WorkflowWorker: workflowpersistence.NewWorkflowWorkerStore(store)})
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, role)
 
 	run, err := records.Applications().Workflows.RunWorkflow(t.Context(), workflow.Key, map[string]any{"request_id": "failure-1"}, principal)

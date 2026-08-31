@@ -2,6 +2,7 @@ package capability
 
 import (
 	"context"
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"strings"
 	"testing"
 
@@ -10,7 +11,6 @@ import (
 
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -43,7 +43,7 @@ func TestEveryPublishedPlatformReferenceKindUsesSnapshotBoundResolver(t *testing
 	service := NewCapabilityAuthoringApplicationService(func(context.Context, principalmodel.Principal) capabilitycontract.CapabilityInstanceSchema {
 		return capabilitycontract.CapabilityInstanceSchema{
 			Objects:      []definitionmodel.ObjectSchema{{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "status"}}}},
-			Integrations: integrationmodel.IntegrationSchema{Connectors: []integrationmodel.ConnectorSchema{{Key: "erp", Providers: []integrationmodel.ConnectorProviderSchema{{Key: "default"}}, Operations: []integrationmodel.ConnectorOperationSchema{{Key: "sync"}}}}},
+			Integrations: connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{{Key: "erp", Providers: []connectormodel.ConnectorProviderSchema{{Key: "default"}}, Operations: []connectormodel.ConnectorOperationSchema{{Key: "sync"}}}}},
 		}
 	})
 	service.UseIdentityReferenceSource(t.Context(), func(context.Context, principalmodel.Principal) (CapabilityIdentityReferences, error) {

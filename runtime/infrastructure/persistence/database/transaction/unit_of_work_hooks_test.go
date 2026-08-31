@@ -89,7 +89,7 @@ func TestCriticalTransactionChainsCoverEveryFailureWindow(t *testing.T) {
 		"workflow_task_decision",
 		"action_execution",
 		"scheduler_run_state",
-		"integration_event_acceptance",
+		"runtime_publication_handoff",
 		"metadata_publication",
 		"cross_boundary_durable_intent",
 	}

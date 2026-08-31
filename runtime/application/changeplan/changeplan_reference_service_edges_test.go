@@ -3,13 +3,13 @@ package changeplan
 import (
 	"context"
 	"errors"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -20,7 +20,7 @@ type changePlanReferenceRuntimeFake struct {
 	processErr   error
 	records      map[string][]recordmodel.Record
 	recordErrors map[string]error
-	messages     []integrationmodel.IntegrationOutboxMessage
+	messages     []publicationmodel.Message
 	messageErr   error
 }
 
@@ -32,11 +32,7 @@ func (f *changePlanReferenceRuntimeFake) PublishedSchedulerDefinitions(context.C
 	return append([]recordmodel.Record(nil), f.records["scheduler"]...), f.recordErrors["scheduler"]
 }
 
-func (f *changePlanReferenceRuntimeFake) SnapshotObjectRecords(_ context.Context, objectKey string, _ principalmodel.Principal, _ int) ([]recordmodel.Record, error) {
-	return f.records[objectKey], f.recordErrors[objectKey]
-}
-
-func (f *changePlanReferenceRuntimeFake) ListIntegrationOutboxMessages(context.Context, string, string, int, principalmodel.Principal) ([]integrationmodel.IntegrationOutboxMessage, error) {
+func (f *changePlanReferenceRuntimeFake) ListPublicationMessages(context.Context, string, string, int, principalmodel.Principal) ([]publicationmodel.Message, error) {
 	return f.messages, f.messageErr
 }
 
@@ -98,7 +94,7 @@ func TestChangePlanReferenceServiceBuildsOptionalRuntimeEvidence(t *testing.T) {
 			{ID: "config", WorkflowKey: "approval", Status: "configuration_error"},
 			{ID: "done", WorkflowKey: "approval", Status: "completed"},
 		},
-		messages: []integrationmodel.IntegrationOutboxMessage{
+		messages: []publicationmodel.Message{
 			{ID: "pending", Status: "pending", ConnectorKey: "erp", Operation: "send", ConnectionKey: "primary"},
 			{ID: "sent", Status: "sent"}, {ID: "cancelled", Status: "cancelled"},
 		},

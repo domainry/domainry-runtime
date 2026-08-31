@@ -3,6 +3,7 @@ package record
 import (
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
@@ -28,7 +29,6 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	integrationmodel "github.com/domainry/domainry-runtime/runtime/domain/integration/model"
 )
 
 type RecordDeleteDependencies struct {
@@ -41,7 +41,7 @@ type RecordDeleteDependencies struct {
 	CanWrite            func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool
 	RunBefore           func(context.Context, string, string, string, map[string]any, map[string]any, map[string]any, principalmodel.Principal) error
 	ValidatePolicies    func(context.Context, definitionmodel.ObjectSchema, map[string]any, map[string]any, string, string, principalmodel.Principal) error
-	AfterOutbox         func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []integrationmodel.IntegrationOutboxMessage
+	AfterOutbox         func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []publicationmodel.Message
 	UpdatedTriggers     func(string, map[string]any, map[string]any) []string
 	PrepareWorkflow     func(context.Context, string, recordmodel.Record, map[string]any, principalmodel.Principal, string) ([]workflowmodel.WorkflowExecution, error)
 	ExecuteWorkflow     func(context.Context, []workflowmodel.WorkflowExecution, principalmodel.Principal)
