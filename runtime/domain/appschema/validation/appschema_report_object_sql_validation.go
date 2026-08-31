@@ -25,11 +25,58 @@ func (v *reportDefinitionValidator) validateExecutionDefinition() {
 		return
 	}
 	v.validateObjectSQLExplicitBounds(plan)
+	if reportmodel.ReportCrossWorkspaceAggregate(v.report) {
+		v.validateCrossWorkspaceAggregatePlan(plan)
+	}
 	for _, source := range plan.Sources {
 		for _, fieldKey := range source.Fields {
 			v.validateAudienceFieldPermission("object_sql_v1.sql", source.ObjectKey, fieldKey, "read")
 		}
 	}
+}
+
+func (v *reportDefinitionValidator) validateCrossWorkspaceAggregatePlan(plan reportmodel.ReportObjectSQLPlan) {
+	for _, projection := range plan.Projections {
+		if reportObjectSQLContainsAggregate(projection.Expression) {
+			continue
+		}
+		if (projection.Expression.Kind == "field" && projection.Expression.FieldKey == "workspace_id") || (projection.Expression.Kind == "function" && projection.Expression.Name == "date_bucket") {
+			continue
+		}
+		v.issue("backend.report.cross_workspace_raw_projection_forbidden", "object_sql_v1.sql", map[string]string{"projection": projection.Alias})
+	}
+	for _, group := range plan.GroupBy {
+		if (group.Kind == "field" && group.FieldKey == "workspace_id") || (group.Kind == "function" && group.Name == "date_bucket") {
+			continue
+		}
+		v.issue("backend.report.cross_workspace_grouping_forbidden", "object_sql_v1.sql", nil)
+	}
+	if len(plan.GroupBy) == 0 {
+		hasAggregate := false
+		for _, projection := range plan.Projections {
+			hasAggregate = hasAggregate || reportObjectSQLContainsAggregate(projection.Expression)
+		}
+		if !hasAggregate {
+			v.issue("backend.report.cross_workspace_aggregate_required", "object_sql_v1.sql", nil)
+		}
+	}
+}
+
+func reportObjectSQLContainsAggregate(expression reportmodel.ReportObjectSQLExpression) bool {
+	if expression.Kind == "aggregate" {
+		return true
+	}
+	for _, argument := range expression.Arguments {
+		if reportObjectSQLContainsAggregate(argument) {
+			return true
+		}
+	}
+	for _, when := range expression.Whens {
+		if reportObjectSQLContainsAggregate(when.Condition) || reportObjectSQLContainsAggregate(when.Value) {
+			return true
+		}
+	}
+	return expression.Else != nil && reportObjectSQLContainsAggregate(*expression.Else)
 }
 
 // validateObjectSQLExplicitBounds shifts the empirical IF-3 pit into the

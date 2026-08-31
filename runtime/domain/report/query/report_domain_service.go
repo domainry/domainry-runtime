@@ -236,10 +236,20 @@ func (s *ReportDomainService) reportForPrincipal(ctx context.Context, reportKey 
 	reportKey = strings.TrimSpace(reportKey)
 	for _, report := range s.dependencies.Reports(ctx, principal) {
 		if report.Key == reportKey {
+			if reportmodel.ReportCrossWorkspaceAggregate(report) && !crossWorkspaceReportPrincipalAllowed(report, principal) {
+				return reportmodel.ReportSchema{}, false
+			}
 			return report, true
 		}
 	}
 	return reportmodel.ReportSchema{}, false
+}
+
+func crossWorkspaceReportPrincipalAllowed(report reportmodel.ReportSchema, principal principalmodel.Principal) bool {
+	return principal.Known &&
+		strings.TrimSpace(principal.RoleKey) == "superadmin" &&
+		len(report.RequiredPermissions) > 0 &&
+		principal.HasAllPermissions(report.RequiredPermissions)
 }
 
 func reportIncludesObject(report reportmodel.ReportSchema, objectKey string) bool {

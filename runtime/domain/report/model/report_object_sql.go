@@ -11,6 +11,7 @@ type ReportObjectSQLSchema struct {
 	ResultSchema        []ReportResultColumnSchema   `json:"result_schema"`
 	JoinCardinalities   []ReportObjectSQLCardinality `json:"join_cardinalities,omitempty"`
 	TimeoutMilliseconds int                          `json:"timeout_milliseconds,omitempty"`
+	TimeZone            string                       `json:"time_zone,omitempty"`
 }
 
 func ReportObjectSQLObjectKeys(schema *ReportObjectSQLSchema) []string {
@@ -93,6 +94,7 @@ type ReportObjectSQLExpression struct {
 	Type      string
 	Precision int
 	Scale     int
+	TimeZone  string
 	Distinct  bool
 	Arguments []ReportObjectSQLExpression
 	Whens     []ReportObjectSQLWhen

@@ -96,7 +96,7 @@ func (a *ReportRecordAdapter) AuthorizeReportObjectSQLField(_ context.Context, p
 	if _, err := a.application.ObjectForAction(principal, object.Key, "read"); err != nil {
 		return err
 	}
-	if fieldKey != "id" && fieldKey != "created_at" && fieldKey != "updated_at" {
+	if fieldKey != "id" && fieldKey != "created_at" && fieldKey != "updated_at" && fieldKey != "workspace_id" {
 		found := false
 		for _, field := range object.Fields {
 			if field.Key == fieldKey && strings.TrimSpace(field.DisabledAt) == "" {
@@ -110,7 +110,7 @@ func (a *ReportRecordAdapter) AuthorizeReportObjectSQLField(_ context.Context, p
 		if !found {
 			return &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.report.object_sql_field_not_found"}
 		}
-	} else if !recordpolicy.RecordCanReadFieldForPrincipal(principal, object.Key, fieldKey) {
+	} else if fieldKey != "workspace_id" && !recordpolicy.RecordCanReadFieldForPrincipal(principal, object.Key, fieldKey) {
 		return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.report.object_sql_field_denied"}
 	}
 	if recordpolicy.RecordFieldReadMaskedForPrincipal(principal, object.Key, fieldKey) {

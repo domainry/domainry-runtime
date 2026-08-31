@@ -3,6 +3,7 @@ package contract
 import (
 	appschemacontract "github.com/domainry/domainry-runtime/runtime/domain/appschema/contract"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
+	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 // ReportAuthoringDomain publishes the Report-owned shape while Metadata owns
@@ -17,6 +18,8 @@ func ReportAuthoringDomain() capabilitycontract.CapabilityAuthoringDomain {
 			{Key: "dataset", Type: "object", ConflictsWith: []string{"object_sql_v1"}},
 			{Key: "object_sql_v1", Type: "object", ConflictsWith: []string{"dataset"}},
 			{Key: "required_permissions", Type: "array", ItemSchema: "permission_key"},
+			{Key: "audience_roles", Type: "array", ItemSchema: "role_key"},
+			{Key: "execution_scope", Type: "object"},
 			{Key: "evidence_requirements", Type: "array", ItemSchema: "report_evidence_requirement"},
 			{Key: "materialization", Type: "object"},
 			{Key: "export_scope", Type: "object"},
@@ -34,6 +37,7 @@ func ReportAuthoringDomain() capabilitycontract.CapabilityAuthoringDomain {
 			{Kind: "object_key", InputJSONPointer: "/payload/export_scope/tags/join/object_key", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/object_key"},
 			{Kind: "object_key", InputJSONPointer: "/payload/export_scope/tags/family_join/object_key", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/object_key"},
 			{Kind: "permission_key", InputJSONPointer: "/payload/required_permissions/*", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/permission_key"},
+			{Kind: "role_key", InputJSONPointer: "/payload/audience_roles/*", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/role_key"},
 		},
 		Execution: appschemacontract.VersionedApplicationDefinitionExecution("report.definition"),
 		Errors:    reportAuthoringErrors(), Examples: reportAuthoringExamples(),
@@ -116,6 +120,7 @@ func reportDefinitionPayloadSchema() capabilitycontract.CapabilityAuthoringSchem
 		"sql": {Type: "string", MinLength: reportIntPointer(1)}, "source_objects": {Type: "array", MinItems: reportIntPointer(1), Items: &stringItem},
 		"parameters": {Type: "array", Items: &objectSQLParameter}, "result_schema": {Type: "array", MinItems: reportIntPointer(1), Items: &objectSQLResultColumn},
 		"join_cardinalities": {Type: "array", Items: &objectSQLCardinality}, "timeout_milliseconds": {Type: "integer", Minimum: reportFloatPointer(1)},
+		"time_zone": {Type: "string", MinLength: reportIntPointer(1)},
 	}}
 	evidence := capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: &closed, Required: []string{"object_key", "minimum_records"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
 		"object_key": {Type: "string", MinLength: reportIntPointer(1)}, "minimum_records": {Type: "integer", Minimum: reportFloatPointer(1)}, "required_non_empty_fields": {Type: "array", Items: &stringItem},
@@ -123,6 +128,9 @@ func reportDefinitionPayloadSchema() capabilitycontract.CapabilityAuthoringSchem
 	materialization := capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: &closed, Required: []string{"maximum_lag_seconds"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
 		"maximum_lag_seconds": {Type: "integer", Minimum: reportFloatPointer(1), Maximum: reportFloatPointer(31536000)},
 		"consistency_retries": {Type: "integer", Minimum: reportFloatPointer(1), Maximum: reportFloatPointer(10), Default: 3},
+	}}
+	executionScope := capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: &closed, Required: []string{"mode"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+		"mode": {Type: "string", Enum: []any{reportmodel.ReportExecutionScopeCrossWorkspaceAggregateV1}},
 	}}
 	queryPredicate := capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: &closed, Required: []string{"field", "operator"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
 		"field": field, "operator": {Type: "string", Enum: []any{"contains", "starts_with", "eq"}},
@@ -142,8 +150,10 @@ func reportDefinitionPayloadSchema() capabilitycontract.CapabilityAuthoringSchem
 		"key": {Type: "string", MinLength: reportIntPointer(1)}, "name": {Type: "string"}, "i18n": {Type: "object", AdditionalProperties: &open},
 		"dataset": dataset, "object_sql_v1": objectSQL,
 		"required_permissions":  {Type: "array", Items: &stringItem},
+		"audience_roles":        {Type: "array", Items: &stringItem},
 		"evidence_requirements": {Type: "array", Items: &evidence},
 		"materialization":       materialization,
+		"execution_scope":       executionScope,
 		"export_scope":          exportScope,
 	}}
 }
@@ -181,7 +191,9 @@ func reportAuthoringErrors() []capabilitycontract.CapabilityAuthoringError {
 		{"backend.report.object_sql_invalid", "payload.object_sql_v1"}, {"backend.report.object_sql_p0_feature_forbidden", "payload.object_sql_v1"},
 		{"backend.report.dataset_source_invalid", "payload.dataset.source"},
 		{"backend.report.dataset_alias_invalid", "payload.dataset"}, {"backend.report.source_object_not_found", "payload.dataset"}, {"backend.report.join_invalid", "payload.dataset.joins[]"}, {"backend.report.join_cardinality_invalid", "payload.dataset.joins[].cardinality"},
-		{"backend.report.permission_invalid", "payload.required_permissions[]"}, {"backend.report.permission_not_found", "payload.required_permissions[]"},
+		{"backend.report.permission_invalid", "payload.required_permissions[]"}, {"backend.report.permission_not_found", "payload.required_permissions[]"}, {"backend.report.audience_role_invalid", "payload.audience_roles[]"},
+		{"backend.report.execution_scope_invalid", "payload.execution_scope.mode"}, {"backend.report.cross_workspace_object_sql_required", "payload.execution_scope.mode"}, {"backend.report.cross_workspace_superadmin_audience_required", "payload.audience_roles"}, {"backend.report.cross_workspace_permission_required", "payload.required_permissions"},
+		{"backend.report.cross_workspace_raw_projection_forbidden", "payload.object_sql_v1.sql"}, {"backend.report.cross_workspace_grouping_forbidden", "payload.object_sql_v1.sql"}, {"backend.report.cross_workspace_aggregate_required", "payload.object_sql_v1.sql"},
 		{"backend.report.field_reference_invalid", "payload.dataset"}, {"backend.report.field_not_found", "payload.dataset"}, {"backend.report.field_permission_denied", "payload.dataset"}, {"backend.report.filter_invalid", "payload.dataset.filters[]"}, {"backend.report.predicate_invalid", "payload.dataset.query_predicates[]"}, {"backend.report.predicate_invalid", "payload.dataset.tag_predicates[]"}, {"backend.report.dimension_invalid", "payload.dataset.dimensions[]"}, {"backend.report.measure_invalid", "payload.dataset.measures[]"}, {"backend.report.join_measure_amplification", "payload.dataset.measures[]"}, {"backend.report.privacy_invalid", "payload.dataset.privacy"}, {"backend.report.comparison_invalid", "payload.dataset.comparisons[]"}, {"backend.report.analysis_invalid", "payload.dataset.analyses[]"}, {"backend.report.time_grain_invalid", "payload.dataset.time_grain"}, {"backend.report.sort_invalid", "payload.dataset.sort[]"}, {"backend.report.limit_invalid", "payload.dataset.limit"},
 		{"backend.report.materialization_invalid", "payload.materialization"}, {"backend.report.required_index_missing", "payload.dataset"},
 		{"backend.report.export_query_definition_invalid", "payload.export_scope.query"}, {"backend.report.export_tag_definition_invalid", "payload.export_scope.tags"},

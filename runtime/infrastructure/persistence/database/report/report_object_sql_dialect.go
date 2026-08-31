@@ -304,5 +304,9 @@ func (e *reportObjectSQLEmitter) dateBucket(expression reportmodel.ReportObjectS
 	if err != nil {
 		return "", err
 	}
-	return e.profile.ReportDateBucket(value, expression.Value, expression.Arguments[0].Type == "date")
+	timeZone := expression.TimeZone
+	if timeZone == "" {
+		timeZone = "UTC"
+	}
+	return e.profile.ReportDateBucket(value, expression.Value, timeZone, expression.Arguments[0].Type == "date")
 }

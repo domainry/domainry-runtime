@@ -44,7 +44,7 @@ func TestReportObjectSQLDialectGoldens(t *testing.T) {
 	}
 	ctes := []string{`"src0" AS (SELECT 1)`, `"src1" AS (SELECT 1)`}
 	wants := map[string][]string{
-		"sqlite":   {`strftime('%Y-%m-%dT00:00:00Z', "s"."sold_at")`, `runtime_decimal_sum_minor(runtime_decimal_minor("s"."total", 18))`, `runtime_currency_divide_minor(runtime_decimal_sum_minor(runtime_decimal_minor("s"."total", 18)), NULLIF(COUNT(*), 0))`, `>= ?`},
+		"sqlite":   {`runtime_date_bucket("s"."sold_at", 'day', 'UTC')`, `runtime_decimal_sum_minor(runtime_decimal_minor("s"."total", 18))`, `runtime_currency_divide_minor(runtime_decimal_sum_minor(runtime_decimal_minor("s"."total", 18)), NULLIF(COUNT(*), 0))`, `>= ?`},
 		"postgres": {`DATE_TRUNC('day', CAST("s"."sold_at" AS TIMESTAMPTZ))`, `SUM("s"."total")`, `(SUM("s"."total") / NULLIF(COUNT(*), 0))`, `>= $1`},
 		"mysql":    {"DATE_FORMAT(`s`.`sold_at`, '%Y-%m-%d 00:00:00')", "SUM(`s`.`total`)", "(SUM(`s`.`total`) / NULLIF(COUNT(*), 0))", ">= ?"},
 	}

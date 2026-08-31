@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
@@ -274,7 +275,7 @@ func (c *objectSQLCompiler) compileDateBucket(value *sqlparser.FuncExpr) (report
 		return reportmodel.ReportObjectSQLExpression{}, objectSQLPlanError("backend.report.object_sql_date_bucket_invalid", "object_sql_v1.sql", nil)
 	}
 	grainValue := strings.ToLower(strings.TrimSpace(grain.Val))
-	if !map[string]bool{"day": true, "week": true, "month": true, "quarter": true, "year": true}[grainValue] {
+	if !map[string]bool{"hour": true, "day": true, "week": true, "month": true, "quarter": true, "year": true}[grainValue] {
 		return reportmodel.ReportObjectSQLExpression{}, objectSQLPlanError("backend.report.object_sql_date_bucket_invalid", "object_sql_v1.sql", map[string]string{"grain": grainValue})
 	}
 	expression, err := c.compileExpression(value.Exprs[1], false)
@@ -284,7 +285,14 @@ func (c *objectSQLCompiler) compileDateBucket(value *sqlparser.FuncExpr) (report
 	if expression.Type != "date" && expression.Type != "datetime" {
 		return reportmodel.ReportObjectSQLExpression{}, objectSQLPlanError("backend.report.object_sql_type_invalid", "object_sql_v1.sql", nil)
 	}
-	return reportmodel.ReportObjectSQLExpression{Kind: "function", Name: "date_bucket", Value: grainValue, Arguments: []reportmodel.ReportObjectSQLExpression{expression}, Type: "datetime"}, nil
+	timeZone := "UTC"
+	if configured := strings.TrimSpace(c.schema.TimeZone); configured != "" {
+		timeZone = configured
+	}
+	if _, err := time.LoadLocation(timeZone); err != nil {
+		return reportmodel.ReportObjectSQLExpression{}, objectSQLPlanError("backend.report.object_sql_timezone_invalid", "object_sql_v1.time_zone", map[string]string{"timezone": timeZone})
+	}
+	return reportmodel.ReportObjectSQLExpression{Kind: "function", Name: "date_bucket", Value: grainValue, TimeZone: timeZone, Arguments: []reportmodel.ReportObjectSQLExpression{expression}, Type: "datetime"}, nil
 }
 
 func (c *objectSQLCompiler) compileAggregate(value sqlparser.AggrFunc) (reportmodel.ReportObjectSQLExpression, error) {
@@ -321,6 +329,9 @@ func (c *objectSQLCompiler) compileAggregate(value sqlparser.AggrFunc) (reportmo
 }
 
 func objectSQLField(object definitionmodel.ObjectSchema, key string) (definitionmodel.FieldSchema, bool) {
+	if key == "workspace_id" {
+		return definitionmodel.FieldSchema{Key: key, Type: "text"}, true
+	}
 	if key == "id" {
 		return definitionmodel.FieldSchema{Key: key, Type: "text"}, true
 	}

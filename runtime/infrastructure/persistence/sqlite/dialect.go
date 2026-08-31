@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	"github.com/shopspring/decimal"
@@ -28,6 +29,9 @@ func init() {
 	if err := modernsqlite.RegisterDeterministicScalarFunction("runtime_exact_decimal_encode", 4, sqliteExactDecimalEncode); err != nil {
 		panic(err)
 	}
+	if err := modernsqlite.RegisterDeterministicScalarFunction("runtime_date_bucket", 3, sqliteDateBucket); err != nil {
+		panic(err)
+	}
 	for name, average := range map[string]bool{"runtime_decimal_sum_minor": false, "runtime_decimal_avg_minor": true} {
 		average := average
 		if err := modernsqlite.RegisterFunction(name, &modernsqlite.FunctionImpl{NArgs: 1, Deterministic: true, MakeAggregate: func(modernsqlite.FunctionContext) (modernsqlite.AggregateFunction, error) {
@@ -36,6 +40,41 @@ func init() {
 			panic(err)
 		}
 	}
+}
+
+func sqliteDateBucket(_ *modernsqlite.FunctionContext, args []sqldriver.Value) (sqldriver.Value, error) {
+	if len(args) != 3 || args[0] == nil {
+		return nil, nil
+	}
+	value, grain, zone := strings.TrimSpace(fmt.Sprint(args[0])), strings.TrimSpace(fmt.Sprint(args[1])), strings.TrimSpace(fmt.Sprint(args[2]))
+	location, err := time.LoadLocation(zone)
+	if err != nil {
+		return nil, fmt.Errorf("invalid report timezone %q: %w", zone, err)
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return nil, fmt.Errorf("invalid report datetime %q: %w", value, err)
+	}
+	local := parsed.In(location)
+	year, month, day := local.Date()
+	switch grain {
+	case "hour":
+		local = time.Date(year, month, day, local.Hour(), 0, 0, 0, location)
+	case "day":
+		local = time.Date(year, month, day, 0, 0, 0, 0, location)
+	case "week":
+		weekday := (int(local.Weekday()) + 6) % 7
+		local = time.Date(year, month, day-weekday, 0, 0, 0, 0, location)
+	case "month":
+		local = time.Date(year, month, 1, 0, 0, 0, 0, location)
+	case "quarter":
+		local = time.Date(year, time.Month((int(month)-1)/3*3+1), 1, 0, 0, 0, 0, location)
+	case "year":
+		local = time.Date(year, 1, 1, 0, 0, 0, 0, location)
+	default:
+		return nil, fmt.Errorf("invalid report date grain %q", grain)
+	}
+	return local.Format(time.RFC3339), nil
 }
 
 func sqliteExactDecimalEncode(_ *modernsqlite.FunctionContext, args []sqldriver.Value) (sqldriver.Value, error) {

@@ -13,6 +13,8 @@ type ReportSchema struct {
 	Dataset              ReportDatasetSchema                `json:"dataset,omitempty"`
 	ObjectSQLV1          *ReportObjectSQLSchema             `json:"object_sql_v1,omitempty"`
 	RequiredPermissions  []string                           `json:"required_permissions,omitempty"`
+	AudienceRoles        []string                           `json:"audience_roles,omitempty"`
+	ExecutionScope       *ReportExecutionScopeSchema        `json:"execution_scope,omitempty"`
 	EvidenceRequirements []ReportEvidenceRequirement        `json:"evidence_requirements,omitempty"`
 	Materialization      *ReportMaterializationPolicy       `json:"materialization,omitempty"`
 	ExportScope          *ReportExportScopeSchema           `json:"export_scope,omitempty"`
@@ -32,15 +34,29 @@ func (r ReportSchema) MarshalJSON() ([]byte, error) {
 		I18n                 localizationmodel.LocalizedTextMap `json:"i18n,omitempty"`
 		ObjectSQLV1          *ReportObjectSQLSchema             `json:"object_sql_v1"`
 		RequiredPermissions  []string                           `json:"required_permissions,omitempty"`
+		AudienceRoles        []string                           `json:"audience_roles,omitempty"`
+		ExecutionScope       *ReportExecutionScopeSchema        `json:"execution_scope,omitempty"`
 		EvidenceRequirements []ReportEvidenceRequirement        `json:"evidence_requirements,omitempty"`
 		Materialization      *ReportMaterializationPolicy       `json:"materialization,omitempty"`
 		ExportScope          *ReportExportScopeSchema           `json:"export_scope,omitempty"`
 	}{
 		Key: r.Key, Name: r.Name, I18n: r.I18n, ObjectSQLV1: r.ObjectSQLV1,
 		RequiredPermissions:  r.RequiredPermissions,
+		AudienceRoles:        r.AudienceRoles,
+		ExecutionScope:       r.ExecutionScope,
 		EvidenceRequirements: r.EvidenceRequirements, Materialization: r.Materialization,
 		ExportScope: r.ExportScope,
 	})
+}
+
+type ReportExecutionScopeSchema struct {
+	Mode string `json:"mode"`
+}
+
+const ReportExecutionScopeCrossWorkspaceAggregateV1 = "cross_workspace_aggregate_v1"
+
+func ReportCrossWorkspaceAggregate(report ReportSchema) bool {
+	return report.ExecutionScope != nil && report.ExecutionScope.Mode == ReportExecutionScopeCrossWorkspaceAggregateV1
 }
 
 // ReportExportScopeSchema is a report-owned allowlist. It carries only typed

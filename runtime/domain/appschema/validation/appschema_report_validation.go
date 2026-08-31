@@ -25,6 +25,7 @@ func ApplicationSchemaValidateReportDefinitionIssues(ctx context.Context, worksp
 	validator.validateIdentity()
 	validator.validateSourceObjects()
 	validator.validatePermissionsAndAudience()
+	validator.validateExecutionScope()
 	validator.validateExecutionDefinition()
 	validator.validateEvidenceRequirements(ctx, true)
 	return validator.issues
@@ -38,6 +39,7 @@ func ApplicationSchemaValidateReportDefinitionContract(ctx context.Context, snap
 	validator.validateIdentity()
 	validator.validateSourceObjects()
 	validator.validatePermissionsAndAudience()
+	validator.validateExecutionScope()
 	validator.validateExecutionDefinition()
 	validator.validateEvidenceRequirements(ctx, false)
 	return validator.issues
@@ -133,6 +135,33 @@ func (v *reportDefinitionValidator) validatePermissionsAndAudience() {
 			v.issue("backend.report.permission_not_found", path, map[string]string{"permission": permission, "actual": permission})
 		}
 		seenPermissions[permission] = true
+	}
+	seenRoles := map[string]bool{}
+	for index, raw := range v.report.AudienceRoles {
+		role := strings.TrimSpace(raw)
+		if role == "" || seenRoles[role] {
+			v.issue("backend.report.audience_role_invalid", fmt.Sprintf("audience_roles[%d]", index), map[string]string{"role": role, "actual": role})
+		}
+		seenRoles[role] = true
+	}
+}
+
+func (v *reportDefinitionValidator) validateExecutionScope() {
+	if v.report.ExecutionScope == nil {
+		return
+	}
+	if v.report.ExecutionScope.Mode != reportmodel.ReportExecutionScopeCrossWorkspaceAggregateV1 {
+		v.issue("backend.report.execution_scope_invalid", "execution_scope.mode", map[string]string{"actual": v.report.ExecutionScope.Mode})
+		return
+	}
+	if v.report.ObjectSQLV1 == nil {
+		v.issue("backend.report.cross_workspace_object_sql_required", "execution_scope.mode", nil)
+	}
+	if len(v.report.AudienceRoles) != 1 || strings.TrimSpace(v.report.AudienceRoles[0]) != "superadmin" {
+		v.issue("backend.report.cross_workspace_superadmin_audience_required", "audience_roles", nil)
+	}
+	if len(v.report.RequiredPermissions) == 0 {
+		v.issue("backend.report.cross_workspace_permission_required", "required_permissions", nil)
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 	ormbuilder "github.com/domainry/domainry-orm/query"
 	"github.com/shopspring/decimal"
 
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	querypersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/query"
@@ -25,6 +26,9 @@ var _ reportcontract.ReportObjectSQLExecutor = (*ReportDatasetStore)(nil)
 func (s *ReportDatasetStore) ExecuteReportObjectSQL(ctx context.Context, request reportcontract.ReportObjectSQLExecutionRequest) (reportcontract.ReportObjectSQLExecutionResult, error) {
 	if s == nil || s.store == nil || s.store.DB() == nil {
 		return reportcontract.ReportObjectSQLExecutionResult{}, fmt.Errorf("report object SQL store is unavailable")
+	}
+	if request.CrossWorkspaceAggregate {
+		request.Plan = crossWorkspaceJoinSafePlan(request.Plan)
 	}
 	timeout := request.Timeout
 	if timeout <= 0 {
@@ -141,10 +145,34 @@ func (s *ReportDatasetStore) ExecuteReportObjectSQL(ctx context.Context, request
 	return result, nil
 }
 
+func crossWorkspaceJoinSafePlan(plan reportmodel.ReportObjectSQLPlan) reportmodel.ReportObjectSQLPlan {
+	plan.Sources = append([]reportmodel.ReportObjectSQLSource(nil), plan.Sources...)
+	if len(plan.Sources) < 2 {
+		return plan
+	}
+	root := reportmodel.ReportObjectSQLExpression{Kind: "field", Alias: plan.Sources[0].Alias, FieldKey: "workspace_id", Type: "text"}
+	for index := 1; index < len(plan.Sources); index++ {
+		source := plan.Sources[index]
+		sameWorkspace := reportmodel.ReportObjectSQLExpression{Kind: "comparison", Operator: "=", Type: "boolean", Arguments: []reportmodel.ReportObjectSQLExpression{root, {Kind: "field", Alias: source.Alias, FieldKey: "workspace_id", Type: "text"}}}
+		if source.On == nil {
+			source.On = &sameWorkspace
+		} else {
+			combined := reportmodel.ReportObjectSQLExpression{Kind: "logical", Operator: "and", Type: "boolean", Arguments: []reportmodel.ReportObjectSQLExpression{*source.On, sameWorkspace}}
+			source.On = &combined
+		}
+		plan.Sources[index] = source
+	}
+	return plan
+}
+
 func (s *ReportDatasetStore) reportObjectSQLSources(ctx context.Context, tx *sql.Tx, request reportcontract.ReportObjectSQLExecutionRequest) ([]string, []any, error) {
 	cteParts, args := make([]string, 0, len(request.Plan.Sources)), []any{}
 	for index, source := range request.Plan.Sources {
 		object, query := request.Objects[source.Alias], request.Queries[source.Alias]
+		if request.CrossWorkspaceAggregate {
+			query = recordmodel.RecordListQuery{SelectFields: append([]string(nil), source.Fields...)}
+			query.SelectFields = append(query.SelectFields, "workspace_id")
+		}
 		if query.ScopeExpression != nil && querypersistence.ScopeExpressionHasRelation(*query.ScopeExpression) {
 			resolved, err := querypersistence.ResolveScopeMembership(s.store, request.WorkspaceID, *query.ScopeExpression, querypersistence.ScopeMembershipINThreshold, func(statement string, lookupArgs ...any) ([]string, error) {
 				rows, queryErr := tx.QueryContext(ctx, statement, lookupArgs...)
@@ -168,12 +196,16 @@ func (s *ReportDatasetStore) reportObjectSQLSources(ctx context.Context, tx *sql
 			query.ScopeExpression = &resolved
 		}
 		query = recordpersistence.RecordQueryDatabaseValues(s.store.RuntimeEngine, object, query)
-		predicate, err := querypersistence.BuildTenantPredicate(s.store, request.WorkspaceID, query)
-		if err != nil {
-			return nil, nil, fmt.Errorf("build report object SQL source %s scope: %w", source.Alias, err)
-		}
 		columns := reportStoreSourceColumns(query.SelectFields)
-		statement, sourceArgs, err := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, object.Key).Columns(columns...).Where(predicate).BuildWithOffset(len(args))
+		builder := ormbuilder.NewSelectBuilder(s.store.SQLRenderer, object.Key).Columns(columns...)
+		if !request.CrossWorkspaceAggregate {
+			predicate, err := querypersistence.BuildTenantPredicate(s.store, request.WorkspaceID, query)
+			if err != nil {
+				return nil, nil, fmt.Errorf("build report object SQL source %s scope: %w", source.Alias, err)
+			}
+			builder.Where(predicate)
+		}
+		statement, sourceArgs, err := builder.BuildWithOffset(len(args))
 		if err != nil {
 			return nil, nil, fmt.Errorf("build report object SQL source %s: %w", source.Alias, err)
 		}

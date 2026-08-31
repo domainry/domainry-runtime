@@ -10,12 +10,13 @@ import (
 )
 
 type ReportObjectSQLExecutionRequest struct {
-	WorkspaceID string
-	Plan        reportmodel.ReportObjectSQLPlan
-	Objects     map[string]definitionmodel.ObjectSchema
-	Queries     map[string]recordmodel.RecordListQuery
-	Parameters  map[string]any
-	Timeout     time.Duration
+	WorkspaceID             string
+	CrossWorkspaceAggregate bool
+	Plan                    reportmodel.ReportObjectSQLPlan
+	Objects                 map[string]definitionmodel.ObjectSchema
+	Queries                 map[string]recordmodel.RecordListQuery
+	Parameters              map[string]any
+	Timeout                 time.Duration
 	// PageCursor is the opaque persistence cursor returned by the previous
 	// execution. PagePosition fences the authored LIMIT without rescanning or
 	// exposing cursor values above the persistence boundary.

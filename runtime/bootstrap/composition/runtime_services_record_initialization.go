@@ -84,7 +84,7 @@ func initializeRecordApplications(s *runtimeAssembly) {
 		NotificationCommitter: s.reportSnapshotNotificationCommitter,
 	})
 	s.reportQueriesService = reportquery.NewReportQueryApplicationService(reportquery.ReportQueryApplicationDependencies{
-		Domain: reportDomain, CursorKey: s.auditExportTokenKey,
+		Domain: reportDomain, CursorKey: s.auditExportTokenKey, Audit: reportadapter.NewReportCrossWorkspaceAuditAdapter(s.auditApplicationService),
 	})
 	s.reportExportsService = reportexportapplication.NewReportExportApplicationService(reportexportapplication.ReportExportApplicationDependencies{
 		ProductBrandName: s.productBrandName, Domain: reportDomain, Records: reportRecords, Audit: s.auditApplicationService,

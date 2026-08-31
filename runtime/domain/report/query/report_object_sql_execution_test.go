@@ -14,6 +14,7 @@ import (
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	reportobjectsql "github.com/domainry/domainry-runtime/runtime/domain/report/query/objectsql"
+	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
 
 type objectSQLAccessProbe struct {
@@ -40,11 +41,38 @@ func (a objectSQLAccessProbe) AuthorizeReportObjectSQLField(_ context.Context, _
 	return nil
 }
 
-type objectSQLExecutorProbe struct{ calls int }
+type objectSQLExecutorProbe struct {
+	calls   int
+	request reportcontract.ReportObjectSQLExecutionRequest
+}
 
-func (e *objectSQLExecutorProbe) ExecuteReportObjectSQL(_ context.Context, _ reportcontract.ReportObjectSQLExecutionRequest) (reportcontract.ReportObjectSQLExecutionResult, error) {
+func (e *objectSQLExecutorProbe) ExecuteReportObjectSQL(_ context.Context, request reportcontract.ReportObjectSQLExecutionRequest) (reportcontract.ReportObjectSQLExecutionResult, error) {
 	e.calls++
+	e.request = request
 	return reportcontract.ReportObjectSQLExecutionResult{Rows: []map[string]string{{"total": "1.00"}}}, nil
+}
+
+func TestCrossWorkspaceObjectSQLRequiresAuthorizedSuperadminAndSetsExplicitStoreScope(t *testing.T) {
+	object := definitionmodel.ObjectSchema{Key: "sale", Fields: []definitionmodel.FieldSchema{{Key: "amount", Type: "integer"}}}
+	report := reportmodel.ReportSchema{Key: "hq", AudienceRoles: []string{"superadmin"}, RequiredPermissions: []string{"reports.hq.read"}, ExecutionScope: &reportmodel.ReportExecutionScopeSchema{Mode: reportmodel.ReportExecutionScopeCrossWorkspaceAggregateV1}, ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{SQL: `SELECT SUM(s.amount) AS total FROM sale s LIMIT 1`, SourceObjects: []string{"sale"}, ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "total", Type: "integer", Kind: "measure"}}}}
+	executor := &objectSQLExecutorProbe{}
+	service := NewReportDomainService(ReportDependencies{Reports: func(context.Context, principalmodel.Principal) []reportmodel.ReportSchema {
+		return []reportmodel.ReportSchema{report}
+	}, Access: objectSQLAccessProbe{objects: map[string]definitionmodel.ObjectSchema{"sale": object}}, ObjectSQL: executor})
+	principal := func(role string, permissions ...string) principalmodel.Principal {
+		return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "default", UserID: "root"}}, accessfixture.Bundle{Key: role, Permissions: permissions, RecordScope: "all_records"})
+	}
+	for _, denied := range []principalmodel.Principal{{}, principal("staff", "reports.hq.read"), principal("admin", "reports.hq.read"), principal("superadmin")} {
+		if _, err := service.Summary(t.Context(), report.Key, denied); apperror.CodeOf(err) != "backend.report.not_found" {
+			t.Fatalf("principal=%#v err=%v", denied, err)
+		}
+	}
+	if _, err := service.Summary(t.Context(), report.Key, principal("superadmin", "reports.hq.read")); err != nil {
+		t.Fatal(err)
+	}
+	if executor.calls != 1 || !executor.request.CrossWorkspaceAggregate {
+		t.Fatalf("calls=%d request=%#v", executor.calls, executor.request)
+	}
 }
 
 func TestObjectSQLRejectsDeniedFieldsFromEverySQLClause(t *testing.T) {

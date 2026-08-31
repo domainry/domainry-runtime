@@ -43,7 +43,7 @@ type EngineProfile interface {
 	OrderedDecimalTextStorage() bool
 	RecordReadIsolation() sql.IsolationLevel
 	DatabaseCurrentTimeQuery() SchemaQuery
-	ReportDateBucket(string, string, bool) (string, error)
+	ReportDateBucket(string, string, string, bool) (string, error)
 }
 
 type Engine interface {
@@ -66,7 +66,7 @@ type RecordProfile interface {
 }
 
 type ReportProfile interface {
-	DateBucket(string, string, bool) (string, error)
+	DateBucket(string, string, string, bool) (string, error)
 }
 
 type MigrationProfile interface {

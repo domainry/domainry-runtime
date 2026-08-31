@@ -15,12 +15,12 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/query"
-	reportobjectsql "github.com/domainry/domainry-runtime/runtime/domain/report/query/objectsql"
 )
 
 type ReportQueryApplicationDependencies struct {
 	Domain    *reportservice.ReportDomainService
 	CursorKey []byte
+	Audit     ReportCrossWorkspaceExecutionAudit
 }
 
 func reportApplicationError(err error) error {
@@ -36,56 +36,11 @@ func reportWorkspaceError(err error) error {
 type ReportQueryApplicationService struct {
 	domain    *reportservice.ReportDomainService
 	cursorKey []byte
+	audit     ReportCrossWorkspaceExecutionAudit
 }
 
 func NewReportQueryApplicationService(dependencies ReportQueryApplicationDependencies) *ReportQueryApplicationService {
-	return &ReportQueryApplicationService{domain: dependencies.Domain, cursorKey: append([]byte(nil), dependencies.CursorKey...)}
-}
-
-func (s *ReportQueryApplicationService) Summary(ctx context.Context, reportKey string, principal principalmodel.Principal) (reportmodel.ReportSummary, error) {
-	return s.SummaryMode(ctx, reportKey, "realtime", principal)
-}
-
-func (s *ReportQueryApplicationService) SummaryMode(ctx context.Context, reportKey, mode string, principal principalmodel.Principal) (reportmodel.ReportSummary, error) {
-	if _, err := principalmodel.QueryScopeForPrincipal(principal); err != nil {
-		return reportmodel.ReportSummary{}, reportWorkspaceError(err)
-	}
-	return s.domain.SummaryMode(ctx, reportKey, mode, principal)
-}
-
-func (s *ReportQueryApplicationService) QueryObjectSQL(ctx context.Context, reportKey string, parameters map[string]any, principal principalmodel.Principal) (reportmodel.ReportSummary, error) {
-	if _, err := principalmodel.QueryScopeForPrincipal(principal); err != nil {
-		return reportmodel.ReportSummary{}, reportWorkspaceError(err)
-	}
-	return s.domain.QueryObjectSQL(ctx, reportKey, parameters, principal)
-}
-
-func (s *ReportQueryApplicationService) QueryObjectSQLPage(ctx context.Context, reportKey string, parameters map[string]any, page reportmodel.ReportPageRequest, principal principalmodel.Principal) (reportmodel.ReportSummary, error) {
-	if _, err := principalmodel.QueryScopeForPrincipal(principal); err != nil {
-		return reportmodel.ReportSummary{}, reportWorkspaceError(err)
-	}
-	report, err := s.domain.ReportForSummary(ctx, reportKey, principal)
-	if err != nil {
-		return reportmodel.ReportSummary{}, err
-	}
-	normalized, err := reportobjectsql.NormalizeParameters(report.ObjectSQLV1.Parameters, parameters)
-	if err != nil {
-		return reportmodel.ReportSummary{}, err
-	}
-	pageSize := page.PageSize
-	if pageSize == 0 {
-		pageSize = reportmodel.ReportPageDefaultSize
-	}
-	if pageSize < 1 || pageSize > reportmodel.ReportPageMaximumSize {
-		return reportmodel.ReportSummary{}, &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.report.page_size_invalid", Params: map[string]string{"maximum": fmt.Sprint(reportmodel.ReportPageMaximumSize)}}
-	}
-	fingerprint, err := reportPageFingerprint(report, map[string]any{"parameters": normalized}, principal)
-	if err != nil {
-		return reportmodel.ReportSummary{}, reportApplicationError(err)
-	}
-	return s.executeStableReportKeysetPage(ctx, report, fingerprint, page, pageSize, principal, func(cursor string, position, size int) (reportmodel.ReportSummary, error) {
-		return s.domain.QueryObjectSQLPage(ctx, reportKey, normalized, cursor, position, size, principal)
-	})
+	return &ReportQueryApplicationService{domain: dependencies.Domain, cursorKey: append([]byte(nil), dependencies.CursorKey...), audit: dependencies.Audit}
 }
 
 type reportPageCursor struct {
