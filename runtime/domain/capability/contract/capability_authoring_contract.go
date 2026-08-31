@@ -11,24 +11,23 @@ import (
 	"sort"
 
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
-	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
 )
 
 const (
 	RuntimeAuthoringContractVersion = "runtime-authoring-v1"
 	// RuntimeAuthoringContractHash identifies the published, canonical authoring catalog.
 	// The Application catalog test fails whenever catalog content changes without updating it.
-	RuntimeAuthoringContractHash = "d5b235b171f28720393e8b0759bc2b25264314d7ef0a770b41323de98327f9d9"
+	RuntimeAuthoringContractHash = "aeecaa7a0b08cdb709074668b0eada4fc924d12b13c5f14fabe41e4bb2c85c1e"
 )
 
 type CapabilityRuntimeAuthoringContract struct {
-	ContractVersion        string                      `json:"contract_version"`
-	SurfaceContractVersion string                      `json:"surface_contract_version"`
-	RuntimeVersion         string                      `json:"runtime_version"`
-	ContractHash           string                      `json:"contract_hash"`
-	InstanceHash           string                      `json:"instance_hash,omitempty"`
-	Domains                []CapabilityAuthoringDomain `json:"domains"`
-	Instance               CapabilityAuthoringInstance `json:"instance"`
+	ContractVersion         string                      `json:"contract_version"`
+	EndpointContractVersion string                      `json:"endpoint_contract_version"`
+	RuntimeVersion          string                      `json:"runtime_version"`
+	ContractHash            string                      `json:"contract_hash"`
+	InstanceHash            string                      `json:"instance_hash,omitempty"`
+	Domains                 []CapabilityAuthoringDomain `json:"domains"`
+	Instance                CapabilityAuthoringInstance `json:"instance"`
 }
 
 type CapabilityAuthoringDomain struct {
@@ -38,9 +37,6 @@ type CapabilityAuthoringDomain struct {
 
 type CapabilityAuthoringDefinition struct {
 	Key                                     string                                 `json:"key"`
-	Surface                                 surfacemodel.ProductSurface            `json:"surface"`
-	ActorAudiences                          []surfacemodel.ActorAudience           `json:"actor_audiences"`
-	ExposureClass                           surfacemodel.ExposureClass             `json:"exposure_class"`
 	Status                                  string                                 `json:"status"`
 	Lifecycle                               string                                 `json:"lifecycle"`
 	AllowedContexts                         []string                               `json:"allowed_contexts,omitempty"`

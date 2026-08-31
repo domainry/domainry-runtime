@@ -3,6 +3,7 @@ package service
 import (
 	"testing"
 
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -17,7 +18,7 @@ import (
 )
 
 func TestLocalizedSchemaOptionHelpersPreserveShapeAndInputs(t *testing.T) {
-	lookup := localizedTextLookup([]appschemamodel.LocalizedText{
+	lookup := localizedTextLookup([]metadatasdk.LocalizedText{
 		{EntityType: " field_option ", EntityKey: "order.status.ready", Property: "label", Text: "Ready localized"},
 		{EntityType: "field_option", EntityKey: "order.status.ready", Property: "description", Text: "Ready description"},
 		{EntityType: "field_option", EntityKey: "order.status.pending", Property: "label", Text: "Pending localized"},
@@ -59,7 +60,7 @@ func TestSnapshotVisibilityFiltersObjectsActionsReportsAndAgentRegistry(t *testi
 	role := accessfixture.Bundle{Key: "sales", Permissions: []string{
 		"customer.read", "customer.update", "customer.approve", "integration.tool.crm_sync", "report.read",
 	}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true, Write: true}}}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}, SurfaceKey: "workspace"}, role)
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, role)
 	snapshot := appschemamodel.ApplicationSchemaSnapshot{
 		Objects: []definitionmodel.ObjectSchema{
 			{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name"}, {Key: "secret"}}},
@@ -102,9 +103,9 @@ func TestSnapshotVisibilityFiltersObjectsActionsReportsAndAgentRegistry(t *testi
 			{Key: "disabled-task", AgentKey: "sales-agent", SideEffectMode: agentsdk.AgentTaskSideEffectAnalysisOnly},
 		},
 		AgentEntrypoints: []agentsdk.AgentEntrypointAssignment{
-			{Key: "sales", AgentKey: "sales-agent", Surface: "workspace", RequiredPermissions: []string{"customer.read"}, AllowedTaskKeys: []string{"customer-review", "invoice-review"}, AllowedWorkflowKeys: []string{"active", "disabled"}, Enabled: true},
-			{Key: "finance", AgentKey: "sales-agent", Surface: "workspace", RequiredPermissions: []string{"finance.read"}, Enabled: true},
-			{Key: "admin-surface", AgentKey: "sales-agent", Surface: "admin", RequiredPermissions: []string{"customer.read"}, Enabled: true},
+			{Key: "sales", AgentKey: "sales-agent", RequiredPermissions: []string{"customer.read"}, AllowedTaskKeys: []string{"customer-review", "invoice-review"}, AllowedWorkflowKeys: []string{"active", "disabled"}, Enabled: true},
+			{Key: "finance", AgentKey: "sales-agent", RequiredPermissions: []string{"finance.read"}, Enabled: true},
+			{Key: "admin", AgentKey: "sales-agent", RequiredPermissions: []string{"customer.read"}, Enabled: true},
 		},
 		AgentServicePrincipals:    []agentsdk.AgentServicePrincipalBinding{{Key: "agent-service", UserID: "service-user", RoleKey: "service"}},
 		Workflows:                 []definitionmodel.WorkflowSchema{{Key: "active", Enabled: true}, {Key: "disabled"}},
@@ -118,7 +119,7 @@ func TestSnapshotVisibilityFiltersObjectsActionsReportsAndAgentRegistry(t *testi
 		t.Fatalf("core visibility=%+v", filtered)
 	}
 	if len(filtered.Reports) != 3 || len(filtered.IdentityProfileExtensions) != 1 {
-		t.Fatalf("surface visibility reports=%v extensions=%v", filtered.Reports, filtered.IdentityProfileExtensions)
+		t.Fatalf("visibility reports=%v extensions=%v", filtered.Reports, filtered.IdentityProfileExtensions)
 	}
 	if len(filtered.Skills) != 3 || len(filtered.Agents) != 2 || len(filtered.Skills[0].AllowedTools) != 1 {
 		t.Fatalf("agent registry skills=%v agents=%v", filtered.Skills, filtered.Agents)
@@ -126,7 +127,8 @@ func TestSnapshotVisibilityFiltersObjectsActionsReportsAndAgentRegistry(t *testi
 	if len(filtered.AgentTasks) != 1 || filtered.AgentTasks[0].Key != "customer-review" || len(filtered.AgentTasks[0].AllowedObjects) != 1 || len(filtered.AgentTasks[0].AllowedActions) != 1 {
 		t.Fatalf("agent task visibility=%v", filtered.AgentTasks)
 	}
-	if len(filtered.AgentEntrypoints) != 1 || len(filtered.AgentEntrypoints[0].AllowedTaskKeys) != 1 || len(filtered.AgentEntrypoints[0].AllowedWorkflowKeys) != 1 || len(filtered.AgentServicePrincipals) != 0 {
+	if len(filtered.AgentEntrypoints) != 2 || filtered.AgentEntrypoints[0].Key != "sales" || filtered.AgentEntrypoints[1].Key != "admin" ||
+		len(filtered.AgentEntrypoints[0].AllowedTaskKeys) != 1 || len(filtered.AgentEntrypoints[0].AllowedWorkflowKeys) != 1 || len(filtered.AgentServicePrincipals) != 0 {
 		t.Fatalf("agent entrypoint visibility=%v service principals=%v", filtered.AgentEntrypoints, filtered.AgentServicePrincipals)
 	}
 	if got := SnapshotForPrincipal(snapshot, principalmodel.Principal{}); len(got.Objects) != len(snapshot.Objects) || len(got.AgentServicePrincipals) != 0 {

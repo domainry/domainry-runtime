@@ -57,7 +57,7 @@ func (p *providerAdapter) Call(ctx context.Context, request connector.CallReques
 	if err != nil {
 		return connector.CallResult{}, err
 	}
-	result, callErr := p.delegate.Call(ctx, integrationcontract.CallRequest{
+	result, callErr := p.delegate.Call(ctx, CallRequest{
 		ConnectorKey: request.ConnectorKey, Connection: fromConnection(request.Connection), Operation: operation.Key,
 		Method: p.operations[operation.Key].Method, Request: payload, RequestRef: request.RequestRef,
 		Headers: cloneStrings(request.Headers), Secrets: cloneStrings(request.Secrets), Delivery: request.Delivery,
@@ -97,8 +97,8 @@ func Provider(connectorKey, providerKey string, adapter Adapter, operations []co
 	if len(fallbackSchemas) > 0 {
 		providerSchema = fallbackSchemas[0]
 	}
-	if schemaProvider, ok := adapter.(integrationcontract.SchemaProvider); ok {
-		providerSchema = integrationprojection.IntegrationMergeConnectorProviderSchema(providerSchema, schemaProvider.ProviderSchema())
+	if schemaProvider, ok := adapter.(SchemaProvider); ok {
+		providerSchema = mergeProviderSchema(providerSchema, schemaProvider.ProviderSchema())
 	}
 	if len(providerSchema.OperationKeys) > 0 {
 		available := make(map[string]connectormodel.ConnectorOperationSchema, len(operations))
@@ -150,14 +150,14 @@ func Provider(connectorKey, providerKey string, adapter Adapter, operations []co
 		byKey[operation.Key] = operation
 	}
 	base := &providerAdapter{descriptor: descriptor, operations: byKey, delegate: adapter}
-	validator, hasValidator := adapter.(integrationcontract.ConfigValidator)
-	tester, hasTester := adapter.(integrationcontract.ConnectionTester)
-	verifier, hasVerifier := adapter.(integrationcontract.WebhookVerifier)
+	validator, hasValidator := adapter.(ConfigValidator)
+	tester, hasTester := adapter.(ConnectionTester)
+	verifier, hasVerifier := adapter.(WebhookVerifier)
 	validate := configValidator(func(connection connector.Connection) error {
 		return validator.ValidateConfig(fromConnection(connection))
 	})
 	test := connectionTester(func(ctx context.Context, request connector.TestConnectionRequest) (connector.TestConnectionResult, error) {
-		result, err := tester.TestConnection(ctx, integrationcontract.CallRequest{ConnectorKey: connectorKey, Connection: fromConnection(request.Connection), Operation: "test_connection", Secrets: cloneStrings(request.Secrets), Timeout: request.Timeout, Principal: fromPrincipal(request.Principal)})
+		result, err := tester.TestConnection(ctx, CallRequest{ConnectorKey: connectorKey, Connection: fromConnection(request.Connection), Operation: "test_connection", Secrets: cloneStrings(request.Secrets), Timeout: request.Timeout, Principal: fromPrincipal(request.Principal)})
 		if err != nil {
 			return connector.TestConnectionResult{}, err
 		}
@@ -169,7 +169,7 @@ func Provider(connectorKey, providerKey string, adapter Adapter, operations []co
 		return connector.TestConnectionResult{Connected: connected, Details: details, SecretUpdates: cloneStrings(result.SecretUpdates)}, err
 	})
 	verify := webhookVerifier(func(ctx context.Context, request connector.VerifyWebhookRequest) (connector.VerifiedWebhook, error) {
-		result, err := verifier.VerifyWebhook(ctx, integrationcontract.InboundWebhookRequest{Connection: fromConnection(request.Connection), Headers: firstValues(request.Headers), Query: firstValues(request.Query), HeaderValues: cloneMultiStrings(request.Headers), QueryValues: cloneMultiStrings(request.Query), Secrets: cloneStrings(request.Secrets), Body: append([]byte(nil), request.Body...), ReceivedAt: request.ReceivedAt})
+		result, err := verifier.VerifyWebhook(ctx, InboundWebhookRequest{Connection: fromConnection(request.Connection), Headers: firstValues(request.Headers), Query: firstValues(request.Query), HeaderValues: cloneMultiStrings(request.Headers), QueryValues: cloneMultiStrings(request.Query), Secrets: cloneStrings(request.Secrets), Body: append([]byte(nil), request.Body...), ReceivedAt: request.ReceivedAt})
 		if err != nil {
 			return connector.VerifiedWebhook{}, err
 		}
@@ -180,6 +180,22 @@ func Provider(connectorKey, providerKey string, adapter Adapter, operations []co
 		return connector.VerifiedWebhook{EventType: result.EventType, ExternalID: result.ExternalID, Payload: payload, Security: webhookSecurity(result.Security), Challenge: result.Challenge, ChallengeFormat: result.ChallengeFormat, ExternalIdentity: webhookIdentity(result.ExternalIdentity), DeliveryReceipt: webhookReceipt(result.DeliveryReceipt)}, nil
 	})
 	return combine(base, validate, test, verify, hasValidator, hasTester, hasVerifier)
+}
+
+func mergeProviderSchema(base, overlay ProviderSchema) ProviderSchema {
+	if strings.TrimSpace(overlay.ProviderRevision) == "" {
+		overlay.ProviderRevision = base.ProviderRevision
+	}
+	if len(overlay.ConfigFields) == 0 {
+		overlay.ConfigFields = append([]definitionmodel.FieldSchema(nil), base.ConfigFields...)
+	}
+	if len(overlay.SecretFields) == 0 {
+		overlay.SecretFields = append([]definitionmodel.FieldSchema(nil), base.SecretFields...)
+	}
+	if len(overlay.OperationKeys) == 0 {
+		overlay.OperationKeys = append([]string(nil), base.OperationKeys...)
+	}
+	return overlay
 }
 
 func configFields(fields []definitionmodel.FieldSchema) []connector.ConfigField {
@@ -291,7 +307,7 @@ func fromConnection(connection connector.Connection) integrationsdk.Connection {
 }
 
 func fromPrincipal(principal connector.Principal) principalmodel.Principal {
-	return principalmodel.Principal{Principal: identitysdk.Principal{UserID: principal.UserID, WorkspaceID: principal.WorkspaceID, DepartmentID: principal.DepartmentID, RoleKey: principal.RoleKey, Known: principal.IsAuthenticated}, RequestID: principal.RequestID, CorrelationID: principal.CorrelationID, CausationID: principal.CausationID, SurfaceKey: principal.SurfaceKey}
+	return principalmodel.Principal{Principal: identitysdk.Principal{UserID: principal.UserID, WorkspaceID: principal.WorkspaceID, DepartmentID: principal.DepartmentID, RoleKey: principal.RoleKey, Known: principal.IsAuthenticated}, RequestID: principal.RequestID, CorrelationID: principal.CorrelationID, CausationID: principal.CausationID}
 }
 
 func decodePayload(raw json.RawMessage) (map[string]any, error) {
@@ -394,21 +410,21 @@ func parseTime(value string) time.Time {
 	return parsed
 }
 
-func webhookSecurity(value *integrationcontract.WebhookSecurityEvidence) *connector.WebhookSecurityEvidence {
+func webhookSecurity(value *WebhookSecurityEvidence) *connector.WebhookSecurityEvidence {
 	if value == nil {
 		return nil
 	}
 	return &connector.WebhookSecurityEvidence{SignatureVerified: value.SignatureVerified, Nonce: value.Nonce, DeviceIdentity: value.DeviceIdentity, EventTime: parseTime(value.EventTime)}
 }
 
-func webhookIdentity(value *integrationcontract.WebhookExternalIdentity) *connector.WebhookExternalIdentity {
+func webhookIdentity(value *WebhookExternalIdentity) *connector.WebhookExternalIdentity {
 	if value == nil {
 		return nil
 	}
 	return &connector.WebhookExternalIdentity{Subject: value.Subject, SubjectType: value.SubjectType, Name: value.Name, Group: value.Group}
 }
 
-func webhookReceipt(value *integrationcontract.WebhookDeliveryReceipt) *connector.WebhookDeliveryReceipt {
+func webhookReceipt(value *WebhookDeliveryReceipt) *connector.WebhookDeliveryReceipt {
 	if value == nil {
 		return nil
 	}

@@ -112,13 +112,13 @@ func TestPlanUpdateMutationCoversDependencyAndScopeEdges(t *testing.T) {
 	}, nil, true).PlanUpdateMutation(t.Context(), object.Key, record.ID, nil, principal); !errors.Is(err, failure) {
 		t.Fatalf("object err=%v", err)
 	}
-	schedulerObject := object
-	schedulerObject.Key = "record_timer"
-	schedulerObject.Config = map[string]any{"record_timer_runtime": true}
+	timerObject := object
+	timerObject.Key = "record_timer"
+	timerObject.Config = map[string]any{"record_timer_runtime": true}
 	if _, _, err := newService(&updateRepositoryProbe{}, func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
-		return schedulerObject, nil
-	}, nil, true).PlanUpdateMutation(t.Context(), schedulerObject.Key, record.ID, nil, principal); apperror.CodeOf(err) != "backend.scheduler.runtime_api_required" {
-		t.Fatalf("scheduler err=%v", err)
+		return timerObject, nil
+	}, nil, true).PlanUpdateMutation(t.Context(), timerObject.Key, record.ID, nil, principal); apperror.CodeOf(err) != "backend.record_timer.runtime_api_required" {
+		t.Fatalf("record timer err=%v", err)
 	}
 	if _, _, err := newService(&updateRepositoryProbe{err: failure}, objectForAction, nil, true).PlanUpdateMutation(t.Context(), object.Key, record.ID, nil, principal); apperror.CodeOf(err) != "backend.internal" {
 		t.Fatalf("repository err=%v", err)

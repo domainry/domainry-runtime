@@ -4,9 +4,9 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
@@ -40,7 +40,6 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 		Key: "admin",
 		Permissions: []string{
 			"workspace.admin", "customer.read", "customer.update",
-			"job_definition.read", "job_run.read", "job_dead_letter.read",
 			"scheduler.definition.read", "ops.workflow.read", "workflow.process.read",
 			"integration.audit.view",
 		},
@@ -57,13 +56,6 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 		manifest.Integrations = connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{{Key: "crm", Providers: []connectormodel.ConnectorProviderSchema{{Key: "test"}}, Operations: []connectormodel.ConnectorOperationSchema{{Key: "sync", Method: "POST", ExecutionMode: "sync", SideEffect: "write", TimeoutDefaultSeconds: 10, TimeoutMaxSeconds: 30}}}}}
 		manifest.Reports = []reportmodel.ReportSchema{{Key: "customer.summary", Name: "Customer summary", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "customer", Alias: "customer"}}, RequiredPermissions: []string{"customer.read"}}}
 	})
-	adminAccess := accessfixture.FromPrincipal(admin)
-	adminAccess.DataPolicies = append(adminAccess.DataPolicies,
-		accessfixture.DataPolicyFixture{ObjectKey: "job_definition", Scope: "all_records", Read: true},
-		accessfixture.DataPolicyFixture{ObjectKey: "job_run", Scope: "all_records", Read: true},
-		accessfixture.DataPolicyFixture{ObjectKey: "job_dead_letter", Scope: "all_records", Read: true},
-	)
-	accessfixture.Set(&admin, adminAccess)
 	defer application.CloseContext(t.Context())
 	if _, err := publicationpersistence.NewPublicationStore(application.store).InsertOutbox(t.Context(), "workspace-primary", publicationmodel.Message{ID: "outbox-1", WorkspaceID: "workspace-primary", ConnectorKey: "crm", Operation: "sync", Status: "queued", CreatedBy: admin.UserID}); err != nil {
 		t.Fatal(err)
@@ -81,7 +73,7 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 		t.Fatalf("workflow impact=%#v", workflowImpact)
 	}
 	connectorImpact := changeplanprojection.ChangePlanReferenceImpact(graph, "connector_operation", "crm.sync")
-	if !referenceCompositionHasConsumer(connectorImpact.DirectConsumers, "outbox_message", "outbox-1", "delivers_operation") {
+	if !referenceCompositionHasConsumer(connectorImpact.DirectConsumers, "publication_handoff", "outbox-1", "delivers_operation") {
 		t.Fatalf("connector impact=%#v", connectorImpact)
 	}
 }

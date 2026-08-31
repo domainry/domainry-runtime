@@ -8,14 +8,13 @@ import (
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
 )
 
-// NotificationInboxActionResolver is the Runtime-owned cross-resource BFF
+// NotificationInboxActionResolver is the Runtime-owned cross-resource HTTP
 // seam. Notification owns Inbox state; Runtime authorizes the resolved target
 // against the current record, workflow, report, or other resource policy.
 type NotificationInboxActionResolver interface {
-	ResolveInboxAction(context.Context, string, string, notificationmodel.NotificationInboxQuery, surfacemodel.ProductSurface, principalmodel.Principal) (notificationmodel.NotificationInboxResolvedAction, error)
+	ResolveInboxAction(context.Context, string, string, notificationmodel.NotificationInboxQuery, string, principalmodel.Principal) (notificationmodel.NotificationInboxResolvedAction, error)
 }
 
 func (h *NotificationsHandler) resolveInboxAction(w http.ResponseWriter, r *http.Request) {
@@ -25,7 +24,7 @@ func (h *NotificationsHandler) resolveInboxAction(w http.ResponseWriter, r *http
 	}
 	value, err := h.actionResolver.ResolveInboxAction(
 		r.Context(), strings.TrimSpace(r.PathValue("notificationID")), strings.TrimSpace(r.PathValue("actionKey")),
-		notificationInboxActionQuery(r), notificationInboxActionSurface(r), h.principal(r),
+		notificationInboxActionQuery(r), notificationInboxActionChannel(r), h.principal(r),
 	)
 	if err != nil {
 		h.writeServiceError(w, r, err)
@@ -34,11 +33,11 @@ func (h *NotificationsHandler) resolveInboxAction(w http.ResponseWriter, r *http
 	h.writeJSON(w, http.StatusOK, value)
 }
 
-func notificationInboxActionSurface(r *http.Request) surfacemodel.ProductSurface {
+func notificationInboxActionChannel(r *http.Request) string {
 	if strings.HasPrefix(r.URL.Path, "/portal/") {
-		return surfacemodel.ProductSurfaceConsumerPortal
+		return "consumer_portal"
 	}
-	return surfacemodel.ProductSurfaceBusinessWorkspace
+	return "business_workspace"
 }
 
 func notificationInboxActionQuery(r *http.Request) notificationmodel.NotificationInboxQuery {

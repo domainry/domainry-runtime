@@ -7,34 +7,32 @@ import (
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	reportsdkpersistence "github.com/domainry/domainry-report-sdk/persistence"
-	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	notificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notification"
-	reportstore "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
 )
 
 type ReportSnapshotNotificationCommitter struct {
 	store         *database.RuntimeStore
-	reports       *reportstore.ModuleReportSnapshotStore
+	snapshots     reportsdkpersistence.SnapshotRepository
 	notifications notificationpersistence.InboxEventWriter
 	commitTx      func(*sql.Tx) error
 }
 
 func NewReportSnapshotNotificationCommitter(store *database.RuntimeStore, snapshots reportsdkpersistence.SnapshotRepository) ReportSnapshotNotificationCommitter {
 	return ReportSnapshotNotificationCommitter{
-		store: store, reports: reportstore.NewModuleReportSnapshotStore(snapshots), notifications: notificationpersistence.NewInboxEventWriter(store),
+		store: store, snapshots: snapshots, notifications: notificationpersistence.NewInboxEventWriter(store),
 	}
 }
 
-func (s ReportSnapshotNotificationCommitter) CompleteReportSnapshotWithNotification(ctx context.Context, request reportcontract.ReportSnapshotCompleteRequest, event notificationmodel.NotificationEvent) error {
+func (s ReportSnapshotNotificationCommitter) CompleteReportSnapshotWithNotification(ctx context.Context, request reportsdkpersistence.SnapshotCompleteRequest, event notificationmodel.NotificationEvent) error {
 	return s.commit(ctx, event, func(txCtx context.Context) error {
-		return s.reports.CompleteReportSnapshot(txCtx, request)
+		return s.snapshots.Complete(txCtx, request)
 	})
 }
 
-func (s ReportSnapshotNotificationCommitter) FailReportSnapshotWithNotification(ctx context.Context, request reportcontract.ReportSnapshotFailRequest, event notificationmodel.NotificationEvent) error {
+func (s ReportSnapshotNotificationCommitter) FailReportSnapshotWithNotification(ctx context.Context, request reportsdkpersistence.SnapshotFailRequest, event notificationmodel.NotificationEvent) error {
 	return s.commit(ctx, event, func(txCtx context.Context) error {
-		return s.reports.FailReportSnapshot(txCtx, request)
+		return s.snapshots.Fail(txCtx, request)
 	})
 }
 

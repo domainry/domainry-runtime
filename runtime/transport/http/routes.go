@@ -6,60 +6,36 @@ import (
 	"fmt"
 	"net/http"
 
+	healthplatform "github.com/domainry/domainry-foundation/health"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
+	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
-	healthplatform "github.com/domainry/domainry-runtime/runtime/platform/health"
 )
 
-const runtimeSurfaceRoutePolicySHA256 = surfacemodel.RoutePolicySHA256
+var runtimeEndpointContracts = endpointmodel.EndpointContracts
 
-var runtimeSurfaceRoutePolicies = surfacemodel.RoutePolicies
-var runtimeEndpointSurfaceContracts = surfacemodel.EndpointContracts
-
-func endpointContractSurfaces(contract surfacemodel.RuntimeEndpointContractV1) []surfacemodel.ProductSurface {
-	surfaces := make([]surfacemodel.ProductSurface, 0, len(contract.Projections))
-	for _, projection := range contract.Projections {
-		surfaces = append(surfaces, projection.Surface)
+func validateCompiledEndpointContracts() error {
+	if len(runtimeEndpointContracts) == 0 {
+		return fmt.Errorf("endpoint contract inventory is empty")
 	}
-	return surfaces
-}
-
-func surfaceInTargets(surface surfacemodel.ProductSurface, targets []surfacemodel.ProductSurface) bool {
-	for _, target := range targets {
-		if surface == target {
-			return true
-		}
-	}
-	return false
-}
-
-func validateCompiledEndpointSurfaceContracts() error {
-	if len(runtimeEndpointSurfaceContracts) != len(runtimeSurfaceRoutePolicies) {
-		return fmt.Errorf("endpoint contract count=%d route policy count=%d", len(runtimeEndpointSurfaceContracts), len(runtimeSurfaceRoutePolicies))
-	}
-	for route, contract := range runtimeEndpointSurfaceContracts {
+	for route, contract := range runtimeEndpointContracts {
 		if contract.EndpointIdentity != route {
 			return fmt.Errorf("endpoint contract %q identity=%q", route, contract.EndpointIdentity)
 		}
 		if err := contract.Validate(); err != nil {
 			return err
 		}
-		expected, exists := runtimeSurfaceRoutePolicies[route]
-		if !exists {
-			return fmt.Errorf("endpoint contract %q has no route policy", route)
-		}
-		actual := endpointContractSurfaces(contract)
-		if len(actual) != len(expected) {
-			return fmt.Errorf("endpoint contract %q Surface count=%d route policy count=%d", route, len(actual), len(expected))
-		}
-		for index := range actual {
-			if actual[index] != expected[index] {
-				return fmt.Errorf("endpoint contract %q Surface[%d]=%q route policy=%q", route, index, actual[index], expected[index])
-			}
-		}
 	}
 	return nil
+}
+
+func endpointVisibleOnListener(contract endpointmodel.RuntimeEndpointContractV1, exposure endpointmodel.ListenerExposure) bool {
+	for _, candidate := range contract.ListenerExposures {
+		if candidate == exposure {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *HTTPRouter) registerProbeRoutes(mux *http.ServeMux) {
@@ -92,6 +68,10 @@ func (s *HTTPRouter) health(w http.ResponseWriter, r *http.Request) {
 	principal := s.principalFromRequest(r)
 	if !healthAllowed(principal) {
 		writeError(w, r, http.StatusForbidden, "auth.permission_denied")
+		return
+	}
+	if s.runtimeStatus == nil {
+		writeError(w, r, http.StatusServiceUnavailable, "monitoring.health_unavailable")
 		return
 	}
 	payload := s.runtimeStatus.Health(r.Context())

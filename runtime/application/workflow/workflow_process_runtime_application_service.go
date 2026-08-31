@@ -2,13 +2,13 @@ package workflow
 
 import (
 	"context"
-	"encoding/json"
+	"crypto/sha256"
 	"fmt"
 	"strings"
 	"sync/atomic"
 	"time"
 
-	agentmodel "github.com/domainry/domainry-agent-sdk/state"
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -32,7 +32,7 @@ func (e *WorkflowProcessEngine) executeAgentTaskNode(ctx context.Context, proces
 	if e.runtime == nil {
 		return "", false, internalError("prepare Agent Task", fmt.Errorf("Agent Task dispatcher is required"))
 	}
-	if e.runtime.dependencies.PrepareAgentTask == nil {
+	if e.runtime.dependencies.StartAgentTask == nil {
 		return "", false, internalError("prepare Agent Task", fmt.Errorf("Agent Task dispatcher is required"))
 	}
 	stateStore, ok := e.runtime.dependencies.Decisions.(workflowcontract.WorkflowStateStore)
@@ -47,26 +47,26 @@ func (e *WorkflowProcessEngine) executeAgentTaskNode(ctx context.Context, proces
 	}
 	contract := *node.Contract.AgentTask
 	instance := e.newNodeInstance(ctx, process.WorkspaceID, process.ID, node, "waiting", workflowpolicy.WorkflowCloneMap(process.Variables), nil)
-	run, err := e.runtime.dependencies.PrepareAgentTask(ctx, WorkflowAgentTaskPreparation{
-		RunID: workflowProcessID(ctx, "agent_task"), WorkspaceID: process.WorkspaceID, ProcessID: process.ID, NodeInstanceID: instance.ID,
+	nodeInstanceID, runID := workflowAgentTaskCorrelation(process.ID, node.ID, instance.Iteration)
+	instance.ID = nodeInstanceID
+	input := renderWorkflowRecordData(ctx, contract.Input, process.Variables, principal)
+	instance.Input = workflowpolicy.WorkflowCloneMap(input)
+	instance.Input["agent_task_run_id"] = runID
+	result, err := e.runtime.dependencies.StartAgentTask(ctx, WorkflowAgentTaskPreparation{
+		RunID: runID, WorkspaceID: process.WorkspaceID, ProcessID: process.ID, NodeInstanceID: instance.ID,
 		NodeID: node.ID, Iteration: instance.Iteration, DefinitionVersionID: process.DefinitionVersionID, DefinitionSnapshotHash: process.DefinitionHash,
-		Contract: contract, Input: renderWorkflowRecordData(ctx, contract.Input, process.Variables, principal), Initiator: principal, CorrelationID: principal.CorrelationID,
+		Contract: contract, Input: input, Initiator: principal, CorrelationID: principal.CorrelationID,
 	})
 	if err != nil {
 		return "", false, err
 	}
-	payload, err := json.Marshal(run)
-	if err != nil {
-		return "", false, internalError("encode Agent Task", err)
+	if result.Status != agentsdk.ProviderRunAccepted && result.Status != agentsdk.ProviderRunRunning {
+		return "", false, internalError("start Agent Task", fmt.Errorf("Agent capability returned status %q", result.Status))
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	event := workflowmodel.WorkflowProcessEvent{WorkspaceID: process.WorkspaceID, ID: workflowProcessID(ctx, "event"), ProcessID: process.ID, NodeID: node.ID, Event: "agent_task_waiting", ActorID: valueOrDefault(principal.UserID, "system"), Summary: node.Name, Metadata: map[string]any{"task_run_id": run.ID, "task_key": run.TaskKey, "task_version": run.TaskVersion, "agent_key": run.Evidence.AgentKey, "identity_mode": run.Identity.Mode, "execution_user_id": run.Identity.Execution.UserID, "execution_role_key": run.Identity.Execution.RoleKey}, CreatedAt: now}
-	commit := transactionmodel.WorkflowAgentTaskCommit{WorkspaceID: run.WorkspaceID, RunID: run.ID, IdempotencyKey: run.IdempotencyKey, TaskKey: run.TaskKey, ProcessID: run.ProcessID, Status: string(run.Status), LeaseOwner: run.Lease.Owner, FencingToken: run.Lease.FencingToken, Payload: payload, CreatedAtMillis: run.CreatedAt.UnixMilli(), UpdatedAtMillis: run.UpdatedAt.UnixMilli()}
-	if err := stateStore.CommitWorkflowState(ctx, transactionmodel.WorkflowStateCommit{WorkspaceID: process.WorkspaceID, InsertNodes: []workflowmodel.WorkflowNodeInstance{instance}, InsertAgentTasks: []transactionmodel.WorkflowAgentTaskCommit{commit}, Events: []workflowmodel.WorkflowProcessEvent{event}}); err != nil {
+	event := workflowmodel.WorkflowProcessEvent{WorkspaceID: process.WorkspaceID, ID: workflowProcessID(ctx, "event"), ProcessID: process.ID, NodeID: node.ID, Event: "agent_task_waiting", ActorID: valueOrDefault(principal.UserID, "system"), Summary: node.Name, Metadata: map[string]any{"task_run_id": runID, "task_key": contract.TaskKey, "task_version": contract.TaskVersion, "agent_external_run_id": result.ExternalRunID}, CreatedAt: now}
+	if err := stateStore.CommitWorkflowState(ctx, transactionmodel.WorkflowStateCommit{WorkspaceID: process.WorkspaceID, InsertNodes: []workflowmodel.WorkflowNodeInstance{instance}, Events: []workflowmodel.WorkflowProcessEvent{event}}); err != nil {
 		return "", false, internalError("commit Agent Task", err)
-	}
-	if e.runtime.dependencies.WakeAgentTask != nil {
-		e.runtime.dependencies.WakeAgentTask(run.WorkspaceID, run.ID)
 	}
 	if strings.TrimSpace(contract.OutputVariable) != "" {
 		process.Variables["agent_task:"+node.ID+":output_variable"] = strings.TrimSpace(contract.OutputVariable)
@@ -74,125 +74,12 @@ func (e *WorkflowProcessEngine) executeAgentTaskNode(ctx context.Context, proces
 	return "waiting", true, nil
 }
 
-func (s *WorkflowApplicationService) CommitAgentTaskTerminal(ctx context.Context, run agentmodel.AgentTaskRun, leaseOwner string, fencingToken int64) error {
-	return s.commitAgentTaskTerminal(ctx, run, leaseOwner, fencingToken, "running")
+func workflowAgentTaskCorrelation(processID, nodeID string, iteration int) (string, string) {
+	seed := fmt.Sprintf("%s:%s:%d", strings.TrimSpace(processID), strings.TrimSpace(nodeID), iteration)
+	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(seed)))
+	return "agent_node_" + hash[:24], "agent_task_" + hash[:24]
 }
 
-func (s *WorkflowApplicationService) CommitAgentTaskApprovalTerminal(ctx context.Context, run agentmodel.AgentTaskRun) error {
-	return s.commitAgentTaskTerminal(ctx, run, "", 0, string(agentmodel.AgentTaskRunWaitingApproval))
-}
-
-func (s *WorkflowApplicationService) commitAgentTaskTerminal(ctx context.Context, run agentmodel.AgentTaskRun, leaseOwner string, fencingToken int64, expectedStatus string) error {
-	if s == nil {
-		return internalError("commit Agent Task terminal", fmt.Errorf("workflow process runtime is required"))
-	}
-	if s.processEngine == nil {
-		return internalError("commit Agent Task terminal", fmt.Errorf("workflow process runtime is required"))
-	}
-	if s.processRepo == nil {
-		return internalError("commit Agent Task terminal", fmt.Errorf("workflow process runtime is required"))
-	}
-	stateStore, ok := s.processEngine.runtime.dependencies.Decisions.(workflowcontract.WorkflowStateStore)
-	if !ok {
-		return internalError("commit Agent Task terminal", fmt.Errorf("workflow state store is required"))
-	}
-	if !run.Status.Terminal() {
-		return badRequest("backend.workflow.agent_task_terminal_invalid")
-	}
-	if strings.TrimSpace(run.ProcessID) == "" {
-		return badRequest("backend.workflow.agent_task_terminal_invalid")
-	}
-	if strings.TrimSpace(run.NodeInstanceID) == "" {
-		return badRequest("backend.workflow.agent_task_terminal_invalid")
-	}
-	process, found, err := s.processRepo.GetProcess(ctx, run.WorkspaceID, run.ProcessID)
-	if err != nil || !found {
-		return internalError("load Agent Task process", err)
-	}
-	nodes, err := s.processRepo.ListNodes(ctx, run.WorkspaceID, run.ProcessID)
-	if err != nil {
-		return internalError("load Agent Task node", err)
-	}
-	var instance *workflowmodel.WorkflowNodeInstance
-	for index := range nodes {
-		if nodes[index].ID != run.NodeInstanceID {
-			continue
-		}
-		if nodes[index].Status == "waiting" {
-			instance = &nodes[index]
-			break
-		}
-	}
-	if instance == nil {
-		return conflict("backend.workflow.agent_task_node_not_waiting")
-	}
-	node, found := workflowpolicy.WorkflowGraphNode(process.DefinitionSnapshot.Graph, instance.NodeID)
-	if !found {
-		return badRequest("backend.workflow.agent_task_contract_required", "node", instance.NodeID)
-	}
-	if node.Contract == nil {
-		return badRequest("backend.workflow.agent_task_contract_required", "node", instance.NodeID)
-	}
-	if node.Contract.AgentTask == nil {
-		return badRequest("backend.workflow.agent_task_contract_required", "node", instance.NodeID)
-	}
-	outcome := agentTaskWorkflowOutcome(run)
-	if !containsWorkflowString(node.Contract.AgentTask.AllowedOutcomes, outcome) {
-		return badRequest("backend.workflow.agent_task_outcome_invalid", "outcome", outcome)
-	}
-	now := time.Now().UTC()
-	instance.Status, instance.Output, instance.ErrorCode, instance.CompletedAt = outcome, workflowpolicy.WorkflowCloneMap(run.Output), run.LastErrorCode, now.Format(time.RFC3339Nano)
-	if outputVariable := strings.TrimSpace(node.Contract.AgentTask.OutputVariable); outputVariable != "" {
-		process.Variables[outputVariable] = workflowpolicy.WorkflowCloneMap(run.Output)
-	}
-	process.UpdatedAt = now.Format(time.RFC3339Nano)
-	next := s.processEngine.nextNodeIDs(process.DefinitionSnapshot.Graph, instance.NodeID, outcome)
-	resume := workflowmodel.WorkflowExecution{
-		WorkspaceID: run.WorkspaceID, ID: "agent_task_resume_" + run.ID, WorkflowKey: process.WorkflowKey, Name: process.WorkflowName,
-		Trigger: "agent_task_terminal", Status: "pending", ActionType: "workflow_graph", Action: workflowpolicy.WorkflowCloneMap(process.DefinitionSnapshot.Action),
-		Payload: workflowpolicy.WorkflowCloneMap(process.Variables), Result: map[string]any{
-			"resume_process_id": process.ID, "resume_node_ids": next, "resume_explicit": true,
-			"agent_task_run_id": run.ID, "agent_task_outcome": outcome,
-			"execution_user_id": run.Identity.Execution.UserID, "execution_role_key": run.Identity.Execution.RoleKey,
-		},
-		ProcessID: process.ID, NodeID: instance.NodeID, ObjectKey: process.ObjectKey, RecordID: process.RecordID, ActorID: run.Identity.Execution.UserID,
-		IdempotencyKey: "agent-task-resume:" + run.ID, MaxAttempts: workflowpolicy.WorkflowMaxAttempts(process.DefinitionSnapshot), Message: "workflow.message.agentTaskCompleted",
-		CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339),
-	}
-	payload, err := json.Marshal(run)
-	if err != nil {
-		return internalError("encode Agent Task terminal", err)
-	}
-	taskCommit := transactionmodel.WorkflowAgentTaskCommit{WorkspaceID: run.WorkspaceID, RunID: run.ID, Status: string(run.Status), ExpectedStatus: expectedStatus, LeaseOwner: strings.TrimSpace(leaseOwner), FencingToken: fencingToken, Payload: payload, UpdatedAtMillis: run.UpdatedAt.UnixMilli()}
-	event := workflowmodel.WorkflowProcessEvent{WorkspaceID: run.WorkspaceID, ID: workflowProcessID(ctx, "event"), ProcessID: process.ID, NodeID: instance.NodeID, Event: "agent_task_" + outcome, ActorID: valueOrDefault(run.Identity.Execution.UserID, "system"), Summary: "workflow.event.agentTask." + outcome, Metadata: map[string]any{"task_run_id": run.ID, "task_key": run.TaskKey, "task_version": run.TaskVersion, "agent_key": run.Evidence.AgentKey, "identity_mode": run.Identity.Mode, "execution_user_id": run.Identity.Execution.UserID, "execution_role_key": run.Identity.Execution.RoleKey, "attempt": run.Attempt, "outcome": outcome, "tool_invocation_refs": append([]string(nil), run.Evidence.ToolInvocationRefs...), "audit_refs": append([]string(nil), run.Evidence.AuditRefs...), "raw_evidence_ref": run.RawEvidenceRef}, CreatedAt: now.Format(time.RFC3339Nano)}
-	if err := stateStore.CommitWorkflowState(ctx, transactionmodel.WorkflowStateCommit{WorkspaceID: run.WorkspaceID, Process: &process, UpdateNodes: []workflowmodel.WorkflowNodeInstance{*instance}, UpdateAgentTasks: []transactionmodel.WorkflowAgentTaskCommit{taskCommit}, Events: []workflowmodel.WorkflowProcessEvent{event}, InsertExecutions: []workflowmodel.WorkflowExecution{resume}}); err != nil {
-		return err
-	}
-	s.wakeWorkflowExecution(resume)
-	return nil
-}
-
-func agentTaskWorkflowOutcome(run agentmodel.AgentTaskRun) string {
-	switch run.Status {
-	case agentmodel.AgentTaskRunCancelled, agentmodel.AgentTaskRunDeadLetter, agentmodel.AgentTaskRunFailed:
-		return "error"
-	}
-	if outcome := strings.TrimSpace(run.Outcome); outcome != "" {
-		return outcome
-	}
-	switch run.Status {
-	case agentmodel.AgentTaskRunSucceeded:
-		return "success"
-	case agentmodel.AgentTaskRunManualReview:
-		return "manual_review"
-	case agentmodel.AgentTaskRunRejected:
-		return "rejected"
-	case agentmodel.AgentTaskRunNoResult:
-		return "no_result"
-	default:
-		return "error"
-	}
-}
 func (e *WorkflowProcessEngine) executeActionNode(ctx context.Context, process *workflowmodel.WorkflowProcessInstance, node definitionmodel.WorkflowGraphNode, principal principalmodel.Principal) (map[string]any, error) {
 	contract := workflowpolicy.WorkflowBusinessActionNodeContract(node)
 	actionKey := strings.TrimSpace(contract.ActionKey)

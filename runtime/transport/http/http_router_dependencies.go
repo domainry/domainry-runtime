@@ -7,15 +7,14 @@ import (
 	"strings"
 	"time"
 
+	capacityplatform "github.com/domainry/domainry-foundation/capacity"
+	"github.com/domainry/domainry-foundation/ratelimit"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	businesseventcontract "github.com/domainry/domainry-runtime/runtime/domain/businessevent/contract"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
-	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
-	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	agentdialoghttp "github.com/domainry/domainry-runtime/runtime/transport/http/agentdialog"
 	appschemahttp "github.com/domainry/domainry-runtime/runtime/transport/http/appschema"
 	automationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/automation"
 	businesseventhttp "github.com/domainry/domainry-runtime/runtime/transport/http/businessevents"
@@ -29,9 +28,7 @@ import (
 	operationshttp "github.com/domainry/domainry-runtime/runtime/transport/http/operations"
 	publicationhandoffhttp "github.com/domainry/domainry-runtime/runtime/transport/http/publicationhandoff"
 	recordhttp "github.com/domainry/domainry-runtime/runtime/transport/http/records"
-	reporthttp "github.com/domainry/domainry-runtime/runtime/transport/http/reports"
 	schedulerhttp "github.com/domainry/domainry-runtime/runtime/transport/http/scheduler"
-	surfacecontexthttp "github.com/domainry/domainry-runtime/runtime/transport/http/surfacecontext"
 	uploadhttp "github.com/domainry/domainry-runtime/runtime/transport/http/uploads"
 	workflowhttp "github.com/domainry/domainry-runtime/runtime/transport/http/workflows"
 	workspaceprovisionhttp "github.com/domainry/domainry-runtime/runtime/transport/http/workspaceprovision"
@@ -71,7 +68,7 @@ type HTTPRouterConfig struct {
 	MaxJSONBodyBytes                  int64
 	CapacityLimits                    capacityplatform.Limits
 	RequestTimeout                    time.Duration
-	SurfaceGroupPolicies              map[SurfaceRouteGroup]SurfaceRouteGroupPolicy
+	ListenerGroupPolicies             map[ListenerRouteGroup]ListenerRouteGroupPolicy
 	BusinessEventReplayLimit          int
 	BusinessEventSubscriberBuffer     int
 	BusinessEventGlobalConnections    int
@@ -81,7 +78,7 @@ type HTTPRouterConfig struct {
 	BusinessEventRetryInterval        time.Duration
 }
 
-type SurfaceRouteGroupPolicy struct {
+type ListenerRouteGroupPolicy struct {
 	MaxJSONBodyBytes   int64
 	RequestTimeout     time.Duration
 	RateLimitPerMinute int
@@ -116,7 +113,7 @@ type IntegrationAuthenticationPrincipalProvider interface {
 }
 
 type BusinessPrincipalResolver interface {
-	ResolveBusinessPrincipal(context.Context, principalmodel.Principal, string, string, string) (principalmodel.Principal, error)
+	ResolveBusinessPrincipal(context.Context, principalmodel.Principal, string, string) (principalmodel.Principal, error)
 }
 
 type SecurityAuditAppender interface {
@@ -150,21 +147,18 @@ type HTTPRouterDependencies struct {
 
 type HTTPRouterHandlers struct {
 	Records            *recordhttp.RecordsHandler
-	SurfaceContext     *surfacecontexthttp.SurfaceContextHandler
 	Uploads            *uploadhttp.UploadsHandler
 	Discovery          *discoveryhttp.DiscoveryHandler
 	OpenAPI            *openapihttp.OpenAPIHandler
 	Workflows          *workflowhttp.WorkflowsHandler
 	Automation         *automationhttp.AutomationHandler
 	Scheduler          *schedulerhttp.SchedulerHandler
-	Reports            *reporthttp.ReportsHandler
 	BusinessReferences *businessreferencehttp.BusinessReferencesHandler
 	PublicationHandoff *publicationhandoffhttp.Handler
 	BusinessSystem     *businesssystemhttp.BusinessSystemHandler
 	Capabilities       *capabilityhttp.CapabilitiesHandler
 	ApplicationSchema  *appschemahttp.ApplicationSchemaHandler
 	Notifications      *notificationhttp.NotificationsHandler
-	AgentDialog        *agentdialoghttp.AgentDialogHandler
 	Operations         *operationshttp.OperationsHandler
 	Lifecycle          *lifecyclehttp.LifecycleHandler
 	BusinessEvents     *businesseventhttp.BusinessEventsHandler

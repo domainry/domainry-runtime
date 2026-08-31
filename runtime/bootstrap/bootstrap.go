@@ -94,8 +94,8 @@ func StartWorkers(ctx context.Context, runtime *Runtime) {
 	runtimebootstrap.StartWorkers(ctx, runtime)
 }
 
-func RoutesForSurfaceGroup(runtime *Runtime, group runtimehttp.SurfaceRouteGroup) http.Handler {
-	return runtimebootstrap.RoutesForSurfaceGroup(runtime, group)
+func RoutesForListenerGroup(runtime *Runtime, group runtimehttp.ListenerRouteGroup) http.Handler {
+	return runtimebootstrap.RoutesForListenerGroup(runtime, group)
 }
 
 func AssembleHTTPServer(ctx context.Context, records *composition.RuntimeServices, identity identitysdk.Binding, uploadDir string, corsAllowedOrigins []string, allowDevAuthHeaders bool) *runtimehttp.HTTPRouter {

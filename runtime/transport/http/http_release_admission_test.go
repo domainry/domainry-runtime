@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	healthplatform "github.com/domainry/domainry-runtime/runtime/platform/health"
 )
 
 type runtimeReleaseIntegrityStub struct {
@@ -50,7 +48,7 @@ func TestRuntimeReleaseIntegrityFactsAreIndependentCriticalReadinessChecks(t *te
 	for checkName, integrity := range cases {
 		t.Run(checkName, func(t *testing.T) {
 			router := &HTTPRouter{
-				healthRegistry: healthplatform.NewRegistry(), healthCheckTimeout: 50 * time.Millisecond,
+				healthRegistry: newRuntimeHealthRegistry(), healthCheckTimeout: 50 * time.Millisecond,
 				runtimeStatus: routerRuntimeStatusStub{}, runtimeReleaseIntegrity: integrity,
 			}
 			router.MarkStartupComplete()
@@ -65,7 +63,7 @@ func TestRuntimeReleaseIntegrityFactsAreIndependentCriticalReadinessChecks(t *te
 
 func TestRuntimeReleaseAdmissionIsCriticalReadinessCheck(t *testing.T) {
 	router := &HTTPRouter{
-		healthRegistry: healthplatform.NewRegistry(), healthCheckTimeout: 50 * time.Millisecond,
+		healthRegistry: newRuntimeHealthRegistry(), healthCheckTimeout: 50 * time.Millisecond,
 		runtimeStatus: routerRuntimeStatusStub{}, runtimeReleaseAdmission: func() error { return errors.New("cohort lease lost") },
 	}
 	router.MarkStartupComplete()

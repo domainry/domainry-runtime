@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
@@ -43,7 +45,7 @@ func addIntegrationOwnerValidationCatalog(ctx context.Context, manifest manifest
 
 func replaceIntegrationConnectorValidationProjection(manifest manifestmodel.ManifestSchema, validationCatalog []connectormodel.ConnectorSchema, catalogErr error) (manifestmodel.ManifestSchema, error) {
 	if catalogErr != nil {
-		return manifestmodel.ManifestSchema{}, fmt.Errorf("load Runtime Connector validation catalog: %w", catalogErr)
+		return manifestmodel.ManifestSchema{}, fmt.Errorf("load Integration Connector validation projection: %w", catalogErr)
 	}
 	manifest.Integrations.Connectors = append([]connectormodel.ConnectorSchema(nil), validationCatalog...)
 	return manifest, nil

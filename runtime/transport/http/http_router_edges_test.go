@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	healthplatform "github.com/domainry/domainry-runtime/runtime/platform/health"
 	localization "github.com/domainry/domainry-runtime/runtime/platform/localization"
 )
 
@@ -162,7 +161,7 @@ func TestFallbackAndRootEndpointResponses(t *testing.T) {
 		t.Fatalf("fallback status=%d", response.Code)
 	}
 
-	router.healthRegistry = healthplatform.NewRegistry()
+	router.healthRegistry = newRuntimeHealthRegistry()
 	router.SetMaintenance(true)
 	if !router.healthRegistry.Maintenance() {
 		t.Fatal("maintenance state was not set")

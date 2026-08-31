@@ -5,9 +5,8 @@ import (
 	"strings"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
-	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	apperror "github.com/domainry/domainry-foundation/apperror"
-	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
+	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agenthost"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -25,28 +24,6 @@ func (a runtimeAgentRecordVisibility) CanReadAgentRecord(ctx context.Context, ob
 		return false, nil
 	}
 	return a.records.recordApplicationService.RecordScopeAllows(ctx, objectKey, recordID, principal)
-}
-
-type runtimeAgentTaskTerminalCommitter struct{ records *runtimeAssembly }
-
-func (a runtimeAgentTaskTerminalCommitter) CommitAgentTaskTerminal(ctx context.Context, run agentmodel.AgentTaskRun, owner string, token int64) error {
-	if a.records == nil {
-		return apperror.New(apperror.KindUnavailable, "agent.task.terminal_committer_unavailable", nil, nil)
-	}
-	if a.records.workflowApplicationService == nil {
-		return apperror.New(apperror.KindUnavailable, "agent.task.terminal_committer_unavailable", nil, nil)
-	}
-	return a.records.workflowApplicationService.CommitAgentTaskTerminal(ctx, run, owner, token)
-}
-
-func (a runtimeAgentTaskTerminalCommitter) CommitAgentTaskApprovalTerminal(ctx context.Context, run agentmodel.AgentTaskRun) error {
-	if a.records == nil {
-		return apperror.New(apperror.KindUnavailable, "agent.task.workflow_unavailable", nil, nil)
-	}
-	if a.records.workflowApplicationService == nil {
-		return apperror.New(apperror.KindUnavailable, "agent.task.workflow_unavailable", nil, nil)
-	}
-	return a.records.workflowApplicationService.CommitAgentTaskApprovalTerminal(ctx, run)
 }
 
 func workflowDependencies(records *runtimeAssembly) workflowapplication.WorkflowDependencies {
@@ -75,13 +52,13 @@ func workflowDependencies(records *runtimeAssembly) workflowapplication.Workflow
 		Workers:                records.workflowWorkerRepo,
 		Decisions:              records.workflowDecisionRepo,
 		WorkflowRegistry:       runtimeWorkflowRegistry{records: records},
-		TimerScheduler:         runtimeWorkflowScheduler{recordTimers: records.recordTimerService},
-		ApprovalTimers:         runtimeWorkflowScheduler{recordTimers: records.recordTimerService},
+		WaitTimers:             runtimeWorkflowRecordTimers{recordTimers: records.recordTimerService},
+		ApprovalDeadlineTimers: runtimeWorkflowRecordTimers{recordTimers: records.recordTimerService},
 		CompileNotification:    records.workflowNotificationCompiler,
 		TaskNotificationCommit: records.workflowTaskNotificationCommitter,
-		PrepareAgentTask: func(ctx context.Context, preparation workflowapplication.WorkflowAgentTaskPreparation) (agentmodel.AgentTaskRun, error) {
-			if records.agentTaskDispatchService == nil {
-				return agentmodel.AgentTaskRun{}, apperror.New(apperror.KindUnavailable, "agent.task.dispatch_unavailable", nil, nil)
+		StartAgentTask: func(ctx context.Context, preparation workflowapplication.WorkflowAgentTaskPreparation) (agentsdk.TaskResult, error) {
+			if records.agentTaskDispatchService == nil || records.agentTaskRunner == nil {
+				return agentsdk.TaskResult{}, apperror.New(apperror.KindUnavailable, "agent.task.dispatch_unavailable", nil, nil)
 			}
 			maxAttempts := 1
 			if preparation.Contract.Retry != nil {
@@ -89,7 +66,7 @@ func workflowDependencies(records *runtimeAssembly) workflowapplication.Workflow
 					maxAttempts = preparation.Contract.Retry.MaxAttempts
 				}
 			}
-			return records.agentTaskDispatchService.Prepare(ctx, agentapplication.AgentTaskDispatchRequest{
+			command, err := records.agentTaskDispatchService.PrepareRequest(ctx, agentapplication.AgentTaskDispatchRequest{
 				RunID: preparation.RunID, WorkspaceID: preparation.WorkspaceID, ProcessID: preparation.ProcessID, NodeInstanceID: preparation.NodeInstanceID,
 				NodeID: preparation.NodeID, Iteration: preparation.Iteration, DefinitionSnapshotHash: preparation.DefinitionSnapshotHash, ManifestHash: preparation.ManifestHash,
 				TaskKey: preparation.Contract.TaskKey, TaskVersion: preparation.Contract.TaskVersion,
@@ -97,11 +74,10 @@ func workflowDependencies(records *runtimeAssembly) workflowapplication.Workflow
 				AllowedObjects: preparation.Contract.AllowedObjects, AllowedActions: preparation.Contract.AllowedActions, AllowedOutcomes: preparation.Contract.AllowedOutcomes,
 				TimeoutSeconds: preparation.Contract.TimeoutSeconds, MaxAttempts: maxAttempts, Initiator: preparation.Initiator, CorrelationID: preparation.CorrelationID,
 			})
-		},
-		WakeAgentTask: func(workspaceID, runID string) {
-			if records.agentTaskWorker != nil {
-				records.agentTaskWorker.Wake(agentapplication.AgentTaskLocator{WorkspaceID: workspaceID, RunID: runID})
+			if err != nil {
+				return agentsdk.TaskResult{}, err
 			}
+			return records.agentTaskRunner.Start(ctx, command)
 		},
 		WakeWorkflowContinuation: func(workspaceID, executionID string) {
 			workflowapplication.WakeWorkflowContinuation(records.workflowApplicationService, workflowapplication.WorkflowContinuationLocator{WorkspaceID: workspaceID, ExecutionID: executionID})

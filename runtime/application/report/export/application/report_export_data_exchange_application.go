@@ -12,54 +12,37 @@ import (
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
+	reportcontract "github.com/domainry/domainry-report/contract"
+	reportadapter "github.com/domainry/domainry-runtime/runtime/application/report/adapter"
 	reportexport "github.com/domainry/domainry-runtime/runtime/application/report/export"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/query"
 )
 
 const reportExportFingerprintDomain = "report_export"
 const reportExportProbeRowLimit = 1000
 
-type ReportExportPreparation struct {
-	Job reportexport.ExchangeJob
-}
-
-func (s *ReportExportApplicationService) PrepareExportRouted(ctx context.Context, reportKey, objectKey, auditID, idempotencyKey string, scope reportmodel.ReportExportScopeRequest, principal principalmodel.Principal) (ReportExportPreparation, error) {
-	payload, err := s.prepareReportExportPayload(ctx, reportKey, objectKey, auditID, idempotencyKey, scope, principal)
-	if err != nil {
-		return ReportExportPreparation{}, err
-	}
-	job, err := s.prepareExportJobFromPayload(ctx, payload, reportExportRequestFingerprint(payload), principal)
-	return ReportExportPreparation{Job: job}, err
-}
-
-// PrepareExportJobScoped freezes the governed request after the bounded
-// preflight and submits every export to Data Exchange. The provider never owns
-// a second export-only query definition.
-func (s *ReportExportApplicationService) PrepareExportJobScoped(ctx context.Context, reportKey, objectKey, auditID, idempotencyKey string, scope reportmodel.ReportExportScopeRequest, principal principalmodel.Principal) (reportexport.ExchangeJob, error) {
-	payload, err := s.prepareReportExportPayload(ctx, reportKey, objectKey, auditID, idempotencyKey, scope, principal)
+// PrepareResolvedExport receives the Report owner's persisted definition
+// and export control. Runtime contributes only cross-owner audit/record/Data
+// Exchange integration and must not reselect them from its schema projection.
+func (s *ReportExportApplicationService) PrepareResolvedExport(ctx context.Context, request reportmodel.ReportExportPrepareRequest, report reportmodel.ReportSchema, control reportmodel.ReportExportControlSchema, principal principalmodel.Principal) (reportexport.ExchangeJob, error) {
+	payload, err := s.prepareReportExportPayloadResolved(ctx, report, control, request.ObjectKey, request.AuditID, request.IdempotencyKey, request.Scope, principal)
 	if err != nil {
 		return reportexport.ExchangeJob{}, err
 	}
 	return s.prepareExportJobFromPayload(ctx, payload, reportExportRequestFingerprint(payload), principal)
 }
 
-func (s *ReportExportApplicationService) prepareReportExportPayload(ctx context.Context, reportKey, objectKey, auditID, idempotencyKey string, scope reportmodel.ReportExportScopeRequest, principal principalmodel.Principal) (reportexport.ExportPayload, error) {
+func (s *ReportExportApplicationService) prepareReportExportPayloadResolved(ctx context.Context, report reportmodel.ReportSchema, control reportmodel.ReportExportControlSchema, objectKey, auditID, idempotencyKey string, scope reportmodel.ReportExportScopeRequest, principal principalmodel.Principal) (reportexport.ExportPayload, error) {
 	if _, err := principalmodel.CommandScopeForPrincipal(principal); err != nil {
 		return reportexport.ExportPayload{}, reportWorkspaceError(err)
 	}
-	if s == nil || s.domain == nil || s.exportRecords == nil {
+	if s == nil || s.reportExports == nil || s.exportRecords == nil {
 		return reportexport.ExportPayload{}, reportApplicationError(nil)
 	}
 	if strings.TrimSpace(idempotencyKey) == "" {
 		return reportexport.ExportPayload{}, &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.idempotency.key_required"}
 	}
-	report, err := s.domain.ReportForExport(ctx, reportKey, objectKey, principal)
-	if err != nil {
-		return reportexport.ExportPayload{}, err
-	}
-	control, ok := s.exportControl(ctx, report.Key, objectKey, principal)
-	if !ok {
+	if strings.TrimSpace(report.Key) == "" || strings.TrimSpace(control.ReportKey) != strings.TrimSpace(report.Key) || !reportExportControlIncludesObject(control, objectKey) {
 		return reportexport.ExportPayload{}, &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.report.export_control_not_found"}
 	}
 	auditID = strings.TrimSpace(auditID)
@@ -74,34 +57,35 @@ func (s *ReportExportApplicationService) prepareReportExportPayload(ctx context.
 	if strings.TrimSpace(fmt.Sprint(auditRecord.Data[mapping.AuditRequesterField])) != strings.TrimSpace(principal.UserID) {
 		return reportexport.ExportPayload{}, &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.report.export_requester_mismatch"}
 	}
-	if !reportExportStatusAllowed(strings.TrimSpace(fmt.Sprint(auditRecord.Data[mapping.AuditStatusField])), mapping.AuditPreparedStatuses) {
+	if !reportexport.StatusAllowed(strings.TrimSpace(fmt.Sprint(auditRecord.Data[mapping.AuditStatusField])), mapping.AuditPreparedStatuses) {
 		return reportexport.ExportPayload{}, &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.report.export_audit_status_invalid"}
 	}
-	normalizedScope, scopedReport, maskedDimensions, err := reportexport.NormalizeScope(report, objectKey, control, scope, principal)
+	executionRequest := reportmodel.ReportExportExecutionRequest{ReportKey: report.Key, ObjectKey: objectKey, Scope: scope}
+	resolved, err := s.resolveReportExportExecution(ctx, executionRequest, principal)
 	if err != nil {
 		return reportexport.ExportPayload{}, err
 	}
-	if _, err = reportexport.ValidateFieldAccess(ctx, s.domain, scopedReport, control, principal); err != nil {
-		return reportexport.ExportPayload{}, err
-	}
-	reportHash, _ := reportexport.CanonicalJSONSHA256(report)
+	report, control = resolved.Definition.Report, resolved.Definition.Control
+	normalizedScope, maskedDimensions := resolved.Scope, resolved.MaskedDimensions
+	executionRequest.ReportKey, executionRequest.Scope = report.Key, normalizedScope
+	reportHash, _ := reportcontract.CanonicalReportJSONSHA256(report)
 	sourceHash := reportHash
 	if report.ObjectSQLV1 != nil {
-		sourceHash, _ = reportexport.CanonicalJSONSHA256(report.ObjectSQLV1)
+		sourceHash, _ = reportcontract.CanonicalReportJSONSHA256(report.ObjectSQLV1)
 	}
-	authHash, err := reportservice.ReportAccessScopeHash(principal)
+	authHash, err := reportadapter.ReportAccessScopeHash(principal)
 	if err != nil {
 		return reportexport.ExportPayload{}, err
 	}
-	controlHash, err := reportexport.CanonicalJSONSHA256(control)
+	controlHash, err := reportcontract.CanonicalReportJSONSHA256(control)
 	if err != nil {
 		return reportexport.ExportPayload{}, err
 	}
-	rows, sourceVersion, exactTotal, err := s.probeReportExport(ctx, report, scopedReport, normalizedScope, control.MaxRows, principal)
+	rows, sourceVersion, exactTotal, err := s.probeReportExport(ctx, executionRequest, control.MaxRows, principal)
 	if err != nil {
 		return reportexport.ExportPayload{}, err
 	}
-	sourceVersionHash, err := reportexport.CanonicalJSONSHA256(sourceVersion)
+	sourceVersionHash, err := reportcontract.CanonicalReportJSONSHA256(sourceVersion)
 	if err != nil {
 		return reportexport.ExportPayload{}, err
 	}
@@ -115,13 +99,23 @@ func (s *ReportExportApplicationService) prepareReportExportPayload(ctx context.
 		if encodeErr != nil {
 			return reportexport.ExportPayload{}, encodeErr
 		}
-		csvHash = reportexport.SHA256Hex(csvContent)
+		csvHash = reportcontract.ReportSHA256Hex(csvContent)
 	}
 	return reportexport.ExportPayload{WorkspaceID: strings.TrimSpace(principal.WorkspaceID), RequesterUserID: strings.TrimSpace(principal.UserID), ReportKey: report.Key, ObjectKey: strings.TrimSpace(objectKey), AuditID: auditID, Scope: normalizedScope, ReportDefinitionSHA256: reportHash, ReportSourceSHA256: sourceHash, AuthorizationScopeSHA256: authHash, ControlDefinitionSHA256: controlHash, SourceVersion: sourceVersion, SourceVersionSHA256: sourceVersionHash, ResultSHA256: resultHash, CSVContentSHA256: csvHash, ExactTotal: exactTotal, MaxRows: control.MaxRows, Format: "csv"}, nil
 }
 
+func reportExportControlIncludesObject(control reportmodel.ReportExportControlSchema, objectKey string) bool {
+	objectKey = strings.TrimSpace(objectKey)
+	for _, source := range control.SourceObjects {
+		if strings.TrimSpace(source) == objectKey && objectKey != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func reportExportResultHash(rows []reportmodel.ReportResultRow) (string, error) {
-	return reportexport.CanonicalJSONSHA256(map[string]any{
+	return reportcontract.CanonicalReportJSONSHA256(map[string]any{
 		"rows": rows, "analyses": []reportmodel.ReportAnalysisResult(nil), "source_row_count": -1, "snapshot": nil,
 	})
 }
@@ -191,26 +185,4 @@ func (s *ReportExportApplicationService) reusableReportExportExchangeJob(job rep
 	default:
 		return false
 	}
-}
-
-func (s *ReportExportApplicationService) GetExportJob(ctx context.Context, jobID string, principal principalmodel.Principal) (reportexport.ExchangeJob, error) {
-	if s == nil || s.dataExchange == nil || s.dataExchangeProvider == nil {
-		return reportexport.ExchangeJob{}, reportApplicationError(nil)
-	}
-	job, err := s.dataExchange.Job(ctx, dataexchange.JobRequest{Scope: reportexport.Scope(principal), JobID: strings.TrimSpace(jobID)})
-	if err != nil {
-		return reportexport.ExchangeJob{}, err
-	}
-	return s.dataExchangeProvider.ProjectJob(ctx, job, principal)
-}
-
-func (s *ReportExportApplicationService) CancelExportJob(ctx context.Context, jobID string, principal principalmodel.Principal) (reportexport.ExchangeJob, error) {
-	if s == nil || s.dataExchange == nil || s.dataExchangeProvider == nil {
-		return reportexport.ExchangeJob{}, reportApplicationError(nil)
-	}
-	job, err := s.dataExchange.Cancel(ctx, dataexchange.JobRequest{Scope: reportexport.Scope(principal), JobID: strings.TrimSpace(jobID)})
-	if err != nil {
-		return reportexport.ExchangeJob{}, err
-	}
-	return s.dataExchangeProvider.ProjectJob(ctx, job, principal)
 }

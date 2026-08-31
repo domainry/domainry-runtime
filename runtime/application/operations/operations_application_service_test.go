@@ -128,7 +128,7 @@ func TestOperationsSubmitRejectsUnregisteredOrMismatchedDefinitions(t *testing.T
 	if _, _, err := service.Submit(t.Context(), OperationsSubmitRequest{Kind: "arbitrary.sql", Permission: "workspace.admin", ResourceType: "database", Reason: "unsafe"}, "key", principal); apperror.CodeOf(err) != "backend.operations.kind_not_registered" {
 		t.Fatalf("unregistered error=%v", err)
 	}
-	if _, _, err := service.Submit(t.Context(), OperationsSubmitRequest{Kind: "backup.restore", Permission: "workspace.admin", ResourceType: "job_run", Reason: "mismatch"}, "key", principal); apperror.CodeOf(err) != "backend.operations.definition_mismatch" {
+	if _, _, err := service.Submit(t.Context(), OperationsSubmitRequest{Kind: "backup.restore", Permission: "workspace.admin", ResourceType: "scheduler_run", Reason: "mismatch"}, "key", principal); apperror.CodeOf(err) != "backend.operations.definition_mismatch" {
 		t.Fatalf("mismatch error=%v", err)
 	}
 }

@@ -16,7 +16,8 @@ CSV 编解码合同唯一归 `domainry-data-exchange-sdk`；job、chunk、artifa
 - Host：`runtime/bootstrap/runtime/data_exchange_module_host.go`
 - SDK：`domainry-data-exchange-sdk/sdk.go`、`modulehost`、`saashost`
 - Module/Remote：`domainry-data-exchange/module`、`domainry-data-exchange/remote`
-- Application/worker engine：`domainry-data-exchange/internal/application/exchange`（仅由公共 `module.Factory` 组装）
+- Application/worker engine：`domainry-data-exchange/internal/application/dataexchange`（仅由内部 assembly 组装）
+- Job HTTP：Data Exchange Binding 通过 Foundation `modulehttp.Provider` 暴露 `/data-exchange/jobs/{jobID}` 的查询、取消与下载；Runtime 只校验并挂载 Surface
 
 ## 变更约束
 

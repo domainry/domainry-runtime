@@ -7,7 +7,7 @@ import (
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
+	"github.com/domainry/domainry-foundation/ratelimit"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 )
 
@@ -24,7 +24,6 @@ func AssembleHTTPServer(ctx context.Context, records *composition.RuntimeService
 			UploadDir: uploadDir, CORSAllowedOrigins: append([]string(nil), corsAllowedOrigins...),
 			RuntimeAllowDevIdentityHeaders: allowDevAuthHeaders,
 			IdentityWorkspaceID:            principalmodel.InstallationWorkspaceID, IdentityAudience: "domainry-runtime",
-			AgentDialogRateLimitPerMinute: 60,
 		},
 	})
 }

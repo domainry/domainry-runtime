@@ -39,10 +39,10 @@ func TestCapabilityDiscoveryProgressivelyLoadsAndBindsReferences(t *testing.T) {
 	if err != nil || len(index.Domains) == 0 || index.ContractHash == "" || index.InstanceHash == "" {
 		t.Fatalf("index=%#v err=%v", index, err)
 	}
-	if len(index.EndpointSurfaceContracts) == 0 {
-		t.Fatal("discovery index omitted the backend-compiled endpoint Surface contracts")
+	if len(index.EndpointContracts) == 0 {
+		t.Fatal("discovery index omitted the backend-compiled endpoint contracts")
 	}
-	for _, endpointContract := range index.EndpointSurfaceContracts {
+	for _, endpointContract := range index.EndpointContracts {
 		if err := endpointContract.Validate(); err != nil {
 			t.Fatalf("discovery index published invalid endpoint contract %q: %v", endpointContract.EndpointIdentity, err)
 		}
@@ -60,7 +60,7 @@ func TestCapabilityDiscoveryProgressivelyLoadsAndBindsReferences(t *testing.T) {
 	}{
 		{kind: "object_key", want: "order"}, {kind: "relation_target_object_key", want: "identity_department"}, {kind: "field_key", scope: "order", want: "status"},
 		{kind: "action_key", want: "order.confirm"},
-		{kind: "scheduler_target_key", scope: "workflow", want: "scheduled:order.approval"}, {kind: "scheduler_target_key", scope: "report_export", want: "orders.daily"},
+		{kind: "scheduler_target_key", scope: "workflow", want: "scheduled:order.approval"}, {kind: "scheduler_target_key", scope: "report_snapshot_refresh", want: "orders.daily"},
 		{kind: "user_id", want: "user-a"}, {kind: "department_id", want: "sales"}, {kind: "role_id", want: "operator-id"},
 		{kind: "menu_id", want: "orders"}, {kind: "menu_id", want: "reports"},
 		{kind: "connector_key", want: "erp"}, {kind: "connection_key", want: "erp-primary"}, {kind: "operation_key", scope: "erp", want: "sync"},

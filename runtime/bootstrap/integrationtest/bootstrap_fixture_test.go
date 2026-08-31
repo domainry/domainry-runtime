@@ -82,7 +82,7 @@ func TestRuntimeBootstrapsBusinessManifestFixtures(t *testing.T) {
 			defer application.CloseContext(t.Context())
 			handler := application.Routes()
 
-			schema := runtimeFixtureRequestWithHeaders[map[string]any](t, handler, tc.role, http.MethodGet, "/business/runtime-schema", nil, map[string]string{"X-Domainry-Product-Surface": "business_workspace"})
+			schema := runtimeFixtureRequest[map[string]any](t, handler, tc.role, http.MethodGet, "/business/runtime-schema", nil)
 			assertRuntimeFixtureArrayHasKey(t, schema, "objects", tc.objectKey)
 			assertRuntimeFixtureArrayHasKey(t, schema, "dictionaries", tc.dictionaryKey)
 			if tc.workflowKey != "" {
@@ -99,7 +99,7 @@ func TestRuntimeBootstrapsBusinessManifestFixtures(t *testing.T) {
 				t.Fatalf("expected seeded records for %s, got %#v", tc.objectKey, page)
 			}
 
-			dictionary := runtimeFixtureRequestWithHeaders[map[string]any](t, handler, tc.role, http.MethodGet, "/dictionaries/"+tc.dictionaryKey+"/items", nil, map[string]string{"X-Domainry-Product-Surface": "business_workspace"})
+			dictionary := runtimeFixtureRequest[map[string]any](t, handler, tc.role, http.MethodGet, "/dictionaries/"+tc.dictionaryKey+"/items", nil)
 			items, ok := dictionary["items"].([]any)
 			if !ok || len(items) == 0 {
 				t.Fatalf("expected dictionary items for %s, got %#v", tc.dictionaryKey, dictionary)
@@ -121,7 +121,7 @@ func TestRuntimeBusinessOnlyManifestSeedsRuntimeOwnedNavigationAndLogin(t *testi
 	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 
-	adminSchema := runtimeFixtureRequestWithHeaders[map[string]any](t, handler, "business_admin", http.MethodGet, "/business/runtime-schema", nil, map[string]string{"X-Domainry-Product-Surface": "business_workspace"})
+	adminSchema := runtimeFixtureRequest[map[string]any](t, handler, "business_admin", http.MethodGet, "/business/runtime-schema", nil)
 	assertRuntimeFixtureArrayHasKey(t, adminSchema, "objects", "customer")
 	assertRuntimeFixtureArrayHasKey(t, adminSchema, "objects", "opportunity")
 	assertRuntimeFixtureArrayHasKey(t, adminSchema, "dictionaries", "platform_operation_status")
@@ -150,7 +150,7 @@ func TestRuntimeBusinessOnlyManifestSeedsRuntimeOwnedNavigationAndLogin(t *testi
 		t.Fatalf("Runtime must not own Identity management HTTP routes, got %d: %s", identityResponse.Code, identityResponse.Body.String())
 	}
 
-	globalDictionary := runtimeFixtureAuthorizedSurfaceRequest[map[string]any](t, handler, session.AccessToken, "admin_console", http.MethodGet, "/dictionaries/platform_operation_status/items", nil)
+	globalDictionary := runtimeFixtureAuthorizedRequest[map[string]any](t, handler, session.AccessToken, http.MethodGet, "/dictionaries/platform_operation_status/items", nil)
 	items, ok := globalDictionary["items"].([]any)
 	if !ok || len(items) < 3 {
 		t.Fatalf("expected seeded global dictionary items, got %#v", globalDictionary)
@@ -184,8 +184,8 @@ func TestRuntimeBusinessOnlyManifestSeedsRuntimeOwnedNavigationAndLogin(t *testi
 
 	restrictedSession := runtimeIdentityFixtureSession(t, "restricted_user", "restricted")
 
-	adminPermissions := runtimeFixtureAuthorizedSurfaceRequest[map[string]any](t, handler, session.AccessToken, "admin_console", http.MethodGet, "/permissions/effective", nil)
-	restrictedPermissions := runtimeFixtureAuthorizedSurfaceRequest[map[string]any](t, handler, restrictedSession.AccessToken, "business_workspace", http.MethodGet, "/permissions/effective", nil)
+	adminPermissions := runtimeFixtureAuthorizedRequest[map[string]any](t, handler, session.AccessToken, http.MethodGet, "/permissions/effective", nil)
+	restrictedPermissions := runtimeFixtureAuthorizedRequest[map[string]any](t, handler, restrictedSession.AccessToken, http.MethodGet, "/permissions/effective", nil)
 	if !runtimeFixtureObjectActionAllowed(t, adminPermissions, "opportunity", "read") {
 		t.Fatalf("expected admin to read opportunity, got %#v", adminPermissions)
 	}
@@ -208,7 +208,7 @@ func TestRuntimeCRMProofServesRoleSpecificSchema(t *testing.T) {
 	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 
-	managerSchema := runtimeFixtureRequestWithHeaders[map[string]any](t, handler, "sales_manager", http.MethodGet, "/business/runtime-schema", nil, map[string]string{"X-Domainry-Product-Surface": "business_workspace"})
+	managerSchema := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/business/runtime-schema", nil)
 	for _, objectKey := range []string{"customer", "contact", "lead", "opportunity", "activity", "contract", "payment"} {
 		assertRuntimeFixtureArrayHasKey(t, managerSchema, "objects", objectKey)
 	}
@@ -218,7 +218,7 @@ func TestRuntimeCRMProofServesRoleSpecificSchema(t *testing.T) {
 	assertRuntimeFixtureArrayHasKey(t, managerSchema, "actions", "payment.mark_collected")
 	runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/reports/crm_revenue_collection/summary", nil)
 
-	repSchema := runtimeFixtureRequestWithHeaders[map[string]any](t, handler, "sales_rep", http.MethodGet, "/business/runtime-schema", nil, map[string]string{"X-Domainry-Product-Surface": "business_workspace"})
+	repSchema := runtimeFixtureRequest[map[string]any](t, handler, "sales_rep", http.MethodGet, "/business/runtime-schema", nil)
 	for _, objectKey := range []string{"customer", "contact", "lead", "opportunity", "activity"} {
 		assertRuntimeFixtureArrayHasKey(t, repSchema, "objects", objectKey)
 	}
@@ -226,7 +226,7 @@ func TestRuntimeCRMProofServesRoleSpecificSchema(t *testing.T) {
 	assertRuntimeFixtureArrayLacksKey(t, repSchema, "objects", "payment")
 	assertRuntimeFixtureArrayLacksKey(t, repSchema, "actions", "payment.mark_collected")
 
-	financeSchema := runtimeFixtureRequestWithHeaders[map[string]any](t, handler, "finance_reviewer", http.MethodGet, "/business/runtime-schema", nil, map[string]string{"X-Domainry-Product-Surface": "business_workspace"})
+	financeSchema := runtimeFixtureRequest[map[string]any](t, handler, "finance_reviewer", http.MethodGet, "/business/runtime-schema", nil)
 	for _, objectKey := range []string{"customer", "opportunity", "contract", "payment"} {
 		assertRuntimeFixtureArrayHasKey(t, financeSchema, "objects", objectKey)
 	}
@@ -473,12 +473,7 @@ func runtimeFixtureRequestWithHeaders[T any](t *testing.T, handler http.Handler,
 	applyIntegrationIdentity(req, role)
 	// Business fixtures state their source-owned product context explicitly.
 	// Pure Admin fixtures keep the header absent so the single allowed audience
-	// selects Admin Console, while Runtime operations are always explicit below.
-	if role != "admin" && role != "platform_admin" {
-		req.Header.Set("X-Domainry-Product-Surface", "business_workspace")
-	}
 	if strings.HasPrefix(path, "/operations/") {
-		req.Header.Set("X-Domainry-Product-Surface", "admin_console")
 		if method != http.MethodGet && method != http.MethodHead {
 			req.Header.Set("X-Operation-Reason", "Runtime integration fixture controlled operation")
 			req.Header.Set("X-Operation-Confirmation", "confirmed")
@@ -507,20 +502,7 @@ func runtimeFixtureAuthorizedRequest[T any](t *testing.T, handler http.Handler, 
 	return runtimeFixtureAuthorizedRequestWithKey[T](t, handler, token, method, path, key, body)
 }
 
-func runtimeFixtureAuthorizedSurfaceRequest[T any](t *testing.T, handler http.Handler, token string, surface string, method string, path string, body any) T {
-	t.Helper()
-	key := ""
-	if method != http.MethodGet && method != http.MethodHead {
-		key = method + ":" + path + ":" + time.Now().UTC().Format(time.RFC3339Nano)
-	}
-	return runtimeFixtureAuthorizedRequestWithKeyAndSurface[T](t, handler, token, surface, method, path, key, body)
-}
-
 func runtimeFixtureAuthorizedRequestWithKey[T any](t *testing.T, handler http.Handler, token string, method string, path string, key string, body any) T {
-	return runtimeFixtureAuthorizedRequestWithKeyAndSurface[T](t, handler, token, "", method, path, key, body)
-}
-
-func runtimeFixtureAuthorizedRequestWithKeyAndSurface[T any](t *testing.T, handler http.Handler, token string, surface string, method string, path string, key string, body any) T {
 	t.Helper()
 	var reader io.Reader
 	if body != nil {
@@ -532,9 +514,6 @@ func runtimeFixtureAuthorizedRequestWithKeyAndSurface[T any](t *testing.T, handl
 	}
 	req := httptest.NewRequest(method, path, reader)
 	req.Header.Set("Authorization", "Bearer "+token)
-	if surface != "" {
-		req.Header.Set("X-Domainry-Product-Surface", surface)
-	}
 	if key != "" {
 		req.Header.Set("Idempotency-Key", key)
 	}

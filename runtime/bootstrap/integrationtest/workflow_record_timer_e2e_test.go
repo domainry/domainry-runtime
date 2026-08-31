@@ -12,7 +12,7 @@ import (
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	schedulerprojection "github.com/domainry/domainry-runtime/runtime/domain/scheduler/projection"
+	recordtimerprojection "github.com/domainry/domainry-runtime/runtime/domain/recordtimer/projection"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -27,7 +27,7 @@ func TestWorkflowWaitDurationUsesDurableRecordTimerAndResumesAfterFire(t *testin
 		t.Fatal(err)
 	}
 	identityStore := newIntegrationTestIdentityDirectory()
-	if err := metadataStore(store).SyncManifestStorage(t.Context(), manifestmodel.ManifestSchema{Objects: schedulerprojection.SchedulerSystemObjects()}); err != nil {
+	if err := metadataStore(store).SyncManifest(t.Context(), recordTimerInstallationScope(), manifestmodel.ManifestSchema{Objects: recordtimerprojection.RecordTimerSystemObjects()}); err != nil {
 		t.Fatal(err)
 	}
 	workflow := definitionmodel.WorkflowSchema{Key: "delayed_follow_up", Name: "Delayed Follow Up", Enabled: true, Trigger: map[string]any{"type": "manual"}, TriggerContract: &definitionmodel.WorkflowTriggerContract{Type: "manual"}, Condition: map[string]any{}, ConditionContract: &definitionmodel.WorkflowConditionContract{Type: "always"}, Action: map[string]any{"type": "workflow_graph"}, Graph: &definitionmodel.WorkflowGraphSchema{Version: 2,
@@ -43,13 +43,13 @@ func TestWorkflowWaitDurationUsesDurableRecordTimerAndResumesAfterFire(t *testin
 	if err != nil || process.Status != "waiting" || len(process.CurrentNodeIDs) != 1 || process.CurrentNodeIDs[0] != "wait" {
 		t.Fatalf("waiting process=%#v err=%v", process, err)
 	}
-	timerObject := schedulerRuntimeObjectByKey(t, schedulerprojection.SchedulerSystemObjects(), "record_timer")
+	timerObject := recordTimerRuntimeObjectByKey(t, recordtimerprojection.RecordTimerSystemObjects(), "record_timer")
 	timers, err := recordLegacyStore(store).ListRecords(t.Context(), "workspace-primary", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 10})
 	if err != nil || timers.Total != 1 || timers.Items[0].Data["status"] != "scheduled" {
 		t.Fatalf("durable workflow timer page=%#v err=%v", timers, err)
 	}
 	now := time.Now().UTC().Add(2 * time.Second)
-	processed, err := service.Applications().Scheduler.ProcessDueRecordTimers(t.Context(), "workspace-primary", now, 10, principal, schedulerRuntimeSystemScope())
+	processed, err := service.Applications().RecordTimers.ProcessDueRecordTimers(t.Context(), "workspace-primary", now, 10, recordTimerRuntimeSystemScope())
 	if err != nil || processed != 1 {
 		t.Fatalf("process workflow timer count=%d err=%v", processed, err)
 	}
@@ -77,7 +77,7 @@ func TestWorkflowApprovalDeadlineUsesDurableRecordTimerForEscalation(t *testing.
 		t.Fatal(err)
 	}
 	identityStore := newIntegrationTestIdentityDirectory()
-	if err := metadataStore(store).SyncManifestStorage(t.Context(), manifestmodel.ManifestSchema{Objects: schedulerprojection.SchedulerSystemObjects()}); err != nil {
+	if err := metadataStore(store).SyncManifest(t.Context(), recordTimerInstallationScope(), manifestmodel.ManifestSchema{Objects: recordtimerprojection.RecordTimerSystemObjects()}); err != nil {
 		t.Fatal(err)
 	}
 	workflow := definitionmodel.WorkflowSchema{Key: "approval_deadline", Name: "Approval Deadline", Enabled: true, Trigger: map[string]any{"type": "manual"}, TriggerContract: &definitionmodel.WorkflowTriggerContract{Type: "manual"}, Condition: map[string]any{}, ConditionContract: &definitionmodel.WorkflowConditionContract{Type: "always"}, Action: map[string]any{"type": "workflow_graph"}, Graph: &definitionmodel.WorkflowGraphSchema{Version: 2,
@@ -96,12 +96,12 @@ func TestWorkflowApprovalDeadlineUsesDurableRecordTimerForEscalation(t *testing.
 	if err != nil || process.Status != "waiting" {
 		t.Fatalf("approval process=%#v err=%v", process, err)
 	}
-	timerObject := schedulerRuntimeObjectByKey(t, schedulerprojection.SchedulerSystemObjects(), "record_timer")
+	timerObject := recordTimerRuntimeObjectByKey(t, recordtimerprojection.RecordTimerSystemObjects(), "record_timer")
 	timers, err := recordLegacyStore(store).ListRecords(t.Context(), "workspace-primary", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 10})
 	if err != nil || timers.Total != 1 || timers.Items[0].Data["target_key"] != "approval_deadline" || timers.Items[0].Data["purpose"] != "approval_escalation" {
 		t.Fatalf("approval timers=%#v err=%v", timers, err)
 	}
-	processed, err := service.Applications().Scheduler.ProcessDueRecordTimers(t.Context(), "workspace-primary", time.Now().UTC().Add(3*time.Second), 10, principal, schedulerRuntimeSystemScope())
+	processed, err := service.Applications().RecordTimers.ProcessDueRecordTimers(t.Context(), "workspace-primary", time.Now().UTC().Add(3*time.Second), 10, recordTimerRuntimeSystemScope())
 	if err != nil || processed != 1 {
 		t.Fatalf("process approval timer count=%d err=%v", processed, err)
 	}

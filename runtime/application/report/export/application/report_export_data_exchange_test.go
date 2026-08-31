@@ -10,13 +10,12 @@ import (
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
+	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	reportexport "github.com/domainry/domainry-runtime/runtime/application/report/export"
-	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/query"
 )
 
 type reportDataExchangeBindingProbe struct {
@@ -24,6 +23,39 @@ type reportDataExchangeBindingProbe struct {
 	submission dataexchange.ExportRequest
 	artifact   dataexchange.Artifact
 	content    string
+	jobCalls   int
+	downloads  int
+}
+
+type reportOwnerExportsStub struct {
+	definition                            reportmodel.ReportExportDefinition
+	resolveCalls, readCalls, versionCalls int
+}
+
+func (*reportOwnerExportsStub) Prepare(context.Context, reportmodel.ReportExportPrepareRequest, reportmodel.ReportAuthority) (reportmodel.ReportExportJob, error) {
+	return reportmodel.ReportExportJob{}, nil
+}
+
+func (s *reportOwnerExportsStub) ResolveExecution(_ context.Context, request reportmodel.ReportExportExecutionRequest, authority reportmodel.ReportAuthority) (reportmodel.ReportExportExecution, error) {
+	s.resolveCalls++
+	scope := request.Scope
+	if scope.RoleKey == "" && authority.Subject != nil {
+		scope.RoleKey = authority.Subject.Principal.RoleKey
+	}
+	if scope.DataScopes == nil {
+		scope.DataScopes = map[string]string{request.ObjectKey: "all_records"}
+	}
+	return reportmodel.ReportExportExecution{Definition: s.definition, Scope: scope, MaskedDimensions: map[string]bool{}}, nil
+}
+
+func (s *reportOwnerExportsStub) ReadPage(context.Context, reportmodel.ReportExportExecutionRequest, reportmodel.ReportAuthority) (reportmodel.ReportSummary, error) {
+	s.readCalls++
+	return reportmodel.ReportSummary{Rows: []reportmodel.ReportResultRow{{Dimensions: map[string]string{"id": "customer-1"}}}, RowCount: 1, Total: 1, TotalSemantics: reportmodel.ReportTotalExact}, nil
+}
+
+func (s *reportOwnerExportsStub) SourceVersion(context.Context, reportmodel.ReportExportExecutionRequest, reportmodel.ReportAuthority) (reportmodel.ReportSnapshotSourceVersion, error) {
+	s.versionCalls++
+	return reportmodel.ReportSnapshotSourceVersion{Watermark: "version-1", SourceVersions: map[string]string{"customer": "version-1"}}, nil
 }
 
 func (*reportDataExchangeBindingProbe) Descriptor() dataexchange.Descriptor {
@@ -39,6 +71,7 @@ func (p *reportDataExchangeBindingProbe) SubmitExport(_ context.Context, request
 	return p.job, false, nil
 }
 func (p *reportDataExchangeBindingProbe) Job(context.Context, dataexchange.JobRequest) (dataexchange.Job, error) {
+	p.jobCalls++
 	return p.job, nil
 }
 func (p *reportDataExchangeBindingProbe) Cancel(context.Context, dataexchange.JobRequest) (dataexchange.Job, error) {
@@ -46,6 +79,7 @@ func (p *reportDataExchangeBindingProbe) Cancel(context.Context, dataexchange.Jo
 	return p.job, nil
 }
 func (p *reportDataExchangeBindingProbe) Download(context.Context, dataexchange.JobRequest) (dataexchange.Artifact, error) {
+	p.downloads++
 	artifact := p.artifact
 	artifact.Content = io.NopCloser(strings.NewReader(p.content))
 	return artifact, nil
@@ -83,25 +117,17 @@ func TestReportDataExchangeProviderPagesAndFinalizesBusinessProjection(t *testin
 		SQL: "SELECT c.id AS id FROM customer c ORDER BY c.id LIMIT 2000", SourceObjects: []string{"customer"},
 		ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}},
 	}}
-	domain := reportservice.NewReportDomainService(reportservice.ReportDependencies{
-		Reports: func(context.Context, principalmodel.Principal) []reportmodel.ReportSchema {
-			return []reportmodel.ReportSchema{reportDefinition}
-		},
-		Access: reportExportDatasetAccessStub{objects: map[string]definitionmodel.ObjectSchema{
-			"customer": {Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "id", Type: "text"}}},
-		}},
-		ObjectSQL: &reportExportObjectSQLExecutorStub{rows: []map[string]string{{"id": "customer-1"}}}, SnapshotSources: reportSnapshotSourceStub{},
-	})
 	exchange := &reportDataExchangeBindingProbe{}
 	providers := recordapplication.NewDataExchangeProviders(func(context.Context, string, string) principalmodel.Principal { return principal })
 	service := NewReportExportApplicationService(ReportExportApplicationDependencies{
-		Domain: domain, Records: store, Audit: &reportAuditAppenderStub{}, DataExchange: exchange, DataExchangeProviders: providers,
-		Controls: func(context.Context, principalmodel.Principal) []reportmodel.ReportExportControlSchema {
-			return []reportmodel.ReportExportControlSchema{control}
-		},
+		Records: store, Audit: &reportAuditAppenderStub{}, DataExchange: exchange, DataExchangeProviders: providers,
 		Clock: func() time.Time { return now },
 	})
-	payload, err := service.prepareReportExportPayload(t.Context(), "revenue", "customer", "audit-1", "request-1", reportmodel.ReportExportScopeRequest{FieldProjection: []string{"id"}, Purpose: "provider test", Freshness: reportmodel.ReportExportFreshness{Mode: "realtime"}}, principal)
+	owner := &reportOwnerExportsStub{definition: reportmodel.ReportExportDefinition{Report: reportDefinition, Control: control}}
+	if err := service.BindReportExports(owner); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := service.prepareReportExportPayloadResolved(t.Context(), reportDefinition, control, "customer", "audit-1", "request-1", reportmodel.ReportExportScopeRequest{FieldProjection: []string{"id"}, Purpose: "provider test", Freshness: reportmodel.ReportExportFreshness{Mode: "realtime"}}, principal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,9 +153,35 @@ func TestReportDataExchangeProviderPagesAndFinalizesBusinessProjection(t *testin
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if store.download.Data[control.RecordMapping.DownloadTokenField] != "data_exchange:report" || store.download.Data[control.RecordMapping.DownloadContentHashField] != "sha256:"+payload.CSVContentSHA256 {
+	if store.download.Data[control.RecordMapping.DownloadJobIDField] != "data_exchange:report" || store.download.Data[control.RecordMapping.DownloadContentHashField] != "sha256:"+payload.CSVContentSHA256 {
 		t.Fatalf("download=%+v", store.download)
+	}
+	exchange.job = dataexchange.Job{
+		ID: "data_exchange:report", Provider: reportexport.DataExchangeProviderKey, Operation: "export", Status: "completed",
+		WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID, ObjectKey: "customer", ReferenceID: "audit-1", Options: options,
+		ArtifactID: "data_exchange:report:artifact", Checkpoint: 1, Total: 1, CreatedAt: now, UpdatedAt: now,
+	}
+	exchange.artifact = dataexchange.Artifact{ID: exchange.job.ArtifactID, Filename: plan.Filename, ContentType: plan.ContentType, SHA256: payload.CSVContentSHA256, ExpiresAt: plan.ExpiresAt}
+	exchange.content = "id\ncustomer-1\n"
+	opened, err := service.dataExchangeProvider.OpenDataExchangeArtifact(t.Context(), exchange.job, scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content, err := io.ReadAll(opened.Content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = opened.Content.Close()
+	if string(content) != exchange.content || opened.ID != exchange.artifact.ID || opened.SHA256 != exchange.artifact.SHA256 || opened.ExpiresAt != exchange.artifact.ExpiresAt {
+		t.Fatalf("opened=%+v content=%q", opened, content)
+	}
+	if exchange.jobCalls != 0 || exchange.downloads != 1 {
+		t.Fatalf("job lookups=%d artifact downloads=%d", exchange.jobCalls, exchange.downloads)
+	}
+	if owner.resolveCalls < 4 || owner.readCalls < 2 || owner.versionCalls < 4 {
+		t.Fatalf("owner calls resolve=%d read=%d source-version=%d", owner.resolveCalls, owner.readCalls, owner.versionCalls)
 	}
 }
 
 var _ dataexchange.Binding = (*reportDataExchangeBindingProbe)(nil)
+var _ reportsdk.Exports = (*reportOwnerExportsStub)(nil)

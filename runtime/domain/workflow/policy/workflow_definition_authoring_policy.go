@@ -11,7 +11,7 @@ func workflowDefinitionAuthoringCapability(nodeTypes []string) capabilitycontrac
 		Requires: []string{"workflow.graph_v2"}, Permissions: []string{"workspace.admin"},
 		ValidationEndpoint: "POST /tenant-admin/workflows/{workflowKey}/validate",
 		ConfigurationRoutes: []string{
-			"GET /metadata/definitions/workflow/{workflowKey}", "POST /tenant-admin/workflows/{workflowKey}/validate", "POST /tenant-admin/workflows/{workflowKey}/simulate",
+			"GET /tenant-admin/metadata/definitions/workflow/{workflowKey}", "POST /tenant-admin/workflows/{workflowKey}/validate", "POST /tenant-admin/workflows/{workflowKey}/simulate",
 			"GET /domain-system-snapshot", "GET /domain-reference-graph",
 		},
 		ResourceKeyPathParameter: "workflowKey", InputSchema: workflowDefinitionInputSchema(nodeTypes),

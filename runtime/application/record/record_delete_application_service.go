@@ -135,7 +135,7 @@ func (s *RecordDeleteApplicationService) planDelete(ctx context.Context, objectK
 	if err != nil {
 		return err
 	}
-	if err := recordpolicy.RecordValidateSchedulerOperationalCRUD(object, "delete"); err != nil {
+	if err := recordpolicy.RecordValidateRuntimeOwnedCRUD(object, "delete"); err != nil {
 		return err
 	}
 	record, found, err := s.dependencies.Repository.GetRecord(ctx, principal.WorkspaceID, object, recordID)

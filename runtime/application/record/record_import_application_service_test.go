@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -178,6 +179,34 @@ func TestImportServiceBuildsRowLevelDuplicatePreview(t *testing.T) {
 	issue := preview.ErrorRows[0].Issues[len(preview.ErrorRows[0].Issues)-1]
 	if issue.Code != "backend.import.duplicate_in_file" || issue.Field != "name" || issue.Params["row"] != "2" || preview.ErrorRows[0].ErrorSummary == "" {
 		t.Fatalf("duplicate issue = %#v row=%#v", issue, preview.ErrorRows[0])
+	}
+}
+
+func TestImportServiceConsumesStructuredDataExchangeRowsWithoutCSVRoundTrip(t *testing.T) {
+	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{
+		{Key: "name", Name: "Name", Type: "text", Required: true, Unique: true},
+		{Key: "status", Name: "Status", Type: "text"},
+	}}
+	service := NewRecordImportApplicationService(RecordImportDependencies{
+		Repository: &importRepositoryProbe{existing: map[string]bool{}},
+		ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
+			return object, nil
+		},
+		CanWrite: func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
+	})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	preview, err := service.PreviewRows(t.Context(), object.Key, []string{"Name", "Status"}, []dataexchange.ImportRow{
+		{Number: 2, Values: []string{"Acme", "active"}},
+		{Number: 3, Values: []string{"Acme", "prospect"}},
+	}, principal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(preview.Rows) != 2 || preview.ValidRows != 1 || preview.InvalidRows != 1 || preview.DuplicateRows != 1 || preview.CanApply {
+		t.Fatalf("structured preview=%#v", preview)
+	}
+	if _, err := service.PreviewRows(t.Context(), object.Key, []string{"Name"}, []dataexchange.ImportRow{{Number: 2, Values: []string{"Acme", "extra"}}}, principal); apperror.CodeOf(err) != "backend.import.invalid_csv" {
+		t.Fatalf("invalid structured row err=%v", err)
 	}
 }
 

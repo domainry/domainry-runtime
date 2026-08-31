@@ -53,7 +53,7 @@ func (h *RecordsHandler) enqueueImportJob(w http.ResponseWriter, r *http.Request
 	if replayed {
 		w.Header().Set("Idempotency-Replayed", "true")
 	}
-	w.Header().Set("Location", "/record-batch-jobs/"+job.ID)
+	w.Header().Set("Location", "/data-exchange/jobs/"+job.ID+"?provider=records&operation=import")
 	h.writeJSON(w, http.StatusAccepted, job)
 }
 
@@ -75,7 +75,7 @@ func (h *RecordsHandler) enqueueExportJob(w http.ResponseWriter, r *http.Request
 	if replayed {
 		w.Header().Set("Idempotency-Replayed", "true")
 	}
-	w.Header().Set("Location", "/record-batch-jobs/"+job.ID)
+	w.Header().Set("Location", "/data-exchange/jobs/"+job.ID+"?provider=records&operation=export")
 	h.writeJSON(w, http.StatusAccepted, job)
 }
 
@@ -83,52 +83,4 @@ func setBatchCapacityRetryAfter(w http.ResponseWriter, err error) {
 	if kind := apperror.KindOf(err); kind == apperror.KindRateLimited || kind == apperror.KindUnavailable {
 		w.Header().Set("Retry-After", "5")
 	}
-}
-
-func (h *RecordsHandler) getBatchJob(w http.ResponseWriter, r *http.Request) {
-	job, err := h.queries.GetBatchJob(r.Context(), strings.TrimSpace(r.PathValue("jobID")), h.principal(r))
-	if err != nil {
-		h.writeServiceError(w, r, err)
-		return
-	}
-	h.writeJSON(w, http.StatusOK, job)
-}
-
-func (h *RecordsHandler) cancelBatchJob(w http.ResponseWriter, r *http.Request) {
-	key, _ := recordsActionIdempotencyKey(r, "")
-	if key == "" {
-		h.writeServiceError(w, r, apperror.New(apperror.KindBadRequest, idempotency.ErrorCodeMissingKey, nil, map[string]string{"use_case": "record.batch.cancel"}))
-		return
-	}
-	job, err := h.queries.CancelBatchJob(r.Context(), strings.TrimSpace(r.PathValue("jobID")), h.principal(r))
-	if err != nil {
-		h.writeServiceError(w, r, err)
-		return
-	}
-	h.writeJSON(w, http.StatusOK, job)
-}
-
-func (h *RecordsHandler) downloadBatchJob(w http.ResponseWriter, r *http.Request) {
-	job, content, err := h.queries.OpenBatchJobDownload(r.Context(), strings.TrimSpace(r.PathValue("jobID")), h.principal(r))
-	if err != nil {
-		h.writeServiceError(w, r, err)
-		return
-	}
-	defer content.Close()
-	w.Header().Set("Content-Type", job.ResultType)
-	w.Header().Set("Content-Disposition", "attachment; filename="+job.ResultFilename)
-	w.WriteHeader(http.StatusOK)
-	ctx := r.Context()
-	_, _ = io.Copy(w, readerFunc(func(buffer []byte) (int, error) {
-		if err := ctx.Err(); err != nil {
-			return 0, err
-		}
-		return content.Read(buffer)
-	}))
-}
-
-type readerFunc func([]byte) (int, error)
-
-func (f readerFunc) Read(buffer []byte) (int, error) {
-	return f(buffer)
 }

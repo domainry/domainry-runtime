@@ -132,8 +132,11 @@ func BuildWithModuleHTTPSurfaces(snapshot appschemamodel.ApplicationSchemaSnapsh
 	addPublicationHandoffOpenAPIPaths(paths)
 	paths["/v1/scheduler-triggers:accept"] = map[string]any{"post": openAPIOperation("acceptSchedulerTrigger", "Scheduler Dispatch Gateway", "Identity-authenticated execution callback for one Scheduler-owned run", openAPIProtocolAudience("scheduler_service_service"), openAPIServiceCredentialSecurity(), openAPIJSONRequest(openAPIObject(nil)), openAPIJSONResponse("Stable downstream receipt", openAPIObject(nil)))}
 	addOwnerOperationsReceiptOpenAPIContracts(paths)
+	applyCompiledEndpointContracts(paths)
+	// Capability-owned OpenAPI and governance are authoritative for mounted
+	// module routes. Static Runtime contracts remain only for Runtime-owned
+	// endpoints and the temporary fallback used before a module is bound.
 	annotateModuleOwnedOpenAPIPaths(paths, surfaces)
-	applyCompiledEndpointSurfaceContracts(paths)
 	return map[string]any{
 		"openapi": "3.1.0",
 		"info": map[string]any{
@@ -155,19 +158,221 @@ func annotateModuleOwnedOpenAPIPaths(paths map[string]any, surfaces []modulehttp
 		if surface == nil {
 			continue
 		}
-		owner := strings.TrimSpace(surface.Owner())
+		owner, surfaceName := strings.TrimSpace(surface.Owner()), strings.TrimSpace(surface.Name())
 		for _, route := range surface.Routes() {
 			method, path, found := strings.Cut(strings.TrimSpace(route.Pattern), " ")
 			if !found || owner == "" || !isOpenAPIHTTPMethod(method) {
 				continue
 			}
-			pathSpec, _ := paths[strings.TrimSpace(path)].(map[string]any)
-			operation, _ := pathSpec[strings.ToLower(strings.TrimSpace(method))].(map[string]any)
-			if operation != nil {
-				operation["x-domainry-module-owner"] = owner
+			method, path = strings.ToLower(strings.TrimSpace(method)), strings.TrimSpace(path)
+			pathSpec, _ := paths[path].(map[string]any)
+			if pathSpec == nil {
+				pathSpec = map[string]any{}
+				paths[path] = pathSpec
+			}
+			operation, _ := pathSpec[method].(map[string]any)
+			if provider, ok := surface.(modulehttp.OpenAPIProvider); ok {
+				if owned := provider.OpenAPIOperations()[strings.TrimSpace(route.Pattern)]; len(owned) != 0 {
+					operation = cloneOpenAPIOperation(owned)
+					pathSpec[method] = operation
+				}
+			}
+			if operation == nil {
+				arguments := []any{moduleHTTPRouteSecurity(route)}
+				for _, parameter := range moduleHTTPPathParameters(path) {
+					arguments = append(arguments, openAPIPathParameter(parameter, moduleHTTPLabel(parameter)))
+				}
+				arguments = append(arguments, openAPIJSONResponse(moduleHTTPLabel(owner)+" response", openAPIObject(nil)))
+				operation = openAPIOperation(
+					moduleHTTPOperationID(method, path),
+					moduleHTTPLabel(owner),
+					moduleHTTPLabel(owner)+" "+strings.ReplaceAll(surfaceName, "_", " "),
+					arguments...,
+				)
+				pathSpec[method] = operation
+			}
+			ensureModuleHTTPPathParameters(operation, path)
+			exposures := make([]string, 0, len(route.Exposures))
+			for _, exposure := range route.Exposures {
+				exposures = append(exposures, string(exposure))
+			}
+			operation["x-domainry-module-owner"] = owner
+			operation["x-domainry-module-route"] = map[string]any{
+				"contract_version": routeModuleHTTPContractVersion(surface),
+				"owner":            owner,
+				"surface":          surfaceName,
+				"exposures":        exposures,
+				"authentication":   string(route.Authentication),
+				"permission":       strings.TrimSpace(route.Permission),
+				"any_permissions":  append([]string(nil), route.AnyPermissions...),
+				"principal_only":   route.PrincipalOnly,
+			}
+			if route.Governance != nil {
+				operation["x-domainry-module-route"].(map[string]any)["governance"] = map[string]any{
+					"effect_class":            string(route.Governance.EffectClass),
+					"high_risk_action_policy": string(route.Governance.HighRiskPolicy),
+					"idempotency_decision":    route.Governance.IdempotencyDecision,
+					"audit_class":             route.Governance.AuditClass,
+				}
+				applyModuleHTTPGovernanceHeaders(operation, *route.Governance)
 			}
 		}
 	}
+}
+
+func ensureModuleHTTPPathParameters(operation map[string]any, path string) {
+	parameters := moduleHTTPOpenAPIParameters(operation)
+	for _, name := range moduleHTTPPathParameters(path) {
+		found := false
+		for _, parameter := range parameters {
+			if parameter["in"] == "path" && parameter["name"] == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			parameters = append(parameters, openAPIPathParameter(name, moduleHTTPLabel(name)).Value)
+		}
+	}
+	if len(parameters) != 0 {
+		operation["parameters"] = parameters
+	}
+}
+
+func moduleHTTPOpenAPIParameters(operation map[string]any) []map[string]any {
+	if operation == nil {
+		return nil
+	}
+	if parameters, ok := operation["parameters"].([]map[string]any); ok {
+		return append([]map[string]any(nil), parameters...)
+	}
+	values, ok := operation["parameters"].([]any)
+	if !ok {
+		return nil
+	}
+	parameters := make([]map[string]any, 0, len(values))
+	for _, value := range values {
+		if parameter, ok := value.(map[string]any); ok {
+			parameters = append(parameters, parameter)
+		}
+	}
+	return parameters
+}
+
+func cloneOpenAPIOperation(source map[string]any) map[string]any {
+	clone := make(map[string]any, len(source))
+	for key, value := range source {
+		clone[key] = cloneOpenAPIValue(value)
+	}
+	return clone
+}
+
+func cloneOpenAPIValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		clone := make(map[string]any, len(typed))
+		for key, item := range typed {
+			clone[key] = cloneOpenAPIValue(item)
+		}
+		return clone
+	case []map[string]any:
+		clone := make([]map[string]any, len(typed))
+		for index, item := range typed {
+			clone[index] = cloneOpenAPIOperation(item)
+		}
+		return clone
+	case []any:
+		clone := make([]any, len(typed))
+		for index, item := range typed {
+			clone[index] = cloneOpenAPIValue(item)
+		}
+		return clone
+	case []string:
+		return append([]string(nil), typed...)
+	default:
+		return value
+	}
+}
+
+func applyModuleHTTPGovernanceHeaders(operation map[string]any, governance modulehttp.Governance) {
+	parameters := moduleHTTPOpenAPIParameters(operation)
+	if governance.IdempotencyDecision == "caller_key_required" {
+		parameters = upsertOpenAPIHeaderParameter(parameters, openAPIHeaderParameter("Idempotency-Key", "Caller-supplied idempotency key", true))
+	}
+	if governance.HighRiskPolicy != modulehttp.HighRiskNone {
+		parameters = upsertOpenAPIHeaderParameter(parameters, openAPIHeaderParameter("X-Operation-Reason", "Human-supplied auditable operator reason", true))
+	}
+	switch governance.HighRiskPolicy {
+	case modulehttp.HighRiskConfirmationRequired:
+		confirmation := openAPIHeaderParameter("X-Operation-Confirmation", "Explicit confirmation required by the module route contract", true)
+		confirmation["schema"] = map[string]any{"type": "string", "enum": []string{"confirmed"}}
+		parameters = upsertOpenAPIHeaderParameter(parameters, confirmation)
+	case modulehttp.HighRiskBreakGlassRequired:
+		confirmation := openAPIHeaderParameter("X-Operation-Confirmation", "Explicit break-glass confirmation required by the module route contract", true)
+		confirmation["schema"] = map[string]any{"type": "string", "enum": []string{"break-glass"}}
+		parameters = upsertOpenAPIHeaderParameter(parameters, confirmation)
+	}
+	if len(parameters) != 0 {
+		operation["parameters"] = parameters
+	}
+}
+
+func moduleHTTPPathParameters(path string) []string {
+	var parameters []string
+	for _, segment := range strings.Split(path, "/") {
+		segment = strings.TrimSpace(segment)
+		if len(segment) > 2 && strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}") {
+			parameters = append(parameters, strings.TrimSpace(segment[1:len(segment)-1]))
+		}
+	}
+	return parameters
+}
+
+func routeModuleHTTPContractVersion(surface modulehttp.Surface) string {
+	if surface == nil {
+		return ""
+	}
+	return surface.ContractVersion()
+}
+
+func moduleHTTPRouteSecurity(route modulehttp.Route) openAPISecurity {
+	switch route.Authentication {
+	case modulehttp.AuthenticationAnonymous:
+		return openAPIPublicSecurity()
+	case modulehttp.AuthenticationService:
+		return openAPIServiceCredentialSecurity()
+	default:
+		return openAPIAdminSecurity()
+	}
+}
+
+func moduleHTTPOperationID(method, path string) string {
+	segments := strings.FieldsFunc(path, func(value rune) bool {
+		return !(value >= 'a' && value <= 'z') && !(value >= 'A' && value <= 'Z') && !(value >= '0' && value <= '9')
+	})
+	if len(segments) > 1 && strings.EqualFold(segments[0], "operations") {
+		segments = segments[1:]
+	}
+	result := strings.ToLower(strings.TrimSpace(method))
+	for _, segment := range segments {
+		result += moduleHTTPLabel(segment)
+	}
+	return result
+}
+
+func moduleHTTPLabel(value string) string {
+	parts := strings.FieldsFunc(strings.TrimSpace(value), func(character rune) bool {
+		return character == '_' || character == '-' || character == ' '
+	})
+	var result strings.Builder
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		result.WriteString(strings.ToUpper(part[:1]))
+		result.WriteString(part[1:])
+	}
+	return result.String()
 }
 
 func isOpenAPIHTTPMethod(method string) bool {
@@ -194,11 +399,12 @@ func openAPIOperation(operationID string, tag string, summary string, args ...an
 		"responses":   map[string]any{"default": openAPIJSONResponse("Error", openAPIRef("Error")).Value},
 	}
 	parameters := []map[string]any{}
-	surfaceMetadata, surfaceClassified := openAPISurfaceMetadataForTag(tag)
+	var endpointMetadata openAPIEndpointMetadata
+	endpointClassified := false
 	for _, arg := range args {
 		switch value := arg.(type) {
-		case openAPISurfaceMetadata:
-			surfaceMetadata, surfaceClassified = value, true
+		case openAPIEndpointMetadata:
+			endpointMetadata, endpointClassified = value, true
 		case openAPISecurity:
 			if value.Items != nil {
 				op["security"] = value.Items
@@ -214,8 +420,8 @@ func openAPIOperation(operationID string, tag string, summary string, args ...an
 	if len(parameters) > 0 {
 		op["parameters"] = parameters
 	}
-	if surfaceClassified {
-		op["x-domainry-surface-contract"] = openAPISurfaceExtension(operationID, surfaceMetadata)
+	if endpointClassified {
+		op["x-domainry-endpoint-contract"] = openAPIEndpointExtension(operationID, endpointMetadata)
 	}
 	return op
 }

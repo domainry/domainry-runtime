@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	connector "github.com/domainry/domainry-connector-sdk"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
@@ -37,7 +38,7 @@ func TestApplicationDefinitionCompositionReusesOwnerValidationForSystemDraftCand
 	application, admin := newMetadataCompositionApp(t, "definition-validation", []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}, {Key: "order", Name: "Order"}}, nil)
 	defer application.CloseContext(t.Context())
 	metadata := application.records.Applications().ApplicationSchema
-	definitionsBeforePreview, err := metadata.ListApplicationDefinitions(t.Context(), "field", "workspace-primary", admin)
+	definitionsBeforePreview, err := application.metadataBinding.Definitions().List(t.Context(), metadatasdk.DefinitionQuery{ResourceType: "field"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +48,7 @@ func TestApplicationDefinitionCompositionReusesOwnerValidationForSystemDraftCand
 	if err != nil || result.Valid || result.Errors[0].FieldPath != "config.cardinality" {
 		t.Fatalf("field result=%#v err=%v", result, err)
 	}
-	definitions, err := metadata.ListApplicationDefinitions(t.Context(), "field", "workspace-primary", admin)
+	definitions, err := application.metadataBinding.Definitions().List(t.Context(), metadatasdk.DefinitionQuery{ResourceType: "field"})
 	if err != nil || !metadataDefinitionsEqual(definitions, definitionsBeforePreview) {
 		t.Fatalf("preview changed persisted definitions: before=%#v after=%#v err=%v", definitionsBeforePreview, definitions, err)
 	}
@@ -104,18 +105,11 @@ func newMetadataCompositionAppWithManifest(t *testing.T, name string, objects []
 		for _, objectKey := range dataPermissionKeys {
 			dataPermissions = append(dataPermissions, accessfixture.DataPolicyFixture{ObjectKey: objectKey, Scope: "all_records", Read: true, Write: true})
 		}
-		dataPermissions = append(dataPermissions,
-			accessfixture.DataPolicyFixture{ObjectKey: "job_definition", Scope: "all_records", Read: true, Write: true},
-			accessfixture.DataPolicyFixture{ObjectKey: "job_run", Scope: "all_records", Read: true, Write: true},
-			accessfixture.DataPolicyFixture{ObjectKey: "job_dead_letter", Scope: "all_records", Read: true, Write: true},
-		)
 		roles = []accessfixture.Bundle{{
 			Key: "admin",
 			Permissions: []string{
 				"workspace.admin", "metadata.read", "metadata.write",
 				"scheduler.definition.read", "scheduler.definition.write", "scheduler.command",
-				"job_definition.read", "job_definition.create", "job_definition.update", "job_definition.delete",
-				"job_run.read", "job_run.update", "job_dead_letter.read", "job_dead_letter.update",
 				"ops.workflow.read", "workflow.process.read", "workflow.process.operate",
 				"integration.audit.view", "integration.retry",
 			},

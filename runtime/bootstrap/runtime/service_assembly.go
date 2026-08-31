@@ -24,17 +24,17 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
+	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	lifecyclemoduleimpl "github.com/domainry/domainry-lifecycle/module"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	partysdk "github.com/domainry/domainry-party-sdk"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
-	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
-	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
+	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
@@ -59,7 +59,6 @@ import (
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
 	lifecyclemodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/lifecyclemodule"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 )
 
 // runtimeServiceAssembly is the result of wiring domain ports to adapters.
@@ -85,16 +84,16 @@ type runtimeExtensionRegistries struct {
 	dataExchangeImportProvider   dataexchangemodulehost.ImportProvider
 	dataExchangeExportProvider   dataexchangemodulehost.ExportProvider
 	integrationMode              integrationsdk.DeploymentMode
-	notificationSubjectLifecycle lifecyclecontract.SubjectDataHandler
+	notificationSubjectLifecycle lifecyclecontract.SubjectExecutionHandler
 	notificationRetention        lifecyclecontract.OwnerLifecycleExecutor
 	auditRepository              auditrepository.AuditRepository
-	auditSubjectLifecycle        lifecyclecontract.SubjectDataHandler
+	auditSubjectLifecycle        lifecyclecontract.SubjectExecutionHandler
 	dataExchangeFactory          dataexchangesdk.Factory
 	agentBinding                 agentsdk.Binding
 	reportBinding                reportsdk.Binding
 }
 
-func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest manifestmodel.ManifestSchema, notifications composition.NotificationRenderer, store *persistence.RuntimeStore, identityDirectory identitysdk.Directory, identityPrincipals identitysdk.PrincipalResolver, partyDirectory partysdk.Directory, auditApplication *auditapplication.AuditApplicationService, apiLimiter ratelimit.Limiter, workerDependencies workerplatform.Dependencies, extensionRegistries ...runtimeExtensionRegistries) (runtimeServiceAssembly, error) {
+func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest manifestmodel.ManifestSchema, notifications composition.NotificationRenderer, store *persistence.RuntimeStore, identityDirectory identitysdk.Directory, identityPrincipals identitysdk.PrincipalResolver, partyDirectory partysdk.Directory, auditApplication *auditapplication.AuditApplicationService, workerDependencies workerplatform.Dependencies, extensionRegistries ...runtimeExtensionRegistries) (runtimeServiceAssembly, error) {
 	businessHandlers := runtimeext.NewBusinessHandlerRegistry()
 	connectorProviders := connector.NewRegistry()
 	var notificationCompiler func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
@@ -107,7 +106,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	var notificationSubjectLifecycle lifecyclecontract.SubjectExecutionHandler
 	var notificationRetention lifecyclecontract.OwnerLifecycleExecutor
 	var auditRepository auditrepository.AuditRepository
-	var auditSubjectLifecycle lifecyclecontract.SubjectDataHandler
+	var auditSubjectLifecycle lifecyclecontract.SubjectExecutionHandler
 	var dataExchangeFactory dataexchangesdk.Factory
 	var agentBinding agentsdk.Binding
 	var reportBinding reportsdk.Binding
@@ -130,6 +129,8 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		notificationPublisher = extensionRegistries[0].notificationPublisher
 		integrationOwnerDelivery = extensionRegistries[0].integrationOwnerDelivery
 		integrationOwnerCatalog = extensionRegistries[0].integrationOwnerCatalog
+		integrationOwnerManagement = extensionRegistries[0].integrationOwnerManagement
+		integrationOwnerOperations = extensionRegistries[0].integrationOwnerOperations
 		notificationSubjectLifecycle = extensionRegistries[0].notificationSubjectLifecycle
 		notificationRetention = extensionRegistries[0].notificationRetention
 		if extensionRegistries[0].auditRepository != nil {
@@ -171,25 +172,14 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	if err != nil {
 		return runtimeServiceAssembly{}, fmt.Errorf("open Data Exchange module: %w", err)
 	}
-	var agentTaskRuns agentpersistence.AgentTaskRunRepository
-	var agentTaskTransactions agentpersistence.AgentTaskTransactionRepository
 	var agentLifecycle agentpersistence.AgentLifecycleRepository
 	if agentBinding != nil {
-		persistenceBinding, ok := agentBinding.(agentpersistence.Binding)
-		if !ok || persistenceBinding.AgentTaskRunRepository() == nil {
-			return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding returned no owned task repository")
-		}
-		agentTaskRuns = persistenceBinding.AgentTaskRunRepository()
 		lifecycleBinding, _ := agentBinding.(agentpersistence.LifecycleBinding)
 		if lifecycleBinding != nil {
 			agentLifecycle = lifecycleBinding.AgentLifecycleRepository()
 		}
 		if agentLifecycle == nil {
 			return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding returned no lifecycle repository")
-		}
-		agentTaskTransactions, _ = agentTaskRuns.(agentpersistence.AgentTaskTransactionRepository)
-		if agentTaskTransactions == nil {
-			return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding returned no transaction repository")
 		}
 	}
 	uploadDirectory := cfg.UploadDir
@@ -206,7 +196,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		return runtimeServiceAssembly{}, fmt.Errorf("validate Lifecycle module: %w", err)
 	}
 	lifecycleArchives := lifecycleBinding.ArchiveStore()
-	if lifecycleBinding.Repository() == nil || lifecycleArchives == nil {
+	if lifecycleArchives == nil {
 		_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
 		return runtimeServiceAssembly{}, fmt.Errorf("Lifecycle Binding is incomplete")
 	}
@@ -249,34 +239,37 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	recordSubjectLifecycle := recordapplication.NewRecordSubjectLifecycleApplicationService(records, manifest.Objects, lifecycleArtifacts, manifest.IdentityProfileExtensions)
 	reportDatasetStore := reportpersistence.NewReportDatasetStore(store)
 	var agentTaskRunner agentsdk.TaskRunner
-	var interactiveAgentRunner agentsdk.InteractiveRunner
 	if agentBinding != nil {
 		agentTaskRunner = agentBinding.TaskRunner()
-		interactiveAgentRunner = agentBinding.InteractiveRunner()
 	}
-	agentTaskCredentialKey := sha256.Sum256([]byte("domainry-agent-task-credential-v1:" + cfg.IntegrationSecretKey))
 	projectRevision, metadataRevision := runtimeActionRevisions(manifest)
-	subjectHandlers := []lifecyclecontract.SubjectDataHandler{recordSubjectLifecycle, auditSubjectLifecycle}
+	subjectHandlers := []lifecyclecontract.SubjectExecutionHandler{recordSubjectLifecycle, auditSubjectLifecycle}
 	if notificationSubjectLifecycle != nil {
 		subjectHandlers = append(subjectHandlers, notificationSubjectLifecycle)
+	}
+	if err := lifecycleBinding.BindOwners(ctx, lifecyclesdk.OwnerExtensions{
+		Executors: lifecycleExecutorPorts, SubjectResolver: recordSubjectLifecycle, SubjectHandlers: subjectHandlers,
+		Artifacts: lifecycleArtifacts, UploadArtifacts: lifecycleFileArtifacts,
+	}); err != nil {
+		_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
+		return runtimeServiceAssembly{}, fmt.Errorf("bind Lifecycle owner extensions: %w", err)
+	}
+	if lifecycleBinding.Governance() == nil || lifecycleBinding.System() == nil {
+		_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
+		return runtimeServiceAssembly{}, fmt.Errorf("Lifecycle Binding returned no business capabilities")
 	}
 	services := composition.NewRuntimeServices(ctx, composition.RuntimeServicesConfig{
 		Manifest: manifest,
 		Dependencies: composition.RuntimeServicesDependencies{
 			ProductBrandName:                    cfg.EffectiveProductBrandName(),
-			AgentTaskRuns:                       agentTaskRuns,
 			AgentPrincipals:                     identityPrincipals,
 			AgentTaskRunner:                     agentTaskRunner,
-			AgentInteractiveRunner:              interactiveAgentRunner,
-			AgentTaskCredentialKey:              agentTaskCredentialKey[:],
-			AgentTaskWorkerConfig:               agentapplication.AgentTaskWorkerConfig{SystemScope: principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "claim durable Agent tasks"), LeaseTTL: cfg.SchedulerLeaseTTL, HeartbeatInterval: cfg.SchedulerLeaseTTL / 3, RetryBaseDelay: cfg.SchedulerPollInterval},
 			ActionRuntimeRevision:               cfg.RuntimeVersion,
 			ActionProjectRevision:               projectRevision,
 			ActionMetadataRevision:              metadataRevision,
 			Records:                             records,
 			ReportDatasetRows:                   reportDatasetStore,
 			ReportObjectSQL:                     reportDatasetStore,
-			ReportSnapshots:                     reportpersistence.NewModuleReportSnapshotStore(reportBinding.Snapshots()),
 			ReportSnapshotSources:               reportDatasetStore,
 			RecordExecutions:                    records,
 			DataExchange:                        dataExchangeBinding,
@@ -285,16 +278,15 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			AuditApplication:                    auditApplication,
 			AuditExportTokenKey:                 []byte(cfg.AuditExportTokenKey),
 			ApplicationSchema:                   appschemapersistence.NewApplicationSchemaStore(store),
-			IntegrationConfig:                   nil,
-			IntegrationEvents:                   nil,
+			MetadataDefinitions:                 store.Metadata().Definitions(),
+			MetadataLocalization:                store.Metadata().Localization(),
 			IntegrationPublication:              publicationhandoffpersistence.NewPublicationStore(store),
-			IntegrationWorker:                   nil,
 			IntegrationPublicationWorker:        publicationhandoffpersistence.NewWorkerStore(store),
 			WorkerWakeups:                       store.WorkerWakeups(),
 			WorkflowWorker:                      workflowpersistence.NewWorkflowWorkerStore(store),
 			WorkflowDefinitions:                 workflowpersistence.NewWorkflowDefinitionStore(store),
 			WorkflowProcesses:                   workflowpersistence.NewWorkflowProcessStore(store),
-			WorkflowDecisions:                   workflowpersistence.NewWorkflowDecisionStore(store, agentTaskTransactions),
+			WorkflowDecisions:                   workflowpersistence.NewWorkflowDecisionStore(store),
 			WorkflowNotificationCompiler:        notificationCompiler,
 			WorkflowTaskNotificationCommitter:   taskNotificationCommitter,
 			RecordNotificationCompiler:          notificationCompiler,
@@ -348,32 +340,28 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 				prepared["_runtime_scan_evidence_ref"] = evidence.EvidenceRef
 				return prepared, nil
 			},
-			ConnectorProviders:       connectorProviders,
-			RuntimeStatus:            deploymentpersistence.NewRuntimeStatusStore(store),
-			Notifications:            notifications,
-			IdentityDirectory:        identityDirectory,
-			PartyDirectory:           partyDirectory,
-			IntegrationAPILimiter:    apiLimiter,
-			IntegrationOwnerDelivery: integrationOwnerDelivery,
-			IntegrationOwnerCatalog:  integrationOwnerCatalog,
-			Lifecycle:                lifecycleBinding.Repository(),
-			LifecycleExecutors:       lifecycleExecutorPorts,
-			LifecycleArtifacts:       lifecycleArtifacts,
-			LifecycleUploadArtifacts: lifecycleFileArtifacts,
-			LifecycleSubjectHandlers: subjectHandlers,
-			LifecycleExternalErasure: nil,
-			Worker:                   workerDependencies,
+			RuntimeStatus:              deploymentpersistence.NewRuntimeStatusStore(store),
+			Notifications:              notifications,
+			IdentityDirectory:          identityDirectory,
+			PartyDirectory:             partyDirectory,
+			IntegrationOwnerDelivery:   integrationOwnerDelivery,
+			IntegrationOwnerCatalog:    integrationOwnerCatalog,
+			IntegrationOwnerManagement: integrationOwnerManagement,
+			IntegrationOwnerOperations: integrationOwnerOperations,
+			Worker:                     workerDependencies,
 		},
 	})
-	lifecyclePrincipal := principalmodel.NewSystemPrincipal("runtime-lifecycle", principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "install default lifecycle policies"))
+	lifecycleScope := lifecycleaccess.NewSystemScope(lifecycleaccess.SystemScopeInstallation, "install default lifecycle policies")
+	lifecyclePrincipal := lifecycleaccess.NewSystemPrincipal("runtime-lifecycle", lifecycleScope, lifecyclesdk.PermissionPolicyManage)
+	services.Applications().RuntimeStatus.ConfigureLifecycleHealth(ctx, lifecycleBinding.System())
 	workflowScope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "initialize published workflow definitions")
 	return completeRuntimeServiceAssembly(
 		runtimeServiceAssembly{services: services, records: records, worker: workerDependencies, dataExchangeBinding: dataExchangeBinding, lifecycleBinding: lifecycleBinding},
 		func() error {
-			return services.Applications().Lifecycle.InstallDefaultPolicies(ctx, principalmodel.InstallationWorkspaceID, lifecyclePrincipal, time.Now().UTC())
+			return lifecycleBinding.System().InstallDefaultPolicies(ctx, principalmodel.InstallationWorkspaceID, lifecyclePrincipal, time.Now().UTC())
 		},
 		func() {
-			services.Applications().Scheduler.ConfigureWorker(schedulerapplication.WorkerConfig{Enabled: cfg.SchedulerEnabled, PollInterval: cfg.SchedulerPollInterval, BatchSize: cfg.SchedulerBatchSize, LeaseTTL: cfg.SchedulerLeaseTTL, MaxCatchupWindows: cfg.SchedulerMaxCatchupWindows})
+			services.Applications().RecordTimers.ConfigureWorker(recordtimerapplication.WorkerConfig{Enabled: cfg.RecordTimerEnabled, PollInterval: cfg.RecordTimerPollInterval, BatchSize: cfg.RecordTimerBatchSize, LeaseTTL: cfg.RecordTimerLeaseTTL})
 		},
 		func() error {
 			return services.Applications().Workflows.InitializePublishedWorkflowDefinitions(ctx, manifest.Workflows, workflowScope)

@@ -23,10 +23,10 @@ func ActionDefinitionAuthoringCapability() capabilitycontract.CapabilityAuthorin
 			{Key: "expected_schema_hash", Type: "string", Required: true},
 		},
 		Permissions:        []string{"workspace.admin"},
-		ValidationEndpoint: "POST /metadata/definitions/action/{resourceKey}/validate",
+		ValidationEndpoint: "POST /tenant-admin/metadata/definitions/action/{resourceKey}/validate",
 		ConfigurationRoutes: []string{
-			"GET /metadata/definitions/action/{resourceKey}",
-			"POST /metadata/definitions/action/{resourceKey}/validate",
+			"GET /tenant-admin/metadata/definitions/action/{resourceKey}",
+			"POST /tenant-admin/metadata/definitions/action/{resourceKey}/validate",
 			"GET /domain-system-snapshot",
 			"GET /domain-reference-graph",
 		},

@@ -129,7 +129,9 @@ runtimehost.Options{
 }
 
 runtimehost.Options{
-    NotificationFactory: notificationremote.NewFactory(...), // SaaS
+    NotificationFactory: notificationmodule.NewSaaSFactory(
+        notificationremote.NewFactory(...),
+    ), // SaaS remote Binding + Notification-owned product HTTP Surface
 }
 ```
 
@@ -165,7 +167,8 @@ Host interface 只暴露该能力真实需要的端口，例如数据库 handle�
 
 ## 8. HTTP、worker 与可观测性
 
-- 进程内 HTTP Surface 由 SDK 合同声明，Host 校验 route、exposure、contract version 与重复 owner；SaaS Binding 不得偷偷挂载本地路由。
+- 产品 HTTP Surface 由能力实现仓通过 Foundation `modulehttp` 合同声明，不能塞进业务 SDK。Module Binding 直接暴露本地 Surface；需要保持同源产品路由的 SaaS 组合，由能力仓的薄 SaaS Factory 在 Remote Binding 外装配同一个 Surface。Remote client 本身不得实现产品 Handler。
+- Runtime Host 只校验并挂载 route、exposure、contract version、认证 guard 与重复 owner，不得复制能力产品 Handler。真正跨 Runtime 资源授权或宿主持久化的少量端点可以留在 Runtime，但必须逐条说明 owner。
 - Module worker 受 Runtime admission、context cancellation 和 shutdown 管理；SaaS worker 由 SaaS owner 管理。
 - 两种模式必须保留相同的业务幂等、重试上限、dead-letter 和取消语义，但 lease、heartbeat 和扩缩容实现可不同。
 - 日志、metric、trace 必须携带 capability、mode、workspace/application、operation 和稳定错误码；不得记录 credential 或敏感 payload。
@@ -228,4 +231,3 @@ remote adapter -> module package
 3. 是否新增了 SDK 泄漏、Runtime implementation 依赖或隐式 topology switch？
 4. 数据与 worker 最终由谁负责？失败后由谁恢复？
 5. 哪个 contract/integration/external compile test 证明边界没有退化？
-

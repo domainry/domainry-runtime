@@ -9,12 +9,12 @@
 | [Party](party.md) | `runtimehost.Options.PartyFactory` | 已实现 | 已实现 | 组织范围通过 SDK 投影给 Identity |
 | [Monitoring](monitoring.md) | `runtimehost.Options.MonitoringFactory` | 已实现 | 已实现 | Module/SaaS Host 分支已存在 |
 | [Scheduler](scheduler.md) | `runtimehost.Options.SchedulerFactory` | 已实现 | 已实现 | Module worker 受 Runtime admission，SaaS 拥有 clock worker |
-| [Agent](agent.md) | `runtimehost.Options.AgentFactory` | 已实现 | 已实现 | Runtime 保留 task/workflow/授权 owner；Agent 拥有 provider execution |
+| [Agent](agent.md) | `runtimehost.Options.AgentFactory` | 已实现 | 已实现 | Agent 拥有 dialog/task/interactive execution state；Runtime 保留 workflow/授权/宿主回调 |
 | [Data Exchange](data-exchange.md) | `runtimehost.Options.DataExchangeFactory` | 已实现 | 已实现 | Host 暴露 import/export provider |
 | [Integration](integration.md) | `runtimehost.Options.IntegrationFactory` | 已实现 | 已实现 | Runtime 只保留 durable publication handoff |
 | [Metadata](metadata.md) | Runtime bootstrap 固定组装 | 已实现 | 未形成可选拓扑 | 定义版本与 workspace preference/rule-set 归 Metadata |
 | [Lifecycle](lifecycle.md) | Runtime bootstrap 固定组装 | 已实现 | 未形成可选拓扑 | Runtime 保留运维 HTTP 编排，状态与 persistence 归 Lifecycle |
-| [Report](report.md) | Runtime bootstrap 固定组装 | 已实现 | 未形成可选拓扑 | Runtime 同步 manifest 定义，执行状态归 Report |
+| [Report](report.md) | `runtimehost.Options.ReportFactory` | 已实现 | 已实现 | Report 拥有定义/查询/快照/产品 HTTP；Data Exchange 拥有导出任务生命周期 |
 | [Audit](audit.md) | Runtime bootstrap 固定组装 | 已实现 | 未形成可选拓扑 | 支持同事务 prepared append |
 
 ## 新模块文档要求

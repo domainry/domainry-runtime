@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
+	reportobjectsql "github.com/domainry/domainry-report/query/objectsql"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 )
 
@@ -88,7 +89,7 @@ func reportObjectSQLContainsAggregate(expression reportmodel.ReportObjectSQLExpr
 // enforced on the definition-contract path (model validate / Blueprint
 // authoring); already-published definitions keep executing unchanged.
 func (v *reportDefinitionValidator) validateObjectSQLExplicitBounds(plan reportmodel.ReportObjectSQLPlan) {
-	if !v.requireObjectSQLExplicitBounds || reportcontract.ReportObjectSQLPlanSingleRow(plan) {
+	if !v.requireObjectSQLExplicitBounds || reportobjectsql.ReportObjectSQLPlanSingleRow(plan) {
 		return
 	}
 	// GROUP BY plans inherit a deterministic order from their grouping terms;
@@ -102,8 +103,8 @@ func (v *reportDefinitionValidator) validateObjectSQLExplicitBounds(plan reportm
 	if !plan.ExplicitLimit {
 		v.issue("backend.report.object_sql_limit_required", "object_sql_v1.sql.limit", map[string]string{
 			"missing_clause": "LIMIT",
-			"default_limit":  strconv.Itoa(reportcontract.ReportObjectSQLDefaultLimitRows),
-			"maximum":        strconv.Itoa(reportcontract.ReportObjectSQLMaximumLimitRows),
+			"default_limit":  strconv.Itoa(reportobjectsql.ReportObjectSQLDefaultLimitRows),
+			"maximum":        strconv.Itoa(reportobjectsql.ReportObjectSQLMaximumLimitRows),
 			"reason":         "declare a literal LIMIT sized to the business bound; the implicit default of 1000 rows equals the sync/async export threshold and silently truncates larger reports",
 		})
 	}

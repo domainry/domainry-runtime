@@ -19,6 +19,10 @@ func openStoreForGeneratedListTest(t *testing.T) *database.RuntimeStore {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := store.BindMetadata(newMetadataBindingStub()); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
 	return store
 }
 
@@ -31,6 +35,10 @@ func openStoreForMetadataTest(t *testing.T) *metadataTestStore {
 	t.Helper()
 	store, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "app.db")})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BindMetadata(newMetadataBindingStub()); err != nil {
+		_ = store.Close()
 		t.Fatal(err)
 	}
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {

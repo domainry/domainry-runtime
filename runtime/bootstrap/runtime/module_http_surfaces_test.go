@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	partysdk "github.com/domainry/domainry-party-sdk"
 )
@@ -25,15 +26,28 @@ type runtimePartySurfaceBinding struct {
 	surfaces []modulehttp.Surface
 }
 
+type runtimeDataExchangeSurfaceBinding struct {
+	dataexchange.Binding
+	surfaces []modulehttp.Surface
+}
+
+func (binding runtimeDataExchangeSurfaceBinding) HTTPSurfaces() []modulehttp.Surface {
+	return append([]modulehttp.Surface(nil), binding.surfaces...)
+}
+
 func (binding runtimePartySurfaceBinding) HTTPSurfaces() []modulehttp.Surface {
 	return append([]modulehttp.Surface(nil), binding.surfaces...)
 }
 
 func TestRuntimeCollectsModuleOwnedHTTPSurfaces(t *testing.T) {
 	party := runtimeModuleSurface{owner: "party"}
-	runtime := &Runtime{partyBinding: runtimePartySurfaceBinding{surfaces: []modulehttp.Surface{party}}}
+	dataExchange := runtimeModuleSurface{owner: "data_exchange"}
+	runtime := &Runtime{
+		partyBinding:        runtimePartySurfaceBinding{surfaces: []modulehttp.Surface{party}},
+		dataExchangeBinding: runtimeDataExchangeSurfaceBinding{surfaces: []modulehttp.Surface{dataExchange}},
+	}
 	surfaces := runtime.ModuleHTTPSurfaces()
-	if len(surfaces) != 2 || surfaces[0].Owner() != "party" || surfaces[1].Name() != "module_inventory" {
+	if len(surfaces) != 3 || surfaces[0].Owner() != "party" || surfaces[1].Owner() != "data_exchange" || surfaces[2].Name() != "module_inventory" {
 		t.Fatalf("surfaces=%#v", surfaces)
 	}
 	if err := modulehttp.ValidateSurface(surfaces[1]); err != nil {
@@ -53,3 +67,4 @@ func TestRuntimeCollectsModuleOwnedHTTPSurfaces(t *testing.T) {
 
 var _ modulehttp.Surface = runtimeModuleSurface{}
 var _ modulehttp.Provider = runtimePartySurfaceBinding{}
+var _ modulehttp.Provider = runtimeDataExchangeSurfaceBinding{}

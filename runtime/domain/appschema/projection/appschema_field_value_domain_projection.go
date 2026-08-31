@@ -216,10 +216,6 @@ func mergeGeneratedDictionaryItems(defaultItems, localizedItems []appschemamodel
 	return items
 }
 
-func ApplicationSchemaMergeGeneratedDictionaryItems(defaultItems, localizedItems []appschemamodel.DictionaryItemSchema) []appschemamodel.DictionaryItemSchema {
-	return mergeGeneratedDictionaryItems(defaultItems, localizedItems)
-}
-
 func ApplicationSchemaNormalizeGeneratedDictionaryItem(item appschemamodel.DictionaryItemSchema) appschemamodel.DictionaryItemSchema {
 	return normalizeGeneratedDictionaryItem(item)
 }

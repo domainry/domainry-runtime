@@ -18,7 +18,7 @@ func initializeSchemaAndRecordFoundation(s *runtimeAssembly, deps RuntimeService
 		Repository: deps.Records,
 		Audit:      s.auditApplicationService.AppendWithMetadata,
 	})
-	s.schemaService = appschemaapplication.NewApplicationSchemaQueryApplicationService(s, deps.ApplicationSchema)
+	s.schemaService = appschemaapplication.NewApplicationSchemaQueryApplicationService(s, deps.MetadataLocalization)
 	s.RecordQueryPolicyDomainService = newRecordQueryPolicyService(s)
 	queryPolicy := recordQueryPolicyAdapter{service: s.RecordQueryPolicyDomainService}
 	s.recordStateMachineEffects = newRecordStateMachineEffects()

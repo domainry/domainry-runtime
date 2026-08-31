@@ -7,19 +7,17 @@ import (
 	"strings"
 	"time"
 
-	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
+	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 )
 
-const productSurfaceHeader = "X-Domainry-Product-Surface"
-
-func (s *HTTPRouter) withSurfaceRouteGroupPolicy(group SurfaceRouteGroup, next http.Handler) http.Handler {
-	policy := s.surfaceGroupPolicies[group]
-	controller := s.surfaceGroupCapacity[group]
+func (s *HTTPRouter) withListenerRouteGroupPolicy(group ListenerRouteGroup, next http.Handler) http.Handler {
+	policy := s.listenerGroupPolicies[group]
+	controller := s.listenerGroupCapacity[group]
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		if s.httpMetrics != nil {
 			defer func() {
-				s.httpMetrics.ObserveSurfaceGroup(string(group), recorder.status, surfaceMutationRequest(r))
+				s.httpMetrics.ObserveListenerGroup(string(group), recorder.status, listenerMutationRequest(r))
 			}()
 		}
 		w = recorder
@@ -31,13 +29,13 @@ func (s *HTTPRouter) withSurfaceRouteGroupPolicy(group SurfaceRouteGroup, next h
 			r.Body = http.MaxBytesReader(w, r.Body, policy.MaxJSONBodyBytes)
 		}
 		if s.rateLimiter != nil && policy.RateLimitPerMinute > 0 && !capacityProbePath(r.URL.Path) {
-			decision, err := s.rateLimiter.Allow(r.Context(), "http_surface:"+string(group), policy.RateLimitPerMinute, time.Minute)
+			decision, err := s.rateLimiter.Allow(r.Context(), "http_listener:"+string(group), policy.RateLimitPerMinute, time.Minute)
 			if err != nil {
 				w.Header().Set("Retry-After", "1")
-				s.appendSecurityAudit(r, "surface_listener_rate_limit_unavailable", "Runtime listener rate-limit backend unavailable", map[string]any{
+				s.appendSecurityAudit(r, "listener_rate_limit_unavailable", "Runtime listener rate-limit backend unavailable", map[string]any{
 					"group": group, "audit_class": policy.AuditClass,
 				})
-				writeError(w, r, http.StatusServiceUnavailable, "capacity.surface_rate_limit_unavailable")
+				writeError(w, r, http.StatusServiceUnavailable, "capacity.listener_rate_limit_unavailable")
 				return
 			}
 			if !decision.Allowed {
@@ -46,10 +44,10 @@ func (s *HTTPRouter) withSurfaceRouteGroupPolicy(group SurfaceRouteGroup, next h
 					retrySeconds = 1
 				}
 				w.Header().Set("Retry-After", strconv.FormatInt(retrySeconds, 10))
-				s.appendSecurityAudit(r, "surface_listener_rate_limited", "Runtime listener rate limit denied", map[string]any{
+				s.appendSecurityAudit(r, "listener_rate_limited", "Runtime listener rate limit denied", map[string]any{
 					"group": group, "audit_class": policy.AuditClass,
 				})
-				writeError(w, r, http.StatusTooManyRequests, "capacity.surface_rate_limited")
+				writeError(w, r, http.StatusTooManyRequests, "capacity.listener_rate_limited")
 				return
 			}
 		}
@@ -71,11 +69,11 @@ func (s *HTTPRouter) withSurfaceRouteGroupPolicy(group SurfaceRouteGroup, next h
 					retrySeconds = 1
 				}
 				w.Header().Set("Retry-After", strconv.FormatInt(retrySeconds, 10))
-				s.appendSecurityAudit(r, "surface_listener_rate_limited", "Runtime listener rate limit denied", map[string]any{
+				s.appendSecurityAudit(r, "listener_rate_limited", "Runtime listener rate limit denied", map[string]any{
 					"group":       group,
 					"audit_class": policy.AuditClass,
 				})
-				writeError(w, r, http.StatusTooManyRequests, "capacity.surface_rate_limited")
+				writeError(w, r, http.StatusTooManyRequests, "capacity.listener_rate_limited")
 				return
 			}
 			defer lease.Release()
@@ -100,7 +98,7 @@ func corsOriginAllowed(allowedOrigins []string, origin string) bool {
 	return false
 }
 
-func surfaceMutationRequest(r *http.Request) bool {
+func listenerMutationRequest(r *http.Request) bool {
 	if r == nil {
 		return false
 	}

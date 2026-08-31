@@ -1,7 +1,6 @@
 package record
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -31,11 +30,7 @@ func (p *recordDataExchangeImportProvider) ValidateImportBatch(ctx context.Conte
 	if err := p.validateScope(batch.Scope); err != nil {
 		return dataexchangesdk.ImportBatchResult{}, err
 	}
-	raw, err := recordDataExchangeCSV(batch)
-	if err != nil {
-		return dataexchangesdk.ImportBatchResult{}, err
-	}
-	preview, err := p.service.Preview(ctx, batch.ObjectKey, raw, p.principal)
+	preview, err := p.service.PreviewRows(ctx, batch.ObjectKey, batch.Headers, batch.Rows, p.principal)
 	if err != nil {
 		return dataexchangesdk.ImportBatchResult{}, err
 	}
@@ -74,11 +69,7 @@ func (p *recordDataExchangeImportProvider) ApplyImportBatch(ctx context.Context,
 	if err := p.validateScope(batch.Scope); err != nil {
 		return dataexchangesdk.ImportBatchResult{}, err
 	}
-	raw, err := recordDataExchangeCSV(batch)
-	if err != nil {
-		return dataexchangesdk.ImportBatchResult{}, err
-	}
-	result, _, err := p.service.ApplyIdempotent(ctx, batch.ObjectKey, raw, "data-exchange:"+batch.ChunkID, p.principal)
+	result, _, err := p.service.ApplyRowsIdempotent(ctx, batch.ObjectKey, batch.Headers, batch.Rows, "data-exchange:"+batch.ChunkID, p.principal)
 	if err != nil {
 		return dataexchangesdk.ImportBatchResult{}, err
 	}
@@ -93,26 +84,6 @@ func (p *recordDataExchangeImportProvider) validateScope(scope dataexchangesdk.S
 		return apperror.New(apperror.KindForbidden, "backend.data_exchange.import_scope_mismatch", nil, nil)
 	}
 	return nil
-}
-
-func recordDataExchangeCSV(batch dataexchangesdk.ImportBatch) ([]byte, error) {
-	var output bytes.Buffer
-	encoder := dataexchangesdk.NewCSVEncoder(&output, recordImportMaxBytes)
-	if err := encoder.Write(batch.Headers); err != nil {
-		return nil, err
-	}
-	for _, row := range batch.Rows {
-		if len(row.Values) != len(batch.Headers) {
-			return nil, apperror.New(apperror.KindBadRequest, "backend.import.invalid_csv", nil, nil)
-		}
-		if err := encoder.Write(row.Values); err != nil {
-			return nil, err
-		}
-	}
-	if err := encoder.Close(); err != nil {
-		return nil, err
-	}
-	return output.Bytes(), nil
 }
 
 var _ modulehost.ImportProvider = (*recordDataExchangeImportProvider)(nil)

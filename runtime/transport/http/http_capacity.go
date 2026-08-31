@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
+	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 )
 
 func (s *HTTPRouter) withAdmission(routes *http.ServeMux, next http.Handler) http.Handler {

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestTenantMetadataRoutesUseAuthenticatedOwnerPermissionBoundary(t *testing.T) {
+func TestRuntimeOnlyRegistersRuntimeOwnedMetadataRoutes(t *testing.T) {
 	handler := NewApplicationSchemaHandler(ApplicationSchemaDependencies{
 		Admin: func(http.HandlerFunc) http.HandlerFunc {
 			return func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) }
@@ -17,14 +17,20 @@ func TestTenantMetadataRoutesUseAuthenticatedOwnerPermissionBoundary(t *testing.
 	})
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/tenant-admin/metadata/definitions/object/account/validate", nil))
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("Runtime authoring validation status=%d", response.Code)
+	}
 	for _, route := range []struct{ method, path string }{
 		{http.MethodGet, "/tenant-admin/metadata/definitions/object"},
 		{http.MethodGet, "/tenant-admin/metadata/localized-texts"},
+		{http.MethodGet, "/dictionaries/status/items"},
 	} {
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, httptest.NewRequest(route.method, route.path, nil))
-		if response.Code != http.StatusNoContent {
-			t.Fatalf("%s %s still uses Admin Console wrapper: status=%d", route.method, route.path, response.Code)
+		if response.Code != http.StatusNotFound {
+			t.Fatalf("Runtime still registers Metadata-owned route %s %s: status=%d", route.method, route.path, response.Code)
 		}
 	}
 }

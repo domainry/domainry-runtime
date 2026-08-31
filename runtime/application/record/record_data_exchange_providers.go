@@ -22,13 +22,18 @@ type DataExchangeProviders struct {
 	importer        *RecordImportApplicationService
 	exporter        *RecordExportApplicationService
 	resolve         func(context.Context, string, string) principalmodel.Principal
-	imports         map[string]*recordDataExchangeImportProvider
+	imports         map[string]recordDataExchangeImportAttempt
 	importProviders map[string]modulehost.ImportProvider
 	exportProviders map[string]modulehost.ExportProvider
 }
 
+type recordDataExchangeImportAttempt struct {
+	attempt  int
+	provider *recordDataExchangeImportProvider
+}
+
 func NewDataExchangeProviders(resolve func(context.Context, string, string) principalmodel.Principal) *DataExchangeProviders {
-	return &DataExchangeProviders{resolve: resolve, imports: map[string]*recordDataExchangeImportProvider{}, importProviders: map[string]modulehost.ImportProvider{}, exportProviders: map[string]modulehost.ExportProvider{}}
+	return &DataExchangeProviders{resolve: resolve, imports: map[string]recordDataExchangeImportAttempt{}, importProviders: map[string]modulehost.ImportProvider{}, exportProviders: map[string]modulehost.ExportProvider{}}
 }
 
 // RegisterImportProvider attaches an application-owned atomic or row-batch
@@ -104,34 +109,51 @@ func (p *DataExchangeProviders) ResolvePrincipal(ctx context.Context, scope data
 
 type dataExchangeImportProvider struct{ owner *DataExchangeProviders }
 
+func (p dataExchangeImportProvider) ProjectDataExchangeJob(_ context.Context, job dataexchange.Job, scope dataexchange.Scope) (any, error) {
+	return projectRecordDataExchangeJob(job, scope)
+}
+
 func (p dataExchangeImportProvider) ValidateImportBatch(ctx context.Context, b dataexchange.ImportBatch) (dataexchange.ImportBatchResult, error) {
+	attempt := b.Attempt
+	if attempt <= 0 {
+		attempt = 1
+	}
 	p.owner.mu.Lock()
-	provider := p.owner.imports[b.JobID]
-	if provider == nil && p.owner.importer != nil {
-		provider = newRecordDataExchangeImportProvider(p.owner.importer, p.owner.principal(ctx, b.Scope))
-		p.owner.imports[b.JobID] = provider
+	entry := p.owner.imports[b.JobID]
+	if (entry.provider == nil || entry.attempt != attempt) && p.owner.importer != nil {
+		entry = recordDataExchangeImportAttempt{attempt: attempt, provider: newRecordDataExchangeImportProvider(p.owner.importer, p.owner.principal(ctx, b.Scope))}
+		p.owner.imports[b.JobID] = entry
 	}
 	p.owner.mu.Unlock()
-	if provider == nil {
+	if entry.provider == nil {
 		return dataexchange.ImportBatchResult{}, fmt.Errorf("Record import provider is unavailable")
 	}
-	return provider.ValidateImportBatch(ctx, b)
+	result, err := entry.provider.ValidateImportBatch(ctx, b)
+	if b.Final {
+		p.owner.mu.Lock()
+		if current := p.owner.imports[b.JobID]; current.provider == entry.provider {
+			delete(p.owner.imports, b.JobID)
+		}
+		p.owner.mu.Unlock()
+	}
+	return result, err
 }
 func (p dataExchangeImportProvider) ApplyImportBatch(ctx context.Context, b dataexchange.ImportBatch) (dataexchange.ImportBatchResult, error) {
 	p.owner.mu.Lock()
-	provider := p.owner.imports[b.JobID]
-	delete(p.owner.imports, b.JobID)
-	if provider == nil && p.owner.importer != nil {
-		provider = newRecordDataExchangeImportProvider(p.owner.importer, p.owner.principal(ctx, b.Scope))
-	}
+	importer := p.owner.importer
 	p.owner.mu.Unlock()
-	if provider == nil {
+	if importer == nil {
 		return dataexchange.ImportBatchResult{}, fmt.Errorf("Record import provider is unavailable")
 	}
+	provider := newRecordDataExchangeImportProvider(importer, p.owner.principal(ctx, b.Scope))
 	return provider.ApplyImportBatch(ctx, b)
 }
 
 type dataExchangeExportProvider struct{ owner *DataExchangeProviders }
+
+func (p dataExchangeExportProvider) ProjectDataExchangeJob(_ context.Context, job dataexchange.Job, scope dataexchange.Scope) (any, error) {
+	return projectRecordDataExchangeJob(job, scope)
+}
 
 func (p dataExchangeExportProvider) ReadExportPage(ctx context.Context, r dataexchange.ExportPageRequest) (dataexchange.ExportPage, error) {
 	p.owner.mu.Lock()
@@ -171,4 +193,13 @@ func (p dataExchangeExportProvider) ReadExportPage(ctx context.Context, r dataex
 	return dataexchange.ExportPage{Columns: page.columns, Rows: page.rows, Total: (pageNumber-1)*recordExportBatchSize + len(page.rows)}, nil
 }
 
+func projectRecordDataExchangeJob(job dataexchange.Job, scope dataexchange.Scope) (any, error) {
+	if job.Provider != "records" || job.WorkspaceID != strings.TrimSpace(scope.WorkspaceID) || job.ActorID != strings.TrimSpace(scope.ActorID) {
+		return nil, dataexchange.ErrJobNotFound
+	}
+	return recordBatchJobFromDataExchange(job), nil
+}
+
 var _ modulehost.Host = (*DataExchangeProviders)(nil)
+var _ modulehost.JobProjector = dataExchangeImportProvider{}
+var _ modulehost.JobProjector = dataExchangeExportProvider{}

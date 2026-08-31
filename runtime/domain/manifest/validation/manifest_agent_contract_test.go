@@ -78,7 +78,6 @@ func TestManifestAgentContractsFailClosed(t *testing.T) {
 		{name: "missing service user", mutate: func(m *manifestmodel.ManifestSchema) { m.AgentServicePrincipals[0].UserID = "" }, want: "stable non-empty service identity"},
 		{name: "invalid service rotation", mutate: func(m *manifestmodel.ManifestSchema) { m.AgentServicePrincipals[0].RotationVersion = 0 }, want: "must be at least 1"},
 		{name: "unknown entrypoint agent", mutate: func(m *manifestmodel.ManifestSchema) { m.AgentEntrypoints[0].AgentKey = "missing" }, want: "references unknown agent"},
-		{name: "unknown surface", mutate: func(m *manifestmodel.ManifestSchema) { m.AgentEntrypoints[0].Surface = "root" }, want: "unknown product Surface"},
 		{name: "empty entrypoint permission", mutate: func(m *manifestmodel.ManifestSchema) { m.AgentEntrypoints[0].RequiredPermissions = nil }, want: "must declare at least one permission"},
 		{name: "unknown task target", mutate: func(m *manifestmodel.ManifestSchema) { m.AgentEntrypoints[0].AllowedTaskKeys = []string{"missing"} }, want: "unknown Agent Task"},
 		{name: "task target belongs to another agent", mutate: func(m *manifestmodel.ManifestSchema) {
@@ -89,11 +88,6 @@ func TestManifestAgentContractsFailClosed(t *testing.T) {
 		{name: "unknown workflow target", mutate: func(m *manifestmodel.ManifestSchema) { m.AgentEntrypoints[0].AllowedWorkflowKeys = []string{"missing"} }, want: "unknown Workflow"},
 		{name: "disabled workflow target", mutate: func(m *manifestmodel.ManifestSchema) { m.Workflows[0].Enabled = false }, want: "disabled Workflow"},
 		{name: "workflow target not manual", mutate: func(m *manifestmodel.ManifestSchema) { m.Workflows[0].TriggerContract.Type = "scheduled" }, want: "invocation.workflow_entry_mode_invalid"},
-		{name: "default conflict", mutate: func(m *manifestmodel.ManifestSchema) {
-			duplicate := m.AgentEntrypoints[0]
-			duplicate.Key = "assistant.secondary"
-			m.AgentEntrypoints = append(m.AgentEntrypoints, duplicate)
-		}, want: "conflicts with default assignment"},
 		{name: "unknown context hint", mutate: func(m *manifestmodel.ManifestSchema) {
 			m.AgentEntrypoints[0].ContextContract.AllowedHintFields = []string{"principal"}
 		}, want: "unsupported context hint"},
@@ -162,8 +156,8 @@ func validAgentContractManifest() manifestmodel.ManifestSchema {
 			ContractVersion: agentsdk.AgentServicePrincipalContractVersion, Key: "customer_agent_service", UserID: "agent_customer_service", RoleKey: "agent_service", Enabled: true, RotationVersion: 1,
 		}},
 		AgentEntrypoints: []agentsdk.AgentEntrypointAssignment{{
-			ContractVersion: agentsdk.AgentEntrypointContractVersion, Key: "assistant.global", AgentKey: "customer_agent", Surface: "business_workspace",
-			DefaultForSurface: true, RequiredPermissions: []string{"agent.use"}, RoutePatterns: []string{"workspace.*"}, AllowedTaskKeys: []string{"customer.summarize"},
+			ContractVersion: agentsdk.AgentEntrypointContractVersion, Key: "assistant.global", AgentKey: "customer_agent",
+			RequiredPermissions: []string{"agent.use"}, RoutePatterns: []string{"workspace.*"}, AllowedTaskKeys: []string{"customer.summarize"},
 			AllowedWorkflowKeys: []string{"customer.review"}, Enabled: true,
 			ContextContract: agentsdk.GlobalAgentContextContract{ContractVersion: agentsdk.GlobalAgentContextContractVersion, AllowedHintFields: []string{"route_key", "record_id"}, MaxSelectedRecord: 20, MaxContextBytes: 65536},
 			RoutingContract: agentsdk.AgentRoutingContract{ContractVersion: agentsdk.AgentRoutingContractVersion, AllowedRouteTypes: []string{agentsdk.AgentRouteInteractiveQuery, agentsdk.AgentRouteTask, agentsdk.AgentRouteWorkflow}},

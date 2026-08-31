@@ -32,7 +32,6 @@ func TestApplyMetadataCandidateMutationCoversEveryPublishedResourceKind(t *testi
 		candidateMutation("create", "workflow", "customer.flow", "", `{"key":"customer.flow"}`),
 		candidateMutation("create", "automation_rule", "customer.changed", "", `{"key":"customer.changed"}`),
 		candidateMutation("create", "dictionary", "customer.status", "", `{"key":"customer.status"}`),
-		candidateMutation("create", "connector", "crm", "", `{"key":"crm"}`),
 		candidateMutation("create", "integration_event_mapping", "crm.updated", "", `{"key":"crm.updated"}`),
 		candidateMutation("create", "skill", "customer.skill", "", `{"key":"customer.skill"}`),
 		candidateMutation("create", "agent", "customer.agent", "", `{"key":"customer.agent"}`),
@@ -70,6 +69,7 @@ func TestApplyMetadataCandidateMutationRejectsEveryMalformedBoundary(t *testing.
 	}{
 		{"operation", candidateMutation("publish", "object", "x", "", `{}`), "unsupported operation"},
 		{"resource", candidateMutation("create", "unknown", "x", "", `{}`), "unsupported candidate resource type"},
+		{"connector owner", candidateMutation("create", "connector", "crm", "", `{}`), "unsupported candidate resource type"},
 		{"object json", candidateMutation("create", "object", "x", "", `{`), "unexpected end"},
 		{"object key", candidateMutation("create", "object", "x", "", `{"key":"y"}`), "resource key mismatch"},
 		{"field object", candidateMutation("create", "field", "missing.name", "", `{"key":"name"}`), "unknown object"},

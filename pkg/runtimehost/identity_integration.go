@@ -58,14 +58,14 @@ func openProjectIdentity(ctx context.Context, cfg config.Config, factory identit
 
 type identitySurfaceRouter = moduleSurfaceRouter
 
-func newIdentitySurfaceRouter(group runtimehttp.SurfaceRouteGroup, fallback http.Handler) *identitySurfaceRouter {
+func newIdentitySurfaceRouter(group runtimehttp.ListenerRouteGroup, fallback http.Handler) *identitySurfaceRouter {
 	return newModuleSurfaceRouter(group, fallback)
 }
 
-func mountIdentityHTTPSurfaces(group runtimehttp.SurfaceRouteGroup, surfaces []identityhttpapi.Surface, fallback http.Handler) (http.Handler, error) {
+func mountIdentityHTTPSurfaces(group runtimehttp.ListenerRouteGroup, surfaces []identityhttpapi.Surface, fallback http.Handler) (http.Handler, error) {
 	return mountModuleHTTPSurfaces(group, surfaces, fallback, func(_ modulehttp.Route, handler http.Handler) (http.Handler, error) { return handler, nil })
 }
 
-func identityRouteVisible(group runtimehttp.SurfaceRouteGroup, exposures []identityhttpapi.Exposure) bool {
+func identityRouteVisible(group runtimehttp.ListenerRouteGroup, exposures []identityhttpapi.Exposure) bool {
 	return moduleRouteVisible(group, []modulehttp.Exposure(exposures))
 }

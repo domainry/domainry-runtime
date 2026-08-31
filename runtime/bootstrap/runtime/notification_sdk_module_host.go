@@ -48,13 +48,13 @@ func notificationSDKCatalog(defaultLocale string, manifest manifestmodel.Manifes
 	if err != nil {
 		return modulehost.Catalog{}, fmt.Errorf("convert Notification rules to SDK catalog: %w", err)
 	}
-	capabilities, err := notificationSDKConvert[[]contract.NotificationTemplateCapability](notificationbinding.ProviderCapabilities())
+	capabilities, err := notificationSDKConvert[[]contract.NotificationTemplateCapability](modulehost.DefaultProviderCapabilities())
 	if err != nil {
 		return modulehost.Catalog{}, fmt.Errorf("convert Notification provider capabilities to SDK catalog: %w", err)
 	}
 	return modulehost.Catalog{
 		DefaultLocale:    defaultLocale,
-		Surfaces:         []string{runtimeext.SurfaceBusinessWorkspace, runtimeext.SurfaceConsumerPortal},
+		Surfaces:         []string{"business", "portal"},
 		ExternalChannels: notificationModuleChannels(manifest.NotificationRules), Templates: templates,
 		TemplateCapabilities: capabilities, EventTypes: events, Rules: rules,
 	}, nil
@@ -358,39 +358,6 @@ func cloneSDKMap(value map[string]any) map[string]any {
 	return result
 }
 
-type notificationSDKProviderTemplateValidator struct{}
-
-var notificationSDKTemplateName = regexp.MustCompile(`^[a-z0-9_]+$`)
-var notificationSDKTemplateLanguage = regexp.MustCompile(`^[a-z]{2,3}([_-][A-Z]{2})?$`)
-var notificationSDKButtonIndex = regexp.MustCompile(`^[0-9]$`)
-
-func (notificationSDKProviderTemplateValidator) ValidateProviderTemplate(channel, provider string, value contract.NotificationProviderTemplate) error {
-	if channel != "whatsapp" || provider == "" || !notificationSDKTemplateName.MatchString(strings.TrimSpace(value.Name)) || !notificationSDKTemplateLanguage.MatchString(strings.TrimSpace(value.Language)) || len(value.Components) > 12 {
-		return fmt.Errorf("invalid WhatsApp provider template")
-	}
-	for _, component := range value.Components {
-		typeName, subtype, index := strings.TrimSpace(component.Type), strings.TrimSpace(component.SubType), strings.TrimSpace(component.Index)
-		if (typeName == "header" || typeName == "body") && (subtype != "" || index != "") {
-			return fmt.Errorf("invalid WhatsApp provider template component")
-		}
-		if typeName == "button" && ((subtype != "url" && subtype != "quick_reply") || !notificationSDKButtonIndex.MatchString(index)) {
-			return fmt.Errorf("invalid WhatsApp provider template button")
-		}
-		if typeName != "header" && typeName != "body" && typeName != "button" {
-			return fmt.Errorf("invalid WhatsApp provider template component")
-		}
-		if len(component.Parameters) == 0 || len(component.Parameters) > 10 {
-			return fmt.Errorf("invalid WhatsApp provider template parameters")
-		}
-		for _, parameter := range component.Parameters {
-			if strings.TrimSpace(parameter) == "" {
-				return fmt.Errorf("invalid WhatsApp provider template parameters")
-			}
-		}
-	}
-	return nil
-}
-
 func notificationSDKConvert[To any, From any](value From) (To, error) {
 	var result To
 	encoded, err := json.Marshal(value)
@@ -404,4 +371,3 @@ func notificationSDKConvert[To any, From any](value From) (To, error) {
 var _ modulehost.Host = notificationSDKModuleHost{}
 var _ modulehost.DeliveryGateway = (*notificationSDKDeliveryGateway)(nil)
 var _ modulehost.DeliveryMetrics = notificationSDKDeliveryMetrics{}
-var _ modulehost.ProviderTemplateValidator = notificationSDKProviderTemplateValidator{}

@@ -15,11 +15,12 @@ import (
 	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
 func assembleBusinessSystemApplication(
 	schema *appschemaapplication.ApplicationSchemaQueryApplicationService,
-	metadata *appschemaapplication.ApplicationSchemaApplicationService,
+	metadata metadatasdk.Definitions,
 	workflows *workflowapplication.WorkflowApplicationService,
 	automations *automationapplication.AutomationApplicationService,
 	publications *publicationhandoff.PublicationHandoffApplicationService,
@@ -30,7 +31,7 @@ func assembleBusinessSystemApplication(
 ) *businesssystemapplication.BusinessSystemApplicationService {
 	return businesssystemapplication.NewBusinessSystemApplicationService(businesssystemapplication.BusinessSystemApplicationDependencies{
 		FeaturePermissions: schema.FeaturePermissions, SchemaForPrincipal: schema.ForPrincipal,
-		ApplicationDefinitions: metadata.ListApplicationDefinitions, Evidence: evidence,
+		Definitions: metadata, Evidence: evidence,
 		Runtime: businesssystemapplication.BusinessSystemRuntimeProjectionDependencies{
 			WorkflowProcesses: workflows.WorkflowProcesses, AutomationRules: automations.AutomationRules,
 			AutomationExecutions: automations.AutomationExecutions,

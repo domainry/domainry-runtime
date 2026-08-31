@@ -71,18 +71,18 @@ func TestMemoryHTTPMetricsCollectorUsesBoundedLabels(t *testing.T) {
 
 func TestSurfaceListenerMetricsSeparateGroupsRejectionsAndMutations(t *testing.T) {
 	collector := NewMemoryHTTPMetricsCollector(8)
-	collector.RegisterSurfaceGroup(string(SurfaceRouteGroupPublic), 120)
-	collector.RegisterSurfaceGroup(string(SurfaceRouteGroupOps), 44)
-	collector.ObserveSurfaceGroup(string(SurfaceRouteGroupPublic), http.StatusOK, false)
-	collector.ObserveSurfaceGroup(string(SurfaceRouteGroupOps), http.StatusForbidden, true)
+	collector.RegisterListenerGroup(string(ListenerRouteGroupPublic), 120)
+	collector.RegisterListenerGroup(string(ListenerRouteGroupOps), 44)
+	collector.ObserveListenerGroup(string(ListenerRouteGroupPublic), http.StatusOK, false)
+	collector.ObserveListenerGroup(string(ListenerRouteGroupOps), http.StatusForbidden, true)
 
 	prometheus := collector.Prometheus()
 	for _, required := range []string{
-		`domainry_runtime_surface_listener_info{surface_group="public"} 1`,
-		`domainry_runtime_surface_listener_endpoints{surface_group="ops"} 44`,
-		`domainry_runtime_surface_requests_total{surface_group="public",status_class="2xx"} 1`,
-		`domainry_runtime_surface_rejections_total{surface_group="ops",status_class="4xx"} 1`,
-		`domainry_runtime_high_risk_operations_total{surface_group="ops",status_class="4xx"} 1`,
+		`domainry_runtime_listener_info{listener_group="public"} 1`,
+		`domainry_runtime_listener_endpoints{listener_group="ops"} 44`,
+		`domainry_runtime_listener_requests_total{listener_group="public",status_class="2xx"} 1`,
+		`domainry_runtime_listener_rejections_total{listener_group="ops",status_class="4xx"} 1`,
+		`domainry_runtime_high_risk_operations_total{listener_group="ops",status_class="4xx"} 1`,
 	} {
 		if !strings.Contains(prometheus, required) {
 			t.Fatalf("surface metrics missing %q:\n%s", required, prometheus)

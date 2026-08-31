@@ -1,7 +1,6 @@
 package testkit
 
 import (
-	connector "github.com/domainry/domainry-connector-sdk"
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
@@ -44,6 +43,5 @@ type RuntimeServicesConfig struct {
 	WorkflowDecisions           workflowcontract.WorkflowDecisionStore
 	IdentityDirectory           identitysdk.Directory
 	IdentityPrincipals          identitysdk.PrincipalResolver
-	ConnectorProviders          *connector.Registry
 	DataExchange                dataexchange.Binding
 }

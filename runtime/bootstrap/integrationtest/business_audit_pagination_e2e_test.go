@@ -41,7 +41,7 @@ func TestRuntimeBusinessAuditPaginationTraversesStableSQLitePagesOverHTTP(t *tes
 		}
 	}
 
-	server := httptest.NewServer(application.Routes())
+	server := httptest.NewServer(auditModuleRoutes(t, application))
 	defer server.Close()
 	page := requestRuntimeBusinessAuditPage(t, server, token, "")
 	assertRuntimeBusinessAuditPage(t, page, []string{"pagination-005", "pagination-004"}, true, true)
@@ -66,7 +66,6 @@ func TestRuntimeBusinessAuditPaginationTraversesStableSQLitePagesOverHTTP(t *tes
 		t.Fatal(err)
 	}
 	request.Header.Set("Authorization", "Bearer "+token)
-	request.Header.Set("X-Domainry-Product-Surface", "business_workspace")
 	response, err := server.Client().Do(request)
 	if err != nil {
 		t.Fatal(err)
@@ -102,7 +101,6 @@ func requestRuntimeBusinessAuditPage(t *testing.T, server *httptest.Server, toke
 		t.Fatal(err)
 	}
 	request.Header.Set("Authorization", "Bearer "+token)
-	request.Header.Set("X-Domainry-Product-Surface", "business_workspace")
 	response, err := server.Client().Do(request)
 	if err != nil {
 		t.Fatal(err)

@@ -1,56 +1,79 @@
 # Agent 模块
 
-状态：SDK、Module、SaaS Binding 与独立 SaaS 服务入口已接入  
-Owner：模型/provider 执行、协议适配、provider run、模型路由与原始 usage 证据  
+状态：SDK、Module、SaaS Binding、产品 HTTP Surface 与独立 SaaS 服务入口已接入
+Owner：Agent/Skill/Task 定义、会话与 proposal、interactive/task 执行、provider run、tool-call ledger、worker/retry/reconcile
 实现/SDK：`domainry-agent` / `domainry-agent-sdk`
 
-## 边界与模式
+## 所有权边界
 
-`domainry-agent` 拥有 Agent/Skill/Task 定义，以及 `_agent_runtime_states`、`_agent_task_runs`、`_agent_interactive_runs`、`_agent_worker_scopes` 的聚合、Repository、DDL 和 DML。Agent/Skill/Task/Context/Routing/Runner 公共合同以 `domainry-agent-sdk` 为唯一源码。Runtime 只保留 workflow 推进、workspace/principal 授权、proposal/approval、tool gateway、宿主事务编排和业务 terminal commit；provider 完成不等于 Runtime workflow 已提交。
+`domainry-agent` 拥有 Agent 产品用例和状态，包括 session/dialog、proposal 决策、interactive run、task run、approval lifecycle、provider correlation、claim/lease/fencing、tool-call ledger、重试和诊断。Agent/Skill/Task/Context/Routing/Runner 公共合同只在 `domainry-agent-sdk` 声明。
 
-项目组合根通过 `runtimehost.Options.AgentFactory` 选择拓扑。Module Factory 在 Runtime 进程内打开 Binding；SaaS Factory 返回远程 Binding。Runtime 对 nil Binding、未知 mode 和协议不匹配 fail closed，Agent Provider 的地址、凭据和协议配置全部归 `domainry-agent` 所有。
+Runtime 不再拥有 `agent_dialog` Handler、Agent Application Service、Agent Domain Model 或 Agent Repository。Runtime 只保留：
 
-## 公共合同
+- Workflow 的 process/node/execution 状态与推进；
+- 当前 workspace/principal/permission 解析；
+- Record、Action、Workflow、Report 等宿主业务能力和高风险策略；
+- Runtime audit 持久化；
+- 供 Agent 调用的窄化 Host Ports 与 workflow task 完成回调；
+- Agent Binding、HTTP Surface 和宿主 middleware 的组合。
+
+项目组合根通过 `runtimehost.Options.AgentFactory` 选择 Module 或 SaaS。两种拓扑必须提供相同 SDK 能力和同一 Agent-owned HTTP Surface；Runtime 只负责挂载 Surface，不复制路径、Handler 或 OpenAPI operation。
+
+## 调用方向与异步边界
+
+Workflow Agent 节点按以下时序执行：
+
+1. Runtime 为 `process_id + node_id + iteration` 生成确定性的 `node_instance_id` 和 `agent_task_run_id`。
+2. Runtime 调用 `TaskRunner.Start`。Agent 只需持久化 task 并返回 `accepted`。
+3. Runtime 提交 Workflow node 的 `waiting` 状态、相关事件和 Agent task correlation；Runtime 事务不写 Agent 表。
+4. Agent worker 在自己的调用栈中 claim/lease、调用 provider，并按需通过 `TaskHost` 请求 Runtime 的当前授权、凭据或具体 business tool effect。
+5. Agent 先提交自身 terminal 状态，再以 `TaskHost.CompleteWorkflowTask` 异步通知 Runtime。
+6. Runtime 校验 workspace/process/node/task-run correlation，只提交 Workflow 状态并唤醒 continuation；它不会在该回调中再次调用 Agent。
+7. Runtime 接收成功后，Agent 标记 workflow completion 已送达；失败则由 Agent reconcile 重试同一个幂等回调。
+
+因此模块间存在两条业务依赖边，但不存在同步循环：Workflow dispatch 的 Runtime→Agent 调用在 `accepted` 处结束；Agent→Runtime Host 调用只发生在后续 Agent worker 或独立 HTTP 请求中。禁止恢复 Runtime→Agent→Runtime 的同栈重入，也禁止用跨 owner 数据库事务模拟原子性。
+
+## 公共合同与 HTTP
 
 - SDK：`domainry-agent-sdk/sdk.go`
-- 定义合同：`domainry-agent-sdk/definitions.go`
-- Agent 自身定义校验：`domainry-agent/definition/validation.go`
+- Host Ports：`domainry-agent-sdk/modulehost/application.go`
+- Agent 定义校验：`domainry-agent/definition/validation.go`
 - 协议：`domainry-agent-protocol-v1`
-- 能力：`task.start`、`task.poll`、`task.cancel`、`interactive.run`、`structured_output`、`usage`、`tool_callback`
-- Runtime 业务 adapter：`runtime/bootstrap/runtime/agent_sdk_binding.go`
-- 稳定错误：`agent.runner.not_configured`、`agent.runner.transport_failed`、`agent.runner.provider_http_<status>`、`agent.runner.response_invalid`
+- 执行能力：`task.start`、`task.poll`、`task.cancel`、`interactive.run`、`dialog.state`、`execution.state`、`structured_output`、`usage`、`tool_callback`
+- Agent 产品 HTTP Surface：`/agent-dialog/*` 的 run、stream、session、proposal、task-run、task-tool、analysis、diagnostics，以及 `/operations/agent/tasks*` 的查询与 operator mutation。
+- Agent Surface 自己声明全部 route metadata 与 OpenAPI operation；Runtime 基础 OpenAPI 和 Runtime API contract 不声明 Agent 路径或 `agent_*` schema。
+- SaaS 内部协议使用固定的 definition、lifecycle 和 execution-state 路径，不暴露通用 repository operation 或 task mutation endpoint。
 
 ## 数据、事务与 worker
 
-- Module 借用宿主数据库、事务、SQL 方言、迁移锁和唯一 `_schema_migrations`；Agent Factory 以 owner `agent` 向宿主 migration registrar 提交 source-owned migration，不创建私有 ledger。
-- SaaS 在独立 Agent 数据库应用同一套 Agent migration；不得访问 Runtime 数据库。
-- Module 下 Agent task mutation 参加宿主 workflow 事务；SaaS 下宿主事务只写 Agent SaaS adapter 的 durable outbox，提交后 relay 以幂等 mutation 写入远端 Agent 数据库，回滚不发布。
-- Agent Repository 负责 task claim、lease、heartbeat、retry、interactive run 和运行状态；Runtime worker 负责何时调度、授权、业务副作用与 workflow terminal commit。
-- 不确定 Start 结果必须先 Poll/reconcile，不得直接创建第二个 provider run；Cancel 必须幂等。
+- Module 借用宿主数据库、SQL 方言、迁移锁和唯一 `_schema_migrations`；Agent Factory 以 owner `agent` 注册 source-owned migration。
+- SaaS 使用独立 Agent 数据库；它不得访问 Runtime 数据库。
+- Agent task 的创建和全部状态迁移都在 Agent Repository 中提交；Runtime workflow 事务只提交 Workflow 状态。
+- 已删除旧 `AgentTaskMutation`、`AgentTaskTransactionRepository`、`_agent_task_publications` outbox 和远端 mutation route。跨 owner 一致性由确定性 identity、幂等 Start、terminal-first callback 和 reconcile 达成。
+- Agent worker 属于 Agent Binding：负责 claim、lease、heartbeat、provider poll/start/cancel、retry/dead-letter、approval、tool evidence 和 callback reconcile。Runtime 不启动或实现第二套 Agent worker/state machine。
+- 不确定 Start 结果必须 Poll/reconcile，不得直接创建第二个 provider run；Cancel 和 completion callback 必须幂等。
 
 ## Tool 与安全边界
 
-Agent 只能携带 Runtime 签发的短期 `execution_credential` 调用 Runtime Agent Tool Gateway。Agent SDK/实现不能取得 Runtime service container 或内部授权对象；Module 只能通过窄化 Host 接口取得借用的数据库、方言和 migration registrar。tool 的授权、risk policy、proposal 和 audit 仍由 Runtime 完成。
+Agent 决定对话、proposal、approval lifecycle、允许的 Agent tool 次数/成本和 tool-call ledger。Runtime Host Port 在每次 effect 前重新解析当前 principal/permission，并执行 Runtime-owned input/output/rate/risk policy。
+
+Agent 只能通过 `InteractiveHost`、`TaskHost`、`ProposalHost`、`AuditHost` 和 `AnalysisHost` 请求宿主事实或效果；SDK/实现不能取得 Runtime service container，也不能 import Runtime implementation package。Host Port 参数只携带稳定引用、当前请求和授权证据，不能传入完整 Agent aggregate。
 
 ## 代码接入
 
-- Runtime 注入：`pkg/runtimehost/options.go`、`pkg/runtimehost/host.go`
-- Runtime 打开/关闭：`runtime/bootstrap/runtime/startup.go`、`worker_registry.go`
-- SDK adapter：`runtime/bootstrap/runtime/agent_sdk_binding.go`
-- Module：`domainry-agent/module`
-- SaaS Remote：`domainry-agent/remote`
-- SaaS 服务：`domainry-agent/server`、`domainry-agent/cmd/domainry-agent`
-- Provider adapter：`domainry-agent/internal/provider`
+- Runtime 组合：`pkg/runtimehost/options.go`、`pkg/runtimehost/host.go`
+- Runtime 打开 Binding：`runtime/bootstrap/runtime/agent_sdk_binding.go`
+- Runtime Host adapter：`runtime/application/agenthost`、`runtime/bootstrap/transport/http_integration_agent_handler_wiring.go`
+- Runtime Workflow dispatch/completion：`runtime/application/workflow/workflow_process_runtime_application_service.go`、`workflow_agent_capability_completion.go`
+- Agent Module：`domainry-agent/module`
+- Agent SaaS Remote/Server：`domainry-agent/remote`、`domainry-agent/server`
+- Agent 产品 Surface：`domainry-agent/internal/transport/http/module`
+- Agent Application：`domainry-agent/internal/application`
 
-## 切换与回滚
+## 验证约束
 
-切换前停止新 task claim，排空或冻结 running provider runs，记录所有 Runtime task run 与 provider run 对照，等待旧 Binding 无未决执行后再切换 Factory。回滚采用同样 fencing；禁止 Module 与 SaaS 同时接受同一 application/idempotency namespace 的 Start。
-
-## 验证
-
-- `domainry-agent-sdk/contracttest` 对 Module/SaaS Binding 执行同一 Descriptor、capability 和 runner 完整性检查。
-- `domainry-agent/remote` 通过真实 HTTP test server 验证 Descriptor 握手、鉴权、幂等键和 task 协议。
-- Runtime 的 Module-only/SaaS-only 外部项目编译测试均包含 `domainry-agent` 依赖闭包。
-- Runtime 旧 `runtime/infrastructure/agentrunner/http` provider adapter 与隐式 runner 选择已删除。
-- Runtime 边界测试禁止重新声明 SDK 公共 Agent 合同；Runtime 业务代码直接引用 SDK 类型，不保留 alias 兼容层。
-- Runtime 边界测试禁止重新声明 Agent-owned 表、聚合、Repository 和 DDL；定义同步通过 SDK `DefinitionRepository` 完成。
+- Runtime 生产代码不得出现 Agent aggregate/repository/state-machine 实现或 `/agent-dialog`、`/operations/agent` 路由声明。
+- Agent 不得 import `domainry-runtime`。
+- Runtime 的 Agent capability contract 不得再包含 Agent 产品路径或 `agent_*` schema；最终 OpenAPI 通过挂载 Agent Surface 合成。
+- Module/SaaS 必须执行相同 Agent contract tests，并验证 Start 幂等、fencing、terminal callback 重放和 HTTP/OpenAPI parity。
+- 切换拓扑前必须停止新 claim 并排空或冻结 running provider runs；禁止 Module 与 SaaS 同时接受同一 application/idempotency namespace。

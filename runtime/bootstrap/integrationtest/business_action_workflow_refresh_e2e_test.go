@@ -34,8 +34,7 @@ func TestBusinessActorRecordActionWorkflowTaskAndRefreshEndToEnd(t *testing.T) {
 	})
 	asUser := func(userID string) map[string]string {
 		return map[string]string{
-			"Authorization":              "Bearer " + integrationIdentityAccessTokenFor(userID, roleForBusinessWorkflowUser(userID)),
-			"X-Domainry-Product-Surface": "business_workspace",
+			"Authorization": "Bearer " + integrationIdentityAccessTokenFor(userID, roleForBusinessWorkflowUser(userID)),
 		}
 	}
 
@@ -78,8 +77,7 @@ func TestBusinessActorRecordActionWorkflowTaskAndRefreshEndToEnd(t *testing.T) {
 	// The Action mutation commits the workflow intent transactionally. The Ops
 	// worker only advances that durable intent; it does not grant Business access.
 	operationsHeaders := map[string]string{
-		"Authorization":              "Bearer " + integrationIdentityAccessToken("platform_admin"),
-		"X-Domainry-Product-Surface": "admin_console",
+		"Authorization": "Bearer " + integrationIdentityAccessToken("platform_admin"),
 	}
 	var creditTasks []workflowapplication.BusinessWorkflowTaskDTO
 	for attempt := 0; attempt < 40 && len(creditTasks) == 0; attempt++ {

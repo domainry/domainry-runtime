@@ -65,16 +65,16 @@ func TestMetadataStorageSchemaBranches(t *testing.T) {
 	}
 }
 
-func TestSyncManifestStorageSkipsEmptyObjectsAndPropagatesFailure(t *testing.T) {
+func TestSyncManifestSkipsEmptyObjectsAndPropagatesFailure(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	t.Cleanup(func() { _ = store.Close() })
 	repository := NewApplicationSchemaStore(store)
-	if err := repository.SyncManifestStorage(t.Context(), manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: " "}}}); err != nil {
+	if err := repository.SyncManifest(t.Context(), metadataTestInstallationScope(), manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: " "}}}); err != nil {
 		t.Fatal(err)
 	}
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if err := repository.SyncManifestStorage(cancelled, manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "account"}}}); err == nil {
+	if err := repository.SyncManifest(cancelled, metadataTestInstallationScope(), manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "account"}}}); err == nil {
 		t.Fatal("expected storage synchronization failure")
 	}
 }

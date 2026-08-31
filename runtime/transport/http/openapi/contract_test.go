@@ -52,14 +52,6 @@ func TestOpenAPIOperationsShareSecurityResponseAndOperationIDContract(t *testing
 	}
 }
 
-func TestReportSummaryPublishesExactAndLowerBoundTotalSemantics(t *testing.T) {
-	properties := reportSummaryPageSchema()["properties"].(map[string]any)
-	semantics := properties["total_semantics"].(map[string]any)["enum"].([]string)
-	if len(semantics) != 2 || semantics[0] != "exact" || semantics[1] != "at_least" {
-		t.Fatalf("report total semantics=%v", semantics)
-	}
-}
-
 func walkOpenAPIRefs(t *testing.T, value any, schemas map[string]any) {
 	t.Helper()
 	switch typed := value.(type) {

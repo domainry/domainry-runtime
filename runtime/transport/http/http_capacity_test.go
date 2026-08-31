@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
+	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 )
 
 func initializedCapacityRequest(method, target string) *http.Request {

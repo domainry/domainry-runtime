@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	schedulerprojection "github.com/domainry/domainry-runtime/runtime/domain/scheduler/projection"
+	recordtimerprojection "github.com/domainry/domainry-runtime/runtime/domain/recordtimer/projection"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 
 	. "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"

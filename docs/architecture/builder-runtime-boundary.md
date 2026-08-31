@@ -10,7 +10,7 @@ Builder owns source projects, route registries, design evidence and deployment r
 
 ## Connector ownership boundary
 
-Runtime owns the Connector catalog, provider schemas, credential lifecycle, operation execution and compensation evidence. Builder never stores Provider credentials. Generated applications must not copy Connector backend implementations; they reference Runtime connector and operation keys discovered from the capability contract.
+`domainry-connectors` owns the Connector catalog, Provider schemas and Provider implementations. `domainry-integration` owns credential lifecycle, configured connections, operation execution and compensation evidence. Runtime owns only application requirement projections, its publication outbox handoff, and Action/Workflow execution reached through the Integration SDK. Builder never stores Provider credentials. Generated applications must not copy Connector backend implementations; they reference Connector and operation keys discovered from the capability contract.
 
 ## Runtime capability discovery contract
 

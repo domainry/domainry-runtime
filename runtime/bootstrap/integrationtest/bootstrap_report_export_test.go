@@ -38,7 +38,6 @@ func runtimeFixtureRawRequest(t *testing.T, handler http.Handler, role string, m
 	t.Helper()
 	req := httptest.NewRequest(method, path, bytes.NewReader(body))
 	applyIntegrationIdentity(req, role)
-	req.Header.Set("X-Domainry-Product-Surface", "business_workspace")
 	res := httptest.NewRecorder()
 	handler.ServeHTTP(res, req)
 	if res.Code != expectedStatus {

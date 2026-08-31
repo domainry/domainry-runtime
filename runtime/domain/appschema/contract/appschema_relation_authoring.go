@@ -12,7 +12,7 @@ func ApplicationSchemaRelationAuthoringCapability() capabilitycontract.Capabilit
 			{Key: "on_delete", Type: "string", Default: "restrict", Enum: []string{"cascade", "restrict", "set_null"}},
 			{Key: "inverse_name", Type: "string"}, {Key: "indexed", Type: "boolean", Default: true},
 		},
-		Permissions: []string{"metadata.read", "metadata.write"}, ValidationEndpoint: "POST /metadata/definitions/field/{resourceKey}/validate",
+		Permissions: []string{"metadata.read", "metadata.write"}, ValidationEndpoint: "POST /tenant-admin/metadata/definitions/field/{resourceKey}/validate",
 		ConfigurationRoutes: metadataConfigurationRoutes("field"), ResourceOperations: metadataResourceOperations("field"),
 		ResourceKeyPathParameter: "resourceKey",
 		InputSchema:              metadataAuthoringRequestSchema(payload, true), OutputSchema: metadataAuthoringOutputSchema(payload),

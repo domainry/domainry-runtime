@@ -33,7 +33,7 @@ func NewBusinessPrincipalApplicationService(dependencies BusinessPrincipalDepend
 	return &BusinessPrincipalApplicationService{dependencies: dependencies}
 }
 
-func (s *BusinessPrincipalApplicationService) ResolveBusinessPrincipal(ctx context.Context, principal principalmodel.Principal, surfaceKey, bindingKey, recordID string) (principalmodel.Principal, error) {
+func (s *BusinessPrincipalApplicationService) ResolveBusinessPrincipal(ctx context.Context, principal principalmodel.Principal, bindingKey, recordID string) (principalmodel.Principal, error) {
 	if err := ctx.Err(); err != nil {
 		return principalmodel.Principal{}, err
 	}
@@ -79,14 +79,13 @@ func (s *BusinessPrincipalApplicationService) ResolveBusinessPrincipal(ctx conte
 			}
 			claims[claim.ClaimKey] = profilebindingmodel.ClaimValue{Type: businessClaimType(field.Type), Value: record.Data[claim.FieldKey]}
 		}
-		profile := profilebindingmodel.Reference{BindingKey: extension.BusinessIdentity.Key, ObjectKey: extension.ObjectKey, RecordID: record.ID, SurfaceKeys: append([]string(nil), extension.BusinessIdentity.SurfaceKeys...), Claims: claims}
+		profile := profilebindingmodel.Reference{BindingKey: extension.BusinessIdentity.Key, ObjectKey: extension.ObjectKey, RecordID: record.ID, Claims: claims}
 		profiles = append(profiles, profile)
 		revisions = append(revisions, map[string]any{"binding_key": profile.BindingKey, "object_key": profile.ObjectKey, "record_id": profile.RecordID, "updated_at": record.UpdatedAt, "claims": claims})
 	}
 	principal.BusinessProfiles = profiles
 	principal.BusinessClaims = nil
 	principal.ActiveBusinessProfile = nil
-	principal.SurfaceKey = ""
 	revision, err := idempotency.Fingerprint(idempotency.FingerprintInput{
 		UseCase: "identity.business_principal", ResourceType: principal.WorkspaceID, TargetID: principal.UserID,
 		Payload: map[string]any{"base_authorization_revision": principal.AuthorizationRevision, "business_profiles": revisions},
@@ -95,7 +94,7 @@ func (s *BusinessPrincipalApplicationService) ResolveBusinessPrincipal(ctx conte
 		return principalmodel.Principal{}, businessPrincipalError(apperror.KindInternal, "backend.identity.business_profile_resolution_failed", err)
 	}
 	principal.AuthorizationRevision = revision
-	selected, found, err := selectBusinessProfile(profiles, surfaceKey, bindingKey, recordID)
+	selected, found, err := selectBusinessProfile(profiles, bindingKey, recordID)
 	if err != nil {
 		return principalmodel.Principal{}, err
 	}
@@ -103,7 +102,6 @@ func (s *BusinessPrincipalApplicationService) ResolveBusinessPrincipal(ctx conte
 		selectedCopy := selected
 		principal.ActiveBusinessProfile = &selectedCopy
 		principal.BusinessClaims = selectedCopy.Claims
-		principal.SurfaceKey = strings.TrimSpace(surfaceKey)
 	}
 	return principal, nil
 }
@@ -130,14 +128,14 @@ func businessProfileActive(binding profilebindingmodel.BusinessIdentityBinding, 
 	return false, nil
 }
 
-func selectBusinessProfile(profiles []profilebindingmodel.Reference, surfaceKey, bindingKey, recordID string) (profilebindingmodel.Reference, bool, error) {
-	surfaceKey, bindingKey, recordID = strings.TrimSpace(surfaceKey), strings.TrimSpace(bindingKey), strings.TrimSpace(recordID)
-	if surfaceKey == "" && bindingKey == "" && recordID == "" {
+func selectBusinessProfile(profiles []profilebindingmodel.Reference, bindingKey, recordID string) (profilebindingmodel.Reference, bool, error) {
+	bindingKey, recordID = strings.TrimSpace(bindingKey), strings.TrimSpace(recordID)
+	if bindingKey == "" && recordID == "" {
 		return profilebindingmodel.Reference{}, false, nil
 	}
 	candidates := []profilebindingmodel.Reference{}
 	for _, profile := range profiles {
-		if bindingKey != "" && profile.BindingKey != bindingKey || recordID != "" && profile.RecordID != recordID || surfaceKey != "" && !containsTrimmed(profile.SurfaceKeys, surfaceKey) {
+		if bindingKey != "" && profile.BindingKey != bindingKey || recordID != "" && profile.RecordID != recordID {
 			continue
 		}
 		candidates = append(candidates, profile)
@@ -146,15 +144,6 @@ func selectBusinessProfile(profiles []profilebindingmodel.Reference, surfaceKey,
 		return profilebindingmodel.Reference{}, false, businessPrincipalError(apperror.KindForbidden, "backend.identity.business_profile_selection_invalid", fmt.Errorf("selection resolved %d active profiles", len(candidates)))
 	}
 	return candidates[0], true, nil
-}
-
-func containsTrimmed(values []string, expected string) bool {
-	for _, value := range values {
-		if strings.TrimSpace(value) == expected {
-			return true
-		}
-	}
-	return false
 }
 
 func profileField(object definitionmodel.ObjectSchema, fieldKey string) (definitionmodel.FieldSchema, bool) {

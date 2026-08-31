@@ -199,12 +199,8 @@ func (stub runtimeSchemaAssemblerStub) EnsureWorkflowProcessSchema(context.Conte
 func (stub runtimeSchemaAssemblerStub) EnsureRateLimitSchema(context.Context, runtimeschema.Store) error {
 	return stub.result("ratelimit")
 }
-func (stub runtimeSchemaAssemblerStub) EnsureLifecycleSchema(context.Context, runtimeschema.Store) error {
-	return stub.result("lifecycle")
-}
-
 func TestEnsureRuntimeSchemaAssemblerFailures(t *testing.T) {
-	for _, stage := range []string{"metadata", "evidence", "workflow", "ratelimit", "lifecycle"} {
+	for _, stage := range []string{"metadata", "evidence", "workflow", "ratelimit"} {
 		t.Run(stage, func(t *testing.T) {
 			state := &databaseSQLState{querySteps: runtimeSchemaLedgerQueries(1, currentRuntimeSchemaChecksum(), false)}
 			store := runtimeSchemaStore(t, state)
@@ -320,9 +316,6 @@ func TestSchemaAssemblerSeamMethods(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := store.EnsureRateLimitSchema(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.EnsureLifecycleSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }

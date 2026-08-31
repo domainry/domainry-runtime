@@ -10,6 +10,7 @@ import (
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	sdkcontract "github.com/domainry/domainry-audit-sdk/contract"
 	auditmoduleimpl "github.com/domainry/domainry-audit/module"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -107,6 +108,16 @@ func (s *SubjectLifecycle) PreviewSubject(ctx context.Context, workspaceID, iden
 func (s *SubjectLifecycle) ExportSubject(ctx context.Context, workspaceID, identity string) (json.RawMessage, error) {
 	return s.lifecycle.ExportSubject(ctx, workspaceID, identity)
 }
+
+func (s *SubjectLifecycle) ExportSubjectForRequest(ctx context.Context, _ string, workspaceID, identity string) (json.RawMessage, error) {
+	return s.ExportSubject(ctx, workspaceID, identity)
+}
 func (s *SubjectLifecycle) EraseSubject(ctx context.Context, workspaceID, identity string, _ []lifecyclemodel.LegalHold) (json.RawMessage, error) {
 	return s.lifecycle.EraseSubject(ctx, workspaceID, identity)
 }
+
+func (s *SubjectLifecycle) EraseSubjectForRequest(ctx context.Context, _ string, workspaceID, identity string, holds []lifecyclemodel.LegalHold) (json.RawMessage, error) {
+	return s.EraseSubject(ctx, workspaceID, identity, holds)
+}
+
+var _ lifecyclecontract.SubjectExecutionHandler = (*SubjectLifecycle)(nil)

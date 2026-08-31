@@ -6,6 +6,7 @@ import (
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 func TestManifestAgentExecutionDefinitionsAreNotRuntimeOwned(t *testing.T) {
@@ -18,13 +19,14 @@ func TestManifestAgentExecutionDefinitionsAreNotRuntimeOwned(t *testing.T) {
 			Instruction: "Screen candidate", InputSchema: map[string]any{"type": "object"}, OutputSchema: map[string]any{"type": "object"},
 			AllowedOutcomes: []string{"success"}, SideEffectMode: agentsdk.AgentTaskSideEffectAnalysisOnly, Enabled: true,
 		}},
-		AgentEntrypoints:       []agentsdk.AgentEntrypointAssignment{{ContractVersion: "agent-entrypoint-v1", Key: "recruiting.global", AgentKey: "recruiter", Surface: "business_workspace", Enabled: true}},
+		AgentEntrypoints:       []agentsdk.AgentEntrypointAssignment{{ContractVersion: "agent-entrypoint-v1", Key: "recruiting.global", AgentKey: "recruiter", Enabled: true}},
 		AgentServicePrincipals: []agentsdk.AgentServicePrincipalBinding{{ContractVersion: "agent-service-principal-v1", Key: "recruiting.service", UserID: "agent-user", RoleKey: "agent_service", Enabled: true, RotationVersion: 1}},
 	}
-	if err := store.EnsureManifestMetadata(t.Context(), manifest); err != nil {
+	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "persist test manifest")
+	if err := store.SyncManifestProjection(t.Context(), scope, manifest); err != nil {
 		t.Fatal(err)
 	}
-	restored, err := store.LoadManifestMetadata(t.Context())
+	restored, err := store.LoadManifest(t.Context(), scope)
 	if err != nil {
 		t.Fatal(err)
 	}

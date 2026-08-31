@@ -15,7 +15,6 @@ import (
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
@@ -35,10 +34,12 @@ type schedulerServiceCall struct {
 }
 
 type fakeSchedulerService struct {
-	call    schedulerServiceCall
-	result  schedulerapplication.SchedulerOperationResult
-	preview schedulerapplication.SchedulerDefinitionPreview
-	err     error
+	call        schedulerServiceCall
+	result      schedulerapplication.SchedulerDefinitionSimulation
+	preview     schedulerapplication.SchedulerDefinitionPreview
+	runs        []schedulersdk.Run
+	deadLetters []schedulersdk.DeadLetter
+	err         error
 }
 
 func (*fakeSchedulerService) Descriptor() schedulersdk.Descriptor { return schedulersdk.Descriptor{} }
@@ -55,7 +56,12 @@ func (f *fakeSchedulerService) Reschedule(_ context.Context, resource string, _ 
 	f.call = schedulerServiceCall{operation: "reschedule", resource: resource, key: "command-a"}
 	return f.err
 }
-func (*fakeSchedulerService) Runs(context.Context, int) ([]schedulersdk.Run, error) { return nil, nil }
+func (f *fakeSchedulerService) Runs(context.Context, int) ([]schedulersdk.Run, error) {
+	return f.runs, nil
+}
+func (f *fakeSchedulerService) DeadLetters(context.Context, int) ([]schedulersdk.DeadLetter, error) {
+	return f.deadLetters, nil
+}
 func (*fakeSchedulerService) Run(context.Context, string) (schedulersdk.Run, error) {
 	return schedulersdk.Run{}, nil
 }
@@ -105,19 +111,9 @@ func (f *fakeSchedulerService) TenantAdminAuthoringContract(_ context.Context, p
 	return schedulerapplication.TenantAdminSchedulerAuthoringContract{ResourceType: "scheduler"}, f.err
 }
 
-func (f *fakeSchedulerService) OpsState(_ context.Context, principal principalmodel.Principal) (schedulerapplication.OpsSchedulerStateDTO, error) {
+func (f *fakeSchedulerService) AuthorizeOpsRead(_ context.Context, principal principalmodel.Principal) error {
 	f.call = schedulerServiceCall{operation: "ops_state", principal: principal}
-	return schedulerapplication.OpsSchedulerStateDTO{}, f.err
-}
-
-func (f *fakeSchedulerService) GetDefinition(_ context.Context, resource string, principal principalmodel.Principal) (recordmodel.Record, error) {
-	f.call = schedulerServiceCall{operation: "get", resource: resource, principal: principal}
-	return recordmodel.Record{ID: resource}, f.err
-}
-
-func (f *fakeSchedulerService) DefinitionVersions(_ context.Context, resource string, principal principalmodel.Principal) ([]schedulerapplication.SchedulerDefinitionVersion, error) {
-	f.call = schedulerServiceCall{operation: "versions", resource: resource, principal: principal}
-	return []schedulerapplication.SchedulerDefinitionVersion{{VersionID: "version-a"}}, f.err
+	return f.err
 }
 
 func (f *fakeSchedulerService) PreviewDefinition(_ context.Context, data map[string]any, principal principalmodel.Principal) (schedulerapplication.SchedulerDefinitionPreview, error) {
@@ -130,24 +126,14 @@ func (f *fakeSchedulerService) PreviewSchedule(_ context.Context, data map[strin
 	return f.preview, f.err
 }
 
-func (f *fakeSchedulerService) SimulateJob(_ context.Context, resource string, principal principalmodel.Principal) (schedulerapplication.SchedulerOperationResult, error) {
-	f.call = schedulerServiceCall{operation: "simulate", resource: resource, principal: principal}
-	return f.result, f.err
-}
-
-func (f *fakeSchedulerService) SimulateTenantAdminDefinition(_ context.Context, resource string, principal principalmodel.Principal) (schedulerapplication.SchedulerOperationResult, error) {
+func (f *fakeSchedulerService) SimulateTenantAdminDefinition(_ context.Context, resource string, principal principalmodel.Principal) (schedulerapplication.SchedulerDefinitionSimulation, error) {
 	f.call = schedulerServiceCall{operation: "tenant_simulate", resource: resource, principal: principal}
-	return f.result, f.err
-}
-
-func (f *fakeSchedulerService) RequeueDeadLetterLegacy(_ context.Context, resource, note, key string, principal principalmodel.Principal) (schedulerapplication.SchedulerOperationResult, error) {
-	f.call = schedulerServiceCall{operation: "requeue", resource: resource, key: key, note: note, principal: principal}
 	return f.result, f.err
 }
 
 func newSchedulerHTTPHandler(result *schedulerHTTPResult) *SchedulerHandler {
 	return NewSchedulerHandler(SchedulerDependencies{
-		Service:   schedulerapplication.NewSchedulerApplicationService(nil, nil, nil, nil),
+		Service:   schedulerapplication.NewSchedulerApplicationService(nil),
 		Principal: func(*http.Request) principalmodel.Principal { return principalmodel.Principal{} },
 		WriteJSON: func(_ http.ResponseWriter, status int, value any) { result.status, result.value = status, value },
 		WriteServiceError: func(_ http.ResponseWriter, _ *http.Request, err error) {
@@ -168,7 +154,7 @@ func TestSchedulerHandlersWriteSuccessfulResultsAndNormalizeInputs(t *testing.T)
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-a", UserID: "operator-a"}}
 	service := &fakeSchedulerService{
 		preview: schedulerapplication.SchedulerDefinitionPreview{NextRuns: []string{"next"}},
-		result:  schedulerapplication.SchedulerOperationResult{Status: "ok"},
+		result:  schedulerapplication.SchedulerDefinitionSimulation{Status: "ok"},
 	}
 	result := &schedulerHTTPResult{}
 	handler := newSchedulerHTTPHandler(result)
@@ -187,8 +173,6 @@ func TestSchedulerHandlersWriteSuccessfulResultsAndNormalizeInputs(t *testing.T)
 	}{
 		{name: "preview", body: `{"data":{"key":"daily"}}`, call: handler.previewSchedulerJob, operation: "preview"},
 		{name: "schedule preview", body: `{"schedule_type":"interval","interval_seconds":300}`, call: handler.previewSchedulerSchedule, operation: "schedule_preview"},
-		{name: "get", path: map[string]string{"definitionID": "  definition-a  "}, call: handler.getSchedulerJob, operation: "get", resource: "definition-a"},
-		{name: "versions", path: map[string]string{"definitionID": "  definition-a  "}, call: handler.listSchedulerJobVersions, operation: "versions", resource: "definition-a"},
 		{name: "simulate", path: map[string]string{"definitionID": "  definition-a  "}, call: handler.simulateSchedulerJob, operation: "tenant_simulate", resource: "definition-a"},
 		{name: "run", path: map[string]string{"definitionID": "  definition-a  "}, call: handler.runSchedulerJob, operation: "run", resource: "definition-a"},
 		{name: "reschedule", body: `{"next_run_at":"2026-08-22T09:00:00Z"}`, path: map[string]string{"definitionID": "  definition-a  "}, call: handler.rescheduleOpsSchedulerDefinition, operation: "reschedule", resource: "definition-a"},
@@ -247,8 +231,6 @@ func TestSchedulerHandlersPropagateFakeServiceErrors(t *testing.T) {
 	}{
 		{name: "preview", body: `{"data":{}}`, call: handler.previewSchedulerJob},
 		{name: "schedule preview", body: `{}`, call: handler.previewSchedulerSchedule},
-		{name: "get", path: map[string]string{"definitionID": "id"}, call: handler.getSchedulerJob},
-		{name: "versions", path: map[string]string{"definitionID": "id"}, call: handler.listSchedulerJobVersions},
 		{name: "simulate", path: map[string]string{"definitionID": "id"}, call: handler.simulateSchedulerJob},
 		{name: "run", path: map[string]string{"definitionID": "id"}, call: handler.runSchedulerJob},
 		{name: "reschedule", body: `{"next_run_at":"2026-08-22T09:00:00Z"}`, path: map[string]string{"definitionID": "id"}, call: handler.rescheduleOpsSchedulerDefinition},

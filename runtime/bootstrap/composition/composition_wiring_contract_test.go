@@ -304,13 +304,13 @@ func TestWorkflowSchemaWiringHandlesOptionalIdentityDirectory(t *testing.T) {
 	}
 }
 
-func TestWorkflowSchedulerTimerModeAndFailureEdges(t *testing.T) {
+func TestWorkflowRecordTimerModeAndFailureEdges(t *testing.T) {
 	repository := &pipelineFailureRepository{records: map[string]map[string]recordmodel.Record{}}
 	runtime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
 		Manifest:     manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "record_timer", Name: "Record timer"}}},
 		Dependencies: RuntimeServicesDependencies{Records: repository},
 	})
-	scheduler := runtimeWorkflowScheduler{recordTimers: runtime.recordTimerService}
+	recordTimers := runtimeWorkflowRecordTimers{recordTimers: runtime.recordTimerService}
 	createdAt := time.Date(2026, 7, 27, 10, 0, 0, 0, time.UTC)
 	request := workflowapplication.WorkflowWaitTimerRequest{
 		WorkspaceID: "workspace-primary", ProcessID: "process", NodeID: "timer", ObjectKey: "order", RecordID: "order-1",
@@ -318,56 +318,56 @@ func TestWorkflowSchedulerTimerModeAndFailureEdges(t *testing.T) {
 	}
 
 	request.Contract = definitionmodel.WorkflowTimerNodeContract{DurationSeconds: 60}
-	if timerID, err := scheduler.ScheduleWorkflowWaitTimer(t.Context(), request); err != nil || timerID == "" {
+	if timerID, err := recordTimers.ScheduleWorkflowWaitTimer(t.Context(), request); err != nil || timerID == "" {
 		t.Fatalf("default timer=%q error=%v", timerID, err)
 	}
 	request.Contract = definitionmodel.WorkflowTimerNodeContract{
 		TimerKey: "business-at", Purpose: "business", At: createdAt.Format(time.RFC3339Nano),
 		DurationSeconds: 10, BusinessCalendarKey: "weekday", OffsetSeconds: 60, Timezone: "UTC",
 	}
-	if timerID, err := scheduler.ScheduleWorkflowWaitTimer(t.Context(), request); err != nil || timerID == "" {
+	if timerID, err := recordTimers.ScheduleWorkflowWaitTimer(t.Context(), request); err != nil || timerID == "" {
 		t.Fatalf("business-at timer=%q error=%v", timerID, err)
 	}
 	request.Contract = definitionmodel.WorkflowTimerNodeContract{
 		TimerKey: "business-base", Purpose: "business", BusinessCalendarKey: "weekday", OffsetSeconds: 60, Timezone: "UTC",
 	}
-	if timerID, err := scheduler.ScheduleWorkflowWaitTimer(t.Context(), request); err != nil || timerID == "" {
+	if timerID, err := recordTimers.ScheduleWorkflowWaitTimer(t.Context(), request); err != nil || timerID == "" {
 		t.Fatalf("business-base timer=%q error=%v", timerID, err)
 	}
 	request.Contract = definitionmodel.WorkflowTimerNodeContract{
 		TimerKey: "relative", Purpose: "relative", SourceField: "starts_at", OffsetSeconds: 60, Timezone: "UTC",
 	}
 	request.Variables = map[string]any{"after": map[string]any{"starts_at": createdAt.Format(time.RFC3339Nano)}}
-	if timerID, err := scheduler.ScheduleWorkflowWaitTimer(t.Context(), request); err != nil || timerID == "" {
+	if timerID, err := recordTimers.ScheduleWorkflowWaitTimer(t.Context(), request); err != nil || timerID == "" {
 		t.Fatalf("relative timer=%q error=%v", timerID, err)
 	}
 	request.Contract = definitionmodel.WorkflowTimerNodeContract{
 		TimerKey: "absolute", Purpose: "absolute", At: createdAt.Add(time.Hour).Format(time.RFC3339Nano), Timezone: "UTC",
 	}
-	if timerID, err := scheduler.ScheduleWorkflowWaitTimer(t.Context(), request); err != nil || timerID == "" {
+	if timerID, err := recordTimers.ScheduleWorkflowWaitTimer(t.Context(), request); err != nil || timerID == "" {
 		t.Fatalf("absolute timer=%q error=%v", timerID, err)
 	}
 	repository.failCommitAt = repository.commitCount + 1
 	request.Contract.TimerKey = "absolute-failure"
-	if _, err := scheduler.ScheduleWorkflowWaitTimer(t.Context(), request); err == nil {
+	if _, err := recordTimers.ScheduleWorkflowWaitTimer(t.Context(), request); err == nil {
 		t.Fatal("timer persistence failure was ignored")
 	}
 	repository.failCommitAt = 0
 
-	if _, err := scheduler.ScheduleWorkflowApprovalDeadlineTimer(t.Context(), workflowapplication.WorkflowApprovalDeadlineTimerRequest{
+	if _, err := recordTimers.ScheduleWorkflowApprovalDeadlineTimer(t.Context(), workflowapplication.WorkflowApprovalDeadlineTimerRequest{
 		WorkspaceID: "workspace-primary", ProcessID: "process", NodeID: "approval", TaskID: "task-invalid",
 		Phase: "invalid", DueAt: createdAt.Add(time.Hour), CreatedAt: createdAt,
 	}); err == nil {
 		t.Fatal("invalid approval deadline phase accepted")
 	}
-	if timerID, err := scheduler.ScheduleWorkflowApprovalDeadlineTimer(t.Context(), workflowapplication.WorkflowApprovalDeadlineTimerRequest{
+	if timerID, err := recordTimers.ScheduleWorkflowApprovalDeadlineTimer(t.Context(), workflowapplication.WorkflowApprovalDeadlineTimerRequest{
 		WorkspaceID: "workspace-primary", ProcessID: "process", NodeID: "approval", TaskID: "task-reminder",
 		Phase: "reminder", DueAt: createdAt.Add(time.Hour), CreatedAt: createdAt,
 	}); err != nil || timerID == "" {
 		t.Fatalf("reminder timer=%q error=%v", timerID, err)
 	}
 	repository.failCommitAt = repository.commitCount + 1
-	if _, err := scheduler.ScheduleWorkflowApprovalDeadlineTimer(t.Context(), workflowapplication.WorkflowApprovalDeadlineTimerRequest{
+	if _, err := recordTimers.ScheduleWorkflowApprovalDeadlineTimer(t.Context(), workflowapplication.WorkflowApprovalDeadlineTimerRequest{
 		WorkspaceID: "workspace-primary", ProcessID: "process", NodeID: "approval", TaskID: "task-escalation",
 		Phase: "escalation", DueAt: createdAt.Add(2 * time.Hour), CreatedAt: createdAt,
 	}); err == nil {
@@ -393,9 +393,6 @@ func TestOptionalMetadataAndIntegrationCompositionFallbacks(t *testing.T) {
 	}
 	if got := publicationHandoffApplication(runtime); got == nil {
 		t.Fatal("publication handoff composition was not assembled")
-	}
-	if users, err := listRuntimeSurfaceContextDirectoryUsers(t.Context(), &runtimeAssembly{}); err != nil || users != nil {
-		t.Fatalf("missing surface identity directory users=%#v error=%v", users, err)
 	}
 }
 

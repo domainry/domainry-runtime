@@ -45,11 +45,11 @@ func (p runtimeWorkflowSchemaProvider) ConnectorAdapterExists(ctx context.Contex
 	return p.records.connectorRegistry.ConnectorDeclared(key)
 }
 
-type runtimeWorkflowScheduler struct {
+type runtimeWorkflowRecordTimers struct {
 	recordTimers *recordtimerapplication.RecordTimerApplicationService
 }
 
-func (s runtimeWorkflowScheduler) ScheduleWorkflowWaitTimer(ctx context.Context, request workflowapplication.WorkflowWaitTimerRequest) (string, error) {
+func (s runtimeWorkflowRecordTimers) ScheduleWorkflowWaitTimer(ctx context.Context, request workflowapplication.WorkflowWaitTimerRequest) (string, error) {
 	contract := request.Contract
 	schedule := recordtimerapplication.RecordTimerSchedule{
 		TimerKey: strings.TrimSpace(contract.TimerKey), ObjectKey: "workflow_process", RecordID: request.ProcessID,
@@ -90,7 +90,7 @@ func (s runtimeWorkflowScheduler) ScheduleWorkflowWaitTimer(ctx context.Context,
 	return timer.ID, nil
 }
 
-func (s runtimeWorkflowScheduler) ScheduleWorkflowApprovalDeadlineTimer(ctx context.Context, request workflowapplication.WorkflowApprovalDeadlineTimerRequest) (string, error) {
+func (s runtimeWorkflowRecordTimers) ScheduleWorkflowApprovalDeadlineTimer(ctx context.Context, request workflowapplication.WorkflowApprovalDeadlineTimerRequest) (string, error) {
 	phase := strings.TrimSpace(request.Phase)
 	if phase != "reminder" && phase != "escalation" {
 		return "", fmt.Errorf("unsupported workflow approval deadline phase %q", phase)

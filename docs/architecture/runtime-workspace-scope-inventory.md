@@ -47,9 +47,10 @@ Registered schema tables:
   key supplied by each tenant-facing caller includes its explicit workspace or
   tenant-owned credential scope, while the shared limiter itself does not infer
   or substitute a workspace
-- `_agent_runtime_states`, `_agent_task_runs`, `_agent_interactive_runs` —
-  `workspace_scoped`; each persisted state/run row has a mandatory
-  `workspace_id`, and repository reads and mutations use workspace builders
+- Agent-owned `_agent_runtime_states`, `_agent_task_runs`,
+  `_agent_interactive_runs` — `workspace_scoped`; each persisted state/run row
+  has a mandatory `workspace_id`, and Agent repository reads and mutations use
+  workspace builders. SaaS mode keeps the same rows in Agent persistence.
 - `_operation_break_glass_grants` — `workspace_scoped`; every grant names one
   target workspace and its audited approval/revocation lifecycle cannot be
   queried through a wildcard tenant scope
@@ -60,28 +61,28 @@ Registered schema tables:
   `_action_assurance_grants`, `_record_mutation_executions`
   — `workspace_scoped`
 - `_idempotency_cleanup_leases` — `runtime_global`
-- workflow definitions: `_application_schema_workflow_definitions`, `_workflow_definitions`,
+- workflow definitions: `_workflow_definitions`,
   `_workflow_definition_versions` — `installation_scoped`
 - workflow execution: `_workflow_executions`, `_workflow_execution_receipts`, `_workflow_process_instances`,
   `_workflow_node_instances`, `_workflow_tasks`, `_workflow_process_events`
   — `workspace_scoped`
-- `_application_schema_automation_rule_definitions` — `installation_scoped`
 - `_automation_rule_executions`, `_automation_instruction_executions` — `workspace_scoped`
-- `_metadata_definition_versions`, `_application_schema_connector_requirements`,
-  `_application_schema_integration_event_mapping_requirements`
-  — `installation_scoped`
 - `_application_schema_projection`, `_application_schema_seed_checkpoints`, `_application_schema_exact_decimal_migration_receipts`
   — `runtime_global`
-- `_application_schema_localized_texts`, `_record_localized_values` — `workspace_scoped`
-- definition catalog: `_metadata_object_definitions`, `_metadata_field_definitions`,
-  `_metadata_validation_definitions`, `_metadata_action_definitions`,
-  `_metadata_dictionary_definitions`, `_integration_connector_definitions`, `_integration_event_mapping_definitions`,
-  `_metadata_role_definitions` — `installation_scoped`
+- `_record_localized_values` — `workspace_scoped`
+- Metadata Module-owned `_metadata_definitions`,
+  `_metadata_definition_versions`, and `_metadata_projection` —
+  `installation_scoped`; `_metadata_localized_texts` — `workspace_scoped`.
+  Runtime reaches them only through the Metadata SDK Binding.
+- Integration Module-owned `_integration_connector_definitions` and
+  `_integration_event_mapping_definitions` — `installation_scoped`
 - Scheduler Module-owned `_scheduler_definitions` — `installation_scoped`
 - Report Module-owned `_report_definitions`, `_report_operation_state_examples`,
   `_report_sensitive_field_policies`, `_report_export_controls` — `installation_scoped`;
   `_report_snapshots` — `workspace_scoped`
-- Identity-owned `_identity_profile_binding_definitions` — `installation_scoped`
+- Identity-owned `_identity_profile_binding_definitions`,
+  `_identity_profile_binding_definition_versions`, `_identity_role_definitions`,
+  and `_identity_role_definition_versions` — `installation_scoped`
 - Agent Module-owned `_agent_skill_definitions`, `_agent_definitions`, `_agent_entrypoint_definitions`,
   `_agent_service_principal_definitions`, `_agent_task_definitions` — `installation_scoped`
 - Data Exchange Module-owned `_data_exchange_jobs`, `_data_exchange_job_chunks`, `_data_exchange_artifacts` — `workspace_scoped`; `_data_exchange_queue_scopes` contains only payload-free workspace scheduling identities. SaaS mode keeps the same ownership boundary remotely.
@@ -116,18 +117,14 @@ Registered schema tables:
 ## File and object-storage surfaces
 
 - upload roots and record attachment paths (`application/upload`, `UploadService`) — `workspace_scoped`
-- report/export/download artifacts (`agentReportDownloadTasks`, export result references) — `workspace_scoped`
+- report/export/download artifacts (Report-owned jobs and export result references) — `workspace_scoped`
 - staged transaction files and commit markers (`StagedFile`, `CommitMarker`) — inherit the owning `workspace_scoped` mutation
 - migration SQL, migration backups, manifests and installation artifacts — `installation_scoped`
 
 ## Process-memory and cache surfaces
 
-- `agentDialogSessions`, `agentDialogProposals`, `agentReportQueryRuns`,
-  `agentReportExportAudits`, `agentReportDownloadTasks`
-  — `workspace_scoped`
 - `dictionaryCache` — `installation_scoped`
-- in-memory rate-limit buckets (`MemoryLimiter.buckets`) — `workspace_scoped`
-- resilience/circuit state (`MemoryStore.states`) — `workspace_scoped`
+- in-memory rate-limit buckets (`foundation/ratelimit.MemoryLimiter`) — `workspace_scoped`
 - idempotency metrics (`MemoryMetricsCollector`) — `workspace_scoped`
 - localization catalog resources (installation-static, read-only after load) — `installation_scoped`
 
@@ -135,7 +132,8 @@ Registered schema tables:
 
 - workflow executions, processes, nodes, tasks, events and execution receipts — `workspace_scoped`
 - automation rule/instruction executions — `workspace_scoped`
-- scheduler job definitions, run records, run events and retry/dead-letter state — `workspace_scoped`
+- Runtime-published Scheduler definition projections — installation metadata scope; Scheduler-owned operational state is outside this Runtime inventory
+- `record_timer` and `record_timer_event` — `workspace_scoped`
 - integration events, invocations, outbox messages and reconciliation work — `workspace_scoped`
 - Notification SaaS publication outbox rows — `workspace_scoped`; Notification
   domain state is owned and scoped outside Runtime by the selected Binding
@@ -170,7 +168,8 @@ Principal before the first Repository call and has a zero-call failure test.
 | Lifecycle | complete | `TestLifecycleApplicationAuthorizesWorkspaceBeforeRepositoryAccess` |
 | Metadata | complete | `TestMetadataApplicationAuthorizesWorkspaceBeforeRepositoryAccess` |
 | Notification | complete | `TestNotificationApplicationAuthorizesWorkspaceBeforeRepositoryAccess`; `TestNotificationOutboxPolicyEvaluationCarriesWorkspace` |
-| Scheduler | complete | `TestSchedulerApplicationAuthorizesWorkspaceBeforeRepositoryAccess` |
+| Scheduler facade | complete | `TestSchedulerSurfaceAuthorizationUsesSchedulerCapabilities`; Runtime authorizes projection/preview/delegation only and holds no Scheduler state repository |
+| Record Timer | complete | worker commands require explicit Runtime `SystemScope`; operator recovery requires Workspace principal and Record Timer capability |
 | Workflow | complete | `TestWorkflowApplicationAuthorizesWorkspaceBeforeRepositoryAccess` |
 
 ## Repository workspace contract migration
@@ -189,8 +188,8 @@ roadmap checkbox remains open until every owner is complete.
 | Deployment | complete | `TestDeploymentStoreWorkspaceIsolationContract`; tenant receipt operations require workspace, while health/metrics aggregation and cleanup use explicit `runtime_global` system scope |
 | Integration | complete | `TestIntegrationConfigStoreWorkspaceIsolationContract`; `TestIntegrationEventStoreWorkspaceIsolationContract`; `TestIntegrationDeliveryStoreWorkspaceIsolationContract`; `TestIntegrationWorkerStoreRejectsMissingTenantAndSystemScopes`; tenant config/event/delivery ports require explicit workspace, worker-wide scans require explicit `runtime_global` system scope, and installation seeding passes `InstallationWorkspaceID` explicitly |
 | Lifecycle | complete | `TestLifecycleStoreWorkspaceIsolationContract`; lifecycle policy, legal-hold, cleanup, subject-request, external-erasure, archive, deletion-registry, audit and metrics methods require explicit tenant workspace; cross-workspace cleanup discovery requires explicit `runtime_global` `SystemScope`; owner cleanup deletes remain constrained to the job workspace |
-| Metadata | complete | `TestMetadataStoreWorkspaceIsolationContract`; definition and manifest operations require explicit `installation` system scope, localized text reads/writes require a non-empty matching workspace, A/B workspaces remain isolated, and installation projection/seeding uses `InstallationWorkspaceID` explicitly |
+| Metadata | complete | Metadata source-owner tests prove definition/projection operations are installation-scoped and localized text reads/writes require an explicit workspace; Runtime consumes these operations only through the SDK Binding and has no Metadata SQL repository |
 | Notification | complete | `TestNotificationStoreWorkspaceIsolationContract`; installation-scoped templates/policies require explicit installation `SystemScope`, tenant preferences/reservations/metrics require a non-empty workspace, and same-key A/B data remains isolated |
-| Record and cross-owner record readers | complete | `TestRecordStoreWorkspaceIsolationContract`; tenant Record repository methods and consumer-owned Action, Automation, Deployment, Metadata, Pipeline, Report, Scheduler, SurfaceContext, and Workflow readers require explicit workspace; read/write/update/delete/list/unique/mutation paths reject missing workspace and isolate A/B workspaces |
-| Scheduler | complete | `TestSchedulerRecordStateWorkspaceIsolationContract`; Scheduler consumer repository requires explicit workspace, job definition/run/event/dead-letter reads and mutations preserve it, and system worker entrypoints map an authorized installation `SystemScope` to `InstallationWorkspaceID` explicitly |
+| Record and cross-owner record readers | complete | `TestRecordStoreWorkspaceIsolationContract`; tenant Record repository methods and consumer-owned Action, Automation, Deployment, Metadata, Pipeline, Report, Record Timer, and Workflow readers require explicit workspace; read/write/update/delete/list/unique/mutation paths reject missing workspace and isolate A/B workspaces |
+| Record Timer | complete | `TestRecordTimerWorkerProcessesEveryWorkspace`, `TestRecordTimerWorkspaceFailureDoesNotStarveOtherTenantOrExceedGlobalBatch`, and Record Timer lease dialect tests prove explicit Workspace partitioning, bounded cross-Workspace rotation and fenced conditional claims; Scheduler has no Runtime repository row |
 | Workflow | complete | `TestWorkflowStoreWorkspaceIsolationContract`; execution/process/node/task/event models persist workspace, Process and Worker repository ports require it, decision/state transactions scope conditional updates by `(workspace_id, id)`, worker claim/update and Action/Deployment/installation seed consumers preserve explicit scope |

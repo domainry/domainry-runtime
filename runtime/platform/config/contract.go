@@ -98,7 +98,6 @@ func LoadContract(sources ...Source) (Config, Snapshot, error) {
 	for _, definition := range definitions {
 		entries[definition.Name] = Provenance{Name: definition.Name, Source: "default", Version: valueVersion(definition.Default), Redacted: definition.Secret}
 	}
-	explicit := map[string]bool{}
 	for _, source := range sources {
 		for name, raw := range source.Values {
 			definition, ok := byName[name]
@@ -120,19 +119,7 @@ func LoadContract(sources ...Source) (Config, Snapshot, error) {
 				}
 			}
 			entries[name] = Provenance{Name: name, Source: source.Name, Version: version, Redacted: definition.Secret}
-			explicit[name] = true
 		}
-	}
-	// Compatibility migration: pre-Opt115 deployments used Scheduler names for
-	// the generic record-batch worker. Preserve those explicit sources until
-	// operators adopt WORKER_*, while keeping Scheduler routing independent.
-	if !explicit["WORKER_POLL_INTERVAL"] && explicit["SCHEDULER_POLL_INTERVAL"] {
-		cfg.WorkerPollInterval = cfg.SchedulerPollInterval
-		entries["WORKER_POLL_INTERVAL"] = Provenance{Name: "WORKER_POLL_INTERVAL", Source: "compat:SCHEDULER_POLL_INTERVAL", Version: entries["SCHEDULER_POLL_INTERVAL"].Version}
-	}
-	if !explicit["WORKER_BATCH_SIZE"] && explicit["SCHEDULER_BATCH_SIZE"] {
-		cfg.WorkerBatchSize = cfg.SchedulerBatchSize
-		entries["WORKER_BATCH_SIZE"] = Provenance{Name: "WORKER_BATCH_SIZE", Source: "compat:SCHEDULER_BATCH_SIZE", Version: entries["SCHEDULER_BATCH_SIZE"].Version}
 	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, Snapshot{}, err
@@ -274,6 +261,9 @@ func (c Config) Validate() error {
 	if c.SchedulerBatchSize < 1 || c.SchedulerBatchSize > 1000 {
 		return fmt.Errorf("SCHEDULER_BATCH_SIZE must be between 1 and 1000")
 	}
+	if c.RecordTimerBatchSize < 1 || c.RecordTimerBatchSize > 1000 {
+		return fmt.Errorf("RECORD_TIMER_BATCH_SIZE must be between 1 and 1000")
+	}
 	if c.EffectiveWorkerBatchSize() < 1 || c.EffectiveWorkerBatchSize() > 1000 {
 		return fmt.Errorf("WORKER_BATCH_SIZE must be between 1 and 1000")
 	}
@@ -282,6 +272,12 @@ func (c Config) Validate() error {
 	}
 	if c.SchedulerLeaseTTL <= c.SchedulerPollInterval {
 		return fmt.Errorf("SCHEDULER_LEASE_TTL must exceed SCHEDULER_POLL_INTERVAL")
+	}
+	if c.RecordTimerLeaseTTL <= c.RecordTimerPollInterval {
+		return fmt.Errorf("RECORD_TIMER_LEASE_TTL must exceed RECORD_TIMER_POLL_INTERVAL")
+	}
+	if c.WorkerLeaseTTL <= c.EffectiveWorkerPollInterval() {
+		return fmt.Errorf("WORKER_LEASE_TTL must exceed WORKER_POLL_INTERVAL")
 	}
 	if strings.TrimSpace(c.Port) == "" {
 		return fmt.Errorf("PORT is required")
@@ -482,7 +478,7 @@ func managedConfigName(name string) bool {
 	if name == "PORT" {
 		return true
 	}
-	for _, prefix := range []string{"APP_", "AUTH_", "AUDIT_", "IDENTITY_", "NOTIFICATION_", "HTTP_", "HEALTH_", "CAPACITY_", "TELEMETRY_", "DATABASE_", "RUNTIME_", "MIGRATION_", "SCHEDULER_", "BUSINESS_", "AGENT_DIALOG_", "CORS_", "INTEGRATION_", "TEMPLATE_", "SKIP_MANIFEST_", "UPLOAD_", "DOMAINRY_RUNTIME_"} {
+	for _, prefix := range []string{"APP_", "AUTH_", "AUDIT_", "IDENTITY_", "NOTIFICATION_", "HTTP_", "HEALTH_", "CAPACITY_", "TELEMETRY_", "DATABASE_", "RUNTIME_", "MIGRATION_", "SCHEDULER_", "RECORD_TIMER_", "WORKER_", "BUSINESS_", "AGENT_DIALOG_", "CORS_", "INTEGRATION_", "TEMPLATE_", "SKIP_MANIFEST_", "UPLOAD_", "DOMAINRY_RUNTIME_"} {
 		if strings.HasPrefix(name, prefix) {
 			return true
 		}

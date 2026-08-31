@@ -165,7 +165,7 @@ func (s *ChangePlanReferenceApplicationService) addSchedulerReferences(ctx conte
 		switch targetType {
 		case "workflow":
 			builder.Edge("scheduler", record.ID, "workflow", strings.TrimPrefix(targetKey, "scheduled:"), "schedules_target", "target_key")
-		case "report", "report_export", "report_snapshot_refresh":
+		case "report_snapshot_refresh":
 			builder.Edge("scheduler", record.ID, "report", targetKey, "schedules_target", "target_key")
 		}
 	}

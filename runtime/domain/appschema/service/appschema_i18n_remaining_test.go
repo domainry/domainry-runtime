@@ -7,23 +7,26 @@ import (
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
-	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 type metadataLocaleRepository struct {
-	appschemarepository.ApplicationSchemaRepository
-	values []appschemamodel.LocalizedText
+	values []metadatasdk.LocalizedText
 	err    error
 }
 
-func (r metadataLocaleRepository) ListLocalizedTexts(context.Context, string, appschemamodel.LocalizedTextQuery) ([]appschemamodel.LocalizedText, error) {
+func (r metadataLocaleRepository) List(context.Context, metadatasdk.LocalizedTextQuery) ([]metadatasdk.LocalizedText, error) {
 	return r.values, r.err
+}
+
+func (r metadataLocaleRepository) Coverage(context.Context, metadatasdk.LocalizedTextCoverageQuery) (metadatasdk.LocalizedTextCoverage, error) {
+	return metadatasdk.LocalizedTextCoverage{}, r.err
 }
 
 func TestApplicationSchemaLocaleProjectsAllOwnedShapes(t *testing.T) {
@@ -40,7 +43,7 @@ func TestApplicationSchemaLocaleProjectsAllOwnedShapes(t *testing.T) {
 		Skills:        []agentsdk.SkillSchema{{Key: "search", Name: "Search", Description: "Search description"}},
 		Agents:        []agentsdk.AgentSchema{{Key: "assistant", Name: "Assistant", Description: "Assistant description"}},
 	}
-	values := []appschemamodel.LocalizedText{{EntityType: "app", EntityKey: "app", Property: "name", Text: "Anwendung"}}
+	values := []metadatasdk.LocalizedText{{EntityType: "app", EntityKey: "app", Property: "name", Text: "Anwendung"}}
 	service := NewApplicationSchemaDomainService(schemaServiceProviderStub{snapshot: snapshot}, metadataLocaleRepository{values: values})
 	localized := service.ForPrincipalLocale(t.Context(), principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace"}}, " de ")
 	if localized.Name != "Anwendung" || !strings.HasSuffix(localized.SchemaHash, ":de") || len(localized.Objects) != 2 || len(localized.Agents) != 1 {

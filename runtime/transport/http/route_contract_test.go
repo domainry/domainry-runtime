@@ -88,15 +88,15 @@ func TestEveryRuntimeRouteIsDocumentedByAggregatedOpenAPI(t *testing.T) {
 	}
 }
 
-func TestEveryRuntimeRouteHasACompleteCompiledEndpointSurfaceContract(t *testing.T) {
+func TestEveryRuntimeRouteHasACompleteCompiledEndpointContract(t *testing.T) {
 	routes := declaredRuntimeRoutes(t)
-	if err := validateCompiledEndpointSurfaceContracts(); err != nil {
+	if err := validateCompiledEndpointContracts(); err != nil {
 		t.Fatal(err)
 	}
 	for route := range routes {
-		contract, exists := runtimeEndpointSurfaceContracts[route]
+		contract, exists := runtimeEndpointContracts[route]
 		if !exists {
-			t.Errorf("%s has no compiled endpoint Surface contract", route)
+			t.Errorf("%s has no compiled endpoint contract", route)
 			continue
 		}
 		if strings.Contains(contract.PermissionPolicyRef, "owner_handler_policy") &&
@@ -106,6 +106,28 @@ func TestEveryRuntimeRouteHasACompleteCompiledEndpointSurfaceContract(t *testing
 		if contract.EffectClass == "write" &&
 			(contract.IdempotencyDecision == "" || contract.AuditClass == "" || contract.HighRiskPolicy == "") {
 			t.Errorf("%s has an incomplete write contract: %+v", route, contract)
+		}
+	}
+}
+
+func TestLegacyFrontendSurfaceRoutesAreNotPublished(t *testing.T) {
+	routes := declaredRuntimeRoutes(t)
+	spec := runtimeopenapi.Build(appschemamodel.ApplicationSchemaSnapshot{})
+	paths := spec["paths"].(map[string]any)
+	for _, identity := range []string{
+		"GET /business/surface-context",
+		"GET /portal/surface-context",
+		"POST /surfaces/{surfaceKey}/context",
+	} {
+		method, path, _ := strings.Cut(identity, " ")
+		if _, exists := routes[identity]; exists {
+			t.Errorf("legacy frontend Surface route is still registered: %s", identity)
+		}
+		if _, exists := runtimeEndpointContracts[identity]; exists {
+			t.Errorf("legacy frontend Surface route still has an endpoint contract: %s", identity)
+		}
+		if item, exists := paths[path].(map[string]any); exists && item[strings.ToLower(method)] != nil {
+			t.Errorf("legacy frontend Surface route is still published by OpenAPI: %s", identity)
 		}
 	}
 }
@@ -145,11 +167,11 @@ func TestRoutesOnlyComposesDomainRegistrarsAndGlobalMiddleware(t *testing.T) {
 	}
 	expected := map[string]bool{
 		"discoveryHTTP": false, "openAPIHTTP": false,
-		"reportHTTP": false, "agentDialogHTTP": false, "applicationSchemaHTTP": false,
-		"capabilityHTTP": false, "businessSystemHTTP": false,
+		"applicationSchemaHTTP": false,
+		"capabilityHTTP":        false, "businessSystemHTTP": false,
 		"businessReferenceHTTP": false, "lifecycleHTTP": false,
 		"workspaceProvisionHTTP": false,
-		"uploadHTTP":             false, "surfaceContextHTTP": false, "recordHTTP": false, "workflowHTTP": false,
+		"uploadHTTP":             false, "recordHTTP": false, "workflowHTTP": false,
 		"automationHTTP": false, "schedulerHTTP": false,
 		"operationsHTTP": false, "businessEventHTTP": false,
 	}
@@ -205,7 +227,6 @@ func declaredRuntimeRoutes(t *testing.T) map[string]bool {
 	files := []string{filepath.Join(filepath.Dir(current), "http_router.go"), filepath.Join(filepath.Dir(current), "routes.go")}
 	files = append(files, filepath.Join(filepath.Dir(current), "records", "records_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "agentdialog", "agentdialog_routes.go"))
-	files = append(files, filepath.Join(filepath.Dir(current), "surfacecontext", "surfacecontext_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "uploads", "uploads_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "discovery", "discovery_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "openapi", "openapi_routes.go"))
@@ -214,7 +235,6 @@ func declaredRuntimeRoutes(t *testing.T) map[string]bool {
 	files = append(files, filepath.Join(filepath.Dir(current), "integrations", "integrations_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "automation", "automation_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "scheduler", "scheduler_routes.go"))
-	files = append(files, filepath.Join(filepath.Dir(current), "reports", "reports_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "appschema", "appschema_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "businessreferences", "businessreferences_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "businesssystem", "businesssystem_routes.go"))

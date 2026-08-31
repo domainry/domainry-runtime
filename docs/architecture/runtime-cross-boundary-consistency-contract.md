@@ -31,13 +31,14 @@ Claims use a lease owner, expiry, and monotonically increasing fencing token. `(
 | T11 Metadata Runtime refresh | the definition publication transaction inserts `_transaction_boundary_intents(owner=metadata, operation=runtime_refresh, status=executing)` with definition/version/Audit/active revision | inline refresh failure moves the intent to `reconciliation_required`; an expired/incomplete execution can be claimed with a newer fencing token | repeated unsafe failure can move to `manual_review`; publication history remains immutable |
 | T13 ChangePlan apply | change-plan draft/operation receipts and per-item owner commits | operation receipts and published/draft revision expose exact completed scope for retry | rollback policy selects automatic, compensating plan, or manual compensation by resource type |
 | T17 Notification publication | publication request state machine and durable delivery rows | due processing retries from publication/delivery state | terminal delivery/publication failures remain reviewable rather than being erased |
-| T21/T22 Integration events | acceptance atomically writes `_integration_events` plus `_integration_event_mapping_intents` | event lease/fencing, retry/dead-letter state, and mapping intent support replay | cross-owner target failure uses retry/dead-letter and target-specific compensation/manual review |
+| T21/T22 Integration events | Integration acceptance atomically writes its event inbox and mapping intent in the Integration-owned database | Integration owns event lease/fencing, retry/dead-letter, replay, and provider reconciliation | a target callback uses an idempotent SDK receipt; Integration retains retry/dead-letter and target-specific manual review |
 
 ## Proof obligations
 
 - A Runtime business transaction failure must prevent `_publication_outbox` creation and therefore prevent any Integration owner call.
 - Integration must durably accept a message identity before a Provider call and reconcile stale prepared invocations inside the Integration owner.
 - Crash-after-commit recovery must close the producer database/process owner, reopen the same durable database through a new worker owner, and prove that polling can still discover and claim the committed Outbox row without any in-memory wakeup.
+- Runtime publication completion stores only the opaque Integration receipt reference; it must not query Integration invocation or event tables.
 - A metadata active-revision failure must roll back definition, version, Audit, and refresh intent.
 - A process-local refresh failure must leave a claimable `reconciliation_required` intent.
 - Illegal state transitions and stale fencing tokens must fail without changing the durable state.

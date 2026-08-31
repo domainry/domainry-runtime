@@ -9,29 +9,28 @@ import (
 
 	"context"
 
-	reportmodel "github.com/domainry/domainry-report-sdk/model"
-
 	"testing"
 
-	agentsdk "github.com/domainry/domainry-agent-sdk"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
-	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
 )
 
 type localizedTextRepositoryStub struct {
-	appschemarepository.ApplicationSchemaRepository
-	values []appschemamodel.LocalizedText
+	values []metadatasdk.LocalizedText
 }
 
-func (r localizedTextRepositoryStub) ListLocalizedTexts(_ context.Context, _ string, query appschemamodel.LocalizedTextQuery) ([]appschemamodel.LocalizedText, error) {
-	result := []appschemamodel.LocalizedText{}
+func (r localizedTextRepositoryStub) List(_ context.Context, query metadatasdk.LocalizedTextQuery) ([]metadatasdk.LocalizedText, error) {
+	result := []metadatasdk.LocalizedText{}
 	for _, value := range r.values {
 		if query.Locale == "" || value.Locale == query.Locale {
 			result = append(result, value)
 		}
 	}
 	return result, nil
+}
+
+func (localizedTextRepositoryStub) Coverage(context.Context, metadatasdk.LocalizedTextCoverageQuery) (metadatasdk.LocalizedTextCoverage, error) {
+	return metadatasdk.LocalizedTextCoverage{}, nil
 }
 
 type localizedSchemaProviderStub struct {
@@ -42,15 +41,7 @@ func (s localizedSchemaProviderStub) SchemaForPrincipal(context.Context, princip
 	return s.snapshot
 }
 
-type localizedLifecycleRuntimeStub struct {
-	snapshot appschemamodel.ApplicationSchemaSnapshot
-}
-
-func (s localizedLifecycleRuntimeStub) Schema() appschemamodel.ApplicationSchemaSnapshot {
-	return s.snapshot
-}
-
-func TestSchemaLocalizationAndCoveragePreserveStableValues(t *testing.T) {
+func TestSchemaLocalizationPreservesStableValues(t *testing.T) {
 	snapshot := appschemamodel.ApplicationSchemaSnapshot{
 		Name: "客户系统", SchemaHash: "schema",
 		Objects: []definitionmodel.ObjectSchema{{Key: "customer", Name: "客户", Fields: []definitionmodel.FieldSchema{{
@@ -61,7 +52,7 @@ func TestSchemaLocalizationAndCoveragePreserveStableValues(t *testing.T) {
 		GuardedWrites: []appschemamodel.ApplicationSchemaGuardedWriteContract{{ObjectKey: "customer", ActionKey: "customer.activate", Label: "启用客户"}},
 		Dictionaries:  []appschemamodel.DictionarySchema{{Key: "customer_status", Name: "客户状态", Items: []appschemamodel.DictionaryItemSchema{{Key: "active", Value: "active", Label: "活跃"}}}},
 	}
-	values := []appschemamodel.LocalizedText{
+	values := []metadatasdk.LocalizedText{
 		{Locale: "en-US", EntityType: "app", EntityKey: "app", Property: "name", Text: "Customer System"},
 		{Locale: "en-US", EntityType: "object", EntityKey: "customer", Property: "name", Text: "Customer"},
 		{Locale: "en-US", EntityType: "field", EntityKey: "customer.status", Property: "name", Text: "Status"},
@@ -83,20 +74,4 @@ func TestSchemaLocalizationAndCoveragePreserveStableValues(t *testing.T) {
 	if localized.Actions[0].Label != "Activate Customer" || localized.GuardedWrites[0].Label != "Activate Customer" || localized.Dictionaries[0].Items[0].Value != "active" || localized.Dictionaries[0].Items[0].Label != "Active" {
 		t.Fatalf("localized projections = %#v", localized)
 	}
-
-	service := NewApplicationSchemaApplicationService(ApplicationSchemaDependencies{Repository: repository, Runtime: localizedLifecycleRuntimeStub{snapshot: snapshot}})
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
-	coverage, err := service.LocalizedTextCoverage(t.Context(), "fr-FR", "en-US", admin)
-	if err != nil || coverage.MissingCount == 0 {
-		t.Fatalf("coverage=%#v err=%v", coverage, err)
-	}
-	for _, item := range coverage.Items {
-		if item.EntityType == "app" && item.EntityKey == "app" && item.Property == "name" {
-			if !item.Missing || item.ResolvedSource != "fallback_locale" || item.ResolvedText != "Customer System" {
-				t.Fatalf("app fallback coverage = %#v", item)
-			}
-			return
-		}
-	}
-	t.Fatal("app coverage item missing")
 }

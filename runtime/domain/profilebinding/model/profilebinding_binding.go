@@ -12,7 +12,6 @@ type ClaimBinding struct {
 
 type BusinessIdentityBinding struct {
 	Key                string         `json:"key"`
-	SurfaceKeys        []string       `json:"surface_keys"`
 	StatusField        string         `json:"status_field,omitempty"`
 	ActiveStatusValues []string       `json:"active_status_values,omitempty"`
 	BlacklistField     string         `json:"blacklist_field,omitempty"`
@@ -79,9 +78,8 @@ type ClaimValue struct {
 
 // Reference identifies the selected Runtime-owned business profile record.
 type Reference struct {
-	BindingKey  string                `json:"binding_key"`
-	ObjectKey   string                `json:"object_key"`
-	RecordID    string                `json:"record_id"`
-	SurfaceKeys []string              `json:"surface_keys"`
-	Claims      map[string]ClaimValue `json:"claims,omitempty"`
+	BindingKey string                `json:"binding_key"`
+	ObjectKey  string                `json:"object_key"`
+	RecordID   string                `json:"record_id"`
+	Claims     map[string]ClaimValue `json:"claims,omitempty"`
 }

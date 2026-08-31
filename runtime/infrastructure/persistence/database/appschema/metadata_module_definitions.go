@@ -6,28 +6,21 @@ import (
 	"fmt"
 	"strings"
 
-	metadatapersistence "github.com/domainry/domainry-metadata-sdk/persistence"
-	"github.com/domainry/domainry-orm/query"
-	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
-	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
 
 func (s ApplicationSchemaStore) syncMetadataModuleDefinitions(ctx context.Context, manifest manifestmodel.ManifestSchema) error {
-	repository := s.metadataDefinitions
-	if repository == nil && s.store != nil {
-		repository = s.store.MetadataDefinitions()
+	if s.metadata == nil || s.metadata.Projection() == nil {
+		return fmt.Errorf("Metadata projection is unavailable")
 	}
-	if repository == nil {
-		return fmt.Errorf("Metadata definition repository is unavailable")
-	}
-	definitions := []metadatapersistence.Definition{}
+	definitions := []metadatasdk.Definition{}
 	appendDefinition := func(resourceType, key, objectKey, name string, value any) error {
 		payload, err := json.Marshal(value)
 		if err != nil {
 			return err
 		}
-		definitions = append(definitions, metadatapersistence.Definition{ResourceType: resourceType, Key: strings.TrimSpace(key), ObjectKey: strings.TrimSpace(objectKey), Name: strings.TrimSpace(name), Payload: payload})
+		definitions = append(definitions, metadatasdk.Definition{ResourceType: resourceType, ResourceKey: strings.TrimSpace(key), ObjectKey: strings.TrimSpace(objectKey), Name: strings.TrimSpace(name), Payload: payload})
 		return nil
 	}
 	for _, object := range manifest.Objects {
@@ -62,8 +55,63 @@ func (s ApplicationSchemaStore) syncMetadataModuleDefinitions(ctx context.Contex
 			return err
 		}
 	}
+	for _, workflow := range manifest.Workflows {
+		if err := appendDefinition("workflow", workflow.Key, metadataMapString(workflow.Trigger, "object_key", "object"), workflow.Name, workflow); err != nil {
+			return err
+		}
+	}
+	for _, rule := range manifest.AutomationRules {
+		if err := appendDefinition("automation_rule", rule.Key, rule.ObjectKey, rule.Name, rule); err != nil {
+			return err
+		}
+	}
 	for _, dictionary := range manifest.Dictionaries {
 		if err := appendDefinition("dictionary", dictionary.Key, "", dictionary.Name, dictionary); err != nil {
+			return err
+		}
+	}
+	for _, mapping := range manifest.Integrations.EventMappings {
+		if err := appendDefinition("integration_event_mapping", mapping.Key, mapping.ObjectKey, mapping.Provider, mapping); err != nil {
+			return err
+		}
+	}
+	for _, report := range manifest.Reports {
+		if err := appendDefinition("report", report.Key, "", report.Name, report); err != nil {
+			return err
+		}
+	}
+	for _, example := range manifest.OperationStateExamples {
+		if err := appendDefinition("operation_state_example", example.Key, example.ObjectKey, example.Name, example); err != nil {
+			return err
+		}
+	}
+	for _, policy := range manifest.SensitiveFieldPolicies {
+		if err := appendDefinition("sensitive_field_policy", policy.Key, policy.ObjectKey, policy.Name, policy); err != nil {
+			return err
+		}
+	}
+	for _, control := range manifest.ReportExportControls {
+		if err := appendDefinition("report_export_control", control.Key, control.ReportKey, control.Name, control); err != nil {
+			return err
+		}
+	}
+	for _, binding := range manifest.IdentityProfileExtensions {
+		if err := appendDefinition("identity_profile_binding", binding.ObjectKey, binding.ObjectKey, binding.BusinessIdentity.Key, binding); err != nil {
+			return err
+		}
+	}
+	for _, skill := range manifest.Skills {
+		if err := appendDefinition("skill", skill.Key, "", skill.Name, skill); err != nil {
+			return err
+		}
+	}
+	for _, agent := range manifest.Agents {
+		if err := appendDefinition("agent", agent.Key, "", agent.Name, agent); err != nil {
+			return err
+		}
+	}
+	for _, scheduler := range manifest.SchedulerDefinitions {
+		if err := appendDefinition("scheduler", metadataMapString(scheduler, "key"), "", metadataMapString(scheduler, "name"), scheduler); err != nil {
 			return err
 		}
 	}
@@ -71,29 +119,12 @@ func (s ApplicationSchemaStore) syncMetadataModuleDefinitions(ctx context.Contex
 	if version == "" {
 		version = "1"
 	}
-	sourceID := strings.TrimSpace(manifest.TemplateID)
-	if sourceID == "" {
-		sourceID = "generated-template"
-	}
-	if err := repository.SyncDefinitions(ctx, metadatapersistence.Snapshot{SchemaVersion: version, SourceKind: "generated", SourceID: sourceID, Definitions: definitions}); err != nil {
-		return err
-	}
-	return s.purgeRetiredMetadataProjectionRows(ctx, "generated", sourceID)
-}
-
-func (s ApplicationSchemaStore) purgeRetiredMetadataProjectionRows(ctx context.Context, sourceKind, sourceID string) error {
-	for _, table := range []string{"_metadata_object_definitions", "_metadata_field_definitions", "_metadata_validation_definitions", "_metadata_action_definitions", "_metadata_dictionary_definitions"} {
-		statement, args, err := query.NewDeleteBuilder(s.store.SQLRenderer, table).Where(query.And(
-			query.Equal("source_kind", sourceKind), query.Equal("source_id", sourceID), query.IsNotNull("disabled_at"),
-		)).Build()
-		if err != nil {
-			return fmt.Errorf("build retired %s projection cleanup: %w", table, err)
-		}
-		if _, err := s.database().ExecContext(ctx, statement, args...); err != nil {
-			return fmt.Errorf("purge retired %s projection rows: %w", table, err)
-		}
-	}
-	return nil
+	sourceID := manifestGeneratedSourceID(manifest)
+	localized := manifestLocalizedTextSeeds(manifest)
+	return s.metadata.Projection().Sync(ctx, metadatasdk.ProjectionSnapshot{
+		SchemaVersion: version, SourceKind: "generated", SourceID: sourceID, Name: strings.TrimSpace(manifest.Name), DefaultLocale: manifestDefaultLocale(manifest),
+		Definitions: definitions, LocalizedText: localized,
+	})
 }
 
 func cloneMetadataModuleConfig(value map[string]any) map[string]any {
@@ -102,58 +133,6 @@ func cloneMetadataModuleConfig(value map[string]any) map[string]any {
 		result[key] = item
 	}
 	return result
-}
-
-func (s ApplicationSchemaStore) loadMetadataModuleDefinitions(ctx context.Context) ([]definitionmodel.ObjectSchema, []definitionmodel.FieldSchema, []definitionmodel.ValidationSchema, []definitionmodel.ActionSchema, []appschemamodel.DictionarySchema, error) {
-	repository := s.metadataDefinitions
-	if repository == nil && s.store != nil {
-		repository = s.store.MetadataDefinitions()
-	}
-	if repository == nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("Metadata definition repository is unavailable")
-	}
-	snapshot, err := repository.DefinitionSnapshot(ctx)
-	if err != nil {
-		return nil, nil, nil, nil, nil, err
-	}
-	objects, fields := []definitionmodel.ObjectSchema{}, []definitionmodel.FieldSchema{}
-	validations, actions := []definitionmodel.ValidationSchema{}, []definitionmodel.ActionSchema{}
-	dictionaries := []appschemamodel.DictionarySchema{}
-	for _, definition := range snapshot.Definitions {
-		switch definition.ResourceType {
-		case "object":
-			var value definitionmodel.ObjectSchema
-			if err := decodeMetadataModuleDefinition(definition.Key, definition.Payload, &value); err != nil {
-				return nil, nil, nil, nil, nil, err
-			}
-			objects = append(objects, value)
-		case "field":
-			var value definitionmodel.FieldSchema
-			if err := decodeMetadataModuleDefinition(definition.Key, definition.Payload, &value); err != nil {
-				return nil, nil, nil, nil, nil, err
-			}
-			fields = append(fields, value)
-		case "validation":
-			var value definitionmodel.ValidationSchema
-			if err := decodeMetadataModuleDefinition(definition.Key, definition.Payload, &value); err != nil {
-				return nil, nil, nil, nil, nil, err
-			}
-			validations = append(validations, value)
-		case "action":
-			var value definitionmodel.ActionSchema
-			if err := decodeMetadataModuleDefinition(definition.Key, definition.Payload, &value); err != nil {
-				return nil, nil, nil, nil, nil, err
-			}
-			actions = append(actions, value)
-		case "dictionary":
-			var value appschemamodel.DictionarySchema
-			if err := decodeMetadataModuleDefinition(definition.Key, definition.Payload, &value); err != nil {
-				return nil, nil, nil, nil, nil, err
-			}
-			dictionaries = append(dictionaries, value)
-		}
-	}
-	return objects, fields, validations, actions, dictionaries, nil
 }
 
 func decodeMetadataModuleDefinition(key string, payload json.RawMessage, target any) error {

@@ -11,6 +11,7 @@ import (
 
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -102,6 +103,47 @@ func (s *RecordImportApplicationService) Apply(ctx context.Context, objectKey st
 }
 
 func (s *RecordImportApplicationService) ApplyIdempotent(ctx context.Context, objectKey string, rawCSV []byte, operationKey string, principal principalmodel.Principal) (recordmodel.RecordImportApplyResult, bool, error) {
+	return s.applyIdempotent(ctx, objectKey, rawCSV, operationKey, principal, func(object definitionmodel.ObjectSchema) (recordmodel.RecordImportPreview, error) {
+		return s.buildPreview(ctx, object, rawCSV, principal)
+	})
+}
+
+// PreviewRows validates an already decoded Data Exchange batch without
+// encoding it back to CSV. The file engine remains the only CSV decoder.
+func (s *RecordImportApplicationService) PreviewRows(ctx context.Context, objectKey string, headers []string, rows []dataexchange.ImportRow, principal principalmodel.Principal) (recordmodel.RecordImportPreview, error) {
+	if err := recordAuthorizeQuery(principal); err != nil {
+		return recordmodel.RecordImportPreview{}, err
+	}
+	object, err := s.dependencies.ObjectForAction(principal, objectKey, "import")
+	if err != nil {
+		s.audit(ctx, "record_import_denied", objectKey, "", principal, "Import preview denied", nil, nil, nil)
+		return recordmodel.RecordImportPreview{}, err
+	}
+	preview, err := s.buildPreviewRows(ctx, object, headers, rows, principal)
+	if err != nil {
+		return recordmodel.RecordImportPreview{}, err
+	}
+	s.audit(ctx, "record_import_previewed", objectKey, "", principal, fmt.Sprintf("Previewed %d %s rows", len(preview.Rows), objectKey), nil, map[string]any{"rows": len(preview.Rows), "invalid_rows": preview.InvalidRows}, nil)
+	return preview, nil
+}
+
+// ApplyRowsIdempotent applies an already decoded Data Exchange batch. A
+// canonical JSON fingerprint preserves the existing idempotency receipt
+// semantics without reintroducing a second CSV codec path.
+func (s *RecordImportApplicationService) ApplyRowsIdempotent(ctx context.Context, objectKey string, headers []string, rows []dataexchange.ImportRow, operationKey string, principal principalmodel.Principal) (recordmodel.RecordImportApplyResult, bool, error) {
+	fingerprint, err := json.Marshal(struct {
+		Headers []string                 `json:"headers"`
+		Rows    []dataexchange.ImportRow `json:"rows"`
+	}{Headers: headers, Rows: rows})
+	if err != nil {
+		return recordmodel.RecordImportApplyResult{}, false, recordImportInternalError("encode structured import fingerprint", err)
+	}
+	return s.applyIdempotent(ctx, objectKey, fingerprint, operationKey, principal, func(object definitionmodel.ObjectSchema) (recordmodel.RecordImportPreview, error) {
+		return s.buildPreviewRows(ctx, object, headers, rows, principal)
+	})
+}
+
+func (s *RecordImportApplicationService) applyIdempotent(ctx context.Context, objectKey string, input []byte, operationKey string, principal principalmodel.Principal, buildPreview func(definitionmodel.ObjectSchema) (recordmodel.RecordImportPreview, error)) (recordmodel.RecordImportApplyResult, bool, error) {
 	if err := recordAuthorizeCommand(principal); err != nil {
 		return recordmodel.RecordImportApplyResult{}, false, err
 	}
@@ -111,14 +153,14 @@ func (s *RecordImportApplicationService) ApplyIdempotent(ctx context.Context, ob
 		return recordmodel.RecordImportApplyResult{}, false, err
 	}
 	if s.dependencies.Execution != nil && s.dependencies.CreateIdempotent != nil {
-		if cached, replay, err := s.dependencies.Execution.ReplayImport(ctx, objectKey, operationKey, rawCSV, principal); err != nil {
+		if cached, replay, err := s.dependencies.Execution.ReplayImport(ctx, objectKey, operationKey, input, principal); err != nil {
 			return recordmodel.RecordImportApplyResult{}, false, err
 		} else if replay {
 			s.audit(ctx, "record_import_idempotent_replayed", object.Key, "", principal, "Replayed idempotent record import", nil, nil, nil)
 			return cached, true, nil
 		}
 	}
-	preview, err := s.buildPreview(ctx, object, rawCSV, principal)
+	preview, err := buildPreview(object)
 	if err != nil {
 		return recordmodel.RecordImportApplyResult{}, false, err
 	}
@@ -129,7 +171,7 @@ func (s *RecordImportApplicationService) ApplyIdempotent(ctx context.Context, ob
 	if s.dependencies.Execution == nil || s.dependencies.CreateIdempotent == nil {
 		return recordmodel.RecordImportApplyResult{}, false, recordImportError(apperror.KindInternal, "backend.idempotency.receipt_unavailable", nil)
 	}
-	cached, claim, replay, err := s.dependencies.Execution.BeginImport(ctx, objectKey, operationKey, rawCSV, principal)
+	cached, claim, replay, err := s.dependencies.Execution.BeginImport(ctx, objectKey, operationKey, input, principal)
 	if err != nil {
 		if strings.TrimSpace(claim.Execution.ID) != "" {
 			logging.LogIdempotency(ctx, claimAuditFacts(claim, "record.import", string(claim.Decision)), principal.RequestID)
@@ -170,122 +212,155 @@ func (s *RecordImportApplicationService) buildPreview(ctx context.Context, objec
 	_, decodeErr := dataexchange.DecodeCSV(ctx, bytes.NewReader(rawCSV), dataexchange.CSVDecodeLimits{
 		MaxBytes: recordImportMaxBytes, MaxRows: recordImportMaxRows, MaxColumns: recordImportMaxColumns,
 	}, func(headers []string, sourceRow dataexchange.CSVRecord) error {
-		rawRow := sourceRow.Values
-		row := recordmodel.RecordImportPreviewRow{Row: sourceRow.Number, Data: map[string]any{}, RawValues: map[string]string{}, Valid: true}
-		for columnIndex, rawHeader := range headers {
-			header := strings.TrimSpace(rawHeader)
-			if header == "" || strings.HasSuffix(header, "__display") {
-				continue
-			}
-			fieldKey := ""
-			if field, ok := fieldByHeader[recordvalidation.RecordNormalizeImportHeaderAlias(header)]; ok {
-				fieldKey = strings.TrimSpace(field.Key)
-			}
-			if fieldKey == "" {
-				fieldKey = header
-			}
-			// fileengine fixes the CSV field count from the header, so every row
-			// reaching this point has exactly the same number of columns.
-			row.RawValues[fieldKey] = strings.TrimSpace(rawRow[columnIndex])
-			field, ok := fieldByHeader[fieldKey]
-			if !ok {
-				row.Issues = append(row.Issues, importRowIssue(fieldKey, "error", "backend.import.unknown_field"))
-				continue
-			}
-			if !recordpolicy.RecordCanWriteFieldForPrincipal(principal, object.Key, fieldKey) {
-				row.Issues = append(row.Issues, importRowIssue(fieldKey, "error", "backend.import.field_not_writable"))
-				continue
-			}
-			value := strings.TrimSpace(rawRow[columnIndex])
-			if value == "" {
-				continue
-			}
-			coerced, issue := recordvalidation.RecordCoerceImportValue(object.Key, field, value)
-			if issue != "" {
-				row.Issues = append(row.Issues, importRowIssue(fieldKey, "error", issue, "value", value, "field", field.Key))
-				continue
-			}
-			row.Data[fieldKey] = coerced
-		}
-		recordpolicy.RecordApplyOwnerDefault(object, row.Data, principal)
-		normalized, err := recordvalidation.RecordNormalizeData(object, row.Data, false)
-		if err != nil {
-			row.Issues = append(row.Issues, importRowIssueFromError("", err))
-		} else {
-			row.Data = normalized
-		}
-		if err := recordvalidation.RecordValidateData(object, row.Data, false); err != nil {
-			row.Issues = append(row.Issues, importRowIssueFromError("", err))
-		}
-		if err := recordpolicy.RecordValidateWritableFields(principal, object, row.Data); err != nil {
-			row.Issues = append(row.Issues, importRowIssueFromError("", err))
-		}
-		if s.dependencies.CanWrite != nil && !s.dependencies.CanWrite(principal, object, row.Data) {
-			row.Issues = append(row.Issues, importRowIssue("", "error", "backend.record.outside_scope"))
-		}
-		if s.dependencies.ValidateRelations != nil {
-			if err := s.dependencies.ValidateRelations(ctx, object, row.Data, principal); err != nil {
-				row.Issues = append(row.Issues, importRowIssueFromError("", err))
-			}
-		}
-		for _, field := range recordvalidation.RecordDuplicateIdentityFields(object) {
-			value := row.Data[field.Key]
-			if recordvalidation.RecordIsEmptyValue(value) {
-				continue
-			}
-			identityKey := field.Key + "=" + strings.ToLower(strings.TrimSpace(fmt.Sprint(value)))
-			if firstRow, ok := seenImportKeys[identityKey]; ok {
-				row.Duplicate = true
-				row.Issues = append(row.Issues, importRowIssue(field.Key, "error", "backend.import.duplicate_in_file", "row", strconv.Itoa(firstRow)))
-			} else {
-				seenImportKeys[identityKey] = row.Row
-			}
-			exists, err := s.dependencies.Repository.UniqueExists(ctx, principal.WorkspaceID, object.Key, field.Key, "", value)
-			if err != nil {
-				return recordImportInternalError("check duplicate field", err)
-			}
-			if exists {
-				row.Duplicate = true
-				row.Issues = append(row.Issues, importRowIssue(field.Key, "error", "backend.import.duplicate_existing"))
-			}
-		}
-		// All issues produced by the import validator are blocking errors.
-		if len(row.Issues) > 0 {
-			row.Valid = false
-		}
-		if !row.Valid {
-			row.ErrorSummary = recordvalidation.RecordImportErrorSummary(row)
-			preview.ErrorRows = append(preview.ErrorRows, row)
-		}
-		if row.Duplicate {
-			preview.DuplicateRows++
-		}
-		if row.Valid {
-			preview.ValidRows++
-		} else {
-			preview.InvalidRows++
-		}
-		preview.Rows = append(preview.Rows, row)
-		return nil
+		return s.appendPreviewRow(ctx, object, fieldByHeader, headers, sourceRow, principal, seenImportKeys, &preview)
 	})
 	if decodeErr != nil {
-		switch {
-		case errors.Is(decodeErr, dataexchange.ErrPayloadTooLarge):
-			return recordmodel.RecordImportPreview{}, recordImportError(apperror.KindBadRequest, "backend.import.payload_too_large", decodeErr)
-		case errors.Is(decodeErr, dataexchange.ErrTooManyRows):
-			return recordmodel.RecordImportPreview{}, recordImportError(apperror.KindBadRequest, "backend.import.too_many_rows", decodeErr)
-		case errors.Is(decodeErr, dataexchange.ErrTooManyColumns):
-			return recordmodel.RecordImportPreview{}, recordImportError(apperror.KindBadRequest, "backend.import.too_many_columns", decodeErr)
-		case errors.Is(decodeErr, dataexchange.ErrHeaderRequired):
-			return recordmodel.RecordImportPreview{}, recordImportError(apperror.KindBadRequest, "backend.import.header_required", decodeErr)
-		case errors.Is(decodeErr, dataexchange.ErrInvalidCSV):
-			return recordmodel.RecordImportPreview{}, recordImportError(apperror.KindBadRequest, "backend.import.invalid_csv", decodeErr)
-		default:
-			return recordmodel.RecordImportPreview{}, decodeErr
+		return recordmodel.RecordImportPreview{}, recordImportDecodeError(decodeErr)
+	}
+	preview.CanApply = len(preview.Rows) > 0 && preview.InvalidRows == 0 && preview.DuplicateRows == 0
+	return preview, nil
+}
+
+func (s *RecordImportApplicationService) buildPreviewRows(ctx context.Context, object definitionmodel.ObjectSchema, headers []string, rows []dataexchange.ImportRow, principal principalmodel.Principal) (recordmodel.RecordImportPreview, error) {
+	if len(headers) == 0 {
+		return recordmodel.RecordImportPreview{}, recordImportDecodeError(dataexchange.ErrHeaderRequired)
+	}
+	if len(headers) > recordImportMaxColumns {
+		return recordmodel.RecordImportPreview{}, recordImportDecodeError(dataexchange.ErrTooManyColumns)
+	}
+	if len(rows) > recordImportMaxRows {
+		return recordmodel.RecordImportPreview{}, recordImportDecodeError(dataexchange.ErrTooManyRows)
+	}
+	fieldByHeader := recordvalidation.RecordImportFieldHeaderAliases(object)
+	seenImportKeys := map[string]int{}
+	preview := recordmodel.RecordImportPreview{ObjectKey: object.Key}
+	for _, sourceRow := range rows {
+		if err := ctx.Err(); err != nil {
+			return recordmodel.RecordImportPreview{}, err
+		}
+		if len(sourceRow.Values) != len(headers) {
+			return recordmodel.RecordImportPreview{}, recordImportDecodeError(dataexchange.ErrInvalidCSV)
+		}
+		if err := s.appendPreviewRow(ctx, object, fieldByHeader, headers, dataexchange.CSVRecord{Number: sourceRow.Number, Values: sourceRow.Values}, principal, seenImportKeys, &preview); err != nil {
+			return recordmodel.RecordImportPreview{}, err
 		}
 	}
 	preview.CanApply = len(preview.Rows) > 0 && preview.InvalidRows == 0 && preview.DuplicateRows == 0
 	return preview, nil
+}
+
+func (s *RecordImportApplicationService) appendPreviewRow(ctx context.Context, object definitionmodel.ObjectSchema, fieldByHeader map[string]definitionmodel.FieldSchema, headers []string, sourceRow dataexchange.CSVRecord, principal principalmodel.Principal, seenImportKeys map[string]int, preview *recordmodel.RecordImportPreview) error {
+	rawRow := sourceRow.Values
+	row := recordmodel.RecordImportPreviewRow{Row: sourceRow.Number, Data: map[string]any{}, RawValues: map[string]string{}, Valid: true}
+	for columnIndex, rawHeader := range headers {
+		header := strings.TrimSpace(rawHeader)
+		if header == "" || strings.HasSuffix(header, "__display") {
+			continue
+		}
+		fieldKey := ""
+		if field, ok := fieldByHeader[recordvalidation.RecordNormalizeImportHeaderAlias(header)]; ok {
+			fieldKey = strings.TrimSpace(field.Key)
+		}
+		if fieldKey == "" {
+			fieldKey = header
+		}
+		row.RawValues[fieldKey] = strings.TrimSpace(rawRow[columnIndex])
+		field, ok := fieldByHeader[fieldKey]
+		if !ok {
+			row.Issues = append(row.Issues, importRowIssue(fieldKey, "error", "backend.import.unknown_field"))
+			continue
+		}
+		if !recordpolicy.RecordCanWriteFieldForPrincipal(principal, object.Key, fieldKey) {
+			row.Issues = append(row.Issues, importRowIssue(fieldKey, "error", "backend.import.field_not_writable"))
+			continue
+		}
+		value := strings.TrimSpace(rawRow[columnIndex])
+		if value == "" {
+			continue
+		}
+		coerced, issue := recordvalidation.RecordCoerceImportValue(object.Key, field, value)
+		if issue != "" {
+			row.Issues = append(row.Issues, importRowIssue(fieldKey, "error", issue, "value", value, "field", field.Key))
+			continue
+		}
+		row.Data[fieldKey] = coerced
+	}
+	recordpolicy.RecordApplyOwnerDefault(object, row.Data, principal)
+	normalized, err := recordvalidation.RecordNormalizeData(object, row.Data, false)
+	if err != nil {
+		row.Issues = append(row.Issues, importRowIssueFromError("", err))
+	} else {
+		row.Data = normalized
+	}
+	if err := recordvalidation.RecordValidateData(object, row.Data, false); err != nil {
+		row.Issues = append(row.Issues, importRowIssueFromError("", err))
+	}
+	if err := recordpolicy.RecordValidateWritableFields(principal, object, row.Data); err != nil {
+		row.Issues = append(row.Issues, importRowIssueFromError("", err))
+	}
+	if s.dependencies.CanWrite != nil && !s.dependencies.CanWrite(principal, object, row.Data) {
+		row.Issues = append(row.Issues, importRowIssue("", "error", "backend.record.outside_scope"))
+	}
+	if s.dependencies.ValidateRelations != nil {
+		if err := s.dependencies.ValidateRelations(ctx, object, row.Data, principal); err != nil {
+			row.Issues = append(row.Issues, importRowIssueFromError("", err))
+		}
+	}
+	for _, field := range recordvalidation.RecordDuplicateIdentityFields(object) {
+		value := row.Data[field.Key]
+		if recordvalidation.RecordIsEmptyValue(value) {
+			continue
+		}
+		identityKey := field.Key + "=" + strings.ToLower(strings.TrimSpace(fmt.Sprint(value)))
+		if firstRow, ok := seenImportKeys[identityKey]; ok {
+			row.Duplicate = true
+			row.Issues = append(row.Issues, importRowIssue(field.Key, "error", "backend.import.duplicate_in_file", "row", strconv.Itoa(firstRow)))
+		} else {
+			seenImportKeys[identityKey] = row.Row
+		}
+		exists, err := s.dependencies.Repository.UniqueExists(ctx, principal.WorkspaceID, object.Key, field.Key, "", value)
+		if err != nil {
+			return recordImportInternalError("check duplicate field", err)
+		}
+		if exists {
+			row.Duplicate = true
+			row.Issues = append(row.Issues, importRowIssue(field.Key, "error", "backend.import.duplicate_existing"))
+		}
+	}
+	if len(row.Issues) > 0 {
+		row.Valid = false
+	}
+	if !row.Valid {
+		row.ErrorSummary = recordvalidation.RecordImportErrorSummary(row)
+		preview.ErrorRows = append(preview.ErrorRows, row)
+	}
+	if row.Duplicate {
+		preview.DuplicateRows++
+	}
+	if row.Valid {
+		preview.ValidRows++
+	} else {
+		preview.InvalidRows++
+	}
+	preview.Rows = append(preview.Rows, row)
+	return nil
+}
+
+func recordImportDecodeError(err error) error {
+	switch {
+	case errors.Is(err, dataexchange.ErrPayloadTooLarge):
+		return recordImportError(apperror.KindBadRequest, "backend.import.payload_too_large", err)
+	case errors.Is(err, dataexchange.ErrTooManyRows):
+		return recordImportError(apperror.KindBadRequest, "backend.import.too_many_rows", err)
+	case errors.Is(err, dataexchange.ErrTooManyColumns):
+		return recordImportError(apperror.KindBadRequest, "backend.import.too_many_columns", err)
+	case errors.Is(err, dataexchange.ErrHeaderRequired):
+		return recordImportError(apperror.KindBadRequest, "backend.import.header_required", err)
+	case errors.Is(err, dataexchange.ErrInvalidCSV):
+		return recordImportError(apperror.KindBadRequest, "backend.import.invalid_csv", err)
+	default:
+		return err
+	}
 }
 
 func recordImportBatchYield(ctx context.Context, processed int) error {

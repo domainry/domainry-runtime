@@ -12,7 +12,7 @@ func ApplicationSchemaObjectAuthoringCapability() capabilitycontract.CapabilityA
 			{Key: "name", Type: "string", Required: true, MinLength: metadataIntPointer(1)},
 		},
 		Permissions: []string{"workspace.admin"}, AuditEvents: []string{"metadata_definition_upserted"},
-		ValidationEndpoint: "POST /metadata/definitions/object/{resourceKey}/validate", ConfigurationRoutes: metadataConfigurationRoutes("object"),
+		ValidationEndpoint: "POST /tenant-admin/metadata/definitions/object/{resourceKey}/validate", ConfigurationRoutes: metadataConfigurationRoutes("object"),
 		ResourceOperations:       metadataResourceOperations("object"),
 		ResourceKeyPathParameter: "resourceKey",
 		InputSchema:              metadataAuthoringRequestSchema(payload, false), OutputSchema: metadataAuthoringOutputSchema(payload),

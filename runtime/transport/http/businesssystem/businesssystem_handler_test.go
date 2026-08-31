@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 
 	"github.com/domainry/domainry-foundation/requestcontext"
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
@@ -30,6 +31,20 @@ import (
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
 
+type businessSystemHandlerDefinitions struct{}
+
+func (businessSystemHandlerDefinitions) List(context.Context, metadatasdk.DefinitionQuery) ([]metadatasdk.Definition, error) {
+	return []metadatasdk.Definition{}, nil
+}
+
+func (businessSystemHandlerDefinitions) Get(context.Context, string, string) (metadatasdk.Definition, bool, error) {
+	return metadatasdk.Definition{}, false, nil
+}
+
+func (businessSystemHandlerDefinitions) Snapshot(context.Context) (metadatasdk.DefinitionSnapshot, error) {
+	return metadatasdk.DefinitionSnapshot{}, nil
+}
+
 func businessSystemHandlerApplication(featureErr error) *businesssystemapplication.BusinessSystemApplicationService {
 	schema := appschemamodel.ApplicationSchemaSnapshot{SchemaHash: "schema-hash"}
 	return businesssystemapplication.NewBusinessSystemApplicationService(businesssystemapplication.BusinessSystemApplicationDependencies{
@@ -39,9 +54,7 @@ func businessSystemHandlerApplication(featureErr error) *businesssystemapplicati
 		SchemaForPrincipal: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 			return schema
 		},
-		ApplicationDefinitions: func(context.Context, string, string, principalmodel.Principal) ([]appschemamodel.ApplicationDefinition, error) {
-			return []appschemamodel.ApplicationDefinition{}, nil
-		},
+		Definitions: businessSystemHandlerDefinitions{},
 		Runtime: businesssystemapplication.BusinessSystemRuntimeProjectionDependencies{
 			WorkflowProcesses: func(context.Context, principalmodel.Principal, workflowmodel.WorkflowProcessFilter) ([]workflowmodel.WorkflowProcessInstance, error) {
 				return []workflowmodel.WorkflowProcessInstance{}, nil

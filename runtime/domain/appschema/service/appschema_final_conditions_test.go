@@ -32,20 +32,6 @@ func TestApplicationSchemaFacadeDoesNotDeriveGuardedWritesFromActionConfig(t *te
 	}
 }
 
-func TestMetadataDictionaryLocaleConditionEdges(t *testing.T) {
-	items := []appschemamodel.DictionaryItemSchema{{Key: "fr", Locale: "fr"}}
-	if got := dictionaryItemsForLocale(items, ""); len(got) != 1 {
-		t.Fatalf("empty locale fallback=%#v", got)
-	}
-	if got := dictionaryItemsForLocale(items, "fr"); len(got) != 1 || got[0].Key != "fr" {
-		t.Fatalf("localized-only=%#v", got)
-	}
-	service := NewApplicationSchemaDictionaryDomainService([]appschemamodel.DictionarySchema{{Key: "status"}})
-	if _, _, err := service.Items(t.Context(), dictionaryFailureRepository{}, "status", "", principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestMetadataVisibilityRemainingCompoundOperands(t *testing.T) {
 	role := accessfixture.Bundle{Permissions: []string{"customer.read", "customer.approve"}}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, role)

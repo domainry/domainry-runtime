@@ -3,13 +3,14 @@ package http
 // These tests enforce cross-package HTTP architecture boundaries.
 
 import (
+	"io/fs"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
 	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
-	agent "github.com/domainry/domainry-runtime/runtime/application/agent"
 )
 
 func TestHTTPRouterDoesNotRetainAgentStateRepository(t *testing.T) {
@@ -23,26 +24,26 @@ func TestHTTPRouterDoesNotRetainAgentStateRepository(t *testing.T) {
 	}
 }
 
-func TestAgentProposalHandlersDoNotOrchestratePersistenceOrExecution(t *testing.T) {
-	for _, name := range []string{"agentdialog/proposal_decision_handlers.go", "agentdialog/proposal_binding.go"} {
-		body, err := os.ReadFile(name)
-		if err != nil {
-			t.Fatal(err)
+func TestRuntimeHTTPDoesNotDeclareAgentProductRoutes(t *testing.T) {
+	err := filepath.WalkDir(".", func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
-		for _, forbidden := range []string{".Invoke(", "RunWorkflow(", "DecideProposal(", "SchemaForPrincipal("} {
-			if strings.Contains(string(body), forbidden) {
-				t.Fatalf("%s contains application orchestration %q", name, forbidden)
+		if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		body, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		for _, route := range []string{"/agent-dialog", "/operations/agent"} {
+			if strings.Contains(string(body), route) {
+				t.Errorf("Runtime HTTP source %s redeclares Agent-owned route %q", path, route)
 			}
 		}
-	}
-}
-
-func TestAgentStateApplicationServiceMethodBudget(t *testing.T) {
-	typeOf := reflect.TypeOf((*agent.AgentApplicationService)(nil))
-	if typeOf.NumMethod() > 15 {
-		t.Fatalf("agent state application service has %d exported methods", typeOf.NumMethod())
-	}
-	if typeOf.Implements(reflect.TypeOf((*agentpersistence.AgentStateRepository)(nil)).Elem()) {
-		t.Fatal("agent application service must not masquerade as its repository contract")
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }

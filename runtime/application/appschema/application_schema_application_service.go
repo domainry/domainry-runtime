@@ -28,15 +28,13 @@ import (
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )
 
-// ApplicationSchemaApplicationService owns metadata projection reads,
-// validation, dictionary and localization entrypoints. Cross-domain behavior is exposed through narrow
-// runtime ports; the service does not retain the aggregate RuntimeServices.
-// ApplicationSchemaApplicationService owns metadata lifecycle behavior.
+// ApplicationSchemaApplicationService owns Runtime-specific metadata
+// validation and lifecycle orchestration. Definition, localization and
+// dictionary reads are owned by the Metadata SDK Binding.
 type ApplicationSchemaApplicationService struct {
 	repository        appschemarepository.ApplicationSchemaRepository
 	runtime           LifecycleRuntime
 	workflows         WorkflowDefinitionInitializer
-	dictionary        DictionaryRuntime
 	audit             auditcontract.AuditEventFactory
 	templateID        string
 	version           string
@@ -45,18 +43,8 @@ type ApplicationSchemaApplicationService struct {
 	integrations      integrationsdk.Management
 	references        ApplicationSchemaReferenceGraphProvider
 	auditAppender     ApplicationSchemaAuditAppender
-	actionDefinitions func() []definitionmodel.ActionSchema
 	reloadObserversMu sync.RWMutex
 	reloadObservers   []func(appschemamodel.ApplicationSchemaSnapshot)
-}
-
-// UseActionDefinitionSource binds the effective execution catalog used by
-// read-only metadata projections. Persisted definition lifecycle and source
-// identity remain owned by the metadata repository.
-func (s *ApplicationSchemaApplicationService) UseActionDefinitionSource(source func() []definitionmodel.ActionSchema) {
-	if s != nil {
-		s.actionDefinitions = source
-	}
 }
 
 func (s *ApplicationSchemaApplicationService) AddReloadObserver(observer func(appschemamodel.ApplicationSchemaSnapshot)) {
@@ -102,16 +90,10 @@ type WorkflowDefinitionInitializer interface {
 	InitializePublishedWorkflowDefinitions(context.Context, []definitionmodel.WorkflowSchema, principalmodel.SystemScope) error
 }
 
-type DictionaryRuntime interface {
-	Invalidate()
-	Items(context.Context, appschemarepository.ApplicationSchemaRepository, string, string, principalmodel.Principal) (appschemamodel.DictionaryItemsResult, bool, error)
-}
-
 type ApplicationSchemaDependencies struct {
 	Repository    appschemarepository.ApplicationSchemaRepository
 	Runtime       LifecycleRuntime
 	Workflows     WorkflowDefinitionInitializer
-	Dictionary    DictionaryRuntime
 	Audit         auditcontract.AuditEventFactory
 	TemplateID    string
 	Version       string
@@ -125,7 +107,7 @@ type ApplicationSchemaDependencies struct {
 func NewApplicationSchemaApplicationService(dependencies ApplicationSchemaDependencies) *ApplicationSchemaApplicationService {
 	return &ApplicationSchemaApplicationService{
 		repository: dependencies.Repository, runtime: dependencies.Runtime, workflows: dependencies.Workflows,
-		dictionary: dependencies.Dictionary, audit: dependencies.Audit, templateID: dependencies.TemplateID,
+		audit: dependencies.Audit, templateID: dependencies.TemplateID,
 		version: dependencies.Version, name: dependencies.Name, records: dependencies.Records,
 		integrations: dependencies.Integrations, references: dependencies.References,
 		auditAppender: dependencies.AuditAppender,

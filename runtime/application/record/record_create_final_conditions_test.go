@@ -31,7 +31,7 @@ func TestRecordCreateAuthorizationSchedulerNilPayloadAndWritableEdges(t *testing
 	dependencies.ObjectForAction = func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
 		return definitionmodel.ObjectSchema{Key: "record_timer", Config: map[string]any{"record_timer_runtime": true}}, nil
 	}
-	if _, err := NewRecordCreateApplicationService(dependencies).Create(t.Context(), "record_timer", nil, principal); apperror.CodeOf(err) != "backend.scheduler.runtime_api_required" {
+	if _, err := NewRecordCreateApplicationService(dependencies).Create(t.Context(), "record_timer", nil, principal); apperror.CodeOf(err) != "backend.record_timer.runtime_api_required" {
 		t.Fatalf("scheduler guard error = %v", err)
 	}
 

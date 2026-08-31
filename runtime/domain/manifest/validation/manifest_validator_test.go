@@ -272,6 +272,5 @@ func loadFixtureManifest(t *testing.T, name string) manifestmodel.ManifestSchema
 			manifest.Integrations.Connectors = append(manifest.Integrations.Connectors, connectormodel.ConnectorSchema{Key: connection.ConnectorKey, Providers: []connectormodel.ConnectorProviderSchema{{Key: connection.ProviderKey}}})
 		}
 	}
-	manifest.Integrations.Connectors = append(builtins, manifest.Integrations.Connectors...)
 	return manifest
 }

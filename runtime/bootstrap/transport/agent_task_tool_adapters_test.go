@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
+	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agenthost"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 

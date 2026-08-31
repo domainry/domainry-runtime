@@ -22,7 +22,7 @@ func TestManifestMaterializationMaintainsOneProjectionHeadAndPurgesDeletedDefini
 		Objects:         []definitionmodel.ObjectSchema{{Key: "account", Name: "Account"}, {Key: "customer", Name: "Customer"}},
 		AutomationRules: []automationmodel.AutomationRuleSchema{},
 	}
-	if err := repository.EnsureManifestMetadata(t.Context(), first); err != nil {
+	if err := repository.SyncManifestProjection(t.Context(), metadataTestInstallationScope(), first); err != nil {
 		t.Fatal(err)
 	}
 	var firstSourceHash, firstSchemaHash, status string
@@ -35,7 +35,7 @@ func TestManifestMaterializationMaintainsOneProjectionHeadAndPurgesDeletedDefini
 	second := first
 	second.Version = "2"
 	second.Objects = second.Objects[:1]
-	if err := repository.SyncManifestMetadata(t.Context(), second); err != nil {
+	if err := repository.SyncManifestProjection(t.Context(), metadataTestInstallationScope(), second); err != nil {
 		t.Fatal(err)
 	}
 	var secondSourceHash string
@@ -45,17 +45,15 @@ func TestManifestMaterializationMaintainsOneProjectionHeadAndPurgesDeletedDefini
 	if secondSourceHash == "" || secondSourceHash == firstSourceHash {
 		t.Fatalf("projection source hash did not advance: first=%q second=%q", firstSourceHash, secondSourceHash)
 	}
-	var projectionRows, deletedRows, tombstones int
+	var projectionRows int
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _application_schema_projection`).Scan(&projectionRows); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _metadata_object_definitions WHERE resource_key = 'customer'`).Scan(&deletedRows); err != nil {
+	_, found, err := store.Metadata().Definitions().Get(t.Context(), "object", "customer")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _metadata_object_definitions WHERE disabled_at IS NOT NULL`).Scan(&tombstones); err != nil {
-		t.Fatal(err)
-	}
-	if projectionRows != 1 || deletedRows != 0 || tombstones != 0 {
-		t.Fatalf("projection rows=%d deleted rows=%d tombstones=%d", projectionRows, deletedRows, tombstones)
+	if projectionRows != 1 || found {
+		t.Fatalf("projection rows=%d removed definition found=%v", projectionRows, found)
 	}
 }

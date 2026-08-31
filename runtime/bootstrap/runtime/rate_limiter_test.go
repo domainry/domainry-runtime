@@ -12,7 +12,7 @@ import (
 	ratelimitpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/ratelimit"
 	ratelimitredis "github.com/domainry/domainry-runtime/runtime/infrastructure/ratelimitredis"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
+	"github.com/domainry/domainry-foundation/ratelimit"
 )
 
 type closeTrackingRateLimiter struct{ closed bool }

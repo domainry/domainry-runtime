@@ -3,8 +3,7 @@ package testkit
 import (
 	"context"
 
-	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
-	lifecyclemoduleimpl "github.com/domainry/domainry-lifecycle/module"
+	reportsdk "github.com/domainry/domainry-report-sdk"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
@@ -16,13 +15,12 @@ import (
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
-	lifecyclemodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/lifecyclemodule"
 )
 
 // NewRuntimeServices expands one SQL test store into focused owner stores and
 // always enters production composition through the typed dependency contract.
 func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *composition.RuntimeServices {
-	dependencies := focusedPersistenceDependencies(ctx, config)
+	dependencies, reportBinding := focusedPersistenceDependencies(ctx, config)
 	if config.ApplicationSchemaRepository != nil {
 		dependencies.ApplicationSchema = config.ApplicationSchemaRepository
 	}
@@ -41,9 +39,8 @@ func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *comp
 	dependencies.WorkflowDecisions = config.WorkflowDecisions
 	dependencies.IdentityDirectory = config.IdentityDirectory
 	dependencies.AgentPrincipals = config.IdentityPrincipals
-	dependencies.ConnectorProviders = config.ConnectorProviders
 	dependencies.DataExchange = config.DataExchange
-	return composition.NewRuntimeServices(ctx, composition.RuntimeServicesConfig{
+	services := composition.NewRuntimeServices(ctx, composition.RuntimeServicesConfig{
 		Manifest: manifestmodel.ManifestSchema{
 			TemplateID: config.TemplateID, Version: config.TemplateVersion, Name: config.Name,
 			Objects: config.Objects, Actions: config.Actions, Workflows: config.Workflows,
@@ -53,11 +50,24 @@ func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *comp
 		},
 		Dependencies: dependencies,
 	})
+	if reportBinding != nil {
+		binder, ok := reportBinding.(reportsdk.ApplicationHostBinder)
+		if !ok {
+			panic("Report test module does not accept application host capabilities")
+		}
+		if err := binder.BindApplicationHost(testkitReportApplicationHost{testkitReportHost: testkitReportHost{store: config.Store}, ports: services.ReportModuleApplicationPorts(), cursorKey: []byte("runtime-testkit-report-cursor")}); err != nil {
+			panic("bind Report test application host: " + err.Error())
+		}
+		if err := services.BindReportApplication(reportBinding); err != nil {
+			panic("bind Report test application: " + err.Error())
+		}
+	}
+	return services
 }
 
-func focusedPersistenceDependencies(ctx context.Context, config RuntimeServicesConfig) composition.RuntimeServicesDependencies {
+func focusedPersistenceDependencies(ctx context.Context, config RuntimeServicesConfig) (composition.RuntimeServicesDependencies, reportsdk.Binding) {
 	if config.Store == nil {
-		return composition.RuntimeServicesDependencies{}
+		return composition.RuntimeServicesDependencies{}, nil
 	}
 	records := recordpersistence.NewRecordStore(config.Store)
 	reportDataset := reportpersistence.NewReportDatasetStore(config.Store)
@@ -65,15 +75,10 @@ func focusedPersistenceDependencies(ctx context.Context, config RuntimeServicesC
 	if err != nil {
 		panic("open Report test module: " + err.Error())
 	}
-	lifecycleBinding, err := lifecyclemoduleimpl.NewFactory().OpenModule(ctx, lifecyclesdk.ApplicationRef{RuntimeID: "runtime-testkit"}, lifecyclemodule.NewHost(config.Store))
-	if err != nil {
-		panic("open Lifecycle test module: " + err.Error())
-	}
 	return composition.RuntimeServicesDependencies{
 		Records: records, RecordExecutions: records,
 		ReportDatasetRows:            reportDataset,
 		ReportObjectSQL:              reportDataset,
-		ReportSnapshots:              reportpersistence.NewModuleReportSnapshotReader(reportBinding.Snapshots()),
 		ReportSnapshotSources:        reportDataset,
 		Audit:                        auditpersistence.NewAuditStoreFromRuntimeStore(ctx, config.Store),
 		IntegrationPublication:       publicationhandoffpersistence.NewPublicationStore(config.Store),

@@ -90,7 +90,7 @@ func TestRuntimeSchemaMigrationHonorsCallerContext(t *testing.T) {
 	}
 }
 
-func TestRuntimeSchemaCreatesMetadataDefinitionVersionTable(t *testing.T) {
+func TestRuntimeSchemaDoesNotCreateMetadataOwnedTables(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
@@ -100,7 +100,7 @@ func TestRuntimeSchemaCreatesMetadataDefinitionVersionTable(t *testing.T) {
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='_metadata_definition_versions'`).Scan(&metadataVersionTableCount); err != nil {
 		t.Fatal(err)
 	}
-	if metadataVersionTableCount != 1 {
-		t.Fatalf("Metadata Module definition version table count=%d want=1", metadataVersionTableCount)
+	if metadataVersionTableCount != 0 {
+		t.Fatalf("Runtime schema created Metadata-owned definition version table: count=%d", metadataVersionTableCount)
 	}
 }

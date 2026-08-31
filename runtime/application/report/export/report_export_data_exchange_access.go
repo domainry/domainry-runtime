@@ -1,9 +1,9 @@
 package export
 
 import (
+	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -12,27 +12,26 @@ import (
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
+	reportcontract "github.com/domainry/domainry-report/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-type ExchangeJob struct {
-	ID                string                               `json:"id"`
-	DataExchangeJobID string                               `json:"data_exchange_job_id"`
-	AuditID           string                               `json:"audit_id"`
-	ReportKey         string                               `json:"report_key"`
-	ObjectKey         string                               `json:"object_key"`
-	Status            string                               `json:"status"`
-	PagesCompleted    int                                  `json:"pages_completed"`
-	RowsExported      int                                  `json:"rows_exported"`
-	Total             int                                  `json:"total"`
-	Scope             reportmodel.ReportExportScopeRequest `json:"scope"`
-	ArtifactID        string                               `json:"artifact_id,omitempty"`
-	ContentSHA256     string                               `json:"content_sha256,omitempty"`
-	DownloadToken     string                               `json:"download_token,omitempty"`
-	ExpiresAt         string                               `json:"expires_at,omitempty"`
-	ErrorCode         string                               `json:"error_code,omitempty"`
-	CreatedAt         string                               `json:"created_at"`
-	UpdatedAt         string                               `json:"updated_at"`
+type ExchangeJob = reportmodel.ReportExportJob
+
+func (p *DataExchangeProvider) OpenDataExchangeArtifact(ctx context.Context, job dataexchange.Job, scope dataexchange.Scope) (dataexchange.Artifact, error) {
+	principal, err := p.principal(ctx, scope)
+	if err != nil {
+		return dataexchange.Artifact{}, err
+	}
+	return p.openDataExchangeArtifact(ctx, job, principal)
+}
+
+func (p *DataExchangeProvider) ProjectDataExchangeJob(ctx context.Context, job dataexchange.Job, scope dataexchange.Scope) (any, error) {
+	principal, err := p.principal(ctx, scope)
+	if err != nil {
+		return nil, err
+	}
+	return p.ProjectJob(ctx, job, principal)
 }
 
 func (p *DataExchangeProvider) ProjectJob(ctx context.Context, job dataexchange.Job, principal principalmodel.Principal) (ExchangeJob, error) {
@@ -52,7 +51,7 @@ func (p *DataExchangeProvider) ProjectJob(ctx context.Context, job dataexchange.
 		total = payload.ExactTotal
 	}
 	projection := ExchangeJob{
-		ID: job.ID, DataExchangeJobID: job.ID, AuditID: job.ReferenceID, ReportKey: payload.ReportKey, ObjectKey: payload.ObjectKey,
+		ID: job.ID, AuditID: job.ReferenceID, ReportKey: payload.ReportKey, ObjectKey: payload.ObjectKey,
 		Status: status, PagesCompleted: job.ResultChunks, RowsExported: job.Checkpoint, Total: total, Scope: payload.Scope,
 		ArtifactID: job.ArtifactID, ErrorCode: job.ErrorCode,
 		CreatedAt: job.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: job.UpdatedAt.UTC().Format(time.RFC3339Nano),
@@ -60,14 +59,14 @@ func (p *DataExchangeProvider) ProjectJob(ctx context.Context, job dataexchange.
 	if status != "completed" {
 		return projection, nil
 	}
-	artifact, err := p.dependencies.Binding.Download(ctx, dataexchange.JobRequest{Scope: Scope(principal), JobID: job.ID})
+	artifact, err := p.dependencies.Binding.Download(ctx, dataexchange.JobRequest{Scope: Scope(principal), JobID: job.ID, Provider: DataExchangeProviderKey, Operation: "export"})
 	if err != nil {
 		return ExchangeJob{}, err
 	}
 	if artifact.Content != nil {
 		_ = artifact.Content.Close()
 	}
-	projection.ArtifactID, projection.ContentSHA256, projection.DownloadToken = artifact.ID, artifact.SHA256, job.ID
+	projection.ArtifactID, projection.ContentSHA256 = artifact.ID, artifact.SHA256
 	projection.ExpiresAt = artifact.ExpiresAt.UTC().Format(time.RFC3339Nano)
 	return projection, nil
 }
@@ -76,15 +75,19 @@ func (p *DataExchangeProvider) CloseReplayAudit(ctx context.Context, payload Exp
 	if strings.TrimSpace(payload.AuditID) == "" || strings.TrimSpace(payload.AuditID) == strings.TrimSpace(job.ReferenceID) {
 		return nil
 	}
-	control, ok := p.dependencies.ExportControl(ctx, payload.ReportKey, payload.ObjectKey, principal)
-	if !ok || p.dependencies.Records == nil {
+	if p.dependencies.ResolveExecution == nil || p.dependencies.Records == nil {
 		return internalError(nil)
 	}
+	resolved, err := p.dependencies.ResolveExecution(ctx, reportmodel.ReportExportExecutionRequest{ReportKey: payload.ReportKey, ObjectKey: payload.ObjectKey, Scope: payload.Scope}, principal)
+	if err != nil {
+		return err
+	}
+	control := resolved.Definition.Control
 	auditRecord, err := p.dependencies.Records.GetReportRecord(ctx, control.AuditObject, payload.AuditID, principal)
 	if err != nil {
 		return err
 	}
-	scopeHash, _ := CanonicalJSONSHA256(payload.Scope)
+	scopeHash, _ := reportcontract.CanonicalReportJSONSHA256(payload.Scope)
 	rowCount := payload.ExactTotal
 	if projection.Total > 0 {
 		rowCount = projection.Total
@@ -124,34 +127,30 @@ func (p *DataExchangeProvider) updateReplayAudit(ctx context.Context, objectKey,
 	}
 }
 
-func (p *DataExchangeProvider) Download(ctx context.Context, jobID string, principal principalmodel.Principal) ([]byte, string, error) {
+func (p *DataExchangeProvider) openDataExchangeArtifact(ctx context.Context, job dataexchange.Job, principal principalmodel.Principal) (dataexchange.Artifact, error) {
 	if p == nil || p.dependencies.Binding == nil {
-		return nil, "", internalError(nil)
+		return dataexchange.Artifact{}, internalError(nil)
 	}
-	job, err := p.dependencies.Binding.Job(ctx, dataexchange.JobRequest{Scope: Scope(principal), JobID: jobID})
-	if err != nil {
-		return nil, "", err
+	if job.Provider != DataExchangeProviderKey || job.Operation != "export" || job.Status != "completed" || job.WorkspaceID != strings.TrimSpace(principal.WorkspaceID) || job.ActorID != strings.TrimSpace(principal.UserID) {
+		return dataexchange.Artifact{}, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_result_not_ready"}
 	}
 	payload, err := exchangePayload(job.Options, job.ReferenceID)
 	if err != nil {
-		return nil, "", err
-	}
-	if job.Provider != DataExchangeProviderKey || job.Operation != "export" || job.Status != "completed" || job.ActorID != strings.TrimSpace(principal.UserID) {
-		return nil, "", &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_result_not_ready"}
+		return dataexchange.Artifact{}, err
 	}
 	prepared, err := p.prepare(ctx, payload, principal, false)
 	if err != nil {
-		return nil, "", err
+		return dataexchange.Artifact{}, err
 	}
-	artifact, err := p.dependencies.Binding.Download(ctx, dataexchange.JobRequest{Scope: Scope(principal), JobID: job.ID})
+	artifact, err := p.dependencies.Binding.Download(ctx, dataexchange.JobRequest{Scope: Scope(principal), JobID: job.ID, Provider: DataExchangeProviderKey, Operation: "export"})
 	if err != nil {
-		return nil, "", err
+		return dataexchange.Artifact{}, err
 	}
 	if artifact.Content == nil {
-		return nil, "", internalError(nil)
+		return dataexchange.Artifact{}, internalError(nil)
 	}
 	defer artifact.Content.Close()
-	deny := func(code, reason string) ([]byte, string, error) {
+	deny := func(code, reason string) error {
 		status, event := prepared.control.RecordMapping.AuditDeniedStatus, "report_export_download_denied"
 		if reason == "expired" {
 			status, event = prepared.control.RecordMapping.AuditExpiredStatus, "report_export_download_expired"
@@ -160,59 +159,45 @@ func (p *DataExchangeProvider) Download(ctx context.Context, jobID string, princ
 			_ = p.dependencies.Records.TransitionReportExportAuditStatus(ctx, payload.WorkspaceID, prepared.control.AuditObject, payload.AuditID, prepared.control.RecordMapping.AuditStatusField, prepared.control.RecordMapping.AuditPreparedStatus, status)
 		}
 		_ = p.audit(ctx, "", event, payload.ObjectKey, principal, payload.AuditID, map[string]any{"report_key": payload.ReportKey, "artifact_id": artifact.ID, "reason": reason}, false)
-		return nil, "", &apperror.AppError{Kind: apperror.KindForbidden, Code: code}
+		return &apperror.AppError{Kind: apperror.KindForbidden, Code: code}
 	}
 	if artifact.ExpiresAt.IsZero() || !p.dependencies.Clock().UTC().Before(artifact.ExpiresAt) {
-		return deny("backend.report.export_download_expired", "expired")
+		return dataexchange.Artifact{}, deny("backend.report.export_download_expired", "expired")
 	}
-	scopeHash, _ := CanonicalJSONSHA256(prepared.normalizedScope)
-	snapshot := reportmodel.ReportExportAuthorizationSnapshot{
-		ObjectKey: payload.ObjectKey, Scope: prepared.normalizedScope, ScopeSHA256: scopeHash,
-		AuthorizationScopeSHA256: payload.AuthorizationScopeSHA256, ReportDefinitionSHA256: payload.ReportDefinitionSHA256,
-		ControlDefinitionSHA256: payload.ControlDefinitionSHA256,
-	}
-	report, err := p.dependencies.Domain.ReportForExport(ctx, payload.ReportKey, payload.ObjectKey, principal)
+	scopeHash, _ := reportcontract.CanonicalReportJSONSHA256(prepared.normalizedScope)
+	content, err := io.ReadAll(artifact.Content)
 	if err != nil {
-		return deny(apperror.CodeOf(err), "current_report_permission")
-	}
-	if err = ValidateCurrentExportAuthorization(ctx, p.dependencies.Domain, report, prepared.control, snapshot, principal); err != nil {
-		return deny(apperror.CodeOf(err), apperror.CodeOf(err))
-	}
-	content, err := io.ReadAll(io.LimitReader(artifact.Content, artifact.Size+1))
-	if err != nil {
-		return nil, "", err
-	}
-	if int64(len(content)) != artifact.Size {
-		return deny("backend.report.export_integrity_failed", "content_size_mismatch")
-	}
-	digest := sha256.Sum256(content)
-	if hex.EncodeToString(digest[:]) != artifact.SHA256 {
-		return deny("backend.report.export_integrity_failed", "content_hash_mismatch")
+		if errors.Is(err, dataexchange.ErrContentCorrupt) {
+			return dataexchange.Artifact{}, deny("backend.report.export_integrity_failed", "content_integrity_mismatch")
+		}
+		return dataexchange.Artifact{}, err
 	}
 	auditRecord, err := p.dependencies.Records.GetReportRecord(ctx, prepared.control.AuditObject, payload.AuditID, principal)
 	if err != nil {
-		return nil, "", err
+		return dataexchange.Artifact{}, err
 	}
 	mapping := prepared.control.RecordMapping
 	if strings.TrimSpace(fmt.Sprint(auditRecord.Data[mapping.AuditReportKeyField])) != payload.ReportKey || strings.TrimSpace(fmt.Sprint(auditRecord.Data[mapping.AuditRequesterField])) != payload.RequesterUserID {
-		return deny("backend.report.export_requester_mismatch", "audit_binding_changed")
+		return dataexchange.Artifact{}, deny("backend.report.export_requester_mismatch", "audit_binding_changed")
 	}
 	status := strings.TrimSpace(fmt.Sprint(auditRecord.Data[mapping.AuditStatusField]))
 	if status != mapping.AuditDownloadedStatus && status != mapping.AuditPreparedStatus {
-		return deny("backend.report.export_audit_status_invalid", "audit_status_changed")
+		return dataexchange.Artifact{}, deny("backend.report.export_audit_status_invalid", "audit_status_changed")
 	}
 	if status != mapping.AuditDownloadedStatus {
 		if _, err = p.dependencies.Records.UpdateReportRecord(ctx, prepared.control.AuditObject, auditRecord.ID, map[string]any{mapping.AuditStatusField: mapping.AuditDownloadedStatus}, "report-export-complete:"+auditRecord.ID, principal); err != nil {
-			return nil, "", err
+			return dataexchange.Artifact{}, err
 		}
 	}
-	parametersHash, _ := CanonicalJSONSHA256(prepared.normalizedScope.Parameters)
+	parametersHash, _ := reportcontract.CanonicalReportJSONSHA256(prepared.normalizedScope.Parameters)
 	if err = p.audit(ctx, "", "report_export_downloaded", payload.ObjectKey, principal, payload.AuditID, map[string]any{
 		"report_key": payload.ReportKey, "artifact_id": artifact.ID, "expires_at": artifact.ExpiresAt.UTC().Format(time.RFC3339Nano),
 		"watermarked": prepared.control.Watermark, "content_sha256": artifact.SHA256, "row_count": job.Checkpoint,
 		"scope_sha256": scopeHash, "parameters_sha256": parametersHash,
 	}, true); err != nil {
-		return nil, "", internalError(err)
+		return dataexchange.Artifact{}, internalError(err)
 	}
-	return content, artifact.Filename, nil
+	artifact.Size = int64(len(content))
+	artifact.Content = io.NopCloser(bytes.NewReader(content))
+	return artifact, nil
 }

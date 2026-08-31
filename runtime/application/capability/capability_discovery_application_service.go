@@ -12,8 +12,8 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
 )
 
 type CapabilityDiscoveryFilter struct {
@@ -34,9 +34,9 @@ func (s *CapabilityAuthoringApplicationService) DiscoveryIndex(ctx context.Conte
 		return capabilitycontract.CapabilityDiscoveryIndex{}, err
 	}
 	result := capabilitycontract.CapabilityDiscoveryIndex{
-		ContractVersion: contract.ContractVersion, SurfaceContractVersion: contract.SurfaceContractVersion, RuntimeVersion: contract.RuntimeVersion, ContractHash: contract.ContractHash, InstanceHash: contract.InstanceHash,
-		EndpointSurfaceContracts: tenantAdminEndpointSurfaceContracts(),
-		Domains:                  []capabilitycontract.CapabilityDomainSummary{},
+		ContractVersion: contract.ContractVersion, EndpointContractVersion: contract.EndpointContractVersion, RuntimeVersion: contract.RuntimeVersion, ContractHash: contract.ContractHash, InstanceHash: contract.InstanceHash,
+		EndpointContracts: tenantAdminEndpointContracts(),
+		Domains:           []capabilitycontract.CapabilityDomainSummary{},
 	}
 	for _, domain := range contract.Domains {
 		result.Domains = append(result.Domains, capabilitycontract.CapabilityDomainSummary{
@@ -46,11 +46,11 @@ func (s *CapabilityAuthoringApplicationService) DiscoveryIndex(ctx context.Conte
 	return result, nil
 }
 
-func tenantAdminEndpointSurfaceContracts() []surfacemodel.RuntimeEndpointContractV1 {
-	result := make([]surfacemodel.RuntimeEndpointContractV1, 0)
-	for _, endpointContract := range surfacemodel.EndpointContracts {
-		for _, projection := range endpointContract.Projections {
-			if projection.Surface == surfacemodel.ProductSurfaceAdminConsole {
+func tenantAdminEndpointContracts() []endpointmodel.RuntimeEndpointContractV1 {
+	result := make([]endpointmodel.RuntimeEndpointContractV1, 0)
+	for _, endpointContract := range endpointmodel.EndpointContracts {
+		for _, exposure := range endpointContract.ListenerExposures {
+			if exposure == endpointmodel.ListenerExposureTenantAdmin {
 				result = append(result, endpointContract)
 				break
 			}
@@ -73,7 +73,7 @@ func (s *CapabilityAuthoringApplicationService) DomainCapabilities(ctx context.C
 			continue
 		}
 		result := capabilitycontract.CapabilityDomainDetail{
-			ContractVersion: contract.ContractVersion, SurfaceContractVersion: contract.SurfaceContractVersion, RuntimeVersion: contract.RuntimeVersion, ContractHash: contract.ContractHash, InstanceHash: contract.InstanceHash,
+			ContractVersion: contract.ContractVersion, EndpointContractVersion: contract.EndpointContractVersion, RuntimeVersion: contract.RuntimeVersion, ContractHash: contract.ContractHash, InstanceHash: contract.InstanceHash,
 			Key: domain.Key, Capabilities: []capabilitycontract.CapabilitySummary{},
 		}
 		for _, definition := range domain.Capabilities {
@@ -84,8 +84,7 @@ func (s *CapabilityAuthoringApplicationService) DomainCapabilities(ctx context.C
 				continue
 			}
 			result.Capabilities = append(result.Capabilities, capabilitycontract.CapabilitySummary{
-				Key: definition.Key, Surface: definition.Surface, ActorAudiences: definition.ActorAudiences, ExposureClass: definition.ExposureClass,
-				Status: definition.Status, Lifecycle: definition.Lifecycle, Requires: definition.Requires,
+				Key: definition.Key, Status: definition.Status, Lifecycle: definition.Lifecycle, Requires: definition.Requires,
 				ValidationEndpoint: definition.ValidationEndpoint, DetailEndpoint: "/tenant-admin/platform-capabilities/capabilities/" + url.PathEscape(definition.Key),
 			})
 		}
@@ -288,7 +287,7 @@ func (s *CapabilityAuthoringApplicationService) ReferenceValues(ctx context.Cont
 					values = append(values, "scheduled:"+workflowKey)
 				}
 			}
-		case "report_export", "report_snapshot_refresh":
+		case "report_snapshot_refresh":
 			values = contract.Instance.ReportKeys
 		default:
 			return capabilitycontract.CapabilityReferenceResult{}, capabilityDiscoveryBadRequest("backend.capability.reference_scope_invalid", "scope", scope)

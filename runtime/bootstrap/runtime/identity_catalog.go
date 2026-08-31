@@ -9,7 +9,7 @@ import (
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
+	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 )
 
 func publishRuntimeIdentityCatalog(ctx context.Context, binding identitysdk.Binding, snapshot appschemamodel.ApplicationSchemaSnapshot, workspaceID, applicationKey string, redirectURLs []string) error {
@@ -127,7 +127,7 @@ func runtimeIdentityCatalog(snapshot appschemamodel.ApplicationSchemaSnapshot, w
 			addPermission(permission, "")
 		}
 	}
-	for _, contract := range surfacemodel.EndpointContracts {
+	for _, contract := range endpointmodel.EndpointContracts {
 		for _, permission := range contract.RequiredPermissions {
 			addPermission(permission, "")
 		}

@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -132,11 +131,11 @@ func TestListRecordsComposesDepartmentScopeWithSearchFiltersPaginationAndSorting
 	}
 }
 
-func TestUpdateRecordWherePreventsStaleSchedulerLeaseClaim(t *testing.T) {
+func TestUpdateRecordWherePreventsStaleRecordTimerLeaseClaim(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
 
-	if _, err := store.DB().Exec("CREATE TABLE " + store.Identifier("job_run") + " (" +
+	if _, err := store.DB().Exec("CREATE TABLE " + store.Identifier("record_timer_claim") + " (" +
 		store.Identifier("workspace_id") + " TEXT NOT NULL, " +
 		store.Identifier("id") + " TEXT PRIMARY KEY, " +
 		store.Identifier("created_at") + " TEXT NOT NULL, " +
@@ -146,11 +145,11 @@ func TestUpdateRecordWherePreventsStaleSchedulerLeaseClaim(t *testing.T) {
 		store.Identifier("lease_expires_at") + " TEXT, " +
 		store.Identifier("attempt") + " REAL" +
 		")"); err != nil {
-		t.Fatalf("create job_run table: %v", err)
+		t.Fatalf("create record timer claim table: %v", err)
 	}
 	object := definitionmodel.ObjectSchema{
-		Key:  "job_run",
-		Name: "Job Run",
+		Key:  "record_timer_claim",
+		Name: "Record Timer Claim",
 		Fields: []definitionmodel.FieldSchema{
 			{Key: "status", Name: "Status", Type: "text"},
 			{Key: "lease_owner", Name: "Lease Owner", Type: "text"},
@@ -159,7 +158,7 @@ func TestUpdateRecordWherePreventsStaleSchedulerLeaseClaim(t *testing.T) {
 		},
 	}
 	record := recordmodel.Record{
-		ID:        "run_1",
+		ID:        "timer_1",
 		CreatedAt: "2026-01-01T00:00:00Z",
 		UpdatedAt: "2026-01-01T00:00:00Z",
 		Data: map[string]any{
@@ -170,7 +169,7 @@ func TestUpdateRecordWherePreventsStaleSchedulerLeaseClaim(t *testing.T) {
 		},
 	}
 	if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", object, record); err != nil {
-		t.Fatalf("insert job_run: %v", err)
+		t.Fatalf("insert record timer claim: %v", err)
 	}
 
 	claimed := record
@@ -183,7 +182,7 @@ func TestUpdateRecordWherePreventsStaleSchedulerLeaseClaim(t *testing.T) {
 		t.Fatalf("first conditional update: %v", err)
 	}
 	if !ok {
-		t.Fatalf("expected first scheduler lease claim to succeed")
+		t.Fatalf("expected first record timer lease claim to succeed")
 	}
 
 	stale := record
@@ -196,21 +195,7 @@ func TestUpdateRecordWherePreventsStaleSchedulerLeaseClaim(t *testing.T) {
 		t.Fatalf("second conditional update: %v", err)
 	}
 	if ok {
-		t.Fatalf("expected stale scheduler lease claim to be rejected")
-	}
-}
-
-func TestSchedulerNowUsesDatabaseClock(t *testing.T) {
-	store := openStoreForGeneratedListTest(t)
-	defer store.Close()
-	before := time.Now().UTC().Add(-2 * time.Second)
-	now, err := recordStore(store).SchedulerNow(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	after := time.Now().UTC().Add(2 * time.Second)
-	if now.Before(before) || now.After(after) {
-		t.Fatalf("database now=%s outside [%s,%s]", now, before, after)
+		t.Fatalf("expected stale record timer lease claim to be rejected")
 	}
 }
 

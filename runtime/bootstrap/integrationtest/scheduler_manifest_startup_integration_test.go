@@ -8,12 +8,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	bootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap"
-	schedulerprojection "github.com/domainry/domainry-runtime/runtime/domain/scheduler/projection"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -28,61 +26,6 @@ func TestManifestSchedulerDefinitionManualCapabilityStartupRestartAndExactlyOnce
 	if err := json.Unmarshal(raw, &manifest); err != nil {
 		t.Fatal(err)
 	}
-	// Model compiler output rather than the legacy fixture's older scheduler
-	// objects: source-owned published jobs always carry the canonical Runtime
-	// Scheduler persistence projection.
-	canonicalRaw, err := json.Marshal(schedulerprojection.SchedulerSystemObjects())
-	if err != nil {
-		t.Fatal(err)
-	}
-	var canonical []any
-	if err := json.Unmarshal(canonicalRaw, &canonical); err != nil {
-		t.Fatal(err)
-	}
-	canonicalKeys := map[string]bool{}
-	for _, rawObject := range canonical {
-		object, _ := rawObject.(map[string]any)
-		canonicalKeys[object["key"].(string)] = true
-	}
-	objects, _ := manifest["objects"].([]any)
-	filtered := make([]any, 0, len(objects)+len(canonical))
-	for _, rawObject := range objects {
-		object, _ := rawObject.(map[string]any)
-		objectKey, _ := object["key"].(string)
-		if !strings.HasPrefix(objectKey, "job_") && !canonicalKeys[objectKey] {
-			fields, _ := object["fields"].([]any)
-			filteredFields := make([]any, 0, len(fields))
-			for _, rawField := range fields {
-				field, _ := rawField.(map[string]any)
-				validation, _ := field["validation"].(map[string]any)
-				if validation["target"] == "job_definition" {
-					continue
-				}
-				filteredFields = append(filteredFields, rawField)
-			}
-			object["fields"] = filteredFields
-			filtered = append(filtered, rawObject)
-		}
-	}
-	manifest["objects"] = filtered
-	seedRecords, _ := manifest["seed_records"].([]any)
-	filteredSeeds := make([]any, 0, len(seedRecords))
-	for _, rawSeed := range seedRecords {
-		seed, _ := rawSeed.(map[string]any)
-		objectKey, _ := seed["object_key"].(string)
-		if strings.HasPrefix(objectKey, "job_") || canonicalKeys[objectKey] {
-			continue
-		}
-		data, _ := seed["data"].(map[string]any)
-		if _, referencesLegacyDefinition := data["job_definition_id"]; referencesLegacyDefinition {
-			continue
-		}
-		if _, referencesLegacyRun := data["job_run_id"]; referencesLegacyRun {
-			continue
-		}
-		filteredSeeds = append(filteredSeeds, rawSeed)
-	}
-	manifest["seed_records"] = filteredSeeds
 	dueAt := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
 	manifest["scheduler_definitions"] = []any{map[string]any{
 		"key": "business_config_activation_job", "name": "Business Config Activation", "status": "enabled",
@@ -149,7 +92,6 @@ func schedulerOperatorRequest(t *testing.T, handler http.Handler, method, path, 
 	req := httptest.NewRequest(method, path, bytes.NewReader(nil))
 	req.Header.Set("Authorization", "Bearer "+integrationIdentityAccessTokenFor("scheduler-operator", "scheduler_operator"))
 	req.Header.Set("X-Workspace-ID", "workspace-primary")
-	req.Header.Set("X-Domainry-Product-Surface", "admin_console")
 	req.Header.Set("X-Operation-Reason", "scheduler contract integration verification")
 	if idempotencyKey != "" {
 		req.Header.Set("Idempotency-Key", idempotencyKey)

@@ -2,7 +2,6 @@ package integrationtest
 
 import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	schedulerpolicy "github.com/domainry/domainry-runtime/runtime/domain/scheduler/policy"
 
 	"bytes"
 	"encoding/json"
@@ -108,16 +107,13 @@ func schedulerSmokeRequest(t *testing.T, handler http.Handler, method string, pa
 		req.Header.Set("Content-Type", "application/json")
 	}
 	applyIntegrationIdentity(req, "platform_admin")
-	if strings.HasPrefix(path, "/tenant-admin/") {
-		req.Header.Set("X-Domainry-Product-Surface", "admin_console")
-	} else if strings.HasPrefix(path, "/operations/") {
-		req.Header.Set("X-Domainry-Product-Surface", "admin_console")
+	if strings.HasPrefix(path, "/operations/") {
 		req.Header.Set("X-Operation-Reason", "scheduler API smoke controlled recovery")
 		if strings.Contains(path, "/cancel") || strings.Contains(path, "/resolve") || strings.Contains(path, "/requeue") {
 			req.Header.Set("X-Operation-Confirmation", "confirmed")
 		}
 	}
-	req.Header.Set("Idempotency-Key", "scheduler-smoke-"+schedulerpolicy.SchedulerSlug(path))
+	req.Header.Set("Idempotency-Key", fmt.Sprintf("scheduler-smoke-%x", []byte(path)))
 	res := httptest.NewRecorder()
 	handler.ServeHTTP(res, req)
 	if res.Code != expectedStatus {

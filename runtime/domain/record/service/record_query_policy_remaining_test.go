@@ -7,7 +7,6 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -92,19 +91,12 @@ func TestQueryPolicyCustomScopeCompilationAndFallbackEdges(t *testing.T) {
 			t.Fatalf("fallback write=%v allowed=%v err=%v", write, allowed, err)
 		}
 	}
-	blankReports := []reportmodel.ReportSchema{{Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: " ", SourceType: "snapshot"}}}}
-	if keys := RecordReportObjectKeySet(blankReports); len(keys) != 0 {
-		t.Fatalf("blank report keys=%#v", keys)
-	}
-
 }
 
 func TestQueryPolicyReportSnapshotAccessMatrix(t *testing.T) {
 	snapshot := definitionmodel.ObjectSchema{Key: "sales_snapshot"}
 	service := NewRecordQueryPolicyDomainService(RecordQueryPolicyDependencies{
-		Reports: func() []reportmodel.ReportSchema {
-			return []reportmodel.ReportSchema{{Key: "sales", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "sales_snapshot", Alias: "sales_snapshot", SourceType: "snapshot"}}}}
-		},
+		ReportObjects: func() map[string]struct{} { return map[string]struct{}{"sales_snapshot": {}} },
 	})
 	if err := service.EnsureReportSnapshotAccess(definitionmodel.ObjectSchema{Key: "customer"}, "read", principalmodel.Principal{}); err != nil {
 		t.Fatal(err)
@@ -123,12 +115,8 @@ func TestQueryPolicyReportSnapshotAccessMatrix(t *testing.T) {
 	if err := service.EnsureReportSnapshotAccess(snapshot, "read", permissionOnly); err != nil {
 		t.Fatal(err)
 	}
-	keys := RecordReportObjectKeySet(service.reports())
-	if len(keys) != 1 {
-		t.Fatalf("snapshot keys=%#v", keys)
-	}
-	if reports := NewRecordQueryPolicyDomainService(RecordQueryPolicyDependencies{}).reports(); reports != nil {
-		t.Fatalf("nil report dependency returned %#v", reports)
+	if err := NewRecordQueryPolicyDomainService(RecordQueryPolicyDependencies{}).EnsureReportSnapshotAccess(snapshot, "read", principalmodel.Principal{}); err != nil {
+		t.Fatalf("nil Report object projection must not classify snapshots: %v", err)
 	}
 }
 

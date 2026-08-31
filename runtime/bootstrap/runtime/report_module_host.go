@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
 	reportpersistence "github.com/domainry/domainry-report-sdk/persistence"
+	"github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
@@ -27,6 +29,41 @@ func (h runtimeReportModuleHost) Dialect() reportmodulehost.Dialect { return h.s
 func (h runtimeReportModuleHost) Migrations() reportmodulehost.MigrationRegistrar {
 	return runtimeReportMigrationRegistrar{store: h.store}
 }
+
+type runtimeReportApplicationHost struct {
+	runtimeReportModuleHost
+	ports     composition.ReportModuleApplicationPorts
+	cursorKey []byte
+}
+
+func (h runtimeReportApplicationHost) ReportSubjects() reportmodulehost.SubjectResolver {
+	return h.ports.Subjects
+}
+func (h runtimeReportApplicationHost) ReportDatasets() reportmodulehost.DatasetReader {
+	return h.ports.Datasets
+}
+func (h runtimeReportApplicationHost) ReportObjectSQL() reportmodulehost.ObjectSQLExecutor {
+	return h.ports.ObjectSQL
+}
+func (h runtimeReportApplicationHost) ReportSourceVersions() reportmodulehost.SourceVersionReader {
+	return h.ports.SourceVersions
+}
+func (h runtimeReportApplicationHost) ReportExecutionAudit() reportmodulehost.ExecutionAudit {
+	return h.ports.Audit
+}
+func (h runtimeReportApplicationHost) ReportExportAuthorization() reportmodulehost.ExportAuthorization {
+	return h.ports.Authorization
+}
+func (h runtimeReportApplicationHost) ReportSnapshotTerminals() reportmodulehost.SnapshotTerminalCommitter {
+	return h.ports.Terminals
+}
+func (h runtimeReportApplicationHost) ReportExports() reportmodulehost.ExportGateway {
+	return h.ports.Exports
+}
+func (h runtimeReportApplicationHost) ReportCursorSigningKey() []byte {
+	return append([]byte(nil), h.cursorKey...)
+}
+func (runtimeReportApplicationHost) ReportClock() func() time.Time { return time.Now }
 
 type runtimeReportMigrationRegistrar struct{ store *persistence.RuntimeStore }
 

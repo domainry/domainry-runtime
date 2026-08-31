@@ -63,10 +63,10 @@ durable maintenance/drain state and the stable `RUNTIME_INSTANCE_ID`.
 
 | Owner | Production entrypoint | Current permission / scope | Current idempotency | Current audit / result | Unified job gap |
 | --- | --- | --- | --- | --- | --- |
-| Scheduler | `POST /operations/scheduler/definitions/{definitionID}/run` | `scheduler.command` or legacy Scheduler run grants; workspace principal | required caller key | owner audit plus terminal shared receipt headers | owner execution is wrapped by `scheduler.job.run`; replay returns stored owner result without a second owner call |
-| Scheduler | `POST /scheduler/runs/{runID}/retry` | admin; workspace principal and owner precondition | required caller key | run event, owner audit and terminal shared receipt | wrapped by `scheduler.run.retry` |
-| Scheduler | `POST /scheduler/runs/{runID}/cancel` | admin; workspace principal and owner precondition | required caller key | run event, owner audit and terminal shared receipt | wrapped by `scheduler.run.cancel` |
-| Scheduler | `POST /scheduler/dead-letters/{deadLetterID}/resolve` | admin; workspace principal and dead-letter policy | required caller key | dead-letter event, owner audit and terminal shared receipt | legacy route is wrapped by `scheduler.dead_letter.resolve`; unified `/operations/dead-letters/scheduler/*` additionally separates inspect/resolve/ack and lets Scheduler reject retry |
+| Scheduler | `POST /operations/scheduler/definitions/{definitionID}/run` | `scheduler.command`; workspace principal | required caller key | owner audit plus terminal shared receipt headers | owner execution is wrapped by `scheduler.job.run`; replay returns stored owner result without a second owner call |
+| Scheduler | `POST /operations/scheduler/runs/{runID}/retry` | `scheduler.command`; workspace principal and owner precondition | required caller key | Scheduler-owned run event plus terminal shared receipt | wrapped by `scheduler.run.retry` |
+| Scheduler | `POST /operations/scheduler/runs/{runID}/cancel` | `scheduler.command`; workspace principal and owner precondition | required caller key | Scheduler-owned run event plus terminal shared receipt | wrapped by `scheduler.run.cancel` |
+| Scheduler | `POST /operations/scheduler/dead-letters/{deadLetterID}/resolve` | `scheduler.command`; workspace principal and Scheduler dead-letter policy | required caller key | Scheduler-owned dead-letter evidence plus terminal shared receipt | wrapped by `scheduler.dead_letter.resolve` |
 | Workflow | `POST /workflow-processes/{processID}/retry` | authenticated owner policy; workspace principal | required caller key | process/execution evidence and terminal shared receipt | wrapped by `workflow.process.retry` |
 | Workflow | `POST /workflow-processes/{processID}/cancel` | authenticated owner policy; workspace principal | required caller key | process/execution evidence and terminal shared receipt | wrapped by `workflow.process.cancel` |
 | Workflow | `POST /workflow-processes/{processID}/resolve` | authenticated owner policy; workspace principal | required caller key | process/execution evidence and terminal shared receipt | wrapped by `workflow.process.resolve` |
@@ -82,11 +82,13 @@ durable maintenance/drain state and the stable `RUNTIME_INSTANCE_ID`.
 
 ## Remaining migration work
 
-- production-reachable Scheduler, Workflow, Integration, Automation, retention
+- production-reachable Scheduler, Workflow, Automation, retention
   cleanup and idempotency recovery mutations register and finish the shared
   ledger around the real owner call. The wrapper never owns the business state
   transition; it prevents duplicate owner calls after a terminal replay and
   exposes the receipt through response headers without changing legacy bodies.
+- Integration owner activity, replay, examples and HTTP contracts are published
+  by `domainry-integration-sdk`; Runtime only aggregates that disclosure.
 - release construction is gated by
   `scripts/operations/verify_runtime_operations_reliability.sh ci`; the gate requires real
   PostgreSQL/MySQL contracts, race coverage and versioned evidence. Recovery

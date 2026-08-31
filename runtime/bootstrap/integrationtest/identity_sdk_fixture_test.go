@@ -19,8 +19,8 @@ func newIntegrationIdentityFactory() identitysdk.Factory {
 		integrationIdentityRole("admin", "Administrator", []string{"business.access", "admin_console.access", "workspace.admin"}, true),
 		integrationIdentityRole("business_admin", "Business administrator", []string{"business.access", "workspace.admin"}, true),
 		integrationIdentityRole("sales_manager", "Sales manager", []string{"business.access", "admin_console.access", "workspace.admin", "integration.entrypoint.invoke"}, true),
-		integrationIdentityRole("platform_admin", "Runtime operator", []string{"admin_console.access", "workspace.admin", "scheduler.command", "ops.workflow.read", "ops.workflow.process", "job_run.read", "job_run.update"}, true),
-		integrationIdentityRole("scheduler_operator", "Scheduler operator", []string{"admin_console.access", "workspace.admin", "scheduler.command", "job_run.read", "job_run.update"}, true),
+		integrationIdentityRole("platform_admin", "Runtime operator", []string{"admin_console.access", "workspace.admin", "scheduler.command", "ops.workflow.read", "ops.workflow.process"}, true),
+		integrationIdentityRole("scheduler_operator", "Scheduler operator", []string{"admin_console.access", "workspace.admin", "scheduler.command"}, true),
 		integrationIdentityRole("kitchen_lead", "Kitchen lead", []string{"business.access", "workspace.admin", "kitchen_order.import"}, true),
 		integrationIdentityRole("inventory_manager", "Inventory manager", []string{"business.access", "workspace.admin"}, true),
 		integrationIdentityRole("hr_admin", "HR administrator", []string{"business.access", "workspace.admin"}, true),
@@ -148,13 +148,6 @@ func roleForBusinessWorkflowRole(role string) string {
 func applyIntegrationIdentity(request *http.Request, role string) {
 	request.Header.Set("Authorization", "Bearer "+integrationIdentityAccessToken(role))
 	request.Header.Set("X-Workspace-ID", "workspace-primary")
-	path := request.URL.Path
-	switch {
-	case strings.HasPrefix(path, "/tenant-admin/"), strings.HasPrefix(path, "/operations/"), strings.HasPrefix(path, "/automation-rules"):
-		request.Header.Set("X-Domainry-Product-Surface", "admin_console")
-	case strings.HasPrefix(path, "/business/"), strings.HasPrefix(path, "/objects/"), strings.HasPrefix(path, "/reports/"):
-		request.Header.Set("X-Domainry-Product-Surface", "business_workspace")
-	}
 }
 
 func integrationIdentityRole(key, name string, permissions []string, allowAllBusinessData bool) runtimetestkit.IdentityFixtureRole {

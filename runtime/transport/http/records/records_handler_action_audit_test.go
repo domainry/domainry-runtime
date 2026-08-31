@@ -20,7 +20,6 @@ import (
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
-	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
@@ -270,44 +269,6 @@ func TestRecordsActionAndPermissionHandlersForwardApplicationErrors(t *testing.T
 	}
 }
 
-func TestRecordsAuditAndPermissionHandlersProjectQueries(t *testing.T) {
-	repository := &recordsAuditRepository{
-		events:  []auditmodel.AuditEvent{{ID: "event"}},
-		options: []auditmodel.AuditOption{{Value: "approve"}},
-	}
-	principal := recordsHTTPPrincipal()
-	handler, serviceErr := recordsHandlerForTest(principal)
-	handler.audit = auditapplication.NewAuditApplicationService(repository)
-	handler.permissions = appschemaapplication.NewApplicationSchemaQueryApplicationService(recordsSchemaProvider{snapshot: appschemamodel.ApplicationSchemaSnapshot{
-		Objects: []definitionmodel.ObjectSchema{{Key: "customer"}},
-	}}, nil)
-
-	w := httptest.NewRecorder()
-	handler.listAuditEvents(w, recordsRequest("GET", "/audit-events?object_key=+customer+&record_id=+one+&event=+updated+&actor_id=+actor+&role_key=+admin+&request_id=+req+&created_from=+from+&created_to=+to+&limit=7", "", nil))
-	if w.Code != http.StatusOK || repository.eventQuery.ObjectKey != "customer" || repository.eventQuery.RecordID != "one" || repository.eventQuery.Limit != 7 {
-		t.Fatalf("status=%d query=%#v err=%v", w.Code, repository.eventQuery, *serviceErr)
-	}
-	w = httptest.NewRecorder()
-	handler.listAuditOptions(w, recordsRequest("GET", "/audit-events/options?field=+event+&q=+app+&object_key=+customer+&created_from=+from+&created_to=+to+&limit=9", "", nil))
-	if w.Code != http.StatusOK || repository.optionQuery.Field != "event" || repository.optionQuery.Query != "app" || repository.optionQuery.Limit != 9 {
-		t.Fatalf("status=%d query=%#v err=%v", w.Code, repository.optionQuery, *serviceErr)
-	}
-	w = httptest.NewRecorder()
-	request := recordsRequest("GET", "/permissions/effective", "", nil)
-	request.Header.Set("X-Domainry-Product-Surface", "admin_console")
-	handler.effectivePermissions(w, request)
-	if w.Code != http.StatusOK || *serviceErr != nil {
-		t.Fatalf("permissions status=%d err=%v", w.Code, *serviceErr)
-	}
-	w = httptest.NewRecorder()
-	request = recordsRequest("GET", "/permissions/effective", "", nil)
-	request.Header.Set("X-Domainry-Product-Surface", "business_workspace")
-	handler.effectivePermissions(w, request)
-	if w.Code != http.StatusOK || *serviceErr != nil {
-		t.Fatalf("business permissions status=%d err=%v", w.Code, *serviceErr)
-	}
-}
-
 func TestEffectivePermissionsAppliesRecordRLSOnceForEveryRecordAction(t *testing.T) {
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "coach-a"}}, accessfixture.Bundle{
 		Key:         "operator",
@@ -507,19 +468,5 @@ func TestRuntimeOpsEffectivePermissionsExcludeWorkspaceAdminInheritance(t *testi
 		if permission.Decision.Reason != "allowed" {
 			t.Fatalf("exact permission reason = %q", permission.Decision.Reason)
 		}
-	}
-}
-
-func TestRecordsAuditHandlersForwardServiceErrors(t *testing.T) {
-	want := errors.New("audit unavailable")
-	handler, serviceErr := recordsHandlerForTest(recordsHTTPPrincipal())
-	handler.audit = auditapplication.NewAuditApplicationService(&recordsAuditRepository{err: want})
-	for _, call := range []func(http.ResponseWriter, *http.Request){handler.listAuditEvents, handler.listAuditOptions} {
-		w := httptest.NewRecorder()
-		call(w, recordsRequest("GET", "/audit?field=event", "", nil))
-		if w.Code != 599 || *serviceErr == nil {
-			t.Fatalf("status=%d err=%v", w.Code, *serviceErr)
-		}
-		*serviceErr = nil
 	}
 }

@@ -107,7 +107,7 @@ func TestCompositionFinalRecordAssuranceEdges(t *testing.T) {
 
 func TestCompositionFinalSchedulerAndWorkflowSchemaEdges(t *testing.T) {
 	calls := 0
-	adapter := schedulerOperationRuntimeAdapter{processExecutions: func(context.Context, int, principalmodel.Principal) (workflowmodel.WorkflowProcessResult, error) {
+	adapter := scheduledWorkflowRuntimeAdapter{processExecutions: func(context.Context, int, principalmodel.Principal) (workflowmodel.WorkflowProcessResult, error) {
 		calls++
 		return workflowmodel.WorkflowProcessResult{}, nil
 	}}

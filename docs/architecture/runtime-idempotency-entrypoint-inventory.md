@@ -5,25 +5,10 @@
 
 Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `optimistic_only`, `not_applicable`.
 
-## HTTP mutation routes (96)
+## HTTP mutation routes (63)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
-| `agentdialog` | `POST /agent-dialog/analysis/query` | `not_applicable` | none | `runtime/transport/http/agentdialog/agentdialog_routes.go` |
-| `agentdialog` | `POST /agent-dialog/download-tasks/{queryRef}/prepare` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/agentdialog/agentdialog_routes.go` |
-| `agentdialog` | `POST /agent-dialog/proposals` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/agentdialog/agentdialog_routes.go` |
-| `agentdialog` | `POST /agent-dialog/proposals/{proposalID}/approve` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/agentdialog/agentdialog_routes.go` |
-| `agentdialog` | `POST /agent-dialog/proposals/{proposalID}/reject` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/agentdialog/agentdialog_routes.go` |
-| `agentdialog` | `POST /agent-dialog/runs` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/agentdialog/agentdialog_routes.go` |
-| `agentdialog` | `POST /agent-dialog/runs/stream` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/agentdialog/agentdialog_routes.go` |
-| `agentdialog` | `POST /agent-dialog/sessions` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/agentdialog/agentdialog_routes.go` |
-| `agentdialog` | `POST /agent-dialog/sessions/{externalSessionID}/archive` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/agentdialog/agentdialog_routes.go` |
-| `agentdialog` | `POST /agent-dialog/sessions/{externalSessionID}/restore` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/agentdialog/agentdialog_routes.go` |
-| `agentdialog` | `POST /agent-dialog/task-tools/invoke` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/agentdialog/agentdialog_routes.go` |
-| `agentdialog` | `POST /operations/agent/tasks/{taskRunID}/cancel` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/agentdialog/agentdialog_routes.go` |
-| `agentdialog` | `POST /operations/agent/tasks/{taskRunID}/reconcile` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/agentdialog/agentdialog_routes.go` |
-| `agentdialog` | `POST /operations/agent/tasks/{taskRunID}/resolve` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/agentdialog/agentdialog_routes.go` |
-| `agentdialog` | `POST /operations/agent/tasks/{taskRunID}/retry` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/agentdialog/agentdialog_routes.go` |
 | `appschema` | `POST /tenant-admin/metadata/definitions/{resourceType}/{resourceKey}/validate` | `not_applicable` | none | `runtime/transport/http/appschema/appschema_routes.go` |
 | `automation` | `POST /automation-rules/authoring-fragments/{capabilityKey}/validate` | `not_applicable` | none | `runtime/transport/http/automation/automation_routes.go` |
 | `automation` | `POST /automation-rules/simulate` | `not_applicable` | none | `runtime/transport/http/automation/automation_routes.go` |
@@ -31,18 +16,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `automation` | `POST /automation-rules/{ruleKey}/simulate` | `not_applicable` | none | `runtime/transport/http/automation/automation_routes.go` |
 | `businesssystem` | `POST /domain-system-delivery-verification` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/businesssystem/businesssystem_routes.go` |
 | `businesssystem` | `POST /domain-system-validation` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/businesssystem/businesssystem_routes.go` |
-| `lifecycle` | `POST /operations/lifecycle/cleanup/jobs` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
 | `lifecycle` | `POST /operations/lifecycle/cleanup/jobs/{jobID}/run` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
-| `lifecycle` | `POST /operations/lifecycle/deletions/replay` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
-| `lifecycle` | `POST /operations/lifecycle/external-erasures/{erasureID}/reconcile` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
-| `lifecycle` | `POST /operations/lifecycle/legal-holds` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
-| `lifecycle` | `POST /operations/lifecycle/legal-holds/{holdID}/end` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
-| `lifecycle` | `POST /operations/lifecycle/policies` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
-| `lifecycle` | `POST /operations/lifecycle/subjects` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
-| `lifecycle` | `POST /operations/lifecycle/subjects/{requestID}/approve` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
-| `lifecycle` | `POST /operations/lifecycle/subjects/{requestID}/execute` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
-| `lifecycle` | `POST /operations/lifecycle/subjects/{requestID}/preview` | `not_applicable` | none | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
-| `lifecycle` | `POST /operations/lifecycle/subjects/{requestID}/verify` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
 | `operations` | `POST /operations` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/operations/operations_routes.go` |
 | `operations` | `POST /operations/break-glass` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/operations/operations_routes.go` |
 | `operations` | `POST /operations/break-glass/{grantID}/disable` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/operations/operations_routes.go` |
@@ -60,7 +34,6 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `operations` | `PUT /operations/controls/{controlKind}/{owner}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/operations/operations_routes.go` |
 | `records` | `DELETE /objects/{objectKey}/records/{recordID}` | `optimistic_only` | workspace plus resource identity and expected version | `runtime/transport/http/records/records_routes.go` |
 | `records` | `PATCH /objects/{objectKey}/records/{recordID}` | `optimistic_only` | workspace plus resource identity and expected version | `runtime/transport/http/records/records_routes.go` |
-| `records` | `POST /business/audit-event-exports` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
 | `records` | `POST /objects/{objectKey}/actions/{actionKey}/bulk` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
 | `records` | `POST /objects/{objectKey}/actions/{actionKey}/run` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
 | `records` | `POST /objects/{objectKey}/records` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
@@ -71,11 +44,6 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `records` | `POST /objects/{objectKey}/records/{recordID}/actions/{actionKey}` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
 | `records` | `POST /objects/{objectKey}/records/{recordID}/deactivate-profile` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
 | `records` | `POST /objects/{objectKey}/records/{recordID}/reactivate-profile` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
-| `records` | `POST /record-batch-jobs/{jobID}/cancel` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
-| `reports` | `POST /report-exports/{jobID}/cancel` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/reports/reports_routes.go` |
-| `reports` | `POST /reports/{reportKey}/exports/{objectKey}/prepare` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/reports/reports_routes.go` |
-| `reports` | `POST /reports/{reportKey}/query` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/reports/reports_routes.go` |
-| `reports` | `POST /reports/{reportKey}/snapshots/refresh` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/reports/reports_routes.go` |
 | `scheduler` | `POST /operations/scheduler/dead-letters/{deadLetterID}/requeue` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/scheduler/scheduler_routes.go` |
 | `scheduler` | `POST /operations/scheduler/dead-letters/{deadLetterID}/resolve` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/scheduler/scheduler_routes.go` |
 | `scheduler` | `POST /operations/scheduler/definitions/{definitionID}/reschedule` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/scheduler/scheduler_routes.go` |
@@ -86,7 +54,6 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `scheduler` | `POST /tenant-admin/scheduler/definitions/{definitionID}/simulate` | `not_applicable` | none | `runtime/transport/http/scheduler/scheduler_routes.go` |
 | `scheduler` | `POST /tenant-admin/scheduler/schedules/preview` | `not_applicable` | none | `runtime/transport/http/scheduler/scheduler_routes.go` |
 | `scheduler` | `POST /v1/scheduler-triggers:accept` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/scheduler/scheduler_routes.go` |
-| `surfacecontext` | `POST /surfaces/{surfaceKey}/context` | `not_applicable` | none | `runtime/transport/http/surfacecontext/surfacecontext_routes.go` |
 | `uploads` | `POST /files` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/uploads/uploads_routes.go` |
 | `workflows` | `POST /business/workflow/processes/{processID}/retry` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
 | `workflows` | `POST /business/workflow/processes/{processID}/withdraw` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
@@ -106,26 +73,16 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workspaceprovision` | `POST /tenant-admin/workspaces/provision` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 | `workspaceprovision` | `POST /tenant-admin/workspaces/{workspaceID}/roles/reconcile` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 
-## Application mutation commands (197)
+## Application mutation commands (125)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
 | `action` | `ExecuteBulkAction` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/action/action_application_service.go` |
 | `action` | `ExecuteBulkAction` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/action/action_bulk_application_service.go` |
 | `action` | `Invoke` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/action/action_application_service.go` |
-| `agent` | `Create` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/agent/runtime/agent_interactive_run_application_service.go` |
-| `agent` | `Create` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/agent/runtime/agent_task_run_application_service.go` |
-| `agent` | `Execute` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/agent/runtime/agent_interactive_execution_application_service.go` |
-| `agent` | `ExpireApprovals` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/agent/runtime/agent_task_run_application_service.go` |
-| `agent` | `RecordReportGovernance` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/agent/agent_report_application.go` |
-| `agent` | `RecordToolInvocation` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/agent/runtime/agent_interactive_run_application_service.go` |
-| `agent` | `ResolveApproval` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/agent/runtime/agent_task_run_application_service.go` |
-| `agent` | `ResolveExecutionIdentity` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/agent/runtime/agent_authorization_application_service.go` |
-| `agent` | `ResolveGlobalContext` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/agent/runtime/agent_authorization_application_service.go` |
-| `agent` | `SetSessionArchived` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/agent/agent_session_application.go` |
-| `agent` | `UpsertSession` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/agent/agent_session_application.go` |
-| `appschema` | `PublishedRuntimeSchema` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/appschema/appschema_surface_use_cases.go` |
-| `appschema` | `PublishedSurfaceContext` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/appschema/appschema_surface_use_cases.go` |
+| `agenthost` | `ResolveExecutionIdentity` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/agenthost/agent_authorization_application_service.go` |
+| `agenthost` | `ResolveGlobalContext` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/agenthost/agent_authorization_application_service.go` |
+| `appschema` | `PublishedRuntimeSchema` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/appschema/appschema_published_runtime_schema_use_cases.go` |
 | `appschema` | `Restore` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/appschema/application_schema_runtime_restoration_application_service.go` |
 | `automation` | `Execute` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/automation/automation_instruction_dispatch_application_service.go` |
 | `automation` | `Execute` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/automation/automation_instruction_execution_application_service.go` |
@@ -174,9 +131,8 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `record` | `ApplyIdempotent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_application_service.go` |
 | `record` | `ApplyImport` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
 | `record` | `ApplyImportIdempotent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
+| `record` | `ApplyRowsIdempotent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_application_service.go` |
 | `record` | `ApplySelfEffects` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_state_machine_effect_application_service.go` |
-| `record` | `Cancel` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_data_exchange_application_service.go` |
-| `record` | `CancelBatchJob` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
 | `record` | `Create` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_create_application_service.go` |
 | `record` | `CreateClaimed` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_create_application_service.go` |
 | `record` | `CreateClaimedLocalized` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_create_application_service.go` |
@@ -201,6 +157,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `record` | `RecordReferences` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_display.go` |
 | `record` | `RecordScopeAllows` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_display.go` |
 | `record` | `RecordScopeAllowsAction` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_display.go` |
+| `record` | `ResolveSubject` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_subject_lifecycle_application_service.go` |
 | `record` | `Restore` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_restore_application_service.go` |
 | `record` | `RestoreRecord` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
 | `record` | `Update` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_internal_mutation_application_service.go` |
@@ -213,17 +170,13 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `record` | `UpdateRecord` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_import_facade.go` |
 | `record` | `UpdateRecordIdempotent` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_import_facade.go` |
 | `recordmutation` | `Dispatch` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/recordmutation/record_mutation_application_service.go` |
-| `recordtimer` | `ProcessDueForAllWorkspaces` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/recordtimer/record_timer_application_service.go` |
-| `recordtimer` | `ResolveFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/recordtimer/record_timer_application_service.go` |
-| `recordtimer` | `RetryFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/recordtimer/record_timer_application_service.go` |
-| `report` | `CancelExportJob` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/report/export/application/report_export_data_exchange_application.go` |
-| `scheduler` | `CancelRecordTimers` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/scheduler/scheduler_record_timer_core.go` |
+| `recordtimer` | `CancelRecordTimers` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/recordtimer/record_timer_core.go` |
+| `recordtimer` | `ProcessDueForAllWorkspaces` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/recordtimer/record_timer_processing.go` |
+| `recordtimer` | `ProcessDueRecordTimers` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/recordtimer/record_timer_processing.go` |
+| `recordtimer` | `ResolveFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/recordtimer/record_timer_recovery.go` |
+| `recordtimer` | `RetryFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/recordtimer/record_timer_recovery.go` |
 | `scheduler` | `DispatchOwnedTrigger` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/scheduler/scheduler_external_dispatch.go` |
-| `scheduler` | `ProcessDueRecordTimers` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/scheduler/scheduler_record_timer_processing.go` |
-| `scheduler` | `ProcessDueRecordTimersForAllWorkspaces` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/scheduler/scheduler_record_timer_processing.go` |
 | `scheduler` | `PublishedDefinitions` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/scheduler/scheduler_application_service.go` |
-| `scheduler` | `ResolveRecordTimerFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/scheduler/scheduler_record_timer_recovery.go` |
-| `scheduler` | `RetryRecordTimerFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/scheduler/scheduler_record_timer_recovery.go` |
 | `upload` | `RecordUploaded` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/upload/upload_access_application_service.go` |
 | `workflow` | `CancelWorkflowProcess` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_process_application_service.go` |
 | `workflow` | `CancelWorkflowProcessWithKey` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_process_application_service.go` |
@@ -250,7 +203,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workflow` | `RunIntegrationWorkflow` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_application_service.go` |
 | `workflow` | `RunWorkflow` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_application_service.go` |
 
-## Process-owned workers (8)
+## Process-owned workers (11)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -266,7 +219,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `integration` | `startIntegrationCredentialExpiryWorker -> LocalWorkers.ProcessDueCredentialExpirations` | `natural_key` | Integration-owned workspace and secret identity | `runtime/bootstrap/runtime/worker_lifecycle.go` |
 | `metadata` | `startMetadataSnapshotWatcher` | `natural_key` | latest durable metadata revision | `runtime/bootstrap/runtime/worker_lifecycle.go` |
 
-## External side effects (5)
+## External side effects (3)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|

@@ -132,14 +132,14 @@ type runtimeMetadataRepositoryStub struct {
 	manifest  manifestmodel.ManifestSchema
 }
 
-func (s runtimeMetadataRepositoryStub) EnsureManifestMetadata(context.Context, manifestmodel.ManifestSchema) error {
+func (s runtimeMetadataRepositoryStub) SyncManifestProjection(context.Context, principalmodel.SystemScope, manifestmodel.ManifestSchema) error {
 	return s.ensureErr
 }
 
-func (s runtimeMetadataRepositoryStub) LoadManifestMetadata(context.Context) (manifestmodel.ManifestSchema, error) {
+func (s runtimeMetadataRepositoryStub) LoadManifest(context.Context, principalmodel.SystemScope) (manifestmodel.ManifestSchema, error) {
 	return s.manifest, s.loadErr
 }
 
-func (s runtimeMetadataRepositoryStub) SyncManifestStorage(context.Context, manifestmodel.ManifestSchema) error {
+func (s runtimeMetadataRepositoryStub) SyncManifest(context.Context, principalmodel.SystemScope, manifestmodel.ManifestSchema) error {
 	return s.syncErr
 }

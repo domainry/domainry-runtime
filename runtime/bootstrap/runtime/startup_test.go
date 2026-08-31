@@ -63,8 +63,6 @@ func runtimeTestDataExchangeFactory() dataexchangesdk.Factory {
 	return dataexchangefixture.NewFactory()
 }
 
-type startupContractMismatchHandler struct{}
-
 type startupIntegrationCatalogStub struct {
 	definitions []integrationsdk.ConnectorDefinition
 	err         error
@@ -73,6 +71,8 @@ type startupIntegrationCatalogStub struct {
 func (s startupIntegrationCatalogStub) ListConnectorDefinitions(context.Context) ([]integrationsdk.ConnectorDefinition, error) {
 	return append([]integrationsdk.ConnectorDefinition(nil), s.definitions...), s.err
 }
+
+type startupContractMismatchHandler struct{}
 
 func (startupContractMismatchHandler) Descriptor() runtimeext.HandlerDescriptor {
 	return runtimeext.HandlerDescriptor{
@@ -422,23 +422,13 @@ func TestGlobalValidationAndDeliveryGateMoveOwnedRuntimeToReady(t *testing.T) {
 	permissions := []string{
 		"workspace.admin", "scheduler.definition.read", "ops.workflow.read", "workflow.process.read",
 		"integration.audit.view", "integration.catalog.view",
-		"job_definition.read", "job_run.read", "job_dead_letter.read",
 	}
-	dataPermissions := []accessfixture.DataPolicyFixture{
-		{ObjectKey: "job_definition", Scope: "all_records", Read: true},
-		{ObjectKey: "job_run", Scope: "all_records", Read: true},
-		{ObjectKey: "job_dead_letter", Scope: "all_records", Read: true},
-	}
+	dataPermissions := []accessfixture.DataPolicyFixture{}
 	for _, object := range canonical.Objects {
 		permissions = append(permissions, object.Key+".read")
 		dataPermissions = append(dataPermissions, accessfixture.DataPolicyFixture{ObjectKey: object.Key, Scope: "all_records", Read: true})
 	}
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "admin", Permissions: permissions, DataPolicies: dataPermissions})
-	for _, objectKey := range []string{"job_definition", "job_run", "job_dead_letter"} {
-		if !admin.Allows(objectKey, "read") {
-			t.Fatalf("test principal lacks %s.read: permissions=%#v bundle=%#v", objectKey, admin.PermissionKeys(), admin.AccessBundle)
-		}
-	}
 	if _, err := runtime.records.Applications().BusinessSystem.RuntimeStateSnapshot(t.Context(), admin); err != nil {
 		t.Fatalf("direct Runtime-state snapshot: %v params=%#v cause=%v", err, apperror.ParamsOf(err), errors.Unwrap(err))
 	}
@@ -565,7 +555,6 @@ func runtimeAuthoringRequest(t *testing.T, runtime *Runtime, method string, path
 	request = request.WithContext(ctx)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Builder-Task-ID", "builder-task-e2e")
-	request.Header.Set("X-Domainry-Product-Surface", "admin_console")
 	if metadataMutation {
 		request.Header.Set("Idempotency-Key", "e2e-"+path)
 		request.Header.Set("Expected-Schema-Hash", "empty")
@@ -676,7 +665,13 @@ func TestPrepareRuntimeManifestValidatesAndCanSkipDomainValidation(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := addRuntimeConnectorValidationCatalog(withCatalog); err != nil {
+	if len(withCatalog.Integrations.Connectors) != 1 || withCatalog.Integrations.Connectors[0].Key != "owner_connector" {
+		t.Fatalf("owner catalog did not replace manifest definitions: %#v", withCatalog.Integrations.Connectors)
+	}
+	if len(manifest.Integrations.Connectors) != 1 || manifest.Integrations.Connectors[0].Key != "manifest_must_not_own_catalog" {
+		t.Fatalf("transient owner catalog mutated the seed manifest: %#v", manifest.Integrations.Connectors)
+	}
+	if _, err := addIntegrationOwnerValidationCatalog(t.Context(), withCatalog, catalog); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -691,6 +686,9 @@ func TestPrepareRuntimeManifestRejectsInvalidDomainManifest(t *testing.T) {
 func TestManifestValidationCatalogPropagatesCatalogFailure(t *testing.T) {
 	if _, err := replaceIntegrationConnectorValidationProjection(manifestmodel.ManifestSchema{}, nil, errors.New("catalog unavailable")); err == nil {
 		t.Fatal("catalog failure must propagate")
+	}
+	if _, err := addIntegrationOwnerValidationCatalog(t.Context(), manifestmodel.ManifestSchema{}, startupIntegrationCatalogStub{err: errors.New("catalog unavailable")}); err == nil {
+		t.Fatal("Integration owner catalog failure must propagate")
 	}
 }
 

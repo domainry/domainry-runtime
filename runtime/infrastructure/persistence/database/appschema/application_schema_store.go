@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	metadatapersistence "github.com/domainry/domainry-metadata-sdk/persistence"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	ormdialect "github.com/domainry/domainry-orm/dialect"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -27,7 +27,7 @@ type ApplicationSchemaStore struct {
 	createIndex          func(context.Context, string, string, bool, ...string) error
 	storage              appschemastorage.Profile
 	exactDecimalMigrator metadataExactDecimalMigrator
-	metadataDefinitions  metadatapersistence.DefinitionRepository
+	metadata             metadatasdk.Binding
 }
 
 type metadataProfileFactory func() (appschemastorage.Profile, metadataExactDecimalMigrator)
@@ -80,7 +80,7 @@ func NewApplicationSchemaStore(store *database.RuntimeStore) ApplicationSchemaSt
 		panic(fmt.Sprintf("unsupported Metadata storage profile %q", store.Engine.Name()))
 	}
 	profile, migrator := factory()
-	return ApplicationSchemaStore{store: store, db: store.DB(), storage: profile, exactDecimalMigrator: migrator, metadataDefinitions: store.MetadataDefinitions()}
+	return ApplicationSchemaStore{store: store, db: store.DB(), storage: profile, exactDecimalMigrator: migrator, metadata: store.Metadata()}
 }
 
 func (r ApplicationSchemaStore) database() *sql.DB {

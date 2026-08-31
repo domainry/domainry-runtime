@@ -13,7 +13,10 @@ ambient environment variables.
 - A module contributes inbound product HTTP only through
   `modulehttp.Provider`. Runtime validates exposure, authentication,
   permissions and route collisions before mounting it.
-- SaaS Bindings never contribute in-process HTTP Surfaces.
+- A SaaS Binding may contribute the same source-owned product HTTP Surface as
+  Module mode when the Surface is the module's deployment-neutral adapter over
+  its remote protocol. Runtime still only validates and mounts it; the SaaS
+  protocol endpoints themselves are never exposed as product HTTP.
 - Runtime orchestration and host-owned HTTP endpoints stay in Runtime even when
   they call a module Binding. Remote SDK `/v1` service protocols are not product HTTP and
   are never mounted into the Runtime listener.
@@ -32,7 +35,7 @@ ambient environment variables.
 | Scheduler | None | Runtime definition authoring, operation receipts and trigger acceptance | Borrowed pool; Scheduler-owned schema |
 | Monitoring | Operations metrics | Process liveness/readiness/startup probes; SaaS compatibility proxy | None |
 | Data Exchange | None | Record import/export and artifact orchestration | Borrowed pool; Data Exchange-owned schema |
-| Agent | None | Dialog, task and proposal orchestration | Borrowed pool; Agent-owned schema |
+| Agent | Dialog/session, proposal, interactive/task operations, analysis and diagnostics in both Module and SaaS Binding modes | Workflow state, current authorization and concrete host business effects exposed only through Agent Host Ports | Module borrows the pool; SaaS uses Agent-owned remote persistence |
 | Lifecycle | Policy, legal hold, cleanup creation/preview, metrics, archive evidence, subject request, external erasure and deletion replay | Durable cleanup-job run through Runtime Operations receipts | Borrowed pool; Lifecycle-owned schema and migrations |
 | Audit | None | Business, tenant-governance and operations projections | Borrowed pool; Audit-owned schema |
 | Metadata | None | Runtime authoring and schema projection | Borrowed pool; Metadata-owned schema |
@@ -40,6 +43,7 @@ ambient environment variables.
 
 “None” is explicit ownership, not missing integration. If a module later owns
 an independent inbound product protocol, the Binding may add a Surface without
-changing Runtime composition. Endpoints that depend on Runtime records,
-idempotency receipts, cross-module transactions, product surface projection or
-operation control remain Runtime-owned.
+changing Runtime composition. Product-use-case ownership determines the
+Surface owner: a source-owned handler may request current Runtime facts or
+business effects through narrow Host Ports, but it may not import Runtime
+services or participate in a cross-owner transaction.

@@ -77,8 +77,6 @@ type WorkflowProcessSummary struct {
 
 type SchedulerStateSnapshot struct {
 	Definitions []recordmodel.Record `json:"definitions"`
-	RecentRuns  []recordmodel.Record `json:"recent_runs"`
-	DeadLetters []recordmodel.Record `json:"dead_letters"`
 }
 
 type IntegrationConnectionSummary struct {
@@ -118,12 +116,6 @@ func (snapshot *BusinessRuntimeStateSnapshot) Normalize() {
 	if snapshot.Scheduler.Definitions == nil {
 		snapshot.Scheduler.Definitions = []recordmodel.Record{}
 	}
-	if snapshot.Scheduler.RecentRuns == nil {
-		snapshot.Scheduler.RecentRuns = []recordmodel.Record{}
-	}
-	if snapshot.Scheduler.DeadLetters == nil {
-		snapshot.Scheduler.DeadLetters = []recordmodel.Record{}
-	}
 	if snapshot.Reports == nil {
 		snapshot.Reports = []reportmodel.ReportSchema{}
 	}
@@ -142,8 +134,6 @@ func (snapshot *BusinessRuntimeStateSnapshot) Normalize() {
 	sort.Slice(snapshot.AutomationRules, func(i, j int) bool { return snapshot.AutomationRules[i].Key < snapshot.AutomationRules[j].Key })
 	sort.Slice(snapshot.RecentAutomationRuns, func(i, j int) bool { return snapshot.RecentAutomationRuns[i].ID < snapshot.RecentAutomationRuns[j].ID })
 	sortRecordsByID(snapshot.Scheduler.Definitions)
-	sortRecordsByID(snapshot.Scheduler.RecentRuns)
-	sortRecordsByID(snapshot.Scheduler.DeadLetters)
 	sort.Slice(snapshot.Reports, func(i, j int) bool { return snapshot.Reports[i].Key < snapshot.Reports[j].Key })
 	sort.Slice(snapshot.Connectors, func(i, j int) bool { return snapshot.Connectors[i].Key < snapshot.Connectors[j].Key })
 }

@@ -8,15 +8,14 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	capacityplatform "github.com/domainry/domainry-foundation/capacity"
+	"github.com/domainry/domainry-foundation/ratelimit"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	businesseventapplication "github.com/domainry/domainry-runtime/runtime/application/businessevent"
 	capabilitybusiness "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
+	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
-	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
-	healthplatform "github.com/domainry/domainry-runtime/runtime/platform/health"
 	"github.com/domainry/domainry-runtime/runtime/platform/productbrand"
-	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	businesseventhttp "github.com/domainry/domainry-runtime/runtime/transport/http/businessevents"
 	businesssystemhttp "github.com/domainry/domainry-runtime/runtime/transport/http/businesssystem"
 	"go.uber.org/zap"
@@ -37,7 +36,6 @@ type httpRouteRegistrar interface {
 
 type HTTPRouter struct {
 	recordHTTP              httpRouteRegistrar
-	surfaceContextHTTP      httpRouteRegistrar
 	uploadHTTP              httpRouteRegistrar
 	discoveryHTTP           httpRouteRegistrar
 	openAPIHTTP             httpRouteRegistrar
@@ -46,7 +44,6 @@ type HTTPRouter struct {
 	workflowHTTP            httpRouteRegistrar
 	automationHTTP          httpRouteRegistrar
 	schedulerHTTP           httpRouteRegistrar
-	reportHTTP              httpRouteRegistrar
 	businessReferenceHTTP   httpRouteRegistrar
 	publicationHandoffHTTP  httpRouteRegistrar
 	businessSystemHTTP      httpRouteRegistrar
@@ -61,14 +58,13 @@ type HTTPRouter struct {
 	securityAudit           SecurityAuditAppender
 	runtimeStatus           DeploymentRuntimeStatusProvider
 	corsAllowedOrigins      []string
-	surfaceGroupPolicies    map[SurfaceRouteGroup]SurfaceRouteGroupPolicy
-	surfaceGroupCapacity    map[SurfaceRouteGroup]*capacityplatform.Controller
+	listenerGroupPolicies   map[ListenerRouteGroup]ListenerRouteGroupPolicy
+	listenerGroupCapacity   map[ListenerRouteGroup]*capacityplatform.Controller
 	rateLimiter             ratelimit.Limiter
 	allowDevAuthHeaders     bool
-	agentDialogHTTP         httpRouteRegistrar
 	technicalMetrics        TechnicalMetricsProvider
 	httpMetrics             HTTPMetricsCollector
-	healthRegistry          *healthplatform.Registry
+	healthRegistry          *runtimeHealthRegistry
 	healthCheckTimeout      time.Duration
 	maxJSONBodyBytes        int64
 	capacityController      *capacityplatform.Controller
@@ -94,8 +90,8 @@ type HTTPRouter struct {
 }
 
 func NewHTTPRouter(config HTTPRouterConfig, deps HTTPRouterDependencies) *HTTPRouter {
-	if err := validateCompiledEndpointSurfaceContracts(); err != nil {
-		panic("invalid compiled Runtime endpoint Surface contract: " + err.Error())
+	if err := validateCompiledEndpointContracts(); err != nil {
+		panic("invalid compiled Runtime endpoint contract: " + err.Error())
 	}
 	controller := capacityplatform.NewController(config.CapacityLimits, func(event capacityplatform.Event) {
 		zap.L().Warn("runtime capacity state", zap.String("code", event.Code), zap.String("state", string(event.State)), zap.String("dimension", string(event.Dimension)), zap.Int("current", event.Current), zap.Int("limit", event.Limit))
@@ -105,26 +101,26 @@ func NewHTTPRouter(config HTTPRouterConfig, deps HTTPRouterDependencies) *HTTPRo
 		identityAuthentication: deps.IdentityAuthentication, identityPrincipal: deps.IdentityPrincipal, integrationAuth: deps.IntegrationAuthentication,
 		securityAudit: deps.SecurityAudit, runtimeStatus: deps.RuntimeStatus,
 		corsAllowedOrigins: normalizeCORSOrigins(config.CORSAllowedOrigins), allowDevAuthHeaders: config.AllowDevAuthHeaders,
-		surfaceGroupPolicies: config.SurfaceGroupPolicies,
-		surfaceGroupCapacity: map[SurfaceRouteGroup]*capacityplatform.Controller{}, rateLimiter: deps.RateLimiter,
+		listenerGroupPolicies: config.ListenerGroupPolicies,
+		listenerGroupCapacity: map[ListenerRouteGroup]*capacityplatform.Controller{}, rateLimiter: deps.RateLimiter,
 		technicalMetrics: deps.TechnicalMetrics,
 		httpMetrics:      NewMemoryHTTPMetricsCollector(defaultHTTPMetricsMaxSeries), serviceKind: BusinessRuntimeServiceKind,
 		productBrandName: productbrand.ResolveName(config.ProductBrandName),
-		healthRegistry:   healthplatform.NewRegistry(), healthCheckTimeout: config.HealthCheckTimeout, maxJSONBodyBytes: config.MaxJSONBodyBytes,
+		healthRegistry:   newRuntimeHealthRegistry(), healthCheckTimeout: config.HealthCheckTimeout, maxJSONBodyBytes: config.MaxJSONBodyBytes,
 		capacityController: controller, requestTimeout: config.RequestTimeout, backpressure: deps.Backpressure, workerControl: deps.WorkerControl,
 		operationsControlState: deps.OperationsControlState, runtimeInstanceID: strings.TrimSpace(deps.RuntimeInstanceID),
 		runtimeReleaseAdmission: deps.RuntimeReleaseAdmission,
 		runtimeReleaseIntegrity: deps.RuntimeReleaseIntegrity,
 		runtimeVersion:          "dev", apiContractVersion: BusinessRuntimeAPIContractVersion, apiContractHash: BusinessRuntimeAPIContractHash(),
 	}
-	for group, policy := range config.SurfaceGroupPolicies {
+	for group, policy := range config.ListenerGroupPolicies {
 		if policy.RateLimitPerMinute <= 0 {
 			continue
 		}
 		if router.rateLimiter != nil {
 			continue
 		}
-		router.surfaceGroupCapacity[group] = capacityplatform.NewController(capacityplatform.Limits{
+		router.listenerGroupCapacity[group] = capacityplatform.NewController(capacityplatform.Limits{
 			GlobalRate: policy.RateLimitPerMinute,
 			RateWindow: time.Minute,
 		}, nil)
@@ -181,13 +177,13 @@ type HTTPRequestMetric struct {
 	DurationBuckets    []uint64 `json:"duration_buckets"`
 }
 
-type SurfaceRouteGroup string
+type ListenerRouteGroup string
 
 const (
-	SurfaceRouteGroupAll         SurfaceRouteGroup = "all"
-	SurfaceRouteGroupPublic      SurfaceRouteGroup = "public"
-	SurfaceRouteGroupTenantAdmin SurfaceRouteGroup = "tenant-admin"
-	SurfaceRouteGroupOps         SurfaceRouteGroup = "ops"
+	ListenerRouteGroupAll         ListenerRouteGroup = "all"
+	ListenerRouteGroupPublic      ListenerRouteGroup = "public"
+	ListenerRouteGroupTenantAdmin ListenerRouteGroup = "tenant-admin"
+	ListenerRouteGroupOps         ListenerRouteGroup = "ops"
 )
 
 func (s *HTTPRouter) Routes() http.Handler {
@@ -198,9 +194,7 @@ func (s *HTTPRouter) Routes() http.Handler {
 	s.registerProbeRoutes(mux)
 	s.discoveryHTTP.RegisterRoutes(mux)
 	s.openAPIHTTP.RegisterRoutes(mux)
-	s.reportHTTP.RegisterRoutes(mux)
 	runOptionalRouteRegistrar(s.businessEventHTTP != nil, func() { s.businessEventHTTP.RegisterRoutes(mux) })
-	runOptionalRouteRegistrar(s.agentDialogHTTP != nil, func() { s.agentDialogHTTP.RegisterRoutes(mux) })
 	s.applicationSchemaHTTP.RegisterRoutes(mux)
 	s.capabilityHTTP.RegisterRoutes(mux)
 	s.businessSystemHTTP.RegisterRoutes(mux)
@@ -208,7 +202,6 @@ func (s *HTTPRouter) Routes() http.Handler {
 	runOptionalRouteRegistrar(s.publicationHandoffHTTP != nil, func() { s.publicationHandoffHTTP.RegisterRoutes(mux) })
 	runOptionalRouteRegistrar(s.notificationHTTP != nil, func() { s.notificationHTTP.RegisterRoutes(mux) })
 	s.uploadHTTP.RegisterRoutes(mux)
-	s.surfaceContextHTTP.RegisterRoutes(mux)
 	s.recordHTTP.RegisterRoutes(mux)
 	s.workflowHTTP.RegisterRoutes(mux)
 	s.automationHTTP.RegisterRoutes(mux)
@@ -225,25 +218,24 @@ func (s *HTTPRouter) Routes() http.Handler {
 	return s.withMetrics(s.withRecovery(s.withCORS(authenticated)))
 }
 
-// RoutesForSurfaceGroup builds the externally attached listener mux from the
-// compiled route inventory. The listener mux itself only registers endpoint
-// patterns owned by the requested Surface group; unknown or cross-group paths
-// never reach the full Runtime router.
-func (s *HTTPRouter) RoutesForSurfaceGroup(group SurfaceRouteGroup) http.Handler {
-	if group == SurfaceRouteGroupAll {
+// RoutesForListenerGroup builds an externally attached listener mux from the
+// endpoint exposure inventory. Listener exposure is a deployment boundary and
+// is independent of frontend product shells and request identity.
+func (s *HTTPRouter) RoutesForListenerGroup(group ListenerRouteGroup) http.Handler {
+	if group == ListenerRouteGroupAll {
 		return s.Routes()
 	}
-	targets := routeGroupSurfaces(group)
-	if len(targets) == 0 {
+	exposure, ok := listenerExposure(group)
+	if !ok {
 		return http.HandlerFunc(s.notFound)
 	}
 	if s.httpMetrics != nil {
-		s.httpMetrics.RegisterSurfaceGroup(string(group), SurfaceRouteGroupEndpointCount(group))
+		s.httpMetrics.RegisterListenerGroup(string(group), ListenerRouteGroupEndpointCount(group))
 	}
 	full := s.Routes()
 	mux := http.NewServeMux()
-	for route, surfaces := range runtimeSurfaceRoutePolicies {
-		if !routeVisibleOnGroup(surfaces, targets) {
+	for route, contract := range runtimeEndpointContracts {
+		if !endpointVisibleOnListener(contract, exposure) {
 			continue
 		}
 		method, path, ok := strings.Cut(route, " ")
@@ -258,50 +250,35 @@ func (s *HTTPRouter) RoutesForSurfaceGroup(group SurfaceRouteGroup) http.Handler
 		}
 		mux.Handle(method+" "+path, full)
 	}
-	mux.Handle("GET /openapi.json", s.surfaceOpenAPIHandler(group, full))
+	mux.Handle("GET /openapi.json", s.listenerOpenAPIHandler(group, full))
 	mux.HandleFunc("/{path...}", s.notFound)
-	return s.withSurfaceRouteGroupPolicy(group, mux)
+	return s.withListenerRouteGroupPolicy(group, mux)
 }
 
-func routeGroupSurfaces(group SurfaceRouteGroup) []surfacemodel.ProductSurface {
+func listenerExposure(group ListenerRouteGroup) (endpointmodel.ListenerExposure, bool) {
 	switch group {
-	case SurfaceRouteGroupPublic:
-		return []surfacemodel.ProductSurface{
-			surfacemodel.ProductSurfaceBusinessWorkspace,
-			surfacemodel.ProductSurfaceConsumerPortal,
-		}
-	case SurfaceRouteGroupTenantAdmin:
-		return []surfacemodel.ProductSurface{surfacemodel.ProductSurfaceAdminConsole}
-	case SurfaceRouteGroupOps:
-		return []surfacemodel.ProductSurface{surfacemodel.ProductSurfaceAdminConsole}
+	case ListenerRouteGroupPublic:
+		return endpointmodel.ListenerExposurePublic, true
+	case ListenerRouteGroupTenantAdmin:
+		return endpointmodel.ListenerExposureTenantAdmin, true
+	case ListenerRouteGroupOps:
+		return endpointmodel.ListenerExposureOps, true
 	default:
-		return nil
+		return "", false
 	}
 }
 
-func routeVisibleOnGroup(routeSurfaces, groupSurfaces []surfacemodel.ProductSurface) bool {
-	if len(routeSurfaces) == 0 {
-		return true
+func ListenerRouteGroupEndpointCount(group ListenerRouteGroup) int {
+	if group == ListenerRouteGroupAll {
+		return len(runtimeEndpointContracts)
 	}
-	for _, routeSurface := range routeSurfaces {
-		if surfaceInTargets(routeSurface, groupSurfaces) {
-			return true
-		}
-	}
-	return false
-}
-
-func SurfaceRouteGroupEndpointCount(group SurfaceRouteGroup) int {
-	if group == SurfaceRouteGroupAll {
-		return len(runtimeSurfaceRoutePolicies)
-	}
-	targets := routeGroupSurfaces(group)
-	if len(targets) == 0 {
+	exposure, ok := listenerExposure(group)
+	if !ok {
 		return 0
 	}
 	count := 0
-	for _, surfaces := range runtimeSurfaceRoutePolicies {
-		if routeVisibleOnGroup(surfaces, targets) {
+	for _, contract := range runtimeEndpointContracts {
+		if endpointVisibleOnListener(contract, exposure) {
 			count++
 		}
 	}

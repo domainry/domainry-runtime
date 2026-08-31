@@ -8,7 +8,8 @@ import (
 )
 
 // ModuleHTTPSurfaces returns routes owned by in-process module Bindings.
-// Runtime-owned orchestration and BFF routes remain on Runtime's HTTP router.
+// Runtime-owned orchestration and cross-capability routes remain on Runtime's
+// HTTP router.
 func (runtime *Runtime) ModuleHTTPSurfaces() []modulehttp.Surface {
 	if runtime == nil {
 		return nil

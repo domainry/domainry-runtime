@@ -49,6 +49,5 @@ func (r *WorkflowPrincipalResolver) ResolveWorkflowPrincipal(ctx context.Context
 	resolved.RequestID = initiator.RequestID
 	resolved.CorrelationID = initiator.CorrelationID
 	resolved.CausationID = initiator.CausationID
-	resolved.SurfaceKey = initiator.SurfaceKey
 	return resolved, nil
 }

@@ -12,7 +12,6 @@ import (
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 	"github.com/domainry/domainry-scheduler-sdk/modulehost"
@@ -29,13 +28,13 @@ type schedulerSDKModuleHost struct {
 	workerID     string
 	mu           sync.RWMutex
 	revision     int64
-	definitions  map[string]recordmodel.Record
+	definitions  map[string]schedulerapplication.PublishedDefinition
 	authored     []map[string]any
 	authoredSet  bool
 }
 
 func NewSchedulerSDKModuleHost(scheduler *schedulerapplication.SchedulerApplicationService, publications schedulerPublicationAcceptor, requirements []integrationsdk.ConnectionRequirement, store *persistence.RuntimeStore, workerID string, authoredDefinitions ...[]map[string]any) modulehost.ModuleHost {
-	host := &schedulerSDKModuleHost{scheduler: scheduler, publications: publications, store: store, workerID: strings.TrimSpace(workerID), definitions: map[string]recordmodel.Record{}}
+	host := &schedulerSDKModuleHost{scheduler: scheduler, publications: publications, store: store, workerID: strings.TrimSpace(workerID), definitions: map[string]schedulerapplication.PublishedDefinition{}}
 	if len(authoredDefinitions) > 0 {
 		host.authoredSet = true
 		host.authored = cloneSchedulerDefinitionMaps(authoredDefinitions[0])
@@ -82,22 +81,22 @@ func (r schedulerSDKMigrationRegistrar) ApplyOwnedMigrations(ctx context.Context
 }
 
 func (h *schedulerSDKModuleHost) Snapshot(ctx context.Context) (schedulersdk.DefinitionSnapshot, error) {
-	var records []recordmodel.Record
+	var published []schedulerapplication.PublishedDefinition
 	if h.authoredSet {
-		records = make([]recordmodel.Record, 0, len(h.authored))
+		published = make([]schedulerapplication.PublishedDefinition, 0, len(h.authored))
 		for _, definition := range h.authored {
 			key := schedulerSDKString(definition, "key")
 			if key == "" {
 				return schedulersdk.DefinitionSnapshot{}, fmt.Errorf("Scheduler manifest definition key is required")
 			}
-			records = append(records, recordmodel.Record{ID: key, Data: cloneSchedulerDefinitionMap(definition), UpdatedAt: schedulerSDKStringDefault(definition, "revision", "published")})
+			published = append(published, schedulerapplication.PublishedDefinition{Key: key, Data: cloneSchedulerDefinitionMap(definition), UpdatedAt: schedulerSDKStringDefault(definition, "revision", "published")})
 		}
 	} else {
 		if h.scheduler == nil {
 			return schedulersdk.DefinitionSnapshot{}, fmt.Errorf("Runtime Scheduler definition source is unavailable")
 		}
 		var err error
-		records, err = h.scheduler.PublishedDefinitions(ctx, schedulerSDKSystemPrincipal("scheduler.definition.read"))
+		published, err = h.scheduler.PublishedDefinitions(ctx, schedulerSDKSystemPrincipal("scheduler.definition.read"))
 		if err != nil {
 			return schedulersdk.DefinitionSnapshot{}, err
 		}
@@ -105,16 +104,16 @@ func (h *schedulerSDKModuleHost) Snapshot(ctx context.Context) (schedulersdk.Def
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.revision++
-	h.definitions = make(map[string]recordmodel.Record, len(records))
-	definitions := make([]schedulersdk.Definition, 0, len(records))
-	for _, record := range records {
-		h.definitions[record.ID] = record
-		definitions = append(definitions, schedulerSDKDefinition(record))
+	h.definitions = make(map[string]schedulerapplication.PublishedDefinition, len(published))
+	definitions := make([]schedulersdk.Definition, 0, len(published))
+	for _, definition := range published {
+		h.definitions[definition.Key] = definition
+		definitions = append(definitions, schedulerSDKDefinition(definition))
 	}
 	return schedulersdk.DefinitionSnapshot{Revision: h.revision, Definitions: definitions}, nil
 }
 
-func (h *schedulerSDKModuleHost) definition(_ context.Context, key string) (recordmodel.Record, bool, error) {
+func (h *schedulerSDKModuleHost) definition(_ context.Context, key string) (schedulerapplication.PublishedDefinition, bool, error) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	record, found := h.definitions[strings.TrimSpace(key)]
@@ -137,19 +136,19 @@ func cloneSchedulerDefinitionMap(value map[string]any) map[string]any {
 	return result
 }
 
-func schedulerSDKDefinition(record recordmodel.Record) schedulersdk.Definition {
-	data := record.Data
+func schedulerSDKDefinition(definition schedulerapplication.PublishedDefinition) schedulersdk.Definition {
+	data := definition.Data
 	targetType := schedulerSDKString(data, "target_type")
 	target := schedulersdk.TargetRef{Type: "runtime_operation", Owner: targetType, Operation: schedulerSDKString(data, "target_key"), Payload: json.RawMessage(schedulerSDKStringDefault(data, "payload_json", "{}"))}
 	if targetType == "http" {
 		target = schedulersdk.TargetRef{Type: "http", ConnectionKey: schedulerSDKString(data, "connection_key"), Operation: schedulerSDKStringDefault(data, "operation", schedulerSDKString(data, "target_key")), DispatchMode: "runtime_callback", Payload: json.RawMessage(schedulerSDKStringDefault(data, "payload_json", "{}"))}
 	}
-	revision := strings.TrimSpace(record.UpdatedAt)
+	revision := strings.TrimSpace(definition.UpdatedAt)
 	if revision == "" {
 		revision = "published"
 	}
 	initialNextRunAt, _ := time.Parse(time.RFC3339, schedulerSDKString(data, "next_run_at"))
-	return schedulersdk.Definition{Key: record.ID, Name: schedulerSDKString(data, "name"), Status: schedulerSDKString(data, "status"), Revision: revision, InitialNextRunAt: initialNextRunAt, Schedule: schedulersdk.Schedule{Type: schedulerSDKString(data, "schedule_type"), Expression: schedulerSDKString(data, "schedule_expression"), Timezone: schedulerSDKString(data, "timezone"), IntervalSeconds: schedulerSDKInt(data["interval_seconds"]), TimeOfDay: schedulerSDKString(data, "time_of_day"), DayOfWeek: schedulerSDKString(data, "day_of_week"), DayOfMonth: schedulerSDKInt(data["day_of_month"])}, Target: target, Policy: schedulersdk.Policy{Misfire: schedulerSDKString(data, "missed_window_policy"), MaxCatchupWindows: schedulerSDKInt(data["max_catchup_windows"]), Timeout: time.Duration(schedulerSDKInt(data["timeout_seconds"])) * time.Second, MaxAttempts: schedulerSDKInt(data["max_attempts"]), RetryInitial: time.Duration(schedulerSDKInt(data["retry_delay_seconds"])) * time.Second, RetryMax: time.Duration(schedulerSDKInt(data["retry_max_delay_seconds"])) * time.Second}}
+	return schedulersdk.Definition{Key: definition.Key, Name: schedulerSDKString(data, "name"), Status: schedulerSDKString(data, "status"), Revision: revision, InitialNextRunAt: initialNextRunAt, Schedule: schedulersdk.Schedule{Type: schedulerSDKString(data, "schedule_type"), Expression: schedulerSDKString(data, "schedule_expression"), Timezone: schedulerSDKString(data, "timezone"), IntervalSeconds: schedulerSDKInt(data["interval_seconds"]), TimeOfDay: schedulerSDKString(data, "time_of_day"), DayOfWeek: schedulerSDKString(data, "day_of_week"), DayOfMonth: schedulerSDKInt(data["day_of_month"])}, Target: target, Policy: schedulersdk.Policy{Misfire: schedulerSDKString(data, "missed_window_policy"), MaxCatchupWindows: schedulerSDKInt(data["max_catchup_windows"]), Timeout: time.Duration(schedulerSDKInt(data["timeout_seconds"])) * time.Second, MaxAttempts: schedulerSDKInt(data["max_attempts"]), RetryInitial: time.Duration(schedulerSDKInt(data["retry_delay_seconds"])) * time.Second, RetryMax: time.Duration(schedulerSDKInt(data["retry_max_delay_seconds"])) * time.Second}}
 }
 
 // SchedulerCallbackDispatcher is the Runtime-owned execution boundary shared
@@ -159,7 +158,7 @@ type SchedulerCallbackDispatcher struct {
 	scheduler    *schedulerapplication.SchedulerApplicationService
 	publications schedulerPublicationAcceptor
 	connectors   map[string]string
-	definition   func(context.Context, string) (recordmodel.Record, bool, error)
+	definition   func(context.Context, string) (schedulerapplication.PublishedDefinition, bool, error)
 }
 
 type schedulerPublicationAcceptor interface {
@@ -189,27 +188,27 @@ func (d *SchedulerCallbackDispatcher) Dispatch(ctx context.Context, trigger sche
 	return schedulersdk.DownstreamReceipt{ID: receiptID, Owner: trigger.Target.Owner, Status: "accepted"}, nil
 }
 
-func (d *SchedulerCallbackDispatcher) publishedDefinition(ctx context.Context, key string) (recordmodel.Record, error) {
+func (d *SchedulerCallbackDispatcher) publishedDefinition(ctx context.Context, key string) (schedulerapplication.PublishedDefinition, error) {
 	if d != nil && d.definition != nil {
 		if record, found, err := d.definition(ctx, key); err != nil {
-			return recordmodel.Record{}, err
+			return schedulerapplication.PublishedDefinition{}, err
 		} else if found {
 			return record, nil
 		}
 	}
 	if d == nil || d.scheduler == nil {
-		return recordmodel.Record{}, fmt.Errorf("Runtime Scheduler definition source is unavailable")
+		return schedulerapplication.PublishedDefinition{}, fmt.Errorf("Runtime Scheduler definition source is unavailable")
 	}
 	records, err := d.scheduler.PublishedDefinitions(ctx, schedulerSDKSystemPrincipal("scheduler.definition.read"))
 	if err != nil {
-		return recordmodel.Record{}, err
+		return schedulerapplication.PublishedDefinition{}, err
 	}
 	for _, record := range records {
-		if record.ID == strings.TrimSpace(key) {
+		if record.Key == strings.TrimSpace(key) {
 			return record, nil
 		}
 	}
-	return recordmodel.Record{}, fmt.Errorf("Scheduler definition %q is not published", key)
+	return schedulerapplication.PublishedDefinition{}, fmt.Errorf("Scheduler definition %q is not published", key)
 }
 
 func (d *SchedulerCallbackDispatcher) dispatchHTTPCallback(ctx context.Context, trigger schedulersdk.Trigger) (schedulersdk.DownstreamReceipt, error) {

@@ -33,7 +33,6 @@ func TestManifestAgentTopLevelValidationBranches(t *testing.T) {
 		{"invalid entrypoint key", func(m *manifestmodel.ManifestSchema) { m.AgentEntrypoints[0].Key = "" }},
 		{"duplicate entrypoint", func(m *manifestmodel.ManifestSchema) {
 			m.AgentEntrypoints = append(m.AgentEntrypoints, m.AgentEntrypoints[0])
-			m.AgentEntrypoints[1].DefaultForSurface = false
 		}},
 		{"unversioned entrypoint agent", func(m *manifestmodel.ManifestSchema) { m.Agents[0].Version = ""; m.AgentTasks = nil }},
 		{"empty entrypoint permissions", func(m *manifestmodel.ManifestSchema) { m.AgentEntrypoints[0].RequiredPermissions = nil }},

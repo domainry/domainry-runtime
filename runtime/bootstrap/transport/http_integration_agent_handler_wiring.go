@@ -3,12 +3,24 @@ package transport
 import (
 	"context"
 	"crypto/sha256"
+	"strings"
+	"time"
 
-	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
-	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentmodulehost "github.com/domainry/domainry-agent-sdk/modulehost"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/modulehttp"
+	identitysdk "github.com/domainry/domainry-identity-sdk"
+	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agenthost"
+	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
+	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
+	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
+	"github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
+	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	agentdialoghttp "github.com/domainry/domainry-runtime/runtime/transport/http/agentdialog"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 )
 
@@ -23,52 +35,378 @@ func (a agentRecordVisibilityAdapter) CanReadAgentRecord(ctx context.Context, ob
 	return a.records.RecordScopeAllows(ctx, objectKey, recordID, principal)
 }
 
-func (a *httpServerAssembly) wireIntegrationAndAgentHandlers(agentDialogRateLimitPerMinute int) {
+type agentRuntimePorts struct {
+	authorization *agentapplication.AgentAuthorizationApplicationService
+	tools         *agentapplication.AgentToolGateway
+	credentials   *agentapplication.AgentTaskCredentialApplicationService
+}
+
+func (a *httpServerAssembly) runtimeAgentPorts() *agentRuntimePorts {
+	if a.agentPorts != nil {
+		return a.agentPorts
+	}
+	applications := a.dependencies.Records.Applications()
+	if applications.AgentAuthorization == nil {
+		return nil
+	}
+	credentialKey := sha256.Sum256([]byte("domainry-agent-task-credential-v1:" + a.dependencies.Config.IntegrationSecretKey))
+	credentials := agentapplication.NewAgentTaskCredentialApplicationService(credentialKey[:], nil, nil)
+	tools := agentapplication.NewAgentToolGateway(agentapplication.AgentToolGatewayDependencies{
+		Authorization: applications.AgentAuthorization, Credentials: credentials,
+		Queries: agentTaskToolQueryAdapter{records: a.recordQueries}, Actions: agentTaskToolActionAdapter{actions: applications.Actions},
+		Risk: agentTaskToolRiskAdapter{actions: applications.Actions}, RateLimiter: a.dependencies.RateLimiter,
+	})
+	a.agentPorts = &agentRuntimePorts{authorization: applications.AgentAuthorization, tools: tools, credentials: credentials}
+	return a.agentPorts
+}
+
+func (a *httpServerAssembly) bindAgentApplicationHost() {
+	binder, ok := a.dependencies.AgentBinding.(agentmodulehost.ApplicationHostBinder)
+	if !ok || binder == nil {
+		return
+	}
+	ports := a.runtimeAgentPorts()
+	if ports == nil {
+		return
+	}
+	applications := a.dependencies.Records.Applications()
+	host := runtimeAgentInteractiveHost{
+		authorization: ports.authorization, tools: ports.tools, workflows: applications.Workflows,
+	}
+	taskHost := runtimeAgentTaskHost{authorization: ports.authorization, credentials: ports.credentials, tools: ports.tools, workflows: applications.Workflows}
+	proposalHost := runtimeAgentProposalHost{records: a.dependencies.Records, principals: a.principals}
+	auditHost := runtimeAgentAuditHost{audit: applications.Audit}
+	analysisHost := runtimeAgentAnalysisHost{catalog: applications.Schema, records: a.recordQueries}
+	if err := binder.BindApplicationHost(runtimeAgentApplicationHost{interactive: host, task: taskHost, proposal: proposalHost, audit: auditHost, analysis: analysisHost}); err != nil {
+		panic("bind Agent application host: " + err.Error())
+	}
+	provider, ok := a.dependencies.AgentBinding.(modulehttp.Provider)
+	if !ok {
+		panic("Agent Binding accepted application host but returned no HTTP surfaces")
+	}
+	surfaces := make([]modulehttp.Surface, 0, len(a.dependencies.ModuleHTTPSurfaces)+1)
+	for _, surface := range a.dependencies.ModuleHTTPSurfaces {
+		if surface != nil && surface.Owner() != "agent" {
+			surfaces = append(surfaces, surface)
+		}
+	}
+	surfaces = append(surfaces, provider.HTTPSurfaces()...)
+	a.dependencies.ModuleHTTPSurfaces = surfaces
+}
+
+type runtimeAgentApplicationHost struct {
+	interactive agentmodulehost.InteractiveHost
+	task        agentmodulehost.TaskHost
+	proposal    agentmodulehost.ProposalHost
+	audit       agentmodulehost.AuditHost
+	analysis    agentmodulehost.AnalysisHost
+}
+
+func (h runtimeAgentApplicationHost) InteractiveAgent() agentmodulehost.InteractiveHost {
+	return h.interactive
+}
+func (h runtimeAgentApplicationHost) TaskAgent() agentmodulehost.TaskHost { return h.task }
+func (h runtimeAgentApplicationHost) ProposalAgent() agentmodulehost.ProposalHost {
+	return h.proposal
+}
+func (h runtimeAgentApplicationHost) AuditAgent() agentmodulehost.AuditHost { return h.audit }
+func (h runtimeAgentApplicationHost) AnalysisAgent() agentmodulehost.AnalysisHost {
+	return h.analysis
+}
+
+type runtimeAgentTaskHost struct {
+	authorization *agentapplication.AgentAuthorizationApplicationService
+	credentials   *agentapplication.AgentTaskCredentialApplicationService
+	tools         *agentapplication.AgentToolGateway
+	workflows     *workflowapplication.WorkflowApplicationService
+}
+
+func (h runtimeAgentTaskHost) AuthorizeTask(ctx context.Context, request agentmodulehost.TaskAuthorizationRequest) (agentmodulehost.TaskAuthorization, error) {
+	initiator := principalmodel.Principal{Principal: identitysdk.Principal{
+		Known: true, WorkspaceID: request.Identity.Initiator.WorkspaceID, UserID: request.Identity.Initiator.UserID,
+		RoleKey: request.Identity.Initiator.RoleKey, AuthorizationRevision: request.Identity.Initiator.AuthorizationRevision,
+	}, CorrelationID: request.CorrelationID}
+	objects, actions, outcomes := []string(nil), []string(nil), []string(nil)
+	if count := len(request.PreviousEvidence); count > 0 {
+		previous := request.PreviousEvidence[count-1]
+		objects, actions, outcomes = previous.AllowedObjects, previous.AllowedActions, previous.AllowedOutcomes
+	}
+	result, err := h.authorization.AuthorizeTask(ctx, agentapplication.AgentTaskAuthorizationRequest{
+		Initiator: initiator, Identity: agentsdk.AgentTaskIdentity{Mode: request.Identity.Mode, PrincipalKey: request.Identity.ServicePrincipalKey},
+		ExpectedRotationVersion: request.Identity.ServiceRotationVersion, TaskKey: request.TaskKey, TaskVersion: request.TaskVersion,
+		NodeAllowedObjects: objects, NodeAllowedActions: actions, NodeAllowedOutcomes: outcomes,
+	})
+	if err != nil {
+		return agentmodulehost.TaskAuthorization{}, err
+	}
+	return agentmodulehost.TaskAuthorization{
+		Principal: runtimeAgentHostPrincipal(result.Principal), Identity: result.Identity, Task: result.Task,
+		Evidence: result.Evidence, AllowedTools: append([]string(nil), result.AllowedTools...),
+	}, nil
+}
+
+func (h runtimeAgentTaskHost) IssueTaskCredential(ctx context.Context, request agentmodulehost.TaskCredentialRequest) (string, error) {
+	if h.credentials == nil {
+		return "", apperror.New(apperror.KindUnavailable, "agent.task.credential_unavailable", nil, nil)
+	}
+	return h.credentials.Issue(ctx, agentapplication.AgentTaskCredentialClaims{
+		WorkspaceID: request.WorkspaceID, ProcessID: request.ProcessID, TaskRunID: request.TaskRunID,
+		Principal: request.Principal.Reference(), AllowedTools: append([]string(nil), request.AllowedTools...),
+	}, time.Duration(request.TTLSeconds)*time.Second)
+}
+
+func (h runtimeAgentTaskHost) InvokeTaskTool(ctx context.Context, request agentmodulehost.TaskToolRequest) (agentmodulehost.TaskToolResult, error) {
+	if h.tools == nil {
+		return agentmodulehost.TaskToolResult{}, apperror.New(apperror.KindUnavailable, "agent.tool.gateway_unavailable", nil, nil)
+	}
+	objects, actions, outcomes := []string(nil), []string(nil), []string(nil)
+	if count := len(request.PreviousEvidence); count > 0 {
+		previous := request.PreviousEvidence[count-1]
+		objects, actions, outcomes = previous.AllowedObjects, previous.AllowedActions, previous.AllowedOutcomes
+	}
+	initiator := principalmodel.Principal{Principal: identitysdk.Principal{
+		Known: true, WorkspaceID: request.Identity.Initiator.WorkspaceID, UserID: request.Identity.Initiator.UserID,
+		RoleKey: request.Identity.Initiator.RoleKey, AuthorizationRevision: request.Identity.Initiator.AuthorizationRevision,
+	}}
+	result, err := h.tools.Invoke(ctx, agentapplication.AgentToolInvocationRequest{
+		Credential: request.Credential, WorkspaceID: request.WorkspaceID, ProcessID: request.ProcessID, TaskRunID: request.TaskRunID,
+		Initiator: initiator, Identity: agentsdk.AgentTaskIdentity{Mode: request.Identity.Mode, PrincipalKey: request.Identity.ServicePrincipalKey},
+		ExpectedRotationVersion: request.Identity.ServiceRotationVersion, TaskKey: request.TaskKey, TaskVersion: request.TaskVersion,
+		NodeAllowedObjects: objects, NodeAllowedActions: actions, NodeAllowedOutcomes: outcomes,
+		Tool: request.Tool, Input: request.Input, IdempotencyKey: request.IdempotencyKey,
+	})
+	return agentmodulehost.TaskToolResult{
+		Status: result.Status, Tool: result.Tool, Output: result.Output, Proposal: result.Proposal, Authorization: result.Authorization,
+	}, err
+}
+
+func (h runtimeAgentTaskHost) CompleteWorkflowTask(ctx context.Context, request agentmodulehost.WorkflowTaskCompletion) error {
+	if h.workflows == nil {
+		return apperror.New(apperror.KindUnavailable, "agent.task.workflow_unavailable", nil, nil)
+	}
+	return h.workflows.CompleteAgentTask(ctx, workflowapplication.WorkflowAgentTaskCompletion{
+		WorkspaceID: request.WorkspaceID, TaskRunID: request.TaskRunID, ProcessID: request.ProcessID, NodeInstanceID: request.NodeInstanceID,
+		TaskKey: request.TaskKey, TaskVersion: request.TaskVersion, Identity: request.Identity, Status: request.Status,
+		Outcome: request.Outcome, Output: request.Output, ErrorCode: request.ErrorCode, Evidence: request.Evidence,
+	})
+}
+
+type runtimeAgentProposalHost struct {
+	records    *composition.RuntimeServices
+	principals identitysdk.PrincipalResolver
+}
+
+func (h runtimeAgentProposalHost) GuardedWrites(ctx context.Context, principal agentmodulehost.Principal) []agentmodulehost.GuardedWriteContract {
+	if h.records == nil {
+		return nil
+	}
+	contracts := h.records.SchemaForPrincipal(ctx, runtimeAgentPrincipal(principal)).GuardedWrites
+	result := make([]agentmodulehost.GuardedWriteContract, 0, len(contracts))
+	for _, contract := range contracts {
+		result = append(result, agentmodulehost.GuardedWriteContract{
+			ObjectKey: contract.ObjectKey, Operation: contract.Operation, ActionKey: contract.ActionKey,
+			Endpoint: contract.Endpoint, RequiresRecord: contract.RequiresRecord,
+		})
+	}
+	return result
+}
+
+func (h runtimeAgentProposalHost) ResolveProposalPrincipal(ctx context.Context, userID, roleKey string) (agentmodulehost.Principal, error) {
+	principal, err := resolveRuntimeAgentPrincipalRole(ctx, h.principals, userID, roleKey)
+	return runtimeAgentHostPrincipal(principal), err
+}
+
+func resolveRuntimeAgentPrincipalRole(ctx context.Context, principals identitysdk.PrincipalResolver, userID, roleKey string) (principalmodel.Principal, error) {
+	if principals == nil {
+		return principalmodel.Principal{}, apperror.New(apperror.KindUnavailable, "agent.authorization.resolver_unavailable", nil, nil)
+	}
+	resolution, err := principals.Resolve(ctx, identitysdk.PrincipalResolutionRequest{SubjectID: identitysdk.SubjectID(userID), RoleKey: roleKey})
+	if err != nil {
+		return principalmodel.Principal{}, err
+	}
+	resolution.Principal.AccessBundle = &resolution.AccessBundle
+	return principalmodel.NewPrincipalFromIdentity(resolution.Principal, ""), nil
+}
+
+func (h runtimeAgentProposalHost) InvokeProposalAction(ctx context.Context, request agentmodulehost.ProposalActionRequest) (agentmodulehost.ProposalActionResult, error) {
+	if h.records == nil || h.records.Applications().Actions == nil {
+		return agentmodulehost.ProposalActionResult{}, apperror.New(apperror.KindUnavailable, "agent.proposal.action_unavailable", nil, nil)
+	}
+	result, err := h.records.Applications().Actions.Invoke(ctx, actionmodel.ActionSourceAgent, actionmodel.ActionInvocation{
+		ActionKey: request.ActionKey, ObjectKey: request.ObjectKey, RecordID: request.RecordID, Input: request.Input,
+		Principal: runtimeAgentPrincipal(request.Principal), Actor: runtimeAgentPrincipal(request.Principal),
+		RequestID: request.Principal.RequestID, IdempotencyKey: request.IdempotencyKey,
+	})
+	return agentmodulehost.ProposalActionResult{Record: result.Record, Object: result.Object}, err
+}
+
+func (h runtimeAgentProposalHost) RunProposalWorkflow(ctx context.Context, request agentmodulehost.ProposalWorkflowRequest) (any, error) {
+	if h.records == nil || h.records.Applications().Workflows == nil {
+		return nil, apperror.New(apperror.KindUnavailable, "agent.proposal.workflow_unavailable", nil, nil)
+	}
+	return h.records.Applications().Workflows.RunAgentWorkflow(ctx, request.WorkflowKey, request.Payload, runtimeAgentPrincipal(request.Principal))
+}
+
+type runtimeAgentAuditHost struct {
+	audit *auditapplication.AuditApplicationService
+}
+
+func (h runtimeAgentAuditHost) AppendAgentAudit(ctx context.Context, request agentmodulehost.AuditRequest) error {
+	if h.audit == nil {
+		return apperror.New(apperror.KindUnavailable, "agent.audit.unavailable", nil, nil)
+	}
+	return h.audit.AppendAudit(ctx, auditapplication.AuditAppendRequest{
+		Event: request.Event, ObjectKey: request.ObjectKey, RecordID: request.RecordID,
+		Principal: runtimeAgentPrincipal(request.Principal), Summary: request.Summary,
+		Before: request.Before, After: request.After, Metadata: request.Metadata,
+	})
+}
+
+func (h runtimeAgentAuditHost) ListAgentAudit(ctx context.Context, principal agentmodulehost.Principal, limit int) ([]agentmodulehost.AuditEvent, error) {
+	if h.audit == nil {
+		return nil, apperror.New(apperror.KindUnavailable, "agent.audit.unavailable", nil, nil)
+	}
+	values, err := h.audit.Events(ctx, auditmodel.AuditEventQuery{Limit: limit}, runtimeAgentPrincipal(principal))
+	if err != nil {
+		return nil, err
+	}
+	result := make([]agentmodulehost.AuditEvent, 0, len(values))
+	for _, value := range values {
+		result = append(result, agentmodulehost.AuditEvent{
+			Event: value.Event, ObjectKey: value.ObjectKey, RecordID: value.RecordID, Summary: value.Summary,
+			Metadata: value.Metadata, CreatedAt: value.CreatedAt,
+		})
+	}
+	return result, nil
+}
+
+type runtimeAgentAnalysisHost struct {
+	catalog *appschemaapplication.ApplicationSchemaQueryApplicationService
+	records *recordapplication.RecordApplicationService
+}
+
+func (h runtimeAgentAnalysisHost) ResolveAnalysisCatalog(ctx context.Context, principal agentmodulehost.Principal) (agentmodulehost.AnalysisCatalog, error) {
+	if h.catalog == nil {
+		return agentmodulehost.AnalysisCatalog{}, apperror.New(apperror.KindUnavailable, "agent.analysis.catalog_unavailable", nil, nil)
+	}
+	runtimePrincipal := runtimeAgentPrincipal(principal)
+	snapshot := h.catalog.ForPrincipal(ctx, runtimePrincipal)
+	permissions, err := h.catalog.FeaturePermissions(ctx, runtimePrincipal)
+	if err != nil {
+		return agentmodulehost.AnalysisCatalog{}, err
+	}
+	result := agentmodulehost.AnalysisCatalog{MaskedFields: map[string][]string{}}
+	for _, object := range snapshot.Objects {
+		result.ObjectKeys = append(result.ObjectKeys, object.Key)
+	}
+	for _, report := range snapshot.Reports {
+		result.ReportKeys = append(result.ReportKeys, report.Key)
+	}
+	for _, field := range permissions.Fields {
+		if field.Masked {
+			result.MaskedFields[field.ObjectKey] = append(result.MaskedFields[field.ObjectKey], field.FieldKey)
+		}
+	}
+	return result, nil
+}
+
+func (h runtimeAgentAnalysisHost) ListAnalysisRecords(ctx context.Context, objectKey string, filters map[string]any, limit int, principal agentmodulehost.Principal) (agentmodulehost.AnalysisRecordPage, error) {
+	if h.records == nil {
+		return agentmodulehost.AnalysisRecordPage{}, apperror.New(apperror.KindUnavailable, "agent.analysis.records_unavailable", nil, nil)
+	}
+	page, err := h.records.ListRecords(ctx, objectKey, recordmodel.RecordListQuery{Page: 1, PageSize: limit, Filters: filters}, runtimeAgentPrincipal(principal))
+	if err != nil {
+		return agentmodulehost.AnalysisRecordPage{}, err
+	}
+	result := agentmodulehost.AnalysisRecordPage{Total: page.Total, HasNext: page.HasNext, Items: make([]agentmodulehost.AnalysisRecord, 0, len(page.Items))}
+	for _, item := range page.Items {
+		result.Items = append(result.Items, agentmodulehost.AnalysisRecord{ID: item.ID, Data: item.Data})
+	}
+	return result, nil
+}
+
+type runtimeAgentInteractiveHost struct {
+	authorization *agentapplication.AgentAuthorizationApplicationService
+	tools         *agentapplication.AgentToolGateway
+	workflows     *workflowapplication.WorkflowApplicationService
+}
+
+func (h runtimeAgentInteractiveHost) ResolveInteractiveContext(ctx context.Context, request agentmodulehost.InteractiveContextRequest) (agentsdk.GlobalContext, error) {
+	return h.authorization.ResolveGlobalContext(ctx, agentapplication.GlobalAgentContextRequest{
+		Principal: runtimeAgentPrincipal(request.Principal), EntrypointKey: request.EntrypointKey, RouteKey: request.RouteKey,
+		ObjectKey: request.ObjectKey, RecordID: request.RecordID, SelectedRecordIDs: append([]string(nil), request.SelectedRecordIDs...),
+		Locale: request.Locale, Timezone: request.Timezone, AvailableOperationIDs: append([]string(nil), request.AvailableOperationIDs...),
+	})
+}
+
+func (h runtimeAgentInteractiveHost) AuthorizeInteractive(ctx context.Context, request agentmodulehost.InteractiveAuthorizationRequest) (agentmodulehost.InteractiveAuthorization, error) {
+	result, err := h.authorization.AuthorizeInteractive(ctx, request.Context, runtimeAgentPrincipal(request.Principal))
+	if err != nil {
+		return agentmodulehost.InteractiveAuthorization{}, err
+	}
+	return agentmodulehost.InteractiveAuthorization{
+		Principal: runtimeAgentHostPrincipal(result.Principal), Context: result.Context, Agent: result.Agent,
+		Candidates: append([]agentsdk.RouteCandidate(nil), result.Candidates...), AllowedTools: append([]string(nil), result.AllowedTools...),
+	}, nil
+}
+
+func (h runtimeAgentInteractiveHost) AuthorizeInteractiveTask(ctx context.Context, request agentmodulehost.InteractiveTaskAuthorizationRequest) (agentmodulehost.InteractiveTaskAuthorization, error) {
+	result, err := h.authorization.AuthorizeTask(ctx, agentapplication.AgentTaskAuthorizationRequest{
+		Initiator: runtimeAgentPrincipal(request.Principal), Identity: agentsdk.AgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityInherit},
+		TaskKey: request.TaskKey, TaskVersion: request.TaskVersion,
+	})
+	if err != nil {
+		return agentmodulehost.InteractiveTaskAuthorization{}, err
+	}
+	return agentmodulehost.InteractiveTaskAuthorization{Identity: result.Identity, Task: result.Task, Evidence: result.Evidence}, nil
+}
+
+func (h runtimeAgentInteractiveHost) InvokeInteractiveTool(ctx context.Context, request agentmodulehost.InteractiveToolInvocationRequest) (agentmodulehost.InteractiveToolInvocationResult, error) {
+	return h.tools.InvokeInteractiveHost(ctx, request)
+}
+
+func (h runtimeAgentInteractiveHost) StartInteractiveWorkflow(ctx context.Context, request agentmodulehost.InteractiveWorkflowHandoffRequest) (string, error) {
+	if h.workflows == nil {
+		return "", apperror.New(apperror.KindUnavailable, "agent.interactive.workflow_handoff_unavailable", nil, nil)
+	}
+	payload := make(map[string]any, len(request.Input)+2)
+	for key, value := range request.Input {
+		payload[key] = value
+	}
+	payload["agent_handoff_idempotency_key"] = strings.TrimSpace(request.IdempotencyKey)
+	payload["agent_interactive_run_id"] = strings.TrimSpace(request.InteractiveID)
+	result, err := h.workflows.RunAgentWorkflow(ctx, request.WorkflowKey, payload, runtimeAgentPrincipal(request.Principal))
+	if err != nil {
+		return "", err
+	}
+	processID := strings.TrimSpace(result.Execution.ProcessID)
+	if processID == "" {
+		return "", apperror.New(apperror.KindConflict, "agent.interactive.workflow_process_required", nil, nil)
+	}
+	return processID, nil
+}
+
+func (h runtimeAgentInteractiveHost) WakeAgentTask(context.Context, string, string) {}
+
+func runtimeAgentPrincipal(value agentmodulehost.Principal) principalmodel.Principal {
+	return principalmodel.Principal{
+		Principal: identitysdk.Principal{Known: value.Known, WorkspaceID: strings.TrimSpace(value.WorkspaceID), UserID: strings.TrimSpace(value.UserID), RoleKey: strings.TrimSpace(value.RoleKey), AuthorizationRevision: strings.TrimSpace(value.AuthorizationRevision)},
+		RequestID: strings.TrimSpace(value.RequestID), CorrelationID: strings.TrimSpace(value.CorrelationID), CausationID: strings.TrimSpace(value.CausationID),
+	}
+}
+
+func runtimeAgentHostPrincipal(value principalmodel.Principal) agentmodulehost.Principal {
+	return agentmodulehost.Principal{
+		Known: value.Known, WorkspaceID: value.WorkspaceID, UserID: value.UserID, RoleKey: value.RoleKey,
+		AuthorizationRevision: value.AuthorizationRevision, RequestID: value.RequestID,
+		CorrelationID: value.CorrelationID, CausationID: value.CausationID,
+	}
+}
+
+func (a *httpServerAssembly) wireNotificationHandlers() {
 	// Integration management and webhook ingress are exposed by the Integration
 	// owner in both Module and SaaS topologies. Runtime only exposes its durable
 	// outbound handoff worker.
-	state, proposals := assembleAgentApplicationPorts(a.dependencies, a.principals)
-	// assembleAgentApplicationPorts owns the pair invariant: both ports are
-	// either available from one persistent store or both absent.
-	if state != nil {
-		var toolLedger agentpersistence.AgentToolCallLedger
-		if a.dependencies.AgentRepositories != nil {
-			toolLedger, _ = a.dependencies.AgentRepositories.AgentTaskRunRepository().(agentpersistence.AgentToolCallLedger)
-		}
-		contextResolver := agentapplication.NewAgentAuthorizationApplicationService(agentapplication.AgentAuthorizationDependencies{
-			Principals: a.principals,
-			Schema:     a.dependencies.Records,
-			Records:    agentRecordVisibilityAdapter{records: a.recordQueries},
-		})
-		credentialKey := sha256.Sum256([]byte("domainry-agent-task-credential-v1:" + a.dependencies.Config.IntegrationSecretKey))
-		credentials := agentapplication.NewAgentTaskCredentialApplicationService(credentialKey[:], nil, nil)
-		taskTools := agentapplication.NewAgentToolGateway(agentapplication.AgentToolGatewayDependencies{
-			Authorization: contextResolver, Credentials: credentials,
-			Queries: agentTaskToolQueryAdapter{records: a.recordQueries}, Actions: agentTaskToolActionAdapter{actions: a.dependencies.Records.Applications().Actions},
-			Proposals: agentTaskToolProposalAdapter{state: state}, Risk: agentTaskToolRiskAdapter{actions: a.dependencies.Records.Applications().Actions},
-			Ledger: toolLedger, RateLimiter: a.dependencies.RateLimiter,
-			InteractiveRuns: a.dependencies.Records.Applications().AgentInteractiveRuns,
-			TaskRuns:        a.dependencies.Records.Applications().AgentTasks,
-		})
-		interactive := newAgentInteractiveExecution(a.dependencies.Records.Applications().NewAgentInteractive, taskTools)
-		a.handlers.AgentDialog = agentdialoghttp.NewAgentDialogHandler(agentdialoghttp.AgentDialogDependencies{
-			Sessions: state, ProposalState: state, ProposalDecisions: proposals,
-			AnalysisCatalog: a.dependencies.Records.Applications().Schema,
-			AnalysisRecords: a.recordQueries,
-			DiagnosticAudit: a.dependencies.Records.Applications().Audit, ReportGovernance: state,
-			ContextResolver: contextResolver,
-			TaskRuns:        a.dependencies.Records.Applications().AgentTasks, TaskTools: taskTools,
-			Operations:      a.operations,
-			InteractiveRuns: a.dependencies.Records.Applications().AgentInteractiveRuns,
-			Interactive:     interactive,
-			Config:          agentdialoghttp.Config{RateLimitPerMinute: agentDialogRateLimitPerMinute},
-			RateLimiter:     a.dependencies.RateLimiter, Principal: a.callbacks.Principal,
-			WriteJSON: a.callbacks.WriteJSON, WriteError: a.callbacks.WriteError,
-			WriteServiceError: a.callbacks.WriteServiceError, DecodeJSON: a.callbacks.DecodeJSON,
-			Admin: a.identityHTTP.PermissionFunc("workspace.admin"), SecurityAudit: a.callbacks.SecurityAudit,
-			SecurityAuditForPrincipal: a.callbacks.SecurityAuditForPrincipal,
-		})
-	}
 	if a.publications != nil || a.dependencies.NotificationInboxActions != nil {
 		a.handlers.Notifications = notificationhttp.NewNotificationsHandler(notificationhttp.NotificationsDependencies{
 			DeliveryLedger: a.publications,
@@ -78,11 +416,4 @@ func (a *httpServerAssembly) wireIntegrationAndAgentHandlers(agentDialogRateLimi
 			Authenticated: a.identityHTTP.AuthenticatedFunc,
 		})
 	}
-}
-
-func newAgentInteractiveExecution(factory func(*agentapplication.AgentToolGateway) *agentapplication.AgentInteractiveExecutionApplicationService, tools *agentapplication.AgentToolGateway) *agentapplication.AgentInteractiveExecutionApplicationService {
-	if factory == nil {
-		return nil
-	}
-	return factory(tools)
 }

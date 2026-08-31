@@ -57,7 +57,7 @@ func (p *idempotencyOperationsProbe) RunIdempotencyCleanup(_ context.Context, re
 
 func TestDeploymentApplicationAuthorizesWorkspaceBeforeRepositoryAccess(t *testing.T) {
 	probe := &idempotencyOperationsProbe{}
-	service := NewDeploymentRuntimeStatusApplicationService("template", "v1", nil, nil, probe, nil, nil, nil, nil)
+	service := NewDeploymentRuntimeStatusApplicationService(nil, nil, probe, nil, nil, nil, nil)
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	if _, err := service.IdempotencyReceipts(t.Context(), principal, "", 10); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("receipts error=%v", err)
@@ -81,7 +81,7 @@ func TestDeploymentApplicationAuthorizesWorkspaceBeforeRepositoryAccess(t *testi
 
 func TestIdempotencyOperationsRequireWorkspaceAdminAndMutableReceipt(t *testing.T) {
 	probe := &idempotencyOperationsProbe{}
-	service := NewDeploymentRuntimeStatusApplicationService("template", "v1", nil, nil, probe, nil, nil, nil, nil)
+	service := NewDeploymentRuntimeStatusApplicationService(nil, nil, probe, nil, nil, nil, nil)
 	if _, err := service.IdempotencyReceipts(t.Context(), principalmodel.Principal{}, "", 10); apperror.KindOf(err) != apperror.KindForbidden {
 		t.Fatalf("anonymous list error=%v", err)
 	}
@@ -100,7 +100,7 @@ func TestIdempotencyOperationsRequireWorkspaceAdminAndMutableReceipt(t *testing.
 
 func TestIdempotencyCleanupWorkerRunsImmediatelyAndStopsWithContext(t *testing.T) {
 	probe := &idempotencyOperationsProbe{cleanup: make(chan deploymentmodel.IdempotencyCleanupRequest, 1)}
-	service := NewDeploymentRuntimeStatusApplicationService("template", "v1", nil, nil, probe, nil, nil, nil, nil)
+	service := NewDeploymentRuntimeStatusApplicationService(nil, nil, probe, nil, nil, nil, nil)
 	ctx, cancel := context.WithCancel(t.Context())
 	done := service.StartIdempotencyCleanupWorker(ctx, time.Hour, 17)
 	select {
@@ -121,7 +121,7 @@ func TestIdempotencyCleanupWorkerRunsImmediatelyAndStopsWithContext(t *testing.T
 
 func TestProcessIdempotencyCleanupDelegatesLeaseOwnerAndBatch(t *testing.T) {
 	probe := &idempotencyOperationsProbe{}
-	service := NewDeploymentRuntimeStatusApplicationService("template", "v1", nil, nil, probe, nil, nil, nil, nil)
+	service := NewDeploymentRuntimeStatusApplicationService(nil, nil, probe, nil, nil, nil, nil)
 	result, err := service.ProcessIdempotencyCleanup(t.Context(), "runtime-a", 25, time.Date(2026, 7, 19, 0, 0, 0, 0, time.UTC), principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "test cleanup"))
 	if err != nil || !result.Acquired || result.LeaseOwner != "runtime-a" || result.Deleted != 25 {
 		t.Fatalf("result=%#v err=%v", result, err)

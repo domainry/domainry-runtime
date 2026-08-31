@@ -24,7 +24,6 @@ import (
 type RecordInternalMutationPolicy string
 
 const (
-	RecordInternalMutationSchedulerRuntime RecordInternalMutationPolicy = "scheduler_runtime"
 	RecordInternalMutationOwnerPathRebuild RecordInternalMutationPolicy = "owner_department_path_rebuild"
 )
 
@@ -82,7 +81,7 @@ func (s *RecordUpdateApplicationService) PlanConditionalUpdateMutation(ctx conte
 	if err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 	}
-	if err := recordpolicy.RecordValidateSchedulerOperationalCRUD(object, "update"); err != nil {
+	if err := recordpolicy.RecordValidateRuntimeOwnedCRUD(object, "update"); err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 	}
 	record, found, err := s.dependencies.Repository.GetRecord(ctx, principal.WorkspaceID, object, recordID)
@@ -338,15 +337,6 @@ func (s *RecordInternalMutationApplicationService) Update(ctx context.Context, w
 
 func RecordValidateInternalMutationPolicy(policy RecordInternalMutationPolicy, operation RecordInternalMutationOperation, object definitionmodel.ObjectSchema) error {
 	switch policy {
-	case RecordInternalMutationSchedulerRuntime:
-		allowed := map[string]bool{
-			"record_timer":       true,
-			"record_timer_event": true,
-			"report_query_run":   true, "report_export_audit": true, "download_task": true, "report_definition": true,
-		}
-		if allowed[strings.TrimSpace(object.Key)] {
-			return nil
-		}
 	case RecordInternalMutationOwnerPathRebuild:
 		if operation == RecordInternalMutationUpdate && recordpolicy.RecordOwnerDepartmentIDFieldKey(object) != "" && recordpolicy.RecordOwnerDepartmentPathFieldKey(object) != "" {
 			return nil

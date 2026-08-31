@@ -15,15 +15,15 @@ func TestRecordPersistenceRemainsClassifiedByResponsibility(t *testing.T) {
 	}
 	root := filepath.Dir(source)
 	required := map[string]string{
-		"record_store.go":               "type RecordStore struct",
-		"record_scheduler_clock.go":     "func (r RecordStore) SchedulerNow",
-		"record_query_store.go":         "func (r RecordStore) ListRecords",
-		"record_crud_store.go":          "func (r RecordStore) InsertRecord",
-		"record_mutation_commit.go":     "func (r RecordStore) CommitRecordMutation",
-		"record_mutation_invariants.go": "func (r RecordStore) validateRelatedAggregateInvariantsTx",
-		"record_query_values.go":        "func recordQueryDBValues",
-		"record_row_write.go":           "func appendRecordInsertMetadata",
-		"record_mutation_effects.go":    "func (r RecordStore) insertWorkflowIntentTx",
+		"record_store.go":                      "type RecordStore struct",
+		"record_timer_workspace_repository.go": "func (r RecordStore) ListDueRecordTimerWorkspaces",
+		"record_query_store.go":                "func (r RecordStore) ListRecords",
+		"record_crud_store.go":                 "func (r RecordStore) InsertRecord",
+		"record_mutation_commit.go":            "func (r RecordStore) CommitRecordMutation",
+		"record_mutation_invariants.go":        "func (r RecordStore) validateRelatedAggregateInvariantsTx",
+		"record_query_values.go":               "func recordQueryDBValues",
+		"record_row_write.go":                  "func appendRecordInsertMetadata",
+		"record_mutation_effects.go":           "func (r RecordStore) insertWorkflowIntentTx",
 	}
 	for name, symbol := range required {
 		raw, err := os.ReadFile(filepath.Join(root, name))

@@ -40,7 +40,7 @@ func TestAssembleRuntimeServicesReportsWorkflowFailures(t *testing.T) {
 
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := assembleRuntimeServices(cancelled, cfg, manifest, nil, store, runtimeIdentityDirectoryStub{}, nil, nil, nil, nil, worker.Dependencies{}); err == nil {
+	if _, err := assembleRuntimeServices(cancelled, cfg, manifest, nil, store, runtimeIdentityDirectoryStub{}, nil, nil, nil, worker.Dependencies{}); err == nil {
 		t.Fatal("cancelled workflow initialization must fail assembly")
 	}
 }

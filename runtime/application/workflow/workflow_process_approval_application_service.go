@@ -80,15 +80,15 @@ func (e *WorkflowProcessEngine) scheduleApprovalDeadlineTimers(ctx context.Conte
 	if strings.TrimSpace(task.DueAt) == "" || strings.TrimSpace(contract.ReminderActionKey) == "" && contract.EscalationSeconds <= 0 {
 		return nil
 	}
-	if e.runtime.dependencies.ApprovalTimers == nil {
-		return internalError("schedule workflow approval deadline", fmt.Errorf("workflow approval timer scheduler is required"))
+	if e.runtime.dependencies.ApprovalDeadlineTimers == nil {
+		return internalError("schedule workflow approval deadline", fmt.Errorf("workflow approval deadline timer service is required"))
 	}
 	dueAt, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(task.DueAt))
 	if err != nil {
 		return badRequest("backend.workflow.approval_due_at_invalid", "task", task.ID)
 	}
 	schedule := func(phase string, at time.Time) error {
-		_, scheduleErr := e.runtime.dependencies.ApprovalTimers.ScheduleWorkflowApprovalDeadlineTimer(ctx, WorkflowApprovalDeadlineTimerRequest{
+		_, scheduleErr := e.runtime.dependencies.ApprovalDeadlineTimers.ScheduleWorkflowApprovalDeadlineTimer(ctx, WorkflowApprovalDeadlineTimerRequest{
 			WorkspaceID: process.WorkspaceID, ProcessID: process.ID, NodeID: task.NodeID, TaskID: task.ID,
 			Phase: phase, DueAt: at, CreatedAt: createdAt,
 		})

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -54,7 +53,7 @@ func newRecordBatchHTTPFixture(t *testing.T) recordBatchHTTPFixture {
 		t.Fatal(err)
 	}
 	object := definitionmodel.ObjectSchema{Key: "customer", Name: "Customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Name: "Name", Type: "text", Required: true}}}
-	if err := appschemapersistence.NewApplicationSchemaStore(store).SyncManifestStorage(t.Context(), manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{object}}); err != nil {
+	if err := appschemapersistence.NewApplicationSchemaStore(store).SyncManifest(t.Context(), principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "prepare record batch test storage"), manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{object}}); err != nil {
 		t.Fatal(err)
 	}
 	role := accessfixture.Bundle{
@@ -216,11 +215,8 @@ func (f recordBatchHTTPFixture) call(method, path, body string, headers map[stri
 	return response
 }
 
-func TestRecordBatchJobHTTPExportLifecycleAndWorkspaceIsolation(t *testing.T) {
+func TestRecordBatchJobHTTPExportSubmission(t *testing.T) {
 	fixture := newRecordBatchHTTPFixture(t)
-	if response := fixture.call(http.MethodGet, "/record-batch-jobs/missing", "", nil); response.Code != http.StatusNotFound {
-		t.Fatalf("missing status=%d body=%s", response.Code, response.Body.String())
-	}
 	if response := fixture.call(http.MethodPost, "/objects/customer/records/export/jobs", "", nil); response.Code != http.StatusBadRequest {
 		t.Fatalf("missing idempotency status=%d body=%s", response.Code, response.Body.String())
 	}
@@ -231,19 +227,8 @@ func TestRecordBatchJobHTTPExportLifecycleAndWorkspaceIsolation(t *testing.T) {
 	if created.Code != http.StatusAccepted || json.Unmarshal(created.Body.Bytes(), &job) != nil || job.ID == "" || job.Kind != "export" {
 		t.Fatalf("created status=%d job=%+v body=%s", created.Code, job, created.Body.String())
 	}
-	if created.Header().Get("Location") != "/record-batch-jobs/"+job.ID {
+	if created.Header().Get("Location") != "/data-exchange/jobs/"+job.ID+"?provider=records&operation=export" {
 		t.Fatalf("location=%q", created.Header().Get("Location"))
-	}
-	fixture.exchange.mu.Lock()
-	foreign := job
-	foreign.ID = "data_exchange:report-job"
-	fixture.exchange.jobs[foreign.ID] = dataexchange.Job{ID: foreign.ID, Provider: "reports", Operation: "export", Status: "queued", WorkspaceID: job.WorkspaceID, ObjectKey: job.ObjectKey, ActorID: job.ActorID, RoleKey: job.RoleKey, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
-	fixture.exchange.mu.Unlock()
-	if response := fixture.call(http.MethodGet, "/record-batch-jobs/"+foreign.ID, "", nil); response.Code != http.StatusNotFound {
-		t.Fatalf("cross-provider read status=%d body=%s", response.Code, response.Body.String())
-	}
-	if response := fixture.call(http.MethodPost, "/record-batch-jobs/"+foreign.ID+"/cancel", "", map[string]string{"Idempotency-Key": "cancel-report-job"}); response.Code != http.StatusNotFound {
-		t.Fatalf("cross-provider cancel status=%d body=%s", response.Code, response.Body.String())
 	}
 	var payload struct {
 		Options recordapplication.RecordExportOptions `json:"options"`
@@ -260,21 +245,9 @@ func TestRecordBatchJobHTTPExportLifecycleAndWorkspaceIsolation(t *testing.T) {
 	if conflict.Code != http.StatusConflict {
 		t.Fatalf("conflict status=%d body=%s", conflict.Code, conflict.Body.String())
 	}
-	if response := fixture.call(http.MethodGet, "/record-batch-jobs/"+job.ID, "", nil); response.Code != http.StatusOK {
-		t.Fatalf("get status=%d body=%s", response.Code, response.Body.String())
-	}
-
-	other := *fixture.principal
-	other.WorkspaceID = "workspace-b"
-	*fixture.principal = other
-	if response := fixture.call(http.MethodGet, "/record-batch-jobs/"+job.ID, "", nil); response.Code != http.StatusNotFound {
-		t.Fatalf("cross-workspace status=%d body=%s", response.Code, response.Body.String())
-	}
-	other.WorkspaceID = "workspace-a"
-	*fixture.principal = other
 }
 
-func TestRecordBatchJobHTTPImportCancelAndDownloadState(t *testing.T) {
+func TestRecordBatchJobHTTPImportSubmissionAndDownloadState(t *testing.T) {
 	fixture := newRecordBatchHTTPFixture(t)
 	if response := fixture.call(http.MethodPost, "/objects/customer/records/import/jobs", `{`, nil); response.Code != http.StatusBadRequest {
 		t.Fatalf("invalid json status=%d body=%s", response.Code, response.Body.String())
@@ -293,84 +266,9 @@ func TestRecordBatchJobHTTPImportCancelAndDownloadState(t *testing.T) {
 	if created.Code != http.StatusAccepted || json.Unmarshal(created.Body.Bytes(), &job) != nil || job.Kind != "import" {
 		t.Fatalf("import status=%d job=%+v body=%s", created.Code, job, created.Body.String())
 	}
-	if response := fixture.call(http.MethodPost, "/record-batch-jobs/"+job.ID+"/cancel", "", nil); response.Code != http.StatusBadRequest {
-		t.Fatalf("cancel missing key status=%d body=%s", response.Code, response.Body.String())
+	if created.Header().Get("Location") != "/data-exchange/jobs/"+job.ID+"?provider=records&operation=import" {
+		t.Fatalf("location=%q", created.Header().Get("Location"))
 	}
-	cancelled := fixture.call(http.MethodPost, "/record-batch-jobs/"+job.ID+"/cancel", "", map[string]string{"Idempotency-Key": "cancel-http-1"})
-	if cancelled.Code != http.StatusOK || !strings.Contains(cancelled.Body.String(), `"status":"cancelled"`) {
-		t.Fatalf("cancel status=%d body=%s", cancelled.Code, cancelled.Body.String())
-	}
-	if response := fixture.call(http.MethodGet, "/record-batch-jobs/"+job.ID+"/download", "", nil); response.Code != http.StatusConflict {
-		t.Fatalf("cancelled download status=%d body=%s", response.Code, response.Body.String())
-	}
-	if response := fixture.call(http.MethodPost, "/record-batch-jobs/missing/cancel", "", map[string]string{"Idempotency-Key": "cancel-missing"}); response.Code != http.StatusNotFound {
-		t.Fatalf("missing cancel status=%d body=%s", response.Code, response.Body.String())
-	}
-}
-
-func TestRecordBatchJobHTTPDownloadStreamsChunksAndStopsOnTransportSignals(t *testing.T) {
-	fixture := newRecordBatchHTTPFixture(t)
-	created := fixture.call(http.MethodPost, "/objects/customer/records/export/jobs", "", map[string]string{"Idempotency-Key": "download-http-1"})
-	var job recordmodel.RecordBatchJob
-	if created.Code != http.StatusAccepted || json.Unmarshal(created.Body.Bytes(), &job) != nil {
-		t.Fatalf("enqueue status=%d body=%s", created.Code, created.Body.String())
-	}
-	fixture.exchange.mu.Lock()
-	exchangeJob := fixture.exchange.jobs[job.ID]
-	exchangeJob.Status, exchangeJob.Total, exchangeJob.ArtifactID = "completed", 1, "artifact-one"
-	fixture.exchange.jobs[job.ID] = exchangeJob
-	fixture.exchange.artifact = dataexchange.Artifact{ID: "artifact-one", Filename: "customer.csv", ContentType: "text/csv"}
-	fixture.exchange.content = "name\nAcme\n"
-	fixture.exchange.mu.Unlock()
-
-	download := fixture.call(http.MethodGet, "/record-batch-jobs/"+job.ID+"/download", "", nil)
-	if download.Code != http.StatusOK || download.Body.String() != "name\nAcme\n" || download.Header().Get("Content-Type") != "text/csv" || download.Header().Get("Content-Disposition") != "attachment; filename=customer.csv" {
-		t.Fatalf("download status=%d headers=%v body=%q", download.Code, download.Header(), download.Body.String())
-	}
-
-	failing := &recordBatchWriteProbe{writeErr: errors.New("client disconnected")}
-	request := httptest.NewRequest(http.MethodGet, "/record-batch-jobs/"+job.ID+"/download", nil)
-	request.SetPathValue("jobID", job.ID)
-	fixture.handler.downloadBatchJob(failing, request)
-	if failing.writes != 1 {
-		t.Fatalf("write failure writes=%d", failing.writes)
-	}
-
-	ctx, cancel := context.WithCancel(t.Context())
-	cancelling := &recordBatchWriteProbe{afterWrite: cancel}
-	request = httptest.NewRequest(http.MethodGet, "/record-batch-jobs/"+job.ID+"/download", nil).WithContext(ctx)
-	request.SetPathValue("jobID", job.ID)
-	fixture.handler.downloadBatchJob(cancelling, request)
-	if cancelling.writes != 1 {
-		t.Fatalf("cancelled stream writes=%d", cancelling.writes)
-	}
-}
-
-type recordBatchWriteProbe struct {
-	header     http.Header
-	writes     int
-	writeErr   error
-	afterWrite func()
-}
-
-func (w *recordBatchWriteProbe) Header() http.Header {
-	if w.header == nil {
-		w.header = http.Header{}
-	}
-	return w.header
-}
-
-func (*recordBatchWriteProbe) WriteHeader(int) {}
-
-func (w *recordBatchWriteProbe) Write(payload []byte) (int, error) {
-	w.writes++
-	if w.afterWrite != nil {
-		w.afterWrite()
-	}
-	if w.writeErr != nil {
-		return 0, w.writeErr
-	}
-	return len(payload), nil
 }
 
 func TestSetBatchCapacityRetryAfter(t *testing.T) {
@@ -392,5 +290,3 @@ func TestSetBatchCapacityRetryAfter(t *testing.T) {
 		})
 	}
 }
-
-var _ io.Writer = (*recordBatchWriteProbe)(nil)

@@ -1,28 +1,13 @@
 package appschema
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"strings"
 
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 )
-
-func (s ApplicationSchemaStore) SyncManifestStorage(ctx context.Context, manifest manifestmodel.ManifestSchema) error {
-	for _, object := range manifest.Objects {
-		if strings.TrimSpace(object.Key) == "" {
-			continue
-		}
-		if err := s.ensureObjectStorage(ctx, object); err != nil {
-			return err
-		}
-	}
-	return nil
-}
 
 func metadataFieldIndexed(field definitionmodel.FieldSchema) bool {
 	if field.Unique {

@@ -15,15 +15,13 @@ import (
 // tenant activation and module replacement never expose a partial route set.
 type moduleSurfaceRouter struct {
 	mu       sync.RWMutex
-	group    runtimehttp.SurfaceRouteGroup
+	group    runtimehttp.ListenerRouteGroup
 	fallback http.Handler
 	handler  http.Handler
 	guard    moduleRouteGuard
 }
 
-type moduleRouteGuard func(modulehttp.Route, http.Handler) (http.Handler, error)
-
-func newModuleSurfaceRouter(group runtimehttp.SurfaceRouteGroup, fallback http.Handler) *moduleSurfaceRouter {
+func newModuleSurfaceRouter(group runtimehttp.ListenerRouteGroup, fallback http.Handler) *moduleSurfaceRouter {
 	if fallback == nil {
 		fallback = http.NotFoundHandler()
 	}
@@ -53,7 +51,7 @@ func (router *moduleSurfaceRouter) ServeHTTP(writer http.ResponseWriter, request
 	handler.ServeHTTP(writer, request)
 }
 
-func mountModuleHTTPSurfaces(group runtimehttp.SurfaceRouteGroup, surfaces []modulehttp.Surface, fallback http.Handler, guards ...moduleRouteGuard) (http.Handler, error) {
+func mountModuleHTTPSurfaces(group runtimehttp.ListenerRouteGroup, surfaces []modulehttp.Surface, fallback http.Handler, guards ...moduleRouteGuard) (http.Handler, error) {
 	if fallback == nil {
 		fallback = http.NotFoundHandler()
 	}
@@ -98,17 +96,17 @@ func mountModuleHTTPSurfaces(group runtimehttp.SurfaceRouteGroup, surfaces []mod
 	return mux, nil
 }
 
-func moduleRouteVisible(group runtimehttp.SurfaceRouteGroup, exposures []modulehttp.Exposure) bool {
-	if group == runtimehttp.SurfaceRouteGroupAll {
+func moduleRouteVisible(group runtimehttp.ListenerRouteGroup, exposures []modulehttp.Exposure) bool {
+	if group == runtimehttp.ListenerRouteGroupAll {
 		return true
 	}
 	want := modulehttp.Exposure("")
 	switch group {
-	case runtimehttp.SurfaceRouteGroupPublic:
+	case runtimehttp.ListenerRouteGroupPublic:
 		want = modulehttp.ExposurePublic
-	case runtimehttp.SurfaceRouteGroupTenantAdmin:
+	case runtimehttp.ListenerRouteGroupTenantAdmin:
 		want = modulehttp.ExposureTenantAdmin
-	case runtimehttp.SurfaceRouteGroupOps:
+	case runtimehttp.ListenerRouteGroupOps:
 		want = modulehttp.ExposureOps
 	default:
 		return false

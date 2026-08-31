@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -13,15 +12,13 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
-	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
-	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
-	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
+	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	connectortest "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit/connectors"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
@@ -32,13 +29,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
-	surfacecontextmodel "github.com/domainry/domainry-runtime/runtime/domain/surfacecontext/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
-	"github.com/domainry/domainry-runtime/runtime/platform/resilience"
-	agentsdkfixture "github.com/domainry/domainry-runtime/testsupport/agentsdkfixture"
 )
 
 type compositionConnectorAdapterStub struct{}
@@ -189,80 +180,20 @@ func TestAgentWorkflowDependencyAbsentAndRetryBranches(t *testing.T) {
 	if allowed, err := (runtimeAgentRecordVisibility{records: &runtimeAssembly{}}).CanReadAgentRecord(t.Context(), "customer", "record", principalmodel.Principal{}); allowed || err != nil {
 		t.Fatalf("ownerless allowed=%v err=%v", allowed, err)
 	}
-	committer := runtimeAgentTaskTerminalCommitter{}
-	if err := committer.CommitAgentTaskTerminal(t.Context(), agentmodel.AgentTaskRun{}, "owner", 1); apperror.CodeOf(err) != "agent.task.terminal_committer_unavailable" {
-		t.Fatalf("err=%v", err)
-	}
-	if err := committer.CommitAgentTaskApprovalTerminal(t.Context(), agentmodel.AgentTaskRun{}); apperror.CodeOf(err) != "agent.task.workflow_unavailable" {
-		t.Fatalf("err=%v", err)
-	}
-	committer.records = &runtimeAssembly{}
-	if err := committer.CommitAgentTaskTerminal(t.Context(), agentmodel.AgentTaskRun{}, "owner", 1); apperror.CodeOf(err) != "agent.task.terminal_committer_unavailable" {
-		t.Fatalf("ownerless err=%v", err)
-	}
-	if err := committer.CommitAgentTaskApprovalTerminal(t.Context(), agentmodel.AgentTaskRun{}); apperror.CodeOf(err) != "agent.task.workflow_unavailable" {
-		t.Fatalf("ownerless err=%v", err)
-	}
 	dependencies := workflowDependencies(&runtimeAssembly{})
-	if _, err := dependencies.PrepareAgentTask(t.Context(), workflowapplication.WorkflowAgentTaskPreparation{}); apperror.CodeOf(err) != "agent.task.dispatch_unavailable" {
+	if _, err := dependencies.StartAgentTask(t.Context(), workflowapplication.WorkflowAgentTaskPreparation{}); apperror.CodeOf(err) != "agent.task.dispatch_unavailable" {
 		t.Fatalf("err=%v", err)
 	}
 	assembly := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{})
 	_, _ = (runtimeInteractiveWorkflowStarter{records: assembly}).StartInteractiveAgentWorkflow(t.Context(), "missing", nil, "run", "key", principalmodel.Principal{})
 	_, _ = (runtimeAgentRecordVisibility{records: assembly}).CanReadAgentRecord(t.Context(), "missing", "record", principalmodel.Principal{})
-	_ = (runtimeAgentTaskTerminalCommitter{records: assembly}).CommitAgentTaskTerminal(t.Context(), agentmodel.AgentTaskRun{}, "owner", 1)
-	_ = (runtimeAgentTaskTerminalCommitter{records: assembly}).CommitAgentTaskApprovalTerminal(t.Context(), agentmodel.AgentTaskRun{})
-	_, _ = workflowDependencies(assembly).PrepareAgentTask(t.Context(), workflowapplication.WorkflowAgentTaskPreparation{})
-	_, _ = workflowDependencies(assembly).PrepareAgentTask(t.Context(), workflowapplication.WorkflowAgentTaskPreparation{Contract: definitionmodel.WorkflowAgentTaskNodeContract{Retry: &definitionmodel.WorkflowRetryPolicy{MaxAttempts: 0}}})
-	_, _ = workflowDependencies(assembly).PrepareAgentTask(t.Context(), workflowapplication.WorkflowAgentTaskPreparation{Contract: definitionmodel.WorkflowAgentTaskNodeContract{Retry: &definitionmodel.WorkflowRetryPolicy{MaxAttempts: 3}}})
+	_, _ = workflowDependencies(assembly).StartAgentTask(t.Context(), workflowapplication.WorkflowAgentTaskPreparation{})
+	_, _ = workflowDependencies(assembly).StartAgentTask(t.Context(), workflowapplication.WorkflowAgentTaskPreparation{Contract: definitionmodel.WorkflowAgentTaskNodeContract{Retry: &definitionmodel.WorkflowRetryPolicy{MaxAttempts: 0}}})
+	_, _ = workflowDependencies(assembly).StartAgentTask(t.Context(), workflowapplication.WorkflowAgentTaskPreparation{Contract: definitionmodel.WorkflowAgentTaskNodeContract{Retry: &definitionmodel.WorkflowRetryPolicy{MaxAttempts: 3}}})
 	assemblyWithPrincipal := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{Dependencies: RuntimeServicesDependencies{AgentPrincipals: agentPrincipalDirectoryStub{principal: principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}}}})
 	_, _ = resolveIdentityPrincipal(t.Context(), assemblyWithPrincipal.agentPrincipals, "user", "role")
 	if _, err := (runtimeInteractiveWorkflowStarter{records: &runtimeAssembly{}}).StartInteractiveAgentWorkflow(t.Context(), "workflow", nil, "run", "key", principalmodel.Principal{}); apperror.CodeOf(err) != "agent.interactive.workflow_handoff_unavailable" {
 		t.Fatalf("ownerless err=%v", err)
-	}
-}
-
-func TestRuntimeCompositionWiresPersistentAgentWorkersAndInteractiveFactory(t *testing.T) {
-	store, err := persistence.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "agent-wiring.db")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
-	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	binding, err := agentsdkfixture.Open(t.Context(), store, "composition-agent-wiring-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = binding.Close(context.Background()) })
-	repositories, ok := binding.(agentpersistence.Binding)
-	if !ok || repositories.AgentTaskRunRepository() == nil {
-		t.Fatal("Agent SDK Binding returned no task-run repository")
-	}
-	repository := repositories.AgentTaskRunRepository()
-	withoutRunner := NewRuntimeServices(t.Context(), RuntimeServicesConfig{Dependencies: RuntimeServicesDependencies{AgentTaskRuns: repository, AgentPrincipals: agentPrincipalDirectoryStub{}}})
-	if withoutRunner.Applications().AgentInteractiveRuns == nil || withoutRunner.Applications().NewAgentInteractive != nil {
-		t.Fatalf("runnerless applications=%+v", withoutRunner.Applications())
-	}
-	auditRepository := &runtimeServicesAuditRepository{}
-	services := NewRuntimeServices(t.Context(), RuntimeServicesConfig{Dependencies: RuntimeServicesDependencies{AgentTaskRuns: repository, AgentTaskRunner: agentTaskRunnerStub{}, AgentInteractiveRunner: interactiveAgentRunnerStub{}, Audit: auditRepository}})
-	applications := services.Applications()
-	if applications.AgentTasks == nil || applications.AgentInteractiveRuns == nil || applications.AgentTaskWorker == nil || applications.NewAgentInteractive == nil {
-		t.Fatalf("applications=%+v", applications)
-	}
-	if interactive := applications.NewAgentInteractive(nil); interactive == nil {
-		t.Fatal("interactive execution service is nil")
-	}
-	now := time.Now().UTC()
-	deadLetter := agentmodel.AgentTaskRun{ID: "agent-task-dead-letter", WorkspaceID: "workspace-a", TaskKey: "agent.retry", TaskVersion: "v1", Status: agentmodel.AgentTaskRunDeadLetter, Outcome: "error", IdempotencyKey: "agent-task-dead-letter", Revision: 3, CreatedAt: now, UpdatedAt: now, CompletedAt: &now}
-	if _, _, err := repository.Create(t.Context(), deadLetter); err != nil {
-		t.Fatal(err)
-	}
-	actor := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: deadLetter.WorkspaceID, UserID: "operator"}}, accessfixture.Bundle{Key: "ops"})
-	retried, replayed, err := applications.AgentTasks.Operate(t.Context(), deadLetter.WorkspaceID, deadLetter.ID, "retry", "retry-after-repair", "provider timeout repaired", actor)
-	if err != nil || replayed || retried.Status != agentmodel.AgentTaskRunPending || len(auditRepository.events) != 1 || auditRepository.events[0].Event != "agent_task_retry" {
-		t.Fatalf("retried=%+v replayed=%v audits=%+v err=%v", retried, replayed, auditRepository.events, err)
 	}
 }
 
@@ -278,67 +209,18 @@ func TestCompositionSmallAdaptersCoverAllDelegationBranches(t *testing.T) {
 		t.Fatalf("partial schema snapshot=%#v", snapshot)
 	}
 
-	executions, inserts, updates := 0, 0, 0
-	adapter := schedulerOperationRuntimeAdapter{
+	executions := 0
+	adapter := scheduledWorkflowRuntimeAdapter{
 		processExecutions: func(context.Context, int, principalmodel.Principal) (workflowmodel.WorkflowProcessResult, error) {
 			executions++
 			return workflowmodel.WorkflowProcessResult{Processed: 1}, nil
-		},
-		insertRecord: func(context.Context, string, definitionmodel.ObjectSchema, recordmodel.Record, string) error {
-			inserts++
-			return nil
-		},
-		updateRecord: func(context.Context, string, definitionmodel.ObjectSchema, recordmodel.Record, string) error {
-			updates++
-			return nil
 		},
 	}
 	if _, err := adapter.ProcessDueWorkflowExecutions(t.Context(), 1, principalmodel.Principal{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := adapter.InsertSchedulerRecord(t.Context(), "workspace-primary", definitionmodel.ObjectSchema{}, recordmodel.Record{}, "test"); err != nil {
-		t.Fatal(err)
-	}
-	if err := adapter.UpdateSchedulerRecord(t.Context(), "workspace-primary", definitionmodel.ObjectSchema{}, recordmodel.Record{}, "test"); err != nil {
-		t.Fatal(err)
-	}
-	if executions != 1 || inserts != 1 || updates != 1 {
-		t.Fatalf("scheduler delegation=%d/%d/%d", executions, inserts, updates)
-	}
-}
-
-func TestRecordInitializationClosuresServeSurfaceContext(t *testing.T) {
-	company := definitionmodel.ObjectSchema{Key: "company", Name: "Company", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
-	customer := definitionmodel.ObjectSchema{Key: "customer", Name: "Customer", Fields: []definitionmodel.FieldSchema{
-		{Key: "name", Type: "text"}, {Key: "company", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "company"}},
-		{Key: "owner", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "identity_user"}},
-	}}
-	repository := &pipelineFailureRepository{records: map[string]map[string]recordmodel.Record{
-		"customer": {"customer-1": {ID: "customer-1", Data: map[string]any{"name": "Ada", "company": "company-1", "owner": "admin"}}},
-		"company":  {"company-1": {ID: "company-1", Data: map[string]any{"name": "Example"}}},
-	}}
-	runtime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
-		Manifest: manifestmodel.ManifestSchema{
-			Objects: []definitionmodel.ObjectSchema{customer, company},
-		},
-		Dependencies: RuntimeServicesDependencies{Records: repository, IdentityDirectory: compositionIdentityDirectory{}},
-	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
-	result := runtime.surfaceContextService.Context(t.Context(), surfacecontextmodel.SurfaceContextRequest{
-		Objects: []surfacecontextmodel.SurfaceContextObjectRequest{{ObjectKey: "customer", Page: 1, PageSize: 5}},
-	}, principal)
-	if result.Objects["customer"].ObjectKey != "customer" || len(result.Objects["customer"].Page.Items) != 1 {
-		t.Fatalf("surface context result=%#v", result)
-	}
-	limited := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "reader", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{
-		Permissions: []string{"customer.read"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true}},
-		ReferencePolicies: []accessfixture.ReferencePolicyFixture{{SourceObjectKey: "customer", RelationFieldKey: "company", TargetObjectKey: "company", DisplayFields: []string{"name"}, Mode: "label_only"}},
-	})
-	limitedResult := runtime.surfaceContextService.Context(t.Context(), surfacecontextmodel.SurfaceContextRequest{
-		Objects: []surfacecontextmodel.SurfaceContextObjectRequest{{ObjectKey: "customer"}},
-	}, limited)
-	if len(limitedResult.RelationProjections) != 1 || limitedResult.RelationProjections[0].Mode != "label_only" {
-		t.Fatalf("label-only surface projection=%#v", limitedResult.RelationProjections)
+	if executions != 1 {
+		t.Fatalf("scheduler delegation=%d", executions)
 	}
 }
 
@@ -370,8 +252,8 @@ func TestRecordInitializationAuditProjectorCoversPresentationAndFailures(t *test
 	if events[3].Before["name"] != "Before" || events[4].After["name"] != "After" || events[5].Before["name"] != "Old" || events[5].After["name"] != "New" {
 		t.Fatalf("projected events=%#v", events)
 	}
-	if _, err := runtime.reportQueriesService.Summary(t.Context(), "missing", principal); apperror.CodeOf(err) != "backend.report.not_found" {
-		t.Fatalf("missing report error=%v", err)
+	if runtime.reportModuleQueryHost == nil {
+		t.Fatal("Report module query host was not assembled")
 	}
 
 	invalidPolicyPrincipal := principal
@@ -411,11 +293,9 @@ func TestCompositionFinalBranchContracts(t *testing.T) {
 	_ = services.SchemaForPrincipal(t.Context(), principalmodel.Principal{})
 
 	nonDefaultState := newRuntimeServicesState(t.Context(), manifestmodel.ManifestSchema{}, RuntimeServicesDependencies{
-		IdentityDirectory:      compositionIdentityDirectory{},
-		IntegrationPolicyStore: resilience.NewMemoryStore(resilience.DefaultMemoryCapacity),
-		IntegrationAPILimiter:  ratelimit.NewMemoryLimiter(ratelimit.DefaultMemoryCapacity),
+		IdentityDirectory: compositionIdentityDirectory{},
 	})
-	if nonDefaultState.identityDirectory == nil || nonDefaultState.integrationPolicyStore == nil || nonDefaultState.apiKeyRateLimiter == nil {
+	if nonDefaultState.identityDirectory == nil {
 		t.Fatal("explicit runtime state dependencies were not retained")
 	}
 }
@@ -429,6 +309,7 @@ func TestCompositionActionWithoutRegisteredHandlerFailsClosed(t *testing.T) {
 			Objects: []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}}, Actions: actions,
 			Integrations: connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{connector}},
 		},
+		Dependencies: RuntimeServicesDependencies{WorkflowProcesses: processes, WorkflowWorker: &runtimeServicesWorkflowWorkerRepository{}},
 	})
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
 	if _, err := runtime.actionService.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: "customer.call", ObjectKey: "customer", Principal: admin}); apperror.CodeOf(err) != "backend.action.owner_unresolved" {
@@ -717,7 +598,7 @@ func TestAssembledBusinessHandlerCoversRevisionAndDurableIntentFallbacks(t *test
 	}
 
 	withoutIntegration := newService(t, nil, true)
-	withoutIntegration.integrationService = nil
+	withoutIntegration.publicationHandoffService = nil
 	if _, err := invoke(withoutIntegration); err == nil || !strings.Contains(err.Error(), "durable_intent_validator_required") {
 		t.Fatalf("missing durable intent validator error=%v", err)
 	}
@@ -812,7 +693,7 @@ func TestRecordQueryPolicyCompositionCandidateEvaluatorAvailability(t *testing.T
 	}
 }
 
-type schedulerWorkflowTimerRuntimeFake struct {
+type recordTimerWorkflowRuntimeFake struct {
 	resumedProcessID string
 	resumedNodeID    string
 	deadlineTaskID   string
@@ -820,7 +701,7 @@ type schedulerWorkflowTimerRuntimeFake struct {
 	err              error
 }
 
-func (f *schedulerWorkflowTimerRuntimeFake) ResumeTimerNode(
+func (f *recordTimerWorkflowRuntimeFake) ResumeTimerNode(
 	_ context.Context,
 	_ string,
 	processID string,
@@ -831,7 +712,7 @@ func (f *schedulerWorkflowTimerRuntimeFake) ResumeTimerNode(
 	return workflowmodel.WorkflowProcessInstance{}, f.err
 }
 
-func (f *schedulerWorkflowTimerRuntimeFake) ProcessApprovalDeadlineTimer(
+func (f *recordTimerWorkflowRuntimeFake) ProcessApprovalDeadlineTimer(
 	_ context.Context,
 	_ string,
 	taskID string,
@@ -842,13 +723,13 @@ func (f *schedulerWorkflowTimerRuntimeFake) ProcessApprovalDeadlineTimer(
 	return f.err
 }
 
-type schedulerActionTimerRuntimeFake struct {
+type recordTimerActionRuntimeFake struct {
 	source     actionmodel.ActionSource
 	invocation actionmodel.ActionInvocation
 	err        error
 }
 
-func (f *schedulerActionTimerRuntimeFake) Invoke(
+func (f *recordTimerActionRuntimeFake) Invoke(
 	_ context.Context,
 	source actionmodel.ActionSource,
 	invocation actionmodel.ActionInvocation,
@@ -857,20 +738,20 @@ func (f *schedulerActionTimerRuntimeFake) Invoke(
 	return actionmodel.ActionInvocationResult{}, f.err
 }
 
-func TestSchedulerOperationRuntimeAdapterTimerTargets(t *testing.T) {
+func TestRecordTimerRuntimeAdapterTargets(t *testing.T) {
 	bare := &runtimeAssembly{}
-	adapter := newSchedulerOperationRuntimeAdapter(bare)
-	if err := adapter.ExecuteRecordTimer(t.Context(), schedulerapplication.RecordTimerExecution{
+	adapter := newRecordTimerTargetRuntimeAdapter(bare)
+	if err := adapter.ExecuteRecordTimer(t.Context(), recordtimerapplication.RecordTimerExecution{
 		WorkspaceID: "workspace-a", TargetType: "workflow", TargetKey: "resume_node",
 	}, principalmodel.Principal{}); err == nil || !strings.Contains(err.Error(), "unsupported workflow timer target") {
 		t.Fatalf("nil workflow runtime error=%v", err)
 	}
-	if err := adapter.ExecuteRecordTimer(t.Context(), schedulerapplication.RecordTimerExecution{
+	if err := adapter.ExecuteRecordTimer(t.Context(), recordtimerapplication.RecordTimerExecution{
 		WorkspaceID: "workspace-a", TargetType: "action", TargetKey: "order.close",
 	}, principalmodel.Principal{}); err == nil || !strings.Contains(err.Error(), "action timer runtime is not configured") {
 		t.Fatalf("nil action runtime error=%v", err)
 	}
-	if err := adapter.ExecuteRecordTimer(t.Context(), schedulerapplication.RecordTimerExecution{
+	if err := adapter.ExecuteRecordTimer(t.Context(), recordtimerapplication.RecordTimerExecution{
 		WorkspaceID: "workspace-a", TargetType: "unknown", TargetKey: "target",
 	}, principalmodel.Principal{}); err == nil || !strings.Contains(err.Error(), "unsupported record timer target type") {
 		t.Fatalf("unknown target type error=%v", err)
@@ -881,23 +762,18 @@ func TestSchedulerOperationRuntimeAdapterTimerTargets(t *testing.T) {
 			TemplateID: "timer-wiring", Version: "1", Name: "Timer Wiring",
 		},
 	})
-	adapter = newSchedulerOperationRuntimeAdapter(assembled)
+	schedulerAdapter := newScheduledWorkflowRuntimeAdapter(assembled)
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator"}}, accessfixture.Bundle{Key: "admin", Permissions: []string{"workspace.admin", "*"}})
-	if result, err := adapter.ProcessDueWorkflowExecutions(t.Context(), 1, principal); err != nil || result.Processed != 0 {
+	if result, err := schedulerAdapter.ProcessDueWorkflowExecutions(t.Context(), 1, principal); err != nil || result.Processed != 0 {
 		t.Fatalf("empty workflow queue result=%#v err=%v", result, err)
 	}
-	if err := adapter.InsertSchedulerRecord(t.Context(), "workspace-a", definitionmodel.ObjectSchema{Key: "missing"}, recordmodel.Record{ID: "record-1"}, "test insert"); err == nil {
-		t.Fatal("scheduler insert without repository unexpectedly succeeded")
-	}
-	if err := adapter.UpdateSchedulerRecord(t.Context(), "workspace-a", definitionmodel.ObjectSchema{Key: "missing"}, recordmodel.Record{ID: "record-1"}, "test update"); err == nil {
-		t.Fatal("scheduler update without repository unexpectedly succeeded")
-	}
-	if err := adapter.ExecuteRecordTimer(t.Context(), schedulerapplication.RecordTimerExecution{
+	adapter = newRecordTimerTargetRuntimeAdapter(assembled)
+	if err := adapter.ExecuteRecordTimer(t.Context(), recordtimerapplication.RecordTimerExecution{
 		WorkspaceID: "workspace-a", TargetType: "workflow", TargetKey: "unsupported",
 	}, principal); err == nil || !strings.Contains(err.Error(), "unsupported workflow timer target") {
 		t.Fatalf("assembled unsupported workflow target error=%v", err)
 	}
-	actionExecution := schedulerapplication.RecordTimerExecution{
+	actionExecution := recordtimerapplication.RecordTimerExecution{
 		WorkspaceID: "workspace-a", TargetType: "action", TargetKey: "missing.action",
 		ObjectKey: "order", RecordID: "order-1",
 	}
@@ -905,37 +781,37 @@ func TestSchedulerOperationRuntimeAdapterTimerTargets(t *testing.T) {
 		t.Fatal("missing assembled action unexpectedly succeeded")
 	}
 
-	workflowRuntime := &schedulerWorkflowTimerRuntimeFake{}
-	actionRuntime := &schedulerActionTimerRuntimeFake{}
-	resume := schedulerapplication.RecordTimerExecution{
+	workflowRuntime := &recordTimerWorkflowRuntimeFake{}
+	actionRuntime := &recordTimerActionRuntimeFake{}
+	resume := recordtimerapplication.RecordTimerExecution{
 		WorkspaceID: "workspace-a", TargetType: "workflow", TargetKey: "resume_node",
 		Payload: map[string]any{"process_id": "process-1", "node_id": "timer-1"},
 	}
-	if err := executeSchedulerRecordTimer(t.Context(), resume, principal, workflowRuntime, actionRuntime); err != nil ||
+	if err := executeRecordTimer(t.Context(), resume, principal, workflowRuntime, actionRuntime); err != nil ||
 		workflowRuntime.resumedProcessID != "process-1" || workflowRuntime.resumedNodeID != "timer-1" {
 		t.Fatalf("resume runtime=%#v err=%v", workflowRuntime, err)
 	}
-	deadline := schedulerapplication.RecordTimerExecution{
+	deadline := recordtimerapplication.RecordTimerExecution{
 		WorkspaceID: "workspace-a", TargetType: "workflow", TargetKey: "approval_deadline",
 		Payload: map[string]any{"task_id": "task-1", "phase": "reminder"},
 	}
-	if err := executeSchedulerRecordTimer(t.Context(), deadline, principal, workflowRuntime, actionRuntime); err != nil ||
+	if err := executeRecordTimer(t.Context(), deadline, principal, workflowRuntime, actionRuntime); err != nil ||
 		workflowRuntime.deadlineTaskID != "task-1" || workflowRuntime.deadlinePhase != "reminder" {
 		t.Fatalf("deadline runtime=%#v err=%v", workflowRuntime, err)
 	}
-	if err := executeSchedulerRecordTimer(t.Context(), schedulerapplication.RecordTimerExecution{
+	if err := executeRecordTimer(t.Context(), recordtimerapplication.RecordTimerExecution{
 		TargetType: "workflow", TargetKey: "unsupported",
 	}, principal, workflowRuntime, actionRuntime); err == nil || !strings.Contains(err.Error(), "unsupported workflow timer target") {
 		t.Fatalf("unsupported workflow target error=%v", err)
 	}
 	actionRuntime.err = errors.New("action failed")
 	actionExecution.IdempotencyKey = "timer-action-1"
-	if err := executeSchedulerRecordTimer(t.Context(), actionExecution, principal, workflowRuntime, actionRuntime); !errors.Is(err, actionRuntime.err) ||
-		actionRuntime.source != actionmodel.ActionSourceScheduler || actionRuntime.invocation.ActionKey != "missing.action" ||
+	if err := executeRecordTimer(t.Context(), actionExecution, principal, workflowRuntime, actionRuntime); !errors.Is(err, actionRuntime.err) ||
+		actionRuntime.source != actionmodel.ActionSourceRecordTimer || actionRuntime.invocation.ActionKey != "missing.action" ||
 		actionRuntime.invocation.Principal.UserID != principal.UserID || actionRuntime.invocation.Actor.UserID != principal.UserID {
 		t.Fatalf("action source=%q invocation=%#v err=%v", actionRuntime.source, actionRuntime.invocation, err)
 	}
-	if err := executeSchedulerRecordTimer(t.Context(), schedulerapplication.RecordTimerExecution{
+	if err := executeRecordTimer(t.Context(), recordtimerapplication.RecordTimerExecution{
 		TargetType: "unsupported",
 	}, principal, workflowRuntime, actionRuntime); err == nil || !strings.Contains(err.Error(), "unsupported record timer target type") {
 		t.Fatalf("unsupported timer target error=%v", err)

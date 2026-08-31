@@ -44,10 +44,11 @@ func assembleApplicationSchema(records *runtimeAssembly) *appschemaapplication.A
 	}
 	return appschemaapplication.NewApplicationSchemaApplicationService(appschemaapplication.ApplicationSchemaDependencies{
 		Repository: records.applicationSchemaRepo, Runtime: applicationSchemaLifecycleRuntimeAdapter{runtime: records},
-		Workflows: records.Applications().Workflows, Dictionary: records.dictionaryRuntime,
-		Audit: records.auditApplicationService, AuditAppender: records.auditApplicationService.AppendWithMetadata,
+		Workflows: records.Applications().Workflows,
+		Audit:     records.auditApplicationService, AuditAppender: records.auditApplicationService.AppendWithMetadata,
 		TemplateID: records.templateID, Version: records.templateVersion, Name: records.name,
-		Records:    records.recordRepo,
-		References: records.businessReferences,
+		Records:      records.recordRepo,
+		Integrations: records.integrationOwnerManagement,
+		References:   records.businessReferences,
 	})
 }

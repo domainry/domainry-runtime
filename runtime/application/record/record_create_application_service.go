@@ -95,7 +95,7 @@ func (s *RecordCreateApplicationService) PlanCreateMutation(ctx context.Context,
 	if err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 	}
-	if err := recordpolicy.RecordValidateSchedulerOperationalCRUD(object, "create"); err != nil {
+	if err := recordpolicy.RecordValidateRuntimeOwnedCRUD(object, "create"); err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 	}
 	if data == nil {
@@ -126,7 +126,7 @@ func (s *RecordCreateApplicationService) create(ctx context.Context, objectKey s
 	if err != nil {
 		return recordmodel.Record{}, err
 	}
-	if err := recordpolicy.RecordValidateSchedulerOperationalCRUD(object, "create"); err != nil {
+	if err := recordpolicy.RecordValidateRuntimeOwnedCRUD(object, "create"); err != nil {
 		return recordmodel.Record{}, err
 	}
 	localizedValues, err := recordmodel.RecordNormalizeTranslations(object, translations)

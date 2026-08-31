@@ -42,7 +42,7 @@ func (s *RecordUpdateApplicationService) PlanUpdateMutation(ctx context.Context,
 	if err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 	}
-	if err := recordpolicy.RecordValidateSchedulerOperationalCRUD(object, "update"); err != nil {
+	if err := recordpolicy.RecordValidateRuntimeOwnedCRUD(object, "update"); err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 	}
 	record, found, err := s.dependencies.Repository.GetRecord(ctx, principal.WorkspaceID, object, recordID)
@@ -81,18 +81,6 @@ func (s *RecordApplicationService) EnqueueImportStream(ctx context.Context, obje
 
 func (s *RecordApplicationService) EnqueueExportJob(ctx context.Context, objectKey, key string, options RecordExportOptions, principal principalmodel.Principal) (recordmodel.RecordBatchJob, bool, error) {
 	return s.dataExchange.EnqueueExport(ctx, objectKey, key, options, principal)
-}
-
-func (s *RecordApplicationService) GetBatchJob(ctx context.Context, jobID string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, error) {
-	return s.dataExchange.Get(ctx, jobID, principal)
-}
-
-func (s *RecordApplicationService) CancelBatchJob(ctx context.Context, jobID string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, error) {
-	return s.dataExchange.Cancel(ctx, jobID, principal)
-}
-
-func (s *RecordApplicationService) OpenBatchJobDownload(ctx context.Context, jobID string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, io.ReadCloser, error) {
-	return s.dataExchange.OpenDownload(ctx, jobID, principal)
 }
 
 func (s *RecordApplicationService) StartDataExchangeWorker(ctx context.Context, interval time.Duration, limit int) <-chan struct{} {

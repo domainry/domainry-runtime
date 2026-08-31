@@ -58,8 +58,8 @@ type runtimeProcess interface {
 	CloseContext(context.Context) error
 }
 
-type runtimeSurfaceProcess interface {
-	RoutesForSurfaceGroup(runtimehttp.SurfaceRouteGroup) http.Handler
+type runtimeListenerProcess interface {
+	RoutesForListenerGroup(runtimehttp.ListenerRouteGroup) http.Handler
 }
 
 type runtimeModuleSurfaceProcess interface {
@@ -72,8 +72,8 @@ func (r bootstrapRuntimeProcess) StartWorkers(ctx context.Context) {
 	bootstrap.StartWorkers(ctx, r.Runtime)
 }
 
-func (r bootstrapRuntimeProcess) RoutesForSurfaceGroup(group runtimehttp.SurfaceRouteGroup) http.Handler {
-	return bootstrap.RoutesForSurfaceGroup(r.Runtime, group)
+func (r bootstrapRuntimeProcess) RoutesForListenerGroup(group runtimehttp.ListenerRouteGroup) http.Handler {
+	return bootstrap.RoutesForListenerGroup(r.Runtime, group)
 }
 
 func (r bootstrapRuntimeProcess) ModuleHTTPSurfaces() []modulehttp.Surface {
@@ -123,7 +123,7 @@ func defaultServerRunDependencies() serverRunDependencies {
 
 type runtimeActivator struct {
 	handler          *bootstrap.EntrypointMux
-	handlers         map[runtimehttp.SurfaceRouteGroup]*bootstrap.EntrypointMux
+	handlers         map[runtimehttp.ListenerRouteGroup]*bootstrap.EntrypointMux
 	connectorGateway *bindableConnectorGateway
 	start            func(manifestmodel.ManifestSchema) (runtimeProcess, error)
 	close            func(runtimeProcess) error
@@ -131,13 +131,13 @@ type runtimeActivator struct {
 	runtime          runtimeProcess
 }
 
-func (a *runtimeActivator) entrypointHandlers() map[runtimehttp.SurfaceRouteGroup]*bootstrap.EntrypointMux {
+func (a *runtimeActivator) entrypointHandlers() map[runtimehttp.ListenerRouteGroup]*bootstrap.EntrypointMux {
 	if len(a.handlers) != 0 {
 		return a.handlers
 	}
 	if a.handler != nil {
-		return map[runtimehttp.SurfaceRouteGroup]*bootstrap.EntrypointMux{
-			runtimehttp.SurfaceRouteGroupAll: a.handler,
+		return map[runtimehttp.ListenerRouteGroup]*bootstrap.EntrypointMux{
+			runtimehttp.ListenerRouteGroupAll: a.handler,
 		}
 	}
 	return nil
@@ -159,9 +159,9 @@ func (a *runtimeActivator) Activate(manifest manifestmodel.ManifestSchema) (err 
 		return startErr
 	}
 	a.runtime = runtime
-	if surfaceRuntime, ok := runtime.(runtimeSurfaceProcess); ok {
+	if listenerRuntime, ok := runtime.(runtimeListenerProcess); ok {
 		for group, handler := range a.entrypointHandlers() {
-			handler.SetBusiness(surfaceRuntime.RoutesForSurfaceGroup(group))
+			handler.SetBusiness(listenerRuntime.RoutesForListenerGroup(group))
 		}
 	} else {
 		for _, handler := range a.entrypointHandlers() {
@@ -203,22 +203,22 @@ func (a *runtimeActivator) Abandon() error {
 type runtimeHTTPListener struct {
 	name  string
 	addr  string
-	group runtimehttp.SurfaceRouteGroup
+	group runtimehttp.ListenerRouteGroup
 }
 
 func runtimeHTTPListeners(cfg config.Config) []runtimeHTTPListener {
 	listeners := []runtimeHTTPListener{}
 	if strings.TrimSpace(cfg.HTTPPublicAddr) != "" {
-		listeners = append(listeners, runtimeHTTPListener{name: "public", addr: strings.TrimSpace(cfg.HTTPPublicAddr), group: runtimehttp.SurfaceRouteGroupPublic})
+		listeners = append(listeners, runtimeHTTPListener{name: "public", addr: strings.TrimSpace(cfg.HTTPPublicAddr), group: runtimehttp.ListenerRouteGroupPublic})
 	}
 	if strings.TrimSpace(cfg.HTTPTenantAdminAddr) != "" {
-		listeners = append(listeners, runtimeHTTPListener{name: "tenant-admin", addr: strings.TrimSpace(cfg.HTTPTenantAdminAddr), group: runtimehttp.SurfaceRouteGroupTenantAdmin})
+		listeners = append(listeners, runtimeHTTPListener{name: "tenant-admin", addr: strings.TrimSpace(cfg.HTTPTenantAdminAddr), group: runtimehttp.ListenerRouteGroupTenantAdmin})
 	}
 	if strings.TrimSpace(cfg.HTTPOpsAddr) != "" {
-		listeners = append(listeners, runtimeHTTPListener{name: "ops", addr: strings.TrimSpace(cfg.HTTPOpsAddr), group: runtimehttp.SurfaceRouteGroupOps})
+		listeners = append(listeners, runtimeHTTPListener{name: "ops", addr: strings.TrimSpace(cfg.HTTPOpsAddr), group: runtimehttp.ListenerRouteGroupOps})
 	}
 	if len(listeners) == 0 {
-		listeners = append(listeners, runtimeHTTPListener{name: "legacy-all", addr: cfg.HTTPAddr(), group: runtimehttp.SurfaceRouteGroupAll})
+		listeners = append(listeners, runtimeHTTPListener{name: "legacy-all", addr: cfg.HTTPAddr(), group: runtimehttp.ListenerRouteGroupAll})
 	}
 	return listeners
 }
@@ -412,11 +412,11 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	}()
 
 	listenerDefinitions := runtimeHTTPListeners(cfg)
-	handlers := make(map[runtimehttp.SurfaceRouteGroup]*bootstrap.EntrypointMux, len(listenerDefinitions))
+	handlers := make(map[runtimehttp.ListenerRouteGroup]*bootstrap.EntrypointMux, len(listenerDefinitions))
 	for _, listener := range listenerDefinitions {
 		handlers[listener.group] = &bootstrap.EntrypointMux{}
 	}
-	identityRouters := make(map[runtimehttp.SurfaceRouteGroup]*identitySurfaceRouter, len(handlers))
+	identityRouters := make(map[runtimehttp.ListenerRouteGroup]*identitySurfaceRouter, len(handlers))
 	var initialModuleGuard moduleRouteGuard
 	if binding := tenantManager.Binding(); binding != nil {
 		initialModuleGuard, err = newModuleHTTPRouteGuard(binding)
@@ -519,7 +519,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	}).UseProductBrand(cfg.EffectiveProductBrandName()).UseAbandonRuntime(activator.Abandon)
 	provisionRoutes := provisionServer.Routes()
 	for group, handler := range handlers {
-		if group == runtimehttp.SurfaceRouteGroupPublic || group == runtimehttp.SurfaceRouteGroupAll {
+		if group == runtimehttp.ListenerRouteGroupPublic || group == runtimehttp.ListenerRouteGroupAll {
 			handler.SetProvision(provisionRoutes)
 		}
 	}
@@ -545,14 +545,14 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	servers := make([]*http.Server, 0, len(listenerDefinitions))
 	for _, listener := range listenerDefinitions {
 		listenerHandler := http.Handler(identityRouters[listener.group])
-		if listener.group == runtimehttp.SurfaceRouteGroupPublic || listener.group == runtimehttp.SurfaceRouteGroupAll {
+		if listener.group == runtimehttp.ListenerRouteGroupPublic || listener.group == runtimehttp.ListenerRouteGroupAll {
 			listenerHandler = frontendAssets.wrap(listenerHandler)
 		}
-		endpointCount := runtimehttp.SurfaceRouteGroupEndpointCount(listener.group)
+		endpointCount := runtimehttp.ListenerRouteGroupEndpointCount(listener.group)
 		zap.L().Info("starting domain Runtime listener",
 			zap.String("listener", listener.name),
 			zap.String("address", listener.addr),
-			zap.String("surface_group", string(listener.group)),
+			zap.String("listener_group", string(listener.group)),
 			zap.Int("endpoint_count", endpointCount),
 		)
 		servers = append(servers, &http.Server{

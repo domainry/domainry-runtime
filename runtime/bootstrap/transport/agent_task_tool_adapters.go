@@ -2,14 +2,11 @@ package transport
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	agentstate "github.com/domainry/domainry-runtime/runtime/application/agent"
-	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
+	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agenthost"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -171,30 +168,6 @@ func (a agentTaskToolRiskAdapter) RequiresAgentProposal(_ context.Context, actio
 		return risk == "high" || risk == "critical", risk, nil
 	}
 	return false, "", apperror.New(apperror.KindNotFound, "agent.tool.action_unknown", nil, nil)
-}
-
-type agentTaskToolProposalAdapter struct {
-	state agentTaskProposalState
-}
-
-type agentTaskProposalState interface {
-	StoreProposal(context.Context, agentstate.AgentProposal) (agentstate.AgentProposal, error)
-}
-
-func (a agentTaskToolProposalAdapter) CreateAgentActionProposal(ctx context.Context, request agentapplication.AgentToolProposalRequest) (agentapplication.AgentToolProposalResult, error) {
-	if a.state == nil {
-		return agentapplication.AgentToolProposalResult{}, apperror.New(apperror.KindUnavailable, "agent.tool.proposal_unavailable", nil, nil)
-	}
-	hash := sha256.Sum256([]byte(strings.Join([]string{request.Principal.WorkspaceID, request.ProcessID, request.TaskRunID, request.InteractiveRunID, request.IdempotencyKey, request.ActionKey, request.ObjectKey, request.RecordID}, "\x00")))
-	proposal := agentstate.AgentProposal{
-		ProposalID: "agent-task-" + hex.EncodeToString(hash[:12]), Status: "draft",
-		Title: "Agent action proposal: " + request.ActionKey, Source: "agent_task", Reference: request.TaskRunID,
-		Actor: request.Identity.Execution.UserID, WorkspaceID: request.Principal.WorkspaceID, UserID: request.Principal.UserID, Role: request.Principal.RoleKey,
-		Proposed: map[string]any{"action_binding": map[string]any{"action_key": request.ActionKey, "object_key": request.ObjectKey, "record_id": request.RecordID, "data": request.Input, "guarded_write": true}},
-		Metadata: map[string]any{"process_id": request.ProcessID, "node_instance_id": request.NodeInstanceID, "task_run_id": request.TaskRunID, "attempt": request.Attempt, "interactive_run_id": request.InteractiveRunID, "session_id": request.SessionID, "entrypoint_key": request.EntrypointKey, "surface": request.Surface, "route_key": request.RouteKey, "context_revision": request.ContextRevision, "idempotency_key": request.IdempotencyKey, "execution_mode": request.Identity.Mode, "service_principal_key": request.Identity.ServicePrincipalKey},
-	}
-	stored, err := a.state.StoreProposal(ctx, proposal)
-	return agentapplication.AgentToolProposalResult{ProposalID: stored.ProposalID, Value: stored}, err
 }
 
 func projectAgentRecordPage(page *recordmodel.RecordPageResult, fields []string) {

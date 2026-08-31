@@ -21,7 +21,7 @@ func TestMetadataEnrichObjectsWithFieldValueDomains(t *testing.T) {
 func TestMetadataMergeGeneratedDictionaryItemsPreservesLocalizedMetadata(t *testing.T) {
 	defaults := []appschemamodel.DictionaryItemSchema{{Key: "open", Value: "open", Label: "Open", Description: "Default", Color: "green", SortOrder: 3}}
 	localized := []appschemamodel.DictionaryItemSchema{{Key: "open", Label: "打开", Locale: "zh-CN"}}
-	items := ApplicationSchemaMergeGeneratedDictionaryItems(defaults, localized)
+	items := mergeGeneratedDictionaryItems(defaults, localized)
 	if len(items) != 1 || items[0].Label != "打开" || items[0].Description != "Default" || items[0].Color != "green" || items[0].SortOrder != 3 {
 		t.Fatalf("items=%#v", items)
 	}

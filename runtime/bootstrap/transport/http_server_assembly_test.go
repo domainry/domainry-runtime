@@ -2,23 +2,13 @@ package transport
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 
-	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
-	agentmodel "github.com/domainry/domainry-agent-sdk/state"
-	identitysdk "github.com/domainry/domainry-identity-sdk"
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
-
-	"github.com/domainry/domainry-foundation/apperror"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
-	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent"
-	agentruntime "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -26,81 +16,6 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 )
-
-type transportAgentRepositoryBinding struct {
-	state agentpersistence.AgentStateRepository
-}
-
-func (b transportAgentRepositoryBinding) AgentStateRepository() agentpersistence.AgentStateRepository {
-	return b.state
-}
-func (transportAgentRepositoryBinding) AgentTaskRunRepository() agentpersistence.AgentTaskRunRepository {
-	return nil
-}
-
-type transportAgentStateRepository struct {
-	mu     sync.Mutex
-	values map[string]agentmodel.AgentStateRecord
-}
-
-func newTransportAgentStateRepository() *transportAgentStateRepository {
-	return &transportAgentStateRepository{values: map[string]agentmodel.AgentStateRecord{}}
-}
-func transportAgentStateKey(workspace, kind, key string) string {
-	return strings.TrimSpace(workspace) + "\x00" + strings.TrimSpace(kind) + "\x00" + strings.TrimSpace(key)
-}
-func (r *transportAgentStateRepository) Put(ctx context.Context, workspace string, value agentmodel.AgentStateRecord) error {
-	return r.PutBatch(ctx, workspace, []agentmodel.AgentStateRecord{value})
-}
-func (r *transportAgentStateRepository) PutBatch(ctx context.Context, workspace string, values []agentmodel.AgentStateRecord) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	for _, value := range values {
-		value.Payload = append(json.RawMessage(nil), value.Payload...)
-		r.values[transportAgentStateKey(workspace, value.Kind, value.Key)] = value
-	}
-	return nil
-}
-func (r *transportAgentStateRepository) CompareAndSwap(ctx context.Context, workspace string, value agentmodel.AgentStateRecord, expected int64) (bool, error) {
-	if err := ctx.Err(); err != nil {
-		return false, err
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	key := transportAgentStateKey(workspace, value.Kind, value.Key)
-	current, ok := r.values[key]
-	if !ok || current.UpdatedAt != expected {
-		return false, nil
-	}
-	r.values[key] = value
-	return true, nil
-}
-func (r *transportAgentStateRepository) Get(ctx context.Context, workspace, kind, key string) (agentmodel.AgentStateRecord, bool, error) {
-	if err := ctx.Err(); err != nil {
-		return agentmodel.AgentStateRecord{}, false, err
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	value, ok := r.values[transportAgentStateKey(workspace, kind, key)]
-	return value, ok, nil
-}
-func (r *transportAgentStateRepository) List(ctx context.Context, workspace, kind, user, role string) ([]agentmodel.AgentStateRecord, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	values := []agentmodel.AgentStateRecord{}
-	for _, value := range r.values {
-		if value.WorkspaceID == workspace && value.Kind == kind && (user == "" || value.UserID == user) && (role == "" || value.RoleKey == role) {
-			values = append(values, value)
-		}
-	}
-	return values, nil
-}
 
 func TestAssembleRuntimeHTTPServerRequiresConstructionContext(t *testing.T) {
 	defer func() {
@@ -133,7 +48,6 @@ func TestAssembleRuntimeHTTPServerMinimalGraphWiresRoutesAndFallbackDependencies
 	request := httptest.NewRequest(http.MethodGet, "/openapi.json", nil)
 	request.Header.Set("X-User-ID", "admin")
 	request.Header.Set("X-Role", "admin")
-	request.Header.Set("X-Domainry-Product-Surface", "admin_console")
 	server.Routes().ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
 		t.Fatalf("openapi status=%d body=%s", response.Code, response.Body.String())
@@ -152,14 +66,13 @@ func TestAssembleRuntimeHTTPServerMinimalGraphWiresRoutesAndFallbackDependencies
 	request = httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	request.Header.Set("X-User-ID", "operator")
 	request.Header.Set("X-Role", "operator")
-	request.Header.Set("X-Domainry-Product-Surface", "admin_console")
 	server.Routes().ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
 		t.Fatalf("metrics status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 
-func TestSurfaceRouteGroupsRegisterOnlyTheirCompiledEndpointInventory(t *testing.T) {
+func TestListenerRouteGroupsRegisterOnlyTheirCompiledEndpointInventory(t *testing.T) {
 	services := composition.NewRuntimeServices(t.Context(), composition.RuntimeServicesConfig{})
 	server := AssembleRuntimeHTTPServer(t.Context(), HTTPServerDependencies{
 		Records:         services,
@@ -168,28 +81,28 @@ func TestSurfaceRouteGroupsRegisterOnlyTheirCompiledEndpointInventory(t *testing
 			RuntimeAllowDevIdentityHeaders: true,
 			IdentityWorkspaceID:            "workspace-primary",
 			IdentityAudience:               "domainry-runtime",
-			SurfaceBusinessOrigins:         []string{"https://app.example.com"},
-			SurfacePortalOrigins:           []string{"https://portal.example.com"},
-			SurfaceAdminOrigins:            []string{"https://admin.example.com"},
+			HTTPPublicOrigins:              []string{"https://app.example.com"},
+			HTTPOpsOrigins:                 []string{"https://ops.example.com"},
+			HTTPTenantAdminOrigins:         []string{"https://admin.example.com"},
 		},
 	})
-	assertStatus := func(group runtimehttp.SurfaceRouteGroup, method, path string, headers map[string]string, want int) {
+	assertStatus := func(group runtimehttp.ListenerRouteGroup, method, path string, headers map[string]string, want int) {
 		t.Helper()
 		request := httptest.NewRequest(method, path, nil)
 		for key, value := range headers {
 			request.Header.Set(key, value)
 		}
 		response := httptest.NewRecorder()
-		server.RoutesForSurfaceGroup(group).ServeHTTP(response, request)
+		server.RoutesForListenerGroup(group).ServeHTTP(response, request)
 		if response.Code != want {
 			t.Fatalf("group=%s %s %s status=%d body=%s want=%d", group, method, path, response.Code, response.Body.String(), want)
 		}
 	}
 
-	assertStatus(runtimehttp.SurfaceRouteGroupPublic, http.MethodGet, "/live", nil, http.StatusOK)
-	assertStatus(runtimehttp.SurfaceRouteGroupPublic, http.MethodGet, "/openapi.json", nil, http.StatusOK)
+	assertStatus(runtimehttp.ListenerRouteGroupPublic, http.MethodGet, "/live", nil, http.StatusOK)
+	assertStatus(runtimehttp.ListenerRouteGroupPublic, http.MethodGet, "/openapi.json", nil, http.StatusOK)
 	publicOpenAPI := httptest.NewRecorder()
-	server.RoutesForSurfaceGroup(runtimehttp.SurfaceRouteGroupPublic).ServeHTTP(
+	server.RoutesForListenerGroup(runtimehttp.ListenerRouteGroupPublic).ServeHTTP(
 		publicOpenAPI,
 		httptest.NewRequest(http.MethodGet, "/openapi.json", nil),
 	)
@@ -200,22 +113,22 @@ func TestSurfaceRouteGroupsRegisterOnlyTheirCompiledEndpointInventory(t *testing
 		strings.Contains(body, `"/operations"`) {
 		t.Fatalf("public OpenAPI leaked or omitted Surface paths: %s", body)
 	}
-	assertStatus(runtimehttp.SurfaceRouteGroupPublic, http.MethodGet, "/metrics", nil, http.StatusNotFound)
-	assertStatus(runtimehttp.SurfaceRouteGroupTenantAdmin, http.MethodGet, "/metrics", nil, http.StatusUnauthorized)
-	assertStatus(runtimehttp.SurfaceRouteGroupOps, http.MethodGet, "/identity/users", nil, http.StatusNotFound)
-	assertStatus(runtimehttp.SurfaceRouteGroupTenantAdmin, http.MethodGet, "/openapi.json", map[string]string{
-		"X-User-ID": "admin", "X-Role": "admin", "X-Domainry-Product-Surface": "admin_console",
+	assertStatus(runtimehttp.ListenerRouteGroupPublic, http.MethodGet, "/metrics", nil, http.StatusNotFound)
+	assertStatus(runtimehttp.ListenerRouteGroupTenantAdmin, http.MethodGet, "/metrics", nil, http.StatusUnauthorized)
+	assertStatus(runtimehttp.ListenerRouteGroupOps, http.MethodGet, "/identity/users", nil, http.StatusNotFound)
+	assertStatus(runtimehttp.ListenerRouteGroupTenantAdmin, http.MethodGet, "/openapi.json", map[string]string{
+		"X-User-ID": "admin", "X-Role": "admin",
 	}, http.StatusOK)
-	assertStatus(runtimehttp.SurfaceRouteGroupPublic, http.MethodGet, "/live", map[string]string{
+	assertStatus(runtimehttp.ListenerRouteGroupPublic, http.MethodGet, "/live", map[string]string{
 		"Origin": "https://admin.example.com",
 	}, http.StatusForbidden)
 
-	for _, group := range []runtimehttp.SurfaceRouteGroup{
-		runtimehttp.SurfaceRouteGroupPublic,
-		runtimehttp.SurfaceRouteGroupTenantAdmin,
-		runtimehttp.SurfaceRouteGroupOps,
+	for _, group := range []runtimehttp.ListenerRouteGroup{
+		runtimehttp.ListenerRouteGroupPublic,
+		runtimehttp.ListenerRouteGroupTenantAdmin,
+		runtimehttp.ListenerRouteGroupOps,
 	} {
-		if count, all := runtimehttp.SurfaceRouteGroupEndpointCount(group), runtimehttp.SurfaceRouteGroupEndpointCount(runtimehttp.SurfaceRouteGroupAll); count == 0 || count >= all {
+		if count, all := runtimehttp.ListenerRouteGroupEndpointCount(group), runtimehttp.ListenerRouteGroupEndpointCount(runtimehttp.ListenerRouteGroupAll); count == 0 || count >= all {
 			t.Fatalf("group=%s endpoint count=%d", group, count)
 		}
 	}
@@ -228,19 +141,8 @@ func TestAgentOptionalTransportOwnersHandleAbsentDependencies(t *testing.T) {
 	}
 	services := composition.NewRuntimeServices(t.Context(), composition.RuntimeServicesConfig{})
 	_, _ = (agentRecordVisibilityAdapter{records: services.Applications().Records}).CanReadAgentRecord(t.Context(), "missing", "record-1", principalmodel.Principal{})
-	if service := newAgentInteractiveExecution(nil, nil); service != nil {
-		t.Fatalf("interactive=%#v", service)
-	}
-	called := false
-	if service := newAgentInteractiveExecution(func(_ *agentruntime.AgentToolGateway) *agentruntime.AgentInteractiveExecutionApplicationService {
-		called = true
-		return nil
-	}, nil); service != nil || !called {
-		t.Fatalf("interactive=%#v called=%v", service, called)
-	}
-	workerMetrics, taskMetrics, interactiveMetrics := runtimeOptionalWorkerMetrics(t.Context(), nil, nil, nil)
-	if workerMetrics != "" || taskMetrics != "" || interactiveMetrics != "" {
-		t.Fatalf("metrics=%q %q %q", workerMetrics, taskMetrics, interactiveMetrics)
+	if workerMetrics := runtimeOptionalWorkerMetrics(nil); workerMetrics != "" {
+		t.Fatalf("metrics=%q", workerMetrics)
 	}
 }
 
@@ -268,15 +170,13 @@ func TestAssembleRuntimeHTTPServerPersistentGraphWiresOptionalOwners(t *testing.
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	repositories := transportAgentRepositoryBinding{state: newTransportAgentStateRepository()}
 	services := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{
 		Store: store,
 	})
 	server := AssembleRuntimeHTTPServer(t.Context(), HTTPServerDependencies{
-		Records:           services,
-		IdentityBinding:   transportIdentityBindingStub{},
-		Store:             store,
-		AgentRepositories: repositories,
+		Records:         services,
+		IdentityBinding: transportIdentityBindingStub{},
+		Store:           store,
 		Config: config.Config{
 			UploadDir:                      "uploads",
 			RuntimeAllowDevIdentityHeaders: true,
@@ -288,12 +188,10 @@ func TestAssembleRuntimeHTTPServerPersistentGraphWiresOptionalOwners(t *testing.
 	if server == nil {
 		t.Fatal("persistent server is nil")
 	}
-	workerMetrics, taskMetrics, interactiveMetrics := runtimeOptionalWorkerMetrics(t.Context(), workerplatform.NewController(), &agentruntime.AgentTaskWorker{}, &agentruntime.AgentInteractiveRunApplicationService{})
+	workerMetrics := runtimeOptionalWorkerMetrics(workerplatform.NewController())
 	if workerMetrics == "" {
 		t.Fatalf("worker metrics missing: %q", workerMetrics)
 	}
-	_ = taskMetrics
-	_ = interactiveMetrics
 	response := httptest.NewRecorder()
 	server.Routes().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/live", nil))
 	if response.Code != http.StatusOK {
@@ -303,29 +201,9 @@ func TestAssembleRuntimeHTTPServerPersistentGraphWiresOptionalOwners(t *testing.
 	request := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	request.Header.Set("X-User-ID", "operator")
 	request.Header.Set("X-Role", "operator")
-	request.Header.Set("X-Domainry-Product-Surface", "admin_console")
 	server.Routes().ServeHTTP(response, request)
 	if response.Code != http.StatusOK || response.Body.Len() == 0 {
 		t.Fatalf("metrics status=%d body=%s", response.Code, response.Body.String())
-	}
-
-	dependencies := HTTPServerDependencies{Records: services, Store: store, AgentRepositories: repositories}
-	state, proposals := assembleAgentApplicationPorts(dependencies)
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "operator"}}, accessfixture.Bundle{Key: "admin", Permissions: []string{"workspace.admin"}})
-	normalized := proposals.NormalizeGuardedWrite(t.Context(), map[string]any{"tool_binding": map[string]any{"tool_name": "updateRecord", "object_key": "customer", "record_id": "customer-1", "data": map[string]any{"name": "updated"}}}, principal)
-	if normalized["tool_binding"] == nil {
-		t.Fatalf("proposal unexpectedly lost tool binding: %v", normalized)
-	}
-	for _, proposal := range []agentapplication.AgentProposal{
-		{ProposalID: "action", WorkspaceID: principal.WorkspaceID, UserID: principal.UserID, Role: principal.RoleKey, Proposed: map[string]any{"action_binding": map[string]any{"object_key": "customer", "record_id": "customer-1", "action_key": "update_customer"}}},
-		{ProposalID: "workflow", WorkspaceID: principal.WorkspaceID, UserID: principal.UserID, Role: principal.RoleKey, Proposed: map[string]any{"workflow_binding": map[string]any{"workflow_key": "missing", "payload": map[string]any{}}}},
-	} {
-		if _, err := state.StoreProposal(t.Context(), proposal); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := proposals.Decide(t.Context(), proposal.ProposalID, "approved", "test", nil, principal); apperror.CodeOf(err) != "agent.authorization.resolver_unavailable" {
-			t.Fatalf("approval without identity owner err=%v", err)
-		}
 	}
 
 	nilControl := runtimeOperationsControlState(nil)

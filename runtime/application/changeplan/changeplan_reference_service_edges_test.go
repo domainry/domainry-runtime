@@ -83,9 +83,7 @@ func TestChangePlanReferenceServiceAuthorizationAndDependencyErrors(t *testing.T
 func TestChangePlanReferenceServiceBuildsOptionalRuntimeEvidence(t *testing.T) {
 	runtime := &changePlanReferenceRuntimeFake{
 		records: map[string][]recordmodel.Record{
-			"job_definition":  {{ID: "job-1", Data: map[string]any{"name": "Nightly", "target_type": "workflow", "target_key": "approval"}}, {ID: "job-2", Data: map[string]any{"target_type": "report", "target_key": "orders"}}, {ID: "job-3", Data: map[string]any{"target_type": "ignored"}}},
-			"job_run":         {{ID: "run-1", Data: map[string]any{"status": "leased", "scheduler_definition_key": "job-1"}}},
-			"job_dead_letter": {{ID: "dead-1", Data: map[string]any{"status": "open", "scheduler_definition_key": "job-1"}}},
+			"scheduler": {{ID: "job-1", Data: map[string]any{"name": "Nightly", "target_type": "workflow", "target_key": "scheduled:approval"}}, {ID: "job-2", Data: map[string]any{"target_type": "report_snapshot_refresh", "target_key": "orders"}}, {ID: "job-3", Data: map[string]any{"target_type": "ignored"}}},
 		},
 		recordErrors: map[string]error{},
 		processes: []workflowmodel.WorkflowProcessInstance{

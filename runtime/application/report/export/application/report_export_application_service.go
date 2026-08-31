@@ -2,23 +2,23 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
+	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
+	reportcontract "github.com/domainry/domainry-report/contract"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
+	reportadapter "github.com/domainry/domainry-runtime/runtime/application/report/adapter"
 	reportexport "github.com/domainry/domainry-runtime/runtime/application/report/export"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/query"
 	"github.com/domainry/domainry-runtime/runtime/platform/productbrand"
 )
-
-var reportExportRows = reportexport.Rows
 
 type ReportExportRecordStore interface {
 	GetReportRecord(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error)
@@ -38,10 +38,8 @@ func reportWorkspaceError(err error) error {
 
 type ReportExportApplicationDependencies struct {
 	ProductBrandName      string
-	Domain                *reportservice.ReportDomainService
 	Records               ReportExportRecordStore
 	Audit                 auditcontract.AuditAppender
-	Controls              func(context.Context, principalmodel.Principal) []reportmodel.ReportExportControlSchema
 	Clock                 func() time.Time
 	DataExchange          dataexchange.Binding
 	DataExchangeProviders *recordapplication.DataExchangeProviders
@@ -51,9 +49,8 @@ type ReportExportApplicationDependencies struct {
 // sequencing, Data Exchange job lifecycle, and download authorization.
 type ReportExportApplicationService struct {
 	productBrandName     string
-	domain               *reportservice.ReportDomainService
 	exportRecords        ReportExportRecordStore
-	exportControls       func(context.Context, principalmodel.Principal) []reportmodel.ReportExportControlSchema
+	reportExports        reportsdk.Exports
 	clock                func() time.Time
 	dataExchange         dataexchange.Binding
 	dataExchangeProvider *reportexport.DataExchangeProvider
@@ -65,13 +62,14 @@ func NewReportExportApplicationService(dependencies ReportExportApplicationDepen
 		clock = time.Now
 	}
 	service := &ReportExportApplicationService{
-		productBrandName: productbrand.ResolveName(dependencies.ProductBrandName), domain: dependencies.Domain,
-		exportRecords: dependencies.Records, exportControls: dependencies.Controls, clock: clock, dataExchange: dependencies.DataExchange,
+		productBrandName: productbrand.ResolveName(dependencies.ProductBrandName),
+		exportRecords:    dependencies.Records, clock: clock, dataExchange: dependencies.DataExchange,
 	}
 	if dependencies.DataExchangeProviders != nil {
 		service.dataExchangeProvider = reportexport.NewDataExchangeProvider(reportexport.DataExchangeDependencies{
-			Binding: dependencies.DataExchange, Domain: dependencies.Domain, Records: dependencies.Records, Audit: dependencies.Audit,
-			ResolvePrincipal: dependencies.DataExchangeProviders.ResolvePrincipal, ExportControl: service.exportControl,
+			Binding: dependencies.DataExchange, Records: dependencies.Records, Audit: dependencies.Audit,
+			ResolvePrincipal: dependencies.DataExchangeProviders.ResolvePrincipal, ResolveExecution: service.resolveReportExportExecution,
+			ReadPage: service.readReportExportPage, SourceVersion: service.readReportExportSourceVersion,
 			Watermark: service.reportExportWatermark, Clock: clock,
 		})
 		dependencies.DataExchangeProviders.RegisterExportProvider(reportexport.DataExchangeProviderKey, service.dataExchangeProvider)
@@ -79,86 +77,111 @@ func NewReportExportApplicationService(dependencies ReportExportApplicationDepen
 	return service
 }
 
+func (s *ReportExportApplicationService) BindReportExports(exports reportsdk.Exports) error {
+	if s == nil || exports == nil {
+		return fmt.Errorf("Report export application capability is required")
+	}
+	s.reportExports = exports
+	return nil
+}
+
+func (s *ReportExportApplicationService) reportExportAuthority(principal principalmodel.Principal) (reportmodel.ReportAuthority, error) {
+	return reportadapter.ReportAuthorityFromRuntimePrincipal(principal)
+}
+
+func (s *ReportExportApplicationService) resolveReportExportExecution(ctx context.Context, request reportmodel.ReportExportExecutionRequest, principal principalmodel.Principal) (reportmodel.ReportExportExecution, error) {
+	if s == nil || s.reportExports == nil {
+		return reportmodel.ReportExportExecution{}, reportApplicationError(nil)
+	}
+	authority, err := s.reportExportAuthority(principal)
+	if err != nil {
+		return reportmodel.ReportExportExecution{}, err
+	}
+	resolved, err := s.reportExports.ResolveExecution(ctx, request, authority)
+	if err == nil {
+		return resolved, nil
+	}
+	return reportmodel.ReportExportExecution{}, reportExportOwnerError(err)
+}
+
+func (s *ReportExportApplicationService) readReportExportPage(ctx context.Context, request reportmodel.ReportExportExecutionRequest, principal principalmodel.Principal) (reportmodel.ReportSummary, error) {
+	if s == nil || s.reportExports == nil {
+		return reportmodel.ReportSummary{}, reportApplicationError(nil)
+	}
+	authority, err := s.reportExportAuthority(principal)
+	if err != nil {
+		return reportmodel.ReportSummary{}, err
+	}
+	summary, err := s.reportExports.ReadPage(ctx, request, authority)
+	if err != nil {
+		return reportmodel.ReportSummary{}, reportExportOwnerError(err)
+	}
+	return summary, nil
+}
+
+func (s *ReportExportApplicationService) readReportExportSourceVersion(ctx context.Context, request reportmodel.ReportExportExecutionRequest, principal principalmodel.Principal) (reportmodel.ReportSnapshotSourceVersion, error) {
+	if s == nil || s.reportExports == nil {
+		return reportmodel.ReportSnapshotSourceVersion{}, reportApplicationError(nil)
+	}
+	authority, err := s.reportExportAuthority(principal)
+	if err != nil {
+		return reportmodel.ReportSnapshotSourceVersion{}, err
+	}
+	version, err := s.reportExports.SourceVersion(ctx, request, authority)
+	if err != nil {
+		return reportmodel.ReportSnapshotSourceVersion{}, reportExportOwnerError(err)
+	}
+	return version, nil
+}
+
+func reportExportOwnerError(err error) error {
+	var stable *reportsdk.Error
+	if !errors.As(err, &stable) {
+		return err
+	}
+	kind := apperror.KindInternal
+	switch stable.StatusCode {
+	case 400:
+		kind = apperror.KindBadRequest
+	case 401, 403:
+		kind = apperror.KindForbidden
+	case 404:
+		kind = apperror.KindNotFound
+	case 409:
+		kind = apperror.KindConflict
+	case 429:
+		kind = apperror.KindRateLimited
+	case 503:
+		kind = apperror.KindUnavailable
+	}
+	return &apperror.AppError{Kind: kind, Code: stable.Code, Params: stable.Params, Err: err}
+}
+
 func (s *ReportExportApplicationService) reportExportWatermark(reportKey, requester, expiresAt string) string {
 	return fmt.Sprintf("%s governed export | report=%s | requester=%s | expires_at=%s", s.productBrandName, reportKey, requester, expiresAt)
 }
 
-func (s *ReportExportApplicationService) DownloadExport(ctx context.Context, jobID string, principal principalmodel.Principal) ([]byte, string, error) {
-	if _, err := principalmodel.QueryScopeForPrincipal(principal); err != nil {
-		return nil, "", reportWorkspaceError(err)
-	}
-	if s == nil || s.dataExchangeProvider == nil {
-		return nil, "", reportApplicationError(nil)
-	}
-	return s.dataExchangeProvider.Download(ctx, strings.TrimSpace(jobID), principal)
-}
-
-func reportExportStatusAllowed(status string, allowed []string) bool {
-	status = strings.TrimSpace(status)
-	for _, value := range allowed {
-		if status == strings.TrimSpace(value) {
-			return true
-		}
-	}
-	return false
-}
-
-func (s *ReportExportApplicationService) executeScopedExport(ctx context.Context, original, scoped reportmodel.ReportSchema, scope reportmodel.ReportExportScopeRequest, principal principalmodel.Principal) (reportmodel.ReportSummary, error) {
-	if scope.Freshness.Mode == "snapshot" {
-		summary, err := s.domain.SummaryMode(ctx, original.Key, "snapshot", principal)
-		if err != nil {
-			return reportmodel.ReportSummary{}, err
-		}
-		if !reportExportSnapshotFreshnessSatisfied(summary, scope.Freshness) {
-			return reportmodel.ReportSummary{}, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_freshness_not_satisfied"}
-		}
-		return summary, nil
-	}
-	return s.domain.ExecuteExportReport(ctx, scoped, scope.Parameters, principal)
-}
-
-func reportExportSnapshotFreshnessSatisfied(summary reportmodel.ReportSummary, freshness reportmodel.ReportExportFreshness) bool {
-	return summary.Snapshot != nil &&
-		(freshness.SnapshotID == "" || freshness.SnapshotID == summary.Snapshot.SnapshotID) &&
-		(freshness.MaximumLagSeconds <= 0 || summary.Snapshot.LagSeconds <= freshness.MaximumLagSeconds)
-}
-
-func (s *ReportExportApplicationService) exportControl(ctx context.Context, reportKey, objectKey string, principal principalmodel.Principal) (reportmodel.ReportExportControlSchema, bool) {
-	if s == nil || s.exportControls == nil {
-		return reportmodel.ReportExportControlSchema{}, false
-	}
-	for _, control := range s.exportControls(ctx, principal) {
-		if strings.TrimSpace(control.ReportKey) != strings.TrimSpace(reportKey) {
-			continue
-		}
-		for _, source := range control.SourceObjects {
-			if strings.TrimSpace(source) == strings.TrimSpace(objectKey) {
-				return control, true
-			}
-		}
-	}
-	return reportmodel.ReportExportControlSchema{}, false
-}
-
 // probeReportExport freezes a bounded result/version preflight without
 // materializing an unbounded export.
-func (s *ReportExportApplicationService) probeReportExport(ctx context.Context, report, scopedReport reportmodel.ReportSchema, scope reportmodel.ReportExportScopeRequest, maxRows int, principal principalmodel.Principal) ([]reportmodel.ReportResultRow, reportmodel.ReportSnapshotSourceVersion, int, error) {
+func (s *ReportExportApplicationService) probeReportExport(ctx context.Context, request reportmodel.ReportExportExecutionRequest, maxRows int, principal principalmodel.Principal) ([]reportmodel.ReportResultRow, reportmodel.ReportSnapshotSourceVersion, int, error) {
 	const consistencyRetries = 3
 	var lastErr error
 	for attempt := 0; attempt < consistencyRetries; attempt++ {
-		before, err := s.domain.ExportSourceVersion(ctx, scopedReport, principal)
+		before, err := s.readReportExportSourceVersion(ctx, request, principal)
 		if err != nil {
 			return nil, reportmodel.ReportSnapshotSourceVersion{}, 0, err
 		}
-		rows, exact, err := s.probeReportExportRows(ctx, report, scopedReport, scope, maxRows, principal)
+		rows, exact, err := s.probeReportExportRows(ctx, request, maxRows, principal)
 		if err != nil {
 			return nil, reportmodel.ReportSnapshotSourceVersion{}, 0, err
 		}
-		after, err := s.domain.ExportSourceVersion(ctx, scopedReport, principal)
+		after, err := s.readReportExportSourceVersion(ctx, request, principal)
 		if err != nil {
 			return nil, reportmodel.ReportSnapshotSourceVersion{}, 0, err
 		}
-		if reportservice.ReportSourceVersionsEqual(before, after) {
+		beforeHash, beforeHashErr := reportcontract.CanonicalReportJSONSHA256(before)
+		afterHash, afterHashErr := reportcontract.CanonicalReportJSONSHA256(after)
+		if beforeHashErr == nil && afterHashErr == nil && beforeHash == afterHash {
 			return rows, after, exact, nil
 		}
 		lastErr = fmt.Errorf("report source changed during export routing")
@@ -166,41 +189,25 @@ func (s *ReportExportApplicationService) probeReportExport(ctx context.Context, 
 	return nil, reportmodel.ReportSnapshotSourceVersion{}, 0, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_source_changed", Err: lastErr}
 }
 
-func (s *ReportExportApplicationService) probeReportExportRows(ctx context.Context, report, scopedReport reportmodel.ReportSchema, scope reportmodel.ReportExportScopeRequest, maxRows int, principal principalmodel.Principal) ([]reportmodel.ReportResultRow, int, error) {
+func (s *ReportExportApplicationService) probeReportExportRows(ctx context.Context, request reportmodel.ReportExportExecutionRequest, maxRows int, principal principalmodel.Principal) ([]reportmodel.ReportResultRow, int, error) {
 	rows := make([]reportmodel.ReportResultRow, 0, reportExportProbeRowLimit+1)
-	pageCursor := ""
+	request.Page = reportmodel.ReportPageRequest{}
 	for len(rows) <= reportExportProbeRowLimit {
 		pageSize := reportmodel.ReportPageMaximumSize
 		if remaining := reportExportProbeRowLimit + 1 - len(rows); remaining < pageSize {
 			pageSize = remaining
 		}
-		summary, err := s.domain.ExecuteExportReportPage(ctx, scopedReport, scope.Parameters, pageCursor, len(rows), pageSize, principal)
-		if err != nil {
-			if apperror.CodeOf(err) != "backend.report.bounded_page_unavailable" || maxRows <= 0 || maxRows > reportExportProbeRowLimit {
-				return nil, 0, err
-			}
-			full, executeErr := s.executeScopedExport(ctx, report, scopedReport, scope, principal)
-			if executeErr != nil {
-				return nil, 0, executeErr
-			}
-			fullRows, rowsErr := reportExportRows(full, scope.AnalysisKey)
-			if rowsErr != nil {
-				return nil, 0, rowsErr
-			}
-			if len(fullRows) > maxRows {
-				return nil, 0, &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.report.export_too_many_rows", Params: map[string]string{"limit": fmt.Sprint(maxRows)}}
-			}
-			return fullRows, len(fullRows), nil
-		}
-		pageRows, err := reportExportRows(summary, scope.AnalysisKey)
+		request.Page.PageSize = pageSize
+		summary, err := s.readReportExportPage(ctx, request, principal)
 		if err != nil {
 			return nil, 0, err
 		}
+		pageRows := summary.Rows
 		if len(pageRows) == 0 && summary.Truncated {
 			return nil, 0, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_result_changed"}
 		}
 		rows = append(rows, pageRows...)
-		pageCursor = summary.ExecutionCursor
+		request.Page.Cursor = summary.NextCursor
 		if maxRows > 0 && len(rows) > maxRows {
 			return nil, 0, &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.report.export_too_many_rows", Params: map[string]string{"limit": fmt.Sprint(maxRows)}}
 		}

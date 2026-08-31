@@ -2,10 +2,10 @@ package http
 
 import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
-	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
+	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,12 +29,12 @@ func TestFinalHighRiskAndSurfacePolicyEdges(t *testing.T) {
 	if errInvalidOperationReasonEncoding.Error() == "" {
 		t.Fatal("reason encoding error has no message")
 	}
-	if normalized := normalizeSurfaceGroup("invalid"); normalized != "unknown" {
+	if normalized := normalizeListenerGroup("invalid"); normalized != "unknown" {
 		t.Fatalf("normalized group=%q", normalized)
 	}
 
-	router := &HTTPRouter{surfaceGroupPolicies: map[SurfaceRouteGroup]SurfaceRouteGroupPolicy{SurfaceRouteGroupPublic: {}}, surfaceGroupCapacity: map[SurfaceRouteGroup]*capacityplatform.Controller{}}
-	policyHandler := router.withSurfaceRouteGroupPolicy(SurfaceRouteGroupPublic, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	router := &HTTPRouter{listenerGroupPolicies: map[ListenerRouteGroup]ListenerRouteGroupPolicy{ListenerRouteGroupPublic: {}}, listenerGroupCapacity: map[ListenerRouteGroup]*capacityplatform.Controller{}}
+	policyHandler := router.withListenerRouteGroupPolicy(ListenerRouteGroupPublic, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 	request := httptest.NewRequest(http.MethodGet, "/live", nil)
 	request.Header.Set("Origin", "https://unrestricted.example")
 	response := httptest.NewRecorder()
@@ -106,71 +106,59 @@ func TestFinalAdmissionMetricsAndHandlerWiringEdges(t *testing.T) {
 		t.Fatalf("admission status=%d", response.Code)
 	}
 	metrics := NewMemoryHTTPMetricsCollector(1)
-	metrics.RegisterSurfaceGroup(string(SurfaceRouteGroupPublic), 1)
-	metrics.RegisterSurfaceGroup(string(SurfaceRouteGroupPublic), 2)
+	metrics.RegisterListenerGroup(string(ListenerRouteGroupPublic), 1)
+	metrics.RegisterListenerGroup(string(ListenerRouteGroupPublic), 2)
 	UseHandlers(&HTTPRouter{}, HTTPRouterHandlers{})
 }
 
 func TestFinalCompiledEndpointContractFailures(t *testing.T) {
-	originalContracts, originalPolicies := runtimeEndpointSurfaceContracts, runtimeSurfaceRoutePolicies
-	t.Cleanup(func() {
-		runtimeEndpointSurfaceContracts, runtimeSurfaceRoutePolicies = originalContracts, originalPolicies
-	})
+	originalContracts := runtimeEndpointContracts
+	t.Cleanup(func() { runtimeEndpointContracts = originalContracts })
 
 	var route string
-	var base surfacemodel.RuntimeEndpointContractV1
+	var base endpointmodel.RuntimeEndpointContractV1
 	for candidate, contract := range originalContracts {
-		if len(contract.Projections) > 0 {
+		if len(contract.ListenerExposures) > 0 {
 			route, base = candidate, contract
 			break
 		}
 	}
-	if route == "" {
-		t.Fatal("no projected endpoint contract")
-	}
-	cloneContracts := func() map[string]surfacemodel.RuntimeEndpointContractV1 {
-		values := make(map[string]surfacemodel.RuntimeEndpointContractV1, len(originalContracts))
+	cloneContracts := func() map[string]endpointmodel.RuntimeEndpointContractV1 {
+		values := make(map[string]endpointmodel.RuntimeEndpointContractV1, len(originalContracts))
 		for key, value := range originalContracts {
+			value.ListenerExposures = append([]endpointmodel.ListenerExposure(nil), value.ListenerExposures...)
 			values[key] = value
 		}
 		return values
 	}
-	clonePolicies := func() map[string][]surfacemodel.ProductSurface {
-		values := make(map[string][]surfacemodel.ProductSurface, len(originalPolicies))
-		for key, value := range originalPolicies {
-			values[key] = append([]surfacemodel.ProductSurface(nil), value...)
-		}
-		return values
-	}
-	assertFailure := func(t *testing.T) {
+	assertFailure := func() {
 		t.Helper()
-		if err := validateCompiledEndpointSurfaceContracts(); err == nil {
+		if err := validateCompiledEndpointContracts(); err == nil {
 			t.Fatal("invalid compiled contract was accepted")
 		}
 	}
 
-	runtimeEndpointSurfaceContracts, runtimeSurfaceRoutePolicies = cloneContracts(), clonePolicies()
+	runtimeEndpointContracts = cloneContracts()
 	changed := base
 	changed.EndpointIdentity = "GET /different"
-	runtimeEndpointSurfaceContracts[route] = changed
-	assertFailure(t)
+	runtimeEndpointContracts[route] = changed
+	assertFailure()
 
-	runtimeEndpointSurfaceContracts, runtimeSurfaceRoutePolicies = cloneContracts(), clonePolicies()
+	runtimeEndpointContracts = cloneContracts()
 	changed = base
 	changed.ContractVersion = "invalid"
-	runtimeEndpointSurfaceContracts[route] = changed
-	assertFailure(t)
+	runtimeEndpointContracts[route] = changed
+	assertFailure()
 
-	runtimeEndpointSurfaceContracts, runtimeSurfaceRoutePolicies = cloneContracts(), clonePolicies()
-	delete(runtimeSurfaceRoutePolicies, route)
-	runtimeSurfaceRoutePolicies["GET /extra-policy"] = []surfacemodel.ProductSurface{base.Projections[0].Surface}
-	assertFailure(t)
+	runtimeEndpointContracts = cloneContracts()
+	changed = base
+	changed.ListenerExposures = []endpointmodel.ListenerExposure{"invalid"}
+	runtimeEndpointContracts[route] = changed
+	assertFailure()
 
-	runtimeEndpointSurfaceContracts, runtimeSurfaceRoutePolicies = cloneContracts(), clonePolicies()
-	runtimeSurfaceRoutePolicies[route] = append(runtimeSurfaceRoutePolicies[route], base.Projections[0].Surface)
-	assertFailure(t)
-
-	runtimeEndpointSurfaceContracts, runtimeSurfaceRoutePolicies = cloneContracts(), clonePolicies()
-	runtimeSurfaceRoutePolicies[route][0] = surfacemodel.ProductSurface("invalid")
-	assertFailure(t)
+	runtimeEndpointContracts = cloneContracts()
+	changed = base
+	changed.ListenerExposures = append(changed.ListenerExposures, changed.ListenerExposures[0])
+	runtimeEndpointContracts[route] = changed
+	assertFailure()
 }

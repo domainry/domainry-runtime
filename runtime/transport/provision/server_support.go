@@ -235,7 +235,7 @@ func (s *Server) writeJSON(w http.ResponseWriter, status int, value any) {
 func validateAndHash(manifest manifestmodel.ManifestSchema, contract ContractIdentity) (string, error) {
 	connectors, err := provisionCatalog()
 	if err != nil {
-		return "", fmt.Errorf("load Runtime Connector validation catalog: %w", err)
+		return "", fmt.Errorf("load Connector validation projection: %w", err)
 	}
 	if err := businessmanifest.ValidateManifestWithConnectorCatalog(manifest, connectors); err != nil {
 		return "", err

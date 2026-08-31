@@ -243,7 +243,7 @@ func TestRecordsExportWriteFailureAndAscendingSort(t *testing.T) {
 	repository := &recordsHTTPRepository{page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "one", Data: map[string]any{"name": "Ada"}}}}}
 	handler, _ := recordsHandlerForTest(recordsHTTPPrincipal())
 	handler.queries = recordsHTTPApplication(repository)
-	writer := &recordBatchWriteProbe{writeErr: errors.New("disconnected")}
+	writer := &recordsWriteProbe{writeErr: errors.New("disconnected")}
 	handler.exportRecords(writer, recordsRequest(http.MethodGet, "/export?sort=name", "", map[string]string{"objectKey": "customer"}))
 	if writer.writes != 1 {
 		t.Fatalf("writes=%d", writer.writes)
@@ -256,6 +256,29 @@ func TestRecordsExportWriteFailureAndAscendingSort(t *testing.T) {
 	if len(query.Sort) != 1 || query.Sort[0].Direction != "asc" {
 		t.Fatalf("explicit sort=%+v", query.Sort)
 	}
+}
+
+type recordsWriteProbe struct {
+	header   http.Header
+	writes   int
+	writeErr error
+}
+
+func (w *recordsWriteProbe) Header() http.Header {
+	if w.header == nil {
+		w.header = http.Header{}
+	}
+	return w.header
+}
+
+func (*recordsWriteProbe) WriteHeader(int) {}
+
+func (w *recordsWriteProbe) Write(payload []byte) (int, error) {
+	w.writes++
+	if w.writeErr != nil {
+		return 0, w.writeErr
+	}
+	return len(payload), nil
 }
 
 func TestRecordsActionErrorHeaderDefaultsAndNonReplay(t *testing.T) {

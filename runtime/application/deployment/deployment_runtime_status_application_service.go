@@ -19,6 +19,7 @@ import (
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/logging"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
+	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"go.uber.org/zap"
 )
@@ -38,7 +39,7 @@ type IdempotencyMetricsProvider interface {
 }
 
 type LifecycleHealthProvider interface {
-	HealthForSystem(context.Context, principalmodel.SystemScope, time.Time) (map[string]any, error)
+	Health(context.Context, lifecycleaccess.SystemScope, time.Time) (map[string]any, error)
 }
 
 func (s *DeploymentRuntimeStatusApplicationService) IdempotencyOperationalStatus(ctx context.Context, workspaceID string) (deploymentmodel.IdempotencyOperationalStatus, error) {
@@ -101,10 +102,10 @@ func (s *DeploymentRuntimeStatusApplicationService) StartIdempotencyCleanupWorke
 	})
 }
 
-// DeploymentRuntimeStatusApplicationService reports the health of deployed runtime owners.
+// DeploymentRuntimeStatusApplicationService exposes Runtime-owned operational
+// observations and idempotency controls. Monitoring owns the health and metric
+// envelopes built from those observations.
 type DeploymentRuntimeStatusApplicationService struct {
-	templateID      string
-	templateVersion string
 	schema          RuntimeSchemaProvider
 	scheduler       SchedulerStatusProvider
 	repository      deploymentrepository.DeploymentRuntimeStatusRepository
@@ -172,12 +173,12 @@ func (s *DeploymentRuntimeStatusApplicationService) mutateIdempotencyReceipt(ctx
 	return nil
 }
 
-func NewDeploymentRuntimeStatusApplicationService(templateID, templateVersion string, schema RuntimeSchemaProvider, scheduler SchedulerStatusProvider, repository deploymentrepository.DeploymentRuntimeStatusRepository, records deploymentcontract.DeploymentRecordReader, audit auditcontract.AuditReader, workflow deploymentcontract.DeploymentWorkflowExecutionReader, delivery deploymentcontract.DeploymentDeliveryReader) *DeploymentRuntimeStatusApplicationService {
-	return NewDeploymentRuntimeStatusApplicationServiceWithWorker(templateID, templateVersion, schema, scheduler, repository, records, audit, workflow, delivery, workerplatform.Dependencies{})
+func NewDeploymentRuntimeStatusApplicationService(schema RuntimeSchemaProvider, scheduler SchedulerStatusProvider, repository deploymentrepository.DeploymentRuntimeStatusRepository, records deploymentcontract.DeploymentRecordReader, audit auditcontract.AuditReader, workflow deploymentcontract.DeploymentWorkflowExecutionReader, delivery deploymentcontract.DeploymentDeliveryReader) *DeploymentRuntimeStatusApplicationService {
+	return NewDeploymentRuntimeStatusApplicationServiceWithWorker(schema, scheduler, repository, records, audit, workflow, delivery, workerplatform.Dependencies{})
 }
 
-func NewDeploymentRuntimeStatusApplicationServiceWithWorker(templateID, templateVersion string, schema RuntimeSchemaProvider, scheduler SchedulerStatusProvider, repository deploymentrepository.DeploymentRuntimeStatusRepository, records deploymentcontract.DeploymentRecordReader, audit auditcontract.AuditReader, workflow deploymentcontract.DeploymentWorkflowExecutionReader, delivery deploymentcontract.DeploymentDeliveryReader, worker workerplatform.Dependencies) *DeploymentRuntimeStatusApplicationService {
-	return &DeploymentRuntimeStatusApplicationService{templateID: templateID, templateVersion: templateVersion, schema: schema, scheduler: scheduler, repository: repository, records: records, audit: audit, workflow: workflow, delivery: delivery, worker: workerplatform.NormalizeDependencies(worker)}
+func NewDeploymentRuntimeStatusApplicationServiceWithWorker(schema RuntimeSchemaProvider, scheduler SchedulerStatusProvider, repository deploymentrepository.DeploymentRuntimeStatusRepository, records deploymentcontract.DeploymentRecordReader, audit auditcontract.AuditReader, workflow deploymentcontract.DeploymentWorkflowExecutionReader, delivery deploymentcontract.DeploymentDeliveryReader, worker workerplatform.Dependencies) *DeploymentRuntimeStatusApplicationService {
+	return &DeploymentRuntimeStatusApplicationService{schema: schema, scheduler: scheduler, repository: repository, records: records, audit: audit, workflow: workflow, delivery: delivery, worker: workerplatform.NormalizeDependencies(worker)}
 }
 
 func (s *DeploymentRuntimeStatusApplicationService) storageStatus(ctx context.Context) (map[string]any, error) {

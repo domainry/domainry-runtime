@@ -94,7 +94,7 @@ func TestDiscoverySchemaAndRoutes(t *testing.T) {
 	}
 }
 
-func TestDiscoveryPublishedRuntimeAndSurfaceRoutes(t *testing.T) {
+func TestDiscoveryPublishedRuntimeRoutes(t *testing.T) {
 	handler := discoveryTestHandler()
 	response := httptest.NewRecorder()
 	handler.getBusinessRuntimeSchema(response, httptest.NewRequest(http.MethodGet, "/runtime-schema", nil))
@@ -102,7 +102,7 @@ func TestDiscoveryPublishedRuntimeAndSurfaceRoutes(t *testing.T) {
 		t.Fatalf("unscoped runtime schema status=%d", response.Code)
 	}
 	handler.principal = func(*http.Request) principalmodel.Principal {
-		return principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "user"}, SurfaceKey: "business_workspace"}
+		return principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "user"}}
 	}
 	response = httptest.NewRecorder()
 	handler.getBusinessRuntimeSchema(response, httptest.NewRequest(http.MethodGet, "/runtime-schema", nil))
@@ -115,16 +115,5 @@ func TestDiscoveryPublishedRuntimeAndSurfaceRoutes(t *testing.T) {
 	handler.getPortalRuntimeSchema(response, request)
 	if response.Code != http.StatusNotModified {
 		t.Fatalf("cached runtime schema status=%d", response.Code)
-	}
-
-	response = httptest.NewRecorder()
-	handler.getBusinessSurfaceContext(response, httptest.NewRequest(http.MethodGet, "/surface-context", nil))
-	if response.Code != http.StatusOK {
-		t.Fatalf("business surface status=%d", response.Code)
-	}
-	response = httptest.NewRecorder()
-	handler.getPortalSurfaceContext(response, httptest.NewRequest(http.MethodGet, "/surface-context", nil))
-	if response.Code != http.StatusForbidden {
-		t.Fatalf("portal surface mismatch status=%d", response.Code)
 	}
 }

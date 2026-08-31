@@ -144,11 +144,6 @@ func visibleAgentContractsForPrincipal(snapshot appschemamodel.ApplicationSchema
 		if !principal.HasAllPermissions(entrypoint.RequiredPermissions) {
 			continue
 		}
-		if surface := strings.TrimSpace(principal.SurfaceKey); surface != "" {
-			if surface != strings.TrimSpace(entrypoint.Surface) {
-				continue
-			}
-		}
 		entrypoint.AllowedTaskKeys = visibleAgentStringIntersection(entrypoint.AllowedTaskKeys, taskKeys)
 		entrypoint.AllowedWorkflowKeys = visibleAgentStringIntersection(entrypoint.AllowedWorkflowKeys, workflows)
 		entrypoints = append(entrypoints, entrypoint)

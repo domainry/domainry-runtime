@@ -15,15 +15,12 @@ type BusinessProfileReference struct {
 // Principal is the immutable caller identity visible to project business code.
 // Runtime-internal role, policy and scope models are intentionally not exposed.
 type Principal struct {
-	UserID        string
-	RoleKey       string
-	DepartmentID  string
-	RequestID     string
-	CorrelationID string
-	CausationID   string
-	// SurfaceKey is optional caller context. Identity/workforce requests may
-	// omit it, so business code must validate it before using it as required data.
-	SurfaceKey            string
+	UserID                string
+	RoleKey               string
+	DepartmentID          string
+	RequestID             string
+	CorrelationID         string
+	CausationID           string
 	AuthorizationRevision string
 	Known                 bool
 	ActiveBusinessProfile *BusinessProfileReference

@@ -10,13 +10,11 @@ import (
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
-	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
 
 	"net/http"
 	"strings"
 	"time"
 
-	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
 
@@ -247,54 +245,12 @@ func (h *RecordsHandler) deleteRecord(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *RecordsHandler) listAuditEvents(w http.ResponseWriter, r *http.Request) {
-	values := r.URL.Query()
-	events, err := h.audit.Events(r.Context(), auditmodel.AuditEventQuery{
-		ObjectKey:   strings.TrimSpace(values.Get("object_key")),
-		RecordID:    strings.TrimSpace(values.Get("record_id")),
-		Event:       strings.TrimSpace(values.Get("event")),
-		ActorID:     strings.TrimSpace(values.Get("actor_id")),
-		RoleKey:     strings.TrimSpace(values.Get("role_key")),
-		RequestID:   strings.TrimSpace(values.Get("request_id")),
-		CreatedFrom: strings.TrimSpace(values.Get("created_from")),
-		CreatedTo:   strings.TrimSpace(values.Get("created_to")),
-		Limit:       intQuery(values.Get("limit")),
-	}, h.principal(r))
-
-	if err != nil {
-		h.writeServiceError(w, r, err)
-		return
-	}
-	h.writeJSON(w, http.StatusOK, events)
-}
-
-func (h *RecordsHandler) listAuditOptions(w http.ResponseWriter, r *http.Request) {
-	values := r.URL.Query()
-	options, err := h.audit.Options(r.Context(), auditmodel.AuditOptionQuery{
-		Field:       strings.TrimSpace(values.Get("field")),
-		Query:       strings.TrimSpace(values.Get("q")),
-		ObjectKey:   strings.TrimSpace(values.Get("object_key")),
-		CreatedFrom: strings.TrimSpace(values.Get("created_from")),
-		CreatedTo:   strings.TrimSpace(values.Get("created_to")),
-		Limit:       intQuery(values.Get("limit")),
-	}, h.principal(r))
-
-	if err != nil {
-		h.writeServiceError(w, r, err)
-		return
-	}
-	h.writeJSON(w, http.StatusOK, map[string]any{"options": options})
-}
-
 func (h *RecordsHandler) effectivePermissions(w http.ResponseWriter, r *http.Request) {
 	principal := h.principal(r)
 	result, err := h.permissions.FeaturePermissions(r.Context(), principal)
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
-	}
-	if surface, ok := surfacemodel.ParseProductSurface(r.Header.Get("X-Domainry-Product-Surface")); ok && surface == surfacemodel.ProductSurfaceAdminConsole {
-		result = runtimeOpsExactFeaturePermissions(result, principal)
 	}
 	objectKey := strings.TrimSpace(r.URL.Query().Get("object_key"))
 	recordID := strings.TrimSpace(r.URL.Query().Get("record_id"))

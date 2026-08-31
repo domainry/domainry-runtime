@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	integrationmodule "github.com/domainry/domainry-integration/module"
 	notificationmodule "github.com/domainry/domainry-notification/module"
 	partymodule "github.com/domainry/domainry-party/module"
 	. "github.com/domainry/domainry-runtime/runtime/bootstrap"
@@ -31,9 +32,10 @@ func TestRuntimeBusinessEventStreamConnectsReplaysAndRejectsCrossTenant(t *testi
 		BusinessEventHeartbeatInterval: time.Second, BusinessEventRetryInterval: 250 * time.Millisecond,
 	}
 	cfg = initializedIntegrationRuntimeConfig(cfg)
-	application := New(t.Context(), cfg, newIntegrationIdentityBinding(t, cfg), notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangefixture.NewFactory())
+	application := New(t.Context(), cfg, newIntegrationIdentityBinding(t, cfg), notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangefixture.NewFactory(), integrationmodule.NewFactory())
 	defer application.CloseContext(t.Context())
-	server := httptest.NewServer(application.Routes())
+	handler := auditModuleRoutes(t, application)
+	server := httptest.NewServer(handler)
 	defer server.Close()
 	client := server.Client()
 	token := runtimeIdentityFixtureSession(t, "admin", "admin").AccessToken
@@ -61,7 +63,6 @@ func TestRuntimeBusinessEventStreamConnectsReplaysAndRejectsCrossTenant(t *testi
 	crossTenantRequest, _ := http.NewRequest(http.MethodGet, server.URL+"/events/business", nil)
 	crossTenantRequest.Header.Set("Authorization", "Bearer "+token)
 	crossTenantRequest.Header.Set("X-Workspace-ID", "workspace-sibling")
-	crossTenantRequest.Header.Set("X-Domainry-Product-Surface", "business_workspace")
 	crossTenantResponse, err := client.Do(crossTenantRequest)
 	if err != nil {
 		t.Fatal(err)
@@ -74,7 +75,7 @@ func TestRuntimeBusinessEventStreamConnectsReplaysAndRejectsCrossTenant(t *testi
 
 	deadline := time.Now().Add(2 * time.Second)
 	for {
-		audits := runtimeFixtureAuthorizedSurfaceRequest[map[string]any](t, application.Routes(), token, "business_workspace", http.MethodGet, "/business/audit-events", nil)
+		audits := runtimeFixtureAuthorizedRequest[map[string]any](t, handler, token, http.MethodGet, "/business/audit-events", nil)
 		items, _ := audits["items"].([]any)
 		if runtimeAuditHasEvent(items, "business_event_stream_connected") && runtimeAuditHasEvent(items, "business_event_stream_disconnected") && runtimeAuditHasEvent(items, "auth_workspace_denied") {
 			break
@@ -109,7 +110,6 @@ func openRuntimeEventStream(t *testing.T, client *http.Client, baseURL, token, l
 	request, _ := http.NewRequest(http.MethodGet, baseURL+"/events/business?objects=customer", nil)
 	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("X-Workspace-ID", workspaceID)
-	request.Header.Set("X-Domainry-Product-Surface", "business_workspace")
 	if lastEventID != "" {
 		request.Header.Set("Last-Event-ID", lastEventID)
 	}
@@ -133,7 +133,6 @@ func createRuntimeCustomer(t *testing.T, client *http.Client, baseURL, token, re
 	request.Header.Set("X-Workspace-ID", "workspace-primary")
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Idempotency-Key", requestKey)
-	request.Header.Set("X-Domainry-Product-Surface", "business_workspace")
 	response, err := client.Do(request)
 	if err != nil {
 		t.Fatal(err)

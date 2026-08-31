@@ -15,7 +15,7 @@ import (
 	"github.com/domainry/domainry-foundation/secrets"
 	"github.com/domainry/domainry-foundation/telemetry"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
-	metadatapersistence "github.com/domainry/domainry-metadata-sdk/persistence"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
 	"github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/base"
@@ -53,14 +53,25 @@ type RuntimeStore struct {
 	schemaAssembler      runtimeSchemaAssembler
 	backupChecksum       func(string) (string, error)
 	migrationReadDir     func(string) ([]os.DirEntry, error)
-	metadataDefinitions  metadatapersistence.DefinitionRepository
+	metadataBinding      metadatasdk.Binding
 }
 
-func (s *RuntimeStore) MetadataDefinitions() metadatapersistence.DefinitionRepository {
+func (s *RuntimeStore) BindMetadata(binding metadatasdk.Binding) error {
+	if s == nil || binding == nil || binding.Definitions() == nil || binding.Localization() == nil || binding.Dictionaries() == nil || binding.Projection() == nil {
+		return fmt.Errorf("Metadata Binding is incomplete")
+	}
+	if s.metadataBinding != nil {
+		return fmt.Errorf("Metadata Binding is already configured")
+	}
+	s.metadataBinding = binding
+	return nil
+}
+
+func (s *RuntimeStore) Metadata() metadatasdk.Binding {
 	if s == nil {
 		return nil
 	}
-	return s.metadataDefinitions
+	return s.metadataBinding
 }
 
 type NotificationSaaSPublicationScope struct {

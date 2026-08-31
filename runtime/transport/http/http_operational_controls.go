@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	workerplatform "github.com/domainry/domainry-foundation/worker"
-	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
-	healthplatform "github.com/domainry/domainry-runtime/runtime/platform/health"
+	capacityplatform "github.com/domainry/domainry-foundation/capacity"
+	healthplatform "github.com/domainry/domainry-foundation/health"
 )
 
 func (s *HTTPRouter) withOperationalControls(routes *http.ServeMux, next http.Handler) http.Handler {

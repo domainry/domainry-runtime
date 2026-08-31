@@ -1,72 +1,183 @@
-// Package recordtimer is the Runtime-owned boundary for record-scoped delayed
-// actions. It is intentionally separate from the external recurrence Scheduler.
+// Package recordtimer owns Runtime record-scoped delayed execution.
 package recordtimer
 
 import (
 	"context"
+	"fmt"
+	"strings"
+	"sync"
 	"time"
 
-	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
+	"github.com/domainry/domainry-foundation/apperror"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	recordtimercontract "github.com/domainry/domainry-runtime/runtime/domain/recordtimer/contract"
 )
 
-type RecordTimerSchedule struct {
-	TimerKey, ObjectKey, RecordID, Purpose                            string
-	ScheduleMode                                                      string
-	DueAt                                                             time.Time
-	SourceField                                                       string
-	OffsetSeconds                                                     int
-	Timezone, BusinessCalendarKey, TargetType, TargetKey, PayloadJSON string
-	Priority                                                          int
-	Sequence                                                          int64
-	MaxAttempts, RetryDelaySeconds, RetryMaxDelaySeconds              int
-	SupersedesTimerID                                                 string
+type SchemaProvider interface {
+	SchemaForPrincipal(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
 }
 
-type RecordTimerBusinessCalendar interface {
-	AddBusinessDuration(context.Context, string, time.Time, time.Duration, *time.Location) (time.Time, error)
+type RecordTimerExecution struct {
+	TimerID, WorkspaceID, ObjectKey, RecordID string
+	TargetType, TargetKey                     string
+	Payload                                   map[string]any
+	IdempotencyKey                            string
 }
 
-type StandardRecordTimerBusinessCalendar struct{}
+type TargetRuntime interface {
+	ExecuteRecordTimer(context.Context, RecordTimerExecution, principalmodel.Principal) error
+}
 
-func (StandardRecordTimerBusinessCalendar) AddBusinessDuration(ctx context.Context, key string, base time.Time, offset time.Duration, location *time.Location) (time.Time, error) {
-	return (schedulerapplication.StandardRecordTimerBusinessCalendar{}).AddBusinessDuration(ctx, key, base, offset, location)
+type WorkerConfig struct {
+	Enabled      bool
+	PollInterval time.Duration
+	BatchSize    int
+	LeaseTTL     time.Duration
+}
+
+func DefaultWorkerConfig() WorkerConfig {
+	return WorkerConfig{Enabled: true, PollInterval: 500 * time.Millisecond, BatchSize: 25, LeaseTTL: 5 * time.Minute}
+}
+
+func NormalizeWorkerConfig(config WorkerConfig) WorkerConfig {
+	if config.PollInterval <= 0 {
+		config.PollInterval = 500 * time.Millisecond
+	}
+	if config.BatchSize <= 0 {
+		config.BatchSize = 25
+	}
+	if config.BatchSize > 500 {
+		config.BatchSize = 500
+	}
+	if config.LeaseTTL <= 0 {
+		config.LeaseTTL = 5 * time.Minute
+	}
+	return config
 }
 
 type RecordTimerApplicationService struct {
-	delegate *schedulerapplication.SchedulerApplicationService
+	schema              SchemaProvider
+	runtime             TargetRuntime
+	repository          recordtimercontract.RecordTimerRepository
+	configMu            sync.RWMutex
+	config              WorkerConfig
+	recordTimerCursorMu sync.Mutex
+	recordTimerCursor   int
+	worker              workerplatform.Dependencies
 }
 
-func NewRecordTimerApplicationService(delegate *schedulerapplication.SchedulerApplicationService) *RecordTimerApplicationService {
-	if delegate == nil {
+func NewRecordTimerApplicationService(schema SchemaProvider, runtime TargetRuntime, repository recordtimercontract.RecordTimerRepository) *RecordTimerApplicationService {
+	return NewRecordTimerApplicationServiceWithWorker(schema, runtime, repository, workerplatform.Dependencies{})
+}
+
+func NewRecordTimerApplicationServiceWithWorker(schema SchemaProvider, runtime TargetRuntime, repository recordtimercontract.RecordTimerRepository, worker workerplatform.Dependencies) *RecordTimerApplicationService {
+	return &RecordTimerApplicationService{
+		schema: schema, runtime: runtime, repository: repository,
+		config: DefaultWorkerConfig(), worker: workerplatform.NormalizeDependencies(worker),
+	}
+}
+
+func (s *RecordTimerApplicationService) ConfigureWorker(config WorkerConfig) {
+	s.configMu.Lock()
+	s.config = NormalizeWorkerConfig(config)
+	s.configMu.Unlock()
+}
+
+func (s *RecordTimerApplicationService) WorkerConfig() WorkerConfig {
+	s.configMu.RLock()
+	defer s.configMu.RUnlock()
+	return NormalizeWorkerConfig(s.config)
+}
+
+func (s *RecordTimerApplicationService) leaseTTL() time.Duration {
+	return s.WorkerConfig().LeaseTTL
+}
+
+func (s *RecordTimerApplicationService) objectForPrincipal(ctx context.Context, principal principalmodel.Principal, objectKey string) (definitionmodel.ObjectSchema, error) {
+	if s == nil || s.schema == nil {
+		return definitionmodel.ObjectSchema{}, recordTimerError(apperror.KindNotFound, "backend.record_timer.runtime_object_not_found", nil, "object_key", objectKey)
+	}
+	for _, object := range s.schema.SchemaForPrincipal(ctx, principal).Objects {
+		if object.Key == objectKey {
+			return object, nil
+		}
+	}
+	return definitionmodel.ObjectSchema{}, recordTimerError(apperror.KindNotFound, "backend.record_timer.runtime_object_not_found", nil, "object_key", objectKey)
+}
+
+func recordTimerWorkerPrincipal() principalmodel.Principal {
+	principal := principalmodel.NewSystemPrincipal("record-timer:worker", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "record timer dispatch"), "*")
+	principal.WorkspaceID = principalmodel.InstallationWorkspaceID
+	return principal
+}
+
+func recordTimerAuthorizeQuery(principal principalmodel.Principal) error {
+	if _, err := principalmodel.QueryScopeForPrincipal(principal); err != nil {
+		return recordTimerError(apperror.KindForbidden, "backend.workspace_scope_required", err)
+	}
+	return nil
+}
+
+func recordTimerAuthorizeCommand(principal principalmodel.Principal) error {
+	if _, err := principalmodel.CommandScopeForPrincipal(principal); err != nil {
+		return recordTimerError(apperror.KindForbidden, "backend.workspace_scope_required", err)
+	}
+	return nil
+}
+
+func recordTimerOpsReadAllowed(principal principalmodel.Principal) error {
+	if err := recordTimerAuthorizeQuery(principal); err != nil {
+		return err
+	}
+	if principal.HasPermission("workspace.admin") || principal.HasExactPermission("operations.read") || principal.HasExactPermission("record_timer.command") {
 		return nil
 	}
-	return &RecordTimerApplicationService{delegate: delegate}
+	return recordTimerError(apperror.KindForbidden, "backend.record_timer.permission_required", nil)
 }
 
-func (s *RecordTimerApplicationService) Schedule(ctx context.Context, workspaceID string, request RecordTimerSchedule, source recordmodel.Record, calendar RecordTimerBusinessCalendar, now time.Time, scope principalmodel.SystemScope) (recordmodel.Record, error) {
-	return s.delegate.ScheduleRecordTimer(ctx, workspaceID, schedulerapplication.RecordTimerSchedule{
-		TimerKey: request.TimerKey, ObjectKey: request.ObjectKey, RecordID: request.RecordID, Purpose: request.Purpose,
-		ScheduleMode: request.ScheduleMode, DueAt: request.DueAt, SourceField: request.SourceField, OffsetSeconds: request.OffsetSeconds,
-		Timezone: request.Timezone, BusinessCalendarKey: request.BusinessCalendarKey, TargetType: request.TargetType, TargetKey: request.TargetKey,
-		PayloadJSON: request.PayloadJSON, Priority: request.Priority, Sequence: request.Sequence, MaxAttempts: request.MaxAttempts,
-		RetryDelaySeconds: request.RetryDelaySeconds, RetryMaxDelaySeconds: request.RetryMaxDelaySeconds, SupersedesTimerID: request.SupersedesTimerID,
-	}, source, calendar, now, scope)
+func recordTimerError(kind apperror.ErrorKind, code string, err error, params ...string) error {
+	values := map[string]string{}
+	for index := 0; index+1 < len(params); index += 2 {
+		if key := strings.TrimSpace(params[index]); key != "" {
+			values[key] = params[index+1]
+		}
+	}
+	if len(values) == 0 {
+		values = nil
+	}
+	return &apperror.AppError{Kind: kind, Code: code, Params: values, Err: err}
 }
 
-func (s *RecordTimerApplicationService) ProcessDueForAllWorkspaces(ctx context.Context, now time.Time, limit int, principal principalmodel.Principal, scope principalmodel.SystemScope) (int, error) {
-	return s.delegate.ProcessDueRecordTimersForAllWorkspaces(ctx, now, limit, principal, scope)
+func recordTimerInternalError(operation string, err error) error {
+	return recordTimerError(apperror.KindInternal, "backend.internal", err, "operation", operation)
 }
 
-func (s *RecordTimerApplicationService) InspectFailure(ctx context.Context, id string, principal principalmodel.Principal) (recordmodel.Record, error) {
-	return s.delegate.InspectRecordTimerFailure(ctx, id, principal)
+func recordTimerString(record recordmodel.Record, key string) string {
+	value := strings.TrimSpace(fmt.Sprint(record.Data[key]))
+	if value == "<nil>" {
+		return ""
+	}
+	return value
 }
 
-func (s *RecordTimerApplicationService) RetryFailure(ctx context.Context, id, reason string, principal principalmodel.Principal) (recordmodel.Record, error) {
-	return s.delegate.RetryRecordTimerFailure(ctx, id, reason, principal)
+func recordTimerInt(value any, fallback int) int {
+	var out int
+	if _, err := fmt.Sscan(strings.TrimSpace(fmt.Sprint(value)), &out); err == nil {
+		return out
+	}
+	return fallback
 }
 
-func (s *RecordTimerApplicationService) ResolveFailure(ctx context.Context, id, reason string, principal principalmodel.Principal) (recordmodel.Record, error) {
-	return s.delegate.ResolveRecordTimerFailure(ctx, id, reason, principal)
+func recordTimerLimit(limit int) int {
+	if limit <= 0 {
+		return 25
+	}
+	if limit > 500 {
+		return 500
+	}
+	return limit
 }

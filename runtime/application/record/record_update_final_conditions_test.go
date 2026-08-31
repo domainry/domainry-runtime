@@ -33,7 +33,7 @@ func TestRecordUpdateSchedulerAndOptimisticConditionEdges(t *testing.T) {
 	dependencies.ObjectForAction = func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
 		return definitionmodel.ObjectSchema{Key: "record_timer", Config: map[string]any{"record_timer_runtime": true}}, nil
 	}
-	if _, err := NewRecordUpdateApplicationService(dependencies).Update(t.Context(), "record_timer", "timer-1", map[string]any{}, principal); apperror.CodeOf(err) != "backend.scheduler.runtime_api_required" {
+	if _, err := NewRecordUpdateApplicationService(dependencies).Update(t.Context(), "record_timer", "timer-1", map[string]any{}, principal); apperror.CodeOf(err) != "backend.record_timer.runtime_api_required" {
 		t.Fatalf("scheduler guard error = %v", err)
 	}
 

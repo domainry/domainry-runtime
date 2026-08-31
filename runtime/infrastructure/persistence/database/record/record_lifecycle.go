@@ -9,9 +9,24 @@ import (
 )
 
 func LifecycleExecutor(store *database.RuntimeStore, archives lifecyclecontract.ArchiveStore, objects ...definitionmodel.ObjectSchema) lifecyclecontract.OwnerLifecycleExecutor {
+	return lifecyclepersistence.NewRelationalOwnerExecutor(store, archives, "record", recordLifecycleSpecs(objects...)...)
+}
+
+func recordLifecycleSpecs(objects ...definitionmodel.ObjectSchema) []lifecyclepersistence.RelationalCleanupSpec {
 	specs := []lifecyclepersistence.RelationalCleanupSpec{{
 		PolicyKey: "execution.idempotency_receipt.v1", Table: "_record_mutation_executions", IDColumn: "id", TenantColumn: "workspace_id", TimeColumn: "expires_at", StatusColumn: "status", IneligibleStatuses: []string{"pending", "processing"},
 	}}
+	available := make(map[string]bool, len(objects))
+	for _, object := range objects {
+		available[object.Key] = true
+	}
+	if available["record_timer"] && available["record_timer_event"] {
+		specs = append(specs, lifecyclepersistence.RelationalCleanupSpec{
+			PolicyKey: "record.object.default.v1", Table: "record_timer", IDColumn: "id", TenantColumn: "workspace_id", TimeColumn: "updated_at", StatusColumn: "status",
+			EligibleStatuses: []string{"fired", "cancelled", "superseded", "failed"},
+			ChildCollections: []lifecyclepersistence.RelationalChildCollection{{Table: "record_timer_event", IDColumn: "id", TenantColumn: "workspace_id", ParentColumn: "record_timer_id"}},
+		})
+	}
 	for _, object := range objects {
 		if !recordpolicy.RecordUsesSoftDelete(object) {
 			continue
@@ -21,5 +36,5 @@ func LifecycleExecutor(store *database.RuntimeStore, archives lifecyclecontract.
 			ReferenceChecks: []lifecyclepersistence.RelationalReferenceCheck{{Table: "_workflow_process_instances", TenantColumn: "workspace_id", ReferenceColumn: "record_id", FixedColumn: "object_key", FixedValue: object.Key}},
 		})
 	}
-	return lifecyclepersistence.NewRelationalOwnerExecutor(store, archives, "record", specs...)
+	return specs
 }

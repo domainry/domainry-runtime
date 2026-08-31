@@ -19,12 +19,3 @@ func (h *ApplicationSchemaHandler) metadataObjectRecordCount(w http.ResponseWrit
 	}
 	h.writeJSON(w, http.StatusOK, map[string]any{"object_key": r.PathValue("objectKey"), "count": count})
 }
-
-func (h *ApplicationSchemaHandler) reloadMetadata(w http.ResponseWriter, r *http.Request) {
-	schema, err := h.runtimeCatalog.ReloadApplicationSchema(r.Context(), h.principal(r))
-	if err != nil {
-		h.writeServiceError(w, r, err)
-		return
-	}
-	h.writeJSON(w, http.StatusOK, map[string]any{"schema": schema})
-}

@@ -22,8 +22,7 @@ or migration names.
 `_agent_skill_definitions`, `_agent_definitions`,
 `_agent_task_definitions`, `_agent_entrypoint_definitions`,
 `_agent_service_principal_definitions`, `_agent_runtime_states`,
-`_agent_task_runs`, `_agent_interactive_runs`, `_agent_worker_scopes`,
-`_agent_task_publications`.
+`_agent_task_runs`, `_agent_interactive_runs`, `_agent_worker_scopes`.
 
 ### Audit
 
@@ -156,12 +155,7 @@ table name.
 ### Application Schema
 
 `_application_schema_projection`, `_application_schema_seed_checkpoints`,
-`_application_schema_exact_decimal_migration_receipts`,
-`_application_schema_localized_texts`,
-`_application_schema_workflow_definitions`,
-`_application_schema_automation_rule_definitions`,
-`_application_schema_connector_requirements`,
-`_application_schema_integration_event_mapping_requirements`.
+`_application_schema_exact_decimal_migration_receipts`.
 
 ### Workflow
 
@@ -226,6 +220,8 @@ physical table name.
 - `_identity_definition_versions`: this was a legacy bridge into the generic
   Metadata definition-version store, not a current Identity table. Generic
   versions live in `_metadata_definition_versions`; Identity-owned profile
-  binding versions live in `_identity_profile_binding_definition_versions`.
+  binding and role versions live in
+  `_identity_profile_binding_definition_versions` and
+  `_identity_role_definition_versions`.
 - Unpublished compatibility copies, rename migrations, and backup tables for
   the retired names are not created.

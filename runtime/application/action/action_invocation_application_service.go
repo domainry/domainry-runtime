@@ -27,7 +27,7 @@ func actionSourceValid(source actionmodel.ActionSource) bool {
 	case actionmodel.ActionSourceHTTP,
 		actionmodel.ActionSourceWorkflow,
 		actionmodel.ActionSourceAutomation,
-		actionmodel.ActionSourceScheduler,
+		actionmodel.ActionSourceRecordTimer,
 		actionmodel.ActionSourceIntegration,
 		actionmodel.ActionSourceAgent,
 		actionmodel.ActionSourceNested,

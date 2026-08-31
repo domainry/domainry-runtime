@@ -33,9 +33,9 @@ func (s *ChangePlanReferenceApplicationService) addRuntimeEvidenceReferences(ctx
 		if message.Status == "sent" || message.Status == "cancelled" {
 			continue
 		}
-		builder.Node("outbox_message", message.ID, "", message.Status, "runtime")
-		builder.Edge("outbox_message", message.ID, "connector_operation", message.ConnectorKey+"."+message.Operation, "delivers_operation", "operation")
-		builder.Edge("outbox_message", message.ID, "connection", message.ConnectionKey, "uses_connection", "connection_key")
+		builder.Node("publication_handoff", message.ID, "", message.Status, "runtime")
+		builder.Edge("publication_handoff", message.ID, "connector_operation", message.ConnectorKey+"."+message.Operation, "delivers_operation", "operation")
+		builder.Edge("publication_handoff", message.ID, "connection", message.ConnectionKey, "uses_connection", "connection_key")
 	}
 	return nil
 }

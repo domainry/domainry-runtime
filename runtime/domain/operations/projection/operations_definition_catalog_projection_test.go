@@ -65,10 +65,7 @@ func TestSchedulerManualRunDefinitionPreservesPublicOwnerPermission(t *testing.T
 	if !found {
 		t.Fatal("missing scheduler.job.run operation definition")
 	}
-	for _, permission := range definition.Permissions {
-		if permission == "scheduler.command" {
-			return
-		}
+	if len(definition.Permissions) != 1 || definition.Permissions[0] != "scheduler.command" {
+		t.Fatalf("scheduler.job.run permissions must exactly match the Scheduler owner command boundary: %#v", definition.Permissions)
 	}
-	t.Fatalf("scheduler.job.run must admit scheduler.command so Operations does not reject a principal accepted by the Scheduler owner: %#v", definition.Permissions)
 }

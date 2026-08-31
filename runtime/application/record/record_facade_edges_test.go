@@ -40,9 +40,6 @@ func TestRecordFacadeRejectsUnknownWorkspaceBeforeDependencies(t *testing.T) {
 			_, _, err := service.EnqueueExportJob(t.Context(), "customer", "key", RecordExportOptions{}, principal)
 			return err
 		}},
-		{name: "get batch", call: func() error { _, err := service.GetBatchJob(t.Context(), "job-1", principal); return err }},
-		{name: "cancel batch", call: func() error { _, err := service.CancelBatchJob(t.Context(), "job-1", principal); return err }},
-		{name: "download batch", call: func() error { _, _, err := service.OpenBatchJobDownload(t.Context(), "job-1", principal); return err }},
 		{name: "preview import", call: func() error { _, err := service.PreviewImport(t.Context(), "customer", nil, principal); return err }},
 		{name: "apply import", call: func() error { _, err := service.ApplyImport(t.Context(), "customer", nil, principal); return err }},
 		{name: "apply idempotent import", call: func() error {

@@ -4,26 +4,21 @@ import (
 	"context"
 	publicationrepository "github.com/domainry/domainry-runtime/runtime/domain/publication/repository"
 
-	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	partysdk "github.com/domainry/domainry-party-sdk"
-	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
-	reportsnapshot "github.com/domainry/domainry-runtime/runtime/application/report/snapshot"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
-	connector "github.com/domainry/domainry-connector-sdk"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
-	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
-	lifecyclepersistence "github.com/domainry/domainry-lifecycle-sdk/persistence"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
-	reportmodel "github.com/domainry/domainry-report-sdk/model"
+	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
@@ -39,8 +34,6 @@ import (
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
-	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
-	resilience "github.com/domainry/domainry-runtime/runtime/platform/resilience"
 )
 
 // RuntimeServices is the immutable facade exported by the composition root.
@@ -49,6 +42,25 @@ import (
 type RuntimeServices struct {
 	applications RuntimeApplications
 	schema       runtimeSchemaReader
+	reportModule ReportModuleApplicationPorts
+}
+
+type ReportModuleApplicationPorts struct {
+	Subjects       reportmodulehost.SubjectResolver
+	Datasets       reportmodulehost.DatasetReader
+	ObjectSQL      reportmodulehost.ObjectSQLExecutor
+	SourceVersions reportmodulehost.SourceVersionReader
+	Audit          reportmodulehost.ExecutionAudit
+	Authorization  reportmodulehost.ExportAuthorization
+	Terminals      reportmodulehost.SnapshotTerminalCommitter
+	Exports        reportmodulehost.ExportGateway
+}
+
+func (s *RuntimeServices) ReportModuleApplicationPorts() ReportModuleApplicationPorts {
+	if s == nil {
+		return ReportModuleApplicationPorts{}
+	}
+	return s.reportModule
 }
 
 type runtimeSchemaReader interface {
@@ -80,7 +92,6 @@ type RuntimeServicesDependencies struct {
 	Records                             recordrepository.RecordRepository
 	ReportDatasetRows                   reportcontract.ReportDatasetRowReader
 	ReportObjectSQL                     reportcontract.ReportObjectSQLExecutor
-	ReportSnapshots                     reportcontract.ReportSnapshotReader
 	ReportSnapshotSources               reportcontract.ReportSnapshotSourceVersionReader
 	RecordExecutions                    recordcontract.RecordMutationExecutionStore
 	DataExchange                        dataexchange.Binding
@@ -92,6 +103,8 @@ type RuntimeServicesDependencies struct {
 	IntegrationPublicationWorker        publicationrepository.WorkerRepository
 	IntegrationOwnerDelivery            integrationsdk.Delivery
 	IntegrationOwnerCatalog             integrationsdk.Catalog
+	IntegrationOwnerManagement          integrationsdk.Management
+	IntegrationOwnerOperations          integrationsdk.Operations
 	WorkerWakeups                       *workerplatform.WakeupBroker
 	WorkflowWorker                      workflowcontract.WorkflowWorkerStore
 	WorkflowDefinitions                 workflowcontract.WorkflowDefinitionStore
@@ -101,41 +114,27 @@ type RuntimeServicesDependencies struct {
 	WorkflowTaskNotificationCommitter   workflowapplication.WorkflowTaskNotificationCommitter
 	RecordNotificationCompiler          func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	ReportNotificationCompiler          func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
-	ReportSnapshotNotificationCommitter reportsnapshot.ReportSnapshotNotificationCommitter
+	ReportSnapshotNotificationCommitter ReportSnapshotNotificationCommitter
 	AutomationNotificationCompiler      func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	AutomationNotificationCommitter     automationapplication.AutomationExecutionNotificationCommitter
 	NotificationIntentPublisher         func(context.Context, notificationmodel.NotificationIntent) error
-	IntegrationOwnerManagement          integrationsdk.Management
-	IntegrationOwnerOperations          integrationsdk.Operations
 	ApplicationSchema                   appschemarepository.ApplicationSchemaRepository
+	MetadataDefinitions                 metadatasdk.Definitions
+	MetadataLocalization                metadatasdk.Localization
 	AutomationWorker                    automationcontract.AutomationWorkerStore
 	AutomationExecutions                automationrepository.AutomationExecutionRepository
 	BusinessEvidence                    changeplanrepository.ChangePlanEvidenceRepository
 	ActionExecutions                    actioncontract.ActionExecutionStore
 	ActionAssurance                     actioncontract.ActionAssuranceStore
-	AgentTaskRuns                       agentpersistence.AgentTaskRunRepository
 	AgentPrincipals                     identitysdk.PrincipalResolver
 	AgentTaskRunner                     agentsdk.TaskRunner
-	AgentInteractiveRunner              agentsdk.InteractiveRunner
-	AgentTaskCredentialKey              []byte
-	AgentTaskWorkerConfig               agentapplication.AgentTaskWorkerConfig
 	BusinessHandlers                    *runtimeext.BusinessHandlerRegistry
 	VerifyFileClean                     func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
 	PrepareOutboxPayload                publicationhandoff.PayloadPreparer
-	ConnectorProviders                  *connector.Registry
 	RuntimeStatus                       deploymentrepository.DeploymentRuntimeStatusRepository
 	Notifications                       NotificationRenderer
 	IdentityDirectory                   identitysdk.Directory
 	PartyDirectory                      partysdk.Directory
-	IntegrationAPILimiter               ratelimit.Limiter
-	IntegrationPolicyStore              resilience.Store
-	Lifecycle                           lifecyclepersistence.LifecycleRepository
-	LifecycleExecutors                  []lifecyclecontract.OwnerLifecycleExecutor
-	LifecycleSubjectResolver            lifecyclecontract.SubjectIdentityResolver
-	LifecycleSubjectHandlers            []lifecyclecontract.SubjectDataHandler
-	LifecycleExternalErasure            lifecyclecontract.ExternalErasureHandler
-	LifecycleArtifacts                  lifecyclecontract.SubjectArtifactStore
-	LifecycleUploadArtifacts            lifecyclecontract.UploadArtifactStore
 	Worker                              workerplatform.Dependencies
 }
 
@@ -149,7 +148,16 @@ type RuntimeServicesConfig struct {
 
 func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *RuntimeServices {
 	assembly := newRuntimeServicesAssembly(ctx, config)
-	return &RuntimeServices{applications: assembly.Applications(), schema: assembly.RecordSchemaSnapshotProvider}
+	return &RuntimeServices{
+		applications: assembly.Applications(), schema: assembly.RecordSchemaSnapshotProvider,
+		reportModule: ReportModuleApplicationPorts{
+			Subjects: assembly.reportModuleQueryHost, Datasets: assembly.reportModuleQueryHost,
+			ObjectSQL: assembly.reportModuleQueryHost, SourceVersions: assembly.reportModuleQueryHost, Audit: assembly.reportModuleQueryHost,
+			Authorization: assembly.reportModuleQueryHost,
+			Terminals:     assembly.reportModuleSnapshotHost,
+			Exports:       assembly.reportModuleExportHost,
+		},
+	}
 }
 
 func newRuntimeServicesAssembly(ctx context.Context, config RuntimeServicesConfig) *runtimeAssembly {
@@ -158,7 +166,6 @@ func newRuntimeServicesAssembly(ctx context.Context, config RuntimeServicesConfi
 	}
 	manifest, deps := config.Manifest, config.Dependencies
 	services := newRuntimeServicesState(ctx, manifest, deps)
-	services.reportExportControls = append([]reportmodel.ReportExportControlSchema(nil), manifest.ReportExportControls...)
 	queryPolicy := initializeSchemaAndRecordFoundation(services, deps)
 	initializeWorkflowAutomationAndGovernance(services, deps)
 	initializeRecordApplications(services)

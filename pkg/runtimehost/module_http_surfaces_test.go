@@ -31,7 +31,7 @@ func TestModuleHTTPSurfacesMountByExposureAndPreserveFallback(t *testing.T) {
 	}), routes: []modulehttp.Route{{Pattern: "GET /party", Exposures: []modulehttp.Exposure{modulehttp.ExposureTenantAdmin}, Authentication: modulehttp.AuthenticationAuthenticated, Permission: "party.read"}}}
 	fallback := http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) { writer.WriteHeader(http.StatusTeapot) })
 	passthrough := func(_ modulehttp.Route, handler http.Handler) (http.Handler, error) { return handler, nil }
-	admin, err := mountModuleHTTPSurfaces(runtimehttp.SurfaceRouteGroupTenantAdmin, []modulehttp.Surface{party}, fallback, passthrough)
+	admin, err := mountModuleHTTPSurfaces(runtimehttp.ListenerRouteGroupTenantAdmin, []modulehttp.Surface{party}, fallback, passthrough)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestModuleHTTPSurfacesMountByExposureAndPreserveFallback(t *testing.T) {
 	if response.Code != http.StatusTeapot {
 		t.Fatalf("fallback status=%d", response.Code)
 	}
-	public, err := mountModuleHTTPSurfaces(runtimehttp.SurfaceRouteGroupPublic, []modulehttp.Surface{party}, fallback, passthrough)
+	public, err := mountModuleHTTPSurfaces(runtimehttp.ListenerRouteGroupPublic, []modulehttp.Surface{party}, fallback, passthrough)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestModuleHTTPSurfacesRejectCrossModuleRouteCollision(t *testing.T) {
 	route := modulehttp.Route{Pattern: "GET /shared", Exposures: []modulehttp.Exposure{modulehttp.ExposureTenantAdmin}, Authentication: modulehttp.AuthenticationAuthenticated, PrincipalOnly: true}
 	first := moduleSurfaceStub{owner: "party", name: "management", handler: http.NotFoundHandler(), routes: []modulehttp.Route{route}}
 	second := moduleSurfaceStub{owner: "notification", name: "management", handler: http.NotFoundHandler(), routes: []modulehttp.Route{route}}
-	_, err := mountModuleHTTPSurfaces(runtimehttp.SurfaceRouteGroupTenantAdmin, []modulehttp.Surface{first, second}, nil, func(_ modulehttp.Route, handler http.Handler) (http.Handler, error) { return handler, nil })
+	_, err := mountModuleHTTPSurfaces(runtimehttp.ListenerRouteGroupTenantAdmin, []modulehttp.Surface{first, second}, nil, func(_ modulehttp.Route, handler http.Handler) (http.Handler, error) { return handler, nil })
 	if err == nil || !strings.Contains(err.Error(), "owned by both") {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestModuleHTTPSurfacesRejectCrossModuleRouteCollision(t *testing.T) {
 
 func TestModuleHTTPSurfacesRejectAuthorizedRouteWithoutHostGuard(t *testing.T) {
 	party := moduleSurfaceStub{owner: "party", name: "management", handler: http.NotFoundHandler(), routes: []modulehttp.Route{{Pattern: "GET /party", Exposures: []modulehttp.Exposure{modulehttp.ExposureTenantAdmin}, Authentication: modulehttp.AuthenticationAuthenticated, Permission: "party.read"}}}
-	_, err := mountModuleHTTPSurfaces(runtimehttp.SurfaceRouteGroupTenantAdmin, []modulehttp.Surface{party}, nil)
+	_, err := mountModuleHTTPSurfaces(runtimehttp.ListenerRouteGroupTenantAdmin, []modulehttp.Surface{party}, nil)
 	if err == nil || !strings.Contains(err.Error(), "requires a host authorization guard") {
 		t.Fatalf("unexpected error: %v", err)
 	}

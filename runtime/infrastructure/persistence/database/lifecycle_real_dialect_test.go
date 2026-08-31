@@ -2,6 +2,7 @@ package database_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,12 +10,43 @@ import (
 	"testing"
 	"time"
 
+	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
+	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/testsupport/lifecyclesdkfixture"
 	"github.com/jackc/pgx/v5"
 )
+
+type dialectLifecycleOwner struct{}
+
+func (dialectLifecycleOwner) Owner(context.Context) string { return "record" }
+func (dialectLifecycleOwner) Preview(context.Context, string, lifecyclemodel.PolicyVersion, time.Time) (lifecyclecontract.CleanupPreview, error) {
+	return lifecyclecontract.CleanupPreview{}, nil
+}
+func (dialectLifecycleOwner) ProcessBatch(context.Context, lifecyclemodel.CleanupJob, lifecyclemodel.PolicyVersion, []lifecyclemodel.LegalHold, int) (lifecyclemodel.CleanupBatchResult, error) {
+	return lifecyclemodel.CleanupBatchResult{Done: true}, nil
+}
+func (dialectLifecycleOwner) ResolveSubject(_ context.Context, _, _, identity string) (string, error) {
+	return identity, nil
+}
+func (dialectLifecycleOwner) PreviewSubject(context.Context, string, string) (json.RawMessage, error) {
+	return json.RawMessage(`{"rows":0}`), nil
+}
+func (dialectLifecycleOwner) ExportSubject(context.Context, string, string) (json.RawMessage, error) {
+	return json.RawMessage(`{}`), nil
+}
+func (dialectLifecycleOwner) EraseSubject(context.Context, string, string, []lifecyclemodel.LegalHold) (json.RawMessage, error) {
+	return json.RawMessage(`{}`), nil
+}
+func (owner dialectLifecycleOwner) ExportSubjectForRequest(ctx context.Context, _ string, workspaceID, identity string) (json.RawMessage, error) {
+	return owner.ExportSubject(ctx, workspaceID, identity)
+}
+func (owner dialectLifecycleOwner) EraseSubjectForRequest(ctx context.Context, _ string, workspaceID, identity string, holds []lifecyclemodel.LegalHold) (json.RawMessage, error) {
+	return owner.EraseSubject(ctx, workspaceID, identity, holds)
+}
 
 // TestLifecyclePersistenceAcrossRealDialects is the deployment gate for the
 // extracted module. SQLite always runs; CI can require PostgreSQL and MySQL by
@@ -47,20 +79,25 @@ func TestLifecyclePersistenceAcrossRealDialects(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = store.Close() })
-			if err := store.EnsureLifecycleSchema(t.Context()); err != nil {
-				t.Fatal(err)
-			}
 			binding, err := lifecyclesdkfixture.Open(t.Context(), store, identity)
 			if err != nil {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = binding.Close(context.Background()) })
-			repository := binding.Repository()
-			policy := lifecyclemodel.PolicyVersion{WorkspaceID: identity, Policy: lifecyclemodel.RetentionPolicy{Key: identity, Version: "1", Owner: "record"}, Status: lifecyclemodel.PolicyStatusPublished, Revision: 1, PublishedAt: time.Now().UTC()}
-			if err := repository.SavePolicy(t.Context(), policy); err != nil {
+			artifacts, err := binding.SubjectArtifacts(t.TempDir())
+			if err != nil {
 				t.Fatal(err)
 			}
-			policies, err := repository.ListPolicies(t.Context(), identity)
+			owner := dialectLifecycleOwner{}
+			if err := binding.BindOwners(t.Context(), lifecyclesdk.OwnerExtensions{Executors: []lifecyclecontract.OwnerLifecycleExecutor{owner}, SubjectResolver: owner, SubjectHandlers: []lifecyclecontract.SubjectExecutionHandler{owner}, Artifacts: artifacts}); err != nil {
+				t.Fatal(err)
+			}
+			principal := lifecycleaccess.Principal{Known: true, WorkspaceID: identity, UserID: "dialect-test", Permissions: map[string]struct{}{lifecyclesdk.PermissionPolicyManage: {}}}
+			policy := lifecyclemodel.PolicyVersion{Policy: lifecyclemodel.RetentionPolicy{Key: identity, Version: "1", Owner: "record", Class: lifecyclemodel.RetentionClassProduct, DefaultRetention: 24 * time.Hour, MinimumRetention: time.Hour, BackupBehavior: lifecyclemodel.BackupBehaviorStandard, EraseBehavior: lifecyclemodel.EraseBehaviorDelete}}
+			if _, err := binding.Governance().PublishPolicy(t.Context(), policy, principal); err != nil {
+				t.Fatal(err)
+			}
+			policies, err := binding.Governance().ListPolicies(t.Context(), principal)
 			if err != nil || len(policies) != 1 || policies[0].Policy.Key != identity {
 				t.Fatalf("policies=%#v err=%v", policies, err)
 			}

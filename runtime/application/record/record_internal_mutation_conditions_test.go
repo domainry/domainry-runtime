@@ -216,14 +216,14 @@ func TestPlanConditionalUpdateMutationCoversAuthorizationLookupScopeAndPlanning(
 	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.ID, transactionmodel.ConditionalUpdateInput{}, principal); !errors.Is(err, lookupFailure) {
 		t.Fatalf("lookup err=%v", err)
 	}
-	schedulerObject := object
-	schedulerObject.Key = "record_timer"
-	schedulerObject.Config = map[string]any{"record_timer_runtime": true}
+	timerObject := object
+	timerObject.Key = "record_timer"
+	timerObject.Config = map[string]any{"record_timer_runtime": true}
 	service = newService(repository, func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
-		return schedulerObject, nil
+		return timerObject, nil
 	}, nil)
-	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), schedulerObject.Key, record.ID, transactionmodel.ConditionalUpdateInput{}, principal); apperror.CodeOf(err) != "backend.scheduler.runtime_api_required" {
-		t.Fatalf("scheduler err=%v", err)
+	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), timerObject.Key, record.ID, transactionmodel.ConditionalUpdateInput{}, principal); apperror.CodeOf(err) != "backend.record_timer.runtime_api_required" {
+		t.Fatalf("record timer err=%v", err)
 	}
 
 	repository = &updateRepositoryProbe{err: errors.New("store unavailable")}

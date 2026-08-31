@@ -72,27 +72,30 @@ deterministic_gate() {
     ./runtime/application/publicationhandoff \
     ./runtime/infrastructure/persistence/database/publicationhandoff \
     ./runtime/bootstrap/runtime
+  run_test integration-owner-workers go -C ../domainry-integration test -count=1 -timeout=5m \
+    ./internal/infrastructure/persistence/database/integration \
+    -run '^TestLocalWorkersPersistProviderStateBeforeDispatchingEvent$'
   run_test protocol-observability go test -count=1 -timeout=5m \
     ./runtime/transport/http \
     ./runtime/transport/http/openapi
   run_test operations-boundaries go test -count=1 -timeout=5m \
-    -run 'TestEveryOperationsApplicationErrorHasMachineRunbook|TestRuntimeOpenAPIRemainsCodeFirst|TestRuntimeRoutesAndOpenAPIDoNotDrift|TestOperationsReliabilityReleaseEvidenceContractIsGoverned|TestHighRiskOwnerRoutesRegisterUnifiedTerminalReceipts' \
-    ./runtime/boundary
+    ./runtime/application/operations \
+    ./runtime/transport/http/operations \
+    ./runtime/transport/http/openapi
   run_test migration-recovery go test -count=1 -timeout=5m \
     ./runtime/infrastructure/persistence/database/migration \
     ./scripts/operations/runtime_disaster_recovery
-  run_test capacity go test -count=1 -timeout=5m \
-    ./runtime/platform/capacity \
-    ./runtime/platform/ratelimit \
-    ./runtime/platform/resilience
+  run_test capacity go -C ../domainry-foundation test -count=1 -timeout=5m \
+    ./capacity \
+    ./ratelimit
 }
 
 race_gate() {
   run_test race-foundation-worker go -C ../domainry-foundation test -race -count=1 -timeout=20m ./worker/...
+  run_test race-foundation-controls go -C ../domainry-foundation test -race -count=1 -timeout=20m \
+    ./capacity \
+    ./ratelimit
   run_test race-core go test -race -count=1 -timeout=20m \
-    ./runtime/platform/capacity \
-    ./runtime/platform/ratelimit \
-    ./runtime/platform/resilience \
     ./runtime/application/lifecycle \
     ./runtime/infrastructure/persistence/database/lifecycle \
     ./runtime/infrastructure/persistence/database/operations

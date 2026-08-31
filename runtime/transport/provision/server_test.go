@@ -201,7 +201,7 @@ func TestInitialProvisionCarriesIdentityProfileExtensionIntoActivation(t *testin
 	manifest.IdentityProfileExtensions = []profilebindingmodel.Binding{{
 		ContractVersion: profilebindingmodel.ContractVersion, MinReaderVersion: profilebindingmodel.MinimumReaderVersion,
 		ObjectKey: "employee_profile", IdentityRelationField: "identity_user", Cardinality: "one_to_one",
-		BusinessIdentity: profilebindingmodel.BusinessIdentityBinding{Key: "employee", SurfaceKeys: []string{"admin"}},
+		BusinessIdentity: profilebindingmodel.BusinessIdentityBinding{Key: "employee"},
 		SummaryFields:    []string{"legal_entity"}, ProfileTabs: []string{"employment"},
 		ProfileTabLabels: map[string]string{"employment": "Employment"}, ProfileTabFields: map[string][]string{"employment": {"legal_entity"}},
 		ProfileTabRelatedObjects: map[string][]string{}, ProfileTabComponents: map[string][]string{},

@@ -100,7 +100,7 @@ func TestProjectActionNotificationDispatchRealRuntimeReplayConcurrencyLifecycleA
 	if status != http.StatusOK || !bytes.Contains([]byte(body), []byte(`"alert_state":"acknowledged"`)) {
 		t.Fatalf("handled status=%d body=%s", status, body)
 	}
-	audits := runtimeFixtureRequestWithHeaders[map[string]any](t, handler, "admin", http.MethodGet, "/business/audit-events?event=notification.intent.dispatch&object_key=lead&record_id="+leadID, nil, map[string]string{"Authorization": "Bearer " + integrationIdentityAccessToken("admin"), "X-Domainry-Product-Surface": "business_workspace"})
+	audits := runtimeFixtureRequestWithHeaders[map[string]any](t, handler, "admin", http.MethodGet, "/business/audit-events?event=notification.intent.dispatch&object_key=lead&record_id="+leadID, nil, map[string]string{"Authorization": "Bearer " + integrationIdentityAccessToken("admin")})
 	if items, _ := audits["items"].([]any); len(items) != 1 {
 		t.Fatalf("notification audit=%#v", audits)
 	}
@@ -119,7 +119,7 @@ func notificationModuleRoutes(t *testing.T, runtime *bootstrap.Runtime) http.Han
 	t.Helper()
 	mux := http.NewServeMux()
 	for _, surface := range runtime.ModuleHTTPSurfaces() {
-		if surface.Owner() != "notification" {
+		if surface.Owner() != "notification" && surface.Owner() != "audit" {
 			continue
 		}
 		if err := modulehttp.ValidateSurface(surface); err != nil {
@@ -127,9 +127,14 @@ func notificationModuleRoutes(t *testing.T, runtime *bootstrap.Runtime) http.Han
 		}
 		for _, route := range surface.Routes() {
 			next := surface.Handler()
+			owner := surface.Owner()
 			mux.Handle(route.Pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				token := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
-				ctx := identitysdk.WithRequestIdentity(r.Context(), identitysdk.RequestIdentity{Principal: identitysdk.Principal{Known: true}, AccessToken: token})
+				principal := identitysdk.Principal{Known: true}
+				if owner == "audit" {
+					principal = integrationAuditPrincipal(r.Header.Get("Authorization"))
+				}
+				ctx := identitysdk.WithRequestIdentity(r.Context(), identitysdk.RequestIdentity{Principal: principal, AccessToken: token})
 				next.ServeHTTP(w, r.WithContext(ctx))
 			}))
 		}
@@ -181,7 +186,6 @@ func projectNotificationRequest(handler http.Handler, userID, role, method, path
 	request := httptest.NewRequest(method, path, bytes.NewReader(payload))
 	request.Header.Set("Authorization", "Bearer "+integrationIdentityAccessTokenFor(userID, role))
 	request.Header.Set("X-Workspace-ID", "workspace-primary")
-	request.Header.Set("X-Domainry-Product-Surface", "business_workspace")
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}

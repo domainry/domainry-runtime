@@ -27,8 +27,6 @@ func TestWorkspaceOwnerPhysicalIsolationAcrossDialects(t *testing.T) {
 		{owner: "audit", table: "_audit_events", mutationColumn: "summary"},
 		{owner: "automation", table: "_automation_rule_executions", mutationColumn: "candidate_json"},
 		{owner: "integration", table: "_publication_outbox", mutationColumn: "payload_json"},
-		{owner: "lifecycle", table: "_lifecycle_cleanup_jobs", mutationColumn: "payload_json"},
-		{owner: "metadata", table: "_application_schema_localized_texts", mutationColumn: "text"},
 		{owner: "record", table: "_record_localized_values", mutationColumn: "text_value"},
 		{owner: "workflow", table: "_workflow_executions", mutationColumn: "result_json"},
 	}

@@ -17,9 +17,7 @@ import (
 	automationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/automation"
 	capabilityhttp "github.com/domainry/domainry-runtime/runtime/transport/http/capabilities"
 	recordhttp "github.com/domainry/domainry-runtime/runtime/transport/http/records"
-	reporthttp "github.com/domainry/domainry-runtime/runtime/transport/http/reports"
 	schedulerhttp "github.com/domainry/domainry-runtime/runtime/transport/http/scheduler"
-	surfacecontexthttp "github.com/domainry/domainry-runtime/runtime/transport/http/surfacecontext"
 	uploadhttp "github.com/domainry/domainry-runtime/runtime/transport/http/uploads"
 	workflowhttp "github.com/domainry/domainry-runtime/runtime/transport/http/workflows"
 )
@@ -32,10 +30,6 @@ func (a *httpServerAssembly) wireRecordAndProcessHandlers() {
 		Audit: records.Applications().Audit, Permissions: records.Applications().Schema,
 		Principal: a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
 		WriteError: a.callbacks.WriteError, WriteServiceError: a.callbacks.WriteServiceError, DecodeJSON: a.callbacks.DecodeJSON,
-	})
-	a.handlers.SurfaceContext = surfacecontexthttp.NewSurfaceContextHandler(surfacecontexthttp.SurfaceContextDependencies{
-		Service: records.Applications().SurfaceContext, Principal: a.callbacks.Principal,
-		WriteJSON: a.callbacks.WriteJSON, WriteError: a.callbacks.WriteError, DecodeJSON: a.callbacks.DecodeJSON,
 	})
 	uploadDir := strings.TrimSpace(a.dependencies.Config.UploadDir)
 	if uploadDir == "" {
@@ -93,9 +87,5 @@ func (a *httpServerAssembly) wireRecordAndProcessHandlers() {
 			}
 			return nil
 		},
-	})
-	a.handlers.Reports = reporthttp.NewReportsHandler(reporthttp.ReportsDependencies{
-		Queries: records.Applications().ReportQueries, Snapshots: records.Applications().ReportSnapshots, Exports: records.Applications().ReportExports, Principal: a.callbacks.Principal,
-		WriteJSON: a.callbacks.WriteJSON, WriteServiceError: a.callbacks.WriteServiceError,
 	})
 }

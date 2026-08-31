@@ -3,11 +3,11 @@ package validation
 import (
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	notificationsdkcontract "github.com/domainry/domainry-notification-sdk/contract"
-	notificationbinding "github.com/domainry/domainry-runtime/runtime/platform/notificationbinding"
+	"github.com/domainry/domainry-notification-sdk/modulehost"
 )
 
 func validateNotificationTemplates(values []notificationmodel.NotificationTemplate) error {
-	capabilities, err := notificationbinding.TemplateCapabilityCatalog()
+	capabilities, err := modulehost.DefaultTemplateCapabilityCatalog()
 	if err != nil {
 		return err
 	}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-connector-sdk"
+	integrationmodule "github.com/domainry/domainry-integration/module"
 	notificationmodule "github.com/domainry/domainry-notification/module"
 	partymodule "github.com/domainry/domainry-party/module"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
@@ -35,7 +36,7 @@ func TestBootstrapEntrypointsAssembleRunnableGraphs(t *testing.T) {
 		SchedulerLeaseTTL:          time.Minute,
 		SchedulerMaxCatchupWindows: 1,
 	}
-	runtime := New(t.Context(), cfg, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangefixture.NewFactory())
+	runtime := New(t.Context(), cfg, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangefixture.NewFactory(), integrationmodule.NewFactory())
 	if runtime == nil || BindHTTP(t.Context(), runtime) != runtime {
 		t.Fatal("bootstrap runtime entrypoints did not preserve the assembled owner")
 	}
@@ -68,13 +69,13 @@ func TestBootstrapExtensionAndProjectFacadeEntrypoints(t *testing.T) {
 	connectors.Freeze()
 	constructors := []func(config.Config) *Runtime{
 		func(cfg config.Config) *Runtime {
-			return NewWithBusinessHandlers(t.Context(), cfg, handlers, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangefixture.NewFactory())
+			return NewWithBusinessHandlers(t.Context(), cfg, handlers, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangefixture.NewFactory(), integrationmodule.NewFactory())
 		},
 		func(cfg config.Config) *Runtime {
-			return NewWithExtensions(t.Context(), cfg, handlers, connectors, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangefixture.NewFactory())
+			return NewWithExtensions(t.Context(), cfg, handlers, connectors, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangefixture.NewFactory(), integrationmodule.NewFactory())
 		},
 		func(cfg config.Config) *Runtime {
-			return NewVerifiedProjectWithIdentity(t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, RuntimeReleaseArtifactEvidence{}, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangefixture.NewFactory())
+			return NewVerifiedProjectWithIdentity(t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, RuntimeReleaseArtifactEvidence{}, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangefixture.NewFactory(), integrationmodule.NewFactory())
 		},
 	}
 	for index, constructor := range constructors {
@@ -84,14 +85,14 @@ func TestBootstrapExtensionAndProjectFacadeEntrypoints(t *testing.T) {
 		if runtime == nil {
 			t.Fatalf("constructor %d returned nil", index)
 		}
-		if RoutesForSurfaceGroup(runtime, runtimehttp.SurfaceRouteGroupPublic) == nil {
+		if RoutesForListenerGroup(runtime, runtimehttp.ListenerRouteGroupPublic) == nil {
 			t.Fatalf("constructor %d routes nil", index)
 		}
 		if err := runtime.CloseContext(t.Context()); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if RoutesForSurfaceGroup(nil, runtimehttp.SurfaceRouteGroupPublic) == nil {
+	if RoutesForListenerGroup(nil, runtimehttp.ListenerRouteGroupPublic) == nil {
 		t.Fatal("nil facade fallback missing")
 	}
 }

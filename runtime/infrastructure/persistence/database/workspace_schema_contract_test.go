@@ -179,8 +179,7 @@ func globallyOwnedUniqueConstraint(table, indexName string, columns []string) bo
 	if len(columns) != 1 || columns[0] != "token_hash" {
 		return false
 	}
-	return (table == "_integration_api_keys" && indexName == "uniq_integration_api_keys_token_hash") ||
-		(table == "_action_assurance_grants" && indexName == "uniq_action_assurance_token_hash")
+	return table == "_action_assurance_grants" && indexName == "uniq_action_assurance_token_hash"
 }
 
 func sqliteIndexColumns(db *sql.DB, quotedIndex string) ([]string, error) {

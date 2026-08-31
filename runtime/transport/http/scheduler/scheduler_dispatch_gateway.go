@@ -8,48 +8,88 @@ import (
 	"strings"
 	"time"
 
-	schedulerbusiness "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 	"github.com/domainry/domainry-scheduler-sdk/dispatchgateway"
 )
 
 func (h *SchedulerHandler) getOpsSchedulerState(w http.ResponseWriter, r *http.Request) {
-	state, err := h.service.OpsState(r.Context(), h.principal(r))
-	if err != nil {
+	if err := h.service.AuthorizeOpsRead(r.Context(), h.principal(r)); err != nil {
 		h.writeServiceError(w, r, err)
 		return
 	}
+	state := opsSchedulerStateDTO{Runs: []opsSchedulerRunDTO{}, DeadLetters: []opsSchedulerDeadLetterDTO{}}
 	if h.binding != nil {
 		runs, bindingErr := h.binding.Runs(r.Context(), 500)
 		if bindingErr != nil {
 			h.writeServiceError(w, r, bindingErr)
 			return
 		}
-		projected := make([]schedulerbusiness.OpsSchedulerRunDTO, 0, len(runs)+len(state.Runs))
-		owned := make(map[string]struct{}, len(runs))
+		projected := make([]opsSchedulerRunDTO, 0, len(runs))
 		for _, run := range runs {
 			projected = append(projected, projectSDKRun(run))
-			owned[run.Trigger.RunID] = struct{}{}
 		}
-		for _, run := range state.Runs {
-			if _, replaced := owned[run.ID]; replaced {
-				continue
-			}
-			projected = append(projected, run)
+		deadLetters, bindingErr := h.binding.DeadLetters(r.Context(), 500)
+		if bindingErr != nil {
+			h.writeServiceError(w, r, bindingErr)
+			return
+		}
+		projectedDeadLetters := make([]opsSchedulerDeadLetterDTO, 0, len(deadLetters))
+		for _, deadLetter := range deadLetters {
+			projectedDeadLetters = append(projectedDeadLetters, projectSDKDeadLetter(deadLetter))
 		}
 		state.Provisioned = true
 		state.Runs = projected
+		state.DeadLetters = projectedDeadLetters
 	}
 	h.writeJSON(w, http.StatusOK, state)
 }
 
-func projectSDKRun(run schedulersdk.Run) schedulerbusiness.OpsSchedulerRunDTO {
-	return schedulerbusiness.OpsSchedulerRunDTO{
+type opsSchedulerStateDTO struct {
+	Provisioned bool                        `json:"provisioned"`
+	Runs        []opsSchedulerRunDTO        `json:"runs"`
+	DeadLetters []opsSchedulerDeadLetterDTO `json:"dead_letters"`
+}
+
+type opsSchedulerRunDTO struct {
+	ID             string `json:"id"`
+	DefinitionKey  string `json:"definition_key,omitempty"`
+	Status         string `json:"status"`
+	Attempt        int    `json:"attempt,omitempty"`
+	ScheduledFor   string `json:"scheduled_for,omitempty"`
+	ErrorMessage   string `json:"error_message,omitempty"`
+	LeaseOwner     string `json:"lease_owner,omitempty"`
+	LeaseExpiresAt string `json:"lease_expires_at,omitempty"`
+	FencingToken   int    `json:"fencing_token,omitempty"`
+	CorrelationID  string `json:"correlation_id,omitempty"`
+	CreatedAt      string `json:"created_at,omitempty"`
+	UpdatedAt      string `json:"updated_at,omitempty"`
+}
+
+type opsSchedulerDeadLetterDTO struct {
+	ID            string `json:"id"`
+	RunID         string `json:"run_id"`
+	DefinitionKey string `json:"definition_key,omitempty"`
+	Status        string `json:"status"`
+	Reason        string `json:"reason,omitempty"`
+	FailedAt      string `json:"failed_at,omitempty"`
+	ResolvedAt    string `json:"resolved_at,omitempty"`
+}
+
+func projectSDKRun(run schedulersdk.Run) opsSchedulerRunDTO {
+	return opsSchedulerRunDTO{
 		ID: run.Trigger.RunID, DefinitionKey: run.Trigger.DefinitionKey, Status: run.Status,
 		Attempt: run.Trigger.Attempt, ScheduledFor: formatSchedulerTime(run.Trigger.ScheduledFor),
 		ErrorMessage: run.LastError, LeaseOwner: run.Lease.Owner, LeaseExpiresAt: formatSchedulerTime(run.Lease.ExpiresAt),
 		FencingToken: int(run.Lease.Token), CorrelationID: run.DownstreamReceipt.ID,
 		CreatedAt: formatSchedulerTime(run.CreatedAt), UpdatedAt: formatSchedulerTime(run.UpdatedAt),
+	}
+}
+
+func projectSDKDeadLetter(deadLetter schedulersdk.DeadLetter) opsSchedulerDeadLetterDTO {
+	return opsSchedulerDeadLetterDTO{
+		ID: deadLetter.RunID, RunID: deadLetter.RunID, DefinitionKey: deadLetter.DefinitionKey,
+		Status: deadLetter.Status, Reason: deadLetter.Reason,
+		FailedAt: formatSchedulerTime(deadLetter.FailedAt), ResolvedAt: formatSchedulerTime(deadLetter.ResolvedAt),
 	}
 }
 

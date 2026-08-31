@@ -104,9 +104,9 @@ func (r *capturedHTTPResponse) Write(payload []byte) (int, error) {
 	return r.body.Write(payload)
 }
 
-func (s *HTTPRouter) surfaceOpenAPIHandler(group SurfaceRouteGroup, full http.Handler) http.Handler {
+func (s *HTTPRouter) listenerOpenAPIHandler(group ListenerRouteGroup, full http.Handler) http.Handler {
 	base := full
-	if group == SurfaceRouteGroupPublic {
+	if group == ListenerRouteGroupPublic {
 		raw := http.NewServeMux()
 		s.openAPIHTTP.RegisterRoutes(raw)
 		base = raw
@@ -120,11 +120,11 @@ func (s *HTTPRouter) surfaceOpenAPIHandler(group SurfaceRouteGroup, full http.Ha
 		}
 		var document map[string]any
 		if err := json.Unmarshal(capture.body.Bytes(), &document); err != nil {
-			writeError(w, request, http.StatusServiceUnavailable, "openapi.surface_projection_failed")
+			writeError(w, request, http.StatusServiceUnavailable, "openapi.listener_projection_failed")
 			return
 		}
-		if err := projectOpenAPIForSurfaceGroup(document, group); err != nil {
-			writeError(w, request, http.StatusServiceUnavailable, "openapi.surface_projection_failed")
+		if err := projectOpenAPIForListenerGroup(document, group); err != nil {
+			writeError(w, request, http.StatusServiceUnavailable, "openapi.listener_projection_failed")
 			return
 		}
 		// The document was decoded from JSON and projection only removes map
@@ -136,14 +136,14 @@ func (s *HTTPRouter) surfaceOpenAPIHandler(group SurfaceRouteGroup, full http.Ha
 	})
 }
 
-func projectOpenAPIForSurfaceGroup(document map[string]any, group SurfaceRouteGroup) error {
+func projectOpenAPIForListenerGroup(document map[string]any, group ListenerRouteGroup) error {
 	paths, ok := document["paths"].(map[string]any)
 	if !ok {
 		return errors.New("OpenAPI paths are missing")
 	}
-	targets := routeGroupSurfaces(group)
-	if len(targets) == 0 {
-		return errors.New("unknown Surface route group")
+	exposure, known := listenerExposure(group)
+	if !known {
+		return errors.New("unknown listener route group")
 	}
 	for path, rawPathItem := range paths {
 		pathItem, ok := rawPathItem.(map[string]any)
@@ -158,8 +158,14 @@ func projectOpenAPIForSurfaceGroup(document map[string]any, group SurfaceRouteGr
 			default:
 				continue
 			}
-			surfaces, classified := runtimeSurfaceRoutePolicies[upperMethod+" "+path]
-			if !classified || !routeVisibleOnGroup(surfaces, targets) {
+			contract, classified := runtimeEndpointContracts[upperMethod+" "+path]
+			if classified && endpointVisibleOnListener(contract, exposure) {
+				continue
+			}
+			if !classified && moduleOpenAPIOperationVisible(pathItem[method], group) {
+				continue
+			}
+			if !classified || !endpointVisibleOnListener(contract, exposure) {
 				delete(pathItem, method)
 			}
 		}
@@ -175,6 +181,40 @@ func projectOpenAPIForSurfaceGroup(document map[string]any, group SurfaceRouteGr
 		}
 	}
 	return nil
+}
+
+func moduleOpenAPIOperationVisible(rawOperation any, group ListenerRouteGroup) bool {
+	operation, _ := rawOperation.(map[string]any)
+	extension, _ := operation["x-domainry-module-route"].(map[string]any)
+	if extension == nil {
+		return false
+	}
+	want := ""
+	switch group {
+	case ListenerRouteGroupPublic:
+		want = "public"
+	case ListenerRouteGroupTenantAdmin:
+		want = "tenant_admin"
+	case ListenerRouteGroupOps:
+		want = "ops"
+	default:
+		return false
+	}
+	switch exposures := extension["exposures"].(type) {
+	case []string:
+		for _, candidate := range exposures {
+			if candidate == want {
+				return true
+			}
+		}
+	case []any:
+		for _, candidate := range exposures {
+			if candidate == want {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func copyHTTPResponse(w http.ResponseWriter, capture *capturedHTTPResponse) {

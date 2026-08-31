@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
@@ -17,7 +18,10 @@ func (s *ApplicationSchemaDomainService) ForPrincipalLocale(ctx context.Context,
 	if locale == "" {
 		return snapshot
 	}
-	values, err := s.metadata.ListLocalizedTexts(ctx, principal.WorkspaceID, appschemamodel.LocalizedTextQuery{WorkspaceID: principal.WorkspaceID, Locale: locale})
+	if s.metadata == nil {
+		return snapshot
+	}
+	values, err := s.metadata.List(ctx, metadatasdk.LocalizedTextQuery{WorkspaceID: principal.WorkspaceID, Locale: locale})
 	if err != nil || len(values) == 0 {
 		return snapshot
 	}
@@ -93,7 +97,7 @@ func (s *ApplicationSchemaDomainService) ForPrincipalLocale(ctx context.Context,
 	return snapshot
 }
 
-func localizedTextLookup(values []appschemamodel.LocalizedText) map[string]string {
+func localizedTextLookup(values []metadatasdk.LocalizedText) map[string]string {
 	out := map[string]string{}
 	for _, value := range values {
 		out[localizedTextLookupKey(value.EntityType, value.EntityKey, value.Property)] = value.Text

@@ -132,9 +132,9 @@ type Config struct {
 	AllowEmptyAuthoringManifest    bool
 	UploadDir                      string
 	CORSAllowedOrigins             []string
-	SurfaceBusinessOrigins         []string
-	SurfaceAdminOrigins            []string
-	SurfacePortalOrigins           []string
+	HTTPPublicOrigins              []string
+	HTTPTenantAdminOrigins         []string
+	HTTPOpsOrigins                 []string
 	RuntimeAllowDevIdentityHeaders bool
 	AuditExportTokenKey            string
 	IdentityRedirectURLs           []string
@@ -149,22 +149,30 @@ type Config struct {
 	IntegrationSecretKey           string
 	IntegrationActiveKeyID         string
 	IntegrationDecryptOnlyKeys     map[string]string
-	AgentDialogRateLimitPerMinute  int
 	WorkerPollInterval             time.Duration
 	WorkerBatchSize                int
+	WorkerLeaseTTL                 time.Duration
 	SchedulerEnabled               bool
 	SchedulerPollInterval          time.Duration
 	SchedulerBatchSize             int
 	SchedulerLeaseTTL              time.Duration
 	SchedulerMaxCatchupWindows     int
+	RecordTimerEnabled             bool
+	RecordTimerPollInterval        time.Duration
+	RecordTimerBatchSize           int
+	RecordTimerLeaseTTL            time.Duration
 }
 
 func FromEnv() Config {
 	environment := env("APP_ENV", env("GO_ENV", env("NODE_ENV", "development")))
+	workerPollDefault := 500 * time.Millisecond
 	schedulerPollDefault := 500 * time.Millisecond
+	recordTimerPollDefault := 500 * time.Millisecond
 	switch strings.ToLower(strings.TrimSpace(environment)) {
 	case "prod", "production":
+		workerPollDefault = 30 * time.Second
 		schedulerPollDefault = 30 * time.Second
+		recordTimerPollDefault = 30 * time.Second
 	}
 	return Config{
 		RuntimeVersion:                          env("DOMAINRY_RUNTIME_VERSION", "dev"),
@@ -276,9 +284,9 @@ func FromEnv() Config {
 		InitialTenantStoreConfiguration:         env("INITIAL_TENANT_STORE_CONFIGURATION", "{}"),
 		UploadDir:                               env("UPLOAD_DIR", "../data/uploads"),
 		CORSAllowedOrigins:                      csvEnv("CORS_ALLOWED_ORIGINS", []string{"*"}),
-		SurfaceBusinessOrigins:                  csvEnv("SURFACE_BUSINESS_ORIGINS", nil),
-		SurfaceAdminOrigins:                     csvEnv("SURFACE_ADMIN_ORIGINS", nil),
-		SurfacePortalOrigins:                    csvEnv("SURFACE_PORTAL_ORIGINS", nil),
+		HTTPPublicOrigins:                       csvEnv("HTTP_PUBLIC_ORIGINS", nil),
+		HTTPTenantAdminOrigins:                  csvEnv("HTTP_TENANT_ADMIN_ORIGINS", nil),
+		HTTPOpsOrigins:                          csvEnv("HTTP_OPS_ORIGINS", nil),
 		RuntimeAllowDevIdentityHeaders:          boolEnv("RUNTIME_ALLOW_DEV_IDENTITY_HEADERS", false),
 		AuditExportTokenKey:                     env("AUDIT_EXPORT_TOKEN_KEY", DevAuditExportTokenKey),
 		IdentityRedirectURLs:                    csvEnv("IDENTITY_REDIRECT_URLS", []string{"http://localhost:3100/auth/callback"}),
@@ -293,14 +301,18 @@ func FromEnv() Config {
 		IntegrationSecretKey:                    env("INTEGRATION_SECRET_KEY", DevIntegrationSecret),
 		IntegrationActiveKeyID:                  env("INTEGRATION_ACTIVE_KEY_ID", "dev-v1"),
 		IntegrationDecryptOnlyKeys:              keyMapEnv("INTEGRATION_DECRYPT_ONLY_KEYS"),
-		AgentDialogRateLimitPerMinute:           intEnv("AGENT_DIALOG_RATE_LIMIT_PER_MINUTE", 60),
-		WorkerPollInterval:                      durationEnv("WORKER_POLL_INTERVAL", durationEnv("SCHEDULER_POLL_INTERVAL", schedulerPollDefault)),
-		WorkerBatchSize:                         intEnv("WORKER_BATCH_SIZE", intEnv("SCHEDULER_BATCH_SIZE", 25)),
+		WorkerPollInterval:                      durationEnv("WORKER_POLL_INTERVAL", workerPollDefault),
+		WorkerBatchSize:                         intEnv("WORKER_BATCH_SIZE", 25),
+		WorkerLeaseTTL:                          durationEnv("WORKER_LEASE_TTL", 5*time.Minute),
 		SchedulerEnabled:                        boolEnv("SCHEDULER_ENABLED", true),
 		SchedulerPollInterval:                   durationEnv("SCHEDULER_POLL_INTERVAL", schedulerPollDefault),
 		SchedulerBatchSize:                      intEnv("SCHEDULER_BATCH_SIZE", 25),
 		SchedulerLeaseTTL:                       durationEnv("SCHEDULER_LEASE_TTL", 5*time.Minute),
 		SchedulerMaxCatchupWindows:              intEnv("SCHEDULER_MAX_CATCHUP_WINDOWS", 1),
+		RecordTimerEnabled:                      boolEnv("RECORD_TIMER_ENABLED", true),
+		RecordTimerPollInterval:                 durationEnv("RECORD_TIMER_POLL_INTERVAL", recordTimerPollDefault),
+		RecordTimerBatchSize:                    intEnv("RECORD_TIMER_BATCH_SIZE", 25),
+		RecordTimerLeaseTTL:                     durationEnv("RECORD_TIMER_LEASE_TTL", 5*time.Minute),
 	}
 }
 
@@ -312,14 +324,14 @@ func (c Config) EffectiveWorkerPollInterval() time.Duration {
 	if c.WorkerPollInterval > 0 {
 		return c.WorkerPollInterval
 	}
-	return c.SchedulerPollInterval
+	return 500 * time.Millisecond
 }
 
 func (c Config) EffectiveWorkerBatchSize() int {
 	if c.WorkerBatchSize > 0 {
 		return c.WorkerBatchSize
 	}
-	return c.SchedulerBatchSize
+	return 25
 }
 
 func databaseMigrationModeEnv(environment string) string {
@@ -368,14 +380,17 @@ func (c Config) ValidateSecurity() error {
 			return fmt.Errorf("CORS_ALLOWED_ORIGINS must not contain * in production")
 		}
 	}
-	if err := c.validateProductionSurfaceOrigins(); err != nil {
+	if err := c.validateProductionListenerOrigins(); err != nil {
 		return err
 	}
-	if err := c.validateProductionSurfaceListeners(); err != nil {
+	if err := c.validateProductionListeners(); err != nil {
 		return err
 	}
 	if c.SchedulerEnabled && c.SchedulerPollInterval < time.Second {
 		return fmt.Errorf("SCHEDULER_POLL_INTERVAL must be at least 1s in production")
+	}
+	if c.RecordTimerEnabled && c.RecordTimerPollInterval < time.Second {
+		return fmt.Errorf("RECORD_TIMER_POLL_INTERVAL must be at least 1s in production")
 	}
 	if strings.TrimSpace(c.TelemetryEndpoint) != "" && c.TelemetryInsecure {
 		return fmt.Errorf("TELEMETRY_INSECURE must be false in production")
@@ -408,7 +423,7 @@ func (c Config) validateWorkspaceProvisionFailurePoint() error {
 	return fmt.Errorf("WORKSPACE_PROVISION_FAILURE_POINT is invalid")
 }
 
-func (c Config) validateProductionSurfaceListeners() error {
+func (c Config) validateProductionListeners() error {
 	listeners := []struct {
 		name string
 		addr string
@@ -447,14 +462,14 @@ func (c Config) validateProductionSurfaceListeners() error {
 	return nil
 }
 
-func (c Config) validateProductionSurfaceOrigins() error {
+func (c Config) validateProductionListenerOrigins() error {
 	groups := []struct {
 		name    string
 		origins []string
 	}{
-		{"SURFACE_BUSINESS_ORIGINS", c.SurfaceBusinessOrigins},
-		{"SURFACE_ADMIN_ORIGINS", c.SurfaceAdminOrigins},
-		{"SURFACE_PORTAL_ORIGINS", c.SurfacePortalOrigins},
+		{"HTTP_PUBLIC_ORIGINS", c.HTTPPublicOrigins},
+		{"HTTP_TENANT_ADMIN_ORIGINS", c.HTTPTenantAdminOrigins},
+		{"HTTP_OPS_ORIGINS", c.HTTPOpsOrigins},
 	}
 	cors := map[string]bool{}
 	for _, origin := range c.CORSAllowedOrigins {
@@ -474,7 +489,7 @@ func (c Config) validateProductionSurfaceOrigins() error {
 			}
 			key := strings.ToLower(origin)
 			if owner := owners[key]; owner != "" && owner != group.name {
-				return fmt.Errorf("Surface origin %q is shared by %s and %s", origin, owner, group.name)
+				return fmt.Errorf("Listener origin %q is shared by %s and %s", origin, owner, group.name)
 			}
 			owners[key] = group.name
 			if !cors[key] {

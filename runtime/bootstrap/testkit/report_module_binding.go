@@ -2,10 +2,12 @@ package testkit
 
 import (
 	"context"
+	"time"
 
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
 	reportmodule "github.com/domainry/domainry-report/module"
+	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
@@ -15,6 +17,41 @@ func openTestkitReportBinding(ctx context.Context, store *database.RuntimeStore)
 }
 
 type testkitReportHost struct{ store *database.RuntimeStore }
+
+type testkitReportApplicationHost struct {
+	testkitReportHost
+	ports     composition.ReportModuleApplicationPorts
+	cursorKey []byte
+}
+
+func (h testkitReportApplicationHost) ReportSubjects() reportmodulehost.SubjectResolver {
+	return h.ports.Subjects
+}
+func (h testkitReportApplicationHost) ReportDatasets() reportmodulehost.DatasetReader {
+	return h.ports.Datasets
+}
+func (h testkitReportApplicationHost) ReportObjectSQL() reportmodulehost.ObjectSQLExecutor {
+	return h.ports.ObjectSQL
+}
+func (h testkitReportApplicationHost) ReportSourceVersions() reportmodulehost.SourceVersionReader {
+	return h.ports.SourceVersions
+}
+func (h testkitReportApplicationHost) ReportExecutionAudit() reportmodulehost.ExecutionAudit {
+	return h.ports.Audit
+}
+func (h testkitReportApplicationHost) ReportExportAuthorization() reportmodulehost.ExportAuthorization {
+	return h.ports.Authorization
+}
+func (h testkitReportApplicationHost) ReportSnapshotTerminals() reportmodulehost.SnapshotTerminalCommitter {
+	return h.ports.Terminals
+}
+func (h testkitReportApplicationHost) ReportExports() reportmodulehost.ExportGateway {
+	return h.ports.Exports
+}
+func (h testkitReportApplicationHost) ReportCursorSigningKey() []byte {
+	return append([]byte(nil), h.cursorKey...)
+}
+func (testkitReportApplicationHost) ReportClock() func() time.Time { return time.Now }
 
 func (h testkitReportHost) Database() reportmodulehost.Database { return h.store.DB() }
 func (h testkitReportHost) DatabaseFor(ctx context.Context) reportmodulehost.DBTX {

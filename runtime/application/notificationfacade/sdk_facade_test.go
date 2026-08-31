@@ -7,6 +7,7 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 func TestAuthorityUsesOriginalIdentityRequestToken(t *testing.T) {
@@ -20,6 +21,17 @@ func TestAuthorityUsesOriginalIdentityRequestToken(t *testing.T) {
 	}
 	if _, err := authority(t.Context(), "business_workspace"); apperror.KindOf(err) != apperror.KindForbidden {
 		t.Fatalf("missing token error=%v", err)
+	}
+}
+
+func TestApplicationUserAuthorityUsesAdministrationChannel(t *testing.T) {
+	ctx := identitysdk.WithRequestIdentity(t.Context(), identitysdk.RequestIdentity{Principal: identitysdk.Principal{Known: true}, AccessToken: "token"})
+	value, err := (&NotificationApplicationService{}).user(ctx, principalmodel.Principal{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value.Surface != "administration" {
+		t.Fatalf("surface=%q", value.Surface)
 	}
 }
 

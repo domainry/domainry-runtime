@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
+	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 )
 
 const (
@@ -27,8 +27,8 @@ func (s *HTTPRouter) withHighRiskOperationPolicy(routes *http.ServeMux, next htt
 			next.ServeHTTP(w, r)
 			return
 		}
-		contract, classified := runtimeEndpointSurfaceContracts[r.Method+" "+policy.path]
-		if !classified || contract.HighRiskPolicy == surfacemodel.HighRiskActionNone {
+		contract, classified := runtimeEndpointContracts[r.Method+" "+policy.path]
+		if !classified || contract.HighRiskPolicy == endpointmodel.HighRiskActionNone {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -43,12 +43,12 @@ func (s *HTTPRouter) withHighRiskOperationPolicy(routes *http.ServeMux, next htt
 		}
 		r.Header.Set(operationReasonHeader, reason)
 		switch contract.HighRiskPolicy {
-		case surfacemodel.HighRiskActionConfirmRequired:
+		case endpointmodel.HighRiskActionConfirmRequired:
 			if strings.TrimSpace(r.Header.Get(operationConfirmationHeader)) != operationConfirmedValue {
 				s.rejectHighRiskOperation(w, r, contract, "confirmation", "operations.confirmation_required")
 				return
 			}
-		case surfacemodel.HighRiskActionBreakGlass:
+		case endpointmodel.HighRiskActionBreakGlass:
 			if strings.TrimSpace(r.Header.Get(operationConfirmationHeader)) != operationBreakGlassValue {
 				s.rejectHighRiskOperation(w, r, contract, "break_glass", "operations.break_glass_confirmation_required")
 				return
@@ -80,7 +80,7 @@ func (*operationReasonEncodingError) Error() string { return "invalid UTF-8 oper
 func (s *HTTPRouter) rejectHighRiskOperation(
 	w http.ResponseWriter,
 	r *http.Request,
-	contract surfacemodel.RuntimeEndpointContractV1,
+	contract endpointmodel.RuntimeEndpointContractV1,
 	missing string,
 	code string,
 ) {

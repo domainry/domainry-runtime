@@ -1,22 +1,26 @@
 # Lifecycle 模块
 
 状态：独立源码 Module 已接入；尚未形成 Runtime 可选 SaaS 拓扑  
-Owner：retention policy、legal hold、cleanup job、subject request、archive evidence 与 deletion replay 状态  
+Owner：retention policy、legal hold、cleanup job、subject request、archive evidence、deletion replay 与 Lifecycle 产品 HTTP
 实现：`domainry-lifecycle`
 
 ## 当前边界
 
-Lifecycle persistence 与业务状态归 `domainry-lifecycle`。Runtime 提供宿主数据库、ORM renderer、事务边界和 migration registrar，并保留 `/operations/lifecycle/*` 的授权、Operations receipt 与 HTTP 组合。Module 不得创建私有 migration ledger；DDL/DML 使用 `domainry-orm`。
+Lifecycle 的 Domain、Application、persistence、迁移、worker tick 和 17 个产品 HTTP 路由均归 `domainry-lifecycle`。Runtime 只提供宿主数据库、ORM renderer、事务、migration registrar、身份中间件、listener 与通用 HTTP governance，并通过 SDK `Governance`、`System`、`LocalWorkers` 调用业务能力；Runtime 不再取得 Lifecycle repository 或 transaction escape hatch。
+
+Lifecycle Module 通过 `modulehttp.Surface` 提交 policy、legal hold、cleanup 创建/预览、metrics、archive、subject request、external erasure 与 deletion replay 路由及其 OpenAPI。Runtime 校验并挂载 Surface。唯一仍由 Runtime 拥有的 Lifecycle HTTP 是 `POST /operations/lifecycle/cleanup/jobs/{jobID}/run`，因为它必须先经过 Runtime Operations durable receipt，再调用 Lifecycle 执行一个 fenced batch。
+
+Lifecycle 在模块打开时自行向宿主 ledger 提交 `_lifecycle_*` 迁移；`EnsureRuntimeSchema` 不再预建或重复登记这些表。Module 不得创建私有 migration ledger，DDL/DML 使用 `domainry-orm`。
 
 ## 代码接入
 
 - Host：`runtime/infrastructure/persistence/lifecyclemodule/host.go`
-- Runtime application binding：`runtime/application/lifecycle/binding.go`
-- HTTP adapter：`runtime/transport/http/lifecycle/lifecycle_handler.go`
-- Bootstrap：`runtime/bootstrap/runtime/service_assembly.go`
+- Module/owner 组合：`runtime/bootstrap/runtime/service_assembly.go`
+- Module Surface 收集：`runtime/bootstrap/runtime/module_http_surfaces.go`
+- Runtime-only cleanup orchestration：`runtime/transport/http/lifecycle`
+- Runtime OpenAPI merge：`runtime/transport/http/openapi/openapi.go`
 
 ## 已知缺口
 
 - 当前仍由 Runtime bootstrap 固定组装，尚无 Module/SaaS Factory 选择。
-- schema assembler、management connection 与 migration failure seam 必须在模块迁移后重新通过完整契约测试。
-- SaaS 化前必须设计 subject export artifact、legal hold、删除 replay 和不可用策略，不能把本地事务语义直接扩展为跨进程原子性。
+- SaaS 化前必须版本化远程 Binding、subject export artifact、legal hold、删除 replay、worker ownership 和不可用策略；不能把本地事务语义直接扩展为跨进程原子性。

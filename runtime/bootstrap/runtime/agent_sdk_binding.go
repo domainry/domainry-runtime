@@ -22,6 +22,13 @@ type runtimeAgentHost struct {
 	store     *persistence.RuntimeStore
 }
 
+// runtimeAgentSaaSHost deliberately has no database or migration methods. A
+// remote Agent Binding receives only deployment identity and cannot recover
+// Runtime persistence through a type assertion on the concrete host value.
+type runtimeAgentSaaSHost struct{ runtimeID string }
+
+func (h runtimeAgentSaaSHost) RuntimeID() string { return h.runtimeID }
+
 func synchronizeAgentDefinitions(ctx context.Context, binding agentsdk.Binding, manifest *manifestmodel.ManifestSchema) error {
 	repositories, ok := binding.(agentpersistence.DefinitionBinding)
 	if !ok || repositories.DefinitionRepository() == nil {
@@ -111,7 +118,7 @@ func openAgentBinding(ctx context.Context, runtimeID string, store *persistence.
 	if moduleFactory, ok := factory.(agentmodulehost.Factory); ok {
 		binding, err = moduleFactory.OpenModule(ctx, application, host)
 	} else if saasFactory, ok := factory.(agentsaashost.Factory); ok {
-		binding, err = saasFactory.OpenSaaS(ctx, application, host)
+		binding, err = saasFactory.OpenSaaS(ctx, application, runtimeAgentSaaSHost{runtimeID: runtimeID})
 	} else {
 		binding, err = factory.Open(ctx, application)
 	}

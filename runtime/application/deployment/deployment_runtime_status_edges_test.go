@@ -109,17 +109,8 @@ func (f *deploymentStatusFixture) IdempotencyMetrics(context.Context) idempotenc
 	return f.idempotencyMetric
 }
 
-type lifecycleHealthFixture struct {
-	status map[string]any
-	err    error
-}
-
-func (f lifecycleHealthFixture) HealthForSystem(context.Context, principalmodel.SystemScope, time.Time) (map[string]any, error) {
-	return f.status, f.err
-}
-
 func deploymentStatusService(fixture *deploymentStatusFixture) *DeploymentRuntimeStatusApplicationService {
-	return NewDeploymentRuntimeStatusApplicationService("template", "v1", fixture, fixture, fixture, fixture, fixture, fixture, fixture)
+	return NewDeploymentRuntimeStatusApplicationService(fixture, fixture, fixture, fixture, fixture, fixture, fixture)
 }
 
 func TestDeploymentIdempotencyStatusAndMutationEdges(t *testing.T) {
@@ -136,7 +127,7 @@ func TestDeploymentIdempotencyStatusAndMutationEdges(t *testing.T) {
 	if err != nil || status.Backlog["pending"] != 2 {
 		t.Fatalf("system status=%#v err=%v", status, err)
 	}
-	unsupported := NewDeploymentRuntimeStatusApplicationService("template", "v1", fixture, fixture, readinessRepository{}, fixture, fixture, fixture, fixture)
+	unsupported := NewDeploymentRuntimeStatusApplicationService(fixture, fixture, readinessRepository{}, fixture, fixture, fixture, fixture)
 	if _, err := unsupported.IdempotencyOperationalStatus(t.Context(), "workspace-a"); apperror.CodeOf(err) != idempotency.ErrorCodeReceiptUnavailable {
 		t.Fatalf("unsupported workspace status error=%v", err)
 	}
@@ -243,7 +234,7 @@ func TestDeploymentStorageAndMigrationEdges(t *testing.T) {
 
 	fixture := &deploymentStatusFixture{migration: deploymentmodel.MigrationStatus{Current: true}, recordTotals: map[string]int{}, recordErrors: map[string]error{}}
 	service := deploymentStatusService(fixture)
-	nilRepository := NewDeploymentRuntimeStatusApplicationService("template", "v1", fixture, fixture, nil, fixture, fixture, fixture, fixture)
+	nilRepository := NewDeploymentRuntimeStatusApplicationService(fixture, fixture, nil, fixture, fixture, fixture, fixture)
 	if status, err := nilRepository.storageStatus(t.Context()); err != nil || status["ping"] != "not_configured" {
 		t.Fatalf("nil storage=%v err=%v", status, err)
 	}
@@ -307,53 +298,7 @@ func TestDeploymentMetricOwnersSuccessAndFailure(t *testing.T) {
 	}
 }
 
-func TestDeploymentHealthErrorPrecedenceAndWarnings(t *testing.T) {
-	t.Parallel()
-
-	fixture := &deploymentStatusFixture{migration: deploymentmodel.MigrationStatus{Current: true}, schedulerStatus: nil, recordTotals: map[string]int{}, recordErrors: map[string]error{}}
-	service := deploymentStatusService(fixture)
-	if payload := service.Health(t.Context()); payload["status"] != "ok" || payload["scheduler"] == nil {
-		t.Fatalf("nil scheduler health=%#v", payload)
-	}
-	fixture.pingErr, fixture.migrationErr, fixture.schedulerErr = errDeploymentStatus, errDeploymentStatus, errDeploymentStatus
-	fixture.schedulerStatus = map[string]any{"runtime_available": true, "unresolved_dead_letters": 2, "lease_expirations": int64(3)}
-	service.ConfigureLifecycleHealth(t.Context(), lifecycleHealthFixture{err: errDeploymentStatus})
-	payload := service.Health(t.Context())
-	checks := payload["checks"].(map[string]string)
-	if payload["status"] != "degraded" || checks["storage"] != "error" || checks["migration"] != "error" || checks["scheduler"] != "error" || checks["lifecycle"] != "error" {
-		t.Fatalf("error health=%#v", payload)
-	}
-	if warnings, ok := payload["warnings"].(map[string]any); ok && warnings["scheduler"] != nil {
-		t.Fatalf("scheduler warning replaced error: %#v", payload)
-	}
-	fixture.pingErr, fixture.migrationErr, fixture.schedulerErr = nil, nil, nil
-	fixture.migration.Current = false
-	service.ConfigureLifecycleHealth(t.Context(), nil)
-	payload = service.Health(t.Context())
-	checks = payload["checks"].(map[string]string)
-	warnings := payload["warnings"].(map[string]any)["scheduler"].(map[string]any)
-	if checks["migration"] != "outdated" || checks["scheduler"] != "warning" || warnings["unresolved_dead_letters"] != 2 || warnings["stale_leased_runs"] != 3 {
-		t.Fatalf("warning health=%#v", payload)
-	}
-}
-
-func TestDeploymentMetricValueHelpers(t *testing.T) {
-	t.Parallel()
-
-	if !boolMetric(true) || boolMetric("true") || boolMetric(nil) {
-		t.Fatal("bool metric mismatch")
-	}
-	for value, want := range map[any]int{int(1): 1, int64(2): 2, float64(3): 3, "4": 0} {
-		if got := intMetric(value); got != want {
-			t.Errorf("intMetric(%T(%v))=%d want=%d", value, value, got, want)
-		}
-	}
-	if warnings := schedulerHealthWarnings(map[string]any{"runtime_available": false, "unresolved_dead_letters": 2}); len(warnings) != 0 {
-		t.Fatalf("unavailable scheduler warnings=%v", warnings)
-	}
-}
-
-func TestDeploymentMetricsAggregatesSuccessAndErrors(t *testing.T) {
+func TestDeploymentMonitoringMetricSectionsCollectOwnerObservationsAndErrors(t *testing.T) {
 	t.Parallel()
 
 	fixture := &deploymentStatusFixture{
@@ -362,29 +307,31 @@ func TestDeploymentMetricsAggregatesSuccessAndErrors(t *testing.T) {
 		operational: deploymentmodel.IdempotencyOperationalStatus{Backlog: map[string]int{}},
 	}
 	service := deploymentStatusService(fixture)
-	payload := service.Metrics(t.Context())
+	payload, errorsPayload := service.MonitoringMetricSections(t.Context())
 	if payload["objects"] != 1 || payload["idempotency"] == nil || payload["scheduler"] == nil {
 		t.Fatalf("success metrics=%#v", payload)
+	}
+	if len(errorsPayload) != 0 {
+		t.Fatalf("unexpected metrics errors=%#v", errorsPayload)
 	}
 	fixture.workflowErr, fixture.auditErr, fixture.pingErr, fixture.migrationErr = errDeploymentStatus, errDeploymentStatus, errDeploymentStatus, errDeploymentStatus
 	fixture.operationalErr, fixture.schedulerErr, fixture.invocationErr = errDeploymentStatus, errDeploymentStatus, errDeploymentStatus
 	fixture.recordErrors["object"] = errDeploymentStatus
-	payload = service.Metrics(t.Context())
-	errorsPayload := payload["errors"].(map[string]string)
+	payload, errorsPayload = service.MonitoringMetricSections(t.Context())
 	for _, key := range []string{"workflow", "audit", "storage", "migration", "idempotency", "scheduler", "domain", "business_actions"} {
 		if errorsPayload[key] == "" {
-			t.Errorf("missing metrics error %q: %#v", key, payload)
+			t.Errorf("missing metrics error %q: payload=%#v errors=%#v", key, payload, errorsPayload)
 		}
 	}
 
 	fixture.schedulerStatus = map[string]any{"runtime_available": true}
-	payload = service.Metrics(t.Context())
+	payload, _ = service.MonitoringMetricSections(t.Context())
 	if payload["scheduler"].(map[string]any)["runtime_available"] != true {
 		t.Fatalf("non-nil scheduler metrics=%#v", payload)
 	}
 
-	withoutIdempotencyMetrics := NewDeploymentRuntimeStatusApplicationService("template", "v1", fixture, fixture, readinessRepository{migration: deploymentmodel.MigrationStatus{Current: true}}, fixture, fixture, fixture, fixture)
-	payload = withoutIdempotencyMetrics.Metrics(t.Context())
+	withoutIdempotencyMetrics := NewDeploymentRuntimeStatusApplicationService(fixture, fixture, readinessRepository{migration: deploymentmodel.MigrationStatus{Current: true}}, fixture, fixture, fixture, fixture)
+	payload, _ = withoutIdempotencyMetrics.MonitoringMetricSections(t.Context())
 	if _, exists := payload["idempotency"]; exists {
 		t.Fatalf("unexpected idempotency metrics=%#v", payload)
 	}
@@ -393,9 +340,9 @@ func TestDeploymentMetricsAggregatesSuccessAndErrors(t *testing.T) {
 func TestDeploymentStatusConstructors(t *testing.T) {
 	t.Parallel()
 	fixture := &deploymentStatusFixture{}
-	service := NewDeploymentRuntimeStatusApplicationService("template", "v1", fixture, fixture, fixture, fixture, fixture, fixture, fixture)
-	withWorker := NewDeploymentRuntimeStatusApplicationServiceWithWorker("template", "v1", fixture, fixture, fixture, fixture, fixture, fixture, fixture, service.worker)
-	if service.templateID != "template" || withWorker.worker.Clock == nil || reflect.ValueOf(withWorker).IsNil() {
+	service := NewDeploymentRuntimeStatusApplicationService(fixture, fixture, fixture, fixture, fixture, fixture, fixture)
+	withWorker := NewDeploymentRuntimeStatusApplicationServiceWithWorker(fixture, fixture, fixture, fixture, fixture, fixture, fixture, service.worker)
+	if withWorker.worker.Clock == nil || reflect.ValueOf(withWorker).IsNil() {
 		t.Fatalf("services=%#v %#v", service, withWorker)
 	}
 }

@@ -76,7 +76,7 @@ func TestRuntimeTechnicalMetricsCoverAbsentAndMigrationStatusOutcomes(t *testing
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			service := deploymentapplication.NewDeploymentRuntimeStatusApplicationService("runtime", "1", nil, nil, technicalMetricsRuntimeStatusRepository{status: test.status, err: test.err}, nil, nil, nil, nil)
+			service := deploymentapplication.NewDeploymentRuntimeStatusApplicationService(nil, nil, technicalMetricsRuntimeStatusRepository{status: test.status, err: test.err}, nil, nil, nil, nil)
 			output := runtimeTechnicalOpenMetrics(t.Context(), nil, service)
 			if !strings.Contains(output, "domainry_runtime_migration_pending ") || !strings.Contains(output, "domainry_runtime_migration_compatible "+test.compatible) {
 				t.Fatalf("output=%s", output)

@@ -88,7 +88,7 @@ func (p *runtimeBusinessProfileProjection) Resolve(ctx context.Context, workspac
 	extensions := append([]profilebindingmodel.Binding(nil), p.extensions...)
 	p.mu.RUnlock()
 	service := principalapplication.NewBusinessPrincipalApplicationService(principalapplication.BusinessPrincipalDependencies{Records: p.records, Objects: func() []definitionmodel.ObjectSchema { return objects }, Extensions: func() []profilebindingmodel.Binding { return extensions }})
-	resolved, err := service.ResolveBusinessPrincipal(ctx, principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: workspaceID, UserID: userID}}, "", "", "")
+	resolved, err := service.ResolveBusinessPrincipal(ctx, principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: workspaceID, UserID: userID}}, "", "")
 	if err != nil {
 		return nil, err
 	}

@@ -199,7 +199,7 @@ git diff --check
 
 规则关键词：
 
-- **MUST**：必须满足；由 `runtime/technical_layout_contract_test.go` 或现有 Runtime architecture tests 机器检查。
+- **MUST**：必须满足；优先由类型系统与 owner package tests 检查，跨 package 依赖规则由精简的 `runtime/boundary` tests 检查。
 - **MUST NOT**：禁止；违反时 CI/Go test 必须失败。
 - **SHOULD**：默认必须遵守；只能在有具体依赖或 Go receiver 证据时例外。
 - **Reviewed legacy baseline**：现有违反项的精确白名单或数量上限；只能减少，不得增加。
@@ -663,30 +663,15 @@ persistence/
 
 ## R7. Platform 目录
 
-Platform 只允许无具体业务语义的 Runtime 能力。当前已审核 capability：
+Platform 只允许 Runtime 自有、不能下沉到 Foundation 或业务 owner 的技术绑定。当前已审核 capability：
 
 ```text
-apperror
-capacity
-collection
 config
-filelock
-health
-idempotency
 localization
-logging
-mutation
-ratelimit
-requestcontext
-resilience
-safehttp
-secrets
-telemetry
-webhooksignature
-worker
+productbrand
 ```
 
-`apperror` 是无业务语义的跨层错误合同，`mutation` 只提供持久化/并发冲突机制，`filelock` 只封装各操作系统的进程级文件锁；这些能力不得回到 `domain` 伪装业务 owner，也不得加入任何具体 owner 规则。
+通用错误、集合、锁、幂等、日志、mutation、request context、secret、telemetry、worker 等机制归 `domainry-foundation`。Admission controller、通用 health Check/Evaluate、rate limit 与安全 HTTP client 同样归 Foundation；Runtime 只保留 readiness 编排。Webhook 签名与 Notification provider-template binding 分别归 Connector provider 与 Notification module-host binding。Integration 抽离后的 `resilience` 残留不得恢复，后续仅按真实跨 SDK 合同重新设计。
 
 新 Platform capability **MUST** 显式通过架构审查并更新机器清单。`common`、`utils`、`shared`、`library` 不是 capability，任何层级都禁止。
 
@@ -932,13 +917,13 @@ ubiquitous language / owner
 主门禁：
 
 ```bash
-go test ./runtime -run 'TestRuntime(TechnicalLayout|LayerAndNaming|ServiceAndStoreNaming)|TestHTTP(Routes|Infrastructure)' -count=1
+go test ./runtime/boundary -count=1
 ```
 
 层级依赖门禁：
 
 ```bash
-go test ./runtime -run 'TestRuntime(DDDLayerImportBoundary|TargetLayerImportBoundaries|BusinessOwnerPackagesDoNotImportComposition)|TestHTTPTransportOwnsNoConcreteBusinessServices' -count=1
+go test ./runtime/boundary -run 'TestRuntime(DDDLayerImportBoundary|PlatformContainsOnlyHostOwnedBindings|ProductionUsesExtractedOwnerSDKs|PublicPackagesDoNotImportInternalOwners|HasNoCatchAllDirectories)' -count=1
 ```
 
 全量门禁：
@@ -948,27 +933,17 @@ go test ./runtime/...
 go vet ./runtime/...
 ```
 
-Runtime architecture tests 当前强制检查：
+Runtime architecture tests 只强制检查无法由单一 owner package 或 Go 类型系统覆盖的规则：
 
-- Runtime 顶层和 Infrastructure/Platform/Transport 允许目录；
-- Domain owner 允许的技术子目录；
-- Application 允许的技术目录；
-- HTTP owner 清单和根包技术文件清单；
-- `common/utils/shared/library` 等兜底目录；
-- 目录、Go 文件、package 和导出符号命名；
-- Domain/Application Service、Infrastructure Store 的层级后缀、主类型与文件名精确匹配；
-- Bootstrap 不得定义或构造业务 Service/Store；
-- Domain/Application/Transport/Infrastructure/Platform 的禁止 import 方向；
-- Domain owner 不得反向 import Application composition；
-- HTTP Handler/Dependencies 必须直接持有对应 owner 的 concrete `*ApplicationService`，不得持有 concrete `DomainService` 或复制 `*ApplicationPort` 接口；
-- HTTP owner 的入口类型、依赖类型和构造函数必须带具体业务前缀，不得声明 `Handler`、`Dependencies`、`NewHandler`；
-- 每个 HTTP owner 都存在 `<owner>_handler.go` 和 `<owner>_routes.go`，且 `_routes.go` 只声明 `RegisterRoutes`；
-- 全 Runtime 已包含 Context 的函数、方法、interface method 和 callback 均为 context-first；Repository、Domain contract、Application interface 的无 Context 例外必须是精确 reviewed pure exception；HTTP 不得声明 Application Port；
-- HTTP 到 Infrastructure 的新反向依赖；
-- Domain/Application 根包生产文件只减不增基线；
-- Domain/App/HTTP 生产文件行数上限；
-- 新模糊文件名称和新 package/目录不一致。
-- production `Known: true` Principal 字面量必须声明 `WorkspaceID` 或显式 `SystemScope`。
+- Domain/Application/Transport 的禁止 import 方向；
+- Runtime production 不得反向依赖已抽离 owner implementation；
+- Runtime Platform 只能保留 `config`、`localization`、`productbrand` 三类 host binding；
+- public Runtime package 不得依赖其他模块的 `internal` owner；
+- 禁止 `common/utils/shared/library` 等兜底目录；
+- production `Known: true` Principal 必须声明 `WorkspaceID` 或显式 `SystemScope`，客户端 Header 不得成为组织授权范围；
+- Domainry dependency 必须使用 release tag，Workspace SQL 例外必须经过精确审查。
+
+文件名、行数、文件数量、文档关键词和生成 inventory 不作为 Go architecture test；行为与协议测试归对应 owner package。
 
 当确实需要新 owner、Platform capability、Transport protocol 或 Infrastructure adapter family 时，必须同时提交：
 
@@ -979,14 +954,4 @@ Runtime architecture tests 当前强制检查：
 
 ## R13. Reviewed legacy baseline
 
-以下不是新代码示例，只是迁移前已存在的只减不增基线：
-
-- Domain 各 owner 根包生产文件数基线；
-- 尚未完成二级拆包的跨 owner root/Service import 只能减少；owner 完成迁移后必须服从 3.3-3.5 的依赖矩阵；
-- Application 根及其 `bootstrap`、`composition` 等生产文件数基线；
-- HTTP Handler 超 400 行 reviewed exception 已清零；新 Handler 继续受 400 行上限约束；
-- HTTP 到 `plugins` 的已审核 infrastructure import；
-- 历史 `helpers.go`/`repositories.go` 模糊文件名例外已经清零；
-- Connector package 名允许按 Go 惯例去除下划线，例如 `google_play_console -> googleplay`。
-
-删除或迁移例外后 **SHOULD** 同批收紧测试基线；不得使用旧例外容纳新文件、新 import 或新 package mismatch。
+Runtime 不再使用文件数、行数或符号清单作为架构完成度代理。当前仅保留 Workspace SQL 精确审查清单；其中的例外只能减少，新增例外必须说明 ORM 无等价能力并补方言测试。

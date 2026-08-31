@@ -8,11 +8,15 @@ import (
 	"io"
 	"testing"
 
-	metadatapersistence "github.com/domainry/domainry-metadata-sdk/persistence"
-	metadatamodule "github.com/domainry/domainry-metadata/module"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 var errMetadataSQL = errors.New("scripted metadata SQL failure")
+
+func metadataInstallScope() principalmodel.SystemScope {
+	return principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "metadata test")
+}
 
 type metadataSQLState struct {
 	execSteps                        []metadataSQLExecStep
@@ -129,57 +133,111 @@ func scriptedApplicationSchemaStore(t *testing.T, state *metadataSQLState, store
 	t.Helper()
 	store.db = openMetadataScriptedDB(state)
 	store.schemaDB = store.db
-	moduleRepository := metadatamodule.NewDefinitionRepository(store.db, store.store.SQLRenderer)
-	store.metadataDefinitions = scriptedMetadataRepository{delegate: store.metadataDefinitions, crud: moduleRepository.(metadatapersistence.ExecutorDefinitionRepository)}
+	if store.metadata == nil {
+		store.metadata = newMetadataBindingStub()
+	}
 	t.Cleanup(func() { _ = store.db.Close() })
 	return store
 }
 
-type scriptedMetadataRepository struct {
-	delegate metadatapersistence.DefinitionRepository
-	crud     metadatapersistence.ExecutorDefinitionRepository
+type metadataBindingStub struct {
+	state *metadataStateStub
 }
 
-func (r scriptedMetadataRepository) SyncDefinitions(ctx context.Context, snapshot metadatapersistence.Snapshot) error {
-	if r.delegate != nil {
-		return r.delegate.SyncDefinitions(ctx, snapshot)
+func (b metadataBindingStub) Descriptor() metadatasdk.Descriptor { return metadatasdk.Descriptor{} }
+func (b metadataBindingStub) Definitions() metadatasdk.Definitions {
+	return metadataDefinitionsStub{state: b.state}
+}
+func (b metadataBindingStub) Localization() metadatasdk.Localization {
+	return metadataLocalizationStub{state: b.state}
+}
+func (metadataBindingStub) Dictionaries() metadatasdk.Dictionaries {
+	return metadataDictionariesStub{}
+}
+func (b metadataBindingStub) Projection() metadatasdk.Projection {
+	return metadataProjectionStub{state: b.state}
+}
+func (metadataBindingStub) Close(context.Context) error { return nil }
+
+type metadataStateStub struct {
+	snapshot  metadatasdk.DefinitionSnapshot
+	localized []metadatasdk.LocalizedText
+	err       error
+}
+
+func newMetadataBindingStub() metadataBindingStub {
+	return metadataBindingStub{state: &metadataStateStub{}}
+}
+
+type metadataDefinitionsStub struct {
+	state *metadataStateStub
+}
+
+func (s metadataDefinitionsStub) List(_ context.Context, query metadatasdk.DefinitionQuery) ([]metadatasdk.Definition, error) {
+	if s.state.err != nil {
+		return nil, s.state.err
 	}
+	values := []metadatasdk.Definition{}
+	for _, definition := range s.state.snapshot.Definitions {
+		if (query.ResourceType == "" || definition.ResourceType == query.ResourceType) && (query.SourceID == "" || definition.SourceID == query.SourceID) {
+			values = append(values, definition)
+		}
+	}
+	return values, nil
+}
+
+func (s metadataDefinitionsStub) Get(_ context.Context, resourceType, key string) (metadatasdk.Definition, bool, error) {
+	if s.state.err != nil {
+		return metadatasdk.Definition{}, false, s.state.err
+	}
+	for _, definition := range s.state.snapshot.Definitions {
+		if definition.ResourceType == resourceType && definition.ResourceKey == key {
+			return definition, true, nil
+		}
+	}
+	return metadatasdk.Definition{}, false, nil
+}
+
+func (s metadataDefinitionsStub) Snapshot(context.Context) (metadatasdk.DefinitionSnapshot, error) {
+	return s.state.snapshot, s.state.err
+}
+
+type metadataProjectionStub struct{ state *metadataStateStub }
+
+func (p metadataProjectionStub) Sync(_ context.Context, snapshot metadatasdk.ProjectionSnapshot) error {
+	if p.state.err != nil {
+		return p.state.err
+	}
+	p.state.snapshot = metadatasdk.DefinitionSnapshot{Definitions: append([]metadatasdk.Definition(nil), snapshot.Definitions...)}
+	p.state.localized = append([]metadatasdk.LocalizedText(nil), snapshot.LocalizedText...)
 	return nil
 }
-func (r scriptedMetadataRepository) DefinitionSnapshot(ctx context.Context) (metadatapersistence.Snapshot, error) {
-	if r.delegate != nil {
-		return r.delegate.DefinitionSnapshot(ctx)
+
+type metadataLocalizationStub struct{ state *metadataStateStub }
+
+func (s metadataLocalizationStub) List(_ context.Context, query metadatasdk.LocalizedTextQuery) ([]metadatasdk.LocalizedText, error) {
+	if s.state.err != nil {
+		return nil, s.state.err
 	}
-	return metadatapersistence.Snapshot{}, nil
-}
-func (scriptedMetadataRepository) DefinitionSnapshotWithExecutor(context.Context, metadatapersistence.QueryExecutor) (metadatapersistence.Snapshot, error) {
-	return metadatapersistence.Snapshot{}, nil
-}
-func (r scriptedMetadataRepository) GetDefinitionWithExecutor(ctx context.Context, executor metadatapersistence.QueryExecutor, resourceType, key string) (metadatapersistence.StoredDefinition, bool, error) {
-	return r.crud.GetDefinitionWithExecutor(ctx, executor, resourceType, key)
-}
-func (r scriptedMetadataRepository) ListDefinitionsWithExecutor(ctx context.Context, executor metadatapersistence.QueryExecutor, resourceType, sourceID string) ([]metadatapersistence.StoredDefinition, error) {
-	return r.crud.ListDefinitionsWithExecutor(ctx, executor, resourceType, sourceID)
-}
-func (r scriptedMetadataRepository) ReplaceDefinitionWithExecutor(ctx context.Context, executor metadatapersistence.ExecutionExecutor, value metadatapersistence.StoredDefinition, expected *string) (metadatapersistence.ReplaceResult, error) {
-	return r.crud.ReplaceDefinitionWithExecutor(ctx, executor, value, expected)
-}
-func (r scriptedMetadataRepository) DisableDefinitionWithExecutor(ctx context.Context, executor metadatapersistence.ExecutionExecutor, resourceType, key, at string, expected *string) (bool, error) {
-	return r.crud.DisableDefinitionWithExecutor(ctx, executor, resourceType, key, at, expected)
+	values := []metadatasdk.LocalizedText{}
+	for _, value := range s.state.localized {
+		if (query.WorkspaceID == "" || value.WorkspaceID == query.WorkspaceID) &&
+			(query.EntityType == "" || value.EntityType == query.EntityType) &&
+			(query.EntityKey == "" || value.EntityKey == query.EntityKey) &&
+			(query.Property == "" || value.Property == query.Property) &&
+			(query.Locale == "" || value.Locale == query.Locale) {
+			values = append(values, value)
+		}
+	}
+	return values, nil
 }
 
-func (r scriptedMetadataRepository) CountDefinitionVersionsWithExecutor(ctx context.Context, executor metadatapersistence.QueryExecutor, resourceType, key string) (int, error) {
-	return r.crud.CountDefinitionVersionsWithExecutor(ctx, executor, resourceType, key)
+func (metadataLocalizationStub) Coverage(_ context.Context, query metadatasdk.LocalizedTextCoverageQuery) (metadatasdk.LocalizedTextCoverage, error) {
+	return metadatasdk.LocalizedTextCoverage{WorkspaceID: query.WorkspaceID, Locale: query.Locale, FallbackLocale: query.FallbackLocale}, nil
 }
 
-func (r scriptedMetadataRepository) InsertDefinitionVersionWithExecutor(ctx context.Context, executor metadatapersistence.ExecutionExecutor, value metadatapersistence.DefinitionVersion) error {
-	return r.crud.InsertDefinitionVersionWithExecutor(ctx, executor, value)
-}
+type metadataDictionariesStub struct{}
 
-func (r scriptedMetadataRepository) ListDefinitionVersionsWithExecutor(ctx context.Context, executor metadatapersistence.QueryExecutor, resourceType, key string) ([]metadatapersistence.DefinitionVersion, error) {
-	return r.crud.ListDefinitionVersionsWithExecutor(ctx, executor, resourceType, key)
-}
-
-func (r scriptedMetadataRepository) GetDefinitionVersionWithExecutor(ctx context.Context, executor metadatapersistence.QueryExecutor, resourceType, key, version string) (metadatapersistence.DefinitionVersion, bool, error) {
-	return r.crud.GetDefinitionVersionWithExecutor(ctx, executor, resourceType, key, version)
+func (metadataDictionariesStub) Items(_ context.Context, query metadatasdk.DictionaryItemsQuery) (metadatasdk.DictionaryItems, error) {
+	return metadatasdk.DictionaryItems{DictionaryKey: query.DictionaryKey, Locale: query.Locale, Items: []metadatasdk.DictionaryItem{}}, nil
 }

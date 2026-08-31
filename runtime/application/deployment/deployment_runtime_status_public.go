@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -15,118 +16,7 @@ func (s *DeploymentRuntimeStatusApplicationService) MonitoringLifecycleStatus(ct
 	if s.lifecycleHealth == nil {
 		return map[string]any{}, nil
 	}
-	return s.lifecycleHealth.HealthForSystem(ctx, principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "collect lifecycle monitoring status"), time.Now().UTC())
-}
-
-func (s *DeploymentRuntimeStatusApplicationService) Health(ctx context.Context) map[string]any {
-	storageStatus, storageErr := s.storageStatus(ctx)
-	migrationStatus, migrationErr := s.migrationStatus(ctx)
-	schedulerScope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "collect scheduler health status")
-	schedulerStatus, schedulerErr := s.scheduler.Status(ctx, schedulerScope)
-	lifecycleStatus := map[string]any{}
-	var lifecycleErr error
-	if s.lifecycleHealth != nil {
-		lifecycleStatus, lifecycleErr = s.lifecycleHealth.HealthForSystem(ctx, principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "collect lifecycle health status"), time.Now().UTC())
-	}
-	if schedulerStatus == nil {
-		schedulerStatus = map[string]any{}
-	}
-	status := "ok"
-	checks := map[string]string{
-		"scheduler": "ok",
-		"storage":   "ok",
-		"migration": "ok",
-		"lifecycle": "ok",
-	}
-	warnings := map[string]any{}
-	if storageErr != nil {
-		status = "degraded"
-		checks["storage"] = "error"
-	}
-	if migrationErr != nil {
-		status = "degraded"
-		checks["migration"] = "error"
-	} else if !migrationStatus.Current {
-		status = "degraded"
-		checks["migration"] = "outdated"
-	}
-	if schedulerErr != nil {
-		status = "degraded"
-		checks["scheduler"] = "error"
-	}
-	if lifecycleErr != nil {
-		status = "degraded"
-		checks["lifecycle"] = "error"
-	} else if warning, _ := lifecycleStatus["warning"].(bool); warning {
-		status = "degraded"
-		checks["lifecycle"] = "warning"
-		warnings["lifecycle"] = lifecycleStatus
-	}
-	if schedulerWarnings := schedulerHealthWarnings(schedulerStatus); schedulerErr == nil && len(schedulerWarnings) > 0 {
-		status = "degraded"
-		checks["scheduler"] = "warning"
-		warnings["scheduler"] = schedulerWarnings
-	}
-	payload := map[string]any{
-		"status":           status,
-		"template_id":      s.templateID,
-		"template_version": s.templateVersion,
-		"checks":           checks,
-		"storage":          storageStatus,
-		"migration":        migrationStatus,
-		"scheduler":        schedulerStatus,
-		"lifecycle":        lifecycleStatus,
-	}
-	if len(warnings) > 0 {
-		payload["warnings"] = warnings
-	}
-	return payload
-}
-
-func schedulerHealthWarnings(status map[string]any) map[string]any {
-	warnings := map[string]any{}
-	if !boolMetric(status["runtime_available"]) {
-		return warnings
-	}
-	if unresolved := intMetric(status["unresolved_dead_letters"]); unresolved > 0 {
-		warnings["unresolved_dead_letters"] = unresolved
-	}
-	if expired := intMetric(status["lease_expirations"]); expired > 0 {
-		warnings["stale_leased_runs"] = expired
-	}
-	return warnings
-}
-
-func boolMetric(value any) bool {
-	switch typed := value.(type) {
-	case bool:
-		return typed
-	default:
-		return false
-	}
-}
-
-func intMetric(value any) int {
-	switch typed := value.(type) {
-	case int:
-		return typed
-	case int64:
-		return int(typed)
-	case float64:
-		return int(typed)
-	default:
-		return 0
-	}
-}
-
-func (s *DeploymentRuntimeStatusApplicationService) Metrics(ctx context.Context) map[string]any {
-	payload, errorsByOwner := s.MonitoringMetricSections(ctx)
-	payload["template_id"] = s.templateID
-	payload["template_version"] = s.templateVersion
-	if len(errorsByOwner) > 0 {
-		payload["errors"] = errorsByOwner
-	}
-	return payload
+	return s.lifecycleHealth.Health(ctx, lifecycleaccess.NewSystemScope(lifecycleaccess.SystemScopeGlobal, "collect lifecycle monitoring status"), time.Now().UTC())
 }
 
 // MonitoringMetricSections exposes owner-produced observations without the

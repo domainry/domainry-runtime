@@ -26,7 +26,7 @@ func ReportAuthoringDomain() capabilitycontract.CapabilityAuthoringDomain {
 			{Key: "expected_schema_hash", Type: "schema_hash", Required: true},
 		},
 		Permissions: []string{"workspace.admin"}, AuditEvents: []string{"metadata_definition_upserted", "metadata_definition_deleted"},
-		ValidationEndpoint: "POST /metadata/definitions/report/{resourceKey}/validate", ConfigurationRoutes: reportConfigurationRoutes(), ResourceKeyPathParameter: "resourceKey",
+		ValidationEndpoint: "POST /tenant-admin/metadata/definitions/report/{resourceKey}/validate", ConfigurationRoutes: reportConfigurationRoutes(), ResourceKeyPathParameter: "resourceKey",
 		ResourceOperations: reportResourceOperations(),
 		InputSchema:        reportAuthoringRequestSchema(payload), OutputSchema: reportAuthoringOutputSchema(payload),
 		OutputVariables: []capabilitycontract.CapabilityAuthoringOutput{{Name: "report_key", JSONPointer: "/definition/resource_key", Type: "report_key", VisibleTo: "subsequent_capability_calls"}, {Name: "schema_hash", JSONPointer: "/definition/schema_hash", Type: "schema_hash", VisibleTo: "subsequent_capability_calls"}},

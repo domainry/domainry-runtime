@@ -14,10 +14,6 @@ import (
 
 	auditmodulehost "github.com/domainry/domainry-audit-sdk/modulehost"
 	auditmodule "github.com/domainry/domainry-audit/module"
-	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
-	lifecyclemodulehost "github.com/domainry/domainry-lifecycle-sdk/modulehost"
-	lifecyclemodule "github.com/domainry/domainry-lifecycle/module"
-	metadatamodule "github.com/domainry/domainry-metadata/module"
 	ormmigration "github.com/domainry/domainry-orm/migration"
 	"github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/base"
@@ -42,9 +38,6 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 			return err
 		}
 		if err := s.verifyManagedDatabaseCohortMarker(ctx); err != nil {
-			return err
-		}
-		if err := s.EnsureLifecycleSchema(ctx); err != nil {
 			return err
 		}
 		return nil
@@ -83,18 +76,6 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 	if err := runtimeschema.EnsureWorkspaceProvisioningSchema(ctx, s); err != nil {
 		return err
 	}
-	metadataMigrations, err := metadatamodule.SchemaMigrationsForDialect(s.SQLRenderer)
-	if err != nil {
-		return err
-	}
-	ownedMetadataMigrations := make([]ormmigration.Migration, len(metadataMigrations))
-	for index, migration := range metadataMigrations {
-		ownedMetadataMigrations[index] = ormmigration.Migration{Version: migration.Version, Name: migration.Name, Statements: append([]string(nil), migration.Statements...)}
-	}
-	if err := s.applyOwnedMigrationsLocked(ctx, "metadata", ownedMetadataMigrations); err != nil {
-		return err
-	}
-	s.metadataDefinitions = metadatamodule.NewDefinitionRepository(s.schemaDatabase(), s.SQLRenderer)
 	if err := s.EnsureApplicationSchema(ctx); err != nil {
 		return err
 	}
@@ -108,13 +89,6 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 		return err
 	}
 	if err := s.EnsureRateLimitSchema(ctx); err != nil {
-		return err
-	}
-	if s.schemaAssembler != nil {
-		if err := s.schemaAssembler.EnsureLifecycleSchema(ctx, s); err != nil {
-			return err
-		}
-	} else if err := s.ensureLifecycleModuleLocked(ctx); err != nil {
 		return err
 	}
 	if err := s.recordRuntimeSchemaMigrationIfPending(ctx, pending, startedAt); err != nil {
@@ -310,7 +284,6 @@ type runtimeSchemaAssembler interface {
 	EnsureEvidenceSchema(context.Context, runtimeschema.Store) error
 	EnsureWorkflowProcessSchema(context.Context, runtimeschema.Store) error
 	EnsureRateLimitSchema(context.Context, runtimeschema.Store) error
-	EnsureLifecycleSchema(context.Context, runtimeschema.Store) error
 }
 
 func (s *RuntimeStore) schemaDatabase() schemaDatabase {
@@ -353,74 +326,6 @@ func (s *RuntimeStore) EnsureRateLimitSchema(ctx context.Context) error {
 		return s.schemaAssembler.EnsureRateLimitSchema(ctx, s)
 	}
 	return runtimeschema.EnsureRateLimitSchema(ctx, s)
-}
-
-func (s *RuntimeStore) EnsureLifecycleSchema(ctx context.Context) error {
-	if s.schemaAssembler != nil {
-		return s.schemaAssembler.EnsureLifecycleSchema(ctx, s)
-	}
-	return s.ensureLifecycleModule(ctx)
-}
-
-func (s *RuntimeStore) ensureLifecycleModule(ctx context.Context) error {
-	binding, err := lifecyclemodule.NewFactory().OpenModule(ctx, lifecyclesdk.ApplicationRef{RuntimeID: "domainry-runtime-schema"}, runtimeLifecycleModuleHost{store: s})
-	if err != nil {
-		return err
-	}
-	return binding.Close(context.WithoutCancel(ctx))
-}
-
-func (s *RuntimeStore) ensureLifecycleModuleLocked(ctx context.Context) error {
-	binding, err := lifecyclemodule.NewFactory().OpenModule(ctx, lifecyclesdk.ApplicationRef{RuntimeID: "domainry-runtime-schema"}, runtimeLifecycleModuleHost{store: s, locked: true})
-	if err != nil {
-		return err
-	}
-	return binding.Close(context.WithoutCancel(ctx))
-}
-
-type runtimeLifecycleModuleHost struct {
-	store  *RuntimeStore
-	locked bool
-}
-
-func (h runtimeLifecycleModuleHost) Database() lifecyclemodulehost.Database { return h.store.DB() }
-func (h runtimeLifecycleModuleHost) Dialect() lifecyclemodulehost.Dialect {
-	return h.store.RuntimeRenderer()
-}
-func (h runtimeLifecycleModuleHost) Migrations() lifecyclemodulehost.MigrationRegistrar {
-	return runtimeLifecycleMigrationRegistrar{store: h.store, locked: h.locked}
-}
-func (h runtimeLifecycleModuleHost) Transactions() lifecyclemodulehost.Transactor {
-	return runtimeLifecycleTransactor{database: h.store.DB()}
-}
-
-type runtimeLifecycleMigrationRegistrar struct {
-	store  *RuntimeStore
-	locked bool
-}
-
-func (r runtimeLifecycleMigrationRegistrar) ApplyOwnedMigrations(ctx context.Context, owner string, values []lifecyclemodulehost.SchemaMigration) error {
-	if r.locked {
-		return r.store.applyOwnedMigrationsLocked(ctx, owner, values)
-	}
-	return r.store.ApplyORMOwnedMigrations(ctx, owner, values)
-}
-
-type runtimeLifecycleTransactor struct{ database *sql.DB }
-
-func (t runtimeLifecycleTransactor) WithinTransaction(ctx context.Context, operation func(context.Context, lifecyclemodulehost.DBTX) error) error {
-	if t.database == nil || operation == nil {
-		return fmt.Errorf("Lifecycle transaction requires database and operation")
-	}
-	tx, err := t.database.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	if err := operation(lifecyclemodulehost.WithExecutor(ctx, tx), tx); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	return tx.Commit()
 }
 
 func (s *RuntimeStore) runtimeMigrationConfig() config.Config {

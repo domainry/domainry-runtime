@@ -31,6 +31,7 @@ func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {
 		LifecycleBinding:   runtime.lifecycleBinding,
 		Store:              runtime.store, RateLimiter: runtime.rateLimiter,
 		AgentRepositories:        agentRepositories,
+		AgentBinding:             runtime.agentBinding,
 		Manifest:                 runtime.manifest,
 		WorkerControl:            runtime.worker.Control,
 		Clock:                    runtime.worker.Clock,
@@ -48,11 +49,11 @@ func (a *Runtime) Routes() http.Handler {
 	return a.api.Routes()
 }
 
-// RoutesForSurfaceGroup is a transport attachment helper. It remains a
+// RoutesForListenerGroup is a transport attachment helper. It remains a
 // composition function instead of expanding Runtime's process API.
-func RoutesForSurfaceGroup(runtime *Runtime, group runtimehttp.SurfaceRouteGroup) http.Handler {
+func RoutesForListenerGroup(runtime *Runtime, group runtimehttp.ListenerRouteGroup) http.Handler {
 	if runtime == nil || runtime.api == nil {
 		return http.NotFoundHandler()
 	}
-	return runtime.api.RoutesForSurfaceGroup(group)
+	return runtime.api.RoutesForListenerGroup(group)
 }

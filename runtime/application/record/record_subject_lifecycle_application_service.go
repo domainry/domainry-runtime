@@ -57,6 +57,13 @@ func NewRecordSubjectLifecycleApplicationService(repository recordrepository.Rec
 
 func (s *RecordSubjectLifecycleApplicationService) Owner(context.Context) string { return "record" }
 
+func (s *RecordSubjectLifecycleApplicationService) ResolveSubject(_ context.Context, workspaceID, subjectType, subjectID string) (string, error) {
+	if strings.TrimSpace(workspaceID) == "" || strings.TrimSpace(subjectType) == "" || strings.TrimSpace(subjectID) == "" {
+		return "", fmt.Errorf("record subject workspace, type, and identity are required")
+	}
+	return strings.TrimSpace(subjectID), nil
+}
+
 func (s *RecordSubjectLifecycleApplicationService) PreviewSubject(ctx context.Context, workspaceID, resolvedIdentity string) (json.RawMessage, error) {
 	matches, err := s.subjectRecords(ctx, workspaceID, resolvedIdentity)
 	if err != nil {
@@ -101,6 +108,10 @@ func (s *RecordSubjectLifecycleApplicationService) ExportSubject(ctx context.Con
 		export.Files = append(export.Files, files...)
 	}
 	return json.Marshal(export)
+}
+
+func (s *RecordSubjectLifecycleApplicationService) ExportSubjectForRequest(ctx context.Context, _ string, workspaceID, resolvedIdentity string) (json.RawMessage, error) {
+	return s.ExportSubject(ctx, workspaceID, resolvedIdentity)
 }
 
 func (s *RecordSubjectLifecycleApplicationService) EraseSubject(ctx context.Context, workspaceID, resolvedIdentity string, holds []lifecyclemodel.LegalHold) (json.RawMessage, error) {
@@ -165,6 +176,10 @@ func (s *RecordSubjectLifecycleApplicationService) EraseSubject(ctx context.Cont
 	}
 	evidence["updated_records"], evidence["deleted_files"] = updated, deletedFiles
 	return json.Marshal(evidence)
+}
+
+func (s *RecordSubjectLifecycleApplicationService) EraseSubjectForRequest(ctx context.Context, _ string, workspaceID, resolvedIdentity string, holds []lifecyclemodel.LegalHold) (json.RawMessage, error) {
+	return s.EraseSubject(ctx, workspaceID, resolvedIdentity, holds)
 }
 
 func (s *RecordSubjectLifecycleApplicationService) subjectRecords(ctx context.Context, workspaceID, resolvedIdentity string) (map[string][]recordmodel.Record, error) {
@@ -275,3 +290,5 @@ func recordSubjectAnonymousValue(workspaceID, identity, objectKey, recordID stri
 	}
 	return "erased-" + token
 }
+
+var _ lifecyclecontract.SubjectExecutionHandler = (*RecordSubjectLifecycleApplicationService)(nil)

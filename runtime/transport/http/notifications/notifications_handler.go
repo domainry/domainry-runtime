@@ -8,8 +8,9 @@ import (
 	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 )
 
-// NotificationsHandler exposes only Runtime's Integration Outbox delivery
-// ledger. Notification product administration and Inbox HTTP are module-owned.
+// NotificationsHandler exposes only Runtime-owned cross-capability HTTP:
+// Integration delivery ledger and Inbox action target reauthorization.
+// Notification product administration and Inbox HTTP are module-owned.
 type NotificationsHandler struct {
 	deliveryLedger    NotificationDeliveryLedger
 	actionResolver    NotificationInboxActionResolver

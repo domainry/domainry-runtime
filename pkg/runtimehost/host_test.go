@@ -38,11 +38,11 @@ import (
 )
 
 type serverRuntimeFake struct {
-	gateway       runtimeConnectorGateway
-	startedHook   func()
-	started       int
-	closed        int
-	surfaceGroups []runtimehttp.SurfaceRouteGroup
+	gateway        runtimeConnectorGateway
+	startedHook    func()
+	started        int
+	closed         int
+	listenerGroups []runtimehttp.ListenerRouteGroup
 }
 
 type identityFactoryStub struct {
@@ -142,8 +142,8 @@ func (f *serverRuntimeFake) StartWorkers(context.Context) {
 	}
 }
 func (f *serverRuntimeFake) Routes() http.Handler { return http.NotFoundHandler() }
-func (f *serverRuntimeFake) RoutesForSurfaceGroup(group runtimehttp.SurfaceRouteGroup) http.Handler {
-	f.surfaceGroups = append(f.surfaceGroups, group)
+func (f *serverRuntimeFake) RoutesForListenerGroup(group runtimehttp.ListenerRouteGroup) http.Handler {
+	f.listenerGroups = append(f.listenerGroups, group)
 	return http.NotFoundHandler()
 }
 func (f *serverRuntimeFake) connectorGateway() runtimeConnectorGateway {
@@ -656,8 +656,8 @@ func TestRunWithDependenciesStartsThreeIsolatedSurfaceListeners(t *testing.T) {
 	if got := strings.Join(addresses, ","); got != "127.0.0.1:18081,127.0.0.1:18082,127.0.0.1:18083" {
 		t.Fatalf("listener addresses=%s", got)
 	}
-	if len(runtime.surfaceGroups) != 3 {
-		t.Fatalf("surface groups=%v", runtime.surfaceGroups)
+	if len(runtime.listenerGroups) != 3 {
+		t.Fatalf("surface groups=%v", runtime.listenerGroups)
 	}
 }
 

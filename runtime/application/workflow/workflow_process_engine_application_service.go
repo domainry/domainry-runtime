@@ -277,14 +277,14 @@ func (e *WorkflowProcessEngine) executeNode(ctx context.Context, process *workfl
 		}
 		return "success", false, e.recordCompletedNode(ctx, *process, node, input, output, principal.UserID)
 	case "wait_until", "wait_duration", "timer":
-		if e.runtime.dependencies.TimerScheduler == nil {
-			return "", false, internalError("schedule workflow timer", fmt.Errorf("workflow timer scheduler is required"))
+		if e.runtime.dependencies.WaitTimers == nil {
+			return "", false, internalError("schedule workflow timer", fmt.Errorf("workflow wait timer service is required"))
 		}
 		nodeInstance := e.newNodeInstance(ctx, process.WorkspaceID, process.ID, node, "waiting", input, nil)
 		if err := e.runtime.dependencies.Processes.InsertNode(ctx, process.WorkspaceID, nodeInstance); err != nil {
 			return "", false, internalError("insert timer node", err)
 		}
-		timerID, err := e.runtime.dependencies.TimerScheduler.ScheduleWorkflowWaitTimer(ctx, WorkflowWaitTimerRequest{
+		timerID, err := e.runtime.dependencies.WaitTimers.ScheduleWorkflowWaitTimer(ctx, WorkflowWaitTimerRequest{
 			WorkspaceID: process.WorkspaceID, ProcessID: process.ID, NodeID: node.ID, ObjectKey: process.ObjectKey, RecordID: process.RecordID,
 			Contract: workflowpolicy.WorkflowTimerNodeContract(node), Variables: workflowpolicy.WorkflowCloneMap(process.Variables), CreatedAt: time.Now().UTC(),
 		})

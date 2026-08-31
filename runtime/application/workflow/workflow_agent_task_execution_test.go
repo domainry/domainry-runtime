@@ -2,10 +2,8 @@ package workflow
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"testing"
-	"time"
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
@@ -33,17 +31,16 @@ func (s *workflowAgentTaskStateStub) CommitWorkflowState(_ context.Context, comm
 	return s.err
 }
 
-func TestWorkflowAgentTaskNodeAtomicallyCreatesWaitingNodeAndDurableRun(t *testing.T) {
+func TestWorkflowAgentTaskNodeStartsCapabilityAndCommitsWaitingCorrelation(t *testing.T) {
 	principal := workflowProcessQueryPrincipal()
 	state := &workflowAgentTaskStateStub{}
 	processes := &workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}}
 	prepared := WorkflowAgentTaskPreparation{}
 	runtime := NewWorkflowProcessRuntime(WorkflowDependencies{
 		Processes: processes, Decisions: state,
-		PrepareAgentTask: func(_ context.Context, request WorkflowAgentTaskPreparation) (agentmodel.AgentTaskRun, error) {
+		StartAgentTask: func(_ context.Context, request WorkflowAgentTaskPreparation) (agentsdk.TaskResult, error) {
 			prepared = request
-			now := time.Now().UTC()
-			return agentmodel.AgentTaskRun{ID: "run-1", WorkspaceID: request.WorkspaceID, ProcessID: request.ProcessID, NodeInstanceID: request.NodeInstanceID, TaskKey: request.Contract.TaskKey, TaskVersion: request.Contract.TaskVersion, Status: agentmodel.AgentTaskRunPending, IdempotencyKey: request.ProcessID + ":agent:1", MaxAttempts: 1, CreatedAt: now, UpdatedAt: now}, nil
+			return agentsdk.TaskResult{ExternalRunID: request.WorkspaceID + "/" + request.RunID, Status: agentsdk.ProviderRunAccepted}, nil
 		},
 	})
 	process := workflowmodel.WorkflowProcessInstance{ID: "process-1", WorkspaceID: principal.WorkspaceID, DefinitionHash: "definition-hash", Variables: map[string]any{"record_id": "record-1"}}
@@ -52,19 +49,26 @@ func TestWorkflowAgentTaskNodeAtomicallyCreatesWaitingNodeAndDurableRun(t *testi
 	if err != nil || !waiting || outcome != "waiting" {
 		t.Fatalf("outcome=%q waiting=%v err=%v", outcome, waiting, err)
 	}
-	if prepared.NodeID != "agent" || prepared.Iteration != 1 || prepared.DefinitionSnapshotHash != "definition-hash" || len(state.commit.InsertNodes) != 1 || len(state.commit.InsertAgentTasks) != 1 || len(state.commit.Events) != 1 {
+	if prepared.NodeID != "agent" || prepared.Iteration != 1 || prepared.DefinitionSnapshotHash != "definition-hash" || len(state.commit.InsertNodes) != 1 || len(state.commit.Events) != 1 {
 		t.Fatalf("prepared=%#v commit=%#v", prepared, state.commit)
 	}
-	var payload agentmodel.AgentTaskRun
-	if err := json.Unmarshal(state.commit.InsertAgentTasks[0].Payload, &payload); err != nil || payload.ID != "run-1" || state.commit.InsertNodes[0].Status != "waiting" {
-		t.Fatalf("payload=%#v node=%#v err=%v", payload, state.commit.InsertNodes[0], err)
+	if state.commit.InsertNodes[0].Status != "waiting" || state.commit.InsertNodes[0].Input["agent_task_run_id"] != prepared.RunID {
+		t.Fatalf("prepared=%#v node=%#v", prepared, state.commit.InsertNodes[0])
+	}
+	nodeInstanceID, runID := workflowAgentTaskCorrelation(process.ID, node.ID, 1)
+	if prepared.NodeInstanceID != nodeInstanceID || prepared.RunID != runID || state.commit.InsertNodes[0].ID != nodeInstanceID {
+		t.Fatalf("durable correlation prepared=%#v node=%#v", prepared, state.commit.InsertNodes[0])
+	}
+	otherNodeInstanceID, otherRunID := workflowAgentTaskCorrelation(process.ID, node.ID, 2)
+	if otherNodeInstanceID == nodeInstanceID || otherRunID == runID {
+		t.Fatal("Agent task correlation did not advance with node iteration")
 	}
 	if process.Variables["agent_task:agent:output_variable"] != "review" {
 		t.Fatalf("output binding=%#v", process.Variables)
 	}
 }
 
-func TestAgentTaskTerminalAtomicallyUpdatesTaskNodeProcessAndResumeIntent(t *testing.T) {
+func TestAgentCapabilityCompletionAtomicallyUpdatesNodeProcessAndResumeIntent(t *testing.T) {
 	principal := workflowProcessQueryPrincipal()
 	state := &workflowAgentTaskStateStub{}
 	graph := &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{
@@ -72,26 +76,42 @@ func TestAgentTaskTerminalAtomicallyUpdatesTaskNodeProcessAndResumeIntent(t *tes
 		{ID: "done", Type: "condition"},
 	}, Edges: []definitionmodel.WorkflowGraphEdge{{Source: "agent", Target: "done", Branch: "success"}}}
 	process := workflowmodel.WorkflowProcessInstance{ID: "process-1", WorkspaceID: principal.WorkspaceID, WorkflowKey: "flow", WorkflowName: "Flow", DefinitionHash: "hash", DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "flow", Graph: graph}, Status: "waiting", CurrentNodeIDs: []string{"agent"}, Variables: map[string]any{}, CreatedAt: "created"}
-	processes := &workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{process.ID: process}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{process.ID: {{ID: "node-instance", ProcessID: process.ID, NodeID: "agent", NodeType: "agent_task", Iteration: 1, Status: "waiting"}}}}
+	processes := &workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{process.ID: process}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{process.ID: {{ID: "node-instance", ProcessID: process.ID, NodeID: "agent", NodeType: "agent_task", Iteration: 1, Status: "waiting", Input: map[string]any{"agent_task_run_id": "run-1"}}}}}
 	service := NewWorkflowApplicationService(WorkflowDependencies{Processes: processes, Decisions: state})
-	now := time.Now().UTC()
-	run := agentmodel.AgentTaskRun{ID: "run-1", WorkspaceID: principal.WorkspaceID, ProcessID: process.ID, NodeInstanceID: "node-instance", TaskKey: "customer.review", TaskVersion: "1.0.0", Status: agentmodel.AgentTaskRunSucceeded, Outcome: "success", Output: map[string]any{"score": 90}, Attempt: 1, UpdatedAt: now, Identity: agentsdk.ExecutionIdentity{Mode: agentsdk.AgentTaskIdentityInherit, Execution: agentsdk.PrincipalReference{UserID: principal.UserID, RoleKey: principal.RoleKey}}, Evidence: agentmodel.AgentTaskExecutionEvidence{AgentKey: "customer-agent", ToolInvocationRefs: []string{"tool-1"}, AuditRefs: []string{"audit-1"}}, RawEvidenceRef: "evidence-1"}
-	if err := service.CommitAgentTaskTerminal(t.Context(), run, "worker-1", 7); err != nil {
+	completion := WorkflowAgentTaskCompletion{TaskRunID: "run-1", WorkspaceID: principal.WorkspaceID, ProcessID: process.ID, NodeInstanceID: "node-instance", TaskKey: "customer.review", TaskVersion: "1.0.0", Status: "succeeded", Outcome: "success", Output: map[string]any{"score": 90}, Identity: agentsdk.ExecutionIdentity{Mode: agentsdk.AgentTaskIdentityInherit, Execution: agentsdk.PrincipalReference{UserID: principal.UserID, RoleKey: principal.RoleKey}}, Evidence: agentmodel.AgentTaskExecutionEvidence{AgentKey: "customer-agent", ToolInvocationRefs: []string{"tool-1"}, AuditRefs: []string{"audit-1"}}}
+	mismatched := completion
+	mismatched.TaskRunID = "other-run"
+	if err := service.CompleteAgentTask(t.Context(), mismatched); apperror.CodeOf(err) != "backend.workflow.agent_task_correlation_mismatch" {
+		t.Fatalf("mismatched completion error=%v", err)
+	}
+	state.err = errors.New("commit failed")
+	if err := service.CompleteAgentTask(t.Context(), completion); err == nil {
+		t.Fatal("failed continuation commit was accepted")
+	}
+	select {
+	case locator := <-WorkflowContinuationWakeups(service):
+		t.Fatalf("failed commit emitted wakeup=%#v", locator)
+	default:
+	}
+	state.err = nil
+	processes.nodes[process.ID][0].Status = "waiting"
+	processes.nodes[process.ID][0].CompletedAt = ""
+	if err := service.CompleteAgentTask(t.Context(), completion); err != nil {
 		t.Fatal(err)
 	}
 	select {
 	case locator := <-WorkflowContinuationWakeups(service):
-		if locator.WorkspaceID != run.WorkspaceID || locator.ExecutionID != "agent_task_resume_"+run.ID {
+		if locator.WorkspaceID != completion.WorkspaceID || locator.ExecutionID != "agent_task_resume_"+completion.TaskRunID {
 			t.Fatalf("continuation wakeup=%#v", locator)
 		}
 	default:
 		t.Fatal("committed Agent continuation did not wake the worker")
 	}
-	if len(state.commit.UpdateAgentTasks) != 1 || len(state.commit.UpdateNodes) != 1 || len(state.commit.InsertExecutions) != 1 || state.commit.Process == nil {
+	if len(state.commit.UpdateNodes) != 1 || len(state.commit.InsertExecutions) != 1 || state.commit.Process == nil {
 		t.Fatalf("terminal commit=%#v", state.commit)
 	}
-	if state.commit.UpdateAgentTasks[0].LeaseOwner != "worker-1" || state.commit.UpdateAgentTasks[0].FencingToken != 7 || state.commit.UpdateNodes[0].Status != "success" {
-		t.Fatalf("fence/node=%#v", state.commit)
+	if state.commit.UpdateNodes[0].Status != "success" {
+		t.Fatalf("node=%#v", state.commit)
 	}
 	resume := state.commit.InsertExecutions[0]
 	if resume.IdempotencyKey != "agent-task-resume:run-1" || resume.Result["resume_explicit"] != true || len(workflowNodeIDsFromAny(resume.Result["resume_node_ids"])) != 1 {
@@ -104,55 +124,33 @@ func TestAgentTaskTerminalAtomicallyUpdatesTaskNodeProcessAndResumeIntent(t *tes
 		t.Fatalf("variables=%#v", state.commit.Process.Variables)
 	}
 	metadata := state.commit.Events[0].Metadata
-	if metadata["task_key"] != run.TaskKey || metadata["task_version"] != run.TaskVersion || metadata["agent_key"] != "customer-agent" || metadata["execution_user_id"] != principal.UserID || metadata["outcome"] != "success" || metadata["raw_evidence_ref"] != "evidence-1" {
+	if metadata["task_key"] != completion.TaskKey || metadata["task_version"] != completion.TaskVersion || metadata["agent_key"] != "customer-agent" || metadata["execution_user_id"] != principal.UserID || metadata["outcome"] != "success" {
 		t.Fatalf("history metadata=%#v", metadata)
 	}
-	state.err = errors.New("commit failed")
-	if err := service.CommitAgentTaskTerminal(t.Context(), run, "worker-1", 7); err == nil {
-		t.Fatal("failed continuation commit was accepted")
+	if err := service.CompleteAgentTask(t.Context(), completion); err != nil {
+		t.Fatalf("idempotent completion=%v", err)
 	}
 	select {
 	case locator := <-WorkflowContinuationWakeups(service):
-		t.Fatalf("failed commit emitted wakeup=%#v", locator)
+		t.Fatalf("idempotent completion emitted duplicate wakeup=%#v", locator)
 	default:
 	}
 }
 
-func TestAgentTaskApprovalTerminalUsesWaitingStatusCAS(t *testing.T) {
-	principal := workflowProcessQueryPrincipal()
-	state := &workflowAgentTaskStateStub{}
-	contract := &definitionmodel.WorkflowNodeContract{AgentTask: &definitionmodel.WorkflowAgentTaskNodeContract{
-		TaskKey: "customer.review", TaskVersion: "1.0.0", AllowedOutcomes: []string{"success", "error"},
-	}}
-	graph := &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{{ID: "agent", Type: "agent_task", Contract: contract}}}
-	process := workflowmodel.WorkflowProcessInstance{ID: "process-approval", WorkspaceID: principal.WorkspaceID, WorkflowKey: "flow", WorkflowName: "Flow", DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "flow", Graph: graph}, Status: "waiting", CurrentNodeIDs: []string{"agent"}, Variables: map[string]any{}}
-	processes := &workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{process.ID: process}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{process.ID: {{ID: "node-approval", ProcessID: process.ID, NodeID: "agent", NodeType: "agent_task", Status: "waiting"}}}}
-	service := NewWorkflowApplicationService(WorkflowDependencies{Processes: processes, Decisions: state})
-	run := agentmodel.AgentTaskRun{ID: "run-approval", WorkspaceID: principal.WorkspaceID, ProcessID: process.ID, NodeInstanceID: "node-approval", TaskKey: "customer.review", TaskVersion: "1.0.0", Status: agentmodel.AgentTaskRunSucceeded, Outcome: "success", UpdatedAt: time.Now().UTC(), Identity: agentsdk.ExecutionIdentity{Execution: agentsdk.PrincipalReference{UserID: principal.UserID, RoleKey: principal.RoleKey}}, Approval: &agentmodel.AgentTaskApproval{ProposalID: "proposal", Status: "resolved", Decision: "approved"}}
-	if err := service.CommitAgentTaskApprovalTerminal(t.Context(), run); err != nil {
-		t.Fatal(err)
-	}
-	commit := state.commit.UpdateAgentTasks[0]
-	if commit.ExpectedStatus != "waiting_approval" || commit.LeaseOwner != "" || commit.FencingToken != 0 || state.commit.InsertExecutions[0].IdempotencyKey != "agent-task-resume:run-approval" {
-		t.Fatalf("commit=%#v resume=%#v", commit, state.commit.InsertExecutions)
-	}
-}
-
-func TestAgentTaskTerminalStatusesMapToDeclaredWorkflowOutcomes(t *testing.T) {
+func TestAgentCapabilityStatusesMapToDeclaredWorkflowOutcomes(t *testing.T) {
 	for _, test := range []struct {
-		status  agentmodel.AgentTaskRunStatus
+		status  string
 		outcome string
 		want    string
 	}{
-		{agentmodel.AgentTaskRunSucceeded, "", "success"},
-		{agentmodel.AgentTaskRunManualReview, "", "manual_review"},
-		{agentmodel.AgentTaskRunRejected, "", "rejected"},
-		{agentmodel.AgentTaskRunNoResult, "", "no_result"},
-		{agentmodel.AgentTaskRunFailed, "cancelled", "error"},
-		{agentmodel.AgentTaskRunCancelled, "cancelled", "error"},
-		{agentmodel.AgentTaskRunDeadLetter, "timeout", "error"},
+		{"succeeded", "", "success"},
+		{"manual_review", "", "manual_review"},
+		{"rejected", "", "rejected"},
+		{"no_result", "", "no_result"},
+		{"failed", "cancelled", "error"},
+		{"cancelled", "", "error"},
 	} {
-		if got := agentTaskWorkflowOutcome(agentmodel.AgentTaskRun{Status: test.status, Outcome: test.outcome}); got != test.want {
+		if got := workflowAgentCapabilityOutcome(test.status, test.outcome); got != test.want {
 			t.Errorf("status=%s outcome=%s got=%s want=%s", test.status, test.outcome, got, test.want)
 		}
 	}
@@ -210,9 +208,9 @@ func TestAgentTaskContinuationPrincipalFailsClosed(t *testing.T) {
 func TestWorkflowSimulationShowsAgentTaskWithoutModelTaskOrSideEffects(t *testing.T) {
 	prepared := false
 	engine := NewWorkflowProcessRuntime(WorkflowDependencies{
-		PrepareAgentTask: func(context.Context, WorkflowAgentTaskPreparation) (agentmodel.AgentTaskRun, error) {
+		StartAgentTask: func(context.Context, WorkflowAgentTaskPreparation) (agentsdk.TaskResult, error) {
 			prepared = true
-			return agentmodel.AgentTaskRun{}, nil
+			return agentsdk.TaskResult{Status: agentsdk.ProviderRunAccepted}, nil
 		},
 		ActionExists: func(context.Context, string) bool { return true },
 	}).ProcessEngine()

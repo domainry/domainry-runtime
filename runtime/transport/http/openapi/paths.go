@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
 )
 
 func addObjectOpenAPIPaths(paths map[string]any, object definitionmodel.ObjectSchema) {
@@ -17,14 +16,14 @@ func addObjectOpenAPIPaths(paths map[string]any, object definitionmodel.ObjectSc
 	createRequest := openAPIRef(openAPIObjectSchemaName(objectKey) + "CreateRequest")
 	updateRequest := openAPIRef(openAPIObjectSchemaName(objectKey) + "UpdateRequest")
 	paths["/objects/"+objectKey+"/records"] = map[string]any{
-		"get":  openAPIOperation("list"+openAPIOperationName(objectKey)+"Records", tag, "List "+tag+" records", openAPIProductSurfaces(surfacemodel.ProductSurfaceBusinessWorkspace, surfacemodel.ProductSurfaceConsumerPortal), openAPIAdminSecurity(), openAPIQueryParameter("locale", "Resolve and search localized record fields in this BCP 47 locale.", map[string]any{"type": "string"}), openAPIJSONResponse("Record page", openAPIRef("PageResult"))),
-		"post": openAPIOperation("create"+openAPIOperationName(objectKey)+"Record", tag, "Create "+tag+" record", openAPIProductSurfaces(surfacemodel.ProductSurfaceBusinessWorkspace, surfacemodel.ProductSurfaceConsumerPortal), openAPIAdminSecurity(), openAPIJSONRequest(createRequest), openAPIJSONResponse("Created record", recordSchema)),
+		"get":  openAPIOperation("list"+openAPIOperationName(objectKey)+"Records", tag, "List "+tag+" records", openAPIEndpointAccess(), openAPIAdminSecurity(), openAPIQueryParameter("locale", "Resolve and search localized record fields in this BCP 47 locale.", map[string]any{"type": "string"}), openAPIJSONResponse("Record page", openAPIRef("PageResult"))),
+		"post": openAPIOperation("create"+openAPIOperationName(objectKey)+"Record", tag, "Create "+tag+" record", openAPIEndpointAccess(), openAPIAdminSecurity(), openAPIJSONRequest(createRequest), openAPIJSONResponse("Created record", recordSchema)),
 	}
 	paths["/objects/"+objectKey+"/records/import/preview"] = map[string]any{
-		"post": openAPIOperation("preview"+openAPIOperationName(objectKey)+"Import", tag, "Preview CSV import for "+tag, openAPIProductSurfaces(surfacemodel.ProductSurfaceBusinessWorkspace), openAPIAdminSecurity(), openAPIJSONResponse("Import preview", openAPIObject(nil))),
+		"post": openAPIOperation("preview"+openAPIOperationName(objectKey)+"Import", tag, "Preview CSV import for "+tag, openAPIEndpointAccess(), openAPIAdminSecurity(), openAPIJSONResponse("Import preview", openAPIObject(nil))),
 	}
 	paths["/objects/"+objectKey+"/records/import/apply"] = map[string]any{
-		"post": openAPIOperation("apply"+openAPIOperationName(objectKey)+"Import", tag, "Apply CSV import for "+tag, openAPIProductSurfaces(surfacemodel.ProductSurfaceBusinessWorkspace), openAPIAdminSecurity(), openAPIJSONResponse("Import result", openAPIObject(nil))),
+		"post": openAPIOperation("apply"+openAPIOperationName(objectKey)+"Import", tag, "Apply CSV import for "+tag, openAPIEndpointAccess(), openAPIAdminSecurity(), openAPIJSONResponse("Import result", openAPIObject(nil))),
 	}
 	paths["/objects/"+objectKey+"/records/export"] = map[string]any{
 		"get": openAPIOperation("export"+openAPIOperationName(objectKey)+"Records", tag, "Export "+tag+" records as CSV", openAPIAdminSecurity(), openAPIQueryParameter("locale", "Export resolved localized record fields in this BCP 47 locale.", map[string]any{"type": "string"}), openAPIResponse("CSV export", "text/csv", map[string]any{"type": "string"})),
@@ -35,38 +34,17 @@ func addObjectOpenAPIPaths(paths map[string]any, object definitionmodel.ObjectSc
 		"delete": openAPIOperation("delete"+openAPIOperationName(objectKey)+"Record", tag, "Delete "+tag+" record", openAPIAdminSecurity(), openAPIPathParameter("recordID", "Record ID"), openAPIResponse("Deleted", "application/json", openAPIObject(nil))),
 	}
 	paths["/objects/"+objectKey+"/actions"] = map[string]any{
-		"get": openAPIOperation("list"+openAPIOperationName(objectKey)+"Actions", tag, "List available actions for "+tag, openAPIProductSurfaces(surfacemodel.ProductSurfaceBusinessWorkspace, surfacemodel.ProductSurfaceConsumerPortal), openAPIAdminSecurity(), openAPIJSONResponse("Actions", openAPIArray(openAPIRef("Action")))),
+		"get": openAPIOperation("list"+openAPIOperationName(objectKey)+"Actions", tag, "List available actions for "+tag, openAPIEndpointAccess(), openAPIAdminSecurity(), openAPIJSONResponse("Actions", openAPIArray(openAPIRef("Action")))),
 	}
 }
 
 func addRuntimeContractOpenAPIPaths(paths map[string]any) {
 	addPartyOpenAPIPaths(paths)
-	addReportQueryOpenAPIPaths(paths)
 	paths["/i18n/locales"] = map[string]any{
 		"get": openAPIOperation("listI18nLocales", "I18n", "Available runtime locales", openAPIPublicSecurity(), openAPIJSONResponse("Locales", openAPIArray(openAPIObject(nil)))),
 	}
 	paths["/i18n/resources"] = map[string]any{
 		"get": openAPIOperation("getI18nResources", "I18n", "Localized runtime resources", openAPIPublicSecurity(), openAPIJSONResponse("Resources", openAPIObject(nil))),
-	}
-	paths["/dictionaries/{dictionaryKey}/items"] = map[string]any{
-		"get": openAPIOperation("listDictionaryItems", "Dictionaries", "List dictionary items", openAPIAdminSecurity(), openAPIPathParameter("dictionaryKey", "Dictionary key"), openAPIJSONResponse("Dictionary items", openAPIArray(openAPIObject(nil)))),
-	}
-	paths["/reports/{reportKey}/snapshots/refresh"] = map[string]any{
-		"post": openAPIOperation("refreshReportSnapshot", "Reports", "Refresh an authorization-scoped report snapshot", openAPIAdminSecurity(), openAPIPathParameter("reportKey", "Report key"), openAPIJSONResponse("Report snapshot", openAPIObject(nil))),
-	}
-	prepareReportExport := openAPIOperation("prepareReportExport", "Reports", "Submit a governed Report export to Data Exchange. The server atomically replays the same active job or unexpired intact artifact for the canonical report, parameters, source, requester, authorization/data scope, format, and result version.", openAPIAdminSecurity(), openAPIPathParameter("reportKey", "Report key"), openAPIPathParameter("objectKey", "Object key"), openAPIParameter{Value: openAPIHeaderParameter("Idempotency-Key", "Required transport idempotency key; canonical server fingerprint dedupe also applies across different caller keys", true)}, openAPIJSONRequest(openAPIRequiredObject([]string{"audit_id", "scope"}, map[string]any{"audit_id": map[string]any{"type": "string"}, "scope": openAPIReportExportScopeSchema()})), openAPIJSONResponse("Accepted Data Exchange report export job", reportExportJobSchema()))
-	prepareReportExport["responses"] = map[string]any{"202": openAPIResponseValue("Accepted Data Exchange report export job", "application/json", reportExportJobSchema()), "default": openAPIJSONResponse("Error", openAPIRef("Error")).Value}
-	paths["/reports/{reportKey}/exports/{objectKey}/prepare"] = map[string]any{"post": prepareReportExport}
-	paths["/report-exports/{jobID}"] = map[string]any{"get": openAPIOperation("getReportExportJob", "Reports", "Get requester-owned report export status and progress", openAPIAdminSecurity(), openAPIPathParameter("jobID", "Report export job ID"), openAPIJSONResponse("Report export job", reportExportJobSchema()))}
-	paths["/report-exports/{jobID}/cancel"] = map[string]any{"post": openAPIOperation("cancelReportExport", "Reports", "Cancel a requester-owned report export job", openAPIAdminSecurity(), openAPIPathParameter("jobID", "Report export job ID"), openAPIJSONResponse("Cancelled report export job", reportExportJobSchema()))}
-	paths["/report-exports/downloads/{token}"] = map[string]any{
-		"get": openAPIOperation("downloadReportExport", "Reports", "Download an approved report export before expiry", openAPIAdminSecurity(), openAPIPathParameter("token", "Download token"), openAPIResponse("Report export", "text/csv", map[string]any{"type": "string", "format": "binary"})),
-	}
-	paths["/business/audit-event-exports"] = map[string]any{
-		"post": openAPIOperation("prepareBusinessAuditEventExport", "Audit", "Prepare immutable server-rendered business audit-event CSV bytes under current workspace and data scope", openAPIProductSurfaces(surfacemodel.ProductSurfaceBusinessWorkspace), openAPIAdminSecurity(), openAPIParameter{Value: openAPIHeaderParameter("Idempotency-Key", "Stable caller key for immutable export preparation", true)}, openAPIJSONRequest(openAPIBusinessAuditExportRequestSchema()), openAPIJSONResponse("Prepared business audit-event export", openAPIBusinessAuditExportPreparedSchema())),
-	}
-	paths["/business/audit-event-exports/downloads/{token}"] = map[string]any{
-		"get": openAPIOperation("downloadBusinessAuditEventExport", "Audit", "Download a short-lived business audit-event export after current permission and data-scope revalidation", openAPIProductSurfaces(surfacemodel.ProductSurfaceBusinessWorkspace), openAPIAdminSecurity(), openAPIPathParameter("token", "Short-lived download token"), openAPIResponse("Business audit-event CSV", "text/csv", map[string]any{"type": "string", "format": "binary"})),
 	}
 	addUploadOpenAPIPaths(paths)
 	paths["/objects/{objectKey}/records"] = map[string]any{

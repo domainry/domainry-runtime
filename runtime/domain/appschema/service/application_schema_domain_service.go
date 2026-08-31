@@ -4,8 +4,8 @@ import (
 	"context"
 
 	collectionplatform "github.com/domainry/domainry-foundation/collection"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
-	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
@@ -21,10 +21,10 @@ type CapabilityAuthoringSchemaProvider interface {
 // ApplicationSchemaDomainService exposes the current authoring schema.
 type ApplicationSchemaDomainService struct {
 	schema   CapabilityAuthoringSchemaProvider
-	metadata appschemarepository.ApplicationSchemaRepository
+	metadata metadatasdk.Localization
 }
 
-func NewApplicationSchemaDomainService(schema CapabilityAuthoringSchemaProvider, metadata appschemarepository.ApplicationSchemaRepository) *ApplicationSchemaDomainService {
+func NewApplicationSchemaDomainService(schema CapabilityAuthoringSchemaProvider, metadata metadatasdk.Localization) *ApplicationSchemaDomainService {
 	return &ApplicationSchemaDomainService{schema: schema, metadata: metadata}
 }
 

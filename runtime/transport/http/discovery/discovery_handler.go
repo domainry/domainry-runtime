@@ -86,20 +86,3 @@ func (h *DiscoveryHandler) getPublishedRuntimeSchema(w http.ResponseWriter, r *h
 	}
 	h.writeJSON(w, http.StatusOK, snapshot)
 }
-
-func (h *DiscoveryHandler) getBusinessSurfaceContext(w http.ResponseWriter, r *http.Request) {
-	h.getPublishedSurfaceContext(w, r, "business_workspace")
-}
-
-func (h *DiscoveryHandler) getPortalSurfaceContext(w http.ResponseWriter, r *http.Request) {
-	h.getPublishedSurfaceContext(w, r, "consumer_portal")
-}
-
-func (h *DiscoveryHandler) getPublishedSurfaceContext(w http.ResponseWriter, r *http.Request, surface string) {
-	context, err := h.schema.PublishedSurfaceContext(r.Context(), surface, h.principal(r))
-	if err != nil {
-		h.writeError(w, r, http.StatusForbidden, "auth.permission_denied")
-		return
-	}
-	h.writeJSON(w, http.StatusOK, context)
-}

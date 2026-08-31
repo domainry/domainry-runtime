@@ -31,7 +31,7 @@ inside each package remains enabled.
 | three SQL dialects and two Runtime instances | `TestOperationsContractAcrossRealDialects` plus existing dialect lock/lease suites |
 | migration, checksum, lock and restore | migration package tests and `runtime_disaster_recovery/drill_external.sh` |
 | HTTP, Capability, OpenAPI and Runbook | HTTP/OpenAPI suites and Operations boundary tests |
-| load, soak, retry storm, backlog recovery | capacity soak, PostgreSQL pool soak, record queue and integration pressure recovery tests |
+| load, soak, retry storm, backlog recovery | Foundation capacity/rate-limit soak, PostgreSQL pool soak, record queue and integration pressure recovery tests |
 | rolling deployment and restart | controlled two-instance drain and bounded Runtime shutdown tests |
 | telemetry, alert and audit | diagnostics/readiness, break-glass audit alert and mandatory-audit tests |
 
@@ -59,4 +59,3 @@ Failures from unrelated repository baselines are recorded separately from a
 gate regression; neither category permits deleting or weakening a test. Drill
 JSON is the source of actual RPO/RTO, data-count comparison and reconciliation
 actions. Evidence artifacts are uploaded even when the release workflow fails.
-

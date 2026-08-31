@@ -10,19 +10,6 @@ func (state *validationState) validateBusinessIdentityBinding(path string, exten
 	if strings.TrimSpace(binding.Key) == "" {
 		state.add(path+".key", "is required")
 	}
-	if len(binding.SurfaceKeys) == 0 {
-		state.add(path+".surface_keys", "must contain at least one surface key")
-	}
-	seenSurfaces := map[string]bool{}
-	for index, surfaceKey := range binding.SurfaceKeys {
-		surfaceKey = strings.TrimSpace(surfaceKey)
-		if surfaceKey == "" {
-			state.add(path+".surface_keys", "item %d must not be blank", index)
-		} else if seenSurfaces[surfaceKey] {
-			state.add(path+".surface_keys", "contains duplicate surface key %q", surfaceKey)
-		}
-		seenSurfaces[surfaceKey] = true
-	}
 	fields := state.fields[extension.ObjectKey]
 	if binding.StatusField != "" {
 		field := fields[binding.StatusField]

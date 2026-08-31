@@ -9,7 +9,6 @@ import (
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
-	appschemavalidation "github.com/domainry/domainry-runtime/runtime/domain/appschema/validation"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -46,11 +45,6 @@ func (s *ApplicationSchemaApplicationService) validateMetadataCandidateWithConne
 	}
 	if err := manifestvalidation.ValidateRuntimeDefinitionGraphWithConnectorCatalog(candidate, connectorCatalog); err != nil {
 		return badRequest("backend.metadata.candidate_invalid", "diagnostic", err.Error())
-	}
-	for _, connector := range candidate.Integrations.Connectors {
-		if err := appschemavalidation.ApplicationSchemaValidateConnectorDefinition(connector); err != nil {
-			return badRequest("backend.metadata.candidate_invalid", "resource_type", "connector", "resource_key", connector.Key, "diagnostic", err.Error())
-		}
 	}
 	for _, action := range candidate.Actions {
 		if issues := validateBusinessActionDefinitionIssuesWithObjects(action, candidate.Objects); len(issues) > 0 {

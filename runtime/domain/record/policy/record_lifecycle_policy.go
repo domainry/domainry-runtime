@@ -17,11 +17,11 @@ func RecordAutomationTransitionCandidate(before, candidate map[string]any) bool 
 	return false
 }
 
-func RecordValidateSchedulerOperationalCRUD(object definitionmodel.ObjectSchema, operation string) error {
-	if !boolFromAny(object.Config["scheduler_runtime"]) && !boolFromAny(object.Config["record_timer_runtime"]) {
+func RecordValidateRuntimeOwnedCRUD(object definitionmodel.ObjectSchema, operation string) error {
+	if !boolFromAny(object.Config["record_timer_runtime"]) {
 		return nil
 	}
-	return lifecycleError(apperror.KindForbidden, "backend.scheduler.runtime_api_required", "object", object.Key, "operation", operation)
+	return lifecycleError(apperror.KindForbidden, "backend.record_timer.runtime_api_required", "object", object.Key, "operation", operation)
 }
 
 func RecordUsesSoftDelete(object definitionmodel.ObjectSchema) bool {

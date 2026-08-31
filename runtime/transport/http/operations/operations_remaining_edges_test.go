@@ -348,39 +348,3 @@ func TestDatabaseRetirementAndLeaseRemainingEdges(t *testing.T) {
 		t.Fatalf("lease nil-decode status=%d", response.Code)
 	}
 }
-
-func TestLifecycleRemainingDecodeDefaultAndServiceErrorEdges(t *testing.T) {
-	mux, _ := newLifecycleGovernanceHTTPMux(t)
-	for _, test := range []struct{ path, body string }{
-		{path: "/operations/lifecycle/subjects", body: "{"},
-		{path: "/operations/lifecycle/subjects/request/verify", body: "{"},
-	} {
-		response := httptest.NewRecorder()
-		mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, test.path, strings.NewReader(test.body)))
-		if response.Code != http.StatusBadRequest {
-			t.Fatalf("malformed %s status=%d body=%s", test.path, response.Code, response.Body.String())
-		}
-	}
-
-	denied := []struct{ method, path, body string }{
-		{http.MethodPost, "/operations/lifecycle/cleanup/jobs", `{}`},
-		{http.MethodPost, "/operations/lifecycle/cleanup/jobs/missing/run", `{}`},
-		{http.MethodPost, "/operations/lifecycle/policies", `{"status":"draft","published_at":"2026-01-01T00:00:00Z"}`},
-		{http.MethodPost, "/operations/lifecycle/legal-holds", `{}`},
-		{http.MethodPost, "/operations/lifecycle/legal-holds/missing/end", `{"ended_at":"2026-01-01T00:00:00Z"}`},
-		{http.MethodPost, "/operations/lifecycle/subjects", `{}`},
-		{http.MethodPost, "/operations/lifecycle/deletions/replay", `{}`},
-		{http.MethodGet, "/operations/lifecycle/subjects/missing/download", ""},
-		{http.MethodPost, "/operations/lifecycle/external-erasures/missing/reconcile", `{}`},
-	}
-	for _, test := range denied {
-		response := httptest.NewRecorder()
-		request := httptest.NewRequest(test.method, test.path, strings.NewReader(test.body))
-		request.Header.Set("X-Deny", "true")
-		request.Header.Set("Idempotency-Key", "key")
-		mux.ServeHTTP(response, request)
-		if response.Code < http.StatusBadRequest {
-			t.Fatalf("denied %s status=%d body=%s", test.path, response.Code, response.Body.String())
-		}
-	}
-}

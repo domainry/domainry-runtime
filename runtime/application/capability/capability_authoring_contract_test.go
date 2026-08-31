@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
+	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 )
 
 func TestRuntimeAuthoringCapabilitiesAreValidAndDeterministic(t *testing.T) {
@@ -19,26 +19,16 @@ func TestRuntimeAuthoringCapabilitiesAreValidAndDeterministic(t *testing.T) {
 	if first.ContractHash != RuntimeAuthoringContractHash {
 		t.Fatalf("published authoring contract hash is stale: catalog=%s published=%s", first.ContractHash, RuntimeAuthoringContractHash)
 	}
-	if first.SurfaceContractVersion != surfacemodel.ContractVersion {
-		t.Fatalf("surface contract version=%q want=%q", first.SurfaceContractVersion, surfacemodel.ContractVersion)
+	if first.EndpointContractVersion != endpointmodel.ContractVersion {
+		t.Fatalf("endpoint contract version=%q want=%q", first.EndpointContractVersion, endpointmodel.ContractVersion)
 	}
-	endpointContracts := tenantAdminEndpointSurfaceContracts()
+	endpointContracts := tenantAdminEndpointContracts()
 	if len(endpointContracts) == 0 {
-		t.Fatal("capability discovery must publish compiled endpoint Surface contracts")
+		t.Fatal("capability discovery must publish compiled endpoint contracts")
 	}
 	for _, endpointContract := range endpointContracts {
 		if err := endpointContract.Validate(); err != nil {
 			t.Fatalf("invalid discovered endpoint contract %q: %v", endpointContract.EndpointIdentity, err)
-		}
-	}
-	for _, domain := range first.Domains {
-		for _, capability := range domain.Capabilities {
-			if capability.Surface != surfacemodel.ProductSurfaceAdminConsole ||
-				len(capability.ActorAudiences) != 1 ||
-				capability.ActorAudiences[0] != surfacemodel.ActorAudiencePlatformAdmin ||
-				capability.ExposureClass != surfacemodel.ExposureClassPlatformAdmin {
-				t.Fatalf("capability %s has incomplete Surface contract: %+v", capability.Key, capability)
-			}
 		}
 	}
 }

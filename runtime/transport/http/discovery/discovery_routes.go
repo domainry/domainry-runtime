@@ -7,7 +7,5 @@ func (h *DiscoveryHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /i18n/resources", h.i18nResources)
 	mux.HandleFunc("GET /tenant-admin/runtime-schema", h.getSchema)
 	mux.HandleFunc("GET /business/runtime-schema", h.getBusinessRuntimeSchema)
-	mux.HandleFunc("GET /business/surface-context", h.getBusinessSurfaceContext)
 	mux.HandleFunc("GET /portal/runtime-schema", h.getPortalRuntimeSchema)
-	mux.HandleFunc("GET /portal/surface-context", h.getPortalSurfaceContext)
 }

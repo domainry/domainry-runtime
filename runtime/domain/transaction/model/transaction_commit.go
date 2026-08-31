@@ -95,27 +95,8 @@ type WorkflowStateCommit struct {
 	Process           *workflowmodel.WorkflowProcessInstance `json:"process,omitempty"`
 	InsertNodes       []workflowmodel.WorkflowNodeInstance   `json:"insert_nodes,omitempty"`
 	UpdateNodes       []workflowmodel.WorkflowNodeInstance   `json:"update_nodes,omitempty"`
-	InsertAgentTasks  []WorkflowAgentTaskCommit              `json:"insert_agent_tasks,omitempty"`
-	UpdateAgentTasks  []WorkflowAgentTaskCommit              `json:"update_agent_tasks,omitempty"`
 	UpdateTasks       []workflowmodel.WorkflowTask           `json:"update_tasks,omitempty"`
 	Events            []workflowmodel.WorkflowProcessEvent   `json:"events,omitempty"`
 	WorkflowExecution *workflowmodel.WorkflowExecution       `json:"workflow_execution,omitempty"`
 	InsertExecutions  []workflowmodel.WorkflowExecution      `json:"insert_executions,omitempty"`
-}
-
-type WorkflowAgentTaskCommit struct {
-	WorkspaceID     string `json:"workspace_id"`
-	RunID           string `json:"run_id"`
-	IdempotencyKey  string `json:"idempotency_key"`
-	TaskKey         string `json:"task_key"`
-	ProcessID       string `json:"process_id"`
-	Status          string `json:"status"`
-	ExpectedStatus  string `json:"expected_status,omitempty"`
-	LeaseOwner      string `json:"lease_owner,omitempty"`
-	FencingToken    int64  `json:"fencing_token,omitempty"`
-	LeaseExpiresAt  int64  `json:"lease_expires_at,omitempty"`
-	NextAttemptAt   int64  `json:"next_attempt_at,omitempty"`
-	Payload         []byte `json:"payload"`
-	CreatedAtMillis int64  `json:"created_at_millis"`
-	UpdatedAtMillis int64  `json:"updated_at_millis"`
 }

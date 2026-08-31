@@ -19,8 +19,8 @@ type HTTPMetricsCollector interface {
 	Begin()
 	Observe(method, route string, status int, duration time.Duration)
 	ObserveBodyRejection(reason string)
-	RegisterSurfaceGroup(group string, endpointCount int)
-	ObserveSurfaceGroup(group string, status int, highRisk bool)
+	RegisterListenerGroup(group string, endpointCount int)
+	ObserveListenerGroup(group string, status int, highRisk bool)
 	Snapshot() []HTTPRequestMetric
 	Summary() map[string]int64
 	Prometheus() string
@@ -34,11 +34,11 @@ type MemoryHTTPMetricsCollector struct {
 	requestCount   int64
 	errorCount     int64
 	bodyRejections map[string]int64
-	surfaceGroups  map[string]surfaceGroupMetric
+	listenerGroups map[string]listenerGroupMetric
 	droppedSeries  int64
 }
 
-type surfaceGroupMetric struct {
+type listenerGroupMetric struct {
 	EndpointCount int
 	Requests      map[string]int64
 	Rejections    map[string]int64
@@ -49,7 +49,7 @@ func NewMemoryHTTPMetricsCollector(maxSeries int) *MemoryHTTPMetricsCollector {
 	if maxSeries <= 0 {
 		maxSeries = defaultHTTPMetricsMaxSeries
 	}
-	return &MemoryHTTPMetricsCollector{series: map[string]HTTPRequestMetric{}, maxSeries: maxSeries, bodyRejections: map[string]int64{}, surfaceGroups: map[string]surfaceGroupMetric{}}
+	return &MemoryHTTPMetricsCollector{series: map[string]HTTPRequestMetric{}, maxSeries: maxSeries, bodyRejections: map[string]int64{}, listenerGroups: map[string]listenerGroupMetric{}}
 }
 
 func (c *MemoryHTTPMetricsCollector) Begin() { c.inFlight.Add(1) }
@@ -93,22 +93,22 @@ func (c *MemoryHTTPMetricsCollector) ObserveBodyRejection(reason string) {
 	c.mu.Unlock()
 }
 
-func (c *MemoryHTTPMetricsCollector) RegisterSurfaceGroup(group string, endpointCount int) {
-	group = normalizeSurfaceGroup(group)
+func (c *MemoryHTTPMetricsCollector) RegisterListenerGroup(group string, endpointCount int) {
+	group = normalizeListenerGroup(group)
 	c.mu.Lock()
-	metric := c.surfaceGroups[group]
+	metric := c.listenerGroups[group]
 	metric.EndpointCount = endpointCount
 	if metric.Requests == nil {
 		metric.Requests, metric.Rejections, metric.HighRisk = map[string]int64{}, map[string]int64{}, map[string]int64{}
 	}
-	c.surfaceGroups[group] = metric
+	c.listenerGroups[group] = metric
 	c.mu.Unlock()
 }
 
-func (c *MemoryHTTPMetricsCollector) ObserveSurfaceGroup(group string, status int, highRisk bool) {
-	group, class := normalizeSurfaceGroup(group), statusClass(status)
+func (c *MemoryHTTPMetricsCollector) ObserveListenerGroup(group string, status int, highRisk bool) {
+	group, class := normalizeListenerGroup(group), statusClass(status)
 	c.mu.Lock()
-	metric := c.surfaceGroups[group]
+	metric := c.listenerGroups[group]
 	if metric.Requests == nil {
 		metric.Requests, metric.Rejections, metric.HighRisk = map[string]int64{}, map[string]int64{}, map[string]int64{}
 	}
@@ -119,7 +119,7 @@ func (c *MemoryHTTPMetricsCollector) ObserveSurfaceGroup(group string, status in
 	if highRisk {
 		metric.HighRisk[class]++
 	}
-	c.surfaceGroups[group] = metric
+	c.listenerGroups[group] = metric
 	c.mu.Unlock()
 }
 
@@ -163,9 +163,9 @@ func (c *MemoryHTTPMetricsCollector) Prometheus() string {
 	for reason, count := range c.bodyRejections {
 		bodyRejections[reason] = count
 	}
-	surfaceGroups := make(map[string]surfaceGroupMetric, len(c.surfaceGroups))
-	for group, metric := range c.surfaceGroups {
-		surfaceGroups[group] = metric
+	listenerGroups := make(map[string]listenerGroupMetric, len(c.listenerGroups))
+	for group, metric := range c.listenerGroups {
+		listenerGroups[group] = metric
 	}
 	c.mu.RUnlock()
 	var output strings.Builder
@@ -195,7 +195,7 @@ func (c *MemoryHTTPMetricsCollector) Prometheus() string {
 	for _, reason := range reasons {
 		fmt.Fprintf(&output, "domainry_runtime_http_body_rejections_total{reason=%q} %d\n", reason, bodyRejections[reason])
 	}
-	writeSurfaceGroupMetrics(&output, surfaceGroups)
+	writeListenerGroupMetrics(&output, listenerGroups)
 	writeMetricHeader(&output, "domainry_runtime_telemetry_dropped_series_total", "Metric series dropped after the cardinality budget was exhausted.", "counter")
 	fmt.Fprintf(&output, "domainry_runtime_telemetry_dropped_series_total{signal=\"http\"} %d\n", summary["dropped_series_count"])
 	writeMetricHeader(&output, "domainry_runtime_telemetry_series", "Current metric series and configured budget.", "gauge")
@@ -204,29 +204,29 @@ func (c *MemoryHTTPMetricsCollector) Prometheus() string {
 	return output.String()
 }
 
-func writeSurfaceGroupMetrics(output *strings.Builder, groups map[string]surfaceGroupMetric) {
+func writeListenerGroupMetrics(output *strings.Builder, groups map[string]listenerGroupMetric) {
 	names := make([]string, 0, len(groups))
 	for group := range groups {
 		names = append(names, group)
 	}
 	sort.Strings(names)
-	writeMetricHeader(output, "domainry_runtime_surface_listener_info", "Configured Runtime Surface listener groups.", "gauge")
-	writeMetricHeader(output, "domainry_runtime_surface_listener_endpoints", "Compiled endpoints attached to each Surface listener.", "gauge")
-	writeMetricHeader(output, "domainry_runtime_surface_requests_total", "Requests handled by Surface listener and status class.", "counter")
-	writeMetricHeader(output, "domainry_runtime_surface_rejections_total", "Rejected requests by Surface listener and status class.", "counter")
+	writeMetricHeader(output, "domainry_runtime_listener_info", "Configured Runtime listener groups.", "gauge")
+	writeMetricHeader(output, "domainry_runtime_listener_endpoints", "Compiled endpoints attached to each listener.", "gauge")
+	writeMetricHeader(output, "domainry_runtime_listener_requests_total", "Requests handled by listener and status class.", "counter")
+	writeMetricHeader(output, "domainry_runtime_listener_rejections_total", "Rejected requests by listener and status class.", "counter")
 	writeMetricHeader(output, "domainry_runtime_high_risk_operations_total", "High-risk mutation requests by Surface listener and status class.", "counter")
 	for _, group := range names {
 		metric := groups[group]
-		fmt.Fprintf(output, "domainry_runtime_surface_listener_info{surface_group=%q} 1\n", group)
-		fmt.Fprintf(output, "domainry_runtime_surface_listener_endpoints{surface_group=%q} %d\n", group, metric.EndpointCount)
+		fmt.Fprintf(output, "domainry_runtime_listener_info{listener_group=%q} 1\n", group)
+		fmt.Fprintf(output, "domainry_runtime_listener_endpoints{listener_group=%q} %d\n", group, metric.EndpointCount)
 		for _, class := range sortedMetricKeys(metric.Requests) {
-			fmt.Fprintf(output, "domainry_runtime_surface_requests_total{surface_group=%q,status_class=%q} %d\n", group, class, metric.Requests[class])
+			fmt.Fprintf(output, "domainry_runtime_listener_requests_total{listener_group=%q,status_class=%q} %d\n", group, class, metric.Requests[class])
 		}
 		for _, class := range sortedMetricKeys(metric.Rejections) {
-			fmt.Fprintf(output, "domainry_runtime_surface_rejections_total{surface_group=%q,status_class=%q} %d\n", group, class, metric.Rejections[class])
+			fmt.Fprintf(output, "domainry_runtime_listener_rejections_total{listener_group=%q,status_class=%q} %d\n", group, class, metric.Rejections[class])
 		}
 		for _, class := range sortedMetricKeys(metric.HighRisk) {
-			fmt.Fprintf(output, "domainry_runtime_high_risk_operations_total{surface_group=%q,status_class=%q} %d\n", group, class, metric.HighRisk[class])
+			fmt.Fprintf(output, "domainry_runtime_high_risk_operations_total{listener_group=%q,status_class=%q} %d\n", group, class, metric.HighRisk[class])
 		}
 	}
 }
@@ -240,10 +240,10 @@ func sortedMetricKeys(values map[string]int64) []string {
 	return keys
 }
 
-func normalizeSurfaceGroup(group string) string {
+func normalizeListenerGroup(group string) string {
 	group = strings.TrimSpace(group)
 	switch group {
-	case string(SurfaceRouteGroupPublic), string(SurfaceRouteGroupTenantAdmin), string(SurfaceRouteGroupOps), string(SurfaceRouteGroupAll):
+	case string(ListenerRouteGroupPublic), string(ListenerRouteGroupTenantAdmin), string(ListenerRouteGroupOps), string(ListenerRouteGroupAll):
 		return group
 	default:
 		return "unknown"

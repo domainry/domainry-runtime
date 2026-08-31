@@ -13,11 +13,11 @@ import (
 )
 
 type testCallAdapter struct {
-	result integrationcontract.CallResult
+	result CallResult
 	err    error
 }
 
-func (a *testCallAdapter) Call(context.Context, integrationcontract.CallRequest) (integrationcontract.CallResult, error) {
+func (a *testCallAdapter) Call(context.Context, CallRequest) (CallResult, error) {
 	return a.result, a.err
 }
 
@@ -25,9 +25,9 @@ type testFullAdapter struct {
 	testCallAdapter
 	schema        ProviderSchema
 	validateErr   error
-	testResult    integrationcontract.CallResult
+	testResult    CallResult
 	testErr       error
-	webhookResult integrationcontract.VerifiedInboundWebhook
+	webhookResult VerifiedInboundWebhook
 	webhookErr    error
 }
 
@@ -38,13 +38,13 @@ func (a *testFullAdapter) ValidateConfig(integrationsdk.Connection) error {
 func (a *testFullAdapter) TestConnection(context.Context, CallRequest) (CallResult, error) {
 	return a.testResult, a.testErr
 }
-func (a *testFullAdapter) VerifyWebhook(context.Context, integrationcontract.InboundWebhookRequest) (integrationcontract.VerifiedInboundWebhook, error) {
+func (a *testFullAdapter) VerifyWebhook(context.Context, InboundWebhookRequest) (VerifiedInboundWebhook, error) {
 	return a.webhookResult, a.webhookErr
 }
 
 func TestProviderCallAndOptionalContracts(t *testing.T) {
 	delegate := &testFullAdapter{
-		testCallAdapter: testCallAdapter{result: integrationcontract.CallResult{
+		testCallAdapter: testCallAdapter{result: CallResult{
 			Response: map[string]any{"ok": true}, ResponseRef: "response", SecretUpdates: map[string]string{"token": "next"},
 			ResourceHealth: &integrationsdk.ProviderResourceHealth{ObservationID: "observation", State: "healthy"},
 		}},
@@ -101,7 +101,7 @@ func TestProviderCallAndOptionalContracts(t *testing.T) {
 		t.Fatalf("test error=%v", err)
 	}
 	delegate.testErr = nil
-	delegate.testResult = integrationcontract.CallResult{Response: map[string]any{"connected": false}, SecretUpdates: map[string]string{"token": "next"}}
+	delegate.testResult = CallResult{Response: map[string]any{"connected": false}, SecretUpdates: map[string]string{"token": "next"}}
 	if got, err := tester.TestConnection(t.Context(), connector.TestConnectionRequest{}); err != nil || got.Connected {
 		t.Fatalf("connection test=%#v err=%v", got, err)
 	}
@@ -120,11 +120,11 @@ func TestProviderCallAndOptionalContracts(t *testing.T) {
 		t.Fatalf("webhook error=%v", err)
 	}
 	delegate.webhookErr = nil
-	delegate.webhookResult = integrationcontract.VerifiedInboundWebhook{
+	delegate.webhookResult = VerifiedInboundWebhook{
 		EventType: "created", Payload: map[string]any{"id": 1},
-		Security:         &integrationcontract.WebhookSecurityEvidence{SignatureVerified: true, EventTime: "2026-01-02T03:04:05Z"},
-		ExternalIdentity: &integrationcontract.WebhookExternalIdentity{Subject: "subject"},
-		DeliveryReceipt:  &integrationcontract.WebhookDeliveryReceipt{ResponseRef: "response", OccurredAt: "2026-01-02T03:04:05Z"},
+		Security:         &WebhookSecurityEvidence{SignatureVerified: true, EventTime: "2026-01-02T03:04:05Z"},
+		ExternalIdentity: &WebhookExternalIdentity{Subject: "subject"},
+		DeliveryReceipt:  &WebhookDeliveryReceipt{ResponseRef: "response", OccurredAt: "2026-01-02T03:04:05Z"},
 	}
 	if got, err := verifier.VerifyWebhook(t.Context(), connector.VerifyWebhookRequest{Headers: map[string][]string{"X": {"one", "two"}, "Empty": {}}, Query: map[string][]string{"q": {"one"}}}); err != nil || got.Security == nil || got.ExternalIdentity == nil || got.DeliveryReceipt == nil {
 		t.Fatalf("verified webhook=%#v err=%v", got, err)

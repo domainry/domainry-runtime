@@ -3,8 +3,8 @@ package projection
 import operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 
 var operationsDefinitionCatalog = []operationsmodel.OperationsDefinition{
-	operationsDefinition("scheduler.job.run", "scheduler", "scheduler_definition", false, []string{"scheduler.command", "scheduler.definition.run"}, "published definition exists and target readiness passes"),
-	operationsDefinition("scheduler.definition.reschedule", "scheduler", "scheduler_definition", false, []string{"scheduler.command", "scheduler.definition.run"}, "published definition exists and next_run_at is valid"),
+	operationsDefinition("scheduler.job.run", "scheduler", "scheduler_definition", false, []string{"scheduler.command"}, "published definition exists and target readiness passes"),
+	operationsDefinition("scheduler.definition.reschedule", "scheduler", "scheduler_definition", false, []string{"scheduler.command"}, "published definition exists and next_run_at is valid"),
 	operationsDefinition("scheduler.run.retry", "scheduler", "scheduler_run", false, []string{"scheduler.command"}, "run is failed, retryable, and below max attempts"),
 	operationsDefinition("scheduler.run.cancel", "scheduler", "scheduler_run", false, []string{"scheduler.command"}, "run is cancellable and caller observes current status"),
 	operationsDefinition("scheduler.dead_letter.resolve", "scheduler", "scheduler_dead_letter", false, []string{"scheduler.command"}, "dead letter is unresolved and resolution note is present"),

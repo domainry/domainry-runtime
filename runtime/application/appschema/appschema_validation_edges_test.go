@@ -21,7 +21,7 @@ import (
 )
 
 func TestStructuredApplicationDefinitionAndValidationDelegates(t *testing.T) {
-	for _, resourceType := range []string{"action", "connector"} {
+	for _, resourceType := range []string{"action"} {
 		issues, handled := ValidateStructuredApplicationDefinition(resourceType, json.RawMessage(`{`))
 		if !handled || len(issues) != 1 {
 			t.Fatalf("type=%s issues=%v handled=%v", resourceType, issues, handled)
@@ -30,6 +30,9 @@ func TestStructuredApplicationDefinitionAndValidationDelegates(t *testing.T) {
 		if !handled || len(issues) == 0 {
 			t.Fatalf("type=%s issues=%v handled=%v", resourceType, issues, handled)
 		}
+	}
+	if issues, handled := ValidateStructuredApplicationDefinition("connector", json.RawMessage(`{}`)); handled || issues != nil {
+		t.Fatalf("source-owned Connector definition must not be handled by Runtime: issues=%v handled=%v", issues, handled)
 	}
 	if issues, handled := ValidateStructuredApplicationDefinition("object", json.RawMessage(`{}`)); handled || issues != nil {
 		t.Fatalf("issues=%v handled=%v", issues, handled)
@@ -152,11 +155,14 @@ func TestApplicationDefinitionValidationApplicationPaths(t *testing.T) {
 	if err != nil || result.Valid || len(result.Errors) == 0 {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
-	for _, resourceType := range []string{"action", "connector"} {
+	for _, resourceType := range []string{"action"} {
 		normalized, issues, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), resourceType, "key", appschemamodel.ApplicationDefinitionUpsertRequest{Payload: json.RawMessage(`{}`)})
 		if err != nil || normalized != nil || len(issues) == 0 {
 			t.Fatalf("type=%s normalized=%s issues=%v err=%v", resourceType, normalized, issues, err)
 		}
+	}
+	if _, _, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "connector", "key", appschemamodel.ApplicationDefinitionUpsertRequest{Payload: json.RawMessage(`{}`)}); apperror.CodeOf(err) != "backend.app_schema.resource_type_unsupported" {
+		t.Fatalf("source-owned Connector definition was not rejected: %v", err)
 	}
 	if _, _, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "dictionary", "key", appschemamodel.ApplicationDefinitionUpsertRequest{Payload: json.RawMessage(`{`)}); err == nil {
 		t.Fatal("malformed dictionary unexpectedly valid")
@@ -174,12 +180,15 @@ func TestApplicationDefinitionValidationApplicationPaths(t *testing.T) {
 	if _, _, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "view", "order_list", viewRequest); err == nil {
 		t.Fatal("retired view definition unexpectedly accepted")
 	}
-	for _, resourceType := range []string{"field", "automation_rule", "connector", "action", "report"} {
+	for _, resourceType := range []string{"field", "automation_rule", "action", "report"} {
 		if _, err := service.ValidateApplicationDefinitionPayload(t.Context(), resourceType, appschemamodel.ApplicationDefinitionUpsertRequest{Payload: json.RawMessage(`{`)}); err == nil {
 			t.Fatalf("type=%s malformed payload unexpectedly valid", resourceType)
 		}
 	}
 	if _, err := service.ValidateApplicationDefinitionPayload(t.Context(), "view", viewRequest); err == nil {
 		t.Fatal("retired view definition unexpectedly accepted by payload validator")
+	}
+	if _, err := service.ValidateApplicationDefinitionPayload(t.Context(), "connector", viewRequest); err == nil {
+		t.Fatal("source-owned Connector definition unexpectedly accepted by payload validator")
 	}
 }

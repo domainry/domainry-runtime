@@ -200,7 +200,7 @@ func (s *ApplicationSchemaApplicationService) ValidateApplicationDefinitionPaylo
 
 func retiredPresentationDefinitionType(resourceType string) bool {
 	switch resourceType {
-	case "view", "surface", "component", "entrypoint":
+	case "view", "surface", "component", "entrypoint", "connector":
 		return true
 	default:
 		return false

@@ -13,7 +13,6 @@ import (
 	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 )
 
 // applyManifestMetadata replaces the RuntimeServices-owned schema indexes. It is
@@ -37,13 +36,10 @@ func (s *runtimeAssembly) applyManifestMetadata(templateID, templateVersion, nam
 		s.connectorRegistry.ReplaceSchema(integrations)
 	}
 	s.reports = append([]reportmodel.ReportSchema(nil), reports...)
-	s.reportObjects = recordservice.RecordReportObjectKeySet(reports)
+	s.reportObjects = reportSnapshotObjectKeySet(reports)
 	s.skills = append([]agentsdk.SkillSchema(nil), skills...)
 	s.agents = append([]agentsdk.AgentSchema(nil), agents...)
 	s.identityProfileExtensions = append([]profilebindingmodel.Binding(nil), profileBindings...)
-	if s.dictionaryRuntime != nil {
-		s.dictionaryRuntime.Replace(dictionaries)
-	}
 	for _, object := range objects {
 		if strings.TrimSpace(object.Key) != "" {
 			s.schema[object.Key] = object
@@ -64,6 +60,18 @@ func (s *runtimeAssembly) applyManifestMetadata(templateID, templateVersion, nam
 			s.automationRules[rule.Key] = rule
 		}
 	}
+}
+
+func reportSnapshotObjectKeySet(reports []reportmodel.ReportSchema) map[string]struct{} {
+	result := map[string]struct{}{}
+	for _, report := range reports {
+		for _, objectKey := range reportmodel.ReportDatasetSnapshotObjectKeys(report.Dataset) {
+			if objectKey = strings.TrimSpace(objectKey); objectKey != "" {
+				result[objectKey] = struct{}{}
+			}
+		}
+	}
+	return result
 }
 
 func (s *runtimeAssembly) applyManifestAgentMetadata(tasks []agentsdk.AgentTaskDefinition, entrypoints []agentsdk.AgentEntrypointAssignment, principals []agentsdk.AgentServicePrincipalBinding) {

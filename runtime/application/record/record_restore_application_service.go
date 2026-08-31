@@ -85,7 +85,7 @@ func (s *RecordRestoreApplicationService) PlanRestoreMutation(ctx context.Contex
 	if err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 	}
-	if err := recordpolicy.RecordValidateSchedulerOperationalCRUD(object, "restore"); err != nil {
+	if err := recordpolicy.RecordValidateRuntimeOwnedCRUD(object, "restore"); err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 	}
 	if !recordpolicy.RecordUsesSoftDelete(object) {

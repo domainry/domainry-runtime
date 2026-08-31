@@ -11,7 +11,7 @@ import (
 	ormdriver "github.com/domainry/domainry-orm/driver"
 	"github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
+	"github.com/domainry/domainry-foundation/ratelimit"
 )
 
 type RateLimiter struct {

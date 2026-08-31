@@ -5,6 +5,7 @@ import appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appsc
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"

@@ -13,7 +13,7 @@ import (
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
 
-type workflowWaitTimerSchedulerProbe struct {
+type workflowWaitTimerServiceProbe struct {
 	id  string
 	err error
 }
@@ -34,7 +34,7 @@ func (i workflowOrderedWorkforceIdentity) ListWorkforce(context.Context, identit
 	return i.entries, nil
 }
 
-func (p workflowWaitTimerSchedulerProbe) ScheduleWorkflowWaitTimer(context.Context, WorkflowWaitTimerRequest) (string, error) {
+func (p workflowWaitTimerServiceProbe) ScheduleWorkflowWaitTimer(context.Context, WorkflowWaitTimerRequest) (string, error) {
 	return p.id, p.err
 }
 
@@ -92,25 +92,25 @@ func TestWorkflowProcessTimerNodeBoundaries(t *testing.T) {
 		return &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}}}
 	}
 	if _, _, err := NewWorkflowProcessRuntime(WorkflowDependencies{Processes: newStore()}).ProcessEngine().executeNode(t.Context(), &process, node, principal); err == nil {
-		t.Fatal("missing timer scheduler accepted")
+		t.Fatal("missing wait timer service accepted")
 	}
 	store := newStore()
 	store.insertNodeErr = errors.New("insert")
-	if _, _, err := NewWorkflowProcessRuntime(WorkflowDependencies{Processes: store, TimerScheduler: workflowWaitTimerSchedulerProbe{id: "timer"}}).ProcessEngine().executeNode(t.Context(), &process, node, principal); err == nil {
+	if _, _, err := NewWorkflowProcessRuntime(WorkflowDependencies{Processes: store, WaitTimers: workflowWaitTimerServiceProbe{id: "timer"}}).ProcessEngine().executeNode(t.Context(), &process, node, principal); err == nil {
 		t.Fatal("insert error ignored")
 	}
 	store = newStore()
 	scheduleErr := errors.New("schedule")
-	if _, _, err := NewWorkflowProcessRuntime(WorkflowDependencies{Processes: store, TimerScheduler: workflowWaitTimerSchedulerProbe{err: scheduleErr}}).ProcessEngine().executeNode(t.Context(), &process, node, principal); !errors.Is(err, scheduleErr) {
+	if _, _, err := NewWorkflowProcessRuntime(WorkflowDependencies{Processes: store, WaitTimers: workflowWaitTimerServiceProbe{err: scheduleErr}}).ProcessEngine().executeNode(t.Context(), &process, node, principal); !errors.Is(err, scheduleErr) {
 		t.Fatalf("schedule err=%v", err)
 	}
 	store = newStore()
 	store.updateNodeErr = errors.New("update")
-	if _, _, err := NewWorkflowProcessRuntime(WorkflowDependencies{Processes: store, TimerScheduler: workflowWaitTimerSchedulerProbe{id: "timer"}}).ProcessEngine().executeNode(t.Context(), &process, node, principal); err == nil {
+	if _, _, err := NewWorkflowProcessRuntime(WorkflowDependencies{Processes: store, WaitTimers: workflowWaitTimerServiceProbe{id: "timer"}}).ProcessEngine().executeNode(t.Context(), &process, node, principal); err == nil {
 		t.Fatal("update error ignored")
 	}
 	store = newStore()
-	if outcome, waiting, err := NewWorkflowProcessRuntime(WorkflowDependencies{Processes: store, TimerScheduler: workflowWaitTimerSchedulerProbe{id: "timer"}}).ProcessEngine().executeNode(t.Context(), &process, node, principal); err != nil || outcome != "waiting" || !waiting {
+	if outcome, waiting, err := NewWorkflowProcessRuntime(WorkflowDependencies{Processes: store, WaitTimers: workflowWaitTimerServiceProbe{id: "timer"}}).ProcessEngine().executeNode(t.Context(), &process, node, principal); err != nil || outcome != "waiting" || !waiting {
 		t.Fatalf("outcome=%q waiting=%v err=%v", outcome, waiting, err)
 	}
 }

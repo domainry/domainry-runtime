@@ -10,7 +10,9 @@ import (
 )
 
 func prepareRuntimeManifest(ctx context.Context, cfg config.Config) (manifestmodel.ManifestSchema, error) {
-	return prepareRuntimeManifestWithCatalog(ctx, cfg, addRuntimeConnectorValidationCatalog)
+	return prepareRuntimeManifestWithCatalog(ctx, cfg, func(manifest manifestmodel.ManifestSchema) (manifestmodel.ManifestSchema, error) {
+		return manifest, nil
+	})
 }
 
 type runtimeManifestCatalogAppender func(manifestmodel.ManifestSchema) (manifestmodel.ManifestSchema, error)
@@ -30,4 +32,15 @@ func prepareRuntimeManifestWithCatalog(ctx context.Context, cfg config.Config, a
 		}
 	}
 	return appschemaapplication.PrepareInstalledManifest(seedManifest), nil
+}
+
+// runtimeManifestHasNoBusinessObjects remains true after Runtime-owned system
+// schemas have been generated for an empty direct-authoring manifest.
+func runtimeManifestHasNoBusinessObjects(manifest manifestmodel.ManifestSchema) bool {
+	for _, object := range manifest.Objects {
+		if runtimeOwned, _ := object.Config["runtime_owned"].(bool); !runtimeOwned {
+			return false
+		}
+	}
+	return true
 }

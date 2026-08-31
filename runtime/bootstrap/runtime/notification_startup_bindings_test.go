@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
@@ -13,7 +14,6 @@ import (
 	notificationcontract "github.com/domainry/domainry-notification-sdk/contract"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
-	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -163,9 +163,7 @@ func TestSchedulerNotificationAuthorizerBoundaries(t *testing.T) {
 		{name: "reader found after unrelated", permissions: []string{"other", "scheduler.definition.read"}, found: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			authorize := newSchedulerNotificationActionAuthorizer(func(context.Context, principalmodel.SystemScope, string, string) (appschemamodel.ApplicationDefinition, bool, error) {
-				return appschemamodel.ApplicationDefinition{}, test.found, test.err
-			})
+			authorize := newSchedulerNotificationActionAuthorizer(schedulerNotificationDefinitions{found: test.found, err: test.err})
 			err := authorize(t.Context(), "job", accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{Permissions: test.permissions}))
 			if test.err != nil && !errors.Is(err, test.err) {
 				t.Fatalf("error=%v", err)
@@ -178,6 +176,23 @@ func TestSchedulerNotificationAuthorizerBoundaries(t *testing.T) {
 			}
 		})
 	}
+}
+
+type schedulerNotificationDefinitions struct {
+	found bool
+	err   error
+}
+
+func (s schedulerNotificationDefinitions) List(context.Context, metadatasdk.DefinitionQuery) ([]metadatasdk.Definition, error) {
+	return nil, s.err
+}
+
+func (s schedulerNotificationDefinitions) Get(context.Context, string, string) (metadatasdk.Definition, bool, error) {
+	return metadatasdk.Definition{}, s.found, s.err
+}
+
+func (s schedulerNotificationDefinitions) Snapshot(context.Context) (metadatasdk.DefinitionSnapshot, error) {
+	return metadatasdk.DefinitionSnapshot{}, s.err
 }
 
 func TestReportAndAutomationNotificationAuthorizerBoundaries(t *testing.T) {

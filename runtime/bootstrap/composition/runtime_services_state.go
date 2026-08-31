@@ -11,14 +11,17 @@ import (
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
+	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
-	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
+	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agenthost"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
@@ -27,22 +30,18 @@ import (
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	changeplanapplication "github.com/domainry/domainry-runtime/runtime/application/changeplan"
 	deploymentbusiness "github.com/domainry/domainry-runtime/runtime/application/deployment"
-	lifecycleapplication "github.com/domainry/domainry-runtime/runtime/application/lifecycle"
 	pipelineapplication "github.com/domainry/domainry-runtime/runtime/application/pipeline"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
+	reportadapter "github.com/domainry/domainry-runtime/runtime/application/report/adapter"
 	reportexportapplication "github.com/domainry/domainry-runtime/runtime/application/report/export/application"
-	reportquery "github.com/domainry/domainry-runtime/runtime/application/report/query"
-	reportsnapshot "github.com/domainry/domainry-runtime/runtime/application/report/snapshot"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
-	surfacecontextbusiness "github.com/domainry/domainry-runtime/runtime/application/surfacecontext"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
-	metadata "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationrepository "github.com/domainry/domainry-runtime/runtime/domain/automation/repository"
@@ -53,8 +52,6 @@ import (
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
-	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
-	resilience "github.com/domainry/domainry-runtime/runtime/platform/resilience"
 )
 
 // runtimeAssembly is the private, constructor-only composition graph.
@@ -84,7 +81,6 @@ type runtimeAssembly struct {
 	dataExchangeProviders             *recordapplication.DataExchangeProviders
 	reportDatasetRows                 reportcontract.ReportDatasetRowReader
 	reportObjectSQL                   reportcontract.ReportObjectSQLExecutor
-	reportSnapshots                   reportcontract.ReportSnapshotStore
 	reportSnapshotSources             reportcontract.ReportSnapshotSourceVersionReader
 	auditRepo                         auditrepository.AuditRepository
 	auditApplicationService           *auditapplication.AuditApplicationService
@@ -92,7 +88,6 @@ type runtimeAssembly struct {
 	schemaService                     *appschemaapplication.ApplicationSchemaQueryApplicationService
 	actionService                     *actionapplication.ActionApplicationService
 	runtimeStatusService              *deploymentbusiness.DeploymentRuntimeStatusApplicationService
-	surfaceContextService             *surfacecontextbusiness.SurfaceContextApplicationService
 	*recordservice.RecordQueryPolicyDomainService
 	*RecordSchemaSnapshotProvider
 	*pipelineapplication.PipelineApplicationService
@@ -107,12 +102,12 @@ type runtimeAssembly struct {
 	businessSystemService               *businesssystemapplication.BusinessSystemApplicationService
 	publicationHandoffService           *publicationhandoff.PublicationHandoffApplicationService
 	integrationPublicationWorkerRepo    publicationrepository.WorkerRepository
-	integrationOwnerManagement          integrationsdk.Management
-	integrationOwnerOperations          integrationsdk.Operations
 	workerWakeups                       *workerplatform.WakeupBroker
 	publicationRepository               publicationrepository.Repository
 	integrationOwnerDelivery            integrationsdk.Delivery
 	integrationOwnerCatalog             integrationsdk.Catalog
+	integrationOwnerManagement          integrationsdk.Management
+	integrationOwnerOperations          integrationsdk.Operations
 	workflowWorkerRepo                  workflowcontract.WorkflowWorkerStore
 	workflowApplicationService          *workflowapplication.WorkflowApplicationService
 	applicationSchemaService            *appschemaapplication.ApplicationSchemaApplicationService
@@ -125,10 +120,12 @@ type runtimeAssembly struct {
 	notificationIntentPublisher         func(context.Context, notificationmodel.NotificationIntent) error
 	recordNotificationCompiler          func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	reportNotificationCompiler          func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
-	reportSnapshotNotificationCommitter reportsnapshot.ReportSnapshotNotificationCommitter
+	reportSnapshotNotificationCommitter ReportSnapshotNotificationCommitter
 	automationNotificationCompiler      func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	automationNotificationCommitter     automationapplication.AutomationExecutionNotificationCommitter
 	applicationSchemaRepo               appschemarepository.ApplicationSchemaRepository
+	metadataDefinitions                 metadatasdk.Definitions
+	metadataLocalization                metadatasdk.Localization
 	automationWorkerRepo                automationcontract.AutomationWorkerStore
 	automationExecutionRepo             automationrepository.AutomationExecutionRepository
 	businessEvidenceRepo                changeplanrepository.ChangePlanEvidenceRepository
@@ -139,23 +136,18 @@ type runtimeAssembly struct {
 	connectorRegistry                   *runtimeConnectorCatalog
 	verifyFileClean                     func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
 	prepareOutboxPayload                publicationhandoff.PayloadPreparer
-	integrationPolicyStore              resilience.Store
-	apiKeyRateLimiter                   ratelimit.Limiter
-	dictionaryRuntime                   *metadata.ApplicationSchemaDictionaryDomainService
 	authoringCapabilities               *capabilityapplication.CapabilityAuthoringApplicationService
 	businessReferences                  *changeplanapplication.ChangePlanReferenceApplicationService
-	reportSnapshotsService              *reportsnapshot.ReportSnapshotApplicationService
-	reportQueriesService                *reportquery.ReportQueryApplicationService
 	reportExportsService                *reportexportapplication.ReportExportApplicationService
-	reportExportControls                []reportmodel.ReportExportControlSchema
+	reportApplication                   reportsdk.ApplicationBinding
+	reportModuleQueryHost               *reportadapter.ReportModuleQueryHost
+	reportModuleSnapshotHost            reportmodulehost.SnapshotTerminalCommitter
+	reportModuleExportHost              reportmodulehost.ExportGateway
 	schedulerService                    *schedulerapplication.SchedulerApplicationService
 	recordTimerService                  *recordtimerapplication.RecordTimerApplicationService
-	agentTaskRunService                 *agentapplication.AgentTaskRunApplicationService
-	agentInteractiveRunService          *agentapplication.AgentInteractiveRunApplicationService
-	newAgentInteractiveExecution        func(*agentapplication.AgentToolGateway) *agentapplication.AgentInteractiveExecutionApplicationService
 	agentAuthorizationService           *agentapplication.AgentAuthorizationApplicationService
 	agentTaskDispatchService            *agentapplication.AgentTaskDispatchApplicationService
-	agentTaskWorker                     *agentapplication.AgentTaskWorker
+	agentTaskRunner                     agentsdk.TaskRunner
 	agentPrincipals                     identitysdk.PrincipalResolver
 	mu                                  sync.RWMutex // guards concurrent schema reads vs. hot-reload writes
 	workerDependencies                  workerplatform.Dependencies

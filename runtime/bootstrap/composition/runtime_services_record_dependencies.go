@@ -91,7 +91,7 @@ func buildRecordApplicationDependencies(s *runtimeAssembly) recordapplication.Re
 			// HTTP prepare always resolves the default business-principal facts,
 			// even when the project defines no active profile. Re-run that owner
 			// here so its authorization revision and profile facts are identical.
-			principal, err = batchBusinessPrincipals.ResolveBusinessPrincipal(ctx, principal, "", "", "")
+			principal, err = batchBusinessPrincipals.ResolveBusinessPrincipal(ctx, principal, "", "")
 			if err != nil {
 				return principalmodel.Principal{Principal: identitysdk.Principal{Known: false}}
 			}
@@ -134,26 +134,11 @@ func buildRecordApplicationDependencies(s *runtimeAssembly) recordapplication.Re
 	}
 }
 
-func listRuntimeSurfaceContextStoredRecords(ctx context.Context, services *runtimeAssembly, workspaceID string, object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
-	if services.recordApplicationService.Repository() == nil {
-		return recordmodel.RecordPageResult{}, nil
-	}
-	return services.recordApplicationService.Repository().ListRecords(ctx, workspaceID, object, query)
-}
-
-func listRuntimeSurfaceContextDirectoryUsers(ctx context.Context, services *runtimeAssembly) ([]identitysdk.User, error) {
-	if services.identityDirectory == nil {
-		return nil, nil
-	}
-	return services.identityDirectory.ListUsers(ctx, identitysdk.DirectoryQuery{})
-}
-
 func initializeIntegrationAndBusinessSystem(ctx context.Context, s *runtimeAssembly, manifest manifestmodel.ManifestSchema, deps RuntimeServicesDependencies, queryPolicy recordQueryPolicyAdapter) {
 	s.actionService = assembleActionApplication(s, s, queryPolicy, s.applicationSchemaService, deps.BusinessHandlers, func(ctx context.Context, event, objectKey, recordID string, principal principalmodel.Principal, summary string, metadata map[string]any) {
 		s.auditApplicationService.AppendWithMetadata(ctx, event, objectKey, recordID, principal, summary, nil, nil, metadata)
 	})
-	s.runtimeStatusService = deployment.NewDeploymentRuntimeStatusApplicationServiceWithWorker(manifest.TemplateID, manifest.Version, s, s.schedulerService, deps.RuntimeStatus, deps.Records, s.auditApplicationService, deps.WorkflowWorker, nil, s.workerDependencies)
-	s.runtimeStatusService.ConfigureLifecycleHealth(ctx, s.lifecycleService)
+	s.runtimeStatusService = deployment.NewDeploymentRuntimeStatusApplicationServiceWithWorker(s, s.schedulerService, deps.RuntimeStatus, deps.Records, s.auditApplicationService, deps.WorkflowWorker, nil, s.workerDependencies)
 	s.workflowProcesses = assembleWorkflowProcessEngine(s)
 	integrationsService := publicationHandoffApplication(s)
 	s.publicationHandoffService = integrationsService

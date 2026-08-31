@@ -26,7 +26,7 @@ func restoreRuntimeMetadata(ctx context.Context, store *persistence.RuntimeStore
 	if err != nil {
 		return restoredRuntimeMetadata{}, err
 	}
-	return restoredRuntimeMetadata{manifest: manifest, metadataStore: metadataStore, deliveryMetricsStore: deliveryMetricsStore}, nil
+	return restoredRuntimeMetadata{manifest: manifest, metadataStore: metadataStore}, nil
 }
 
 type installedNotificationTemplateCatalog struct {

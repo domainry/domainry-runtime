@@ -36,7 +36,6 @@ type businessRuntimeProjectionPorts struct {
 	publicationHandoff     func(context.Context, string, string, int, principalmodel.Principal) ([]publicationmodel.Message, error)
 	schedulerDefinitions   func(context.Context, principalmodel.Principal) ([]recordmodel.Record, error)
 	schemaForPrincipal     func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
-	schemaObjectMap        func(context.Context) map[string]definitionmodel.ObjectSchema
 	listRecords            func(context.Context, string, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error)
 	idempotencyStatus      func(context.Context, string) (deploymentmodel.IdempotencyOperationalStatus, error)
 }
@@ -50,7 +49,6 @@ type BusinessSystemRuntimeProjectionDependencies struct {
 	PublicationHandoff     func(context.Context, string, string, int, principalmodel.Principal) ([]publicationmodel.Message, error)
 	SchedulerDefinitions   func(context.Context, principalmodel.Principal) ([]recordmodel.Record, error)
 	SchemaForPrincipal     func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
-	SchemaObjectMap        func(context.Context) map[string]definitionmodel.ObjectSchema
 	ListRecords            func(context.Context, string, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error)
 	IdempotencyStatus      func(context.Context, string) (deploymentmodel.IdempotencyOperationalStatus, error)
 }
@@ -61,7 +59,7 @@ func newBusinessSystemRuntimeProjectionPorts(dependencies BusinessSystemRuntimeP
 		automationExecutions: dependencies.AutomationExecutions, connectorCatalog: dependencies.ConnectorCatalog,
 		integrationConnections: dependencies.IntegrationConnections, publicationHandoff: dependencies.PublicationHandoff,
 		schedulerDefinitions: dependencies.SchedulerDefinitions,
-		schemaForPrincipal:   dependencies.SchemaForPrincipal, schemaObjectMap: dependencies.SchemaObjectMap, listRecords: dependencies.ListRecords, idempotencyStatus: dependencies.IdempotencyStatus,
+		schemaForPrincipal:   dependencies.SchemaForPrincipal, listRecords: dependencies.ListRecords, idempotencyStatus: dependencies.IdempotencyStatus,
 	}
 }
 
@@ -120,19 +118,7 @@ func (s *BusinessSystemApplicationService) schedulerStateSnapshot(ctx context.Co
 			return changeplanprojection.SchedulerStateSnapshot{}, err
 		}
 	}
-	return changeplanprojection.SchedulerStateSnapshot{Definitions: definitions, RecentRuns: []recordmodel.Record{}, DeadLetters: []recordmodel.Record{}}, nil
-}
-
-func (s *BusinessSystemApplicationService) SnapshotObjectRecords(ctx context.Context, objectKey string, principal principalmodel.Principal, limit int) ([]recordmodel.Record, error) {
-	_, exists := s.runtimeProjection.schemaObjectMap(ctx)[objectKey]
-	if !exists {
-		return []recordmodel.Record{}, nil
-	}
-	page, err := s.runtimeProjection.listRecords(ctx, objectKey, recordmodel.RecordListQuery{Page: 1, PageSize: limit, Sort: []recordmodel.RecordSortRule{{Field: "updated_at", Direction: "desc"}}}, principal)
-	if err != nil {
-		return nil, err
-	}
-	return page.Items, nil
+	return changeplanprojection.SchedulerStateSnapshot{Definitions: definitions}, nil
 }
 
 func (s *BusinessSystemApplicationService) RuntimeProjectionConfigured() bool {

@@ -292,7 +292,7 @@ func (state *validationState) validateReportExportRecordMapping(path string, con
 	state.validateReportExportMappedField(path+".download_filename_field", downloadObject, mapping.DownloadFilenameField, []string{"text"}, "")
 	state.validateReportExportMappedField(path+".download_content_hash_field", downloadObject, mapping.DownloadContentHashField, []string{"text"}, "")
 	state.validateReportExportMappedField(path+".download_expires_at_field", downloadObject, mapping.DownloadExpiresAtField, []string{"datetime"}, "")
-	state.validateReportExportMappedField(path+".download_token_field", downloadObject, mapping.DownloadTokenField, []string{"text"}, "")
+	state.validateReportExportMappedField(path+".download_job_id_field", downloadObject, mapping.DownloadJobIDField, []string{"text"}, "")
 	state.validateReportExportMappedField(path+".download_watermarked_field", downloadObject, mapping.DownloadWatermarkedField, []string{"boolean"}, "")
 	state.validateReportExportMappedField(path+".download_number_field", downloadObject, mapping.DownloadNumberField, []string{"text"}, "")
 	statusField := state.fields[auditObject][strings.TrimSpace(mapping.AuditStatusField)]

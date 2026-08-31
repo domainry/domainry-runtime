@@ -59,15 +59,6 @@ func addRecordBatchOpenAPIPaths(paths map[string]any) {
 		"enqueueObjectRecordImport", "Objects", "Submit a durable bounded asynchronous CSV import to Data Exchange", openAPIAdminSecurity(), objectKey, idempotencyKey, recordCSVRequestBody(),
 		openAPIJSONResponse("Queued Data Exchange job", recordBatchJobOpenAPISchema()),
 	), "enqueueRecordImport")}
-	paths["/record-batch-jobs/{jobID}"] = map[string]any{"get": openAPIRuntimeClient(openAPIOperation(
-		"getRecordBatchJob", "Objects", "Get a Record-owned Data Exchange import or export status", openAPIAdminSecurity(), openAPIPathParameter("jobID", "Data Exchange job ID"), openAPIJSONResponse("Data Exchange job", recordBatchJobOpenAPISchema()),
-	), "getRecordBatchJob")}
-	paths["/record-batch-jobs/{jobID}/cancel"] = map[string]any{"post": openAPIRuntimeClient(openAPIOperation(
-		"cancelRecordBatchJob", "Objects", "Idempotently cancel a queued or running Record-owned Data Exchange job", openAPIAdminSecurity(), openAPIPathParameter("jobID", "Data Exchange job ID"), idempotencyKey, openAPIJSONResponse("Cancelled Data Exchange job", recordBatchJobOpenAPISchema()),
-	), "cancelRecordBatchJob")}
-	paths["/record-batch-jobs/{jobID}/download"] = map[string]any{"get": openAPIRuntimeClient(openAPIOperation(
-		"downloadRecordBatchJob", "Objects", "Download a completed authorized Data Exchange export", openAPIAdminSecurity(), openAPIPathParameter("jobID", "Data Exchange job ID"), openAPIResponse("CSV export", "text/csv", map[string]any{"type": "string", "format": "binary"}),
-	), "downloadRecordBatchJob")}
 	paths["/objects/{objectKey}/actions/{actionKey}/bulk"] = map[string]any{"post": openAPIRuntimeClient(openAPIOperation(
 		"executeBulkObjectAction", "Actions", "Idempotently execute one action for an explicit bounded record set", openAPIAdminSecurity(), objectKey, openAPIPathParameter("actionKey", "Action key"), idempotencyKey,
 		openAPIJSONRequest(openAPIRef("BulkActionRequest")), openAPIJSONResponse("Bulk action result", openAPIObject(nil)),

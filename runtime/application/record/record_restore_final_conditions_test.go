@@ -39,13 +39,13 @@ func TestRestoreAuthorizationSchedulerAndOptionalDependencyEdges(t *testing.T) {
 	if _, err := (&RecordRestoreApplicationService{}).Restore(t.Context(), "customer", "customer-1", principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("authorization err=%v", err)
 	}
-	scheduler := restoreFinalObject()
-	scheduler.Key = "record_timer"
-	scheduler.Config = map[string]any{"record_timer_runtime": true}
-	service := restoreFinalService(scheduler, restoreFinalRepository(map[string]any{"status": "deleted", "deleted_at": "now", "deleted_by": "user-1"}))
+	timerObject := restoreFinalObject()
+	timerObject.Key = "record_timer"
+	timerObject.Config = map[string]any{"record_timer_runtime": true}
+	service := restoreFinalService(timerObject, restoreFinalRepository(map[string]any{"status": "deleted", "deleted_at": "now", "deleted_by": "user-1"}))
 	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
-	if _, err := service.Restore(t.Context(), "record_timer", "timer-1", principal); apperror.CodeOf(err) != "backend.scheduler.runtime_api_required" {
-		t.Fatalf("scheduler err=%v", err)
+	if _, err := service.Restore(t.Context(), "record_timer", "timer-1", principal); apperror.CodeOf(err) != "backend.record_timer.runtime_api_required" {
+		t.Fatalf("record timer err=%v", err)
 	}
 
 	object := restoreFinalObject()

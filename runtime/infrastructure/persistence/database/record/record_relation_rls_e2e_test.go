@@ -18,7 +18,6 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
-	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/query"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	. "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	querypersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/query"
@@ -183,16 +182,10 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 	if err != nil || !strings.Contains(string(csv), "ledger-1") || strings.Contains(string(csv), "ledger-2") || strings.Contains(string(csv), "ledger-3") {
 		t.Fatalf("export did not preserve database RLS: csv=%s err=%v", csv, err)
 	}
-	report := reportservice.NewReportDomainService(reportservice.ReportDependencies{
-		Reports: func(context.Context, principalmodel.Principal) []reportmodel.ReportSchema {
-			return []reportmodel.ReportSchema{{Key: "member-ledger", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "ledger", Alias: "ledger"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "status", Field: reportmodel.ReportDatasetField{SourceAlias: "ledger", FieldKey: "status"}}}}}}
-		},
-		Access:  relationRLSReportAccess{policy: policy},
-		Records: relationRLSReportRecords{repository: repository},
-	})
-	summary, err := report.Summary(t.Context(), "member-ledger", memberPrincipal)
-	if err != nil || summary.SourceRowCount != 1 || summary.RowCount != 1 {
-		t.Fatalf("report did not aggregate after RLS downpush: summary=%#v err=%v", summary, err)
+	reportDefinition := reportmodel.ReportSchema{Key: "member-ledger", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "ledger", Alias: "ledger"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "status", Field: reportmodel.ReportDatasetField{SourceAlias: "ledger", FieldKey: "status"}}}}}
+	sources := readAuthorizedReportSources(t, reportDefinition, memberPrincipal, relationRLSReportAccess{policy: policy}, relationRLSReportRecords{repository: repository})
+	if len(sources.Records["ledger"]) != 1 {
+		t.Fatalf("Report host did not preserve RLS downpush: sources=%#v", sources)
 	}
 	assertRelationScopeAcrossReadExportAndReport(t, reader, exporter, policy, repository, memberPrincipal, "card", "card-1", "card-2", "member_id")
 	assertRelationScopeAcrossReadExportAndReport(t, reader, exporter, policy, repository, memberPrincipal, "account", "account-1", "account-2", "card_id")
@@ -224,15 +217,10 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 	if err != nil || !strings.Contains(string(csv), "training-session-1") || strings.Contains(string(csv), "training-session-2") {
 		t.Fatalf("session-package-student export scope mismatch: csv=%s err=%v", csv, err)
 	}
-	sessionReport := reportservice.NewReportDomainService(reportservice.ReportDependencies{
-		Reports: func(context.Context, principalmodel.Principal) []reportmodel.ReportSchema {
-			return []reportmodel.ReportSchema{{Key: "student-sessions", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "training_session", Alias: "training_session"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "status", Field: reportmodel.ReportDatasetField{SourceAlias: "training_session", FieldKey: "status"}}}}}}
-		},
-		Access: relationRLSReportAccess{policy: policy}, Records: relationRLSReportRecords{repository: repository},
-	})
-	summary, err = sessionReport.Summary(t.Context(), "student-sessions", studentPrincipal)
-	if err != nil || summary.SourceRowCount != 1 || summary.RowCount != 1 {
-		t.Fatalf("session-package-student report scope mismatch: summary=%#v err=%v", summary, err)
+	sessionDefinition := reportmodel.ReportSchema{Key: "student-sessions", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "training_session", Alias: "training_session"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "status", Field: reportmodel.ReportDatasetField{SourceAlias: "training_session", FieldKey: "status"}}}}}
+	sources = readAuthorizedReportSources(t, sessionDefinition, studentPrincipal, relationRLSReportAccess{policy: policy}, relationRLSReportRecords{repository: repository})
+	if len(sources.Records["training_session"]) != 1 {
+		t.Fatalf("session-package-student Report host scope mismatch: sources=%#v", sources)
 	}
 }
 
@@ -249,15 +237,10 @@ func assertRelationScopeAcrossReadExportAndReport(t *testing.T, reader *recordse
 	if err != nil || !strings.Contains(string(csv), allowedID) || strings.Contains(string(csv), deniedID) {
 		t.Fatalf("%s export scope mismatch: csv=%s err=%v", objectKey, csv, err)
 	}
-	report := reportservice.NewReportDomainService(reportservice.ReportDependencies{
-		Reports: func(context.Context, principalmodel.Principal) []reportmodel.ReportSchema {
-			return []reportmodel.ReportSchema{{Key: objectKey + "-scope", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: objectKey, Alias: objectKey}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: reportField, Field: reportmodel.ReportDatasetField{SourceAlias: objectKey, FieldKey: reportField}}}}}}
-		},
-		Access: relationRLSReportAccess{policy: policy}, Records: relationRLSReportRecords{repository: repository},
-	})
-	summary, err := report.Summary(t.Context(), objectKey+"-scope", principal)
-	if err != nil || summary.SourceRowCount != 1 || summary.RowCount != 1 {
-		t.Fatalf("%s report scope mismatch: summary=%#v err=%v", objectKey, summary, err)
+	reportDefinition := reportmodel.ReportSchema{Key: objectKey + "-scope", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: objectKey, Alias: objectKey}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: reportField, Field: reportmodel.ReportDatasetField{SourceAlias: objectKey, FieldKey: reportField}}}}}
+	sources := readAuthorizedReportSources(t, reportDefinition, principal, relationRLSReportAccess{policy: policy}, relationRLSReportRecords{repository: repository})
+	if len(sources.Records[objectKey]) != 1 {
+		t.Fatalf("%s Report host scope mismatch: sources=%#v", objectKey, sources)
 	}
 }
 

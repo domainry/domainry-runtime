@@ -45,10 +45,10 @@ func (s *ApplicationSchemaRuntimeRestorationApplicationService) Restore(ctx cont
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
-	if err = s.manifest.EnsureManifestMetadata(ctx, installed); err != nil {
+	if err = s.manifest.SyncManifestProjection(ctx, scope, installed); err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
-	persisted, err := s.manifest.LoadManifestMetadata(ctx)
+	persisted, err := s.manifest.LoadManifest(ctx, scope)
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
@@ -56,7 +56,7 @@ func (s *ApplicationSchemaRuntimeRestorationApplicationService) Restore(ctx cont
 		return manifestmodel.ManifestSchema{}, err
 	}
 	restored := manifestprojection.MergeInstalledEnvelope(persisted, installed, activePublishedNotificationTemplates(records))
-	if err = s.manifest.SyncManifestStorage(ctx, restored); err != nil {
+	if err = s.manifest.SyncManifest(ctx, scope, restored); err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
 	return restored, nil

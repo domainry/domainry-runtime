@@ -12,10 +12,11 @@ import (
 	"github.com/domainry/domainry-data-exchange-sdk/modulehost"
 	"github.com/domainry/domainry-foundation/apperror"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
+	reportcontract "github.com/domainry/domainry-report/contract"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
+	reportadapter "github.com/domainry/domainry-runtime/runtime/application/report/adapter"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/query"
 )
 
 const DataExchangeProviderKey = "reports"
@@ -51,11 +52,12 @@ type DataExchangeRecordStore interface {
 
 type DataExchangeDependencies struct {
 	Binding          dataexchange.Binding
-	Domain           *reportservice.ReportDomainService
 	Records          DataExchangeRecordStore
 	Audit            auditcontract.AuditAppender
 	ResolvePrincipal func(context.Context, dataexchange.Scope) principalmodel.Principal
-	ExportControl    func(context.Context, string, string, principalmodel.Principal) (reportmodel.ReportExportControlSchema, bool)
+	ResolveExecution func(context.Context, reportmodel.ReportExportExecutionRequest, principalmodel.Principal) (reportmodel.ReportExportExecution, error)
+	ReadPage         func(context.Context, reportmodel.ReportExportExecutionRequest, principalmodel.Principal) (reportmodel.ReportSummary, error)
+	SourceVersion    func(context.Context, reportmodel.ReportExportExecutionRequest, principalmodel.Principal) (reportmodel.ReportSnapshotSourceVersion, error)
 	Watermark        func(string, string, string) string
 	Clock            func() time.Time
 }
@@ -70,7 +72,6 @@ type dataExchangeCursor struct {
 type preparedDataExchangeExport struct {
 	control          reportmodel.ReportExportControlSchema
 	normalizedScope  reportmodel.ReportExportScopeRequest
-	scopedReport     reportmodel.ReportSchema
 	maskedDimensions map[string]bool
 }
 
@@ -117,52 +118,54 @@ func (p *DataExchangeProvider) prepare(ctx context.Context, payload ExportPayloa
 	if payload.WorkspaceID != strings.TrimSpace(principal.WorkspaceID) || payload.RequesterUserID != strings.TrimSpace(principal.UserID) {
 		return preparedDataExchangeExport{}, &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.report.export_requester_mismatch"}
 	}
-	authorizationHash, err := reportservice.ReportAccessScopeHash(principal)
+	authorizationHash, err := reportadapter.ReportAccessScopeHash(principal)
 	if err != nil || authorizationHash != payload.AuthorizationScopeSHA256 {
 		return preparedDataExchangeExport{}, &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.report.export_scope_changed", Err: err}
 	}
-	report, err := p.dependencies.Domain.ReportForExport(ctx, payload.ReportKey, payload.ObjectKey, principal)
+	if p.dependencies.ResolveExecution == nil {
+		return preparedDataExchangeExport{}, internalError(nil)
+	}
+	executionRequest := reportmodel.ReportExportExecutionRequest{ReportKey: payload.ReportKey, ObjectKey: payload.ObjectKey, Scope: payload.Scope}
+	resolved, err := p.dependencies.ResolveExecution(ctx, executionRequest, principal)
 	if err != nil {
 		return preparedDataExchangeExport{}, err
 	}
-	reportHash, _ := CanonicalJSONSHA256(report)
+	report, control := resolved.Definition.Report, resolved.Definition.Control
+	reportHash, _ := reportcontract.CanonicalReportJSONSHA256(report)
 	sourceHash := reportHash
 	if report.ObjectSQLV1 != nil {
-		sourceHash, _ = CanonicalJSONSHA256(report.ObjectSQLV1)
+		sourceHash, _ = reportcontract.CanonicalReportJSONSHA256(report.ObjectSQLV1)
 	}
 	if reportHash != payload.ReportDefinitionSHA256 || sourceHash != payload.ReportSourceSHA256 {
 		return preparedDataExchangeExport{}, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_source_changed"}
 	}
-	control, ok := p.dependencies.ExportControl(ctx, payload.ReportKey, payload.ObjectKey, principal)
-	if !ok {
-		return preparedDataExchangeExport{}, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_scope_changed"}
-	}
-	controlHash, _ := CanonicalJSONSHA256(control)
+	controlHash, _ := reportcontract.CanonicalReportJSONSHA256(control)
 	if strings.TrimSpace(payload.ControlDefinitionSHA256) == "" || controlHash != payload.ControlDefinitionSHA256 {
 		return preparedDataExchangeExport{}, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_scope_changed"}
 	}
-	normalized, scoped, masked, err := NormalizeScope(report, payload.ObjectKey, control, payload.Scope, principal)
-	if err != nil {
-		return preparedDataExchangeExport{}, err
-	}
-	masked, err = ValidateFieldAccess(ctx, p.dependencies.Domain, scoped, control, principal)
-	if err != nil {
-		return preparedDataExchangeExport{}, err
+	normalizedHash, _ := reportcontract.CanonicalReportJSONSHA256(resolved.Scope)
+	payloadScopeHash, _ := reportcontract.CanonicalReportJSONSHA256(payload.Scope)
+	if normalizedHash != payloadScopeHash {
+		return preparedDataExchangeExport{}, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_scope_changed"}
 	}
 	if verifySourceVersion && strings.TrimSpace(payload.SourceVersionSHA256) != "" {
-		version, versionErr := p.dependencies.Domain.ExportSourceVersion(ctx, scoped, principal)
+		if p.dependencies.SourceVersion == nil {
+			return preparedDataExchangeExport{}, internalError(nil)
+		}
+		executionRequest.Scope = resolved.Scope
+		version, versionErr := p.dependencies.SourceVersion(ctx, executionRequest, principal)
 		if versionErr != nil {
 			return preparedDataExchangeExport{}, versionErr
 		}
-		versionHash, hashErr := CanonicalJSONSHA256(version)
+		versionHash, hashErr := reportcontract.CanonicalReportJSONSHA256(version)
 		if hashErr != nil {
 			return preparedDataExchangeExport{}, hashErr
 		}
-		if versionHash != payload.SourceVersionSHA256 || !reportservice.ReportSourceVersionsEqual(version, payload.SourceVersion) {
+		if versionHash != payload.SourceVersionSHA256 {
 			return preparedDataExchangeExport{}, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_source_changed"}
 		}
 	}
-	return preparedDataExchangeExport{control: control, normalizedScope: normalized, scopedReport: scoped, maskedDimensions: masked}, nil
+	return preparedDataExchangeExport{control: control, normalizedScope: resolved.Scope, maskedDimensions: resolved.MaskedDimensions}, nil
 }
 
 func (p *DataExchangeProvider) PlanExport(ctx context.Context, request dataexchange.ExportPlanRequest) (dataexchange.ExportPlan, error) {
@@ -182,7 +185,7 @@ func (p *DataExchangeProvider) PlanExport(ctx context.Context, request dataexcha
 	if createdAt.IsZero() {
 		createdAt = p.dependencies.Clock().UTC()
 	}
-	return dataexchange.ExportPlan{Filename: SafeFilename(payload.ReportKey, payload.ObjectKey), ContentType: "text/csv; charset=utf-8", ExpiresAt: createdAt.Add(dataExchangeTTL(prepared.control))}, nil
+	return dataexchange.ExportPlan{Filename: reportcontract.SafeReportExportFilename(payload.ReportKey, payload.ObjectKey), ContentType: "text/csv; charset=utf-8", ExpiresAt: createdAt.Add(dataExchangeTTL(prepared.control))}, nil
 }
 
 func (p *DataExchangeProvider) ReadExportPage(ctx context.Context, request dataexchange.ExportPageRequest) (dataexchange.ExportPage, error) {
@@ -206,14 +209,17 @@ func (p *DataExchangeProvider) ReadExportPage(ctx context.Context, request datae
 	if pageSize < 1 || pageSize > reportmodel.ReportPageMaximumSize {
 		pageSize = reportmodel.ReportPageMaximumSize
 	}
-	summary, err := p.dependencies.Domain.ExecuteExportReportPage(ctx, prepared.scopedReport, prepared.normalizedScope.Parameters, cursor.ExecutionCursor, cursor.Position, pageSize, principal)
+	if p.dependencies.ReadPage == nil {
+		return dataexchange.ExportPage{}, internalError(nil)
+	}
+	summary, err := p.dependencies.ReadPage(ctx, reportmodel.ReportExportExecutionRequest{
+		ReportKey: payload.ReportKey, ObjectKey: payload.ObjectKey, Scope: prepared.normalizedScope,
+		Page: reportmodel.ReportPageRequest{Cursor: cursor.ExecutionCursor, PageSize: pageSize},
+	}, principal)
 	if err != nil {
 		return dataexchange.ExportPage{}, err
 	}
-	pageRows, err := Rows(summary, prepared.normalizedScope.AnalysisKey)
-	if err != nil {
-		return dataexchange.ExportPage{}, err
-	}
+	pageRows := summary.Rows
 	processed := cursor.Position + len(pageRows)
 	if payload.MaxRows > 0 && processed > payload.MaxRows {
 		return dataexchange.ExportPage{}, &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.report.export_too_many_rows", Params: map[string]string{"limit": fmt.Sprint(payload.MaxRows)}}
@@ -230,10 +236,10 @@ func (p *DataExchangeProvider) ReadExportPage(ctx context.Context, request datae
 	}
 	next := ""
 	if hasMore {
-		if strings.TrimSpace(summary.ExecutionCursor) == "" {
+		if strings.TrimSpace(summary.NextCursor) == "" {
 			return dataexchange.ExportPage{}, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_cursor_missing"}
 		}
-		next, err = encodeDataExchangeCursor(dataExchangeCursor{ExecutionCursor: summary.ExecutionCursor, Position: processed})
+		next, err = encodeDataExchangeCursor(dataExchangeCursor{ExecutionCursor: summary.NextCursor, Position: processed})
 		if err != nil {
 			return dataexchange.ExportPage{}, err
 		}
@@ -314,3 +320,5 @@ func workspaceError(err error) error {
 var _ modulehost.ExportProvider = (*DataExchangeProvider)(nil)
 var _ modulehost.ExportPlanningProvider = (*DataExchangeProvider)(nil)
 var _ modulehost.ExportCompletionProvider = (*DataExchangeProvider)(nil)
+var _ modulehost.JobProjector = (*DataExchangeProvider)(nil)
+var _ modulehost.JobArtifactOpener = (*DataExchangeProvider)(nil)

@@ -13,7 +13,7 @@ func TestValidateSecurityRemainingProductionGates(t *testing.T) {
 		IntegrationSecretKey: "integration-secret", IntegrationActiveKeyID: "data-1",
 		CORSAllowedOrigins: []string{"https://admin.example.com"}, SchedulerPollInterval: time.Second,
 	}
-	setValidProductionSurfaceOrigins(&valid)
+	setValidProductionListenerOrigins(&valid)
 	tests := []struct {
 		name   string
 		mutate func(*Config)

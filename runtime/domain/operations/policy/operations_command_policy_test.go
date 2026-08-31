@@ -11,7 +11,7 @@ func TestOperationsValidateCommandRequiresAuthorizationScopeIdempotencyAndAudit(
 	now := time.Date(2026, 7, 19, 8, 0, 0, 0, time.UTC)
 	valid := operationsmodel.OperationsCommand{
 		ID: " op-1 ", Kind: " scheduler.run.retry ", Permission: " scheduler.runs.retry ",
-		Scope:          operationsmodel.OperationsScope{WorkspaceID: " workspace-a ", ResourceType: " job_run ", ResourceID: " run-1 "},
+		Scope:          operationsmodel.OperationsScope{WorkspaceID: " workspace-a ", ResourceType: " scheduler_run ", ResourceID: " run-1 "},
 		IdempotencyKey: " retry-1 ", RequestFingerprint: " fingerprint-1 ", RequestedBy: " user-1 ",
 		Reason: " recover transient failure ", Reference: " INC-42 ", Status: operationsmodel.OperationsStatusCreated, CreatedAt: now, UpdatedAt: now,
 	}

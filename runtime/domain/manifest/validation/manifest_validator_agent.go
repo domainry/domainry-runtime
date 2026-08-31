@@ -5,10 +5,8 @@ import (
 	"strings"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
-	agentcatalog "github.com/domainry/domainry-runtime/runtime/domain/agent/contract/catalog"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	invocationcontract "github.com/domainry/domainry-runtime/runtime/domain/manifest/contract/invocation"
-	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
 )
 
 func (state *validationState) validateAgents() {
@@ -28,7 +26,7 @@ func (state *validationState) validateAgents() {
 		validateAgentTools(state, path+".allowed_tools", skill.AllowedTools)
 		validateAgentStringSet(state, path+".allowed_objects", skill.AllowedObjects)
 		for _, toolKey := range skill.AllowedTools {
-			tool, exists := agentcatalog.Lookup(toolKey)
+			tool, exists := agentsdk.LookupAgentTool(toolKey)
 			if exists && tool.RequiresAllowedObjects && len(skill.AllowedObjects) == 0 {
 				state.add(path+".allowed_objects", "must declare at least one object when tool %q is allowed", tool.Key)
 			}
@@ -176,7 +174,6 @@ func (state *validationState) validateAgents() {
 		workflows[strings.TrimSpace(workflow.Key)] = workflow
 	}
 	agentEntrypointKeys := map[string]bool{}
-	defaultAssignments := map[string]string{}
 	for index, assignment := range state.manifest.AgentEntrypoints {
 		path := fmt.Sprintf("agent_entrypoints[%d]", index)
 		key := strings.TrimSpace(assignment.Key)
@@ -195,21 +192,10 @@ func (state *validationState) validateAgents() {
 		} else if strings.TrimSpace(assignedAgent.Version) == "" {
 			state.add(path+".agent_key", "references unversioned agent %q", assignment.AgentKey)
 		}
-		if _, valid := surfacemodel.ParseProductSurface(assignment.Surface); !valid {
-			state.add(path+".surface", "references unknown product Surface %q", assignment.Surface)
-		}
 		if len(assignment.RequiredPermissions) == 0 {
 			state.add(path+".required_permissions", "must declare at least one permission")
 		}
 		validateAgentStringSet(state, path+".required_permissions", assignment.RequiredPermissions)
-		if assignment.DefaultForSurface {
-			conflictKey := strings.TrimSpace(assignment.Surface)
-			if previous := defaultAssignments[conflictKey]; previous != "" {
-				state.add(path+".default_for_surface", "conflicts with default assignment %q for Surface %q", previous, assignment.Surface)
-			} else {
-				defaultAssignments[conflictKey] = key
-			}
-		}
 		if len(assignment.RoutePatterns) == 0 {
 			state.add(path+".route_patterns", "must declare at least one route pattern")
 		}
@@ -311,21 +297,21 @@ func (state *validationState) validateAgents() {
 
 func validateAgentTools(state *validationState, path string, values []string) {
 	for index, value := range values {
-		if _, exists := agentcatalog.Lookup(value); !exists {
-			state.add(fmt.Sprintf("%s[%d]", path, index), "references unsupported Agent tool %q; allowed values are %s", value, strings.Join(agentcatalog.Keys(), ","))
+		if _, exists := agentsdk.LookupAgentTool(value); !exists {
+			state.add(fmt.Sprintf("%s[%d]", path, index), "references unsupported Agent tool %q; allowed values are %s", value, strings.Join(agentsdk.AgentToolKeys(), ","))
 		}
 	}
 }
 
 func agentUsesObjectTool(agent agentsdk.AgentSchema, skills map[string]agentsdk.SkillSchema) bool {
 	for _, toolKey := range agent.Tools {
-		if tool, exists := agentcatalog.Lookup(toolKey); exists && tool.RequiresAllowedObjects {
+		if tool, exists := agentsdk.LookupAgentTool(toolKey); exists && tool.RequiresAllowedObjects {
 			return true
 		}
 	}
 	for _, skillKey := range agent.SkillKeys {
 		for _, toolKey := range skills[strings.TrimSpace(skillKey)].AllowedTools {
-			if tool, exists := agentcatalog.Lookup(toolKey); exists && tool.RequiresAllowedObjects {
+			if tool, exists := agentsdk.LookupAgentTool(toolKey); exists && tool.RequiresAllowedObjects {
 				return true
 			}
 		}

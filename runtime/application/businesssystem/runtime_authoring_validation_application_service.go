@@ -159,8 +159,6 @@ func runtimeAuthoringDefinitionDiagnostic(err error) RuntimeAuthoringValidationD
 		owner, capability = "workflow", "workflow.definition"
 	case "scheduler":
 		owner, capability = "scheduler", "scheduler.business_job"
-	case "connector":
-		owner, capability = "integration", "integration.connector_definition"
 	}
 	path := strings.TrimSuffix(strings.ReplaceAll("definitions."+resourceType+"."+resourceKey, "..", "."), ".")
 	message := valueOrDefault(strings.TrimSpace(params["diagnostic"]), "current Runtime definition graph is invalid")

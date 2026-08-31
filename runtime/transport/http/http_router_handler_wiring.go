@@ -2,14 +2,12 @@ package http
 
 func UseHandlers(router *HTTPRouter, handlers HTTPRouterHandlers) *HTTPRouter {
 	router.recordHTTP = handlers.Records
-	router.surfaceContextHTTP = handlers.SurfaceContext
 	router.uploadHTTP = handlers.Uploads
 	router.discoveryHTTP = handlers.Discovery
 	router.openAPIHTTP = handlers.OpenAPI
 	router.workflowHTTP = handlers.Workflows
 	router.automationHTTP = handlers.Automation
 	router.schedulerHTTP = handlers.Scheduler
-	router.reportHTTP = handlers.Reports
 	router.businessReferenceHTTP = handlers.BusinessReferences
 	router.publicationHandoffHTTP = handlers.PublicationHandoff
 	router.businessSystemHTTP = handlers.BusinessSystem
@@ -18,10 +16,6 @@ func UseHandlers(router *HTTPRouter, handlers HTTPRouterHandlers) *HTTPRouter {
 	router.notificationHTTP = nil
 	if handlers.Notifications != nil {
 		router.notificationHTTP = handlers.Notifications
-	}
-	router.agentDialogHTTP = nil
-	if handlers.AgentDialog != nil {
-		router.agentDialogHTTP = handlers.AgentDialog
 	}
 	router.operationsHTTP = handlers.Operations
 	router.lifecycleHTTP = nil

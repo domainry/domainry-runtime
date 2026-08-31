@@ -57,7 +57,7 @@ func TestDirectAuthoringSuccessProjectionRemainingContractShapes(t *testing.T) {
 }
 
 func TestCapabilityCatalogAndReferenceRemainingConditions(t *testing.T) {
-	materializeAuthoringCapabilitySurfaces(nil)
+	materializeAuthoringCapabilityPermissions(nil)
 	service, admin := capabilityDiscoveryEdgeService()
 	if _, err := service.ReferenceValues(t.Context(), admin, "scheduler_target_key", ""); err == nil {
 		t.Fatal("empty scheduler scope accepted")
@@ -69,7 +69,7 @@ func TestCapabilityCatalogAndReferenceRemainingConditions(t *testing.T) {
 	if err != nil || len(values.Values) != 2 {
 		t.Fatalf("scheduler values=%+v err=%v", values, err)
 	}
-	if _, err := service.ReferenceValues(t.Context(), admin, "scheduler_target_key", "report_export"); err != nil {
+	if _, err := service.ReferenceValues(t.Context(), admin, "scheduler_target_key", "report_snapshot_refresh"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.ReferenceValues(t.Context(), admin, "scheduler_target_key", "unknown"); err == nil {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 )
@@ -29,6 +30,10 @@ func (s notificationSystemSubjectLifecycle) ExportSubject(ctx context.Context, w
 	return s.subjects.ExportSubject(ctx, workspaceID, subjectID)
 }
 
+func (s notificationSystemSubjectLifecycle) ExportSubjectForRequest(ctx context.Context, _ string, workspaceID, subjectID string) (json.RawMessage, error) {
+	return s.ExportSubject(ctx, workspaceID, subjectID)
+}
+
 func (s notificationSystemSubjectLifecycle) EraseSubject(ctx context.Context, workspaceID, subjectID string, holds []lifecyclemodel.LegalHold) (json.RawMessage, error) {
 	if s.subjects == nil {
 		return nil, fmt.Errorf("Notification system subject port is unavailable")
@@ -39,3 +44,9 @@ func (s notificationSystemSubjectLifecycle) EraseSubject(ctx context.Context, wo
 	}
 	return s.subjects.EraseSubject(ctx, workspaceID, subjectID, evidence)
 }
+
+func (s notificationSystemSubjectLifecycle) EraseSubjectForRequest(ctx context.Context, _ string, workspaceID, subjectID string, holds []lifecyclemodel.LegalHold) (json.RawMessage, error) {
+	return s.EraseSubject(ctx, workspaceID, subjectID, holds)
+}
+
+var _ lifecyclecontract.SubjectExecutionHandler = notificationSystemSubjectLifecycle{}

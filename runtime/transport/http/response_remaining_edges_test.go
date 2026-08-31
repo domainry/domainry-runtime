@@ -36,7 +36,7 @@ func TestCapturedAndCopiedHTTPResponseCoversStatusAndHeaderEdges(t *testing.T) {
 	}
 }
 
-func TestSurfaceOpenAPIHandlerCoversPassThroughProjectionAndFailureEdges(t *testing.T) {
+func TestListenerOpenAPIHandlerCoversPassThroughProjectionAndFailureEdges(t *testing.T) {
 	router := &HTTPRouter{}
 	request := httptest.NewRequest(http.MethodGet, "/openapi.json", nil)
 	tests := []struct {
@@ -47,9 +47,9 @@ func TestSurfaceOpenAPIHandlerCoversPassThroughProjectionAndFailureEdges(t *test
 		contains   string
 	}{
 		{name: "upstream status", status: http.StatusTeapot, body: "upstream", wantStatus: http.StatusTeapot, contains: "upstream"},
-		{name: "invalid json", status: http.StatusOK, body: "{", wantStatus: http.StatusServiceUnavailable, contains: "openapi.surface_projection_failed"},
-		{name: "missing paths", status: http.StatusOK, body: `{"openapi":"3.1.0"}`, wantStatus: http.StatusServiceUnavailable, contains: "openapi.surface_projection_failed"},
-		{name: "unknown group", status: http.StatusOK, body: `{"paths":{}}`, wantStatus: http.StatusServiceUnavailable, contains: "openapi.surface_projection_failed"},
+		{name: "invalid json", status: http.StatusOK, body: "{", wantStatus: http.StatusServiceUnavailable, contains: "openapi.listener_projection_failed"},
+		{name: "missing paths", status: http.StatusOK, body: `{"openapi":"3.1.0"}`, wantStatus: http.StatusServiceUnavailable, contains: "openapi.listener_projection_failed"},
+		{name: "unknown group", status: http.StatusOK, body: `{"paths":{}}`, wantStatus: http.StatusServiceUnavailable, contains: "openapi.listener_projection_failed"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -58,12 +58,12 @@ func TestSurfaceOpenAPIHandlerCoversPassThroughProjectionAndFailureEdges(t *test
 				w.WriteHeader(tc.status)
 				_, _ = w.Write([]byte(tc.body))
 			})
-			group := SurfaceRouteGroupTenantAdmin
+			group := ListenerRouteGroupTenantAdmin
 			if tc.name == "unknown group" {
-				group = SurfaceRouteGroup("unknown")
+				group = ListenerRouteGroup("unknown")
 			}
 			response := httptest.NewRecorder()
-			router.surfaceOpenAPIHandler(group, full).ServeHTTP(response, request)
+			router.listenerOpenAPIHandler(group, full).ServeHTTP(response, request)
 			if response.Code != tc.wantStatus || !strings.Contains(response.Body.String(), tc.contains) {
 				t.Fatalf("status=%d body=%q", response.Code, response.Body.String())
 			}
@@ -79,7 +79,7 @@ func TestSurfaceOpenAPIHandlerCoversPassThroughProjectionAndFailureEdges(t *test
 		_, _ = w.Write([]byte(document))
 	})
 	response := httptest.NewRecorder()
-	router.surfaceOpenAPIHandler(SurfaceRouteGroupTenantAdmin, full).ServeHTTP(response, request)
+	router.listenerOpenAPIHandler(ListenerRouteGroupTenantAdmin, full).ServeHTTP(response, request)
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"paths":{}`) {
 		t.Fatalf("status=%d body=%q", response.Code, response.Body.String())
 	}
@@ -87,24 +87,24 @@ func TestSurfaceOpenAPIHandlerCoversPassThroughProjectionAndFailureEdges(t *test
 	calls := 0
 	publicRouter := &HTTPRouter{openAPIHTTP: routerCountingRegistrar{calls: &calls}}
 	response = httptest.NewRecorder()
-	publicRouter.surfaceOpenAPIHandler(SurfaceRouteGroupPublic, http.NotFoundHandler()).ServeHTTP(response, request)
+	publicRouter.listenerOpenAPIHandler(ListenerRouteGroupPublic, http.NotFoundHandler()).ServeHTTP(response, request)
 	if calls != 1 || response.Code != http.StatusNotFound {
 		t.Fatalf("public registration calls=%d status=%d", calls, response.Code)
 	}
 }
 
 func TestOpenAPIProjectionAndAuthoringSemanticsRemainingEdges(t *testing.T) {
-	if err := projectOpenAPIForSurfaceGroup(map[string]any{}, SurfaceRouteGroupTenantAdmin); err == nil {
+	if err := projectOpenAPIForListenerGroup(map[string]any{}, ListenerRouteGroupTenantAdmin); err == nil {
 		t.Fatal("missing paths accepted")
 	}
-	if err := projectOpenAPIForSurfaceGroup(map[string]any{"paths": map[string]any{}}, SurfaceRouteGroup("unknown")); err == nil {
+	if err := projectOpenAPIForListenerGroup(map[string]any{"paths": map[string]any{}}, ListenerRouteGroup("unknown")); err == nil {
 		t.Fatal("unknown group accepted")
 	}
 	document := map[string]any{"paths": map[string]any{
 		"/invalid": "not-a-path-item",
 		"/unknown": map[string]any{"parameters": []any{}, "get": map[string]any{}},
 	}}
-	if err := projectOpenAPIForSurfaceGroup(document, SurfaceRouteGroupTenantAdmin); err != nil {
+	if err := projectOpenAPIForListenerGroup(document, ListenerRouteGroupTenantAdmin); err != nil {
 		t.Fatal(err)
 	}
 	if len(document["paths"].(map[string]any)) != 0 {

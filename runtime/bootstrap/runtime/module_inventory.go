@@ -103,7 +103,7 @@ func (runtime *Runtime) ModuleInventory() (moduleinfo.Inventory, error) {
 	}
 	if binding := runtime.metadataBinding; binding != nil {
 		d := binding.Descriptor()
-		add("metadata", d.Mode, []string{"definition_repository"}, binding)
+		add("metadata", string(d.Mode), append([]string(nil), d.Capabilities...), binding)
 	}
 	if binding := runtime.reportBinding; binding != nil {
 		d := binding.Descriptor()

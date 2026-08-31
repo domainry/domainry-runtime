@@ -168,19 +168,19 @@ func TestLoadContractUsesExplicitPriorityAndProvenance(t *testing.T) {
 	}
 }
 
-func TestLoadContractMigratesLegacySchedulerWorkerSettingsWithoutCouplingExplicitWorkerSettings(t *testing.T) {
-	legacy, legacySnapshot, err := LoadContract(Source{Name: "legacy", Values: map[string]string{
+func TestLoadContractKeepsSchedulerAndRuntimeWorkerSettingsIndependent(t *testing.T) {
+	schedulerOnly, schedulerSnapshot, err := LoadContract(Source{Name: "scheduler-owner", Values: map[string]string{
 		"SCHEDULER_POLL_INTERVAL": "3s", "SCHEDULER_BATCH_SIZE": "17",
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if legacy.EffectiveWorkerPollInterval() != 3*time.Second || legacy.EffectiveWorkerBatchSize() != 17 ||
-		legacySnapshot.Entries["WORKER_POLL_INTERVAL"].Source != "compat:SCHEDULER_POLL_INTERVAL" ||
-		legacySnapshot.Entries["WORKER_BATCH_SIZE"].Source != "compat:SCHEDULER_BATCH_SIZE" {
-		t.Fatalf("legacy worker migration=%+v snapshot=%+v", legacy, legacySnapshot.Entries)
+	if schedulerOnly.SchedulerPollInterval != 3*time.Second || schedulerOnly.SchedulerBatchSize != 17 ||
+		schedulerOnly.EffectiveWorkerPollInterval() != 500*time.Millisecond || schedulerOnly.EffectiveWorkerBatchSize() != 25 ||
+		schedulerSnapshot.Entries["WORKER_POLL_INTERVAL"].Source != "default" || schedulerSnapshot.Entries["WORKER_BATCH_SIZE"].Source != "default" {
+		t.Fatalf("scheduler settings leaked into Runtime worker=%+v snapshot=%+v", schedulerOnly, schedulerSnapshot.Entries)
 	}
-	explicit, snapshot, err := LoadContract(Source{Name: "opt115", Values: map[string]string{
+	explicit, snapshot, err := LoadContract(Source{Name: "runtime-worker-owner", Values: map[string]string{
 		"SCHEDULER_POLL_INTERVAL": "4s", "SCHEDULER_BATCH_SIZE": "19",
 		"WORKER_POLL_INTERVAL": "250ms", "WORKER_BATCH_SIZE": "23",
 	}})
@@ -189,8 +189,38 @@ func TestLoadContractMigratesLegacySchedulerWorkerSettingsWithoutCouplingExplici
 	}
 	if explicit.SchedulerPollInterval != 4*time.Second || explicit.SchedulerBatchSize != 19 ||
 		explicit.EffectiveWorkerPollInterval() != 250*time.Millisecond || explicit.EffectiveWorkerBatchSize() != 23 ||
-		snapshot.Entries["WORKER_POLL_INTERVAL"].Source != "opt115" {
+		snapshot.Entries["WORKER_POLL_INTERVAL"].Source != "runtime-worker-owner" {
 		t.Fatalf("explicit worker routing=%+v snapshot=%+v", explicit, snapshot.Entries)
+	}
+}
+
+func TestLoadContractKeepsRecordTimerConfigurationIndependentFromScheduler(t *testing.T) {
+	cfg, snapshot, err := LoadContract(
+		Source{Name: "scheduler-owner", Values: map[string]string{
+			"SCHEDULER_ENABLED":       "false",
+			"SCHEDULER_POLL_INTERVAL": "4s",
+			"SCHEDULER_BATCH_SIZE":    "19",
+		}},
+		Source{Name: "record-timer-owner", Values: map[string]string{
+			"RECORD_TIMER_ENABLED":       "true",
+			"RECORD_TIMER_POLL_INTERVAL": "2s",
+			"RECORD_TIMER_BATCH_SIZE":    "7",
+			"RECORD_TIMER_LEASE_TTL":     "20s",
+		}},
+		Source{Name: "runtime-worker-owner", Values: map[string]string{
+			"WORKER_POLL_INTERVAL": "250ms",
+			"WORKER_BATCH_SIZE":    "23",
+			"WORKER_LEASE_TTL":     "30s",
+		}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SchedulerEnabled || !cfg.RecordTimerEnabled || cfg.RecordTimerPollInterval != 2*time.Second || cfg.RecordTimerBatchSize != 7 || cfg.RecordTimerLeaseTTL != 20*time.Second {
+		t.Fatalf("record timer configuration coupled to scheduler: %+v", cfg)
+	}
+	if snapshot.Entries["SCHEDULER_POLL_INTERVAL"].Source != "scheduler-owner" || snapshot.Entries["RECORD_TIMER_POLL_INTERVAL"].Source != "record-timer-owner" || snapshot.Entries["WORKER_POLL_INTERVAL"].Source != "runtime-worker-owner" {
+		t.Fatalf("record timer provenance=%+v", snapshot.Entries)
 	}
 }
 
@@ -208,7 +238,7 @@ func TestLoadContractRejectsTyposAndInvalidCombinations(t *testing.T) {
 
 func TestProductionSecurityRejectsSharedAuditAndIntegrationKeys(t *testing.T) {
 	cfg := Config{Environment: "production", AuditExportTokenKey: "shared", IntegrationSecretKey: "shared", IntegrationActiveKeyID: "key-1", CORSAllowedOrigins: []string{"https://admin.example.com"}, SchedulerPollInterval: time.Second}
-	setValidProductionSurfaceOrigins(&cfg)
+	setValidProductionListenerOrigins(&cfg)
 	if err := cfg.ValidateSecurity(); err == nil {
 		t.Fatal("production accepted one key for audit export and integration encryption")
 	}
@@ -224,7 +254,7 @@ func TestLoadRejectsMisspelledManagedEnvironmentVariable(t *testing.T) {
 
 func TestProductionSecurityHardGates(t *testing.T) {
 	valid := Config{Environment: "production", AuditExportTokenKey: "audit-export", IntegrationSecretKey: "integration", IntegrationActiveKeyID: "data-1", CORSAllowedOrigins: []string{"https://admin.example.com"}, SchedulerPollInterval: time.Second}
-	setValidProductionSurfaceOrigins(&valid)
+	setValidProductionListenerOrigins(&valid)
 	tests := []struct {
 		name   string
 		mutate func(*Config)

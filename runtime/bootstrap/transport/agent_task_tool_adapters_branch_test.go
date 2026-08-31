@@ -7,8 +7,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	agentstate "github.com/domainry/domainry-runtime/runtime/application/agent"
-	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
+	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agenthost"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -43,15 +42,6 @@ func (s agentTaskActionStub) Invoke(context.Context, actionmodel.ActionSource, a
 	return s.result, s.err
 }
 func (s agentTaskActionStub) Definitions() []definitionmodel.ActionSchema { return s.definitions }
-
-type agentTaskProposalStub struct {
-	result agentstate.AgentProposal
-	err    error
-}
-
-func (s agentTaskProposalStub) StoreProposal(context.Context, agentstate.AgentProposal) (agentstate.AgentProposal, error) {
-	return s.result, s.err
-}
 
 func TestAgentTaskQueryAdapterRemainingBranches(t *testing.T) {
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace"}}
@@ -118,15 +108,6 @@ func TestAgentTaskActionRiskProposalAndPrimitiveBranches(t *testing.T) {
 	}
 	if _, _, err := risk.RequiresAgentProposal(t.Context(), "missing", principalmodel.Principal{}); apperror.CodeOf(err) != "agent.tool.action_unknown" {
 		t.Fatalf("err=%v", err)
-	}
-	if _, err := (agentTaskToolProposalAdapter{}).CreateAgentActionProposal(t.Context(), agentapplication.AgentToolProposalRequest{}); apperror.CodeOf(err) != "agent.tool.proposal_unavailable" {
-		t.Fatalf("err=%v", err)
-	}
-	if _, err := (agentTaskToolProposalAdapter{state: agentTaskProposalStub{err: wantErr}}).CreateAgentActionProposal(t.Context(), agentapplication.AgentToolProposalRequest{}); !errors.Is(err, wantErr) {
-		t.Fatalf("err=%v", err)
-	}
-	if result, err := (agentTaskToolProposalAdapter{state: agentTaskProposalStub{result: agentstate.AgentProposal{ProposalID: "proposal"}}}).CreateAgentActionProposal(t.Context(), agentapplication.AgentToolProposalRequest{}); err != nil || result.ProposalID != "proposal" {
-		t.Fatalf("result=%#v err=%v", result, err)
 	}
 	record := recordmodel.Record{Data: map[string]any{"name": "Ada"}}
 	projectAgentRecord(&record, []string{"name"})

@@ -13,20 +13,11 @@ func TestBackendIntegrationRoutesPublishTypedRuntimeClientContracts(t *testing.T
 		method string
 		client string
 	}{
-		{path: "/agent-dialog/runs/stream", method: "post", client: "runAgentStream"},
-		{path: "/agent-dialog/analysis/query", method: "post", client: "queryAgentAnalysis"},
-		{path: "/agent-dialog/report-query-runs/{queryRef}", method: "get", client: "getAgentReportQueryRun"},
-		{path: "/agent-dialog/report-export-audits/{queryRef}", method: "get", client: "getAgentReportExportAudit"},
-		{path: "/agent-dialog/download-tasks/{queryRef}", method: "get", client: "getAgentReportDownloadTask"},
-		{path: "/agent-dialog/download-tasks/{queryRef}/prepare", method: "post", client: "prepareAgentReportHandoff"},
 		{path: "/objects/{objectKey}/records/import/preview", method: "post", client: "previewRecordImport"},
 		{path: "/objects/{objectKey}/records/import/apply", method: "post", client: "applyRecordImport"},
 		{path: "/objects/{objectKey}/records/import/jobs", method: "post", client: "enqueueRecordImport"},
 		{path: "/objects/{objectKey}/records/export", method: "get", client: "exportRecords"},
 		{path: "/objects/{objectKey}/records/export/jobs", method: "post", client: "enqueueRecordExport"},
-		{path: "/record-batch-jobs/{jobID}", method: "get", client: "getRecordBatchJob"},
-		{path: "/record-batch-jobs/{jobID}/cancel", method: "post", client: "cancelRecordBatchJob"},
-		{path: "/record-batch-jobs/{jobID}/download", method: "get", client: "downloadRecordBatchJob"},
 		{path: "/objects/{objectKey}/actions/{actionKey}/bulk", method: "post", client: "runBulkAction"},
 		{path: "/files", method: "post", client: "uploadFile"},
 		{path: "/uploads/{filename}", method: "get", client: "downloadUpload"},
@@ -37,16 +28,10 @@ func TestBackendIntegrationRoutesPublishTypedRuntimeClientContracts(t *testing.T
 		}
 	}
 
-	stream := openAPITestOperation(t, paths, "/agent-dialog/runs/stream", "post")
-	if !openAPITestResponseContentType(stream, "text/event-stream") || !openAPITestRequiredHeader(stream, "Idempotency-Key") {
-		t.Fatalf("Agent stream is not resumable typed SSE with required idempotency: %#v", stream)
-	}
-
 	for _, path := range []string{
 		"/objects/{objectKey}/records/import/apply",
 		"/objects/{objectKey}/records/import/jobs",
 		"/objects/{objectKey}/records/export/jobs",
-		"/record-batch-jobs/{jobID}/cancel",
 		"/objects/{objectKey}/actions/{actionKey}/bulk",
 	} {
 		if operation := openAPITestOperation(t, paths, path, "post"); !openAPITestRequiredHeader(operation, "Idempotency-Key") {
@@ -70,25 +55,6 @@ func TestBackendIntegrationRoutesPublishTypedRuntimeClientContracts(t *testing.T
 		t.Fatalf("authorized file download contract=%#v", download)
 	}
 
-	reportExport := openAPITestOperation(t, paths, "/reports/{reportKey}/exports/{objectKey}/prepare", "post")
-	responses := reportExport["responses"].(map[string]any)
-	if responses["200"] != nil || responses["202"] == nil {
-		t.Fatalf("Report export must always submit a Data Exchange job: responses=%#v", responses)
-	}
-	requestSchema := reportExport["requestBody"].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)
-	required, _ := requestSchema["required"].([]string)
-	if !containsString(required, "audit_id") || !containsString(required, "scope") {
-		t.Fatalf("Report export request must require governed scope: required=%v", required)
-	}
-}
-
-func containsString(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
 }
 
 func TestPersonalInboxAndWorkforcePublishDurableIntegrationContracts(t *testing.T) {

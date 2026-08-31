@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
+	"github.com/domainry/domainry-foundation/ratelimit"
 	redis "github.com/redis/go-redis/v9"
 )
 

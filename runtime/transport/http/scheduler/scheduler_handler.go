@@ -10,7 +10,6 @@ import (
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	schedulerbusiness "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	operationshttp "github.com/domainry/domainry-runtime/runtime/transport/http/operations"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 	"github.com/domainry/domainry-scheduler-sdk/modulehost"
@@ -37,13 +36,10 @@ type schedulerService interface {
 	TenantAdminDefinition(context.Context, string, principalmodel.Principal) (schedulerbusiness.TenantAdminSchedulerDefinitionDTO, error)
 	TenantAdminDefinitionVersions(context.Context, string, principalmodel.Principal) ([]schedulerbusiness.TenantAdminSchedulerDefinitionVersionDTO, error)
 	TenantAdminAuthoringContract(context.Context, principalmodel.Principal) (schedulerbusiness.TenantAdminSchedulerAuthoringContract, error)
-	OpsState(context.Context, principalmodel.Principal) (schedulerbusiness.OpsSchedulerStateDTO, error)
+	AuthorizeOpsRead(context.Context, principalmodel.Principal) error
 	PreviewDefinition(context.Context, map[string]any, principalmodel.Principal) (schedulerbusiness.SchedulerDefinitionPreview, error)
 	PreviewSchedule(context.Context, map[string]any, principalmodel.Principal) (schedulerbusiness.SchedulerDefinitionPreview, error)
-	SimulateTenantAdminDefinition(context.Context, string, principalmodel.Principal) (schedulerbusiness.SchedulerOperationResult, error)
-	GetDefinition(context.Context, string, principalmodel.Principal) (recordmodel.Record, error)
-	DefinitionVersions(context.Context, string, principalmodel.Principal) ([]schedulerbusiness.SchedulerDefinitionVersion, error)
-	SimulateJob(context.Context, string, principalmodel.Principal) (schedulerbusiness.SchedulerOperationResult, error)
+	SimulateTenantAdminDefinition(context.Context, string, principalmodel.Principal) (schedulerbusiness.SchedulerDefinitionSimulation, error)
 }
 
 func (h *SchedulerHandler) ownerBinding() (schedulersdk.Binding, error) {
@@ -144,24 +140,6 @@ func (h *SchedulerHandler) previewSchedulerSchedule(w http.ResponseWriter, r *ht
 		return
 	}
 	h.writeJSON(w, http.StatusOK, result)
-}
-
-func (h *SchedulerHandler) getSchedulerJob(w http.ResponseWriter, r *http.Request) {
-	record, err := h.service.GetDefinition(r.Context(), strings.TrimSpace(r.PathValue("definitionID")), h.principal(r))
-	if err != nil {
-		h.writeServiceError(w, r, err)
-		return
-	}
-	h.writeJSON(w, http.StatusOK, record)
-}
-
-func (h *SchedulerHandler) listSchedulerJobVersions(w http.ResponseWriter, r *http.Request) {
-	versions, err := h.service.DefinitionVersions(r.Context(), strings.TrimSpace(r.PathValue("definitionID")), h.principal(r))
-	if err != nil {
-		h.writeServiceError(w, r, err)
-		return
-	}
-	h.writeJSON(w, http.StatusOK, map[string]any{"items": versions, "count": len(versions)})
 }
 
 func (h *SchedulerHandler) simulateSchedulerJob(w http.ResponseWriter, r *http.Request) {

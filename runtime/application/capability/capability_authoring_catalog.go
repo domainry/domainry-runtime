@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
-	surfacemodel "github.com/domainry/domainry-runtime/runtime/domain/surface/model"
+	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 )
 
 const (
@@ -18,9 +18,9 @@ var RuntimeAutomationCapabilities = capabilitycontract.RuntimeAutomationCapabili
 
 func RuntimeAuthoringCapabilities() capabilitycontract.CapabilityRuntimeAuthoringContract {
 	contract := capabilitycontract.CapabilityRuntimeAuthoringContract{
-		ContractVersion:        capabilitycontract.RuntimeAuthoringContractVersion,
-		SurfaceContractVersion: surfacemodel.ContractVersion,
-		RuntimeVersion:         capabilitycontract.RuntimeCapabilityContractVersion,
+		ContractVersion:         capabilitycontract.RuntimeAuthoringContractVersion,
+		EndpointContractVersion: endpointmodel.ContractVersion,
+		RuntimeVersion:          capabilitycontract.RuntimeCapabilityContractVersion,
 		Domains: []capabilitycontract.CapabilityAuthoringDomain{
 			authoringSchemaDomain(), authoringActionDomain(), authoringWorkflowDomain(),
 			authoringAutomationDomain(), authoringSchedulerDomain(), authoringProfileBindingDomain(),
@@ -30,7 +30,6 @@ func RuntimeAuthoringCapabilities() capabilitycontract.CapabilityRuntimeAuthorin
 		Instance: capabilitycontract.CapabilityAuthoringInstance{ObjectKeys: []string{}, FieldKeys: []capabilitycontract.CapabilityAuthoringScopedValues{}, ActionKeys: []string{}, WorkflowKeys: []string{}, ReportKeys: []string{}, RoleKeys: []string{}, PermissionKeys: []string{}, UserIDs: []string{}, WorkforceProfileIDs: []string{}, DepartmentIDs: []string{}, RoleIDs: []string{}, MenuIDs: []string{}, ConnectorKeys: []string{}, ConnectionKeys: []string{}, ConnectorOperations: []capabilitycontract.CapabilityAuthoringConnectorBinding{}},
 	}
 	normalizeSourceControlledMetadataCapabilities(&contract)
-	materializeAuthoringCapabilitySurfaces(&contract)
 	materializeAuthoringCapabilityPermissions(&contract)
 	capabilitycontract.SortAuthoringContract(&contract)
 	contract.ContractHash = capabilitycontract.ContractHash(contract)
@@ -116,20 +115,6 @@ func removeSourceControlledHashInput(schema *capabilitycontract.CapabilityAuthor
 		}
 	}
 	schema.Required = kept
-}
-
-func materializeAuthoringCapabilitySurfaces(contract *capabilitycontract.CapabilityRuntimeAuthoringContract) {
-	if contract == nil {
-		return
-	}
-	for domainIndex := range contract.Domains {
-		for capabilityIndex := range contract.Domains[domainIndex].Capabilities {
-			definition := &contract.Domains[domainIndex].Capabilities[capabilityIndex]
-			definition.Surface = surfacemodel.ProductSurfaceAdminConsole
-			definition.ActorAudiences = []surfacemodel.ActorAudience{surfacemodel.ActorAudiencePlatformAdmin}
-			definition.ExposureClass = surfacemodel.ExposureClassPlatformAdmin
-		}
-	}
 }
 
 func authoringContractHash(contract capabilitycontract.CapabilityRuntimeAuthoringContract) string {

@@ -29,7 +29,7 @@ func TestRecordDeleteAuthorizationSchedulerAndSoftValidationEdges(t *testing.T) 
 	}
 	repository := &deleteEdgeRepository{found: true, record: recordmodel.Record{ID: "run-1", Data: map[string]any{}}}
 	dependencies := recordDeleteEdgeDependencies(repository, definitionmodel.ObjectSchema{Key: "record_timer", Config: map[string]any{"record_timer_runtime": true}})
-	if err := NewRecordDeleteApplicationService(dependencies).Delete(t.Context(), "record_timer", "timer-1", principal); apperror.CodeOf(err) != "backend.scheduler.runtime_api_required" {
+	if err := NewRecordDeleteApplicationService(dependencies).Delete(t.Context(), "record_timer", "timer-1", principal); apperror.CodeOf(err) != "backend.record_timer.runtime_api_required" {
 		t.Fatalf("scheduler guard error = %v", err)
 	}
 

@@ -3,19 +3,10 @@ package composition
 import (
 	"context"
 	"fmt"
-	"time"
 
-	reportmodel "github.com/domainry/domainry-report-sdk/model"
-	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
-	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
-	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
-	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
-	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
-	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
 
 func newRecordQueryPolicyService(services *runtimeAssembly) *recordservice.RecordQueryPolicyDomainService {
@@ -23,8 +14,14 @@ func newRecordQueryPolicyService(services *runtimeAssembly) *recordservice.Recor
 		Objects: func() []definitionmodel.ObjectSchema {
 			return services.Schema().Objects
 		},
-		Reports: func() []reportmodel.ReportSchema {
-			return services.Schema().Reports
+		ReportObjects: func() map[string]struct{} {
+			services.mu.RLock()
+			defer services.mu.RUnlock()
+			result := make(map[string]struct{}, len(services.reportObjects))
+			for key := range services.reportObjects {
+				result[key] = struct{}{}
+			}
+			return result
 		},
 		CandidateScopeMatches: func(ctx context.Context, workspaceID string, candidate recordmodel.Record, expression recordmodel.RecordScopeExpression) (bool, error) {
 			evaluator, ok := services.recordRepo.(interface {
@@ -36,103 +33,4 @@ func newRecordQueryPolicyService(services *runtimeAssembly) *recordservice.Recor
 			return evaluator.CandidateScopeMatches(ctx, workspaceID, candidate, expression)
 		},
 	})
-}
-
-type schedulerWorkflowTimerRuntime interface {
-	ResumeTimerNode(context.Context, string, string, string, principalmodel.Principal) (workflowmodel.WorkflowProcessInstance, error)
-	ProcessApprovalDeadlineTimer(context.Context, string, string, string, principalmodel.Principal) error
-}
-
-type schedulerActionTimerRuntime interface {
-	Invoke(context.Context, actionmodel.ActionSource, actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error)
-}
-
-func executeSchedulerRecordTimer(
-	ctx context.Context,
-	execution schedulerapplication.RecordTimerExecution,
-	principal principalmodel.Principal,
-	workflows schedulerWorkflowTimerRuntime,
-	actionService schedulerActionTimerRuntime,
-) error {
-	switch execution.TargetType {
-	case "workflow":
-		switch execution.TargetKey {
-		case "resume_node":
-			processID, _ := execution.Payload["process_id"].(string)
-			nodeID, _ := execution.Payload["node_id"].(string)
-			_, err := workflows.ResumeTimerNode(ctx, execution.WorkspaceID, processID, nodeID, principal)
-			return err
-		case "approval_deadline":
-			taskID, _ := execution.Payload["task_id"].(string)
-			phase, _ := execution.Payload["phase"].(string)
-			return workflows.ProcessApprovalDeadlineTimer(ctx, execution.WorkspaceID, taskID, phase, principal)
-		default:
-			return fmt.Errorf("unsupported workflow timer target %q", execution.TargetKey)
-		}
-	case "action":
-		_, err := actionService.Invoke(ctx, actionmodel.ActionSourceScheduler, actionmodel.ActionInvocation{ActionKey: execution.TargetKey, ObjectKey: execution.ObjectKey, RecordID: execution.RecordID, Input: execution.Payload, Principal: principal, Actor: principal, IdempotencyKey: execution.IdempotencyKey})
-		return err
-	default:
-		return fmt.Errorf("unsupported record timer target type %q", execution.TargetType)
-	}
-}
-
-func newSchedulerOperationRuntimeAdapter(s *runtimeAssembly) schedulerOperationRuntimeAdapter {
-	return schedulerOperationRuntimeAdapter{
-		processExecutions: func(ctx context.Context, limit int, principal principalmodel.Principal) (workflowmodel.WorkflowProcessResult, error) {
-			return s.workflowApplicationService.ProcessDueWorkflowExecutions(ctx, limit, principal)
-		},
-		processTargetedExecutions: func(ctx context.Context, targetKey string, limit int, principal principalmodel.Principal) (workflowmodel.WorkflowProcessResult, error) {
-			return s.workflowApplicationService.ProcessDueWorkflowExecutionsForTarget(ctx, targetKey, limit, principal)
-		},
-		processTargetedExecutionsForWindow: func(ctx context.Context, targetKey string, scheduledFor time.Time, limit int, principal principalmodel.Principal) (workflowmodel.WorkflowProcessResult, error) {
-			return s.workflowApplicationService.ProcessDueWorkflowExecutionsForScheduledWindow(ctx, targetKey, scheduledFor, limit, principal)
-		},
-		insertRecord: func(ctx context.Context, workspaceID string, object definitionmodel.ObjectSchema, record recordmodel.Record, reason string) error {
-			return s.internalMutations.Insert(ctx, workspaceID, recordapplication.RecordInternalMutationSchedulerRuntime, object, record, reason)
-		},
-		updateRecord: func(ctx context.Context, workspaceID string, object definitionmodel.ObjectSchema, record recordmodel.Record, reason string) error {
-			return s.internalMutations.Update(ctx, workspaceID, recordapplication.RecordInternalMutationSchedulerRuntime, object, record, reason)
-		},
-		executeTimer: func(ctx context.Context, execution schedulerapplication.RecordTimerExecution, _ principalmodel.Principal) error {
-			principal := principalmodel.NewSystemPrincipal(
-				"runtime-scheduler",
-				principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "scheduler record timer dispatch"),
-				"*",
-			)
-			principal.WorkspaceID = execution.WorkspaceID
-			switch execution.TargetType {
-			case "workflow":
-				if s.workflowApplicationService == nil {
-					return fmt.Errorf("unsupported workflow timer target %q", execution.TargetKey)
-				}
-			case "action":
-				if s.actionService == nil {
-					return fmt.Errorf("action timer runtime is not configured")
-				}
-			}
-			return executeSchedulerRecordTimer(ctx, execution, principal, s.workflowApplicationService, s.actionService)
-		},
-	}
-}
-
-func initializeWorkflowAutomationAndGovernance(s *runtimeAssembly, deps RuntimeServicesDependencies) {
-	schedulerRuntime := newSchedulerOperationRuntimeAdapter(s)
-	s.schedulerService = newSchedulerApplicationService(s, schedulerRuntime, s.recordRepo, s.auditApplicationService, s.workerDependencies)
-	s.recordTimerService = recordtimerapplication.NewRecordTimerApplicationService(s.schedulerService)
-	s.schedulerService.UseNotificationCompiler(s.workflowNotificationCompiler)
-	s.schedulerService.UseDefinitionSource(schedulerApplicationDefinitionSource{authored: s.schedulerDefinitions})
-	s.workflowApplicationService = assembleWorkflowApplication(s)
-	if s.agentInteractiveRunService != nil && deps.AgentInteractiveRunner != nil {
-		s.newAgentInteractiveExecution = func(tools *agentapplication.AgentToolGateway) *agentapplication.AgentInteractiveExecutionApplicationService {
-			return agentapplication.NewAgentInteractiveExecutionApplicationService(agentapplication.AgentInteractiveExecutionDependencies{
-				Runs: s.agentInteractiveRunService, Authorize: s.agentAuthorizationService, Runner: deps.AgentInteractiveRunner, Dispatch: s.agentTaskDispatchService,
-				Workflows: runtimeInteractiveWorkflowStarter{records: s}, Tools: tools,
-			})
-		}
-	}
-	s.authoringCapabilities = newCapabilityAuthoringApplicationService(s)
-	s.businessReferences = assembleChangePlanReferenceApplication(s, businessReferenceRuntimeAdapter{records: s, workflows: s.workflowApplicationService}, s.businessEvidenceRepo)
-	s.applicationSchemaService = assembleApplicationSchema(s)
-	s.automationApplicationService = assembleAutomationApplication(s)
 }

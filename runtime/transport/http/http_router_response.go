@@ -144,7 +144,6 @@ func (s *HTTPRouter) principalWithBusinessProfile(principal principalmodel.Princ
 	resolved, err := s.businessPrincipal.ResolveBusinessPrincipal(
 		r.Context(),
 		principal,
-		r.Header.Get("X-Surface-Key"),
 		r.Header.Get("X-Business-Profile-Key"),
 		r.Header.Get("X-Business-Profile-ID"),
 	)
@@ -152,7 +151,7 @@ func (s *HTTPRouter) principalWithBusinessProfile(principal principalmodel.Princ
 		return resolved
 	}
 	s.appendSecurityAuditForPrincipal(r, principal, "business_profile_selection_denied", "Business profile selection denied", map[string]any{
-		"surface_key": r.Header.Get("X-Surface-Key"), "binding_key": r.Header.Get("X-Business-Profile-Key"), "record_id": r.Header.Get("X-Business-Profile-ID"), "reason": err.Error(),
+		"binding_key": r.Header.Get("X-Business-Profile-Key"), "record_id": r.Header.Get("X-Business-Profile-ID"), "reason": err.Error(),
 	})
 	principal.Known = false
 	principal.BusinessProfiles = nil

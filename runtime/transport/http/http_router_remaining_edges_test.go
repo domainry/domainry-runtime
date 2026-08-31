@@ -15,13 +15,11 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
-	healthplatform "github.com/domainry/domainry-runtime/runtime/platform/health"
-	agentdialoghttp "github.com/domainry/domainry-runtime/runtime/transport/http/agentdialog"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 )
 
@@ -118,11 +116,11 @@ func routerTestPrincipal(principal identitysdk.Principal, permissions ...string)
 type routerBusinessPrincipalStub struct {
 	principal principalmodel.Principal
 	error     error
-	selection [3]string
+	selection [2]string
 }
 
-func (s *routerBusinessPrincipalStub) ResolveBusinessPrincipal(_ context.Context, _ principalmodel.Principal, surfaceKey, bindingKey, recordID string) (principalmodel.Principal, error) {
-	s.selection = [3]string{surfaceKey, bindingKey, recordID}
+func (s *routerBusinessPrincipalStub) ResolveBusinessPrincipal(_ context.Context, _ principalmodel.Principal, bindingKey, recordID string) (principalmodel.Principal, error) {
+	s.selection = [2]string{bindingKey, recordID}
 	return s.principal, s.error
 }
 
@@ -135,12 +133,12 @@ type routerCountingRegistrar struct{ calls *int }
 
 func (s routerCountingRegistrar) RegisterRoutes(*http.ServeMux) { *s.calls++ }
 
-func completeRouterForSurfaceGroupTests(config HTTPRouterConfig) *HTTPRouter {
+func completeRouterForListenerGroupTests(config HTTPRouterConfig) *HTTPRouter {
 	router := NewHTTPRouter(config, HTTPRouterDependencies{})
 	calls := 0
 	registrar := routerCountingRegistrar{calls: &calls}
-	router.recordHTTP, router.surfaceContextHTTP, router.uploadHTTP, router.discoveryHTTP, router.openAPIHTTP = registrar, registrar, registrar, registrar, registrar
-	router.workflowHTTP, router.automationHTTP, router.schedulerHTTP, router.reportHTTP = registrar, registrar, registrar, registrar
+	router.recordHTTP, router.uploadHTTP, router.discoveryHTTP, router.openAPIHTTP = registrar, registrar, registrar, registrar
+	router.workflowHTTP, router.automationHTTP, router.schedulerHTTP = registrar, registrar, registrar
 	router.businessReferenceHTTP, router.businessSystemHTTP, router.capabilityHTTP = registrar, registrar, registrar
 	router.applicationSchemaHTTP, router.operationsHTTP = registrar, registrar
 	return router
@@ -153,9 +151,6 @@ type routerRuntimeStatusStub struct {
 
 func (s routerRuntimeStatusStub) Health(context.Context) map[string]any {
 	return map[string]any{"status": "ok"}
-}
-func (s routerRuntimeStatusStub) Metrics(context.Context) map[string]any {
-	return map[string]any{"runtime_id": "runtime-1", "objects": 2}
 }
 func (s routerRuntimeStatusStub) StorageReadiness(context.Context) error   { return s.storageErr }
 func (s routerRuntimeStatusStub) MigrationReadiness(context.Context) error { return s.migrationErr }
@@ -194,7 +189,7 @@ func TestOperationalControlRemainingStateMatrix(t *testing.T) {
 		{name: "inactive", wantCode: ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			router := &HTTPRouter{healthRegistry: healthplatform.NewRegistry(), runtimeInstanceID: "runtime-1"}
+			router := &HTTPRouter{healthRegistry: newRuntimeHealthRegistry(), runtimeInstanceID: "runtime-1"}
 			router.operationsControlState = func(_ context.Context, kind, owner string) (bool, bool, error) {
 				if kind == "maintenance" {
 					return test.maintenance, false, test.maintenanceErr
@@ -222,7 +217,7 @@ func TestRefreshAndExemptOperationalControlEdges(t *testing.T) {
 	(&HTTPRouter{}).refreshOperationalState(t.Context())
 	(&HTTPRouter{operationsControlState: func(context.Context, string, string) (bool, bool, error) { return true, false, nil }}).refreshOperationalState(t.Context())
 
-	router := &HTTPRouter{healthRegistry: healthplatform.NewRegistry(), runtimeInstanceID: "runtime-2"}
+	router := &HTTPRouter{healthRegistry: newRuntimeHealthRegistry(), runtimeInstanceID: "runtime-2"}
 	router.operationsControlState = func(_ context.Context, kind, _ string) (bool, bool, error) {
 		if kind == "maintenance" {
 			return true, false, nil
@@ -265,13 +260,13 @@ func TestRoutePolicyAndAnonymousPathCompleteMatrix(t *testing.T) {
 		t.Fatalf("root catch-all policy=%+v", policy)
 	}
 
-	paths := []string{"/", "/live", "/ready", "/startup", "/i18n/en", "/integrations/webhooks/{workspaceID}/{connectionKey}", "/integrations/google/oauth/callback", "/agent-dialog/task-tools/invoke"}
+	paths := []string{"/", "/live", "/ready", "/startup", "/i18n/en", "/integrations/webhooks/{workspaceID}/{connectionKey}", "/integrations/google/oauth/callback"}
 	for _, path := range paths {
 		if !anonymousAuthPath(path) {
 			t.Errorf("anonymous path rejected: %s", path)
 		}
 	}
-	for _, path := range []string{"", "/records", "/metrics", "/openapi.json", "/schema", "/tenant-admin/platform-capabilities", "/domain-system-snapshot", "/metadata/manifests/x", "/api/x", "/auth/me", "/auth/change-password", "/auth/external-accounts", "/integrations/webhooks/provider/events"} {
+	for _, path := range []string{"", "/records", "/metrics", "/openapi.json", "/schema", "/tenant-admin/platform-capabilities", "/domain-system-snapshot", "/metadata/manifests/x", "/api/x", "/auth/me", "/auth/change-password", "/auth/external-accounts", "/integrations/webhooks/provider/events", "/agent-dialog/task-tools/invoke"} {
 		if anonymousAuthPath(path) {
 			t.Errorf("protected path accepted as anonymous: %s", path)
 		}
@@ -342,7 +337,7 @@ func TestRouterIdentityLifecycleProbeAndMetricsEdges(t *testing.T) {
 	router.SetDraining(false)
 	router.SetMaintenance(false)
 
-	nilStatus := &HTTPRouter{healthRegistry: healthplatform.NewRegistry(), healthCheckTimeout: time.Millisecond}
+	nilStatus := &HTTPRouter{healthRegistry: newRuntimeHealthRegistry(), healthCheckTimeout: time.Millisecond}
 	nilStatus.MarkStartupComplete()
 	if snapshot := nilStatus.readinessSnapshot(t.Context()); snapshot.Status != "unavailable" {
 		t.Fatalf("nil status readiness=%+v", snapshot)
@@ -355,7 +350,7 @@ func TestRouterIdentityLifecycleProbeAndMetricsEdges(t *testing.T) {
 	}
 	defer lease.Release()
 	_, _ = controller.Acquire(t.Context(), capacityplatform.Request{WorkspaceID: "two", UseCase: "two"})
-	overloaded := &HTTPRouter{healthRegistry: healthplatform.NewRegistry(), healthCheckTimeout: time.Millisecond, capacityController: controller}
+	overloaded := &HTTPRouter{healthRegistry: newRuntimeHealthRegistry(), healthCheckTimeout: time.Millisecond, capacityController: controller}
 	overloaded.MarkStartupComplete()
 	if snapshot := overloaded.readinessSnapshot(t.Context()); snapshot.Status != "unavailable" {
 		t.Fatalf("overloaded readiness=%+v", snapshot)
@@ -379,68 +374,71 @@ func TestRouterIdentityLifecycleProbeAndMetricsEdges(t *testing.T) {
 	}
 }
 
-func TestHTTPRouterSurfaceGroupConstructionAndOriginEdges(t *testing.T) {
-	originalContracts := runtimeEndpointSurfaceContracts
+func TestHTTPRouterListenerGroupConstructionAndOriginEdges(t *testing.T) {
+	originalContracts := runtimeEndpointContracts
 	func() {
 		defer func() {
-			runtimeEndpointSurfaceContracts = originalContracts
+			runtimeEndpointContracts = originalContracts
 			if recover() == nil {
 				t.Fatal("invalid compiled endpoint contracts did not panic")
 			}
 		}()
-		runtimeEndpointSurfaceContracts = nil
+		runtimeEndpointContracts = nil
 		NewHTTPRouter(HTTPRouterConfig{}, HTTPRouterDependencies{})
 	}()
 
-	router := completeRouterForSurfaceGroupTests(HTTPRouterConfig{
-		SurfaceGroupPolicies: map[SurfaceRouteGroup]SurfaceRouteGroupPolicy{
-			SurfaceRouteGroupPublic:      {RateLimitPerMinute: 1},
-			SurfaceRouteGroupTenantAdmin: {},
+	router := completeRouterForListenerGroupTests(HTTPRouterConfig{
+		ListenerGroupPolicies: map[ListenerRouteGroup]ListenerRouteGroupPolicy{
+			ListenerRouteGroupPublic:      {RateLimitPerMinute: 1},
+			ListenerRouteGroupTenantAdmin: {},
 		},
 	})
-	if router.surfaceGroupCapacity[SurfaceRouteGroupPublic] == nil {
+	if router.listenerGroupCapacity[ListenerRouteGroupPublic] == nil {
 		t.Fatal("positive listener rate limit did not create a capacity controller")
 	}
-	if router.surfaceGroupCapacity[SurfaceRouteGroupTenantAdmin] != nil {
+	if router.listenerGroupCapacity[ListenerRouteGroupTenantAdmin] != nil {
 		t.Fatal("zero listener rate limit created a capacity controller")
 	}
 
-	if handler := router.RoutesForSurfaceGroup(SurfaceRouteGroupAll); handler == nil {
+	if handler := router.RoutesForListenerGroup(ListenerRouteGroupAll); handler == nil {
 		t.Fatal("all-surface handler is nil")
 	}
 	unknownResponse := httptest.NewRecorder()
-	router.RoutesForSurfaceGroup(SurfaceRouteGroup("unknown")).ServeHTTP(unknownResponse, httptest.NewRequest(http.MethodGet, "/records", nil))
+	router.RoutesForListenerGroup(ListenerRouteGroup("unknown")).ServeHTTP(unknownResponse, httptest.NewRequest(http.MethodGet, "/records", nil))
 	if unknownResponse.Code != http.StatusNotFound {
 		t.Fatalf("unknown group status=%d body=%s", unknownResponse.Code, unknownResponse.Body.String())
 	}
-	if handler := router.RoutesForSurfaceGroup(SurfaceRouteGroupPublic); handler == nil {
+	if handler := router.RoutesForListenerGroup(ListenerRouteGroupPublic); handler == nil {
 		t.Fatal("metered public handler is nil")
 	}
 
 	router.httpMetrics = nil
 	malformedRoutes := []string{"invalid", " GET /invalid-method", "GET "}
+	base := originalContracts["GET /"]
 	for _, route := range malformedRoutes {
-		runtimeSurfaceRoutePolicies[route] = nil
+		contract := base
+		contract.EndpointIdentity = route
+		runtimeEndpointContracts[route] = contract
 	}
 	func() {
 		defer func() {
 			for _, route := range malformedRoutes {
-				delete(runtimeSurfaceRoutePolicies, route)
+				delete(runtimeEndpointContracts, route)
 			}
 		}()
-		if handler := router.RoutesForSurfaceGroup(SurfaceRouteGroupPublic); handler == nil {
+		if handler := router.RoutesForListenerGroup(ListenerRouteGroupPublic); handler == nil {
 			t.Fatal("public handler is nil")
 		}
 	}()
-	if handler := router.RoutesForSurfaceGroup(SurfaceRouteGroupTenantAdmin); handler == nil {
+	if handler := router.RoutesForListenerGroup(ListenerRouteGroupTenantAdmin); handler == nil {
 		t.Fatal("tenant-admin handler is nil")
 	}
 
-	if SurfaceRouteGroupEndpointCount(SurfaceRouteGroupAll) != len(runtimeSurfaceRoutePolicies) {
-		t.Fatal("all-surface endpoint count mismatch")
+	if ListenerRouteGroupEndpointCount(ListenerRouteGroupAll) != len(runtimeEndpointContracts) {
+		t.Fatal("all-listener endpoint count mismatch")
 	}
-	if SurfaceRouteGroupEndpointCount(SurfaceRouteGroup("unknown")) != 0 {
-		t.Fatal("unknown surface group has endpoints")
+	if ListenerRouteGroupEndpointCount(ListenerRouteGroup("unknown")) != 0 {
+		t.Fatal("unknown listener group has endpoints")
 	}
 }
 
@@ -579,10 +577,15 @@ func TestOptionalRouteRegistrationAndHealthAuthorization(t *testing.T) {
 	if !healthAllowed(operator) {
 		t.Fatal("runtime operator health permissions were rejected")
 	}
+	response := httptest.NewRecorder()
+	router.health(response, requestWithPrincipal(httptest.NewRequest(http.MethodGet, "/health", nil), operator))
+	if response.Code != http.StatusServiceUnavailable || !strings.Contains(response.Body.String(), "monitoring.health_unavailable") {
+		t.Fatalf("missing Monitoring binding status=%d body=%s", response.Code, response.Body.String())
+	}
 }
 
 func TestReadinessStartupMaintenanceWorkerAndManifestObjectEdges(t *testing.T) {
-	router := &HTTPRouter{healthRegistry: healthplatform.NewRegistry(), healthCheckTimeout: time.Millisecond}
+	router := &HTTPRouter{healthRegistry: newRuntimeHealthRegistry(), healthCheckTimeout: time.Millisecond}
 	if snapshot := router.readinessSnapshot(t.Context()); snapshot.Status != "unavailable" {
 		t.Fatalf("startup-incomplete readiness=%+v", snapshot)
 	}
@@ -599,7 +602,7 @@ func TestReadinessStartupMaintenanceWorkerAndManifestObjectEdges(t *testing.T) {
 		t.Fatalf("worker-drain readiness=%+v", snapshot)
 	}
 
-	startupRouter := &HTTPRouter{healthRegistry: healthplatform.NewRegistry(), healthCheckTimeout: time.Millisecond, manifest: manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}}}
+	startupRouter := &HTTPRouter{healthRegistry: newRuntimeHealthRegistry(), healthCheckTimeout: time.Millisecond, manifest: manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}}}
 	startupRouter.MarkStartupComplete()
 	response := httptest.NewRecorder()
 	startupRouter.startup(response, httptest.NewRequest(http.MethodGet, "/startup", nil))
@@ -710,12 +713,12 @@ func TestCompleteRouterCompositionSmokeAndCallbacks(t *testing.T) {
 	}
 	calls := 0
 	registrar := routerCountingRegistrar{calls: &calls}
-	router.recordHTTP, router.surfaceContextHTTP, router.uploadHTTP, router.discoveryHTTP, router.openAPIHTTP = registrar, registrar, registrar, registrar, registrar
-	router.workflowHTTP, router.automationHTTP, router.schedulerHTTP, router.reportHTTP = registrar, registrar, registrar, registrar
+	router.recordHTTP, router.uploadHTTP, router.discoveryHTTP, router.openAPIHTTP = registrar, registrar, registrar, registrar
+	router.workflowHTTP, router.automationHTTP, router.schedulerHTTP = registrar, registrar, registrar
 	router.businessReferenceHTTP, router.businessSystemHTTP, router.capabilityHTTP = registrar, registrar, registrar
-	router.applicationSchemaHTTP, router.notificationHTTP, router.agentDialogHTTP, router.operationsHTTP = registrar, registrar, registrar, registrar
+	router.applicationSchemaHTTP, router.notificationHTTP, router.operationsHTTP = registrar, registrar, registrar
 	handler := router.Routes()
-	if calls != 16 {
+	if calls != 14 {
 		t.Fatalf("registrar calls=%d", calls)
 	}
 	for _, test := range []struct {
@@ -738,7 +741,7 @@ func TestCompleteRouterCompositionSmokeAndCallbacks(t *testing.T) {
 
 func TestAuthorizedHealthAndAuditPrincipalSources(t *testing.T) {
 	releaseIdentity := RuntimeReleaseIdentity{ContractVersion: "domainry-runtime-release-identity-v1", BuildMode: "packaged", CombinationSHA256: strings.Repeat("a", 64)}
-	router := &HTTPRouter{runtimeStatus: routerRuntimeStatusStub{}, healthRegistry: healthplatform.NewRegistry(), healthCheckTimeout: time.Second, httpMetrics: NewMemoryHTTPMetricsCollector(2), capacityController: capacityplatform.NewController(capacityplatform.Limits{}, nil), releaseIdentity: releaseIdentity}
+	router := &HTTPRouter{runtimeStatus: routerRuntimeStatusStub{}, healthRegistry: newRuntimeHealthRegistry(), healthCheckTimeout: time.Second, httpMetrics: NewMemoryHTTPMetricsCollector(2), capacityController: capacityplatform.NewController(capacityplatform.Limits{}, nil), releaseIdentity: releaseIdentity}
 	router.MarkStartupComplete()
 	admin := routerTestPrincipal(identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace"}, "workspace.admin")
 	response := httptest.NewRecorder()
@@ -774,7 +777,7 @@ func TestAuthorizedHealthAndAuditPrincipalSources(t *testing.T) {
 }
 
 func TestLastRouterConditionEdges(t *testing.T) {
-	router := &HTTPRouter{healthRegistry: healthplatform.NewRegistry(), runtimeInstanceID: "runtime"}
+	router := &HTTPRouter{healthRegistry: newRuntimeHealthRegistry(), runtimeInstanceID: "runtime"}
 	router.operationsControlState = func(_ context.Context, kind, _ string) (bool, bool, error) {
 		if kind == "maintenance" {
 			return false, false, errors.New("maintenance unavailable")
@@ -786,8 +789,8 @@ func TestLastRouterConditionEdges(t *testing.T) {
 		t.Fatalf("refresh state maintenance=%v draining=%v", router.healthRegistry.Maintenance(), router.healthRegistry.Draining())
 	}
 
-	configured := UseHandlers(&HTTPRouter{}, HTTPRouterHandlers{Notifications: &notificationhttp.NotificationsHandler{}, AgentDialog: &agentdialoghttp.AgentDialogHandler{}})
-	if configured.notificationHTTP == nil || configured.agentDialogHTTP == nil {
+	configured := UseHandlers(&HTTPRouter{}, HTTPRouterHandlers{Notifications: &notificationhttp.NotificationsHandler{}})
+	if configured.notificationHTTP == nil {
 		t.Fatal("optional handlers were not retained")
 	}
 
@@ -846,17 +849,16 @@ func TestLastRouterConditionEdges(t *testing.T) {
 }
 
 func TestHTTPPrincipalBusinessProfileSelectionIsServerResolvedAndFailClosed(t *testing.T) {
-	resolved := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "workspace-primary"}, SurfaceKey: "portal", BusinessClaims: map[string]profilebindingmodel.ClaimValue{"member_no": {Type: "text", Value: "M-1"}}}
+	resolved := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "workspace-primary"}, BusinessClaims: map[string]profilebindingmodel.ClaimValue{"member_no": {Type: "text", Value: "M-1"}}}
 	business := &routerBusinessPrincipalStub{principal: resolved}
 	router := &HTTPRouter{businessPrincipal: business}
 	request := requestWithPrincipal(httptest.NewRequest(http.MethodGet, "/", nil), principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "workspace-primary"}})
-	request.Header.Set("X-Surface-Key", "portal")
 	request.Header.Set("X-Business-Profile-Key", "member")
 	request.Header.Set("X-Business-Profile-ID", "member-1")
 	if principal := router.principalFromRequest(request); !principal.Known || principal.BusinessClaims["member_no"].Value != "M-1" {
 		t.Fatalf("resolved business principal=%#v", principal)
 	}
-	if business.selection != [3]string{"portal", "member", "member-1"} {
+	if business.selection != [2]string{"member", "member-1"} {
 		t.Fatalf("selection headers=%#v", business.selection)
 	}
 

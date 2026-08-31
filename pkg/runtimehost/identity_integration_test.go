@@ -52,11 +52,11 @@ func TestProjectHostMountsModuleIdentityHTTPOutsideRuntime(t *testing.T) {
 		w.WriteHeader(http.StatusAccepted)
 	})
 
-	public, err := mountIdentityHTTPSurfaces(runtimehttp.SurfaceRouteGroupPublic, []identityhttpapi.Surface{surface}, runtimeHandler)
+	public, err := mountIdentityHTTPSurfaces(runtimehttp.ListenerRouteGroupPublic, []identityhttpapi.Surface{surface}, runtimeHandler)
 	if err != nil {
 		t.Fatal(err)
 	}
-	admin, err := mountIdentityHTTPSurfaces(runtimehttp.SurfaceRouteGroupTenantAdmin, []identityhttpapi.Surface{surface}, runtimeHandler)
+	admin, err := mountIdentityHTTPSurfaces(runtimehttp.ListenerRouteGroupTenantAdmin, []identityhttpapi.Surface{surface}, runtimeHandler)
 	if err != nil {
 		t.Fatal(err)
 	}

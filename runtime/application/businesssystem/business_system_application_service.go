@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
@@ -33,11 +34,11 @@ import (
 )
 
 type BusinessSystemApplicationDependencies struct {
-	FeaturePermissions     func(context.Context, principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error)
-	SchemaForPrincipal     func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
-	ApplicationDefinitions func(context.Context, string, string, principalmodel.Principal) ([]appschemamodel.ApplicationDefinition, error)
-	Evidence               changeplanrepository.ChangePlanEvidenceRepository
-	Runtime                BusinessSystemRuntimeProjectionDependencies
+	FeaturePermissions func(context.Context, principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error)
+	SchemaForPrincipal func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
+	Definitions        metadatasdk.Definitions
+	Evidence           changeplanrepository.ChangePlanEvidenceRepository
+	Runtime            BusinessSystemRuntimeProjectionDependencies
 }
 
 // businessSystemSnapshotPorts contains only the owner reads required to build
@@ -45,7 +46,7 @@ type BusinessSystemApplicationDependencies struct {
 type businessSystemSnapshotPorts struct {
 	featurePermissions  func(context.Context, principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error)
 	schemaForPrincipal  func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
-	metadataDefinitions func(context.Context, string, string, principalmodel.Principal) ([]appschemamodel.ApplicationDefinition, error)
+	metadataDefinitions metadatasdk.Definitions
 }
 
 // BusinessSystemApplicationService is the cross-domain snapshot composition
@@ -61,7 +62,7 @@ func NewBusinessSystemApplicationService(dependencies BusinessSystemApplicationD
 		snapshotProjection: businessSystemSnapshotPorts{
 			featurePermissions:  dependencies.FeaturePermissions,
 			schemaForPrincipal:  dependencies.SchemaForPrincipal,
-			metadataDefinitions: dependencies.ApplicationDefinitions,
+			metadataDefinitions: dependencies.Definitions,
 		},
 		evidence:          dependencies.Evidence,
 		runtimeProjection: newBusinessSystemRuntimeProjectionPorts(dependencies.Runtime),
@@ -120,8 +121,11 @@ func (s *BusinessSystemApplicationService) Snapshot(ctx context.Context, princip
 
 func (s *BusinessSystemApplicationService) businessResourceSources(ctx context.Context, principal principalmodel.Principal) ([]changeplanprojection.SystemResourceSource, error) {
 	items := []changeplanprojection.SystemResourceSource{}
+	if s.snapshotProjection.metadataDefinitions == nil {
+		return nil, businessSystemInternalError("list Metadata definitions", nil)
+	}
 	for _, resourceType := range appschemavalidation.ApplicationSchemaBusinessResourceTypes() {
-		definitions, err := s.snapshotProjection.metadataDefinitions(ctx, resourceType, businessSystemPrincipalWorkspaceID(principal), principal)
+		definitions, err := s.snapshotProjection.metadataDefinitions.List(ctx, metadatasdk.DefinitionQuery{ResourceType: resourceType})
 		if err != nil {
 			return nil, err
 		}

@@ -9,10 +9,10 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	notificationfacade "github.com/domainry/domainry-runtime/runtime/application/notificationfacade"
-	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -54,7 +54,6 @@ func newProjectRecordNotificationActionAuthorizer(getRecord func(context.Context
 }
 
 type workflowTaskLookup func(context.Context, string, string) (workflowmodel.WorkflowTask, bool, error)
-type schedulerDefinitionLookup func(context.Context, principalmodel.SystemScope, string, string) (appschemamodel.ApplicationDefinition, bool, error)
 type reportCatalogLookup func(context.Context, principalmodel.Principal) []reportmodel.ReportSchema
 type automationRuleLookup func(context.Context, string, principalmodel.Principal) (automationmodel.AutomationRuleSchema, error)
 type notificationIntentPublisher func(context.Context, notificationmodel.NotificationIntent, principalmodel.SystemScope) (notificationmodel.NotificationEvent, bool, error)
@@ -122,14 +121,16 @@ func newWorkflowTaskNotificationActionAuthorizer(lookup workflowTaskLookup) func
 	}
 }
 
-func newSchedulerNotificationActionAuthorizer(lookup schedulerDefinitionLookup) func(context.Context, string, principalmodel.Principal) error {
+func newSchedulerNotificationActionAuthorizer(definitions metadatasdk.Definitions) func(context.Context, string, principalmodel.Principal) error {
 	return func(ctx context.Context, resourceID string, principal principalmodel.Principal) error {
 		allowed := principal.HasPermission("workspace.admin") || principal.HasPermission("scheduler.definition.read")
 		if !allowed {
 			return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.notification.inbox_action_forbidden"}
 		}
-		scope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "authorize scheduler notification action")
-		_, found, err := lookup(ctx, scope, "scheduler", resourceID)
+		if definitions == nil {
+			return &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.notification.inbox_action_unavailable"}
+		}
+		_, found, err := definitions.Get(ctx, "scheduler", resourceID)
 		if err != nil {
 			return err
 		}

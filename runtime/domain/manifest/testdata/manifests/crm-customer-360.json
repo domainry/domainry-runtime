@@ -447,615 +447,6 @@
           "required": true
         }
       ]
-    },
-    {
-      "key": "job_definition",
-      "name": "Job Definition",
-      "description": "System scheduler definitions used by shared workflow operations.",
-      "fields": [
-        {
-          "key": "key",
-          "name": "Job Key",
-          "type": "text",
-          "required": true
-        },
-        {
-          "key": "name",
-          "name": "Name",
-          "type": "text",
-          "required": true
-        },
-        {
-          "key": "status",
-          "name": "Status",
-          "type": "select",
-          "required": true,
-          "validation": {
-            "options": [
-              "draft",
-              "enabled",
-              "paused",
-              "disabled",
-              "archived"
-            ]
-          }
-        },
-        {
-          "key": "trigger_type",
-          "name": "Trigger Type",
-          "type": "select",
-          "required": true,
-          "validation": {
-            "options": [
-              "scheduled",
-              "manual",
-              "workflow",
-              "object_scan",
-              "external_event"
-            ]
-          }
-        },
-        {
-          "key": "schedule_type",
-          "name": "Schedule Type",
-          "type": "select",
-          "required": false,
-          "validation": {
-            "options": [
-              "interval",
-              "daily_at",
-              "weekly_at",
-              "monthly_at",
-              "cron"
-            ]
-          }
-        },
-        {
-          "key": "schedule_expression",
-          "name": "Schedule Expression",
-          "type": "text",
-          "required": false
-        },
-        {
-          "key": "time_of_day",
-          "name": "Time Of Day",
-          "type": "text",
-          "required": false
-        },
-        {
-          "key": "day_of_week",
-          "name": "Day Of Week",
-          "type": "text",
-          "required": false
-        },
-        {
-          "key": "day_of_month",
-          "name": "Day Of Month",
-          "type": "number",
-          "required": false
-        },
-        {
-          "key": "interval_seconds",
-          "name": "Interval Seconds",
-          "type": "number",
-          "required": false
-        },
-        {
-          "key": "interval_minutes",
-          "name": "Interval Minutes",
-          "type": "number",
-          "required": false
-        },
-        {
-          "key": "interval_hours",
-          "name": "Interval Hours",
-          "type": "number",
-          "required": false
-        },
-        {
-          "key": "missed_window_policy",
-          "name": "Missed Window Policy",
-          "type": "select",
-          "required": false,
-          "validation": {
-            "options": [
-              "skip",
-              "catch_up_one",
-              "catch_up_bounded"
-            ]
-          }
-        },
-        {
-          "key": "max_catchup_windows",
-          "name": "Max Catch-Up Windows",
-          "type": "number",
-          "required": false
-        },
-        {
-          "key": "timezone",
-          "name": "Timezone",
-          "type": "text",
-          "required": false
-        },
-        {
-          "key": "target_type",
-          "name": "Target Type",
-          "type": "select",
-          "required": true,
-          "validation": {
-            "options": [
-              "workflow",
-              "report_export"
-            ]
-          }
-        },
-        {
-          "key": "target_key",
-          "name": "Target Key",
-          "type": "text",
-          "required": true
-        },
-        {
-          "key": "target_object",
-          "name": "Target Object",
-          "type": "text",
-          "required": false
-        },
-        {
-          "key": "condition_json",
-          "name": "Condition JSON",
-          "type": "long_text",
-          "required": false
-        },
-        {
-          "key": "payload_json",
-          "name": "Payload JSON",
-          "type": "long_text",
-          "required": false
-        },
-        {
-          "key": "run_as_role",
-          "name": "Run As Role",
-          "type": "text",
-          "required": false
-        },
-        {
-          "key": "max_attempts",
-          "name": "Max Attempts",
-          "type": "number",
-          "required": true
-        },
-        {
-          "key": "retry_backoff",
-          "name": "Retry Backoff",
-          "type": "select",
-          "required": false,
-          "validation": {
-            "options": [
-              "fixed",
-              "exponential",
-              "capped_exponential"
-            ]
-          }
-        },
-        {
-          "key": "retry_delay_seconds",
-          "name": "Retry Delay Seconds",
-          "type": "number",
-          "required": false
-        },
-        {
-          "key": "retry_max_delay_seconds",
-          "name": "Max Retry Delay Seconds",
-          "type": "number",
-          "required": false
-        },
-        {
-          "key": "timeout_seconds",
-          "name": "Timeout Seconds",
-          "type": "number",
-          "required": true
-        },
-        {
-          "key": "idempotency_keys",
-          "name": "Idempotency Keys",
-          "type": "long_text",
-          "required": false
-        },
-        {
-          "key": "next_run_at",
-          "name": "Next Run At",
-          "type": "datetime",
-          "required": false
-        },
-        {
-          "key": "last_run_at",
-          "name": "Last Run At",
-          "type": "datetime",
-          "required": false
-        },
-        {
-          "key": "last_run_status",
-          "name": "Last Run Status",
-          "type": "text",
-          "required": false
-        },
-        {
-          "key": "description",
-          "name": "Description",
-          "type": "long_text",
-          "required": false
-        }
-      ],
-      "config": {
-        "system_object": true,
-        "scheduler_runtime": true,
-        "state_field": "status"
-      }
-    },
-    {
-      "key": "job_run",
-      "name": "Job Run",
-      "description": "System scheduler run evidence.",
-      "fields": [
-        {
-          "key": "job_definition_id",
-          "name": "Job Definition",
-          "type": "relation",
-          "required": true,
-          "validation": {
-            "target": "job_definition"
-          }
-        },
-        {
-          "key": "status",
-          "name": "Status",
-          "type": "select",
-          "required": true,
-          "validation": {
-            "options": [
-              "queued",
-              "leased",
-              "running",
-              "succeeded",
-              "failed",
-              "retrying",
-              "cancelled",
-              "dead_letter"
-            ]
-          }
-        },
-        {
-          "key": "triggered_by",
-          "name": "Triggered By",
-          "type": "select",
-          "required": true,
-          "validation": {
-            "options": [
-              "scheduler",
-              "manual",
-              "api",
-              "workflow",
-              "retry"
-            ]
-          }
-        },
-        {
-          "key": "scheduled_for",
-          "name": "Scheduled For",
-          "type": "datetime",
-          "required": true
-        },
-        {
-          "key": "started_at",
-          "name": "Started At",
-          "type": "datetime",
-          "required": false
-        },
-        {
-          "key": "finished_at",
-          "name": "Finished At",
-          "type": "datetime",
-          "required": false
-        },
-        {
-          "key": "lease_owner",
-          "name": "Lease Owner",
-          "type": "text",
-          "required": false
-        },
-        {
-          "key": "lease_expires_at",
-          "name": "Lease Expires At",
-          "type": "datetime",
-          "required": false
-        },
-        {
-          "key": "fencing_token",
-          "name": "Fencing Token",
-          "type": "number",
-          "required": false
-        },
-        {
-          "key": "attempt",
-          "name": "Attempt",
-          "type": "number",
-          "required": true
-        },
-        {
-          "key": "max_attempts",
-          "name": "Max Attempts",
-          "type": "number",
-          "required": true
-        },
-        {
-          "key": "timeout_seconds",
-          "name": "Timeout Seconds",
-          "type": "number",
-          "required": false
-        },
-        {
-          "key": "next_retry_at",
-          "name": "Next Retry At",
-          "type": "datetime",
-          "required": false
-        },
-        {
-          "key": "retry_backoff",
-          "name": "Retry Backoff",
-          "type": "text",
-          "required": false
-        },
-        {
-          "key": "retry_delay_seconds",
-          "name": "Retry Delay Seconds",
-          "type": "number",
-          "required": false
-        },
-        {
-          "key": "retry_max_delay_seconds",
-          "name": "Max Retry Delay Seconds",
-          "type": "number",
-          "required": false
-        },
-        {
-          "key": "retry_backoff_seconds",
-          "name": "Retry Backoff Seconds",
-          "type": "number",
-          "required": false
-        },
-        {
-          "key": "idempotency_scope",
-          "name": "Idempotency Scope",
-          "type": "text",
-          "required": false
-        },
-        {
-          "key": "idempotency_key",
-          "name": "Idempotency Key",
-          "type": "text",
-          "required": false
-        },
-        {
-          "key": "last_command_scope",
-          "name": "Last Command Scope",
-          "type": "text",
-          "required": false
-        },
-        {
-          "key": "last_command_key",
-          "name": "Last Command Key",
-          "type": "text",
-          "required": false
-        },
-        {
-          "key": "workflow_key",
-          "name": "Workflow Key",
-          "type": "text",
-          "required": false
-        },
-        {
-          "key": "workflow_execution_id",
-          "name": "Workflow Execution",
-          "type": "text",
-          "required": false
-        },
-        {
-          "key": "target_object",
-          "name": "Target Object",
-          "type": "text",
-          "required": false
-        },
-        {
-          "key": "target_record_id",
-          "name": "Target Record",
-          "type": "text",
-          "required": false
-        },
-        {
-          "key": "payload_json",
-          "name": "Payload JSON",
-          "type": "long_text",
-          "required": false
-        },
-        {
-          "key": "result_json",
-          "name": "Result JSON",
-          "type": "long_text",
-          "required": false
-        },
-        {
-          "key": "error_message",
-          "name": "Error Message",
-          "type": "long_text",
-          "required": false
-        },
-        {
-          "key": "error_category",
-          "name": "Error Category",
-          "type": "text",
-          "required": false
-        },
-        {
-          "key": "recoverability",
-          "name": "Recoverability",
-          "type": "text",
-          "required": false
-        }
-      ],
-      "config": {
-        "system_object": true,
-        "scheduler_runtime": true,
-        "state_field": "status"
-      }
-    },
-    {
-      "key": "job_run_event",
-      "name": "Job Run Event",
-      "description": "System scheduler run event evidence.",
-      "fields": [
-        {
-          "key": "job_run_id",
-          "name": "Job Run",
-          "type": "relation",
-          "required": true,
-          "validation": {
-            "target": "job_run"
-          }
-        },
-        {
-          "key": "event_type",
-          "name": "Event Type",
-          "type": "select",
-          "required": true,
-          "validation": {
-            "options": [
-              "created",
-              "lease_acquired",
-              "definition_cursor_advanced",
-              "state_changed",
-              "simulated",
-              "workflow_triggered",
-              "action_triggered",
-              "report_query_run_created",
-              "report_export_audit_created",
-              "download_task_created",
-              "retry_scheduled",
-              "dead_lettered",
-              "dead_letter_resolved",
-              "cancelled"
-            ]
-          }
-        },
-        {
-          "key": "message",
-          "name": "Message",
-          "type": "long_text",
-          "required": false
-        },
-        {
-          "key": "metadata_json",
-          "name": "Metadata JSON",
-          "type": "long_text",
-          "required": false
-        },
-        {
-          "key": "created_at",
-          "name": "Created At",
-          "type": "datetime",
-          "required": true
-        }
-      ],
-      "config": {
-        "system_object": true,
-        "scheduler_runtime": true
-      }
-    },
-    {
-      "key": "job_dead_letter",
-      "name": "Job Dead Letter",
-      "description": "System scheduler dead-letter evidence.",
-      "fields": [
-        {
-          "key": "job_run_id",
-          "name": "Job Run",
-          "type": "relation",
-          "required": true,
-          "validation": {
-            "target": "job_run"
-          }
-        },
-        {
-          "key": "job_definition_id",
-          "name": "Job Definition",
-          "type": "relation",
-          "required": true,
-          "validation": {
-            "target": "job_definition"
-          }
-        },
-        {
-          "key": "status",
-          "name": "Status",
-          "type": "select",
-          "required": true,
-          "validation": {
-            "options": [
-              "open",
-              "retrying",
-              "resolved",
-              "ignored"
-            ]
-          }
-        },
-        {
-          "key": "reason",
-          "name": "Reason",
-          "type": "long_text",
-          "required": true
-        },
-        {
-          "key": "last_error",
-          "name": "Last Error",
-          "type": "long_text",
-          "required": false
-        },
-        {
-          "key": "failed_at",
-          "name": "Failed At",
-          "type": "datetime",
-          "required": true
-        },
-        {
-          "key": "resolved_at",
-          "name": "Resolved At",
-          "type": "datetime",
-          "required": false
-        },
-        {
-          "key": "resolved_by",
-          "name": "Resolved By",
-          "type": "text",
-          "required": false
-        },
-        {
-          "key": "resolution_note",
-          "name": "Resolution Note",
-          "type": "long_text",
-          "required": false
-        },
-        {
-          "key": "resolution_idempotency_key",
-          "name": "Resolution Idempotency Key",
-          "type": "text",
-          "required": false
-        }
-      ],
-      "config": {
-        "system_object": true,
-        "scheduler_runtime": true,
-        "state_field": "status"
-      }
     }
   ],
   "views": [
@@ -2189,11 +1580,38 @@
       "key": "crm_pipeline_health",
       "name": "Pipeline Health",
       "dataset": {
-        "source": {"object_key": "customer", "alias": "customer"},
-        "joins": [{"alias": "opportunity", "object_key": "opportunity", "type": "left", "left_alias": "customer", "left_field": "id", "right_field": "customer", "cardinality": "one_to_many"}],
+        "source": {
+          "object_key": "customer",
+          "alias": "customer"
+        },
+        "joins": [
+          {
+            "alias": "opportunity",
+            "object_key": "opportunity",
+            "type": "left",
+            "left_alias": "customer",
+            "left_field": "id",
+            "right_field": "customer",
+            "cardinality": "one_to_many"
+          }
+        ],
         "measures": [
-          {"key": "customer_count", "operation": "distinct_count", "field": {"source_alias": "customer", "field_key": "id"}},
-          {"key": "opportunity_count", "operation": "distinct_count", "field": {"source_alias": "opportunity", "field_key": "id"}}
+          {
+            "key": "customer_count",
+            "operation": "distinct_count",
+            "field": {
+              "source_alias": "customer",
+              "field_key": "id"
+            }
+          },
+          {
+            "key": "opportunity_count",
+            "operation": "distinct_count",
+            "field": {
+              "source_alias": "opportunity",
+              "field_key": "id"
+            }
+          }
         ]
       },
       "required_permissions": [
@@ -2204,9 +1622,19 @@
       "key": "crm_activity_coverage",
       "name": "Activity Coverage",
       "dataset": {
-        "source": {"object_key": "activity", "alias": "activity"},
+        "source": {
+          "object_key": "activity",
+          "alias": "activity"
+        },
         "measures": [
-          {"key": "activity_count", "operation": "distinct_count", "field": {"source_alias": "activity", "field_key": "id"}}
+          {
+            "key": "activity_count",
+            "operation": "distinct_count",
+            "field": {
+              "source_alias": "activity",
+              "field_key": "id"
+            }
+          }
         ]
       },
       "required_permissions": [
@@ -2217,11 +1645,38 @@
       "key": "crm_revenue_collection",
       "name": "Revenue Collection",
       "dataset": {
-        "source": {"object_key": "contract", "alias": "contract"},
-        "joins": [{"alias": "payment", "object_key": "payment", "type": "left", "left_alias": "contract", "left_field": "id", "right_field": "contract", "cardinality": "one_to_many"}],
+        "source": {
+          "object_key": "contract",
+          "alias": "contract"
+        },
+        "joins": [
+          {
+            "alias": "payment",
+            "object_key": "payment",
+            "type": "left",
+            "left_alias": "contract",
+            "left_field": "id",
+            "right_field": "contract",
+            "cardinality": "one_to_many"
+          }
+        ],
         "measures": [
-          {"key": "contract_count", "operation": "distinct_count", "field": {"source_alias": "contract", "field_key": "id"}},
-          {"key": "payment_count", "operation": "distinct_count", "field": {"source_alias": "payment", "field_key": "id"}}
+          {
+            "key": "contract_count",
+            "operation": "distinct_count",
+            "field": {
+              "source_alias": "contract",
+              "field_key": "id"
+            }
+          },
+          {
+            "key": "payment_count",
+            "operation": "distinct_count",
+            "field": {
+              "source_alias": "payment",
+              "field_key": "id"
+            }
+          }
         ]
       },
       "required_permissions": [
@@ -2617,8 +2072,6 @@
         "admin_console.access",
         "workspace.admin",
         "scheduler.command",
-        "scheduler.definition.run",
-        "job_run.update",
         "integration.catalog.view",
         "integration.audit.view",
         "integration.retry",
@@ -2633,12 +2086,6 @@
           "scope": "all_records",
           "read": true,
           "write": false
-        },
-        {
-          "object_key": "job_run",
-          "scope": "all_records",
-          "read": true,
-          "write": true
         }
       ]
     }
@@ -2808,87 +2255,6 @@
         "amount": 8000,
         "due_at": "2026-07-01",
         "owner": "finance_reviewer"
-      }
-    },
-    {
-      "object_key": "job_definition",
-      "data": {
-        "__seed_key": "scheduler_daily_workflow_scan_seed",
-        "key": "scheduler_daily_workflow_scan_seed",
-        "name": "Daily Workflow Scan Seed",
-        "status": "enabled",
-        "trigger_type": "scheduled",
-        "schedule_expression": "daily",
-        "timezone": "UTC",
-        "target_type": "workflow",
-        "target_key": "scheduled:*",
-        "condition_json": "{}",
-        "payload_json": "{}",
-        "run_as_role": "system",
-        "max_attempts": 3,
-        "retry_backoff": "fixed",
-        "retry_delay_seconds": 60,
-        "retry_max_delay_seconds": 3600,
-        "missed_window_policy": "skip",
-        "max_catchup_windows": 0,
-        "timeout_seconds": 300,
-        "idempotency_keys": "workflow_key,record_id,scheduled_at,due_at",
-        "next_run_at": "2026-01-01T00:00:00Z",
-        "last_run_status": "seeded"
-      }
-    },
-    {
-      "object_key": "job_run",
-      "data": {
-        "__seed_key": "scheduler_seed_run_succeeded",
-        "job_definition_id": "$record:scheduler_daily_workflow_scan_seed",
-        "status": "succeeded",
-        "triggered_by": "scheduler",
-        "scheduled_for": "2026-07-01T00:00:00Z",
-        "started_at": "2026-07-01T00:00:01Z",
-        "finished_at": "2026-07-01T00:00:02Z",
-        "attempt": 1,
-        "max_attempts": 3,
-        "timeout_seconds": 300,
-        "next_retry_at": "",
-        "retry_backoff": "fixed",
-        "retry_delay_seconds": 60,
-        "retry_max_delay_seconds": 3600,
-        "retry_backoff_seconds": 0,
-        "idempotency_key": "seed:scheduler_seed_run_succeeded",
-        "workflow_key": "scheduled:*",
-        "target_object": "payment",
-        "payload_json": "{}",
-        "result_json": "{\"seeded\":true}",
-        "error_message": "",
-        "error_category": "",
-        "recoverability": ""
-      }
-    },
-    {
-      "object_key": "job_run_event",
-      "data": {
-        "__seed_key": "scheduler_seed_event_workflow_triggered",
-        "job_run_id": "$record:scheduler_seed_run_succeeded",
-        "event_type": "workflow_triggered",
-        "message": "Seed scheduler workflow evidence",
-        "metadata_json": "{\"workflow_key\":\"payment.overdue_escalation\"}",
-        "created_at": "2026-07-01T00:00:02Z"
-      }
-    },
-    {
-      "object_key": "job_dead_letter",
-      "data": {
-        "__seed_key": "scheduler_seed_dead_letter_resolved",
-        "job_run_id": "$record:scheduler_seed_run_succeeded",
-        "job_definition_id": "$record:scheduler_daily_workflow_scan_seed",
-        "status": "resolved",
-        "reason": "Seed resolved scheduler exception",
-        "last_error": "seeded example",
-        "failed_at": "2026-07-01T00:00:03Z",
-        "resolved_at": "2026-07-01T00:10:00Z",
-        "resolved_by": "sales_manager",
-        "resolution_note": "Seed evidence only."
       }
     }
   ]

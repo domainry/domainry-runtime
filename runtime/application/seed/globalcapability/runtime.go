@@ -5,7 +5,7 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	schedulerprojection "github.com/domainry/domainry-runtime/runtime/domain/scheduler/projection"
+	recordtimerprojection "github.com/domainry/domainry-runtime/runtime/domain/recordtimer/projection"
 
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
@@ -21,7 +21,7 @@ import (
 )
 
 func WithGeneratedSchema(manifest manifestmodel.ManifestSchema) manifestmodel.ManifestSchema {
-	systemObjects := schedulerprojection.SchedulerSystemObjects()
+	systemObjects := recordtimerprojection.RecordTimerSystemObjects()
 	manifest.Objects = MergeSystemObjects(manifest.Objects, systemObjects)
 	manifest.Dictionaries = MergeDictionaries(manifest.Dictionaries, generatedGlobalDictionaries())
 	manifest.Workflows = MergeWorkflows(manifest.Workflows, generatedGlobalWorkflows())

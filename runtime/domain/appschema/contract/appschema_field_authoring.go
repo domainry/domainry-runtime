@@ -20,7 +20,7 @@ func ApplicationSchemaFieldAuthoringCapability() capabilitycontract.CapabilityAu
 			{Key: "currency_code", Type: "currency_code", Format: "iso-4217", RequiredWhen: map[string]any{"type": "currency"}, Default: "XXX"},
 		},
 		Permissions: []string{"metadata.read", "metadata.write"}, AuditEvents: []string{"metadata_definition_upserted"},
-		ValidationEndpoint: "POST /metadata/definitions/field/{resourceKey}/validate", ConfigurationRoutes: metadataConfigurationRoutes("field"),
+		ValidationEndpoint: "POST /tenant-admin/metadata/definitions/field/{resourceKey}/validate", ConfigurationRoutes: metadataConfigurationRoutes("field"),
 		ResourceOperations:       metadataResourceOperations("field"),
 		ResourceKeyPathParameter: "resourceKey",
 		InputSchema:              metadataAuthoringRequestSchema(payload, true), OutputSchema: metadataAuthoringOutputSchema(payload),

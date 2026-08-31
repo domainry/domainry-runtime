@@ -180,7 +180,7 @@ func TestExecuteOwnerOperationRejectsRunningReplayWithoutRepeatingOwner(t *testi
 func TestExecuteOwnerOperationValidationMarshalAndPersistenceFailures(t *testing.T) {
 	principal := operationsAdminPrincipal()
 	service := NewOperationsApplicationService(&operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}, nil, nil, func() string { return "owner-edge" })
-	if _, err := service.ExecuteOwnerOperation(t.Context(), OperationsOwnerExecutionRequest{Kind: "backup.restore", ResourceType: "job_run"}, principal, func(context.Context) (any, error) { return nil, nil }); apperror.CodeOf(err) != "backend.operations.definition_mismatch" {
+	if _, err := service.ExecuteOwnerOperation(t.Context(), OperationsOwnerExecutionRequest{Kind: "backup.restore", ResourceType: "scheduler_run"}, principal, func(context.Context) (any, error) { return nil, nil }); apperror.CodeOf(err) != "backend.operations.definition_mismatch" {
 		t.Fatalf("definition err=%v", err)
 	}
 	request := OperationsOwnerExecutionRequest{Kind: "scheduler.run.retry", ResourceType: "scheduler_run", ResourceID: "run-1", Reason: "recover", Key: "retry"}

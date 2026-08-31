@@ -28,7 +28,7 @@ After Automation consumes a committed event or Outbox fact. Downstream Action or
 
 ## Pre-release migration
 
-This repository has not been deployed to production, so Runtime does not preserve legacy execution semantics. The machine-readable inventory at `runtime/boundary/testdata/mutation_entrypoint_inventory_v1.json` identifies duplicate owners so they can be removed. Repository fixtures and tests migrate in the same change. Facades may preserve a stable use-case shape, but fallback planners, validators, committers and dual execution branches are forbidden. A new strong-consistency write capability may not be added to an unregistered entrypoint.
+This repository has not been deployed to production, so Runtime does not preserve legacy execution semantics. Duplicate owners are removed together with their fixtures and tests. Facades may preserve a stable use-case shape, but fallback planners, validators, committers and dual execution branches are forbidden. New strong-consistency write capabilities require owner-local transaction and failure-window tests.
 
 Internal projection writes require an explicit object allowlist and system scope. This is a narrow exception, not a generic repository bypass.
 
@@ -37,4 +37,4 @@ Internal projection writes require an explicit object allowlist and system scope
 - Single-record CRUD becomes a one-plan commit; atomic Action batches become a multi-plan single commit.
 - Workflow business nodes invoke published Actions.
 - Simulation and execution consume the same planner output.
-- Architecture tests reject missing inventory owners, unknown entrypoints and unreviewed repository bypasses.
+- Owner-local tests prove mutation planning, transaction behavior and repository bypass protection.

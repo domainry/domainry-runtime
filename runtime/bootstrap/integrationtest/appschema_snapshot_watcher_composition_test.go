@@ -31,7 +31,8 @@ func TestMetadataSnapshotWatcherInvalidatesSecondRuntimeFromSharedDatabase(t *te
 		t.Fatal(err)
 	}
 	manifest := manifestmodel.ManifestSchema{TemplateID: "shared", Version: "1", Name: "Shared", Objects: []definitionmodel.ObjectSchema{{Key: "account", Name: "Account"}}}
-	if err := appschemapersistence.NewApplicationSchemaStore(store).EnsureManifestMetadata(t.Context(), manifest); err != nil {
+	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "test metadata snapshot watcher")
+	if err := appschemapersistence.NewApplicationSchemaStore(store).SyncManifestProjection(t.Context(), scope, manifest); err != nil {
 		t.Fatal(err)
 	}
 	repository := appschemapersistence.NewApplicationSchemaStore(store)
@@ -40,7 +41,6 @@ func TestMetadataSnapshotWatcherInvalidatesSecondRuntimeFromSharedDatabase(t *te
 		Dependencies: composition.RuntimeServicesDependencies{ApplicationSchema: repository, WorkflowDefinitions: workflowpersistence.NewWorkflowDefinitionStore(store)},
 	})
 	ctx, cancel := context.WithCancel(t.Context())
-	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "test metadata snapshot watcher")
 	done := second.Applications().ApplicationSchema.StartSnapshotWatcher(ctx, 5*time.Millisecond, scope)
 	time.Sleep(15 * time.Millisecond)
 	updated := manifest
@@ -50,7 +50,7 @@ func TestMetadataSnapshotWatcherInvalidatesSecondRuntimeFromSharedDatabase(t *te
 	// Publish through the metadata projection owner. SyncManifest is the
 	// physical business-table materializer and intentionally does not publish
 	// definition revisions for peer Runtime instances.
-	if err := repository.SyncManifestMetadata(t.Context(), updated); err != nil {
+	if err := repository.SyncManifestProjection(t.Context(), scope, updated); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(time.Second)

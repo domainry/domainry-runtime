@@ -3,6 +3,7 @@ package transport
 import (
 	"net/http"
 
+	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
@@ -59,17 +60,21 @@ func (a *httpServerAssembly) wireMetadataAndBusinessHandlers() {
 		DecodeJSON: a.callbacks.DecodeJSON, SecurityAudit: a.callbacks.SecurityAuditForPrincipal, Admin: a.identityHTTP.PermissionFunc("workspace.admin"),
 		Authenticated: a.identityHTTP.AuthenticatedFunc,
 	})
+	var lifecycleGovernance lifecyclesdk.Governance
+	if a.dependencies.LifecycleBinding != nil {
+		lifecycleGovernance = a.dependencies.LifecycleBinding.Governance()
+	}
 	a.handlers.Lifecycle = lifecyclehttp.NewLifecycleHandler(lifecyclehttp.LifecycleDependencies{
-		Service: records.Applications().Lifecycle, Operations: operationsService,
+		Service: lifecycleGovernance, Operations: operationsService,
 		Principal: a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
-		WriteServiceError: a.callbacks.WriteServiceError, DecodeJSON: a.callbacks.DecodeJSON,
-		Authenticated: a.identityHTTP.AuthenticatedFunc,
+		WriteServiceError: a.callbacks.WriteServiceError,
+		Authenticated:     a.identityHTTP.AuthenticatedFunc,
 	})
 	a.handlers.ApplicationSchema = appschemahttp.NewApplicationSchemaHandler(appschemahttp.ApplicationSchemaDependencies{
-		Definitions: a.metadata, LocalizedTexts: a.metadata, RuntimeCatalog: a.metadata,
+		Definitions: a.metadata, RuntimeCatalog: a.metadata,
 		Capabilities: records.Applications().AuthoringCapabilities,
-		Audit:        records.Applications().Audit, Principal: a.callbacks.Principal,
-		WriteJSON: a.callbacks.WriteJSON, WriteError: a.callbacks.WriteError,
+		Principal:    a.callbacks.Principal,
+		WriteJSON:    a.callbacks.WriteJSON, WriteError: a.callbacks.WriteError,
 		WriteServiceError: a.callbacks.WriteServiceError, DecodeJSON: a.callbacks.DecodeJSON,
 		Admin: a.identityHTTP.PermissionFunc("workspace.admin"), Authenticated: a.identityHTTP.AuthenticatedFunc, LegacyHeaders: capabilityhttp.WriteLegacyProjectionHeaders,
 		ProvisionRequired: a.callbacks.ProvisionRequired,

@@ -211,15 +211,6 @@ func TestWorkflowDecisionStoreTransactionFailures(t *testing.T) {
 		{"state insert node", workflowSQLState{execSteps: []workflowSQLExecStep{{err: errWorkflowSQL}}}, func(store WorkflowDecisionStore) error {
 			return store.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "workspace", InsertNodes: []workflowmodel.WorkflowNodeInstance{{ID: "node"}}})
 		}},
-		{"state insert agent task", workflowSQLState{execSteps: []workflowSQLExecStep{{err: errWorkflowSQL}}}, func(store WorkflowDecisionStore) error {
-			return store.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "workspace", InsertAgentTasks: []transactionmodel.WorkflowAgentTaskCommit{{RunID: "run"}}})
-		}},
-		{"state update agent task exec", workflowSQLState{execSteps: []workflowSQLExecStep{{err: errWorkflowSQL}}}, func(store WorkflowDecisionStore) error {
-			return store.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "workspace", UpdateAgentTasks: []transactionmodel.WorkflowAgentTaskCommit{{RunID: "run"}}})
-		}},
-		{"state update agent task rows", workflowSQLState{execSteps: []workflowSQLExecStep{{rowsErr: errWorkflowSQL}}}, func(store WorkflowDecisionStore) error {
-			return store.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "workspace", UpdateAgentTasks: []transactionmodel.WorkflowAgentTaskCommit{{RunID: "run"}}})
-		}},
 		{"state insert execution encoding", workflowSQLState{}, func(store WorkflowDecisionStore) error {
 			return store.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "workspace", InsertExecutions: []workflowmodel.WorkflowExecution{{ID: "execution", Action: map[string]any{"bad": make(chan int)}}}})
 		}},

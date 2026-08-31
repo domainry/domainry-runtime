@@ -4,8 +4,10 @@ import (
 	"errors"
 	"net/http"
 	"testing"
+	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -63,6 +65,36 @@ func TestSchedulerTenantAndOpsReadSurfaceRemainingEdges(t *testing.T) {
 	}
 }
 
+func TestSchedulerOpsStateProjectsOnlyOwnerRunAndDeadLetterContracts(t *testing.T) {
+	now := time.Date(2026, 8, 31, 9, 30, 0, 0, time.UTC)
+	service := &fakeSchedulerService{
+		runs: []schedulersdk.Run{{
+			Trigger: schedulersdk.Trigger{RunID: "run-a", DefinitionKey: "daily", Attempt: 2, ScheduledFor: now},
+			Status:  "dead_letter", LastError: "target timeout", CreatedAt: now.Add(-time.Minute), UpdatedAt: now,
+		}},
+		deadLetters: []schedulersdk.DeadLetter{{RunID: "run-a", DefinitionKey: "daily", Status: "open", Reason: "target timeout", FailedAt: now}},
+	}
+	result := &schedulerHTTPResult{}
+	handler := newSchedulerHTTPHandler(result)
+	handler.service = service
+	handler.binding = service
+	handler.principal = func(*http.Request) principalmodel.Principal {
+		return principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-a", UserID: "operator-a"}}
+	}
+	writer, request := schedulerHTTPRequest("", nil)
+	handler.getOpsSchedulerState(writer, request)
+	state, ok := result.value.(opsSchedulerStateDTO)
+	if result.status != http.StatusOK || result.err != nil || !ok || !state.Provisioned {
+		t.Fatalf("status=%d err=%v state=%#v", result.status, result.err, result.value)
+	}
+	if len(state.Runs) != 1 || state.Runs[0].ID != "run-a" || state.Runs[0].DefinitionKey != "daily" || state.Runs[0].ErrorMessage != "target timeout" {
+		t.Fatalf("runs=%+v", state.Runs)
+	}
+	if len(state.DeadLetters) != 1 || state.DeadLetters[0].ID != "run-a" || state.DeadLetters[0].Status != "open" {
+		t.Fatalf("dead letters=%+v", state.DeadLetters)
+	}
+}
+
 func TestSchedulerHandlerPreservesExplicitAuthenticatedMiddleware(t *testing.T) {
 	authenticated := func(handler http.HandlerFunc) http.HandlerFunc { return handler }
 	handler := NewSchedulerHandler(SchedulerDependencies{Authenticated: authenticated})
@@ -96,7 +128,7 @@ func TestSchedulerOpsMutationSurfaceRemainingEdges(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			for _, wantErr := range []bool{false, true} {
-				service := &fakeSchedulerService{result: schedulerapplication.SchedulerOperationResult{Status: "ok"}}
+				service := &fakeSchedulerService{result: schedulerapplication.SchedulerDefinitionSimulation{Status: "ok"}}
 				if wantErr {
 					service.err = errors.New("unavailable")
 				}
@@ -139,7 +171,7 @@ func TestSchedulerOpsDeadLetterOptionalBodyEdges(t *testing.T) {
 			for _, nilBody := range []bool{false, true} {
 				result := &schedulerHTTPResult{}
 				handler := newSchedulerHTTPHandler(result)
-				service := &fakeSchedulerService{result: schedulerapplication.SchedulerOperationResult{Status: "ok"}}
+				service := &fakeSchedulerService{result: schedulerapplication.SchedulerDefinitionSimulation{Status: "ok"}}
 				handler.service = service
 				handler.binding = service
 				writer, request := schedulerHTTPRequest("", map[string]string{"deadLetterID": "dead-a"})

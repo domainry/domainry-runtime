@@ -6,7 +6,6 @@ import (
 	"time"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
-	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
@@ -24,8 +23,8 @@ type WorkflowDependencies struct {
 	Workers                  workflowcontract.WorkflowWorkerStore
 	Decisions                workflowcontract.WorkflowDecisionStore
 	WorkflowRegistry         WorkflowRegistry
-	TimerScheduler           WorkflowTimerScheduler
-	ApprovalTimers           WorkflowApprovalTimerScheduler
+	WaitTimers               WorkflowWaitTimerService
+	ApprovalDeadlineTimers   WorkflowApprovalDeadlineTimerService
 	Identity                 identitysdk.Directory
 	Principals               identitysdk.PrincipalResolver
 	Schema                   WorkflowSchemaProvider
@@ -40,8 +39,7 @@ type WorkflowDependencies struct {
 	Worker                   workerplatform.Dependencies
 	CompileNotification      func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	TaskNotificationCommit   WorkflowTaskNotificationCommitter
-	PrepareAgentTask         func(context.Context, WorkflowAgentTaskPreparation) (agentmodel.AgentTaskRun, error)
-	WakeAgentTask            func(string, string)
+	StartAgentTask           func(context.Context, WorkflowAgentTaskPreparation) (agentsdk.TaskResult, error)
 	WakeWorkflowContinuation func(string, string)
 }
 
@@ -105,7 +103,7 @@ type WorkflowWaitTimerRequest struct {
 	CreatedAt   time.Time
 }
 
-type WorkflowTimerScheduler interface {
+type WorkflowWaitTimerService interface {
 	ScheduleWorkflowWaitTimer(context.Context, WorkflowWaitTimerRequest) (string, error)
 }
 
@@ -119,7 +117,7 @@ type WorkflowApprovalDeadlineTimerRequest struct {
 	CreatedAt   time.Time
 }
 
-type WorkflowApprovalTimerScheduler interface {
+type WorkflowApprovalDeadlineTimerService interface {
 	ScheduleWorkflowApprovalDeadlineTimer(context.Context, WorkflowApprovalDeadlineTimerRequest) (string, error)
 }
 

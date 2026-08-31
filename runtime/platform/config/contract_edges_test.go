@@ -11,7 +11,7 @@ import (
 func TestConfigContractTypedSettersAndCollectionParsers(t *testing.T) {
 	for field, want := range map[string]string{
 		"AuditExportTokenKey": "AUDIT_EXPORT_TOKEN_KEY", "HTTPReadTimeout": "HTTP_READ_TIMEOUT", "WorkerPollInterval": "WORKER_POLL_INTERVAL",
-		"AgentDialogRateLimitPerMinute": "AGENT_DIALOG_RATE_LIMIT_PER_MINUTE", "CORSAllowedOrigins": "CORS_ALLOWED_ORIGINS",
+		"CORSAllowedOrigins": "CORS_ALLOWED_ORIGINS",
 		"MigrationRestoreDrillSuccessAt": "MIGRATION_RESTORE_DRILL_LAST_SUCCESS_AT",
 	} {
 		if got := configEnvName(field); got != want {

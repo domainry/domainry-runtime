@@ -29,7 +29,7 @@ func TestWorkflowApprovalDeadlineSchedulesDurableReminderAndEscalationTimers(t *
 	store := &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}}}
 	probe := &workflowApprovalTimerProbe{}
 	identity := workflowApprovalIdentityStub{users: map[string]identitysdk.User{"approver": {ID: "approver", Status: identitysdk.UserStatusActive}}}
-	engine := NewWorkflowProcessEngine(WorkflowDependencies{Processes: store, Identity: identity, ApprovalTimers: probe})
+	engine := NewWorkflowProcessEngine(WorkflowDependencies{Processes: store, Identity: identity, ApprovalDeadlineTimers: probe})
 	process := workflowEngineProcess(nil, nil)
 	node := definitionmodel.WorkflowGraphNode{ID: "approval", Type: "approval", Contract: &definitionmodel.WorkflowNodeContract{Approval: &definitionmodel.WorkflowApprovalNodeContract{
 		DueSeconds: 60, ReminderActionKey: "notify", EscalationSeconds: 120,
@@ -56,7 +56,7 @@ func TestWorkflowApprovalDeadlineSchedulingFailureAndDisabledEdges(t *testing.T)
 	}
 
 	probe := &workflowApprovalTimerProbe{}
-	engine := NewWorkflowProcessEngine(WorkflowDependencies{ApprovalTimers: probe})
+	engine := NewWorkflowProcessEngine(WorkflowDependencies{ApprovalDeadlineTimers: probe})
 	invalidDue := task
 	invalidDue.DueAt = "not-a-time"
 	if err := engine.scheduleApprovalDeadlineTimers(t.Context(), process, invalidDue, definitionmodel.WorkflowApprovalNodeContract{
@@ -74,7 +74,7 @@ func TestWorkflowApprovalDeadlineSchedulingFailureAndDisabledEdges(t *testing.T)
 	}
 
 	failing := &workflowApprovalTimerProbe{err: errors.New("schedule")}
-	failingEngine := NewWorkflowProcessEngine(WorkflowDependencies{ApprovalTimers: failing})
+	failingEngine := NewWorkflowProcessEngine(WorkflowDependencies{ApprovalDeadlineTimers: failing})
 	if err := failingEngine.scheduleApprovalDeadlineTimers(t.Context(), process, task, definitionmodel.WorkflowApprovalNodeContract{
 		ReminderActionKey: "notify",
 	}, createdAt); apperror.CodeOf(err) != "backend.internal" {
@@ -90,7 +90,7 @@ func TestWorkflowApprovalDeadlineSchedulingFailureAndDisabledEdges(t *testing.T)
 		processes: map[string]workflowmodel.WorkflowProcessInstance{}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{},
 	}}
 	identity := workflowApprovalIdentityStub{users: map[string]identitysdk.User{"approver": {ID: "approver", Status: identitysdk.UserStatusActive}}}
-	taskEngine := NewWorkflowProcessEngine(WorkflowDependencies{Processes: store, Identity: identity, ApprovalTimers: failing})
+	taskEngine := NewWorkflowProcessEngine(WorkflowDependencies{Processes: store, Identity: identity, ApprovalDeadlineTimers: failing})
 	node := definitionmodel.WorkflowGraphNode{
 		ID: "approval", Type: "approval",
 		Contract: &definitionmodel.WorkflowNodeContract{Approval: &definitionmodel.WorkflowApprovalNodeContract{

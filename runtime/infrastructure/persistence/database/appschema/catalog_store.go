@@ -10,25 +10,6 @@ import (
 	"github.com/domainry/domainry-orm/query"
 )
 
-type metadataSQLDialect interface {
-	Identifier(string) string
-	TableIdentifier(string) string
-	Placeholder(int) string
-}
-
-func (s ApplicationSchemaStore) manifestMetadataSeeded(ctx context.Context) (bool, error) {
-	queryValue, args, err := query.NewSelectBuilder(s.store.SQLRenderer, "_application_schema_projection").
-		Projections(query.Project(query.CountAll())).Where(query.Equal("id", "current")).Build()
-	if err != nil {
-		return false, fmt.Errorf("build metadata projection seed query: %w", err)
-	}
-	var count int
-	if err := s.database().QueryRowContext(ctx, queryValue, args...).Scan(&count); err != nil {
-		return false, fmt.Errorf("read metadata projection: %w", err)
-	}
-	return count > 0, nil
-}
-
 func (s ApplicationSchemaStore) ManifestIdentitySeedSyncedVersion(ctx context.Context) (string, error) {
 	queryValue, args, buildErr := query.NewSelectBuilder(s.store.SQLRenderer, "_application_schema_seed_checkpoints").
 		Columns("value").Where(query.Equal("key", "identity_seed_synced_version")).Build()
@@ -96,8 +77,4 @@ func buildSeedCheckpointUpsert(store ApplicationSchemaStore, key, value, now str
 		return "", nil, err
 	}
 	return insert.Build()
-}
-
-func (s ApplicationSchemaStore) refreshMetadataCatalogHash(ctx context.Context) error {
-	return s.refreshCatalogHash(ctx)
 }

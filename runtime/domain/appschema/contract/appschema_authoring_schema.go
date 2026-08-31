@@ -177,7 +177,7 @@ func metadataAuthoringExecution(resource string) *capabilitycontract.CapabilityA
 }
 
 func metadataConfigurationRoutes(resourceType string) []string {
-	base := "/metadata/definitions/" + resourceType + "/{resourceKey}"
+	base := "/tenant-admin/metadata/definitions/" + resourceType + "/{resourceKey}"
 	return []string{
 		"GET " + base,
 		"POST " + base + "/validate",

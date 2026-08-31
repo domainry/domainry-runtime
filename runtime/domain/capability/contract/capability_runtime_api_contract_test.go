@@ -25,6 +25,29 @@ func TestRuntimeAPIContractIdentityIsStable(t *testing.T) {
 	}
 }
 
+func TestRuntimeAPIContractDoesNotUseFrontendSurfaceForEndpointBehavior(t *testing.T) {
+	var document struct {
+		Identity map[string]json.RawMessage `json:"identity"`
+		Routes   map[string]struct {
+			Query []string `json:"query"`
+		} `json:"routes"`
+		Schemas map[string]struct {
+			Required []string `json:"required"`
+		} `json:"schemas"`
+		AdminBusinessReuse json.RawMessage `json:"admin_business_reuse"`
+	}
+	if err := json.Unmarshal(RuntimeAPIContractDocument(), &document); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := document.Identity["surface"]; exists || len(document.AdminBusinessReuse) != 0 {
+		t.Fatalf("frontend Surface contract leaked into Runtime API: identity=%v admin_business_reuse=%s", document.Identity, document.AdminBusinessReuse)
+	}
+	if stringSliceContains(document.Routes["agent_session_list"].Query, "surface") ||
+		stringSliceContains(document.Schemas["agent_interactive_run"].Required, "surface") {
+		t.Fatal("Agent API contract still partitions requests or runs by frontend Surface")
+	}
+}
+
 func TestRuntimeAPIContractPublishesActionInvocationScope(t *testing.T) {
 	var document struct {
 		Routes map[string]struct {
@@ -81,59 +104,25 @@ func TestRuntimeAPIContractPublishesFoundationReads(t *testing.T) {
 	}
 }
 
-func TestRuntimeAPIContractPublishesBusinessAgentRoutesWithoutOperationsControls(t *testing.T) {
+func TestRuntimeAPIContractDoesNotRepublishAgentOwnedHTTP(t *testing.T) {
 	var document struct {
 		Routes map[string]struct {
-			Method, Path, Request, Response string
-			RequiresIdempotencyKey          bool `json:"requires_idempotency_key"`
+			Path string `json:"path"`
 		} `json:"routes"`
-		Schemas map[string]struct {
-			Required []string `json:"required"`
-			Optional []string `json:"optional"`
-			Items    string   `json:"items"`
-		} `json:"schemas"`
+		Schemas map[string]json.RawMessage `json:"schemas"`
 	}
 	if err := json.Unmarshal(RuntimeAPIContractDocument(), &document); err != nil {
 		t.Fatal(err)
 	}
-	expected := map[string]struct{ method, path string }{
-		"agent_interactive_run":          {"POST", "/agent-dialog/runs"},
-		"agent_interactive_run_stream":   {"POST", "/agent-dialog/runs/stream"},
-		"agent_analysis_query":           {"POST", "/agent-dialog/analysis/query"},
-		"agent_interactive_run_get":      {"GET", "/agent-dialog/runs/{runID}"},
-		"agent_task_run_get":             {"GET", "/agent-dialog/task-runs/{taskRunID}"},
-		"agent_session_list":             {"GET", "/agent-dialog/sessions"},
-		"agent_session_upsert":           {"POST", "/agent-dialog/sessions"},
-		"agent_proposal_list":            {"GET", "/agent-dialog/proposals"},
-		"agent_proposal_create":          {"POST", "/agent-dialog/proposals"},
-		"agent_proposal_approve":         {"POST", "/agent-dialog/proposals/{proposalID}/approve"},
-		"agent_proposal_reject":          {"POST", "/agent-dialog/proposals/{proposalID}/reject"},
-		"agent_report_query_run_get":     {"GET", "/agent-dialog/report-query-runs/{queryRef}"},
-		"agent_report_export_audit_get":  {"GET", "/agent-dialog/report-export-audits/{queryRef}"},
-		"agent_report_download_task_get": {"GET", "/agent-dialog/download-tasks/{queryRef}"},
-		"agent_report_handoff_prepare":   {"POST", "/agent-dialog/download-tasks/{queryRef}/prepare"},
-	}
-	for key, want := range expected {
-		route, ok := document.Routes[key]
-		if !ok || route.Method != want.method || route.Path != want.path {
-			t.Errorf("Agent route %s=%+v", key, route)
-		}
-	}
-	if !document.Routes["agent_interactive_run"].RequiresIdempotencyKey || document.Routes["agent_interactive_run"].Request != "agent_interactive_run_request" {
-		t.Fatalf("interactive Agent route lacks idempotency/request contract: %+v", document.Routes["agent_interactive_run"])
-	}
 	for key, route := range document.Routes {
-		if strings.HasPrefix(route.Path, "/operations/agent/") || route.Path == "/agent-dialog/diagnostics" {
-			t.Errorf("operations-only Agent route leaked into Business Runtime API contract as %s", key)
+		if strings.HasPrefix(key, "agent_") || strings.HasPrefix(route.Path, "/agent-dialog/") || strings.HasPrefix(route.Path, "/operations/agent/") {
+			t.Errorf("Runtime contract retained Agent-owned route %s=%s", key, route.Path)
 		}
 	}
-	for key := range map[string]bool{"agent_interactive_run": true, "agent_task_run": true, "agent_session": true, "agent_proposal": true} {
-		if len(document.Schemas[key].Required) == 0 {
-			t.Errorf("Agent schema %s has no stable required projection", key)
+	for key := range document.Schemas {
+		if strings.HasPrefix(key, "agent_") {
+			t.Errorf("Runtime contract retained Agent-owned schema %s", key)
 		}
-	}
-	if document.Schemas["agent_session_list"].Items != "agent_session" || document.Schemas["agent_proposal_list"].Items != "agent_proposal" {
-		t.Fatalf("Agent list schema drift: sessions=%+v proposals=%+v", document.Schemas["agent_session_list"], document.Schemas["agent_proposal_list"])
 	}
 }
 
@@ -159,85 +148,23 @@ func TestRuntimeAPIContractRouteSchemasAreClosed(t *testing.T) {
 	}
 }
 
-func TestRuntimeAPIContractPublishesGovernedReportDataExchangeJob(t *testing.T) {
+func TestRuntimeAPIContractDoesNotRepublishReportOwnedSurface(t *testing.T) {
 	var document struct {
-		Routes map[string]struct {
-			Request, Response string
-		} `json:"routes"`
-		Schemas map[string]struct {
-			Required    []string            `json:"required"`
-			Optional    []string            `json:"optional"`
-			FieldValues map[string][]string `json:"field_values"`
-		} `json:"schemas"`
+		Routes  map[string]json.RawMessage `json:"routes"`
+		Schemas map[string]json.RawMessage `json:"schemas"`
 	}
 	if err := json.Unmarshal(RuntimeAPIContractDocument(), &document); err != nil {
 		t.Fatal(err)
 	}
-	if route := document.Routes["report_export_prepare"]; route.Request != "report_export_prepare_request" || route.Response != "report_export_job" {
-		t.Fatalf("route=%+v", route)
-	}
-	if document.Routes["report_export_job_get"].Response != "report_export_job" || document.Routes["report_export_job_cancel"].Response != "report_export_job" {
-		t.Fatalf("report export lifecycle routes=%+v/%+v", document.Routes["report_export_job_get"], document.Routes["report_export_job_cancel"])
-	}
-	contains := func(values []string, key string) bool {
-		for _, value := range values {
-			if value == key {
-				return true
-			}
-		}
-		return false
-	}
-	if !contains(document.Schemas["report_export_prepare_request"].Required, "scope") || contains(document.Schemas["report_export_prepare_request"].Optional, "scope") {
-		t.Fatalf("prepare schema=%+v", document.Schemas["report_export_prepare_request"])
-	}
-	for _, key := range []string{"page_size", "truncated", "total", "total_semantics"} {
-		if !contains(document.Schemas["report_summary"].Required, key) {
-			t.Fatalf("report summary missing pagination field %s: %+v", key, document.Schemas["report_summary"])
+	for _, key := range []string{"report_summary", "report_object_sql_query", "report_snapshot_refresh", "report_export_prepare", "report_export_job_get", "report_export_job_cancel", "report_export_download"} {
+		if _, exists := document.Routes[key]; exists {
+			t.Fatalf("Report-owned route %q remains in Runtime static contract", key)
 		}
 	}
-	if !reflect.DeepEqual(document.Schemas["report_summary"].FieldValues["total_semantics"], []string{"exact", "at_least"}) {
-		t.Fatalf("report summary total semantics=%v", document.Schemas["report_summary"].FieldValues["total_semantics"])
-	}
-	if !contains(document.Schemas["report_export_job"].Required, "data_exchange_job_id") || contains(document.Schemas["report_export_job"].Required, "batch_job_id") {
-		t.Fatalf("report export job schema=%+v", document.Schemas["report_export_job"])
-	}
-	for _, key := range []string{"purpose", "freshness", "role_key", "data_scopes", "metric_definitions"} {
-		if !contains(document.Schemas["report_export_scope"].Required, key) {
-			t.Fatalf("scope missing %s: %+v", key, document.Schemas["report_export_scope"])
+	for _, key := range []string{"report_summary", "report_object_sql_query_request", "report_snapshot", "report_export_prepare_request", "report_export_job", "report_export_scope"} {
+		if _, exists := document.Schemas[key]; exists {
+			t.Fatalf("Report-owned schema %q remains in Runtime static contract", key)
 		}
-	}
-	if !contains(document.Schemas["report_export_scope"].Optional, "tag_match") {
-		t.Fatalf("scope missing tag_match: %+v", document.Schemas["report_export_scope"])
-	}
-	for _, key := range []string{"content_sha256", "row_count", "scope"} {
-		if !contains(document.Schemas["report_export_download"].Required, key) {
-			t.Fatalf("download missing %s: %+v", key, document.Schemas["report_export_download"])
-		}
-	}
-}
-
-func TestRuntimeAPIContractPublishesObjectSQLQueryAndExportParameters(t *testing.T) {
-	var document struct {
-		Routes map[string]struct {
-			Method, Path, Request, Response string
-		} `json:"routes"`
-		Schemas map[string]struct {
-			Required []string `json:"required"`
-			Optional []string `json:"optional"`
-		} `json:"schemas"`
-	}
-	if err := json.Unmarshal(RuntimeAPIContractDocument(), &document); err != nil {
-		t.Fatal(err)
-	}
-	route := document.Routes["report_object_sql_query"]
-	if route.Method != "POST" || route.Path != "/reports/{reportKey}/query" || route.Request != "report_object_sql_query_request" || route.Response != "report_summary" {
-		t.Fatalf("object SQL route=%+v", route)
-	}
-	if !reflect.DeepEqual(document.Schemas["report_object_sql_query_request"].Required, []string{"parameters"}) {
-		t.Fatalf("object SQL request schema=%+v", document.Schemas["report_object_sql_query_request"])
-	}
-	if !stringSliceContains(document.Schemas["report_summary"].Optional, "result_schema") || !stringSliceContains(document.Schemas["report_export_scope"].Optional, "parameters") {
-		t.Fatalf("report schemas=%+v %+v", document.Schemas["report_summary"], document.Schemas["report_export_scope"])
 	}
 }
 

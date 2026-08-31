@@ -26,11 +26,11 @@ func TestRecordSchedulerCRUDSoftDeleteAndRestorePolicy(t *testing.T) {
 		code      string
 	}{
 		{object: definitionmodel.ObjectSchema{Key: "record_timer"}},
-		{object: definitionmodel.ObjectSchema{Key: "record_timer", Config: map[string]any{"record_timer_runtime": true}}, operation: "update", code: "backend.scheduler.runtime_api_required"},
-		{object: definitionmodel.ObjectSchema{Key: "record_timer_event", Config: map[string]any{"record_timer_runtime": "true"}}, operation: "delete", code: "backend.scheduler.runtime_api_required"},
+		{object: definitionmodel.ObjectSchema{Key: "record_timer", Config: map[string]any{"record_timer_runtime": true}}, operation: "update", code: "backend.record_timer.runtime_api_required"},
+		{object: definitionmodel.ObjectSchema{Key: "record_timer_event", Config: map[string]any{"record_timer_runtime": "true"}}, operation: "delete", code: "backend.record_timer.runtime_api_required"},
 		{object: definitionmodel.ObjectSchema{Key: "other"}, operation: "delete"},
 	} {
-		err := RecordValidateSchedulerOperationalCRUD(test.object, test.operation)
+		err := RecordValidateRuntimeOwnedCRUD(test.object, test.operation)
 		if test.code == "" && err != nil || test.code != "" && apperror.CodeOf(err) != test.code {
 			t.Fatalf("CRUD %#v/%s = %v", test.object, test.operation, err)
 		}

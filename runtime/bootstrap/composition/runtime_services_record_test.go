@@ -16,6 +16,7 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
@@ -32,7 +33,6 @@ import (
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
-	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationprojection "github.com/domainry/domainry-runtime/runtime/domain/automation/projection"
@@ -54,6 +54,29 @@ import (
 type compositionRecordRepository struct {
 	recordrepository.RecordRepository
 	page recordmodel.RecordPageResult
+}
+
+type runtimeServicesMetadataDefinitions struct {
+	fail    bool
+	failure error
+}
+
+func (definitions runtimeServicesMetadataDefinitions) List(_ context.Context, query metadatasdk.DefinitionQuery) ([]metadatasdk.Definition, error) {
+	if definitions.fail {
+		return nil, definitions.failure
+	}
+	if query.ResourceType != "action" {
+		return nil, nil
+	}
+	return []metadatasdk.Definition{{ResourceType: query.ResourceType, ResourceKey: "customer.activate", SourceKind: "manifest"}}, nil
+}
+
+func (runtimeServicesMetadataDefinitions) Get(context.Context, string, string) (metadatasdk.Definition, bool, error) {
+	return metadatasdk.Definition{}, false, nil
+}
+
+func (runtimeServicesMetadataDefinitions) Snapshot(context.Context) (metadatasdk.DefinitionSnapshot, error) {
+	return metadatasdk.DefinitionSnapshot{}, nil
 }
 
 type runtimeServicesRecordActionRepository struct {
@@ -215,13 +238,6 @@ func (*runtimeServicesAutomationMetadataRepository) DisableDefinition(context.Co
 	return nil
 }
 
-type runtimeServicesIntegrationEventRecords struct {
-	page      recordmodel.RecordPageResult
-	listErr   error
-	createErr error
-	created   []recordmodel.Record
-}
-
 type runtimeServicesActionSideEffectRecords struct {
 	createdID string
 }
@@ -233,33 +249,6 @@ type runtimeServicesActionExecutionWorkflows struct {
 
 func (r runtimeServicesActionExecutionWorkflows) TriggeredWorkflows(context.Context, string, recordmodel.Record, principalmodel.Principal, string) ([]workflowmodel.WorkflowRunSummary, error) {
 	return append([]workflowmodel.WorkflowRunSummary(nil), r.results...), r.err
-}
-
-type runtimeServicesIntegrationAgentRecords struct {
-	createErr error
-	updateErr error
-	deleteErr error
-}
-
-func (r *runtimeServicesIntegrationAgentRecords) CreateRecord(context.Context, string, map[string]any, principalmodel.Principal) (recordmodel.Record, error) {
-	return recordmodel.Record{ID: "created-1"}, r.createErr
-}
-
-func (r *runtimeServicesIntegrationAgentRecords) UpdateRecord(context.Context, string, string, map[string]any, principalmodel.Principal) (recordmodel.Record, error) {
-	return recordmodel.Record{ID: "updated-1"}, r.updateErr
-}
-
-func (r *runtimeServicesIntegrationAgentRecords) DeleteRecord(context.Context, string, string, principalmodel.Principal) error {
-	return r.deleteErr
-}
-
-type runtimeServicesIntegrationWorkflowApplication struct {
-	result workflowmodel.WorkflowRunResult
-	err    error
-}
-
-func (r runtimeServicesIntegrationWorkflowApplication) RunIntegrationWorkflow(context.Context, string, map[string]any, principalmodel.Principal) (workflowmodel.WorkflowRunResult, error) {
-	return r.result, r.err
 }
 
 func (r runtimeServicesActionSideEffectRecords) CreateRecord(_ context.Context, _ string, data map[string]any, _ principalmodel.Principal) (recordmodel.Record, error) {
@@ -439,27 +428,6 @@ func TestAuditAppendHandlesNilAndConfiguredServices(t *testing.T) {
 	}
 }
 
-func TestRuntimeInitializationSupportsOptionalSurfacePorts(t *testing.T) {
-	repository := &compositionRecordRepository{page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "record-1"}}, Total: 1}}
-	directory := compositionIdentityDirectory{}
-	services := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{Dependencies: RuntimeServicesDependencies{
-		Records: repository, IdentityDirectory: directory,
-	}})
-
-	page, err := listRuntimeSurfaceContextStoredRecords(t.Context(), services, "workspace-primary", definitionmodel.ObjectSchema{Key: "customer"}, recordmodel.RecordListQuery{Page: 1, PageSize: 10})
-	if err != nil || len(page.Items) != 1 || page.Items[0].ID != "record-1" {
-		t.Fatalf("stored records=%#v error=%v", page, err)
-	}
-	users, err := listRuntimeSurfaceContextDirectoryUsers(t.Context(), services)
-	if err != nil || users != nil {
-		t.Fatalf("users=%#v error=%v", users, err)
-	}
-	partial := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{})
-	if page, err = listRuntimeSurfaceContextStoredRecords(t.Context(), partial, "workspace-primary", definitionmodel.ObjectSchema{Key: "customer"}, recordmodel.RecordListQuery{}); err != nil || len(page.Items) != 0 {
-		t.Fatalf("nil repository page=%#v error=%v", page, err)
-	}
-}
-
 func TestMetadataSnapshotWatcherSupportsCanonicalAndFallbackOwners(t *testing.T) {
 	records := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{})
 	canonical := assembleApplicationSchema(records)
@@ -485,8 +453,6 @@ func TestAutomationApplicationUsesCanonicalRuntimeServiceAndOwnerBoundaries(t *t
 	if history, err := emptyRuntime.Applications().Automations.AutomationExecutions(t.Context(), automationmodel.AutomationExecutionFilter{}, historyPrincipal); err != nil || history.Count != 0 {
 		t.Fatalf("empty Automation history=%#v error=%v", history, err)
 	}
-	delivery := &runtimeServicesDeliveryRepository{}
-	config := &runtimeServicesAutomationConfigRepository{}
 	automationPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "developer", Permissions: []string{"*"}})
 	configuredRuntime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
 		Manifest:     manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}},
@@ -680,10 +646,6 @@ func TestBusinessRuntimeProjectionPropagatesOwnerFailures(t *testing.T) {
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin"}}
 	failure := errors.New("owner read failed")
 	portsFor := func(failAt string) businesssystemapplication.BusinessSystemRuntimeProjectionDependencies {
-		objects := map[string]definitionmodel.ObjectSchema{
-			"job_run":         {Key: "job_run"},
-			"job_dead_letter": {Key: "job_dead_letter"},
-		}
 		return businesssystemapplication.BusinessSystemRuntimeProjectionDependencies{
 			WorkflowProcesses: func(context.Context, principalmodel.Principal, workflowmodel.WorkflowProcessFilter) ([]workflowmodel.WorkflowProcessInstance, error) {
 				if failAt == "workflow" {
@@ -730,7 +692,6 @@ func TestBusinessRuntimeProjectionPropagatesOwnerFailures(t *testing.T) {
 			SchemaForPrincipal: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 				return appschemamodel.ApplicationSchemaSnapshot{Reports: []reportmodel.ReportSchema{{Key: "pipeline"}}}
 			},
-			SchemaObjectMap: func(context.Context) map[string]definitionmodel.ObjectSchema { return objects },
 			ListRecords: func(_ context.Context, objectKey string, _ recordmodel.RecordListQuery, _ principalmodel.Principal) (recordmodel.RecordPageResult, error) {
 				if failAt == objectKey {
 					return recordmodel.RecordPageResult{}, failure
@@ -748,15 +709,8 @@ func TestBusinessRuntimeProjectionPropagatesOwnerFailures(t *testing.T) {
 	}
 	service := businesssystemapplication.NewBusinessSystemApplicationService(businesssystemapplication.BusinessSystemApplicationDependencies{Runtime: portsFor("")})
 	snapshot, err := service.RuntimeStateSnapshot(t.Context(), principal)
-	if err != nil || len(snapshot.Scheduler.Definitions) != 1 || len(snapshot.Scheduler.RecentRuns) != 0 || len(snapshot.Scheduler.DeadLetters) != 0 || len(snapshot.Reports) != 1 {
+	if err != nil || len(snapshot.Scheduler.Definitions) != 1 || len(snapshot.Reports) != 1 {
 		t.Fatalf("snapshot=%#v error=%v", snapshot, err)
-	}
-
-	missing := portsFor("")
-	missing.SchemaObjectMap = func(context.Context) map[string]definitionmodel.ObjectSchema { return nil }
-	service = businesssystemapplication.NewBusinessSystemApplicationService(businesssystemapplication.BusinessSystemApplicationDependencies{Runtime: missing})
-	if records, err := service.SnapshotObjectRecords(t.Context(), "missing", principal, 10); err != nil || records == nil || len(records) != 0 {
-		t.Fatalf("missing records=%#v error=%v", records, err)
 	}
 }
 
@@ -778,16 +732,8 @@ func TestBusinessSystemSnapshotUsesNarrowOwnerPorts(t *testing.T) {
 			SchemaForPrincipal: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 				return schema
 			},
-			ApplicationDefinitions: func(_ context.Context, resourceType, _ string, _ principalmodel.Principal) ([]appschemamodel.ApplicationDefinition, error) {
-				if failAt == "metadata" {
-					return nil, failure
-				}
-				if resourceType != "action" {
-					return nil, nil
-				}
-				return []appschemamodel.ApplicationDefinition{{ResourceType: resourceType, ResourceKey: "customer.activate", SourceKind: "manifest"}}, nil
-			},
-			Evidence: evidence,
+			Definitions: runtimeServicesMetadataDefinitions{fail: failAt == "metadata", failure: failure},
+			Evidence:    evidence,
 			Runtime: businesssystemapplication.BusinessSystemRuntimeProjectionDependencies{
 				WorkflowProcesses: func(context.Context, principalmodel.Principal, workflowmodel.WorkflowProcessFilter) ([]workflowmodel.WorkflowProcessInstance, error) {
 					if failAt == "runtime" {
@@ -813,7 +759,6 @@ func TestBusinessSystemSnapshotUsesNarrowOwnerPorts(t *testing.T) {
 				SchemaForPrincipal: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 					return schema
 				},
-				SchemaObjectMap: func(context.Context) map[string]definitionmodel.ObjectSchema { return nil },
 				ListRecords: func(context.Context, string, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error) {
 					if failAt == "records" {
 						return recordmodel.RecordPageResult{}, failure
@@ -1001,11 +946,8 @@ func TestRecordConsumersShareCanonicalApplicationService(t *testing.T) {
 	if service.Applications().Records != canonical {
 		t.Fatal("Runtime application facade does not expose the canonical Record application service")
 	}
-	if service.reportQueriesService == nil || service.reportSnapshotsService == nil || service.reportExportsService == nil {
-		t.Fatal("Report capability application services were not assembled")
-	}
-	if service.surfaceContextService == nil {
-		t.Fatal("Surface Context owner service was not assembled")
+	if service.reportModuleQueryHost == nil || service.reportModuleSnapshotHost == nil || service.reportModuleExportHost == nil {
+		t.Fatal("Report module host adapters were not assembled")
 	}
 	if service.businessSystemService == nil || !service.businessSystemService.RuntimeProjectionConfigured() {
 		t.Fatal("Business System does not expose its canonical Record read port")

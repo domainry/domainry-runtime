@@ -169,7 +169,7 @@ func reportExportTestRecordMapping() reportmodel.ReportExportRecordMappingSchema
 		AuditPreparedStatuses: []string{"approved", "completed"}, AuditPreparedStatus: "completed", AuditDownloadedStatus: "completed", AuditDeniedStatus: "denied", AuditExpiredStatus: "expired",
 		AuditRowCountField: "row_count", AuditScopeHashField: "filters_hash",
 		DownloadAuditField: "audit_id", DownloadFilenameField: "file_name", DownloadContentHashField: "content_hash", DownloadExpiresAtField: "expires_at",
-		DownloadTokenField: "file_reference", DownloadWatermarkedField: "watermarked", DownloadNumberField: "download_no",
+		DownloadJobIDField: "file_reference", DownloadWatermarkedField: "watermarked", DownloadNumberField: "download_no",
 	}
 }
 

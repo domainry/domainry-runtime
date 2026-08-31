@@ -18,7 +18,7 @@ func TestApplicationSchemaStoreLoadsPersistedManifest(t *testing.T) {
 		TemplateID: "manifest-read", Version: "1", Name: "Manifest read", DefaultLocale: "zh-CN",
 		Objects: []definitionmodel.ObjectSchema{{Key: "account", Name: "Account", Fields: []definitionmodel.FieldSchema{{Key: "name", Name: "Name", Type: "text", Config: map[string]any{"definition_object_key": "ignored"}}}, Validations: []definitionmodel.ValidationSchema{{Key: "account.name.required", ObjectKey: "account", Type: "required", FieldKey: "name"}}}},
 	}
-	if err := repository.EnsureManifestMetadata(t.Context(), manifest); err != nil {
+	if err := repository.SyncManifestProjection(t.Context(), metadataTestInstallationScope(), manifest); err != nil {
 		t.Fatal(err)
 	}
 	loaded, err := repository.LoadManifest(t.Context(), metadataTestInstallationScope())

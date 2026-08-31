@@ -21,7 +21,7 @@ func TestConfigHelperAndSecurityRemainingConditions(t *testing.T) {
 		IntegrationSecretKey: "integration-secret", IntegrationActiveKeyID: "data-1",
 		CORSAllowedOrigins: []string{"https://admin.example.com"}, SchedulerPollInterval: time.Second,
 	}
-	setValidProductionSurfaceOrigins(&secure)
+	setValidProductionListenerOrigins(&secure)
 	sharedSecret := secure
 	sharedSecret.IntegrationSecretKey = sharedSecret.AuditExportTokenKey
 	if err := sharedSecret.ValidateSecurity(); err == nil || !strings.Contains(err.Error(), "INTEGRATION_SECRET_KEY") {
@@ -187,10 +187,10 @@ func TestConfigUnknownProductionPolicyCondition(t *testing.T) {
 	t.Setenv("AUDIT_EXPORT_TOKEN_KEY", "production-audit-export-secret")
 	t.Setenv("INTEGRATION_SECRET_KEY", "production-integration-secret")
 	t.Setenv("INTEGRATION_ACTIVE_KEY_ID", "data-1")
-	t.Setenv("SURFACE_BUSINESS_ORIGINS", "https://app.example.com")
-	t.Setenv("SURFACE_ADMIN_ORIGINS", "https://admin.example.com")
-	t.Setenv("SURFACE_PORTAL_ORIGINS", "https://portal.example.com")
-	t.Setenv("CORS_ALLOWED_ORIGINS", "https://app.example.com,https://admin.example.com,https://portal.example.com")
+	t.Setenv("HTTP_PUBLIC_ORIGINS", "https://app.example.com")
+	t.Setenv("HTTP_TENANT_ADMIN_ORIGINS", "https://admin.example.com")
+	t.Setenv("HTTP_OPS_ORIGINS", "https://ops.example.com")
+	t.Setenv("CORS_ALLOWED_ORIGINS", "https://app.example.com,https://admin.example.com,https://ops.example.com")
 	t.Setenv("HTTP_PUBLIC_ADDR", "0.0.0.0:8081")
 	t.Setenv("HTTP_TENANT_ADMIN_ADDR", "127.0.0.1:8082")
 	t.Setenv("HTTP_OPS_ADDR", "127.0.0.1:8083")

@@ -2,11 +2,10 @@ package appschema
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
-	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	metadatadomain "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -35,8 +34,8 @@ type ApplicationSchemaProvider interface {
 	SchemaForPrincipal(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
 }
 
-func NewApplicationSchemaQueryApplicationService(schema ApplicationSchemaProvider, repository appschemarepository.ApplicationSchemaRepository) *ApplicationSchemaQueryApplicationService {
-	return &ApplicationSchemaQueryApplicationService{ApplicationSchemaDomainService: metadatadomain.NewApplicationSchemaDomainService(schema, repository)}
+func NewApplicationSchemaQueryApplicationService(schema ApplicationSchemaProvider, localization metadatasdk.Localization) *ApplicationSchemaQueryApplicationService {
+	return &ApplicationSchemaQueryApplicationService{ApplicationSchemaDomainService: metadatadomain.NewApplicationSchemaDomainService(schema, localization)}
 }
 
 func (s *ApplicationSchemaQueryApplicationService) FeaturePermissions(ctx context.Context, principal principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error) {
@@ -45,31 +44,6 @@ func (s *ApplicationSchemaQueryApplicationService) FeaturePermissions(ctx contex
 	}
 	snapshot := s.Snapshot(ctx)
 	return recordprojection.RecordBuildFeaturePermissions(snapshot.Objects, snapshot.Actions, principal)
-}
-
-func (s *ApplicationSchemaApplicationService) ReloadApplicationSchema(ctx context.Context, principal principalmodel.Principal) (appschemamodel.ApplicationSchemaSnapshot, error) {
-	if err := metadataAuthorizeCommand(principal); err != nil {
-		return appschemamodel.ApplicationSchemaSnapshot{}, err
-	}
-	if !principal.HasPermission("workspace.admin") {
-		return appschemamodel.ApplicationSchemaSnapshot{}, forbidden("auth.permission_denied")
-	}
-	manifest, err := s.repository.LoadManifest(ctx, metadataInstallationScope("reload metadata manifest"))
-	if err != nil {
-		return appschemamodel.ApplicationSchemaSnapshot{}, err
-	}
-	if err := s.repository.SyncManifest(ctx, metadataInstallationScope("synchronize metadata manifest"), manifest); err != nil {
-		return appschemamodel.ApplicationSchemaSnapshot{}, wrapMetadataError(err)
-	}
-	s.runtime.ApplyManifestMetadata(valueOrDefault(manifest.TemplateID, s.templateID), valueOrDefault(manifest.Version, s.version), valueOrDefault(manifest.Name, s.name), manifest.Objects, manifest.Actions, manifest.Workflows, manifest.AutomationRules, manifest.Dictionaries, manifest.Integrations, manifest.Reports, manifest.Skills, manifest.Agents, manifest.IdentityProfileExtensions)
-	applyManifestAgentMetadata(s.runtime, manifest)
-	workflowScope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "reload published workflow definitions")
-	if err := s.workflows.InitializePublishedWorkflowDefinitions(ctx, manifest.Workflows, workflowScope); err != nil {
-		return appschemamodel.ApplicationSchemaSnapshot{}, err
-	}
-	snapshot := s.runtime.Schema()
-	s.notifyReloadObservers(snapshot)
-	return snapshot, nil
 }
 
 func (s *ApplicationSchemaApplicationService) ApplicationSchemaMigrationPlan(ctx context.Context, principal principalmodel.Principal) ([]appschemamodel.ApplicationSchemaMigrationStep, error) {
@@ -118,89 +92,4 @@ func (s *ApplicationSchemaApplicationService) ApplicationSchemaObjectRecordCount
 		return 0, wrapMetadataError(err)
 	}
 	return page.Total, nil
-}
-
-func (s *ApplicationSchemaApplicationService) ListApplicationDefinitions(ctx context.Context, resourceType, workspaceID string, principal principalmodel.Principal) ([]appschemamodel.ApplicationDefinition, error) {
-	if err := metadataAuthorizeQuery(principal); err != nil {
-		return nil, err
-	}
-	workspaceID = strings.TrimSpace(workspaceID)
-	if workspaceID != strings.TrimSpace(principal.WorkspaceID) || !principal.HasPermission("workspace.admin") {
-		return nil, forbidden("auth.permission_denied")
-	}
-	definitions, err := s.repository.ListDefinitions(ctx, metadataInstallationScope("list metadata definitions"), resourceType)
-	if err != nil {
-		return nil, wrapMetadataError(err)
-	}
-	return s.withEffectiveActionDefinitions(resourceType, definitions), nil
-}
-
-func (s *ApplicationSchemaApplicationService) GetApplicationDefinition(ctx context.Context, resourceType, resourceKey string, principal principalmodel.Principal) (appschemamodel.ApplicationDefinition, bool, error) {
-	if err := metadataAuthorizeQuery(principal); err != nil {
-		return appschemamodel.ApplicationDefinition{}, false, err
-	}
-	if !principal.HasPermission("workspace.admin") {
-		return appschemamodel.ApplicationDefinition{}, false, forbidden("auth.permission_denied")
-	}
-	definition, found, err := s.repository.GetDefinition(ctx, metadataInstallationScope("get metadata definition"), resourceType, resourceKey)
-	if err != nil || !found {
-		return definition, found, wrapMetadataError(err)
-	}
-	definition = s.withEffectiveActionDefinitions(resourceType, []appschemamodel.ApplicationDefinition{definition})[0]
-	return definition, true, nil
-}
-
-func (s *ApplicationSchemaApplicationService) withEffectiveActionDefinitions(resourceType string, definitions []appschemamodel.ApplicationDefinition) []appschemamodel.ApplicationDefinition {
-	if strings.TrimSpace(resourceType) != "action" || s.actionDefinitions == nil || len(definitions) == 0 {
-		return definitions
-	}
-	effective := map[string]definitionmodel.ActionSchema{}
-	for _, action := range s.actionDefinitions() {
-		if key := strings.TrimSpace(action.Key); key != "" {
-			effective[key] = action
-		}
-	}
-	result := append([]appschemamodel.ApplicationDefinition(nil), definitions...)
-	for index := range result {
-		action, ok := effective[strings.TrimSpace(result[index].ResourceKey)]
-		if !ok {
-			continue
-		}
-		payload, err := json.Marshal(action)
-		if err == nil {
-			result[index].Payload = payload
-		}
-	}
-	return result
-}
-
-func (s *ApplicationSchemaApplicationService) ListLocalizedTexts(ctx context.Context, query appschemamodel.LocalizedTextQuery, principal principalmodel.Principal) ([]appschemamodel.LocalizedText, error) {
-	if err := metadataAuthorizeQuery(principal); err != nil {
-		return nil, err
-	}
-	if strings.TrimSpace(query.WorkspaceID) != strings.TrimSpace(principal.WorkspaceID) || !principal.HasPermission("workspace.admin") {
-		return nil, forbidden("auth.permission_denied")
-	}
-	values, err := s.repository.ListLocalizedTexts(ctx, query.WorkspaceID, query)
-	return values, wrapMetadataError(err)
-}
-
-func (s *ApplicationSchemaApplicationService) LocalizedTextsForLocale(ctx context.Context, workspaceID, locale string) ([]appschemamodel.LocalizedText, error) {
-	workspaceID = strings.TrimSpace(workspaceID)
-	if err := metadataAuthorizeWorkspaceQuery(workspaceID); err != nil {
-		return nil, err
-	}
-	locale = strings.TrimSpace(locale)
-	if locale == "" {
-		return nil, nil
-	}
-	values, err := s.repository.ListLocalizedTexts(ctx, workspaceID, appschemamodel.LocalizedTextQuery{WorkspaceID: workspaceID, Locale: locale})
-	return values, wrapMetadataError(err)
-}
-
-func (s *ApplicationSchemaApplicationService) DictionaryItems(ctx context.Context, dictionaryKey, locale string, principal principalmodel.Principal) (appschemamodel.DictionaryItemsResult, bool, error) {
-	if err := metadataAuthorizeQuery(principal); err != nil {
-		return appschemamodel.DictionaryItemsResult{}, false, err
-	}
-	return s.dictionary.Items(ctx, s.repository, dictionaryKey, locale, principal)
 }

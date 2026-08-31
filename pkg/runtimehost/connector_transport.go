@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/safehttp"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/microsoft/go-mssqldb"
@@ -43,7 +44,10 @@ func newConnectorTransport() connector.Transport {
 }
 
 func newConnectorTransportWithProcessPolicy(policy ConnectorProcessPolicy) connector.Transport {
-	return &connectorTransport{httpClient: &http.Client{}, processPolicy: policy}
+	return &connectorTransport{
+		httpClient:    safehttp.NewClient(safehttp.Policy{AllowLiteralLoopback: true}),
+		processPolicy: policy,
+	}
 }
 
 func (t *connectorTransport) SendSMTP(ctx context.Context, request connector.SMTPRequest) (result connector.SMTPResult, returnErr error) {

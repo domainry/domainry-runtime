@@ -21,6 +21,5 @@ var (
 	_ changeplanapplication.ReferenceRuntime = businessReferenceRuntimePortAdapter{}
 	_ BusinessReferenceRuntimeProvider       = businessReferenceRuntimeAdapter{}
 
-	_ schedulerapplication.SchedulerOperationRuntime = schedulerOperationRuntimeAdapter{}
-	_ schedulerapplication.RecordMutationRuntime     = schedulerOperationRuntimeAdapter{}
+	_ schedulerapplication.ScheduledWorkflowRuntime = scheduledWorkflowRuntimeAdapter{}
 )

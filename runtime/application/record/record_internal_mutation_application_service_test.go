@@ -32,20 +32,17 @@ func (r *internalMutationRepositoryProbe) UpdateRecord(_ context.Context, _ stri
 
 func TestInternalMutationPolicyRejectsUnapprovedBypass(t *testing.T) {
 	customer := definitionmodel.ObjectSchema{Key: "customer"}
-	err := RecordValidateInternalMutationPolicy(RecordInternalMutationSchedulerRuntime, RecordInternalMutationCreate, customer)
+	err := RecordValidateInternalMutationPolicy(RecordInternalMutationPolicy("unknown"), RecordInternalMutationCreate, customer)
 	assertRecordApplicationError(t, err, apperror.KindForbidden, "backend.record.internal_mutation_policy_denied", map[string]string{
-		"policy": "scheduler_runtime", "operation": "create", "object": "customer",
+		"policy": "unknown", "operation": "create", "object": "customer",
 	})
 	err = RecordValidateInternalMutationPolicy(RecordInternalMutationOwnerPathRebuild, RecordInternalMutationUpdate, customer)
 	assertRecordApplicationError(t, err, apperror.KindForbidden, "backend.record.internal_mutation_policy_denied", map[string]string{
 		"policy": "owner_department_path_rebuild", "operation": "update", "object": "customer",
 	})
-	if err := RecordValidateInternalMutationPolicy(RecordInternalMutationSchedulerRuntime, RecordInternalMutationUpdate, definitionmodel.ObjectSchema{Key: "record_timer"}); err != nil {
-		t.Fatalf("scheduler evidence update rejected: %v", err)
-	}
 }
 
-func TestInternalMutationServiceOwnsWriteAndAudit(t *testing.T) {
+func TestInternalMutationServiceOwnsOwnerPathWriteAndAudit(t *testing.T) {
 	repository := &internalMutationRepositoryProbe{}
 	var event, objectKey, recordID string
 	var principal principalmodel.Principal
@@ -56,15 +53,18 @@ func TestInternalMutationServiceOwnsWriteAndAudit(t *testing.T) {
 			event, objectKey, recordID, principal, metadata = gotEvent, gotObjectKey, gotRecordID, gotPrincipal, gotMetadata
 		},
 	})
-	object := definitionmodel.ObjectSchema{Key: "record_timer_event"}
-	record := recordmodel.Record{ID: "event-1"}
-	if err := service.Insert(t.Context(), "workspace-primary", RecordInternalMutationSchedulerRuntime, object, record, " scheduler evidence "); err != nil {
+	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{
+		{Key: "owner_department_id", Type: "text", Config: map[string]any{"owner_department_id": true}},
+		{Key: "owner_department_path", Type: "text", Config: map[string]any{"owner_department_path": true}},
+	}}
+	record := recordmodel.Record{ID: "run-1"}
+	if err := service.Update(t.Context(), "workspace-primary", RecordInternalMutationOwnerPathRebuild, object, record, " owner path rebuilt "); err != nil {
 		t.Fatal(err)
 	}
-	if repository.inserted.ID != "event-1" || event != "internal_record_mutation" || objectKey != "record_timer_event" || recordID != "event-1" || !principal.Known || principal.UserID != "system" {
-		t.Fatalf("insert=%#v event=%q object=%q record=%q principal=%#v", repository.inserted, event, objectKey, recordID, principal)
+	if repository.updated.ID != "run-1" || event != "internal_record_mutation" || objectKey != "customer" || recordID != "run-1" || !principal.Known || principal.UserID != "system" {
+		t.Fatalf("update=%#v event=%q object=%q record=%q principal=%#v", repository.updated, event, objectKey, recordID, principal)
 	}
-	if metadata["policy"] != "scheduler_runtime" || metadata["operation"] != "create" || metadata["reason"] != "scheduler evidence" {
+	if metadata["policy"] != "owner_department_path_rebuild" || metadata["operation"] != "update" || metadata["reason"] != "owner path rebuilt" {
 		t.Fatalf("metadata = %#v", metadata)
 	}
 }

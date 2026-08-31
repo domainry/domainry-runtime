@@ -17,11 +17,11 @@ func TestManifestBusinessIdentityBindingRemainingInvalidShapes(t *testing.T) {
 	state.validateBusinessIdentityBinding("binding", profilebindingmodel.Binding{
 		ObjectKey: "profile",
 		BusinessIdentity: profilebindingmodel.BusinessIdentityBinding{
-			Key: "identity", SurfaceKeys: []string{" "}, StatusField: "missing", BlacklistField: "missing",
+			Key: "identity", StatusField: "missing", BlacklistField: "missing",
 			Claims: []profilebindingmodel.ClaimBinding{{ClaimKey: " ", FieldKey: " "}},
 		},
 	})
-	if len(state.errs) < 6 {
+	if len(state.errs) < 5 {
 		t.Fatalf("diagnostics=%v", state.errs)
 	}
 }

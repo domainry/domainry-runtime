@@ -3,6 +3,7 @@ package transport
 import (
 	"context"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
@@ -17,15 +18,15 @@ import (
 	partysdk "github.com/domainry/domainry-party-sdk"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 
-	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agent/runtime"
+	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	principalapplication "github.com/domainry/domainry-runtime/runtime/application/principal"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	workspaceprovisionapplication "github.com/domainry/domainry-runtime/runtime/application/workspaceprovision"
-	capacityplatform "github.com/domainry/domainry-runtime/runtime/platform/capacity"
 
+	"github.com/domainry/domainry-foundation/ratelimit"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	businesseventcontract "github.com/domainry/domainry-runtime/runtime/domain/businessevent/contract"
@@ -38,7 +39,6 @@ import (
 	operationspersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
 	workspaceprovisionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceprovision"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-runtime/runtime/platform/ratelimit"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 	publicationhandoffhttp "github.com/domainry/domainry-runtime/runtime/transport/http/publicationhandoff"
@@ -55,6 +55,7 @@ type HTTPServerDependencies struct {
 	Store                    *persistence.RuntimeStore
 	IntegrationBinding       integrationsdk.Binding
 	AgentRepositories        agentpersistence.Binding
+	AgentBinding             agentsdk.Binding
 	LifecycleBinding         lifecyclesdk.Binding
 	RateLimiter              ratelimit.Limiter
 	Manifest                 manifestmodel.ManifestSchema
@@ -80,6 +81,7 @@ type httpServerAssembly struct {
 	operations    *operationsapplication.OperationsApplicationService
 	identityHTTP  *identityhttpmiddleware.Middleware
 	principals    identitysdk.PrincipalResolver
+	agentPorts    *agentRuntimePorts
 }
 
 func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDependencies) *runtimehttp.HTTPRouter {
@@ -116,21 +118,21 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 		HealthCheckTimeout: dependencies.Config.HealthCheckTimeout,
 		MaxJSONBodyBytes:   int64(dependencies.Config.HTTPMaxJSONBodyBytes),
 		RequestTimeout:     dependencies.Config.CapacityRequestTimeout,
-		SurfaceGroupPolicies: map[runtimehttp.SurfaceRouteGroup]runtimehttp.SurfaceRouteGroupPolicy{
-			runtimehttp.SurfaceRouteGroupPublic: {
+		ListenerGroupPolicies: map[runtimehttp.ListenerRouteGroup]runtimehttp.ListenerRouteGroupPolicy{
+			runtimehttp.ListenerRouteGroupPublic: {
 				MaxJSONBodyBytes: int64(dependencies.Config.HTTPPublicMaxJSONBodyBytes), RequestTimeout: dependencies.Config.HTTPPublicRequestTimeout,
-				RateLimitPerMinute: dependencies.Config.HTTPPublicRateLimitPerMinute, AuditClass: "public_surface",
-				AllowedOrigins: append(append([]string(nil), dependencies.Config.SurfaceBusinessOrigins...), dependencies.Config.SurfacePortalOrigins...),
+				RateLimitPerMinute: dependencies.Config.HTTPPublicRateLimitPerMinute, AuditClass: "public_listener",
+				AllowedOrigins: append([]string(nil), dependencies.Config.HTTPPublicOrigins...),
 			},
-			runtimehttp.SurfaceRouteGroupTenantAdmin: {
+			runtimehttp.ListenerRouteGroupTenantAdmin: {
 				MaxJSONBodyBytes: int64(dependencies.Config.HTTPTenantAdminMaxJSONBodyBytes), RequestTimeout: dependencies.Config.HTTPTenantAdminRequestTimeout,
 				RateLimitPerMinute: dependencies.Config.HTTPTenantAdminRateLimitPerMinute, AuditClass: "tenant_governance",
-				AllowedOrigins: append([]string(nil), dependencies.Config.SurfaceAdminOrigins...),
+				AllowedOrigins: append([]string(nil), dependencies.Config.HTTPTenantAdminOrigins...),
 			},
-			runtimehttp.SurfaceRouteGroupOps: {
+			runtimehttp.ListenerRouteGroupOps: {
 				MaxJSONBodyBytes: int64(dependencies.Config.HTTPOpsMaxJSONBodyBytes), RequestTimeout: dependencies.Config.HTTPOpsRequestTimeout,
 				RateLimitPerMinute: dependencies.Config.HTTPOpsRateLimitPerMinute, AuditClass: "privileged_operations",
-				AllowedOrigins: append([]string(nil), dependencies.Config.SurfaceAdminOrigins...),
+				AllowedOrigins: append([]string(nil), dependencies.Config.HTTPOpsOrigins...),
 			},
 		},
 		CapacityLimits:           capacityplatform.Limits{GlobalInFlight: dependencies.Config.CapacityGlobalInFlight, WorkspaceInFlight: dependencies.Config.CapacityWorkspaceInFlight, UseCaseInFlight: dependencies.Config.CapacityUseCaseInFlight, RetryInFlight: dependencies.Config.CapacityRetryInFlight, GlobalRate: dependencies.Config.CapacityGlobalRatePerMinute, WorkspaceRate: dependencies.Config.CapacityWorkspaceRatePerMinute, UseCaseRate: dependencies.Config.CapacityUseCaseRatePerMinute, RateWindow: time.Minute, MaxWorkspaceStates: dependencies.Config.CapacityMaxWorkspaceStates, MaxUseCaseStates: dependencies.Config.CapacityMaxUseCaseStates, WorkspaceStateTTL: dependencies.Config.CapacityWorkspaceStateTTL, DegradedRatio: dependencies.Config.CapacityDegradedRatio, RecoveryRatio: dependencies.Config.CapacityRecoveryRatio, RetryAfter: dependencies.Config.CapacityRetryAfter},
@@ -151,10 +153,9 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 				return records.Schema().IdentityProfileExtensions
 			},
 		}),
-		SecurityAudit: records.Applications().Audit, RuntimeStatus: runtimeStatusProvider(dependencies),
+		SecurityAudit: records.Applications().Audit, RuntimeStatus: dependencies.MonitoringBinding,
 		TechnicalMetrics: func(ctx context.Context) string {
-			workerMetrics, agentTaskMetrics, agentInteractiveMetrics := runtimeOptionalWorkerMetrics(ctx, dependencies.WorkerControl, records.Applications().AgentTaskWorker, records.Applications().AgentInteractiveRuns)
-			return runtimeTechnicalOpenMetrics(ctx, dependencies.Store, records.Applications().RuntimeStatus) + workerMetrics + agentTaskMetrics + agentInteractiveMetrics
+			return runtimeTechnicalOpenMetrics(ctx, dependencies.Store, records.Applications().RuntimeStatus) + runtimeOptionalWorkerMetrics(dependencies.WorkerControl)
 		},
 		WorkerControl:           dependencies.WorkerControl,
 		RuntimeInstanceID:       dependencies.RuntimeInstanceID,
@@ -170,12 +171,13 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 		principals: identityPrincipals,
 	}
 	assembly.wireOperationsApplication()
+	assembly.bindAgentApplicationHost()
 	assembly.wirePartyAndIdentityReferences(ctx)
 	assembly.wireRecordAndProcessHandlers()
 	assembly.wireMetadataAndBusinessHandlers()
 	assembly.wireRuntimePublicationHandoff()
 	assembly.wireWorkspaceProvisioning()
-	assembly.wireIntegrationAndAgentHandlers(dependencies.Config.AgentDialogRateLimitPerMinute)
+	assembly.wireNotificationHandlers()
 	server = runtimehttp.UseHandlers(server, assembly.handlers)
 	server = runtimehttp.UseServiceIdentity(server, dependencies.Config.RuntimeVersion)
 	server = runtimehttp.UseRuntimeReleaseIdentity(server, dependencies.ReleaseIdentity)
@@ -212,32 +214,15 @@ func (a *httpServerAssembly) wireRuntimePublicationHandoff() {
 		Intents:   a.publications,
 		Principal: a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
 		WriteServiceError: a.callbacks.WriteServiceError,
-		Admin:             a.identityHTTP.PermissionFunc("workspace.admin"),
 		Authenticated:     a.identityHTTP.AuthenticatedFunc,
 	})
 }
 
-func runtimeStatusProvider(dependencies HTTPServerDependencies) runtimehttp.DeploymentRuntimeStatusProvider {
-	if dependencies.MonitoringBinding != nil {
-		return dependencies.MonitoringBinding
+func runtimeOptionalWorkerMetrics(workers *workerplatform.Controller) string {
+	if workers == nil {
+		return ""
 	}
-	return dependencies.Records.Applications().RuntimeStatus
-}
-
-func runtimeOptionalWorkerMetrics(ctx context.Context, workers *workerplatform.Controller, agentTasks *agentapplication.AgentTaskWorker, interactive *agentapplication.AgentInteractiveRunApplicationService) (string, string, string) {
-	workerMetrics := ""
-	if workers != nil {
-		workerMetrics = workers.OpenMetrics()
-	}
-	agentTaskMetrics := ""
-	if agentTasks != nil {
-		agentTaskMetrics = agentTasks.OpenMetrics()
-	}
-	agentInteractiveMetrics := ""
-	if interactive != nil {
-		agentInteractiveMetrics = interactive.OpenMetrics(ctx)
-	}
-	return workerMetrics, agentTaskMetrics, agentInteractiveMetrics
+	return workers.OpenMetrics()
 }
 
 func runtimeOperationsControlState(store *persistence.RuntimeStore) func(context.Context, string, string) (bool, bool, error) {

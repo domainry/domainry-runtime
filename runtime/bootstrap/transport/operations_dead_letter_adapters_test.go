@@ -13,7 +13,6 @@ import (
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
@@ -158,14 +157,14 @@ func TestWorkflowDeadLetterOwnerAllActionsAndFailures(t *testing.T) {
 }
 
 type schedulerDeadLetterServiceStub struct {
-	record     recordmodel.Record
+	deadLetter schedulersdk.DeadLetter
 	inspectErr error
 	resolveErr error
 	requeueErr error
 }
 
 func (s *schedulerDeadLetterServiceStub) DeadLetter(context.Context, string) (schedulersdk.DeadLetter, error) {
-	return schedulersdk.DeadLetter{RunID: fmt.Sprint(s.record.Data["job_run_id"]), DefinitionKey: fmt.Sprint(s.record.Data["scheduler_definition_key"]), Status: fmt.Sprint(s.record.Data["status"]), Reason: fmt.Sprint(s.record.Data["last_error"])}, s.inspectErr
+	return s.deadLetter, s.inspectErr
 }
 func (s *schedulerDeadLetterServiceStub) ResolveDeadLetter(context.Context, string, string) (schedulersdk.DeadLetter, error) {
 	return schedulersdk.DeadLetter{}, s.resolveErr
@@ -175,7 +174,7 @@ func (s *schedulerDeadLetterServiceStub) RequeueDeadLetter(context.Context, stri
 }
 
 func TestSchedulerDeadLetterOwnerAllActionsAndFailures(t *testing.T) {
-	service := &schedulerDeadLetterServiceStub{record: recordmodel.Record{ID: "dead", UpdatedAt: "now", Data: map[string]any{"status": "dead_letter", "last_error": "failed", "job_run_id": "run", "scheduler_definition_key": "definition", "reason": "provider"}}}
+	service := &schedulerDeadLetterServiceStub{deadLetter: schedulersdk.DeadLetter{RunID: "run", DefinitionKey: "definition", Status: "dead_letter", Reason: "failed"}}
 	owner := schedulerDeadLetterOwner{service: service}
 	principal := deadLetterPrincipal()
 	item, err := owner.Inspect(t.Context(), "dead", principal)

@@ -147,7 +147,6 @@ func recordCreateRequest(t *testing.T, handler http.Handler, key string, body an
 	request := httptest.NewRequest(http.MethodPost, "/objects/kitchen_order/records", bytes.NewReader(raw))
 	request.Header.Set("Content-Type", "application/json")
 	applyIntegrationIdentity(request, "kitchen_lead")
-	request.Header.Set("X-Domainry-Product-Surface", "business_workspace")
 	if key != "" {
 		request.Header.Set("Idempotency-Key", key)
 	}
@@ -165,7 +164,6 @@ func recordUpdateRequest(t *testing.T, handler http.Handler, recordID, key strin
 	request := httptest.NewRequest(http.MethodPatch, "/objects/kitchen_order/records/"+recordID, bytes.NewReader(raw))
 	request.Header.Set("Content-Type", "application/json")
 	applyIntegrationIdentity(request, "kitchen_lead")
-	request.Header.Set("X-Domainry-Product-Surface", "business_workspace")
 	if key != "" {
 		request.Header.Set("Idempotency-Key", key)
 	}
@@ -188,7 +186,6 @@ func recordCreatePathRequest(t *testing.T, handler http.Handler, path, key strin
 	request := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(raw))
 	request.Header.Set("Content-Type", "application/json")
 	applyIntegrationIdentity(request, "kitchen_lead")
-	request.Header.Set("X-Domainry-Product-Surface", "business_workspace")
 	if key != "" {
 		request.Header.Set("Idempotency-Key", key)
 	}

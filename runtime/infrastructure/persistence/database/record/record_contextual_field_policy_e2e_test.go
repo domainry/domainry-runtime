@@ -18,7 +18,6 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
-	reportservice "github.com/domainry/domainry-runtime/runtime/domain/report/query"
 )
 
 func TestContextualFieldPolicyEndToEndKeepsReadExportReportAuditAndWriteAligned(t *testing.T) {
@@ -100,15 +99,10 @@ func TestContextualFieldPolicyEndToEndKeepsReadExportReportAuditAndWriteAligned(
 	}
 
 	reportAccess := contextualFieldReportAccess{policy: policy, fields: fieldPolicy}
-	report := reportservice.NewReportDomainService(reportservice.ReportDependencies{
-		Reports: func(context.Context, principalmodel.Principal) []reportmodel.ReportSchema {
-			return []reportmodel.ReportSchema{{Key: "member-sensitive", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "member", Alias: "member"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "health_note", Field: reportmodel.ReportDatasetField{SourceAlias: "member", FieldKey: "health_note"}}}}}}
-		},
-		Access: reportAccess, Records: contextualFieldReportRecords{repository: repository},
-	})
-	summary, err := report.Summary(t.Context(), "member-sensitive", principal)
-	if err != nil || strings.Contains(fmt.Sprint(summary), "allergy-b") || !strings.Contains(fmt.Sprint(summary), "allergy-a") {
-		t.Fatalf("contextual report projection mismatch: summary=%#v err=%v", summary, err)
+	reportDefinition := reportmodel.ReportSchema{Key: "member-sensitive", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "member", Alias: "member"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "health_note", Field: reportmodel.ReportDatasetField{SourceAlias: "member", FieldKey: "health_note"}}}}}
+	sources := readAuthorizedReportSources(t, reportDefinition, principal, reportAccess, contextualFieldReportRecords{repository: repository})
+	if strings.Contains(fmt.Sprint(sources.Records["member"]), "allergy-b") || !strings.Contains(fmt.Sprint(sources.Records["member"]), "allergy-a") {
+		t.Fatalf("contextual Report host projection mismatch: sources=%#v", sources)
 	}
 
 	auditProjection, _, err := fieldPolicy.ApplyReadPage(t.Context(), principal, member, []recordmodel.Record{

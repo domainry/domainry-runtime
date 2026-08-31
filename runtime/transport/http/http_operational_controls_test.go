@@ -5,12 +5,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	healthplatform "github.com/domainry/domainry-runtime/runtime/platform/health"
 )
 
 func TestOperationalControlsRejectMutationButAllowReadAndRecovery(t *testing.T) {
-	router := &HTTPRouter{healthRegistry: healthplatform.NewRegistry(), runtimeInstanceID: "instance-a"}
+	router := &HTTPRouter{healthRegistry: newRuntimeHealthRegistry(), runtimeInstanceID: "instance-a"}
 	router.operationsControlState = func(_ context.Context, kind, owner string) (bool, bool, error) {
 		return kind == "maintenance" && owner == "runtime", true, nil
 	}
@@ -34,7 +32,7 @@ func TestOperationalControlsRejectMutationButAllowReadAndRecovery(t *testing.T) 
 }
 
 func TestOperationalControlsFailClosedWhenDurableStateUnavailable(t *testing.T) {
-	router := &HTTPRouter{healthRegistry: healthplatform.NewRegistry()}
+	router := &HTTPRouter{healthRegistry: newRuntimeHealthRegistry()}
 	router.operationsControlState = func(context.Context, string, string) (bool, bool, error) {
 		return false, false, context.DeadlineExceeded
 	}

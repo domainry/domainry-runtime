@@ -207,7 +207,7 @@ func TestPlanCreateMutationCoversInputAuthorizationReplayAndPlannerEdges(t *test
 			return definitionmodel.ObjectSchema{Key: "record_timer", Config: map[string]any{"record_timer_runtime": true}}, nil
 		}
 		_, _, err := NewRecordCreateApplicationService(dependencies).PlanCreateMutation(t.Context(), "record_timer", nil, "", principal)
-		if apperror.CodeOf(err) != "backend.scheduler.runtime_api_required" {
+		if apperror.CodeOf(err) != "backend.record_timer.runtime_api_required" {
 			t.Fatalf("err=%v", err)
 		}
 	})

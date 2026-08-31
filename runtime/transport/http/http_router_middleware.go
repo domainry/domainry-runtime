@@ -208,7 +208,7 @@ func (s *HTTPRouter) withCORS(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
 		}
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, If-Match, Last-Event-ID, Traceparent, Tracestate, Baggage, X-API-Key, X-User-ID, X-Role, X-User-Role, X-Preview-Role, X-Preview-User-ID, X-Workspace-ID, X-Request-ID, X-Correlation-ID, X-Domainry-Product-Surface, X-Operation-Reason, X-Operation-Confirmation, Builder-Task-ID, Idempotency-Key, Expected-Schema-Hash")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, If-Match, Last-Event-ID, Traceparent, Tracestate, Baggage, X-API-Key, X-User-ID, X-Role, X-User-Role, X-Preview-Role, X-Preview-User-ID, X-Workspace-ID, X-Request-ID, X-Correlation-ID, X-Operation-Reason, X-Operation-Confirmation, Builder-Task-ID, Idempotency-Key, Expected-Schema-Hash")
 		w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID, X-Correlation-ID, X-Resource-Hash, X-Operation-ID, X-Operation-Status, X-Operation-Replayed, Operation-ID, Operation-Location, Idempotency-Replayed")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		if r.Method == http.MethodOptions {
@@ -363,9 +363,6 @@ func anonymousAuthPath(path string) bool {
 		return false
 	}
 	if path == "/" || path == "/live" || path == "/ready" || path == "/startup" || path == "/v1/notification-deliveries:accept" || path == "/v1/scheduler-triggers:accept" || strings.HasPrefix(path, "/i18n/") {
-		return true
-	}
-	if path == "/agent-dialog/task-tools/invoke" {
 		return true
 	}
 	return false

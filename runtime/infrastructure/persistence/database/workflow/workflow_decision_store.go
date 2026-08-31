@@ -10,7 +10,6 @@ import (
 
 	"strings"
 
-	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -21,17 +20,12 @@ import (
 )
 
 type WorkflowDecisionStore struct {
-	store      *database.RuntimeStore
-	db         workflowDatabase
-	agentTasks agentpersistence.AgentTaskTransactionRepository
+	store *database.RuntimeStore
+	db    workflowDatabase
 }
 
-func NewWorkflowDecisionStore(store *database.RuntimeStore, agentTasks ...agentpersistence.AgentTaskTransactionRepository) WorkflowDecisionStore {
-	value := WorkflowDecisionStore{store: store}
-	if len(agentTasks) > 0 {
-		value.agentTasks = agentTasks[0]
-	}
-	return value
+func NewWorkflowDecisionStore(store *database.RuntimeStore) WorkflowDecisionStore {
+	return WorkflowDecisionStore{store: store}
 }
 
 func (r WorkflowDecisionStore) database() workflowDatabase {
@@ -156,24 +150,6 @@ func (r WorkflowDecisionStore) CommitWorkflowState(ctx context.Context, commit t
 			return err
 		}
 	}
-	for _, task := range commit.InsertAgentTasks {
-		task.WorkspaceID = workspaceID
-		if r.agentTasks == nil {
-			return fmt.Errorf("Agent transaction repository is unavailable")
-		}
-		if err := r.agentTasks.InsertAgentTask(ctx, tx, agentTaskMutation(task)); err != nil {
-			return err
-		}
-	}
-	for _, task := range commit.UpdateAgentTasks {
-		task.WorkspaceID = workspaceID
-		if r.agentTasks == nil {
-			return fmt.Errorf("Agent transaction repository is unavailable")
-		}
-		if err := r.agentTasks.UpdateAgentTask(ctx, tx, agentTaskMutation(task)); err != nil {
-			return err
-		}
-	}
 	for _, task := range commit.UpdateTasks {
 		task.WorkspaceID = workspaceID
 		if err := r.updateTaskTx(ctx, tx, task); err != nil {
@@ -211,16 +187,6 @@ func (r WorkflowDecisionStore) CommitWorkflowState(ctx context.Context, commit t
 		return fmt.Errorf("commit workflow state: %w", err)
 	}
 	return nil
-}
-
-func agentTaskMutation(run transactionmodel.WorkflowAgentTaskCommit) agentpersistence.AgentTaskMutation {
-	return agentpersistence.AgentTaskMutation{
-		WorkspaceID: run.WorkspaceID, RunID: run.RunID, IdempotencyKey: run.IdempotencyKey,
-		TaskKey: run.TaskKey, ProcessID: run.ProcessID, Status: run.Status, ExpectedStatus: run.ExpectedStatus,
-		LeaseOwner: run.LeaseOwner, FencingToken: run.FencingToken, LeaseExpiresAt: run.LeaseExpiresAt,
-		NextAttemptAt: run.NextAttemptAt, Payload: append([]byte(nil), run.Payload...),
-		CreatedAtMillis: run.CreatedAtMillis, UpdatedAtMillis: run.UpdatedAtMillis,
-	}
 }
 
 func recordMutationTxOptions() *sql.TxOptions {

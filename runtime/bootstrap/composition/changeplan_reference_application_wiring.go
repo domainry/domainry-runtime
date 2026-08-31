@@ -28,7 +28,8 @@ func (a businessReferenceRuntimeAdapter) PublishedSchedulerDefinitions(ctx conte
 	if a.records == nil || a.records.schedulerService == nil {
 		return []recordmodel.Record{}, nil
 	}
-	return a.records.schedulerService.PublishedDefinitions(ctx, principal)
+	definitions, err := a.records.schedulerService.PublishedDefinitions(ctx, principal)
+	return schedulerPublishedDefinitionRecords(definitions), err
 }
 
 func (a businessReferenceRuntimeAdapter) ListPublicationMessages(ctx context.Context, status, connectorKey string, limit int, principal principalmodel.Principal) ([]publicationmodel.Message, error) {

@@ -74,6 +74,7 @@ func ValidateRuntimeDefinitionGraph(manifest manifestmodel.ManifestSchema) error
 // validationState without becoming Connector source definitions.
 func ValidateRuntimeDefinitionGraphWithConnectorCatalog(manifest manifestmodel.ManifestSchema, connectorCatalog []connectormodel.ConnectorSchema) error {
 	state := newValidationState(manifest, connectorCatalog)
+	state.validateSchedulerOwnershipAndDefinitions()
 	state.validateObjects()
 	state.validateRoles()
 	state.validateDictionaries()
@@ -102,6 +103,7 @@ func ValidateManifestWithConnectorCatalog(manifest manifestmodel.ManifestSchema,
 	state := newValidationState(manifest, connectorCatalog)
 	state.validateRequiredShell()
 	state.validateSourceIntentCoverage()
+	state.validateSchedulerOwnershipAndDefinitions()
 	state.validateObjects()
 	state.validateRoles()
 	state.validateDictionaries()

@@ -95,8 +95,8 @@ func (s *RecordUpdateApplicationService) update(ctx context.Context, objectKey, 
 		s.denied(ctx, objectKey, recordID, principal, err, "object_permission", patch)
 		return recordmodel.Record{}, err
 	}
-	if err := recordpolicy.RecordValidateSchedulerOperationalCRUD(object, "update"); err != nil {
-		s.denied(ctx, objectKey, recordID, principal, err, "scheduler_runtime", patch)
+	if err := recordpolicy.RecordValidateRuntimeOwnedCRUD(object, "update"); err != nil {
+		s.denied(ctx, objectKey, recordID, principal, err, "runtime_owned", patch)
 		return recordmodel.Record{}, err
 	}
 	localizedValues, err := recordmodel.RecordNormalizeTranslations(object, translations)

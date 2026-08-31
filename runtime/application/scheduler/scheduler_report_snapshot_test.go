@@ -3,19 +3,34 @@ package scheduler
 import (
 	"context"
 	"testing"
+	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
 type schedulerReportSnapshotRuntime struct {
 	reportKey, idempotencyKey string
 	principal                 principalmodel.Principal
 	calls                     int
+}
+
+func TestSchedulerRejectsReportExportInsteadOfSynthesizingReportEvidence(t *testing.T) {
+	service := NewSchedulerApplicationService(schedulerAuthoringRuntime{})
+	_, err := service.DispatchOwnedTrigger(
+		t.Context(),
+		PublishedDefinition{Key: "nightly-export", Data: map[string]any{"target_type": "report_export", "target_key": "orders"}},
+		"run-1",
+		time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC),
+		25,
+		principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "scheduler-user"}},
+	)
+	if apperror.CodeOf(err) != "backend.scheduler.unsupported_target_type" {
+		t.Fatalf("report export dispatch err=%v", err)
+	}
 }
 
 func (r *schedulerReportSnapshotRuntime) RefreshSnapshot(_ context.Context, reportKey, idempotencyKey string, principal principalmodel.Principal) (reportmodel.ReportSnapshot, error) {
@@ -28,12 +43,12 @@ func TestSchedulerReportSnapshotTargetDelegatesWithDurableRunIdentity(t *testing
 	runtime := &schedulerReportSnapshotRuntime{}
 	service := &SchedulerApplicationService{}
 	service.UseReportSnapshotRuntime(runtime)
-	evidence, err := service.schedulerProcessReportSnapshotDefinition(t.Context(), "workspace-a", recordmodel.Record{Data: map[string]any{"target_key": "operations"}}, recordmodel.Record{ID: "run-1", Data: map[string]any{"idempotency_key": "window-1"}}, principalmodel.Principal{Principal: identitysdk.Principal{UserID: "scheduler-user"}})
-	if err != nil || runtime.calls != 1 || runtime.reportKey != "operations" || runtime.idempotencyKey != "window-1" || runtime.principal.WorkspaceID != "workspace-a" || len(evidence) != 1 || evidence[0].Kind != "report_snapshot_refreshed" || evidence[0].RecordID != "snapshot-1" {
-		t.Fatalf("runtime=%#v evidence=%#v err=%v", runtime, evidence, err)
+	receiptID, err := service.refreshScheduledReportSnapshot(t.Context(), "workspace-a", PublishedDefinition{Data: map[string]any{"target_key": "operations"}}, "window-1", principalmodel.Principal{Principal: identitysdk.Principal{UserID: "scheduler-user"}})
+	if err != nil || runtime.calls != 1 || runtime.reportKey != "operations" || runtime.idempotencyKey != "window-1" || runtime.principal.WorkspaceID != "workspace-a" || receiptID != "snapshot-1" {
+		t.Fatalf("runtime=%#v receipt=%q err=%v", runtime, receiptID, err)
 	}
 	service.UseReportSnapshotRuntime(nil)
-	if _, err := service.schedulerProcessReportSnapshotDefinition(t.Context(), "workspace-a", recordmodel.Record{}, recordmodel.Record{}, principalmodel.Principal{}); apperror.CodeOf(err) != "backend.scheduler.report_snapshot_runtime_unavailable" {
+	if _, err := service.refreshScheduledReportSnapshot(t.Context(), "workspace-a", PublishedDefinition{}, "", principalmodel.Principal{}); apperror.CodeOf(err) != "backend.scheduler.report_snapshot_runtime_unavailable" {
 		t.Fatalf("missing runtime err=%v", err)
 	}
 }

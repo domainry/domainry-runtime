@@ -19,7 +19,7 @@ func TestActionInvocationNormalizationAndProjection(t *testing.T) {
 	if normalized.ActionKey != "approve" || normalized.ObjectKey != "order" || normalized.RecordID != "one" || normalized.Principal.WorkspaceID != "run-as-space" || normalized.RequestID != "run-as-request" || normalized.Input == nil || normalized.Source != "" {
 		t.Fatalf("normalized=%+v", normalized)
 	}
-	for _, source := range []actionmodel.ActionSource{ActionSourceHTTP, ActionSourceWorkflow, ActionSourceAutomation, actionmodel.ActionSourceScheduler, ActionSourceIntegration, ActionSourceAgent, ActionSourceNested, ActionSourceBulk} {
+	for _, source := range []actionmodel.ActionSource{ActionSourceHTTP, ActionSourceWorkflow, ActionSourceAutomation, actionmodel.ActionSourceRecordTimer, ActionSourceIntegration, ActionSourceAgent, ActionSourceNested, ActionSourceBulk} {
 		if !actionSourceValid(source) {
 			t.Fatalf("valid source rejected: %q", source)
 		}

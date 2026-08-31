@@ -18,7 +18,7 @@ func TestAuthoringErrorResponsePreservesMachineReadableContract(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	if response["code"] != response["message_key"] || response["field_path"] != "operations[0].method" || response["capability_key"] != "integration.connector_operation" || response["contract_version"] != capabilityapplication.RuntimeAuthoringCapabilities().ContractVersion {
+	if response["code"] != response["message_key"] || response["field_path"] != "operations[0].method" || response["capability_key"] != "integration.catalog" || response["contract_version"] != capabilityapplication.RuntimeAuthoringCapabilities().ContractVersion {
 		t.Fatalf("unexpected machine-readable error response: %#v", response)
 	}
 }

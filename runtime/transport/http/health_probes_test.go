@@ -9,14 +9,22 @@ import (
 	"testing"
 	"time"
 
+	healthplatform "github.com/domainry/domainry-foundation/health"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
-	healthplatform "github.com/domainry/domainry-runtime/runtime/platform/health"
 )
 
 type probeReadinessRepository struct {
 	pingErr   error
 	migration deploymentmodel.MigrationStatus
+}
+
+type probeRuntimeStatus struct {
+	*deploymentapplication.DeploymentRuntimeStatusApplicationService
+}
+
+func (probeRuntimeStatus) Health(context.Context) map[string]any {
+	return map[string]any{"status": "ok"}
 }
 
 func (r probeReadinessRepository) Ping(context.Context) error { return r.pingErr }
@@ -54,7 +62,7 @@ func TestProbeWriterSeparatesUnavailableStatus(t *testing.T) {
 }
 
 func TestHealthRegistryCoversStartupDrainAndTimeoutState(t *testing.T) {
-	registry := healthplatform.NewRegistry()
+	registry := newRuntimeHealthRegistry()
 	check := healthplatform.Check{Name: "database", Criticality: healthplatform.Critical, Timeout: time.Millisecond, Run: func(ctx context.Context) error { <-ctx.Done(); return errors.New("database detail must not escape") }}
 	if snapshot := registry.Evaluate(t.Context(), []healthplatform.Check{check}); snapshot.Status != "unavailable" || snapshot.Checks[0].LastErrorCode != "timeout" {
 		t.Fatalf("snapshot=%#v", snapshot)
@@ -78,8 +86,8 @@ func TestReadinessReturnsUnavailableForDatabaseMigrationAndDrain(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			status := deploymentapplication.NewDeploymentRuntimeStatusApplicationService("runtime", "v1", nil, nil, testCase.repository, nil, nil, nil, nil)
-			router := &HTTPRouter{healthRegistry: healthplatform.NewRegistry(), healthCheckTimeout: 50 * time.Millisecond, runtimeStatus: status}
+			status := deploymentapplication.NewDeploymentRuntimeStatusApplicationService(nil, nil, testCase.repository, nil, nil, nil, nil)
+			router := &HTTPRouter{healthRegistry: newRuntimeHealthRegistry(), healthCheckTimeout: 50 * time.Millisecond, runtimeStatus: probeRuntimeStatus{status}}
 			router.MarkStartupComplete()
 			router.SetDraining(testCase.draining)
 			response := httptest.NewRecorder()
@@ -95,7 +103,7 @@ func TestReadinessReturnsUnavailableForDatabaseMigrationAndDrain(t *testing.T) {
 }
 
 func TestStartupRequiresManifestAndInitializedWorkers(t *testing.T) {
-	router := &HTTPRouter{healthRegistry: healthplatform.NewRegistry(), healthCheckTimeout: 50 * time.Millisecond}
+	router := &HTTPRouter{healthRegistry: newRuntimeHealthRegistry(), healthCheckTimeout: 50 * time.Millisecond}
 	response := httptest.NewRecorder()
 	router.startup(response, httptest.NewRequest(http.MethodGet, "/startup", nil))
 	if response.Code != http.StatusServiceUnavailable {

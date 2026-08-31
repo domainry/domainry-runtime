@@ -82,54 +82,6 @@ func (s *RecordDataExchangeApplicationService) EnqueueExport(ctx context.Context
 	return recordBatchJobFromDataExchange(job), replayed, err
 }
 
-func (s *RecordDataExchangeApplicationService) Get(ctx context.Context, jobID string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, error) {
-	if err := recordAuthorizeQuery(principal); err != nil {
-		return recordmodel.RecordBatchJob{}, err
-	}
-	if s == nil || s.dependencies.DataExchange == nil {
-		return recordmodel.RecordBatchJob{}, apperror.New(apperror.KindInternal, "backend.data_exchange.unavailable", nil, nil)
-	}
-	job, err := s.dependencies.DataExchange.Job(ctx, dataexchange.JobRequest{Scope: recordDataExchangeScope(principal), JobID: strings.TrimSpace(jobID)})
-	if err == nil && job.Provider != "records" {
-		return recordmodel.RecordBatchJob{}, apperror.New(apperror.KindNotFound, "backend.data_exchange.job_not_found", nil, nil)
-	}
-	return recordBatchJobFromDataExchange(job), err
-}
-
-func (s *RecordDataExchangeApplicationService) Cancel(ctx context.Context, jobID string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, error) {
-	if err := recordAuthorizeCommand(principal); err != nil {
-		return recordmodel.RecordBatchJob{}, err
-	}
-	if s == nil || s.dependencies.DataExchange == nil {
-		return recordmodel.RecordBatchJob{}, apperror.New(apperror.KindInternal, "backend.data_exchange.unavailable", nil, nil)
-	}
-	current, err := s.dependencies.DataExchange.Job(ctx, dataexchange.JobRequest{Scope: recordDataExchangeScope(principal), JobID: strings.TrimSpace(jobID)})
-	if err != nil {
-		return recordmodel.RecordBatchJob{}, err
-	}
-	if current.Provider != "records" {
-		return recordmodel.RecordBatchJob{}, apperror.New(apperror.KindNotFound, "backend.data_exchange.job_not_found", nil, nil)
-	}
-	job, err := s.dependencies.DataExchange.Cancel(ctx, dataexchange.JobRequest{Scope: recordDataExchangeScope(principal), JobID: current.ID})
-	return recordBatchJobFromDataExchange(job), err
-}
-
-func (s *RecordDataExchangeApplicationService) OpenDownload(ctx context.Context, jobID string, principal principalmodel.Principal) (recordmodel.RecordBatchJob, io.ReadCloser, error) {
-	job, err := s.Get(ctx, jobID, principal)
-	if err != nil {
-		return recordmodel.RecordBatchJob{}, nil, err
-	}
-	if job.Status != "completed" || job.Kind != "export" {
-		return recordmodel.RecordBatchJob{}, nil, apperror.New(apperror.KindConflict, "backend.data_exchange.result_not_ready", nil, nil)
-	}
-	artifact, err := s.dependencies.DataExchange.Download(ctx, dataexchange.JobRequest{Scope: recordDataExchangeScope(principal), JobID: job.ID})
-	if err != nil {
-		return recordmodel.RecordBatchJob{}, nil, err
-	}
-	job.ResultFilename, job.ResultType, job.ResultArtifactID = artifact.Filename, artifact.ContentType, artifact.ID
-	return job, artifact.Content, nil
-}
-
 func (s *RecordDataExchangeApplicationService) StartWorker(ctx context.Context, interval time.Duration, limit int) <-chan struct{} {
 	if s == nil || s.dependencies.DataExchange == nil {
 		done := make(chan struct{})

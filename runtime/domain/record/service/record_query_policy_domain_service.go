@@ -14,12 +14,11 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	collectionplatform "github.com/domainry/domainry-foundation/collection"
-	reportmodel "github.com/domainry/domainry-report-sdk/model"
 )
 
 type RecordQueryPolicyDependencies struct {
 	Objects               func() []definitionmodel.ObjectSchema
-	Reports               func() []reportmodel.ReportSchema
+	ReportObjects         func() map[string]struct{}
 	CandidateScopeMatches func(context.Context, string, recordmodel.Record, recordmodel.RecordScopeExpression) (bool, error)
 }
 
@@ -164,20 +163,11 @@ func (s *RecordQueryPolicyDomainService) canAccessSDKRecordScope(ctx context.Con
 }
 
 func (s *RecordQueryPolicyDomainService) isReportSnapshotObject(object definitionmodel.ObjectSchema) bool {
-	_, ok := RecordReportObjectKeySet(s.reports())[strings.TrimSpace(object.Key)]
-	return ok
-}
-
-func RecordReportObjectKeySet(reports []reportmodel.ReportSchema) map[string]struct{} {
-	out := map[string]struct{}{}
-	for _, report := range reports {
-		for _, objectKey := range reportmodel.ReportDatasetSnapshotObjectKeys(report.Dataset) {
-			if objectKey = strings.TrimSpace(objectKey); objectKey != "" {
-				out[objectKey] = struct{}{}
-			}
-		}
+	if s.dependencies.ReportObjects == nil {
+		return false
 	}
-	return out
+	_, ok := s.dependencies.ReportObjects()[strings.TrimSpace(object.Key)]
+	return ok
 }
 
 func queryPolicyObjectMap(objects []definitionmodel.ObjectSchema) map[string]definitionmodel.ObjectSchema {
@@ -193,11 +183,4 @@ func (s *RecordQueryPolicyDomainService) objects() []definitionmodel.ObjectSchem
 		return nil
 	}
 	return s.dependencies.Objects()
-}
-
-func (s *RecordQueryPolicyDomainService) reports() []reportmodel.ReportSchema {
-	if s.dependencies.Reports == nil {
-		return nil
-	}
-	return s.dependencies.Reports()
 }

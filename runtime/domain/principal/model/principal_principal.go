@@ -44,7 +44,6 @@ type Principal struct {
 	BusinessProfiles      []profilebindingmodel.Reference
 	ActiveBusinessProfile *profilebindingmodel.Reference
 	BusinessClaims        map[string]profilebindingmodel.ClaimValue
-	SurfaceKey            string
 	// SystemCapabilities are explicit, process-owned capabilities. They are
 	// honored only when SystemScope is valid and are never populated for a
 	// human, API-key, or other externally authenticated principal.

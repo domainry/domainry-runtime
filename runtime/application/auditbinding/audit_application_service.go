@@ -18,23 +18,8 @@ type AuditRepository = auditapplication.Store[principalmodel.SystemScope]
 type AuditEventWriterRepository = auditapplication.EventWriterStore
 type AuditEventRepository = auditapplication.EventStore
 
-type BusinessAuditEventDTO = auditapplication.BusinessAuditEventDTO
-type TenantGovernanceAuditEventDTO = auditapplication.TenantGovernanceAuditEventDTO
-type OperationsAuditEventDTO = auditapplication.OperationsAuditEventDTO
-type SurfaceAuditResult[T any] = auditapplication.SurfaceAuditResult[T]
-type BusinessAuditExportPrepared = auditapplication.BusinessAuditExportPrepared
-
-const (
-	PermissionBusinessAuditRead      = auditapplication.PermissionBusinessAuditRead
-	PermissionBusinessAuditExport    = auditapplication.PermissionBusinessAuditExport
-	PermissionTenantGovernanceRead   = auditapplication.PermissionTenantGovernanceRead
-	PermissionTenantGovernanceExport = auditapplication.PermissionTenantGovernanceExport
-	PermissionOperationsAuditRead    = auditapplication.PermissionOperationsAuditRead
-	PermissionOperationsAuditExport  = auditapplication.PermissionOperationsAuditExport
-)
-
-func NewAuditApplicationService(store AuditRepository, exporters ...auditcontract.Exporter) *AuditApplicationService {
-	return auditapplication.NewService(store, runtimePolicy(), exporters...)
+func NewAuditApplicationService(store AuditRepository) *AuditApplicationService {
+	return auditapplication.NewService(store, runtimePolicy())
 }
 
 func runtimePolicy() auditapplication.Policy[principalmodel.Principal, principalmodel.SystemScope] {
@@ -62,15 +47,6 @@ func runtimePolicy() auditapplication.Policy[principalmodel.Principal, principal
 		Known: func(principal principalmodel.Principal) bool { return principal.Known },
 		CanView: func(principal principalmodel.Principal) bool {
 			return principal.HasPermission("identity.audit.view") || principal.Allows("identity_permission", "read")
-		},
-		HasPermission: func(principal principalmodel.Principal, permission string, inherited bool) bool {
-			if inherited {
-				return principal.HasPermission(permission)
-			}
-			return principal.HasExactPermission(permission)
-		},
-		ExportPrincipal: func(principal principalmodel.Principal) auditcontract.ExportPrincipal {
-			return auditcontract.ExportPrincipal{WorkspaceID: principal.WorkspaceID, UserID: principal.UserID, RoleKey: principal.RoleKey, AuthorizationRevision: principal.AuthorizationRevision, SystemScope: string(principal.SystemScope.Kind), SystemCapabilities: append([]string(nil), principal.SystemCapabilities...), AuthorizationContext: principal}
 		},
 	}
 }
