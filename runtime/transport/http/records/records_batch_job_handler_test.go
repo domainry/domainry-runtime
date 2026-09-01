@@ -15,6 +15,7 @@ import (
 	"time"
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
+	"github.com/domainry/domainry-foundation/modulecapability"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
@@ -79,6 +80,7 @@ func newRecordBatchHTTPFixture(t *testing.T) recordBatchHTTPFixture {
 			_ = json.NewEncoder(w).Encode(map[string]string{"code": code})
 		},
 		WriteServiceError: func(w http.ResponseWriter, _ *http.Request, err error) {
+			t.Logf("record HTTP service error: %v", err)
 			status := http.StatusInternalServerError
 			switch apperror.KindOf(err) {
 			case apperror.KindBadRequest:
@@ -111,6 +113,7 @@ func newRecordBatchHTTPFixture(t *testing.T) recordBatchHTTPFixture {
 }
 
 type recordBatchDataExchangeProbe struct {
+	modulecapability.Binding
 	mu           sync.Mutex
 	jobs         map[string]dataexchange.Job
 	fingerprints map[string][]byte

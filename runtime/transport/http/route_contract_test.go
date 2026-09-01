@@ -46,7 +46,7 @@ func TestRoutePolicyUsesRegisteredPatternInsteadOfUserPathSegments(t *testing.T)
 
 	webhookRequest := httptest.NewRequest(http.MethodPost, "/integrations/webhooks/workspace-a/slack", nil)
 	webhookPolicy := routePolicyFor(mux, webhookRequest)
-	if !webhookPolicy.anonymous() || webhookPolicy.fallback {
+	if webhookPolicy.anonymous() || webhookPolicy.fallback {
 		t.Fatalf("unexpected webhook route policy: %#v", webhookPolicy)
 	}
 
@@ -226,17 +226,16 @@ func declaredRuntimeRoutes(t *testing.T) map[string]bool {
 	_, current, _, _ := runtime.Caller(0)
 	files := []string{filepath.Join(filepath.Dir(current), "http_router.go"), filepath.Join(filepath.Dir(current), "routes.go")}
 	files = append(files, filepath.Join(filepath.Dir(current), "records", "records_routes.go"))
-	files = append(files, filepath.Join(filepath.Dir(current), "agentdialog", "agentdialog_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "uploads", "uploads_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "discovery", "discovery_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "openapi", "openapi_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "workflows", "workflows_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "lifecycle", "lifecycle_routes.go"))
-	files = append(files, filepath.Join(filepath.Dir(current), "integrations", "integrations_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "automation", "automation_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "scheduler", "scheduler_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "appschema", "appschema_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "businessreferences", "businessreferences_routes.go"))
+	files = append(files, filepath.Join(filepath.Dir(current), "publicationhandoff", "publication_handoff_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "businesssystem", "businesssystem_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "capabilities", "capabilities_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "operations", "operations_routes.go"))

@@ -21,6 +21,7 @@ import (
 // tests. Store is only a test convenience: NewRuntimeServices expands it into
 // focused owner stores before entering the production composition root.
 type RuntimeServicesConfig struct {
+	InstallationWorkspaceID     string
 	TemplateID                  string
 	TemplateVersion             string
 	Name                        string

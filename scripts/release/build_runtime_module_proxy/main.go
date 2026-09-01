@@ -280,6 +280,7 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 	}{
 		{path: "github.com/domainry/domainry-orm", rootEnvironment: "DOMAINRY_ORM_REPO_ROOT", label: "ORM", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-foundation", rootEnvironment: "DOMAINRY_FOUNDATION_REPO_ROOT", label: "Foundation", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-connector-sdk", rootEnvironment: "DOMAINRY_CONNECTOR_SDK_REPO_ROOT", label: "Connector SDK", patterns: []string{"."}},
 		{path: "github.com/domainry/domainry-identity-sdk", rootEnvironment: "DOMAINRY_IDENTITY_SDK_REPO_ROOT", label: "Identity SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-agent-sdk", rootEnvironment: "DOMAINRY_AGENT_SDK_REPO_ROOT", label: "Agent SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-agent", rootEnvironment: "DOMAINRY_AGENT_REPO_ROOT", label: "Agent", patterns: []string{"./module", "./remote"}},
@@ -299,7 +300,9 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 		{path: "github.com/domainry/domainry-report", rootEnvironment: "DOMAINRY_REPORT_REPO_ROOT", label: "Report", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-metadata-sdk", rootEnvironment: "DOMAINRY_METADATA_SDK_REPO_ROOT", label: "Metadata SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-metadata", rootEnvironment: "DOMAINRY_METADATA_REPO_ROOT", label: "Metadata", patterns: []string{"./module"}},
+		{path: "github.com/domainry/domainry-identity", rootEnvironment: "DOMAINRY_IDENTITY_REPO_ROOT", label: "Identity", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-integration-sdk", rootEnvironment: "DOMAINRY_INTEGRATION_SDK_REPO_ROOT", label: "Integration SDK", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-connectors", rootEnvironment: "DOMAINRY_CONNECTORS_REPO_ROOT", label: "Connectors", patterns: []string{"./catalog"}},
 		{path: "github.com/domainry/domainry-integration", rootEnvironment: "DOMAINRY_INTEGRATION_REPO_ROOT", label: "Integration", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-lifecycle-sdk", rootEnvironment: "DOMAINRY_LIFECYCLE_SDK_REPO_ROOT", label: "Lifecycle SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-lifecycle", rootEnvironment: "DOMAINRY_LIFECYCLE_REPO_ROOT", label: "Lifecycle", patterns: []string{"./..."}},
@@ -322,6 +325,9 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 		result = append(result, identity)
 		versionOverrides[local.path] = downloaded.Version
 		published[local.path+"@"+downloaded.Version] = true
+		if local.path == "github.com/domainry/domainry-identity" {
+			versions[local.path] = downloaded.Version
+		}
 	}
 	for _, requirement := range parsed.Require {
 		if strings.HasPrefix(requirement.Mod.Path, "github.com/domainry/") {
@@ -403,6 +409,7 @@ func dependencyModule(repository, path, version string) (downloadedModule, error
 	for _, candidate := range []localModule{
 		{path: "github.com/domainry/domainry-orm", rootEnvironment: "DOMAINRY_ORM_REPO_ROOT", label: "ORM", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-foundation", rootEnvironment: "DOMAINRY_FOUNDATION_REPO_ROOT", label: "Foundation", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-connector-sdk", rootEnvironment: "DOMAINRY_CONNECTOR_SDK_REPO_ROOT", label: "Connector SDK", patterns: []string{"."}},
 		{path: "github.com/domainry/domainry-identity-sdk", rootEnvironment: "DOMAINRY_IDENTITY_SDK_REPO_ROOT", label: "Identity SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-agent-sdk", rootEnvironment: "DOMAINRY_AGENT_SDK_REPO_ROOT", label: "Agent SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-agent", rootEnvironment: "DOMAINRY_AGENT_REPO_ROOT", label: "Agent", patterns: []string{"./module", "./remote"}},
@@ -456,14 +463,7 @@ func localReplacementRoot(repository, path string) string {
 		}
 		return filepath.Clean(root)
 	}
-	localSibling := map[string]bool{
-		"github.com/domainry/domainry-agent-sdk": true, "github.com/domainry/domainry-agent": true,
-		"github.com/domainry/domainry-lifecycle-sdk": true, "github.com/domainry/domainry-lifecycle": true,
-		"github.com/domainry/domainry-metadata-sdk": true, "github.com/domainry/domainry-metadata": true,
-		"github.com/domainry/domainry-report-sdk": true, "github.com/domainry/domainry-report": true,
-		"github.com/domainry/domainry-scheduler-sdk": true, "github.com/domainry/domainry-scheduler": true,
-	}
-	if !localSibling[path] {
+	if !strings.HasPrefix(path, "github.com/domainry/") {
 		return ""
 	}
 	candidate := filepath.Join(filepath.Dir(repository), strings.TrimPrefix(path, "github.com/domainry/"))
@@ -736,8 +736,18 @@ func moduleBuildClosure(repository string, patterns ...string) ([]string, error)
 
 func localDependencyModFile(repository string) (string, func(), error) {
 	replacements := []struct{ path, environment string }{
+		{path: "github.com/domainry/domainry-foundation", environment: "DOMAINRY_FOUNDATION_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-identity-sdk", environment: "DOMAINRY_IDENTITY_SDK_REPO_ROOT"},
 		{path: "github.com/domainry/domainry-agent-sdk", environment: "DOMAINRY_AGENT_SDK_REPO_ROOT"},
 		{path: "github.com/domainry/domainry-agent", environment: "DOMAINRY_AGENT_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-audit-sdk", environment: "DOMAINRY_AUDIT_SDK_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-audit", environment: "DOMAINRY_AUDIT_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-notification-sdk", environment: "DOMAINRY_NOTIFICATION_SDK_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-notification", environment: "DOMAINRY_NOTIFICATION_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-party-sdk", environment: "DOMAINRY_PARTY_SDK_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-party", environment: "DOMAINRY_PARTY_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-monitoring-sdk", environment: "DOMAINRY_MONITORING_SDK_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-monitoring", environment: "DOMAINRY_MONITORING_REPO_ROOT"},
 		{path: "github.com/domainry/domainry-lifecycle-sdk", environment: "DOMAINRY_LIFECYCLE_SDK_REPO_ROOT"},
 		{path: "github.com/domainry/domainry-lifecycle", environment: "DOMAINRY_LIFECYCLE_REPO_ROOT"},
 		{path: "github.com/domainry/domainry-metadata-sdk", environment: "DOMAINRY_METADATA_SDK_REPO_ROOT"},
@@ -746,6 +756,10 @@ func localDependencyModFile(repository string) (string, func(), error) {
 		{path: "github.com/domainry/domainry-report", environment: "DOMAINRY_REPORT_REPO_ROOT"},
 		{path: "github.com/domainry/domainry-scheduler-sdk", environment: "DOMAINRY_SCHEDULER_SDK_REPO_ROOT"},
 		{path: "github.com/domainry/domainry-scheduler", environment: "DOMAINRY_SCHEDULER_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-data-exchange-sdk", environment: "DOMAINRY_DATA_EXCHANGE_SDK_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-data-exchange", environment: "DOMAINRY_DATA_EXCHANGE_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-integration-sdk", environment: "DOMAINRY_INTEGRATION_SDK_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-integration", environment: "DOMAINRY_INTEGRATION_REPO_ROOT"},
 	}
 	contents, err := os.ReadFile(filepath.Join(repository, "go.mod"))
 	if err != nil {

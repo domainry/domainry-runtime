@@ -17,12 +17,14 @@ Report 通过 SDK `ApplicationBinding` 独占以下用例与规则：
 
 Runtime 不再发布 Report handler、静态 OpenAPI path、endpoint policy、第二套 query/snapshot application service 或 `ReportDomainService` 执行引擎。Runtime 保留的代码必须属于宿主或跨 owner 边界：身份解析，授权后的 Record/SQL 读取，source version，execution audit，snapshot terminal 与 Notification 的原子提交，以及 Report export 与 Audit、Record、Data Exchange 的编排适配。Report 负责 fallback join、cardinality、filter、aggregate、analysis、Object SQL 规划和全部 export policy；Runtime adapter 只回答当前 Record/field 授权事实并执行 Report 已编译的 SQL plan。Data Exchange 的 Report worker 通过 SDK `Exports.ResolveExecution`、`ReadPage`、`SourceVersion` 完成当前定义解析、scope 授权、分页执行和 fencing；不得从 Runtime Application Schema、Manifest 副本或 Runtime 自建 Report 引擎读取/执行。
 
+数据集计划验证、Object SQL 定义编译、canonical hash/filename 和 portable object/field metadata 在 `domainry-report-sdk/contract` 与 `domainry-report-sdk/query` 单源维护。Runtime 不得导入 `domainry-report/contract` 或 `domainry-report/query/*`；Report 实现仓只保留向 SDK 转发的兼容 facade 与在线执行引擎。
+
 导出 prepare 成功后，Data Exchange 是唯一 job/artifact owner。查询、取消和下载走 `/data-exchange/jobs/*`；不得恢复 `/report-exports/*` 生命周期别名。Report 的 prepare 响应 `Location` 指向 Data Exchange 的规范任务地址。
 
 ## 代码接入
 
 - Bootstrap、定义同步与 ApplicationHost：`runtime/bootstrap/runtime/report_module_host.go`、`runtime/bootstrap/runtime/startup.go`
-- Host anti-corruption adapter：`runtime/application/report/adapter/report_module_host.go`
+- Host anti-corruption adapter：`runtime/modulehost/report/report_module_host.go`
 - 跨 owner export adapter：`runtime/application/report/export`
 - SDK application 绑定：`runtime/bootstrap/composition/report_application_binding.go`
 - Module/SDK：`domainry-report/module`、`domainry-report-sdk`

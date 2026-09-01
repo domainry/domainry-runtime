@@ -9,14 +9,14 @@ import (
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	reportsdk "github.com/domainry/domainry-report-sdk"
+	reportcontract "github.com/domainry/domainry-report-sdk/contract"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
-	reportcontract "github.com/domainry/domainry-report/contract"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
-	reportadapter "github.com/domainry/domainry-runtime/runtime/application/report/adapter"
 	reportexport "github.com/domainry/domainry-runtime/runtime/application/report/export"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	reportadapter "github.com/domainry/domainry-runtime/runtime/modulehost/report"
 	"github.com/domainry/domainry-runtime/runtime/platform/productbrand"
 )
 
@@ -179,8 +179,8 @@ func (s *ReportExportApplicationService) probeReportExport(ctx context.Context, 
 		if err != nil {
 			return nil, reportmodel.ReportSnapshotSourceVersion{}, 0, err
 		}
-		beforeHash, beforeHashErr := reportcontract.CanonicalReportJSONSHA256(before)
-		afterHash, afterHashErr := reportcontract.CanonicalReportJSONSHA256(after)
+		beforeHash, beforeHashErr := reportcontract.CanonicalJSONSHA256(before)
+		afterHash, afterHashErr := reportcontract.CanonicalJSONSHA256(after)
 		if beforeHashErr == nil && afterHashErr == nil && beforeHash == afterHash {
 			return rows, after, exact, nil
 		}

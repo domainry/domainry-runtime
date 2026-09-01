@@ -219,7 +219,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	if !cfg.SkipManifestValidation && !(cfg.AllowEmptyAuthoringManifest && runtimeManifestHasNoBusinessObjects(seedManifest)) {
 		mustCompleteRuntimeStartup(manifestvalidation.ValidateManifest(ownerProjectedManifest))
 	}
-	mustCompleteRuntimeStartup(synchronizeReportDefinitions(ctx, reportBinding, seedManifest))
+	mustCompleteRuntimeStartup(SynchronizeReportDefinitions(ctx, reportBinding, seedManifest))
 	restoredMetadata, err := restoreRuntimeMetadata(ctx, store, seedManifest)
 	mustCompleteRuntimeStartup(err)
 	manifest := restoredMetadata.manifest

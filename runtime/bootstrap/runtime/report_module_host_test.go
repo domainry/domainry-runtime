@@ -37,7 +37,7 @@ func TestReportModuleAdoptsRuntimeSnapshotTableAndOwnsDefinitions(t *testing.T) 
 		t.Fatal(err)
 	}
 	manifest := manifestmodel.ManifestSchema{TemplateID: "template", Version: "7", Reports: []reportmodel.ReportSchema{{Key: "summary", Name: "Summary"}}}
-	if err := synchronizeReportDefinitions(t.Context(), binding, manifest); err != nil {
+	if err := SynchronizeReportDefinitions(t.Context(), binding, manifest); err != nil {
 		t.Fatal(err)
 	}
 	var snapshots, definitions, migrations int

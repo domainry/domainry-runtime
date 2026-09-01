@@ -2,10 +2,24 @@ package capability
 
 import (
 	"reflect"
+	"sort"
 	"testing"
 
 	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 )
+
+func TestRuntimeAuthoringCapabilitiesContainOnlyRuntimeOwnedDomains(t *testing.T) {
+	contract := RuntimeAuthoringCapabilities()
+	got := make([]string, 0, len(contract.Domains))
+	for _, domain := range contract.Domains {
+		got = append(got, domain.Key)
+	}
+	sort.Strings(got)
+	want := []string{"action", "automation", "maintenance", "principal", "schema", "workflow"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Runtime authoring ownership drifted: got=%v want=%v", got, want)
+	}
+}
 
 func TestRuntimeAuthoringCapabilitiesAreValidAndDeterministic(t *testing.T) {
 	first := RuntimeAuthoringCapabilities()
@@ -30,13 +44,6 @@ func TestRuntimeAuthoringCapabilitiesAreValidAndDeterministic(t *testing.T) {
 		if err := endpointContract.Validate(); err != nil {
 			t.Fatalf("invalid discovered endpoint contract %q: %v", endpointContract.EndpointIdentity, err)
 		}
-	}
-}
-
-func TestRuntimeAuthoringErrorContractClassification(t *testing.T) {
-	contract := RuntimeAuthoringErrorContract("backend.integration.connector.operation_method_invalid", map[string]string{"field": "operations[0].method"})
-	if contract.CapabilityKey != "integration.catalog" || contract.FieldPath != "operations[0].method" {
-		t.Fatalf("unexpected authoring error contract: %#v", contract)
 	}
 }
 

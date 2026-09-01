@@ -4,8 +4,8 @@ import (
 	"strings"
 
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
-	reportengine "github.com/domainry/domainry-report/query/engine"
-	reportobjectsql "github.com/domainry/domainry-report/query/objectsql"
+	reportengine "github.com/domainry/domainry-report-sdk/query"
+	reportobjectsql "github.com/domainry/domainry-report-sdk/query/objectsql"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )

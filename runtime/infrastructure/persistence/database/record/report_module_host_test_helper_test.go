@@ -3,16 +3,16 @@ package record_test
 import (
 	"testing"
 
+	reportsdkcontract "github.com/domainry/domainry-report-sdk/contract"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
-	reportownercontract "github.com/domainry/domainry-report/contract"
-	reportadapter "github.com/domainry/domainry-runtime/runtime/application/report/adapter"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
+	reportadapter "github.com/domainry/domainry-runtime/runtime/modulehost/report"
 )
 
 func readAuthorizedReportSources(t *testing.T, report reportmodel.ReportSchema, principal principalmodel.Principal, access reportcontract.ReportRecordAccess, records reportcontract.ReportRecordReader) reportmodel.ReportDatasetReadResult {
 	t.Helper()
-	plan, err := reportownercontract.BuildReportDatasetPlan(report)
+	plan, err := reportsdkcontract.BuildReportDatasetPlan(report)
 	if err != nil {
 		t.Fatal(err)
 	}

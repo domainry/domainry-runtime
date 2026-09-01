@@ -33,7 +33,7 @@ func executeRecordTimer(ctx context.Context, execution recordtimerapplication.Re
 			phase, _ := execution.Payload["phase"].(string)
 			return workflows.ProcessApprovalDeadlineTimer(ctx, execution.WorkspaceID, taskID, phase, principal)
 		default:
-			return fmt.Errorf("unsupported Record Timer workflow target %q", execution.TargetKey)
+			return fmt.Errorf("unsupported workflow timer target %q", execution.TargetKey)
 		}
 	case "action":
 		_, err := actionService.Invoke(ctx, actionmodel.ActionSourceRecordTimer, actionmodel.ActionInvocation{ActionKey: execution.TargetKey, ObjectKey: execution.ObjectKey, RecordID: execution.RecordID, Input: execution.Payload, Principal: principal, Actor: principal, IdempotencyKey: execution.IdempotencyKey})
@@ -62,7 +62,7 @@ func newRecordTimerTargetRuntimeAdapter(s *runtimeAssembly) recordTimerTargetRun
 		switch execution.TargetType {
 		case "workflow":
 			if s.workflowApplicationService == nil {
-				return fmt.Errorf("unsupported Record Timer workflow target %q", execution.TargetKey)
+				return fmt.Errorf("unsupported workflow timer target %q", execution.TargetKey)
 			}
 		case "action":
 			if s.actionService == nil {

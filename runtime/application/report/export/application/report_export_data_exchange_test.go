@@ -9,6 +9,7 @@ import (
 	"time"
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
+	"github.com/domainry/domainry-foundation/modulecapability"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
@@ -19,6 +20,7 @@ import (
 )
 
 type reportDataExchangeBindingProbe struct {
+	modulecapability.Binding
 	job        dataexchange.Job
 	submission dataexchange.ExportRequest
 	artifact   dataexchange.Artifact

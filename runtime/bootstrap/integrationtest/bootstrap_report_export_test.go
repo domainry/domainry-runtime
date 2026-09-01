@@ -19,7 +19,7 @@ func TestRuntimeCRMReportObjectExportsRetireTheUngovernedSecondQuery(t *testing.
 		UploadDir:      filepath.Join(t.TempDir(), "uploads"),
 	})
 	defer application.CloseContext(t.Context())
-	handler := application.Routes()
+	handler := integrationModuleOwnerRoutes(t, application, "report")
 
 	for _, path := range []string{
 		"/reports/crm_pipeline_health/exports/opportunity",

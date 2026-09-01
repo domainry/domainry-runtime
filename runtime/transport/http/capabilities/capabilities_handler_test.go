@@ -3,10 +3,8 @@ package capabilities
 import (
 	"context"
 	"encoding/json"
-	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -68,8 +66,7 @@ func TestPlatformCapabilitiesWritesServiceErrorForNonAdministrator(t *testing.T)
 func TestCapabilityDiscoveryRoutesLoadIndexDomainDetailAndReferences(t *testing.T) {
 	service := capabilityapplication.NewCapabilityAuthoringApplicationService(func(context.Context, principalmodel.Principal) capabilitycontract.CapabilityInstanceSchema {
 		return capabilitycontract.CapabilityInstanceSchema{
-			Objects:      []definitionmodel.ObjectSchema{{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "status"}}}},
-			Integrations: connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{{Key: "webhook", Providers: []connectormodel.ConnectorProviderSchema{{Key: "generic", ConfigFields: []definitionmodel.FieldSchema{{Key: "url", Name: "URL", Type: "text", Required: true}}}}}}},
+			Objects: []definitionmodel.ObjectSchema{{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "status"}}}},
 		}
 	})
 	handler := NewCapabilitiesHandler(CapabilitiesDependencies{
@@ -88,16 +85,12 @@ func TestCapabilityDiscoveryRoutesLoadIndexDomainDetailAndReferences(t *testing.
 		"/tenant-admin/platform-capabilities/index",
 		"/tenant-admin/platform-capabilities/domains/schema?status=supported",
 		"/tenant-admin/platform-capabilities/capabilities/schema.object",
-		"/tenant-admin/platform-capabilities/capabilities/integration.connection?connector_key=webhook&provider_key=generic",
 		"/tenant-admin/platform-capabilities/references/field_key?scope=order",
 	} {
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
 		if response.Code != http.StatusOK || response.Header().Get("ETag") == "" {
 			t.Fatalf("path=%s status=%d etag=%q body=%s", path, response.Code, response.Header().Get("ETag"), response.Body.String())
-		}
-		if strings.Contains(path, "integration.connection") && !strings.Contains(response.Body.String(), `"connector_key":"webhook"`) {
-			t.Fatalf("path=%s response did not include specialization: %s", path, response.Body.String())
 		}
 		cached := httptest.NewRequest(http.MethodGet, path, nil)
 		cached.Header.Set("If-None-Match", response.Header().Get("ETag"))
@@ -106,6 +99,11 @@ func TestCapabilityDiscoveryRoutesLoadIndexDomainDetailAndReferences(t *testing.
 		if cachedResponse.Code != http.StatusNotModified {
 			t.Fatalf("path=%s cached status=%d", path, cachedResponse.Code)
 		}
+	}
+	external := httptest.NewRecorder()
+	mux.ServeHTTP(external, httptest.NewRequest(http.MethodGet, "/tenant-admin/platform-capabilities/capabilities/integration.connection", nil))
+	if external.Code != http.StatusBadRequest {
+		t.Fatalf("external owner capability remained in Runtime discovery: status=%d body=%s", external.Code, external.Body.String())
 	}
 }
 

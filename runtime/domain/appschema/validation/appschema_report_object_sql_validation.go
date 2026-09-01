@@ -4,7 +4,7 @@ import (
 	"strconv"
 
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
-	reportobjectsql "github.com/domainry/domainry-report/query/objectsql"
+	reportobjectsql "github.com/domainry/domainry-report-sdk/query/objectsql"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 )
 

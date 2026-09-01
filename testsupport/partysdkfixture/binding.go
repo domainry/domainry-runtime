@@ -5,6 +5,7 @@ package partysdkfixture
 import (
 	"context"
 
+	"github.com/domainry/domainry-foundation/modulecapability"
 	partysdk "github.com/domainry/domainry-party-sdk"
 	"github.com/domainry/domainry-party-sdk/contract"
 )
@@ -29,6 +30,7 @@ type CatalogRepository interface {
 }
 
 type binding struct {
+	modulecapability.Binding
 	workspace           string
 	directoryRepository DirectoryRepository
 	catalogRepository   CatalogRepository

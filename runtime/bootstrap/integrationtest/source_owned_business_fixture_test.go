@@ -159,6 +159,9 @@ func initializedIntegrationRuntimeConfig(cfg config.Config) config.Config {
 	if strings.TrimSpace(cfg.PartyWorkspaceID) == "" {
 		cfg.PartyWorkspaceID = cfg.IdentityWorkspaceID
 	}
+	if strings.TrimSpace(cfg.AuditExportTokenKey) == "" {
+		cfg.AuditExportTokenKey = "integrationtest-audit-export-signing-key"
+	}
 	return cfg
 }
 
@@ -266,6 +269,10 @@ func newIntegrationRuntime(t *testing.T, cfg config.Config) *bootstrap.Runtime {
 	if strings.TrimSpace(cfg.RuntimeVersion) == "" {
 		cfg.RuntimeVersion = "integrationtest-runtime-v1"
 	}
+	// Connector and Connection definitions are Integration-owned. The legacy
+	// business fixture keeps historical integration traces as seed evidence,
+	// but must not republish an owner catalog through the Runtime manifest.
+	delete(manifest, "integrations")
 	registry.Freeze()
 	normalized, err := json.Marshal(manifest)
 	if err != nil {

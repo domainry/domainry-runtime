@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	reportsdkcontract "github.com/domainry/domainry-report-sdk/contract"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
-	reportownercontract "github.com/domainry/domainry-report/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	workflowvalidation "github.com/domainry/domainry-runtime/runtime/domain/workflow/validation"
@@ -243,7 +243,7 @@ func (state *validationState) validateReports() {
 			state.add(path+".dataset", "backend.report.execution_definition_missing")
 			continue
 		}
-		if _, err := reportownercontract.BuildReportDatasetPlan(report); err != nil {
+		if _, err := reportsdkcontract.BuildReportDatasetPlan(report); err != nil {
 			state.addReportPlanError(path, err)
 		}
 		for _, objectKey := range reportmodel.ReportDatasetObjectKeys(report.Dataset) {

@@ -4,18 +4,7 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
-
-func schedulerWorkspaceID(principal principalmodel.Principal) string {
-	if workspaceID, err := principalmodel.NewWorkspaceID(principal.WorkspaceID); err == nil {
-		return workspaceID.String()
-	}
-	if principal.SystemScope.Valid() {
-		return principalmodel.InstallationWorkspaceID
-	}
-	return ""
-}
 
 func badRequest(code string, params ...string) error {
 	return schedulerError(apperror.KindBadRequest, code, nil, params...)
@@ -41,11 +30,4 @@ func schedulerError(kind apperror.ErrorKind, code string, err error, params ...s
 		values = nil
 	}
 	return &apperror.AppError{Kind: kind, Code: code, Params: values, Err: err}
-}
-
-func valueOrDefault(value, fallback string) string {
-	if strings.TrimSpace(value) == "" {
-		return fallback
-	}
-	return value
 }

@@ -1213,17 +1213,12 @@
     "connectors": [
       {
         "key": "mock",
-        "type": "mock",
-        "provider": "fixture",
         "providers": [
           {
             "key": "fixture"
           }
         ],
         "name": "Mock Connector",
-        "capabilities": [
-          "sync_call"
-        ],
         "operations": [
           {
             "key": "business_license.recognize",

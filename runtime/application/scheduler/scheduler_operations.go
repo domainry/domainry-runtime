@@ -8,7 +8,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
+	schedulermodulehost "github.com/domainry/domainry-runtime/runtime/modulehost/scheduler"
 	"github.com/domainry/domainry-scheduler-sdk/schedule"
 )
 
@@ -20,17 +20,9 @@ type SchedulerDefinitionSimulation struct {
 	TargetKey  string `json:"target_key,omitempty"`
 }
 
-type ScheduledWorkflowRuntime interface {
-	ProcessDueWorkflowExecutions(context.Context, int, principalmodel.Principal) (workflowmodel.WorkflowProcessResult, error)
-}
-
-type TargetedScheduledWorkflowRuntime interface {
-	ProcessDueWorkflowExecutionsForTarget(context.Context, string, int, principalmodel.Principal) (workflowmodel.WorkflowProcessResult, error)
-}
-
-type WindowedScheduledWorkflowRuntime interface {
-	ProcessDueWorkflowExecutionsForScheduledWindow(context.Context, string, time.Time, int, principalmodel.Principal) (workflowmodel.WorkflowProcessResult, error)
-}
+type ScheduledWorkflowRuntime = schedulermodulehost.ScheduledWorkflowRuntime
+type TargetedScheduledWorkflowRuntime = schedulermodulehost.TargetedScheduledWorkflowRuntime
+type WindowedScheduledWorkflowRuntime = schedulermodulehost.WindowedScheduledWorkflowRuntime
 
 func (s *SchedulerApplicationService) SimulateTenantAdminDefinition(ctx context.Context, definitionID string, principal principalmodel.Principal) (SchedulerDefinitionSimulation, error) {
 	if err := schedulerDefinitionWriteAllowed(principal); err != nil {
@@ -40,10 +32,11 @@ func (s *SchedulerApplicationService) SimulateTenantAdminDefinition(ctx context.
 	if err != nil {
 		return SchedulerDefinitionSimulation{}, err
 	}
-	if err := validateSchedulerDefinitionContract(ctx, definition.Data); err != nil {
-		return SchedulerDefinitionSimulation{}, err
+	nextRuns, err := schedule.PreviewDefinitionData(ctx, definition.Data, s.clock.Now(), 1)
+	if err != nil {
+		return SchedulerDefinitionSimulation{}, apperror.FromError(apperror.KindBadRequest, err)
 	}
-	next := schedule.NextSchedule(schedulerScheduleFromData(definition.Data), s.clock.Now())
+	next := nextRuns[0]
 	return SchedulerDefinitionSimulation{
 		Status: "simulated", Message: "backend.scheduler.simulated", NextRunAt: next.UTC().Format(time.RFC3339),
 		TargetType: schedulerDefinitionTargetType(definition), TargetKey: strings.TrimSpace(fmt.Sprint(definition.Data["target_key"])),

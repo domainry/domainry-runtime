@@ -27,6 +27,7 @@ func TestBootstrapEntrypointsAssembleRunnableGraphs(t *testing.T) {
 		PartyTenantID:              "tenant-primary",
 		PartyWorkspaceID:           "workspace-primary",
 		DatabaseDriver:             "sqlite",
+		AuditExportTokenKey:        "test-audit-export-signing-key",
 		DBPath:                     filepath.Join(t.TempDir(), "runtime.db"),
 		ManifestPath:               filepath.Join("..", "domain", "manifest", "testdata", "manifests", "domain-only-minimal.json"),
 		UploadDir:                  filepath.Join(t.TempDir(), "uploads"),
@@ -62,6 +63,7 @@ func TestBootstrapExtensionAndProjectFacadeEntrypoints(t *testing.T) {
 		AppLocale: "en-US", DatabaseDriver: "sqlite", ManifestPath: filepath.Join("..", "domain", "manifest", "testdata", "manifests", "domain-only-minimal.json"), UploadDir: t.TempDir(), HTTPShutdownTimeout: time.Second,
 		IdentityWorkspaceID: "workspace-primary", NotificationTenantID: "tenant-primary", NotificationWorkspaceID: "workspace-primary",
 		PartyTenantID: "tenant-primary", PartyWorkspaceID: "workspace-primary",
+		AuditExportTokenKey: "test-audit-export-signing-key",
 	}
 	handlers := runtimeext.NewBusinessHandlerRegistry()
 	handlers.Freeze()

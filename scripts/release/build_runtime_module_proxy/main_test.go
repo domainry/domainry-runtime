@@ -92,7 +92,7 @@ import (
 		dependencyVersions[dependency.Path] = dependency.Version
 	}
 	for _, dependency := range []struct{ path, version string }{
-		{"github.com/domainry/domainry-identity", identityModuleVersion},
+		{"github.com/domainry/domainry-identity", dependencyVersions["github.com/domainry/domainry-identity"]},
 		{"github.com/domainry/domainry-identity-sdk", dependencyVersions["github.com/domainry/domainry-identity-sdk"]},
 	} {
 		if dependency.version == "" {
@@ -106,13 +106,15 @@ import (
 			}
 		}
 	}
-	for path, wantVersion := range map[string]string{
-		"github.com/domainry/domainry-identity-sdk":     "v0.1.1-dev7",
-		"github.com/domainry/domainry-notification-sdk": "v0.1.0-dev.7",
-		"github.com/domainry/domainry-notification":     "v0.1.0-dev.20",
+	for _, path := range []string{
+		"github.com/domainry/domainry-identity",
+		"github.com/domainry/domainry-identity-sdk",
+		"github.com/domainry/domainry-notification-sdk",
+		"github.com/domainry/domainry-notification",
+		"github.com/domainry/domainry-connectors",
 	} {
-		if version := dependencyVersions[path]; version != wantVersion {
-			t.Fatalf("released dependency %s version=%q, want %q", path, version, wantVersion)
+		if version := dependencyVersions[path]; !strings.HasPrefix(version, "v0.999.0-domainry.") {
+			t.Fatalf("workspace dependency %s version=%q is not content-addressed", path, version)
 		}
 	}
 	runtimeMod, err := os.ReadFile(filepath.Join(proxy, filepath.FromSlash(runtimeModulePath), "@v", result.Version+".mod"))

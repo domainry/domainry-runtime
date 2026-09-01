@@ -12,13 +12,13 @@ import (
 	"testing"
 )
 
-func TestWorkflowAndIntegrationRepositoriesUseStructuredBuilders(t *testing.T) {
+func TestWorkflowRepositoriesUseStructuredBuilders(t *testing.T) {
 	_, source, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("resolve persistence boundary path")
 	}
 	root := filepath.Dir(source)
-	for _, owner := range []string{"workflow", "integration"} {
+	for _, owner := range []string{"workflow"} {
 		err := filepath.WalkDir(filepath.Join(root, owner), func(path string, entry os.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr

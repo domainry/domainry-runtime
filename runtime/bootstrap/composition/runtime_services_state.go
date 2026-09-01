@@ -34,7 +34,6 @@ import (
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
-	reportadapter "github.com/domainry/domainry-runtime/runtime/application/report/adapter"
 	reportexportapplication "github.com/domainry/domainry-runtime/runtime/application/report/export/application"
 	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
@@ -52,6 +51,7 @@ import (
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
+	reportadapter "github.com/domainry/domainry-runtime/runtime/modulehost/report"
 )
 
 // runtimeAssembly is the private, constructor-only composition graph.

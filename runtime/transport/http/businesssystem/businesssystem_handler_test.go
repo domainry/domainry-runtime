@@ -77,9 +77,6 @@ func businessSystemHandlerApplication(featureErr error) *businesssystemapplicati
 			SchemaForPrincipal: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 				return schema
 			},
-			SchemaObjectMap: func(context.Context) map[string]definitionmodel.ObjectSchema {
-				return map[string]definitionmodel.ObjectSchema{}
-			},
 			ListRecords: func(context.Context, string, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error) {
 				return recordmodel.RecordPageResult{}, nil
 			},

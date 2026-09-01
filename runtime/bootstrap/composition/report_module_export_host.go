@@ -5,8 +5,8 @@ import (
 
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
-	reportadapter "github.com/domainry/domainry-runtime/runtime/application/report/adapter"
 	reportexportapplication "github.com/domainry/domainry-runtime/runtime/application/report/export/application"
+	reportadapter "github.com/domainry/domainry-runtime/runtime/modulehost/report"
 )
 
 type reportModuleExportHost struct {

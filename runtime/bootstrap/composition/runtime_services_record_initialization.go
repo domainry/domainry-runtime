@@ -11,13 +11,13 @@ import (
 	principalapplication "github.com/domainry/domainry-runtime/runtime/application/principal"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordruntime "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
-	reportadapter "github.com/domainry/domainry-runtime/runtime/application/report/adapter"
 	reportexportapplication "github.com/domainry/domainry-runtime/runtime/application/report/export/application"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	recordexecutionruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
+	reportadapter "github.com/domainry/domainry-runtime/runtime/modulehost/report"
 )
 
 type recordRuntimeState struct {

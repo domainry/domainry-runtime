@@ -8,6 +8,7 @@ import (
 	"time"
 
 	capacityplatform "github.com/domainry/domainry-foundation/capacity"
+	"github.com/domainry/domainry-foundation/modulehttp"
 	"github.com/domainry/domainry-foundation/ratelimit"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -143,6 +144,7 @@ type HTTPRouterDependencies struct {
 	RuntimeInstanceID         string
 	BusinessEventBackplane    businesseventcontract.Backplane
 	RateLimiter               ratelimit.Limiter
+	ModuleHTTPSurfaces        []modulehttp.Surface
 }
 
 type HTTPRouterHandlers struct {

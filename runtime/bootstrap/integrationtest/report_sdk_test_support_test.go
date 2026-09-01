@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
-	reportadapter "github.com/domainry/domainry-runtime/runtime/application/report/adapter"
 	runtimecomposition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	reportadapter "github.com/domainry/domainry-runtime/runtime/modulehost/report"
 )
 
 func integrationReportSummary(ctx context.Context, services *runtimecomposition.RuntimeServices, reportKey, mode string, principal principalmodel.Principal) (reportmodel.ReportSummary, error) {

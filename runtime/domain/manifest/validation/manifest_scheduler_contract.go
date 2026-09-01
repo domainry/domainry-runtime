@@ -5,30 +5,20 @@ import (
 	"fmt"
 	"strings"
 
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 	"github.com/domainry/domainry-scheduler-sdk/schedule"
 )
-
-// Scheduler lifecycle rows are source-owned by domainry-scheduler. Runtime
-// manifests publish only SchedulerDefinitions; they must never recreate the
-// retired Record-backed clock, run, event, or dead-letter model.
-var schedulerOwnedManifestObjectKeys = map[string]struct{}{
-	"job_definition":   {},
-	"scheduler_cursor": {},
-	"job_run":          {},
-	"job_run_event":    {},
-	"job_dead_letter":  {},
-}
 
 func (state *validationState) validateSchedulerOwnershipAndDefinitions() {
 	for index, object := range state.manifest.Objects {
 		key := strings.TrimSpace(object.Key)
-		if _, reserved := schedulerOwnedManifestObjectKeys[key]; reserved {
+		if schedulersdk.OwnsManifestObjectKey(key) {
 			state.add(fmt.Sprintf("objects[%d].key", index), "owner-managed Scheduler object %q must not be declared in a Runtime manifest", key)
 		}
 	}
 	for index, seed := range state.manifest.SeedRecords {
 		key := strings.TrimSpace(seed.ObjectKey)
-		if _, reserved := schedulerOwnedManifestObjectKeys[key]; reserved {
+		if schedulersdk.OwnsManifestObjectKey(key) {
 			state.add(fmt.Sprintf("seed_records[%d].object_key", index), "Scheduler-owned operational state %q cannot be seeded by Runtime", key)
 		}
 	}

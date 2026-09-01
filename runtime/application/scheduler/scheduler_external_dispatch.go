@@ -2,55 +2,18 @@ package scheduler
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"time"
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
+	schedulermodulehost "github.com/domainry/domainry-runtime/runtime/modulehost/scheduler"
 )
 
 // DispatchOwnedTrigger executes downstream Runtime semantics for a run whose
 // lifecycle and durable evidence are owned by the extracted Scheduler. It must
 // not create, lease or finish Scheduler-owned run records.
 func (s *SchedulerApplicationService) DispatchOwnedTrigger(ctx context.Context, definition PublishedDefinition, runID string, scheduledFor time.Time, limit int, principal principalmodel.Principal) (string, error) {
-	if s == nil || s.runtime == nil {
+	if s == nil || s.downstream == nil {
 		return "", schedulerErrorUnavailable("backend.scheduler.runtime_operation_executor_unavailable")
 	}
-	if limit <= 0 {
-		limit = 25
-	}
-	workspaceID := schedulerWorkspaceID(principal)
-	principal.WorkspaceID = workspaceID
-	runID = strings.TrimSpace(runID)
-	switch schedulerDefinitionTargetType(definition) {
-	case "workflow":
-		result, err := s.processWorkflowTarget(ctx, definition, scheduledFor, limit, principal)
-		if err != nil {
-			return "", err
-		}
-		if len(result.Executions) > 0 && strings.TrimSpace(result.Executions[0].ID) != "" {
-			return result.Executions[0].ID, nil
-		}
-		return runID, nil
-	case "report_snapshot_refresh":
-		receiptID, err := s.refreshScheduledReportSnapshot(ctx, workspaceID, definition, runID, principal)
-		if err != nil {
-			return "", err
-		}
-		return valueOrDefault(receiptID, runID), nil
-	default:
-		return "", badRequest("backend.scheduler.unsupported_target_type", "target_type", schedulerDefinitionTargetType(definition))
-	}
-}
-
-func (s *SchedulerApplicationService) processWorkflowTarget(ctx context.Context, definition PublishedDefinition, scheduledFor time.Time, limit int, principal principalmodel.Principal) (workflowmodel.WorkflowProcessResult, error) {
-	target := strings.TrimSpace(fmt.Sprint(definition.Data["target_key"]))
-	if windowed, ok := s.runtime.(WindowedScheduledWorkflowRuntime); ok && !scheduledFor.IsZero() {
-		return windowed.ProcessDueWorkflowExecutionsForScheduledWindow(ctx, target, scheduledFor.UTC(), limit, principal)
-	}
-	if targeted, ok := s.runtime.(TargetedScheduledWorkflowRuntime); ok {
-		return targeted.ProcessDueWorkflowExecutionsForTarget(ctx, target, limit, principal)
-	}
-	return s.runtime.ProcessDueWorkflowExecutions(ctx, limit, principal)
+	return s.downstream.Dispatch(ctx, schedulermodulehost.PublishedDefinition{Key: definition.Key, Data: definition.Data}, runID, scheduledFor, limit, principal)
 }

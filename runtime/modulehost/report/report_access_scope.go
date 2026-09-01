@@ -1,4 +1,4 @@
-package adapter
+package reportmodulehost
 
 import (
 	"crypto/sha256"

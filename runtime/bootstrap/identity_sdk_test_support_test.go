@@ -3,10 +3,11 @@ package bootstrap
 import (
 	"context"
 
+	"github.com/domainry/domainry-foundation/modulecapability"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 )
 
-type bootstrapIdentityBindingStub struct{}
+type bootstrapIdentityBindingStub struct{ modulecapability.Binding }
 
 func (bootstrapIdentityBindingStub) Descriptor() identitysdk.Descriptor {
 	return identitysdk.Descriptor{Mode: identitysdk.DeploymentModeModule}

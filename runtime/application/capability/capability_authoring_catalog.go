@@ -23,9 +23,7 @@ func RuntimeAuthoringCapabilities() capabilitycontract.CapabilityRuntimeAuthorin
 		RuntimeVersion:          capabilitycontract.RuntimeCapabilityContractVersion,
 		Domains: []capabilitycontract.CapabilityAuthoringDomain{
 			authoringSchemaDomain(), authoringActionDomain(), authoringWorkflowDomain(),
-			authoringAutomationDomain(), authoringSchedulerDomain(), authoringProfileBindingDomain(),
-			authoringReportDomain(), authoringIntegrationDomain(), authoringMaintenanceDomain(),
-			authoringIdentityDomain(),
+			authoringAutomationDomain(), authoringProfileBindingDomain(), authoringMaintenanceDomain(),
 		},
 		Instance: capabilitycontract.CapabilityAuthoringInstance{ObjectKeys: []string{}, FieldKeys: []capabilitycontract.CapabilityAuthoringScopedValues{}, ActionKeys: []string{}, WorkflowKeys: []string{}, ReportKeys: []string{}, RoleKeys: []string{}, PermissionKeys: []string{}, UserIDs: []string{}, WorkforceProfileIDs: []string{}, DepartmentIDs: []string{}, RoleIDs: []string{}, MenuIDs: []string{}, ConnectorKeys: []string{}, ConnectionKeys: []string{}, ConnectorOperations: []capabilitycontract.CapabilityAuthoringConnectorBinding{}},
 	}

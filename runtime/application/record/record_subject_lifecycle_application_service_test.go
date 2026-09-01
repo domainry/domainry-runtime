@@ -1,4 +1,4 @@
-package record
+package record_test
 
 import (
 	"crypto/sha256"
@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -63,13 +64,20 @@ func TestRecordSubjectLifecycleExportsRecordsAndFilesThenErasesDeclaredFields(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := NewRecordSubjectLifecycleApplicationService(repository, []definitionmodel.ObjectSchema{object}, artifacts)
+	service := recordapplication.NewRecordSubjectLifecycleApplicationService(repository, []definitionmodel.ObjectSchema{object}, artifacts)
 
 	raw, err := service.ExportSubject(t.Context(), "workspace-a", "user-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	var exported recordSubjectExport
+	var exported struct {
+		Objects []struct {
+			Records []recordmodel.Record `json:"records"`
+		} `json:"objects"`
+		Files []struct {
+			Content []byte `json:"content"`
+		} `json:"files"`
+	}
 	if err := json.Unmarshal(raw, &exported); err != nil {
 		t.Fatal(err)
 	}

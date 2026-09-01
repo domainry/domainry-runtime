@@ -32,7 +32,9 @@ import (
 	schedulermodule "github.com/domainry/domainry-scheduler/module"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	capabilitycontracttest "github.com/domainry/domainry-foundation/modulecapability/contracttest"
 	"github.com/domainry/domainry-foundation/requestcontext"
+	monitoringcapability "github.com/domainry/domainry-monitoring/capability"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
@@ -239,12 +241,25 @@ func TestProjectRuntimeOpensMonitoringModuleAndSaaSBindings(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	service := httptest.NewServer(monitoringserver.New(monitoringserver.Options{BearerToken: "secret"}).Routes())
+	monitoringService, err := monitoringserver.New(monitoringserver.Options{BearerToken: "secret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := httptest.NewServer(monitoringService.Routes())
 	defer service.Close()
-	saasRuntime := build(t, monitoringremote.NewFactory(monitoringremote.Config{Endpoint: service.URL, Token: "secret", Client: service.Client()}))
+	sourceCapability, err := monitoringcapability.Open(monitoringcapability.Inputs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceSummary, err := sourceCapability.CapabilitySummary(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	saasRuntime := build(t, monitoringremote.NewFactory(monitoringremote.Config{Endpoint: service.URL, Token: "secret", Client: service.Client(), CapabilityContractSHA256: sourceSummary.Identity.ContractSHA256}))
 	if saasRuntime.monitoringBinding == nil || saasRuntime.monitoringBinding.Descriptor().Mode != monitoringsdk.DeploymentModeSaaS {
 		t.Fatalf("saas binding=%#v", saasRuntime.monitoringBinding)
 	}
+	capabilitycontracttest.VerifyBinding(t, saasRuntime.monitoringBinding)
 	if metrics := saasRuntime.monitoringBinding.Metrics(t.Context()); metrics["runtime_id"] != "monitoring-runtime" {
 		t.Fatalf("saas metrics=%#v", metrics)
 	}
@@ -591,6 +606,7 @@ func TestNewRestoresPublishedNotificationTemplates(t *testing.T) {
 	}
 	delete(manifest, "actions")
 	delete(manifest, "workflows")
+	delete(manifest, "integrations")
 	raw, err = json.Marshal(manifest)
 	if err != nil {
 		t.Fatal(err)

@@ -11,8 +11,8 @@ import (
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
+	reportcontract "github.com/domainry/domainry-report-sdk/contract"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
-	reportcontract "github.com/domainry/domainry-report/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -71,62 +71,6 @@ func (p *DataExchangeProvider) ProjectJob(ctx context.Context, job dataexchange.
 	return projection, nil
 }
 
-func (p *DataExchangeProvider) CloseReplayAudit(ctx context.Context, payload ExportPayload, job dataexchange.Job, projection ExchangeJob, principal principalmodel.Principal) error {
-	if strings.TrimSpace(payload.AuditID) == "" || strings.TrimSpace(payload.AuditID) == strings.TrimSpace(job.ReferenceID) {
-		return nil
-	}
-	if p.dependencies.ResolveExecution == nil || p.dependencies.Records == nil {
-		return internalError(nil)
-	}
-	resolved, err := p.dependencies.ResolveExecution(ctx, reportmodel.ReportExportExecutionRequest{ReportKey: payload.ReportKey, ObjectKey: payload.ObjectKey, Scope: payload.Scope}, principal)
-	if err != nil {
-		return err
-	}
-	control := resolved.Definition.Control
-	auditRecord, err := p.dependencies.Records.GetReportRecord(ctx, control.AuditObject, payload.AuditID, principal)
-	if err != nil {
-		return err
-	}
-	scopeHash, _ := reportcontract.CanonicalReportJSONSHA256(payload.Scope)
-	rowCount := payload.ExactTotal
-	if projection.Total > 0 {
-		rowCount = projection.Total
-	} else if rowCount < 0 {
-		rowCount = job.Checkpoint
-	}
-	mapping := control.RecordMapping
-	patch := map[string]any{mapping.AuditRowCountField: rowCount, mapping.AuditScopeHashField: "sha256:" + scopeHash}
-	if job.Status == "completed" {
-		patch[mapping.AuditStatusField] = mapping.AuditPreparedStatus
-	}
-	if err := p.updateReplayAudit(ctx, control.AuditObject, auditRecord.ID, patch, "report-export-replay:"+job.ID+":"+auditRecord.ID, principal); err != nil {
-		return err
-	}
-	return p.audit(ctx, "", "report_export_prepare_replayed", payload.ObjectKey, principal, auditRecord.ID, map[string]any{
-		"report_key": payload.ReportKey, "job_id": job.ID, "artifact_id": projection.ArtifactID,
-		"original_audit_id": job.ReferenceID, "replay_audit_id": auditRecord.ID, "status": projection.Status,
-		"row_count": rowCount, "scope_sha256": scopeHash,
-	}, true)
-}
-
-func (p *DataExchangeProvider) updateReplayAudit(ctx context.Context, objectKey, auditID string, patch map[string]any, key string, principal principalmodel.Principal) error {
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		if _, err := p.dependencies.Records.UpdateReportRecord(ctx, objectKey, auditID, patch, key, principal); err == nil {
-			return nil
-		} else if apperror.CodeOf(err) != "backend.idempotency.in_progress" || !time.Now().Before(deadline) {
-			return err
-		}
-		timer := time.NewTimer(5 * time.Millisecond)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return ctx.Err()
-		case <-timer.C:
-		}
-	}
-}
-
 func (p *DataExchangeProvider) openDataExchangeArtifact(ctx context.Context, job dataexchange.Job, principal principalmodel.Principal) (dataexchange.Artifact, error) {
 	if p == nil || p.dependencies.Binding == nil {
 		return dataexchange.Artifact{}, internalError(nil)
@@ -164,7 +108,7 @@ func (p *DataExchangeProvider) openDataExchangeArtifact(ctx context.Context, job
 	if artifact.ExpiresAt.IsZero() || !p.dependencies.Clock().UTC().Before(artifact.ExpiresAt) {
 		return dataexchange.Artifact{}, deny("backend.report.export_download_expired", "expired")
 	}
-	scopeHash, _ := reportcontract.CanonicalReportJSONSHA256(prepared.normalizedScope)
+	scopeHash, _ := reportcontract.CanonicalJSONSHA256(prepared.normalizedScope)
 	content, err := io.ReadAll(artifact.Content)
 	if err != nil {
 		if errors.Is(err, dataexchange.ErrContentCorrupt) {
@@ -189,7 +133,7 @@ func (p *DataExchangeProvider) openDataExchangeArtifact(ctx context.Context, job
 			return dataexchange.Artifact{}, err
 		}
 	}
-	parametersHash, _ := reportcontract.CanonicalReportJSONSHA256(prepared.normalizedScope.Parameters)
+	parametersHash, _ := reportcontract.CanonicalJSONSHA256(prepared.normalizedScope.Parameters)
 	if err = p.audit(ctx, "", "report_export_downloaded", payload.ObjectKey, principal, payload.AuditID, map[string]any{
 		"report_key": payload.ReportKey, "artifact_id": artifact.ID, "expires_at": artifact.ExpiresAt.UTC().Format(time.RFC3339Nano),
 		"watermarked": prepared.control.Watermark, "content_sha256": artifact.SHA256, "row_count": job.Checkpoint,

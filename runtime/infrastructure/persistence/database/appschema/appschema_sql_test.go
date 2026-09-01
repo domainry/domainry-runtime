@@ -8,6 +8,7 @@ import (
 	"io"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/modulecapability"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -141,6 +142,7 @@ func scriptedApplicationSchemaStore(t *testing.T, state *metadataSQLState, store
 }
 
 type metadataBindingStub struct {
+	modulecapability.Binding
 	state *metadataStateStub
 }
 

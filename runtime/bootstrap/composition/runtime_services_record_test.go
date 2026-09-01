@@ -570,7 +570,7 @@ func TestAuthoringCapabilityHelpersCoverAbsentSchemaAndLookupFallbacks(t *testin
 }
 
 func TestStructuredApplicationDefinitionDispatchesAndRejectsInvalidJSON(t *testing.T) {
-	for _, resourceType := range []string{"action", "connector"} {
+	for _, resourceType := range []string{"action"} {
 		issues, handled := appschemaapplication.ValidateStructuredApplicationDefinition(resourceType, json.RawMessage(`{`))
 		if !handled || len(issues) != 1 {
 			t.Fatalf("resource=%s issues=%#v handled=%t", resourceType, issues, handled)
@@ -578,6 +578,9 @@ func TestStructuredApplicationDefinitionDispatchesAndRejectsInvalidJSON(t *testi
 		if issues, handled = appschemaapplication.ValidateStructuredApplicationDefinition(resourceType, json.RawMessage(`{}`)); !handled || issues == nil {
 			t.Fatalf("valid resource=%s issues=%#v handled=%t", resourceType, issues, handled)
 		}
+	}
+	if issues, handled := appschemaapplication.ValidateStructuredApplicationDefinition("connector", json.RawMessage(`{}`)); handled || issues != nil {
+		t.Fatalf("Integration-owned Connector must not dispatch through Runtime structured validation: issues=%#v handled=%t", issues, handled)
 	}
 	if issues, handled := appschemaapplication.ValidateStructuredApplicationDefinition("object", json.RawMessage(`{}`)); handled || issues != nil {
 		t.Fatalf("unhandled issues=%#v handled=%t", issues, handled)

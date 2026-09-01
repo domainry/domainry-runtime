@@ -9,8 +9,34 @@ import (
 
 func TestReportModuleOwnsProductHTTPAndApplicationBoundary(t *testing.T) {
 	root := runtimeRoot(t)
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() || filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		content, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		for _, implementationImport := range []string{
+			"github.com/domainry/domainry-report/contract",
+			"github.com/domainry/domainry-report/query/",
+		} {
+			if strings.Contains(string(content), implementationImport) {
+				relative, _ := filepath.Rel(root, path)
+				t.Errorf("Runtime production source %s imports Report implementation facade %q", filepath.ToSlash(relative), implementationImport)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, removed := range []string{
 		"transport/http/reports",
+		"application/report/adapter",
 		"application/report/query",
 		"application/report/snapshot",
 		"domain/report/query",

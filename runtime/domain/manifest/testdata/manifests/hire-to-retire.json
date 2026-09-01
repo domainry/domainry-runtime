@@ -243,7 +243,7 @@
     }
   ],
   "integrations": {"connectors": [
-    {"key": "benefit_webhook", "type": "http", "provider": "http", "providers": [{"key": "http"}], "name": "Benefit HTTP Webhook", "capabilities": ["sync_call"], "operations": [
+    {"key": "benefit_webhook", "providers": [{"key": "http"}], "name": "Benefit HTTP Webhook", "operations": [
       {"key": "benefit.enroll", "name": "Enroll benefit", "method": "POST", "execution_mode": "sync", "side_effect": "write", "timeout_default_seconds": 5, "timeout_max_seconds": 30, "idempotency_supported": true}
     ]}
   ], "connections": [

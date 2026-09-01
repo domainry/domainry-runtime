@@ -1,4 +1,4 @@
-package adapter
+package reportmodulehost
 
 import (
 	"context"
@@ -7,10 +7,10 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	reportsdk "github.com/domainry/domainry-report-sdk"
+	reportsdkcontract "github.com/domainry/domainry-report-sdk/contract"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
-	reportownercontract "github.com/domainry/domainry-report/contract"
-	reportengine "github.com/domainry/domainry-report/query/engine"
+	reportquery "github.com/domainry/domainry-report-sdk/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
@@ -312,7 +312,7 @@ func (h *ReportModuleQueryHost) reportSourceVersionRequest(ctx context.Context, 
 		}
 		return request, nil
 	}
-	plan, err := reportownercontract.BuildReportDatasetPlan(report)
+	plan, err := reportsdkcontract.BuildReportDatasetPlan(report)
 	if err != nil {
 		return request, err
 	}
@@ -338,7 +338,7 @@ func (h *ReportModuleQueryHost) AppendReportExecution(ctx context.Context, repor
 	return stableReportHostError(h.dependencies.Audit(ctx, report, summary, RuntimePrincipalFromReportSubject(subject)))
 }
 
-func portableReportObject(object reportengine.Object) reportmodel.ReportSourceObject {
+func portableReportObject(object reportquery.Object) reportmodel.ReportSourceObject {
 	fields := make([]reportmodel.ReportSourceField, 0, len(object.Fields))
 	for _, field := range object.Fields {
 		fields = append(fields, reportmodel.ReportSourceField{Key: field.Key, Type: field.Type, Precision: field.Precision, Scale: field.Scale})

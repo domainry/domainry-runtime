@@ -4,10 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/domainry/domainry-foundation/modulecapability"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 )
 
-type runtimeIdentityBindingStub struct{}
+type runtimeIdentityBindingStub struct{ modulecapability.Binding }
 
 func (runtimeIdentityBindingStub) Descriptor() identitysdk.Descriptor {
 	return identitysdk.Descriptor{Mode: identitysdk.DeploymentModeModule}

@@ -8,6 +8,7 @@ import (
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-agent-sdk/modulehost"
+	"github.com/domainry/domainry-foundation/modulecapability"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -39,6 +40,7 @@ func (*agentSDKRunnerStub) Run(context.Context, agentsdk.InteractiveRequest) (ag
 }
 
 type agentSDKBindingStub struct {
+	modulecapability.Binding
 	runner     *agentSDKRunnerStub
 	descriptor agentsdk.Descriptor
 	closed     bool

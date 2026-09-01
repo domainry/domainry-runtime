@@ -2,6 +2,10 @@ package integrationtest
 
 import (
 	"context"
+
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
+	metadatamodulehost "github.com/domainry/domainry-metadata-sdk/modulehost"
+	metadatamodule "github.com/domainry/domainry-metadata/module"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
@@ -21,6 +25,22 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
+type metadataWatcherHost struct{ store *persistence.RuntimeStore }
+
+func (h metadataWatcherHost) Database() metadatamodulehost.Database { return h.store.DB() }
+func (h metadataWatcherHost) Dialect() metadatamodulehost.Dialect   { return h.store.SQLRenderer }
+func (h metadataWatcherHost) Migrations() metadatamodulehost.MigrationRegistrar {
+	return metadataWatcherMigrations{store: h.store}
+}
+
+type metadataWatcherMigrations struct{ store *persistence.RuntimeStore }
+
+func (m metadataWatcherMigrations) Driver() string { return m.store.Driver() }
+func (m metadataWatcherMigrations) Schema() string { return m.store.DatabaseSchema() }
+func (m metadataWatcherMigrations) ApplyOwnedMigrations(ctx context.Context, owner string, migrations []metadatamodulehost.SchemaMigration) error {
+	return m.store.ApplyORMOwnedMigrations(ctx, owner, migrations)
+}
+
 func TestMetadataSnapshotWatcherInvalidatesSecondRuntimeFromSharedDatabase(t *testing.T) {
 	store, err := persistence.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "watcher.db")})
 	if err != nil {
@@ -28,6 +48,14 @@ func TestMetadataSnapshotWatcherInvalidatesSecondRuntimeFromSharedDatabase(t *te
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := metadatamodule.NewFactory().OpenModule(t.Context(), metadatasdk.ApplicationRef{InstallationID: "shared"}, metadataWatcherHost{store: store})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = metadata.Close(t.Context()) })
+	if err := store.BindMetadata(metadata); err != nil {
 		t.Fatal(err)
 	}
 	manifest := manifestmodel.ManifestSchema{TemplateID: "shared", Version: "1", Name: "Shared", Objects: []definitionmodel.ObjectSchema{{Key: "account", Name: "Account"}}}

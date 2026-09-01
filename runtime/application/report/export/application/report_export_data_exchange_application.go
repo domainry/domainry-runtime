@@ -11,11 +11,11 @@ import (
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
+	reportcontract "github.com/domainry/domainry-report-sdk/contract"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
-	reportcontract "github.com/domainry/domainry-report/contract"
-	reportadapter "github.com/domainry/domainry-runtime/runtime/application/report/adapter"
 	reportexport "github.com/domainry/domainry-runtime/runtime/application/report/export"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	reportadapter "github.com/domainry/domainry-runtime/runtime/modulehost/report"
 )
 
 const reportExportFingerprintDomain = "report_export"
@@ -68,16 +68,16 @@ func (s *ReportExportApplicationService) prepareReportExportPayloadResolved(ctx 
 	report, control = resolved.Definition.Report, resolved.Definition.Control
 	normalizedScope, maskedDimensions := resolved.Scope, resolved.MaskedDimensions
 	executionRequest.ReportKey, executionRequest.Scope = report.Key, normalizedScope
-	reportHash, _ := reportcontract.CanonicalReportJSONSHA256(report)
+	reportHash, _ := reportcontract.CanonicalJSONSHA256(report)
 	sourceHash := reportHash
 	if report.ObjectSQLV1 != nil {
-		sourceHash, _ = reportcontract.CanonicalReportJSONSHA256(report.ObjectSQLV1)
+		sourceHash, _ = reportcontract.CanonicalJSONSHA256(report.ObjectSQLV1)
 	}
 	authHash, err := reportadapter.ReportAccessScopeHash(principal)
 	if err != nil {
 		return reportexport.ExportPayload{}, err
 	}
-	controlHash, err := reportcontract.CanonicalReportJSONSHA256(control)
+	controlHash, err := reportcontract.CanonicalJSONSHA256(control)
 	if err != nil {
 		return reportexport.ExportPayload{}, err
 	}
@@ -85,7 +85,7 @@ func (s *ReportExportApplicationService) prepareReportExportPayloadResolved(ctx 
 	if err != nil {
 		return reportexport.ExportPayload{}, err
 	}
-	sourceVersionHash, err := reportcontract.CanonicalReportJSONSHA256(sourceVersion)
+	sourceVersionHash, err := reportcontract.CanonicalJSONSHA256(sourceVersion)
 	if err != nil {
 		return reportexport.ExportPayload{}, err
 	}
@@ -99,7 +99,7 @@ func (s *ReportExportApplicationService) prepareReportExportPayloadResolved(ctx 
 		if encodeErr != nil {
 			return reportexport.ExportPayload{}, encodeErr
 		}
-		csvHash = reportcontract.ReportSHA256Hex(csvContent)
+		csvHash = reportcontract.SHA256Hex(csvContent)
 	}
 	return reportexport.ExportPayload{WorkspaceID: strings.TrimSpace(principal.WorkspaceID), RequesterUserID: strings.TrimSpace(principal.UserID), ReportKey: report.Key, ObjectKey: strings.TrimSpace(objectKey), AuditID: auditID, Scope: normalizedScope, ReportDefinitionSHA256: reportHash, ReportSourceSHA256: sourceHash, AuthorizationScopeSHA256: authHash, ControlDefinitionSHA256: controlHash, SourceVersion: sourceVersion, SourceVersionSHA256: sourceVersionHash, ResultSHA256: resultHash, CSVContentSHA256: csvHash, ExactTotal: exactTotal, MaxRows: control.MaxRows, Format: "csv"}, nil
 }
@@ -115,7 +115,7 @@ func reportExportControlIncludesObject(control reportmodel.ReportExportControlSc
 }
 
 func reportExportResultHash(rows []reportmodel.ReportResultRow) (string, error) {
-	return reportcontract.CanonicalReportJSONSHA256(map[string]any{
+	return reportcontract.CanonicalJSONSHA256(map[string]any{
 		"rows": rows, "analyses": []reportmodel.ReportAnalysisResult(nil), "source_row_count": -1, "snapshot": nil,
 	})
 }
@@ -141,15 +141,16 @@ func (s *ReportExportApplicationService) prepareExportJobFromPayload(ctx context
 		return reportexport.ExchangeJob{}, reportApplicationError(nil)
 	}
 	baseFingerprint := fingerprint
+	jobFingerprint := reportExportAuditFingerprint(baseFingerprint, payload.AuditID)
 	for generation := 0; generation < 32; generation++ {
 		candidate := payload
-		candidate.ArtifactIdempotencyKey = "report-export-business:" + fingerprint
+		candidate.ArtifactIdempotencyKey = "report-export-business:" + jobFingerprint
 		canonical := candidate
 		canonical.AuditID = ""
 		raw, _ := json.Marshal(canonical)
 		job, replayed, err := s.dataExchange.SubmitExport(ctx, dataexchange.ExportRequest{
 			Scope: reportexport.Scope(principal), Provider: reportexport.DataExchangeProviderKey,
-			ObjectKey: payload.ObjectKey, IdempotencyKey: fingerprint, ReferenceID: payload.AuditID, Options: raw,
+			ObjectKey: payload.ObjectKey, IdempotencyKey: jobFingerprint, ReferenceID: payload.AuditID, Options: raw,
 		})
 		if err != nil {
 			return reportexport.ExchangeJob{}, err
@@ -163,16 +164,16 @@ func (s *ReportExportApplicationService) prepareExportJobFromPayload(ctx context
 			return reportexport.ExchangeJob{}, projectionErr
 		}
 		if !replayed || s.reusableReportExportExchangeJob(projection) {
-			if replayed && strings.TrimSpace(payload.AuditID) != strings.TrimSpace(job.ReferenceID) {
-				if err := s.dataExchangeProvider.CloseReplayAudit(ctx, payload, job, projection, principal); err != nil {
-					return reportexport.ExchangeJob{}, err
-				}
-			}
 			return projection, nil
 		}
-		fingerprint = baseFingerprint + ":renew:" + job.UpdatedAt.UTC().Format(time.RFC3339Nano)
+		jobFingerprint = reportExportAuditFingerprint(baseFingerprint, payload.AuditID) + ":renew:" + job.UpdatedAt.UTC().Format(time.RFC3339Nano)
 	}
 	return reportexport.ExchangeJob{}, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_replay_generation_exhausted"}
+}
+
+func reportExportAuditFingerprint(fingerprint, auditID string) string {
+	digest := sha256.Sum256([]byte(reportExportFingerprintDomain + ":audit\x00" + fingerprint + "\x00" + strings.TrimSpace(auditID)))
+	return hex.EncodeToString(digest[:])
 }
 
 func (s *ReportExportApplicationService) reusableReportExportExchangeJob(job reportexport.ExchangeJob) bool {

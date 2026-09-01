@@ -4,10 +4,11 @@ import (
 	"context"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/modulecapability"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 )
 
-type transportIdentityBindingStub struct{}
+type transportIdentityBindingStub struct{ modulecapability.Binding }
 
 func (transportIdentityBindingStub) Descriptor() identitysdk.Descriptor {
 	return identitysdk.Descriptor{Mode: identitysdk.DeploymentModeModule}

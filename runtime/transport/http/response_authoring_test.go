@@ -18,7 +18,7 @@ func TestAuthoringErrorResponsePreservesMachineReadableContract(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	if response["code"] != response["message_key"] || response["field_path"] != "operations[0].method" || response["capability_key"] != "integration.catalog" || response["contract_version"] != capabilityapplication.RuntimeAuthoringCapabilities().ContractVersion {
+	if response["code"] != response["message_key"] || response["field_path"] != "operations[0].method" || response["capability_key"] != nil || response["contract_version"] != capabilityapplication.RuntimeAuthoringCapabilities().ContractVersion {
 		t.Fatalf("unexpected machine-readable error response: %#v", response)
 	}
 }
@@ -34,7 +34,7 @@ func TestAuthoringErrorResponseRedactsSensitiveParams(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	if response.CapabilityKey != "integration.connection" || response.Params["actual"] != "[REDACTED]" || response.Params["connector"] != "crm" {
+	if response.CapabilityKey != "" || response.Params["actual"] != "[REDACTED]" || response.Params["connector"] != "crm" {
 		t.Fatalf("unexpected redacted authoring response: %#v", response)
 	}
 }

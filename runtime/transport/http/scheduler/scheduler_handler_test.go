@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/modulecapability"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
@@ -34,6 +35,7 @@ type schedulerServiceCall struct {
 }
 
 type fakeSchedulerService struct {
+	modulecapability.Binding
 	call        schedulerServiceCall
 	result      schedulerapplication.SchedulerDefinitionSimulation
 	preview     schedulerapplication.SchedulerDefinitionPreview

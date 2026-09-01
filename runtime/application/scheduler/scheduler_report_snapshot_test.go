@@ -41,14 +41,14 @@ func (r *schedulerReportSnapshotRuntime) RefreshSnapshot(_ context.Context, repo
 
 func TestSchedulerReportSnapshotTargetDelegatesWithDurableRunIdentity(t *testing.T) {
 	runtime := &schedulerReportSnapshotRuntime{}
-	service := &SchedulerApplicationService{}
+	service := NewSchedulerApplicationService(schedulerAuthoringRuntime{})
 	service.UseReportSnapshotRuntime(runtime)
-	receiptID, err := service.refreshScheduledReportSnapshot(t.Context(), "workspace-a", PublishedDefinition{Data: map[string]any{"target_key": "operations"}}, "window-1", principalmodel.Principal{Principal: identitysdk.Principal{UserID: "scheduler-user"}})
+	receiptID, err := service.DispatchOwnedTrigger(t.Context(), PublishedDefinition{Data: map[string]any{"target_type": "report_snapshot_refresh", "target_key": "operations"}}, "window-1", time.Time{}, 25, principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "scheduler-user"}})
 	if err != nil || runtime.calls != 1 || runtime.reportKey != "operations" || runtime.idempotencyKey != "window-1" || runtime.principal.WorkspaceID != "workspace-a" || receiptID != "snapshot-1" {
 		t.Fatalf("runtime=%#v receipt=%q err=%v", runtime, receiptID, err)
 	}
 	service.UseReportSnapshotRuntime(nil)
-	if _, err := service.refreshScheduledReportSnapshot(t.Context(), "workspace-a", PublishedDefinition{}, "", principalmodel.Principal{}); apperror.CodeOf(err) != "backend.scheduler.report_snapshot_runtime_unavailable" {
+	if _, err := service.DispatchOwnedTrigger(t.Context(), PublishedDefinition{Data: map[string]any{"target_type": "report_snapshot_refresh"}}, "window-2", time.Time{}, 25, principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}); apperror.CodeOf(err) != "backend.scheduler.report_snapshot_runtime_unavailable" {
 		t.Fatalf("missing runtime err=%v", err)
 	}
 }

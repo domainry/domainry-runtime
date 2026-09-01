@@ -1,6 +1,8 @@
 package integrationtest
 
 import (
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
+	metadatamodule "github.com/domainry/domainry-metadata/module"
 	"testing"
 
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -21,6 +23,16 @@ func openRuntimePersistenceFixture(t *testing.T, cfg config.Config) *persistence
 	// or bind module repositories. An independently opened integration fixture
 	// must enter the same host initialization boundary before using Metadata.
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	metadata, err := metadatamodule.NewFactory().OpenModule(t.Context(), metadatasdk.ApplicationRef{InstallationID: "runtime-integration-fixture"}, metadataWatcherHost{store: store})
+	if err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := store.BindMetadata(metadata); err != nil {
+		_ = metadata.Close(t.Context())
 		_ = store.Close()
 		t.Fatal(err)
 	}

@@ -11,18 +11,18 @@ func TestRuntimeAuthoringErrorContractMappings(t *testing.T) {
 		"backend.action.invalid":                                    "action.definition",
 		"backend.automation.invalid":                                "automation.rule",
 		"backend.workflow.invalid":                                  "workflow.graph_v2",
-		"backend.scheduler.invalid":                                 "scheduler.business_job",
-		"backend.report.invalid":                                    "report.definition",
+		"backend.scheduler.invalid":                                 "",
+		"backend.report.invalid":                                    "",
 		"backend.change_plan.invalid":                               "",
-		"backend.integration.binding.invalid":                       "integration.binding_validation",
-		"backend.integration.connector.operation_invalid":           "integration.catalog",
-		"backend.integration.connector.protocol_field_invalid":      "integration.catalog",
-		"backend.integration.connector.compensation_invalid":        "integration.catalog",
-		"backend.integration.connector.reserve_contract_incomplete": "integration.catalog",
-		"backend.integration.connector.invalid":                     "integration.catalog",
-		"backend.integration.connection.invalid":                    "integration.connection",
-		"backend.integration.secret_missing":                        "integration.connection",
-		"backend.integration.webhook_signature.invalid":             "integration.connection",
+		"backend.integration.binding.invalid":                       "",
+		"backend.integration.connector.operation_invalid":           "",
+		"backend.integration.connector.protocol_field_invalid":      "",
+		"backend.integration.connector.compensation_invalid":        "",
+		"backend.integration.connector.reserve_contract_incomplete": "",
+		"backend.integration.connector.invalid":                     "",
+		"backend.integration.connection.invalid":                    "",
+		"backend.integration.secret_missing":                        "",
+		"backend.integration.webhook_signature.invalid":             "",
 		"backend.runtime.publication.invalid":                       "",
 		"backend.unknown":                                           "",
 	}
@@ -32,7 +32,7 @@ func TestRuntimeAuthoringErrorContractMappings(t *testing.T) {
 			t.Fatalf("code=%q result=%#v want capability=%q", code, result, want)
 		}
 	}
-	resources := map[string]string{"field": "schema.field", "action": "action.definition", "automation_rule": "automation.rule", "connector": "", "report": "report.definition", "unknown": ""}
+	resources := map[string]string{"field": "schema.field", "action": "action.definition", "automation_rule": "automation.rule", "connector": "", "report": "", "unknown": ""}
 	for resource, want := range resources {
 		result := RuntimeAuthoringErrorContract("backend.metadata.definition_version_conflict", map[string]string{"resource_type": " " + resource + " ", "parameter_path": "definition.version"})
 		if result.CapabilityKey != want || result.FieldPath != "definition.version" {

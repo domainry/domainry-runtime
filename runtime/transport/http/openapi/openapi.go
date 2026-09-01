@@ -122,7 +122,7 @@ func BuildWithModuleHTTPSurfaces(snapshot appschemamodel.ApplicationSchemaSnapsh
 	addRuntimeContractOpenAPIPaths(paths)
 	addLifecycleOpenAPIPaths(paths)
 	addBusinessBuilderOpenAPIPaths(paths)
-	addAdminCapabilityDisclosureOpenAPIPaths(paths)
+	addAdminListenerOpenAPIPaths(paths)
 	for _, object := range snapshot.Objects {
 		addObjectOpenAPIPaths(paths, object)
 	}
@@ -133,6 +133,7 @@ func BuildWithModuleHTTPSurfaces(snapshot appschemamodel.ApplicationSchemaSnapsh
 	paths["/v1/scheduler-triggers:accept"] = map[string]any{"post": openAPIOperation("acceptSchedulerTrigger", "Scheduler Dispatch Gateway", "Identity-authenticated execution callback for one Scheduler-owned run", openAPIProtocolAudience("scheduler_service_service"), openAPIServiceCredentialSecurity(), openAPIJSONRequest(openAPIObject(nil)), openAPIJSONResponse("Stable downstream receipt", openAPIObject(nil)))}
 	addOwnerOperationsReceiptOpenAPIContracts(paths)
 	applyCompiledEndpointContracts(paths)
+	annotateStaticModuleOwnerFallbacks(paths)
 	// Capability-owned OpenAPI and governance are authoritative for mounted
 	// module routes. Static Runtime contracts remain only for Runtime-owned
 	// endpoints and the temporary fallback used before a module is bound.

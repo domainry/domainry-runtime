@@ -80,7 +80,7 @@ func TestRuntimeBootstrapsBusinessManifestFixtures(t *testing.T) {
 				UploadDir:      filepath.Join(t.TempDir(), "uploads"),
 			})
 			defer application.CloseContext(t.Context())
-			handler := application.Routes()
+			handler := integrationModuleOwnerRoutes(t, application, "report", "metadata")
 
 			schema := runtimeFixtureRequest[map[string]any](t, handler, tc.role, http.MethodGet, "/business/runtime-schema", nil)
 			assertRuntimeFixtureArrayHasKey(t, schema, "objects", tc.objectKey)
@@ -119,7 +119,7 @@ func TestRuntimeBusinessOnlyManifestSeedsRuntimeOwnedNavigationAndLogin(t *testi
 	}
 	application := newIntegrationRuntime(t, cfg)
 	defer application.CloseContext(t.Context())
-	handler := application.Routes()
+	handler := integrationModuleOwnerRoutes(t, application, "metadata")
 
 	adminSchema := runtimeFixtureRequest[map[string]any](t, handler, "business_admin", http.MethodGet, "/business/runtime-schema", nil)
 	assertRuntimeFixtureArrayHasKey(t, adminSchema, "objects", "customer")
@@ -206,7 +206,7 @@ func TestRuntimeCRMProofServesRoleSpecificSchema(t *testing.T) {
 		UploadDir:      filepath.Join(t.TempDir(), "uploads"),
 	})
 	defer application.CloseContext(t.Context())
-	handler := application.Routes()
+	handler := integrationModuleOwnerRoutes(t, application, "report")
 
 	managerSchema := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/business/runtime-schema", nil)
 	for _, objectKey := range []string{"customer", "contact", "lead", "opportunity", "activity", "contract", "payment"} {
@@ -385,7 +385,7 @@ func TestRuntimeCRMReportSummaryUsesRoleVisibleRuntimeData(t *testing.T) {
 		UploadDir:      filepath.Join(t.TempDir(), "uploads"),
 	})
 	defer application.CloseContext(t.Context())
-	handler := application.Routes()
+	handler := integrationModuleOwnerRoutes(t, application, "report")
 
 	pipeline := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/reports/crm_pipeline_health/summary", nil)
 	assertRuntimeFixtureReportMeasure(t, pipeline, "customer_count", "2")

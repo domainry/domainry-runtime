@@ -8,7 +8,7 @@ import (
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
-	reportcontract "github.com/domainry/domainry-report/contract"
+	reportcontract "github.com/domainry/domainry-report-sdk/contract"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -46,7 +46,7 @@ func (p *DataExchangeProvider) CompleteExport(ctx context.Context, completion da
 		(!StatusAllowed(status, mapping.AuditPreparedStatuses) && status != mapping.AuditPreparedStatus && status != mapping.AuditDownloadedStatus) {
 		return &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_scope_changed"}
 	}
-	scopeHash, _ := reportcontract.CanonicalReportJSONSHA256(prepared.normalizedScope)
+	scopeHash, _ := reportcontract.CanonicalJSONSHA256(prepared.normalizedScope)
 	if _, err = p.dependencies.Records.UpdateReportRecord(ctx, prepared.control.AuditObject, auditRecord.ID, map[string]any{
 		mapping.AuditStatusField: mapping.AuditPreparedStatus, mapping.AuditRowCountField: completion.Rows, mapping.AuditScopeHashField: "sha256:" + scopeHash,
 	}, "report-export-prepared:"+completion.Artifact.ID, principal); err != nil {
@@ -74,7 +74,7 @@ func (p *DataExchangeProvider) CompleteExport(ctx context.Context, completion da
 	if err != nil {
 		return err
 	}
-	parametersHash, _ := reportcontract.CanonicalReportJSONSHA256(prepared.normalizedScope.Parameters)
+	parametersHash, _ := reportcontract.CanonicalJSONSHA256(prepared.normalizedScope.Parameters)
 	return p.audit(ctx, "report-export-download-prepared:"+completion.Artifact.ID, "report_export_download_prepared", payload.ObjectKey, principal, payload.AuditID, map[string]any{
 		"report_key": payload.ReportKey, "download_id": downloadRecord.ID, "artifact_id": completion.Artifact.ID,
 		"expires_at": completion.Artifact.ExpiresAt.UTC().Format(time.RFC3339Nano), "watermarked": prepared.control.Watermark,

@@ -163,6 +163,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 		RuntimeReleaseAdmission: dependencies.ReleaseAdmission,
 		RuntimeReleaseIntegrity: dependencies.ReleaseIntegrity,
 		BusinessEventBackplane:  backplane,
+		ModuleHTTPSurfaces:      dependencies.ModuleHTTPSurfaces,
 	})
 	assembly := &httpServerAssembly{
 		dependencies: dependencies, server: server, callbacks: server.HandlerCallbacks(),

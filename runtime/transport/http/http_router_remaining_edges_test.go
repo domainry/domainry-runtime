@@ -260,7 +260,7 @@ func TestRoutePolicyAndAnonymousPathCompleteMatrix(t *testing.T) {
 		t.Fatalf("root catch-all policy=%+v", policy)
 	}
 
-	paths := []string{"/", "/live", "/ready", "/startup", "/i18n/en", "/integrations/webhooks/{workspaceID}/{connectionKey}", "/integrations/google/oauth/callback"}
+	paths := []string{"/", "/live", "/ready", "/startup", "/i18n/en"}
 	for _, path := range paths {
 		if !anonymousAuthPath(path) {
 			t.Errorf("anonymous path rejected: %s", path)
@@ -716,6 +716,7 @@ func TestCompleteRouterCompositionSmokeAndCallbacks(t *testing.T) {
 	router.recordHTTP, router.uploadHTTP, router.discoveryHTTP, router.openAPIHTTP = registrar, registrar, registrar, registrar
 	router.workflowHTTP, router.automationHTTP, router.schedulerHTTP = registrar, registrar, registrar
 	router.businessReferenceHTTP, router.businessSystemHTTP, router.capabilityHTTP = registrar, registrar, registrar
+	router.publicationHandoffHTTP = registrar
 	router.applicationSchemaHTTP, router.notificationHTTP, router.operationsHTTP = registrar, registrar, registrar
 	handler := router.Routes()
 	if calls != 14 {

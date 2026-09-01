@@ -1,0 +1,178 @@
+package capabilityprovider
+
+import (
+	"encoding/json"
+	"reflect"
+	"sort"
+	"strings"
+	"testing"
+
+	"github.com/domainry/domainry-foundation/modulecapability"
+	"github.com/domainry/domainry-foundation/modulecapability/contracttest"
+)
+
+func TestBindingsConformAndAreDeterministic(t *testing.T) {
+	first, err := Bindings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := Bindings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := []string{"automation", "discovery", "maintenance", "profile_binding", "publication", "realtime", "records", "runtime_schema", "uploads", "workflow"}
+	actual := make([]string, 0, len(first))
+	firstDigests := map[string]string{}
+	for _, binding := range first {
+		contracttest.VerifyBinding(t, binding)
+		summary, summaryErr := binding.CapabilitySummary(t.Context())
+		if summaryErr != nil {
+			t.Fatal(summaryErr)
+		}
+		actual = append(actual, summary.Identity.Key)
+		firstDigests[summary.Identity.Key] = summary.Identity.ContractSHA256
+		assertRuntimeCategoryOperations(t, binding, summary)
+	}
+	sort.Strings(actual)
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("Runtime provider keys=%v, want %v", actual, expected)
+	}
+	for _, binding := range second {
+		summary, summaryErr := binding.CapabilitySummary(t.Context())
+		if summaryErr != nil {
+			t.Fatal(summaryErr)
+		}
+		if firstDigests[summary.Identity.Key] != summary.Identity.ContractSHA256 {
+			t.Fatalf("provider %s digest is nondeterministic: %s != %s", summary.Identity.Key, firstDigests[summary.Identity.Key], summary.Identity.ContractSHA256)
+		}
+	}
+}
+
+func TestOwnerValidatorsRejectMalformedAndSemanticInvalidCandidates(t *testing.T) {
+	bindings := runtimeBindingsByKey(t)
+	tests := []struct {
+		name, moduleKey, categoryKey, kind string
+		candidate                          modulecapability.AuthoringFragment
+		referencedContext                  []modulecapability.AuthoringFragment
+		wantRule                           string
+	}{
+		{name: "schema closed fragment", moduleKey: "runtime_schema", categoryKey: "schema.authoring", kind: "schema.object", candidate: authoringFragment("objects", "order", `{"key":"order","name":"Order","description":"","fields":[],"unknown":true}`), wantRule: "runtime.authoring.fragment_invalid"},
+		{name: "schema owner policy", moduleKey: "runtime_schema", categoryKey: "schema.authoring", kind: "schema.object", candidate: authoringFragment("objects", "order", `{"key":"order","name":"","description":"","fields":[]}`), wantRule: "backend.metadata.object_name_required"},
+		{name: "action kind", moduleKey: "records", categoryKey: "records.authoring", kind: "action.definition", candidate: authoringFragment("actions", "order.run", `{"key":"order.run","name":"Run","object_key":"order","kind":"script","permission":"order.run","audit_event":"order_ran"}`), wantRule: "backend.action.kind_invalid"},
+		{name: "workflow graph", moduleKey: "workflow", categoryKey: "workflow.authoring", kind: "workflow.definition", candidate: authoringFragment("workflows", "order.complete", `{"key":"order.complete","name":"Complete order","trigger":{},"condition":{},"action":{},"enabled":true,"trigger_contract":{"type":"manual"},"graph":{"version":2,"nodes":[{"id":"same","type":"trigger"},{"id":"same","type":"action","contract":{"action":{"action_key":"order.complete"}}}],"edges":[]}}`), wantRule: "backend.workflow.graph_node_invalid"},
+		{name: "automation instruction", moduleKey: "automation", categoryKey: "automation.rules", kind: "automation.rule", candidate: authoringFragment("automation_rules", "order.ready", `{"key":"order.ready","name":"Order ready","object_key":"order","enabled":true,"trigger":{"phase":"after","operation":"update"},"instructions":[{"key":"","type":"emit_event","config":{"event_type":"order.ready"}}]}`), referencedContext: []modulecapability.AuthoringFragment{authoringFragment("objects", "order", `{"key":"order","name":"Order","description":"","fields":[]}`)}, wantRule: "backend.automation.instruction_key_invalid"},
+		{name: "profile relation contract", moduleKey: "profile_binding", categoryKey: "profile_binding.authoring", kind: "principal.profile_binding", candidate: authoringFragment("objects", "staff_profile", `{"key":"staff_profile","name":"Staff","description":"","fields":[{"key":"identity_user","name":"Identity","type":"relation","config":{"object_key":"identity_user"},"required":true}],"ux":{"kind":"identity_profile_extension","config":{"identity_relation_field":"identity_user","business_identity":{"key":"staff"}}}}`), wantRule: "backend.identity.profile_binding_invalid"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := validateRuntimeCandidate(t, bindings[test.moduleKey], test.categoryKey, test.kind, test.candidate, test.referencedContext)
+			if !diagnosticsContainRule(result.Diagnostics, test.wantRule) {
+				t.Fatalf("diagnostics=%#v, want rule %q", result.Diagnostics, test.wantRule)
+			}
+		})
+	}
+}
+
+func TestOwnerValidatorsAcceptRepresentativeValidCandidates(t *testing.T) {
+	bindings := runtimeBindingsByKey(t)
+	identityUser := authoringFragment("objects", "identity_user", `{"key":"identity_user","name":"Identity user","description":"","fields":[]}`)
+	order := authoringFragment("objects", "order", `{"key":"order","name":"Order","description":"","fields":[]}`)
+	action := authoringFragment("actions", "order.complete", `{"key":"order.complete","name":"Complete","object_key":"order","kind":"record_update","permission":"order.complete","audit_event":"order_completed"}`)
+	tests := []struct {
+		name, moduleKey, categoryKey, kind string
+		candidate                          modulecapability.AuthoringFragment
+		referencedContext                  []modulecapability.AuthoringFragment
+	}{
+		{name: "object", moduleKey: "runtime_schema", categoryKey: "schema.authoring", kind: "schema.object", candidate: authoringFragment("objects", "order", `{"key":"order","name":"Order","description":"","fields":[]}`)},
+		{name: "action", moduleKey: "records", categoryKey: "records.authoring", kind: "action.definition", candidate: action, referencedContext: []modulecapability.AuthoringFragment{order}},
+		{name: "workflow", moduleKey: "workflow", categoryKey: "workflow.authoring", kind: "workflow.definition", candidate: authoringFragment("workflows", "order.complete", `{"key":"order.complete","name":"Complete order","trigger":{},"condition":{},"action":{},"enabled":true,"trigger_contract":{"type":"manual"},"graph":{"version":2,"nodes":[{"id":"trigger","type":"trigger"},{"id":"action","type":"action","contract":{"action":{"action_key":"order.complete"}}}],"edges":[{"id":"start","source":"trigger","target":"action"}]}}`), referencedContext: []modulecapability.AuthoringFragment{action, order}},
+		{name: "automation", moduleKey: "automation", categoryKey: "automation.rules", kind: "automation.rule", candidate: authoringFragment("automation_rules", "order.ready", `{"key":"order.ready","name":"Order ready","object_key":"order","enabled":true,"trigger":{"phase":"after","operation":"update"},"instructions":[{"key":"event","type":"emit_event","config":{"event_type":"order.ready"}}]}`), referencedContext: []modulecapability.AuthoringFragment{order}},
+		{name: "profile binding", moduleKey: "profile_binding", categoryKey: "profile_binding.authoring", kind: "principal.profile_binding", candidate: authoringFragment("objects", "staff_profile", `{"key":"staff_profile","name":"Staff","description":"","fields":[{"key":"identity_user","name":"Identity","type":"relation","config":{"object_key":"identity_user"},"required":true,"unique":true}],"ux":{"kind":"identity_profile_extension","config":{"identity_relation_field":"identity_user","business_identity":{"key":"staff"}}}}`), referencedContext: []modulecapability.AuthoringFragment{identityUser}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := validateRuntimeCandidate(t, bindings[test.moduleKey], test.categoryKey, test.kind, test.candidate, test.referencedContext)
+			if len(result.Diagnostics) != 0 {
+				t.Fatalf("valid candidate diagnostics=%#v", result.Diagnostics)
+			}
+		})
+	}
+}
+
+func runtimeBindingsByKey(t *testing.T) map[string]modulecapability.Binding {
+	t.Helper()
+	bindings, err := Bindings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := make(map[string]modulecapability.Binding, len(bindings))
+	for _, binding := range bindings {
+		summary, summaryErr := binding.CapabilitySummary(t.Context())
+		if summaryErr != nil {
+			t.Fatal(summaryErr)
+		}
+		result[summary.Identity.Key] = binding
+	}
+	return result
+}
+
+func validateRuntimeCandidate(t *testing.T, binding modulecapability.Binding, categoryKey, kind string, candidate modulecapability.AuthoringFragment, reference []modulecapability.AuthoringFragment) modulecapability.ValidationResult {
+	t.Helper()
+	if binding == nil {
+		t.Fatal("Runtime binding is unavailable")
+	}
+	summary, err := binding.CapabilitySummary(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := binding.ValidateCapabilityCandidate(t.Context(), modulecapability.ValidationRequest{
+		ContractVersion: modulecapability.ValidationContractVersion,
+		ModuleKey:       summary.Identity.Key, CategoryKey: categoryKey, ContractSHA256: summary.Identity.ContractSHA256,
+		Kind: kind, Candidate: candidate, ReferencedContext: reference,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
+}
+
+func authoringFragment(collection, key, value string) modulecapability.AuthoringFragment {
+	return modulecapability.AuthoringFragment{Collection: collection, Key: key, Value: json.RawMessage(value)}
+}
+
+func diagnosticsContainRule(values []modulecapability.Diagnostic, rule string) bool {
+	for _, value := range values {
+		if value.RuleKey == rule {
+			return true
+		}
+	}
+	return false
+}
+
+func assertRuntimeCategoryOperations(t *testing.T, binding modulecapability.Binding, summary modulecapability.ModuleSummary) {
+	t.Helper()
+	for _, category := range summary.Categories {
+		document, err := binding.CapabilityCategory(t.Context(), category.Key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		count := 0
+		for _, methods := range document.OpenAPI.Paths {
+			for _, raw := range methods {
+				count++
+				var operation map[string]any
+				if err := json.Unmarshal(raw, &operation); err != nil {
+					t.Fatal(err)
+				}
+				for key := range operation {
+					if strings.HasPrefix(key, "x-domainry-") && key != modulecapability.OperationExtensionKey {
+						t.Fatalf("provider %s category %s retained obsolete extension %s", summary.Identity.Key, category.Key, key)
+					}
+				}
+			}
+		}
+		if count != category.OperationCount {
+			t.Fatalf("provider %s category %s operation count=%d, want %d", summary.Identity.Key, category.Key, count, category.OperationCount)
+		}
+	}
+}

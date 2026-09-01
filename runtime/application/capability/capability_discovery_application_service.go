@@ -2,7 +2,6 @@ package capability
 
 import (
 	"context"
-	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"net/url"
 	"sort"
 	"strings"
@@ -11,7 +10,6 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
-	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -98,7 +96,7 @@ func (s *CapabilityAuthoringApplicationService) CapabilityDetail(ctx context.Con
 }
 
 func (s *CapabilityAuthoringApplicationService) CapabilityDetailSelected(ctx context.Context, principal principalmodel.Principal, capabilityKey string, selection CapabilityDetailSelection) (capabilitycontract.CapabilityDetail, error) {
-	contract, snapshot, err := s.capabilitiesAndSchema(ctx, principal)
+	contract, _, err := s.capabilitiesAndSchema(ctx, principal)
 	if err != nil {
 		return capabilitycontract.CapabilityDetail{}, err
 	}
@@ -106,125 +104,14 @@ func (s *CapabilityAuthoringApplicationService) CapabilityDetailSelected(ctx con
 	for _, domain := range contract.Domains {
 		for _, definition := range domain.Capabilities {
 			if definition.Key == capabilityKey {
-				selected := map[string]string{}
-				if capabilityKey == "integration.connection" || capabilityKey == "integration.connection.rotate" {
-					if selection.ConnectorKey != "" || selection.ProviderKey != "" {
-						if selection.ConnectorKey == "" || selection.ProviderKey == "" {
-							return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryBadRequest("backend.capability.detail_selection_incomplete", "capability", capabilityKey)
-						}
-						connector, found := capabilityConnectorByKey(snapshot, selection.ConnectorKey)
-						if !found {
-							return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryNotFound("backend.capability.connector_not_found", "connector_key", selection.ConnectorKey)
-						}
-						specialized, found := specializeIntegrationAuthoringCapability(capabilityKey, connector, selection.ProviderKey, "")
-						if !found {
-							return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryNotFound("backend.capability.provider_not_found", "provider_key", selection.ProviderKey)
-						}
-						definition = specialized
-						selected = map[string]string{"connector_key": selection.ConnectorKey, "provider_key": selection.ProviderKey}
-					}
-				}
-				if capabilityKey == "integration.operation_test" && (selection.ConnectorKey != "" || selection.OperationKey != "") {
-					if selection.ConnectorKey == "" || selection.OperationKey == "" {
-						return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryBadRequest("backend.capability.detail_selection_incomplete", "capability", capabilityKey)
-					}
-					connector, found := capabilityConnectorByKey(snapshot, selection.ConnectorKey)
-					if !found {
-						return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryNotFound("backend.capability.connector_not_found", "connector_key", selection.ConnectorKey)
-					}
-					specialized, found := specializeIntegrationAuthoringCapability(capabilityKey, connector, "", selection.OperationKey)
-					if !found {
-						return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryNotFound("backend.capability.operation_not_found", "operation_key", selection.OperationKey)
-					}
-					definition = specialized
-					selected = map[string]string{"connector_key": selection.ConnectorKey, "operation_key": selection.OperationKey}
-				}
-				if capabilityKey == "integration.binding_validation" && (selection.ConnectorKey != "" || selection.ProviderKey != "" || selection.OperationKey != "") {
-					if selection.ConnectorKey == "" {
-						return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryBadRequest("backend.capability.detail_selection_incomplete", "capability", capabilityKey)
-					}
-					connector, found := capabilityConnectorByKey(snapshot, selection.ConnectorKey)
-					if !found {
-						return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryNotFound("backend.capability.connector_not_found", "connector_key", selection.ConnectorKey)
-					}
-					var provider *connectormodel.ConnectorProviderSchema
-					if selection.ProviderKey != "" {
-						provider = capabilityConnectorProviderByKey(&connector, selection.ProviderKey)
-						if provider == nil {
-							return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryNotFound("backend.capability.provider_not_found", "provider_key", selection.ProviderKey)
-						}
-					}
-					var operation *connectormodel.ConnectorOperationSchema
-					if selection.OperationKey != "" {
-						operation = capabilityConnectorOperationByKey(&connector, selection.OperationKey)
-						if operation == nil {
-							return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryNotFound("backend.capability.operation_not_found", "operation_key", selection.OperationKey)
-						}
-					}
-					providerKey, operationKey := "", ""
-					if provider != nil {
-						providerKey = provider.Key
-					}
-					if operation != nil {
-						operationKey = operation.Key
-					}
-					var specialized bool
-					definition, specialized = specializeIntegrationAuthoringCapability(capabilityKey, connector, providerKey, operationKey)
-					if !specialized {
-						return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryBadRequest("backend.capability.integration_authoring_contract_invalid", "capability", capabilityKey)
-					}
-					selected = map[string]string{"connector_key": selection.ConnectorKey}
-					if selection.ProviderKey != "" {
-						selected["provider_key"] = selection.ProviderKey
-					}
-					if selection.OperationKey != "" {
-						selected["operation_key"] = selection.OperationKey
-					}
-				}
 				return capabilitycontract.CapabilityDetail{
 					ContractVersion: contract.ContractVersion, RuntimeVersion: contract.RuntimeVersion, ContractHash: contract.ContractHash,
-					InstanceHash: contract.InstanceHash, Domain: domain.Key, Selection: selected, Capability: definition,
+					InstanceHash: contract.InstanceHash, Domain: domain.Key, Selection: map[string]string{}, Capability: definition,
 				}, nil
 			}
 		}
 	}
 	return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryNotFound("backend.capability.not_found", "capability", capabilityKey)
-}
-
-func capabilityObjectByKey(snapshot capabilitycontract.CapabilityInstanceSchema, objectKey string) (definitionmodel.ObjectSchema, bool) {
-	for _, object := range snapshot.Objects {
-		if object.Key == objectKey {
-			return object, true
-		}
-	}
-	return definitionmodel.ObjectSchema{}, false
-}
-
-func capabilityConnectorByKey(snapshot capabilitycontract.CapabilityInstanceSchema, connectorKey string) (connectormodel.ConnectorSchema, bool) {
-	for _, connector := range snapshot.Integrations.Connectors {
-		if connector.Key == connectorKey {
-			return connector, true
-		}
-	}
-	return connectormodel.ConnectorSchema{}, false
-}
-
-func capabilityConnectorProviderByKey(connector *connectormodel.ConnectorSchema, providerKey string) *connectormodel.ConnectorProviderSchema {
-	for index := range connector.Providers {
-		if connector.Providers[index].Key == providerKey {
-			return &connector.Providers[index]
-		}
-	}
-	return nil
-}
-
-func capabilityConnectorOperationByKey(connector *connectormodel.ConnectorSchema, operationKey string) *connectormodel.ConnectorOperationSchema {
-	for index := range connector.Operations {
-		if connector.Operations[index].Key == operationKey {
-			return &connector.Operations[index]
-		}
-	}
-	return nil
 }
 
 func (s *CapabilityAuthoringApplicationService) ReferenceValues(ctx context.Context, principal principalmodel.Principal, kind, scope string) (capabilitycontract.CapabilityReferenceResult, error) {

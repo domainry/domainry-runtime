@@ -163,11 +163,11 @@ func TestDefinitionValidationUtilityEdges(t *testing.T) {
 			t.Fatalf("%s: %q", code, got)
 		}
 	}
-	for code, capability := range map[string]string{
-		"backend.integration.connector.operation_unknown": "integration.catalog",
-		"backend.integration.connector.unknown":           "integration.catalog",
+	for _, code := range []string{
+		"backend.integration.connector.operation_unknown",
+		"backend.integration.connector.unknown",
 	} {
-		if got := NewApplicationDefinitionValidationIssue(code, "field", "", "", nil).CapabilityKey; got != capability {
+		if got := NewApplicationDefinitionValidationIssue(code, "field", "", "", nil).CapabilityKey; got != "" {
 			t.Fatalf("%s capability=%q", code, got)
 		}
 	}

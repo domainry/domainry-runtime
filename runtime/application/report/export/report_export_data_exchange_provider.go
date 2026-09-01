@@ -11,12 +11,12 @@ import (
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-data-exchange-sdk/modulehost"
 	"github.com/domainry/domainry-foundation/apperror"
+	reportcontract "github.com/domainry/domainry-report-sdk/contract"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
-	reportcontract "github.com/domainry/domainry-report/contract"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
-	reportadapter "github.com/domainry/domainry-runtime/runtime/application/report/adapter"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	reportadapter "github.com/domainry/domainry-runtime/runtime/modulehost/report"
 )
 
 const DataExchangeProviderKey = "reports"
@@ -131,20 +131,20 @@ func (p *DataExchangeProvider) prepare(ctx context.Context, payload ExportPayloa
 		return preparedDataExchangeExport{}, err
 	}
 	report, control := resolved.Definition.Report, resolved.Definition.Control
-	reportHash, _ := reportcontract.CanonicalReportJSONSHA256(report)
+	reportHash, _ := reportcontract.CanonicalJSONSHA256(report)
 	sourceHash := reportHash
 	if report.ObjectSQLV1 != nil {
-		sourceHash, _ = reportcontract.CanonicalReportJSONSHA256(report.ObjectSQLV1)
+		sourceHash, _ = reportcontract.CanonicalJSONSHA256(report.ObjectSQLV1)
 	}
 	if reportHash != payload.ReportDefinitionSHA256 || sourceHash != payload.ReportSourceSHA256 {
 		return preparedDataExchangeExport{}, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_source_changed"}
 	}
-	controlHash, _ := reportcontract.CanonicalReportJSONSHA256(control)
+	controlHash, _ := reportcontract.CanonicalJSONSHA256(control)
 	if strings.TrimSpace(payload.ControlDefinitionSHA256) == "" || controlHash != payload.ControlDefinitionSHA256 {
 		return preparedDataExchangeExport{}, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_scope_changed"}
 	}
-	normalizedHash, _ := reportcontract.CanonicalReportJSONSHA256(resolved.Scope)
-	payloadScopeHash, _ := reportcontract.CanonicalReportJSONSHA256(payload.Scope)
+	normalizedHash, _ := reportcontract.CanonicalJSONSHA256(resolved.Scope)
+	payloadScopeHash, _ := reportcontract.CanonicalJSONSHA256(payload.Scope)
 	if normalizedHash != payloadScopeHash {
 		return preparedDataExchangeExport{}, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_scope_changed"}
 	}
@@ -157,7 +157,7 @@ func (p *DataExchangeProvider) prepare(ctx context.Context, payload ExportPayloa
 		if versionErr != nil {
 			return preparedDataExchangeExport{}, versionErr
 		}
-		versionHash, hashErr := reportcontract.CanonicalReportJSONSHA256(version)
+		versionHash, hashErr := reportcontract.CanonicalJSONSHA256(version)
 		if hashErr != nil {
 			return preparedDataExchangeExport{}, hashErr
 		}
@@ -185,7 +185,7 @@ func (p *DataExchangeProvider) PlanExport(ctx context.Context, request dataexcha
 	if createdAt.IsZero() {
 		createdAt = p.dependencies.Clock().UTC()
 	}
-	return dataexchange.ExportPlan{Filename: reportcontract.SafeReportExportFilename(payload.ReportKey, payload.ObjectKey), ContentType: "text/csv; charset=utf-8", ExpiresAt: createdAt.Add(dataExchangeTTL(prepared.control))}, nil
+	return dataexchange.ExportPlan{Filename: reportcontract.SafeExportFilename(payload.ReportKey, payload.ObjectKey), ContentType: "text/csv; charset=utf-8", ExpiresAt: createdAt.Add(dataExchangeTTL(prepared.control))}, nil
 }
 
 func (p *DataExchangeProvider) ReadExportPage(ctx context.Context, request dataexchange.ExportPageRequest) (dataexchange.ExportPage, error) {

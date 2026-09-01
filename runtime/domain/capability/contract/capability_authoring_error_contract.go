@@ -27,16 +27,6 @@ func fallbackAuthoringErrorCapability(code string) string {
 		return "automation.rule"
 	case strings.HasPrefix(code, "backend.workflow."):
 		return "workflow.graph_v2"
-	case strings.HasPrefix(code, "backend.scheduler."):
-		return "scheduler.business_job"
-	case strings.HasPrefix(code, "backend.report."):
-		return "report.definition"
-	case strings.HasPrefix(code, "backend.integration.binding."):
-		return "integration.binding_validation"
-	case strings.HasPrefix(code, "backend.integration.connector."):
-		return "integration.catalog"
-	case strings.HasPrefix(code, "backend.integration.connection."), strings.HasPrefix(code, "backend.integration.secret"), strings.HasPrefix(code, "backend.integration.webhook_signature."):
-		return "integration.connection"
 	default:
 		return ""
 	}
@@ -50,8 +40,6 @@ func metadataResourceCapabilityKey(resourceType string) string {
 		return "action.definition"
 	case "automation_rule":
 		return "automation.rule"
-	case "report":
-		return "report.definition"
 	default:
 		return ""
 	}

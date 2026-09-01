@@ -22,17 +22,19 @@ func TestTwoRuntimeInstancesShareAgentOwnedDialogState(t *testing.T) {
 	second := newIntegrationRuntime(t, cfg)
 	defer second.CloseContext(t.Context())
 	store := openRuntimePersistenceFixture(t, cfg)
+	firstHandler := integrationModuleOwnerRoutes(t, first, "agent")
+	secondHandler := integrationModuleOwnerRoutes(t, second, "agent")
 
-	created := runtimeFixtureRequest[map[string]any](t, first.Routes(), "business_admin", http.MethodPost, "/agent-dialog/sessions", map[string]any{"external_session_id": "shared-session", "title": "Shared session"})
+	created := runtimeFixtureRequest[map[string]any](t, firstHandler, "business_admin", http.MethodPost, "/agent-dialog/sessions", map[string]any{"external_session_id": "shared-session", "title": "Shared session"})
 	if created["external_session_id"] != "shared-session" {
 		t.Fatalf("created session=%#v", created)
 	}
-	listed := runtimeFixtureRequest[map[string]any](t, second.Routes(), "business_admin", http.MethodGet, "/agent-dialog/sessions", nil)
+	listed := runtimeFixtureRequest[map[string]any](t, secondHandler, "business_admin", http.MethodGet, "/agent-dialog/sessions", nil)
 	if sessions, ok := listed["sessions"].([]any); !ok || len(sessions) != 1 {
 		t.Fatalf("second runtime sessions=%#v", listed)
 	}
-	runtimeFixtureRequest[map[string]any](t, second.Routes(), "business_admin", http.MethodPost, "/agent-dialog/sessions/shared-session/archive", nil)
-	archived := runtimeFixtureRequest[map[string]any](t, first.Routes(), "business_admin", http.MethodGet, "/agent-dialog/sessions?archived=true", nil)
+	runtimeFixtureRequest[map[string]any](t, secondHandler, "business_admin", http.MethodPost, "/agent-dialog/sessions/shared-session/archive", nil)
+	archived := runtimeFixtureRequest[map[string]any](t, firstHandler, "business_admin", http.MethodGet, "/agent-dialog/sessions?archived=true", nil)
 	if sessions, ok := archived["sessions"].([]any); !ok || len(sessions) != 1 {
 		t.Fatalf("first runtime archived sessions=%#v", archived)
 	}
@@ -58,11 +60,12 @@ func TestTwoRuntimeInstancesShareAgentOwnedDialogState(t *testing.T) {
 	}
 	third := newIntegrationRuntime(t, cfg)
 	defer third.CloseContext(t.Context())
-	proposal := runtimeFixtureRequest[map[string]any](t, third.Routes(), "business_admin", http.MethodGet, "/agent-dialog/proposals/shared-proposal", nil)
+	thirdHandler := integrationModuleOwnerRoutes(t, third, "agent")
+	proposal := runtimeFixtureRequest[map[string]any](t, thirdHandler, "business_admin", http.MethodGet, "/agent-dialog/proposals/shared-proposal", nil)
 	if proposal["status"] != "draft" {
 		t.Fatalf("replacement runtime proposal=%#v", proposal)
 	}
-	replacementSessions := runtimeFixtureRequest[map[string]any](t, third.Routes(), "business_admin", http.MethodGet, "/agent-dialog/sessions?archived=true", nil)
+	replacementSessions := runtimeFixtureRequest[map[string]any](t, thirdHandler, "business_admin", http.MethodGet, "/agent-dialog/sessions?archived=true", nil)
 	if sessions, ok := replacementSessions["sessions"].([]any); !ok || len(sessions) != 1 {
 		t.Fatalf("replacement runtime sessions=%#v", replacementSessions)
 	}

@@ -6,8 +6,8 @@ import (
 
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
-	reportadapter "github.com/domainry/domainry-runtime/runtime/application/report/adapter"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	reportadapter "github.com/domainry/domainry-runtime/runtime/modulehost/report"
 )
 
 // BindReportApplication installs the Report owner's application boundary only

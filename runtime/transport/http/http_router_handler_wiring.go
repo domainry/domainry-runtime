@@ -9,7 +9,10 @@ func UseHandlers(router *HTTPRouter, handlers HTTPRouterHandlers) *HTTPRouter {
 	router.automationHTTP = handlers.Automation
 	router.schedulerHTTP = handlers.Scheduler
 	router.businessReferenceHTTP = handlers.BusinessReferences
-	router.publicationHandoffHTTP = handlers.PublicationHandoff
+	router.publicationHandoffHTTP = nil
+	if handlers.PublicationHandoff != nil {
+		router.publicationHandoffHTTP = handlers.PublicationHandoff
+	}
 	router.businessSystemHTTP = handlers.BusinessSystem
 	router.capabilityHTTP = handlers.Capabilities
 	router.applicationSchemaHTTP = handlers.ApplicationSchema

@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
+	reportsdkcontract "github.com/domainry/domainry-report-sdk/contract"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
-	reportownercontract "github.com/domainry/domainry-report/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 )
@@ -33,7 +33,7 @@ func (v *reportDefinitionValidator) validateDatasetReferences() {
 			"usage": diagnostic.Usage, "recommended_index": strings.Join(diagnostic.Fields, ","),
 		})
 	}
-	if _, err := reportownercontract.BuildReportDatasetPlan(v.report); err != nil {
+	if _, err := reportsdkcontract.BuildReportDatasetPlan(v.report); err != nil {
 		// BuildReportDatasetPlan owns this contract and returns only the typed
 		// authoring diagnostic; retaining a second untyped fallback would hide a
 		// broken internal boundary behind an unreachable compatibility branch.

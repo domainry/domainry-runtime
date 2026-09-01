@@ -9,7 +9,7 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
+	schedulermodulehost "github.com/domainry/domainry-runtime/runtime/modulehost/scheduler"
 	"github.com/domainry/domainry-scheduler-sdk/schedule"
 )
 
@@ -92,10 +92,9 @@ type SchedulerDefinitionSource interface {
 // owns published-definition projection and downstream Runtime dispatch only;
 // clock execution belongs to domainry-scheduler.
 type SchedulerApplicationService struct {
-	runtime         ScheduledWorkflowRuntime
-	definitions     SchedulerDefinitionSource
-	clock           workerplatform.Clock
-	reportSnapshots ReportSnapshotRuntime
+	definitions SchedulerDefinitionSource
+	clock       workerplatform.Clock
+	downstream  *schedulermodulehost.DownstreamDispatcher
 }
 
 func (s *SchedulerApplicationService) UseDefinitionSource(source SchedulerDefinitionSource) {
@@ -137,7 +136,9 @@ func definitionString(definition PublishedDefinition, key string) string {
 }
 
 func (s *SchedulerApplicationService) UseReportSnapshotRuntime(runtime ReportSnapshotRuntime) {
-	s.reportSnapshots = runtime
+	if s != nil && s.downstream != nil {
+		s.downstream.UseReportSnapshotRuntime(runtime)
+	}
 }
 
 func NewSchedulerApplicationService(runtime ScheduledWorkflowRuntime) *SchedulerApplicationService {
@@ -148,7 +149,7 @@ func NewSchedulerApplicationServiceWithClock(runtime ScheduledWorkflowRuntime, c
 	if clock == nil {
 		clock = workerplatform.SystemClock{}
 	}
-	return &SchedulerApplicationService{runtime: runtime, clock: clock}
+	return &SchedulerApplicationService{clock: clock, downstream: schedulermodulehost.NewDownstreamDispatcher(runtime)}
 }
 
 func (s *SchedulerApplicationService) PreviewDefinition(ctx context.Context, data map[string]any, principal principalmodel.Principal) (SchedulerDefinitionPreview, error) {
@@ -158,10 +159,7 @@ func (s *SchedulerApplicationService) PreviewDefinition(ctx context.Context, dat
 	if err := schedulerDefinitionWriteAllowed(principal); err != nil {
 		return SchedulerDefinitionPreview{}, err
 	}
-	if err := validateSchedulerDefinitionContract(ctx, data); err != nil {
-		return SchedulerDefinitionPreview{}, err
-	}
-	return s.previewSchedule(data), nil
+	return s.previewDefinition(ctx, data, true)
 }
 
 // PreviewSchedule validates and previews a leaf schedule payload without a
@@ -173,40 +171,23 @@ func (s *SchedulerApplicationService) PreviewSchedule(ctx context.Context, data 
 	if err := schedulerDefinitionWriteAllowed(principal); err != nil {
 		return SchedulerDefinitionPreview{}, err
 	}
-	if err := validateSchedulerScheduleFragment(ctx, data); err != nil {
-		return SchedulerDefinitionPreview{}, err
-	}
-	return s.previewSchedule(data), nil
+	return s.previewDefinition(ctx, data, false)
 }
 
-func (s *SchedulerApplicationService) previewSchedule(data map[string]any) SchedulerDefinitionPreview {
-	definition := schedulerScheduleFromData(cloneSchedulerDefinitionData(data))
-	cursor := s.clock.Now()
-	preview := SchedulerDefinitionPreview{NextRuns: make([]string, 0, 3)}
-	for range 3 {
-		next := schedule.NextSchedule(definition, cursor)
+func (s *SchedulerApplicationService) previewDefinition(ctx context.Context, data map[string]any, complete bool) (SchedulerDefinitionPreview, error) {
+	var nextRuns []time.Time
+	var err error
+	if complete {
+		nextRuns, err = schedule.PreviewDefinitionData(ctx, data, s.clock.Now(), 3)
+	} else {
+		nextRuns, err = schedule.PreviewData(ctx, data, s.clock.Now(), 3)
+	}
+	if err != nil {
+		return SchedulerDefinitionPreview{}, apperror.FromError(apperror.KindBadRequest, err)
+	}
+	preview := SchedulerDefinitionPreview{NextRuns: make([]string, 0, len(nextRuns))}
+	for _, next := range nextRuns {
 		preview.NextRuns = append(preview.NextRuns, next.UTC().Format(time.RFC3339))
-		cursor = next
 	}
-	return preview
-}
-
-func cloneSchedulerDefinitionData(data map[string]any) map[string]any {
-	clone := make(map[string]any, len(data))
-	for key, value := range data {
-		clone[key] = value
-	}
-	return clone
-}
-
-func schedulerScheduleFromData(data map[string]any) schedulersdk.Schedule {
-	return schedulersdk.Schedule{
-		Type:            strings.TrimSpace(fmt.Sprint(data["schedule_type"])),
-		Expression:      strings.TrimSpace(fmt.Sprint(data["schedule_expression"])),
-		Timezone:        strings.TrimSpace(fmt.Sprint(data["timezone"])),
-		IntervalSeconds: schedule.Int(data["interval_seconds"], 0),
-		TimeOfDay:       strings.TrimSpace(fmt.Sprint(data["time_of_day"])),
-		DayOfWeek:       strings.TrimSpace(fmt.Sprint(data["day_of_week"])),
-		DayOfMonth:      schedule.Int(data["day_of_month"], 0),
-	}
+	return preview, nil
 }

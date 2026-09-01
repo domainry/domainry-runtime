@@ -27,7 +27,10 @@ func TestOpenAPIOperationsPublishEndpointPolicy(t *testing.T) {
 			}
 			extension, ok := operation["x-domainry-endpoint-contract"].(map[string]any)
 			if !ok {
-				t.Fatalf("%s %s has no endpoint contract", method, path)
+				if owner, _ := operation["x-domainry-module-owner-fallback"].(string); owner == "" {
+					t.Errorf("%s %s has neither a Runtime endpoint contract nor an explicit module-owner fallback", method, path)
+				}
+				continue
 			}
 			if extension["contract_version"] != endpointmodel.ContractVersion {
 				t.Fatalf("%s %s contract version=%v", method, path, extension["contract_version"])

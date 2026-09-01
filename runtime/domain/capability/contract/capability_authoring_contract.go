@@ -17,7 +17,7 @@ const (
 	RuntimeAuthoringContractVersion = "runtime-authoring-v1"
 	// RuntimeAuthoringContractHash identifies the published, canonical authoring catalog.
 	// The Application catalog test fails whenever catalog content changes without updating it.
-	RuntimeAuthoringContractHash = "aeecaa7a0b08cdb709074668b0eada4fc924d12b13c5f14fabe41e4bb2c85c1e"
+	RuntimeAuthoringContractHash = "ba8f63f6aba777f756028f7492da8d44aec05a98b5a3ec0c71403767741a41d5"
 )
 
 type CapabilityRuntimeAuthoringContract struct {

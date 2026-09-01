@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/domainry/domainry-foundation/modulecapability"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityevaluator "github.com/domainry/domainry-identity-sdk/authorization/evaluator"
 )
@@ -105,6 +106,7 @@ type manifestIdentitySession struct {
 }
 
 type manifestIdentityBinding struct {
+	modulecapability.Binding
 	mu          sync.RWMutex
 	application identitysdk.ApplicationRef
 	roles       map[string]IdentityFixtureRole

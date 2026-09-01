@@ -87,6 +87,7 @@ type HTTPRouter struct {
 	manifestHash            string
 	manifest                manifestmodel.ManifestSchema
 	releaseIdentity         RuntimeReleaseIdentity
+	moduleHTTPRoutes        map[string]moduleHTTPRoute
 }
 
 func NewHTTPRouter(config HTTPRouterConfig, deps HTTPRouterDependencies) *HTTPRouter {
@@ -112,6 +113,7 @@ func NewHTTPRouter(config HTTPRouterConfig, deps HTTPRouterDependencies) *HTTPRo
 		runtimeReleaseAdmission: deps.RuntimeReleaseAdmission,
 		runtimeReleaseIntegrity: deps.RuntimeReleaseIntegrity,
 		runtimeVersion:          "dev", apiContractVersion: BusinessRuntimeAPIContractVersion, apiContractHash: BusinessRuntimeAPIContractHash(),
+		moduleHTTPRoutes: buildModuleHTTPRouteIndex(deps.ModuleHTTPSurfaces),
 	}
 	for group, policy := range config.ListenerGroupPolicies {
 		if policy.RateLimitPerMinute <= 0 {
@@ -209,6 +211,7 @@ func (s *HTTPRouter) Routes() http.Handler {
 	s.operationsHTTP.RegisterRoutes(mux)
 	runOptionalRouteRegistrar(s.lifecycleHTTP != nil, func() { s.lifecycleHTTP.RegisterRoutes(mux) })
 	runOptionalRouteRegistrar(s.workspaceProvisionHTTP != nil, func() { s.workspaceProvisionHTTP.RegisterRoutes(mux) })
+	s.registerModuleHTTPRoutes(mux)
 	s.registerFallbackRoutes(mux)
 	admitted := s.withAdmission(mux, mux)
 	controlled := s.withOperationalControls(mux, admitted)
@@ -249,6 +252,12 @@ func (s *HTTPRouter) RoutesForListenerGroup(group ListenerRouteGroup) http.Handl
 			path = "/{$}"
 		}
 		mux.Handle(method+" "+path, full)
+	}
+	for identity, binding := range s.moduleHTTPRoutes {
+		if _, ownedByRuntime := runtimeEndpointContracts[identity]; ownedByRuntime || !moduleRouteVisibleOnListener(binding.route, group) {
+			continue
+		}
+		mux.Handle(identity, full)
 	}
 	mux.Handle("GET /openapi.json", s.listenerOpenAPIHandler(group, full))
 	mux.HandleFunc("/{path...}", s.notFound)
