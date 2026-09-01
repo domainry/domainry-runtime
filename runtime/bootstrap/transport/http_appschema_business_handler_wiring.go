@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
+	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
@@ -66,7 +67,12 @@ func (a *httpServerAssembly) wireMetadataAndBusinessHandlers() {
 	}
 	a.handlers.Lifecycle = lifecyclehttp.NewLifecycleHandler(lifecyclehttp.LifecycleDependencies{
 		Service: lifecycleGovernance, Operations: operationsService,
-		Principal: a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
+		Principal: a.callbacks.Principal,
+		CleanupProcessorPrincipal: lifecycleaccess.NewSystemPrincipal("runtime-lifecycle-http", lifecycleaccess.NewSystemScope(
+			lifecycleaccess.SystemScopeGlobal,
+			"process cleanup after Runtime operations authorization",
+		)),
+		WriteJSON:         a.callbacks.WriteJSON,
 		WriteServiceError: a.callbacks.WriteServiceError,
 		Authenticated:     a.identityHTTP.AuthenticatedFunc,
 	})

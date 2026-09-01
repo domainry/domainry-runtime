@@ -21,27 +21,30 @@ type OperationRunner interface {
 }
 
 type LifecycleDependencies struct {
-	Service           lifecyclesdk.Governance
-	Operations        OperationRunner
-	Principal         func(*http.Request) principalmodel.Principal
-	WriteJSON         func(http.ResponseWriter, int, any)
-	WriteServiceError func(http.ResponseWriter, *http.Request, error)
-	Authenticated     func(http.HandlerFunc) http.HandlerFunc
+	Service                   lifecyclesdk.Governance
+	Operations                OperationRunner
+	Principal                 func(*http.Request) principalmodel.Principal
+	CleanupProcessorPrincipal lifecycleaccess.Principal
+	WriteJSON                 func(http.ResponseWriter, int, any)
+	WriteServiceError         func(http.ResponseWriter, *http.Request, error)
+	Authenticated             func(http.HandlerFunc) http.HandlerFunc
 }
 
 type LifecycleHandler struct {
-	service           lifecyclesdk.Governance
-	operations        OperationRunner
-	principal         func(*http.Request) principalmodel.Principal
-	writeJSON         func(http.ResponseWriter, int, any)
-	writeServiceError func(http.ResponseWriter, *http.Request, error)
-	authenticated     func(http.HandlerFunc) http.HandlerFunc
+	service                   lifecyclesdk.Governance
+	operations                OperationRunner
+	principal                 func(*http.Request) principalmodel.Principal
+	cleanupProcessorPrincipal lifecycleaccess.Principal
+	writeJSON                 func(http.ResponseWriter, int, any)
+	writeServiceError         func(http.ResponseWriter, *http.Request, error)
+	authenticated             func(http.HandlerFunc) http.HandlerFunc
 }
 
 func NewLifecycleHandler(deps LifecycleDependencies) *LifecycleHandler {
 	return &LifecycleHandler{
 		service: deps.Service, operations: deps.Operations, principal: deps.Principal,
-		writeJSON: deps.WriteJSON, writeServiceError: deps.WriteServiceError,
+		cleanupProcessorPrincipal: deps.CleanupProcessorPrincipal,
+		writeJSON:                 deps.WriteJSON, writeServiceError: deps.WriteServiceError,
 		authenticated: deps.Authenticated,
 	}
 }
@@ -57,7 +60,7 @@ func (h *LifecycleHandler) runCleanupJob(w http.ResponseWriter, r *http.Request)
 	run := func(ctx context.Context) (any, error) {
 		return h.service.ProcessCleanupJob(
 			ctx, principal.WorkspaceID, jobID, "http-"+requestcontext.NewRequestID(),
-			2*time.Minute, batch, time.Now().UTC(), runtimePrincipal(principal),
+			2*time.Minute, batch, time.Now().UTC(), h.cleanupProcessorPrincipal,
 		)
 	}
 	if h.operations == nil {
@@ -84,16 +87,6 @@ func (h *LifecycleHandler) writeResult(w http.ResponseWriter, r *http.Request, r
 		return
 	}
 	h.writeJSON(w, http.StatusOK, result)
-}
-
-func runtimePrincipal(value principalmodel.Principal) lifecycleaccess.Principal {
-	permissions := make(map[string]struct{}, 3)
-	for _, permission := range []string{lifecyclesdk.PermissionPolicyManage, lifecyclesdk.PermissionCleanupRun, lifecyclesdk.PermissionSubjectManage} {
-		if value.HasPermission(permission) {
-			permissions[permission] = struct{}{}
-		}
-	}
-	return lifecycleaccess.Principal{UserID: value.UserID, WorkspaceID: value.WorkspaceID, Known: value.Known, Permissions: permissions}
 }
 
 func operationReason(r *http.Request, fallback string) string {

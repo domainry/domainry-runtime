@@ -358,7 +358,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		},
 	})
 	lifecycleScope := lifecycleaccess.NewSystemScope(lifecycleaccess.SystemScopeInstallation, "install default lifecycle policies")
-	lifecyclePrincipal := lifecycleaccess.NewSystemPrincipal("runtime-lifecycle", lifecycleScope, lifecyclesdk.PermissionPolicyManage)
+	lifecyclePrincipal := lifecycleaccess.NewSystemPrincipal("runtime-lifecycle", lifecycleScope)
 	services.Applications().RuntimeStatus.ConfigureLifecycleHealth(ctx, lifecycleBinding.System())
 	workflowScope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "initialize published workflow definitions")
 	return completeRuntimeServiceAssembly(

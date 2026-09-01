@@ -92,7 +92,10 @@ func TestLifecyclePersistenceAcrossRealDialects(t *testing.T) {
 			if err := binding.BindOwners(t.Context(), lifecyclesdk.OwnerExtensions{Executors: []lifecyclecontract.OwnerLifecycleExecutor{owner}, SubjectResolver: owner, SubjectHandlers: []lifecyclecontract.SubjectExecutionHandler{owner}, Artifacts: artifacts}); err != nil {
 				t.Fatal(err)
 			}
-			principal := lifecycleaccess.Principal{Known: true, WorkspaceID: identity, UserID: "dialect-test", Permissions: map[string]struct{}{lifecyclesdk.PermissionPolicyManage: {}}}
+			principal := lifecycleaccess.Principal{Known: true, WorkspaceID: identity, UserID: "dialect-test", Permissions: map[string]struct{}{
+				lifecyclesdk.ActionLifecyclePoliciesPublish: {},
+				lifecyclesdk.ActionLifecyclePoliciesList:    {},
+			}}
 			policy := lifecyclemodel.PolicyVersion{Policy: lifecyclemodel.RetentionPolicy{Key: identity, Version: "1", Owner: "record", Class: lifecyclemodel.RetentionClassProduct, DefaultRetention: 24 * time.Hour, MinimumRetention: time.Hour, BackupBehavior: lifecyclemodel.BackupBehaviorStandard, EraseBehavior: lifecyclemodel.EraseBehaviorDelete}}
 			if _, err := binding.Governance().PublishPolicy(t.Context(), policy, principal); err != nil {
 				t.Fatal(err)

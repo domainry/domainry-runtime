@@ -22,10 +22,11 @@ type cleanupGovernanceStub struct {
 	workspaceID string
 	jobID       string
 	batchSize   int
+	principal   lifecycleaccess.Principal
 }
 
 func (s *cleanupGovernanceStub) ProcessCleanupJob(_ context.Context, workspaceID, jobID, _ string, _ time.Duration, batchSize int, _ time.Time, principal lifecycleaccess.Principal) (lifecyclemodel.CleanupJob, error) {
-	s.workspaceID, s.jobID, s.batchSize = workspaceID, jobID, batchSize
+	s.workspaceID, s.jobID, s.batchSize, s.principal = workspaceID, jobID, batchSize, principal
 	return lifecyclemodel.CleanupJob{ID: jobID, WorkspaceID: workspaceID, RequestedBy: principal.UserID, Status: lifecyclemodel.CleanupStatusSucceeded}, nil
 }
 
@@ -47,11 +48,12 @@ func TestRuntimeLifecycleHTTPKeepsOnlyDurableCleanupRunOrchestration(t *testing.
 	handler := lifecyclehttp.NewLifecycleHandler(lifecyclehttp.LifecycleDependencies{
 		Service: governance, Operations: operations,
 		Principal: func(*http.Request) principalmodel.Principal {
-			principal := principalmodel.NewSystemPrincipal("operator-a", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "test cleanup"), lifecyclesdk.PermissionCleanupRun)
+			principal := principalmodel.NewSystemPrincipal("operator-a", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "test cleanup"))
 			principal.WorkspaceID = "workspace-a"
 			return principal
 		},
-		Authenticated: func(next http.HandlerFunc) http.HandlerFunc { return next },
+		CleanupProcessorPrincipal: lifecycleaccess.NewSystemPrincipal("runtime-lifecycle-http", lifecycleaccess.NewSystemScope(lifecycleaccess.SystemScopeGlobal, "test cleanup processor")),
+		Authenticated:             func(next http.HandlerFunc) http.HandlerFunc { return next },
 		WriteJSON: func(writer http.ResponseWriter, status int, value any) {
 			writer.WriteHeader(status)
 			_ = json.NewEncoder(writer).Encode(value)
@@ -73,6 +75,9 @@ func TestRuntimeLifecycleHTTPKeepsOnlyDurableCleanupRunOrchestration(t *testing.
 	}
 	if governance.workspaceID != "workspace-a" || governance.jobID != "job-1" || governance.batchSize != 25 {
 		t.Fatalf("cleanup call=%#v", governance)
+	}
+	if !governance.principal.Known || !governance.principal.SystemScope.Valid() || len(governance.principal.Permissions) != 0 {
+		t.Fatalf("cleanup processor authority=%#v", governance.principal)
 	}
 	if operations.request.Key != "cleanup-1" || operations.request.Reason != "verified retention cleanup" || response.Header().Get("Operation-ID") != "operation-1" {
 		t.Fatalf("operation request=%#v headers=%v", operations.request, response.Header())
