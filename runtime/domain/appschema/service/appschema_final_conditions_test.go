@@ -22,7 +22,7 @@ func TestApplicationSchemaFacadeDoesNotDeriveGuardedWritesFromActionConfig(t *te
 		t.Fatalf("object map=%#v", got)
 	}
 	actions := []definitionmodel.ActionSchema{
-		{Key: "z", ObjectKey: "z", Kind: "object_create", IdempotencyKeys: []string{"request"}},
+		{Key: "z", ObjectKey: "z", Kind: "object_create"},
 		{Key: "ignored"},
 		{Key: "a", ObjectKey: "a", Kind: "record_update"},
 	}
@@ -35,7 +35,7 @@ func TestApplicationSchemaFacadeDoesNotDeriveGuardedWritesFromActionConfig(t *te
 func TestMetadataVisibilityRemainingCompoundOperands(t *testing.T) {
 	role := accessfixture.Bundle{Permissions: []string{"customer.read", "customer.approve"}}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, role)
-	if !actionAllowed(principal, definitionmodel.ActionSchema{ObjectKey: "customer", RequiresPermission: "customer.approve"}) {
+	if !actionAllowed(principal, definitionmodel.ActionSchema{Key: "customer.approve", ObjectKey: "customer"}) {
 		t.Fatal("explicit action permission denied")
 	}
 	snapshot := appschemamodel.ApplicationSchemaSnapshot{

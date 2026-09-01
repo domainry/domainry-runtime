@@ -122,6 +122,96 @@ func TestSnapshotWatcherReloadsOnlyAfterSharedRevisionChanges(t *testing.T) {
 	}
 }
 
+func TestMetadataReloadPreparesAuthorizationBeforePublishingCandidateSnapshot(t *testing.T) {
+	repository := &metadataWatcherRepository{manifest: manifestmodel.ManifestSchema{
+		TemplateID: "orders", Version: "2", Name: "candidate",
+		Objects: []definitionmodel.ObjectSchema{{Key: "customer"}},
+	}}
+	runtime := &metadataWatcherRuntime{}
+	application := NewApplicationSchemaApplicationService(ApplicationSchemaDependencies{
+		Repository: repository, Runtime: runtime, Workflows: metadataWatcherWorkflowStub{},
+	})
+	application.AddReloadObserver(func(_ context.Context, candidate appschemamodel.ApplicationSchemaSnapshot) (ApplicationSchemaReloadPreparation, error) {
+		if len(candidate.Objects) != 1 || candidate.Objects[0].Capabilities == nil {
+			t.Fatalf("candidate object capabilities were not normalized: %+v", candidate.Objects)
+		}
+		return ApplicationSchemaReloadPreparation{}, errors.New("permission reconcile failed")
+	})
+	if err := application.reloadMetadataFromSource(t.Context()); err == nil || err.Error() != "permission reconcile failed" {
+		t.Fatalf("reload error=%v", err)
+	}
+	runtime.mu.Lock()
+	defer runtime.mu.Unlock()
+	if len(runtime.names) != 0 {
+		t.Fatalf("failed candidate was published: %v", runtime.names)
+	}
+}
+
+func TestMetadataReloadCommitsPreparedDependentsAfterRuntimeSnapshot(t *testing.T) {
+	repository := &metadataWatcherRepository{manifest: manifestmodel.ManifestSchema{TemplateID: "orders", Version: "2", Name: "candidate"}}
+	runtime := &metadataWatcherRuntime{}
+	application := NewApplicationSchemaApplicationService(ApplicationSchemaDependencies{
+		Repository: repository, Runtime: runtime, Workflows: metadataWatcherWorkflowStub{},
+	})
+	committed := false
+	application.AddReloadObserver(func(_ context.Context, _ appschemamodel.ApplicationSchemaSnapshot) (ApplicationSchemaReloadPreparation, error) {
+		return ApplicationSchemaReloadPreparation{Commit: func() {
+			runtime.mu.Lock()
+			defer runtime.mu.Unlock()
+			if len(runtime.names) != 1 || runtime.names[0] != "candidate" {
+				t.Fatalf("dependent committed before runtime snapshot: %v", runtime.names)
+			}
+			committed = true
+		}}, nil
+	})
+	if err := application.reloadMetadataFromSource(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if !committed {
+		t.Fatal("prepared dependent snapshot was not committed")
+	}
+}
+
+type metadataWatcherWorkflowErrorStub struct{ err error }
+
+func (stub metadataWatcherWorkflowErrorStub) InitializePublishedWorkflowDefinitions(context.Context, []definitionmodel.WorkflowSchema, principalmodel.SystemScope) error {
+	return stub.err
+}
+
+func TestMetadataReloadCompensatesPreparedDependentsWhenWorkflowPublicationFails(t *testing.T) {
+	repository := &metadataWatcherRepository{manifest: manifestmodel.ManifestSchema{TemplateID: "orders", Version: "2", Name: "candidate"}}
+	runtime := &metadataWatcherRuntime{}
+	workflowErr := errors.New("workflow publication failed")
+	application := NewApplicationSchemaApplicationService(ApplicationSchemaDependencies{
+		Repository: repository, Runtime: runtime, Workflows: metadataWatcherWorkflowErrorStub{err: workflowErr},
+	})
+	prepared, committed, aborted := false, false, false
+	application.AddReloadObserver(func(_ context.Context, _ appschemamodel.ApplicationSchemaSnapshot) (ApplicationSchemaReloadPreparation, error) {
+		prepared = true
+		return ApplicationSchemaReloadPreparation{
+			Commit: func() { committed = true },
+			Abort: func(ctx context.Context) error {
+				if ctx.Err() != nil {
+					t.Fatalf("abort received cancelled context: %v", ctx.Err())
+				}
+				aborted = true
+				return nil
+			},
+		}, nil
+	})
+	if err := application.reloadMetadataFromSource(t.Context()); !errors.Is(err, workflowErr) {
+		t.Fatalf("reload error=%v", err)
+	}
+	if !prepared || !aborted || committed {
+		t.Fatalf("prepared=%t aborted=%t committed=%t", prepared, aborted, committed)
+	}
+	runtime.mu.Lock()
+	defer runtime.mu.Unlock()
+	if len(runtime.names) != 0 {
+		t.Fatalf("failed candidate was published: %v", runtime.names)
+	}
+}
+
 func TestSnapshotWatcherCapturesBaselineBeforeStartReturns(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()

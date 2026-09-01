@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -57,7 +56,7 @@ func recordUpdateEdgeDependencies(repository *updateEdgeRepository) RecordUpdate
 }
 
 func TestUpdateDependencyFailuresAndCandidateGuards(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
 	stages := []string{
 		"cancelled", "object", "not found", "expected timestamp", "expected version invalid", "expected version mismatch",
 		"normalize patch", "identity", "pipeline validation", "pipeline defaults", "before", "cancelled after before",
@@ -203,7 +202,7 @@ func TestUpdateSelfEffectRevalidatesChangedCandidate(t *testing.T) {
 		validationCalls++
 		return nil
 	}
-	updated, err := NewRecordUpdateApplicationService(dependencies).Update(t.Context(), "customer", "customer-1", map[string]any{"name": "After"}, accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}}))
+	updated, err := NewRecordUpdateApplicationService(dependencies).Update(t.Context(), "customer", "customer-1", map[string]any{"name": "After"}, recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}))
 	if err != nil || updated.Data["name"] != "Self Effect" || validationCalls != 2 {
 		t.Fatalf("updated=%#v validationCalls=%d err=%v", updated, validationCalls, err)
 	}

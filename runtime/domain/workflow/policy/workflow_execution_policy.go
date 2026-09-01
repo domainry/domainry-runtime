@@ -27,7 +27,7 @@ func WorkflowRunPermissionAllows(principal principalmodel.Principal, workflowKey
 }
 
 func WorkflowDefinitionPermissionAllows(principal principalmodel.Principal, permission string) bool {
-	return principal.Known && (principal.HasPermission("workspace.admin") || principal.HasPermission(permission))
+	return principal.Known && principal.HasPermission(permission)
 }
 
 func WorkflowChangedFieldsFromTrigger(workflow definitionmodel.WorkflowSchema, trigger string) []string {

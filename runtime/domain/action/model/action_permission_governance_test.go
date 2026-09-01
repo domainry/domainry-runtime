@@ -7,12 +7,12 @@ import (
 )
 
 func TestActionPermissionGovernanceProjection(t *testing.T) {
-	inherited := definitionmodel.ActionSchema{Key: "order.view", ObjectKey: "order", Kind: "object_operation", RequiresPermission: "order.read"}
-	if ActionAuthorizationStrategy(inherited) != ActionAuthorizationInheritObjectPermission || ActionRiskLevel(inherited) != "low" || ActionHasHighRiskEffect(inherited) || ActionHasEnhancedAssurance(inherited) {
-		t.Fatalf("inherited=%#v", inherited)
+	ordinary := definitionmodel.ActionSchema{Key: "order.view", ObjectKey: "order", Kind: "object_operation"}
+	if ActionRiskLevel(ordinary) != "low" || ActionHasHighRiskEffect(ordinary) || ActionHasEnhancedAssurance(ordinary) {
+		t.Fatalf("ordinary=%#v", ordinary)
 	}
-	critical := definitionmodel.ActionSchema{Key: "order.refund", ObjectKey: "order", Kind: "record_operation", RequiresPermission: "order.refund", AssurancePolicy: &definitionmodel.ActionAssurancePolicy{RequiredMethods: []string{definitionmodel.ActionAssuranceMakerChecker}}}
-	if ActionAuthorizationStrategy(critical) != ActionAuthorizationDedicatedPermission || ActionRiskLevel(critical) != "critical" || ActionHasHighRiskEffect(critical) || !ActionHasEnhancedAssurance(critical) || !ActionApprovalRequired(critical) {
+	critical := definitionmodel.ActionSchema{Key: "order.refund", ObjectKey: "order", Kind: "record_operation", AssurancePolicy: &definitionmodel.ActionAssurancePolicy{RequiredMethods: []string{definitionmodel.ActionAssuranceMakerChecker}}}
+	if ActionRiskLevel(critical) != "critical" || ActionHasHighRiskEffect(critical) || !ActionHasEnhancedAssurance(critical) || !ActionApprovalRequired(critical) {
 		t.Fatalf("critical=%#v", critical)
 	}
 }

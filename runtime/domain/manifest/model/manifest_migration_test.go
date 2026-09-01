@@ -50,9 +50,29 @@ func TestDecodeManifestV2RejectsRetiredFrontendKeys(t *testing.T) {
 }
 
 func TestDecodeManifestV2RejectsRetiredActionConfig(t *testing.T) {
-	raw := []byte(`{"schema_version":"2","template_id":"crm","version":"2","objects":[],"actions":[{"key":"order.submit","object_key":"order","kind":"record_operation","requires_permission":"order.update","audit_event":"order.submitted","config":{"steps":[]}}]}`)
+	raw := []byte(`{"schema_version":"2","template_id":"crm","version":"2","objects":[],"actions":[{"key":"order.submit","object_key":"order","kind":"record_operation","audit_event":"order.submitted","config":{"steps":[]}}]}`)
 	if _, _, err := DecodeManifest(raw); err == nil || !strings.Contains(err.Error(), "unknown field \"config\"") {
 		t.Fatalf("v2 retired Action config was not rejected by strict decode: %v", err)
+	}
+}
+
+func TestDecodeManifestRetiresActionAuthoredIdempotencyKeys(t *testing.T) {
+	v2 := []byte(`{"schema_version":"2","template_id":"crm","version":"2","objects":[],"actions":[{"key":"order.submit","object_key":"order","label":"Submit","kind":"record_operation","audit_event":"order.submitted","idempotency_keys":["request_id"]}]}`)
+	if _, _, err := DecodeManifest(v2); err == nil || !strings.Contains(err.Error(), `unknown field "idempotency_keys"`) {
+		t.Fatalf("v2 Action idempotency metadata was not rejected: %v", err)
+	}
+
+	v1 := []byte(`{"schema_version":"1","template_id":"crm","version":"1","objects":[],"actions":[{"key":"order.submit","object_key":"order","label":"Submit","kind":"record_operation","audit_event":"order.submitted","idempotency_keys":["request_id"]}]}`)
+	manifest, report, err := DecodeManifest(v1)
+	if err != nil || len(manifest.Actions) != 1 || !report.Migrated {
+		t.Fatalf("v1 Action migration manifest=%#v report=%#v err=%v", manifest, report, err)
+	}
+	found := false
+	for _, warning := range report.Warnings {
+		found = found || warning.Code == "manifest.v1.action_idempotency_field_removed"
+	}
+	if !found {
+		t.Fatalf("v1 Action idempotency migration warning missing: %#v", report.Warnings)
 	}
 }
 

@@ -19,9 +19,6 @@ func (s *ApplicationSchemaApplicationService) CurrentManifest(ctx context.Contex
 	if err := metadataAuthorizeQuery(principal); err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
-	if !principal.HasPermission("workspace.admin") {
-		return manifestmodel.ManifestSchema{}, forbidden("auth.permission_denied")
-	}
 	manifest, err := s.repository.LoadManifest(ctx, metadataInstallationScope("load current Runtime manifest for global validation"))
 	return manifest, wrapMetadataError(err)
 }
@@ -49,9 +46,6 @@ func (s *ApplicationSchemaQueryApplicationService) FeaturePermissions(ctx contex
 func (s *ApplicationSchemaApplicationService) ApplicationSchemaMigrationPlan(ctx context.Context, principal principalmodel.Principal) ([]appschemamodel.ApplicationSchemaMigrationStep, error) {
 	if err := metadataAuthorizeQuery(principal); err != nil {
 		return nil, err
-	}
-	if !principal.HasPermission("workspace.admin") {
-		return nil, forbidden("auth.permission_denied")
 	}
 	manifest, err := s.repository.LoadManifest(ctx, metadataInstallationScope("load metadata migration manifest"))
 	if err != nil {

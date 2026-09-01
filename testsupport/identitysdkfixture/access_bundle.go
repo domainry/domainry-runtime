@@ -19,12 +19,21 @@ import (
 type Bundle struct {
 	Key               string
 	Permissions       []string
+	FunctionGrants    []FunctionGrantFixture
 	RecordScope       string
 	DataPolicies      []DataPolicyFixture
 	FieldPolicies     []FieldPolicyFixture
 	ReferencePolicies []ReferencePolicyFixture
 	ExportPolicies    []ExportPolicyFixture
 	Guardrails        []GuardrailFixture
+}
+
+// FunctionGrantFixture carries the canonical resource/action decomposition for
+// permission keys whose segments cannot be inferred from the opaque key.
+type FunctionGrantFixture struct {
+	PermissionKey string
+	ResourceKey   string
+	ActionKey     string
 }
 
 type DataPolicyFixture struct {
@@ -125,7 +134,6 @@ func Attach(principal principalmodel.Principal, spec Bundle) principalmodel.Prin
 	principal.Permissions = append([]string(nil), spec.Permissions...)
 	bundle := identitysdk.AccessBundle{
 		ContractVersion:       identitysdk.CurrentPolicyBundleVersion,
-		CatalogRevision:       "test-catalog",
 		AuthorizationRevision: "test-authorization",
 		ExpiresAt:             time.Now().Add(time.Hour),
 		Subject: identitysdk.Subject{
@@ -154,16 +162,27 @@ func Attach(principal principalmodel.Principal, spec Bundle) principalmodel.Prin
 		grants = append(grants, grant)
 		functionGrantKeys[grantKey] = true
 	}
+	explicitFunctionGrants := map[string]FunctionGrantFixture{}
+	for _, grant := range spec.FunctionGrants {
+		explicitFunctionGrants[strings.TrimSpace(grant.PermissionKey)] = grant
+	}
 	for _, permission := range spec.Permissions {
 		permission = strings.TrimSpace(permission)
-		if permission == "*" {
-			addGrant("*", "*")
+		if grant, exists := explicitFunctionGrants[permission]; exists {
+			addGrant(identitysdk.ResourceType(strings.TrimSpace(grant.ResourceKey)), identitysdk.Action(strings.TrimSpace(grant.ActionKey)))
+			continue
 		}
 		resource, action, ok := permissionParts(permission)
 		if !ok {
 			continue
 		}
 		addGrant(resource, action)
+	}
+	for permissionKey, grant := range explicitFunctionGrants {
+		if containsFixturePermission(spec.Permissions, permissionKey) {
+			continue
+		}
+		addGrant(identitysdk.ResourceType(strings.TrimSpace(grant.ResourceKey)), identitysdk.Action(strings.TrimSpace(grant.ActionKey)))
 	}
 	explicitDataResources := map[identitysdk.ResourceType]bool{}
 	for _, permission := range spec.DataPolicies {
@@ -177,25 +196,24 @@ func Attach(principal principalmodel.Principal, spec Bundle) principalmodel.Prin
 		defaultScope = "all_records"
 	}
 	if defaultScope != "" && defaultScope != "none" {
-		for grantIndex, grant := range grants {
+		dataPolicyKeys := map[string]bool{}
+		for _, grant := range grants {
 			if explicitDataResources[grant.Resource] {
 				continue
 			}
-			policy := dataPolicy(grant.Resource, grant.Action, defaultScope, false, nil)
-			policy.Key += fmt.Sprintf(".record_scope.%d", grantIndex)
+			dataAction := sdkDataAction(grant.Action)
+			policyKey := string(grant.Resource) + "\x00" + string(dataAction)
+			if dataPolicyKeys[policyKey] {
+				continue
+			}
+			dataPolicyKeys[policyKey] = true
+			policy := dataPolicy(grant.Resource, dataAction, defaultScope, false, nil)
+			policy.Key += ".record_scope"
 			bundle.DataPolicies = append(bundle.DataPolicies, policy)
 		}
 	}
 	for permissionIndex, permission := range spec.DataPolicies {
 		actions := dataPolicyActions(permission)
-		for _, grant := range grants {
-			if grant.Resource != identitysdk.ResourceType(strings.TrimSpace(permission.ObjectKey)) {
-				continue
-			}
-			if permission.Read && sdkReadLikeAction(grant.Action) || permission.Write && !sdkReadLikeAction(grant.Action) {
-				actions = appendUniqueActions(actions, grant.Action)
-			}
-		}
 		for actionIndex, action := range actions {
 			policy := dataPolicy(identitysdk.ResourceType(permission.ObjectKey), action, permission.Scope, permission.AuditDenial, permission.Predicate)
 			policy.Key += fmt.Sprintf(".%d.%d", permissionIndex, actionIndex)
@@ -330,7 +348,7 @@ func FromPrincipal(principal principalmodel.Principal) Bundle {
 		switch policy.Action {
 		case "read":
 			permission.Read = policy.Effect == identitysdk.EffectAllow
-		case "create", "update", "delete":
+		case "write", "create", "update", "delete":
 			permission.Write = permission.Write || policy.Effect == identitysdk.EffectAllow
 		}
 	}
@@ -418,48 +436,44 @@ func WithMutation[T principalValue](principal T, mutate func(*Bundle)) T {
 
 func permissionParts(permission string) (identitysdk.ResourceType, identitysdk.Action, bool) {
 	permission = strings.TrimSpace(permission)
-	separator := strings.Index(permission, ".")
+	separator := strings.LastIndex(permission, ".")
 	if separator <= 0 || separator == len(permission)-1 {
 		return "", "", false
 	}
 	return identitysdk.ResourceType(permission[:separator]), identitysdk.Action(permission[separator+1:]), true
 }
 
-func dataPolicyActions(permission DataPolicyFixture) []identitysdk.Action {
-	actions := make([]identitysdk.Action, 0, 4)
+func containsFixturePermission(permissions []string, permissionKey string) bool {
+	permissionKey = strings.TrimSpace(permissionKey)
+	for _, permission := range permissions {
+		if strings.TrimSpace(permission) == permissionKey {
+			return true
+		}
+	}
+	return false
+}
+
+func dataPolicyActions(permission DataPolicyFixture) []identitysdk.DataAction {
+	actions := make([]identitysdk.DataAction, 0, 2)
 	if permission.Read {
-		actions = append(actions, "read")
+		actions = append(actions, identitysdk.DataActionRead)
 	}
 	if permission.Write {
-		actions = append(actions, "create", "update", "delete")
+		actions = append(actions, identitysdk.DataActionWrite)
 	}
 	return actions
 }
 
-func appendUniqueActions(values []identitysdk.Action, candidates ...identitysdk.Action) []identitysdk.Action {
-	seen := make(map[identitysdk.Action]bool, len(values)+len(candidates))
-	for _, value := range values {
-		seen[value] = true
-	}
-	for _, candidate := range candidates {
-		if candidate != "" && !seen[candidate] {
-			values = append(values, candidate)
-			seen[candidate] = true
-		}
-	}
-	return values
-}
-
-func sdkReadLikeAction(action identitysdk.Action) bool {
+func sdkDataAction(action identitysdk.Action) identitysdk.DataAction {
 	switch action {
 	case "read", "list", "view", "search", "report", "audit", "export":
-		return true
+		return identitysdk.DataActionRead
 	default:
-		return false
+		return identitysdk.DataActionWrite
 	}
 }
 
-func dataPolicy(resource identitysdk.ResourceType, action identitysdk.Action, scope string, auditDenial bool, predicate *PredicateFixture) identitysdk.DataPolicy {
+func dataPolicy(resource identitysdk.ResourceType, action identitysdk.DataAction, scope string, auditDenial bool, predicate *PredicateFixture) identitysdk.DataPolicy {
 	resolved := scopePredicate(scope)
 	if predicate != nil {
 		resolved = sdkPolicyExpression(*predicate)

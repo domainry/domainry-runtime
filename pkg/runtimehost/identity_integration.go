@@ -19,7 +19,6 @@ func openProjectIdentity(ctx context.Context, cfg config.Config, factory identit
 	application := identitysdk.ApplicationRef{
 		WorkspaceID:    identitysdk.WorkspaceID(cfg.IdentityWorkspaceID),
 		ApplicationKey: identitysdk.ApplicationKey(cfg.IdentityAudience),
-		RedirectURLs:   append([]string(nil), cfg.IdentityRedirectURLs...),
 	}
 	var binding identitysdk.Binding
 	var err error

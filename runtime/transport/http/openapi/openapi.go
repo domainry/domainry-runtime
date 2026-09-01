@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	"github.com/domainry/domainry-runtime/runtime/platform/productbrand"
 )
@@ -161,7 +162,8 @@ func annotateModuleOwnedOpenAPIPaths(paths map[string]any, surfaces []modulehttp
 		}
 		owner, surfaceName := strings.TrimSpace(surface.Owner()), strings.TrimSpace(surface.Name())
 		for _, route := range surface.Routes() {
-			method, path, found := strings.Cut(strings.TrimSpace(route.Pattern), " ")
+			pattern := strings.TrimSpace(route.Pattern())
+			method, path, found := strings.Cut(pattern, " ")
 			if !found || owner == "" || !isOpenAPIHTTPMethod(method) {
 				continue
 			}
@@ -173,7 +175,7 @@ func annotateModuleOwnedOpenAPIPaths(paths map[string]any, surfaces []modulehttp
 			}
 			operation, _ := pathSpec[method].(map[string]any)
 			if provider, ok := surface.(modulehttp.OpenAPIProvider); ok {
-				if owned := provider.OpenAPIOperations()[strings.TrimSpace(route.Pattern)]; len(owned) != 0 {
+				if owned := provider.OpenAPIOperations()[pattern]; len(owned) != 0 {
 					operation = cloneOpenAPIOperation(owned)
 					pathSpec[method] = operation
 				}
@@ -193,30 +195,33 @@ func annotateModuleOwnedOpenAPIPaths(paths map[string]any, surfaces []modulehttp
 				pathSpec[method] = operation
 			}
 			ensureModuleHTTPPathParameters(operation, path)
-			exposures := make([]string, 0, len(route.Exposures))
-			for _, exposure := range route.Exposures {
+			exposures := make([]string, 0, len(route.Action.Exposures))
+			for _, exposure := range route.Action.Exposures {
 				exposures = append(exposures, string(exposure))
+			}
+			permission := ""
+			if route.Action.Permission != nil {
+				permission = route.Action.Permission.Key
 			}
 			operation["x-domainry-module-owner"] = owner
 			operation["x-domainry-module-route"] = map[string]any{
 				"contract_version": routeModuleHTTPContractVersion(surface),
 				"owner":            owner,
 				"surface":          surfaceName,
+				"action_key":       route.Action.Key,
 				"exposures":        exposures,
-				"authentication":   string(route.Authentication),
-				"permission":       strings.TrimSpace(route.Permission),
-				"any_permissions":  append([]string(nil), route.AnyPermissions...),
-				"principal_only":   route.PrincipalOnly,
+				"authorization":    string(route.Action.Authorization.Strategy),
+				"policy_key":       route.Action.Authorization.PolicyKey,
+				"permission":       permission,
+				"governance": map[string]any{
+					"effect_class":         string(route.Action.EffectClass),
+					"risk_level":           string(route.Action.RiskLevel),
+					"approval_policies":    append([]actioncontract.ApprovalPolicy(nil), route.Action.ApprovalPolicies...),
+					"idempotency_decision": route.Action.IdempotencyDecision,
+					"audit_class":          route.Action.AuditClass,
+				},
 			}
-			if route.Governance != nil {
-				operation["x-domainry-module-route"].(map[string]any)["governance"] = map[string]any{
-					"effect_class":            string(route.Governance.EffectClass),
-					"high_risk_action_policy": string(route.Governance.HighRiskPolicy),
-					"idempotency_decision":    route.Governance.IdempotencyDecision,
-					"audit_class":             route.Governance.AuditClass,
-				}
-				applyModuleHTTPGovernanceHeaders(operation, *route.Governance)
-			}
+			applyModuleHTTPGovernanceHeaders(operation, route.Action)
 		}
 	}
 }
@@ -295,20 +300,20 @@ func cloneOpenAPIValue(value any) any {
 	}
 }
 
-func applyModuleHTTPGovernanceHeaders(operation map[string]any, governance modulehttp.Governance) {
+func applyModuleHTTPGovernanceHeaders(operation map[string]any, action actioncontract.ActionDefinition) {
 	parameters := moduleHTTPOpenAPIParameters(operation)
-	if governance.IdempotencyDecision == "caller_key_required" {
+	if action.IdempotencyDecision == "caller_key_required" {
 		parameters = upsertOpenAPIHeaderParameter(parameters, openAPIHeaderParameter("Idempotency-Key", "Caller-supplied idempotency key", true))
 	}
-	if governance.HighRiskPolicy != modulehttp.HighRiskNone {
+	if len(action.ApprovalPolicies) != 0 {
 		parameters = upsertOpenAPIHeaderParameter(parameters, openAPIHeaderParameter("X-Operation-Reason", "Human-supplied auditable operator reason", true))
 	}
-	switch governance.HighRiskPolicy {
-	case modulehttp.HighRiskConfirmationRequired:
+	if actionHasApprovalPolicy(action, actioncontract.ApprovalConfirmation) {
 		confirmation := openAPIHeaderParameter("X-Operation-Confirmation", "Explicit confirmation required by the module route contract", true)
 		confirmation["schema"] = map[string]any{"type": "string", "enum": []string{"confirmed"}}
 		parameters = upsertOpenAPIHeaderParameter(parameters, confirmation)
-	case modulehttp.HighRiskBreakGlassRequired:
+	}
+	if actionHasApprovalPolicy(action, actioncontract.ApprovalBreakGlass) {
 		confirmation := openAPIHeaderParameter("X-Operation-Confirmation", "Explicit break-glass confirmation required by the module route contract", true)
 		confirmation["schema"] = map[string]any{"type": "string", "enum": []string{"break-glass"}}
 		parameters = upsertOpenAPIHeaderParameter(parameters, confirmation)
@@ -316,6 +321,15 @@ func applyModuleHTTPGovernanceHeaders(operation map[string]any, governance modul
 	if len(parameters) != 0 {
 		operation["parameters"] = parameters
 	}
+}
+
+func actionHasApprovalPolicy(action actioncontract.ActionDefinition, wanted actioncontract.ApprovalPolicy) bool {
+	for _, policy := range action.ApprovalPolicies {
+		if policy == wanted {
+			return true
+		}
+	}
+	return false
 }
 
 func moduleHTTPPathParameters(path string) []string {
@@ -337,10 +351,10 @@ func routeModuleHTTPContractVersion(surface modulehttp.Surface) string {
 }
 
 func moduleHTTPRouteSecurity(route modulehttp.Route) openAPISecurity {
-	switch route.Authentication {
-	case modulehttp.AuthenticationAnonymous:
+	switch route.Action.Authorization.Strategy {
+	case actioncontract.AuthorizationAnonymousProtocol, actioncontract.AuthorizationDelegatedCredential:
 		return openAPIPublicSecurity()
-	case modulehttp.AuthenticationService:
+	case actioncontract.AuthorizationServiceIdentity:
 		return openAPIServiceCredentialSecurity()
 	default:
 		return openAPIAdminSecurity()

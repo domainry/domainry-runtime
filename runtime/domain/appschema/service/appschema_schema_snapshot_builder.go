@@ -35,6 +35,10 @@ type SchemaSnapshotState struct {
 
 func BuildSchemaSnapshot(state SchemaSnapshotState) appschemamodel.ApplicationSchemaSnapshot {
 	objects := append([]definitionmodel.ObjectSchema(nil), state.Objects...)
+	for index := range objects {
+		capabilities := definitionmodel.EffectiveObjectCapabilities(objects[index])
+		objects[index].Capabilities = &capabilities
+	}
 	actions := append([]definitionmodel.ActionSchema(nil), state.Actions...)
 	workflows := append([]definitionmodel.WorkflowSchema(nil), state.Workflows...)
 	automationRules := append([]automationmodel.AutomationRuleSchema(nil), state.AutomationRules...)

@@ -117,15 +117,11 @@ func TestExecutionRuntimePersistsAndReplaysTerminalFailureWhileReclaimingRetryab
 	}
 }
 
-func TestExecutionRuntimeAllowsActionWithoutIdempotencyKeyOrRepository(t *testing.T) {
+func TestExecutionRuntimeRequiresReceiptRepository(t *testing.T) {
 	var nilService *ActionExecutionRuntime
 	for _, service := range []*ActionExecutionRuntime{nilService, NewActionExecutionRuntime(nil)} {
-		_, claim, replay, err := service.BeginRecord(t.Context(), "order", "order-1", "order.update", "request-1", idempotency.FingerprintInput{}, principalmodel.Principal{})
-		if err != nil || replay || claim.Decision != idempotency.DecisionAcquired {
-			t.Fatalf("optional claim=%#v replay=%v error=%v", claim, replay, err)
-		}
-		if err := service.Complete(t.Context(), claim, actionmodel.ActionResult{}); err != nil {
-			t.Fatalf("optional completion error=%v", err)
+		if _, _, _, err := service.BeginRecord(t.Context(), "order", "order-1", "order.update", "request-1", idempotency.FingerprintInput{}, principalmodel.Principal{}); apperror.CodeOf(err) != idempotency.ErrorCodeReceiptUnavailable {
+			t.Fatalf("missing receipt repository error=%v", err)
 		}
 	}
 }

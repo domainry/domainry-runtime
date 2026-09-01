@@ -97,7 +97,7 @@ func businessSystemTestDependencies() BusinessSystemApplicationDependencies {
 
 func TestBusinessSystemSnapshotSeparatesAdministratorAndLimitedVisibility(t *testing.T) {
 	service := NewBusinessSystemApplicationService(businessSystemTestDependencies())
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{ActionBusinessSystemSnapshot}})
 	snapshot, err := service.Snapshot(t.Context(), admin)
 	if err != nil {
 		t.Fatal(err)
@@ -266,7 +266,7 @@ func TestBusinessSystemAdministratorSnapshotPropagatesEveryProjectionFailure(t *
 			deps.Evidence = businessSystemEvidenceStub{err: want}
 		}},
 	}
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{ActionBusinessSystemSnapshot}})
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			dependencies := businessSystemTestDependencies()
@@ -283,7 +283,7 @@ func TestBusinessSystemAdministratorSnapshotPropagatesEveryProjectionFailure(t *
 }
 
 func TestBusinessSystemRemainingProjectionOutcomes(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{ActionBusinessSystemSnapshot}})
 	dependencies := businessSystemTestDependencies()
 	dependencies.Evidence = businessSystemEvidenceStub{values: []businessseedmodel.BusinessSeedProvenance{{}}}
 	dependencies.Runtime.IdempotencyStatus = func(context.Context, string) (deploymentmodel.IdempotencyOperationalStatus, error) {

@@ -24,8 +24,18 @@ func ApplicationSchemaValidateObjectDefinition(resourceKey string, payload json.
 	if object.Name == "" {
 		return nil, badRequest("backend.metadata.object_name_required", "object", resourceKey)
 	}
+	capabilities := definitionmodel.EffectiveObjectCapabilities(object)
+	object.Capabilities = &capabilities
 	if len(object.Fields) > 0 || len(object.Validations) > 0 {
 		return nil, badRequest("backend.metadata.object_shell_only", "object", resourceKey)
+	}
+	if raw, exists := object.Config["write_policy"]; exists {
+		policy, ok := raw.(string)
+		policy = strings.TrimSpace(policy)
+		if !ok || policy != "direct_crud" && policy != "action_only" {
+			return nil, badRequest("backend.metadata.object_write_policy_invalid", "object", resourceKey)
+		}
+		object.Config["write_policy"] = policy
 	}
 	if object.LifecyclePolicy != nil {
 		object.LifecyclePolicy.Mode = strings.TrimSpace(object.LifecyclePolicy.Mode)
@@ -53,6 +63,8 @@ func ApplicationSchemaValidateObjectDefinition(resourceKey string, payload json.
 		default:
 			return nil, badRequest("backend.metadata.object_lifecycle_policy_invalid", "object", resourceKey)
 		}
+		capabilities = definitionmodel.EffectiveObjectCapabilities(object)
+		object.Capabilities = &capabilities
 	}
 	if object.LedgerPolicy != nil {
 		object.LedgerPolicy.Integrity = strings.TrimSpace(object.LedgerPolicy.Integrity)

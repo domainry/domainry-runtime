@@ -34,7 +34,7 @@ var validationAuthoringKeys = stringSet(
 )
 
 var actionAuthoringKeys = stringSet(
-	"assurance_policy", "audit_event", "authorization", "concurrency_field", "defaults", "handler", "i18n", "idempotency_keys", "key", "kind", "module_key", "name", "object_key", "optimistic_concurrency", "payload_fields", "permission", "preconditions", "risk_level",
+	"assurance_policy", "audit_event", "authorization", "concurrency_field", "defaults", "handler", "i18n", "key", "kind", "module_key", "name", "object_key", "optimistic_concurrency", "payload_fields", "preconditions", "risk_level",
 )
 
 var workflowAuthoringKeys = stringSet(
@@ -255,14 +255,9 @@ func decodeActionAuthoringFragment(fragment modulecapability.AuthoringFragment) 
 	}
 	normalized := cloneObject(source)
 	normalized["label"] = source["name"]
-	normalized["requires_permission"] = source["permission"]
 	delete(normalized, "module_key")
 	delete(normalized, "name")
-	delete(normalized, "permission")
 	handler, _ := normalized["handler"].(map[string]any)
-	if strings.TrimSpace(textValue(normalized["requires_permission"])) == "" && (handler != nil || normalized["authorization"] != nil) {
-		normalized["requires_permission"] = source["key"]
-	}
 	if handler != nil {
 		normalized["file_operations"] = handler["file_operations"]
 	}

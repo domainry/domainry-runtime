@@ -126,6 +126,11 @@ func migrateLegacyFrontendEnvelope(envelope map[string]json.RawMessage, report *
 	if raw := envelope["actions"]; len(raw) > 0 && json.Unmarshal(raw, &actions) == nil {
 		changed := false
 		for index := range actions {
+			if _, exists := actions[index]["idempotency_keys"]; exists {
+				delete(actions[index], "idempotency_keys")
+				changed = true
+				report.Warnings = append(report.Warnings, ManifestMigrationWarning{Code: "manifest.v1.action_idempotency_field_removed", Path: fmt.Sprintf("/actions/%d/idempotency_keys", index), Message: "Action request idempotency is enforced by the invocation protocol"})
+			}
 			for _, key := range []string{"ui_placement", "confirmation"} {
 				if _, exists := actions[index][key]; !exists {
 					continue

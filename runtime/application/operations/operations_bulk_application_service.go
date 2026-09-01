@@ -84,7 +84,7 @@ func (s *OperationsApplicationService) DryRunBulkDeadLetters(ctx context.Context
 	if err != nil {
 		return OperationsBulkPlan{}, err
 	}
-	receipt, decision, err := s.Submit(ctx, OperationsSubmitRequest{Kind: "bulk_operation.dry_run", Permission: "workspace.admin", ResourceType: "bulk_operation", ResourceID: request.Owner + ":" + request.Action, Reason: request.Reason, Reference: request.Reference, Payload: request}, key, principal)
+	receipt, decision, err := s.Submit(ctx, OperationsSubmitRequest{Kind: "bulk_operation.dry_run", Permission: operationsDefinitionPermission("bulk_operation.dry_run"), ResourceType: "bulk_operation", ResourceID: request.Owner + ":" + request.Action, Reason: request.Reason, Reference: request.Reference, Payload: request}, key, principal)
 	if err != nil {
 		return OperationsBulkPlan{}, err
 	}
@@ -129,7 +129,7 @@ func (s *OperationsApplicationService) DryRunBulkDeadLetters(ctx context.Context
 }
 
 func (s *OperationsApplicationService) ApplyBulkDeadLetters(ctx context.Context, request OperationsBulkApplyRequest, key string, principal principalmodel.Principal) (OperationsBulkApplyResult, error) {
-	if err := operationsAuthorize(principal, "workspace.admin"); err != nil {
+	if err := operationsAuthorize(principal, operationsDefinitionPermission("bulk_operation.apply")); err != nil {
 		return OperationsBulkApplyResult{}, err
 	}
 	if !request.Confirm || strings.TrimSpace(request.DryRunOperationID) == "" || strings.TrimSpace(request.ConfirmationToken) == "" {
@@ -147,7 +147,7 @@ func (s *OperationsApplicationService) ApplyBulkDeadLetters(ctx context.Context,
 	if err != nil {
 		return OperationsBulkApplyResult{}, err
 	}
-	receipt, decision, err := s.Submit(ctx, OperationsSubmitRequest{Kind: "bulk_operation.apply", Permission: "workspace.admin", ResourceType: "bulk_operation", ResourceID: plan.DryRunOperationID, Reason: request.Reason, Reference: request.Reference, Payload: map[string]any{"dry_run_operation_id": plan.DryRunOperationID, "confirmation_token": plan.ConfirmationToken}}, key, principal)
+	receipt, decision, err := s.Submit(ctx, OperationsSubmitRequest{Kind: "bulk_operation.apply", Permission: operationsDefinitionPermission("bulk_operation.apply"), ResourceType: "bulk_operation", ResourceID: plan.DryRunOperationID, Reason: request.Reason, Reference: request.Reference, Payload: map[string]any{"dry_run_operation_id": plan.DryRunOperationID, "confirmation_token": plan.ConfirmationToken}}, key, principal)
 	if err != nil {
 		return OperationsBulkApplyResult{}, err
 	}

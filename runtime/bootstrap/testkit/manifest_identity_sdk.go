@@ -12,6 +12,7 @@ import (
 	"github.com/domainry/domainry-foundation/modulecapability"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityevaluator "github.com/domainry/domainry-identity-sdk/authorization/evaluator"
+	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 )
 
 const identityFixtureTokenPrefix = "plane-testkit-token-v1."
@@ -81,13 +82,33 @@ func NewIdentityFactory(config IdentityFixtureConfig) identitysdk.Factory {
 
 func NewDefaultIdentityFactory() identitysdk.Factory {
 	return NewIdentityFactory(IdentityFixtureConfig{
-		Roles: []IdentityFixtureRole{{Key: "admin", Name: "Administrator", Permissions: []string{"workspace.admin"}, AllowAllBusinessData: true}},
+		Roles: []IdentityFixtureRole{{Key: "admin", Name: "Administrator", Permissions: defaultIdentityFixturePermissions(), AllowAllBusinessData: true}},
 		Users: []identitysdk.User{
 			{ID: "admin", Name: "Administrator", Status: "active"},
 			{ID: "runtime_fixture_user", Name: "Runtime fixture user", Email: "runtime-fixture@example.com", Status: "active"},
 		},
 		UserRoleAssignments: map[string][]string{"admin": {"admin"}, "runtime_fixture_user": {"admin"}},
 	})
+}
+
+func defaultIdentityFixturePermissions() []string {
+	permissions := []string{
+		"ops.workflow.process", "ops.workflow.read", "scheduler.definition.read", "workflow.advanced.configure", "workflow.definition.read",
+	}
+	for _, contract := range endpointmodel.EndpointContracts {
+		definition, err := endpointmodel.AuthorizationActionDefinition(contract)
+		if err == nil && definition.Permission != nil {
+			permissions = append(permissions, definition.Permission.Key)
+		}
+	}
+	sort.Strings(permissions)
+	result := permissions[:0]
+	for _, permission := range permissions {
+		if len(result) == 0 || result[len(result)-1] != permission {
+			result = append(result, permission)
+		}
+	}
+	return append([]string(nil), result...)
 }
 
 func (factory IdentityFactory) Open(_ context.Context, application identitysdk.ApplicationRef) (identitysdk.Binding, error) {
@@ -107,26 +128,30 @@ type manifestIdentitySession struct {
 
 type manifestIdentityBinding struct {
 	modulecapability.Binding
-	mu          sync.RWMutex
-	application identitysdk.ApplicationRef
-	roles       map[string]IdentityFixtureRole
-	users       map[string]identitysdk.User
-	userRoles   map[string][]string
-	sessions    map[string]manifestIdentitySession
-	catalog     identitysdk.AuthorizationCatalog
+	mu                       sync.RWMutex
+	application              identitysdk.ApplicationRef
+	roles                    map[string]IdentityFixtureRole
+	users                    map[string]identitysdk.User
+	userRoles                map[string][]string
+	sessions                 map[string]manifestIdentitySession
+	permissions              map[string]map[string]identitysdk.PermissionDefinition
+	permissionSnapshotHashes map[string]string
 }
 
 func (binding *manifestIdentityBinding) Descriptor() identitysdk.Descriptor {
-	return identitysdk.Descriptor{ProtocolVersion: identitysdk.CurrentProtocolVersion, BundleVersion: identitysdk.CurrentPolicyBundleVersion, CatalogVersion: identitysdk.CatalogVersionV1, Mode: identitysdk.DeploymentModeModule, Issuer: "plane-testkit-identity", Audience: string(binding.application.ApplicationKey)}
+	return identitysdk.Descriptor{ProtocolVersion: identitysdk.CurrentProtocolVersion, BundleVersion: identitysdk.CurrentPolicyBundleVersion, AuthorizationVersion: identitysdk.AuthorizationContractVersionV1, Mode: identitysdk.DeploymentModeModule, Issuer: "plane-testkit-identity", Audience: string(binding.application.ApplicationKey)}
 }
 func (binding *manifestIdentityBinding) Authentication() identitysdk.Authentication { return binding }
 func (binding *manifestIdentityBinding) Tokens() identitysdk.TokenVerifier          { return binding }
 func (binding *manifestIdentityBinding) Authorization() identitysdk.Authorization   { return binding }
 func (binding *manifestIdentityBinding) Principals() identitysdk.PrincipalResolver  { return binding }
 func (binding *manifestIdentityBinding) Directory() identitysdk.Directory           { return binding }
-func (binding *manifestIdentityBinding) Catalog() identitysdk.CatalogClient         { return binding }
-func (binding *manifestIdentityBinding) Credentials() identitysdk.CredentialManager { return binding }
-func (binding *manifestIdentityBinding) Close(context.Context) error                { return nil }
+func (binding *manifestIdentityBinding) Applications() identitysdk.ApplicationRegistry {
+	return binding
+}
+func (binding *manifestIdentityBinding) Permissions() identitysdk.PermissionRegistry { return binding }
+func (binding *manifestIdentityBinding) Credentials() identitysdk.CredentialManager  { return binding }
+func (binding *manifestIdentityBinding) Close(context.Context) error                 { return nil }
 
 func (binding *manifestIdentityBinding) Providers(context.Context, identitysdk.ProviderQuery) ([]identitysdk.Provider, error) {
 	return nil, nil
@@ -290,20 +315,55 @@ func (binding *manifestIdentityBinding) ListWorkforce(context.Context, identitys
 	return nil, nil
 }
 
-func (binding *manifestIdentityBinding) Validate(_ context.Context, catalog identitysdk.AuthorizationCatalog) error {
-	return catalog.ValidateContract()
+func (binding *manifestIdentityBinding) Register(_ context.Context, request identitysdk.ApplicationRegistration) (identitysdk.ApplicationRegistrationReceipt, error) {
+	if err := request.ValidateContract(); err != nil {
+		return identitysdk.ApplicationRegistrationReceipt{}, err
+	}
+	return identitysdk.ApplicationRegistrationReceipt{Application: request.Application, RedirectURLs: request.CanonicalRedirectURLs(), Status: "active", UpdatedAt: time.Now().UTC().Format(time.RFC3339Nano)}, nil
 }
-func (binding *manifestIdentityBinding) Publish(_ context.Context, catalog identitysdk.AuthorizationCatalog) (identitysdk.CatalogReceipt, error) {
-	if err := catalog.ValidateContract(); err != nil {
-		return identitysdk.CatalogReceipt{}, err
+
+func (binding *manifestIdentityBinding) Reconcile(_ context.Context, request identitysdk.PermissionReconcileRequest) (identitysdk.PermissionReconcileReceipt, error) {
+	if err := request.ValidateContract(); err != nil {
+		return identitysdk.PermissionReconcileReceipt{}, err
+	}
+	definitions := make(map[string]identitysdk.PermissionDefinition, len(request.Definitions))
+	for _, definition := range request.Definitions {
+		definitions[definition.PermissionKey] = definition
 	}
 	binding.mu.Lock()
-	binding.catalog = catalog
-	binding.mu.Unlock()
-	return identitysdk.CatalogReceipt{Revision: "plane-testkit-catalog", PublishedAt: time.Now().UTC().Format(time.RFC3339Nano)}, nil
+	defer binding.mu.Unlock()
+	if binding.permissions == nil {
+		binding.permissions = map[string]map[string]identitysdk.PermissionDefinition{}
+	}
+	if binding.permissionSnapshotHashes == nil {
+		binding.permissionSnapshotHashes = map[string]string{}
+	}
+	currentSnapshotHash := binding.permissionSnapshotHashes[request.SourceOwner]
+	if request.PreviousSnapshotHash != currentSnapshotHash && request.SnapshotHash != currentSnapshotHash {
+		return identitysdk.PermissionReconcileReceipt{}, &identitysdk.Error{Code: "identity.permission_reconcile_stale_snapshot", StatusCode: 409}
+	}
+	binding.permissions[request.SourceOwner] = definitions
+	binding.permissionSnapshotHashes[request.SourceOwner] = request.SnapshotHash
+	return identitysdk.PermissionReconcileReceipt{WorkspaceID: request.Application.WorkspaceID, SourceOwner: request.SourceOwner, PreviousSnapshotHash: currentSnapshotHash, SnapshotHash: request.SnapshotHash, DefinitionCount: len(definitions), Updated: len(definitions)}, nil
 }
-func (binding *manifestIdentityBinding) CurrentRevision(context.Context, identitysdk.ApplicationRef) (identitysdk.CatalogReceipt, error) {
-	return identitysdk.CatalogReceipt{Revision: "plane-testkit-catalog"}, nil
+
+func (binding *manifestIdentityBinding) CurrentSourceSnapshot(_ context.Context, request identitysdk.PermissionSourceSnapshotRequest) (identitysdk.PermissionSourceSnapshot, error) {
+	if err := request.ValidateContract(); err != nil {
+		return identitysdk.PermissionSourceSnapshot{}, err
+	}
+	binding.mu.RLock()
+	definitionsByKey := binding.permissions[request.SourceOwner]
+	definitions := make([]identitysdk.PermissionDefinition, 0, len(definitionsByKey))
+	for _, definition := range definitionsByKey {
+		definitions = append(definitions, definition)
+	}
+	sort.Slice(definitions, func(left, right int) bool { return definitions[left].PermissionKey < definitions[right].PermissionKey })
+	snapshotHash := binding.permissionSnapshotHashes[request.SourceOwner]
+	binding.mu.RUnlock()
+	return identitysdk.PermissionSourceSnapshot{
+		WorkspaceID: request.Application.WorkspaceID, SourceOwner: request.SourceOwner,
+		SnapshotHash: snapshotHash, Definitions: definitions,
+	}, nil
 }
 
 func (binding *manifestIdentityBinding) ChangePassword(_ context.Context, request identitysdk.ChangePasswordRequest) (identitysdk.AuthSession, error) {
@@ -393,12 +453,15 @@ func (binding *manifestIdentityBinding) accessBundle(subject, roleKey string) id
 		role = IdentityFixtureRole{}
 	}
 	binding.mu.RLock()
-	catalog := binding.catalog
-	binding.mu.RUnlock()
-	resources := map[identitysdk.ResourceType]identitysdk.ResourceDefinition{}
-	for _, resource := range catalog.Resources {
-		resources[resource.Key] = resource
+	resources := map[identitysdk.ResourceType]bool{}
+	for _, definitions := range binding.permissions {
+		for _, definition := range definitions {
+			if definition.SourceKind == "object_default" {
+				resources[identitysdk.ResourceType(definition.ResourceKey)] = true
+			}
+		}
 	}
+	binding.mu.RUnlock()
 	grants := []identitysdk.FunctionGrant{}
 	grantKeys := map[string]bool{}
 	addGrant := func(resource identitysdk.ResourceType, action identitysdk.Action) {
@@ -409,51 +472,52 @@ func (binding *manifestIdentityBinding) accessBundle(subject, roleKey string) id
 		grantKeys[key] = true
 		grants = append(grants, identitysdk.FunctionGrant{Resource: resource, Action: action, Effect: identitysdk.EffectAllow})
 	}
-	admin := false
 	for _, permission := range role.Permissions {
 		permission = strings.TrimSpace(permission)
-		admin = admin || permission == "workspace.admin"
 		separator := strings.LastIndex(permission, ".")
 		if separator > 0 && separator < len(permission)-1 {
 			addGrant(identitysdk.ResourceType(permission[:separator]), identitysdk.Action(permission[separator+1:]))
 		}
 	}
-	if admin {
-		for _, action := range catalog.Actions {
-			addGrant(action.Resource, action.Action)
-		}
-	}
 	dataPolicies := append([]identitysdk.DataPolicy(nil), role.DataPolicies...)
 	for index, grant := range grants {
-		if _, businessResource := resources[grant.Resource]; !businessResource {
+		if !resources[grant.Resource] {
+			continue
+		}
+		dataAction, ok := fixtureDataAction(grant.Action)
+		if !ok {
 			continue
 		}
 		predicate := identitysdk.Predicate{}
 		switch {
-		case admin || role.AllowAllBusinessData:
+		case role.AllowAllBusinessData:
 			predicate = identitysdk.Predicate{Fact: "id", Operator: identitysdk.OperatorExists, Value: true}
 		case role.DataPredicate != nil:
 			predicate = *role.DataPredicate
 		default:
 			continue
 		}
-		dataPolicies = append(dataPolicies, identitysdk.DataPolicy{Key: fmt.Sprintf("plane-testkit-%s-%s-%d", grant.Resource, grant.Action, index), Resource: grant.Resource, Action: grant.Action, Effect: identitysdk.EffectAllow, Predicate: predicate})
+		dataPolicies = append(dataPolicies, identitysdk.DataPolicy{Key: fmt.Sprintf("plane-testkit-%s-%s-%d", grant.Resource, dataAction, index), Resource: grant.Resource, Action: dataAction, Effect: identitysdk.EffectAllow, Predicate: predicate})
 	}
 	fieldPolicies := map[string]identitysdk.FieldPolicy{}
-	actionsByResource := map[identitysdk.ResourceType]map[identitysdk.Action]bool{}
-	for _, grant := range grants {
-		if actionsByResource[grant.Resource] == nil {
-			actionsByResource[grant.Resource] = map[identitysdk.Action]bool{}
-		}
-		actionsByResource[grant.Resource][grant.Action] = grant.Effect == identitysdk.EffectAllow
-	}
-	for resourceKey, resource := range resources {
-		actions := actionsByResource[resourceKey]
-		read := admin || actions["read"] || actions["list"] || actions["search"] || actions["report"] || actions["audit"]
-		write := admin || actions["create"] || actions["update"] || actions["write"]
-		export := admin || actions["export"]
-		for _, field := range resource.Fields {
-			fieldPolicies[string(resourceKey)+"\x00"+field] = identitysdk.FieldPolicy{Resource: resourceKey, Field: field, Read: read, Write: write, Export: export}
+	if role.AllowAllBusinessData {
+		for _, grant := range grants {
+			if !resources[grant.Resource] {
+				continue
+			}
+			key := string(grant.Resource) + "\x00*"
+			policy := fieldPolicies[key]
+			policy.Resource = grant.Resource
+			policy.Field = "*"
+			switch grant.Action {
+			case "read":
+				policy.Read = true
+			case "export":
+				policy.Export = true
+			case "create", "update", "delete":
+				policy.Write = true
+			}
+			fieldPolicies[key] = policy
 		}
 	}
 	for _, policy := range role.FieldPolicies {
@@ -467,9 +531,23 @@ func (binding *manifestIdentityBinding) accessBundle(subject, roleKey string) id
 		return string(fields[left].Resource)+"\x00"+fields[left].Field < string(fields[right].Resource)+"\x00"+fields[right].Field
 	})
 	return identitysdk.AccessBundle{
-		ContractVersion: identitysdk.CurrentPolicyBundleVersion, CatalogRevision: "plane-testkit-catalog", AuthorizationRevision: "plane-testkit-authorization", ExpiresAt: time.Now().Add(time.Hour),
+		ContractVersion: identitysdk.CurrentPolicyBundleVersion, AuthorizationRevision: "plane-testkit-authorization", ExpiresAt: time.Now().Add(time.Hour),
 		Subject: identitysdk.Subject{WorkspaceID: binding.application.WorkspaceID, SubjectID: identitysdk.SubjectID(subject)}, FunctionGrants: grants, DataPolicies: dataPolicies, FieldPolicies: fields,
 		ExportPolicies: append([]identitysdk.ExportPolicy(nil), role.ExportPolicies...), Guardrails: append([]identitysdk.Guardrail(nil), role.Guardrails...),
+	}
+}
+
+// fixtureDataAction is Runtime-owned test policy for its five default object
+// operations. Identity's evaluator receives this explicit coarse effect and
+// never derives it from an arbitrary Action name.
+func fixtureDataAction(action identitysdk.Action) (identitysdk.DataAction, bool) {
+	switch action {
+	case "read", "export":
+		return identitysdk.DataActionRead, true
+	case "create", "update", "delete":
+		return identitysdk.DataActionWrite, true
+	default:
+		return "", false
 	}
 }
 

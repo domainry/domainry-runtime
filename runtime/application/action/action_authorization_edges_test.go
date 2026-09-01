@@ -31,8 +31,8 @@ func TestActionAuthorizationWorkspaceAndPermissionBoundaries(t *testing.T) {
 	if !ActionAllowed(principal, definitionmodel.ActionSchema{ObjectKey: "order", Key: "order.submit"}) {
 		t.Fatal("action key fallback permission rejected")
 	}
-	if !ActionAllowed(principal, definitionmodel.ActionSchema{ObjectKey: "order", Key: "custom", RequiresPermission: "approve"}) {
-		t.Fatal("object fallback permission rejected")
+	if !ActionAllowed(principal, definitionmodel.ActionSchema{ObjectKey: "order", Key: "order.approve"}) {
+		t.Fatal("same-key Action permission rejected")
 	}
 	if ActionAllowed(principal, definitionmodel.ActionSchema{ObjectKey: "order", Key: "order.delete"}) {
 		t.Fatal("missing permission was authorized")
@@ -52,21 +52,16 @@ func TestActionPersistencePrincipalDoesNotDuplicateOrAliasPermissions(t *testing
 	}
 }
 
-func TestActionPermissionMigrationHasNoInheritedCRUDFallback(t *testing.T) {
+func TestActionPermissionHasNoCRUDFallback(t *testing.T) {
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Key: "editor", Permissions: []string{"order.read", "order.update"}})
-	inherited := definitionmodel.ActionSchema{Key: "order.submit", ObjectKey: "order", RequiresPermission: "order.update"}
-	dedicated := inherited
-	dedicated.RequiresPermission = "order.submit"
-	if !ActionAllowed(principal, inherited) {
-		t.Fatal("role holding the inherited CRUD permission must see the old published Action")
-	}
-	if ActionAllowed(principal, dedicated) {
-		t.Fatal("old CRUD permission must not authorize the dedicated Action after publication")
+	action := definitionmodel.ActionSchema{Key: "order.submit", ObjectKey: "order"}
+	if ActionAllowed(principal, action) {
+		t.Fatal("CRUD permission must not authorize a different Action")
 	}
 	principal = accessfixture.WithMutation(principal, func(role *accessfixture.Bundle) {
 		role.Permissions = append(role.Permissions, "order.submit")
 	})
-	if !ActionAllowed(principal, dedicated) {
-		t.Fatal("same-draft dedicated Action grant was not honored")
+	if !ActionAllowed(principal, action) {
+		t.Fatal("same-key Action grant was not honored")
 	}
 }

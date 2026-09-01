@@ -109,10 +109,6 @@ func (state *validationState) validateObjects() {
 }
 
 func (state *validationState) validateActions() {
-	roles := make(map[string]manifestmodel.RoleSchema, len(state.manifest.Roles))
-	for _, role := range state.manifest.Roles {
-		roles[strings.TrimSpace(role.Key)] = role
-	}
 	seen := map[string]bool{}
 	for index, action := range state.manifest.Actions {
 		path := fmt.Sprintf("actions[%d]", index)
@@ -126,27 +122,9 @@ func (state *validationState) validateActions() {
 		if _, ok := state.objects[strings.TrimSpace(action.ObjectKey)]; !ok {
 			state.add(path+".object_key", "unknown object %q", action.ObjectKey)
 		}
-		if strings.TrimSpace(action.RequiresPermission) == "" {
-			state.add(path+".requires_permission", "is required")
-		}
-		if action.Authorization != nil {
-			allowed := map[string]bool{}
-			if len(action.Authorization.AllowedRoles) == 0 {
-				state.add(path+".authorization.allowed_roles", "at least one role is required")
-			}
-			for roleIndex, roleKey := range action.Authorization.AllowedRoles {
-				roleKey = strings.TrimSpace(roleKey)
-				rolePath := fmt.Sprintf("%s.authorization.allowed_roles[%d]", path, roleIndex)
-				if roleKey == "" {
-					state.add(rolePath, "is required")
-				} else if allowed[roleKey] {
-					state.add(rolePath, "duplicate role %q", roleKey)
-				} else if role, exists := roles[roleKey]; !exists {
-					state.add(rolePath, "unknown role %q", roleKey)
-				} else {
-					state.validateActionRoleAuthorization(rolePath, action, role)
-				}
-				allowed[roleKey] = true
+		for roleIndex, role := range state.manifest.Roles {
+			if containsString(role.Permissions, key) {
+				state.validateActionRoleDataPolicies(fmt.Sprintf("roles[%d].permissions", roleIndex), action, role)
 			}
 		}
 		outputKeys := map[string]bool{}
@@ -180,11 +158,7 @@ func (state *validationState) validateActions() {
 	}
 }
 
-func (state *validationState) validateActionRoleAuthorization(path string, action definitionmodel.ActionSchema, role manifestmodel.RoleSchema) {
-	permission := strings.TrimSpace(action.RequiresPermission)
-	if permission != "" && !containsString(role.Permissions, permission) {
-		state.add(path, "role %q lacks Action permission %q", role.Key, permission)
-	}
+func (state *validationState) validateActionRoleDataPolicies(path string, action definitionmodel.ActionSchema, role manifestmodel.RoleSchema) {
 	if action.EffectSet == nil {
 		return
 	}

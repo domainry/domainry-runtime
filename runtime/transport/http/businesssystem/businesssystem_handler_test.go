@@ -115,7 +115,7 @@ func businessSystemRequest(t *testing.T) *http.Request {
 
 func TestBuilderSnapshotPrincipalIsRuntimeOwnedInstallationAuthority(t *testing.T) {
 	fallback := builderSnapshotPrincipal(manifestmodel.ManifestSchema{})
-	if !fallback.Known || fallback.UserID != "builder-snapshot" || fallback.RoleKey != "builder-snapshot" || fallback.WorkspaceID != principalmodel.InstallationWorkspaceID || fallback.SystemScope.Kind != principalmodel.SystemScopeInstallation || !fallback.SystemScope.Valid() || !fallback.HasPermission("workspace.admin") {
+	if !fallback.Known || fallback.UserID != "builder-snapshot" || fallback.RoleKey != "builder-snapshot" || fallback.WorkspaceID != principalmodel.InstallationWorkspaceID || fallback.SystemScope.Kind != principalmodel.SystemScopeInstallation || !fallback.SystemScope.Valid() || !fallback.HasExactPermission(businesssystemapplication.ActionBusinessSystemSnapshot) {
 		t.Fatalf("fallback principal=%#v", fallback)
 	}
 	if withManifest := builderSnapshotPrincipal(manifestmodel.ManifestSchema{TemplateID: "ignored"}); withManifest.UserID != fallback.UserID || withManifest.RoleKey != fallback.RoleKey {
@@ -124,7 +124,7 @@ func TestBuilderSnapshotPrincipalIsRuntimeOwnedInstallationAuthority(t *testing.
 }
 
 func TestRuntimeAuthoringValidationDrivesTrustedLifecycleCallbacks(t *testing.T) {
-	principal := principalmodel.NewSystemPrincipal("builder", principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "runtime authoring validation"), "workspace.admin")
+	principal := principalmodel.NewSystemPrincipal("builder", principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "runtime authoring validation"), businesssystemapplication.ActionBusinessSystemSnapshot)
 	validation := businesssystemapplication.NewRuntimeAuthoringValidationApplicationService(businesssystemapplication.RuntimeAuthoringValidationDependencies{
 		CurrentManifest: func(context.Context, principalmodel.Principal) (manifestmodel.ManifestSchema, error) {
 			return manifestmodel.ManifestSchema{SchemaVersion: "2", TemplateID: "direct", Version: "configuring", Objects: []definitionmodel.ObjectSchema{}}, nil
@@ -190,7 +190,7 @@ func businessSystemCompleteValidationSnapshot() changeplanprojection.BusinessSys
 }
 
 func TestBusinessSystemSnapshotIncludesRuntimeMetadata(t *testing.T) {
-	principal := principalmodel.NewSystemPrincipal("builder", principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "snapshot test"), "workspace.admin")
+	principal := principalmodel.NewSystemPrincipal("builder", principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "snapshot test"), businesssystemapplication.ActionBusinessSystemSnapshot)
 	handler := businessSystemHandlerForTest(t, principal, nil)
 	snapshot, err := handler.Snapshot(businessSystemRequest(t))
 	if err != nil {

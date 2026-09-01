@@ -8,7 +8,7 @@ import (
 
 func TestActionAssuranceDefinitionValidatesKnownObjectFields(t *testing.T) {
 	action := definitionmodel.ActionSchema{
-		Key: "order.approve", ObjectKey: "order", Kind: "record_operation", RequiresPermission: "order.approve", AuditEvent: "order.approved",
+		Key: "order.approve", ObjectKey: "order", Kind: "record_operation", AuditEvent: "order.approved",
 		AssurancePolicy: &definitionmodel.ActionAssurancePolicy{RequiredMethods: []string{definitionmodel.ActionAssuranceWorkflowApproval}, ApprovalVersionField: "missing", ApprovalHashField: "approval_hash"},
 	}
 	issues := ActionValidateDefinitionIssuesWithObjects(action, []definitionmodel.ObjectSchema{{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "approval_hash"}}}})

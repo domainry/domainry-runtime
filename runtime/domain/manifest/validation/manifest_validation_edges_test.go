@@ -250,7 +250,7 @@ func TestManifestObjectViewReferenceActionAndConnectionEdges(t *testing.T) {
 			{Key: "source", Fields: []definitionmodel.FieldSchema{{Key: ""}, {Key: "plain", Type: "text"}, {Key: "relation-no-target", Type: "relation"}, {Key: "relation", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "target"}}, {Key: "relation", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "missing"}}}, Validations: []definitionmodel.ValidationSchema{{FieldKey: "missing", Fields: []string{"missing"}}}},
 			{Key: "source", Fields: []definitionmodel.FieldSchema{{Key: "plain", Type: "text"}, {Key: "relation-no-target", Type: "relation"}, {Key: "relation", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "target"}}}}, {Key: "target", Fields: []definitionmodel.FieldSchema{{Key: "label"}}},
 		},
-		Actions: []definitionmodel.ActionSchema{{Key: "", ObjectKey: "missing"}, {Key: "same", ObjectKey: "source"}, {Key: "same", ObjectKey: "source", RequiresPermission: "source.write"}},
+		Actions: []definitionmodel.ActionSchema{{Key: "", ObjectKey: "missing"}, {Key: "same", ObjectKey: "source"}, {Key: "same", ObjectKey: "source"}},
 		Integrations: connectormodel.IntegrationSchema{
 			Connectors: []connectormodel.ConnectorSchema{
 				{Key: "family", Providers: []connectormodel.ConnectorProviderSchema{{Key: "real"}}},

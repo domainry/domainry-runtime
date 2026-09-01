@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	actioncontract "github.com/domainry/domainry-foundation/action"
 	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	"github.com/domainry/domainry-foundation/ratelimit"
@@ -132,6 +133,7 @@ type HTTPRouterDependencies struct {
 	IdentityPrincipal         IdentityPrincipalProjection
 	IntegrationAuthentication IntegrationAuthenticationPrincipalProvider
 	IdentityAuthorization     identitysdk.PrincipalResolver
+	AuthorizationActions      func() *actioncontract.Registry
 	BusinessPrincipal         BusinessPrincipalResolver
 	SecurityAudit             SecurityAuditAppender
 	RuntimeStatus             DeploymentRuntimeStatusProvider

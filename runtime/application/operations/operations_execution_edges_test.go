@@ -30,7 +30,20 @@ func (p *operationsUpdateFailureProbe) UpdateOperationsReceipt(ctx context.Conte
 }
 
 func operationsAdminPrincipal() principalmodel.Principal {
-	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{
+		"operations.read",
+		"runtime.scheduler.retry_ops_scheduler_run",
+		"runtime.retention.execute",
+		"runtime.maintenance.write",
+		"runtime.worker.control",
+		"runtime.instance.drain",
+		"runtime.worker.force_release",
+		"runtime.dead_letter.read",
+		"runtime.dead_letter.write",
+		"runtime.bulk.execute",
+		"runtime.diagnostics.read",
+		"runtime.break_glass",
+	}})
 }
 
 func replaceOperationsReceipt(repository *operationsRepositoryProbe, mutate func(*operationsmodel.OperationsReceipt)) {
@@ -163,7 +176,7 @@ func TestExecuteOwnerOperationRejectsRunningReplayWithoutRepeatingOwner(t *testi
 	service := NewOperationsApplicationService(repository, nil, nil, func() string { return "running-owner" })
 	principal := operationsAdminPrincipal()
 	request := OperationsOwnerExecutionRequest{Kind: "scheduler.run.retry", ResourceType: "scheduler_run", ResourceID: "run-1", Reason: "recover", Key: "retry", Payload: map[string]any{"attempt": 2}}
-	receipt, _, err := service.Submit(t.Context(), OperationsSubmitRequest{Kind: request.Kind, Permission: "workspace.admin", ResourceType: request.ResourceType, ResourceID: request.ResourceID, Reason: request.Reason, Payload: request.Payload}, request.Key, principal)
+	receipt, _, err := service.Submit(t.Context(), OperationsSubmitRequest{Kind: request.Kind, Permission: "runtime.scheduler.retry_ops_scheduler_run", ResourceType: request.ResourceType, ResourceID: request.ResourceID, Reason: request.Reason, Payload: request.Payload}, request.Key, principal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,8 +228,8 @@ func TestOperationsOwnerPermissionAndFailureClassEdges(t *testing.T) {
 	if permission := operationsOwnerPermission([]string{"scheduler.run", "integration.retry"}, principal); permission != "integration.retry" {
 		t.Fatalf("permission=%q", permission)
 	}
-	if permission := operationsOwnerPermission([]string{"scheduler.run"}, principal); permission != "scheduler.run" {
-		t.Fatalf("fallback=%q", permission)
+	if permission := operationsOwnerPermission([]string{"scheduler.run"}, principal); permission != "" {
+		t.Fatalf("ungranted=%q", permission)
 	}
 	for kind, expected := range map[apperror.ErrorKind]operationsmodel.OperationsFailureClass{
 		apperror.KindConflict:   operationsmodel.OperationsFailureManualIntervention,

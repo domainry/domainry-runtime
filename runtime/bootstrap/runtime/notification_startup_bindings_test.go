@@ -149,7 +149,6 @@ func TestWorkflowTaskNotificationBindingsBoundaryMatrix(t *testing.T) {
 }
 
 func TestSchedulerNotificationAuthorizerBoundaries(t *testing.T) {
-	failure := errors.New("lookup failed")
 	for _, test := range []struct {
 		name        string
 		permissions []string
@@ -158,7 +157,7 @@ func TestSchedulerNotificationAuthorizerBoundaries(t *testing.T) {
 		wantCode    string
 	}{
 		{name: "unrelated permission", permissions: []string{"other"}, wantCode: "backend.notification.inbox_action_forbidden"},
-		{name: "admin lookup error", permissions: []string{"workspace.admin"}, err: failure},
+		{name: "workspace admin is not scheduler read", permissions: []string{"workspace.admin"}, wantCode: "backend.notification.inbox_action_forbidden"},
 		{name: "reader missing", permissions: []string{"scheduler.definition.read"}, wantCode: "backend.notification.inbox_action_resource_not_found"},
 		{name: "reader found after unrelated", permissions: []string{"other", "scheduler.definition.read"}, found: true},
 	} {

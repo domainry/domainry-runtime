@@ -31,13 +31,12 @@ type ApplicationSchemaSnapshot struct {
 }
 
 type ApplicationSchemaGuardedWriteContract struct {
-	ObjectKey       string   `json:"object_key"`
-	Operation       string   `json:"operation"`
-	ActionKey       string   `json:"action_key"`
-	ActionKind      string   `json:"action_kind"`
-	Label           string   `json:"label,omitempty"`
-	Endpoint        string   `json:"endpoint"`
-	RequiresRecord  bool     `json:"requires_record,omitempty"`
-	BlocksRawCRUD   bool     `json:"blocks_raw_crud"`
-	IdempotencyKeys []string `json:"idempotency_keys,omitempty"`
+	ObjectKey      string `json:"object_key"`
+	Operation      string `json:"operation"`
+	ActionKey      string `json:"action_key"`
+	ActionKind     string `json:"action_kind"`
+	Label          string `json:"label,omitempty"`
+	Endpoint       string `json:"endpoint"`
+	RequiresRecord bool   `json:"requires_record,omitempty"`
+	BlocksRawCRUD  bool   `json:"blocks_raw_crud"`
 }

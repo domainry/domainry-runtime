@@ -112,9 +112,8 @@ func TestStringBackedIdentityAndTemporalLiteralsMatchRuntimeValues(t *testing.T)
 
 func TestSharedInvocationPermissionContractFailsClosed(t *testing.T) {
 	action := definitionmodel.ActionSchema{
-		Key:                "document.reject",
-		ObjectKey:          "document",
-		RequiresPermission: "document.reject",
+		Key:       "document.reject",
+		ObjectKey: "document",
 	}
 	workflow := definitionmodel.WorkflowSchema{Key: "document.review"}
 	unknown := principalmodel.Principal{}

@@ -36,7 +36,7 @@ func (file *uploadTemporaryFileStub) Name() string { return file.name }
 func (file *uploadTemporaryFileStub) Close() error { return file.closeErr }
 
 func TestUploadRequestLimitPrefixAndWriterFailures(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, uploadTestRole("document.*"))
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, uploadTestRole("document.update"))
 	handler := uploadTestHandler(t, principal)
 	response := httptest.NewRecorder()
 	handler.uploadFile(response, multipartUploadRequest(t, "/files?object_key=document&field_key=file_url", "huge.bin", bytes.Repeat([]byte{'x'}, maxUploadRequestBytes+1)))
@@ -71,7 +71,7 @@ func TestUploadStorageFailureMappingAtEveryFilesystemStage(t *testing.T) {
 	t.Cleanup(func() {
 		uploadMkdirAll, uploadCreateTemp, uploadRename, uploadAbs = originalMkdirAll, originalCreateTemp, originalRename, originalAbs
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, uploadTestRole("document.*"))
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, uploadTestRole("document.update"))
 
 	request := func(t *testing.T, handler *UploadsHandler) *httptest.ResponseRecorder {
 		t.Helper()

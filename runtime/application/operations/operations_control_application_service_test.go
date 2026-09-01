@@ -80,7 +80,7 @@ func TestOperationsControlPersistsSystemStateAndReceipt(t *testing.T) {
 	operations := NewOperationsApplicationService(ledger, nil, func() time.Time { return now }, func() string { return "control" })
 	controls := &operationsControlRepositoryProbe{controls: map[string]operationsmodel.OperationsControl{}}
 	service := NewOperationsControlApplicationService(controls, operations, nil, func() time.Time { return now })
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"runtime.maintenance.write"}})
 
 	result, err := service.Set(t.Context(), OperationsControlRequest{Kind: operationsmodel.OperationsControlMaintenance, Owner: "runtime", Active: true, Reason: "restore drill", Reference: "CHG-42"}, "maintenance-1", principal)
 	if err != nil {
@@ -105,7 +105,7 @@ func TestOperationsControlRejectsStaleRevision(t *testing.T) {
 		operationsmodel.OperationsSystemPurposeRuntimeControl + ":maintenance:runtime": {SystemPurpose: operationsmodel.OperationsSystemPurposeRuntimeControl, Kind: operationsmodel.OperationsControlMaintenance, Owner: "runtime", State: operationsmodel.OperationsControlActive, Revision: 2},
 	}}
 	service := NewOperationsControlApplicationService(controls, operations, nil, nil)
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"runtime.worker.control"}})
 	if _, err := service.Set(t.Context(), OperationsControlRequest{Kind: operationsmodel.OperationsControlMaintenance, Owner: "runtime", Active: false, Reason: "complete", ExpectedRevision: 1}, "maintenance-2", principal); err == nil {
 		t.Fatal("stale revision accepted")
 	}
@@ -118,7 +118,7 @@ func TestOperationsControlDrainWaitsAndReturnsRemainingLeaseSnapshot(t *testing.
 	leases := operationsLeaseRepositoryProbe{snapshot: operationsmodel.OperationsLeaseSnapshot{InstanceID: "instance-a", Live: 2, Owners: []operationsmodel.OperationsLeaseCount{{Owner: "workflow", Live: 2}}}}
 	service := NewOperationsControlApplicationService(controls, operations, leases, nil)
 	service.drainSettleDelay, service.drainWaitTimeout = time.Millisecond, 5*time.Millisecond
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"runtime.instance.drain"}})
 	result, err := service.Set(t.Context(), OperationsControlRequest{Kind: operationsmodel.OperationsControlInstanceDrain, Owner: "instance-a", Active: true, Reason: "rolling deploy"}, "drain-1", principal)
 	if err != nil {
 		t.Fatal(err)

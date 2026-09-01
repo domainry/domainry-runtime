@@ -23,7 +23,7 @@ func (h *RecordsHandler) enqueueImportJob(w http.ResponseWriter, r *http.Request
 		}
 		csvSource = buffered
 	}
-	key, _ := recordsActionIdempotencyKey(r, "")
+	key, _ := recordsActionIdempotencyKey(r)
 	if key == "" {
 		h.writeServiceError(w, r, apperror.New(apperror.KindBadRequest, idempotency.ErrorCodeMissingKey, nil, map[string]string{"use_case": "record.import.async"}))
 		return
@@ -58,7 +58,7 @@ func (h *RecordsHandler) enqueueImportJob(w http.ResponseWriter, r *http.Request
 }
 
 func (h *RecordsHandler) enqueueExportJob(w http.ResponseWriter, r *http.Request) {
-	key, _ := recordsActionIdempotencyKey(r, "")
+	key, _ := recordsActionIdempotencyKey(r)
 	if key == "" {
 		h.writeServiceError(w, r, apperror.New(apperror.KindBadRequest, idempotency.ErrorCodeMissingKey, nil, map[string]string{"use_case": "record.export.async"}))
 		return

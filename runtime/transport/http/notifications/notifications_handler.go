@@ -45,7 +45,7 @@ type NotificationDeliveryLedger interface {
 
 func (h *NotificationsHandler) require(w http.ResponseWriter, r *http.Request, permission string) bool {
 	principal := h.principal(r)
-	if principal.Known && (principal.HasPermission("workspace.admin") || principal.HasPermission(permission)) {
+	if principal.Known && principal.HasPermission(permission) {
 		return true
 	}
 	h.writeError(w, r, http.StatusForbidden, "auth.permission_denied")

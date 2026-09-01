@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -115,7 +114,7 @@ func TestCreateRecordIdempotentResultReportsAcquireAndReplay(t *testing.T) {
 		ExecutionRuntime: runtime,
 	})
 	service := &RecordApplicationService{queryPolicy: queryPolicy, create: create, recordMutationExecution: runtime}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}, RequestID: "request-a"}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}, RequestID: "request-a"})
 
 	first, replayed, err := service.CreateRecordIdempotentResult(t.Context(), object.Key, map[string]any{"name": "Acme"}, "create-key", principal)
 	if err != nil || replayed || first.ID != "customer-1" || executions.commitCalls != 1 {
@@ -132,7 +131,7 @@ func TestCreateRecordIdempotentResultRuntimeUnavailableAndBeginFailure(t *testin
 	queryPolicy := recordservice.NewRecordQueryPolicyDomainService(recordservice.RecordQueryPolicyDependencies{
 		Objects: func() []definitionmodel.ObjectSchema { return []definitionmodel.ObjectSchema{object} },
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
 	service := &RecordApplicationService{queryPolicy: queryPolicy}
 	if _, _, err := service.CreateRecordIdempotentResult(t.Context(), object.Key, map[string]any{"name": "Acme"}, "key", principal); apperror.CodeOf(err) != "backend.idempotency.receipt_unavailable" {
 		t.Fatalf("missing runtime err=%v", err)

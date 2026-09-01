@@ -27,8 +27,11 @@ func (bootstrapIdentityBindingStub) Principals() identitysdk.PrincipalResolver {
 func (bootstrapIdentityBindingStub) Directory() identitysdk.Directory {
 	return bootstrapIdentityDirectoryStub{}
 }
-func (bootstrapIdentityBindingStub) Catalog() identitysdk.CatalogClient {
-	return bootstrapIdentityCatalogStub{}
+func (bootstrapIdentityBindingStub) Applications() identitysdk.ApplicationRegistry {
+	return bootstrapIdentityApplicationRegistryStub{}
+}
+func (bootstrapIdentityBindingStub) Permissions() identitysdk.PermissionRegistry {
+	return bootstrapIdentityPermissionRegistryStub{}
 }
 func (bootstrapIdentityBindingStub) Credentials() identitysdk.CredentialManager {
 	return bootstrapIdentityCredentialsStub{}
@@ -107,16 +110,23 @@ func (bootstrapIdentityDirectoryStub) ListWorkforce(context.Context, identitysdk
 	return nil, nil
 }
 
-type bootstrapIdentityCatalogStub struct{}
+type bootstrapIdentityApplicationRegistryStub struct{}
 
-func (bootstrapIdentityCatalogStub) Validate(context.Context, identitysdk.AuthorizationCatalog) error {
-	return nil
+func (bootstrapIdentityApplicationRegistryStub) Register(_ context.Context, request identitysdk.ApplicationRegistration) (identitysdk.ApplicationRegistrationReceipt, error) {
+	return identitysdk.ApplicationRegistrationReceipt{Application: request.Application, RedirectURLs: request.CanonicalRedirectURLs(), Status: "active"}, request.ValidateContract()
 }
-func (bootstrapIdentityCatalogStub) Publish(context.Context, identitysdk.AuthorizationCatalog) (identitysdk.CatalogReceipt, error) {
-	return identitysdk.CatalogReceipt{}, nil
+
+type bootstrapIdentityPermissionRegistryStub struct{}
+
+func (bootstrapIdentityPermissionRegistryStub) CurrentSourceSnapshot(_ context.Context, request identitysdk.PermissionSourceSnapshotRequest) (identitysdk.PermissionSourceSnapshot, error) {
+	if err := request.ValidateContract(); err != nil {
+		return identitysdk.PermissionSourceSnapshot{}, err
+	}
+	return identitysdk.PermissionSourceSnapshot{WorkspaceID: request.Application.WorkspaceID, SourceOwner: request.SourceOwner}, nil
 }
-func (bootstrapIdentityCatalogStub) CurrentRevision(context.Context, identitysdk.ApplicationRef) (identitysdk.CatalogReceipt, error) {
-	return identitysdk.CatalogReceipt{}, nil
+
+func (bootstrapIdentityPermissionRegistryStub) Reconcile(_ context.Context, request identitysdk.PermissionReconcileRequest) (identitysdk.PermissionReconcileReceipt, error) {
+	return identitysdk.PermissionReconcileReceipt{WorkspaceID: request.Application.WorkspaceID, SourceOwner: request.SourceOwner, PreviousSnapshotHash: request.PreviousSnapshotHash, SnapshotHash: request.SnapshotHash, DefinitionCount: len(request.Definitions), Inserted: len(request.Definitions)}, request.ValidateContract()
 }
 
 type bootstrapIdentityCredentialsStub struct{}

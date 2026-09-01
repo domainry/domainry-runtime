@@ -123,7 +123,7 @@ func newWorkflowTaskNotificationActionAuthorizer(lookup workflowTaskLookup) func
 
 func newSchedulerNotificationActionAuthorizer(definitions metadatasdk.Definitions) func(context.Context, string, principalmodel.Principal) error {
 	return func(ctx context.Context, resourceID string, principal principalmodel.Principal) error {
-		allowed := principal.HasPermission("workspace.admin") || principal.HasPermission("scheduler.definition.read")
+		allowed := principal.HasPermission("scheduler.definition.read")
 		if !allowed {
 			return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.notification.inbox_action_forbidden"}
 		}

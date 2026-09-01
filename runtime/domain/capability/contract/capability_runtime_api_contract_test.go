@@ -25,6 +25,27 @@ func TestRuntimeAPIContractIdentityIsStable(t *testing.T) {
 	}
 }
 
+func TestRuntimeAPIContractPublishesClientOwnedIdempotencyLifecycle(t *testing.T) {
+	var document struct {
+		Identity struct {
+			Idempotency map[string]string `json:"idempotency"`
+		} `json:"identity"`
+		Schemas map[string]struct {
+			Optional []string `json:"optional"`
+		} `json:"schemas"`
+	}
+	if err := json.Unmarshal(RuntimeAPIContractDocument(), &document); err != nil {
+		t.Fatal(err)
+	}
+	policy := document.Identity.Idempotency
+	if policy["request_header"] != "Idempotency-Key" || policy["key_source"] != "client_logical_operation_id" || policy["retry_policy"] != "reuse_same_key" || policy["new_operation_policy"] != "new_key" {
+		t.Fatalf("idempotency lifecycle=%v", policy)
+	}
+	if stringSliceContains(document.Schemas["record_bulk_action_request"].Optional, "idempotency_key") {
+		t.Fatal("bulk Action request still exposes transport idempotency in its body")
+	}
+}
+
 func TestRuntimeAPIContractDoesNotUseFrontendSurfaceForEndpointBehavior(t *testing.T) {
 	var document struct {
 		Identity map[string]json.RawMessage `json:"identity"`

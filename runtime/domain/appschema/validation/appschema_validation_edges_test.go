@@ -242,9 +242,9 @@ func TestDictionaryValidationJSONEdges(t *testing.T) {
 }
 
 func TestDefinitionRequestFailureEdges(t *testing.T) {
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
-	if _, err := ApplicationSchemaValidateDefinitionRequest(t.Context(), "action", "x", json.RawMessage(`{}`), principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, nil); err == nil {
-		t.Fatal("known non-admin must be forbidden")
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}})
+	if result, err := ApplicationSchemaValidateDefinitionRequest(t.Context(), "action", "x", json.RawMessage(`{}`), principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, nil); err != nil || result.Valid || result.Errors[0].ErrorCode != "backend.metadata.definition_validator_required" {
+		t.Fatalf("authenticated validation result=%+v error=%v", result, err)
 	}
 	validator := func(context.Context, string, string, json.RawMessage) (json.RawMessage, []appschemamodel.ApplicationDefinitionValidationIssue, error) {
 		return nil, []appschemamodel.ApplicationDefinitionValidationIssue{{ErrorCode: "owned"}}, nil

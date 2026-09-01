@@ -43,7 +43,10 @@ func TestAutomationApplicationAuthorizesWorkspaceBeforeRepositoryAccess(t *testi
 			return nil, nil
 		},
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"automation.read", "automation.history"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{
+		"runtime.automation.automation_capabilities",
+		"runtime.automation.list_automation_executions",
+	}})
 	if _, err := service.Capabilities(t.Context(), principal); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("capabilities error=%v", err)
 	}
@@ -109,7 +112,11 @@ func TestManagementServiceOwnsSortedRulesCapabilitiesAndHistory(t *testing.T) {
 			}
 		},
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1"}}, accessfixture.Bundle{Permissions: []string{"automation.read", "automation.history"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1"}}, accessfixture.Bundle{Permissions: []string{
+		"runtime.automation.list_automation_rules",
+		"runtime.automation.automation_capabilities",
+		"runtime.automation.list_automation_executions",
+	}})
 	listed, err := service.Rules(t.Context(), principal)
 	if err != nil || len(listed) != 2 || listed[0].Key != "a" {
 		t.Fatalf("rules=%#v err=%v", listed, err)
@@ -134,7 +141,7 @@ func TestManagementServiceOwnsSimulationResultProjection(t *testing.T) {
 			return automationprojection.AutomationRuleTrace{Status: "succeeded", Matched: true, NodeTraces: []automationprojection.AutomationNodeTrace{{NodeID: "save", Status: "success"}}}, nil
 		},
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1"}}, accessfixture.Bundle{Permissions: []string{"automation.simulate"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1"}}, accessfixture.Bundle{Permissions: []string{"runtime.automation.simulate_rule"}})
 	result, err := service.SimulateRule(t.Context(), rule, automationcontract.AutomationSimulationRequest{Input: map[string]any{"name": "test"}}, principal)
 	if err != nil || !result.WouldSave || !result.NodePassed || result.Candidate["normalized"] != true {
 		t.Fatalf("result=%#v err=%v", result, err)

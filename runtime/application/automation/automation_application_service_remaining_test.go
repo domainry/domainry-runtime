@@ -32,7 +32,7 @@ func TestAutomationAuthoringFragmentRejectsUnknownPrincipal(t *testing.T) {
 
 	readOnly := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true,
 		WorkspaceID: "workspace-1"},
-	}, accessfixture.Bundle{Permissions: []string{"automation.rule.read"}},
+	}, accessfixture.Bundle{Permissions: []string{"runtime.automation.list_automation_rules"}},
 	)
 	if _, err := service.ValidateAutomationAuthoringFragment(
 		t.Context(), "automation.trigger", map[string]any{}, readOnly,
@@ -42,7 +42,7 @@ func TestAutomationAuthoringFragmentRejectsUnknownPrincipal(t *testing.T) {
 
 	manager := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true,
 		WorkspaceID: "workspace-1"},
-	}, accessfixture.Bundle{Permissions: []string{"automation.rule.write"}},
+	}, accessfixture.Bundle{Permissions: []string{"runtime.automation.validate_automation_authoring_fragment"}},
 	)
 	if result, err := service.ValidateAutomationAuthoringFragment(
 		t.Context(),
@@ -116,8 +116,7 @@ func TestAutomationOutboxRejectsRevalidatedRoleMismatch(t *testing.T) {
 			return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true,
 				UserID: userID},
 			}, accessfixture.Bundle{
-				Key:         "replacement-role",
-				Permissions: []string{"workspace.admin"},
+				Key: "replacement-role",
 			},
 			)
 		},

@@ -82,7 +82,7 @@ func (s *OperationsApplicationService) ActOnDeadLetter(ctx context.Context, owne
 		return OperationsDeadLetterActionResult{}, err
 	}
 	receipt, decision, err := s.Submit(ctx, OperationsSubmitRequest{
-		Kind: "dead_letter." + action, Permission: "workspace.admin", ResourceType: "dead_letter", ResourceID: owner + ":" + id,
+		Kind: "dead_letter." + action, Permission: operationsDefinitionPermission("dead_letter." + action), ResourceType: "dead_letter", ResourceID: owner + ":" + id,
 		Reason: strings.TrimSpace(request.Reason), Reference: strings.TrimSpace(request.Reference), Payload: map[string]any{"owner": owner, "dead_letter_id": id},
 	}, key, principal)
 	if err != nil {

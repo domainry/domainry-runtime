@@ -15,7 +15,7 @@ import (
 type IdentityBindingStub struct{ modulecapability.Binding }
 
 func (IdentityBindingStub) Descriptor() identitysdk.Descriptor {
-	return identitysdk.Descriptor{ProtocolVersion: identitysdk.CurrentProtocolVersion, BundleVersion: identitysdk.CurrentPolicyBundleVersion, CatalogVersion: identitysdk.CatalogVersionV1, Mode: identitysdk.DeploymentModeModule}
+	return identitysdk.Descriptor{ProtocolVersion: identitysdk.CurrentProtocolVersion, BundleVersion: identitysdk.CurrentPolicyBundleVersion, AuthorizationVersion: identitysdk.AuthorizationContractVersionV1, Mode: identitysdk.DeploymentModeModule}
 }
 func (IdentityBindingStub) Authentication() identitysdk.Authentication {
 	return identityAuthenticationStub{}
@@ -27,8 +27,13 @@ func (IdentityBindingStub) Authorization() identitysdk.Authorization {
 func (IdentityBindingStub) Principals() identitysdk.PrincipalResolver {
 	return identityPrincipalResolverStub{}
 }
-func (IdentityBindingStub) Directory() identitysdk.Directory   { return identityDirectoryStub{} }
-func (IdentityBindingStub) Catalog() identitysdk.CatalogClient { return identityCatalogStub{} }
+func (IdentityBindingStub) Directory() identitysdk.Directory { return identityDirectoryStub{} }
+func (IdentityBindingStub) Applications() identitysdk.ApplicationRegistry {
+	return identityApplicationRegistryStub{}
+}
+func (IdentityBindingStub) Permissions() identitysdk.PermissionRegistry {
+	return identityPermissionRegistryStub{}
+}
 func (IdentityBindingStub) Credentials() identitysdk.CredentialManager {
 	return identityCredentialsStub{}
 }
@@ -106,16 +111,23 @@ func (identityDirectoryStub) ListWorkforce(context.Context, identitysdk.Director
 	return nil, nil
 }
 
-type identityCatalogStub struct{}
+type identityApplicationRegistryStub struct{}
 
-func (identityCatalogStub) Validate(context.Context, identitysdk.AuthorizationCatalog) error {
-	return nil
+func (identityApplicationRegistryStub) Register(_ context.Context, request identitysdk.ApplicationRegistration) (identitysdk.ApplicationRegistrationReceipt, error) {
+	return identitysdk.ApplicationRegistrationReceipt{Application: request.Application, RedirectURLs: request.CanonicalRedirectURLs(), Status: "active"}, request.ValidateContract()
 }
-func (identityCatalogStub) Publish(context.Context, identitysdk.AuthorizationCatalog) (identitysdk.CatalogReceipt, error) {
-	return identitysdk.CatalogReceipt{}, nil
+
+type identityPermissionRegistryStub struct{}
+
+func (identityPermissionRegistryStub) CurrentSourceSnapshot(_ context.Context, request identitysdk.PermissionSourceSnapshotRequest) (identitysdk.PermissionSourceSnapshot, error) {
+	if err := request.ValidateContract(); err != nil {
+		return identitysdk.PermissionSourceSnapshot{}, err
+	}
+	return identitysdk.PermissionSourceSnapshot{WorkspaceID: request.Application.WorkspaceID, SourceOwner: request.SourceOwner}, nil
 }
-func (identityCatalogStub) CurrentRevision(context.Context, identitysdk.ApplicationRef) (identitysdk.CatalogReceipt, error) {
-	return identitysdk.CatalogReceipt{}, nil
+
+func (identityPermissionRegistryStub) Reconcile(_ context.Context, request identitysdk.PermissionReconcileRequest) (identitysdk.PermissionReconcileReceipt, error) {
+	return identitysdk.PermissionReconcileReceipt{WorkspaceID: request.Application.WorkspaceID, SourceOwner: request.SourceOwner, PreviousSnapshotHash: request.PreviousSnapshotHash, SnapshotHash: request.SnapshotHash, DefinitionCount: len(request.Definitions), Inserted: len(request.Definitions)}, request.ValidateContract()
 }
 
 type identityCredentialsStub struct{}

@@ -477,14 +477,14 @@ func TestActionApplicationInvokesFrozenBusinessHandlerRegistry(t *testing.T) {
 		t.Fatal(err)
 	}
 	registry.Freeze()
-	action := actionTestPublishedContract(definitionmodel.ActionSchema{Key: "booking.reserve", ObjectKey: "booking", Kind: "object_operation", RequiresPermission: "booking.reserve", EffectSet: &definitionmodel.ActionEffectSet{Write: []definitionmodel.ActionObjectEffect{{ObjectKey: "booking", Fields: []string{"status"}}}}})
+	action := actionTestPublishedContract(definitionmodel.ActionSchema{Key: "booking.reserve", ObjectKey: "booking", Kind: "object_operation", EffectSet: &definitionmodel.ActionEffectSet{Write: []definitionmodel.ActionObjectEffect{{ObjectKey: "booking", Fields: []string{"status"}}}}})
 	system := NewSystemOperationCatalog()
 	service := NewActionApplication(ActionApplicationDependencies{
 		Catalog: NewActionCatalog([]definitionmodel.ActionSchema{action}, system, registry), SystemOperations: NewSystemOperationExecutor(system),
-		BusinessHandlers: newActionTestBusinessHandlerExecutor(BusinessHandlerExecutionDependencies{}), UnitOfWork: newActionTestUnitOfWork().manager, NewInvocationID: func(context.Context) string { return "execution-1" },
+		BusinessHandlers: newActionTestBusinessHandlerExecutor(BusinessHandlerExecutionDependencies{}), UnitOfWork: newActionTestUnitOfWork().manager,
 	})
 	handler.descriptor = runtimeext.HandlerDescriptor{ActionKey: "booking.mutated", InputContractSHA256: "mutated", OutputContractSHA256: "mutated", HandlerRevision: "mutated"}
-	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: action.Key, ObjectKey: action.ObjectKey, Input: map[string]any{"booking_id": "booking-1"}, Principal: actionTestPrincipal("booking.reserve")})
+	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: action.Key, ObjectKey: action.ObjectKey, Input: map[string]any{"booking_id": "booking-1"}, IdempotencyKey: "execution-1", Principal: actionTestPrincipal("booking.reserve")})
 	if err != nil || !handler.invoked || handler.identity.ActionKey != action.Key || handler.identity.ExecutionID != "execution-1" || handler.identity.ReceiptID != "execution-1" || handler.identity.RuntimeRevision != "runtime-test" || handler.identity.ProjectRevision != "project-test" || handler.identity.ApplicationSchemaRevision != "snapshot-test" || handler.identity.HandlerRevision != "handler-v1" || result.Object == nil || result.Object.Output["accepted"] != true {
 		t.Fatalf("result=%+v invoked=%v identity=%+v error=%v", result, handler.invoked, handler.identity, err)
 	}

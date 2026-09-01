@@ -52,7 +52,7 @@ func (s *OperationsApplicationService) EnableBreakGlass(ctx context.Context, com
 	if command.DurationSeconds <= 0 || time.Duration(command.DurationSeconds)*time.Second > operationspolicy.MaximumBreakGlassDuration || command.AlertTarget == "" || command.IncidentRef == "" {
 		return OperationsBreakGlassResult{}, apperror.New(apperror.KindBadRequest, "backend.operations.break_glass_command_invalid", nil, nil)
 	}
-	receipt, decision, err := s.SubmitSystem(ctx, OperationsSubmitRequest{Kind: "break_glass.enable", Permission: "workspace.admin", ResourceType: "runtime", ResourceID: principal.WorkspaceID, Reason: command.Reason, Reference: command.IncidentRef, Payload: command}, key, operationsmodel.OperationsSystemPurposeRuntimeControl, principal)
+	receipt, decision, err := s.SubmitSystem(ctx, OperationsSubmitRequest{Kind: "break_glass.enable", Permission: operationsDefinitionPermission("break_glass.enable"), ResourceType: "runtime", ResourceID: principal.WorkspaceID, Reason: command.Reason, Reference: command.IncidentRef, Payload: command}, key, operationsmodel.OperationsSystemPurposeRuntimeControl, principal)
 	if err != nil {
 		return OperationsBreakGlassResult{}, err
 	}
@@ -94,7 +94,7 @@ func (s *OperationsApplicationService) DisableBreakGlass(ctx context.Context, gr
 	if grantID == "" || command.ExpectedRevision <= 0 || command.Reason == "" || command.IncidentRef == "" {
 		return OperationsBreakGlassResult{}, apperror.New(apperror.KindBadRequest, "backend.operations.break_glass_command_invalid", nil, nil)
 	}
-	receipt, decision, err := s.SubmitSystem(ctx, OperationsSubmitRequest{Kind: "break_glass.disable", Permission: "workspace.admin", ResourceType: "runtime", ResourceID: grantID, Reason: command.Reason, Reference: command.IncidentRef, Payload: command}, key, operationsmodel.OperationsSystemPurposeRuntimeControl, principal)
+	receipt, decision, err := s.SubmitSystem(ctx, OperationsSubmitRequest{Kind: "break_glass.disable", Permission: operationsDefinitionPermission("break_glass.disable"), ResourceType: "runtime", ResourceID: grantID, Reason: command.Reason, Reference: command.IncidentRef, Payload: command}, key, operationsmodel.OperationsSystemPurposeRuntimeControl, principal)
 	if err != nil {
 		return OperationsBreakGlassResult{}, err
 	}
@@ -130,7 +130,7 @@ func (s *OperationsApplicationService) DisableBreakGlass(ctx context.Context, gr
 }
 
 func (s *OperationsApplicationService) ListBreakGlass(ctx context.Context, limit int, principal principalmodel.Principal) ([]operationsmodel.OperationsBreakGlassGrant, error) {
-	if err := operationsAuthorize(principal, "workspace.admin"); err != nil {
+	if err := operationsAuthorize(principal, operationsDefinitionPermission("break_glass.enable")); err != nil {
 		return nil, err
 	}
 	grants, err := s.breakGlass.ListOperationsBreakGlass(ctx, principal.WorkspaceID, limit)

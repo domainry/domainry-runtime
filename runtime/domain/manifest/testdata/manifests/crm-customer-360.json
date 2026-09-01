@@ -539,7 +539,6 @@
       "object_key": "customer",
       "label": "Mark At Risk",
       "kind": "record_update",
-      "requires_permission": "customer.update",
       "preconditions": [],
       "audit_event": "customer_marked_risk",
       "ui_placement": "record_header"
@@ -549,7 +548,6 @@
       "object_key": "lead",
       "label": "Qualify Lead",
       "kind": "record_operation",
-      "requires_permission": "lead.update",
       "preconditions": [],
       "audit_event": "lead_qualified",
       "ui_placement": "row_action"
@@ -559,7 +557,6 @@
       "object_key": "lead",
       "label": "Convert Lead",
       "kind": "record_operation",
-      "requires_permission": "lead.update",
       "preconditions": [
         "status == qualified"
       ],
@@ -571,7 +568,6 @@
       "object_key": "opportunity",
       "label": "Advance Stage",
       "kind": "record_operation",
-      "requires_permission": "opportunity.update",
       "preconditions": [],
       "audit_event": "opportunity_stage_advanced",
       "ui_placement": "record_header",
@@ -589,7 +585,6 @@
       "object_key": "opportunity",
       "label": "Mark Won",
       "kind": "record_operation",
-      "requires_permission": "opportunity.update",
       "preconditions": [
         "stage == negotiation"
       ],
@@ -601,7 +596,6 @@
       "object_key": "opportunity",
       "label": "Mark Lost",
       "kind": "record_operation",
-      "requires_permission": "opportunity.update",
       "preconditions": [
         "stage == negotiation"
       ],
@@ -613,7 +607,6 @@
       "object_key": "activity",
       "label": "Assign To Me",
       "kind": "record_update",
-      "requires_permission": "activity.update",
       "preconditions": [],
       "audit_event": "activity_assigned",
       "ui_placement": "record_header"
@@ -623,7 +616,6 @@
       "object_key": "activity",
       "label": "Start Activity",
       "kind": "record_operation",
-      "requires_permission": "activity.update",
       "preconditions": [
         "status == open"
       ],
@@ -635,7 +627,6 @@
       "object_key": "activity",
       "label": "Complete Activity",
       "kind": "record_operation",
-      "requires_permission": "activity.update",
       "preconditions": [],
       "audit_event": "activity_completed",
       "ui_placement": "row_action"
@@ -645,7 +636,6 @@
       "object_key": "activity",
       "label": "Escalate Overdue",
       "kind": "record_operation",
-      "requires_permission": "activity.update",
       "preconditions": [
         "status == in_progress"
       ],
@@ -657,7 +647,6 @@
       "object_key": "contract",
       "label": "Approve Contract",
       "kind": "record_operation",
-      "requires_permission": "contract.update",
       "preconditions": [
         "status == draft"
       ],
@@ -669,7 +658,6 @@
       "object_key": "contract",
       "label": "Sign Contract",
       "kind": "record_operation",
-      "requires_permission": "contract.update",
       "preconditions": [
         "status == approved"
       ],
@@ -681,7 +669,6 @@
       "object_key": "payment",
       "label": "Mark Collected",
       "kind": "record_operation",
-      "requires_permission": "payment.update",
       "preconditions": [],
       "audit_event": "payment_collected",
       "ui_placement": "row_action"
@@ -691,7 +678,6 @@
       "object_key": "customer",
       "label": "Verify Business License",
       "kind": "record_operation",
-      "requires_permission": "customer.create",
       "audit_event": "customer_business_license_verified",
       "idempotency_keys": [
         "business_license_no"
@@ -703,7 +689,6 @@
       "object_key": "customer",
       "label": "Record Risk Follow Up",
       "kind": "record_operation",
-      "requires_permission": "customer.read",
       "audit_event": "risk_follow_up_requested",
       "ui_placement": "workflow_only"
     },
@@ -712,7 +697,6 @@
       "object_key": "customer",
       "label": "Apply Automation Verification",
       "kind": "record_operation",
-      "requires_permission": "customer.apply_automation_verification",
       "audit_event": "customer_automation_verification_applied",
       "payload_fields": [
         {
@@ -738,7 +722,6 @@
       "object_key": "lead",
       "label": "Record Lead Ready for Conversion",
       "kind": "record_operation",
-      "requires_permission": "lead.read",
       "audit_event": "lead_ready_for_conversion",
       "ui_placement": "workflow_only"
     },
@@ -747,7 +730,6 @@
       "object_key": "payment",
       "label": "Record Payment Overdue Escalation",
       "kind": "record_operation",
-      "requires_permission": "payment.read",
       "audit_event": "payment_overdue_escalated",
       "ui_placement": "workflow_only"
     }

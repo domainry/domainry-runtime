@@ -10,7 +10,7 @@ import (
 
 func TestValidateActionAssurancePolicyIsTypedAndFieldBound(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "payment", Fields: []definitionmodel.FieldSchema{{Key: "approval_version"}, {Key: "approval_hash"}, {Key: "created_by"}}}
-	validAction := definitionmodel.ActionSchema{Key: "payment.refund", ObjectKey: "payment", RequiresPermission: "payment.refund", AssurancePolicy: &definitionmodel.ActionAssurancePolicy{RequiredMethods: []string{"normal_login", "recent_reauth", "otp", "maker_checker", "workflow_approval"}, RecentReauthMaxAgeSeconds: 300, ApprovalVersionField: "approval_version", ApprovalHashField: "approval_hash", MakerField: "created_by"}}
+	validAction := definitionmodel.ActionSchema{Key: "payment.refund", ObjectKey: "payment", AssurancePolicy: &definitionmodel.ActionAssurancePolicy{RequiredMethods: []string{"normal_login", "recent_reauth", "otp", "maker_checker", "workflow_approval"}, RecentReauthMaxAgeSeconds: 300, ApprovalVersionField: "approval_version", ApprovalHashField: "approval_hash", MakerField: "created_by"}}
 	valid := newValidationState(manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{object}, Actions: []definitionmodel.ActionSchema{validAction}}, nil)
 	valid.validateActions()
 	if len(valid.errs) != 0 {

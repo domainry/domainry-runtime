@@ -3,9 +3,7 @@ package action
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
-	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/mutation"
@@ -36,11 +34,6 @@ func actionSourceValid(source actionmodel.ActionSource) bool {
 	default:
 		return false
 	}
-}
-
-func NewActionInvocationID(ctx context.Context) string {
-	_ = ctx
-	return fmt.Sprintf("action_%d", time.Now().UnixNano())
 }
 
 func ActionNormalizeInvocation(invocation actionmodel.ActionInvocation) actionmodel.ActionInvocation {

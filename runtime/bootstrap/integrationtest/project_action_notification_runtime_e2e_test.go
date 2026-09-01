@@ -128,7 +128,7 @@ func notificationModuleRoutes(t *testing.T, runtime *bootstrap.Runtime) http.Han
 		for _, route := range surface.Routes() {
 			next := surface.Handler()
 			owner := surface.Owner()
-			mux.Handle(route.Pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mux.Handle(route.Pattern(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				token := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
 				principal := identitysdk.Principal{Known: true}
 				if owner == "audit" {

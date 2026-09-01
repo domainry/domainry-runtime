@@ -191,8 +191,11 @@ func actionFailureResponseStatus(kind apperror.ErrorKind) int {
 
 func (s *ActionExecutionRuntime) begin(ctx context.Context, objectKey, recordID, actionKey, idempotencyKey string, input idempotency.FingerprintInput, principal principalmodel.Principal) (actionmodel.ActionExecutionClaimResult, bool, error) {
 	idempotencyKey = strings.TrimSpace(idempotencyKey)
-	if idempotencyKey == "" || s == nil || s.repository == nil {
-		return actionmodel.ActionExecutionClaimResult{Decision: idempotency.DecisionAcquired}, false, nil
+	if idempotencyKey == "" {
+		return actionmodel.ActionExecutionClaimResult{}, false, apperror.New(apperror.KindBadRequest, idempotency.ErrorCodeMissingKey, nil, map[string]string{"action": strings.TrimSpace(actionKey)})
+	}
+	if s == nil || s.repository == nil {
+		return actionmodel.ActionExecutionClaimResult{}, false, apperror.New(apperror.KindInternal, idempotency.ErrorCodeReceiptUnavailable, nil, map[string]string{"action": strings.TrimSpace(actionKey)})
 	}
 	fingerprint, err := idempotency.Fingerprint(input)
 	if err != nil {

@@ -4,8 +4,6 @@ import (
 	"errors"
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 
-	identitysdk "github.com/domainry/domainry-identity-sdk"
-
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
 
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
@@ -165,9 +163,12 @@ func (h *BusinessSystemHandler) businessSystemSnapshot(w http.ResponseWriter, r 
 
 func builderSnapshotPrincipal(manifest manifestmodel.ManifestSchema) principalmodel.Principal {
 	_ = manifest
-	return principalmodel.Principal{
-		Principal:          identitysdk.Principal{Known: true, UserID: "builder-snapshot", WorkspaceID: principalmodel.InstallationWorkspaceID, RoleKey: "builder-snapshot"},
-		SystemScope:        principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "builder_system_snapshot"),
-		SystemCapabilities: []string{"workspace.admin"},
-	}
+	principal := principalmodel.NewSystemPrincipal(
+		"builder-snapshot",
+		principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "builder_system_snapshot"),
+		businesssystemapplication.ActionBusinessSystemSnapshot,
+	)
+	principal.WorkspaceID = principalmodel.InstallationWorkspaceID
+	principal.RoleKey = "builder-snapshot"
+	return principal
 }

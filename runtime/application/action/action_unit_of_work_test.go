@@ -230,7 +230,7 @@ func TestActionUnitOfWorkCommitsSystemAndBusinessOwnersThroughOneBoundary(t *tes
 
 	t.Run("system operation", func(t *testing.T) {
 		store := &actionUnitOfWorkStoreProbe{}
-		action := definitionmodel.ActionSchema{Key: "order.create", ObjectKey: "order", Kind: definitionmodel.ActionKindObjectCreate, RequiresPermission: "order.create"}
+		action := definitionmodel.ActionSchema{Key: "order.create", ObjectKey: "order", Kind: definitionmodel.ActionKindObjectCreate}
 		system := NewSystemOperationCatalog(SystemOperationDescriptor{Key: SystemOperationCreate, Kind: definitionmodel.ActionKindObjectCreate, WriteOperation: "create"})
 		handlers := NewRecordSystemOperationHandlers(RecordSystemOperationDependencies{PlanCreateMutation: func(ctx context.Context, objectKey string, fields map[string]any, _ string, principal principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
 			if active, _ := ctx.Value(actionUnitOfWorkTransactionContextKey{}).(bool); !active {
@@ -243,13 +243,13 @@ func TestActionUnitOfWorkCommitsSystemAndBusinessOwnersThroughOneBoundary(t *tes
 			SystemOperations: NewSystemOperationExecutor(system, SystemOperationBinding{Key: SystemOperationCreate, Handler: handlers.Create}),
 			UnitOfWork:       NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(store)),
 		})
-		result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: action.Key, ObjectKey: action.ObjectKey, Input: map[string]any{"status": "new"}, Principal: actionTestPrincipal("order.create")})
+		result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: action.Key, ObjectKey: action.ObjectKey, Input: map[string]any{"status": "new"}, IdempotencyKey: "order-create-1", Principal: actionTestPrincipal("order.create")})
 		assertOneActionUnitOfWorkCommit(t, result, err, store, "order")
 	})
 
 	t.Run("business handler", func(t *testing.T) {
 		store := &actionUnitOfWorkStoreProbe{}
-		action := actionTestPublishedContract(definitionmodel.ActionSchema{Key: "booking.reserve", ObjectKey: "booking", Kind: definitionmodel.ActionKindObjectOperation, RequiresPermission: "booking.reserve"})
+		action := actionTestPublishedContract(definitionmodel.ActionSchema{Key: "booking.reserve", ObjectKey: "booking", Kind: definitionmodel.ActionKindObjectOperation})
 		handler := actionUnitOfWorkMutationHandler{descriptor: actionTestHandlerDescriptor(action.Key, []runtimeext.ActionObjectCapability{{ObjectKey: "booking", Operations: []string{"create"}}})}
 		registry := runtimeext.NewBusinessHandlerRegistry()
 		if err := registry.Register(handler); err != nil {
@@ -267,7 +267,7 @@ func TestActionUnitOfWorkCommitsSystemAndBusinessOwnersThroughOneBoundary(t *tes
 			}}),
 			UnitOfWork: NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(store)),
 		})
-		result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: action.Key, ObjectKey: action.ObjectKey, Principal: actionTestPrincipal("booking.reserve")})
+		result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: action.Key, ObjectKey: action.ObjectKey, IdempotencyKey: "booking-reserve-1", Principal: actionTestPrincipal("booking.reserve")})
 		assertOneActionUnitOfWorkCommit(t, result, err, store, "booking")
 	})
 }
@@ -353,7 +353,7 @@ func TestBusinessActionRelationValidationSeesEarlierPlannedCreate(t *testing.T) 
 }
 
 func TestActionUnitOfWorkFailsClosedWhenMutationStoreIsMissing(t *testing.T) {
-	action := definitionmodel.ActionSchema{Key: "order.create", ObjectKey: "order", Kind: definitionmodel.ActionKindObjectCreate, RequiresPermission: "order.create"}
+	action := definitionmodel.ActionSchema{Key: "order.create", ObjectKey: "order", Kind: definitionmodel.ActionKindObjectCreate}
 	system := NewSystemOperationCatalog(SystemOperationDescriptor{Key: SystemOperationCreate, Kind: definitionmodel.ActionKindObjectCreate, WriteOperation: "create"})
 	handlers := NewRecordSystemOperationHandlers(RecordSystemOperationDependencies{PlanCreateMutation: func(_ context.Context, objectKey string, fields map[string]any, _ string, principal principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
 		context, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: principal.WorkspaceID, Source: transactionmodel.MutationSourceAction, ActionKey: action.Key, CorrelationID: "correlation-1", ApplicationSchemaRevision: "snapshot-1"})
@@ -367,7 +367,7 @@ func TestActionUnitOfWorkFailsClosedWhenMutationStoreIsMissing(t *testing.T) {
 	service := NewActionApplication(ActionApplicationDependencies{
 		Catalog: NewActionCatalog([]definitionmodel.ActionSchema{action}, system, frozenEmptyHandlerRegistry(t)), SystemOperations: NewSystemOperationExecutor(system, SystemOperationBinding{Key: SystemOperationCreate, Handler: handlers.Create}),
 	})
-	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: action.Key, ObjectKey: action.ObjectKey, Input: map[string]any{"status": "new"}, Principal: actionTestPrincipal("order.create")})
+	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: action.Key, ObjectKey: action.ObjectKey, Input: map[string]any{"status": "new"}, IdempotencyKey: "order-create-no-store", Principal: actionTestPrincipal("order.create")})
 	if apperror.CodeOf(err) != idempotency.ErrorCodeReceiptUnavailable || result.Status != "failed" {
 		t.Fatalf("result=%+v error=%v", result, err)
 	}
@@ -393,7 +393,7 @@ func TestActionExecutionPhaseFollowsRuntimeOwnedUnitOfWork(t *testing.T) {
 			t.Fatal(err)
 		}
 		registry.Freeze()
-		action := actionTestPublishedContract(definitionmodel.ActionSchema{Key: "booking.reserve", ObjectKey: "booking", Kind: definitionmodel.ActionKindObjectOperation, RequiresPermission: "booking.reserve"})
+		action := actionTestPublishedContract(definitionmodel.ActionSchema{Key: "booking.reserve", ObjectKey: "booking", Kind: definitionmodel.ActionKindObjectOperation})
 		system := NewSystemOperationCatalog()
 		return NewActionApplication(ActionApplicationDependencies{
 			Catalog: NewActionCatalog([]definitionmodel.ActionSchema{action}, system, registry), SystemOperations: NewSystemOperationExecutor(system),
@@ -412,7 +412,7 @@ func TestActionExecutionPhaseFollowsRuntimeOwnedUnitOfWork(t *testing.T) {
 	newHandler := func() *actionPhaseMutationHandler {
 		return &actionPhaseMutationHandler{descriptor: actionTestHandlerDescriptor("booking.reserve", []runtimeext.ActionObjectCapability{{ObjectKey: "booking", Operations: []string{"create"}}})}
 	}
-	invocation := actionmodel.ActionInvocation{ActionKey: "booking.reserve", ObjectKey: "booking", Principal: actionTestPrincipal("booking.reserve")}
+	invocation := actionmodel.ActionInvocation{ActionKey: "booking.reserve", ObjectKey: "booking", IdempotencyKey: "booking-phase-1", Principal: actionTestPrincipal("booking.reserve")}
 
 	t.Run("commit", func(t *testing.T) {
 		handler, store := newHandler(), &actionUnitOfWorkStoreProbe{}
@@ -576,7 +576,7 @@ func TestActionUnitOfWorkOpensLazilyForGetForUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	registry.Freeze()
-	action := actionTestPublishedContract(definitionmodel.ActionSchema{Key: "booking.lock", ObjectKey: "booking", Kind: definitionmodel.ActionKindObjectOperation, RequiresPermission: "booking.lock"})
+	action := actionTestPublishedContract(definitionmodel.ActionSchema{Key: "booking.lock", ObjectKey: "booking", Kind: definitionmodel.ActionKindObjectOperation})
 	system := NewSystemOperationCatalog()
 	service := NewActionApplication(ActionApplicationDependencies{
 		Catalog: NewActionCatalog([]definitionmodel.ActionSchema{action}, system, registry), SystemOperations: NewSystemOperationExecutor(system),
@@ -596,7 +596,7 @@ func TestActionUnitOfWorkOpensLazilyForGetForUpdate(t *testing.T) {
 		}),
 		UnitOfWork: NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(store)),
 	})
-	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: action.Key, ObjectKey: action.ObjectKey, Principal: actionTestPrincipal("booking.lock")})
+	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: action.Key, ObjectKey: action.ObjectKey, IdempotencyKey: "booking-lock-1", Principal: actionTestPrincipal("booking.lock")})
 	want := []runtimeext.ExecutionPhase{runtimeext.ExecutionPhasePrewrite, runtimeext.ExecutionPhasePrewrite, runtimeext.ExecutionPhaseWriting}
 	if err != nil || result.Status != "success" || len(handler.observed) != len(want) || handler.observed[0] != want[0] || handler.observed[1] != want[1] || handler.observed[2] != want[2] {
 		t.Fatalf("result=%+v phases=%v error=%v", result, handler.observed, err)
@@ -614,7 +614,7 @@ func TestActionScopeDenialAfterLockingReadRollsBackBeforeAtomicFailureAudit(t *t
 		t.Fatal(err)
 	}
 	registry.Freeze()
-	action := actionTestPublishedContract(definitionmodel.ActionSchema{Key: "booking.lock", ObjectKey: "booking", Kind: definitionmodel.ActionKindRecordOperation, RequiresPermission: "booking.lock"})
+	action := actionTestPublishedContract(definitionmodel.ActionSchema{Key: "booking.lock", ObjectKey: "booking", Kind: definitionmodel.ActionKindRecordOperation})
 	system := NewSystemOperationCatalog()
 	service := NewActionApplication(ActionApplicationDependencies{
 		Catalog: NewActionCatalog([]definitionmodel.ActionSchema{action}, system, registry), SystemOperations: NewSystemOperationExecutor(system),
@@ -845,7 +845,7 @@ func TestActionSuccessAuditAndReceiptShareTransactionWithoutBusinessMutation(t *
 		t.Fatal(err)
 	}
 	registry.Freeze()
-	action := actionTestPublishedContract(definitionmodel.ActionSchema{Key: "booking.preview", ObjectKey: "booking", Kind: definitionmodel.ActionKindObjectOperation, RequiresPermission: "booking.preview"})
+	action := actionTestPublishedContract(definitionmodel.ActionSchema{Key: "booking.preview", ObjectKey: "booking", Kind: definitionmodel.ActionKindObjectOperation})
 	system := NewSystemOperationCatalog()
 	service := NewActionApplication(ActionApplicationDependencies{
 		Catalog: NewActionCatalog([]definitionmodel.ActionSchema{action}, system, registry), SystemOperations: NewSystemOperationExecutor(system),
@@ -855,7 +855,7 @@ func TestActionSuccessAuditAndReceiptShareTransactionWithoutBusinessMutation(t *
 			return auditmodel.AuditEvent{ID: "action-audit-1", WorkspaceID: "workspace-a", Event: "booking.previewed", CreatedAt: "2026-07-22T00:00:00Z"}
 		}},
 	})
-	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: action.Key, ObjectKey: action.ObjectKey, Principal: actionTestPrincipal("booking.preview")})
+	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: action.Key, ObjectKey: action.ObjectKey, IdempotencyKey: "booking-preview-1", Principal: actionTestPrincipal("booking.preview")})
 	if err != nil || result.Status != "success" || store.beginTransactionCalls != 1 || store.completeCalls != 0 || len(store.completions) != 1 {
 		t.Fatalf("result=%+v begins=%d complete=%d completions=%+v error=%v", result, store.beginTransactionCalls, store.completeCalls, store.completions, err)
 	}
@@ -901,7 +901,7 @@ func TestBookClassCommitsClassBookingAuditOutboxAndReceiptThroughOneUnitOfWork(t
 	registry.Freeze()
 	action := actionTestPublishedContract(definitionmodel.ActionSchema{
 		Key: "group_class.book_class", ObjectKey: "group_class", Kind: definitionmodel.ActionKindObjectOperation,
-		RequiresPermission: "group_class.book_class", AuditEvent: "gym.class_booked",
+		AuditEvent: "gym.class_booked",
 		EffectSet: &definitionmodel.ActionEffectSet{
 			Read: []definitionmodel.ActionObjectEffect{
 				{ObjectKey: "group_class", Operations: []string{"get_for_update"}, Fields: []string{"remaining_capacity"}},

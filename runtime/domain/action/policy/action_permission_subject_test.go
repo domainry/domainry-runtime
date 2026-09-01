@@ -6,11 +6,8 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
 
-// Regression for platform finding #11: the permission subject must be derived
-// relative to the Action's object key so multi-segment keys such as
-// "ticket.transition.start" are evaluated as (ticket, transition.start) by
-// every authorization layer instead of being re-split into the never-granted
-// (ticket, start).
+// The subject decomposition is metadata only: joining both parts must preserve
+// the complete Action key. Authorization compares ActionSchema.Key directly.
 func TestActionPermissionSubjectObjectRelative(t *testing.T) {
 	for _, test := range []struct {
 		name       string
@@ -19,24 +16,24 @@ func TestActionPermissionSubjectObjectRelative(t *testing.T) {
 		wantAction string
 	}{
 		{
-			name:       "multi-segment key prefixed with object key",
-			action:     definitionmodel.ActionSchema{Key: "ticket.start_progress", ObjectKey: "ticket", RequiresPermission: "ticket.transition.start"},
+			name:       "multi-segment action key prefixed with object key",
+			action:     definitionmodel.ActionSchema{Key: "ticket.transition.start", ObjectKey: "ticket"},
 			wantObject: "ticket", wantAction: "transition.start",
 		},
 		{
 			name:       "two-segment key prefixed with object key",
-			action:     definitionmodel.ActionSchema{Key: "ticket.start_progress", ObjectKey: "ticket", RequiresPermission: "ticket.transition_start"},
+			action:     definitionmodel.ActionSchema{Key: "ticket.transition_start", ObjectKey: "ticket"},
 			wantObject: "ticket", wantAction: "transition_start",
 		},
 		{
-			name:       "permission defaults to action key",
+			name:       "two-segment action key",
 			action:     definitionmodel.ActionSchema{Key: "ticket.start_progress", ObjectKey: "ticket"},
 			wantObject: "ticket", wantAction: "start_progress",
 		},
 		{
-			name:       "legacy fallback without object prefix",
-			action:     definitionmodel.ActionSchema{Key: "ignored", RequiresPermission: "sales.order.approve"},
-			wantObject: "order", wantAction: "approve",
+			name:       "multi-segment action key without object context",
+			action:     definitionmodel.ActionSchema{Key: "sales.order.approve"},
+			wantObject: "sales.order", wantAction: "approve",
 		},
 	} {
 		object, action := definitionmodel.ActionPermissionSubject(test.action)
@@ -44,7 +41,7 @@ func TestActionPermissionSubjectObjectRelative(t *testing.T) {
 			t.Fatalf("%s: subject = %q/%q, want %q/%q", test.name, object, action, test.wantObject, test.wantAction)
 		}
 	}
-	if got := ActionName(definitionmodel.ActionSchema{Key: "ticket.start_progress", ObjectKey: "ticket", RequiresPermission: "ticket.transition.start"}); got != "transition.start" {
+	if got := ActionName(definitionmodel.ActionSchema{Key: "ticket.transition.start", ObjectKey: "ticket"}); got != "transition.start" {
 		t.Fatalf("ActionName must stay consistent with the permission subject, got %q", got)
 	}
 }

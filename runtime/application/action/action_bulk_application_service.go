@@ -109,12 +109,12 @@ func (s *ActionBulkApplicationService) ExecuteBulkAction(ctx context.Context, ob
 			return result, err
 		}
 		data := actionpolicy.ActionCloneData(request.Data)
-		data["idempotency_key"] = commandKey + ":" + recordID
 		if expected, ok := request.ExpectedVersions[recordID]; ok {
 			data["expected_version"] = expected
 		}
 		invocation, err := s.dependencies.Invoke(ctx, actionmodel.ActionInvocation{
 			ActionKey: actionKey, ObjectKey: objectKey, RecordID: recordID, Input: data, Principal: principal, Source: actionmodel.ActionSourceBulk,
+			IdempotencyKey: commandKey + ":" + recordID,
 		})
 		if err != nil || invocation.Record == nil {
 			if err == nil {

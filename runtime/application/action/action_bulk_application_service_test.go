@@ -55,7 +55,7 @@ func TestActionBulkReplayRechecksPermissionBeforeReadingReceipt(t *testing.T) {
 	executions := &bulkExecutionProbe{execution: actionmodel.ActionBusinessExecution{ID: "existing-receipt", Status: string(idempotency.StatusSucceeded)}}
 	service := NewActionBulkApplicationService(ActionBulkDependencies{
 		Actions: func(context.Context) []definitionmodel.ActionSchema {
-			return []definitionmodel.ActionSchema{{Key: "order.approve", ObjectKey: "order", RequiresPermission: "order.approve"}}
+			return []definitionmodel.ActionSchema{{Key: "order.approve", ObjectKey: "order"}}
 		},
 		Allowed: func(principalmodel.Principal, definitionmodel.ActionSchema) bool { return false },
 		Invoke: func(context.Context, actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error) {
@@ -80,7 +80,7 @@ func TestActionBulkApplicationServiceResumesRowsAfterOperationReclaim(t *testing
 			return []definitionmodel.ActionSchema{{Key: "order.approve", ObjectKey: "order"}}
 		},
 		Invoke: func(ctx context.Context, invocation actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error) {
-			key, _ := invocation.Input["idempotency_key"].(string)
+			key := invocation.IdempotencyKey
 			if invocation.RecordID == "record-2" && firstAttempt {
 				firstAttempt = false
 				cancel()
@@ -140,7 +140,7 @@ func TestActionBulkApplicationServiceFiltersAndSortsAvailableActions(t *testing.
 	service := NewActionBulkApplicationService(ActionBulkDependencies{
 		Allowed: func(principal principalmodel.Principal, action definitionmodel.ActionSchema) bool {
 			for _, permission := range principal.PermissionKeys() {
-				if permission == action.RequiresPermission {
+				if permission == action.Key {
 					return true
 				}
 			}
@@ -148,9 +148,9 @@ func TestActionBulkApplicationServiceFiltersAndSortsAvailableActions(t *testing.
 		},
 		Actions: func(context.Context) []definitionmodel.ActionSchema {
 			return []definitionmodel.ActionSchema{
-				{Key: "order.cancel", ObjectKey: "order", RequiresPermission: "order.cancel"},
-				{Key: "customer.approve", ObjectKey: "customer", RequiresPermission: "customer.approve"},
-				{Key: "order.approve", ObjectKey: "order", RequiresPermission: "order.approve"},
+				{Key: "order.cancel", ObjectKey: "order"},
+				{Key: "customer.approve", ObjectKey: "customer"},
+				{Key: "order.approve", ObjectKey: "order"},
 			}
 		},
 	})
@@ -191,7 +191,7 @@ func TestActionBulkApplicationServiceOwnsBulkAggregationAndExpectedVersions(t *t
 	if result.Total != 2 || result.Succeeded != 2 || !audited {
 		t.Fatalf("unexpected result: %+v audited=%v", result, audited)
 	}
-	if invocations[0].RecordID != "record-2" || invocations[0].Input["idempotency_key"] != "bulk-key:record-2" || invocations[1].Input["idempotency_key"] != "bulk-key:record-1" || invocations[1].Input["expected_version"] != 7 || invocations[1].Source != actionmodel.ActionSourceBulk {
+	if invocations[0].RecordID != "record-2" || invocations[0].IdempotencyKey != "bulk-key:record-2" || invocations[1].IdempotencyKey != "bulk-key:record-1" || invocations[1].Input["expected_version"] != 7 || invocations[1].Source != actionmodel.ActionSourceBulk {
 		t.Fatalf("unexpected invocations: %+v", invocations)
 	}
 	replayed, err := service.ExecuteBulkAction(t.Context(), "order", "order.approve", actionmodel.ActionBulkRequest{

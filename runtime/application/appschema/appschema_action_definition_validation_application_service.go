@@ -77,16 +77,9 @@ func validateInstalledActionAuthorization(installed, persisted manifestmodel.Man
 	}
 	for _, action := range installed.Actions {
 		actionKey := strings.TrimSpace(action.Key)
-		requiredPermission := strings.TrimSpace(action.RequiresPermission)
-		persistedAction, exists := persistedActions[actionKey]
+		_, exists := persistedActions[actionKey]
 		if !exists {
 			return fmt.Errorf("Runtime metadata initialization is incomplete: installed Action %q was not persisted", actionKey)
-		}
-		if strings.TrimSpace(persistedAction.RequiresPermission) != requiredPermission {
-			return fmt.Errorf(
-				"Runtime metadata initialization is incomplete: persisted Action %q requires permission %q, want %q",
-				actionKey, persistedAction.RequiresPermission, requiredPermission,
-			)
 		}
 	}
 	return nil

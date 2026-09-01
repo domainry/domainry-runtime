@@ -31,7 +31,7 @@ func businessReferenceTestHandler(principal principalmodel.Principal) *BusinessR
 }
 
 func businessReferenceAdmin() principalmodel.Principal {
-	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{changeplanapplication.ActionBusinessReferenceGraph, changeplanapplication.ActionBusinessReferenceImpact}})
 }
 
 func TestBusinessReferenceGraphAndImpact(t *testing.T) {

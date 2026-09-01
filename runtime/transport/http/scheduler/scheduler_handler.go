@@ -23,7 +23,6 @@ type SchedulerHandler struct {
 	writeError          func(http.ResponseWriter, *http.Request, int, string, ...string)
 	writeServiceError   func(http.ResponseWriter, *http.Request, error)
 	decodeJSON          func(http.ResponseWriter, *http.Request, any) bool
-	admin               func(http.HandlerFunc) http.HandlerFunc
 	authenticated       func(http.HandlerFunc) http.HandlerFunc
 	dispatcher          modulehost.Dispatcher
 	runtimeID           string
@@ -93,7 +92,6 @@ type SchedulerDependencies struct {
 	WriteError          func(http.ResponseWriter, *http.Request, int, string, ...string)
 	WriteServiceError   func(http.ResponseWriter, *http.Request, error)
 	DecodeJSON          func(http.ResponseWriter, *http.Request, any) bool
-	Admin               func(http.HandlerFunc) http.HandlerFunc
 	Authenticated       func(http.HandlerFunc) http.HandlerFunc
 	Dispatcher          modulehost.Dispatcher
 	RuntimeID           string
@@ -102,14 +100,10 @@ type SchedulerDependencies struct {
 }
 
 func NewSchedulerHandler(deps SchedulerDependencies) *SchedulerHandler {
-	authenticated := deps.Authenticated
-	if authenticated == nil {
-		authenticated = deps.Admin
-	}
 	return &SchedulerHandler{
 		service: deps.Service, operations: deps.Operations, principal: deps.Principal, writeJSON: deps.WriteJSON,
-		writeError: deps.WriteError, writeServiceError: deps.WriteServiceError, decodeJSON: deps.DecodeJSON, admin: deps.Admin,
-		authenticated: authenticated,
+		writeError: deps.WriteError, writeServiceError: deps.WriteServiceError, decodeJSON: deps.DecodeJSON,
+		authenticated: deps.Authenticated,
 		dispatcher:    deps.Dispatcher, runtimeID: strings.TrimSpace(deps.RuntimeID), authenticateService: deps.AuthenticateService, binding: deps.Binding,
 	}
 }

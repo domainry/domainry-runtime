@@ -219,7 +219,7 @@ func TestWorkflowCCNodeValidationRecipientProviderAndSuccessOutcomes(t *testing.
 		return WorkflowBusinessActionInvocationResult{InvocationID: "invocation"}, nil
 	}})
 	result, err := runtime.ProcessEngine().executeCCNode(t.Context(), process, node, actor)
-	if err != nil || result["notified"] != true || invoked.Input["subject"] != "Ada" || len(processStore.events) != 1 {
+	if err != nil || result["notified"] != true || invoked.Input["subject"] != "Ada" || invoked.IdempotencyKey != "process:cc:cc-notification" || len(processStore.events) != 1 {
 		t.Fatalf("result=%v invocation=%+v events=%v err=%v", result, invoked, processStore.events, err)
 	}
 	providerErr := errors.New("provider")

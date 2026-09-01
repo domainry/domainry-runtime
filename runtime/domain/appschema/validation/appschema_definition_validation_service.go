@@ -24,7 +24,7 @@ func ApplicationSchemaValidateDefinitionRequest(
 	principal principalmodel.Principal,
 	validatePayload ApplicationDefinitionPayloadValidator,
 ) (appschemamodel.ApplicationDefinitionValidationResult, error) {
-	if !principal.Known || !principal.HasPermission("workspace.admin") {
+	if !principal.Known {
 		return appschemamodel.ApplicationDefinitionValidationResult{}, forbidden("auth.permission_denied")
 	}
 

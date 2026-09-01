@@ -8,6 +8,7 @@ import (
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -66,10 +67,10 @@ func TestActionApplicationInvocationInputBoundaries(t *testing.T) {
 	}
 
 	recordAction := definitionmodel.ActionSchema{
-		Key: "order.update", ObjectKey: "order", Kind: definitionmodel.ActionKindRecordUpdate, RequiresPermission: "order.update",
+		Key: "order.update", ObjectKey: "order", Kind: definitionmodel.ActionKindRecordUpdate,
 	}
 	objectAction := definitionmodel.ActionSchema{
-		Key: "order.create", ObjectKey: "order", Kind: definitionmodel.ActionKindObjectCreate, RequiresPermission: "order.create",
+		Key: "order.create", ObjectKey: "order", Kind: definitionmodel.ActionKindObjectCreate,
 	}
 	service := &ActionApplicationService{dependencies: ActionApplicationDependencies{
 		Catalog: &ActionCatalog{entries: map[string]ActionCatalogEntry{
@@ -78,22 +79,31 @@ func TestActionApplicationInvocationInputBoundaries(t *testing.T) {
 		}},
 	}}
 	if _, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{
-		ActionKey: recordAction.Key,
+		ActionKey: objectAction.Key,
 		Principal: principal,
+	}); apperror.CodeOf(err) != idempotency.ErrorCodeMissingKey {
+		t.Fatalf("missing invocation idempotency key error = %v", err)
+	}
+	if _, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{
+		ActionKey:      recordAction.Key,
+		IdempotencyKey: "record-shape-1",
+		Principal:      principal,
 	}); apperror.CodeOf(err) != "backend.action.object_action_required" {
 		t.Fatalf("default object key error = %v", err)
 	}
 	if _, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{
-		ActionKey: objectAction.Key,
-		ObjectKey: objectAction.ObjectKey,
-		RecordID:  "order-1",
-		Principal: principal,
+		ActionKey:      objectAction.Key,
+		ObjectKey:      objectAction.ObjectKey,
+		RecordID:       "order-1",
+		IdempotencyKey: "object-shape-1",
+		Principal:      principal,
 	}); apperror.CodeOf(err) != "backend.action.record_action_required" {
 		t.Fatalf("record supplied to object action error = %v", err)
 	}
 	if _, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{
-		ActionKey: "missing.action",
-		Principal: principal,
+		ActionKey:      "missing.action",
+		IdempotencyKey: "missing-1",
+		Principal:      principal,
 	}); apperror.CodeOf(err) != "backend.action.not_found" {
 		t.Fatalf("missing catalog action error = %v", err)
 	}
@@ -104,8 +114,9 @@ func TestActionApplicationInvocationInputBoundaries(t *testing.T) {
 		ResolutionError: resolutionFailure,
 	}
 	if _, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{
-		ActionKey: "broken.action",
-		Principal: principal,
+		ActionKey:      "broken.action",
+		IdempotencyKey: "broken-1",
+		Principal:      principal,
 	}); err == nil {
 		t.Fatal("owner resolution failure was ignored")
 	}
@@ -114,18 +125,19 @@ func TestActionApplicationInvocationInputBoundaries(t *testing.T) {
 		Definition: definitionmodel.ActionSchema{Key: "mismatch.action", ObjectKey: "order", Kind: definitionmodel.ActionKindRecordUpdate},
 	}
 	if _, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{
-		ActionKey: "mismatch.action",
-		ObjectKey: "invoice",
-		RecordID:  "invoice-1",
-		Principal: principal,
+		ActionKey:      "mismatch.action",
+		ObjectKey:      "invoice",
+		RecordID:       "invoice-1",
+		IdempotencyKey: "mismatch-1",
+		Principal:      principal,
 	}); apperror.CodeOf(err) != "backend.action.object_mismatch" {
 		t.Fatalf("object mismatch error = %v", err)
 	}
 }
 
-func TestActionApplicationPanicBeforeUnitOfWorkIsNormalized(t *testing.T) {
+func TestActionApplicationFailsClosedWithoutReceiptStore(t *testing.T) {
 	action := definitionmodel.ActionSchema{
-		Key: "order.update", ObjectKey: "order", Kind: definitionmodel.ActionKindRecordUpdate, RequiresPermission: "order.update",
+		Key: "order.update", ObjectKey: "order", Kind: definitionmodel.ActionKindRecordUpdate,
 	}
 	service := &ActionApplicationService{dependencies: ActionApplicationDependencies{
 		Catalog: &ActionCatalog{entries: map[string]ActionCatalogEntry{
@@ -133,19 +145,20 @@ func TestActionApplicationPanicBeforeUnitOfWorkIsNormalized(t *testing.T) {
 		}},
 	}}
 	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{
-		ActionKey: action.Key,
-		ObjectKey: action.ObjectKey,
-		RecordID:  "order-1",
-		Principal: actionTestPrincipal("order.update"),
+		ActionKey:      action.Key,
+		ObjectKey:      action.ObjectKey,
+		RecordID:       "order-1",
+		IdempotencyKey: "panic-1",
+		Principal:      actionTestPrincipal("order.update"),
 	})
-	if apperror.CodeOf(err) != "backend.action.handler_panicked" || result.Status != "failed" {
-		t.Fatalf("panic result = %+v, err = %v", result, err)
+	if apperror.CodeOf(err) != idempotency.ErrorCodeReceiptUnavailable || result.Status != "failed" {
+		t.Fatalf("missing receipt result = %+v, err = %v", result, err)
 	}
 }
 
 func TestActionApplicationRejectsEmptyOwnerResult(t *testing.T) {
 	action := definitionmodel.ActionSchema{
-		Key: "order.update", ObjectKey: "order", Kind: definitionmodel.ActionKindRecordUpdate, RequiresPermission: "order.update",
+		Key: "order.update", ObjectKey: "order", Kind: definitionmodel.ActionKindRecordUpdate,
 	}
 	system := NewSystemOperationCatalog(SystemOperationDescriptor{
 		Key: "record.update", Kind: definitionmodel.ActionKindRecordUpdate, WriteOperation: "update",
@@ -162,20 +175,21 @@ func TestActionApplicationRejectsEmptyOwnerResult(t *testing.T) {
 		UnitOfWork:       newActionTestUnitOfWork().manager,
 	})
 	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{
-		ActionKey: action.Key,
-		ObjectKey: action.ObjectKey,
-		RecordID:  "order-1",
-		Principal: actionTestPrincipal("order.update"),
+		ActionKey:      action.Key,
+		ObjectKey:      action.ObjectKey,
+		RecordID:       "order-1",
+		IdempotencyKey: "empty-result-1",
+		Principal:      actionTestPrincipal("order.update"),
 	})
 	if apperror.CodeOf(err) != "backend.action.result_invalid" || result.Status != "failed" {
 		t.Fatalf("empty owner result = %+v, err = %v", result, err)
 	}
 }
 
-func TestActionApplicationPayloadIdempotencyAndRecordVersion(t *testing.T) {
+func TestActionApplicationInvocationIdempotencyAndRecordVersion(t *testing.T) {
 	action := definitionmodel.ActionSchema{
 		Key: "order.update", ObjectKey: "order", Kind: definitionmodel.ActionKindRecordUpdate,
-		RequiresPermission: "order.update", AuditEvent: "order.updated",
+		AuditEvent: "order.updated",
 	}
 	system := NewSystemOperationCatalog(SystemOperationDescriptor{
 		Key: "record.update", Kind: definitionmodel.ActionKindRecordUpdate, WriteOperation: "update",
@@ -201,11 +215,11 @@ func TestActionApplicationPayloadIdempotencyAndRecordVersion(t *testing.T) {
 		UnitOfWork:       newActionTestUnitOfWork().manager,
 	})
 	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{
-		ActionKey: action.Key,
-		ObjectKey: action.ObjectKey,
-		RecordID:  "order-1",
-		Input:     map[string]any{"idempotency_key": " payload-request "},
-		Principal: actionTestPrincipal("order.update"),
+		ActionKey:      action.Key,
+		ObjectKey:      action.ObjectKey,
+		RecordID:       "order-1",
+		IdempotencyKey: "payload-request",
+		Principal:      actionTestPrincipal("order.update"),
 	})
 	if err != nil || result.RecordVersions["order-1"] != "version-2" || result.AuditEvent != "order.updated" {
 		t.Fatalf("versioned result = %+v, err = %v", result, err)
@@ -263,10 +277,6 @@ func TestActionExecutionUnknownOwnerAndResultProjection(t *testing.T) {
 		t.Fatalf("record projection = %+v", projected)
 	}
 
-	service.dependencies.NewInvocationID = func(context.Context) string { return "generated" }
-	if invocationID := service.invocationID(t.Context(), actionmodel.ActionInvocation{RequestID: "request-id"}); invocationID != "request-id" {
-		t.Fatalf("request invocation ID = %q", invocationID)
-	}
 }
 
 func TestActionApplicationBulkValidationUsesObjectAuthorization(t *testing.T) {
@@ -281,8 +291,9 @@ func TestActionApplicationBulkValidationUsesObjectAuthorization(t *testing.T) {
 		t.Fatalf("bulk object authorization called=%v err=%v", called, err)
 	}
 	if _, err := service.bulk.dependencies.Invoke(t.Context(), actionmodel.ActionInvocation{
-		ActionKey: "missing",
-		Principal: actionTestPrincipal(),
+		ActionKey:      "missing",
+		IdempotencyKey: "bulk-missing-1",
+		Principal:      actionTestPrincipal(),
 	}); apperror.CodeOf(err) != "backend.action.not_found" {
 		t.Fatalf("bulk invoke closure error = %v", err)
 	}
@@ -316,7 +327,7 @@ func TestActionCatalogValidationIncludesBusinessExecutorForBusinessOwners(t *tes
 
 func TestActionAuthorizationDeniesMissingPermission(t *testing.T) {
 	err := (ActionAuthorization{}).Validate(actionTestPrincipal(), definitionmodel.ActionSchema{
-		Key: "order.update", RequiresPermission: "order.update",
+		Key: "order.update",
 	})
 	if apperror.CodeOf(err) != "backend.action.permission_denied" {
 		t.Fatalf("authorization error = %v", err)
@@ -325,7 +336,7 @@ func TestActionAuthorizationDeniesMissingPermission(t *testing.T) {
 
 func TestActionApplicationExecuteBulkDelegates(t *testing.T) {
 	action := definitionmodel.ActionSchema{
-		Key: "order.update", ObjectKey: "order", Kind: definitionmodel.ActionKindRecordUpdate, RequiresPermission: "order.update",
+		Key: "order.update", ObjectKey: "order", Kind: definitionmodel.ActionKindRecordUpdate,
 	}
 	system := NewRuntimeSystemOperationCatalog()
 	service := NewActionApplication(ActionApplicationDependencies{

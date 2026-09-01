@@ -314,17 +314,19 @@ func operationsAuthorize(principal principalmodel.Principal, permission string) 
 	if principal.HasExactPermission(strings.TrimSpace(permission)) {
 		return nil
 	}
-	if principal.HasExactPermission("workspace.admin") {
-		return nil
-	}
 	return apperror.New(apperror.KindForbidden, "auth.permission_denied", nil, nil)
+}
+
+func operationsDefinitionPermission(kind string) string {
+	definition, found := operationsprojection.OperationsDefinition(strings.TrimSpace(kind))
+	if !found || len(definition.Permissions) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(definition.Permissions[0])
 }
 
 func operationsPermissionDeclared(permissions []string, permission string) bool {
 	permission = strings.TrimSpace(permission)
-	if permission == "workspace.admin" {
-		return true
-	}
 	for _, candidate := range permissions {
 		if strings.TrimSpace(candidate) == permission {
 			return true

@@ -144,7 +144,7 @@ func (s *WorkflowApplicationService) Workflows(ctx context.Context, principal pr
 	if err := workflowAuthorizeQuery(principal); err != nil {
 		return nil, err
 	}
-	if !principal.HasPermission("workspace.admin") {
+	if !principal.HasExactPermission("workflow.definition.read") {
 		return nil, forbidden("backend.workflow.read_permission_required")
 	}
 	workflows := s.registry.List()

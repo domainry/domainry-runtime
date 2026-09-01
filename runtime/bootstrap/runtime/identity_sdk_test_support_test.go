@@ -28,8 +28,11 @@ func (runtimeIdentityBindingStub) Principals() identitysdk.PrincipalResolver {
 func (runtimeIdentityBindingStub) Directory() identitysdk.Directory {
 	return runtimeIdentityDirectoryStub{}
 }
-func (runtimeIdentityBindingStub) Catalog() identitysdk.CatalogClient {
-	return runtimeIdentityCatalogStub{}
+func (runtimeIdentityBindingStub) Applications() identitysdk.ApplicationRegistry {
+	return runtimeIdentityApplicationRegistryStub{}
+}
+func (runtimeIdentityBindingStub) Permissions() identitysdk.PermissionRegistry {
+	return runtimeIdentityPermissionRegistryStub{}
 }
 func (runtimeIdentityBindingStub) Credentials() identitysdk.CredentialManager {
 	return runtimeIdentityCredentialsStub{}
@@ -93,7 +96,7 @@ func (runtimeIdentityPrincipalResolverStub) Resolve(_ context.Context, request i
 		Permissions: []string{"workspace.admin"}, AuthorizationRevision: "test-authorization",
 	}
 	bundle := identitysdk.AccessBundle{
-		ContractVersion: identitysdk.CurrentPolicyBundleVersion, CatalogRevision: "runtime-test-catalog", AuthorizationRevision: "test-authorization", ExpiresAt: time.Now().Add(time.Hour),
+		ContractVersion: identitysdk.CurrentPolicyBundleVersion, AuthorizationRevision: "test-authorization", ExpiresAt: time.Now().Add(time.Hour),
 		Subject:        identitysdk.Subject{WorkspaceID: request.Application.WorkspaceID, SubjectID: request.SubjectID},
 		FunctionGrants: []identitysdk.FunctionGrant{{Resource: "workspace", Action: "admin", Effect: identitysdk.EffectAllow}},
 	}
@@ -122,16 +125,20 @@ func (runtimeIdentityDirectoryStub) ListWorkforce(context.Context, identitysdk.D
 	return nil, nil
 }
 
-type runtimeIdentityCatalogStub struct{}
+type runtimeIdentityApplicationRegistryStub struct{}
 
-func (runtimeIdentityCatalogStub) Validate(context.Context, identitysdk.AuthorizationCatalog) error {
-	return nil
+func (runtimeIdentityApplicationRegistryStub) Register(_ context.Context, request identitysdk.ApplicationRegistration) (identitysdk.ApplicationRegistrationReceipt, error) {
+	return identitysdk.ApplicationRegistrationReceipt{Application: request.Application, RedirectURLs: request.RedirectURLs, Status: "active"}, nil
 }
-func (runtimeIdentityCatalogStub) Publish(context.Context, identitysdk.AuthorizationCatalog) (identitysdk.CatalogReceipt, error) {
-	return identitysdk.CatalogReceipt{}, nil
+
+type runtimeIdentityPermissionRegistryStub struct{}
+
+func (runtimeIdentityPermissionRegistryStub) CurrentSourceSnapshot(_ context.Context, request identitysdk.PermissionSourceSnapshotRequest) (identitysdk.PermissionSourceSnapshot, error) {
+	return identitysdk.PermissionSourceSnapshot{WorkspaceID: request.Application.WorkspaceID, SourceOwner: request.SourceOwner}, nil
 }
-func (runtimeIdentityCatalogStub) CurrentRevision(context.Context, identitysdk.ApplicationRef) (identitysdk.CatalogReceipt, error) {
-	return identitysdk.CatalogReceipt{}, nil
+
+func (runtimeIdentityPermissionRegistryStub) Reconcile(_ context.Context, request identitysdk.PermissionReconcileRequest) (identitysdk.PermissionReconcileReceipt, error) {
+	return identitysdk.PermissionReconcileReceipt{WorkspaceID: request.Application.WorkspaceID, SourceOwner: request.SourceOwner, PreviousSnapshotHash: request.PreviousSnapshotHash, SnapshotHash: request.SnapshotHash, DefinitionCount: len(request.Definitions), Inserted: len(request.Definitions)}, request.ValidateContract()
 }
 
 type runtimeIdentityCredentialsStub struct{}

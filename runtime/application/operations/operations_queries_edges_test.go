@@ -39,7 +39,7 @@ func (p *operationsLegacyProbe) ResetIdempotencyReceipt(_ context.Context, _ pri
 }
 
 func operationsTestAdmin() principalmodel.Principal {
-	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "operations.read"}})
+	return operationsAdminPrincipal()
 }
 
 func TestOperationsDefinitionsReceiptAndReceiptListEdges(t *testing.T) {
@@ -57,8 +57,8 @@ func TestOperationsDefinitionsReceiptAndReceiptListEdges(t *testing.T) {
 	}
 	workspaceAdminOnOps := operationsTestAdmin()
 	accessfixture.Set(&workspaceAdminOnOps, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
-	if _, err := service.Receipts(t.Context(), "", 10, workspaceAdminOnOps); err != nil {
-		t.Fatalf("workspace administrator authority must not depend on Surface: %v", err)
+	if _, err := service.Receipts(t.Context(), "", 10, workspaceAdminOnOps); apperror.KindOf(err) != apperror.KindForbidden {
+		t.Fatalf("workspace.admin expanded to operations.read: %v", err)
 	}
 	admin := operationsTestAdmin()
 	repositoryFailure := errors.New("operations repository failed")
@@ -121,7 +121,7 @@ func TestOperationsSubmitSystemValidationAndPersistenceFailures(t *testing.T) {
 	if _, _, err := service.SubmitSystem(t.Context(), OperationsSubmitRequest{Kind: "unknown"}, "key", "purpose", admin); apperror.CodeOf(err) != "backend.operations.kind_not_registered" {
 		t.Fatalf("unknown kind error = %v", err)
 	}
-	request := OperationsSubmitRequest{Kind: "runtime.maintenance.enable", Permission: "workspace.admin", ResourceType: "runtime", ResourceID: "runtime", Reason: "maintenance"}
+	request := OperationsSubmitRequest{Kind: "runtime.maintenance.enable", Permission: "runtime.maintenance.write", ResourceType: "runtime", ResourceID: "runtime", Reason: "maintenance"}
 	mismatch := request
 	mismatch.ResourceType = "wrong"
 	if _, _, err := service.SubmitSystem(t.Context(), mismatch, "key", "purpose", admin); apperror.CodeOf(err) != "backend.operations.definition_mismatch" {

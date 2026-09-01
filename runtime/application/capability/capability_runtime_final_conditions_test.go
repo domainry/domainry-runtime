@@ -17,7 +17,7 @@ func TestCapabilityAuthoringSourcesAndInstanceRemainingConditions(t *testing.T) 
 	var nilService *CapabilityAuthoringApplicationService
 	nilService.UseIdentityReferenceSource(t.Context(), nil)
 	service := NewCapabilityAuthoringApplicationService(func(context.Context, principalmodel.Principal) capabilitycontract.CapabilityInstanceSchema {
-		return capabilitycontract.CapabilityInstanceSchema{Actions: []definitionmodel.ActionSchema{{Key: "empty"}, {Key: "allowed", RequiresPermission: "booking.approve"}}}
+		return capabilitycontract.CapabilityInstanceSchema{Actions: []definitionmodel.ActionSchema{{Key: "empty"}, {Key: "allowed"}}}
 	})
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	service.UseIdentityReferenceSource(t.Context(), func(context.Context, principalmodel.Principal) (CapabilityIdentityReferences, error) {

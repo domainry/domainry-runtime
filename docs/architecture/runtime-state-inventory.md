@@ -1,6 +1,6 @@
 # Runtime Mutable State Inventory
 
-本清单是 Runtime 数据生命周期政策登记表。表名使用真实表或明确的表族；动态业务对象表由 `business-records` 行统一登记，但 owner 在执行清理时仍必须按具体 Object policy 裁决。Identity 账号、认证、角色与授权状态不属于 Runtime：module 模式借用 Runtime 拥有的项目数据库连接池，以 `domainry_identity_` 表前缀和独立迁移账本保持所有权边界；SaaS 模式由远程 Identity 服务持有。`Retention class` 只能是 `product_retention`、`legal_audit_retention`、`technical_ttl` 或 `user_requested_erase`。
+本清单是 Runtime 数据生命周期政策登记表。表名使用真实表或明确的表族；动态业务对象表由 `business-records` 行统一登记，但 owner 在执行清理时仍必须按具体 Object policy 裁决。Identity 账号、认证、角色与授权状态不属于 Runtime：module 模式借用 Runtime 拥有的项目数据库、事务、方言、迁移锁和宿主唯一 `_schema_migrations`，保留 Identity source-owned 的原始 `_identity_*` 关系名，不注入 relation prefix；SaaS 模式由远程 Identity 服务持有。`Retention class` 只能是 `product_retention`、`legal_audit_retention`、`technical_ttl` 或 `user_requested_erase`。
 
 | State / table family | Authoritative owner | Workspace scope | Sensitivity / region | Source of truth | Policy key | Retention class | Retention / minimum | Archive + purge / legal hold | Backup behavior | Export / erase | Loss allowed | Consistency | Capacity policy | Multi-instance target |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|

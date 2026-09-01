@@ -4,13 +4,7 @@ import (
 	"errors"
 	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
-	identitysdk "github.com/domainry/domainry-identity-sdk"
-
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
-
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
-
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
@@ -48,18 +42,6 @@ func TestValidateActiveInstructionIssuesLocatesInstructionType(t *testing.T) {
 	}
 	if issue.ContractVersion != AutomationRuntimeAuthoringContractVersion {
 		t.Fatalf("unexpected contract version: %q", issue.ContractVersion)
-	}
-}
-
-func TestHasPermissionSupportsDedicatedAndLegacyPermissions(t *testing.T) {
-	for _, permission := range []string{"automation.rule.write", "automation.*", "automation.manage"} {
-		principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{permission}})
-		if !AutomationHasPermission(principal, "manage") {
-			t.Fatalf("expected %q to grant manage", permission)
-		}
-	}
-	if AutomationHasPermission(accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: false}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}}), "manage") {
-		t.Fatal("unknown principal must not receive automation permission")
 	}
 }
 

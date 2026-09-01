@@ -32,7 +32,7 @@ func TestWorkflowApplicationListDefinitionsAuthorizationSortingAndProjection(t *
 	service := &WorkflowApplicationService{registry: registry}
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"workflow.definition.read"}})
 	if _, err := service.Workflows(cancelled, admin); err != context.Canceled {
 		t.Fatalf("cancel error=%v", err)
 	}

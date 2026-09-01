@@ -28,11 +28,6 @@ func SnapshotForPrincipal(snapshot appschemamodel.ApplicationSchemaSnapshot, pri
 		snapshot.SnapshotVersion = snapshot.SchemaHash
 		return snapshot
 	}
-	if principal.Allows("workspace", "admin") {
-		snapshot.SchemaHash = SchemaSnapshotHash(snapshot)
-		snapshot.SnapshotVersion = snapshot.SchemaHash
-		return snapshot
-	}
 	visibleObjects := make([]definitionmodel.ObjectSchema, 0, len(snapshot.Objects))
 	visibleObjectKeys := map[string]bool{}
 	for _, object := range snapshot.Objects {
@@ -199,15 +194,7 @@ func actionAllowed(principal principalmodel.Principal, action definitionmodel.Ac
 	if !principal.Known {
 		return false
 	}
-	permission := strings.TrimSpace(action.RequiresPermission)
-	if permission == "" {
-		permission = strings.TrimSpace(action.Key)
-	}
-	objectKey, actionName := splitPermission(permission)
-	if objectKey == "" {
-		objectKey = action.ObjectKey
-	}
-	return principal.Allows(objectKey, actionName)
+	return principal.HasExactPermission(strings.TrimSpace(action.Key))
 }
 
 func visibleAgentRegistryForPrincipal(skills []agentsdk.SkillSchema, agents []agentsdk.AgentSchema, principal principalmodel.Principal, visibleObjects map[string]bool) ([]agentsdk.SkillSchema, []agentsdk.AgentSchema) {
@@ -266,7 +253,7 @@ func agentToolAllowedForPrincipal(tool string, principal principalmodel.Principa
 	case "updateRecord", "update_record":
 		return principalCanUseAnyObjectAction(principal, visibleObjects, "update")
 	default:
-		return principal.HasPermission("integration.tool."+strings.TrimSpace(tool)) || principal.HasPermission("integration.tool.*")
+		return principal.HasExactPermission("integration.tool." + strings.TrimSpace(tool))
 	}
 }
 
@@ -293,9 +280,19 @@ func metadataSDKAllowsObjectAction(principal principalmodel.Principal, objectKey
 		*principal.AccessBundle,
 		identitysdk.ResourceType(strings.TrimSpace(objectKey)),
 		identitysdk.Action(strings.TrimSpace(action)),
+		metadataDataAction(action),
 		time.Now().UTC(),
 	)
 	return err == nil && len(filter.Allow) > 0, true
+}
+
+func metadataDataAction(action string) identitysdk.DataAction {
+	switch strings.ToLower(strings.TrimSpace(action)) {
+	case "read", "view", "list", "search", "export":
+		return identitysdk.DataActionRead
+	default:
+		return identitysdk.DataActionWrite
+	}
 }
 
 func metadataSDKFieldAllowed(principal principalmodel.Principal, objectKey, fieldKey, action string) (allowed, handled bool) {
@@ -316,7 +313,7 @@ func metadataSDKFieldAllowed(principal principalmodel.Principal, objectKey, fiel
 func reportVisibleForPrincipal(report reportmodel.ReportSchema, principal principalmodel.Principal, visibleObjects map[string]bool) bool {
 	if len(report.RequiredPermissions) > 0 {
 		for _, permission := range report.RequiredPermissions {
-			if !principal.HasPermission(permission) {
+			if !principal.HasExactPermission(permission) {
 				return false
 			}
 		}

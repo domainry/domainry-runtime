@@ -315,7 +315,7 @@ func (s *RecordExportApplicationService) relationLabels(ctx context.Context, sou
 }
 
 func (s *RecordExportApplicationService) identityLabels(ctx context.Context, ids map[string]bool, principal principalmodel.Principal, labels map[string]string) {
-	canRead := principal.HasPermission("workspace.admin") || principal.HasPermission("identity.users.read")
+	canRead := principal.HasPermission("identity.users.read")
 	if s.dependencies.ListDirectoryUsers == nil || (!canRead && !ids[principal.UserID]) {
 		return
 	}

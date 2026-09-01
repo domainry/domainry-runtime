@@ -2,8 +2,10 @@ package openapi
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
+	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )
@@ -27,14 +29,8 @@ func (s openAPIModuleSurface) OpenAPIOperations() map[string]map[string]any {
 
 func TestOpenAPIModuleOwnershipComesFromSurfaceRoutes(t *testing.T) {
 	surface := openAPIModuleSurface{owner: "example-module", routes: []modulehttp.Route{
-		{
-			Pattern: "GET /operations/monitoring/metrics", Exposures: []modulehttp.Exposure{modulehttp.ExposureOps},
-			Authentication: modulehttp.AuthenticationAuthenticated, PrincipalOnly: true,
-		},
-		{
-			Pattern: "GET /data-exchange/jobs/{jobID}", Exposures: []modulehttp.Exposure{modulehttp.ExposurePublic},
-			Authentication: modulehttp.AuthenticationAuthenticated, PrincipalOnly: true,
-		},
+		{Action: openAPITestAction("example.metrics.read", "GET /operations/monitoring/metrics", []actioncontract.Exposure{actioncontract.ExposureOps}, actioncontract.AuthorizationAuthenticatedPrincipal, actioncontract.EffectRead, "not_applicable", nil)},
+		{Action: openAPITestAction("example.jobs.get", "GET /data-exchange/jobs/{jobID}", []actioncontract.Exposure{actioncontract.ExposurePublic}, actioncontract.AuthorizationAuthenticatedPrincipal, actioncontract.EffectRead, "not_applicable", nil)},
 	}}
 	spec := BuildWithModuleHTTPSurfaces(appschemamodel.ApplicationSchemaSnapshot{}, "Domainry", []modulehttp.Surface{surface})
 	paths := spec["paths"].(map[string]any)
@@ -46,7 +42,7 @@ func TestOpenAPIModuleOwnershipComesFromSurfaceRoutes(t *testing.T) {
 		t.Fatalf("module operation id=%v", operation["operationId"])
 	}
 	route := operation["x-domainry-module-route"].(map[string]any)
-	if route["contract_version"] != modulehttp.ContractVersion || route["authentication"] != string(modulehttp.AuthenticationAuthenticated) {
+	if route["contract_version"] != modulehttp.ContractVersion || route["authorization"] != string(actioncontract.AuthorizationAuthenticatedPrincipal) {
 		t.Fatalf("module route=%#v", route)
 	}
 	jobOperation := paths["/data-exchange/jobs/{jobID}"].(map[string]any)["get"].(map[string]any)
@@ -64,12 +60,8 @@ func TestOpenAPIModuleOwnershipComesFromSurfaceRoutes(t *testing.T) {
 func TestOpenAPIModuleUsesOwnerOperationAndGovernanceContract(t *testing.T) {
 	pattern := "POST /example/{exampleID}"
 	surface := openAPIModuleSurface{
-		owner: "example-module",
-		routes: []modulehttp.Route{{
-			Pattern: pattern, Exposures: []modulehttp.Exposure{modulehttp.ExposureOps},
-			Authentication: modulehttp.AuthenticationAuthenticated, Permission: "example.write",
-			Governance: &modulehttp.Governance{EffectClass: modulehttp.EffectWrite, HighRiskPolicy: modulehttp.HighRiskConfirmationRequired, IdempotencyDecision: "caller_key_required", AuditClass: "mutation_audit_required"},
-		}},
+		owner:  "example-module",
+		routes: []modulehttp.Route{{Action: openAPITestAction("example.write", pattern, []actioncontract.Exposure{actioncontract.ExposureOps}, actioncontract.AuthorizationExactRolePermission, actioncontract.EffectWrite, "caller_key_required", []actioncontract.ApprovalPolicy{actioncontract.ApprovalConfirmation})}},
 		operations: map[string]map[string]any{pattern: {
 			"operationId": "applyExample", "summary": "Owner summary",
 			"parameters": []any{map[string]any{"in": "query", "name": "dry_run", "required": false, "schema": map[string]any{"type": "boolean"}}},
@@ -100,6 +92,23 @@ func TestOpenAPIModuleUsesOwnerOperationAndGovernanceContract(t *testing.T) {
 	if governance["effect_class"] != "write" || governance["audit_class"] != "mutation_audit_required" {
 		t.Fatalf("governance=%#v", governance)
 	}
+}
+
+func openAPITestAction(key, pattern string, exposures []actioncontract.Exposure, strategy actioncontract.AuthorizationStrategy, effect actioncontract.EffectClass, idempotency string, approvals []actioncontract.ApprovalPolicy) actioncontract.ActionDefinition {
+	method, path, _ := strings.Cut(pattern, " ")
+	separator := strings.LastIndex(key, ".")
+	action := actioncontract.ActionDefinition{
+		Key: key, Owner: "module:example", SourceKind: "module_surface", CapabilityKey: "example.product", CapabilityLabel: "Example",
+		OperationKey: key[separator+1:], OperationLabel: key, Label: key, Exposures: exposures, Authorization: actioncontract.Authorization{Strategy: strategy},
+		HTTP: &actioncontract.HTTPBinding{Method: method, RouteTemplate: path}, EffectClass: effect, RiskLevel: actioncontract.RiskLow,
+		ApprovalPolicies: approvals, IdempotencyDecision: idempotency, AuditClass: "mutation_audit_required", LifecycleStatus: actioncontract.LifecycleActive,
+	}
+	if strategy == actioncontract.AuthorizationExactRolePermission {
+		action.Permission = &actioncontract.PermissionDefinition{Key: key, Owner: action.Owner, ResourceKey: key[:separator], ActionKey: key[separator+1:], Label: key, Category: "Example", LifecycleStatus: actioncontract.LifecycleActive}
+	} else if strategy != actioncontract.AuthorizationAuthenticatedPrincipal {
+		action.Authorization.PolicyKey = "example.policy"
+	}
+	return action
 }
 
 var _ modulehttp.Surface = openAPIModuleSurface{}

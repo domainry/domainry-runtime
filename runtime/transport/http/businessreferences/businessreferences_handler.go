@@ -51,7 +51,7 @@ func (h *BusinessReferencesHandler) businessReferenceGraph(w http.ResponseWriter
 }
 
 func (h *BusinessReferencesHandler) businessReferenceImpact(w http.ResponseWriter, r *http.Request) {
-	graph, err := h.Graph(r)
+	graph, err := h.service.ImpactGraph(r.Context(), h.principal(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return

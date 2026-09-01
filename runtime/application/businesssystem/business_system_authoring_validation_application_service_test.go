@@ -175,7 +175,7 @@ func TestRuntimeAuthoringValidationRequiresWorkspaceAdmin(t *testing.T) {
 }
 
 func runtimeAuthoringValidationAdmin() principalmodel.Principal {
-	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "builder", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "builder", Permissions: []string{"workspace.admin"}})
+	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "builder", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "builder", Permissions: []string{ActionBusinessSystemSnapshot}})
 }
 
 func runtimeAuthoringCompleteConfigurationSnapshot(connectors []connectormodel.ConnectorSchema) changeplanprojection.BusinessSystemSnapshot {

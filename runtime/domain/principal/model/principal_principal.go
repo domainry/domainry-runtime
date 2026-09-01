@@ -70,11 +70,19 @@ func (principal Principal) HasPermission(permission string) bool {
 	return systemCapabilityAllows(principal.SystemCapabilities, permission)
 }
 
-// HasExactPermission is identical to HasPermission because neither Identity
-// bundles nor explicit system capabilities have implicit workspace-admin
-// escalation.
+// HasExactPermission compares the canonical granted key literally. It does not
+// interpret "*" or an object wildcard as an alias for another Action.
 func (principal Principal) HasExactPermission(permission string) bool {
-	return principal.HasPermission(permission)
+	permission = strings.TrimSpace(permission)
+	if permission == "" {
+		return false
+	}
+	for _, granted := range principal.PermissionKeys() {
+		if strings.TrimSpace(granted) == permission {
+			return true
+		}
+	}
+	return false
 }
 
 // HasAllPermissions requires every declared SDK function grant. An empty
@@ -95,14 +103,33 @@ func (principal Principal) HasAllPermissions(permissions []string) bool {
 	return true
 }
 
+// WithExactSystemCapabilities narrows a trusted Runtime system execution to
+// concrete capabilities derived from the work item it is about to execute.
+// Externally authenticated principals are immutable at this boundary, and
+// wildcard-shaped capabilities are rejected rather than interpreted.
+func (principal Principal) WithExactSystemCapabilities(capabilities ...string) Principal {
+	if !principal.Known || !principal.SystemScope.Valid() || principal.AccessBundle != nil {
+		return principal
+	}
+	exact := append([]string(nil), principal.SystemCapabilities...)
+	seen := make(map[string]bool, len(exact)+len(capabilities))
+	for _, capability := range exact {
+		seen[strings.TrimSpace(capability)] = true
+	}
+	for _, capability := range capabilities {
+		capability = strings.TrimSpace(capability)
+		if capability == "" || strings.Contains(capability, "*") || seen[capability] {
+			continue
+		}
+		seen[capability] = true
+		exact = append(exact, capability)
+	}
+	principal.SystemCapabilities = exact
+	return principal
+}
+
 func (principal Principal) Allows(objectKey, action string) bool {
 	action = strings.TrimSpace(action)
-	switch action {
-	case "view":
-		action = "read"
-	case "edit":
-		action = "update"
-	}
 	objectKey = strings.TrimSpace(objectKey)
 	return objectKey != "" && action != "" && principal.HasPermission(objectKey+"."+action)
 }
@@ -110,10 +137,7 @@ func (principal Principal) Allows(objectKey, action string) bool {
 func systemCapabilityAllows(capabilities []string, permission string) bool {
 	for _, granted := range capabilities {
 		granted = strings.TrimSpace(granted)
-		if granted == "*" || granted == permission {
-			return true
-		}
-		if strings.HasSuffix(granted, ".*") && strings.HasPrefix(permission, strings.TrimSuffix(granted, ".*")+".") {
+		if granted == permission {
 			return true
 		}
 	}

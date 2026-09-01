@@ -10,7 +10,6 @@ import (
 	recordruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
@@ -91,7 +90,7 @@ func TestImportIdempotentReplayStoreFailure(t *testing.T) {
 			return recordmodel.Record{}, false, nil
 		},
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}})
 	if _, _, err := service.ApplyIdempotent(t.Context(), object.Key, []byte("name\nAcme\n"), "key", principal); !errors.Is(err, failure) {
 		t.Fatalf("err=%v", err)
 	}
@@ -114,7 +113,7 @@ func TestImportIdempotentClaimStageReplayAndConflictEvidence(t *testing.T) {
 			return recordmodel.Record{ID: key, Data: data}, replayed, nil
 		},
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}, RequestID: "request"}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}, RequestID: "request"})
 	raw := []byte("name\nAcme\n")
 	if _, replayed, err := service.ApplyIdempotent(t.Context(), object.Key, raw, "key", principal); err != nil || replayed {
 		t.Fatalf("first replayed=%v err=%v", replayed, err)
@@ -167,7 +166,7 @@ func TestImportServiceBuildsRowLevelDuplicatePreview(t *testing.T) {
 			return nil
 		},
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
 
 	preview, err := service.Preview(t.Context(), "customer", []byte("Name,Status\nAcme,active\nAcme,prospect\n"), principal)
 	if err != nil {
@@ -194,7 +193,7 @@ func TestImportServiceConsumesStructuredDataExchangeRowsWithoutCSVRoundTrip(t *t
 		},
 		CanWrite: func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
 	preview, err := service.PreviewRows(t.Context(), object.Key, []string{"Name", "Status"}, []dataexchange.ImportRow{
 		{Number: 2, Values: []string{"Acme", "active"}},
 		{Number: 3, Values: []string{"Acme", "prospect"}},
@@ -229,7 +228,7 @@ func TestImportServiceAppliesValidPreviewThroughCreatePort(t *testing.T) {
 			events = append(events, event)
 		},
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
 
 	result, err := service.Apply(t.Context(), "customer", []byte("name\nAcme\nBeta\n"), principal)
 	if err != nil {
@@ -269,7 +268,7 @@ func TestImportServiceUsesOperationAndRowKeysForResumeReplayAndConflict(t *testi
 			return recordmodel.Record{ID: key, Data: data}, false, nil
 		},
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}, RequestID: "request-a"}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}, RequestID: "request-a"})
 	rawCSV := []byte("name\nAcme\nBeta\n")
 	if _, _, err := service.ApplyIdempotent(t.Context(), "customer", rawCSV, "import-1", principal); err == nil {
 		t.Fatal("expected injected row failure")
@@ -313,7 +312,7 @@ func TestImportServicePreservesPermissionAndRepositoryErrors(t *testing.T) {
 		},
 		CanWrite: func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
 	})
-	_, err = service.Preview(t.Context(), "customer", []byte("name\nAcme\n"), accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}}))
+	_, err = service.Preview(t.Context(), "customer", []byte("name\nAcme\n"), recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}))
 	assertRecordApplicationError(t, err, apperror.KindInternal, "backend.internal", map[string]string{"operation": "check duplicate field"})
 }
 
@@ -326,7 +325,7 @@ func TestImportServiceBoundsRowsColumnsBytesAndCancellation(t *testing.T) {
 		},
 		CanWrite: func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
 	var rows strings.Builder
 	rows.WriteString("name\n")
 	for index := 0; index <= recordImportMaxRows; index++ {

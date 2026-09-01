@@ -120,7 +120,7 @@ func TestDeactivateBusinessProfileValidatesIdempotencyAfterDefinition(t *testing
 }
 
 func TestBusinessProfileLifecycleDefinitionErrorsSkipsAndExpectedRevision(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "identity.profile_binding.manage", "*"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "admin"}}, recordFullAccessBundle("identity.profile_binding.manage"))
 	if _, err := (&RecordApplicationService{}).DeactivateBusinessProfile(t.Context(), "profile", "id", "inactive", "", "key", principal); apperror.CodeOf(err) != "backend.identity.profile_binding_unavailable" {
 		t.Fatalf("definition err=%v", err)
 	}

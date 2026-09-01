@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -180,7 +179,7 @@ func TestRecordCanonicalPredicatesCoversUpdatedAtNormalizationAndFailures(t *tes
 func TestPlanConditionalUpdateMutationCoversAuthorizationLookupScopeAndPlanning(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "counter", Fields: []definitionmodel.FieldSchema{{Key: "count", Type: "number"}, {Key: "rate", Type: "percent"}, {Key: "visits", Type: "integer"}}}
 	record := recordmodel.Record{ID: "counter-1", UpdatedAt: "revision-1", Data: map[string]any{"count": float64(3), "rate": float64(1), "visits": int64(5)}}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
 	newService := func(repository *updateRepositoryProbe, objectForAction func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error), canAccess func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool) *RecordUpdateApplicationService {
 		return NewRecordUpdateApplicationService(RecordUpdateDependencies{Repository: repository, ObjectForAction: objectForAction, CanAccess: canAccess, CanWrite: func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true }})
 	}
@@ -281,7 +280,7 @@ func TestPlanConditionalUpdateMutationCoversAuthorizationLookupScopeAndPlanning(
 func TestConditionalUpdateCoversLifecycleErrorsAndWorkflow(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "counter", Fields: []definitionmodel.FieldSchema{{Key: "count", Type: "number"}}}
 	record := recordmodel.Record{ID: "counter-1", UpdatedAt: "revision-1", Data: map[string]any{"count": float64(3)}}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
 	input := transactionmodel.ConditionalUpdateInput{Patch: map[string]any{"count": 4}}
 	newService := func(repository *updateRepositoryProbe, executeWorkflow func(context.Context, []workflowmodel.WorkflowExecution, principalmodel.Principal)) *RecordUpdateApplicationService {
 		return NewRecordUpdateApplicationService(RecordUpdateDependencies{

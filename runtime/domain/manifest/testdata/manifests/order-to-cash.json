@@ -111,7 +111,6 @@
       "object_key": "sales_order",
       "label": "Initialize Order Risk",
       "kind": "record_operation",
-      "requires_permission": "sales_order.update",
       "audit_event": "sales_order_risk_initialized"
     },
     {
@@ -119,7 +118,6 @@
       "object_key": "sales_order",
       "label": "Submit Order",
       "kind": "record_operation",
-      "requires_permission": "sales_order.update",
       "audit_event": "sales_order_submitted",
       "ui_placement": "record_header",
       "idempotency_keys": ["request_id"]
@@ -129,7 +127,6 @@
       "object_key": "sales_order",
       "label": "Approve and Reserve",
       "kind": "record_operation",
-      "requires_permission": "sales_order.update",
       "audit_event": "sales_order_approved_and_reserved",
       "ui_placement": "workflow_only"
     },
@@ -138,7 +135,6 @@
       "object_key": "sales_order",
       "label": "Reject Order",
       "kind": "record_operation",
-      "requires_permission": "sales_order.update",
       "audit_event": "sales_order_rejected"
     },
     {
@@ -146,7 +142,6 @@
       "object_key": "sales_order",
       "label": "Ship Partial Quantity",
       "kind": "record_operation",
-      "requires_permission": "sales_order.update",
       "audit_event": "sales_order_partially_shipped",
       "ui_placement": "record_header",
       "idempotency_keys": ["shipment_number"]
@@ -156,7 +151,6 @@
       "object_key": "sales_order",
       "label": "Cancel Remaining Quantity",
       "kind": "record_operation",
-      "requires_permission": "sales_order.update",
       "audit_event": "sales_order_remaining_cancelled",
       "ui_placement": "record_header",
       "idempotency_keys": ["request_id"]
@@ -166,7 +160,6 @@
       "object_key": "payment",
       "label": "Reconcile Timeout",
       "kind": "record_operation",
-      "requires_permission": "payment.update",
       "audit_event": "payment_timeout_reconciled",
       "ui_placement": "record_header",
       "idempotency_keys": ["provider_reference"]
@@ -176,7 +169,6 @@
       "object_key": "return_request",
       "label": "Approve Return",
       "kind": "record_operation",
-      "requires_permission": "return_request.update",
       "audit_event": "return_approved_inventory_restored",
       "ui_placement": "record_header",
       "idempotency_keys": ["request_id"]
@@ -186,7 +178,6 @@
       "object_key": "return_request",
       "label": "Retry Refund",
       "kind": "record_operation",
-      "requires_permission": "return_request.update",
       "audit_event": "return_refund_compensated",
       "ui_placement": "record_header",
       "idempotency_keys": ["provider_reference"]

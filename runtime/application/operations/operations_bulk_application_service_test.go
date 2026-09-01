@@ -54,7 +54,7 @@ func TestOperationsBulkRequiresMatchingDryRunAndReplaysPerItemResults(t *testing
 	if err := service.RegisterDeadLetterOwner("probe", owner); err != nil {
 		t.Fatal(err)
 	}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"runtime.bulk.execute"}})
 	plan, err := service.DryRunBulkDeadLetters(t.Context(), OperationsBulkDryRunRequest{Owner: "probe", Action: "retry", Filter: OperationsBulkFilter{IDs: []string{"b", "a", "a"}, Status: "dead_letter"}, Limit: 2, Reason: "incident recovery"}, "dry-key", principal)
 	if err != nil {
 		t.Fatal(err)
@@ -79,7 +79,7 @@ func TestOperationsBulkRequiresMatchingDryRunAndReplaysPerItemResults(t *testing
 func TestOperationsBulkEnforcesExplicitBoundedFilter(t *testing.T) {
 	service := NewOperationsApplicationService(&operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}, nil, nil, nil)
 	_ = service.RegisterDeadLetterOwner("probe", &bulkDeadLetterOwnerProbe{items: map[string]OperationsDeadLetterItem{}})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"runtime.bulk.execute"}})
 	for _, request := range []OperationsBulkDryRunRequest{
 		{Owner: "probe", Action: "retry", Limit: 1, Reason: "test"},
 		{Owner: "probe", Action: "retry", Filter: OperationsBulkFilter{IDs: []string{"a", "b"}}, Limit: 1, Reason: "test"},
@@ -98,7 +98,7 @@ func TestOperationsDeadLetterActionReplaysReceiptWithoutDuplicateOwnerMutation(t
 	if err := service.RegisterDeadLetterOwner("probe", owner); err != nil {
 		t.Fatal(err)
 	}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"runtime.dead_letter.write"}})
 	request := OperationsDeadLetterActionRequest{Reason: "verified and resolved", Reference: "INC-42"}
 	first, err := service.ActOnDeadLetter(t.Context(), "probe", "item-1", "resolve", request, "resolve-key", principal)
 	if err != nil || owner.acts != 1 || first.Item.CorrelationID != "correlation-1" || first.Item.BusinessKey != "order-42" || first.Item.EvidenceRef != "evidence-7" {

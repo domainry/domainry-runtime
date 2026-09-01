@@ -26,7 +26,7 @@ func recordImportEdgeObject() definitionmodel.ObjectSchema {
 }
 
 func recordImportEdgePrincipal() principalmodel.Principal {
-	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	return recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
 }
 
 func recordImportEdgeService(repository *importRepositoryProbe) *RecordImportApplicationService {

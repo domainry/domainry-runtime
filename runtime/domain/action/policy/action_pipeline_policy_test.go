@@ -13,8 +13,8 @@ func TestActionPipelineNamesAndLookup(t *testing.T) {
 	if got := ActionName(definitionmodel.ActionSchema{Key: "order.submit"}); got != "submit" {
 		t.Fatalf("name from key = %q", got)
 	}
-	if got := ActionName(definitionmodel.ActionSchema{Key: "ignored", RequiresPermission: "sales.order.approve"}); got != "approve" {
-		t.Fatalf("name from permission = %q", got)
+	if got := ActionName(definitionmodel.ActionSchema{Key: "sales.order.approve"}); got != "approve" {
+		t.Fatalf("name from multi-segment action key = %q", got)
 	}
 	for _, test := range []struct {
 		input      string

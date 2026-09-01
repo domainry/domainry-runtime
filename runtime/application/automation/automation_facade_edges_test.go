@@ -72,8 +72,19 @@ func (p automationFacadeWorkflowProbe) RunAutomationWorkflow(context.Context, st
 	return p.run, p.err
 }
 
+var automationFacadePermissions = []string{
+	"runtime.automation.automation_capabilities",
+	"runtime.automation.list_automation_rules",
+	"runtime.automation.get_automation_rule",
+	"runtime.automation.list_automation_executions",
+	"runtime.automation.validate_automation_rule",
+	"runtime.automation.validate_automation_authoring_fragment",
+	"runtime.automation.simulate_rule_candidate",
+	"runtime.automation.simulate_rule",
+}
+
 func automationFacadePrincipal() principalmodel.Principal {
-	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1", UserID: "operator"}}, accessfixture.Bundle{Key: "admin", Permissions: []string{"workspace.admin"}})
+	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1", UserID: "operator"}}, accessfixture.Bundle{Key: "automation-manager", Permissions: append([]string(nil), automationFacadePermissions...)})
 }
 
 func newAutomationFacade(registry *automationFacadeRegistry, metadata *automationFacadeMetadataProbe) *AutomationApplicationService {
@@ -84,7 +95,7 @@ func newAutomationFacade(registry *automationFacadeRegistry, metadata *automatio
 			return appschemamodel.ApplicationSchemaSnapshot{Integrations: connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{{Key: "erp"}}}}
 		},
 		Principal: func(_ context.Context, userID, roleKey, _ string) principalmodel.Principal {
-			return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: userID}}, accessfixture.Bundle{Key: roleKey, Permissions: []string{"workspace.admin"}})
+			return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: userID}}, accessfixture.Bundle{Key: roleKey, Permissions: append([]string(nil), automationFacadePermissions...)})
 		},
 		ValidateRule: func(context.Context, automationmodel.AutomationRuleSchema) error { return nil },
 	})

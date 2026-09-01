@@ -40,5 +40,11 @@ func (r *workflowRegistryStub) Delete(key string) {
 func (r *workflowRegistryStub) Count() int { return len(r.items) }
 
 func workflowAdminPrincipal() principalmodel.Principal {
-	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-1"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-1"}}, accessfixture.Bundle{Permissions: []string{
+		"runtime.workflows.approve_business_workflow_task",
+		"runtime.workflows.reject_business_workflow_task",
+		"runtime.workflows.return_business_workflow_task",
+		"workflow.process.read",
+		"workflow.process.operate",
+	}})
 }

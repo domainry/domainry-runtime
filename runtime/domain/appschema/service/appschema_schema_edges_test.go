@@ -134,21 +134,23 @@ func TestSnapshotVisibilityFiltersObjectsActionsReportsAndAgentRegistry(t *testi
 	if got := SnapshotForPrincipal(snapshot, principalmodel.Principal{}); len(got.Objects) != len(snapshot.Objects) || len(got.AgentServicePrincipals) != 0 {
 		t.Fatal("unknown principal snapshot should preserve public metadata without service principal bindings")
 	}
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
-	if got := SnapshotForPrincipal(snapshot, admin); len(got.Objects) != len(snapshot.Objects) || got.SchemaHash != SchemaSnapshotHash(got) {
-		t.Fatal("admin snapshot should remain unchanged")
+	workspaceGovernor := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	if got := SnapshotForPrincipal(snapshot, workspaceGovernor); len(got.Objects) != 0 || got.SchemaHash != SchemaSnapshotHash(got) {
+		t.Fatal("workspace governance permission must not bypass object visibility")
 	}
 }
 
 func TestVisibilityPermissionAndToolHelperEdges(t *testing.T) {
 	role := accessfixture.Bundle{
-		Key: "member", Permissions: []string{"customer.read", "customer.create", "integration.tool.*", "report.read"},
+		Key: "member", Permissions: []string{"customer.read", "customer.create", "integration.tool.external", "integration.tool.admin", "report.read"},
 		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true, Write: true}},
 	}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, role)
 	visible := map[string]bool{"customer": true}
-	if !principalCanUseObject(principal, "customer") || principalCanUseObject(principal, "invoice") {
-		t.Fatal("object visibility mismatch")
+	customerVisible := principalCanUseObject(principal, "customer")
+	invoiceVisible := principalCanUseObject(principal, "invoice")
+	if !customerVisible || invoiceVisible {
+		t.Fatalf("object visibility mismatch: customer=%t invoice=%t", customerVisible, invoiceVisible)
 	}
 	if !principalCanUseAnyObjectAction(principal, visible, "create") || principalCanUseAnyObjectAction(principal, visible, "delete") {
 		t.Fatal("object action visibility mismatch")

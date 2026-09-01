@@ -2,9 +2,11 @@ package appschema
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	workerplatform "github.com/domainry/domainry-foundation/worker"
+	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -30,12 +32,29 @@ func (s *ApplicationSchemaApplicationService) reloadMetadataFromSource(ctx conte
 	if err != nil {
 		return err
 	}
-	s.runtime.ApplyManifestMetadata(valueOrDefault(manifest.TemplateID, s.templateID), valueOrDefault(manifest.Version, s.version), valueOrDefault(manifest.Name, s.name), manifest.Objects, manifest.Actions, manifest.Workflows, manifest.AutomationRules, manifest.Dictionaries, manifest.Integrations, manifest.Reports, manifest.Skills, manifest.Agents, manifest.IdentityProfileExtensions)
-	applyManifestAgentMetadata(s.runtime, manifest)
-	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "refresh published workflow definitions from metadata snapshot")
-	if err := s.workflows.InitializePublishedWorkflowDefinitions(ctx, manifest.Workflows, scope); err != nil {
+	templateID, version, name := valueOrDefault(manifest.TemplateID, s.templateID), valueOrDefault(manifest.Version, s.version), valueOrDefault(manifest.Name, s.name)
+	candidate := appschemaservice.BuildSchemaSnapshot(appschemaservice.SchemaSnapshotState{
+		TemplateID: templateID, TemplateVersion: version, Name: name,
+		Objects: manifest.Objects, Actions: manifest.Actions, Workflows: manifest.Workflows,
+		AutomationRules: manifest.AutomationRules, Dictionaries: manifest.Dictionaries, Integrations: manifest.Integrations,
+		Reports: manifest.Reports, Skills: manifest.Skills, Agents: manifest.Agents,
+		AgentTasks: manifest.AgentTasks, AgentEntrypoints: manifest.AgentEntrypoints, AgentServicePrincipals: manifest.AgentServicePrincipals,
+		IdentityProfileExtensions: manifest.IdentityProfileExtensions,
+	})
+	preparations, err := s.prepareReloadObservers(ctx, candidate)
+	if err != nil {
 		return err
 	}
-	s.notifyReloadObservers(s.runtime.Schema())
+	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "refresh published workflow definitions from metadata snapshot")
+	if err := s.workflows.InitializePublishedWorkflowDefinitions(ctx, manifest.Workflows, scope); err != nil {
+		return errors.Join(err, abortReloadObservers(context.WithoutCancel(ctx), preparations))
+	}
+	s.runtime.ApplyManifestMetadata(templateID, version, name, candidate.Objects, candidate.Actions, candidate.Workflows, candidate.AutomationRules, candidate.Dictionaries, candidate.Integrations, candidate.Reports, candidate.Skills, candidate.Agents, candidate.IdentityProfileExtensions)
+	applyManifestAgentMetadata(s.runtime, manifest)
+	for _, preparation := range preparations {
+		if preparation.Commit != nil {
+			preparation.Commit()
+		}
+	}
 	return nil
 }

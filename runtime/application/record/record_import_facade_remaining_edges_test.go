@@ -7,8 +7,6 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
-
 	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -92,7 +90,7 @@ func TestRecordMutationFacadeConditionalAuthorizationEdge(t *testing.T) {
 func TestPlanUpdateMutationCoversDependencyAndScopeEdges(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
 	record := recordmodel.Record{ID: "customer-1", UpdatedAt: "revision-1", Data: map[string]any{"name": "Before"}}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
 	newService := func(repository *updateRepositoryProbe, objectForAction func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error), canAccess func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool, canWrite bool) *RecordUpdateApplicationService {
 		return NewRecordUpdateApplicationService(RecordUpdateDependencies{
 			Repository: repository, ObjectForAction: objectForAction, CanAccess: canAccess,

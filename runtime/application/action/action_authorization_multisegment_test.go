@@ -14,23 +14,20 @@ import (
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 )
 
-// Regression for platform finding #11: an action declaring a multi-segment
-// requires_permission (e.g. "ticket.transition.start") passed the first
-// authorization layer (ActionAllowed, via the 3-segment compatibility branch)
-// but was re-derived by ActionAuthorization.Validate as the never-granted key
-// "ticket.start", so every legitimate caller received 403
-// backend.permission.denied. Both layers must interpret the declared
-// permission identically: a role granted the exact declared string passes both.
+// A multi-segment Action key is also its Permission key. Every authorization
+// layer must derive the same object-relative permission subject.
 func TestActionAuthorizationMultiSegmentPermissionKeyConsistent(t *testing.T) {
 	action := definitionmodel.ActionSchema{
-		Key:                "ticket.start_progress",
-		ObjectKey:          "ticket",
-		Kind:               "transition_state",
-		RequiresPermission: "ticket.transition.start",
+		Key:       "ticket.transition.start",
+		ObjectKey: "ticket",
+		Kind:      "transition_state",
 	}
 	granted := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{UserID: "agent_wang", WorkspaceID: "ws1", Known: true}}, accessfixture.Bundle{
 		Key:         "support_agent",
 		Permissions: []string{"ticket.read", "ticket.transition.start"},
+		FunctionGrants: []accessfixture.FunctionGrantFixture{{
+			PermissionKey: "ticket.transition.start", ResourceKey: "ticket", ActionKey: "transition.start",
+		}},
 		DataPolicies: []accessfixture.DataPolicyFixture{
 			{ObjectKey: "ticket", Scope: "all_records", Read: true, Write: true},
 		},
@@ -71,19 +68,19 @@ func TestActionAuthorizationMultiSegmentPermissionKeyConsistent(t *testing.T) {
 		t.Fatalf("denial must stay a forbidden error, got: %v", err)
 	}
 
-	// The object-level wildcard must keep passing both layers.
+	// An object-level wildcard is not an alias for the exact Action Permission.
 	wildcard := granted
 	wildcard = accessfixture.WithMutation(wildcard, func(role *accessfixture.Bundle) { role.Permissions = []string{"ticket.*"} })
-	if !ActionAllowed(wildcard, action) {
-		t.Fatal("layer 1 must accept the object wildcard grant")
+	if ActionAllowed(wildcard, action) {
+		t.Fatal("layer 1 accepted an object wildcard for an exact Action")
 	}
-	if err := authorization.Validate(wildcard, action); err != nil {
-		t.Fatalf("layer 2 must accept the object wildcard grant, got: %v", err)
+	if err := authorization.Validate(wildcard, action); err == nil {
+		t.Fatal("layer 2 accepted an object wildcard for an exact Action")
 	}
 
 	// Two-segment keys keep their existing behavior in both layers.
 	twoSegment := action
-	twoSegment.RequiresPermission = "ticket.transition_start"
+	twoSegment.Key = "ticket.transition_start"
 	granted2 := granted
 	granted2 = accessfixture.WithMutation(granted2, func(role *accessfixture.Bundle) { role.Permissions = []string{"ticket.transition_start"} })
 	if !ActionAllowed(granted2, twoSegment) {

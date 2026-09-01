@@ -31,7 +31,7 @@ func TestActionPayloadObjectAndFieldShapeMatrix(t *testing.T) {
 
 func TestActionDefinitionValidationIdentityKindAndIssueEdges(t *testing.T) {
 	issues := ActionValidateDefinitionIssues(definitionmodel.ActionSchema{})
-	if len(issues) != 5 {
+	if len(issues) != 4 {
 		t.Fatalf("empty action issues = %#v", issues)
 	}
 	for _, kind := range definitionmodel.ActionKindValues() {

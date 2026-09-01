@@ -41,7 +41,7 @@ func TestReferenceServiceAllowsSchemaOnlyGraphWithoutOptionalRuntime(t *testing.
 	service := NewChangePlanReferenceApplicationService(func(context.Context, principalmodel.Principal) ReferenceSchema {
 		return ReferenceSchema{Objects: []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}}}
 	}, nil, nil)
-	graph, err := service.Graph(t.Context(), accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}}))
+	graph, err := service.Graph(t.Context(), accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1"}}, accessfixture.Bundle{Permissions: []string{ActionBusinessReferenceGraph}}))
 	if err != nil {
 		t.Fatal(err)
 	}

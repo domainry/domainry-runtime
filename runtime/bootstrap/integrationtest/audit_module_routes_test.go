@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityprincipal "github.com/domainry/domainry-identity-sdk/authorization/principal"
@@ -30,7 +31,7 @@ func auditModuleRoutes(t *testing.T, runtime *bootstrap.Runtime) http.Handler {
 		}
 		for _, route := range surface.Routes() {
 			next := surface.Handler()
-			mux.Handle(route.Pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mux.Handle(route.Pattern(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				principal := integrationAuditPrincipal(r.Header.Get("Authorization"))
 				ctx := identitysdk.WithRequestIdentity(r.Context(), identitysdk.RequestIdentity{Principal: principal})
 				next.ServeHTTP(w, r.WithContext(ctx))
@@ -85,15 +86,16 @@ func integrationModuleOwnerRoutes(t *testing.T, runtime *bootstrap.Runtime, owne
 				ctx := identitysdk.WithRequestIdentity(r.Context(), identity)
 				surfaceHandler.ServeHTTP(w, r.WithContext(ctx))
 			}))
-			switch {
-			case len(route.AnyPermissions) != 0:
-				next = identityMiddleware.RequireAnyPermission(route.AnyPermissions, next)
-			case strings.TrimSpace(route.Permission) != "":
-				next = identityMiddleware.RequirePermission(route.Permission, next)
+			switch route.Action.Authorization.Strategy {
+			case actioncontract.AuthorizationExactRolePermission:
+				next = identityMiddleware.RequirePermission(route.Action.Permission.Key, next)
+			case actioncontract.AuthorizationAnonymousProtocol:
+				mux.Handle(route.Pattern(), next)
+				continue
 			default:
 				next = identityMiddleware.RequireAuthenticated(next)
 			}
-			mux.Handle(route.Pattern, identityMiddleware.Authenticate(next))
+			mux.Handle(route.Pattern(), identityMiddleware.Authenticate(next))
 		}
 	}
 	for _, owner := range owners {
@@ -107,16 +109,10 @@ func integrationModuleOwnerRoutes(t *testing.T, runtime *bootstrap.Runtime, owne
 
 func integrationModulePrincipal(authorization string) identitysdk.Principal {
 	subject, role := integrationFixtureTokenSubjectRole(strings.TrimSpace(strings.TrimPrefix(authorization, "Bearer ")))
-	permissions := []string{"*"}
+	permissions := integrationIdentityRolePermissions(role)
 	recordScope := "all_records"
-	switch role {
-	case "sales_rep":
-		permissions = []string{"business.access", "customer.read", "customer.update", "contact.read", "contact.create", "lead.read", "lead.update", "opportunity.read", "opportunity.update", "activity.read", "activity.create", "activity.update", "contract.read"}
+	if role == "sales_rep" || role == "automation_business_tester" {
 		recordScope = "owned_records"
-	case "finance_reviewer":
-		permissions = []string{"business.access", "customer.read", "opportunity.read", "contract.read", "payment.read", "payment.update", "payment.export"}
-	case "restricted":
-		permissions = []string{"business.access", "customer.read"}
 	}
 	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{
 		ContractVersion: identitysdk.PrincipalContextContractVersion,
@@ -134,7 +130,7 @@ func integrationAuditPrincipal(authorization string) identitysdk.Principal {
 	}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{
 		ContractVersion: identitysdk.PrincipalContextContractVersion, Known: true, WorkspaceID: "workspace-primary", UserID: subject, RoleKey: role,
-	}}, accessfixture.Bundle{Key: role, Permissions: []string{"*"}, RecordScope: "all_records"})
+	}}, accessfixture.Bundle{Key: role, Permissions: integrationIdentityRolePermissions(role), RecordScope: "all_records"})
 	return principal.Principal
 }
 

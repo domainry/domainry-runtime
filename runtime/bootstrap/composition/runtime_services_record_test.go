@@ -29,6 +29,7 @@ import (
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
+	changeplanapplication "github.com/domainry/domainry-runtime/runtime/application/changeplan"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
@@ -445,7 +446,7 @@ func TestMetadataSnapshotWatcherSupportsCanonicalAndFallbackOwners(t *testing.T)
 }
 
 func TestAutomationApplicationUsesCanonicalRuntimeServiceAndOwnerBoundaries(t *testing.T) {
-	historyPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"automation.rule.history.read"}})
+	historyPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"runtime.automation.list_automation_executions"}})
 	emptyRuntime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{})
 	if emptyRuntime.Applications().Automations == nil || emptyRuntime.Applications().Automations != emptyRuntime.automationApplicationService {
 		t.Fatal("Runtime does not expose the canonical Automation application service")
@@ -453,7 +454,7 @@ func TestAutomationApplicationUsesCanonicalRuntimeServiceAndOwnerBoundaries(t *t
 	if history, err := emptyRuntime.Applications().Automations.AutomationExecutions(t.Context(), automationmodel.AutomationExecutionFilter{}, historyPrincipal); err != nil || history.Count != 0 {
 		t.Fatalf("empty Automation history=%#v error=%v", history, err)
 	}
-	automationPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "developer", Permissions: []string{"*"}})
+	automationPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "developer", Permissions: []string{"customer.update"}})
 	configuredRuntime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
 		Manifest:     manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}},
 		Dependencies: RuntimeServicesDependencies{AgentPrincipals: agentPrincipalDirectoryStub{principal: automationPrincipal}},
@@ -461,7 +462,7 @@ func TestAutomationApplicationUsesCanonicalRuntimeServiceAndOwnerBoundaries(t *t
 	if _, err := configuredRuntime.Applications().Automations.AutomationExecutions(t.Context(), automationmodel.AutomationExecutionFilter{}, historyPrincipal); err != nil {
 		t.Fatalf("configured Automation history error=%v", err)
 	}
-	readPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"automation.rule.read"}})
+	readPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"runtime.automation.automation_capabilities"}})
 	if _, err := emptyRuntime.Applications().Automations.AutomationCapabilities(t.Context(), readPrincipal); err != nil {
 		t.Fatalf("empty Automation capabilities error=%v", err)
 	}
@@ -474,14 +475,16 @@ func TestAutomationApplicationUsesCanonicalRuntimeServiceAndOwnerBoundaries(t *t
 		Trigger:      automationmodel.AutomationTriggerSchema{Phase: "after", Operation: "update"},
 		Instructions: []automationmodel.AutomationInstructionSchema{{Key: "emit", Type: "emit_event", Config: map[string]any{"event": "customer.updated"}}},
 	}
-	if _, err := configuredRuntime.Applications().Automations.ValidateAutomationRule(t.Context(), baseRule, accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})); err != nil {
+	if _, err := configuredRuntime.Applications().Automations.ValidateAutomationRule(t.Context(), baseRule, accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"runtime.automation.validate_automation_rule"}})); err != nil {
 		t.Fatalf("Automation definition with configured Integration repository error=%v", err)
 	}
 	if _, err := emptyRuntime.Applications().Automations.ExecuteBeforeRule(t.Context(), automationmodel.AutomationRuleSchema{Key: "before", Trigger: automationmodel.AutomationTriggerSchema{Phase: "before"}}, nil, nil, map[string]any{}, historyPrincipal); err != nil {
 		t.Fatalf("before Automation execution error=%v", err)
 	}
 
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{
+		"runtime.automation.simulate_rule_candidate", "runtime.automation.simulate_rule",
+	}})
 	automation := configuredRuntime.Applications().Automations
 	baseRule.Key = "customer.after_update"
 	rules := configuredRuntime.automationRules
@@ -547,7 +550,7 @@ func TestAutomationApplicationUsesCanonicalRuntimeServiceAndOwnerBoundaries(t *t
 }
 
 func TestAuthoringCapabilityHelpersCoverAbsentSchemaAndLookupFallbacks(t *testing.T) {
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{businesssystemapplication.ActionBusinessSystemSnapshot}})
 	for _, service := range []*capabilityapplication.CapabilityAuthoringApplicationService{
 		newCapabilityAuthoringApplicationService(nil),
 		newCapabilityAuthoringApplicationService(newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{})),
@@ -608,7 +611,7 @@ func TestApplicationDefinitionValidationRoutesOwnerContracts(t *testing.T) {
 	if _, issues, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "action", "customer.activate", request(`{`)); err != nil || len(issues) == 0 {
 		t.Fatalf("invalid structured action issues=%#v error=%v", issues, err)
 	}
-	validAction := `{"key":"customer.activate","object_key":"customer","kind":"record_operation","requires_permission":"customer.update","audit_event":"customer_activated"}`
+	validAction := `{"key":"customer.activate","object_key":"customer","kind":"record_operation","audit_event":"customer_activated"}`
 	if payload, issues, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "action", "customer.activate", request(validAction)); err != nil || len(issues) != 0 || len(payload) == 0 {
 		t.Fatalf("action payload=%s issues=%#v error=%v", payload, issues, err)
 	}
@@ -719,7 +722,7 @@ func TestBusinessRuntimeProjectionPropagatesOwnerFailures(t *testing.T) {
 
 func TestBusinessSystemSnapshotUsesNarrowOwnerPorts(t *testing.T) {
 	failure := errors.New("owner projection failed")
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{businesssystemapplication.ActionBusinessSystemSnapshot}})
 	limited := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "reader"}}
 	reader := accessfixture.Attach(limited, accessfixture.Bundle{Permissions: []string{"workflow.definition.read"}})
 
@@ -824,9 +827,10 @@ func TestRecordActionApplicationWiringCoversRoutingAndCoreValidationBoundaries(t
 		{Key: "version", Name: "Version", Type: "number"},
 		{Key: "created_by", Name: "Created By", Type: "text"},
 	}}
-	baseAction := definitionmodel.ActionSchema{Key: "customer.activate", ObjectKey: "customer", Kind: "record_update", RequiresPermission: "customer.update", AuditEvent: "customer_activated"}
+	baseAction := definitionmodel.ActionSchema{Key: "customer.activate", ObjectKey: "customer", Kind: "record_update", AuditEvent: "customer_activated"}
 	baseRole := accessfixture.Bundle{
-		Key: "operator", Permissions: []string{"customer.*"}, RecordScope: "all_records",
+		Key:          "operator",
+		Permissions:  []string{baseAction.Key},
 		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true, Write: true}},
 	}
 	baseRecord := recordmodel.Record{ID: "customer-1", Data: map[string]any{"status": "draft", "version": 1, "created_by": "maker"}}
@@ -845,7 +849,7 @@ func TestRecordActionApplicationWiringCoversRoutingAndCoreValidationBoundaries(t
 		t.Fatalf("Runtime System Operation Catalog validation errors=%v", validationErrors)
 	}
 	invoke := func(service *actionapplication.ActionApplicationService, objectKey, actionKey string, principal principalmodel.Principal) (actionmodel.ActionInvocationResult, error) {
-		return service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: actionKey, ObjectKey: objectKey, RecordID: "customer-1", Principal: principal})
+		return service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: actionKey, ObjectKey: objectKey, RecordID: "customer-1", IdempotencyKey: objectKey + "-" + actionKey, Principal: principal})
 	}
 	if _, err := invoke(runtime.Applications().Actions, "customer", "missing", principal); err == nil {
 		t.Fatal("missing Action must fail through Invoke")
@@ -876,11 +880,13 @@ func TestRecordActionApplicationWiringCoversRoutingAndCoreValidationBoundaries(t
 	conditionalAction.Kind = definitionmodel.ActionKindConditionalUpdate
 	conditionalAction.OptimisticConcurrency = true
 	conditionalAction.ConcurrencyField = "version"
+	conditionalRole := baseRole
+	conditionalRole.Permissions = []string{conditionalAction.Key}
 	conditionalRepository := newRepository()
-	conditionalRuntime, conditionalPrincipal := fixture(baseObject, conditionalAction, baseRole, conditionalRepository)
+	conditionalRuntime, conditionalPrincipal := fixture(baseObject, conditionalAction, conditionalRole, conditionalRepository)
 	conditionalResult, err := conditionalRuntime.Applications().Actions.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{
 		ActionKey: conditionalAction.Key, ObjectKey: conditionalAction.ObjectKey, RecordID: baseRecord.ID,
-		Input: map[string]any{"status": "active", "expected_version": 1}, Principal: conditionalPrincipal,
+		Input: map[string]any{"status": "active", "expected_version": 1}, IdempotencyKey: "customer-activate-if-current-success", Principal: conditionalPrincipal,
 	})
 	if err != nil || conditionalResult.Record == nil || conditionalRepository.record.Data["status"] != "active" {
 		t.Fatalf("conditional System Operation result=%+v record=%+v error=%v", conditionalResult, conditionalRepository.record, err)
@@ -890,10 +896,10 @@ func TestRecordActionApplicationWiringCoversRoutingAndCoreValidationBoundaries(t
 	}
 
 	conflictRepository := newRepository()
-	conflictRuntime, conflictPrincipal := fixture(baseObject, conditionalAction, baseRole, conflictRepository)
+	conflictRuntime, conflictPrincipal := fixture(baseObject, conditionalAction, conditionalRole, conflictRepository)
 	_, err = conflictRuntime.Applications().Actions.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{
 		ActionKey: conditionalAction.Key, ObjectKey: conditionalAction.ObjectKey, RecordID: baseRecord.ID,
-		Input: map[string]any{"status": "active", "expected_version": 99}, Principal: conflictPrincipal,
+		Input: map[string]any{"status": "active", "expected_version": 99}, IdempotencyKey: "customer-activate-if-current-conflict", Principal: conflictPrincipal,
 	})
 	if apperror.CodeOf(err) != "backend.record.version_conflict" {
 		t.Fatalf("conditional System Operation conflict code=%q error=%v", apperror.CodeOf(err), err)
@@ -905,7 +911,10 @@ func TestRecordActionApplicationWiringCoversRoutingAndCoreValidationBoundaries(t
 
 func TestBusinessReferenceProjectionSupportsOptionalPorts(t *testing.T) {
 	service := assembleChangePlanReferenceApplication(nil, nil, nil)
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{
+		Permissions:  []string{changeplanapplication.ActionBusinessReferenceGraph, "customer.read"},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true}},
+	})
 	if graph, err := service.Graph(t.Context(), principal); err != nil || len(graph.Nodes) != 0 {
 		t.Fatalf("empty reference graph=%#v error=%v", graph, err)
 	}

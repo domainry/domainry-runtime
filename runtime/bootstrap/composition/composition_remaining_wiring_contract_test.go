@@ -311,8 +311,11 @@ func TestCompositionActionWithoutRegisteredHandlerFailsClosed(t *testing.T) {
 		},
 		Dependencies: RuntimeServicesDependencies{WorkflowProcesses: processes, WorkflowWorker: &runtimeServicesWorkflowWorkerRepository{}},
 	})
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
-	if _, err := runtime.actionService.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: "customer.call", ObjectKey: "customer", Principal: admin}); apperror.CodeOf(err) != "backend.action.owner_unresolved" {
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{
+		Permissions:  []string{"customer.call"},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true, Write: true}},
+	})
+	if _, err := runtime.actionService.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: "customer.call", ObjectKey: "customer", IdempotencyKey: "customer-call-owner-check", Principal: admin}); apperror.CodeOf(err) != "backend.action.owner_unresolved" {
 		t.Fatalf("unregistered source-owned handler error=%v code=%q", err, apperror.CodeOf(err))
 	}
 }
@@ -511,7 +514,7 @@ func TestAssembledActionPipelineBindingCoversPlanFailureAndCommits(t *testing.T)
 	invoke := func(input map[string]any) (actionmodel.ActionInvocationResult, error) {
 		return service.Applications().Actions.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{
 			ActionKey: "pipeline_item.advance", ObjectKey: "pipeline_item", RecordID: "item_1",
-			Input: input, Principal: principal,
+			Input: input, IdempotencyKey: "pipeline-advance-" + input["to_stage"].(string), Principal: principal,
 		})
 	}
 	if _, err := invoke(map[string]any{"to_stage": "missing"}); err == nil {
@@ -553,7 +556,7 @@ func TestAssembledBusinessHandlerCoversRevisionAndDurableIntentFallbacks(t *test
 		InputContractSHA256: descriptor.InputContractSHA256, OutputContractSHA256: descriptor.OutputContractSHA256,
 	}
 	role := accessfixture.Bundle{
-		Key: "operator", Permissions: []string{"notification_job.*"}, RecordScope: "all_records",
+		Key: "operator", Permissions: []string{actionKey},
 		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "notification_job", Scope: "all_records", Read: true, Write: true}},
 	}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "user-a"}}, role)
@@ -579,7 +582,7 @@ func TestAssembledBusinessHandlerCoversRevisionAndDurableIntentFallbacks(t *test
 	}
 	invoke := func(service *runtimeAssembly) (actionmodel.ActionInvocationResult, error) {
 		return service.Applications().Actions.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{
-			ActionKey: actionKey, ObjectKey: "notification_job", Principal: principal,
+			ActionKey: actionKey, ObjectKey: "notification_job", IdempotencyKey: "notification-job-notify", Principal: principal,
 		})
 	}
 

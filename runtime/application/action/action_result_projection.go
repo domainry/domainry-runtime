@@ -94,7 +94,7 @@ func buildActionFailureAudits(ctx context.Context, action definitionmodel.Action
 	auditDenial, err := identityevaluator.AuditDenialRequired(
 		*invocation.Principal.AccessBundle,
 		identitysdk.ResourceType(objectKey),
-		identitysdk.Action("read"),
+		identitysdk.DataActionRead,
 		time.Now().UTC(),
 	)
 	if err != nil || !auditDenial {

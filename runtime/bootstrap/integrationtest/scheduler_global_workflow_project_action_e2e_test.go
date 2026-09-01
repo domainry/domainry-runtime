@@ -81,15 +81,15 @@ func schedulerGlobalWorkflowManifest(t *testing.T) string {
 	manifest["actions"] = append(actions,
 		map[string]any{
 			"key": "lead.activate_due_candidates", "label": "Activate due candidates", "object_key": "lead", "kind": "object_operation",
-			"requires_permission": "lead.activate_due_candidates", "audit_event": "lead.due_candidates_activated", "payload_fields": []any{},
+			"audit_event": "lead.due_candidates_activated", "payload_fields": []any{},
 		},
 		map[string]any{
 			"key": "lead.create_daily_review_tasks", "label": "Create daily review tasks", "object_key": "lead", "kind": "object_operation",
-			"requires_permission": "lead.create_daily_review_tasks", "audit_event": "lead.daily_review_tasks_created", "payload_fields": []any{},
+			"audit_event": "lead.daily_review_tasks_created", "payload_fields": []any{},
 		},
 		map[string]any{
 			"key": "lead.fail_due_candidates", "label": "Fail due candidates", "object_key": "lead", "kind": "object_operation",
-			"requires_permission": "lead.fail_due_candidates", "audit_event": "lead.due_candidates_failed", "payload_fields": []any{},
+			"audit_event": "lead.due_candidates_failed", "payload_fields": []any{},
 		},
 	)
 	roles, _ := manifest["roles"].([]any)

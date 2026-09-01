@@ -77,11 +77,11 @@ func (s workflowReferenceIdentityEdgeStub) ListRoles(context.Context, identitysd
 func workflowReferenceValidatorFixture(identity identitysdk.Directory) *WorkflowReferenceValidator {
 	object := definitionmodel.ObjectSchema{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "owner", Type: "user"}, {Key: "disabled", Type: "user", DisabledAt: "now"}, {Key: "status", Type: "text"}}}
 	actions := []definitionmodel.ActionSchema{
-		{Key: "send", Label: "Send", ObjectKey: "order", RequiresPermission: "order.send", PayloadFields: []definitionmodel.ActionPayloadField{{Key: "required", Required: true}, {Key: "optional"}}, Defaults: map[string]any{}},
+		{Key: "send", Label: "Send", ObjectKey: "order", PayloadFields: []definitionmodel.ActionPayloadField{{Key: "required", Required: true}, {Key: "optional"}}, Defaults: map[string]any{}},
 		{Key: "defaulted", ObjectKey: "order", PayloadFields: []definitionmodel.ActionPayloadField{{Key: "required", Required: true}}, Defaults: map[string]any{"required": "value"}},
 		{Key: "field-defaulted", ObjectKey: "order", PayloadFields: []definitionmodel.ActionPayloadField{{Key: "required", Required: true, DefaultValue: "value"}}, Defaults: map[string]any{}},
 		{Key: "free", ObjectKey: "order"},
-		{Key: "allowed-by-action", Label: "send", ObjectKey: "order", RequiresPermission: "custom.required"},
+		{Key: "allowed-by-action", Label: "send", ObjectKey: "order"},
 	}
 	if identity == nil {
 		identity = workflowReferenceIdentityEdgeStub{roles: []identitysdk.Role{{Key: "sender"}, {Key: "denied"}, {Key: "action-allowed"}}}
@@ -276,7 +276,7 @@ func TestWorkflowReferenceIdentityResolversRunAsAndGraphNodeOutcomes(t *testing.
 		t.Fatalf("empty run-as issues=%v", issues)
 	}
 	withoutPermission := action
-	withoutPermission.RequiresPermission = ""
+	withoutPermission.Key = ""
 	if issues := runAsValidator.validateWorkflowRunAsActionPermission(t.Context(), definitionmodel.WorkflowSchema{RunAs: "sender"}, "node", withoutPermission); issues != nil {
 		t.Fatalf("empty permission issues=%v", issues)
 	}
@@ -290,7 +290,7 @@ func TestWorkflowReferenceIdentityResolversRunAsAndGraphNodeOutcomes(t *testing.
 		t.Fatalf("allowed issues=%v", issues)
 	}
 	if issues := runAsValidator.validateWorkflowRunAsActionPermission(t.Context(), definitionmodel.WorkflowSchema{RunAs: "action-allowed"}, "node", runAsValidator.workflowActions(t.Context())["allowed-by-action"]); len(issues) != 0 {
-		t.Fatalf("action permission fallback issues=%v", issues)
+		t.Fatalf("same-key Action permission issues=%v", issues)
 	}
 
 	approval := definitionmodel.WorkflowApprovalNodeContract{DueSeconds: -1, ReminderActionKey: "send", ReminderInput: map[string]any{"required": "value"}, Resolvers: resolvers, EscalationResolvers: resolvers}

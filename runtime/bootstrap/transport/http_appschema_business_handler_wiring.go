@@ -57,7 +57,7 @@ func (a *httpServerAssembly) wireMetadataAndBusinessHandlers() {
 			nil,
 		),
 		WriteJSON: a.callbacks.WriteJSON, WriteServiceError: a.callbacks.WriteServiceError,
-		DecodeJSON: a.callbacks.DecodeJSON, SecurityAudit: a.callbacks.SecurityAuditForPrincipal, Admin: a.identityHTTP.PermissionFunc("workspace.admin"),
+		DecodeJSON: a.callbacks.DecodeJSON, SecurityAudit: a.callbacks.SecurityAuditForPrincipal,
 		Authenticated: a.identityHTTP.AuthenticatedFunc,
 	})
 	var lifecycleGovernance lifecyclesdk.Governance
@@ -76,7 +76,7 @@ func (a *httpServerAssembly) wireMetadataAndBusinessHandlers() {
 		Principal:    a.callbacks.Principal,
 		WriteJSON:    a.callbacks.WriteJSON, WriteError: a.callbacks.WriteError,
 		WriteServiceError: a.callbacks.WriteServiceError, DecodeJSON: a.callbacks.DecodeJSON,
-		Admin: a.identityHTTP.PermissionFunc("workspace.admin"), Authenticated: a.identityHTTP.AuthenticatedFunc, LegacyHeaders: capabilityhttp.WriteLegacyProjectionHeaders,
+		Authenticated: a.identityHTTP.AuthenticatedFunc, LegacyHeaders: capabilityhttp.WriteLegacyProjectionHeaders,
 		ProvisionRequired: a.callbacks.ProvisionRequired,
 	})
 	a.handlers.Capabilities = capabilityhttp.NewCapabilitiesHandler(capabilityhttp.CapabilitiesDependencies{

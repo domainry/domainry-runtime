@@ -8,7 +8,6 @@ import (
 	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -23,7 +22,7 @@ func (recordUpdateEmptyCodeError) ErrorCode() string              { return " " }
 func (recordUpdateEmptyCodeError) ErrorParams() map[string]string { return nil }
 
 func recordUpdateFinalPrincipal() principalmodel.Principal {
-	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	return recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}})
 }
 
 func TestRecordUpdateSchedulerAndOptimisticConditionEdges(t *testing.T) {

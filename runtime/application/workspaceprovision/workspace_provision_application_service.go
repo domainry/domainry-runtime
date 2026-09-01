@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	Permission          = "platform.workspace.provision"
-	ReconcilePermission = "platform.workspace.roles.reconcile"
+	ProvisionActionKey      = "runtime.workspaceprovision.provision_workspace"
+	ReconcileRolesActionKey = "runtime.workspaceprovision.reconcile_roles"
 )
 
 type WorkspaceProvisionApplicationService struct {
@@ -24,7 +24,7 @@ func NewWorkspaceProvisionApplicationService(repository workspaceprovisionreposi
 }
 
 func (service *WorkspaceProvisionApplicationService) Provision(ctx context.Context, principal principalmodel.Principal, request workspaceprovisionmodel.Request) (workspaceprovisionmodel.Result, error) {
-	if !principal.Known || !principal.HasExactPermission(Permission) {
+	if !principal.Known || !principal.HasExactPermission(ProvisionActionKey) {
 		return workspaceprovisionmodel.Result{}, &apperror.AppError{Kind: apperror.KindForbidden, Code: "auth.permission_denied"}
 	}
 	if service == nil || service.repository == nil {
@@ -38,7 +38,7 @@ func (service *WorkspaceProvisionApplicationService) Provision(ctx context.Conte
 }
 
 func (service *WorkspaceProvisionApplicationService) ReconcileWorkspaceRoles(ctx context.Context, principal principalmodel.Principal, workspaceID string) (workspaceprovisionmodel.RoleReconciliationResult, error) {
-	if !principal.Known || !principal.HasExactPermission(ReconcilePermission) {
+	if !principal.Known || !principal.HasExactPermission(ReconcileRolesActionKey) {
 		return workspaceprovisionmodel.RoleReconciliationResult{}, &apperror.AppError{Kind: apperror.KindForbidden, Code: "auth.permission_denied"}
 	}
 	if service == nil || service.repository == nil {

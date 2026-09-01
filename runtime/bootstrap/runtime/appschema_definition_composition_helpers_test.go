@@ -57,7 +57,7 @@ func TestApplicationDefinitionCompositionReusesOwnerValidationForSystemDraftCand
 		kind, key, objectKey, code string
 		value                      any
 	}{
-		{"action", "order.submit", "order", "backend.action.kind_invalid", definitionmodel.ActionSchema{Key: "order.submit", ObjectKey: "order", Kind: "legacy_step_action", RequiresPermission: "order.update", AuditEvent: "order.submitted"}},
+		{"action", "order.submit", "order", "backend.action.kind_invalid", definitionmodel.ActionSchema{Key: "order.submit", ObjectKey: "order", Kind: "legacy_step_action", AuditEvent: "order.submitted"}},
 		{"connector", "finance", "", "backend.integration.connector.operation_execution_mode_invalid", connectormodel.ConnectorSchema{Key: "finance", Providers: []connectormodel.ConnectorProviderSchema{{Key: "finance"}}, Operations: []connectormodel.ConnectorOperationSchema{{Key: "push", Method: "POST", ExecutionMode: "later", SideEffect: "write"}}}},
 		{"report", "order_summary", "", "backend.report.source_object_not_found", reportmodel.ReportSchema{Key: "order_summary", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "missing", Alias: "missing"}}}},
 	}

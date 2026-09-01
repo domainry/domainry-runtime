@@ -19,8 +19,8 @@ import (
 
 func TestDefinitionAndErrorConditionOutcomes(t *testing.T) {
 	knownNonAdmin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"record.read"}})
-	if _, err := ApplicationSchemaValidateDefinitionRequest(t.Context(), "action", "a", json.RawMessage(`{}`), knownNonAdmin, nil); err == nil {
-		t.Fatal("known non-admin must be rejected")
+	if result, err := ApplicationSchemaValidateDefinitionRequest(t.Context(), "action", "a", json.RawMessage(`{}`), knownNonAdmin, nil); err != nil || result.Valid || result.Errors[0].ErrorCode != "backend.metadata.definition_validator_required" {
+		t.Fatalf("authenticated validation result=%+v error=%v", result, err)
 	}
 	if err := ApplicationSchemaFirstDefinitionIssueError([]appschemamodel.ApplicationDefinitionValidationIssue{{ErrorCode: "code"}}); err == nil {
 		t.Fatal("issue without field must still map to an error")

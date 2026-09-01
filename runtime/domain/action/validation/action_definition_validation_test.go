@@ -25,19 +25,29 @@ func TestActionDefinitionValidationOwnsMetadataContract(t *testing.T) {
 func TestActionDefinitionValidationAcceptsSourceOwnedActionMetadata(t *testing.T) {
 	action := definitionmodel.ActionSchema{
 		Key: "order.complete", ObjectKey: "order", Label: "Complete", Kind: "record_update",
-		RequiresPermission: "order.complete", AuditEvent: "order.completed",
-		PayloadFields:   []definitionmodel.ActionPayloadField{{Key: "request_id", Type: "text", Required: true}},
-		IdempotencyKeys: []string{"request_id"},
+		AuditEvent:    "order.completed",
+		PayloadFields: []definitionmodel.ActionPayloadField{{Key: "reason", Type: "text", Required: true}},
 	}
 	if issues := ActionValidateDefinitionIssues(action); len(issues) != 0 {
 		t.Fatalf("source-owned Action metadata rejected: %#v", issues)
 	}
 }
 
-func TestActionPermissionPolicyValidatesHighRiskGovernance(t *testing.T) {
-	action := definitionmodel.ActionSchema{Key: "order.delete", ObjectKey: "order", Kind: "record_delete", RequiresPermission: "order.update", AuditEvent: "order.deleted"}
+func TestActionDefinitionValidationRejectsRuntimeIdempotencyPayloadField(t *testing.T) {
+	action := definitionmodel.ActionSchema{
+		Key: "order.complete", ObjectKey: "order", Label: "Complete", Kind: "record_update", AuditEvent: "order.completed",
+		PayloadFields: []definitionmodel.ActionPayloadField{{Key: "idempotency_key", Type: "text"}},
+	}
 	issues := ActionValidateDefinitionIssues(action)
-	for _, code := range []string{"backend.action.high_risk_permission_must_be_dedicated", "backend.action.high_risk_assurance_required"} {
+	if !actionIssuesContainCode(issues, "backend.action.definition_invalid") {
+		t.Fatalf("reserved Runtime payload field accepted: %#v", issues)
+	}
+}
+
+func TestActionPermissionPolicyValidatesHighRiskGovernance(t *testing.T) {
+	action := definitionmodel.ActionSchema{Key: "order.delete", ObjectKey: "order", Kind: "record_delete", AuditEvent: "order.deleted"}
+	issues := ActionValidateDefinitionIssues(action)
+	for _, code := range []string{"backend.action.high_risk_assurance_required"} {
 		if !actionIssuesContainCode(issues, code) {
 			t.Fatalf("issues=%#v missing=%s", issues, code)
 		}
@@ -50,13 +60,13 @@ func TestActionPermissionPolicyCoversFormatObjectAndDeclaredRiskMatrix(t *testin
 		action definitionmodel.ActionSchema
 		code   string
 	}{
-		{name: "invalid permission format", action: definitionmodel.ActionSchema{RequiresPermission: "Order Read"}, code: "backend.action.permission_format_invalid"},
-		{name: "object mismatch", action: definitionmodel.ActionSchema{ObjectKey: "order", RequiresPermission: "invoice.read"}, code: "backend.action.permission_object_mismatch"},
-		{name: "blank object", action: definitionmodel.ActionSchema{RequiresPermission: "order.read"}},
-		{name: "matching object", action: definitionmodel.ActionSchema{ObjectKey: "order", RequiresPermission: "order.read"}},
-		{name: "invalid declared risk", action: definitionmodel.ActionSchema{ObjectKey: "order", RequiresPermission: "order.read", RiskLevel: "extreme"}, code: "backend.action.risk_level_invalid"},
-		{name: "understated risk", action: definitionmodel.ActionSchema{Key: "order.delete", ObjectKey: "order", Kind: "record_delete", RequiresPermission: "order.delete", RiskLevel: "low"}, code: "backend.action.risk_level_understated"},
-		{name: "sufficient declared risk", action: definitionmodel.ActionSchema{Key: "order.update", ObjectKey: "order", Kind: "record_update", RequiresPermission: "order.update", RiskLevel: "high", AssurancePolicy: &definitionmodel.ActionAssurancePolicy{RequiredMethods: []string{definitionmodel.ActionAssuranceNormalLogin}}}},
+		{name: "invalid permission format", action: definitionmodel.ActionSchema{Key: "Order Read"}, code: "backend.action.permission_format_invalid"},
+		{name: "object mismatch", action: definitionmodel.ActionSchema{Key: "invoice.read", ObjectKey: "order"}, code: "backend.action.permission_object_mismatch"},
+		{name: "blank object", action: definitionmodel.ActionSchema{Key: "order.read"}},
+		{name: "matching object", action: definitionmodel.ActionSchema{Key: "order.read", ObjectKey: "order"}},
+		{name: "invalid declared risk", action: definitionmodel.ActionSchema{Key: "order.read", ObjectKey: "order", RiskLevel: "extreme"}, code: "backend.action.risk_level_invalid"},
+		{name: "understated risk", action: definitionmodel.ActionSchema{Key: "order.delete", ObjectKey: "order", Kind: "record_delete", RiskLevel: "low"}, code: "backend.action.risk_level_understated"},
+		{name: "sufficient declared risk", action: definitionmodel.ActionSchema{Key: "order.update", ObjectKey: "order", Kind: "record_update", RiskLevel: "high", AssurancePolicy: &definitionmodel.ActionAssurancePolicy{RequiredMethods: []string{definitionmodel.ActionAssuranceNormalLogin}}}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

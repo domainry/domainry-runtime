@@ -36,6 +36,9 @@ const (
 type RuntimeEndpointContractV1 struct {
 	ContractVersion     string               `json:"contract_version"`
 	EndpointIdentity    string               `json:"endpoint_identity"`
+	ActionKey           string               `json:"action_key"`
+	SourceOwner         string               `json:"source_owner"`
+	ApplicationUseCase  string               `json:"application_use_case"`
 	ListenerExposures   []ListenerExposure   `json:"listener_exposures"`
 	ProtocolAudiences   []string             `json:"protocol_audiences,omitempty"`
 	RequiredPermissions []string             `json:"required_permissions"`
@@ -52,6 +55,9 @@ func (contract RuntimeEndpointContractV1) Validate() error {
 	}
 	if strings.TrimSpace(contract.EndpointIdentity) == "" {
 		return fmt.Errorf("endpoint identity is required")
+	}
+	if strings.TrimSpace(contract.ActionKey) == "" || strings.TrimSpace(contract.SourceOwner) == "" || strings.TrimSpace(contract.ApplicationUseCase) == "" {
+		return fmt.Errorf("endpoint contract %q requires canonical action identity", contract.EndpointIdentity)
 	}
 	if len(contract.ListenerExposures) == 0 {
 		return fmt.Errorf("endpoint contract %q requires a listener exposure", contract.EndpointIdentity)

@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 const AutomationRuntimeAuthoringContractVersion = "runtime-authoring-v1"
@@ -141,23 +140,6 @@ func AutomationValidationIssueFromError(rule automationmodel.AutomationRuleSchem
 		issue.FieldPath = prefix
 	}
 	return issue
-}
-
-func AutomationHasPermission(principal principalmodel.Principal, action string) bool {
-	if !principal.Known {
-		return false
-	}
-	permissionKey := map[string]string{
-		"read":     "automation.rule.read",
-		"manage":   "automation.rule.write",
-		"simulate": "automation.rule.simulate",
-		"execute":  "automation.rule.execute",
-		"history":  "automation.rule.history.read",
-	}[action]
-	return principal.HasPermission("workspace.admin") ||
-		principal.HasPermission(permissionKey) ||
-		principal.HasPermission("automation.*") ||
-		principal.HasPermission("automation."+action)
 }
 
 func validationCapabilityKey(code string) string {

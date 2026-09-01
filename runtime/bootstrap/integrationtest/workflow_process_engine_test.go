@@ -66,10 +66,10 @@ func TestWorkflowProcessWaitsForManagerAndResumesAfterRestart(t *testing.T) {
 		t.Fatalf("expected non-assignee denial, got %v", err)
 	}
 	assignedWithoutPermission := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "manager", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "restricted_manager"})
-	if _, err := restarted.Applications().Workflows.DecideTask(t.Context(), tasks[0].ID, workflowmodel.WorkflowTaskDecisionRequest{Decision: "approved"}, assignedWithoutPermission); err == nil || serviceErrorCode(err) != "backend.workflow.task.act_permission_required" {
+	if _, err := restarted.Applications().Workflows.DecideTask(t.Context(), tasks[0].ID, workflowmodel.WorkflowTaskDecisionRequest{Decision: "approved"}, assignedWithoutPermission); err == nil || serviceErrorCode(err) != "auth.permission_denied" {
 		t.Fatalf("expected task permission denial, got %v", err)
 	}
-	manager := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "manager", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "line_manager", Permissions: []string{"workflow.task.act"}})
+	manager := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "manager", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "line_manager", Permissions: integrationWorkflowTaskDecisionPermissions()})
 	completed, err := restarted.Applications().Workflows.DecideTask(t.Context(), tasks[0].ID, workflowmodel.WorkflowTaskDecisionRequest{Decision: "approved", Comment: "Approved"}, manager)
 	if err != nil {
 		t.Fatalf("approve after restart: %v", err)

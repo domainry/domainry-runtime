@@ -71,12 +71,8 @@ func (v *reportDefinitionValidator) loadRuntimeReferences() {
 		}
 	}
 	for _, action := range v.snapshot.Actions {
-		resource, operation := definitionmodel.ActionPermissionSubject(action)
-		if resource != "" && operation != "" {
-			v.permissions[resource+"."+operation] = true
-		}
-		if permission := strings.TrimSpace(action.RequiresPermission); permission != "" {
-			v.permissions[permission] = true
+		if key := strings.TrimSpace(action.Key); key != "" {
+			v.permissions[key] = true
 		}
 	}
 }

@@ -25,10 +25,10 @@ type TargetedScheduledWorkflowRuntime = schedulermodulehost.TargetedScheduledWor
 type WindowedScheduledWorkflowRuntime = schedulermodulehost.WindowedScheduledWorkflowRuntime
 
 func (s *SchedulerApplicationService) SimulateTenantAdminDefinition(ctx context.Context, definitionID string, principal principalmodel.Principal) (SchedulerDefinitionSimulation, error) {
-	if err := schedulerDefinitionWriteAllowed(principal); err != nil {
+	if err := schedulerExactQueryAllowed(principal, ActionSimulateSchedulerJob); err != nil {
 		return SchedulerDefinitionSimulation{}, err
 	}
-	definition, err := s.schedulerDefinitionForOperation(ctx, definitionID, principal)
+	definition, err := s.schedulerDefinition(ctx, definitionID)
 	if err != nil {
 		return SchedulerDefinitionSimulation{}, err
 	}
@@ -41,23 +41,6 @@ func (s *SchedulerApplicationService) SimulateTenantAdminDefinition(ctx context.
 		Status: "simulated", Message: "backend.scheduler.simulated", NextRunAt: next.UTC().Format(time.RFC3339),
 		TargetType: schedulerDefinitionTargetType(definition), TargetKey: strings.TrimSpace(fmt.Sprint(definition.Data["target_key"])),
 	}, nil
-}
-
-func (s *SchedulerApplicationService) schedulerDefinitionForOperation(ctx context.Context, definitionID string, principal principalmodel.Principal) (PublishedDefinition, error) {
-	if err := schedulerOperationAllowed(principal); err != nil {
-		return PublishedDefinition{}, err
-	}
-	if s.definitions == nil {
-		return PublishedDefinition{}, schedulerError(apperror.KindUnavailable, "backend.scheduler.definition_source_unavailable", nil)
-	}
-	definition, ok, err := s.definitions.GetSchedulerDefinition(ctx, strings.TrimSpace(definitionID))
-	if err != nil {
-		return PublishedDefinition{}, internalError("get scheduler definition", err)
-	}
-	if !ok {
-		return PublishedDefinition{}, notFound("backend.scheduler.definition_not_found")
-	}
-	return definition, nil
 }
 
 func schedulerDefinitionTargetType(definition PublishedDefinition) string {

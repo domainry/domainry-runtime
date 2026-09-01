@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/domainry/domainry-foundation/modulehttp"
+	actioncontract "github.com/domainry/domainry-foundation/action"
 
 	apperror "github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/logging"
@@ -251,8 +251,8 @@ func (s *HTTPRouter) allowedCORSOrigin(origin string) (string, bool) {
 func (s *HTTPRouter) withAuth(routes *http.ServeMux, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		policy := routePolicyFor(routes, r)
-		moduleRoute, isModuleRoute := s.moduleHTTPRoutes[r.Method+" "+policy.path]
-		if r.Method == http.MethodOptions || policy.anonymous() || isModuleRoute && moduleRoute.route.Authentication == modulehttp.AuthenticationAnonymous || policy.fallback {
+		resolved := s.resolveRequestAction(routes, r)
+		if r.Method == http.MethodOptions || resolved.found && (resolved.definition.Authorization.Strategy == actioncontract.AuthorizationAnonymousProtocol || resolved.definition.Authorization.Strategy == actioncontract.AuthorizationDelegatedCredential) || policy.fallback {
 			next.ServeHTTP(w, r)
 			return
 		}

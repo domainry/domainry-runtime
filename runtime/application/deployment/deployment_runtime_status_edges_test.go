@@ -141,8 +141,8 @@ func TestDeploymentIdempotencyStatusAndMutationEdges(t *testing.T) {
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 	nonAdmin := admin
 	accessfixture.Set(&nonAdmin, accessfixture.Bundle{})
-	if _, err := service.IdempotencyReceipts(t.Context(), nonAdmin, "", 1); apperror.CodeOf(err) != "auth.permission_denied" {
-		t.Fatalf("non-admin receipts error=%v", err)
+	if receipts, err := service.IdempotencyReceipts(t.Context(), nonAdmin, "", 1); err != nil || len(receipts) != 1 {
+		t.Fatalf("authenticated receipts=%v error=%v", receipts, err)
 	}
 	if _, err := unsupported.IdempotencyReceipts(t.Context(), admin, "", 1); apperror.CodeOf(err) != idempotency.ErrorCodeReceiptUnavailable {
 		t.Fatalf("unsupported receipts error=%v", err)
@@ -156,9 +156,11 @@ func TestDeploymentIdempotencyStatusAndMutationEdges(t *testing.T) {
 		t.Fatalf("receipts repository error=%v", err)
 	}
 	fixture.receiptsErr = nil
-	if err := service.RetryIdempotencyReceipt(t.Context(), nonAdmin, "owner", "id"); apperror.CodeOf(err) != "auth.permission_denied" {
-		t.Fatalf("non-admin retry error=%v", err)
+	fixture.changed = true
+	if err := service.RetryIdempotencyReceipt(t.Context(), nonAdmin, "owner", "id"); err != nil {
+		t.Fatalf("authenticated retry error=%v", err)
 	}
+	fixture.changed = false
 	if err := unsupported.RetryIdempotencyReceipt(t.Context(), admin, "owner", "id"); apperror.CodeOf(err) != idempotency.ErrorCodeReceiptUnavailable {
 		t.Fatalf("unsupported retry error=%v", err)
 	}

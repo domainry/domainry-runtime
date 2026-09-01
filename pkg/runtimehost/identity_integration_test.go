@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	actioncontract "github.com/domainry/domainry-foundation/action"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityhttpapi "github.com/domainry/domainry-identity-sdk/httpapi"
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
@@ -44,8 +45,8 @@ func TestProjectHostMountsModuleIdentityHTTPOutsideRuntime(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	surface := integrationHTTPSurface{name: "identity", handler: identityHandler, routes: []identityhttpapi.Route{
-		{Pattern: "POST /auth/login", Exposures: []identityhttpapi.Exposure{identityhttpapi.ExposurePublic, identityhttpapi.ExposureTenantAdmin}, Authentication: identityhttpapi.AuthenticationAnonymous},
-		{Pattern: "GET /identity/users", Exposures: []identityhttpapi.Exposure{identityhttpapi.ExposureTenantAdmin}, Authentication: identityhttpapi.AuthenticationAuthenticated, PrincipalOnly: true},
+		{Action: runtimeHostTestAction("auth.login", "POST /auth/login", []actioncontract.Exposure{actioncontract.ExposurePublic, actioncontract.ExposureTenantAdmin}, actioncontract.AuthorizationAnonymousProtocol)},
+		{Action: runtimeHostTestAction("identity.users.list", "GET /identity/users", []actioncontract.Exposure{actioncontract.ExposureTenantAdmin}, actioncontract.AuthorizationAuthenticatedPrincipal)},
 	}}
 	runtimeHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("X-Owner", "runtime")
@@ -79,7 +80,7 @@ func TestProjectIdentityTopologyRejectsMissingModuleHTTPAndSaaSSurfaces(t *testi
 	if _, _, err := openProjectIdentity(t.Context(), cfg, identityFactoryStub{binding: moduleBindingStub{}}); err == nil {
 		t.Fatal("module binding without HTTP surfaces was accepted")
 	}
-	surface := integrationHTTPSurface{name: "identity", handler: http.NotFoundHandler(), routes: []identityhttpapi.Route{{Pattern: "GET /identity/users", Exposures: []identityhttpapi.Exposure{identityhttpapi.ExposureTenantAdmin}, Authentication: identityhttpapi.AuthenticationAuthenticated, PrincipalOnly: true}}}
+	surface := integrationHTTPSurface{name: "identity", handler: http.NotFoundHandler(), routes: []identityhttpapi.Route{{Action: runtimeHostTestAction("identity.users.list", "GET /identity/users", []actioncontract.Exposure{actioncontract.ExposureTenantAdmin}, actioncontract.AuthorizationAuthenticatedPrincipal)}}}
 	saasWithHTTP := saasHTTPBindingStub{surfaces: []identityhttpapi.Surface{surface}}
 	if _, _, err := openProjectIdentity(t.Context(), cfg, identityFactoryStub{binding: saasWithHTTP}); err == nil {
 		t.Fatal("SaaS binding with in-process HTTP surfaces was accepted")

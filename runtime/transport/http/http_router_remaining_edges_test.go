@@ -565,17 +565,14 @@ func TestOptionalRouteRegistrationAndHealthAuthorization(t *testing.T) {
 	}
 
 	router := &HTTPRouter{}
-	for _, principal := range []principalmodel.Principal{principalmodel.Principal{Principal: identitysdk.Principal{Known: false}}, principalmodel.Principal{Principal: identitysdk.Principal{Known: true, RoleKey: "viewer"}}} {
-		response := httptest.NewRecorder()
-		request := requestWithPrincipal(httptest.NewRequest(http.MethodGet, "/health", nil), principal)
-		router.health(response, request)
-		if response.Code != http.StatusForbidden {
-			t.Fatalf("principal=%+v status=%d body=%s", principal, response.Code, response.Body.String())
-		}
+	unknownResponse := httptest.NewRecorder()
+	router.health(unknownResponse, requestWithPrincipal(httptest.NewRequest(http.MethodGet, "/health", nil), principalmodel.Principal{}))
+	if unknownResponse.Code != http.StatusForbidden {
+		t.Fatalf("unknown principal status=%d body=%s", unknownResponse.Code, unknownResponse.Body.String())
 	}
-	operator := routerTestPrincipal(identitysdk.Principal{Known: true, RoleKey: "operator"}, "runtime_ops.capability_status.read")
+	operator := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, RoleKey: "viewer"}}
 	if !healthAllowed(operator) {
-		t.Fatal("runtime operator health permissions were rejected")
+		t.Fatal("authenticated health principal was rejected")
 	}
 	response := httptest.NewRecorder()
 	router.health(response, requestWithPrincipal(httptest.NewRequest(http.MethodGet, "/health", nil), operator))

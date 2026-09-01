@@ -17,7 +17,7 @@ import (
 )
 
 func workflowWorkerPrincipal() principalmodel.Principal {
-	principal := principalmodel.NewSystemPrincipal("workflow:worker", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "workflow worker dispatch"), "*")
+	principal := principalmodel.NewSystemPrincipal("workflow:worker", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "workflow worker dispatch"))
 	principal.WorkspaceID = principalmodel.InstallationWorkspaceID
 	return principal
 }

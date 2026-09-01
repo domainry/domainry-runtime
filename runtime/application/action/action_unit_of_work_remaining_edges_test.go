@@ -34,8 +34,8 @@ func TestActionUnitOfWorkRemainingNilBoundaries(t *testing.T) {
 	}
 
 	action := definitionmodel.ActionSchema{Key: "booking.reserve", ObjectKey: "booking"}
-	cached, unitOfWork, replay, err := manager.begin(t.Context(), actionmodel.ActionInvocation{}, action)
-	if err != nil || replay || cached.Status != "" || unitOfWork == nil || unitOfWork.manager == nil {
+	cached, unitOfWork, replay, err := manager.begin(t.Context(), actionmodel.ActionInvocation{IdempotencyKey: "booking-reserve-1"}, action)
+	if apperror.CodeOf(err) != idempotency.ErrorCodeReceiptUnavailable || replay || cached.Status != "" || unitOfWork == nil || unitOfWork.manager == nil {
 		t.Fatalf("cached=%+v unit=%+v replay=%v err=%v", cached, unitOfWork, replay, err)
 	}
 

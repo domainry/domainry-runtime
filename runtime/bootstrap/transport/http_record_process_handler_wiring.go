@@ -72,7 +72,7 @@ func (a *httpServerAssembly) wireRecordAndProcessHandlers() {
 	a.handlers.Scheduler = schedulerhttp.NewSchedulerHandler(schedulerhttp.SchedulerDependencies{
 		Service: records.Applications().Scheduler, Operations: a.operations, Principal: a.callbacks.Principal,
 		WriteJSON: a.callbacks.WriteJSON, WriteError: a.callbacks.WriteError,
-		WriteServiceError: a.callbacks.WriteServiceError, DecodeJSON: a.callbacks.DecodeJSON, Admin: a.identityHTTP.PermissionFunc("workspace.admin"),
+		WriteServiceError: a.callbacks.WriteServiceError, DecodeJSON: a.callbacks.DecodeJSON,
 		Authenticated: a.identityHTTP.AuthenticatedFunc,
 		Binding:       a.dependencies.SchedulerBinding,
 		Dispatcher:    composition.NewSchedulerCallbackDispatcher(records.Applications().Scheduler, records.Applications().PublicationHandoff, composition.IntegrationConnectionRequirements(a.dependencies.Manifest.Integrations.Connections)),

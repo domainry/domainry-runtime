@@ -67,6 +67,30 @@ func TestDatabaseRetirementRetriesAreIdempotent(t *testing.T) {
 	}
 }
 
+func TestDatabaseRetirementActionsDoNotAuthorizeEachOther(t *testing.T) {
+	listOnly := accessfixture.Attach(
+		principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "operations"}},
+		accessfixture.Bundle{Key: "database-list-operator", Permissions: []string{ActionListDatabaseRetirements}},
+	)
+	executeOnly := accessfixture.Attach(
+		principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "operations"}},
+		accessfixture.Bundle{Key: "database-execute-operator", Permissions: []string{ActionExecuteDatabaseRetirement}},
+	)
+	service := NewDatabaseRetirementApplicationService(
+		&databaseRetirementRepositoryFake{items: map[string]operationsmodel.DatabaseRetirement{}},
+		&databaseRetirementExecutorFake{},
+		nil,
+		nil,
+	)
+
+	if _, err := service.Execute(t.Context(), "retirement-1", listOnly); err == nil {
+		t.Fatal("list Action unexpectedly authorized execute")
+	}
+	if _, err := service.List(t.Context(), "", 10, executeOnly); err == nil {
+		t.Fatal("execute Action unexpectedly authorized list")
+	}
+}
+
 type databaseRetirementRepositoryFake struct {
 	items             map[string]operationsmodel.DatabaseRetirement
 	registerErr       error
@@ -166,5 +190,8 @@ func (e *databaseRetirementExecutorFake) ExecuteDatabaseRetirement(context.Conte
 }
 
 func databaseRetirementPrincipal() principalmodel.Principal {
-	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "operations"}}, accessfixture.Bundle{Key: "database-operator", Permissions: []string{databaseRetirementPermission}})
+	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "operations"}}, accessfixture.Bundle{Key: "database-operator", Permissions: []string{
+		ActionDiscoverDatabaseRetirement, ActionListDatabaseRetirements, ActionGetDatabaseRetirement,
+		ActionPreviewDatabaseRetirement, ActionAdvanceDatabaseRetirement, ActionExecuteDatabaseRetirement,
+	}})
 }

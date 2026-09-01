@@ -14,7 +14,7 @@ import (
 
 func TestActionAuthorizationAndPersistenceAuthority(t *testing.T) {
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"leave_request.recover"}})
-	action := definitionmodel.ActionSchema{ObjectKey: "leave_request", RequiresPermission: "leave_request.recover"}
+	action := definitionmodel.ActionSchema{Key: "leave_request.recover", ObjectKey: "leave_request"}
 	if !ActionAllowed(principal, action) {
 		t.Fatal("authorized Action was rejected")
 	}
@@ -26,8 +26,7 @@ func TestActionAuthorizationAndPersistenceAuthority(t *testing.T) {
 
 func TestHandlerActionAuthorizationUsesWriteDataPolicyForExactCustomAction(t *testing.T) {
 	action := definitionmodel.ActionSchema{
-		Key: "member.self_enroll", ObjectKey: "member", RequiresPermission: "member.self_enroll",
-		Authorization: &definitionmodel.ActionAuthorization{AllowedRoles: []string{"member_onboarding"}},
+		Key: "member.self_enroll", ObjectKey: "member",
 	}
 	principal := accessfixture.Attach(
 		principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "wechat-user", WorkspaceID: "workspace-primary"}},
@@ -44,21 +43,18 @@ func TestHandlerActionAuthorizationUsesWriteDataPolicyForExactCustomAction(t *te
 	}
 }
 
-func TestHandlerActionAuthorizationRequiresExactAllowedRoleAndPermission(t *testing.T) {
-	action := definitionmodel.ActionSchema{
-		Key: "booking.book", ObjectKey: "booking", RequiresPermission: "booking.book",
-		Authorization: &definitionmodel.ActionAuthorization{AllowedRoles: []string{"member"}},
-	}
+func TestHandlerActionAuthorizationUsesOnlyExactPermission(t *testing.T) {
+	action := definitionmodel.ActionSchema{Key: "booking.book", ObjectKey: "booking"}
 	member := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Key: "member", Permissions: []string{"booking.book"}})
 	if !ActionAllowed(member, action) {
-		t.Fatal("allowed role with the derived Handler permission was rejected")
+		t.Fatal("role with the exact Action permission was rejected")
 	}
 	coach := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Key: "coach", Permissions: []string{"booking.book"}})
-	if ActionAllowed(coach, action) {
-		t.Fatal("role outside authorization.allowed_roles was authorized")
+	if !ActionAllowed(coach, action) {
+		t.Fatal("role key became a second authorization authority")
 	}
 	memberWithoutPermission := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Key: "member", Permissions: []string{"booking.read"}})
 	if ActionAllowed(memberWithoutPermission, action) {
-		t.Fatal("allowed role without the Identity-issued Handler permission was authorized")
+		t.Fatal("role without the exact Action permission was authorized")
 	}
 }

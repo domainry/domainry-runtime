@@ -47,6 +47,9 @@ func (s *OperationsApplicationService) ExecuteOwnerOperation(ctx context.Context
 		return OperationsOwnerExecutionResult{}, apperror.New(apperror.KindBadRequest, "backend.operations.definition_mismatch", nil, nil)
 	}
 	permission := operationsOwnerPermission(definition.Permissions, principal)
+	if permission == "" {
+		return OperationsOwnerExecutionResult{}, operationsAuthorize(principal, "")
+	}
 	receipt, decision, err := s.Submit(ctx, OperationsSubmitRequest{
 		Kind: request.Kind, Permission: permission, ResourceType: request.ResourceType,
 		ResourceID: request.ResourceID, Reason: request.Reason, Reference: request.Reference, Payload: request.Payload,
@@ -195,16 +198,11 @@ func (s *OperationsApplicationService) executeOwnerReceipt(ctx context.Context, 
 }
 
 func operationsOwnerPermission(permissions []string, principal principalmodel.Principal) string {
-	if principal.HasExactPermission("workspace.admin") {
-		return "workspace.admin"
-	}
 	for _, permission := range permissions {
+		permission = strings.TrimSpace(permission)
 		if principal.HasExactPermission(permission) {
 			return permission
 		}
-	}
-	if len(permissions) > 0 {
-		return strings.TrimSpace(permissions[0])
 	}
 	return ""
 }

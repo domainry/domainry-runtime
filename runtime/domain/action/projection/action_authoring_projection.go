@@ -16,13 +16,11 @@ func ActionDefinitionAuthoringCapability() capabilitycontract.CapabilityAuthorin
 			{Key: "object_key", Type: "object_key", Required: true},
 			{Key: "kind", Type: "string", Required: true, Enum: actionAuthoringKinds()},
 			{Key: "risk_level", Type: "string", Enum: []string{"low", "medium", "high", "critical"}},
-			{Key: "requires_permission", Type: "permission_key", Required: true},
 			{Key: "audit_event", Type: "audit_event_key", Required: true},
-			{Key: "idempotency_keys", Type: "array", ItemSchema: "string"},
 			{Key: "assurance_policy", Type: "object"},
 			{Key: "expected_schema_hash", Type: "string", Required: true},
 		},
-		Permissions:        []string{"workspace.admin"},
+		Permissions:        []string{"runtime.appschema.validate_application_definition"},
 		ValidationEndpoint: "POST /tenant-admin/metadata/definitions/action/{resourceKey}/validate",
 		ConfigurationRoutes: []string{
 			"GET /tenant-admin/metadata/definitions/action/{resourceKey}",
@@ -38,12 +36,11 @@ func ActionDefinitionAuthoringCapability() capabilitycontract.CapabilityAuthorin
 		},
 		ReferenceContracts: []capabilitycontract.CapabilityAuthoringReference{
 			{Kind: "object_key", InputJSONPointer: "/payload/object_key", ResolverEndpoint: "GET /tenant-admin/platform-capabilities/references/object_key"},
-			{Kind: "permission_key", InputJSONPointer: "/payload/requires_permission", ResolverEndpoint: "GET /tenant-admin/platform-capabilities/references/permission_key"},
 			{Kind: "field_key", InputJSONPointer: "/payload/assurance_policy/approval_version_field", ScopeFrom: "/payload/object_key", ResolverEndpoint: "GET /tenant-admin/platform-capabilities/references/field_key"},
 			{Kind: "field_key", InputJSONPointer: "/payload/assurance_policy/approval_hash_field", ScopeFrom: "/payload/object_key", ResolverEndpoint: "GET /tenant-admin/platform-capabilities/references/field_key"},
 			{Kind: "field_key", InputJSONPointer: "/payload/assurance_policy/maker_field", ScopeFrom: "/payload/object_key", ResolverEndpoint: "GET /tenant-admin/platform-capabilities/references/field_key"},
 		},
-		Execution: &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"schema.object", "identity.role_permission"}, Transaction: "read_only_candidate_validation", Idempotency: "naturally_idempotent_at_candidate_hash", SideEffectLevel: "none", PermissionModel: "workspace.admin", ChangeControl: "source_controlled_json"},
+		Execution: &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"schema.object", "identity.permission_definition"}, Transaction: "read_only_candidate_validation", Idempotency: "naturally_idempotent_at_candidate_hash", SideEffectLevel: "none", PermissionModel: "runtime.appschema.validate_application_definition", ChangeControl: "source_controlled_json"},
 		Errors: []capabilitycontract.CapabilityAuthoringError{
 			{Code: "backend.action.definition_invalid", FieldPath: "payload", MessageKey: "backend.action.definition_invalid"},
 			{Code: "backend.action.kind_invalid", FieldPath: "payload.kind", ParameterKeys: []string{"allowed", "actual"}, MessageKey: "backend.action.kind_invalid"},
@@ -75,14 +72,13 @@ func actionAuthoringRequestSchema() *capabilitycontract.CapabilityAuthoringSchem
 	}
 	payload := capabilitycontract.CapabilityAuthoringSchema{
 		Type: "object", AdditionalProperties: &closed,
-		Required: []string{"audit_event", "key", "kind", "label", "object_key", "requires_permission"},
+		Required: []string{"audit_event", "key", "kind", "label", "object_key"},
 		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
 			"key": {Type: "string"}, "object_key": {Type: "string"}, "label": {Type: "string"},
 			"kind": {Type: "string", Enum: actionStringEnums(actionAuthoringKinds())}, "risk_level": {Type: "string", Enum: actionStringEnums([]string{"low", "medium", "high", "critical"})},
-			"requires_permission": {Type: "string"}, "audit_event": {Type: "string"},
+			"audit_event":    {Type: "string"},
 			"preconditions":  {Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Type: "string"}},
 			"payload_fields": {Type: "array", Items: &payloadField}, "defaults": {Type: "object"},
-			"idempotency_keys":       {Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Type: "string"}},
 			"optimistic_concurrency": {Type: "boolean", Default: false}, "concurrency_field": {Type: "string"}, "assurance_policy": assurancePolicy,
 		},
 	}
@@ -110,11 +106,10 @@ func actionAuthoringOutputSchema() *capabilitycontract.CapabilityAuthoringSchema
 }
 
 func actionAuthoringExamples() []capabilitycontract.CapabilityAuthoringExample {
-	base := map[string]any{"key": "order.complete", "object_key": "order", "label": "Complete order", "kind": "record_update", "requires_permission": "order.complete", "audit_event": "order_completed"}
+	base := map[string]any{"key": "order.complete", "object_key": "order", "label": "Complete order", "kind": "record_update", "audit_event": "order_completed"}
 	representative := actionExampleCopy(base)
 	representative["preconditions"] = []any{"status == paid"}
-	representative["payload_fields"] = []any{map[string]any{"key": "request_id", "type": "text", "required": true}}
-	representative["idempotency_keys"] = []any{"request_id"}
+	representative["payload_fields"] = []any{map[string]any{"key": "reason", "type": "text", "required": true}}
 	invalid := actionExampleCopy(base)
 	invalid["kind"] = "script"
 	return []capabilitycontract.CapabilityAuthoringExample{

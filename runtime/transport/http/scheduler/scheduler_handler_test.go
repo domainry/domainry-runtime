@@ -148,7 +148,7 @@ func newSchedulerHTTPHandler(result *schedulerHTTPResult) *SchedulerHandler {
 			}
 			return true
 		},
-		Admin: func(handler http.HandlerFunc) http.HandlerFunc { return handler },
+		Authenticated: func(handler http.HandlerFunc) http.HandlerFunc { return handler },
 	})
 }
 
@@ -253,15 +253,8 @@ func TestSchedulerHandlersPropagateFakeServiceErrors(t *testing.T) {
 }
 
 func TestSchedulerRoutesEnforceMethodsAndApplySurfaceMiddleware(t *testing.T) {
-	adminCalls := 0
 	authenticatedCalls := 0
 	handler := newSchedulerHTTPHandler(&schedulerHTTPResult{})
-	handler.admin = func(next http.HandlerFunc) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			adminCalls++
-			w.WriteHeader(http.StatusNoContent)
-		}
-	}
 	handler.authenticated = func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			authenticatedCalls++
@@ -287,8 +280,8 @@ func TestSchedulerRoutesEnforceMethodsAndApplySurfaceMiddleware(t *testing.T) {
 			t.Fatalf("POST %s status=%d", path, writer.Code)
 		}
 	}
-	if adminCalls != 0 || authenticatedCalls != 8 {
-		t.Fatalf("admin calls=%d authenticated calls=%d", adminCalls, authenticatedCalls)
+	if authenticatedCalls != 8 {
+		t.Fatalf("authenticated calls=%d", authenticatedCalls)
 	}
 	wrongMethod := httptest.NewRecorder()
 	mux.ServeHTTP(wrongMethod, httptest.NewRequest(http.MethodGet, "/operations/scheduler/definitions/id/run", nil))

@@ -1,13 +1,15 @@
 package businesssystem
 
-import recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
-
 // This file assembles the cross-owner business-system projection.
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"strings"
+
+	apperror "github.com/domainry/domainry-foundation/apperror"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
@@ -15,22 +17,21 @@ import (
 	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
 	appschemavalidation "github.com/domainry/domainry-runtime/runtime/domain/appschema/validation"
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
+	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
 	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
 	changeplanvalidation "github.com/domainry/domainry-runtime/runtime/domain/changeplan/validation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-
-	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-
-	"context"
-
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+)
 
-	"strings"
-
-	apperror "github.com/domainry/domainry-foundation/apperror"
-	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
+const (
+	ActionBusinessSystemSnapshot         = "runtime.businesssystem.business_system_snapshot"
+	ActionValidateRuntimeAuthoring       = "runtime.businesssystem.validate_runtime_authoring"
+	ActionVerifyRuntimeAuthoringDelivery = "runtime.businesssystem.verify_runtime_authoring_delivery"
 )
 
 type BusinessSystemApplicationDependencies struct {
@@ -102,7 +103,7 @@ func (s *BusinessSystemApplicationService) Snapshot(ctx context.Context, princip
 		ResourceVisibility:       baseBusinessSnapshotVisibility(),
 		CapabilityKeys:           capabilityKeys,
 	}
-	if principal.HasPermission("workspace.admin") {
+	if principal.HasExactPermission(ActionBusinessSystemSnapshot) {
 		if err := s.addBusinessAdministratorSnapshotFacts(ctx, &snapshot, principal); err != nil {
 			return changeplanprojection.BusinessSystemSnapshot{}, err
 		}

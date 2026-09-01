@@ -76,16 +76,15 @@ func TestRecordApplicationCompositionForwardsEveryOwnedClosure(t *testing.T) {
 		ExecuteWorkflow: func(context.Context, []workflowmodel.WorkflowExecution, principalmodel.Principal) {},
 	})
 	ctx := t.Context()
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{
-		Permissions: []string{"workspace.admin", "*"}, RecordScope: "all_records",
-		FieldPolicies: []accessfixture.FieldPolicyFixture{{
-			ObjectKey: "customer", FieldKey: "name",
-			Policies: []accessfixture.FieldRuleFixture{{
-				Key: "owner-write", Actions: []string{"write"}, Effect: "allow",
-				Predicate: &accessfixture.PredicateFixture{Operator: "eq", FieldKey: "owner_id", ValueSource: "actor_claim", ClaimKey: "user_id"},
-			}},
+	principalBundle := recordFullAccessBundle()
+	principalBundle.FieldPolicies = append(principalBundle.FieldPolicies, accessfixture.FieldPolicyFixture{
+		ObjectKey: "customer", FieldKey: "name",
+		Policies: []accessfixture.FieldRuleFixture{{
+			Key: "owner-write", Actions: []string{"write"}, Effect: "allow",
+			Predicate: &accessfixture.PredicateFixture{Operator: "eq", FieldKey: "owner_id", ValueSource: "actor_claim", ClaimKey: "user_id"},
 		}},
 	})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, principalBundle)
 	record := recordmodel.Record{ID: "customer-1", Data: map[string]any{"name": "Acme", "owner_id": "admin"}}
 
 	_ = service.create.dependencies.ApplyScopeOwnerFacts(ctx, principal.WorkspaceID, object, record.Data, record.ID)

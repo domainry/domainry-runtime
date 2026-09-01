@@ -9,7 +9,7 @@ import (
 
 func TestMetadataValidateObjectDefinitionOwnsSmallObjectShell(t *testing.T) {
 	normalized, err := ApplicationSchemaValidateObjectDefinition("order", json.RawMessage(`{"key":" order ","name":" Order "}`))
-	if err != nil || string(normalized) != `{"key":"order","name":"Order","description":"","fields":[]}` {
+	if err != nil || string(normalized) != `{"key":"order","name":"Order","description":"","fields":[],"capabilities":{"create":true,"read":true,"update":true,"delete":true,"export":true}}` {
 		t.Fatalf("normalized=%s err=%v", normalized, err)
 	}
 	for _, test := range []struct {
@@ -21,6 +21,7 @@ func TestMetadataValidateObjectDefinitionOwnsSmallObjectShell(t *testing.T) {
 		{name: "key mismatch", payload: `{"key":"invoice","name":"Invoice"}`, code: "backend.metadata.object_key_mismatch"},
 		{name: "name required", payload: `{"key":"order"}`, code: "backend.metadata.object_name_required"},
 		{name: "nested field rejected", payload: `{"key":"order","name":"Order","fields":[{"key":"total"}]}`, code: "backend.metadata.object_shell_only"},
+		{name: "write policy rejected", payload: `{"key":"order","name":"Order","config":{"write_policy":"implicit"}}`, code: "backend.metadata.object_write_policy_invalid"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := ApplicationSchemaValidateObjectDefinition("order", json.RawMessage(test.payload))
@@ -31,16 +32,23 @@ func TestMetadataValidateObjectDefinitionOwnsSmallObjectShell(t *testing.T) {
 	}
 }
 
+func TestMetadataValidateObjectDefinitionNormalizesWritePolicy(t *testing.T) {
+	normalized, err := ApplicationSchemaValidateObjectDefinition("order", json.RawMessage(`{"key":"order","name":"Order","config":{"title_field":"number","write_policy":" action_only "}}`))
+	if err != nil || string(normalized) != `{"key":"order","name":"Order","description":"","fields":[],"capabilities":{"create":true,"read":true,"update":true,"delete":true,"export":true},"config":{"title_field":"number","write_policy":"action_only"}}` {
+		t.Fatalf("normalized=%s err=%v", normalized, err)
+	}
+}
+
 func TestMetadataValidateObjectDefinitionPreservesProfileUX(t *testing.T) {
 	normalized, err := ApplicationSchemaValidateObjectDefinition("technician_profile", json.RawMessage(`{"key":"technician_profile","name":"Technician profile","ux":{"kind":"identity_profile_extension","config":{"identity_relation_field":"identity_user"},"display":{"title_field":"certificate_no"}}}`))
-	if err != nil || string(normalized) != `{"key":"technician_profile","name":"Technician profile","description":"","fields":[],"ux":{"config":{"identity_relation_field":"identity_user"},"display":{"title_field":"certificate_no"},"kind":"identity_profile_extension"}}` {
+	if err != nil || string(normalized) != `{"key":"technician_profile","name":"Technician profile","description":"","fields":[],"capabilities":{"create":true,"read":true,"update":true,"delete":true,"export":true},"ux":{"config":{"identity_relation_field":"identity_user"},"display":{"title_field":"certificate_no"},"kind":"identity_profile_extension"}}` {
 		t.Fatalf("normalized=%s err=%v", normalized, err)
 	}
 }
 
 func TestMetadataValidateObjectDefinitionNormalizesLifecyclePolicy(t *testing.T) {
 	normalized, err := ApplicationSchemaValidateObjectDefinition("ledger_entry", json.RawMessage(`{"key":"ledger_entry","name":"Ledger entry","lifecycle_policy":{"mode":" immutable_after_state ","state_field":" status ","immutable_states":[" confirmed ","reversed"]}}`))
-	if err != nil || string(normalized) != `{"key":"ledger_entry","name":"Ledger entry","description":"","fields":[],"lifecycle_policy":{"mode":"immutable_after_state","state_field":"status","immutable_states":["confirmed","reversed"]}}` {
+	if err != nil || string(normalized) != `{"key":"ledger_entry","name":"Ledger entry","description":"","fields":[],"capabilities":{"create":true,"read":true,"update":true,"delete":true,"export":true},"lifecycle_policy":{"mode":"immutable_after_state","state_field":"status","immutable_states":["confirmed","reversed"]}}` {
 		t.Fatalf("normalized=%s err=%v", normalized, err)
 	}
 	for _, payload := range []string{
@@ -58,7 +66,7 @@ func TestMetadataValidateObjectDefinitionNormalizesLifecyclePolicy(t *testing.T)
 
 func TestMetadataValidateObjectDefinitionNormalizesLedgerPolicy(t *testing.T) {
 	normalized, err := ApplicationSchemaValidateObjectDefinition("financial_entry", json.RawMessage(`{"key":"financial_entry","name":"Financial entry","lifecycle_policy":{"mode":"append_only"},"ledger_policy":{"integrity":" sha256_chain ","signature":" hmac_sha256 "}}`))
-	if err != nil || string(normalized) != `{"key":"financial_entry","name":"Financial entry","description":"","fields":[],"lifecycle_policy":{"mode":"append_only"},"ledger_policy":{"integrity":"sha256_chain","signature":"hmac_sha256"}}` {
+	if err != nil || string(normalized) != `{"key":"financial_entry","name":"Financial entry","description":"","fields":[],"capabilities":{"create":true,"read":true,"update":false,"delete":false,"export":true},"lifecycle_policy":{"mode":"append_only"},"ledger_policy":{"integrity":"sha256_chain","signature":"hmac_sha256"}}` {
 		t.Fatalf("normalized=%s err=%v", normalized, err)
 	}
 	for _, payload := range []string{
@@ -75,7 +83,7 @@ func TestMetadataValidateObjectDefinitionNormalizesLedgerPolicy(t *testing.T) {
 
 func TestMetadataValidateObjectDefinitionNormalizesExportAssurancePolicy(t *testing.T) {
 	normalized, err := ApplicationSchemaValidateObjectDefinition("customer", json.RawMessage(`{"key":"customer","name":"Customer","export_assurance_policy":{"required_methods":[" otp "," recent_reauth "],"recent_reauth_max_age_seconds":300}}`))
-	if err != nil || string(normalized) != `{"key":"customer","name":"Customer","description":"","fields":[],"export_assurance_policy":{"required_methods":["otp","recent_reauth"],"recent_reauth_max_age_seconds":300}}` {
+	if err != nil || string(normalized) != `{"key":"customer","name":"Customer","description":"","fields":[],"capabilities":{"create":true,"read":true,"update":true,"delete":true,"export":true},"export_assurance_policy":{"required_methods":["otp","recent_reauth"],"recent_reauth_max_age_seconds":300}}` {
 		t.Fatalf("normalized=%s err=%v", normalized, err)
 	}
 	for _, payload := range []string{

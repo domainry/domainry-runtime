@@ -23,14 +23,16 @@ type governedHandlerProbe struct {
 	events     *[]string
 	invoked    int
 	input      json.RawMessage
+	identity   runtimeext.ExecutionIdentity
 	allowEmpty bool
 }
 
 func (h *governedHandlerProbe) Descriptor() runtimeext.HandlerDescriptor { return h.descriptor }
 
-func (h *governedHandlerProbe) Invoke(_ context.Context, _ runtimeext.ActionExecution, input json.RawMessage) (json.RawMessage, error) {
+func (h *governedHandlerProbe) Invoke(_ context.Context, execution runtimeext.ActionExecution, input json.RawMessage) (json.RawMessage, error) {
 	h.invoked++
 	h.input = append(h.input[:0], input...)
+	h.identity = execution.Identity()
 	*h.events = append(*h.events, "handler")
 	var payload map[string]any
 	if err := json.Unmarshal(input, &payload); err != nil {
@@ -55,8 +57,7 @@ func TestBusinessHandlerReceivesOnlyPublishedInputFields(t *testing.T) {
 	service := newGovernedHandlerApplication(t, handler, ActionAuthorization{}, ActionAssurance{}, store)
 
 	_, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, governedHandlerInvocation(map[string]any{
-		"amount":          "12.5",
-		"idempotency_key": "transport-command-1",
+		"amount": "12.5",
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -66,25 +67,18 @@ func TestBusinessHandlerReceivesOnlyPublishedInputFields(t *testing.T) {
 	}
 }
 
-func TestBusinessHandlerBindsDeclaredIdempotencyFieldFromInvocationMetadata(t *testing.T) {
+func TestBusinessHandlerReceivesIdempotencyOnlyAsExecutionMetadata(t *testing.T) {
 	events := []string{}
 	handler := newGovernedHandlerProbe(&events)
 	store := &governedExecutionStoreProbe{events: &events}
 	service := newGovernedHandlerApplication(t, handler, ActionAuthorization{}, ActionAssurance{}, store)
-	entry, ok := service.dependencies.Catalog.Entry("booking.reserve")
-	if !ok {
-		t.Fatal("missing action entry")
-	}
-	entry.Definition.PayloadFields = append(entry.Definition.PayloadFields, definitionmodel.ActionPayloadField{Key: "idempotency_key", Type: "string", Required: true})
-	service.dependencies.Catalog.entries["booking.reserve"] = entry
-
 	invocation := governedHandlerInvocation(map[string]any{"amount": "12.5"})
 	invocation.IdempotencyKey = "header-command-1"
 	if _, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, invocation); err != nil {
 		t.Fatal(err)
 	}
-	if string(handler.input) != `{"amount":12.5,"idempotency_key":"header-command-1"}` {
-		t.Fatalf("handler input=%s", handler.input)
+	if string(handler.input) != `{"amount":12.5}` || handler.identity.IdempotencyKey != "header-command-1" {
+		t.Fatalf("handler input=%s identity=%+v", handler.input, handler.identity)
 	}
 }
 
@@ -101,9 +95,7 @@ func TestBusinessHandlerEmptyContractReceivesEmptyJSONObject(t *testing.T) {
 	entry.Definition.PayloadFields = nil
 	service.dependencies.Catalog.entries["booking.reserve"] = entry
 
-	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, governedHandlerInvocation(map[string]any{
-		"idempotency_key": "transport-command-1",
-	}))
+	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, governedHandlerInvocation(nil))
 	if err != nil || result.Object == nil {
 		t.Fatalf("result=%+v error=%v", result, err)
 	}
@@ -268,14 +260,14 @@ func newGovernedHandlerApplication(t *testing.T, handler runtimeext.BusinessHand
 	}
 	registry.Freeze()
 	action := actionTestPublishedContract(definitionmodel.ActionSchema{
-		Key: "booking.reserve", ObjectKey: "booking", Kind: definitionmodel.ActionKindObjectOperation, RequiresPermission: "booking.reserve",
+		Key: "booking.reserve", ObjectKey: "booking", Kind: definitionmodel.ActionKindObjectOperation,
 		PayloadFields: []definitionmodel.ActionPayloadField{{Key: "amount", Type: "number", Required: true}},
 	})
 	system := NewSystemOperationCatalog()
 	return NewActionApplication(ActionApplicationDependencies{
 		Catalog: NewActionCatalog([]definitionmodel.ActionSchema{action}, system, registry), SystemOperations: NewSystemOperationExecutor(system),
 		BusinessHandlers: newActionTestBusinessHandlerExecutor(BusinessHandlerExecutionDependencies{}), Authorization: authorization, Assurance: assurance,
-		UnitOfWork: NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(store)), NewInvocationID: func(context.Context) string { return "invocation-1" },
+		UnitOfWork: NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(store)),
 	})
 }
 

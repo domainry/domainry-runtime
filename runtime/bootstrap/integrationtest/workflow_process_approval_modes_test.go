@@ -53,7 +53,7 @@ func TestWorkflowApprovalModesAggregateTasks(t *testing.T) {
 			if test.mode == "sequential" && (tasks[0].Status != "open" || tasks[1].Status != "pending") {
 				t.Fatalf("expected sequential open/pending tasks, got %#v", tasks)
 			}
-			first := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: tasks[0].AssigneeUserID, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "approver", Permissions: []string{"workflow.task.act"}})
+			first := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: tasks[0].AssigneeUserID, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "approver", Permissions: integrationWorkflowTaskDecisionPermissions()})
 			application := records.Applications().Workflows
 			afterFirst, err := application.DecideTask(t.Context(), tasks[0].ID, workflowmodel.WorkflowTaskDecisionRequest{Decision: test.firstDecision}, first)
 			if err != nil {
@@ -69,7 +69,7 @@ func TestWorkflowApprovalModesAggregateTasks(t *testing.T) {
 			if test.wantAfterFirst != "waiting" {
 				return
 			}
-			secondPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: second.AssigneeUserID, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "approver", Permissions: []string{"workflow.task.act"}})
+			secondPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: second.AssigneeUserID, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "approver", Permissions: integrationWorkflowTaskDecisionPermissions()})
 			final, err := application.DecideTask(t.Context(), second.ID, workflowmodel.WorkflowTaskDecisionRequest{Decision: "approved"}, secondPrincipal)
 			if err != nil || final.Status != test.wantFinal {
 				t.Fatalf("expected final %s, got %#v err=%v cause=%v", test.wantFinal, final, err, errors.Unwrap(err))

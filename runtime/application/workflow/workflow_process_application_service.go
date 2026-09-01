@@ -369,8 +369,8 @@ func (s *WorkflowApplicationService) DecideTask(ctx context.Context, taskID stri
 			if task.AssigneeUserID != principal.UserID {
 				return workflowmodel.WorkflowProcessInstance{}, forbidden("backend.workflow.task_assignee_required")
 			}
-			if !workflowpolicy.WorkflowDefinitionPermissionAllows(principal, "workflow.task.act") {
-				return workflowmodel.WorkflowProcessInstance{}, forbidden("backend.workflow.task.act_permission_required")
+			if err := workflowAuthorizeTaskDecision(principal, req.Decision); err != nil {
+				return workflowmodel.WorkflowProcessInstance{}, err
 			}
 			process, processFound, getErr := s.processRepo.GetProcess(ctx, principal.WorkspaceID, task.ProcessID)
 			if getErr != nil {

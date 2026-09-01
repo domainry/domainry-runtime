@@ -23,7 +23,7 @@ func (repository *workspaceProvisionRepositoryProbe) Provision(context.Context, 
 func TestWorkspaceProvisionApplicationServiceMapsAcceptanceFailureToStableCode(t *testing.T) {
 	repository := &workspaceProvisionRepositoryProbe{provisionErr: workspaceprovisionmodel.ErrAcceptanceFailure}
 	service := NewWorkspaceProvisionApplicationService(repository)
-	principal := principalmodel.NewSystemPrincipal("platform-admin", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "workspace provisioning"), Permission)
+	principal := principalmodel.NewSystemPrincipal("platform-admin", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "workspace provisioning"), ProvisionActionKey)
 	result, err := service.Provision(t.Context(), principal, workspaceprovisionmodel.Request{RequestID: "secret-request"})
 	if result.WorkspaceID != "" || result.TenantRegistryID != "" || result.InitialPassword != "" || len(result.ProjectionIDs) != 0 || apperror.CodeOf(err) != "workspace.provision_failed" || apperror.KindOf(err) != apperror.KindInternal {
 		t.Fatalf("result=%#v code=%q kind=%q error=%v", result, apperror.CodeOf(err), apperror.KindOf(err), err)
@@ -50,11 +50,11 @@ func TestWorkspaceProvisionApplicationServiceAuthorizesBeforeRepositoryAccess(t 
 		t.Fatalf("denied request reached repository: provision=%d reconcile=%d", repository.provisionCalls, repository.reconcileCalls)
 	}
 
-	provisioner := principalmodel.NewSystemPrincipal("platform-admin", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "workspace provisioning"), Permission)
+	provisioner := principalmodel.NewSystemPrincipal("platform-admin", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "workspace provisioning"), ProvisionActionKey)
 	if _, err := service.Provision(t.Context(), provisioner, request); err != nil || repository.provisionCalls != 1 {
 		t.Fatalf("authorized provision calls=%d err=%v", repository.provisionCalls, err)
 	}
-	reconciler := principalmodel.NewSystemPrincipal("platform-admin", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "role reconciliation"), ReconcilePermission)
+	reconciler := principalmodel.NewSystemPrincipal("platform-admin", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "role reconciliation"), ReconcileRolesActionKey)
 	if _, err := service.ReconcileWorkspaceRoles(t.Context(), reconciler, "workspace-new"); err != nil || repository.reconcileCalls != 1 {
 		t.Fatalf("authorized reconcile calls=%d err=%v", repository.reconcileCalls, err)
 	}

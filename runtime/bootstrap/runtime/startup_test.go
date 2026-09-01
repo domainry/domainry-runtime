@@ -435,7 +435,7 @@ func TestGlobalValidationAndDeliveryGateMoveOwnedRuntimeToReady(t *testing.T) {
 	runtime := New(t.Context(), cfg, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 	defer runtime.CloseContext(t.Context())
 	permissions := []string{
-		"workspace.admin", "scheduler.definition.read", "ops.workflow.read", "workflow.process.read",
+		"workspace.admin", "scheduler.definition.read", "runtime.automation.list_automation_rules", "runtime.automation.list_automation_executions", "ops.workflow.read", "workflow.process.read",
 		"integration.audit.view", "integration.catalog.view",
 	}
 	dataPermissions := []accessfixture.DataPolicyFixture{}

@@ -22,7 +22,7 @@ func (h *RecordsHandler) executeBulkAction(w http.ResponseWriter, r *http.Reques
 	if r.Body != nil && r.ContentLength != 0 && !h.decodeJSON(w, r, &req) {
 		return
 	}
-	key, err := recordsActionIdempotencyKey(r, req.IdempotencyKey)
+	key, err := recordsActionIdempotencyKey(r)
 	if err != nil {
 		h.writeActionServiceError(w, r, err)
 		return
@@ -42,15 +42,14 @@ func (h *RecordsHandler) executeObjectAction(w http.ResponseWriter, r *http.Requ
 	if r.Body != nil && r.ContentLength != 0 && !h.decodeJSON(w, r, &req) {
 		return
 	}
-	key, err := recordsActionIdempotencyKey(r, req.IdempotencyKey)
+	key, err := recordsActionIdempotencyKey(r)
 	if err != nil {
 		h.writeActionServiceError(w, r, err)
 		return
 	}
-	req.IdempotencyKey = key
 	invoked, err := h.actions.Invoke(r.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{
 		ActionKey: strings.TrimSpace(r.PathValue("actionKey")), ObjectKey: strings.TrimSpace(r.PathValue("objectKey")),
-		Input: req.Data, IdempotencyKey: req.IdempotencyKey, AssuranceToken: req.AssuranceToken, Principal: h.principal(r),
+		Input: req.Data, IdempotencyKey: key, AssuranceToken: req.AssuranceToken, Principal: h.principal(r),
 	})
 	if err != nil {
 		h.writeActionServiceError(w, r, err)
@@ -76,7 +75,7 @@ func (h *RecordsHandler) executeAction(w http.ResponseWriter, r *http.Request) {
 		}))
 		return
 	}
-	key, err := recordsActionIdempotencyKey(r, "")
+	key, err := recordsActionIdempotencyKey(r)
 	if err != nil {
 		h.writeActionServiceError(w, r, err)
 		return

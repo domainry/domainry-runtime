@@ -30,7 +30,7 @@ func TestChangePlanRichReferenceSchemaCoversGenericResourceRelationships(t *test
 			}},
 			{Key: "customer", Name: "Customer"},
 		},
-		Actions: []definitionmodel.ActionSchema{{Key: "order.approve", ObjectKey: "order", Label: "Approve", RequiresPermission: "order.update"}},
+		Actions: []definitionmodel.ActionSchema{{Key: "order.approve", ObjectKey: "order", Label: "Approve"}},
 		Workflows: []definitionmodel.WorkflowSchema{{
 			Key: "order_approval", Name: "Order approval", RunAs: "manager",
 			TriggerContract:   &definitionmodel.WorkflowTriggerContract{ObjectKeys: []string{"", "order"}, FieldKey: "status"},

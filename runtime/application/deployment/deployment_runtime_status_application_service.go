@@ -126,9 +126,6 @@ func (s *DeploymentRuntimeStatusApplicationService) IdempotencyReceipts(ctx cont
 		return nil, err
 	}
 	operations, ok := s.repository.(deploymentrepository.IdempotencyOperationsRepository)
-	if !principal.HasPermission("workspace.admin") {
-		return nil, apperror.New(apperror.KindForbidden, "auth.permission_denied", nil, nil)
-	}
 	if !ok {
 		return nil, apperror.New(apperror.KindInternal, idempotency.ErrorCodeReceiptUnavailable, nil, nil)
 	}
@@ -151,9 +148,6 @@ func (s *DeploymentRuntimeStatusApplicationService) mutateIdempotencyReceipt(ctx
 		return err
 	}
 	operations, ok := s.repository.(deploymentrepository.IdempotencyOperationsRepository)
-	if !principal.HasPermission("workspace.admin") {
-		return apperror.New(apperror.KindForbidden, "auth.permission_denied", nil, nil)
-	}
 	if !ok {
 		return apperror.New(apperror.KindInternal, idempotency.ErrorCodeReceiptUnavailable, nil, nil)
 	}

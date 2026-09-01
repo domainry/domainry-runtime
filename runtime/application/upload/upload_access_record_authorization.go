@@ -24,7 +24,7 @@ func (s *UploadAccessApplicationService) authorizeRecordDownload(ctx context.Con
 	if !uploadFileMatchesRecord(filename, record.Data[fieldKey]) {
 		return s.denyDownload(ctx, objectKey, fieldKey, recordID, filename, principal, "File download filename mismatch", "mismatch", apperror.KindForbidden, "backend.upload.permission_denied")
 	}
-	if objectKey == "document" && uploadRecordBoolean(record.Data["sensitive"]) && !principal.HasPermission("workspace.admin") && !principal.HasPermission("document.sensitive.read") {
+	if objectKey == "document" && uploadRecordBoolean(record.Data["sensitive"]) && !principal.HasExactPermission("document.sensitive.read") {
 		s.audit.AppendWithMetadata(ctx, "sensitive_file_download_denied", objectKey, recordID, principal, "Sensitive document download denied", nil, nil, map[string]any{"filename": filename, "field_key": fieldKey, "reason": "sensitive"})
 		return uploadAccessError(apperror.KindForbidden, "backend.upload.permission_denied")
 	}

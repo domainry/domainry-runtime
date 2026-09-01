@@ -61,7 +61,7 @@ func (s *RuntimeAuthoringValidationApplicationService) Validate(ctx context.Cont
 }
 
 func (s *RuntimeAuthoringValidationApplicationService) ValidateWithCoverage(ctx context.Context, principal principalmodel.Principal, ledger *changeplanmodel.RuntimeAuthoringCoverageLedger) (RuntimeAuthoringValidationReport, error) {
-	if !principal.Known || !principal.HasPermission("workspace.admin") {
+	if !principal.Known {
 		return RuntimeAuthoringValidationReport{}, businessSystemForbidden("auth.permission_denied")
 	}
 	if s == nil || s.dependencies.CurrentManifest == nil || s.dependencies.CurrentSnapshot == nil || s.dependencies.ValidateDefinitions == nil {

@@ -72,9 +72,10 @@ func (s runtimeIntegrationTriggerSink) Trigger(ctx context.Context, request inte
 			err := fmt.Errorf("Runtime Action application is unavailable")
 			return runtimeIntegrationReceipt(request, "", "failed", "backend.integration.runtime_action_unavailable"), err
 		}
+		executionPrincipal := principal.WithExactSystemCapabilities(request.Target.ActionKey)
 		result, invokeErr := s.actions.Invoke(ctx, actionmodel.ActionSourceIntegration, actionmodel.ActionInvocation{
 			ActionKey: request.Target.ActionKey, ObjectKey: request.Target.ObjectKey, RecordID: request.Target.RecordID,
-			Input: cloneIntegrationTriggerInput(request.Target.Input), Principal: principal, Actor: principal,
+			Input: cloneIntegrationTriggerInput(request.Target.Input), Principal: executionPrincipal, Actor: principal,
 			RequestID: request.EventID, IdempotencyKey: request.IdempotencyKey,
 		})
 		receipt := runtimeIntegrationReceipt(request, result.InvocationID, result.Status, result.ErrorCode)
@@ -91,7 +92,8 @@ func (s runtimeIntegrationTriggerSink) Trigger(ctx context.Context, request inte
 		setIntegrationTriggerDefault(payload, "integration_event_id", request.EventID)
 		setIntegrationTriggerDefault(payload, "integration_mapping_key", request.MappingKey)
 		setIntegrationTriggerDefault(payload, "integration_idempotency_key", request.IdempotencyKey)
-		result, runErr := s.workflows.RunIntegrationWorkflow(ctx, request.Target.WorkflowKey, payload, principal)
+		executionPrincipal := principal.WithExactSystemCapabilities("workflow.run." + strings.TrimSpace(request.Target.WorkflowKey))
+		result, runErr := s.workflows.RunIntegrationWorkflow(ctx, request.Target.WorkflowKey, payload, executionPrincipal)
 		receipt := runtimeIntegrationReceipt(request, result.Execution.ID, result.Status, "")
 		if runErr != nil {
 			receipt.Status, receipt.ErrorCode = "failed", apperror.CodeOf(runErr)
@@ -108,7 +110,6 @@ func (s runtimeIntegrationTriggerSink) principal(ctx context.Context, request in
 		principal := principalmodel.NewSystemPrincipal(
 			"integration:worker",
 			principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "execute verified Integration event mapping"),
-			"*",
 		)
 		principal.WorkspaceID = strings.TrimSpace(request.WorkspaceID)
 		principal.RequestID, principal.CorrelationID, principal.CausationID = request.EventID, request.EventID, request.EventID

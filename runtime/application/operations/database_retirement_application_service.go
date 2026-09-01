@@ -16,7 +16,14 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-const databaseRetirementPermission = "runtime.database.retirement.manage"
+const (
+	ActionDiscoverDatabaseRetirement = "runtime.operations.discover_database_retirement"
+	ActionListDatabaseRetirements    = "runtime.operations.list_database_retirements"
+	ActionGetDatabaseRetirement      = "runtime.operations.get_database_retirement"
+	ActionPreviewDatabaseRetirement  = "runtime.operations.preview_database_retirement"
+	ActionAdvanceDatabaseRetirement  = "runtime.operations.advance_database_retirement"
+	ActionExecuteDatabaseRetirement  = "runtime.operations.execute_database_retirement"
+)
 
 type DatabaseRetirementApplicationService struct {
 	repository operationsrepository.DatabaseRetirementRepository
@@ -36,7 +43,7 @@ func NewDatabaseRetirementApplicationService(repository operationsrepository.Dat
 }
 
 func (s *DatabaseRetirementApplicationService) Discover(ctx context.Context, object operationsmodel.DatabaseObjectIdentity, owner string, principal principalmodel.Principal) (operationsmodel.DatabaseRetirement, error) {
-	if err := authorizeDatabaseRetirement(principal); err != nil {
+	if err := authorizeDatabaseRetirement(principal, ActionDiscoverDatabaseRetirement); err != nil {
 		return operationsmodel.DatabaseRetirement{}, err
 	}
 	if s == nil || s.repository == nil {
@@ -58,9 +65,13 @@ func (s *DatabaseRetirementApplicationService) Discover(ctx context.Context, obj
 }
 
 func (s *DatabaseRetirementApplicationService) Status(ctx context.Context, id string, principal principalmodel.Principal) (operationsmodel.DatabaseRetirement, error) {
-	if err := authorizeDatabaseRetirement(principal); err != nil {
+	if err := authorizeDatabaseRetirement(principal, ActionGetDatabaseRetirement); err != nil {
 		return operationsmodel.DatabaseRetirement{}, err
 	}
+	return s.status(ctx, id)
+}
+
+func (s *DatabaseRetirementApplicationService) status(ctx context.Context, id string) (operationsmodel.DatabaseRetirement, error) {
 	retirement, found, err := s.repository.GetDatabaseRetirement(ctx, strings.TrimSpace(id))
 	if err != nil {
 		return operationsmodel.DatabaseRetirement{}, apperror.New(apperror.KindInternal, "backend.operations.database_retirement_read_failed", err, nil)
@@ -72,7 +83,10 @@ func (s *DatabaseRetirementApplicationService) Status(ctx context.Context, id st
 }
 
 func (s *DatabaseRetirementApplicationService) OperationalStatus(ctx context.Context, id string, principal principalmodel.Principal) (operationsmodel.DatabaseRetirementOperationalStatus, error) {
-	retirement, err := s.Status(ctx, id, principal)
+	if err := authorizeDatabaseRetirement(principal, ActionGetDatabaseRetirement); err != nil {
+		return operationsmodel.DatabaseRetirementOperationalStatus{}, err
+	}
+	retirement, err := s.status(ctx, id)
 	if err != nil {
 		return operationsmodel.DatabaseRetirementOperationalStatus{}, err
 	}
@@ -99,17 +113,24 @@ func (s *DatabaseRetirementApplicationService) OperationalStatus(ctx context.Con
 }
 
 func (s *DatabaseRetirementApplicationService) List(ctx context.Context, state operationsmodel.DatabaseRetirementState, limit int, principal principalmodel.Principal) ([]operationsmodel.DatabaseRetirement, error) {
-	if err := authorizeDatabaseRetirement(principal); err != nil {
+	if err := authorizeDatabaseRetirement(principal, ActionListDatabaseRetirements); err != nil {
 		return nil, err
 	}
 	return s.repository.ListDatabaseRetirements(ctx, state, limit)
 }
 
 func (s *DatabaseRetirementApplicationService) Preview(ctx context.Context, id string, principal principalmodel.Principal) (operationsmodel.DatabaseDropPlan, error) {
-	retirement, err := s.Status(ctx, id, principal)
+	if err := authorizeDatabaseRetirement(principal, ActionPreviewDatabaseRetirement); err != nil {
+		return operationsmodel.DatabaseDropPlan{}, err
+	}
+	retirement, err := s.status(ctx, id)
 	if err != nil {
 		return operationsmodel.DatabaseDropPlan{}, err
 	}
+	return s.preview(ctx, retirement)
+}
+
+func (s *DatabaseRetirementApplicationService) preview(ctx context.Context, retirement operationsmodel.DatabaseRetirement) (operationsmodel.DatabaseDropPlan, error) {
 	if s.executor == nil {
 		return operationsmodel.DatabaseDropPlan{}, apperror.New(apperror.KindInternal, "backend.operations.database_retirement_executor_unavailable", nil, nil)
 	}
@@ -124,7 +145,10 @@ func (s *DatabaseRetirementApplicationService) Preview(ctx context.Context, id s
 }
 
 func (s *DatabaseRetirementApplicationService) Advance(ctx context.Context, id string, nextState operationsmodel.DatabaseRetirementState, evidence operationsmodel.DatabaseRetirementEvidence, principal principalmodel.Principal) (operationsmodel.DatabaseRetirement, error) {
-	current, err := s.Status(ctx, id, principal)
+	if err := authorizeDatabaseRetirement(principal, ActionAdvanceDatabaseRetirement); err != nil {
+		return operationsmodel.DatabaseRetirement{}, err
+	}
+	current, err := s.status(ctx, id)
 	if err != nil {
 		return operationsmodel.DatabaseRetirement{}, err
 	}
@@ -160,7 +184,10 @@ func (s *DatabaseRetirementApplicationService) Advance(ctx context.Context, id s
 }
 
 func (s *DatabaseRetirementApplicationService) Execute(ctx context.Context, id string, principal principalmodel.Principal) (operationscontract.DatabaseRetirementExecutionResult, error) {
-	current, err := s.Status(ctx, id, principal)
+	if err := authorizeDatabaseRetirement(principal, ActionExecuteDatabaseRetirement); err != nil {
+		return operationscontract.DatabaseRetirementExecutionResult{}, err
+	}
+	current, err := s.status(ctx, id)
 	if err != nil {
 		return operationscontract.DatabaseRetirementExecutionResult{}, err
 	}
@@ -176,7 +203,7 @@ func (s *DatabaseRetirementApplicationService) Execute(ctx context.Context, id s
 	if err := operationspolicy.OperationsValidateDatabaseRetirementTransition(current, next, now); err != nil {
 		return operationscontract.DatabaseRetirementExecutionResult{}, apperror.New(apperror.KindConflict, err.Error(), err, nil)
 	}
-	plan, err := s.Preview(ctx, id, principal)
+	plan, err := s.preview(ctx, current)
 	if err != nil {
 		return operationscontract.DatabaseRetirementExecutionResult{}, err
 	}
@@ -206,8 +233,8 @@ func validateDatabaseRetirementDiscovery(retirement operationsmodel.DatabaseReti
 	return nil
 }
 
-func authorizeDatabaseRetirement(principal principalmodel.Principal) error {
-	if !principal.Known || strings.TrimSpace(principal.UserID) == "" || !principal.HasPermission(databaseRetirementPermission) {
+func authorizeDatabaseRetirement(principal principalmodel.Principal, actionKey string) error {
+	if !principal.Known || strings.TrimSpace(principal.UserID) == "" || !principal.HasExactPermission(actionKey) {
 		return apperror.New(apperror.KindForbidden, "auth.permission_denied", nil, nil)
 	}
 	return nil

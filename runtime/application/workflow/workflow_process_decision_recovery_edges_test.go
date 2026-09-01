@@ -101,7 +101,7 @@ func TestDecideTerminalWorkflowTaskValidationAndLookupOutcomes(t *testing.T) {
 	store.getTaskValue = task
 	denied := principal
 	denied = workflowPrincipalWithPermissions(denied)
-	if _, _, err := decideTerminalWorkflowTaskWithContext(t.Context(), runtime, "task", workflowmodel.WorkflowTaskDecisionRequest{Decision: "approved"}, denied); apperror.CodeOf(err) != "backend.workflow.task.act_permission_required" {
+	if _, _, err := decideTerminalWorkflowTaskWithContext(t.Context(), runtime, "task", workflowmodel.WorkflowTaskDecisionRequest{Decision: "approved"}, denied); apperror.CodeOf(err) != "auth.permission_denied" {
 		t.Fatalf("permission=%v", err)
 	}
 	store.getProcessErr = errors.New("process")

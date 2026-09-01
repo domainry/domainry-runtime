@@ -29,15 +29,28 @@ type ChangePlanReferenceApplicationService struct {
 	evidence changeplanrepository.ChangePlanEvidenceRepository
 }
 
+const (
+	ActionBusinessReferenceGraph  = "runtime.businessreferences.business_reference_graph"
+	ActionBusinessReferenceImpact = "runtime.businessreferences.business_reference_impact"
+)
+
 func NewChangePlanReferenceApplicationService(schema func(context.Context, principalmodel.Principal) ReferenceSchema, runtime ReferenceRuntime, evidence changeplanrepository.ChangePlanEvidenceRepository) *ChangePlanReferenceApplicationService {
 	return &ChangePlanReferenceApplicationService{schema: schema, runtime: runtime, evidence: evidence}
 }
 
 func (s *ChangePlanReferenceApplicationService) Graph(ctx context.Context, principal principalmodel.Principal) (changeplanmodel.ReferenceGraph, error) {
+	return s.graphForAction(ctx, principal, ActionBusinessReferenceGraph)
+}
+
+func (s *ChangePlanReferenceApplicationService) ImpactGraph(ctx context.Context, principal principalmodel.Principal) (changeplanmodel.ReferenceGraph, error) {
+	return s.graphForAction(ctx, principal, ActionBusinessReferenceImpact)
+}
+
+func (s *ChangePlanReferenceApplicationService) graphForAction(ctx context.Context, principal principalmodel.Principal, actionKey string) (changeplanmodel.ReferenceGraph, error) {
 	if err := changePlanAuthorizeQuery(principal); err != nil {
 		return changeplanmodel.ReferenceGraph{}, err
 	}
-	if !principal.HasPermission("workspace.admin") {
+	if !principal.HasExactPermission(actionKey) {
 		return changeplanmodel.ReferenceGraph{}, &apperror.AppError{Kind: apperror.KindForbidden, Code: "auth.permission_denied"}
 	}
 	builder := newChangePlanReferenceGraphBuilder()

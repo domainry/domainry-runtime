@@ -1,6 +1,10 @@
 package appschema
 
 import (
+	"context"
+	"errors"
+	"sync"
+
 	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
@@ -19,10 +23,7 @@ import (
 
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 
-	"context"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
-
-	"sync"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
@@ -44,10 +45,30 @@ type ApplicationSchemaApplicationService struct {
 	references        ApplicationSchemaReferenceGraphProvider
 	auditAppender     ApplicationSchemaAuditAppender
 	reloadObserversMu sync.RWMutex
-	reloadObservers   []func(appschemamodel.ApplicationSchemaSnapshot)
+	reloadObservers   []ApplicationSchemaReloadObserver
 }
 
-func (s *ApplicationSchemaApplicationService) AddReloadObserver(observer func(appschemamodel.ApplicationSchemaSnapshot)) {
+// ApplicationSchemaReloadCommit publishes one already prepared in-process
+// dependent snapshot. It cannot fail.
+type ApplicationSchemaReloadCommit func()
+
+// ApplicationSchemaReloadAbort compensates external prepare effects when a
+// later reload step fails. External implementations must apply their own
+// bounded timeout to the supplied non-cancelled context.
+type ApplicationSchemaReloadAbort func(context.Context) error
+
+// ApplicationSchemaReloadPreparation separates reversible external prepare
+// effects from the no-fail in-process commit that publishes live snapshots.
+type ApplicationSchemaReloadPreparation struct {
+	Commit ApplicationSchemaReloadCommit
+	Abort  ApplicationSchemaReloadAbort
+}
+
+// ApplicationSchemaReloadObserver validates/prepares a candidate schema.
+// Returning an error aborts activation and compensates earlier preparations.
+type ApplicationSchemaReloadObserver func(context.Context, appschemamodel.ApplicationSchemaSnapshot) (ApplicationSchemaReloadPreparation, error)
+
+func (s *ApplicationSchemaApplicationService) AddReloadObserver(observer ApplicationSchemaReloadObserver) {
 	if s == nil || observer == nil {
 		return
 	}
@@ -56,13 +77,31 @@ func (s *ApplicationSchemaApplicationService) AddReloadObserver(observer func(ap
 	s.reloadObservers = append(s.reloadObservers, observer)
 }
 
-func (s *ApplicationSchemaApplicationService) notifyReloadObservers(snapshot appschemamodel.ApplicationSchemaSnapshot) {
+func (s *ApplicationSchemaApplicationService) prepareReloadObservers(ctx context.Context, snapshot appschemamodel.ApplicationSchemaSnapshot) ([]ApplicationSchemaReloadPreparation, error) {
 	s.reloadObserversMu.RLock()
-	observers := append([]func(appschemamodel.ApplicationSchemaSnapshot){}, s.reloadObservers...)
+	observers := append([]ApplicationSchemaReloadObserver(nil), s.reloadObservers...)
 	s.reloadObserversMu.RUnlock()
+	preparations := make([]ApplicationSchemaReloadPreparation, 0, len(observers))
 	for _, observer := range observers {
-		observer(snapshot)
+		preparation, err := observer(ctx, snapshot)
+		if err != nil {
+			return nil, errors.Join(err, abortReloadObservers(context.WithoutCancel(ctx), preparations))
+		}
+		if preparation.Commit != nil || preparation.Abort != nil {
+			preparations = append(preparations, preparation)
+		}
 	}
+	return preparations, nil
+}
+
+func abortReloadObservers(ctx context.Context, preparations []ApplicationSchemaReloadPreparation) error {
+	var result error
+	for index := len(preparations) - 1; index >= 0; index-- {
+		if preparations[index].Abort != nil {
+			result = errors.Join(result, preparations[index].Abort(ctx))
+		}
+	}
+	return result
 }
 
 type ApplicationSchemaReferenceGraphProvider interface {

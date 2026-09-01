@@ -79,7 +79,7 @@ func TestBusinessWorkspaceIdentityCreatesCustomerAndPersistsBeforeAutomationHist
 
 	reviewerSession := runtimeIdentityFixtureSession(t, "automation_history_reviewer_user", "automation_history_reviewer")
 	reviewerEffective := runtimeFixtureAuthorizedRequest[map[string]any](t, handler, reviewerSession.AccessToken, http.MethodGet, "/permissions/effective", nil)
-	if !runtimeFixtureFunctionPermissionAllowed(t, reviewerEffective, "automation.rule.history.read") ||
+	if !runtimeFixtureFunctionPermissionAllowed(t, reviewerEffective, "runtime.automation.list_automation_executions") ||
 		runtimeFixtureFunctionPermissionAllowed(t, reviewerEffective, "workspace.admin") ||
 		runtimeFixtureObjectActionAllowed(t, reviewerEffective, "customer", "create") {
 		t.Fatalf("backend effective permissions do not isolate the history reviewer: %#v", reviewerEffective)

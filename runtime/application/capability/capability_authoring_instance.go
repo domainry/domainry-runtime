@@ -35,8 +35,8 @@ func (s *CapabilityAuthoringApplicationService) capabilityAuthoringInstanceFromS
 	}
 	for _, action := range snapshot.Actions {
 		result.ActionKeys = append(result.ActionKeys, action.Key)
-		if action.RequiresPermission != "" {
-			permissions[action.RequiresPermission] = true
+		if key := strings.TrimSpace(action.Key); key != "" {
+			permissions[key] = true
 		}
 	}
 	for _, workflow := range snapshot.Workflows {

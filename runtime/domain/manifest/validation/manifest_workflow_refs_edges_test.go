@@ -46,7 +46,7 @@ func TestManifestWorkflowActionPermissionAndResolverEdges(t *testing.T) {
 		},
 		Actions: []definitionmodel.ActionSchema{
 			{Key: "blank-permission", ObjectKey: "known"},
-			{Key: "allowed-by-action", ObjectKey: "known", Label: "approve", RequiresPermission: "different.permission"},
+			{Key: "allowed-by-action", ObjectKey: "known", Label: "approve"},
 		},
 	}, nil)
 	workflow := definitionmodel.WorkflowSchema{RunAs: "role", TriggerContract: &definitionmodel.WorkflowTriggerContract{ObjectKey: "known", ObjectKeys: []string{"missing", "second"}}}
@@ -54,7 +54,7 @@ func TestManifestWorkflowActionPermissionAndResolverEdges(t *testing.T) {
 	state.validateWorkflowActionReference("blank", workflow, "blank-permission", nil)
 	state.validateWorkflowActionReference("allowed", workflow, "allowed-by-action", nil)
 
-	state.actions["registered-empty"] = definitionmodel.ActionSchema{ObjectKey: "known", RequiresPermission: "different.permission"}
+	state.actions["registered-empty"] = definitionmodel.ActionSchema{ObjectKey: "known"}
 	state.validateWorkflowActionReference("empty-name", workflow, "registered-empty", nil)
 	state.validateWorkflowResolvers("resolver", workflow, []definitionmodel.WorkflowAssigneeResolver{
 		{Type: "role", RoleKey: "missing"},

@@ -10,8 +10,9 @@ func ApplicationSchemaObjectAuthoringCapability() capabilitycontract.CapabilityA
 		Parameters: []capabilitycontract.CapabilityAuthoringParameter{
 			{Key: "key", Type: "string", Required: true, MinLength: metadataIntPointer(1)},
 			{Key: "name", Type: "string", Required: true, MinLength: metadataIntPointer(1)},
+			{Key: "write_policy", Type: "string", Enum: []string{"direct_crud", "action_only"}},
 		},
-		Permissions: []string{"workspace.admin"}, AuditEvents: []string{"metadata_definition_upserted"},
+		Permissions: []string{"runtime.appschema.validate_application_definition"}, AuditEvents: []string{"metadata_definition_upserted"},
 		ValidationEndpoint: "POST /tenant-admin/metadata/definitions/object/{resourceKey}/validate", ConfigurationRoutes: metadataConfigurationRoutes("object"),
 		ResourceOperations:       metadataResourceOperations("object"),
 		ResourceKeyPathParameter: "resourceKey",
@@ -26,13 +27,14 @@ func ApplicationSchemaObjectAuthoringCapability() capabilitycontract.CapabilityA
 			{Code: "backend.metadata.object_key_mismatch", FieldPath: "payload.key", ParameterKeys: []string{"object"}, MessageKey: "backend.metadata.object_key_mismatch"},
 			{Code: "backend.metadata.object_name_required", FieldPath: "payload.name", ParameterKeys: []string{"object"}, MessageKey: "backend.metadata.object_name_required"},
 			{Code: "backend.metadata.object_shell_only", FieldPath: "payload.fields", ParameterKeys: []string{"object"}, MessageKey: "backend.metadata.object_shell_only"},
+			{Code: "backend.metadata.object_write_policy_invalid", FieldPath: "payload.config.write_policy", ParameterKeys: []string{"object"}, MessageKey: "backend.metadata.object_write_policy_invalid"},
 			{Code: "backend.metadata.object_lifecycle_policy_invalid", FieldPath: "payload.lifecycle_policy", ParameterKeys: []string{"object"}, MessageKey: "backend.metadata.object_lifecycle_policy_invalid"},
 			{Code: "backend.metadata.object_ledger_policy_invalid", FieldPath: "payload.ledger_policy", ParameterKeys: []string{"object"}, MessageKey: "backend.metadata.object_ledger_policy_invalid"},
 			{Code: "backend.metadata.object_export_assurance_policy_invalid", FieldPath: "payload.export_assurance_policy", ParameterKeys: []string{"object"}, MessageKey: "backend.metadata.object_export_assurance_policy_invalid"},
 		},
 		Examples: []capabilitycontract.CapabilityAuthoringExample{
-			{Name: "minimal_valid", Value: map[string]any{"expected_schema_hash": "$instance.schema_hash", "payload": map[string]any{"key": "order", "name": "Order", "fields": []any{}}}},
-			{Name: "representative", Value: map[string]any{"expected_schema_hash": "$instance.schema_hash", "name": "Order", "source_kind": "builder_v4", "source_id": "$builder_task_id", "payload": map[string]any{"key": "order", "name": "Order", "description": "Customer order", "fields": []any{}, "lifecycle_policy": map[string]any{"mode": "mutable"}, "ux": map[string]any{"display": map[string]any{"title_field": "number"}}}}},
+			{Name: "minimal_valid", Value: map[string]any{"expected_schema_hash": "$instance.schema_hash", "payload": map[string]any{"key": "order", "name": "Order", "fields": []any{}, "config": map[string]any{"write_policy": "direct_crud"}}}},
+			{Name: "representative", Value: map[string]any{"expected_schema_hash": "$instance.schema_hash", "name": "Order", "source_kind": "builder_v4", "source_id": "$builder_task_id", "payload": map[string]any{"key": "order", "name": "Order", "description": "Customer order", "fields": []any{}, "config": map[string]any{"write_policy": "action_only"}, "lifecycle_policy": map[string]any{"mode": "mutable"}, "ux": map[string]any{"display": map[string]any{"title_field": "number"}}}}},
 			{Name: "invalid_with_repair", Value: map[string]any{"expected_schema_hash": "$instance.schema_hash", "payload": map[string]any{"key": "invoice", "name": "Order"}}, ExpectedErrorCodes: []string{"backend.metadata.object_key_mismatch"}},
 		},
 		Sources: []capabilitycontract.CapabilityAuthoringSource{

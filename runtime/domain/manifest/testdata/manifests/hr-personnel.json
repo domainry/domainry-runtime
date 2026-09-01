@@ -158,7 +158,6 @@
       "label": "Submit Leave",
       "i18n": {"zh-CN": {"label": "提交请假"}, "en": {"label": "Submit Leave"}},
       "kind": "record_operation",
-      "requires_permission": "leave_request.update",
       "preconditions": [],
       "audit_event": "leave_request_submitted",
       "ui_placement": "record_header",
@@ -170,7 +169,6 @@
       "label": "Withdraw Leave",
       "i18n": {"zh-CN": {"label": "撤回请假"}, "en": {"label": "Withdraw Leave"}},
       "kind": "record_operation",
-      "requires_permission": "leave_request.update",
       "audit_event": "leave_request_withdrawn",
       "ui_placement": "record_header",
       "idempotency_keys": ["request_id"]
@@ -181,7 +179,6 @@
       "label": "Cancel Approved Leave",
       "i18n": {"zh-CN": {"label": "取消已批准请假"}, "en": {"label": "Cancel Approved Leave"}},
       "kind": "record_operation",
-      "requires_permission": "leave_request.update",
       "audit_event": "leave_request_cancelled",
       "ui_placement": "record_header",
       "idempotency_keys": ["request_id"]
@@ -192,7 +189,6 @@
       "label": "Return Leave for Revision",
       "i18n": {"zh-CN": {"label": "退回修改"}, "en": {"label": "Return for Revision"}},
       "kind": "record_operation",
-      "requires_permission": "leave_request.update",
       "audit_event": "leave_request_returned",
       "ui_placement": "workflow_only"
     },
@@ -202,7 +198,6 @@
       "label": "Approve Leave",
       "i18n": {"zh-CN": {"label": "批准请假"}, "en": {"label": "Approve Leave"}},
       "kind": "record_operation",
-      "requires_permission": "leave_request.update",
       "preconditions": [],
       "audit_event": "leave_request_approved",
       "ui_placement": "workflow_only"
@@ -213,7 +208,6 @@
       "label": "Reject Leave",
       "i18n": {"zh-CN": {"label": "拒绝请假"}, "en": {"label": "Reject Leave"}},
       "kind": "record_operation",
-      "requires_permission": "leave_request.update",
       "preconditions": [],
       "audit_event": "leave_request_rejected",
       "ui_placement": "workflow_only"
@@ -224,7 +218,6 @@
       "label": "Notify Approval Reminder",
       "i18n": {"zh-CN": {"label": "发送审批提醒"}, "en": {"label": "Send Approval Reminder"}},
       "kind": "record_operation",
-      "requires_permission": "leave_request.update",
       "audit_event": "leave_request_approval_reminder_queued",
       "ui_placement": "workflow_only"
     },
@@ -234,7 +227,6 @@
       "label": "Notify Leave Result",
       "i18n": {"zh-CN": {"label": "通知请假结果"}, "en": {"label": "Notify Leave Result"}},
       "kind": "record_operation",
-      "requires_permission": "leave_request.update",
       "audit_event": "leave_request_result_notified",
       "ui_placement": "workflow_only"
     }

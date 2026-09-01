@@ -41,7 +41,7 @@ func TestOperationsDiagnosticsIsBoundedAndReceiptReplayDoesNotRecapture(t *testi
 	if err := service.RegisterDiagnostics(probe, "runtime-1"); err != nil {
 		t.Fatal(err)
 	}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"runtime.diagnostics.read"}})
 	command := OperationsDiagnosticsCommand{Sections: []string{"db_pool"}, PageSize: 10, Reason: "incident diagnostics"}
 	first, err := service.CaptureDiagnostics(t.Context(), command, "diagnostics-key", principal)
 	if err != nil || probe.calls != 1 || !first.Snapshot.Redacted || first.Receipt.Correlation == "" || len(first.Receipt.Evidence) == 0 || first.Receipt.NextAction == "" {

@@ -46,6 +46,21 @@ func metadataAuthoringOutputSchema(payload capabilitycontract.CapabilityAuthorin
 }
 
 func metadataObjectPayloadSchema() capabilitycontract.CapabilityAuthoringSchema {
+	capabilities := capabilitycontract.CapabilityAuthoringSchema{
+		Type: "object", AdditionalProperties: metadataBoolPointer(false),
+		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+			"create": {Type: "boolean", Default: true}, "read": {Type: "boolean", Default: true},
+			"update": {Type: "boolean", Default: true}, "delete": {Type: "boolean", Default: true},
+			"export": {Type: "boolean", Default: true},
+		},
+	}
+	config := capabilitycontract.CapabilityAuthoringSchema{
+		Type: "object", AdditionalProperties: metadataBoolPointer(false),
+		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+			"title_field":  {Type: "string", MinLength: metadataIntPointer(1)},
+			"write_policy": {Type: "string", Enum: []any{"direct_crud", "action_only"}, Default: "direct_crud"},
+		},
+	}
 	lifecyclePolicy := capabilitycontract.CapabilityAuthoringSchema{
 		Type: "object", AdditionalProperties: metadataBoolPointer(false), Required: []string{"mode"},
 		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
@@ -86,6 +101,8 @@ func metadataObjectPayloadSchema() capabilitycontract.CapabilityAuthoringSchema 
 			"key":                     metadataNonEmptyStringSchema("Stable lowercase object key matching the resourceKey path."),
 			"name":                    metadataNonEmptyStringSchema("Human-readable object name."),
 			"description":             {Type: "string"},
+			"capabilities":            capabilities,
+			"config":                  config,
 			"fields":                  {Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: metadataBoolPointer(false)}, Default: []any{}},
 			"lifecycle_policy":        lifecyclePolicy,
 			"ledger_policy":           ledgerPolicy,
@@ -172,7 +189,7 @@ func metadataAuthoringExecution(resource string) *capabilitycontract.CapabilityA
 	return &capabilitycontract.CapabilityAuthoringExecution{
 		ReadSet:     []string{"metadata.schema_snapshot", resource},
 		Transaction: "read_only_candidate_validation", Idempotency: "naturally_idempotent_at_candidate_hash",
-		SideEffectLevel: "none", PermissionModel: "workspace.admin", ChangeControl: "source_controlled_json",
+		SideEffectLevel: "none", PermissionModel: "runtime.appschema.validate_application_definition", ChangeControl: "source_controlled_json",
 	}
 }
 

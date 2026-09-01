@@ -91,8 +91,8 @@ func TestOperationsSubmitPersistsReplayableWorkspaceReceipt(t *testing.T) {
 	repository := &operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}
 	now := time.Date(2026, 7, 19, 10, 0, 0, 0, time.UTC)
 	service := NewOperationsApplicationService(repository, nil, func() time.Time { return now }, func() string { return "fixed" })
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
-	request := OperationsSubmitRequest{Kind: "retention.cleanup", Permission: "workspace.admin", ResourceType: "retention_policy", Reason: "release cleanup", Payload: map[string]any{"mode": "preview"}}
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"runtime.retention.execute"}})
+	request := OperationsSubmitRequest{Kind: "retention.cleanup", Permission: "runtime.retention.execute", ResourceType: "retention_policy", Reason: "release cleanup", Payload: map[string]any{"mode": "preview"}}
 
 	first, decision, err := service.Submit(t.Context(), request, "backup-1", principal)
 	if err != nil || decision != operationsmodel.OperationsSubmissionAccepted || first.Command.ID != "operation_fixed" || first.StatusURL != "/operations/operation_fixed" {
@@ -124,7 +124,7 @@ func TestOperationsSubmitRequiresWorkspaceAndDeclaredPermission(t *testing.T) {
 
 func TestOperationsSubmitRejectsUnregisteredOrMismatchedDefinitions(t *testing.T) {
 	service := NewOperationsApplicationService(&operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}, nil, nil, nil)
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"runtime.backup.restore"}})
 	if _, _, err := service.Submit(t.Context(), OperationsSubmitRequest{Kind: "arbitrary.sql", Permission: "workspace.admin", ResourceType: "database", Reason: "unsafe"}, "key", principal); apperror.CodeOf(err) != "backend.operations.kind_not_registered" {
 		t.Fatalf("unregistered error=%v", err)
 	}
@@ -138,8 +138,8 @@ func TestOperationsSearchReceiptsRequiresExactReadPermissionAndNormalizesFilter(
 	service := NewOperationsApplicationService(repository, nil, nil, nil)
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
 
-	if _, err := service.SearchReceipts(t.Context(), operationsmodel.OperationsReceiptFilter{}, principal); err != nil {
-		t.Fatalf("workspace administrator authority must not depend on Surface: %v", err)
+	if _, err := service.SearchReceipts(t.Context(), operationsmodel.OperationsReceiptFilter{}, principal); apperror.KindOf(err) != apperror.KindForbidden {
+		t.Fatalf("workspace.admin expanded to operations.read: %v", err)
 	}
 	accessfixture.Mutate(&principal, func(role *accessfixture.Bundle) {
 		role.Permissions = append(role.Permissions, "operations.read")

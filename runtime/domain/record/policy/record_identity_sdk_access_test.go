@@ -80,7 +80,7 @@ func TestRecordAuthorizationAllowsOnlyExplicitRuntimeSystemAuthorityWithoutBundl
 	if RecordAllowsObjectAction(unknown, "case", "read") || RecordCanAccess(unknown, definitionmodel.ObjectSchema{Key: "case"}, recordmodel.Record{}) {
 		t.Fatal("human principal without AccessBundle was authorized")
 	}
-	system := principalmodel.NewSystemPrincipal("runtime-worker", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "record worker"), "case.*")
+	system := principalmodel.NewSystemPrincipal("runtime-worker", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "record worker"), "case.read")
 	if !RecordAllowsObjectAction(system, "case", "read") || !RecordCanAccess(system, definitionmodel.ObjectSchema{Key: "case"}, recordmodel.Record{}) {
 		t.Fatal("explicit Runtime system capability was denied")
 	}

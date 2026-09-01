@@ -151,6 +151,7 @@ func (e *WorkflowProcessEngine) executeCCNode(ctx context.Context, process workf
 	invocation, err := e.runtime.dependencies.InvokeAction(ctx, WorkflowBusinessActionInvocation{
 		ActionKey: contract.NotificationActionKey, ObjectKey: process.ObjectKey, RecordID: process.RecordID,
 		Input: input, Principal: actionPrincipal, Source: WorkflowBusinessActionSourceWorkflow, ProcessID: process.ID, NodeID: node.ID,
+		IdempotencyKey: process.ID + ":" + node.ID + ":cc-notification",
 	})
 	if err != nil {
 		return nil, err

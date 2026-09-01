@@ -47,19 +47,57 @@ type ValidationSchema struct {
 }
 
 type ObjectSchema struct {
-	Key             string                             `json:"key"`
-	Name            string                             `json:"name"`
-	Description     string                             `json:"description"`
-	I18n            localizationmodel.LocalizedTextMap `json:"i18n,omitempty"`
-	Fields          []FieldSchema                      `json:"fields"`
-	Validations     []ValidationSchema                 `json:"validations,omitempty"`
-	LifecyclePolicy *ObjectLifecyclePolicy             `json:"lifecycle_policy,omitempty"`
-	LedgerPolicy    *ObjectLedgerPolicy                `json:"ledger_policy,omitempty"`
+	Key         string                             `json:"key"`
+	Name        string                             `json:"name"`
+	Description string                             `json:"description"`
+	I18n        localizationmodel.LocalizedTextMap `json:"i18n,omitempty"`
+	Fields      []FieldSchema                      `json:"fields"`
+	Validations []ValidationSchema                 `json:"validations,omitempty"`
+	// Capabilities is the source declaration for the generic record surface.
+	// Nil means the Runtime standard set; a non-nil value can only remove
+	// operations the object does not support. The authorization compiler turns
+	// the effective set into exact object Action/Permission pairs.
+	Capabilities    *ObjectCapabilitySet   `json:"capabilities,omitempty"`
+	LifecyclePolicy *ObjectLifecyclePolicy `json:"lifecycle_policy,omitempty"`
+	LedgerPolicy    *ObjectLedgerPolicy    `json:"ledger_policy,omitempty"`
 	// ExportAssurancePolicy applies the shared assurance grant contract to
 	// object exports. Record-bound selector fields are intentionally not used.
 	ExportAssurancePolicy *ActionAssurancePolicy `json:"export_assurance_policy,omitempty"`
 	UX                    map[string]any         `json:"ux,omitempty"`
 	Config                map[string]any         `json:"config,omitempty"`
+}
+
+// ObjectCapabilitySet declares which generic record operations are real for
+// one ObjectSchema. It is deliberately closed and boolean so an authored false
+// cannot be confused with a missing or differently named operation.
+type ObjectCapabilitySet struct {
+	Create bool `json:"create"`
+	Read   bool `json:"read"`
+	Update bool `json:"update"`
+	Delete bool `json:"delete"`
+	Export bool `json:"export"`
+}
+
+// StandardObjectCapabilities is the default for an ordinary mutable object.
+// Export is included because Runtime publishes a generic export surface.
+func StandardObjectCapabilities() ObjectCapabilitySet {
+	return ObjectCapabilitySet{Create: true, Read: true, Update: true, Delete: true, Export: true}
+}
+
+// EffectiveObjectCapabilities applies source declarations and lifecycle
+// invariants in one place. Append-only objects can be created and read but can
+// never expose generic update/delete, even if malformed source data asks for
+// them. An explicit capability set may further remove any surface.
+func EffectiveObjectCapabilities(object ObjectSchema) ObjectCapabilitySet {
+	capabilities := StandardObjectCapabilities()
+	if object.Capabilities != nil {
+		capabilities = *object.Capabilities
+	}
+	if object.LifecyclePolicy != nil && strings.TrimSpace(object.LifecyclePolicy.Mode) == ObjectLifecycleAppendOnly {
+		capabilities.Update = false
+		capabilities.Delete = false
+	}
+	return capabilities
 }
 
 const (
@@ -97,7 +135,6 @@ type ActionSchema struct {
 	I18n                  localizationmodel.LocalizedTextMap `json:"i18n,omitempty"`
 	Kind                  string                             `json:"kind"`
 	RiskLevel             string                             `json:"risk_level,omitempty"`
-	RequiresPermission    string                             `json:"requires_permission"`
 	Preconditions         []string                           `json:"preconditions"`
 	AuditEvent            string                             `json:"audit_event"`
 	InputType             string                             `json:"input_type,omitempty"`
@@ -106,40 +143,28 @@ type ActionSchema struct {
 	OutputContractSHA256  string                             `json:"output_contract_sha256,omitempty"`
 	PayloadFields         []ActionPayloadField               `json:"payload_fields,omitempty"`
 	OutputFields          []ActionOutputField                `json:"output_fields,omitempty"`
-	IdempotencyKeys       []string                           `json:"idempotency_keys,omitempty"`
 	Defaults              map[string]any                     `json:"defaults,omitempty"`
 	OptimisticConcurrency bool                               `json:"optimistic_concurrency,omitempty"`
 	ConcurrencyField      string                             `json:"concurrency_field,omitempty"`
 	AssurancePolicy       *ActionAssurancePolicy             `json:"assurance_policy,omitempty"`
 	EffectSet             *ActionEffectSet                   `json:"effect_set,omitempty"`
 	FileOperations        []string                           `json:"file_operations,omitempty"`
-	Authorization         *ActionAuthorization               `json:"authorization,omitempty"`
 }
 
-// ActionAuthorization preserves the compiler-owned exact role allowlist for
-// a project-owned Handler. Runtime evaluates it in addition to the
-// Identity-issued functional permission and data policies.
-type ActionAuthorization struct {
-	AllowedRoles []string `json:"allowed_roles"`
-}
-
-// ActionPermissionSubject derives the canonical object/action pair from the
-// authored Action schema. Multi-segment permissions are interpreted relative
-// to ObjectKey so every authorization boundary evaluates the same subject.
+// ActionPermissionSubject decomposes the canonical Action key for SDK metadata
+// that still represents a permission as resource plus operation. Authorization
+// must compare the complete Action key directly; this helper is not a mapping.
 func ActionPermissionSubject(action ActionSchema) (string, string) {
-	permission := strings.TrimSpace(action.RequiresPermission)
-	if permission == "" {
-		permission = strings.TrimSpace(action.Key)
-	}
+	key := strings.TrimSpace(action.Key)
 	objectKey := strings.TrimSpace(action.ObjectKey)
-	if objectKey != "" && strings.HasPrefix(permission, objectKey+".") {
-		return objectKey, strings.TrimSpace(strings.TrimPrefix(permission, objectKey+"."))
+	if objectKey != "" && strings.HasPrefix(key, objectKey+".") {
+		return objectKey, strings.TrimSpace(strings.TrimPrefix(key, objectKey+"."))
 	}
-	parts := strings.Split(permission, ".")
-	if len(parts) < 2 {
-		return "", strings.TrimSpace(permission)
+	separator := strings.LastIndex(key, ".")
+	if separator <= 0 || separator == len(key)-1 {
+		return "", key
 	}
-	return strings.TrimSpace(parts[len(parts)-2]), strings.TrimSpace(parts[len(parts)-1])
+	return strings.TrimSpace(key[:separator]), strings.TrimSpace(key[separator+1:])
 }
 
 const (

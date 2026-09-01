@@ -75,6 +75,17 @@ type automationHandlerFixture struct {
 	validateErr error
 }
 
+var automationHTTPPermissions = []string{
+	"runtime.automation.automation_capabilities",
+	"runtime.automation.list_automation_rules",
+	"runtime.automation.get_automation_rule",
+	"runtime.automation.list_automation_executions",
+	"runtime.automation.validate_automation_rule",
+	"runtime.automation.validate_automation_authoring_fragment",
+	"runtime.automation.simulate_rule_candidate",
+	"runtime.automation.simulate_rule",
+}
+
 func automationTestRule(key string) automationmodel.AutomationRuleSchema {
 	return automationmodel.AutomationRuleSchema{Key: key, Name: "Rule " + key, ObjectKey: "customer", Enabled: true, Trigger: automationmodel.AutomationTriggerSchema{Phase: "before", Operation: "create"}, Instructions: []automationmodel.AutomationInstructionSchema{}}
 }
@@ -83,7 +94,7 @@ func newAutomationHandlerFixture() *automationHandlerFixture {
 	registry := &automationRuleRegistryStub{rules: map[string]automationmodel.AutomationRuleSchema{"welcome": automationTestRule("welcome")}}
 	executions := &automationExecutionRepositoryStub{items: []automationmodel.AutomationRuleExecution{{ID: "execution-1", RuleKey: "welcome", Status: "succeeded"}}}
 	metadata := &automationMetadataStub{}
-	principal := accessfixture.AttachPointer(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Key: "admin", Permissions: []string{"workspace.admin", "*"}})
+	principal := accessfixture.AttachPointer(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Key: "automation-manager", Permissions: append([]string(nil), automationHTTPPermissions...)})
 	capture := &automationHandlerCapture{}
 	fixture := &automationHandlerFixture{registry: registry, executions: executions, metadata: metadata, capture: capture, principal: principal}
 	service := automationapplication.NewAutomationApplicationService(automationapplication.AutomationApplicationDependencies{
@@ -223,7 +234,7 @@ func TestAutomationHandlersMapHistoryRulesAndCapabilityErrors(t *testing.T) {
 			}
 		})
 	}
-	accessfixture.Set(fixture.principal, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	accessfixture.Set(fixture.principal, accessfixture.Bundle{Permissions: append([]string(nil), automationHTTPPermissions...)})
 	fixture.executions.err = errors.New("history failed")
 	fixture.capture.serviceErr = nil
 	response := httptest.NewRecorder()

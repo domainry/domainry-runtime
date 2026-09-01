@@ -33,12 +33,16 @@ func TestDatabaseRetirementHTTPRejectsEarlyExecutionAndNeverAcceptsSQL(t *testin
 	}
 	repository := operationspersistence.NewOperationsStore(store)
 	service := operationsapplication.NewDatabaseRetirementApplicationService(repository, operationspersistence.NewDatabaseRetirementSQLExecutor(store, nil, nil), nil, func() string { return "http-fixed" })
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "operations"}}, accessfixture.Bundle{Permissions: []string{"runtime.database.retirement.manage"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "operations"}}, accessfixture.Bundle{Permissions: []string{
+		operationsapplication.ActionDiscoverDatabaseRetirement, operationsapplication.ActionListDatabaseRetirements,
+		operationsapplication.ActionGetDatabaseRetirement, operationsapplication.ActionPreviewDatabaseRetirement,
+		operationsapplication.ActionAdvanceDatabaseRetirement, operationsapplication.ActionExecuteDatabaseRetirement,
+	}})
 	audits := 0
 	handler := NewOperationsHandler(OperationsDependencies{
 		DatabaseRetirement: service,
 		Principal:          func(*http.Request) principalmodel.Principal { return principal },
-		Admin:              func(next http.HandlerFunc) http.HandlerFunc { return next },
+		Authenticated:      func(next http.HandlerFunc) http.HandlerFunc { return next },
 		SecurityAudit: func(_ *http.Request, _ principalmodel.Principal, event, _ string, _ map[string]any) {
 			if event == "database_retirement_preview" {
 				audits++

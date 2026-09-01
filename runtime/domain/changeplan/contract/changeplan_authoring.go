@@ -5,10 +5,10 @@ import capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/c
 func ChangePlanCurrentStateSnapshotAuthoringCapability() capabilitycontract.CapabilityAuthoringDefinition {
 	return capabilitycontract.CapabilityAuthoringDefinition{
 		Key: "maintenance.current_state_snapshot", Status: "supported", Lifecycle: "read_only_discovery",
-		Permissions: []string{"workspace.admin"}, ConfigurationRoutes: []string{"GET /domain-system-snapshot"},
+		Permissions: []string{"runtime.businesssystem.business_system_snapshot"}, ConfigurationRoutes: []string{"GET /domain-system-snapshot"},
 		InputSchema:  changePlanEmptyInputSchema(),
 		OutputSchema: changePlanSnapshotOutputSchema(), OutputVariables: []capabilitycontract.CapabilityAuthoringOutput{{Name: "snapshot_hash", JSONPointer: "/snapshot_hash", Type: "snapshot_hash", VisibleTo: "subsequent_capability_calls"}},
-		Execution: &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"runtime.metadata", "metadata.schema_snapshot", "identity.governance", "workflow.definition", "integration.connector"}, Transaction: "read_only_snapshot", Idempotency: "naturally_idempotent_at_snapshot_hash", SideEffectLevel: "none", PermissionModel: "workspace.admin"},
+		Execution: &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"runtime.metadata", "metadata.schema_snapshot", "identity.governance", "workflow.definition", "integration.connector"}, Transaction: "read_only_snapshot", Idempotency: "naturally_idempotent_at_snapshot_hash", SideEffectLevel: "none", PermissionModel: "runtime.businesssystem.business_system_snapshot"},
 		Examples:  []capabilitycontract.CapabilityAuthoringExample{{Name: "minimal_valid", Value: map[string]any{}}, {Name: "representative", Value: map[string]any{}}},
 		Sources:   []capabilitycontract.CapabilityAuthoringSource{{Kind: "domain", Path: "runtime/domain/changeplan/projection/changeplan_system_snapshot.go", Symbol: "RuntimeNativeMetadataModel"}, {Kind: "service", Path: "runtime/application/businesssystem/business_system_application_service.go", Symbol: "BusinessSystemApplicationService.Snapshot"}},
 	}

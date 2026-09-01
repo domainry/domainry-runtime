@@ -2,6 +2,7 @@ package runtime
 
 import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	changeplanapplication "github.com/domainry/domainry-runtime/runtime/application/changeplan"
 	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
@@ -39,7 +40,7 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 	adminRole := accessfixture.Bundle{
 		Key: "admin",
 		Permissions: []string{
-			"workspace.admin", "customer.read", "customer.update",
+			changeplanapplication.ActionBusinessReferenceGraph, "customer.read", "customer.update",
 			"scheduler.definition.read", "ops.workflow.read", "workflow.process.read",
 			"integration.audit.view",
 		},
@@ -47,7 +48,7 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true, Write: true}},
 	}
 	application, admin := newMetadataCompositionAppWithManifest(t, "references", objects, []accessfixture.Bundle{adminRole}, func(manifest *manifestmodel.ManifestSchema) {
-		manifest.Actions = []definitionmodel.ActionSchema{{Key: "customer.qualify", ObjectKey: "customer", Label: "Qualify", Kind: "record_update", RequiresPermission: "customer.update", AuditEvent: "customer_qualified", IdempotencyKeys: []string{"request_id"}}}
+		manifest.Actions = []definitionmodel.ActionSchema{{Key: "customer.qualify", ObjectKey: "customer", Label: "Qualify", Kind: "record_update", AuditEvent: "customer_qualified"}}
 		manifest.Workflows = []definitionmodel.WorkflowSchema{{Key: "customer.approval", Name: "Customer approval", Enabled: true, Trigger: map[string]any{"type": "field_changed", "object_key": "customer", "field_key": "status"}, TriggerContract: &definitionmodel.WorkflowTriggerContract{Type: "field_changed", ObjectKey: "customer", FieldKey: "status"}, Condition: map[string]any{"field": "status", "equals": "new"}, ConditionContract: &definitionmodel.WorkflowConditionContract{Type: "field_equals", Field: "status", Value: "new"}, Action: map[string]any{"type": "workflow_graph"}, IdempotencyKeys: []string{"record_id", "status"}, Graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{
 			{ID: "started", Type: "trigger", Name: "Customer changed"},
 			{ID: "qualify", Type: "action", Name: "Qualify", Contract: &definitionmodel.WorkflowNodeContract{Action: &definitionmodel.WorkflowBusinessActionNodeContract{ActionKey: "customer.qualify", ObjectKey: "customer", OnError: "fail"}}},

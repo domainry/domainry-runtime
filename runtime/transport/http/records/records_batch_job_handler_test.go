@@ -58,7 +58,7 @@ func newRecordBatchHTTPFixture(t *testing.T) recordBatchHTTPFixture {
 		t.Fatal(err)
 	}
 	role := accessfixture.Bundle{
-		Key: "admin", Permissions: []string{"customer.*"}, RecordScope: "all_records",
+		Key: "admin", Permissions: []string{"customer.create", "customer.read", "customer.update", "customer.delete", "customer.import", "customer.export"}, RecordScope: "all_records",
 		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true, Write: true}},
 	}
 	exchange := &recordBatchDataExchangeProbe{}

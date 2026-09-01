@@ -11,29 +11,29 @@ import (
 
 var actionPermissionKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$`)
 
-// ActionPermissionKeyWellFormed reports whether a requires_permission key is
+// ActionPermissionKeyWellFormed reports whether an Action/Permission key is
 // shaped as at least two dot-separated lower_snake_case segments.
 func ActionPermissionKeyWellFormed(permission string) bool {
 	return actionPermissionKeyPattern.MatchString(strings.TrimSpace(permission))
 }
 
 func actionValidatePermissionPolicy(action definitionmodel.ActionSchema) []appschemamodel.ApplicationDefinitionValidationIssue {
-	permission := strings.TrimSpace(action.RequiresPermission)
+	permission := strings.TrimSpace(action.Key)
 	if permission == "" {
 		return nil
 	}
 	issue := func(code string, params map[string]string) appschemamodel.ApplicationDefinitionValidationIssue {
-		return actionDefinitionValidationIssue(code, "requires_permission", params)
+		return actionDefinitionValidationIssue(code, "key", params)
 	}
 	if !actionPermissionKeyPattern.MatchString(permission) {
 		return []appschemamodel.ApplicationDefinitionValidationIssue{issue("backend.action.permission_format_invalid", map[string]string{
-			"field": "requires_permission", "actual": permission, "expected": "<object_key>.<permission_name>",
+			"field": "key", "actual": permission, "expected": "<object_key>.<action_name>",
 		})}
 	}
 	objectKey := strings.TrimSpace(action.ObjectKey)
 	if objectKey != "" && !strings.HasPrefix(permission, objectKey+".") {
 		return []appschemamodel.ApplicationDefinitionValidationIssue{issue("backend.action.permission_object_mismatch", map[string]string{
-			"field": "requires_permission", "actual": permission, "object_key": objectKey,
+			"field": "key", "actual": permission, "object_key": objectKey,
 		})}
 	}
 	issues := make([]appschemamodel.ApplicationDefinitionValidationIssue, 0, 2)
@@ -52,13 +52,6 @@ func actionValidatePermissionPolicy(action definitionmodel.ActionSchema) []appsc
 		}))
 	}
 	riskLevel := actionmodel.ActionRiskLevel(action)
-	if riskLevel == "high" || riskLevel == "critical" {
-		if actionmodel.ActionAuthorizationStrategy(action) == actionmodel.ActionAuthorizationInheritObjectPermission {
-			issues = append(issues, issue("backend.action.high_risk_permission_must_be_dedicated", map[string]string{
-				"field": "requires_permission", "actual": permission, "object_key": objectKey, "risk_level": riskLevel,
-			}))
-		}
-	}
 	if riskLevel == "high" || riskLevel == "critical" {
 		if !actionmodel.ActionHasEnhancedAssurance(action) {
 			issues = append(issues, actionDefinitionValidationIssue("backend.action.high_risk_assurance_required", "assurance_policy.required_methods", map[string]string{

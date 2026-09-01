@@ -10,7 +10,7 @@ import (
 )
 
 func (s *CapabilityAuthoringApplicationService) ExecutionCapabilities(_ context.Context, principal principalmodel.Principal) (capabilitycontract.CapabilityExecutionCatalog, error) {
-	if err := capabilityAuthorizeAdmin(principal); err != nil {
+	if err := capabilityAuthorizePrincipal(principal); err != nil {
 		return capabilitycontract.CapabilityExecutionCatalog{}, err
 	}
 	catalog := capabilitycontract.RuntimeExecutionCapabilities()
@@ -20,7 +20,7 @@ func (s *CapabilityAuthoringApplicationService) ExecutionCapabilities(_ context.
 }
 
 func (s *CapabilityAuthoringApplicationService) ApplicationSchemaProjection(_ context.Context, principal principalmodel.Principal) (CapabilityMetadataAuthoringProjection, error) {
-	if err := capabilityAuthorizeAdmin(principal); err != nil {
+	if err := capabilityAuthorizePrincipal(principal); err != nil {
 		return CapabilityMetadataAuthoringProjection{}, err
 	}
 	contract := RuntimeAuthoringCapabilities()
@@ -37,8 +37,8 @@ func (s *CapabilityAuthoringApplicationService) ApplicationSchemaProjection(_ co
 	}, nil
 }
 
-func capabilityAuthorizeAdmin(principal principalmodel.Principal) error {
-	if principal.Known && principal.HasPermission("workspace.admin") {
+func capabilityAuthorizePrincipal(principal principalmodel.Principal) error {
+	if principal.Known {
 		return nil
 	}
 	return &apperror.AppError{Kind: apperror.KindForbidden, Code: "auth.permission_denied"}

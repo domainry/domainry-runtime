@@ -21,7 +21,6 @@ type ActionResult struct {
 
 type ActionObjectRequest struct {
 	Data           map[string]any `json:"data,omitempty"`
-	IdempotencyKey string         `json:"idempotency_key,omitempty"`
 	AssuranceToken string         `json:"assurance_token,omitempty"`
 }
 
@@ -47,7 +46,7 @@ type ActionBulkRequest struct {
 	RecordIDs        []string       `json:"record_ids"`
 	Data             map[string]any `json:"data,omitempty"`
 	ExpectedVersions map[string]int `json:"expected_versions,omitempty"`
-	IdempotencyKey   string         `json:"idempotency_key,omitempty"`
+	IdempotencyKey   string         `json:"-"`
 }
 
 type ActionBulkItemResult struct {

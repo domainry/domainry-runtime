@@ -65,8 +65,12 @@ func uploadAccessPrincipal(permissions ...string) principalmodel.Principal {
 		grantKeys[key] = true
 		grants = append(grants, identitysdk.FunctionGrant{Resource: identitysdk.ResourceType(resource), Action: identitysdk.Action(action), Effect: identitysdk.EffectAllow})
 		if resource == "asset" || resource == "document" {
+			dataAction := identitysdk.DataActionRead
+			if action == "create" || action == "update" || action == "delete" {
+				dataAction = identitysdk.DataActionWrite
+			}
 			dataPolicies = append(dataPolicies, identitysdk.DataPolicy{
-				Key: "upload-test-" + resource + "-" + action, Resource: identitysdk.ResourceType(resource), Action: identitysdk.Action(action), Effect: identitysdk.EffectAllow,
+				Key: "upload-test-" + resource + "-" + action, Resource: identitysdk.ResourceType(resource), Action: dataAction, Effect: identitysdk.EffectAllow,
 				Predicate: identitysdk.Predicate{Fact: "id", Operator: identitysdk.OperatorExists, Value: true},
 			})
 		}
@@ -78,16 +82,10 @@ func uploadAccessPrincipal(permissions ...string) principalmodel.Principal {
 			continue
 		}
 		resource, action := permission[:separator], permission[separator+1:]
-		if action == "*" {
-			for _, expanded := range []string{"create", "read", "update", "delete", "export"} {
-				addGrant(resource, expanded)
-			}
-			continue
-		}
 		addGrant(resource, action)
 	}
 	bundle := identitysdk.AccessBundle{
-		ContractVersion: identitysdk.CurrentPolicyBundleVersion, CatalogRevision: "upload-test-catalog", AuthorizationRevision: "upload-test-authorization",
+		ContractVersion: identitysdk.CurrentPolicyBundleVersion, AuthorizationRevision: "upload-test-authorization",
 		ExpiresAt: time.Now().Add(time.Hour), Subject: identitysdk.Subject{WorkspaceID: "workspace-a", SubjectID: "user"},
 		FunctionGrants: grants, DataPolicies: dataPolicies,
 		FieldPolicies: []identitysdk.FieldPolicy{
@@ -114,18 +112,18 @@ func TestUploadAccessAuthorizeUpload(t *testing.T) {
 	service := NewUploadAccessApplicationService(uploadAccessCatalog(), audit, nil)
 	assertUploadAccessError(t, service.AuthorizeUpload(t.Context(), "asset", "file_url", principalmodel.Principal{}), apperror.KindForbidden, "backend.role.unknown")
 
-	assertUploadAccessError(t, service.AuthorizeUpload(t.Context(), "missing", "file_url", uploadAccessPrincipal("asset.*")), apperror.KindNotFound, "backend.object.not_found")
-	assertUploadAccessError(t, service.AuthorizeUpload(t.Context(), "asset", "missing", uploadAccessPrincipal("asset.*")), apperror.KindBadRequest, "backend.upload.field_not_defined")
+	assertUploadAccessError(t, service.AuthorizeUpload(t.Context(), "missing", "file_url", uploadAccessPrincipal("asset.update")), apperror.KindNotFound, "backend.object.not_found")
+	assertUploadAccessError(t, service.AuthorizeUpload(t.Context(), "asset", "missing", uploadAccessPrincipal("asset.update")), apperror.KindBadRequest, "backend.upload.field_not_defined")
 	assertUploadAccessError(t, service.AuthorizeUpload(t.Context(), "asset", "file_url", uploadAccessPrincipal("asset.read")), apperror.KindForbidden, "backend.upload.permission_denied")
 	if audit.reason != "permission" {
 		t.Fatalf("audit reason=%q", audit.reason)
 	}
-	for _, permissions := range [][]string{{"asset.update"}, {"asset.create"}, {"asset.*"}} {
+	for _, permissions := range [][]string{{"asset.update"}, {"asset.create"}} {
 		if err := service.AuthorizeUpload(t.Context(), " asset ", " file_url ", uploadAccessPrincipal(permissions...)); err != nil {
 			t.Fatalf("permissions=%v err=%v", permissions, err)
 		}
 	}
-	service.RecordUploaded(t.Context(), "asset", "file_url", "file.txt", "text/plain", 4, uploadAccessPrincipal("asset.*"))
+	service.RecordUploaded(t.Context(), "asset", "file_url", "file.txt", "text/plain", 4, uploadAccessPrincipal("asset.update"))
 	if audit.events[len(audit.events)-1] != "file_uploaded" {
 		t.Fatalf("events=%v", audit.events)
 	}
@@ -200,11 +198,11 @@ func TestUploadAccessAuthorizeDownloadAgainstRecord(t *testing.T) {
 		records.record.Data = map[string]any{"file_url": "file:///tmp/document.pdf?download=1", "sensitive": sensitive}
 		assertUploadAccessError(t, service.AuthorizeDownload(t.Context(), "document", "file_url", "record", "document.pdf", principal), apperror.KindForbidden, "backend.upload.permission_denied")
 	}
-	for _, permission := range []string{"workspace.admin", "document.sensitive.read"} {
-		privileged := uploadAccessPrincipal("document.read", permission)
-		if err := service.AuthorizeDownload(t.Context(), "document", "file_url", "record", "document.pdf", privileged); err != nil {
-			t.Fatalf("permission=%s err=%v", permission, err)
-		}
+	workspaceAdmin := uploadAccessPrincipal("document.read", "workspace.admin")
+	assertUploadAccessError(t, service.AuthorizeDownload(t.Context(), "document", "file_url", "record", "document.pdf", workspaceAdmin), apperror.KindForbidden, "backend.upload.permission_denied")
+	privileged := uploadAccessPrincipal("document.read", "document.sensitive.read")
+	if err := service.AuthorizeDownload(t.Context(), "document", "file_url", "record", "document.pdf", privileged); err != nil {
+		t.Fatalf("exact sensitive permission rejected: %v", err)
 	}
 	records.record.Data["sensitive"] = false
 	if err := service.AuthorizeDownload(t.Context(), "document", "file_url", "record", "document.pdf", principal); err != nil {

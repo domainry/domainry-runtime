@@ -21,6 +21,7 @@ func RecordCompileSDKDataScopeExpression(object definitionmodel.ObjectSchema, ob
 		*principal.AccessBundle,
 		identitysdk.ResourceType(strings.TrimSpace(object.Key)),
 		identitysdk.Action(normalizeSDKScopeAction(action)),
+		sdkScopeDataAction(action),
 		time.Now().UTC(),
 	)
 	if err != nil {
@@ -257,6 +258,15 @@ func normalizeSDKScopeAction(action string) string {
 		return "update"
 	default:
 		return strings.TrimSpace(action)
+	}
+}
+
+func sdkScopeDataAction(action string) identitysdk.DataAction {
+	switch strings.ToLower(strings.TrimSpace(action)) {
+	case "read", "view", "list", "search", "export":
+		return identitysdk.DataActionRead
+	default:
+		return identitysdk.DataActionWrite
 	}
 }
 

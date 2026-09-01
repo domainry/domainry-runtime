@@ -58,7 +58,7 @@ func TestRestoreAuthorizationSchedulerAndOptionalDependencyEdges(t *testing.T) {
 }
 
 func TestRestoreNormalizationWritableAndValidationFailures(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
 	object := restoreFinalObject()
 	service := restoreFinalService(object, restoreFinalRepository(map[string]any{
 		"status": "deleted", "deleted_at": "now", "deleted_by": "user-1", "unknown": "value",

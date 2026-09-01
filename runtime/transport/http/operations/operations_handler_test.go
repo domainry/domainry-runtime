@@ -7,7 +7,7 @@ import (
 )
 
 func TestIdempotencyOperationRoutesAreAdminProtected(t *testing.T) {
-	handler := NewOperationsHandler(OperationsDependencies{Admin: func(http.HandlerFunc) http.HandlerFunc {
+	handler := NewOperationsHandler(OperationsDependencies{Authenticated: func(http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusForbidden) }
 	}})
 	mux := http.NewServeMux()

@@ -6,12 +6,15 @@ import (
 	"strings"
 	"time"
 
+	actioncontract "github.com/domainry/domainry-foundation/action"
+	"github.com/domainry/domainry-foundation/modulehttp"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 	"github.com/domainry/domainry-foundation/ratelimit"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	businesseventapplication "github.com/domainry/domainry-runtime/runtime/application/businessevent"
+	actionservice "github.com/domainry/domainry-runtime/runtime/domain/action/service"
 	capabilitybusiness "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -50,6 +53,7 @@ type HTTPRouter struct {
 	capabilityHTTP          httpRouteRegistrar
 	applicationSchemaHTTP   httpRouteRegistrar
 	notificationHTTP        httpRouteRegistrar
+	authorizationActions    func() *actioncontract.Registry
 	identityAuthorization   identitysdk.PrincipalResolver
 	businessPrincipal       BusinessPrincipalResolver
 	identityAuthentication  IdentityRequestMiddleware
@@ -97,8 +101,23 @@ func NewHTTPRouter(config HTTPRouterConfig, deps HTTPRouterDependencies) *HTTPRo
 	controller := capacityplatform.NewController(config.CapacityLimits, func(event capacityplatform.Event) {
 		zap.L().Warn("runtime capacity state", zap.String("code", event.Code), zap.String("state", string(event.State)), zap.String("dimension", string(event.Dimension)), zap.Int("current", event.Current), zap.Int("limit", event.Limit))
 	})
+	authorizationActions := deps.AuthorizationActions
+	if authorizationActions == nil {
+		contributedActions, err := modulehttp.AuthorizationActionsFromSurfaces(deps.ModuleHTTPSurfaces)
+		if err != nil {
+			panic("assemble Runtime HTTP authorization contributions: " + err.Error())
+		}
+		registry, err := actionservice.BuildAuthorizationRegistry(actionservice.AuthorizationRegistryInput{
+			ApplicationKey: "runtime-http", ContributedActions: contributedActions, EndpointContracts: runtimeEndpointContracts,
+		})
+		if err != nil {
+			panic("assemble Runtime HTTP authorization registry: " + err.Error())
+		}
+		authorizationActions = func() *actioncontract.Registry { return registry }
+	}
 	router := &HTTPRouter{
 		identityAuthorization: deps.IdentityAuthorization, businessPrincipal: deps.BusinessPrincipal,
+		authorizationActions:   authorizationActions,
 		identityAuthentication: deps.IdentityAuthentication, identityPrincipal: deps.IdentityPrincipal, integrationAuth: deps.IntegrationAuthentication,
 		securityAudit: deps.SecurityAudit, runtimeStatus: deps.RuntimeStatus,
 		corsAllowedOrigins: normalizeCORSOrigins(config.CORSAllowedOrigins), allowDevAuthHeaders: config.AllowDevAuthHeaders,
@@ -217,7 +236,8 @@ func (s *HTTPRouter) Routes() http.Handler {
 	controlled := s.withOperationalControls(mux, admitted)
 	published := s.withBusinessEventPublication(controlled)
 	highRiskAuthorized := s.withHighRiskOperationPolicy(mux, published)
-	authenticated := s.withAuth(mux, highRiskAuthorized)
+	actionAuthorized := s.withActionAuthorization(mux, highRiskAuthorized)
+	authenticated := s.withAuth(mux, actionAuthorized)
 	return s.withMetrics(s.withRecovery(s.withCORS(authenticated)))
 }
 

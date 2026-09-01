@@ -69,7 +69,7 @@ func TestRecordMutationPlanApplicationErrorRemainingMappings(t *testing.T) {
 func TestRecordScopeAllowsActionRemainingBoundaries(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
 	objects := map[string]definitionmodel.ObjectSchema{object.Key: object}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}, RecordScope: "all_records"})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}})
 	newService := func(repository recordrepository.RecordRepository) *RecordApplicationService {
 		queryPolicy := recordservice.NewRecordQueryPolicyDomainService(recordservice.RecordQueryPolicyDependencies{
 			Objects: func() []definitionmodel.ObjectSchema { return []definitionmodel.ObjectSchema{object} },

@@ -26,7 +26,7 @@ func TestOperationsCoreFinalConditionEdges(t *testing.T) {
 		t.Fatalf("system permission declaration error = %v", err)
 	}
 
-	validRequest := OperationsSubmitRequest{Kind: "retention.cleanup", Permission: "workspace.admin", ResourceType: "retention_policy", Reason: "test"}
+	validRequest := OperationsSubmitRequest{Kind: "retention.cleanup", Permission: "runtime.retention.execute", ResourceType: "retention_policy", Reason: "test"}
 	if _, _, err := NewOperationsApplicationService(nil, nil, nil, nil).Submit(t.Context(), validRequest, "key", admin); apperror.CodeOf(err) != "backend.operations.repository_unavailable" {
 		t.Fatalf("nil repository error = %v", err)
 	}
@@ -40,14 +40,14 @@ func TestOperationsCoreFinalConditionEdges(t *testing.T) {
 			}
 		})
 	}
-	t.Run("workspace administrator authority is Surface independent", func(t *testing.T) {
+	t.Run("workspace administrator does not expand to runtime operations", func(t *testing.T) {
 		principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true,
 			WorkspaceID: admin.WorkspaceID,
 			UserID:      "tenant-admin"},
 		}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}},
 		)
-		if err := operationsAuthorize(principal, "runtime.worker.control"); err != nil {
-			t.Fatalf("workspace administrator authority must not depend on Surface: %v", err)
+		if err := operationsAuthorize(principal, "runtime.worker.control"); apperror.KindOf(err) != apperror.KindForbidden {
+			t.Fatalf("workspace.admin expanded to runtime.worker.control: %v", err)
 		}
 		accessfixture.Mutate(&principal, func(role *accessfixture.Bundle) {
 			role.Permissions = append(role.Permissions, "runtime.worker.control")

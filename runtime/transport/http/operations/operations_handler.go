@@ -74,16 +74,11 @@ type OperationsDependencies struct {
 	WriteServiceError  func(http.ResponseWriter, *http.Request, error)
 	DecodeJSON         func(http.ResponseWriter, *http.Request, any) bool
 	SecurityAudit      func(*http.Request, principalmodel.Principal, string, string, map[string]any)
-	Admin              func(http.HandlerFunc) http.HandlerFunc
 	Authenticated      func(http.HandlerFunc) http.HandlerFunc
 }
 
 func NewOperationsHandler(deps OperationsDependencies) *OperationsHandler {
-	authenticated := deps.Authenticated
-	if authenticated == nil {
-		authenticated = deps.Admin
-	}
-	return &OperationsHandler{service: deps.Service, controls: deps.Controls, leases: deps.Leases, databaseRetirement: deps.DatabaseRetirement, principal: deps.Principal, writeJSON: deps.WriteJSON, writeServiceError: deps.WriteServiceError, decodeJSON: deps.DecodeJSON, securityAudit: deps.SecurityAudit, authenticated: authenticated}
+	return &OperationsHandler{service: deps.Service, controls: deps.Controls, leases: deps.Leases, databaseRetirement: deps.DatabaseRetirement, principal: deps.Principal, writeJSON: deps.WriteJSON, writeServiceError: deps.WriteServiceError, decodeJSON: deps.DecodeJSON, securityAudit: deps.SecurityAudit, authenticated: deps.Authenticated}
 }
 
 func (h *OperationsHandler) receipts(w http.ResponseWriter, r *http.Request) {
@@ -119,7 +114,7 @@ func (h *OperationsHandler) mutate(w http.ResponseWriter, r *http.Request, reset
 			ownerErr = h.service.RetryLegacyReceipt(ctx, principal, owner, receiptID)
 		}
 		if ownerErr == nil && h.securityAudit != nil {
-			h.securityAudit(r, principal, "idempotency_receipt_"+operation, "Admin changed idempotency receipt state", map[string]any{"owner": owner, "receipt_id": receiptID, "operation": operation})
+			h.securityAudit(r, principal, "idempotency_receipt_"+operation, "Operator changed idempotency receipt state", map[string]any{"owner": owner, "receipt_id": receiptID, "operation": operation})
 		}
 		return map[string]any{"ok": ownerErr == nil, "operation": operation}, ownerErr
 	})

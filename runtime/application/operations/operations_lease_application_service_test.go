@@ -43,7 +43,7 @@ func TestOperationsLeaseForceReleaseProducesFencedReceiptAndReplay(t *testing.T)
 	operations := NewOperationsApplicationService(ledger, nil, func() time.Time { return now }, func() string { return "lease" })
 	repository := &operationsLeaseReleaseRepositoryProbe{changed: true}
 	service := NewOperationsLeaseApplicationService(repository, operations, func() time.Time { return now })
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"runtime.worker.force_release"}})
 	command := OperationsLeaseReleaseCommand{Owner: "workflow", ResourceID: "execution-1", ExpectedLeaseOwner: "instance-a", ExpectedFencingToken: 7, VerifiedStuck: true, VerificationEvidence: "instance terminated and heartbeat absent", Reason: "incident recovery", Reference: "INC-42"}
 
 	result, err := service.ForceRelease(t.Context(), command, "lease-key", principal)
@@ -63,7 +63,7 @@ func TestOperationsLeaseForceReleaseRejectsFailedPrecondition(t *testing.T) {
 	ledger := &operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}
 	operations := NewOperationsApplicationService(ledger, nil, nil, func() string { return "lease-conflict" })
 	service := NewOperationsLeaseApplicationService(&operationsLeaseReleaseRepositoryProbe{}, operations, nil)
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"runtime.worker.force_release"}})
 	if _, err := service.ForceRelease(t.Context(), OperationsLeaseReleaseCommand{Owner: "workflow", ResourceID: "execution-1", ExpectedLeaseOwner: "instance-a", ExpectedFencingToken: 7, Reason: "recovery"}, "lease-key", principal); err == nil {
 		t.Fatal("failed lease precondition accepted")
 	}

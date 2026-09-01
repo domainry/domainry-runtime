@@ -5,6 +5,7 @@ import (
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
+	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	"time"
@@ -49,6 +50,7 @@ type HTTPServerDependencies struct {
 	Config                   config.Config
 	Records                  *composition.RuntimeServices
 	IdentityBinding          identitysdk.Binding
+	AuthorizationActions     func() *actioncontract.Registry
 	PartyBinding             partysdk.Binding
 	MonitoringBinding        monitoringsdk.Binding
 	SchedulerBinding         schedulersdk.Binding
@@ -142,6 +144,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 		BusinessEventRetryInterval: dependencies.Config.BusinessEventRetryInterval,
 	}, runtimehttp.HTTPRouterDependencies{
 		IdentityAuthentication: identityAuthentication, IdentityPrincipal: principalmodel.NewPrincipalFromIdentity, IntegrationAuthentication: integrationAuthentication,
+		AuthorizationActions:  dependencies.AuthorizationActions,
 		RateLimiter:           dependencies.RateLimiter,
 		IdentityAuthorization: identityPrincipals,
 		BusinessPrincipal: principalapplication.NewBusinessPrincipalApplicationService(principalapplication.BusinessPrincipalDependencies{
@@ -199,9 +202,7 @@ func (a *httpServerAssembly) wireWorkspaceProvisioning() {
 	a.handlers.WorkspaceProvision = workspaceprovisionhttp.NewWorkspaceProvisionHandler(workspaceprovisionhttp.WorkspaceProvisionDependencies{
 		UseCases: service, Principal: a.callbacks.Principal, DecodeJSON: a.callbacks.DecodeJSON,
 		WriteJSON: a.callbacks.WriteJSON, WriteServiceError: a.callbacks.WriteServiceError,
-		ProvisionGuard: a.identityHTTP.PermissionFunc(workspaceprovisionapplication.Permission),
-		ReconcileGuard: a.identityHTTP.PermissionFunc(workspaceprovisionapplication.ReconcilePermission),
-		SecurityAudit:  a.callbacks.SecurityAudit,
+		SecurityAudit: a.callbacks.SecurityAudit,
 	})
 }
 

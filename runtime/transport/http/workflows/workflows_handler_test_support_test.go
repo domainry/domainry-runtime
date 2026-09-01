@@ -227,7 +227,20 @@ func newWorkflowHTTPDefinitionFixture() (*WorkflowsHandler, *workflowHTTPDefinit
 }
 
 func workflowHTTPAdminPrincipal() principalmodel.Principal {
-	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin-1", WorkspaceID: "workspace-1"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "ops.workflow.run", "ops.workflow.simulate", "ops.workflow.retry", "ops.workflow.resolve", "ops.workflow.read", "ops.workflow.process", "workflow.process.read", "workflow.process.operate"}})
+	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin-1", WorkspaceID: "workspace-1"}}, accessfixture.Bundle{Permissions: []string{
+		"runtime.workflows.approve_business_workflow_task",
+		"runtime.workflows.reject_business_workflow_task",
+		"runtime.workflows.return_business_workflow_task",
+		"ops.workflow.run",
+		"ops.workflow.simulate",
+		"ops.workflow.retry",
+		"ops.workflow.resolve",
+		"ops.workflow.read",
+		"ops.workflow.process",
+		"workflow.advanced.configure",
+		"workflow.process.read",
+		"workflow.process.operate",
+	}})
 }
 
 func workflowHTTPSchema(key, name string) definitionmodel.WorkflowSchema {

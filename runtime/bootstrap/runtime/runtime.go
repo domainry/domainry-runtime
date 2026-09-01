@@ -10,6 +10,8 @@ import (
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 
 	connector "github.com/domainry/domainry-connector-sdk"
+	actioncontract "github.com/domainry/domainry-foundation/action"
+	"github.com/domainry/domainry-foundation/ratelimit"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
@@ -30,50 +32,51 @@ import (
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	notificationpublication "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-foundation/ratelimit"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 // Runtime owns the process-level composition and lifecycle.
 type Runtime struct {
-	cfg                 config.Config
-	templateID          string
-	store               *persistence.RuntimeStore
-	borrowedStore       bool
-	records             *composition.RuntimeServices
-	identityBinding     identitysdk.Binding
-	identityDirectory   identitysdk.Directory
-	identityPrincipals  identitysdk.PrincipalResolver
-	integrationMode     integrationsdk.DeploymentMode
-	integrationBinding  integrationsdk.Binding
-	integrationWorkers  integrationsdk.LocalWorkers
-	partyBinding        partysdk.Binding
-	dataExchangeBinding dataexchangesdk.Binding
-	lifecycleBinding    lifecyclesdk.Binding
-	manifest            manifestmodel.ManifestSchema
-	recordRepo          recordrepository.RecordRepository
-	rateLimiter         ratelimit.Limiter
-	notificationHTTP    *notificationfacade.NotificationApplicationService
-	notificationBinding notificationsdk.Binding
-	monitoringBinding   monitoringsdk.Binding
-	schedulerBinding    schedulersdk.Binding
-	agentBinding        agentsdk.Binding
-	auditBinding        auditsdk.Binding
-	metadataBinding     metadatasdk.Binding
-	reportBinding       reportsdk.Binding
-	notificationWorkers notificationsdk.LocalWorkers
-	notificationRelay   *notificationpublication.Relay
-	worker              workerplatform.Dependencies
-	api                 *runtimehttp.HTTPRouter
-	businessHandlers    *runtimeext.BusinessHandlerRegistry
-	connectorProviders  *connector.Registry
-	releaseIdentity     runtimehttp.RuntimeReleaseIdentity
-	releaseCohort       *deploymentapplication.DeploymentRuntimeReleaseCohortApplicationService
-	releaseLease        deploymentmodel.RuntimeReleaseCohortLease
-	releaseAdmission    *deploymentapplication.RuntimeReleaseAdmission
-	releaseIntegrity    *deploymentapplication.RuntimeReleaseIntegrity
-	releaseMu           sync.Mutex
+	cfg                  config.Config
+	templateID           string
+	store                *persistence.RuntimeStore
+	borrowedStore        bool
+	records              *composition.RuntimeServices
+	authorizationActions func() *actioncontract.Registry
+	moduleBindings       runtimeModuleBindingInventory
+	identityBinding      identitysdk.Binding
+	identityDirectory    identitysdk.Directory
+	identityPrincipals   identitysdk.PrincipalResolver
+	integrationMode      integrationsdk.DeploymentMode
+	integrationBinding   integrationsdk.Binding
+	integrationWorkers   integrationsdk.LocalWorkers
+	partyBinding         partysdk.Binding
+	dataExchangeBinding  dataexchangesdk.Binding
+	lifecycleBinding     lifecyclesdk.Binding
+	manifest             manifestmodel.ManifestSchema
+	recordRepo           recordrepository.RecordRepository
+	rateLimiter          ratelimit.Limiter
+	notificationHTTP     *notificationfacade.NotificationApplicationService
+	notificationBinding  notificationsdk.Binding
+	monitoringBinding    monitoringsdk.Binding
+	schedulerBinding     schedulersdk.Binding
+	agentBinding         agentsdk.Binding
+	auditBinding         auditsdk.Binding
+	metadataBinding      metadatasdk.Binding
+	reportBinding        reportsdk.Binding
+	notificationWorkers  notificationsdk.LocalWorkers
+	notificationRelay    *notificationpublication.Relay
+	worker               workerplatform.Dependencies
+	api                  *runtimehttp.HTTPRouter
+	businessHandlers     *runtimeext.BusinessHandlerRegistry
+	connectorProviders   *connector.Registry
+	releaseIdentity      runtimehttp.RuntimeReleaseIdentity
+	releaseCohort        *deploymentapplication.DeploymentRuntimeReleaseCohortApplicationService
+	releaseLease         deploymentmodel.RuntimeReleaseCohortLease
+	releaseAdmission     *deploymentapplication.RuntimeReleaseAdmission
+	releaseIntegrity     *deploymentapplication.RuntimeReleaseIntegrity
+	releaseMu            sync.Mutex
 
 	workersMu                     sync.Mutex
 	workerCancels                 []context.CancelFunc

@@ -18,7 +18,7 @@ import (
 
 func TestWorkflowExecutionContextPrincipalAndRendering(t *testing.T) {
 	worker := WorkflowWorkerPrincipal()
-	if !worker.Known || worker.UserID != "workflow:worker" || !worker.SystemScope.Valid() || len(worker.SystemCapabilities) != 1 || worker.SystemCapabilities[0] != "*" {
+	if !worker.Known || worker.UserID != "workflow:worker" || !worker.SystemScope.Valid() || len(worker.SystemCapabilities) != 0 {
 		t.Fatalf("worker=%+v", worker)
 	}
 	bundle := identitysdk.AccessBundle{}

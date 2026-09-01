@@ -12,7 +12,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-func TestVisibilityWriteOnlyFieldAndActionFallbackEdges(t *testing.T) {
+func TestVisibilityWriteOnlyFieldAndExactActionKeyEdges(t *testing.T) {
 	role := accessfixture.Bundle{
 		Permissions:  []string{"customer.update", "customer.approve"},
 		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Write: true}},
@@ -29,8 +29,8 @@ func TestVisibilityWriteOnlyFieldAndActionFallbackEdges(t *testing.T) {
 	if actionAllowed(principalmodel.Principal{}, definitionmodel.ActionSchema{}) {
 		t.Fatal("unknown principal allowed action")
 	}
-	if !actionAllowed(accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, role), definitionmodel.ActionSchema{Key: "approve", ObjectKey: "customer"}) {
-		t.Fatal("object fallback action denied")
+	if !actionAllowed(accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, role), definitionmodel.ActionSchema{Key: "customer.approve", ObjectKey: "customer"}) {
+		t.Fatal("same-key action permission denied")
 	}
 	dataDenied := accessfixture.Bundle{Permissions: []string{"customer.read"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer"}}}
 	dataDeniedPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, dataDenied)

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
+	"strings"
 	"time"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
@@ -22,19 +22,15 @@ import (
 	metadatamodule "github.com/domainry/domainry-metadata/module"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
 	partysdk "github.com/domainry/domainry-party-sdk"
 	reportsdk "github.com/domainry/domainry-report-sdk"
-	reportmodule "github.com/domainry/domainry-report/module"
-	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
-	schedulermodulehost "github.com/domainry/domainry-scheduler-sdk/modulehost"
-	schedulersaashost "github.com/domainry/domainry-scheduler-sdk/saashost"
-	"go.uber.org/zap"
-
-	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
+	reportmodule "github.com/domainry/domainry-report/module"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
+	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	notificationfacade "github.com/domainry/domainry-runtime/runtime/application/notificationfacade"
@@ -46,6 +42,7 @@ import (
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	manifestvalidation "github.com/domainry/domainry-runtime/runtime/domain/manifest/validation"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	runtimeauditmodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	deploymentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/deployment"
@@ -55,6 +52,9 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/localization"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
+	schedulermodulehost "github.com/domainry/domainry-scheduler-sdk/modulehost"
+	schedulersaashost "github.com/domainry/domainry-scheduler-sdk/saashost"
 )
 
 func New(ctx context.Context, cfg config.Config, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, partyFactory partysdk.Factory, dataExchangeFactory dataexchangesdk.Factory, integrationFactory integrationsdk.Factory) *Runtime {
@@ -440,7 +440,20 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		mustCompleteRuntimeStartup(schedulerBinding.Descriptor().Validate())
 		mustCompleteRuntimeStartup(schedulerBinding.Reconcile(ctx))
 	}
-	mustCompleteRuntimeStartup(publishRuntimeIdentityCatalog(ctx, identityBinding, records.Schema(), cfg.IdentityWorkspaceID, cfg.IdentityAudience, cfg.IdentityRedirectURLs))
+	moduleBindings := newRuntimeModuleBindingInventory(
+		notificationBinding, partyBinding, integrationOwner.Binding, schedulerBinding, monitoringBinding,
+		serviceAssembly.dataExchangeBinding, agentBinding, serviceAssembly.lifecycleBinding,
+		auditBinding, metadataBinding, reportBinding,
+	)
+	authorizationModuleActions, err := moduleBindings.AuthorizationActions()
+	mustCompleteRuntimeStartup(err)
+	authorizationRegistry, err := reconcileRuntimeIdentityAuthorization(ctx, identityBinding, records.Schema(), authorizationModuleActions, nil, cfg.IdentityWorkspaceID, cfg.IdentityAudience, cfg.IdentityRedirectURLs)
+	mustCompleteRuntimeStartup(err)
+	authorizationRegistrySnapshot := &runtimeAuthorizationRegistrySnapshot{}
+	authorizationRegistrySnapshot.Store(authorizationRegistry)
+	if binder, embedded := identityBinding.(identitysdk.PermissionUsageProviderBinder); embedded {
+		mustCompleteRuntimeStartup(binder.BindPermissionUsageProvider(authorizationRegistrySnapshot))
+	}
 	mustCompleteRuntimeStartup(publishRuntimeProjectRoles(ctx, identityBinding, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience))
 	startupCallbacks.records = records
 	notificationWakeup := func(message publicationmodel.Message) {
@@ -455,57 +468,75 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	mustCompleteRuntimeStartup(validateRuntimeActionReadiness(records.Applications().Actions))
 	err = synchronizeRuntimeSeeds(ctx, store, manifest, !cfg.BusinessSeedSyncDisabled, identityDirectory)
 	mustCompleteRuntimeStartup(err)
-	refreshRuntimeActionCatalog := func(snapshot appschemamodel.ApplicationSchemaSnapshot) {
-		records.Applications().Actions.ReplaceDefinitions(snapshot.Actions)
+	refreshRuntimeActionCatalog := func(_ context.Context, snapshot appschemamodel.ApplicationSchemaSnapshot) (appschemaapplication.ApplicationSchemaReloadCommit, error) {
+		return func() { records.Applications().Actions.ReplaceDefinitions(snapshot.Actions) }, nil
 	}
-	records.Applications().ApplicationSchema.AddReloadObserver(refreshRuntimeActionCatalog)
-	records.Applications().ApplicationSchema.AddReloadObserver(func(snapshot appschemamodel.ApplicationSchemaSnapshot) {
+	records.Applications().ApplicationSchema.AddReloadObserver(func(ctx context.Context, snapshot appschemamodel.ApplicationSchemaSnapshot) (appschemaapplication.ApplicationSchemaReloadPreparation, error) {
+		commit, err := refreshRuntimeActionCatalog(ctx, snapshot)
+		return appschemaapplication.ApplicationSchemaReloadPreparation{Commit: commit}, err
+	})
+	records.Applications().ApplicationSchema.AddReloadObserver(func(_ context.Context, snapshot appschemamodel.ApplicationSchemaSnapshot) (appschemaapplication.ApplicationSchemaReloadPreparation, error) {
 		publishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer cancel()
-		if err := publishRuntimeIdentityCatalog(publishCtx, identityBinding, snapshot, cfg.IdentityWorkspaceID, cfg.IdentityAudience, cfg.IdentityRedirectURLs); err != nil {
-			zap.L().Error("publish Runtime authorization catalog to Identity", zap.Error(err))
+		previousRegistry := authorizationRegistrySnapshot.Load()
+		candidateRegistry, err := reconcileRuntimeIdentityAuthorization(publishCtx, identityBinding, snapshot, authorizationModuleActions, previousRegistry, cfg.IdentityWorkspaceID, cfg.IdentityAudience, cfg.IdentityRedirectURLs)
+		if err != nil {
+			return appschemaapplication.ApplicationSchemaReloadPreparation{}, fmt.Errorf("reconcile Runtime authorization definitions with Identity: %w", err)
 		}
-		if err := publishRuntimeProjectRoles(publishCtx, identityBinding, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience); err != nil {
-			zap.L().Error("publish Runtime project role catalog to Identity", zap.Error(err))
+		preparation := appschemaapplication.ApplicationSchemaReloadPreparation{
+			Commit: func() { authorizationRegistrySnapshot.Store(candidateRegistry) },
 		}
+		if identityBinding != nil {
+			application := identitysdk.ApplicationRef{
+				WorkspaceID: identitysdk.WorkspaceID(strings.TrimSpace(cfg.IdentityWorkspaceID)), ApplicationKey: identitysdk.ApplicationKey(strings.TrimSpace(cfg.IdentityAudience)),
+			}
+			preparation.Abort = func(abortCtx context.Context) error {
+				rollbackCtx, rollbackCancel := context.WithTimeout(context.WithoutCancel(abortCtx), 10*time.Second)
+				defer rollbackCancel()
+				return reconcileRuntimePermissionRegistries(rollbackCtx, identityBinding.Permissions(), application, candidateRegistry, previousRegistry)
+			}
+		}
+		return preparation, nil
 	})
-	refreshRuntimeActionCatalog(records.Schema())
+	records.Applications().Actions.ReplaceDefinitions(records.Schema().Actions)
 	manifest.ManifestHash = seedManifest.ManifestHash
 	runtime := constructRuntime(runtimeConstructionInput{
-		config:              cfg,
-		templateID:          templateID,
-		store:               store,
-		applicationServices: records,
-		identityBinding:     identityBinding,
-		identityDirectory:   identityDirectory,
-		identityPrincipals:  identityPrincipals,
-		integrationMode:     integrationOwner.Binding.Descriptor().Mode,
-		integrationBinding:  integrationOwner.Binding,
-		integrationWorkers:  integrationOwner.Workers,
-		partyBinding:        partyBinding,
-		dataExchangeBinding: serviceAssembly.dataExchangeBinding,
-		lifecycleBinding:    serviceAssembly.lifecycleBinding,
-		manifest:            manifest,
-		recordRepository:    recordRepository,
-		rateLimiter:         sharedRateLimiter,
-		notificationHTTP:    notificationHTTP,
-		notificationBinding: notificationBinding,
-		monitoringBinding:   monitoringBinding,
-		schedulerBinding:    schedulerBinding,
-		agentBinding:        agentBinding,
-		auditBinding:        auditBinding,
-		metadataBinding:     metadataBinding,
-		reportBinding:       reportBinding,
-		notificationWorkers: notificationWorkers,
-		notificationRelay:   notificationRelay,
-		worker:              serviceAssembly.worker,
-		businessHandlers:    businessHandlers,
-		connectorProviders:  connectorProviders,
-		releaseIdentity:     releaseIdentity,
-		releaseCohort:       releaseCohort,
-		releaseLease:        releaseLease,
-		releaseAdmission:    releaseAdmission,
-		releaseIntegrity:    releaseIntegrity,
+		config:               cfg,
+		templateID:           templateID,
+		store:                store,
+		applicationServices:  records,
+		authorizationActions: authorizationRegistrySnapshot.Load,
+		moduleBindings:       moduleBindings,
+		identityBinding:      identityBinding,
+		identityDirectory:    identityDirectory,
+		identityPrincipals:   identityPrincipals,
+		integrationMode:      integrationOwner.Binding.Descriptor().Mode,
+		integrationBinding:   integrationOwner.Binding,
+		integrationWorkers:   integrationOwner.Workers,
+		partyBinding:         partyBinding,
+		dataExchangeBinding:  serviceAssembly.dataExchangeBinding,
+		lifecycleBinding:     serviceAssembly.lifecycleBinding,
+		manifest:             manifest,
+		recordRepository:     recordRepository,
+		rateLimiter:          sharedRateLimiter,
+		notificationHTTP:     notificationHTTP,
+		notificationBinding:  notificationBinding,
+		monitoringBinding:    monitoringBinding,
+		schedulerBinding:     schedulerBinding,
+		agentBinding:         agentBinding,
+		auditBinding:         auditBinding,
+		metadataBinding:      metadataBinding,
+		reportBinding:        reportBinding,
+		notificationWorkers:  notificationWorkers,
+		notificationRelay:    notificationRelay,
+		worker:               serviceAssembly.worker,
+		businessHandlers:     businessHandlers,
+		connectorProviders:   connectorProviders,
+		releaseIdentity:      releaseIdentity,
+		releaseCohort:        releaseCohort,
+		releaseLease:         releaseLease,
+		releaseAdmission:     releaseAdmission,
+		releaseIntegrity:     releaseIntegrity,
 	})
 	runtime.borrowedStore = preparedStore != nil
 	runtime.startMetadataSnapshotWatcher(ctx)

@@ -98,7 +98,7 @@ func (h *RecordsHandler) createRecord(w http.ResponseWriter, r *http.Request) {
 	if !h.decodeJSON(w, r, &req) {
 		return
 	}
-	key, _ := recordsActionIdempotencyKey(r, "")
+	key, _ := recordsActionIdempotencyKey(r)
 	if key == "" {
 		// Collection CRUD requires the public Runtime operation contract's
 		// idempotency key. Reject before dispatch with its formal contract code;
@@ -293,7 +293,7 @@ func (h *RecordsHandler) effectivePermissions(w http.ResponseWriter, r *http.Req
 func runtimeOpsExactFeaturePermissions(result recordcontract.RecordFeaturePermissionSnapshot, principal principalmodel.Principal) recordcontract.RecordFeaturePermissionSnapshot {
 	functions := make([]recordcontract.RecordFeatureFunctionPermission, 0, len(result.Functions))
 	for _, permission := range result.Functions {
-		if permission.Key == "workspace.admin" || !principal.HasExactPermission(permission.Key) {
+		if !principal.HasExactPermission(permission.Key) {
 			continue
 		}
 		permission.Decision.Reason = "allowed"

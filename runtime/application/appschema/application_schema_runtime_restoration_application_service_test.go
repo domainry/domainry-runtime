@@ -93,11 +93,11 @@ func TestRestoreRuntimeManifestKeepsOnlyActivePublishedTemplates(t *testing.T) {
 func TestRestoreRuntimeManifestRejectsIncompleteInstalledActionAuthorization(t *testing.T) {
 	installed := manifestmodel.ManifestSchema{
 		Actions: []definitionmodel.ActionSchema{{
-			Key: "booking.cancel", RequiresPermission: "booking.cancel",
+			Key: "booking.cancel",
 		}},
 	}
 	persisted := installed
-	persisted.Actions = []definitionmodel.ActionSchema{{Key: "booking.cancel", RequiresPermission: "booking.read"}}
+	persisted.Actions = nil
 	_, err := NewApplicationSchemaRuntimeRestorationApplicationService(
 		runtimeNotificationRepositoryStub{},
 		runtimeMetadataRepositoryStub{manifest: persisted},
@@ -106,7 +106,7 @@ func TestRestoreRuntimeManifestRejectsIncompleteInstalledActionAuthorization(t *
 		installed,
 		principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "test Runtime metadata restoration"),
 	)
-	if err == nil || !strings.Contains(err.Error(), `requires permission "booking.read", want "booking.cancel"`) {
+	if err == nil || !strings.Contains(err.Error(), `installed Action "booking.cancel" was not persisted`) {
 		t.Fatalf("incomplete Action authorization did not block Runtime readiness: %v", err)
 	}
 }

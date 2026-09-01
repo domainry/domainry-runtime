@@ -7,7 +7,6 @@
       "label": "Create Purchase Request",
       "object_key": "stock_item",
       "preconditions": [],
-      "requires_permission": "purchase_request.create",
       "ui_placement": "record_header"
     },
     {
@@ -16,8 +15,7 @@
       "kind": "record_operation",
       "label": "Low Stock Watch",
       "object_key": "stock_item",
-      "ui_placement": "workflow_only",
-      "requires_permission": ".update"
+      "ui_placement": "workflow_only"
     }
   ],
   "dictionaries": [

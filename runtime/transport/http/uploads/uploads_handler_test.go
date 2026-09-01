@@ -83,11 +83,11 @@ func uploadTestRole(permissions ...string) accessfixture.Bundle {
 	role := accessfixture.Bundle{Permissions: permissions}
 	for _, permission := range permissions {
 		switch permission {
-		case "document.*":
+		case "document.create", "document.update":
 			role.DataPolicies = append(role.DataPolicies, accessfixture.DataPolicyFixture{ObjectKey: "document", Scope: "all_records", Read: true, Write: true})
 		case "document.read":
 			role.DataPolicies = append(role.DataPolicies, accessfixture.DataPolicyFixture{ObjectKey: "document", Scope: "all_records", Read: true})
-		case "asset.*":
+		case "asset.create", "asset.update":
 			role.DataPolicies = append(role.DataPolicies, accessfixture.DataPolicyFixture{ObjectKey: "asset", Scope: "all_records", Read: true, Write: true})
 		case "asset.read":
 			role.DataPolicies = append(role.DataPolicies, accessfixture.DataPolicyFixture{ObjectKey: "asset", Scope: "all_records", Read: true})
@@ -145,7 +145,7 @@ func TestUploadFileAuthorizationAndValidation(t *testing.T) {
 		t.Fatalf("unknown upload status=%d code=%q", response.Code, response.Header().Get("X-Error-Code"))
 	}
 
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "u1", WorkspaceID: "workspace-a"}}, uploadTestRole("document.*", "asset.*"))
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "u1", WorkspaceID: "workspace-a"}}, uploadTestRole("document.update", "asset.update"))
 	handler := uploadTestHandler(t, principal)
 	for _, test := range []struct {
 		name   string
@@ -237,7 +237,7 @@ func TestUploadFileAuthorizationAndValidation(t *testing.T) {
 }
 
 func TestUploadReadFailureAndDetectedContentType(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, uploadTestRole("document.*"))
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, uploadTestRole("document.update"))
 	handler := uploadTestHandler(t, principal)
 	handler.copyUpload = func(io.Writer, io.Reader) (int64, error) { return 0, errors.New("read failed") }
 	response := httptest.NewRecorder()
@@ -264,7 +264,7 @@ func TestUploadReadFailureAndDetectedContentType(t *testing.T) {
 }
 
 func TestUploadFileSuccessAndStorageFailure(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "u1", WorkspaceID: "workspace-a"}}, uploadTestRole("document.*"))
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "u1", WorkspaceID: "workspace-a"}}, uploadTestRole("document.update"))
 	handler := uploadTestHandler(t, principal)
 	response := httptest.NewRecorder()
 	handler.uploadFile(response, multipartUploadRequest(t, "/files?object_key=document&field_key=file_url", "note.txt", []byte("hello upload")))
@@ -310,7 +310,7 @@ func TestUploadFileSuccessAndStorageFailure(t *testing.T) {
 }
 
 func TestUploadFileRegistersLifecycleEvidenceAndRemovesUnregisteredContent(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "u1", WorkspaceID: "workspace-a"}}, uploadTestRole("document.*"))
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "u1", WorkspaceID: "workspace-a"}}, uploadTestRole("document.update"))
 	handler := uploadTestHandler(t, principal)
 	registry := &uploadArtifactStoreStub{}
 	handler.artifacts = registry
@@ -384,7 +384,7 @@ func TestServeUploadedFileAndDownloadAuthorization(t *testing.T) {
 }
 
 func TestUploadStorageIsIsolatedByWorkspace(t *testing.T) {
-	principalA := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "u", WorkspaceID: "workspace-a"}}, uploadTestRole("document.*", "asset.read"))
+	principalA := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "u", WorkspaceID: "workspace-a"}}, uploadTestRole("document.update", "asset.read"))
 	handlerA := uploadTestHandler(t, principalA)
 	response := httptest.NewRecorder()
 	handlerA.uploadFile(response, multipartUploadRequest(t, "/files?object_key=document&field_key=file_url", "same.txt", []byte("same content")))

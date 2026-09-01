@@ -64,8 +64,9 @@ func AddIdentityProfileReferences(builder *changeplanprojection.ChangePlanRefere
 func AddActionReferences(builder *changeplanprojection.ChangePlanReferenceGraphBuilder, snapshot ReferenceSchema) {
 	for _, action := range snapshot.Actions {
 		builder.Node("action", action.Key, action.ObjectKey, action.Label, "")
+		builder.Node("permission", action.Key, action.ObjectKey, action.Label, "")
 		builder.Edge("action", action.Key, "object", action.ObjectKey, "operates_on", "object_key")
-		builder.Edge("action", action.Key, "permission", action.RequiresPermission, "requires_permission", "requires_permission")
+		builder.Edge("action", action.Key, "permission", action.Key, "owns_permission", "key")
 	}
 }
 

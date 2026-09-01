@@ -8,17 +8,10 @@ import (
 	"github.com/domainry/domainry-foundation/idempotency"
 )
 
-func recordsActionIdempotencyKey(request *http.Request, payloadKey string) (string, error) {
+func recordsActionIdempotencyKey(request *http.Request) (string, error) {
 	headerKey := strings.TrimSpace(request.Header.Get("Idempotency-Key"))
-	payloadKey = strings.TrimSpace(payloadKey)
-	if headerKey != "" && payloadKey != "" && headerKey != payloadKey {
-		return "", apperror.New(apperror.KindBadRequest, idempotency.ErrorCodeKeyReused, nil, map[string]string{"reason": "header_payload_mismatch"})
-	}
 	if headerKey != "" {
 		return headerKey, nil
-	}
-	if payloadKey != "" {
-		return payloadKey, nil
 	}
 	return "", apperror.New(apperror.KindBadRequest, idempotency.ErrorCodeMissingKey, nil, map[string]string{"use_case": "action.invoke"})
 }

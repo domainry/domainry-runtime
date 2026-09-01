@@ -315,7 +315,7 @@ func TestDecideTaskCancellationAuthorizationIdempotencyAndRuntimeOutcomes(t *tes
 	denied.UserID = task.AssigneeUserID
 	service = workflowProcessQueryService(store, nil)
 	service.decisions = workflowDecisionRuntimeEdgeStub{handled: true}
-	if _, err := service.DecideTask(t.Context(), "task", request, denied); apperror.CodeOf(err) != "backend.workflow.task.act_permission_required" {
+	if _, err := service.DecideTask(t.Context(), "task", request, denied); apperror.CodeOf(err) != "auth.permission_denied" {
 		t.Fatalf("permission error=%v", err)
 	}
 	store = base()

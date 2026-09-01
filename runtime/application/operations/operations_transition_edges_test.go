@@ -15,7 +15,7 @@ func newStartedOperationsReceipt(t *testing.T) (*OperationsApplicationService, *
 	now := time.Date(2026, 7, 19, 15, 16, 17, 0, time.UTC)
 	repository := &operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}
 	service := NewOperationsApplicationService(repository, nil, func() time.Time { return now }, func() string { return "transition" })
-	request := OperationsSubmitRequest{Kind: "retention.cleanup", Permission: "workspace.admin", ResourceType: "retention_policy", ResourceID: "policy-1", Reason: "cleanup"}
+	request := OperationsSubmitRequest{Kind: "retention.cleanup", Permission: "runtime.retention.execute", ResourceType: "retention_policy", ResourceID: "policy-1", Reason: "cleanup"}
 	receipt, _, err := service.Submit(t.Context(), request, "key", operationsTestAdmin())
 	if err != nil {
 		t.Fatal(err)
@@ -30,7 +30,7 @@ func newStartedOperationsReceipt(t *testing.T) (*OperationsApplicationService, *
 
 func TestOperationsSubmitAndStartFailureBoundaries(t *testing.T) {
 	admin := operationsTestAdmin()
-	request := OperationsSubmitRequest{Kind: "retention.cleanup", Permission: "workspace.admin", ResourceType: "retention_policy", Reason: "cleanup"}
+	request := OperationsSubmitRequest{Kind: "retention.cleanup", Permission: "runtime.retention.execute", ResourceType: "retention_policy", Reason: "cleanup"}
 	var nilService *OperationsApplicationService
 	if _, _, err := nilService.submit(t.Context(), request, "key", admin.UserID, operationsmodel.OperationsScope{WorkspaceID: admin.WorkspaceID}); apperror.CodeOf(err) != "backend.operations.repository_unavailable" {
 		t.Fatalf("nil repository error = %v", err)
@@ -46,7 +46,7 @@ func TestOperationsSubmitAndStartFailureBoundaries(t *testing.T) {
 	if _, _, err := service.Submit(t.Context(), invalidCommand, "", admin); apperror.KindOf(err) != apperror.KindBadRequest {
 		t.Fatalf("command validation error = %v", err)
 	}
-	systemRequest := OperationsSubmitRequest{Kind: "runtime.maintenance.enable", Permission: "workspace.admin", ResourceType: "runtime", Reason: "maintenance"}
+	systemRequest := OperationsSubmitRequest{Kind: "runtime.maintenance.enable", Permission: "runtime.maintenance.write", ResourceType: "runtime", Reason: "maintenance"}
 	if _, _, err := service.Submit(t.Context(), systemRequest, "key", admin); apperror.CodeOf(err) != "backend.operations.system_entrypoint_required" {
 		t.Fatalf("workspace entrypoint error = %v", err)
 	}

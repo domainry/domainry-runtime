@@ -19,7 +19,7 @@ func ActionValidateDefinitionIssues(action definitionmodel.ActionSchema) []appsc
 func ActionValidateDefinitionIssuesWithObjects(action definitionmodel.ActionSchema, objects []definitionmodel.ObjectSchema) []appschemamodel.ApplicationDefinitionValidationIssue {
 	issues := make([]appschemamodel.ApplicationDefinitionValidationIssue, 0)
 	for _, identity := range []struct{ path, value string }{
-		{"key", action.Key}, {"object_key", action.ObjectKey}, {"requires_permission", action.RequiresPermission}, {"audit_event", action.AuditEvent},
+		{"key", action.Key}, {"object_key", action.ObjectKey}, {"audit_event", action.AuditEvent},
 	} {
 		if strings.TrimSpace(identity.value) == "" {
 			issues = append(issues, actionDefinitionValidationIssue("backend.action.definition_invalid", identity.path, map[string]string{"field": identity.path}))
@@ -29,6 +29,12 @@ func ActionValidateDefinitionIssuesWithObjects(action definitionmodel.ActionSche
 		issues = append(issues, actionDefinitionValidationIssue("backend.action.kind_invalid", "kind", map[string]string{
 			"field": "kind", "allowed": strings.Join(definitionmodel.ActionKindValues(), ","), "actual": action.Kind, "kind": action.Kind,
 		}))
+	}
+	for index, field := range action.PayloadFields {
+		if strings.TrimSpace(field.Key) == "idempotency_key" {
+			path := fmt.Sprintf("payload_fields[%d].key", index)
+			issues = append(issues, actionDefinitionValidationIssue("backend.action.definition_invalid", path, map[string]string{"field": path, "reason": "reserved Runtime invocation metadata"}))
+		}
 	}
 	issues = append(issues, actionValidatePermissionPolicy(action)...)
 	issues = append(issues, actionValidateAssurancePolicy(action, objects)...)

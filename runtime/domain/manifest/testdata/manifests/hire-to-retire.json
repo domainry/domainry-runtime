@@ -127,43 +127,43 @@
   "actions": [
     {
       "key": "candidate_offer.submit", "object_key": "candidate_offer", "label": "Submit Offer", "kind": "record_operation",
-      "requires_permission": "candidate_offer.update", "audit_event": "candidate_offer_submitted", "idempotency_keys": ["request_id"]
+      "audit_event": "candidate_offer_submitted", "idempotency_keys": ["request_id"]
     },
     {
       "key": "candidate_offer.approve", "object_key": "candidate_offer", "label": "Approve Offer", "kind": "record_operation",
-      "requires_permission": "candidate_offer.update", "audit_event": "candidate_offer_approved"
+      "audit_event": "candidate_offer_approved"
     },
     {
       "key": "candidate_offer.reject", "object_key": "candidate_offer", "label": "Reject Offer", "kind": "record_operation",
-      "requires_permission": "candidate_offer.update", "audit_event": "candidate_offer_rejected"
+      "audit_event": "candidate_offer_rejected"
     },
     {
       "key": "candidate_offer.accept", "object_key": "candidate_offer", "label": "Accept Offer", "kind": "record_operation",
-      "requires_permission": "candidate_offer.update", "audit_event": "candidate_offer_accepted", "idempotency_keys": ["acceptance_token"]
+      "audit_event": "candidate_offer_accepted", "idempotency_keys": ["acceptance_token"]
     },
     {
       "key": "benefit_enrollment.retry_and_reconcile", "object_key": "benefit_enrollment", "label": "Retry Benefit Provider", "kind": "record_operation",
-      "requires_permission": "benefit_enrollment.update", "audit_event": "benefit_provider_reconciled", "idempotency_keys": ["retry_token"]
+      "audit_event": "benefit_provider_reconciled", "idempotency_keys": ["retry_token"]
     },
     {
       "key": "employee_lifecycle.transfer", "object_key": "employee_lifecycle", "label": "Transfer Employee", "kind": "record_operation",
-      "requires_permission": "employee_lifecycle.update", "audit_event": "employee_transferred", "idempotency_keys": ["transfer_token"]
+      "audit_event": "employee_transferred", "idempotency_keys": ["transfer_token"]
     },
     {
       "key": "termination_case.submit", "object_key": "termination_case", "label": "Submit Termination", "kind": "record_operation",
-      "requires_permission": "termination_case.update", "audit_event": "termination_submitted", "idempotency_keys": ["request_id"]
+      "audit_event": "termination_submitted", "idempotency_keys": ["request_id"]
     },
     {
       "key": "termination_case.approve_due", "object_key": "termination_case", "label": "Approve Termination", "kind": "record_operation",
-      "requires_permission": "termination_case.update", "audit_event": "termination_approved"
+      "audit_event": "termination_approved"
     },
     {
       "key": "termination_case.reject", "object_key": "termination_case", "label": "Reject Termination", "kind": "record_operation",
-      "requires_permission": "termination_case.update", "audit_event": "termination_rejected"
+      "audit_event": "termination_rejected"
     },
     {
       "key": "termination_case.execute_due", "object_key": "termination_case", "label": "Execute Due Termination", "kind": "record_operation",
-      "requires_permission": "termination_case.update", "audit_event": "termination_executed"
+      "audit_event": "termination_executed"
     }
   ],
   "notification_templates": [

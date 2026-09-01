@@ -12,6 +12,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
+	automationruntime "github.com/domainry/domainry-runtime/runtime/domain/automation/runtime"
 )
 
 type AutomationInstructionRenderContext struct {
@@ -59,6 +60,7 @@ func (d *AutomationInstructionDispatchApplicationService) Execute(ctx context.Co
 		invocation, err := d.dependencies.InvokeAction(ctx, actionmodel.ActionInvocation{
 			ActionKey: actionKey, ObjectKey: objectKey, RecordID: recordID, Input: input, Principal: principal,
 			Source: actionmodel.ActionSourceAutomation, RequestID: principal.RequestID,
+			IdempotencyKey: automationruntime.AutomationInstructionIdempotencyKey(rule, instruction, record),
 		})
 		if err != nil {
 			return failedInstruction(result, err)

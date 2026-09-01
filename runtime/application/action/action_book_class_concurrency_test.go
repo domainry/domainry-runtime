@@ -151,7 +151,7 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 	registry.Freeze()
 	action := actionTestPublishedContract(definitionmodel.ActionSchema{
 		Key: "group_class.book_class", ObjectKey: groupClass.Key, Kind: definitionmodel.ActionKindObjectOperation,
-		RequiresPermission: "group_class.book_class", AuditEvent: "gym.class_booked",
+		AuditEvent: "gym.class_booked",
 		EffectSet: &definitionmodel.ActionEffectSet{
 			Read: []definitionmodel.ActionObjectEffect{{
 				ObjectKey: groupClass.Key, Operations: []string{"get_for_update"},

@@ -31,8 +31,11 @@ func TestWorkflowExecutionPermissionAndInputPolicies(t *testing.T) {
 	if WorkflowPermissionAllows(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, "run") {
 		t.Fatal("missing permission must be denied")
 	}
-	if !WorkflowDefinitionPermissionAllows(accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}}), "workflow.publish") || !WorkflowDefinitionPermissionAllows(accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workflow.publish"}}), "workflow.publish") {
-		t.Fatal("definition permission should allow admin and exact grant")
+	if WorkflowDefinitionPermissionAllows(accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}}), "workflow.publish") {
+		t.Fatal("workspace.admin must not expand to workflow.publish")
+	}
+	if !WorkflowDefinitionPermissionAllows(accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workflow.publish"}}), "workflow.publish") {
+		t.Fatal("definition permission should allow its exact grant")
 	}
 	if WorkflowDefinitionPermissionAllows(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, "workflow.publish") {
 		t.Fatal("definition permission must reject missing grant")

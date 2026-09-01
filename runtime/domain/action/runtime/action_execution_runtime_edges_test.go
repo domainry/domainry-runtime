@@ -140,8 +140,8 @@ func TestActionExecutionRuntimeCompletionEncodingAndReplayEdges(t *testing.T) {
 	if err != nil || !replayed || result.Message != "backend.action.idempotent_replay" {
 		t.Fatalf("bulk result=%#v replay=%v error=%v", result, replayed, err)
 	}
-	if _, claim, replayed, err := NewActionExecutionRuntime(&executionRepositoryEdgeStub{}).BeginBulk(t.Context(), "object", "action", "", actionmodel.ActionBulkRequest{}, principalmodel.Principal{}); err != nil || replayed || claim.Decision != idempotency.DecisionAcquired {
-		t.Fatalf("bulk without key claim=%#v replay=%v error=%v", claim, replayed, err)
+	if _, _, replayed, err := NewActionExecutionRuntime(&executionRepositoryEdgeStub{}).BeginBulk(t.Context(), "object", "action", "", actionmodel.ActionBulkRequest{}, principalmodel.Principal{}); apperror.CodeOf(err) != idempotency.ErrorCodeMissingKey || replayed {
+		t.Fatalf("bulk without key replay=%v error=%v", replayed, err)
 	}
 	if _, _, replayed, err := NewActionExecutionRuntime(&executionRepositoryEdgeStub{}).BeginBulk(t.Context(), "object", "action", "key", actionmodel.ActionBulkRequest{
 		Data: map[string]any{"bad": make(chan int)},

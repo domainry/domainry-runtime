@@ -20,8 +20,6 @@ type WorkspaceProvisionDependencies struct {
 	DecodeJSON        func(http.ResponseWriter, *http.Request, any) bool
 	WriteJSON         func(http.ResponseWriter, int, any)
 	WriteServiceError func(http.ResponseWriter, *http.Request, error)
-	ProvisionGuard    func(http.HandlerFunc) http.HandlerFunc
-	ReconcileGuard    func(http.HandlerFunc) http.HandlerFunc
 	SecurityAudit     func(*http.Request, string, string, map[string]any)
 }
 

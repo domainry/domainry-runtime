@@ -52,7 +52,7 @@ func TestOpsMetadataDiagnosticsRequiresExplicitPermissionAndReturnsOnlyCompatibi
 	if _, err := service.OpsMetadataDiagnostics(t.Context(), principal); apperror.KindOf(err) != apperror.KindForbidden {
 		t.Fatalf("workspace.admin unexpectedly granted metadata Ops diagnostics: %v", err)
 	}
-	principal = accessfixture.Attach(principal, accessfixture.Bundle{Permissions: []string{PermissionMetadataOpsRead}})
+	principal = accessfixture.Attach(principal, accessfixture.Bundle{Permissions: []string{ActionOpsMetadataDiagnostics}})
 	result, err := service.OpsMetadataDiagnostics(t.Context(), principal)
 	if err != nil {
 		t.Fatal(err)
@@ -76,13 +76,13 @@ func TestMetadataUseCasesRejectMissingScope(t *testing.T) {
 	if _, err := application.OpsMetadataDiagnostics(t.Context(), unknown); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("ops diagnostics scope err=%v", err)
 	}
-	if metadataHasExactPermission(unknown, PermissionMetadataOpsRead) {
+	if metadataHasExactPermission(unknown, ActionOpsMetadataDiagnostics) {
 		t.Fatal("unknown principal received exact metadata permission")
 	}
 }
 
 func TestOpsMetadataDiagnosticsRejectsEveryUnavailableDependency(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{PermissionMetadataOpsRead}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{ActionOpsMetadataDiagnostics}})
 	repository := &metadataWatcherRepository{revision: "revision"}
 	runtime := &upsertMetadataRuntime{snapshot: appschemamodel.ApplicationSchemaSnapshot{SchemaHash: "hash"}}
 	tests := []struct {
@@ -108,7 +108,7 @@ func TestOpsMetadataDiagnosticsForwardsRepositoryRevisionFailure(t *testing.T) {
 		Repository: &metadataWatcherRepository{revision: "revision"},
 		Runtime:    &upsertMetadataRuntime{snapshot: appschemamodel.ApplicationSchemaSnapshot{SchemaHash: "hash"}},
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{PermissionMetadataOpsRead}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{ActionOpsMetadataDiagnostics}})
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	if _, err := service.OpsMetadataDiagnostics(ctx, principal); err == nil {

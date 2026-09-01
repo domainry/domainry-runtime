@@ -12,7 +12,6 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
 
 type externalDataExchangeProviderStub struct{}
@@ -93,7 +92,7 @@ func TestRecordImportProviderResetsAndReleasesAttemptState(t *testing.T) {
 		CanWrite: func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
 	})
 	providers := NewDataExchangeProviders(func(context.Context, string, string) principalmodel.Principal {
-		return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "actor"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+		return recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "actor"}})
 	})
 	providers.Bind(importer, nil)
 	provider, ok := providers.ImportProvider("records")

@@ -110,7 +110,12 @@ func (s *RecordTimerApplicationService) objectForPrincipal(ctx context.Context, 
 }
 
 func recordTimerWorkerPrincipal() principalmodel.Principal {
-	principal := principalmodel.NewSystemPrincipal("record-timer:worker", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "record timer dispatch"), "*")
+	principal := principalmodel.NewSystemPrincipal(
+		"record-timer:worker",
+		principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "record timer dispatch"),
+		"record_timer.create", "record_timer.read", "record_timer.update",
+		"record_timer_event.create", "record_timer_event.read",
+	)
 	principal.WorkspaceID = principalmodel.InstallationWorkspaceID
 	return principal
 }
@@ -133,7 +138,7 @@ func recordTimerOpsReadAllowed(principal principalmodel.Principal) error {
 	if err := recordTimerAuthorizeQuery(principal); err != nil {
 		return err
 	}
-	if principal.HasPermission("workspace.admin") || principal.HasExactPermission("operations.read") || principal.HasExactPermission("record_timer.command") {
+	if principal.HasExactPermission("operations.read") || principal.HasExactPermission("record_timer.command") {
 		return nil
 	}
 	return recordTimerError(apperror.KindForbidden, "backend.record_timer.permission_required", nil)

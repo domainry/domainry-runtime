@@ -41,7 +41,10 @@ func pipelineExecuteFixtureWithCommit(t *testing.T, commitErr error) (*PipelineT
 }
 
 func TestPipelineTransitionExecuteBoundariesAndHappyPaths(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1", UserID: "user-1"}}, accessfixture.Bundle{Permissions: []string{"*"}, RecordScope: "all_records"})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1", UserID: "user-1"}}, accessfixture.Bundle{
+		Permissions: []string{"pipeline_item.read", "pipeline_item.update", "pipeline_item.advance", "pipeline_item.reopen"},
+		RecordScope: "all_records",
+	})
 	action := definitionmodel.ActionSchema{Key: "pipeline_item.advance", ObjectKey: "pipeline_item"}
 	service, object, record := pipelineExecuteFixture(t)
 	if !service.IsAction(action) || service.IsAction(definitionmodel.ActionSchema{Key: "other"}) {

@@ -37,7 +37,7 @@ func TestMetadataCandidateServiceAvailabilityAndRepositoryFailures(t *testing.T)
 	invalidAction := loadMetadataCandidateFixture(t)
 	invalidAction.Actions = []definitionmodel.ActionSchema{{
 		Key: "customer.invalid", ObjectKey: "customer", Label: "Invalid", Kind: "unsupported",
-		RequiresPermission: "customer.read", AuditEvent: "customer.invalid",
+		AuditEvent: "customer.invalid",
 	}}
 	service = NewApplicationSchemaApplicationService(ApplicationSchemaDependencies{Repository: metadataCandidateRepository{manifest: invalidAction}})
 	if code := apperror.CodeOf(service.ValidateMetadataCandidate(t.Context(), nil)); code != "backend.metadata.candidate_invalid" {

@@ -40,26 +40,22 @@ func TestPlatformCapabilitiesUsesAuthenticatedPrincipal(t *testing.T) {
 	}
 }
 
-func TestPlatformCapabilitiesWritesServiceErrorForNonAdministrator(t *testing.T) {
+func TestPlatformCapabilitiesAllowsAuthenticatedPrincipal(t *testing.T) {
 	service := capabilityapplication.NewCapabilityAuthoringApplicationService(func(context.Context, principalmodel.Principal) capabilitycontract.CapabilityInstanceSchema {
 		return capabilitycontract.CapabilityInstanceSchema{}
 	})
-	serviceErrorCalled := false
 	handler := NewCapabilitiesHandler(CapabilitiesDependencies{
 		Service: service,
 		Principal: func(*http.Request) principalmodel.Principal {
 			return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"record.read"}})
 		},
-		WriteJSON: func(http.ResponseWriter, int, any) { t.Fatal("unexpected JSON response") },
-		WriteServiceError: func(w http.ResponseWriter, _ *http.Request, err error) {
-			serviceErrorCalled = err != nil
-			w.WriteHeader(http.StatusForbidden)
-		},
+		WriteJSON:         func(w http.ResponseWriter, status int, _ any) { w.WriteHeader(status) },
+		WriteServiceError: func(http.ResponseWriter, *http.Request, error) { t.Fatal("unexpected service error") },
 	})
 	response := httptest.NewRecorder()
 	handler.platformCapabilities(response, httptest.NewRequest(http.MethodGet, "/tenant-admin/platform-capabilities", nil))
-	if response.Code != http.StatusForbidden || !serviceErrorCalled {
-		t.Fatalf("status=%d serviceErrorCalled=%v", response.Code, serviceErrorCalled)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d", response.Code)
 	}
 }
 
@@ -115,7 +111,7 @@ func TestCapabilityDiscoveryHandlersMapAuthorizationAndHashFailures(t *testing.T
 	handler := NewCapabilitiesHandler(CapabilitiesDependencies{
 		Service: service,
 		Principal: func(*http.Request) principalmodel.Principal {
-			return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"record.read"}})
+			return principalmodel.Principal{}
 		},
 		WriteJSON: func(http.ResponseWriter, int, any) { t.Fatal("unexpected JSON response") },
 		WriteServiceError: func(w http.ResponseWriter, _ *http.Request, err error) {

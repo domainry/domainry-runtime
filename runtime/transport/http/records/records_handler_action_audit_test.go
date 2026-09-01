@@ -108,7 +108,14 @@ func (p recordsSchemaProvider) SchemaForPrincipal(context.Context, principalmode
 }
 
 func recordsHTTPPrincipal() principalmodel.Principal {
-	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "user"}, RequestID: "request"}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "user"}, RequestID: "request"}, accessfixture.Bundle{
+		Permissions: []string{
+			"customer.create", "customer.read", "customer.update", "customer.delete", "customer.import", "customer.export",
+			"order.create", "order.read", "order.update", "order.delete", "order.import", "order.export",
+			"customer.approve", "customer.approve_object", "identity.profile_binding.manage",
+		},
+		RecordScope: "all_records",
+	})
 }
 
 func recordsActionService(actions []definitionmodel.ActionSchema, execute actionapplication.SystemOperationHandler, authorizationError error) *actionapplication.ActionApplicationService {
@@ -123,8 +130,7 @@ func recordsActionService(actions []definitionmodel.ActionSchema, execute action
 		Authorization: actionapplication.ActionAuthorization{ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
 			return definitionmodel.ObjectSchema{Key: "customer"}, authorizationError
 		}},
-		UnitOfWork:      actionapplication.NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(recordsActionExecutionStore{})),
-		NewInvocationID: func(context.Context) string { return "generated" },
+		UnitOfWork: actionapplication.NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(recordsActionExecutionStore{})),
 	})
 }
 
@@ -168,8 +174,8 @@ func TestRecordsActionHandlersProjectInputsAndReplayHeaders(t *testing.T) {
 	principal := recordsHTTPPrincipal()
 	var bulkInvocation, recordInvocation, objectInvocation actionmodel.ActionInvocation
 	actions := recordsActionService([]definitionmodel.ActionSchema{
-		{Key: "approve", ObjectKey: "customer", Kind: "record_update", RequiresPermission: "workspace.admin"},
-		{Key: "approve_object", ObjectKey: "customer", Kind: "object_operation", RequiresPermission: "workspace.admin"},
+		{Key: "customer.approve", ObjectKey: "customer", Kind: "record_update"},
+		{Key: "customer.approve_object", ObjectKey: "customer", Kind: "object_operation"},
 	}, func(_ context.Context, invocation actionmodel.ActionInvocation, action definitionmodel.ActionSchema, _ map[string]any) (actionapplication.ActionExecutionResult, error) {
 		if invocation.Source == actionmodel.ActionSourceBulk {
 			bulkInvocation = invocation
@@ -193,15 +199,17 @@ func TestRecordsActionHandlersProjectInputsAndReplayHeaders(t *testing.T) {
 			handler.listActions(w, recordsRequest("GET", "/objects/customer/actions", "", map[string]string{"objectKey": " customer "}))
 		},
 		"bulk": func(w *httptest.ResponseRecorder) {
-			r := recordsRequest("POST", "/bulk", `{"record_ids":["one"],"idempotency_key":"bulk-key"}`, map[string]string{"objectKey": " customer ", "actionKey": " approve "})
+			r := recordsRequest("POST", "/bulk", `{"record_ids":["one"]}`, map[string]string{"objectKey": " customer ", "actionKey": " customer.approve "})
+			r.Header.Set("Idempotency-Key", "bulk-key")
 			handler.executeBulkAction(w, r)
 		},
 		"object": func(w *httptest.ResponseRecorder) {
-			r := recordsRequest("POST", "/object", `{"data":{"approved":true},"idempotency_key":"object-key"}`, map[string]string{"objectKey": " customer ", "actionKey": " approve_object "})
+			r := recordsRequest("POST", "/object", `{"data":{"approved":true}}`, map[string]string{"objectKey": " customer ", "actionKey": " customer.approve_object "})
+			r.Header.Set("Idempotency-Key", "object-key")
 			handler.executeObjectAction(w, r)
 		},
 		"record": func(w *httptest.ResponseRecorder) {
-			r := recordsRequest("POST", "/record", `{"data":{"approved":true}}`, map[string]string{"objectKey": " customer ", "recordID": " one ", "actionKey": " approve "})
+			r := recordsRequest("POST", "/record", `{"data":{"approved":true}}`, map[string]string{"objectKey": " customer ", "recordID": " one ", "actionKey": " customer.approve "})
 			r.Header.Set("Idempotency-Key", "record-key")
 			handler.executeAction(w, r)
 		},
@@ -236,7 +244,7 @@ func TestRecordsActionHandlersRejectDecodeAndIdempotencyMismatch(t *testing.T) {
 	}
 	*serviceErr = nil
 	w = httptest.NewRecorder()
-	r := recordsRequest("POST", "/object", `{"idempotency_key":"payload"}`, map[string]string{"objectKey": "customer", "actionKey": "approve"})
+	r := recordsRequest("POST", "/object", `{"idempotency_key":"payload"}`, map[string]string{"objectKey": "customer", "actionKey": "customer.approve"})
 	r.Header.Set("Idempotency-Key", "header")
 	handler.executeObjectAction(w, r)
 	if w.Code != 599 || *serviceErr == nil {
@@ -248,12 +256,12 @@ func TestRecordsActionAndPermissionHandlersForwardApplicationErrors(t *testing.T
 	want := errors.New("action unavailable")
 	principal := recordsHTTPPrincipal()
 	handler, serviceErr := recordsHandlerForTest(principal)
-	handler.actions = recordsActionService([]definitionmodel.ActionSchema{{Key: "approve", ObjectKey: "customer", Kind: "record_update", RequiresPermission: "workspace.admin"}}, nil, want)
+	handler.actions = recordsActionService([]definitionmodel.ActionSchema{{Key: "customer.approve", ObjectKey: "customer", Kind: "record_update"}}, nil, want)
 	calls := []func(http.ResponseWriter, *http.Request){handler.listActions, handler.executeBulkAction, handler.executeObjectAction, handler.executeAction}
 	for _, call := range calls {
 		*serviceErr = nil
 		w := httptest.NewRecorder()
-		r := recordsRequest("POST", "/action", "", map[string]string{"objectKey": "customer", "recordID": "one", "actionKey": "approve"})
+		r := recordsRequest("POST", "/action", "", map[string]string{"objectKey": "customer", "recordID": "one", "actionKey": "customer.approve"})
 		call(w, r)
 		if w.Code != 599 || *serviceErr == nil {
 			t.Fatalf("status=%d err=%v", w.Code, *serviceErr)
@@ -280,9 +288,9 @@ func TestEffectivePermissionsAppliesRecordRLSOnceForEveryRecordAction(t *testing
 	},
 	)
 	actions := []definitionmodel.ActionSchema{
-		{Key: "customer.complete", ObjectKey: "customer", Label: "Complete", Kind: "record_operation", RequiresPermission: "customer.complete", AssurancePolicy: &definitionmodel.ActionAssurancePolicy{RequiredMethods: []string{"otp"}}},
-		{Key: "customer.cancel", ObjectKey: "customer", Label: "Cancel", Kind: "record_operation", RequiresPermission: "customer.cancel"},
-		{Key: "customer.create", ObjectKey: "customer", Label: "Create", Kind: "object_create", RequiresPermission: "customer.create"},
+		{Key: "customer.complete", ObjectKey: "customer", Label: "Complete", Kind: "record_operation", AssurancePolicy: &definitionmodel.ActionAssurancePolicy{RequiredMethods: []string{"otp"}}},
+		{Key: "customer.cancel", ObjectKey: "customer", Label: "Cancel", Kind: "record_operation"},
+		{Key: "customer.create", ObjectKey: "customer", Label: "Create", Kind: "object_create"},
 	}
 	for _, test := range []struct {
 		name       string
@@ -351,7 +359,7 @@ func TestEffectivePermissionsRecordDecisionEdgePaths(t *testing.T) {
 		}}, nil)
 	}
 	recordAction := definitionmodel.ActionSchema{
-		Key: "customer.approve", ObjectKey: "customer", Kind: "record_operation", RequiresPermission: "customer.approve",
+		Key: "customer.approve", ObjectKey: "customer", Kind: "record_operation",
 	}
 	principalWithPermissions := func(permissions ...string) principalmodel.Principal {
 		return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "user"}, RequestID: "request"}, accessfixture.Bundle{Key: "limited", Permissions: permissions})
@@ -364,9 +372,9 @@ func TestEffectivePermissionsRecordDecisionEdgePaths(t *testing.T) {
 		})
 		handler, serviceErr := recordsHandlerForTest(principal)
 		handler.permissions = permissionService(principal, []definitionmodel.ActionSchema{
-			{Key: "order.approve", ObjectKey: "order", Kind: "record_operation", RequiresPermission: "order.approve"},
-			{Key: "customer.denied", ObjectKey: "customer", Kind: "record_operation", RequiresPermission: "customer.denied"},
-			{Key: "customer.create", ObjectKey: "customer", Kind: "object_create", RequiresPermission: "customer.create"},
+			{Key: "order.approve", ObjectKey: "order", Kind: "record_operation"},
+			{Key: "customer.denied", ObjectKey: "customer", Kind: "record_operation"},
+			{Key: "customer.create", ObjectKey: "customer", Kind: "object_create"},
 		})
 		w := httptest.NewRecorder()
 		handler.effectivePermissions(w, recordsRequest("GET", "/permissions/effective?object_key=customer&record_id=one", "", nil))
@@ -397,8 +405,8 @@ func TestEffectivePermissionsRecordDecisionEdgePaths(t *testing.T) {
 		handler, serviceErr := recordsHandlerForTest(principal)
 		handler.permissions = permissionService(principal, []definitionmodel.ActionSchema{
 			recordAction,
-			{Key: "customer.denied", ObjectKey: "customer", Kind: "record_operation", RequiresPermission: "customer.denied"},
-			{Key: "order.approve", ObjectKey: "order", Kind: "record_operation", RequiresPermission: "order.approve"},
+			{Key: "customer.denied", ObjectKey: "customer", Kind: "record_operation"},
+			{Key: "order.approve", ObjectKey: "order", Kind: "record_operation"},
 		})
 		handler.UseQueries(recordsHTTPApplication(&recordsHTTPRepository{err: errors.New("lookup unavailable")}))
 		w := httptest.NewRecorder()
@@ -420,9 +428,9 @@ func TestEffectivePermissionsRecordDecisionEdgePaths(t *testing.T) {
 		handler, serviceErr := recordsHandlerForTest(principal)
 		handler.permissions = permissionService(principal, []definitionmodel.ActionSchema{
 			recordAction,
-			{Key: "customer.denied", ObjectKey: "customer", Kind: "record_operation", RequiresPermission: "customer.denied"},
-			{Key: "order.approve", ObjectKey: "order", Kind: "record_operation", RequiresPermission: "order.approve"},
-			{Key: "customer.create", ObjectKey: "customer", Kind: "object_create", RequiresPermission: "customer.create"},
+			{Key: "customer.denied", ObjectKey: "customer", Kind: "record_operation"},
+			{Key: "order.approve", ObjectKey: "order", Kind: "record_operation"},
+			{Key: "customer.create", ObjectKey: "customer", Kind: "object_create"},
 		})
 		handler.UseQueries(recordsHTTPApplication(&recordsHTTPRepository{
 			record: recordmodel.Record{ID: "one", Data: map[string]any{"owner": "someone-else"}},
@@ -453,8 +461,8 @@ func TestEffectivePermissionsRecordDecisionEdgePaths(t *testing.T) {
 	})
 }
 
-func TestRuntimeOpsEffectivePermissionsExcludeWorkspaceAdminInheritance(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "operations.read", "integration.retry"}})
+func TestRuntimeOpsEffectivePermissionsKeepOnlyExactGrants(t *testing.T) {
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"operations.read", "integration.retry"}})
 	result := runtimeOpsExactFeaturePermissions(recordcontract.RecordFeaturePermissionSnapshot{Functions: []recordcontract.RecordFeatureFunctionPermission{
 		{Key: "workspace.admin", Decision: recordcontract.RecordFeaturePermissionDecision{Allowed: true, Reason: "allowed"}},
 		{Key: "integration.audit.view", Decision: recordcontract.RecordFeaturePermissionDecision{Allowed: true, Reason: "inherited"}},

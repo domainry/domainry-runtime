@@ -28,8 +28,11 @@ func (transportIdentityBindingStub) Principals() identitysdk.PrincipalResolver {
 func (transportIdentityBindingStub) Directory() identitysdk.Directory {
 	return transportIdentityDirectoryStub{}
 }
-func (transportIdentityBindingStub) Catalog() identitysdk.CatalogClient {
-	return transportIdentityCatalogStub{}
+func (transportIdentityBindingStub) Applications() identitysdk.ApplicationRegistry {
+	return transportIdentityApplicationRegistryStub{}
+}
+func (transportIdentityBindingStub) Permissions() identitysdk.PermissionRegistry {
+	return transportIdentityPermissionRegistryStub{}
 }
 func (transportIdentityBindingStub) Credentials() identitysdk.CredentialManager {
 	return transportIdentityCredentialsStub{}
@@ -123,16 +126,16 @@ func (transportIdentityDirectoryStub) ListWorkforce(context.Context, identitysdk
 	return nil, nil
 }
 
-type transportIdentityCatalogStub struct{}
+type transportIdentityApplicationRegistryStub struct{}
 
-func (transportIdentityCatalogStub) Validate(context.Context, identitysdk.AuthorizationCatalog) error {
-	return nil
+func (transportIdentityApplicationRegistryStub) Register(_ context.Context, request identitysdk.ApplicationRegistration) (identitysdk.ApplicationRegistrationReceipt, error) {
+	return identitysdk.ApplicationRegistrationReceipt{Application: request.Application, RedirectURLs: request.CanonicalRedirectURLs(), Status: "active"}, request.ValidateContract()
 }
-func (transportIdentityCatalogStub) Publish(context.Context, identitysdk.AuthorizationCatalog) (identitysdk.CatalogReceipt, error) {
-	return identitysdk.CatalogReceipt{}, nil
-}
-func (transportIdentityCatalogStub) CurrentRevision(context.Context, identitysdk.ApplicationRef) (identitysdk.CatalogReceipt, error) {
-	return identitysdk.CatalogReceipt{}, nil
+
+type transportIdentityPermissionRegistryStub struct{}
+
+func (transportIdentityPermissionRegistryStub) Reconcile(_ context.Context, request identitysdk.PermissionReconcileRequest) (identitysdk.PermissionReconcileReceipt, error) {
+	return identitysdk.PermissionReconcileReceipt{WorkspaceID: request.Application.WorkspaceID, SourceOwner: request.SourceOwner, PreviousSnapshotHash: request.PreviousSnapshotHash, SnapshotHash: request.SnapshotHash, DefinitionCount: len(request.Definitions), Inserted: len(request.Definitions)}, request.ValidateContract()
 }
 
 type transportIdentityCredentialsStub struct{}

@@ -29,10 +29,30 @@ type PublishedDefinition struct {
 	UpdatedAt string
 }
 
+const (
+	ActionGetOpsSchedulerState                     = "runtime.scheduler.get_ops_scheduler_state"
+	ActionGetTenantAdminSchedulerAuthoringContract = "runtime.scheduler.get_tenant_admin_scheduler_authoring_contract"
+	ActionListTenantAdminSchedulerDefinitions      = "runtime.scheduler.list_tenant_admin_scheduler_definitions"
+	ActionGetTenantAdminSchedulerDefinition        = "runtime.scheduler.get_tenant_admin_scheduler_definition"
+	ActionPreviewSchedulerJob                      = "runtime.scheduler.preview_scheduler_job"
+	ActionPreviewSchedulerSchedule                 = "runtime.scheduler.preview_scheduler_schedule"
+	ActionSimulateSchedulerJob                     = "runtime.scheduler.simulate_scheduler_job"
+	ActionRunOpsSchedulerJob                       = "runtime.scheduler.run_ops_scheduler_job"
+	ActionRescheduleOpsSchedulerDefinition         = "runtime.scheduler.reschedule_ops_scheduler_definition"
+	ActionRetryOpsSchedulerRun                     = "runtime.scheduler.retry_ops_scheduler_run"
+	ActionCancelOpsSchedulerRun                    = "runtime.scheduler.cancel_ops_scheduler_run"
+	ActionResolveOpsSchedulerDeadLetter            = "runtime.scheduler.resolve_ops_scheduler_dead_letter"
+	ActionRequeueOpsSchedulerDeadLetter            = "runtime.scheduler.requeue_ops_scheduler_dead_letter"
+)
+
 func (s *SchedulerApplicationService) GetDefinition(ctx context.Context, definitionID string, principal principalmodel.Principal) (PublishedDefinition, error) {
 	if err := schedulerDefinitionReadAllowed(principal); err != nil {
 		return PublishedDefinition{}, err
 	}
+	return s.schedulerDefinition(ctx, definitionID)
+}
+
+func (s *SchedulerApplicationService) schedulerDefinition(ctx context.Context, definitionID string) (PublishedDefinition, error) {
 	if s.definitions == nil {
 		return PublishedDefinition{}, schedulerError(apperror.KindUnavailable, "backend.scheduler.definition_source_unavailable", nil)
 	}
@@ -70,7 +90,7 @@ func schedulerDefinitionReadAllowed(principal principalmodel.Principal) error {
 	if err := schedulerAuthorizeQuery(principal); err != nil {
 		return err
 	}
-	if principal.HasPermission("workspace.admin") || principal.HasExactPermission("metadata.read") || principal.HasExactPermission("scheduler.definition.read") {
+	if principal.HasExactPermission("scheduler.definition.read") {
 		return nil
 	}
 	return forbidden("backend.scheduler.permission_required")
@@ -103,11 +123,11 @@ func (s *SchedulerApplicationService) UseDefinitionSource(source SchedulerDefini
 	}
 }
 
-func schedulerOperationAllowed(principal principalmodel.Principal) error {
-	if err := schedulerAuthorizeCommand(principal); err != nil {
+func schedulerExactQueryAllowed(principal principalmodel.Principal, actionKey string) error {
+	if err := schedulerAuthorizeQuery(principal); err != nil {
 		return err
 	}
-	if principal.HasPermission("workspace.admin") || principal.HasExactPermission("scheduler.command") {
+	if principal.HasExactPermission(strings.TrimSpace(actionKey)) {
 		return nil
 	}
 	return forbidden("backend.scheduler.permission_required")
@@ -115,13 +135,6 @@ func schedulerOperationAllowed(principal principalmodel.Principal) error {
 
 func schedulerAuthorizeQuery(principal principalmodel.Principal) error {
 	if _, err := principalmodel.QueryScopeForPrincipal(principal); err != nil {
-		return schedulerError(apperror.KindForbidden, "backend.workspace_scope_required", err)
-	}
-	return nil
-}
-
-func schedulerAuthorizeCommand(principal principalmodel.Principal) error {
-	if _, err := principalmodel.CommandScopeForPrincipal(principal); err != nil {
 		return schedulerError(apperror.KindForbidden, "backend.workspace_scope_required", err)
 	}
 	return nil
@@ -156,7 +169,7 @@ func (s *SchedulerApplicationService) PreviewDefinition(ctx context.Context, dat
 	if err := ctx.Err(); err != nil {
 		return SchedulerDefinitionPreview{}, err
 	}
-	if err := schedulerDefinitionWriteAllowed(principal); err != nil {
+	if err := schedulerExactQueryAllowed(principal, ActionPreviewSchedulerJob); err != nil {
 		return SchedulerDefinitionPreview{}, err
 	}
 	return s.previewDefinition(ctx, data, true)
@@ -168,7 +181,7 @@ func (s *SchedulerApplicationService) PreviewSchedule(ctx context.Context, data 
 	if err := ctx.Err(); err != nil {
 		return SchedulerDefinitionPreview{}, err
 	}
-	if err := schedulerDefinitionWriteAllowed(principal); err != nil {
+	if err := schedulerExactQueryAllowed(principal, ActionPreviewSchedulerSchedule); err != nil {
 		return SchedulerDefinitionPreview{}, err
 	}
 	return s.previewDefinition(ctx, data, false)

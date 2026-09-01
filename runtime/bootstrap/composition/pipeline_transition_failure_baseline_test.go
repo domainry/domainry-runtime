@@ -213,7 +213,18 @@ func pipelineFailureFixture(t *testing.T, failCommitAt int, failAudit, failWorkf
 	if failWorkflow {
 		workflows = append(workflows, definitionmodel.WorkflowSchema{Key: "pipeline_after_action", Name: "Pipeline after action", Enabled: true, TriggerContract: &definitionmodel.WorkflowTriggerContract{Type: "action_completed", ObjectKey: "pipeline_item", Event: "pipeline_item.advance"}})
 	}
-	role := accessfixture.Bundle{Key: "admin", Permissions: []string{"workspace.admin", "pipeline_item.*", "pipeline_stage.*", "pipeline_item_history.*"}, RecordScope: "all_records"}
+	role := accessfixture.Bundle{
+		Key: "pipeline-operator",
+		Permissions: []string{
+			"pipeline_item.advance", "pipeline_item.read", "pipeline_item.update",
+			"pipeline_stage.read", "pipeline_item_history.create",
+		},
+		DataPolicies: []accessfixture.DataPolicyFixture{
+			{ObjectKey: "pipeline_item", Scope: "all_records", Read: true, Write: true},
+			{ObjectKey: "pipeline_stage", Scope: "all_records", Read: true},
+			{ObjectKey: "pipeline_item_history", Scope: "all_records", Write: true},
+		},
+	}
 	service := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
 		Manifest:     manifestmodel.ManifestSchema{TemplateID: "pipeline-failure", Version: "1", Name: "Pipeline Failure", Objects: objects, Actions: []definitionmodel.ActionSchema{pipelineAction()}, Workflows: workflows},
 		Dependencies: RuntimeServicesDependencies{Records: repo, ActionExecutions: &runtimeServicesActionExecutionRepository{records: repo}},

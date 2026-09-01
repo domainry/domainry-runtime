@@ -280,11 +280,8 @@ func (s *AutomationApplicationService) ValidateAutomationRule(ctx context.Contex
 // ValidateAutomationAuthoringFragment validates one Automation leaf payload
 // without creating or persisting a complete rule.
 func (s *AutomationApplicationService) ValidateAutomationAuthoringFragment(_ context.Context, capabilityKey string, fragment map[string]any, principal principalmodel.Principal) (automationvalidation.AutomationFragmentValidationResult, error) {
-	if err := automationAuthorizeQuery(principal); err != nil {
+	if err := automationAuthorizeEndpoint(principal, "POST /automation-rules/authoring-fragments/{capabilityKey}/validate"); err != nil {
 		return automationvalidation.AutomationFragmentValidationResult{}, err
-	}
-	if !automationvalidation.AutomationHasPermission(principal, "manage") {
-		return automationvalidation.AutomationFragmentValidationResult{}, managementError(apperror.KindForbidden, "auth.permission_denied", nil)
 	}
 	capabilityKey = strings.TrimSpace(capabilityKey)
 	result := automationvalidation.AutomationFragmentValidationResult{Valid: true, CapabilityKey: capabilityKey, Fragment: fragment}
@@ -302,10 +299,13 @@ func (s *AutomationApplicationService) SimulateAutomationRule(ctx context.Contex
 	if request.Rule != nil {
 		rule = *request.Rule
 	} else {
-		var err error
-		rule, err = s.AutomationRule(ctx, ruleKey, principal)
-		if err != nil {
+		if err := automationAuthorizeEndpoint(principal, "POST /automation-rules/{ruleKey}/simulate"); err != nil {
 			return automationprojection.AutomationSimulationResult{}, err
+		}
+		var found bool
+		rule, found = s.rules.Get(strings.TrimSpace(ruleKey))
+		if !found {
+			return automationprojection.AutomationSimulationResult{}, managementError(apperror.KindNotFound, "backend.automation.not_found", nil)
 		}
 	}
 	return s.management.SimulateRule(ctx, rule, request, principal)

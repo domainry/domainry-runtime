@@ -125,8 +125,8 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 	if task.Status != "open" {
 		return workflowmodel.WorkflowProcessInstance{}, true, conflict("backend.workflow.task_already_decided")
 	}
-	if !workflowpolicy.WorkflowDefinitionPermissionAllows(principal, "workflow.task.act") {
-		return workflowmodel.WorkflowProcessInstance{}, true, forbidden("backend.workflow.task.act_permission_required")
+	if err := workflowAuthorizeTaskDecision(principal, decision); err != nil {
+		return workflowmodel.WorkflowProcessInstance{}, true, err
 	}
 	process, ok, err := records.dependencies.Processes.GetProcess(ctx, principal.WorkspaceID, task.ProcessID)
 	if err != nil || !ok {

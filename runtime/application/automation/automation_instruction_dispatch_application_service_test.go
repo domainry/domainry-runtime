@@ -20,7 +20,7 @@ func TestInstructionDispatcherInvokesBusinessActionAndMergesObjectOutput(t *test
 	payload := map[string]any{"source": "automation"}
 	dispatcher := NewAutomationInstructionDispatchApplicationService(AutomationInstructionDispatchDependencies{
 		InvokeAction: func(_ context.Context, invocation actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error) {
-			if invocation.ActionKey != "order.normalize" || invocation.ObjectKey != "order" || invocation.Source != actionmodel.ActionSourceAutomation || invocation.RequestID != "request-1" || invocation.Input["extra"] != true {
+			if invocation.ActionKey != "order.normalize" || invocation.ObjectKey != "order" || invocation.Source != actionmodel.ActionSourceAutomation || invocation.RequestID != "request-1" || invocation.IdempotencyKey == "" || invocation.Input["extra"] != true {
 				t.Fatalf("unexpected invocation: %#v", invocation)
 			}
 			if _, leaked := invocation.Input["source"]; leaked {

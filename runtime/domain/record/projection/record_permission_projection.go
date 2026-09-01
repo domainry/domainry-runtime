@@ -48,7 +48,7 @@ func RecordBuildFeaturePermissions(objects []definitionmodel.ObjectSchema, actio
 		result.Exports = append(result.Exports, exportPermissionSnapshot(principal, object))
 	}
 	for _, action := range actions {
-		permissionKey := valueOrDefault(action.RequiresPermission, action.Key)
+		permissionKey := strings.TrimSpace(action.Key)
 		objectKey, permissionAction := splitPermission(permissionKey)
 		if objectKey == "" {
 			objectKey = action.ObjectKey
@@ -410,6 +410,6 @@ func splitPermission(value string) (string, string) {
 }
 
 func actionName(action definitionmodel.ActionSchema) string {
-	_, name := splitPermission(valueOrDefault(action.RequiresPermission, action.Key))
+	_, name := splitPermission(action.Key)
 	return name
 }

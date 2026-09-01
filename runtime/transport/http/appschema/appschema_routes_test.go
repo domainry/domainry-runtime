@@ -8,9 +8,6 @@ import (
 
 func TestRuntimeOnlyRegistersRuntimeOwnedMetadataRoutes(t *testing.T) {
 	handler := NewApplicationSchemaHandler(ApplicationSchemaDependencies{
-		Admin: func(http.HandlerFunc) http.HandlerFunc {
-			return func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) }
-		},
 		Authenticated: func(http.HandlerFunc) http.HandlerFunc {
 			return func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }
 		},
@@ -36,7 +33,7 @@ func TestRuntimeOnlyRegistersRuntimeOwnedMetadataRoutes(t *testing.T) {
 }
 
 func TestRegisterRoutesWithoutProvisionHandler(t *testing.T) {
-	handler := &ApplicationSchemaHandler{admin: func(handle http.HandlerFunc) http.HandlerFunc { return handle }}
+	handler := &ApplicationSchemaHandler{authenticated: func(handle http.HandlerFunc) http.HandlerFunc { return handle }}
 	mux := http.NewServeMux()
 
 	handler.RegisterRoutes(mux)
@@ -48,7 +45,7 @@ func TestRegisterRoutesWithoutProvisionHandler(t *testing.T) {
 }
 
 func TestRegisterRoutesWithProvisionHandler(t *testing.T) {
-	handler := &ApplicationSchemaHandler{admin: func(handle http.HandlerFunc) http.HandlerFunc { return handle }, provisionRequired: func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusServiceUnavailable) }}
+	handler := &ApplicationSchemaHandler{authenticated: func(handle http.HandlerFunc) http.HandlerFunc { return handle }, provisionRequired: func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusServiceUnavailable) }}
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 	for _, path := range []string{

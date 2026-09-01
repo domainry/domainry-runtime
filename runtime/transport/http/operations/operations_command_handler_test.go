@@ -29,13 +29,13 @@ func TestOperationsCommandHTTPReceiptReplayConflictAndStatus(t *testing.T) {
 	if err := runtimeStore.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"runtime.scheduler.run_ops_scheduler_job", "operations.read", "runtime.maintenance.write"}})
 	operationsStore := operationspersistence.NewOperationsStore(runtimeStore)
 	service := operationsapplication.NewOperationsApplicationService(operationsStore, nil, nil, func() string { return "http-1" })
 	controlOperations := operationsapplication.NewOperationsApplicationService(operationsStore, nil, nil, func() string { return "http-control" })
 	handler := NewOperationsHandler(OperationsDependencies{
 		Service: service, Controls: operationsapplication.NewOperationsControlApplicationService(operationsStore, controlOperations, operationsStore, nil), Principal: func(*http.Request) principalmodel.Principal { return principal },
-		Admin: func(next http.HandlerFunc) http.HandlerFunc { return next },
+		Authenticated: func(next http.HandlerFunc) http.HandlerFunc { return next },
 		DecodeJSON: func(w http.ResponseWriter, r *http.Request, target any) bool {
 			if err := json.NewDecoder(r.Body).Decode(target); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -65,7 +65,7 @@ func TestOperationsCommandHTTPReceiptReplayConflictAndStatus(t *testing.T) {
 	})
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
-	body := map[string]any{"kind": "scheduler.job.run", "permission": "workspace.admin", "resource_type": "scheduler_definition", "resource_id": "daily-report", "reason": "release", "payload": map[string]any{"mode": "manual"}}
+	body := map[string]any{"kind": "scheduler.job.run", "permission": "runtime.scheduler.run_ops_scheduler_job", "resource_type": "scheduler_definition", "resource_id": "daily-report", "reason": "release", "payload": map[string]any{"mode": "manual"}}
 
 	first := operationsRequest(t, mux, http.MethodPost, "/operations", "operation-key", body, http.StatusAccepted)
 	operationID := first["command"].(map[string]any)["id"].(string)

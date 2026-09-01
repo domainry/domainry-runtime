@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulecapability"
 	actionprojection "github.com/domainry/domainry-runtime/runtime/domain/action/projection"
 	appschemacontract "github.com/domainry/domainry-runtime/runtime/domain/appschema/contract"
@@ -147,12 +148,12 @@ func providerSpecs() ([]providerSpec, error) {
 			key: "workflow", sourceOwner: "workflows", name: "Workflow", description: "Published human and system workflow graphs, tasks, decisions, timers, and execution evidence.",
 			scenarios: scenarios(
 				[]string{"A PRD needs approvals, assignments, branching, human tasks, workflow timers, or durable process state"},
-				[]string{"The requirement is one deterministic Action, a record lifecycle reaction, or a simple recurring clock trigger"},
+				[]string{"The requirement is one deterministic source-owned Action or a simple recurring clock trigger"},
 				[]string{"approval flow", "human task", "assignee", "workflow graph", "branch", "process status"},
 				[]string{"workflow.definition", "workflow.graph_v2", "workflow.task", "workflow.decision", "workflow.timer"}, []string{"identity", "records"}, []string{"agent", "notification", "scheduler"},
 				[]string{"record_or_action_to_workflow_process", "workflow_task_to_identity_assignee", "workflow_timer_to_scheduler_clock"}, []string{"workflow.definition"},
 				"Route an expense through manager approval and finance review", "Workflow owns the graph, assignments, task decisions, and durable process evidence",
-				"Recalculate a field whenever a record changes", "Automation is the smaller owner for a deterministic record-lifecycle reaction"),
+				"Recalculate a field as part of a governed record mutation", "A source-owned Handler owns the mutation and derived business value"),
 			categories: []categorySpec{
 				{key: "workflow.authoring", name: "Workflow authoring", description: "Author and validate one complete workflow definition with its embedded graph, nodes, resolvers, and edges.", chains: []string{"record_or_action_to_workflow_process"}, scopes: []string{"workflow.definition"}, validationContracts: []modulecapability.ValidationScopeContract{{
 					Kind: "workflow.definition", Description: "Validate one complete project workflow definition.", Coverage: modulecapability.ValidationCoverageAllCandidates, CandidateCollections: []string{"workflows"}, ReferencedCollections: []string{"actions", "objects"},
@@ -287,7 +288,11 @@ func buildProvider(document map[string]any, spec providerSpec) (*modulecapabilit
 						delete(operation, key)
 					}
 				}
-				operation[modulecapability.OperationExtensionKey] = runtimeOperationExtension(contract)
+				extension, extensionErr := runtimeOperationExtension(contract)
+				if extensionErr != nil {
+					return nil, extensionErr
+				}
+				operation[modulecapability.OperationExtensionKey] = extension
 				operations[contract.EndpointIdentity] = operation
 			}
 		}
@@ -340,15 +345,21 @@ func endpointOwner(contract endpointmodel.RuntimeEndpointContractV1) string {
 	return ""
 }
 
-func runtimeOperationExtension(contract endpointmodel.RuntimeEndpointContractV1) modulecapability.OperationExtension {
-	authorization := modulecapability.Authorization{Mode: modulecapability.AuthorizationDynamic, PolicyKey: runtimeAuthorizationPolicy(endpointOwner(contract)), WorkspaceScope: "authenticated_workspace"}
-	switch {
-	case contract.PermissionPolicyRef == "anonymous":
-		authorization = modulecapability.Authorization{Mode: modulecapability.AuthorizationAnonymous}
-	case strings.HasPrefix(contract.PermissionPolicyRef, "static_permission:"):
-		authorization = modulecapability.Authorization{Mode: modulecapability.AuthorizationFixed, AllOf: append([]string(nil), contract.RequiredPermissions...), WorkspaceScope: "authenticated_workspace"}
+func runtimeOperationExtension(contract endpointmodel.RuntimeEndpointContractV1) (modulecapability.OperationExtension, error) {
+	action, err := endpointmodel.AuthorizationActionDefinition(contract)
+	if err != nil {
+		return modulecapability.OperationExtension{}, err
 	}
-	sort.Strings(authorization.AllOf)
+	authorization := modulecapability.Authorization{
+		Strategy: action.Authorization.Strategy, PolicyKey: action.Authorization.PolicyKey,
+		Audiences: append([]string(nil), action.Authorization.Audiences...),
+	}
+	if action.Permission != nil {
+		authorization.Permission = action.Permission.Key
+	}
+	if action.Authorization.Strategy != actioncontract.AuthorizationAnonymousProtocol {
+		authorization.WorkspaceScope = "authenticated_workspace"
+	}
 	value := modulecapability.OperationExtension{
 		Owner: endpointOwner(contract), Authorization: authorization, Effect: modulecapability.EffectClass(contract.EffectClass),
 		Idempotency: modulecapability.Idempotency{Mode: contract.IdempotencyDecision},
@@ -356,32 +367,7 @@ func runtimeOperationExtension(contract endpointmodel.RuntimeEndpointContractV1)
 	if contract.EndpointIdentity == http.MethodGet+" /events/business" {
 		value.Transport = &modulecapability.Transport{Mode: "sse", ResumeSemantics: "Last-Event-ID is an opaque bounded cursor; a resync event requires authorized state refetch", DeliveryOrdering: "tenant_scoped_refresh_order"}
 	}
-	return value
-}
-
-func runtimeAuthorizationPolicy(owner string) string {
-	switch owner {
-	case "records":
-		return "records.object_action_and_identity_policy"
-	case "workflows":
-		return "workflow.definition_task_and_identity_policy"
-	case "automation":
-		return "automation.rule_and_identity_policy"
-	case "uploads":
-		return "uploads.file_owner_and_identity_policy"
-	case "discovery":
-		return "discovery.principal_visibility_policy"
-	case "publicationhandoff":
-		return "publication.handoff_visibility_policy"
-	case "businessreferences", "businesssystem":
-		return "maintenance.workspace_administrator_policy"
-	case "metadata":
-		return "schema.workspace_administrator_policy"
-	case "businessevents":
-		return "realtime.principal_visibility_policy"
-	default:
-		return "runtime.owner_policy"
-	}
+	return value, nil
 }
 
 func cloneMap(value map[string]any) (map[string]any, error) {

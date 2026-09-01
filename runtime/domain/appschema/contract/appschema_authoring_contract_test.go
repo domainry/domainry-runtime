@@ -52,3 +52,13 @@ func TestMetadataObjectAuthoringPublishesConsumedUXContract(t *testing.T) {
 		t.Fatalf("object ux.display schema=%#v", ux.Properties["display"])
 	}
 }
+
+func TestMetadataObjectAuthoringPublishesWriteOwnershipChoice(t *testing.T) {
+	capability := ApplicationSchemaObjectAuthoringCapability()
+	payload := capability.InputSchema.Properties["payload"]
+	config := payload.Properties["config"]
+	writePolicy := config.Properties["write_policy"]
+	if config.Type != "object" || config.AdditionalProperties == nil || *config.AdditionalProperties || !reflect.DeepEqual(writePolicy.Enum, []any{"direct_crud", "action_only"}) || writePolicy.Default != "direct_crud" {
+		t.Fatalf("object write-policy schema=%#v", config)
+	}
+}

@@ -10,7 +10,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-const PermissionMetadataOpsRead = "metadata.ops.read"
+const ActionOpsMetadataDiagnostics = "runtime.appschema.ops_metadata_diagnostics"
 
 type PublishedRuntimeSchemaDTO struct {
 	TemplateID      string                                                 `json:"template_id"`
@@ -60,7 +60,7 @@ func (s *ApplicationSchemaApplicationService) OpsMetadataDiagnostics(ctx context
 	if _, err := principalmodel.QueryScopeForPrincipal(principal); err != nil {
 		return OpsMetadataDiagnosticsDTO{}, &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.workspace_scope_required", Err: err}
 	}
-	if !metadataHasExactPermission(principal, PermissionMetadataOpsRead) {
+	if !metadataHasExactPermission(principal, ActionOpsMetadataDiagnostics) {
 		return OpsMetadataDiagnosticsDTO{}, forbidden("auth.permission_denied")
 	}
 	if s == nil || s.repository == nil || s.runtime == nil {

@@ -7,7 +7,6 @@
       "label": "Start Cooking",
       "object_key": "kitchen_order",
       "preconditions": [],
-      "requires_permission": "kitchen_order.update",
       "ui_placement": "card_action"
     },
     {
@@ -16,8 +15,7 @@
       "kind": "record_operation",
       "label": "Ready Alert",
       "object_key": "kitchen_order",
-      "ui_placement": "workflow_only",
-      "requires_permission": ".update"
+      "ui_placement": "workflow_only"
     }
   ],
   "dictionaries": [

@@ -13,7 +13,7 @@ type TenantAdminSchedulerDefinitionVersionDTO = schedulerauthoring.TenantAdminDe
 type TenantAdminSchedulerAuthoringContract = schedulerauthoring.TenantAdminAuthoringContract
 
 func (s *SchedulerApplicationService) TenantAdminDefinitions(ctx context.Context, principal principalmodel.Principal) ([]TenantAdminSchedulerDefinitionDTO, error) {
-	if err := schedulerDefinitionReadAllowed(principal); err != nil {
+	if err := schedulerExactQueryAllowed(principal, ActionListTenantAdminSchedulerDefinitions); err != nil {
 		return nil, err
 	}
 	if s.definitions == nil {
@@ -31,7 +31,10 @@ func (s *SchedulerApplicationService) TenantAdminDefinitions(ctx context.Context
 }
 
 func (s *SchedulerApplicationService) TenantAdminDefinition(ctx context.Context, definitionID string, principal principalmodel.Principal) (TenantAdminSchedulerDefinitionDTO, error) {
-	definition, err := s.GetDefinition(ctx, definitionID, principal)
+	if err := schedulerExactQueryAllowed(principal, ActionGetTenantAdminSchedulerDefinition); err != nil {
+		return TenantAdminSchedulerDefinitionDTO{}, err
+	}
+	definition, err := s.schedulerDefinition(ctx, definitionID)
 	if err != nil {
 		return TenantAdminSchedulerDefinitionDTO{}, err
 	}
@@ -39,7 +42,13 @@ func (s *SchedulerApplicationService) TenantAdminDefinition(ctx context.Context,
 }
 
 func (s *SchedulerApplicationService) TenantAdminDefinitionVersions(ctx context.Context, definitionID string, principal principalmodel.Principal) ([]TenantAdminSchedulerDefinitionVersionDTO, error) {
-	versions, err := s.DefinitionVersions(ctx, definitionID, principal)
+	if err := schedulerExactQueryAllowed(principal, ActionGetTenantAdminSchedulerDefinition); err != nil {
+		return nil, err
+	}
+	if _, err := s.schedulerDefinition(ctx, definitionID); err != nil {
+		return nil, err
+	}
+	versions, err := s.definitions.ListSchedulerDefinitionVersions(ctx, definitionID)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +65,7 @@ func (s *SchedulerApplicationService) TenantAdminDefinitionVersions(ctx context.
 }
 
 func (s *SchedulerApplicationService) TenantAdminAuthoringContract(_ context.Context, principal principalmodel.Principal) (TenantAdminSchedulerAuthoringContract, error) {
-	if err := schedulerDefinitionWriteAllowed(principal); err != nil {
+	if err := schedulerExactQueryAllowed(principal, ActionGetTenantAdminSchedulerAuthoringContract); err != nil {
 		return TenantAdminSchedulerAuthoringContract{}, err
 	}
 	return schedulerauthoring.TenantAdminContract(), nil
@@ -66,31 +75,11 @@ func (s *SchedulerApplicationService) AuthorizeOpsRead(ctx context.Context, prin
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return schedulerOpsReadAllowed(principal)
+	return schedulerExactQueryAllowed(principal, ActionGetOpsSchedulerState)
 }
 
 func projectTenantAdminSchedulerDefinition(definition PublishedDefinition) TenantAdminSchedulerDefinitionDTO {
 	return schedulerauthoring.ProjectTenantAdminDefinition(schedulerauthoring.DefinitionProjection{Key: definition.Key, Data: definition.Data, CreatedAt: definition.CreatedAt, UpdatedAt: definition.UpdatedAt})
-}
-
-func schedulerDefinitionWriteAllowed(principal principalmodel.Principal) error {
-	if err := schedulerAuthorizeCommand(principal); err != nil {
-		return err
-	}
-	if principal.HasPermission("workspace.admin") || principal.HasExactPermission("metadata.write") || principal.HasExactPermission("scheduler.definition.write") {
-		return nil
-	}
-	return forbidden("backend.scheduler.permission_required")
-}
-
-func schedulerOpsReadAllowed(principal principalmodel.Principal) error {
-	if err := schedulerAuthorizeQuery(principal); err != nil {
-		return err
-	}
-	if principal.HasExactPermission("operations.read") || principal.HasExactPermission("scheduler.command") {
-		return nil
-	}
-	return forbidden("backend.scheduler.permission_required")
 }
 
 func unavailableDefinitionSource() error {

@@ -89,10 +89,7 @@ func (s *HTTPRouter) health(w http.ResponseWriter, r *http.Request) {
 }
 
 func healthAllowed(principal principalmodel.Principal) bool {
-	tenantAdmin := principal.Known && principal.HasPermission("workspace.admin")
-	runtimeOperator := principal.Known &&
-		principal.HasExactPermission("runtime_ops.capability_status.read")
-	return tenantAdmin || runtimeOperator
+	return principal.Known
 }
 
 func (s *HTTPRouter) live(w http.ResponseWriter, _ *http.Request) {

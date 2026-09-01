@@ -17,6 +17,7 @@ import (
 	automationprojection "github.com/domainry/domainry-runtime/runtime/domain/automation/projection"
 	automationrepository "github.com/domainry/domainry-runtime/runtime/domain/automation/repository"
 	automationvalidation "github.com/domainry/domainry-runtime/runtime/domain/automation/validation"
+	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 
 	"sort"
 	"strings"
@@ -49,11 +50,8 @@ func NewAutomationManagementApplicationService(dependencies AutomationManagement
 }
 
 func (s *AutomationManagementApplicationService) Capabilities(ctx context.Context, principal principalmodel.Principal) (capability.CapabilityAutomationCatalog, error) {
-	if err := automationAuthorizeQuery(principal); err != nil {
+	if err := automationAuthorizeEndpoint(principal, "GET /automation-rules/capabilities"); err != nil {
 		return capability.CapabilityAutomationCatalog{}, err
-	}
-	if !automationvalidation.AutomationHasPermission(principal, "read") {
-		return capability.CapabilityAutomationCatalog{}, managementError(apperror.KindForbidden, "auth.permission_denied", nil)
 	}
 	workspaceID := automationWorkspaceID(principal)
 	connections := []integrationsdk.Connection{}
@@ -77,14 +75,11 @@ func (s *AutomationManagementApplicationService) Capabilities(ctx context.Contex
 }
 
 func (s *AutomationManagementApplicationService) Rules(ctx context.Context, principal principalmodel.Principal) ([]automationmodel.AutomationRuleSchema, error) {
-	if err := automationAuthorizeQuery(principal); err != nil {
+	if err := automationAuthorizeEndpoint(principal, "GET /automation-rules"); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
-	}
-	if !automationvalidation.AutomationHasPermission(principal, "read") {
-		return nil, managementError(apperror.KindForbidden, "auth.permission_denied", nil)
 	}
 	rules := s.dependencies.Rules.List()
 	sort.Slice(rules, func(i, j int) bool { return rules[i].Key < rules[j].Key })
@@ -92,14 +87,11 @@ func (s *AutomationManagementApplicationService) Rules(ctx context.Context, prin
 }
 
 func (s *AutomationManagementApplicationService) Rule(ctx context.Context, ruleKey string, principal principalmodel.Principal) (automationmodel.AutomationRuleSchema, error) {
-	if err := automationAuthorizeQuery(principal); err != nil {
+	if err := automationAuthorizeEndpoint(principal, "GET /automation-rules/{ruleKey}"); err != nil {
 		return automationmodel.AutomationRuleSchema{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return automationmodel.AutomationRuleSchema{}, err
-	}
-	if !automationvalidation.AutomationHasPermission(principal, "read") {
-		return automationmodel.AutomationRuleSchema{}, managementError(apperror.KindForbidden, "auth.permission_denied", nil)
 	}
 	rule, ok := s.dependencies.Rules.Get(strings.TrimSpace(ruleKey))
 	if !ok {
@@ -109,11 +101,8 @@ func (s *AutomationManagementApplicationService) Rule(ctx context.Context, ruleK
 }
 
 func (s *AutomationManagementApplicationService) ExecutionHistory(ctx context.Context, filter automationmodel.AutomationExecutionFilter, principal principalmodel.Principal) (automationprojection.AutomationExecutionHistory, error) {
-	if err := automationAuthorizeQuery(principal); err != nil {
+	if err := automationAuthorizeEndpoint(principal, "GET /automation-rules/executions"); err != nil {
 		return automationprojection.AutomationExecutionHistory{}, err
-	}
-	if !automationvalidation.AutomationHasPermission(principal, "history") {
-		return automationprojection.AutomationExecutionHistory{}, managementError(apperror.KindForbidden, "auth.permission_denied", nil)
 	}
 	workspaceID := automationWorkspaceID(principal)
 	items := []automationmodel.AutomationRuleExecution{}
@@ -144,21 +133,19 @@ func (s *AutomationManagementApplicationService) ExecutionHistory(ctx context.Co
 }
 
 func (s *AutomationManagementApplicationService) ValidateRule(ctx context.Context, rule automationmodel.AutomationRuleSchema, principal principalmodel.Principal) (automationvalidation.AutomationValidationResult, error) {
-	if err := automationAuthorizeQuery(principal); err != nil {
+	if err := automationAuthorizeEndpoint(principal, "POST /automation-rules/validate"); err != nil {
 		return automationvalidation.AutomationValidationResult{}, err
-	}
-	if !automationvalidation.AutomationHasPermission(principal, "manage") {
-		return automationvalidation.AutomationValidationResult{}, managementError(apperror.KindForbidden, "auth.permission_denied", nil)
 	}
 	return automationvalidation.AutomationValidateRuleForAuthoring(ctx, rule, s.dependencies.ValidateDefinition)
 }
 
 func (s *AutomationManagementApplicationService) SimulateRule(ctx context.Context, rule automationmodel.AutomationRuleSchema, request automationcontract.AutomationSimulationRequest, principal principalmodel.Principal) (automationprojection.AutomationSimulationResult, error) {
-	if err := automationAuthorizeCommand(principal); err != nil {
-		return automationprojection.AutomationSimulationResult{}, err
+	endpoint := "POST /automation-rules/{ruleKey}/simulate"
+	if request.Rule != nil {
+		endpoint = "POST /automation-rules/simulate"
 	}
-	if !automationvalidation.AutomationHasPermission(principal, "simulate") {
-		return automationprojection.AutomationSimulationResult{}, managementError(apperror.KindForbidden, "auth.permission_denied", nil)
+	if err := automationAuthorizeEndpoint(principal, endpoint); err != nil {
+		return automationprojection.AutomationSimulationResult{}, err
 	}
 	if err := s.dependencies.ValidateDefinition(ctx, rule); err != nil {
 		return automationprojection.AutomationSimulationResult{}, err
@@ -203,6 +190,17 @@ func automationAuthorizeQuery(principal principalmodel.Principal) error {
 func automationAuthorizeCommand(principal principalmodel.Principal) error {
 	if _, err := principalmodel.NewWorkspaceCommandScope(principal.WorkspaceID); !principal.Known || err != nil {
 		return managementError(apperror.KindForbidden, "backend.workspace_scope_required", err)
+	}
+	return nil
+}
+
+func automationAuthorizeEndpoint(principal principalmodel.Principal, endpointIdentity string) error {
+	if err := automationAuthorizeQuery(principal); err != nil {
+		return err
+	}
+	contract, found := endpointmodel.EndpointContracts[strings.TrimSpace(endpointIdentity)]
+	if !found || strings.TrimSpace(contract.ActionKey) == "" || !principal.HasExactPermission(contract.ActionKey) {
+		return managementError(apperror.KindForbidden, "auth.permission_denied", nil)
 	}
 	return nil
 }

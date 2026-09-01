@@ -65,7 +65,7 @@ func TestSchedulerManualRunDefinitionPreservesPublicOwnerPermission(t *testing.T
 	if !found {
 		t.Fatal("missing scheduler.job.run operation definition")
 	}
-	if len(definition.Permissions) != 1 || definition.Permissions[0] != "scheduler.command" {
-		t.Fatalf("scheduler.job.run permissions must exactly match the Scheduler owner command boundary: %#v", definition.Permissions)
+	if len(definition.Permissions) != 1 || definition.Permissions[0] != "runtime.scheduler.run_ops_scheduler_job" {
+		t.Fatalf("scheduler.job.run permission must exactly match its Runtime endpoint Action: %#v", definition.Permissions)
 	}
 }

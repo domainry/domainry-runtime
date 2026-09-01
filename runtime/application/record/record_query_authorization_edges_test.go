@@ -7,8 +7,6 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
-
 	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -104,7 +102,7 @@ func TestRecordQueryEntrypointsDelegateForAuthorizedWorkspace(t *testing.T) {
 			return []profilebindingmodel.Binding{{ObjectKey: profile.Key, IdentityRelationField: "identity_user"}}
 		},
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}, RecordScope: "all_records"})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}})
 
 	if object, err := service.ObjectForAction(principal, customer.Key, "read"); err != nil || object.Key != customer.Key {
 		t.Fatalf("object=%#v err=%v", object, err)
@@ -157,7 +155,7 @@ func TestRecordFacadeDelegatesAuthorizedWorkspaceToOwnedServices(t *testing.T) {
 		QueryPolicy: queryPolicy,
 		SchemaMap:   func() map[string]definitionmodel.ObjectSchema { return objects },
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}, RecordScope: "all_records"})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}})
 
 	if _, err := service.PreviewImport(t.Context(), customer.Key, nil, principal); apperror.CodeOf(err) != "backend.import.header_required" {
 		t.Fatalf("preview err=%v", err)

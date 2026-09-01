@@ -35,7 +35,7 @@ func authoringHandlerForEdges(validation *businesssystemapplication.RuntimeAutho
 	return NewBusinessSystemHandler(BusinessSystemDependencies{
 		Validation: validation,
 		Principal: func(*http.Request) principalmodel.Principal {
-			return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "builder", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+			return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "builder", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{businesssystemapplication.ActionBusinessSystemSnapshot}})
 		},
 		WriteJSON:         func(w http.ResponseWriter, status int, _ any) { w.WriteHeader(status) },
 		WriteServiceError: func(w http.ResponseWriter, _ *http.Request, _ error) { w.WriteHeader(http.StatusInternalServerError) },

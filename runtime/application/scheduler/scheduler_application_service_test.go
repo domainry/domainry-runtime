@@ -4,10 +4,6 @@ package scheduler
 import (
 	"reflect"
 	"testing"
-
-	identitysdk "github.com/domainry/domainry-identity-sdk"
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
 
 func TestScheduledWorkflowRuntimeMethodBudget(t *testing.T) {
@@ -19,7 +15,7 @@ func TestScheduledWorkflowRuntimeMethodBudget(t *testing.T) {
 
 func TestSchedulerServicePreviewDoesNotRequireRuntimeServices(t *testing.T) {
 	service := NewSchedulerApplicationService(nil)
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := schedulerTestPrincipal(ActionPreviewSchedulerJob)
 	preview, err := service.PreviewDefinition(t.Context(), map[string]any{"target_type": "workflow", "target_key": "scheduled:*", "schedule_type": "interval", "interval_seconds": 60}, principal)
 	if err != nil {
 		t.Fatal(err)
@@ -31,7 +27,7 @@ func TestSchedulerServicePreviewDoesNotRequireRuntimeServices(t *testing.T) {
 
 func TestSchedulerServicePreviewsLeafScheduleWithoutJobEnvelope(t *testing.T) {
 	service := NewSchedulerApplicationService(nil)
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := schedulerTestPrincipal(ActionPreviewSchedulerSchedule)
 	preview, err := service.PreviewSchedule(t.Context(), map[string]any{"schedule_type": "weekly_at", "time_of_day": "09:30", "day_of_week": "monday", "timezone": "Asia/Shanghai"}, principal)
 	if err != nil {
 		t.Fatal(err)

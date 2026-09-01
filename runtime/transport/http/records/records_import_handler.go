@@ -29,7 +29,7 @@ func (h *RecordsHandler) applyImport(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	key, _ := recordsActionIdempotencyKey(r, "")
+	key, _ := recordsActionIdempotencyKey(r)
 	if key == "" {
 		h.writeActionServiceError(w, r, apperror.New(apperror.KindBadRequest, idempotency.ErrorCodeMissingKey, nil, map[string]string{"use_case": "record.import"}))
 		return

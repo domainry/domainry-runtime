@@ -31,7 +31,7 @@ func TestSchedulerDefinitionSurfaceReadsPublishedDefinitions(t *testing.T) {
 	published := PublishedDefinition{Key: "nightly", Data: map[string]any{"key": "nightly", "status": "enabled", "target_type": "workflow"}}
 	service := NewSchedulerApplicationService(nil)
 	service.UseDefinitionSource(schedulerSurfaceDefinitionSource{definitions: []PublishedDefinition{published}, definition: published, found: true, versions: []SchedulerDefinitionVersion{{VersionID: "v1", Event: "published", Data: published.Data}}})
-	principal := schedulerTestPrincipal("scheduler.definition.read")
+	principal := schedulerTestPrincipal(ActionListTenantAdminSchedulerDefinitions, ActionGetTenantAdminSchedulerDefinition)
 	definitions, err := service.TenantAdminDefinitions(t.Context(), principal)
 	if err != nil || len(definitions) != 1 || definitions[0].Key != "nightly" {
 		t.Fatalf("definitions = %+v, err = %v", definitions, err)
@@ -48,7 +48,7 @@ func TestSchedulerDefinitionSurfaceReadsPublishedDefinitions(t *testing.T) {
 
 func TestSchedulerDefinitionSurfaceReportsSourceFailures(t *testing.T) {
 	service := NewSchedulerApplicationService(nil)
-	principal := schedulerTestPrincipal("scheduler.definition.read")
+	principal := schedulerTestPrincipal(ActionListTenantAdminSchedulerDefinitions)
 	if _, err := service.TenantAdminDefinitions(t.Context(), principal); apperror.CodeOf(err) != "backend.scheduler.definition_source_unavailable" {
 		t.Fatalf("missing source error = %v", err)
 	}
@@ -59,7 +59,7 @@ func TestSchedulerDefinitionSurfaceReportsSourceFailures(t *testing.T) {
 }
 
 func TestSchedulerOpsAuthorizationDoesNotProjectRuntimeJobLifecycle(t *testing.T) {
-	if err := NewSchedulerApplicationService(nil).AuthorizeOpsRead(t.Context(), schedulerTestPrincipal("operations.read")); err != nil {
+	if err := NewSchedulerApplicationService(nil).AuthorizeOpsRead(t.Context(), schedulerTestPrincipal(ActionGetOpsSchedulerState)); err != nil {
 		t.Fatal(err)
 	}
 	if err := NewSchedulerApplicationService(nil).AuthorizeOpsRead(t.Context(), principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
@@ -67,10 +67,11 @@ func TestSchedulerOpsAuthorizationDoesNotProjectRuntimeJobLifecycle(t *testing.T
 	}
 }
 
-func TestSchedulerSurfaceAuthorizationUsesSchedulerCapabilities(t *testing.T) {
-	for _, permission := range []string{"operations.read", "scheduler.command"} {
-		if err := schedulerOpsReadAllowed(schedulerTestPrincipal(permission)); err != nil {
-			t.Fatalf("read permission %q rejected: %v", permission, err)
+func TestSchedulerSurfaceAuthorizationRequiresItsExactAction(t *testing.T) {
+	service := NewSchedulerApplicationService(nil)
+	for _, permission := range []string{"operations.read", "scheduler.command", "workspace.admin"} {
+		if err := service.AuthorizeOpsRead(t.Context(), schedulerTestPrincipal(permission)); apperror.CodeOf(err) != "backend.scheduler.permission_required" {
+			t.Fatalf("unrelated permission %q authorized Scheduler state: %v", permission, err)
 		}
 	}
 }

@@ -45,16 +45,12 @@ func TestActionNormalizePayloadContractDefaultsExtrasAndValidation(t *testing.T)
 			{Key: "note", Type: "text", DefaultValue: "field-default"},
 			{Key: "mode", Type: "select", Options: []string{"fast", "safe"}},
 		},
-		IdempotencyKeys: []string{" tenant_request ", "", "tenant_request", "external_request"},
-		Defaults:        map[string]any{"note": "action-default", "mode": "safe", "request_ref": "generated", "undeclared": "ignored", "also_undeclared": true},
+		Defaults: map[string]any{"note": "action-default", "mode": "safe", "request_ref": "generated", "undeclared": "ignored", "also_undeclared": true},
 	}
 	input := map[string]any{
-		"amount":           "12.5",
-		"note":             "",
-		"idempotency_key":  "idem-1",
-		"tenant_request":   "tenant-1",
-		"external_request": "external-1",
-		"approved":         true,
+		"amount":   "12.5",
+		"note":     "",
+		"approved": true,
 	}
 	got, err := ActionNormalizePayload(action, input)
 	if err != nil {
@@ -63,7 +59,7 @@ func TestActionNormalizePayloadContractDefaultsExtrasAndValidation(t *testing.T)
 	if got["amount"] != 12.5 || got["note"] != "action-default" || got["mode"] != "safe" || got["request_ref"] != "generated" {
 		t.Fatalf("normalized declared/default payload=%#v", got)
 	}
-	for _, key := range []string{"idempotency_key", "tenant_request", "external_request", "approved"} {
+	for _, key := range []string{"approved"} {
 		if got[key] != input[key] {
 			t.Fatalf("extra key %q lost: %#v", key, got)
 		}
@@ -74,6 +70,9 @@ func TestActionNormalizePayloadContractDefaultsExtrasAndValidation(t *testing.T)
 
 	if _, err := ActionNormalizePayload(action, map[string]any{"amount": 1, "unknown": true}); apperror.CodeOf(err) != "backend.validation.unknown_field" || apperror.ParamsOf(err)["field"] != "unknown" {
 		t.Fatalf("unknown field error=%v params=%v", err, apperror.ParamsOf(err))
+	}
+	if _, err := ActionNormalizePayload(action, map[string]any{"amount": 1, "idempotency_key": "technical"}); apperror.CodeOf(err) != "backend.validation.unknown_field" || apperror.ParamsOf(err)["field"] != "idempotency_key" {
+		t.Fatalf("technical idempotency field error=%v params=%v", err, apperror.ParamsOf(err))
 	}
 	if _, err := ActionNormalizePayload(action, map[string]any{"mode": "invalid"}); apperror.KindOf(err) != apperror.KindBadRequest {
 		t.Fatalf("invalid payload error=%v kind=%s", err, apperror.KindOf(err))
@@ -109,14 +108,6 @@ func TestActionNormalizePayloadPreservesExactAndInexactNumericSemantics(t *testi
 }
 
 func TestActionPayloadErrorMappingAndHelpers(t *testing.T) {
-	actionWithIdempotency := definitionmodel.ActionSchema{PayloadFields: []definitionmodel.ActionPayloadField{{Key: "idempotency_key"}}}
-	if got := actionBindInvocationIdempotency(actionWithIdempotency, nil, " bound "); got["idempotency_key"] != "bound" {
-		t.Fatalf("nil payload binding=%#v", got)
-	}
-	existingKey := map[string]any{"idempotency_key": "payload"}
-	if got := actionBindInvocationIdempotency(actionWithIdempotency, existingKey, "header"); got["idempotency_key"] != "payload" {
-		t.Fatalf("existing payload binding=%#v", got)
-	}
 	existing := &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.test.conflict"}
 	if got := actionPayloadBadRequestFromError(existing); got != existing {
 		t.Fatalf("existing AppError changed: %v", got)

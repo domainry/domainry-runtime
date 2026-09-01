@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
@@ -80,7 +81,16 @@ func (s *HTTPRouter) principalFromRequest(r *http.Request) principalmodel.Princi
 	requestID := requestIDFromRequest(r)
 	workspaceID := workspaceIDFromRequest(r)
 	if builderTaskID := operationscontract.BuilderTaskID(r.Context()); builderTaskID != "" && bearerTokenFromRequest(r) == "" && apiKeyTokenFromRequest(r) == "" && strings.TrimSpace(r.Header.Get("X-User-ID")) == "" && strings.TrimSpace(r.Header.Get("X-Role")) == "" && strings.TrimSpace(r.Header.Get("X-User-Role")) == "" {
-		principal := principalmodel.NewSystemPrincipal("runtime-builder:"+builderTaskID, principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "runtime_direct_authoring"), "*")
+		principal := principalmodel.NewSystemPrincipal(
+			"runtime-builder:"+builderTaskID,
+			principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "runtime_direct_authoring"),
+			businesssystemapplication.ActionBusinessSystemSnapshot,
+			businesssystemapplication.ActionValidateRuntimeAuthoring,
+			businesssystemapplication.ActionVerifyRuntimeAuthoringDelivery,
+			"scheduler.definition.read",
+			"runtime.automation.list_automation_rules",
+			"runtime.automation.list_automation_executions",
+		)
 		principal.RequestID = requestID
 		principal.WorkspaceID = workspaceID
 		return principal

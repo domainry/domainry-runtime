@@ -267,13 +267,25 @@ func newOperationsRecoveryHTTPMuxWithLease(t *testing.T, includeLease bool) *htt
 	deps := OperationsDependencies{
 		Service: service, Controls: operationsapplication.NewOperationsControlApplicationService(repository, service, repository, nil),
 		Principal: func(r *http.Request) principalmodel.Principal {
-			principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "runtime.dead_letter.read"}})
+			principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{
+				"operations.read",
+				"runtime.idempotency.manage",
+				"runtime.maintenance.write",
+				"runtime.worker.control",
+				"runtime.instance.drain",
+				"runtime.worker.force_release",
+				"runtime.dead_letter.read",
+				"runtime.dead_letter.write",
+				"runtime.bulk.execute",
+				"runtime.diagnostics.read",
+				"runtime.break_glass",
+			}})
 			if r.Header.Get("X-Deny") == "true" {
 				accessfixture.Set(&principal, accessfixture.Bundle{})
 			}
 			return principal
 		},
-		Admin: func(next http.HandlerFunc) http.HandlerFunc { return next },
+		Authenticated: func(next http.HandlerFunc) http.HandlerFunc { return next },
 		DecodeJSON: func(w http.ResponseWriter, r *http.Request, target any) bool {
 			if err := json.NewDecoder(r.Body).Decode(target); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)

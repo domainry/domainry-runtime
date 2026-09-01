@@ -55,35 +55,8 @@ func ActionNormalizePayload(action definitionmodel.ActionSchema, data map[string
 	return normalized, nil
 }
 
-func actionBindInvocationIdempotency(action definitionmodel.ActionSchema, data map[string]any, idempotencyKey string) map[string]any {
-	idempotencyKey = strings.TrimSpace(idempotencyKey)
-	if idempotencyKey == "" {
-		return data
-	}
-	for _, field := range action.PayloadFields {
-		if strings.TrimSpace(field.Key) != "idempotency_key" {
-			continue
-		}
-		bound := actionCloneMap(data)
-		if bound == nil {
-			bound = map[string]any{}
-		}
-		if _, exists := bound["idempotency_key"]; !exists {
-			bound["idempotency_key"] = idempotencyKey
-		}
-		return bound
-	}
-	return data
-}
-
-func actionPayloadExtraKeys(action definitionmodel.ActionSchema) map[string]bool {
-	out := map[string]bool{"idempotency_key": true, "expected_version": true, "expected_updated_at": true, "record_id": true, "request_ref": true, "approved": true, "approval_id": true, "approval_token": true}
-	for _, key := range action.IdempotencyKeys {
-		if key = strings.TrimSpace(key); key != "" {
-			out[key] = true
-		}
-	}
-	return out
+func actionPayloadExtraKeys(definitionmodel.ActionSchema) map[string]bool {
+	return map[string]bool{"expected_version": true, "expected_updated_at": true, "record_id": true, "request_ref": true, "approved": true, "approval_id": true, "approval_token": true}
 }
 
 func actionApplyPayloadDefaults(action definitionmodel.ActionSchema, payload map[string]any, schema definitionmodel.ObjectSchema, extraKeys map[string]bool, hasContract bool) {

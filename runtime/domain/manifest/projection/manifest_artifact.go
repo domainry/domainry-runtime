@@ -65,7 +65,7 @@ func writeWorkflowsActionsReports(out *strings.Builder, manifest manifestmodel.M
 	writeLine(out, "| Type | Key | Object/Source | Permission/Run As |")
 	writeLine(out, "| --- | --- | --- | --- |")
 	for _, action := range manifest.Actions {
-		writeLine(out, fmt.Sprintf("| Action | `%s` %s | `%s` | `%s` |", action.Key, action.Label, action.ObjectKey, action.RequiresPermission))
+		writeLine(out, fmt.Sprintf("| Action/Permission | `%s` %s | `%s` | `%s` |", action.Key, action.Label, action.ObjectKey, action.Key))
 	}
 	for _, workflow := range manifest.Workflows {
 		writeLine(out, fmt.Sprintf("| Workflow | `%s` %s | %s | `%s` |", workflow.Key, workflow.Name, codeList(manifestWorkflowObjectKeys(workflow)), workflow.RunAs))

@@ -124,7 +124,7 @@ func moduleHTTPSurfaceInventory(binding any) []moduleinfo.HTTPSurface {
 		}
 		routes := make([]string, 0, len(surface.Routes()))
 		for _, route := range surface.Routes() {
-			routes = append(routes, route.Pattern)
+			routes = append(routes, route.Pattern())
 		}
 		sort.Strings(routes)
 		result = append(result, moduleinfo.HTTPSurface{Name: surface.Name(), Routes: routes})

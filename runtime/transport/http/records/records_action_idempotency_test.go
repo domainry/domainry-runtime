@@ -10,20 +10,14 @@ import (
 	"github.com/domainry/domainry-foundation/idempotency"
 )
 
-func TestRecordsActionIdempotencyKeyHeaderCompatibility(t *testing.T) {
+func TestRecordsActionIdempotencyKeyRequiresHeader(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/objects/order/actions/create/run", nil)
 	request.Header.Set("Idempotency-Key", " key-1 ")
-	if key, err := recordsActionIdempotencyKey(request, "key-1"); err != nil || key != "key-1" {
-		t.Fatalf("matching key=%q err=%v", key, err)
-	}
-	if _, err := recordsActionIdempotencyKey(request, "different"); apperror.CodeOf(err) != idempotency.ErrorCodeKeyReused {
-		t.Fatalf("mismatch error=%v", err)
+	if key, err := recordsActionIdempotencyKey(request); err != nil || key != "key-1" {
+		t.Fatalf("header key=%q err=%v", key, err)
 	}
 	request.Header.Del("Idempotency-Key")
-	if key, err := recordsActionIdempotencyKey(request, " payload-key "); err != nil || key != "payload-key" {
-		t.Fatalf("payload compatibility key=%q err=%v", key, err)
-	}
-	if _, err := recordsActionIdempotencyKey(request, ""); apperror.CodeOf(err) != idempotency.ErrorCodeMissingKey {
+	if _, err := recordsActionIdempotencyKey(request); apperror.CodeOf(err) != idempotency.ErrorCodeMissingKey {
 		t.Fatalf("missing key error=%v", err)
 	}
 }

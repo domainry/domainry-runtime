@@ -69,12 +69,8 @@ func ValidateActionPermission(action definitionmodel.ActionSchema, principal pri
 	if !principal.Known {
 		return []Issue{{Code: "invocation.action_permission_denied"}}
 	}
-	objectKey, actionName := definitionmodel.ActionPermissionSubject(action)
-	if objectKey == "" {
-		objectKey = strings.TrimSpace(action.ObjectKey)
-	}
-	if !principal.Allows(objectKey, actionName) {
-		return []Issue{{Code: "invocation.action_permission_denied", Expected: strings.TrimSpace(action.RequiresPermission), Actual: strings.TrimSpace(principal.RoleKey)}}
+	if !principal.HasPermission(strings.TrimSpace(action.Key)) {
+		return []Issue{{Code: "invocation.action_permission_denied", Expected: strings.TrimSpace(action.Key), Actual: strings.TrimSpace(principal.RoleKey)}}
 	}
 	return nil
 }

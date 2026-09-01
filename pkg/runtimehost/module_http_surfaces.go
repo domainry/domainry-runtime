@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 )
@@ -70,15 +71,15 @@ func mountModuleHTTPSurfaces(group runtimehttp.ListenerRouteGroup, surfaces []mo
 		}
 		identity := strings.TrimSpace(surface.Owner()) + "/" + strings.TrimSpace(surface.Name())
 		for _, route := range surface.Routes() {
-			if !moduleRouteVisible(group, route.Exposures) {
+			if !moduleRouteVisible(group, route.Action.Exposures) {
 				continue
 			}
-			pattern := strings.TrimSpace(route.Pattern)
+			pattern := strings.TrimSpace(route.Pattern())
 			if owner, duplicate := seen[pattern]; duplicate {
 				return nil, fmt.Errorf("module HTTP route %q is owned by both %q and %q", pattern, owner, identity)
 			}
 			handler := surface.Handler()
-			if route.Authentication != modulehttp.AuthenticationAnonymous {
+			if route.Action.Authorization.Strategy != actioncontract.AuthorizationAnonymousProtocol {
 				if guard == nil {
 					return nil, fmt.Errorf("module HTTP route %q requires a host authorization guard", pattern)
 				}

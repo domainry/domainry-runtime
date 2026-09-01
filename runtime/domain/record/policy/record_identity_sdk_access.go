@@ -111,6 +111,7 @@ func RecordSDKAllowsObjectAction(principal principalmodel.Principal, objectKey, 
 		*principal.AccessBundle,
 		identitysdk.ResourceType(strings.TrimSpace(objectKey)),
 		identitysdk.Action(normalizeSDKRecordAction(action)),
+		recordSDKDataAction(action),
 		time.Now().UTC(),
 	)
 	if err != nil {
@@ -128,9 +129,10 @@ func RecordSDKAllowsRecord(principal principalmodel.Principal, object definition
 	decision, err := identityevaluator.EvaluateWithContext(
 		*principal.AccessBundle,
 		identitysdk.AccessRequest{
-			ObjectKey: object.Key,
-			Action:    normalizeSDKRecordAction(action),
-			RecordID:  record.ID,
+			ObjectKey:  object.Key,
+			Action:     normalizeSDKRecordAction(action),
+			DataAction: recordSDKDataAction(action),
+			RecordID:   record.ID,
 		},
 		recordSDKResourceFacts(object, record),
 		RecordSDKEvaluationContext(principal),
@@ -233,6 +235,20 @@ func normalizeSDKRecordAction(action string) string {
 		return "update"
 	default:
 		return strings.TrimSpace(action)
+	}
+}
+
+// recordSDKDataAction is Runtime's owned projection from executable record
+// operations to the deliberately coarse role data contract. The shared SDK
+// does not infer this relationship from action names.
+func recordSDKDataAction(action string) identitysdk.DataAction {
+	switch strings.ToLower(strings.TrimSpace(action)) {
+	case "read", "view", "list", "search", "export":
+		return identitysdk.DataActionRead
+	default:
+		// Runtime-authored business Actions are mutation Actions in the current
+		// ActionDefinition projection, so custom operations belong to write.
+		return identitysdk.DataActionWrite
 	}
 }
 

@@ -152,11 +152,11 @@ func TestCapabilityAuthoringProjectionAndServices(t *testing.T) {
 		if err := call(principalmodel.Principal{}); apperror.CodeOf(err) != "auth.permission_denied" {
 			t.Errorf("%s unknown principal error=%v", name, err)
 		}
-		if err := call(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}); apperror.CodeOf(err) != "auth.permission_denied" {
-			t.Errorf("%s restricted principal error=%v", name, err)
+		if err := call(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}); err != nil {
+			t.Errorf("%s authenticated principal error=%v", name, err)
 		}
 	}
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{})
 	execution, err := service.ExecutionCapabilities(t.Context(), admin)
 	if err != nil || execution.AuthoringProjection == nil || !reflect.DeepEqual(execution.AuthoringProjection.Domains, []string{"action", "automation", "workflow"}) {
 		t.Fatalf("execution projection=%#v err=%v", execution.AuthoringProjection, err)

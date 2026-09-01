@@ -7,6 +7,7 @@ import (
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/telemetry"
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
@@ -53,7 +54,6 @@ type ActionApplicationDependencies struct {
 	Audit            ActionAudit
 	ProjectRecord    func(context.Context, principalmodel.Principal, string, recordmodel.Record) (recordmodel.Record, error)
 	ProjectOutput    func(context.Context, principalmodel.Principal, definitionmodel.ActionSchema, map[string]any) (map[string]any, error)
-	NewInvocationID  func(context.Context) string
 }
 
 // ActionApplicationService is the single governed invocation boundary used by
@@ -76,9 +76,6 @@ type governedActionExecution struct {
 }
 
 func NewActionApplication(dependencies ActionApplicationDependencies) *ActionApplicationService {
-	if dependencies.NewInvocationID == nil {
-		dependencies.NewInvocationID = NewActionInvocationID
-	}
 	if dependencies.UnitOfWork == nil {
 		dependencies.UnitOfWork = NewActionUnitOfWorkManager(nil)
 	}
@@ -179,6 +176,12 @@ func (s *ActionApplicationService) Invoke(ctx context.Context, source actionmode
 	if invocation.ActionKey == "" {
 		return actionmodel.ActionInvocationResult{}, apperror.New(apperror.KindBadRequest, "backend.action.key_required", nil, nil)
 	}
+	if invocation.IdempotencyKey == "" {
+		return actionmodel.ActionInvocationResult{}, apperror.New(apperror.KindBadRequest, idempotency.ErrorCodeMissingKey, nil, map[string]string{"action": invocation.ActionKey, "source": string(source)})
+	}
+	if _, exists := invocation.Input["idempotency_key"]; exists {
+		return actionmodel.ActionInvocationResult{}, apperror.New(apperror.KindBadRequest, "backend.validation.unknown_field", nil, map[string]string{"field": "idempotency_key", "object": invocation.ActionKey})
+	}
 	entry, ok := s.dependencies.Catalog.Entry(invocation.ActionKey)
 	if !ok {
 		return actionmodel.ActionInvocationResult{}, apperror.New(apperror.KindNotFound, "backend.action.not_found", nil, nil)
@@ -202,26 +205,17 @@ func (s *ActionApplicationService) Invoke(ctx context.Context, source actionmode
 	if err := s.dependencies.Authorization.Validate(invocation.Principal, action); err != nil {
 		return actionmodel.ActionInvocationResult{}, err
 	}
-	invocation.Input = actionBindInvocationIdempotency(action, invocation.Input, invocation.IdempotencyKey)
 	payload, err := ActionNormalizePayload(action, invocation.Input)
 	if err != nil {
 		return actionmodel.ActionInvocationResult{}, err
 	}
 	invocation.Input = payload
-	if invocation.IdempotencyKey == "" {
-		if value, ok := payload["idempotency_key"].(string); ok {
-			invocation.IdempotencyKey = strings.TrimSpace(value)
-		}
-	}
 	if assured, err := actionValidateInvocationAssurance(ctx, s.dependencies.Assurance.Validate, invocation); err != nil {
 		return actionmodel.ActionInvocationResult{}, err
 	} else {
 		invocation = assured
 	}
-	invocationID := s.invocationID(ctx, invocation)
-	if invocation.IdempotencyKey == "" {
-		invocation.IdempotencyKey = invocationID
-	}
+	invocationID := invocation.IdempotencyKey
 	result = actionmodel.ActionInvocationResult{
 		InvocationID: invocationID, Status: "running", Source: invocation.Source, AuditEvent: action.AuditEvent,
 		AuditEvidence: map[string]string{"action_key": action.Key, "object_key": action.ObjectKey, "record_id": invocation.RecordID, "request_id": invocation.RequestID, "process_id": invocation.ProcessID, "node_id": invocation.NodeID},
@@ -308,16 +302,6 @@ func (s *ActionApplicationService) execute(ctx context.Context, governed governe
 	default:
 		return ActionExecutionResult{}, actionOwnerResolutionError(governed.entry)
 	}
-}
-
-func (s *ActionApplicationService) invocationID(ctx context.Context, invocation actionmodel.ActionInvocation) string {
-	if invocation.IdempotencyKey != "" {
-		return invocation.IdempotencyKey
-	}
-	if invocation.RequestID != "" {
-		return invocation.RequestID
-	}
-	return s.dependencies.NewInvocationID(ctx)
 }
 
 func invocationResultFromRecord(invocation actionmodel.ActionInvocation, action definitionmodel.ActionSchema, record actionmodel.ActionResult) actionmodel.ActionInvocationResult {

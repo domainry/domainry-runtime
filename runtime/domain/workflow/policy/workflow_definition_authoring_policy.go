@@ -8,7 +8,7 @@ func workflowDefinitionAuthoringCapability(nodeTypes []string) capabilitycontrac
 		Parameters: []capabilitycontract.CapabilityAuthoringParameter{
 			{Key: "workflow", Type: "workflow_definition", Required: true},
 		},
-		Requires: []string{"workflow.graph_v2"}, Permissions: []string{"workspace.admin"},
+		Requires: []string{"workflow.graph_v2"}, Permissions: []string{"runtime.workflows.validate_workflow_definition"},
 		ValidationEndpoint: "POST /tenant-admin/workflows/{workflowKey}/validate",
 		ConfigurationRoutes: []string{
 			"GET /tenant-admin/metadata/definitions/workflow/{workflowKey}", "POST /tenant-admin/workflows/{workflowKey}/validate", "POST /tenant-admin/workflows/{workflowKey}/simulate",
@@ -22,7 +22,7 @@ func workflowDefinitionAuthoringCapability(nodeTypes []string) capabilitycontrac
 			{Kind: "field_key", InputJSONPointer: "/payload/trigger_contract/field_key", ScopeFrom: "/payload/trigger_contract/object_key", ResolverEndpoint: "GET /tenant-admin/platform-capabilities/references/field_key"},
 			{Kind: "action_key", InputJSONPointer: "/payload/graph/nodes/*/contract/action/action_key", ResolverEndpoint: "GET /tenant-admin/platform-capabilities/references/action_key"},
 		},
-		Execution: &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"metadata.published_snapshot", "action.definition", "identity.role", "schema.object"}, Transaction: "read_only_candidate_validation", Idempotency: "naturally_idempotent_at_candidate_hash", SideEffectLevel: "none", PermissionModel: "workspace.admin", ChangeControl: "source_controlled_json"},
+		Execution: &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"metadata.published_snapshot", "action.definition", "identity.role", "schema.object"}, Transaction: "read_only_candidate_validation", Idempotency: "naturally_idempotent_at_candidate_hash", SideEffectLevel: "none", PermissionModel: "runtime.workflows.validate_workflow_definition", ChangeControl: "source_controlled_json"},
 		Errors: []capabilitycontract.CapabilityAuthoringError{
 			{Code: "backend.workflow.definition_identity_required", FieldPath: "payload.key", MessageKey: "backend.workflow.definition_identity_required"},
 			{Code: "backend.workflow.graph_trigger_required", FieldPath: "payload.graph.nodes", MessageKey: "backend.workflow.graph_trigger_required"},

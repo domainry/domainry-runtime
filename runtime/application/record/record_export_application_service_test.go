@@ -66,7 +66,7 @@ func TestExportServiceOwnsCSVRelationDisplayAndAudit(t *testing.T) {
 			}
 		},
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Key: "admin", Permissions: []string{"workspace.admin", "*"}, RecordScope: "all_records"})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}})
 
 	content, filename, err := service.ExportWithOptions(t.Context(), "order", principal, RecordExportOptions{Reason: "analysis", Query: recordmodel.RecordListQuery{Search: "original", Locale: "zh-CN", FallbackLocale: "en-US"}})
 	if err != nil {
@@ -109,7 +109,7 @@ func TestExportServiceBindsAssuranceToCanonicalIntentAndAuditEvidence(t *testing
 			events[event] = metadata
 		},
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator"}})
 	options := RecordExportOptions{Fields: []string{"name"}, Reason: " month close ", FilterSummary: " active customers ", MaskingPolicy: "strict", Query: recordmodel.RecordListQuery{Search: "Acme"}, AssuranceToken: "verified-token"}
 	content, _, err := service.ExportWithOptions(t.Context(), object.Key, principal, options)
 	if err != nil {

@@ -42,7 +42,8 @@ func TestRuntimeIntegrationTriggerSinkExecutesOnlyRuntimeOwnedTargets(t *testing
 	if err != nil || receipt.ExecutionID != "action-1" || actions.source != actionmodel.ActionSourceIntegration {
 		t.Fatalf("receipt=%#v source=%q err=%v", receipt, actions.source, err)
 	}
-	if actions.invocation.IdempotencyKey != actionRequest.IdempotencyKey || actions.invocation.Principal.WorkspaceID != "workspace-a" || !actions.invocation.Principal.SystemScope.Valid() || !actions.invocation.Principal.HasPermission("anything.execute") {
+	if actions.invocation.IdempotencyKey != actionRequest.IdempotencyKey || actions.invocation.Principal.WorkspaceID != "workspace-a" || !actions.invocation.Principal.SystemScope.Valid() ||
+		!actions.invocation.Principal.HasExactPermission("sync") || actions.invocation.Principal.HasPermission("anything.execute") || len(actions.invocation.Actor.SystemCapabilities) != 0 {
 		t.Fatalf("action invocation=%#v", actions.invocation)
 	}
 
@@ -55,5 +56,8 @@ func TestRuntimeIntegrationTriggerSinkExecutesOnlyRuntimeOwnedTargets(t *testing
 	}
 	if workflows.payload["integration_event_id"] != "event-2" || workflows.payload["integration_mapping_key"] != "mapping-b" || workflows.payload["integration_idempotency_key"] != "event-2:mapping-b" {
 		t.Fatalf("workflow payload=%#v", workflows.payload)
+	}
+	if !workflows.principal.HasExactPermission("workflow.run.contact-sync") || workflows.principal.HasPermission("anything.execute") {
+		t.Fatalf("workflow principal=%#v", workflows.principal)
 	}
 }

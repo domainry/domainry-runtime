@@ -41,7 +41,7 @@ func (s *CapabilityAuthoringApplicationService) Capabilities(ctx context.Context
 }
 
 func (s *CapabilityAuthoringApplicationService) capabilitiesAndSchema(ctx context.Context, principal principalmodel.Principal) (capabilitycontract.CapabilityRuntimeAuthoringContract, capabilitycontract.CapabilityInstanceSchema, error) {
-	if err := capabilityAuthorizeAdmin(principal); err != nil {
+	if err := capabilityAuthorizePrincipal(principal); err != nil {
 		return capabilitycontract.CapabilityRuntimeAuthoringContract{}, capabilitycontract.CapabilityInstanceSchema{}, err
 	}
 	contract := RuntimeAuthoringCapabilities()
