@@ -18,6 +18,7 @@ import (
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 func TestNotificationStartupRevisionAndPublisherBoundaries(t *testing.T) {
@@ -157,9 +158,9 @@ func TestSchedulerNotificationAuthorizerBoundaries(t *testing.T) {
 		wantCode    string
 	}{
 		{name: "unrelated permission", permissions: []string{"other"}, wantCode: "backend.notification.inbox_action_forbidden"},
-		{name: "workspace admin is not scheduler read", permissions: []string{"workspace.admin"}, wantCode: "backend.notification.inbox_action_forbidden"},
-		{name: "reader missing", permissions: []string{"scheduler.definition.read"}, wantCode: "backend.notification.inbox_action_resource_not_found"},
-		{name: "reader found after unrelated", permissions: []string{"other", "scheduler.definition.read"}, found: true},
+		{name: "list permission cannot get", permissions: []string{schedulersdk.ActionSchedulerDefinitionsList}, wantCode: "backend.notification.inbox_action_forbidden"},
+		{name: "reader missing", permissions: []string{schedulersdk.ActionSchedulerDefinitionsGet}, wantCode: "backend.notification.inbox_action_resource_not_found"},
+		{name: "reader found after unrelated", permissions: []string{"other", schedulersdk.ActionSchedulerDefinitionsGet}, found: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			authorize := newSchedulerNotificationActionAuthorizer(schedulerNotificationDefinitions{found: test.found, err: test.err})

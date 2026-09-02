@@ -21,7 +21,7 @@ func TestReportObjectSQLExecutesPOSFixtureWithIsolationRLSAndExactMoney(t *testi
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	for _, statement := range []string{
-		`CREATE TABLE sale (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, employee_id TEXT, team_id TEXT, department_path TEXT, status TEXT, net_total TEXT, discount_total TEXT, refund_total TEXT, units INTEGER, UNIQUE (workspace_id, id))`,
+		`CREATE TABLE sale (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, employee_id TEXT, team_id TEXT, organization_path TEXT, status TEXT, net_total TEXT, discount_total TEXT, refund_total TEXT, units INTEGER, UNIQUE (workspace_id, id))`,
 		`CREATE TABLE payment (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, sale_id TEXT, owner_id TEXT, kind TEXT, amount TEXT, UNIQUE (workspace_id, id))`,
 	} {
 		if _, err := store.DB().ExecContext(t.Context(), statement); err != nil {
@@ -31,7 +31,7 @@ func TestReportObjectSQLExecutesPOSFixtureWithIsolationRLSAndExactMoney(t *testi
 	currency := map[string]any{"precision": 19, "scale": 2, "currency_code": "CNY"}
 	objects := map[string]definitionmodel.ObjectSchema{
 		"sale": {Key: "sale", Fields: []definitionmodel.FieldSchema{
-			{Key: "employee_id", Type: "user"}, {Key: "team_id", Type: "relation"}, {Key: "department_path", Type: "text"}, {Key: "status", Type: "text"},
+			{Key: "employee_id", Type: "user"}, {Key: "team_id", Type: "relation"}, {Key: "organization_path", Type: "text"}, {Key: "status", Type: "text"},
 			{Key: "net_total", Type: "currency", Config: currency}, {Key: "discount_total", Type: "currency", Config: currency}, {Key: "refund_total", Type: "currency", Config: currency}, {Key: "units", Type: "integer"},
 		}},
 		"payment": {Key: "payment", Fields: []definitionmodel.FieldSchema{{Key: "sale_id", Type: "relation"}, {Key: "owner_id", Type: "user"}, {Key: "kind", Type: "text"}, {Key: "amount", Type: "currency", Config: currency}}},
@@ -43,10 +43,10 @@ func TestReportObjectSQLExecutesPOSFixtureWithIsolationRLSAndExactMoney(t *testi
 			t.Fatal(err)
 		}
 	}
-	insert("workspace-a", objects["sale"], "s1", map[string]any{"employee_id": "e1", "team_id": "t1", "department_path": "sales/east", "status": "paid", "net_total": "10.10", "discount_total": "0.30", "refund_total": "0.00", "units": 2})
-	insert("workspace-a", objects["sale"], "s2", map[string]any{"employee_id": "e1", "team_id": "t2", "department_path": "sales/west", "status": "refunded", "net_total": "20.20", "discount_total": "1.20", "refund_total": "5.05", "units": 0})
-	insert("workspace-a", objects["sale"], "s3", map[string]any{"employee_id": "e2", "team_id": "t1", "department_path": "sales/east", "status": "paid", "net_total": "0.10", "discount_total": "0.00", "refund_total": "0.00", "units": 1})
-	insert("workspace-b", objects["sale"], "other", map[string]any{"employee_id": "e1", "team_id": "t1", "department_path": "sales/east", "status": "paid", "net_total": "999.99", "discount_total": "0.00", "refund_total": "0.00", "units": 1})
+	insert("workspace-a", objects["sale"], "s1", map[string]any{"employee_id": "e1", "team_id": "t1", "organization_path": "sales/east", "status": "paid", "net_total": "10.10", "discount_total": "0.30", "refund_total": "0.00", "units": 2})
+	insert("workspace-a", objects["sale"], "s2", map[string]any{"employee_id": "e1", "team_id": "t2", "organization_path": "sales/west", "status": "refunded", "net_total": "20.20", "discount_total": "1.20", "refund_total": "5.05", "units": 0})
+	insert("workspace-a", objects["sale"], "s3", map[string]any{"employee_id": "e2", "team_id": "t1", "organization_path": "sales/east", "status": "paid", "net_total": "0.10", "discount_total": "0.00", "refund_total": "0.00", "units": 1})
+	insert("workspace-b", objects["sale"], "other", map[string]any{"employee_id": "e1", "team_id": "t1", "organization_path": "sales/east", "status": "paid", "net_total": "999.99", "discount_total": "0.00", "refund_total": "0.00", "units": 1})
 	insert("workspace-a", objects["payment"], "p1", map[string]any{"sale_id": "s1", "owner_id": "user-1", "kind": "cash", "amount": "10.10"})
 	insert("workspace-a", objects["payment"], "p2", map[string]any{"sale_id": "s2", "owner_id": "user-2", "kind": "card", "amount": "15.15"})
 	insert("workspace-a", objects["payment"], "p3", map[string]any{"sale_id": "s2", "owner_id": "user-1", "kind": "cash", "amount": "5.05"})
@@ -97,7 +97,7 @@ func TestReportObjectSQLExecutesPOSFixtureWithIsolationRLSAndExactMoney(t *testi
 	payments := execute(reportmodel.ReportObjectSQLSchema{
 		SQL: `SELECT p.kind AS payment_kind, SUM(p.amount) AS paid_amount FROM payment p GROUP BY p.kind ORDER BY payment_kind LIMIT 10`, SourceObjects: []string{"payment"},
 		ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "payment_kind", Type: "text", Kind: "dimension"}, {Key: "paid_amount", Type: "currency", Kind: "measure", Precision: 19, Scale: 2}},
-	}, map[string]recordmodel.RecordListQuery{"p": {Scope: "owned_records", OwnerField: "owner_id", PrincipalUserID: "user-1"}})
+	}, map[string]recordmodel.RecordListQuery{"p": {Scope: "custom", RootObjectKey: "payment", ScopeExpression: &recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "owner_id", Values: []string{"user-1"}}}})
 	if len(payments) != 1 || payments[0]["payment_kind"] != "cash" || payments[0]["paid_amount"] != "15.15" {
 		t.Fatalf("payments=%#v", payments)
 	}
@@ -106,7 +106,7 @@ func TestReportObjectSQLExecutesPOSFixtureWithIsolationRLSAndExactMoney(t *testi
 		SQL: `SELECT s.id AS sale_id, COALESCE(SUM(p.amount), 0) AS visible_paid FROM sale s LEFT JOIN payment p ON p.sale_id = s.id GROUP BY s.id ORDER BY sale_id LIMIT 10`, SourceObjects: []string{"sale", "payment"},
 		JoinCardinalities: []reportmodel.ReportObjectSQLCardinality{{Alias: "p", Cardinality: "one_to_many"}},
 		ResultSchema:      []reportmodel.ReportResultColumnSchema{{Key: "sale_id", Type: "text", Kind: "dimension"}, {Key: "visible_paid", Type: "currency", Kind: "measure", Precision: 19, Scale: 2}},
-	}, map[string]recordmodel.RecordListQuery{"s": {Scope: "all_records"}, "p": {Scope: "owned_records", OwnerField: "owner_id", PrincipalUserID: "user-1"}})
+	}, map[string]recordmodel.RecordListQuery{"s": {Scope: "all_records"}, "p": {Scope: "custom", RootObjectKey: "payment", ScopeExpression: &recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "owner_id", Values: []string{"user-1"}}}})
 	if len(joined) != 3 || joined[0]["visible_paid"] != "10.10" || joined[1]["visible_paid"] != "5.05" || joined[2]["visible_paid"] != "0.00" {
 		t.Fatalf("left joined=%#v", joined)
 	}
@@ -123,9 +123,12 @@ func TestReportObjectSQLExecutesPOSFixtureWithIsolationRLSAndExactMoney(t *testi
 		query recordmodel.RecordListQuery
 		want  string
 	}{
-		"owned":      {query: recordmodel.RecordListQuery{Scope: "owned_records", OwnerField: "employee_id", PrincipalUserID: "e1"}, want: "2"},
-		"team":       {query: recordmodel.RecordListQuery{Scope: "team", TeamField: "team_id", PrincipalTeamIDs: []string{"t1"}}, want: "2"},
-		"department": {query: recordmodel.RecordListQuery{Scope: "department", DepartmentPathField: "department_path", PrincipalDepartmentPath: "sales/east"}, want: "2"},
+		"owned": {query: recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "sale", ScopeExpression: &recordmodel.RecordScopeExpression{
+			Operator: "eq", FieldKey: "employee_id", Values: []string{"e1"},
+		}}, want: "2"},
+		"organization": {query: recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "sale", ScopeExpression: &recordmodel.RecordScopeExpression{
+			Operator: "eq", FieldKey: "organization_path", Values: []string{"sales/east"},
+		}}, want: "2"},
 		"custom": {query: recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "sale", ScopeExpression: &recordmodel.RecordScopeExpression{
 			Operator: "eq", FieldKey: "status", Values: []string{"paid"},
 		}}, want: "2"},

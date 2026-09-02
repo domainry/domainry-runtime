@@ -1,6 +1,11 @@
 package openapi
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/domainry/domainry-foundation/modulehttp"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
+)
 
 func runtimeAuthoringCoverageRequestSchema() map[string]any {
 	return openAPIObject(map[string]any{"coverage": openAPIObject(map[string]any{
@@ -92,21 +97,52 @@ func addBusinessBuilderOpenAPIPaths(paths map[string]any) {
 	addBuilderPath(paths, "/tenant-admin/workflows/authoring-fragments/{capabilityKey}/validate", "Workflow Administration", "post")
 	addBuilderPath(paths, "/tenant-admin/workflows/{workflowKey}/validate", "Workflow Administration", "post")
 	addBuilderPath(paths, "/tenant-admin/workflows/{workflowKey}/simulate", "Workflow Administration", "post")
-	addBuilderPath(paths, "/tenant-admin/scheduler/definitions", "Scheduler Administration", "get")
-	addBuilderPath(paths, "/tenant-admin/scheduler/definitions/{definitionID}", "Scheduler Administration", "get")
-	addBuilderPath(paths, "/tenant-admin/scheduler/authoring-contract", "Scheduler Administration", "get")
-	addBuilderPath(paths, "/tenant-admin/scheduler/definitions/validate", "Scheduler Administration", "post")
-	addBuilderPath(paths, "/tenant-admin/scheduler/schedules/preview", "Scheduler Administration", "post")
-	addBuilderPath(paths, "/tenant-admin/scheduler/definitions/{definitionID}/simulate", "Scheduler Administration", "post")
-	addBuilderPath(paths, "/operations/scheduler/state", "Scheduler Operations", "get")
-	addBuilderPath(paths, "/operations/scheduler/definitions/{definitionID}/reschedule", "Scheduler Operations", "post")
-	addBuilderPath(paths, "/operations/scheduler/definitions/{definitionID}/run", "Scheduler Operations", "post")
-	addBuilderPath(paths, "/operations/scheduler/runs/{runID}/retry", "Scheduler Operations", "post")
-	addBuilderPath(paths, "/operations/scheduler/runs/{runID}/cancel", "Scheduler Operations", "post")
-	addBuilderPath(paths, "/operations/scheduler/dead-letters/{deadLetterID}/resolve", "Scheduler Operations", "post")
-	addBuilderPath(paths, "/operations/scheduler/dead-letters/{deadLetterID}/requeue", "Scheduler Operations", "post")
+	addSchedulerOpenAPIPaths(paths)
 	addBuilderPath(paths, "/automation-rules/authoring-fragments/{capabilityKey}/validate", "Automation", "post")
 
+}
+
+func addSchedulerOpenAPIPaths(paths map[string]any) {
+	contract, err := schedulersdk.SchedulerHTTPSurfaceContract()
+	if err != nil {
+		panic("compile Scheduler OpenAPI surface: " + err.Error())
+	}
+	routes := make(map[string]modulehttp.Route, len(contract.Routes))
+	for _, source := range contract.Routes {
+		route, routeErr := modulehttp.RouteFromAction(source.Action)
+		if routeErr != nil {
+			panic("project Scheduler OpenAPI route: " + routeErr.Error())
+		}
+		routes[route.Pattern()] = route
+	}
+	for pattern, sourceOperation := range contract.OpenAPI {
+		method, path, found := strings.Cut(strings.TrimSpace(pattern), " ")
+		if !found || strings.TrimSpace(method) == "" || strings.TrimSpace(path) == "" {
+			panic("Scheduler OpenAPI operation has invalid route pattern: " + pattern)
+		}
+		route, found := routes[pattern]
+		if !found {
+			panic("Scheduler OpenAPI operation has no source Action: " + pattern)
+		}
+		operation := cloneOpenAPIOperation(sourceOperation)
+		responses, _ := operation["responses"].(map[string]any)
+		if responses == nil {
+			responses = map[string]any{}
+		}
+		responses["default"] = openAPIJSONResponse("Error", openAPIRef("Error")).Value
+		operation["responses"] = responses
+		applyModuleHTTPRouteMetadata(operation, path, contract.Owner, contract.Name, contract.ContractVersion, route)
+		pathItem, _ := paths[path].(map[string]any)
+		if pathItem == nil {
+			pathItem = map[string]any{}
+		}
+		pathItem[strings.ToLower(method)] = operation
+		paths[path] = pathItem
+		delete(routes, pattern)
+	}
+	if len(routes) != 0 {
+		panic("Scheduler source Action has no OpenAPI operation")
+	}
 }
 
 func addBuilderPath(paths map[string]any, path, tag string, methods ...string) {

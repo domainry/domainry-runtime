@@ -220,7 +220,7 @@
       "name": "Inventory Manager",
       "permissions": [
         "business.access",
-        "workspace.admin",
+        "runtime.appschema.validate_application_definition",
         "stock_item.read",
         "stock_item.create",
         "stock_item.update",

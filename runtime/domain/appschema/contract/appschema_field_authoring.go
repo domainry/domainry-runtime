@@ -19,7 +19,7 @@ func ApplicationSchemaFieldAuthoringCapability() capabilitycontract.CapabilityAu
 			{Key: "rounding_mode", Type: "string", Enum: []string{"ceiling", "down", "floor", "half_even", "half_up", "up"}, RequiredWhen: map[string]any{"type": "currency"}, Default: "half_even"},
 			{Key: "currency_code", Type: "currency_code", Format: "iso-4217", RequiredWhen: map[string]any{"type": "currency"}, Default: "XXX"},
 		},
-		Permissions: []string{"metadata.read", "metadata.write"}, AuditEvents: []string{"metadata_definition_upserted"},
+		Permissions: []string{"runtime.appschema.validate_application_definition"}, AuditEvents: []string{"metadata_definition_upserted"},
 		ValidationEndpoint: "POST /tenant-admin/metadata/definitions/field/{resourceKey}/validate", ConfigurationRoutes: metadataConfigurationRoutes("field"),
 		ResourceOperations:       metadataResourceOperations("field"),
 		ResourceKeyPathParameter: "resourceKey",

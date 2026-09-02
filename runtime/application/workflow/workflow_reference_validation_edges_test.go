@@ -241,7 +241,7 @@ func TestWorkflowReferenceIdentityResolversRunAsAndGraphNodeOutcomes(t *testing.
 	if issues := validator.validateWorkflowResolvers(t.Context(), workflow, "node", resolvers, catalogUsers, catalogRoles); len(issues) != 5 {
 		t.Fatalf("resolver issues=%v", issues)
 	}
-	validResolvers := []definitionmodel.WorkflowAssigneeResolver{{Type: "users", UserIDs: []string{"unchecked"}}, {Type: "role", RoleKey: "sender"}, {Type: "record_field", Field: "owner"}}
+	validResolvers := []definitionmodel.WorkflowAssigneeResolver{{Type: "users", UserIDs: []string{"unchecked"}}, {Type: "role", RoleKey: "sender"}, {Type: "record_field", Field: "owner"}, {Type: "manager_of", UserField: "owner"}, {Type: "initiator_manager"}}
 	validValidator := workflowReferenceValidatorFixture(workflowReferenceIdentityEdgeStub{
 		users: []identitysdk.User{{ID: "unchecked"}},
 		roles: []identitysdk.Role{{Key: "sender"}},

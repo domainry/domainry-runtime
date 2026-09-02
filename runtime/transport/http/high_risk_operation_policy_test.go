@@ -4,9 +4,28 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	actioncontract "github.com/domainry/domainry-foundation/action"
+	actionservice "github.com/domainry/domainry-runtime/runtime/domain/action/service"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
-func TestHighRiskOperationPolicyIsEnforcedFromCompiledEndpointContract(t *testing.T) {
+func highRiskPolicyTestRouter(t *testing.T) *HTTPRouter {
+	t.Helper()
+	moduleActions, err := schedulersdk.SchedulerAuthorizationActions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := actionservice.BuildAuthorizationRegistry(actionservice.AuthorizationRegistryInput{
+		ApplicationKey: "high-risk-test", ContributedActions: moduleActions, EndpointContracts: runtimeEndpointContracts,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &HTTPRouter{authorizationActions: func() *actioncontract.Registry { return registry }}
+}
+
+func TestHighRiskOperationPolicyIsEnforcedFromResolvedActionManifest(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /operations/scheduler/definitions/{definitionID}/run", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -17,7 +36,7 @@ func TestHighRiskOperationPolicyIsEnforcedFromCompiledEndpointContract(t *testin
 	mux.HandleFunc("POST /operations/break-glass", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	handler := (&HTTPRouter{}).withHighRiskOperationPolicy(mux, mux)
+	handler := highRiskPolicyTestRouter(t).withHighRiskOperationPolicy(mux, mux)
 
 	tests := []struct {
 		name         string
@@ -59,7 +78,7 @@ func TestHighRiskOperationPolicyDoesNotApplyToReadsOrUnclassifiedFallback(t *tes
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
-	handler := (&HTTPRouter{}).withHighRiskOperationPolicy(mux, mux)
+	handler := highRiskPolicyTestRouter(t).withHighRiskOperationPolicy(mux, mux)
 
 	for _, request := range []*http.Request{
 		httptest.NewRequest(http.MethodGet, "/operations/scheduler/state", nil),
@@ -80,7 +99,7 @@ func TestHighRiskOperationPolicyDecodesUTF8Reason(t *testing.T) {
 		received = r.Header.Get(operationReasonHeader)
 		w.WriteHeader(http.StatusNoContent)
 	})
-	handler := (&HTTPRouter{}).withHighRiskOperationPolicy(mux, mux)
+	handler := highRiskPolicyTestRouter(t).withHighRiskOperationPolicy(mux, mux)
 
 	request := httptest.NewRequest(http.MethodPost, "/operations/scheduler/definitions/job-1/run", nil)
 	request.Header.Set(operationReasonHeader, "UTF-8''%E8%A1%A5%E5%85%85%E7%BB%93%E7%AE%97%E6%98%8E%E7%BB%86")
@@ -100,7 +119,7 @@ func TestHighRiskOperationPolicyRejectsInvalidUTF8ReasonEncoding(t *testing.T) {
 	mux.HandleFunc("POST /operations/scheduler/definitions/{definitionID}/run", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	handler := (&HTTPRouter{}).withHighRiskOperationPolicy(mux, mux)
+	handler := highRiskPolicyTestRouter(t).withHighRiskOperationPolicy(mux, mux)
 
 	request := httptest.NewRequest(http.MethodPost, "/operations/scheduler/definitions/job-1/run", nil)
 	request.Header.Set(operationReasonHeader, "UTF-8''%zz")

@@ -206,7 +206,4 @@ func TestRecordFacadeDelegatesAuthorizedWorkspaceToOwnedServices(t *testing.T) {
 	if content, filename, err := service.ExportRecordsWithOptions(t.Context(), customer.Key, principal, RecordExportOptions{Fields: []string{"name"}}); err != nil || filename != "customer.csv" || len(content) == 0 {
 		t.Fatalf("filename=%q content=%q err=%v", filename, content, err)
 	}
-	if count, err := service.RebuildOwnerDepartmentPaths(t.Context(), principal.WorkspaceID, nil); err != nil || count != 0 {
-		t.Fatalf("count=%d err=%v", count, err)
-	}
 }

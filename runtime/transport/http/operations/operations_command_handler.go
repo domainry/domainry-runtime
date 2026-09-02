@@ -13,7 +13,6 @@ import (
 
 type operationsSubmitRequest struct {
 	Kind         string `json:"kind"`
-	Permission   string `json:"permission"`
 	ResourceType string `json:"resource_type"`
 	ResourceID   string `json:"resource_id"`
 	Reason       string `json:"reason"`
@@ -37,7 +36,7 @@ func (h *OperationsHandler) submitOperation(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	receipt, decision, err := h.service.Submit(r.Context(), operationsapplication.OperationsSubmitRequest{
-		Kind: body.Kind, Permission: body.Permission, ResourceType: body.ResourceType, ResourceID: body.ResourceID,
+		Kind: body.Kind, ResourceType: body.ResourceType, ResourceID: body.ResourceID,
 		Reason: body.Reason, Reference: body.Reference, Payload: body.Payload,
 	}, key, h.principal(r))
 	if err != nil {

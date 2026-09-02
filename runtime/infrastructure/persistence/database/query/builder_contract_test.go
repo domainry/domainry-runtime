@@ -10,59 +10,8 @@ import (
 
 func TestTenantWhereScopeAndFilterContract(t *testing.T) {
 	store := fuzzQueryStore{}
-	for _, scope := range []string{"owned_records"} {
-		where, args, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{Scope: scope, OwnerField: "owner_id", PrincipalUserID: "user-a"})
-		if err != nil || !strings.Contains(where, `"owner_id" = $2`) || !reflect.DeepEqual(args, []any{"workspace-a", "user-a"}) {
-			t.Fatalf("owned scope %q where=%s args=%#v err=%v", scope, where, args, err)
-		}
-	}
-	if where, args, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{Scope: "owned_records", OwnerField: " "}); err != nil || strings.Contains(where, "owner_id") || len(args) != 1 {
-		t.Fatalf("blank owner where=%s args=%#v err=%v", where, args, err)
-	}
-	for _, query := range []recordmodel.RecordListQuery{
-		{Scope: "subordinates", OwnerField: ""},
-		{Scope: "subordinates", OwnerField: "owner_id"},
-	} {
-		where, args, err := BuildTenantWhere(store, "workspace-a", query)
-		if err != nil || len(args) != 1 || (strings.TrimSpace(query.OwnerField) != "" && !strings.Contains(where, "1 = 0")) {
-			t.Fatalf("incomplete subordinate where=%s args=%#v err=%v", where, args, err)
-		}
-	}
-	where, args, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{Scope: "subordinates", OwnerField: "owner_id", PrincipalReportingUserIDs: []string{"user-b", " ", "user-c"}})
-	if err != nil || !strings.Contains(where, `"owner_id" IN ($2, $3)`) || !reflect.DeepEqual(args, []any{"workspace-a", "user-b", "user-c"}) {
-		t.Fatalf("workforce subordinate where=%s args=%#v err=%v", where, args, err)
-	}
-
-	for _, test := range []struct {
-		scope string
-		query recordmodel.RecordListQuery
-		term  string
-	}{
-		{scope: "department", query: recordmodel.RecordListQuery{DepartmentPathField: "department_path", PrincipalDepartmentPath: "/sales"}, term: `"department_path" = $2`},
-		{scope: "department_and_children", query: recordmodel.RecordListQuery{DepartmentPathField: "department_path", PrincipalDepartmentPath: "/sales/"}, term: `LIKE $3`},
-	} {
-		test.query.Scope = test.scope
-		where, _, err := BuildTenantWhere(store, "workspace-a", test.query)
-		if err != nil || !strings.Contains(where, test.term) {
-			t.Fatalf("scope %q where=%s err=%v", test.scope, where, err)
-		}
-		test.query.DepartmentPathField = ""
-		if _, args, err := BuildTenantWhere(store, "workspace-a", test.query); err != nil || len(args) != 1 {
-			t.Fatalf("scope %q blank field args=%#v err=%v", test.scope, args, err)
-		}
-		test.query.DepartmentPathField, test.query.PrincipalDepartmentPath = "department_path", ""
-		if _, args, err := BuildTenantWhere(store, "workspace-a", test.query); err != nil || len(args) != 1 {
-			t.Fatalf("scope %q blank path args=%#v err=%v", test.scope, args, err)
-		}
-	}
-
-	teamQuery := recordmodel.RecordListQuery{Scope: "team", TeamField: "team_id", PrincipalTeamIDs: []string{"one", " ", "two"}}
-	where, args, err = BuildTenantWhere(store, "workspace-a", teamQuery)
-	if err != nil || !strings.Contains(where, `"team_id" IN`) || len(args) != 3 {
-		t.Fatalf("team scope where=%s args=%#v err=%v", where, args, err)
-	}
-	for _, invalid := range []string{"team_records", "store", "territory", "warehouse", "filtered_records"} {
-		if _, _, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{Scope: invalid, TeamField: "team_id", PrincipalTeamIDs: []string{"one"}}); err == nil {
+	for _, invalid := range []string{"owned_records", "organization", "organization_and_children", "team", "department", "department_and_children", "subordinates", "store", "territory", "warehouse", "filtered_records"} {
+		if _, _, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{Scope: invalid}); err == nil {
 			t.Fatalf("legacy scope %q accepted", invalid)
 		}
 	}
@@ -71,7 +20,7 @@ func TestTenantWhereScopeAndFilterContract(t *testing.T) {
 		Search: " Needle ", SearchFields: []string{"name", "code"},
 		Filters: map[string]any{"workspace_id": "other", "empty": "", "plain": 2, "minimum__gte": int64(3), "maximum__lte": float32(4), "ids__in": []any{"a", "", 5}},
 	}
-	where, args, err = BuildTenantWhere(store, "workspace-a", query)
+	where, args, err := BuildTenantWhere(store, "workspace-a", query)
 	if err != nil || !strings.Contains(where, "LOWER") || !strings.Contains(where, `"minimum" >=`) || !strings.Contains(where, `"maximum" <=`) || !strings.Contains(where, `"ids" IN`) || len(args) != 8 {
 		t.Fatalf("search/filter where=%s args=%#v err=%v", where, args, err)
 	}
@@ -80,10 +29,10 @@ func TestTenantWhereScopeAndFilterContract(t *testing.T) {
 	}
 }
 
-func TestTenantWhereCompilesOwnedDepartmentUnionWithoutAllRecordsFallback(t *testing.T) {
+func TestTenantWhereCompilesStableOwnershipIDUnion(t *testing.T) {
 	expression := recordmodel.RecordScopeExpression{Operator: "or", Children: []recordmodel.RecordScopeExpression{
-		{Operator: "eq", FieldKey: "owner", Values: []string{"user-1"}},
-		{Operator: "eq", FieldKey: "owner_department_path", Values: []string{"/company/sales"}},
+		{Operator: "eq", FieldKey: "owner_user_id", Values: []string{"user-1"}},
+		{Operator: "in", FieldKey: "owner_org_id", Values: []string{"sales", "store-1"}},
 	}}
 	where, args, err := BuildTenantWhere(fuzzQueryStore{}, "workspace-a", recordmodel.RecordListQuery{
 		Scope: "custom", RootObjectKey: "case", ScopeExpression: &expression,
@@ -91,8 +40,8 @@ func TestTenantWhereCompilesOwnedDepartmentUnionWithoutAllRecordsFallback(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(where, `("case"."owner" = $2 OR "case"."owner_department_path" = $3)`) ||
-		!reflect.DeepEqual(args, []any{"workspace-a", "user-1", "/company/sales"}) {
+	if !strings.Contains(where, `("case"."owner_user_id" = $2 OR "case"."owner_org_id" IN ($3, $4))`) ||
+		!reflect.DeepEqual(args, []any{"workspace-a", "user-1", "sales", "store-1"}) {
 		t.Fatalf("where=%s args=%#v", where, args)
 	}
 }
@@ -166,14 +115,6 @@ func TestQueryBuilderRemainingScopeAndExpressionConditions(t *testing.T) {
 	store := fuzzQueryStore{}
 	if where, _, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{Scope: "none"}); err != nil || !strings.Contains(where, "1 = 0") {
 		t.Fatalf("deny-all where=%s err=%v", where, err)
-	}
-	for _, query := range []recordmodel.RecordListQuery{
-		{Scope: "team", TeamField: "", PrincipalTeamIDs: []string{"team-1"}},
-		{Scope: "team", TeamField: "team_id"},
-	} {
-		if _, args, err := BuildTenantWhere(store, "workspace-a", query); err != nil || len(args) != 1 {
-			t.Fatalf("incomplete team query=%#v args=%#v err=%v", query, args, err)
-		}
 	}
 	if _, _, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "object"}); err == nil {
 		t.Fatal("custom scope without expression accepted")

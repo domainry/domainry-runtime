@@ -89,27 +89,32 @@ func (contract RuntimeEndpointContractV1) Validate() error {
 	}
 	switch {
 	case contract.PermissionPolicyRef == "anonymous":
+		if len(contract.RequiredPermissions) != 0 {
+			return fmt.Errorf("endpoint contract %q anonymous authorization cannot declare role permissions", contract.EndpointIdentity)
+		}
 		if contract.EffectClass == EndpointEffectWrite {
 			return fmt.Errorf("write endpoint contract %q cannot use anonymous authorization", contract.EndpointIdentity)
 		}
 	case strings.HasPrefix(contract.PermissionPolicyRef, "integration_entrypoint_policy:"):
+		if len(contract.RequiredPermissions) != 0 {
+			return fmt.Errorf("endpoint contract %q service authorization cannot declare role permissions", contract.EndpointIdentity)
+		}
 		entrypointPolicy := strings.TrimSpace(strings.TrimPrefix(contract.PermissionPolicyRef, "integration_entrypoint_policy:"))
 		if len(contract.ProtocolAudiences) == 0 || entrypointPolicy == "" || !strings.Contains(entrypointPolicy, ".") {
 			return fmt.Errorf("endpoint contract %q has an unbound integration entrypoint permission policy", contract.EndpointIdentity)
 		}
 	case strings.HasPrefix(contract.PermissionPolicyRef, "static_permission:"):
 		permission := strings.TrimSpace(strings.TrimPrefix(contract.PermissionPolicyRef, "static_permission:"))
-		if permission == "" || !containsString(contract.RequiredPermissions, permission) {
-			return fmt.Errorf("endpoint contract %q static permission policy must declare %q", contract.EndpointIdentity, permission)
+		if permission == "" || permission != strings.TrimSpace(contract.ActionKey) || len(contract.RequiredPermissions) != 1 || strings.TrimSpace(contract.RequiredPermissions[0]) != permission {
+			return fmt.Errorf("endpoint contract %q role authorization must declare exactly its same-key Action permission %q", contract.EndpointIdentity, contract.ActionKey)
 		}
 	case strings.HasPrefix(contract.PermissionPolicyRef, "owner_handler_policy:"):
+		if len(contract.RequiredPermissions) != 0 {
+			return fmt.Errorf("endpoint contract %q owner authorization cannot declare role permissions", contract.EndpointIdentity)
+		}
 		ownerPolicy := strings.TrimSpace(strings.TrimPrefix(contract.PermissionPolicyRef, "owner_handler_policy:"))
 		if ownerPolicy == "" || !strings.Contains(ownerPolicy, ".") {
 			return fmt.Errorf("endpoint contract %q has an unbound owner permission policy", contract.EndpointIdentity)
-		}
-	case contract.PermissionPolicyRef == "audit.business_event_export_policy":
-		if !containsString(contract.RequiredPermissions, "audit.business.read") || !containsString(contract.RequiredPermissions, "audit.business.export") {
-			return fmt.Errorf("endpoint contract %q audit export policy requires read and export permissions", contract.EndpointIdentity)
 		}
 	default:
 		return fmt.Errorf("endpoint contract %q has unsupported operation permission policy %q", contract.EndpointIdentity, contract.PermissionPolicyRef)
@@ -120,13 +125,4 @@ func (contract RuntimeEndpointContractV1) Validate() error {
 		}
 	}
 	return nil
-}
-
-func containsString(values []string, expected string) bool {
-	for _, value := range values {
-		if strings.TrimSpace(value) == expected {
-			return true
-		}
-	}
-	return false
 }

@@ -21,7 +21,7 @@ func TestCapabilityDiscoveryProgressivelyLoadsRuntimeOwnedDomains(t *testing.T) 
 			Workflows: []definitionmodel.WorkflowSchema{{Key: "order.approval"}},
 		}
 	})
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}})
 	index, err := service.DiscoveryIndex(t.Context(), admin)
 	if err != nil || len(index.Domains) != 6 || index.ContractHash == "" || index.InstanceHash == "" {
 		t.Fatalf("index=%#v err=%v", index, err)
@@ -55,7 +55,7 @@ func TestCapabilityDiscoveryPropagatesIdentityReferenceSourceFailure(t *testing.
 	service.UseIdentityReferenceSource(t.Context(), func(context.Context, principalmodel.Principal) (CapabilityIdentityReferences, error) {
 		return CapabilityIdentityReferences{}, want
 	})
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}})
 	if _, err := service.DiscoveryIndex(t.Context(), admin); !errors.Is(err, want) {
 		t.Fatalf("discovery error=%v", err)
 	}

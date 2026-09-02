@@ -16,15 +16,13 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	recordexecutionruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
-	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 	reportadapter "github.com/domainry/domainry-runtime/runtime/modulehost/report"
 )
 
 type recordRuntimeState struct {
-	recordMutations                       *recordruntime.RecordMutationApplicationService
-	mutationKernel                        *recordruntime.MutationKernelApplicationService
-	RecordMutationExecutionRuntime        *recordexecutionruntime.RecordMutationExecutionRuntime
-	RecordScopeOwnerFactDerivationService *recordservice.RecordScopeOwnerFactDerivationDomainService
+	recordMutations                *recordruntime.RecordMutationApplicationService
+	mutationKernel                 *recordruntime.MutationKernelApplicationService
+	RecordMutationExecutionRuntime *recordexecutionruntime.RecordMutationExecutionRuntime
 }
 
 func (s *runtimeAssembly) reportRecordSchemaMap() map[string]definitionmodel.ObjectSchema {

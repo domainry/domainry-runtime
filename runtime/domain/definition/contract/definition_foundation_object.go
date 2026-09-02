@@ -1,13 +1,8 @@
 package contract
 
 const (
-	PartyObjectKey                    = "party"
-	PersonObjectKey                   = "person"
-	OrganizationObjectKey             = "organization"
 	IdentityUserObjectKey             = "identity_user"
-	IdentityDepartmentObjectKey       = "identity_department"
 	IdentityOrganizationUnitObjectKey = "identity_organization_unit"
-	IdentityWorkforceProfileObjectKey = "identity_workforce_profile"
 )
 
 // IsFoundationObjectKey reports whether objectKey is owned by Foundation or
@@ -15,8 +10,7 @@ const (
 // Runtime business metadata object.
 func IsFoundationObjectKey(objectKey string) bool {
 	switch objectKey {
-	case PartyObjectKey, PersonObjectKey, OrganizationObjectKey,
-		IdentityUserObjectKey, IdentityDepartmentObjectKey, IdentityOrganizationUnitObjectKey, IdentityWorkforceProfileObjectKey:
+	case IdentityUserObjectKey, IdentityOrganizationUnitObjectKey:
 		return true
 	default:
 		return false

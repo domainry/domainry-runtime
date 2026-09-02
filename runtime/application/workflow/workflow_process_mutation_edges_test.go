@@ -90,10 +90,12 @@ func TestCancelWorkflowProcessAuthorizationLookupReplayStateTaskAndSyncOutcomes(
 	if _, err := workflowProcessMutationService(store, worker, nil).CancelWorkflowProcess(t.Context(), "process", other); apperror.CodeOf(err) != "backend.workflow.process_cancel_denied" {
 		t.Fatalf("denied=%v", err)
 	}
-	admin := other
-	admin = workflowPrincipalWithPermissions(admin, "workflow.process.operate")
+	operator := workflowPrincipalWithPermissions(other, "runtime.workflows.retry_business_workflow_process")
+	if _, err := workflowProcessMutationService(store, worker, nil).CancelWorkflowProcess(t.Context(), "process", operator); apperror.CodeOf(err) != "backend.workflow.process_cancel_denied" {
+		t.Fatalf("unrelated action must not bypass initiator ownership: %v", err)
+	}
 	store.processes["process"] = workflowMutationProcess("completed")
-	if _, err := workflowProcessMutationService(store, worker, nil).CancelWorkflowProcess(t.Context(), "process", admin); apperror.CodeOf(err) != "backend.workflow.process_not_cancellable" {
+	if _, err := workflowProcessMutationService(store, worker, nil).CancelWorkflowProcess(t.Context(), "process", principal); apperror.CodeOf(err) != "backend.workflow.process_not_cancellable" {
 		t.Fatalf("state error=%v", err)
 	}
 	store, worker = base()
@@ -143,13 +145,8 @@ func TestRetryWorkflowProcessContractsReplayFailedNodePersistenceAndExecutionOut
 	if _, err := workflowProcessMutationService(store, worker, nil).RetryWorkflowProcess(cancelled, "process", admin); err != context.Canceled {
 		t.Fatalf("cancel error=%v", err)
 	}
-	denied := admin
-	denied = workflowPrincipalWithPermissions(denied)
 	if _, err := workflowProcessMutationService(store, worker, nil).RetryWorkflowProcess(t.Context(), "process", principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("authorization=%v", err)
-	}
-	if _, err := workflowProcessMutationService(store, worker, nil).RetryWorkflowProcess(t.Context(), "process", denied); apperror.CodeOf(err) != "backend.workflow.process.operate_permission_required" {
-		t.Fatalf("permission error=%v", err)
 	}
 	store.getProcessErr = errors.New("get")
 	if _, err := workflowProcessMutationService(store, worker, nil).RetryWorkflowProcess(t.Context(), "process", admin); apperror.CodeOf(err) != "backend.internal" {
@@ -218,15 +215,10 @@ func TestResolveWorkflowProcessFailureContractsStateStoreAndPersistenceOutcomes(
 	if _, err := workflowProcessMutationService(store, &workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}}, nil).ResolveWorkflowProcessFailure(t.Context(), "process", "note", admin); apperror.CodeOf(err) != "backend.internal" {
 		t.Fatalf("state store error=%v", err)
 	}
-	denied := admin
-	denied = workflowPrincipalWithPermissions(denied)
 	decision := &workflowStateDecisionEdgeStub{}
 	service := workflowProcessMutationService(store, &workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}}, decision)
 	if _, err := service.ResolveWorkflowProcessFailure(t.Context(), "process", "note", principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("authorization=%v", err)
-	}
-	if _, err := service.ResolveWorkflowProcessFailure(t.Context(), "process", "note", denied); apperror.CodeOf(err) != "backend.workflow.process.operate_permission_required" {
-		t.Fatalf("permission=%v", err)
 	}
 	if _, err := service.ResolveWorkflowProcessFailure(t.Context(), "process", " ", admin); apperror.CodeOf(err) != "backend.workflow.process_resolution_note_required" {
 		t.Fatalf("note=%v", err)
@@ -308,15 +300,6 @@ func TestDecideTaskCancellationAuthorizationIdempotencyAndRuntimeOutcomes(t *tes
 	service.decisions = workflowDecisionRuntimeEdgeStub{handled: true}
 	if _, err := service.DecideTask(t.Context(), "task", request, principal); apperror.CodeOf(err) != "backend.workflow.task_assignee_required" {
 		t.Fatalf("assignee error=%v", err)
-	}
-	store = base()
-	denied := principal
-	denied = workflowPrincipalWithPermissions(denied)
-	denied.UserID = task.AssigneeUserID
-	service = workflowProcessQueryService(store, nil)
-	service.decisions = workflowDecisionRuntimeEdgeStub{handled: true}
-	if _, err := service.DecideTask(t.Context(), "task", request, denied); apperror.CodeOf(err) != "auth.permission_denied" {
-		t.Fatalf("permission error=%v", err)
 	}
 	store = base()
 	store.getProcessErr = errors.New("process")

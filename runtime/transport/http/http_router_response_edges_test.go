@@ -19,12 +19,7 @@ func TestPrincipalContextIgnoresUntrustedScopeHeadersAndUsesRequestSources(t *te
 	base := httptest.NewRequest(http.MethodGet, "/workspaces/path-workspace/records?workspace_id=query-workspace", nil)
 	base.SetPathValue("workspaceID", "path-workspace")
 	base.Header.Set("X-Workspace-ID", " header-workspace ")
-	base.Header.Set("X-Team-IDs", " team-1,team-2,team-1, ")
-	base.Header.Set("X-Store-IDs", "store-1")
-	base.Header.Set("X-Territory-IDs", "territory-1")
-	base.Header.Set("X-Warehouse-IDs", "warehouse-1")
-	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user-1", WorkspaceID: "workspace-original", OrganizationScopes: identitysdk.OrganizationScopes{TeamIDs: []string{"trusted-team"}, StoreIDs: []string{"trusted-store"},
-		TerritoryIDs: []string{"trusted-territory"}, WarehouseIDs: []string{"trusted-warehouse"}}}}
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user-1", WorkspaceID: "workspace-original", OrgID: "store-1", OrgScopeIDs: []string{"region-1", "store-1"}}}
 	request := requestWithPrincipal(base, principal)
 	fromContext, ok := principalFromContext(request)
 	if !ok || fromContext.UserID != "user-1" || requestcontext.WorkspaceID(request.Context()) != "workspace-original" || requestcontext.ActorID(request.Context()) != "user-1" {
@@ -32,11 +27,7 @@ func TestPrincipalContextIgnoresUntrustedScopeHeadersAndUsesRequestSources(t *te
 	}
 	router := &HTTPRouter{}
 	resolved := router.principalFromRequest(request)
-	if !resolved.Known || resolved.WorkspaceID != "header-workspace" ||
-		len(resolved.OrganizationScopes.TeamIDs) != 1 || resolved.OrganizationScopes.TeamIDs[0] != "trusted-team" ||
-		len(resolved.OrganizationScopes.StoreIDs) != 1 || resolved.OrganizationScopes.StoreIDs[0] != "trusted-store" ||
-		len(resolved.OrganizationScopes.TerritoryIDs) != 1 || resolved.OrganizationScopes.TerritoryIDs[0] != "trusted-territory" ||
-		len(resolved.OrganizationScopes.WarehouseIDs) != 1 || resolved.OrganizationScopes.WarehouseIDs[0] != "trusted-warehouse" {
+	if !resolved.Known || resolved.WorkspaceID != "header-workspace" || resolved.OrgID != "store-1" || len(resolved.OrgScopeIDs) != 2 {
 		t.Fatalf("resolved principal=%+v", resolved)
 	}
 	if router.actorIDFromRequest(request) != "user-1" {

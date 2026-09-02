@@ -20,7 +20,7 @@ func (s *CapabilityAuthoringApplicationService) capabilityAuthoringInstance(ctx 
 func (s *CapabilityAuthoringApplicationService) capabilityAuthoringInstanceFromSchema(ctx context.Context, principal principalmodel.Principal, snapshot capabilitycontract.CapabilityInstanceSchema) (capabilitycontract.CapabilityAuthoringInstance, error) {
 	result := capabilitycontract.CapabilityAuthoringInstance{
 		ObjectKeys: []string{}, FieldKeys: []capabilitycontract.CapabilityAuthoringScopedValues{}, ActionKeys: []string{}, WorkflowKeys: []string{}, ReportKeys: []string{},
-		RoleKeys: []string{}, PermissionKeys: []string{}, UserIDs: []string{}, WorkforceProfileIDs: []string{}, DepartmentIDs: []string{}, RoleIDs: []string{}, MenuIDs: []string{},
+		RoleKeys: []string{}, PermissionKeys: []string{}, UserIDs: []string{}, OrgIDs: []string{}, RoleIDs: []string{}, MenuIDs: []string{},
 		ConnectorKeys: []string{}, ConnectionKeys: []string{}, ConnectorOperations: []capabilitycontract.CapabilityAuthoringConnectorBinding{},
 	}
 	permissions := map[string]bool{}
@@ -72,8 +72,7 @@ func (s *CapabilityAuthoringApplicationService) capabilityAuthoringInstanceFromS
 			return capabilitycontract.CapabilityAuthoringInstance{}, err
 		}
 		result.UserIDs = normalizedCapabilityReferences(references.UserIDs)
-		result.WorkforceProfileIDs = normalizedCapabilityReferences(references.WorkforceProfileIDs)
-		result.DepartmentIDs = normalizedCapabilityReferences(references.DepartmentIDs)
+		result.OrgIDs = normalizedCapabilityReferences(references.OrgIDs)
 		result.RoleIDs = normalizedCapabilityReferences(references.RoleIDs)
 		result.MenuIDs = normalizedCapabilityReferences(references.MenuIDs)
 	}

@@ -174,7 +174,7 @@
       "name": "Kitchen Lead",
       "permissions": [
         "business.access",
-        "workspace.admin",
+        "runtime.appschema.validate_application_definition",
         "kitchen_order.read",
         "kitchen_order.create",
         "kitchen_order.update"

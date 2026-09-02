@@ -10,6 +10,7 @@ import (
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	schedulermodulehost "github.com/domainry/domainry-runtime/runtime/modulehost/scheduler"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 	"github.com/domainry/domainry-scheduler-sdk/schedule"
 )
 
@@ -30,23 +31,23 @@ type PublishedDefinition struct {
 }
 
 const (
-	ActionGetOpsSchedulerState                     = "runtime.scheduler.get_ops_scheduler_state"
-	ActionGetTenantAdminSchedulerAuthoringContract = "runtime.scheduler.get_tenant_admin_scheduler_authoring_contract"
-	ActionListTenantAdminSchedulerDefinitions      = "runtime.scheduler.list_tenant_admin_scheduler_definitions"
-	ActionGetTenantAdminSchedulerDefinition        = "runtime.scheduler.get_tenant_admin_scheduler_definition"
-	ActionPreviewSchedulerJob                      = "runtime.scheduler.preview_scheduler_job"
-	ActionPreviewSchedulerSchedule                 = "runtime.scheduler.preview_scheduler_schedule"
-	ActionSimulateSchedulerJob                     = "runtime.scheduler.simulate_scheduler_job"
-	ActionRunOpsSchedulerJob                       = "runtime.scheduler.run_ops_scheduler_job"
-	ActionRescheduleOpsSchedulerDefinition         = "runtime.scheduler.reschedule_ops_scheduler_definition"
-	ActionRetryOpsSchedulerRun                     = "runtime.scheduler.retry_ops_scheduler_run"
-	ActionCancelOpsSchedulerRun                    = "runtime.scheduler.cancel_ops_scheduler_run"
-	ActionResolveOpsSchedulerDeadLetter            = "runtime.scheduler.resolve_ops_scheduler_dead_letter"
-	ActionRequeueOpsSchedulerDeadLetter            = "runtime.scheduler.requeue_ops_scheduler_dead_letter"
+	ActionGetOpsSchedulerState                     = schedulersdk.ActionSchedulerStateGet
+	ActionGetTenantAdminSchedulerAuthoringContract = schedulersdk.ActionSchedulerAuthoringContractGet
+	ActionListTenantAdminSchedulerDefinitions      = schedulersdk.ActionSchedulerDefinitionsList
+	ActionGetTenantAdminSchedulerDefinition        = schedulersdk.ActionSchedulerDefinitionsGet
+	ActionPreviewSchedulerJob                      = schedulersdk.ActionSchedulerDefinitionsValidate
+	ActionPreviewSchedulerSchedule                 = schedulersdk.ActionSchedulerSchedulesPreview
+	ActionSimulateSchedulerJob                     = schedulersdk.ActionSchedulerDefinitionsSimulate
+	ActionRunOpsSchedulerJob                       = schedulersdk.ActionSchedulerDefinitionsRun
+	ActionRescheduleOpsSchedulerDefinition         = schedulersdk.ActionSchedulerDefinitionsReschedule
+	ActionRetryOpsSchedulerRun                     = schedulersdk.ActionSchedulerRunsRetry
+	ActionCancelOpsSchedulerRun                    = schedulersdk.ActionSchedulerRunsCancel
+	ActionResolveOpsSchedulerDeadLetter            = schedulersdk.ActionSchedulerDeadLettersResolve
+	ActionRequeueOpsSchedulerDeadLetter            = schedulersdk.ActionSchedulerDeadLettersRequeue
 )
 
 func (s *SchedulerApplicationService) GetDefinition(ctx context.Context, definitionID string, principal principalmodel.Principal) (PublishedDefinition, error) {
-	if err := schedulerDefinitionReadAllowed(principal); err != nil {
+	if err := schedulerDefinitionReadAllowed(principal, schedulersdk.ActionSchedulerDefinitionsGet); err != nil {
 		return PublishedDefinition{}, err
 	}
 	return s.schedulerDefinition(ctx, definitionID)
@@ -67,7 +68,7 @@ func (s *SchedulerApplicationService) schedulerDefinition(ctx context.Context, d
 }
 
 func (s *SchedulerApplicationService) PublishedDefinitions(ctx context.Context, principal principalmodel.Principal) ([]PublishedDefinition, error) {
-	if err := schedulerDefinitionReadAllowed(principal); err != nil {
+	if err := schedulerDefinitionReadAllowed(principal, schedulersdk.ActionSchedulerDefinitionsList); err != nil {
 		return nil, err
 	}
 	if s.definitions == nil {
@@ -86,14 +87,13 @@ func (s *SchedulerApplicationService) DefinitionVersions(ctx context.Context, de
 	return s.definitions.ListSchedulerDefinitionVersions(ctx, strings.TrimSpace(definitionID))
 }
 
-func schedulerDefinitionReadAllowed(principal principalmodel.Principal) error {
-	if err := schedulerAuthorizeQuery(principal); err != nil {
-		return err
+func schedulerDefinitionReadAllowed(principal principalmodel.Principal, actionKey string) error {
+	if principal.Known {
+		if _, err := principalmodel.NewSystemQueryScope(principal.SystemScope); err == nil {
+			return nil
+		}
 	}
-	if principal.HasExactPermission("scheduler.definition.read") {
-		return nil
-	}
-	return forbidden("backend.scheduler.permission_required")
+	return schedulerExactQueryAllowed(principal, actionKey)
 }
 
 type SchedulerDefinitionPreview struct {

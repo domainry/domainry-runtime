@@ -11,7 +11,7 @@ func ApplicationSchemaDictionaryAuthoringCapabilities() []capabilitycontract.Cap
 			{Key: "key", Type: "string", Required: true}, {Key: "name", Type: "string"}, {Key: "description", Type: "string"},
 			{Key: "items", Type: "array", ItemSchema: "dictionary_item"}, {Key: "config", Type: "object"},
 		},
-		Permissions: []string{"dictionary.read", "dictionary.write"}, AuditEvents: []string{"metadata_definition_upserted", "metadata_definition_deleted"},
+		Permissions: []string{"runtime.appschema.validate_application_definition"}, AuditEvents: []string{"metadata_definition_upserted", "metadata_definition_deleted"},
 		ValidationEndpoint: "POST /tenant-admin/metadata/definitions/dictionary/{resourceKey}/validate", ConfigurationRoutes: metadataConfigurationRoutes("dictionary"), ResourceOperations: metadataResourceOperations("dictionary"),
 		ResourceKeyPathParameter: "resourceKey",
 		InputSchema:              metadataAuthoringRequestSchema(payload, false), OutputSchema: metadataAuthoringOutputSchema(payload),

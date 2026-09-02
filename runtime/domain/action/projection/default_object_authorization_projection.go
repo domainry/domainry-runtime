@@ -57,7 +57,7 @@ func DefaultActionsForObject(object definitionmodel.ObjectSchema, owner string) 
 			},
 			NonHTTP: []actioncontract.NonHTTPBinding{{Kind: "runtime_object_action", InvocationKey: key}},
 			Permission: &actioncontract.PermissionDefinition{
-				Key: key, Owner: owner, ResourceKey: objectKey, ActionKey: operation.key,
+				Key: key, Owner: owner, ResourceKey: objectKey, OperationKey: operation.key,
 				Label: capabilityLabel + " · " + operation.label, Category: capabilityLabel, LifecycleStatus: actioncontract.LifecycleActive,
 			},
 			EffectClass: operation.effect, RiskLevel: operation.risk,

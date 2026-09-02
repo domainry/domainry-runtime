@@ -15,7 +15,6 @@ import (
 
 	integrationmodule "github.com/domainry/domainry-integration/module"
 	notificationmodule "github.com/domainry/domainry-notification/module"
-	partymodule "github.com/domainry/domainry-party/module"
 	. "github.com/domainry/domainry-runtime/runtime/bootstrap"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	dataexchangefixture "github.com/domainry/domainry-runtime/testsupport/dataexchangefixture"
@@ -32,7 +31,7 @@ func TestRuntimeBusinessEventStreamConnectsReplaysAndRejectsCrossTenant(t *testi
 		BusinessEventHeartbeatInterval: time.Second, BusinessEventRetryInterval: 250 * time.Millisecond,
 	}
 	cfg = initializedIntegrationRuntimeConfig(cfg)
-	application := New(t.Context(), cfg, newIntegrationIdentityBinding(t, cfg), notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangefixture.NewFactory(), integrationmodule.NewFactory())
+	application := New(t.Context(), cfg, newIntegrationIdentityBinding(t, cfg), notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory(), integrationmodule.NewFactory())
 	defer application.CloseContext(t.Context())
 	handler := auditModuleRoutes(t, application)
 	server := httptest.NewServer(handler)

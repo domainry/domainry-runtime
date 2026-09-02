@@ -86,7 +86,7 @@ func (s *WorkflowApplicationService) workflowTasksWithAssigneeNames(ctx context.
 }
 
 func (s *WorkflowApplicationService) workflowProcessVisible(ctx context.Context, process workflowmodel.WorkflowProcessInstance, principal principalmodel.Principal) bool {
-	if process.InitiatorID == principal.UserID || workflowpolicy.WorkflowDefinitionPermissionAllows(principal, "workflow.process.read") {
+	if process.InitiatorID == principal.UserID {
 		return true
 	}
 	tasks, err := s.processRepo.ListTasks(ctx, principal.WorkspaceID, process.ID, principal.UserID, "", 1)
@@ -97,6 +97,10 @@ func (s *WorkflowApplicationService) workflowProcessVisible(ctx context.Context,
 }
 
 func (s *WorkflowApplicationService) WorkflowProcesses(ctx context.Context, principal principalmodel.Principal, filter workflowmodel.WorkflowProcessFilter) ([]workflowmodel.WorkflowProcessInstance, error) {
+	return s.workflowProcesses(ctx, principal, filter, true, false)
+}
+
+func (s *WorkflowApplicationService) workflowProcesses(ctx context.Context, principal principalmodel.Principal, filter workflowmodel.WorkflowProcessFilter, restrictToPrincipal, advanced bool) ([]workflowmodel.WorkflowProcessInstance, error) {
 	if err := workflowAuthorizeQuery(principal); err != nil {
 		return nil, err
 	}
@@ -108,7 +112,7 @@ func (s *WorkflowApplicationService) WorkflowProcesses(ctx context.Context, prin
 	filter.Statuses = normalizeWorkflowProcessStatuses(filter.Statuses)
 	filter.InitiatorID = strings.TrimSpace(filter.InitiatorID)
 	filter.ApproverID = strings.TrimSpace(filter.ApproverID)
-	if !workflowpolicy.WorkflowDefinitionPermissionAllows(principal, "workflow.process.read") {
+	if restrictToPrincipal {
 		filter.VisibleToUserID = principal.UserID
 	}
 	processes, err := s.processRepo.ListProcesses(ctx, principal.WorkspaceID, filter)
@@ -116,7 +120,6 @@ func (s *WorkflowApplicationService) WorkflowProcesses(ctx context.Context, prin
 		return nil, internalError("list workflow processes", err)
 	}
 	visible := make([]workflowmodel.WorkflowProcessInstance, 0, len(processes))
-	advanced := workflowProjectionAdvanced(principal)
 	actions := s.workflowProjectionActions(ctx, principal)
 	nodesByProcess, batchLoaded := s.loadWorkflowProcessSummaryNodes(ctx, principal.WorkspaceID, processes)
 	for _, process := range processes {
@@ -163,12 +166,16 @@ func (s *WorkflowApplicationService) MyWorkflowTasks(ctx context.Context, princi
 	}
 	tasks = s.workflowTasksWithAssigneeNames(ctx, tasks)
 	for index := range tasks {
-		tasks[index] = workflowprojection.WorkflowTaskForPrincipal(tasks[index], workflowProjectionAdvanced(principal))
+		tasks[index] = workflowprojection.WorkflowTaskForPrincipal(tasks[index], false)
 	}
 	return tasks, nil
 }
 
 func (s *WorkflowApplicationService) WorkflowProcess(ctx context.Context, processID string, principal principalmodel.Principal) (WorkflowProcessDetail, error) {
+	return s.workflowProcess(ctx, processID, principal, true, false)
+}
+
+func (s *WorkflowApplicationService) workflowProcess(ctx context.Context, processID string, principal principalmodel.Principal, requireVisible, advanced bool) (WorkflowProcessDetail, error) {
 	if err := workflowAuthorizeQuery(principal); err != nil {
 		return WorkflowProcessDetail{}, err
 	}
@@ -179,7 +186,7 @@ func (s *WorkflowApplicationService) WorkflowProcess(ctx context.Context, proces
 	if !ok {
 		return WorkflowProcessDetail{}, notFound("backend.workflow.process_not_found")
 	}
-	if !s.workflowProcessVisible(ctx, process, principal) {
+	if requireVisible && !s.workflowProcessVisible(ctx, process, principal) {
 		return WorkflowProcessDetail{}, forbidden("backend.workflow.process_access_denied")
 	}
 	nodes, err := s.processRepo.ListNodes(ctx, principal.WorkspaceID, process.ID)
@@ -196,15 +203,15 @@ func (s *WorkflowApplicationService) WorkflowProcess(ctx context.Context, proces
 	}
 	tasks = s.workflowTasksWithAssigneeNames(ctx, tasks)
 	for index := range nodes {
-		nodes[index] = workflowprojection.WorkflowNodeForPrincipal(nodes[index], workflowProjectionAdvanced(principal))
+		nodes[index] = workflowprojection.WorkflowNodeForPrincipal(nodes[index], advanced)
 	}
 	for index := range tasks {
-		tasks[index] = workflowprojection.WorkflowTaskForPrincipal(tasks[index], workflowProjectionAdvanced(principal))
+		tasks[index] = workflowprojection.WorkflowTaskForPrincipal(tasks[index], advanced)
 	}
 	for index := range events {
-		events[index] = workflowprojection.WorkflowEventForPrincipal(events[index], workflowProjectionAdvanced(principal))
+		events[index] = workflowprojection.WorkflowEventForPrincipal(events[index], advanced)
 	}
-	return WorkflowProcessDetail{Process: workflowprojection.WorkflowProcessForPrincipal(process, workflowProjectionAdvanced(principal), s.workflowProjectionActions(ctx, principal)), Nodes: nodes, Tasks: tasks, Events: events}, nil
+	return WorkflowProcessDetail{Process: workflowprojection.WorkflowProcessForPrincipal(process, advanced, s.workflowProjectionActions(ctx, principal)), Nodes: nodes, Tasks: tasks, Events: events}, nil
 }
 
 func (s *WorkflowApplicationService) CancelWorkflowProcess(ctx context.Context, processID string, principal principalmodel.Principal) (workflowmodel.WorkflowProcessInstance, error) {
@@ -222,12 +229,12 @@ func (s *WorkflowApplicationService) CancelWorkflowProcessWithKey(ctx context.Co
 	if !ok {
 		return workflowmodel.WorkflowProcessInstance{}, notFound("backend.workflow.process_not_found")
 	}
-	if process.InitiatorID != principal.UserID && !workflowpolicy.WorkflowDefinitionPermissionAllows(principal, "workflow.process.operate") {
+	if process.InitiatorID != principal.UserID {
 		return workflowmodel.WorkflowProcessInstance{}, forbidden("backend.workflow.process_cancel_denied")
 	}
 	commandKey := workflowCommandKey("process.cancel", process.ID, callerKey, map[string]any{"command": "cancel"})
 	if workflowProcessHasCommand(process, "process.cancel", commandKey) {
-		return workflowprojection.WorkflowProcessForPrincipal(process, workflowProjectionAdvanced(principal), s.workflowProjectionActions(ctx, principal)), nil
+		return workflowprojection.WorkflowProcessForPrincipal(process, false, s.workflowProjectionActions(ctx, principal)), nil
 	}
 	if process.Status != "waiting" && process.Status != "running" {
 		return workflowmodel.WorkflowProcessInstance{}, conflict("backend.workflow.process_not_cancellable")
@@ -256,7 +263,7 @@ func (s *WorkflowApplicationService) CancelWorkflowProcessWithKey(ctx context.Co
 	if err := s.syncWorkflowExecutionWithProcess(ctx, process, nil); err != nil {
 		return process, internalError("sync cancelled workflow execution", err)
 	}
-	return workflowprojection.WorkflowProcessForPrincipal(process, workflowProjectionAdvanced(principal), s.workflowProjectionActions(ctx, principal)), nil
+	return workflowprojection.WorkflowProcessForPrincipal(process, false, s.workflowProjectionActions(ctx, principal)), nil
 }
 
 func (s *WorkflowApplicationService) RetryWorkflowProcess(ctx context.Context, processID string, principal principalmodel.Principal) (workflowmodel.WorkflowProcessInstance, error) {
@@ -270,9 +277,6 @@ func (s *WorkflowApplicationService) RetryWorkflowProcessWithKey(ctx context.Con
 	if err := workflowAuthorizeCommand(principal); err != nil {
 		return workflowmodel.WorkflowProcessInstance{}, err
 	}
-	if !workflowpolicy.WorkflowDefinitionPermissionAllows(principal, "workflow.process.operate") {
-		return workflowmodel.WorkflowProcessInstance{}, forbidden("backend.workflow.process.operate_permission_required")
-	}
 	process, ok, err := s.processRepo.GetProcess(ctx, principal.WorkspaceID, strings.TrimSpace(processID))
 	if err != nil {
 		return process, internalError("get retry workflow process", err)
@@ -282,7 +286,7 @@ func (s *WorkflowApplicationService) RetryWorkflowProcessWithKey(ctx context.Con
 	}
 	commandKey := workflowCommandKey("process.retry", process.ID, callerKey, map[string]any{"command": "retry"})
 	if workflowProcessHasCommand(process, "process.retry", commandKey) {
-		return workflowprojection.WorkflowProcessForPrincipal(process, workflowProjectionAdvanced(principal), s.workflowProjectionActions(ctx, principal)), nil
+		return workflowprojection.WorkflowProcessForPrincipal(process, false, s.workflowProjectionActions(ctx, principal)), nil
 	}
 	if process.Status != "configuration_error" && process.Status != "failed" {
 		return process, conflict("backend.workflow.process_not_retryable")
@@ -314,15 +318,12 @@ func (s *WorkflowApplicationService) RetryWorkflowProcessWithKey(ctx context.Con
 	}
 	s.processEngine.appendEvent(ctx, process.WorkspaceID, process.ID, failedNodeID, "", "process_retry_started", principal.UserID, "workflow.event.process.retryStarted", map[string]any{"retry_count": process.Result["retry_count"]})
 	retried, retryErr := s.processEngine.RunWithContext(ctx, process, []string{failedNodeID}, nil, principal)
-	return workflowprojection.WorkflowProcessForPrincipal(retried, workflowProjectionAdvanced(principal), s.workflowProjectionActions(ctx, principal)), retryErr
+	return workflowprojection.WorkflowProcessForPrincipal(retried, false, s.workflowProjectionActions(ctx, principal)), retryErr
 }
 
 func (s *WorkflowApplicationService) ResolveWorkflowProcessFailure(ctx context.Context, processID, note string, principal principalmodel.Principal) (workflowmodel.WorkflowProcessInstance, error) {
 	if err := workflowAuthorizeCommand(principal); err != nil {
 		return workflowmodel.WorkflowProcessInstance{}, err
-	}
-	if !workflowpolicy.WorkflowDefinitionPermissionAllows(principal, "workflow.process.operate") {
-		return workflowmodel.WorkflowProcessInstance{}, forbidden("backend.workflow.process.operate_permission_required")
 	}
 	if strings.TrimSpace(note) == "" {
 		return workflowmodel.WorkflowProcessInstance{}, badRequest("backend.workflow.process_resolution_note_required")
@@ -350,7 +351,7 @@ func (s *WorkflowApplicationService) ResolveWorkflowProcessFailure(ctx context.C
 	if err := stateStore.CommitWorkflowState(ctx, transactionmodel.WorkflowStateCommit{WorkspaceID: principal.WorkspaceID, Process: &process, Events: []workflowmodel.WorkflowProcessEvent{event}}); err != nil {
 		return process, internalError("resolve workflow process", err)
 	}
-	return workflowprojection.WorkflowProcessForPrincipal(process, workflowProjectionAdvanced(principal), s.workflowProjectionActions(ctx, principal)), nil
+	return workflowprojection.WorkflowProcessForPrincipal(process, false, s.workflowProjectionActions(ctx, principal)), nil
 }
 
 func (s *WorkflowApplicationService) DecideTask(ctx context.Context, taskID string, req workflowmodel.WorkflowTaskDecisionRequest, principal principalmodel.Principal) (workflowmodel.WorkflowProcessInstance, error) {
@@ -378,12 +379,12 @@ func (s *WorkflowApplicationService) DecideTask(ctx context.Context, taskID stri
 			}
 			key := workflowCommandKey("task.decision", task.ID, req.IdempotencyKey, map[string]any{"decision": strings.ToLower(strings.TrimSpace(req.Decision)), "comment": strings.TrimSpace(req.Comment)})
 			if processFound && workflowProcessHasCommand(process, "task.decision:"+task.ID, key) {
-				return workflowprojection.WorkflowProcessForPrincipal(process, workflowProjectionAdvanced(principal), s.workflowProjectionActions(ctx, principal)), nil
+				return workflowprojection.WorkflowProcessForPrincipal(process, false, s.workflowProjectionActions(ctx, principal)), nil
 			}
 		}
 	}
 	if process, handled, err := s.decisions.DecideTerminalTask(ctx, strings.TrimSpace(taskID), req, principal); handled {
-		return workflowprojection.WorkflowProcessForPrincipal(process, workflowProjectionAdvanced(principal), s.workflowProjectionActions(ctx, principal)), err
+		return workflowprojection.WorkflowProcessForPrincipal(process, false, s.workflowProjectionActions(ctx, principal)), err
 	}
 	return workflowmodel.WorkflowProcessInstance{}, internalError("commit workflow task decision", errors.New("transactional workflow decision store unavailable"))
 }

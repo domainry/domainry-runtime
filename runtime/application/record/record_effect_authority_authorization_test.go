@@ -57,7 +57,7 @@ func TestRecordEffectAuthorizationPrincipalRequiresActionOwnedObjectAuthority(t 
 		t.Fatalf("authorized=%#v original=%#v", got, principal)
 	}
 	for _, permission := range got.PermissionKeys() {
-		if permission == "workspace.admin" {
+		if permission == "runtime.appschema.validate_application_definition" {
 			t.Fatalf("Action effect authority expanded record scope: %#v", got.AccessBundle)
 		}
 	}

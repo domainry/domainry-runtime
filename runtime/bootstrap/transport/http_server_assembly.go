@@ -16,7 +16,6 @@ import (
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
-	partysdk "github.com/domainry/domainry-party-sdk"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 
 	capacityplatform "github.com/domainry/domainry-foundation/capacity"
@@ -51,7 +50,6 @@ type HTTPServerDependencies struct {
 	Records                  *composition.RuntimeServices
 	IdentityBinding          identitysdk.Binding
 	AuthorizationActions     func() *actioncontract.Registry
-	PartyBinding             partysdk.Binding
 	MonitoringBinding        monitoringsdk.Binding
 	SchedulerBinding         schedulersdk.Binding
 	Store                    *persistence.RuntimeStore
@@ -83,7 +81,6 @@ type httpServerAssembly struct {
 	operations    *operationsapplication.OperationsApplicationService
 	identityHTTP  *identityhttpmiddleware.Middleware
 	principals    identitysdk.PrincipalResolver
-	agentPorts    *agentRuntimePorts
 }
 
 func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDependencies) *runtimehttp.HTTPRouter {
@@ -176,7 +173,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	}
 	assembly.wireOperationsApplication()
 	assembly.bindAgentApplicationHost()
-	assembly.wirePartyAndIdentityReferences(ctx)
+	assembly.wireIdentityReferences(ctx)
 	assembly.wireRecordAndProcessHandlers()
 	assembly.wireMetadataAndBusinessHandlers()
 	assembly.wireRuntimePublicationHandoff()

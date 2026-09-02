@@ -46,7 +46,13 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 			}
 		}
 	}
-	if _, err := s.SchemaDB().ExecContext(ctx, "DELETE FROM "+s.TableIdentifier("_worker_queue_scopes")+" WHERE "+s.Identifier("queue_kind")+" = "+s.Placeholder(1), "runtime_publication_outbox"); err != nil {
+	deleteLegacyScopes, deleteLegacyScopeArgs, err := query.NewDeleteBuilder(s.RuntimeRenderer(), "_worker_queue_scopes").
+		Where(query.Equal("queue_kind", "runtime_publication_outbox")).
+		Build()
+	if err != nil {
+		return fmt.Errorf("build legacy integration outbox worker task cleanup: %w", err)
+	}
+	if _, err := s.SchemaDB().ExecContext(ctx, deleteLegacyScopes, deleteLegacyScopeArgs...); err != nil {
 		return fmt.Errorf("remove legacy integration outbox worker tasks: %w", err)
 	}
 	for _, table := range []string{"_automation_instruction_executions", "_publication_outbox"} {
@@ -101,7 +107,14 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 			return err
 		}
 	}
-	if _, err := s.SchemaDB().ExecContext(ctx, "UPDATE "+s.TableIdentifier("_publication_outbox")+" SET "+s.Identifier("dedup_key")+" = "+s.Identifier("id")+" WHERE "+s.Identifier("dedup_key")+" = ''"); err != nil {
+	backfillDedupKey, backfillDedupKeyArgs, err := query.NewUpdateBuilder(s.RuntimeRenderer(), "_publication_outbox").
+		SetExpression("dedup_key", query.Column("id")).
+		Where(query.Equal("dedup_key", "")).
+		Build()
+	if err != nil {
+		return fmt.Errorf("build integration outbox dedup key backfill: %w", err)
+	}
+	if _, err := s.SchemaDB().ExecContext(ctx, backfillDedupKey, backfillDedupKeyArgs...); err != nil {
 		return fmt.Errorf("backfill integration outbox dedup key: %w", err)
 	}
 	for column, definition := range map[string]string{

@@ -86,12 +86,6 @@ Registered schema tables:
 - Agent Module-owned `_agent_skill_definitions`, `_agent_definitions`, `_agent_entrypoint_definitions`,
   `_agent_service_principal_definitions`, `_agent_task_definitions` — `installation_scoped`
 - Data Exchange Module-owned `_data_exchange_jobs`, `_data_exchange_job_chunks`, `_data_exchange_artifacts` — `workspace_scoped`; `_data_exchange_queue_scopes` contains only payload-free workspace scheduling identities. SaaS mode keeps the same ownership boundary remotely.
-- Party Module-owned foundation tables in the borrowed Runtime database (or isolated behind Party SaaS): `_party_parties`, `_party_persons`,
-  `_party_organizations`, `_party_contact_points`, `_party_addresses`,
-  `_party_identifiers`, `_party_communication_preferences`, `_party_consents`,
-  `_party_privacy_preferences`, `_party_marketing_subscriptions`,
-  `_party_job_catalog_items`, `_party_positions`, `_party_organization_extensions`,
-  `_party_organization_extension_memberships` — `workspace_scoped`
 - Integration Module-owned tables in the borrowed Runtime database (or isolated behind Integration SaaS): `_integration_connections`, `_integration_api_keys`,
   `_integration_secret_materials`, `_integration_secrets`,
   `_integration_external_identities`, `_integration_credential_refresh_leases`,
@@ -159,7 +153,7 @@ Principal before the first Repository call and has a zero-call failure test.
 | Audit | complete | `TestAuditApplicationAuthorizesWorkspaceBeforeRepositoryAccess` |
 | Upload | complete | `TestUploadApplicationAuthorizesWorkspaceBeforePortAccess` |
 | Report | complete | `TestReportApplicationAuthorizesWorkspaceBeforePorts` |
-| Record | complete | `TestRecordApplicationAuthorizesWorkspaceBeforeRepositoryAccess`; `TestOwnerDepartmentPathRebuilderRejectsMissingSystemScopeBeforeRepository` |
+| Record | complete | `TestRecordApplicationAuthorizesWorkspaceBeforeRepositoryAccess`; `TestInternalMutationServiceRejectsDisallowedPoliciesBeforeRepository` |
 | Action | complete | `TestActionApplicationAuthorizesWorkspaceBeforeRepositoryAccess` |
 | Automation | complete | `TestAutomationApplicationAuthorizesWorkspaceBeforeRepositoryAccess` |
 | ChangePlan | complete | `TestChangePlanApplicationAuthorizesWorkspaceBeforeRepositoryAccess` |

@@ -147,7 +147,7 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"workspace_id " + idempotencyScopeText + " NOT NULL",
 			"system_purpose " + idempotencyScopeText + " NOT NULL DEFAULT ''",
 			"kind " + idempotencyScopeText + " NOT NULL",
-			"permission " + text + " NOT NULL",
+			"action_key " + text + " NOT NULL",
 			"resource_type " + text + " NOT NULL",
 			"resource_id " + text + " NOT NULL DEFAULT ''",
 			"idempotency_key " + idempotencyScopeText + " NOT NULL",

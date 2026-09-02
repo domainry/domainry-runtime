@@ -19,7 +19,7 @@
       "name": "Admin",
       "permissions": [
         "admin_console.access",
-        "workspace.admin",
+        "runtime.appschema.validate_application_definition",
         "scheduler.command",
         "scheduler.definition.read",
         "scheduler_probe.read"

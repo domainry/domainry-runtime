@@ -25,7 +25,6 @@ func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {
 		Config: runtime.cfg, Records: runtime.records,
 		IdentityBinding:      runtime.identityBinding,
 		AuthorizationActions: runtime.authorizationActions,
-		PartyBinding:         runtime.partyBinding,
 		MonitoringBinding:    runtime.monitoringBinding,
 		SchedulerBinding:     runtime.schedulerBinding,
 		IntegrationBinding:   runtime.integrationBinding,

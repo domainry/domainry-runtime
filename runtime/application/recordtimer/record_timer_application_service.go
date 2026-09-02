@@ -12,6 +12,7 @@ import (
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordtimercontract "github.com/domainry/domainry-runtime/runtime/domain/recordtimer/contract"
@@ -134,14 +135,22 @@ func recordTimerAuthorizeCommand(principal principalmodel.Principal) error {
 	return nil
 }
 
-func recordTimerOpsReadAllowed(principal principalmodel.Principal) error {
+func recordTimerAuthorizeRecovery(principal principalmodel.Principal, actionKey string) error {
 	if err := recordTimerAuthorizeQuery(principal); err != nil {
 		return err
 	}
-	if principal.HasExactPermission("operations.read") || principal.HasExactPermission("record_timer.command") {
+	if principal.HasExactPermission(actionKey) {
 		return nil
 	}
 	return recordTimerError(apperror.KindForbidden, "backend.record_timer.permission_required", nil)
+}
+
+func recordTimerAuthorizeRecoveryRead(principal principalmodel.Principal) error {
+	return recordTimerAuthorizeRecovery(principal, operationscontract.ActionInspectDeadLetter)
+}
+
+func recordTimerAuthorizeRecoveryWrite(principal principalmodel.Principal) error {
+	return recordTimerAuthorizeRecovery(principal, operationscontract.ActionRetryDeadLetter)
 }
 
 func recordTimerError(kind apperror.ErrorKind, code string, err error, params ...string) error {

@@ -57,7 +57,7 @@ func TestRuntimeIntegrationTriggerSinkExecutesOnlyRuntimeOwnedTargets(t *testing
 	if workflows.payload["integration_event_id"] != "event-2" || workflows.payload["integration_mapping_key"] != "mapping-b" || workflows.payload["integration_idempotency_key"] != "event-2:mapping-b" {
 		t.Fatalf("workflow payload=%#v", workflows.payload)
 	}
-	if !workflows.principal.HasExactPermission("workflow.run.contact-sync") || workflows.principal.HasPermission("anything.execute") {
+	if !workflows.principal.HasExactPermission("workflow.contact-sync.run") || workflows.principal.HasPermission("anything.execute") {
 		t.Fatalf("workflow principal=%#v", workflows.principal)
 	}
 }

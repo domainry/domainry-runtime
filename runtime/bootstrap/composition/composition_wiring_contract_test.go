@@ -227,9 +227,6 @@ func TestRecordApplicationDependencyClosuresUseCanonicalOwners(t *testing.T) {
 	if got := dependencies.IdentityProfileExtensions()[0].ObjectKey; got != "customer" {
 		t.Fatalf("identity profile extensions leaked caller mutation: %q", got)
 	}
-	if err := dependencies.UpdateInternal(t.Context(), "workspace-primary", definitionmodel.ObjectSchema{Key: "customer"}, recordmodel.Record{ID: "customer-1"}, "test"); err == nil {
-		t.Fatal("missing record repository must reject internal update")
-	}
 }
 
 func TestRecordDomainWiringInvokesSchemaWorkflowAndPipelinePorts(t *testing.T) {
@@ -255,7 +252,7 @@ func TestRecordDomainWiringInvokesSchemaWorkflowAndPipelinePorts(t *testing.T) {
 	repository := &pipelineFailureRepository{records: map[string]map[string]recordmodel.Record{
 		"activity": {"activity-1": {ID: "activity-1", Data: map[string]any{"subject": "existing"}}},
 	}}
-	validation := newRecordValidationService(runtime, repository, recordQueryPolicyAdapter{service: runtime.RecordQueryPolicyDomainService}, nil, nil)
+	validation := newRecordValidationService(runtime, repository, recordQueryPolicyAdapter{service: runtime.RecordQueryPolicyDomainService}, nil)
 	if err := validation.ValidateRelations(t.Context(), order, map[string]any{"activity": "activity-1"}, principal); err != nil {
 		t.Fatalf("relation validation error=%v", err)
 	}

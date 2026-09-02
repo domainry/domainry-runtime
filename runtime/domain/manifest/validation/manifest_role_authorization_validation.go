@@ -31,8 +31,8 @@ func (state *validationState) validateRoles() {
 		if assignmentMode == "" {
 			assignmentMode = "manual"
 		}
-		if role.ProvisionToWorkspaces && audience != "any" && audience != "workforce" {
-			state.add(path+".provision_to_workspaces", "tenant login roles must use any or workforce audience")
+		if role.ProvisionToWorkspaces && audience != "any" && audience != "user" && audience != "business_profile" {
+			state.add(path+".provision_to_workspaces", "tenant login roles must use any, user, or business_profile audience")
 		}
 		if role.ProvisionToWorkspaces && assignmentMode == "system_managed" {
 			state.add(path+".provision_to_workspaces", "system-managed roles cannot be provisioned as tenant login roles")

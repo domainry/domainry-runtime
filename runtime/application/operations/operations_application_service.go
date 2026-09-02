@@ -10,6 +10,7 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/requestcontext"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationspolicy "github.com/domainry/domainry-runtime/runtime/domain/operations/policy"
 	operationsprojection "github.com/domainry/domainry-runtime/runtime/domain/operations/projection"
@@ -27,7 +28,6 @@ type OperationsIdempotencyReceiptControl interface {
 
 type OperationsSubmitRequest struct {
 	Kind         string `json:"kind"`
-	Permission   string `json:"permission"`
 	ResourceType string `json:"resource_type"`
 	ResourceID   string `json:"resource_id,omitempty"`
 	Reason       string `json:"reason"`
@@ -64,16 +64,16 @@ func (s *OperationsApplicationService) Submit(ctx context.Context, request Opera
 	if !found {
 		return operationsmodel.OperationsReceipt{}, "", apperror.New(apperror.KindBadRequest, "backend.operations.kind_not_registered", nil, nil)
 	}
-	if strings.TrimSpace(request.ResourceType) != definition.ResourceType || !operationsPermissionDeclared(definition.Permissions, request.Permission) {
+	if strings.TrimSpace(request.ResourceType) != definition.ResourceType {
 		return operationsmodel.OperationsReceipt{}, "", apperror.New(apperror.KindBadRequest, "backend.operations.definition_mismatch", nil, nil)
 	}
 	if definition.ExecutionScope != operationsmodel.OperationsExecutionWorkspace {
 		return operationsmodel.OperationsReceipt{}, "", apperror.New(apperror.KindBadRequest, "backend.operations.system_entrypoint_required", nil, nil)
 	}
-	if err := operationsAuthorize(principal, request.Permission); err != nil {
+	if err := operationsAuthorize(principal, definition.ActionKey); err != nil {
 		return operationsmodel.OperationsReceipt{}, "", err
 	}
-	return s.submit(ctx, request, key, principal.UserID, operationsmodel.OperationsScope{WorkspaceID: principal.WorkspaceID, ResourceType: request.ResourceType, ResourceID: request.ResourceID})
+	return s.submit(ctx, request, definition.ActionKey, key, principal.UserID, operationsmodel.OperationsScope{WorkspaceID: principal.WorkspaceID, ResourceType: request.ResourceType, ResourceID: request.ResourceID})
 }
 
 // SubmitSystem registers a Runtime-global operation after authenticating the
@@ -84,32 +84,32 @@ func (s *OperationsApplicationService) SubmitSystem(ctx context.Context, request
 	if !found {
 		return operationsmodel.OperationsReceipt{}, "", apperror.New(apperror.KindBadRequest, "backend.operations.kind_not_registered", nil, nil)
 	}
-	if strings.TrimSpace(request.ResourceType) != definition.ResourceType || !operationsPermissionDeclared(definition.Permissions, request.Permission) {
+	if strings.TrimSpace(request.ResourceType) != definition.ResourceType {
 		return operationsmodel.OperationsReceipt{}, "", apperror.New(apperror.KindBadRequest, "backend.operations.definition_mismatch", nil, nil)
 	}
 	if definition.ExecutionScope != operationsmodel.OperationsExecutionSystem || strings.TrimSpace(systemPurpose) == "" {
 		return operationsmodel.OperationsReceipt{}, "", apperror.New(apperror.KindBadRequest, "backend.operations.system_scope_required", nil, nil)
 	}
-	if err := operationsAuthorize(principal, request.Permission); err != nil {
+	if err := operationsAuthorize(principal, definition.ActionKey); err != nil {
 		return operationsmodel.OperationsReceipt{}, "", err
 	}
-	return s.submit(ctx, request, key, principal.UserID, operationsmodel.OperationsScope{SystemPurpose: strings.TrimSpace(systemPurpose), ResourceType: request.ResourceType, ResourceID: request.ResourceID})
+	return s.submit(ctx, request, definition.ActionKey, key, principal.UserID, operationsmodel.OperationsScope{SystemPurpose: strings.TrimSpace(systemPurpose), ResourceType: request.ResourceType, ResourceID: request.ResourceID})
 }
 
-func (s *OperationsApplicationService) submit(ctx context.Context, request OperationsSubmitRequest, key, requestedBy string, scope operationsmodel.OperationsScope) (operationsmodel.OperationsReceipt, operationsmodel.OperationsSubmissionDecision, error) {
+func (s *OperationsApplicationService) submit(ctx context.Context, request OperationsSubmitRequest, actionKey, key, requestedBy string, scope operationsmodel.OperationsScope) (operationsmodel.OperationsReceipt, operationsmodel.OperationsSubmissionDecision, error) {
 	if s == nil || s.repository == nil {
 		return operationsmodel.OperationsReceipt{}, "", apperror.New(apperror.KindInternal, "backend.operations.repository_unavailable", nil, nil)
 	}
 	fingerprint, err := idempotency.Fingerprint(idempotency.FingerprintInput{
 		UseCase: strings.TrimSpace(request.Kind), ResourceType: strings.TrimSpace(request.ResourceType), TargetID: strings.TrimSpace(request.ResourceID), Payload: request.Payload,
-		Preconditions: map[string]any{"permission": strings.TrimSpace(request.Permission)},
+		Preconditions: map[string]any{"action_key": strings.TrimSpace(actionKey)},
 	})
 	if err != nil {
 		return operationsmodel.OperationsReceipt{}, "", apperror.New(apperror.KindBadRequest, "backend.operations.payload_invalid", err, nil)
 	}
 	now := s.now().UTC()
 	command := operationsmodel.OperationsCommand{
-		ID: "operation_" + strings.TrimSpace(s.newID()), Kind: request.Kind, Permission: request.Permission,
+		ID: "operation_" + strings.TrimSpace(s.newID()), Kind: request.Kind, ActionKey: strings.TrimSpace(actionKey),
 		Scope:          scope,
 		IdempotencyKey: key, RequestFingerprint: fingerprint, RequestedBy: requestedBy, Reason: request.Reason,
 		Reference: request.Reference, Status: operationsmodel.OperationsStatusCreated, CreatedAt: now, UpdatedAt: now,
@@ -133,7 +133,7 @@ func (s *OperationsApplicationService) Definitions() []operationsmodel.Operation
 }
 
 func (s *OperationsApplicationService) Receipt(ctx context.Context, id string, principal principalmodel.Principal) (operationsmodel.OperationsReceipt, error) {
-	if err := operationsAuthorize(principal, "operations.read"); err != nil {
+	if err := operationsAuthorize(principal, operationscontract.ActionGetOperation); err != nil {
 		return operationsmodel.OperationsReceipt{}, err
 	}
 	receipt, found, err := s.repository.GetOperationsReceipt(ctx, operationsmodel.OperationsScope{WorkspaceID: principal.WorkspaceID}, strings.TrimSpace(id))
@@ -147,7 +147,7 @@ func (s *OperationsApplicationService) Receipt(ctx context.Context, id string, p
 }
 
 func (s *OperationsApplicationService) Receipts(ctx context.Context, status operationsmodel.OperationsStatus, limit int, principal principalmodel.Principal) ([]operationsmodel.OperationsReceipt, error) {
-	if err := operationsAuthorize(principal, "operations.read"); err != nil {
+	if err := operationsAuthorize(principal, operationscontract.ActionListOperations); err != nil {
 		return nil, err
 	}
 	if limit <= 0 || limit > 200 {
@@ -157,7 +157,7 @@ func (s *OperationsApplicationService) Receipts(ctx context.Context, status oper
 }
 
 func (s *OperationsApplicationService) SearchReceipts(ctx context.Context, filter operationsmodel.OperationsReceiptFilter, principal principalmodel.Principal) (operationsmodel.OperationsReceiptPage, error) {
-	if err := operationsAuthorize(principal, "operations.read"); err != nil {
+	if err := operationsAuthorize(principal, operationscontract.ActionListOperations); err != nil {
 		return operationsmodel.OperationsReceiptPage{}, err
 	}
 	filter = normalizeOperationsReceiptFilter(filter)
@@ -317,20 +317,10 @@ func operationsAuthorize(principal principalmodel.Principal, permission string) 
 	return apperror.New(apperror.KindForbidden, "auth.permission_denied", nil, nil)
 }
 
-func operationsDefinitionPermission(kind string) string {
+func operationsDefinitionActionKey(kind string) string {
 	definition, found := operationsprojection.OperationsDefinition(strings.TrimSpace(kind))
-	if !found || len(definition.Permissions) == 0 {
+	if !found {
 		return ""
 	}
-	return strings.TrimSpace(definition.Permissions[0])
-}
-
-func operationsPermissionDeclared(permissions []string, permission string) bool {
-	permission = strings.TrimSpace(permission)
-	for _, candidate := range permissions {
-		if strings.TrimSpace(candidate) == permission {
-			return true
-		}
-	}
-	return false
+	return strings.TrimSpace(definition.ActionKey)
 }

@@ -140,7 +140,7 @@ func orderToCashSurfaceTestManifest(t *testing.T) string {
 	roles, _ := manifest["roles"].([]any)
 	manifest["roles"] = append(roles, map[string]any{
 		"key": "platform_admin", "name": "Runtime Operator",
-		"permissions":  []any{"ops.workflow.process", "ops.workflow.read"},
+		"permissions":  []any{"runtime.workflows.process_ops_workflow_executions"},
 		"record_scope": "all_records",
 		"data_permissions": []any{map[string]any{
 			"object_key": "sales_order", "scope": "none", "read": false, "write": false,

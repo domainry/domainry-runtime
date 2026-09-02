@@ -11,7 +11,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-func TestScopeOwnerFactDerivationServiceOwnsUpdateDeniedAuditPolicy(t *testing.T) {
+func TestRecordUpdateDeniedAuditPolicy(t *testing.T) {
 	var event, objectKey, recordID, summary string
 	var metadata map[string]any
 	audit := func(_ context.Context, gotEvent, gotObjectKey, gotRecordID string, _ principalmodel.Principal, gotSummary string, _, _ map[string]any, gotMetadata map[string]any) {
@@ -31,7 +31,7 @@ func TestScopeOwnerFactDerivationServiceOwnsUpdateDeniedAuditPolicy(t *testing.T
 	}
 }
 
-func TestScopeOwnerFactDerivationServiceUsesInjectedErrorCode(t *testing.T) {
+func TestRecordUpdateDeniedAuditUsesInjectedErrorCode(t *testing.T) {
 	var metadata map[string]any
 	audit := func(_ context.Context, _, _, _ string, _ principalmodel.Principal, _ string, _, _ map[string]any, got map[string]any) {
 		metadata = got

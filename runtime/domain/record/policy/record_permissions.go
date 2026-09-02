@@ -1,11 +1,11 @@
 package policy
 
 import (
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-
 	"fmt"
 	"strings"
+
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
 	apperror "github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -21,45 +21,32 @@ func RecordCanAccess(principal principalmodel.Principal, object definitionmodel.
 	return principal.SystemScope.Valid() && principal.Allows(object.Key, "read")
 }
 
-func RecordApplyOwnerDefault(object definitionmodel.ObjectSchema, data map[string]any, principal principalmodel.Principal) {
-	if data == nil {
+func RecordApplyOwnerDefault(record *recordmodel.Record, principal principalmodel.Principal) {
+	if record == nil {
 		return
 	}
-	ownerField := RecordOwnerFieldKey(object)
-	if ownerField != "" {
-		currentOwner := strings.TrimSpace(fmt.Sprint(data[ownerField]))
-		if currentOwner == "current_user" || (recordPolicyIsEmptyValue(data[ownerField]) && RecordOwnerAutoAssignCurrentUser(object, ownerField)) {
-			data[ownerField] = principal.UserID
-		}
-		if strings.TrimSpace(fmt.Sprint(data[ownerField])) == "" {
-			return
-		}
+	if strings.TrimSpace(record.OwnerUserID) == "" {
+		record.OwnerUserID = strings.TrimSpace(principal.UserID)
 	}
-	departmentPathField := RecordOwnerDepartmentPathFieldKey(object)
-	if departmentPathField != "" && strings.TrimSpace(principal.DepartmentPath) != "" {
-		data[departmentPathField] = principal.DepartmentPath
-	}
-	departmentIDField := RecordOwnerDepartmentIDFieldKey(object)
-	if departmentIDField != "" && strings.TrimSpace(principal.DepartmentID) != "" {
-		data[departmentIDField] = principal.DepartmentID
+	if strings.TrimSpace(record.OwnerOrgID) == "" {
+		record.OwnerOrgID = strings.TrimSpace(principal.OrgID)
 	}
 }
 
-func RecordOwnerAutoAssignCurrentUser(object definitionmodel.ObjectSchema, ownerField string) bool {
-	for _, field := range object.Fields {
-		if field.Key != ownerField {
-			continue
-		}
-		value, ok := field.Config["auto_assign_current_user"]
-		if ok {
-			enabled, valid := boolAny(value)
-			if valid {
-				return enabled
-			}
-		}
-		return field.Required
+// RecordDataWithOwnerFacts exposes Runtime-owned ownership metadata only to
+// authorization callbacks. System columns never become authored business data.
+func RecordDataWithOwnerFacts(record recordmodel.Record) map[string]any {
+	data := make(map[string]any, len(record.Data)+2)
+	for key, value := range record.Data {
+		data[key] = value
 	}
-	return false
+	data[RecordOwnerUserIDSystemField] = record.OwnerUserID
+	data[RecordOwnerOrgIDSystemField] = record.OwnerOrgID
+	return data
+}
+
+func RecordOwnerAutoAssignCurrentUser(_ definitionmodel.ObjectSchema, ownerField string) bool {
+	return strings.TrimSpace(ownerField) == RecordOwnerUserIDSystemField
 }
 
 func RecordApplyFieldDefaults(object definitionmodel.ObjectSchema, data map[string]any) {
@@ -84,7 +71,14 @@ func RecordCanWriteScope(principal principalmodel.Principal, object definitionmo
 	if !principal.Known {
 		return false
 	}
-	if allowed, handled := RecordSDKAllowsRecord(principal, object, "update", recordmodel.Record{Data: data}); handled {
+	record := recordmodel.Record{Data: data}
+	if value, ok := data[RecordOwnerUserIDSystemField]; ok {
+		record.OwnerUserID = strings.TrimSpace(fmt.Sprint(value))
+	}
+	if value, ok := data[RecordOwnerOrgIDSystemField]; ok {
+		record.OwnerOrgID = strings.TrimSpace(fmt.Sprint(value))
+	}
+	if allowed, handled := RecordSDKAllowsRecord(principal, object, "update", record); handled {
 		return allowed
 	}
 	return principal.SystemScope.Valid() && principal.Allows(object.Key, "update")

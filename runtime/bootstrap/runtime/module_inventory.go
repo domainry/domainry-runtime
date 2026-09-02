@@ -39,10 +39,6 @@ func (runtime *Runtime) ModuleInventory() (moduleinfo.Inventory, error) {
 		d := binding.Descriptor()
 		add("notification", string(d.Mode), d.Capabilities, binding)
 	}
-	if binding := runtime.partyBinding; binding != nil {
-		d := binding.Descriptor()
-		add("party", string(d.Mode), d.Capabilities, binding)
-	}
 	if binding := runtime.integrationBinding; binding != nil {
 		d := binding.Descriptor()
 		add("integration", string(d.Mode), d.Capabilities, binding)

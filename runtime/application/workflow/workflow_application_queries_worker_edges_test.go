@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -27,52 +26,20 @@ func (s *workflowListWorkerEdgeStub) ListExecutions(_ context.Context, _ string,
 	return s.list, s.listErr
 }
 
-func TestWorkflowApplicationListDefinitionsAuthorizationSortingAndProjection(t *testing.T) {
-	registry := &workflowRegistryStub{items: map[string]definitionmodel.WorkflowSchema{"z": {Key: "z"}, "a": {Key: "a"}}}
-	service := &WorkflowApplicationService{registry: registry}
-	cancelled, cancel := context.WithCancel(t.Context())
-	cancel()
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"workflow.definition.read"}})
-	if _, err := service.Workflows(cancelled, admin); err != context.Canceled {
-		t.Fatalf("cancel error=%v", err)
-	}
-	if _, err := service.Workflows(t.Context(), principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
-		t.Fatalf("workspace error=%v", err)
-	}
-	unknown := admin
-	unknown.Known = false
-	if _, err := service.Workflows(t.Context(), unknown); apperror.CodeOf(err) != "backend.workspace_scope_required" {
-		t.Fatalf("unknown error=%v", err)
-	}
-	denied := admin
-	denied = workflowPrincipalWithPermissions(denied)
-	if _, err := service.Workflows(t.Context(), denied); apperror.CodeOf(err) != "backend.workflow.read_permission_required" {
-		t.Fatalf("denied error=%v", err)
-	}
-	items, err := service.Workflows(t.Context(), admin)
-	if err != nil || len(items) != 2 || items[0].Key != "a" {
-		t.Fatalf("items=%v err=%v", items, err)
-	}
-	if service.workflowProjectionActions(t.Context(), admin) != nil {
+func TestWorkflowProjectionActionsUsesCurrentSchemaSnapshot(t *testing.T) {
+	service := &WorkflowApplicationService{}
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}
+	if service.workflowProjectionActions(t.Context(), principal) != nil {
 		t.Fatal("nil schema projected actions")
 	}
 	service.schema = workflowSchemaProviderEdgeStub{snapshot: WorkflowSchemaSnapshot{Actions: []definitionmodel.ActionSchema{{Key: "action"}}}}
-	if actions := service.workflowProjectionActions(t.Context(), admin); len(actions) != 1 || actions[0].Key != "action" {
+	if actions := service.workflowProjectionActions(t.Context(), principal); len(actions) != 1 || actions[0].Key != "action" {
 		t.Fatalf("actions=%v", actions)
-	}
-	limited := admin
-	limited = workflowPrincipalWithPermissions(limited)
-	if workflowProjectionAdvanced(limited) {
-		t.Fatal("unexpected advanced permission")
-	}
-	limited = workflowPrincipalWithPermissions(limited, "workflow.advanced.configure")
-	if !workflowProjectionAdvanced(limited) {
-		t.Fatal("advanced permission denied")
 	}
 }
 
 func TestWorkflowExecutionQueryFilterVisibilityLimitAndFailureMatrix(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"ops.workflow.read"}})
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "workspace"}}
 	worker := &workflowListWorkerEdgeStub{workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}}, list: []workflowmodel.WorkflowExecution{
 		{ID: "denied", ObjectKey: "order", RecordID: "denied"},
 		{ID: "allowed", ObjectKey: "order", RecordID: "allowed"},
@@ -98,11 +65,6 @@ func TestWorkflowExecutionQueryFilterVisibilityLimitAndFailureMatrix(t *testing.
 	unknown.Known = false
 	if _, err := service.WorkflowExecutions(t.Context(), unknown, "", "", 1); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("unknown error=%v", err)
-	}
-	denied := principal
-	denied = workflowPrincipalWithPermissions(denied)
-	if _, err := service.WorkflowExecutions(t.Context(), denied, "", "", 1); apperror.CodeOf(err) != "backend.workflow.read_permission_required" {
-		t.Fatalf("denied error=%v", err)
 	}
 	if _, err := service.WorkflowExecutions(t.Context(), principal, " error ", "", 1); err == nil || err.Error() != "object" {
 		t.Fatalf("object error=%v", err)

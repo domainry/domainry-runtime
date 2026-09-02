@@ -37,10 +37,6 @@ func TestNewRecordApplicationServiceWiresOptionalCallbacks(t *testing.T) {
 			counts["self_effects"]++
 			return true, nil
 		},
-		UpdateInternal: func(context.Context, string, definitionmodel.ObjectSchema, recordmodel.Record, string) error {
-			counts["internal_update"]++
-			return nil
-		},
 		SchemaMap: func() map[string]definitionmodel.ObjectSchema {
 			counts["schema"]++
 			return map[string]definitionmodel.ObjectSchema{object.Key: object}
@@ -72,9 +68,6 @@ func TestNewRecordApplicationServiceWiresOptionalCallbacks(t *testing.T) {
 		t.Fatalf("intents=%#v err=%v", intents, err)
 	}
 	service.executeWorkflow(t.Context(), []workflowmodel.WorkflowExecution{{ID: "workflow-1"}}, principal)
-	if err := service.updateInternal(t.Context(), principal.WorkspaceID, object, record, "reason"); err != nil {
-		t.Fatal(err)
-	}
 	if len(service.schemaMap()) != 1 || len(service.identityProfileExtensions()) != 1 {
 		t.Fatal("schema and extensions were not delegated")
 	}
@@ -110,7 +103,7 @@ func TestNewRecordApplicationServiceWiresOptionalCallbacks(t *testing.T) {
 		t.Fatalf("users=%#v err=%v", users, err)
 	}
 
-	for _, key := range []string{"audit", "prepare", "execute", "self_effects", "internal_update", "schema", "extensions", "replay", "before", "outbox", "build_audit"} {
+	for _, key := range []string{"audit", "prepare", "execute", "self_effects", "schema", "extensions", "replay", "before", "outbox", "build_audit"} {
 		if counts[key] == 0 {
 			t.Fatalf("callback %q was not wired: %#v", key, counts)
 		}

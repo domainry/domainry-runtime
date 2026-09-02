@@ -44,7 +44,5 @@ func workflowAdminPrincipal() principalmodel.Principal {
 		"runtime.workflows.approve_business_workflow_task",
 		"runtime.workflows.reject_business_workflow_task",
 		"runtime.workflows.return_business_workflow_task",
-		"workflow.process.read",
-		"workflow.process.operate",
 	}})
 }

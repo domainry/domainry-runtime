@@ -6,7 +6,6 @@
 | --- | --- | --- | --- | --- |
 | [Identity](identity.md) | `runtimehost.Options.IdentityFactory` | 已实现 | 已实现 | Module 独有进程内 HTTP Surface |
 | [Notification](notification.md) | `runtimehost.Options.NotificationFactory` | 已实现 | 已实现 | SaaS publication outbox 已在 Runtime 清单登记 |
-| [Party](party.md) | `runtimehost.Options.PartyFactory` | 已实现 | 已实现 | 组织范围通过 SDK 投影给 Identity |
 | [Monitoring](monitoring.md) | `runtimehost.Options.MonitoringFactory` | 已实现 | 已实现 | Module/SaaS Host 分支已存在 |
 | [Scheduler](scheduler.md) | `runtimehost.Options.SchedulerFactory` | 已实现 | 已实现 | Module worker 受 Runtime admission，SaaS 拥有 clock worker |
 | [Agent](agent.md) | `runtimehost.Options.AgentFactory` | 已实现 | 已实现 | Agent 拥有 dialog/task/interactive execution state；Runtime 保留 workflow/授权/宿主回调 |

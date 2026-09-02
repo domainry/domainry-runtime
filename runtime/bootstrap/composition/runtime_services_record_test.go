@@ -385,8 +385,8 @@ func (compositionIdentityDirectory) FindUser(context.Context, identitysdk.UserLo
 	return identitysdk.User{}, false, nil
 }
 
-func (compositionIdentityDirectory) FindDepartment(context.Context, identitysdk.DepartmentLookup) (identitysdk.Department, bool, error) {
-	return identitysdk.Department{}, false, nil
+func (compositionIdentityDirectory) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
+	return identitysdk.OrganizationUnit{}, false, nil
 }
 
 func (compositionIdentityDirectory) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
@@ -398,10 +398,6 @@ func (compositionIdentityDirectory) ListRoles(context.Context, identitysdk.Direc
 }
 
 func (compositionIdentityDirectory) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
-	return nil, nil
-}
-
-func (compositionIdentityDirectory) ListWorkforce(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.WorkforceEntry, error) {
 	return nil, nil
 }
 
@@ -524,7 +520,7 @@ func TestAutomationApplicationUsesCanonicalRuntimeServiceAndOwnerBoundaries(t *t
 		t.Fatalf("Automation Workflow result=%#v error=%v", result, err)
 	}
 
-	adminRuntimePrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	adminRuntimePrincipal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}
 	if _, err := (businessReferenceRuntimeAdapter{}).WorkflowProcesses(t.Context(), adminRuntimePrincipal, workflowmodel.WorkflowProcessFilter{}); err != nil {
 		t.Fatalf("nil Business Reference Workflow adapter error=%v", err)
 	}
@@ -724,7 +720,7 @@ func TestBusinessSystemSnapshotUsesNarrowOwnerPorts(t *testing.T) {
 	failure := errors.New("owner projection failed")
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{businesssystemapplication.ActionBusinessSystemSnapshot}})
 	limited := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "reader"}}
-	reader := accessfixture.Attach(limited, accessfixture.Bundle{Permissions: []string{"workflow.definition.read"}})
+	reader := accessfixture.Attach(limited, accessfixture.Bundle{})
 
 	newService := func(failAt string, evidence changeplanrepository.ChangePlanEvidenceRepository) *businesssystemapplication.BusinessSystemApplicationService {
 		schema := appschemamodel.ApplicationSchemaSnapshot{SchemaHash: "schema-1", Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}, Workflows: []definitionmodel.WorkflowSchema{{Key: "customer.approval"}}}

@@ -227,10 +227,9 @@ func TestWorkflowProcessSummaryAssigneeAndVisibilityOutcomes(t *testing.T) {
 	if !service.workflowProcessVisible(t.Context(), initiated, principal) {
 		t.Fatal("initiator hidden")
 	}
-	admin := principal
-	admin = workflowPrincipalWithPermissions(admin, "workflow.process.read")
-	if !service.workflowProcessVisible(t.Context(), process, admin) {
-		t.Fatal("admin hidden")
+	operator := workflowPrincipalWithPermissions(principal, "runtime.workflows.get_ops_workflow_process")
+	if service.workflowProcessVisible(t.Context(), process, operator) {
+		t.Fatal("route Action must not broaden business-process visibility")
 	}
 	store.tasks = []workflowmodel.WorkflowTask{{ID: "task"}}
 	if !service.workflowProcessVisible(t.Context(), process, principal) {
@@ -297,9 +296,8 @@ func TestWorkflowProcessListAndMyTasksAuthorizationFilterAndFailureOutcomes(t *t
 
 func TestWorkflowProcessListLoadsFailedNodesInOneBatch(t *testing.T) {
 	principal := workflowProcessQueryPrincipal()
-	principal = workflowPrincipalWithPermissions(principal, "workflow.process.read")
-	first := workflowmodel.WorkflowProcessInstance{ID: "first", WorkspaceID: "workspace", Status: "failed"}
-	second := workflowmodel.WorkflowProcessInstance{ID: "second", WorkspaceID: "workspace", Status: "configuration_error"}
+	first := workflowmodel.WorkflowProcessInstance{ID: "first", WorkspaceID: "workspace", InitiatorID: principal.UserID, Status: "failed"}
+	second := workflowmodel.WorkflowProcessInstance{ID: "second", WorkspaceID: "workspace", InitiatorID: principal.UserID, Status: "configuration_error"}
 	store := &workflowProcessStoreEdgeStub{
 		workflowExecutionProcessStub: workflowExecutionProcessStub{nodes: map[string][]workflowmodel.WorkflowNodeInstance{
 			"first":  {{ProcessID: "first", NodeID: "one", Status: "failed"}},

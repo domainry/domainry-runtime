@@ -41,7 +41,7 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 		Key: "admin",
 		Permissions: []string{
 			changeplanapplication.ActionBusinessReferenceGraph, "customer.read", "customer.update",
-			"scheduler.definition.read", "ops.workflow.read", "workflow.process.read",
+			"scheduler.definitions.list", "runtime.workflows.list_ops_workflow_executions", "runtime.workflows.list_ops_workflow_processes",
 			"integration.audit.view",
 		},
 		RecordScope:  "all_records",
@@ -82,7 +82,7 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 func TestBusinessSystemSnapshotCompositionHidesGovernanceFacts(t *testing.T) {
 	objects := []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Name: "Name", Type: "text"}}}}
 	roles := []accessfixture.Bundle{
-		{Key: "admin", Permissions: []string{"workspace.admin"}, RecordScope: "all_records", DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true, Write: true}}},
+		{Key: "admin", Permissions: []string{"runtime.appschema.validate_application_definition"}, RecordScope: "all_records", DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true, Write: true}}},
 		{Key: "viewer", Permissions: []string{"customer.read"}, RecordScope: "all_records", DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true}}},
 	}
 	application, _ := newMetadataCompositionApp(t, "visibility", objects, roles)

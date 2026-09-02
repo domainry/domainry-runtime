@@ -176,7 +176,7 @@ func TestOperationsOwnerExecutionFinalDefinitionAndReceiptEdges(t *testing.T) {
 
 	createdRequest := request
 	createdRequest.Key = "created-replay"
-	if _, _, err := service.Submit(t.Context(), OperationsSubmitRequest{Kind: createdRequest.Kind, Permission: "runtime.scheduler.retry_ops_scheduler_run", ResourceType: createdRequest.ResourceType, ResourceID: createdRequest.ResourceID, Reason: createdRequest.Reason}, createdRequest.Key, principal); err != nil {
+	if _, _, err := service.Submit(t.Context(), OperationsSubmitRequest{Kind: createdRequest.Kind, ResourceType: createdRequest.ResourceType, ResourceID: createdRequest.ResourceID, Reason: createdRequest.Reason}, createdRequest.Key, principal); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.ExecuteOwnerOperation(t.Context(), createdRequest, principal, func(context.Context) (any, error) { return nil, nil }); err != nil {
@@ -185,7 +185,7 @@ func TestOperationsOwnerExecutionFinalDefinitionAndReceiptEdges(t *testing.T) {
 
 	unknownStatusRequest := request
 	unknownStatusRequest.Key = "unknown-status"
-	if _, _, err := service.Submit(t.Context(), OperationsSubmitRequest{Kind: unknownStatusRequest.Kind, Permission: "runtime.scheduler.retry_ops_scheduler_run", ResourceType: unknownStatusRequest.ResourceType, ResourceID: unknownStatusRequest.ResourceID, Reason: unknownStatusRequest.Reason}, unknownStatusRequest.Key, principal); err != nil {
+	if _, _, err := service.Submit(t.Context(), OperationsSubmitRequest{Kind: unknownStatusRequest.Kind, ResourceType: unknownStatusRequest.ResourceType, ResourceID: unknownStatusRequest.ResourceID, Reason: unknownStatusRequest.Reason}, unknownStatusRequest.Key, principal); err != nil {
 		t.Fatal(err)
 	}
 	for key, receipt := range ledger.receipts {

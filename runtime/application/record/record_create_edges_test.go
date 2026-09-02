@@ -87,7 +87,7 @@ func TestCreatePrefersRelationAwareCandidateScopeAuthorization(t *testing.T) {
 
 func TestCreateDependencyFailuresStopBeforeCommit(t *testing.T) {
 	stages := []string{
-		"cancelled", "object", "identity", "normalize", "pipeline validation", "pipeline defaults",
+		"cancelled", "object", "normalize", "pipeline validation", "pipeline defaults",
 		"write scope", "replay", "before", "cancelled after before", "relations",
 		"policies", "unique", "duplicate", "workflow",
 	}
@@ -109,10 +109,6 @@ func TestCreateDependencyFailuresStopBeforeCommit(t *testing.T) {
 			case "object":
 				dependencies.ObjectForAction = func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
 					return definitionmodel.ObjectSchema{}, failure
-				}
-			case "identity":
-				dependencies.ApplyScopeOwnerFacts = func(context.Context, string, definitionmodel.ObjectSchema, map[string]any, string) error {
-					return failure
 				}
 			case "normalize":
 				dependencies.ObjectForAction = func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
@@ -179,9 +175,8 @@ func TestCreateDependencyFailuresStopBeforeCommit(t *testing.T) {
 				t.Fatalf("err=%v want wrapped/same %v", err, failure)
 			}
 
-			committedBeforeFailure := stage == "identity sync"
-			if (repository.commit.Operation != "") != committedBeforeFailure {
-				t.Fatalf("commit=%#v committedBeforeFailure=%v", repository.commit, committedBeforeFailure)
+			if repository.commit.Operation != "" {
+				t.Fatalf("commit=%#v", repository.commit)
 			}
 		})
 	}

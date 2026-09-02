@@ -10,7 +10,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-func (a *httpServerAssembly) wirePartyAndIdentityReferences(constructionContext context.Context) {
+func (a *httpServerAssembly) wireIdentityReferences(constructionContext context.Context) {
 	records := a.dependencies.Records
 	if directory := a.dependencies.IdentityBinding.Directory(); directory != nil {
 		records.Applications().AuthoringCapabilities.UseIdentityReferenceSource(constructionContext, identitySDKCapabilityReferenceSource(directory))
@@ -27,13 +27,9 @@ func identitySDKCapabilityReferenceSource(directory identitysdk.Directory) func(
 		if err != nil {
 			return capabilityapplication.CapabilityIdentityReferences{}, err
 		}
-		workforce, err := directory.ListWorkforce(ctx, identitysdk.DirectoryQuery{})
-		if err != nil {
-			return capabilityapplication.CapabilityIdentityReferences{}, err
-		}
 		references := capabilityapplication.CapabilityIdentityReferences{
 			UserIDs: make([]string, 0, len(users)), RoleIDs: make([]string, 0, len(roles)),
-			WorkforceProfileIDs: make([]string, 0, len(workforce)), DepartmentIDs: make([]string, 0, len(workforce)),
+			OrgIDs: make([]string, 0, len(users)),
 		}
 		for _, user := range users {
 			references.UserIDs = append(references.UserIDs, user.ID)
@@ -41,22 +37,18 @@ func identitySDKCapabilityReferenceSource(directory identitysdk.Directory) func(
 		for _, role := range roles {
 			references.RoleIDs = append(references.RoleIDs, role.ID)
 		}
-		departments := map[string]struct{}{}
-		for _, entry := range workforce {
-			if value := strings.TrimSpace(entry.WorkforceProfileID); value != "" {
-				references.WorkforceProfileIDs = append(references.WorkforceProfileIDs, value)
-			}
-			if value := strings.TrimSpace(entry.OrganizationUnitID); value != "" {
-				departments[value] = struct{}{}
+		organizationUnits := map[string]struct{}{}
+		for _, user := range users {
+			if value := strings.TrimSpace(user.OrgID); value != "" {
+				organizationUnits[value] = struct{}{}
 			}
 		}
-		for departmentID := range departments {
-			references.DepartmentIDs = append(references.DepartmentIDs, departmentID)
+		for organizationUnitID := range organizationUnits {
+			references.OrgIDs = append(references.OrgIDs, organizationUnitID)
 		}
 		sort.Strings(references.UserIDs)
 		sort.Strings(references.RoleIDs)
-		sort.Strings(references.WorkforceProfileIDs)
-		sort.Strings(references.DepartmentIDs)
+		sort.Strings(references.OrgIDs)
 		return references, nil
 	}
 }

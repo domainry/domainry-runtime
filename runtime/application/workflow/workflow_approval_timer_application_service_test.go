@@ -124,7 +124,7 @@ func TestWorkflowApprovalDeadlineTimerExecutesOnceAndSkipsCompletedTask(t *testi
 			return WorkflowBusinessActionInvocationResult{InvocationID: "reminder"}, nil
 		},
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "runtime-scheduler", WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "runtime-scheduler", WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}})
 	if err := service.ProcessApprovalDeadlineTimer(t.Context(), "workspace", task.ID, "reminder", principal); err != nil || invocations != 1 {
 		t.Fatalf("reminder invocations=%d err=%v", invocations, err)
 	}

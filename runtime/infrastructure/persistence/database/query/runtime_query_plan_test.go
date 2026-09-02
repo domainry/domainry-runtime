@@ -40,29 +40,6 @@ func TestRuntimeOperationalQueriesUseWorkflowAndHierarchyIndexes(t *testing.T) {
 	}
 }
 
-func TestMySQLReportingScopeQueryUsesWorkforceResolvedUserIDs(t *testing.T) {
-	store := openStoreForGeneratedListTest(t)
-	defer store.Close()
-	if err := store.SetEngineForTesting("mysql"); err != nil {
-		t.Fatal(err)
-	}
-	whereSQL, args, err := store.TenantListWhereClause("workspace-primary", recordmodel.RecordListQuery{
-		Scope: "subordinates", PrincipalWorkspaceID: "workspace-primary",
-		PrincipalReportingUserIDs: []string{"member-1", "member-2"}, OwnerField: "owner",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, predicate := range []string{"`owner` IN (?, ?)", "`workspace_id` = ?"} {
-		if !strings.Contains(whereSQL, predicate) {
-			t.Fatalf("mysql reporting query missing indexed predicate %q: %s", predicate, whereSQL)
-		}
-	}
-	if len(args) != 3 || args[1] != "member-1" || args[2] != "member-2" {
-		t.Fatalf("expected workspace and resolved subordinate IDs, got %#v", args)
-	}
-}
-
 func TestTenantQueryBuilderRejectsMissingWorkspaceAndOwnsWorkspaceFilter(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()

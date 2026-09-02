@@ -59,7 +59,7 @@ func TestUpdateDependencyFailuresAndCandidateGuards(t *testing.T) {
 	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
 	stages := []string{
 		"cancelled", "object", "not found", "expected timestamp", "expected version invalid", "expected version mismatch",
-		"normalize patch", "identity", "pipeline validation", "pipeline defaults", "before", "cancelled after before",
+		"normalize patch", "pipeline validation", "pipeline defaults", "before", "cancelled after before",
 		"transition before", "normalize candidate", "write scope", "relations", "policies",
 		"self effects", "unique", "duplicate", "workflow", "commit", "cancelled after commit",
 	}
@@ -97,10 +97,6 @@ func TestUpdateDependencyFailuresAndCandidateGuards(t *testing.T) {
 			case "normalize patch":
 				patch = map[string]any{"age": "invalid"}
 				wantCode = "backend.validation.number"
-			case "identity":
-				dependencies.ApplyScopeOwnerFacts = func(context.Context, string, definitionmodel.ObjectSchema, map[string]any, string) error {
-					return failure
-				}
 			case "pipeline validation":
 				dependencies.ValidatePipeline = func(context.Context, definitionmodel.ObjectSchema, string, map[string]any, principalmodel.Principal) error {
 					return failure

@@ -18,10 +18,10 @@ func ChangePlanReferenceImpactAuthoringCapability() capabilitycontract.Capabilit
 	return capabilitycontract.CapabilityAuthoringDefinition{
 		Key: "maintenance.reference_impact", Status: "supported", Lifecycle: "read_only_impact_analysis",
 		Parameters:  []capabilitycontract.CapabilityAuthoringParameter{{Key: "resource_type", Type: "string", Required: true}, {Key: "resource_key", Type: "string", Required: true}},
-		Permissions: []string{"platform_admin.domain_impact.read"}, ConfigurationRoutes: []string{"GET /domain-reference-graph", "GET /domain-references/{resourceType}/{resourceKey}"},
+		Permissions: []string{"runtime.businessreferences.business_reference_impact"}, ConfigurationRoutes: []string{"GET /domain-reference-graph", "GET /domain-references/{resourceType}/{resourceKey}"},
 		InputSchema:  changePlanReferenceImpactInputSchema(),
 		OutputSchema: changePlanReferenceImpactOutputSchema(), OutputVariables: []capabilitycontract.CapabilityAuthoringOutput{{Name: "reference_graph_hash", JSONPointer: "/graph_hash", Type: "reference_graph_hash", VisibleTo: "subsequent_capability_calls"}},
-		Execution: &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"changeplan.reference_graph"}, Transaction: "read_only_graph_projection", Idempotency: "naturally_idempotent_at_graph_hash", SideEffectLevel: "none", PermissionModel: "platform_admin.domain_impact.read"},
+		Execution: &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"changeplan.reference_graph"}, Transaction: "read_only_graph_projection", Idempotency: "naturally_idempotent_at_graph_hash", SideEffectLevel: "none", PermissionModel: "runtime.businessreferences.business_reference_impact"},
 		Examples:  []capabilitycontract.CapabilityAuthoringExample{{Name: "minimal_valid", Value: map[string]any{"resource_type": "object", "resource_key": "order"}}, {Name: "representative", Value: map[string]any{"resource_type": "field", "resource_key": "order.status"}}},
 		Sources:   []capabilitycontract.CapabilityAuthoringSource{{Kind: "service", Path: "runtime/application/changeplan/change_plan_reference_application_service.go", Symbol: "ChangePlanReferenceApplicationService.Graph"}, {Kind: "domain", Path: "runtime/domain/changeplan/projection/changeplan_reference_graph_projection.go", Symbol: "ChangePlanReferenceImpact"}},
 	}

@@ -3,13 +3,8 @@ package policy
 import (
 	"testing"
 
-	identitysdk "github.com/domainry/domainry-identity-sdk"
-
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
-
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 func TestWorkflowRuntimeFinalAuthoringAndPermissionEdges(t *testing.T) {
@@ -23,12 +18,6 @@ func TestWorkflowRuntimeFinalAuthoringAndPermissionEdges(t *testing.T) {
 	schema := workflowComponentInputSchema([]capabilitycontract.CapabilityAuthoringParameter{{Key: "enabled", Type: "boolean"}})
 	if schema.Properties["enabled"].Type != "boolean" {
 		t.Fatalf("boolean parameter schema=%#v", schema)
-	}
-
-	global := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workflow.run"}})
-	named := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workflow.run.order.approval"}})
-	if !WorkflowRunPermissionAllows(global, "anything") || !WorkflowRunPermissionAllows(named, " order.approval ") || WorkflowRunPermissionAllows(principalmodel.Principal{}, "order.approval") {
-		t.Fatal("workflow run permission matrix mismatch")
 	}
 }
 

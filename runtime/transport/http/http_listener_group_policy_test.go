@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	identitysdk "github.com/domainry/domainry-identity-sdk"
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 	"github.com/domainry/domainry-foundation/ratelimit"
+	identitysdk "github.com/domainry/domainry-identity-sdk"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 type listenerRateLimiterFunc func(context.Context, string, int, time.Duration) (ratelimit.Decision, error)

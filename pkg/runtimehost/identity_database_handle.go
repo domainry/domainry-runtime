@@ -2,12 +2,9 @@ package runtimehost
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"sync"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	partysdk "github.com/domainry/domainry-party-sdk"
 	principalapplication "github.com/domainry/domainry-runtime/runtime/application/principal"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -16,48 +13,12 @@ import (
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 )
 
-func projectIdentityDatabaseHandle(database *bootstrap.ProjectDatabase, filePath string, profile *runtimeBusinessProfileProjection, scopes *partyOrganizationScopeProjection) identitysdk.DatabaseHandle {
+func projectIdentityDatabaseHandle(database *bootstrap.ProjectDatabase, filePath string, profile *runtimeBusinessProfileProjection) identitysdk.DatabaseHandle {
 	var profileResolver identitysdk.BusinessProfileResolver
 	if profile != nil {
 		profileResolver = profile.Resolve
 	}
-	var scopeResolver identitysdk.OrganizationScopeResolver
-	if scopes != nil {
-		scopeResolver = scopes.Resolve
-	}
-	return identitysdk.DatabaseHandle{Pool: database.DB(), Driver: database.Driver(), Schema: database.DatabaseSchema(), FilePath: filePath, OrganizationScopeResolver: scopeResolver, BusinessProfileResolver: profileResolver, Migrations: database}
-}
-
-// partyOrganizationScopeProjection breaks the assembly-time cycle without
-// introducing a domain dependency. Identity retains this stable function;
-// Runtime Host publishes the selected Party Binding before serving requests.
-type partyOrganizationScopeProjection struct {
-	mu          sync.RWMutex
-	workspaceID string
-	scopes      partysdk.OrganizationScopes
-}
-
-func (p *partyOrganizationScopeProjection) Bind(workspaceID string, scopes partysdk.OrganizationScopes) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.workspaceID = strings.TrimSpace(workspaceID)
-	p.scopes = scopes
-}
-func (p *partyOrganizationScopeProjection) Resolve(ctx context.Context, workspaceID string, profileIDs []string) (identitysdk.OrganizationScopes, error) {
-	p.mu.RLock()
-	expected, scopes := p.workspaceID, p.scopes
-	p.mu.RUnlock()
-	if scopes == nil {
-		return identitysdk.OrganizationScopes{}, fmt.Errorf("Party organization scopes are unavailable")
-	}
-	if strings.TrimSpace(workspaceID) != expected {
-		return identitysdk.OrganizationScopes{}, fmt.Errorf("Party organization scope workspace mismatch")
-	}
-	facts, err := scopes.Resolve(ctx, profileIDs)
-	if err != nil {
-		return identitysdk.OrganizationScopes{}, err
-	}
-	return identitysdk.OrganizationScopes{TeamIDs: append([]string(nil), facts.TeamIDs...), StoreIDs: append([]string(nil), facts.StoreIDs...), TerritoryIDs: append([]string(nil), facts.TerritoryIDs...), WarehouseIDs: append([]string(nil), facts.WarehouseIDs...)}, nil
+	return identitysdk.DatabaseHandle{Pool: database.DB(), Driver: database.Driver(), Schema: database.DatabaseSchema(), FilePath: filePath, BusinessProfileResolver: profileResolver, Migrations: database}
 }
 
 type runtimeBusinessProfileProjection struct {

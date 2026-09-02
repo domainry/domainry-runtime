@@ -10,7 +10,7 @@ const (
 type OperationsDefinition struct {
 	Kind             string                   `json:"kind"`
 	Owner            string                   `json:"owner"`
-	Permissions      []string                 `json:"permissions"`
+	ActionKey        string                   `json:"action_key"`
 	ExecutionScope   OperationsExecutionScope `json:"execution_scope"`
 	ResourceType     string                   `json:"resource_type"`
 	Preconditions    []string                 `json:"preconditions"`

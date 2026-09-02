@@ -364,7 +364,7 @@ func actionEffectAuthority(set *definitionmodel.ActionEffectSet) map[string][]st
 }
 
 func toRuntimeextPrincipal(principal principalmodel.Principal) runtimeext.Principal {
-	result := runtimeext.Principal{UserID: principal.UserID, RoleKey: principal.RoleKey, DepartmentID: principal.DepartmentID, RequestID: principal.RequestID, CorrelationID: principal.CorrelationID, CausationID: principal.CausationID, AuthorizationRevision: principal.AuthorizationRevision, Known: principal.Known}
+	result := runtimeext.Principal{UserID: principal.UserID, RoleKey: principal.RoleKey, OrgID: principal.OrgID, RequestID: principal.RequestID, CorrelationID: principal.CorrelationID, CausationID: principal.CausationID, AuthorizationRevision: principal.AuthorizationRevision, Known: principal.Known}
 	if principal.ActiveBusinessProfile != nil {
 		result.ActiveBusinessProfile = &runtimeext.BusinessProfileReference{
 			BindingKey: principal.ActiveBusinessProfile.BindingKey,

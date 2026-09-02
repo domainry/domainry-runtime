@@ -19,7 +19,6 @@ type RecordValidationDependencies struct {
 	CanAccess          func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool
 	CanAccessPersisted func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) (bool, error)
 	Identity           identitysdk.Directory
-	Party              RecordPartyReferenceLookup
 }
 
 // RecordValidationDomainService validates record mutations.
@@ -35,7 +34,6 @@ func NewRecordValidationDomainService(dependencies RecordValidationDependencies)
 		relations: NewRecordRelationValidator(RecordRelationValidationDependencies{
 			Repository: dependencies.Repository, Object: dependencies.Object,
 			CanAccessRecord: dependencies.CanAccess, CanAccessPersistedRecord: dependencies.CanAccessPersisted, Identity: dependencies.Identity,
-			Party: dependencies.Party,
 		}),
 		relatedPolicies: NewRecordRelatedPolicyValidator(RecordRelatedPolicyDependencies{
 			Repository: dependencies.Repository, Object: dependencies.Object,

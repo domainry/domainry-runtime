@@ -33,9 +33,10 @@ func automationCompleteComponentAuthoringContract(capability *capabilitycontract
 	capability.InputSchema = schemas[capability.Key]
 	capability.OutputSchema = automationValidationOutputSchema()
 	capability.OutputVariables = automationValidationOutputVariables()
+	capability.Permissions = []string{"runtime.automation.validate_automation_authoring_fragment"}
 	capability.Execution = &capabilitycontract.CapabilityAuthoringExecution{
 		ReadSet: []string{"automation.rule"}, Transaction: "read_only_validation", Idempotency: "naturally_idempotent",
-		SideEffectLevel: "none", PermissionModel: "automation.rule.write",
+		SideEffectLevel: "none", PermissionModel: "runtime.automation.validate_automation_authoring_fragment",
 	}
 	capability.Sources = append(capability.Sources, capabilitycontract.CapabilityAuthoringSource{Kind: "validation", Path: "runtime/domain/automation/validation/automation_authoring_fragment_validation.go", Symbol: "AutomationValidateAuthoringFragment"})
 	capability.Errors = append(capability.Errors, automationComponentError(capability.Key))

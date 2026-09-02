@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
-	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
 
 // validateGovernance rejects policy-shaped metadata that cannot actually be
@@ -13,26 +12,10 @@ import (
 // policy because authoring agents may otherwise treat it as effective.
 func (state *validationState) validateGovernance() {
 	for objectIndex, object := range state.manifest.Objects {
-		scopeOwnerCount := 0
 		for fieldIndex, field := range object.Fields {
 			path := fmt.Sprintf("objects[%d].fields[%d].config", objectIndex, fieldIndex)
-			if raw, declared := field.Config["scope_owner"]; declared {
-				if enabled, valid := runtimeOwnerConfigBool(raw); valid && enabled {
-					scopeOwnerCount++
-				}
-				enabled, valid := raw.(bool)
-				if !valid {
-					state.add(path+".scope_owner", "must be boolean")
-				} else if enabled {
-					if strings.TrimSpace(field.Type) != "user" && !(strings.TrimSpace(field.Type) == "relation" && runtimeRelationTargetObject(field) == "identity_user") {
-						state.add(path+".scope_owner", "must mark a user field or relation targeting identity_user")
-					} else if strings.TrimSpace(field.Type) == "user" {
-						autoAssign, _ := field.Config["auto_assign_current_user"].(bool)
-						if !autoAssign {
-							state.add(path+".auto_assign_current_user", "must be true for a user scope_owner")
-						}
-					}
-				}
+			if _, declared := field.Config["scope_owner"]; declared {
+				state.add(path+".scope_owner", "is Runtime-owned and must not be declared by object metadata")
 			}
 			for _, key := range []string{"lifecycle_subject_identity", "lifecycle_subject_file"} {
 				if raw, ok := field.Config[key]; ok {
@@ -52,12 +35,6 @@ func (state *validationState) validateGovernance() {
 					state.add(path+".lifecycle_erase", "file lifecycle erase must be retain or delete")
 				}
 			}
-		}
-		if scopeOwnerCount > 0 {
-			if scopeOwnerCount != 1 {
-				state.add(fmt.Sprintf("objects[%d].fields", objectIndex), "object requires exactly one scope_owner field; found %d", scopeOwnerCount)
-			}
-			state.validateScopeOwnerDepartmentFields(objectIndex, object)
 		}
 	}
 	policyKeys := map[string]bool{}
@@ -185,76 +162,6 @@ func (state *validationState) validateGovernance() {
 			state.add(path+".max_rows", "must be at least 1")
 		}
 	}
-}
-
-func (state *validationState) validateScopeOwnerDepartmentFields(objectIndex int, object definitionmodel.ObjectSchema) {
-	for _, keys := range [][]string{{"owner_department_id", "ownerDepartmentId"}, {"owner_department_path", "ownerDepartmentPath"}} {
-		fieldIndex := -1
-		for _, key := range keys {
-			for index, field := range object.Fields {
-				if strings.TrimSpace(field.Key) == key {
-					fieldIndex = index
-					break
-				}
-			}
-			if fieldIndex >= 0 {
-				break
-			}
-		}
-		if fieldIndex < 0 {
-			state.add(fmt.Sprintf("objects[%d].fields", objectIndex), "scope_owner object requires one Runtime-recognized %s field", strings.Join(keys, " or "))
-			continue
-		}
-		if fieldType := strings.TrimSpace(object.Fields[fieldIndex].Type); fieldType != "text" {
-			state.add(fmt.Sprintf("objects[%d].fields[%d].type", objectIndex, fieldIndex), "scope-owner department field must be text; found %q", fieldType)
-		}
-	}
-}
-
-func runtimeManifestResolvableOwnerField(object definitionmodel.ObjectSchema) bool {
-	for _, field := range object.Fields {
-		if enabled, valid := runtimeOwnerConfigBool(field.Config["scope_owner"]); valid && enabled {
-			return true
-		}
-	}
-	if strings.TrimSpace(fmt.Sprint(object.UX["kind"])) == "identity_profile_extension" {
-		if config, ok := object.UX["config"].(map[string]any); ok {
-			identityField := strings.TrimSpace(fmt.Sprint(config["identity_relation_field"]))
-			for _, field := range object.Fields {
-				if field.Key == identityField && field.Type == "relation" {
-					return true
-				}
-			}
-		}
-	}
-	for _, preferred := range []string{"owner", "assignee", "requester", "created_by", "createdBy"} {
-		for _, field := range object.Fields {
-			if field.Key == preferred && field.Type == "user" {
-				return true
-			}
-		}
-	}
-	for _, field := range object.Fields {
-		if field.Type == "user" {
-			return true
-		}
-	}
-	return false
-}
-
-func runtimeOwnerConfigBool(value any) (bool, bool) {
-	switch typed := value.(type) {
-	case bool:
-		return typed, true
-	case string:
-		switch strings.ToLower(strings.TrimSpace(typed)) {
-		case "true", "1", "yes":
-			return true, true
-		case "false", "0", "no":
-			return false, true
-		}
-	}
-	return false, false
 }
 
 func (state *validationState) validateReportExportRecordMapping(path string, control reportmodel.ReportExportControlSchema) {

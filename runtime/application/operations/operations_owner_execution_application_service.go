@@ -30,6 +30,7 @@ type OperationsOwnerExecutionResult struct {
 
 type DirectAuthoringUpsertRequest struct {
 	CapabilityKey        string
+	ActionKey            string
 	ResourceID           string
 	BuilderTaskID        string
 	IdempotencyKey       string
@@ -46,12 +47,11 @@ func (s *OperationsApplicationService) ExecuteOwnerOperation(ctx context.Context
 	if !found || definition.ExecutionScope != operationsmodel.OperationsExecutionWorkspace || definition.ResourceType != strings.TrimSpace(request.ResourceType) {
 		return OperationsOwnerExecutionResult{}, apperror.New(apperror.KindBadRequest, "backend.operations.definition_mismatch", nil, nil)
 	}
-	permission := operationsOwnerPermission(definition.Permissions, principal)
-	if permission == "" {
-		return OperationsOwnerExecutionResult{}, operationsAuthorize(principal, "")
+	if err := operationsAuthorize(principal, definition.ActionKey); err != nil {
+		return OperationsOwnerExecutionResult{}, err
 	}
 	receipt, decision, err := s.Submit(ctx, OperationsSubmitRequest{
-		Kind: request.Kind, Permission: permission, ResourceType: request.ResourceType,
+		Kind: request.Kind, ResourceType: request.ResourceType,
 		ResourceID: request.ResourceID, Reason: request.Reason, Reference: request.Reference, Payload: request.Payload,
 	}, request.Key, principal)
 	if err != nil {
@@ -72,11 +72,12 @@ func (s *OperationsApplicationService) ExecuteDirectAuthoringUpsert(
 	execute func(context.Context) (any, error),
 ) (OperationsOwnerExecutionResult, error) {
 	request.CapabilityKey = strings.TrimSpace(request.CapabilityKey)
+	request.ActionKey = strings.TrimSpace(request.ActionKey)
 	request.ResourceID = strings.TrimSpace(request.ResourceID)
 	request.BuilderTaskID = strings.TrimSpace(request.BuilderTaskID)
 	request.IdempotencyKey = strings.TrimSpace(request.IdempotencyKey)
 	request.ExpectedResourceHash = strings.TrimSpace(request.ExpectedResourceHash)
-	if request.CapabilityKey == "" || request.ResourceID == "" || request.BuilderTaskID == "" {
+	if request.CapabilityKey == "" || request.ActionKey == "" || request.ResourceID == "" || request.BuilderTaskID == "" {
 		return OperationsOwnerExecutionResult{}, apperror.New(apperror.KindBadRequest, "backend.authoring.request_identity_required", nil, nil)
 	}
 	if request.IdempotencyKey == "" {
@@ -105,10 +106,10 @@ func (s *OperationsApplicationService) ExecuteDirectAuthoringUpsert(
 	}
 	kind := "runtime.authoring.upsert." + request.CapabilityKey
 	receipt, decision, err := s.submit(ctx, OperationsSubmitRequest{
-		Kind: kind, Permission: "owner_enforced", ResourceType: "authoring_resource", ResourceID: request.ResourceID,
+		Kind: kind, ResourceType: "authoring_resource", ResourceID: request.ResourceID,
 		Reason:  "direct authoring upsert " + request.CapabilityKey,
 		Payload: map[string]any{"builder_task_id": request.BuilderTaskID, "expected_resource_hash": request.ExpectedResourceHash, "payload": request.Payload},
-	}, request.IdempotencyKey, principal.UserID, operationsmodel.OperationsScope{WorkspaceID: principal.WorkspaceID, ResourceType: "authoring_resource", ResourceID: request.CapabilityKey + ":" + request.ResourceID})
+	}, request.ActionKey, request.IdempotencyKey, principal.UserID, operationsmodel.OperationsScope{WorkspaceID: principal.WorkspaceID, ResourceType: "authoring_resource", ResourceID: request.CapabilityKey + ":" + request.ResourceID})
 	if err != nil {
 		return OperationsOwnerExecutionResult{}, err
 	}
@@ -195,16 +196,6 @@ func (s *OperationsApplicationService) executeOwnerReceipt(ctx context.Context, 
 	}
 	result.Value, result.Receipt = value, finished
 	return result, ownerErr
-}
-
-func operationsOwnerPermission(permissions []string, principal principalmodel.Principal) string {
-	for _, permission := range permissions {
-		permission = strings.TrimSpace(permission)
-		if principal.HasExactPermission(permission) {
-			return permission
-		}
-	}
-	return ""
 }
 
 func operationsOwnerFailureClass(kind apperror.ErrorKind) operationsmodel.OperationsFailureClass {

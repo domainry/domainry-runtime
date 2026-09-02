@@ -45,7 +45,7 @@ func TestModuleHTTPRouteAuthorizationUsesDeclaredPermissionPolicy(t *testing.T) 
 	}
 
 	known := moduleHTTPAuthorizationPrincipal()
-	workspaceAdmin := moduleHTTPAuthorizationPrincipal("workspace.admin")
+	workspaceAdmin := moduleHTTPAuthorizationPrincipal("runtime.appschema.validate_application_definition")
 	read := moduleHTTPAuthorizationPrincipal("module.resource.read")
 	for _, test := range []struct {
 		name      string
@@ -79,7 +79,7 @@ func moduleHTTPTestAction(key string, strategy actioncontract.AuthorizationStrat
 		EffectClass: actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow, IdempotencyDecision: "not_applicable", AuditClass: "module_resource_read", LifecycleStatus: actioncontract.LifecycleActive,
 	}
 	if strategy == actioncontract.AuthorizationExactRolePermission {
-		action.Permission = &actioncontract.PermissionDefinition{Key: key, Owner: action.Owner, ResourceKey: key[:separator], ActionKey: key[separator+1:], Label: key, Category: "Module", LifecycleStatus: actioncontract.LifecycleActive}
+		action.Permission = &actioncontract.PermissionDefinition{Key: key, Owner: action.Owner, ResourceKey: key[:separator], OperationKey: key[separator+1:], Label: key, Category: "Module", LifecycleStatus: actioncontract.LifecycleActive}
 	} else if strategy == actioncontract.AuthorizationAnonymousProtocol {
 		action.Authorization.PolicyKey = "module.public_protocol"
 	}

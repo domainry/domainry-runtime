@@ -12,7 +12,7 @@ import (
 
 func TestDirectAuthoringSuccessProjectionUsesLiveInstanceAndReverseDependencies(t *testing.T) {
 	service := NewCapabilityAuthoringApplicationService(nil)
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}})
 	projection, err := service.DirectAuthoringSuccessProjection(t.Context(), "schema.object", principal)
 	if err != nil || projection.SnapshotHash == "" || len(projection.AvailableSuccessors) == 0 {
 		t.Fatalf("projection=%#v err=%v", projection, err)

@@ -29,7 +29,7 @@ const (
 )
 
 func SupportedRuntimeSchemaUpgradeVersions() []string {
-	return []string{"001_connector_runtime_lifecycle", "002_data_lifecycle_governance", "003_operations_reliability", "004_runtime_release_cohort", "005_identity_workforce_separation", "006_party_foundation", "007_identity_global_names", "008_identity_account_directory", "009_managed_database_cohort", "010_external_identity_ownership", "011_notification_service_publication_outbox", "012_rate_limit_schema_owner", "013_agent_schema_owner"}
+	return []string{"001_connector_runtime_lifecycle", "002_data_lifecycle_governance", "003_operations_reliability", "004_runtime_release_cohort", "007_identity_global_names", "008_identity_account_directory", "009_managed_database_cohort", "010_external_identity_ownership", "011_notification_service_publication_outbox", "012_rate_limit_schema_owner", "013_agent_schema_owner"}
 }
 
 func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
@@ -391,7 +391,7 @@ func runtimeSchemaMigrationPath(version string) string {
 
 func (s *RuntimeStore) removeObsoleteMigrationLedgers(ctx context.Context) error {
 
-	for _, table := range []string{"_schema_materializations", "_runtime_schema_migrations", "_party_schema_migrations"} {
+	for _, table := range []string{"_schema_materializations", "_runtime_schema_migrations"} {
 		if _, err := s.schemaDatabase().ExecContext(ctx, "DROP TABLE IF EXISTS "+s.tableIdentifier(table)); err != nil {
 			return fmt.Errorf("remove obsolete migration ledger %s: %w", table, err)
 		}
@@ -400,7 +400,7 @@ func (s *RuntimeStore) removeObsoleteMigrationLedgers(ctx context.Context) error
 }
 
 func currentRuntimeSchemaChecksum() string {
-	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":metadata_projection,object_fields,record_data,evidence,party,lifecycle,operations,indexes,_release_cohorts,_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,module_migrations,workspace_provisioning,tenant_initialization"))
+	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":metadata_projection,object_fields,record_data,evidence,lifecycle,operations,indexes,_release_cohorts,_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,module_migrations,workspace_provisioning,tenant_initialization"))
 	return hex.EncodeToString(sum[:])
 }
 

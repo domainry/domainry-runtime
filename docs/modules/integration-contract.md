@@ -29,7 +29,6 @@ ambient environment variables.
 | Module | Module HTTP Surface | Runtime-owned HTTP that remains | Persistence |
 | --- | --- | --- | --- |
 | Identity | Authentication, browser session and Identity management | Project provisioning orchestration | Borrowed pool; Identity-owned schema |
-| Party | Party directory and Party foundation catalog | SaaS proxy facade only | Borrowed pool; Party-owned schema |
 | Notification | None yet | Inbox product projections, SSE, publication orchestration and delivery governance | Borrowed pool; Notification-owned schema |
 | Integration | Web Push readiness and subscription self-service | Durable Runtime outbox handoff query; SaaS compatibility proxy | Borrowed pool; Integration-owned schema |
 | Scheduler | None | Runtime definition authoring, operation receipts and trigger acceptance | Borrowed pool; Scheduler-owned schema |

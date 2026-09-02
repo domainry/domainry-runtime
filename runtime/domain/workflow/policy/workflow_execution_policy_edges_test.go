@@ -7,40 +7,12 @@ import (
 	"testing"
 	"time"
 
-	identitysdk "github.com/domainry/domainry-identity-sdk"
-
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
-
 	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
 
-func TestWorkflowExecutionPermissionAndInputPolicies(t *testing.T) {
-	unknown := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{Permissions: []string{"*"}})
-	if WorkflowPermissionAllows(unknown, "run") || WorkflowDefinitionPermissionAllows(unknown, "workflow.publish") {
-		t.Fatal("unknown principal must be denied")
-	}
-	if !WorkflowPermissionAllows(accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"ops.workflow.run"}}), "run") {
-		t.Fatal("operations permission should allow workflow action")
-	}
-	if !WorkflowPermissionAllows(accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workflow.cancel"}}), "cancel") {
-		t.Fatal("workflow object permission should allow action")
-	}
-	if WorkflowPermissionAllows(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, "run") {
-		t.Fatal("missing permission must be denied")
-	}
-	if WorkflowDefinitionPermissionAllows(accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}}), "workflow.publish") {
-		t.Fatal("workspace.admin must not expand to workflow.publish")
-	}
-	if !WorkflowDefinitionPermissionAllows(accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workflow.publish"}}), "workflow.publish") {
-		t.Fatal("definition permission should allow its exact grant")
-	}
-	if WorkflowDefinitionPermissionAllows(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, "workflow.publish") {
-		t.Fatal("definition permission must reject missing grant")
-	}
-
+func TestWorkflowExecutionInputPolicies(t *testing.T) {
 	workflow := definitionmodel.WorkflowSchema{TriggerContract: &definitionmodel.WorkflowTriggerContract{FieldKey: "status"}}
 	if got := WorkflowChangedFieldsFromTrigger(workflow, " record_updated:order.amount "); !reflect.DeepEqual(got, []string{"amount", "status"}) {
 		t.Fatalf("changed fields = %#v", got)

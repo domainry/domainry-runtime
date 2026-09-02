@@ -29,12 +29,12 @@ func TestOperationsRunbookCategories(t *testing.T) {
 
 func TestOperationsDefinitionsAreIndependentAndMissingLookup(t *testing.T) {
 	definitions := OperationsDefinitions()
-	originalPermission := definitions[0].Permissions[0]
-	definitions[0].Permissions[0] = "mutated"
+	originalActionKey := definitions[0].ActionKey
+	definitions[0].ActionKey = "mutated"
 	definitions[0].Preconditions[0] = "mutated"
 	definitions[0].FailureSemantics[0] = "mutated"
 	fresh := OperationsDefinitions()
-	if fresh[0].Permissions[0] != originalPermission || fresh[0].Preconditions[0] == "mutated" || fresh[0].FailureSemantics[0] == "mutated" {
+	if fresh[0].ActionKey != originalActionKey || fresh[0].Preconditions[0] == "mutated" || fresh[0].FailureSemantics[0] == "mutated" {
 		t.Fatal("operations definitions leaked mutable slices")
 	}
 	if _, ok := OperationsDefinition("missing"); ok {

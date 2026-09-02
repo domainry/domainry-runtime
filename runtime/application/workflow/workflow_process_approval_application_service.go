@@ -144,25 +144,21 @@ func (e *WorkflowProcessEngine) resolveApprovalAssigneeStrategy(ctx context.Cont
 	case "users":
 		return uniqueSortedStrings(resolver.UserIDs), "", nil
 	case "manager", "manager_of", "initiator_manager":
-		userID := process.InitiatorID
+		userID := strings.TrimSpace(process.InitiatorID)
 		if resolver.Type != "initiator_manager" {
-			field := strings.TrimSpace(resolver.UserField)
-			userID = workflowpolicy.WorkflowApprovalSubjectUserID(process.Variables, field)
-			if userID == "" {
-				return nil, "", nil
-			}
+			userID = workflowpolicy.WorkflowApprovalSubjectUserID(process.Variables, strings.TrimSpace(resolver.UserField))
 		}
-		entries, err := e.runtime.dependencies.Identity.ListWorkforce(ctx, identitysdk.DirectoryQuery{})
+		if userID == "" {
+			return nil, "", nil
+		}
+		user, userExists, err := e.runtime.dependencies.Identity.FindUser(ctx, identitysdk.UserLookup{UserID: identitysdk.SubjectID(userID)})
 		if err != nil {
 			return nil, "", err
 		}
-		managerID := ""
-		for _, entry := range entries {
-			if entry.IdentityUserID == userID {
-				managerID = strings.TrimSpace(entry.ManagerIdentityUserID)
-				break
-			}
+		if !userExists {
+			return nil, "", nil
 		}
+		managerID := strings.TrimSpace(user.ManagerUserID)
 		if managerID == "" {
 			return nil, "", nil
 		}

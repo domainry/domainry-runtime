@@ -57,7 +57,7 @@ func TestBackendIntegrationRoutesPublishTypedRuntimeClientContracts(t *testing.T
 
 }
 
-func TestPersonalInboxAndWorkforcePublishDurableIntegrationContracts(t *testing.T) {
+func TestPersonalInboxPublishesDurableIntegrationContracts(t *testing.T) {
 	paths := Build(appschemamodel.ApplicationSchemaSnapshot{})["paths"].(map[string]any)
 	inbox := map[string]map[string]string{
 		"/notifications":                                              {"get": "listNotifications"},

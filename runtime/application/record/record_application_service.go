@@ -36,12 +36,10 @@ type RecordApplicationService struct {
 	importer                  *RecordImportApplicationService
 	exporter                  *RecordExportApplicationService
 	dataExchange              *RecordDataExchangeApplicationService
-	ownerDepartmentPaths      *RecordOwnerDepartmentPathApplicationService
 	queryPolicy               *recordservice.RecordQueryPolicyDomainService
 	audit                     func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
 	prepareWorkflow           func(context.Context, string, recordmodel.Record, map[string]any, principalmodel.Principal, string) ([]workflowmodel.WorkflowExecution, error)
 	executeWorkflow           func(context.Context, []workflowmodel.WorkflowExecution, principalmodel.Principal)
-	updateInternal            func(context.Context, string, definitionmodel.ObjectSchema, recordmodel.Record, string) error
 	schemaMap                 func() map[string]definitionmodel.ObjectSchema
 	identityProfileExtensions func() []profilebindingmodel.Binding
 	recordMutationExecution   *recordruntime.RecordMutationExecutionRuntime
@@ -55,12 +53,10 @@ type RecordApplicationDependencies struct {
 	Pipeline                     *pipelineapplication.PipelineApplicationService
 	Validation                   *recordservice.RecordValidationDomainService
 	IdentityDirectory            identitysdk.Directory
-	ScopeOwnerFactDerivation     *recordservice.RecordScopeOwnerFactDerivationDomainService
 	Audit                        func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
 	PrepareWorkflow              func(context.Context, string, recordmodel.Record, map[string]any, principalmodel.Principal, string) ([]workflowmodel.WorkflowExecution, error)
 	ExecuteWorkflow              func(context.Context, []workflowmodel.WorkflowExecution, principalmodel.Principal)
 	ApplyStateMachineSelfEffects func(context.Context, definitionmodel.ObjectSchema, map[string]any, map[string]any, string, principalmodel.Principal) (bool, error)
-	UpdateInternal               func(context.Context, string, definitionmodel.ObjectSchema, recordmodel.Record, string) error
 	SchemaMap                    func() map[string]definitionmodel.ObjectSchema
 	IdentityProfileExtensions    func() []profilebindingmodel.Binding
 	FindBeforeCreateReplay       func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) (recordmodel.Record, bool, error)
@@ -123,7 +119,6 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 		audit:                     dependencies.Audit,
 		prepareWorkflow:           dependencies.PrepareWorkflow,
 		executeWorkflow:           dependencies.ExecuteWorkflow,
-		updateInternal:            dependencies.UpdateInternal,
 		schemaMap:                 dependencies.SchemaMap,
 		identityProfileExtensions: dependencies.IdentityProfileExtensions,
 		recordMutationExecution:   dependencies.RecordMutationExecution,
@@ -156,7 +151,6 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 		ListRecords:     reader.ListRecords,
 	})
 	relationDeletes := recordservice.NewRecordDeleteRelationDomainService(dependencies.Repository, service.schemaMap)
-	ownerDepartmentPaths := NewRecordOwnerDepartmentPathApplicationService(dependencies.Repository, service.schemaMap, service.updateInternal)
 	create := NewRecordCreateApplicationService(RecordCreateDependencies{
 		Repository:      dependencies.Repository,
 		MutationKernel:  mutationKernel,
@@ -164,9 +158,6 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 		CanWrite:        service.queryPolicy.CanWriteRecordScope,
 		CanWriteCandidate: func(ctx context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema, candidate recordmodel.Record) (bool, error) {
 			return service.queryPolicy.CanAccessRecordAction(ctx, principal, object, candidate, "create")
-		},
-		ApplyScopeOwnerFacts: func(ctx context.Context, workspaceID string, object definitionmodel.ObjectSchema, data map[string]any, recordID string) error {
-			return dependencies.ScopeOwnerFactDerivation.Apply(ctx, workspaceID, object, data, recordID)
 		},
 		ValidatePipeline: func(ctx context.Context, object definitionmodel.ObjectSchema, recordID string, data map[string]any, principal principalmodel.Principal) error {
 			return dependencies.Pipeline.ValidateDefaults(ctx, object, recordID, data, principal)
@@ -230,9 +221,6 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 		CanWrite: service.queryPolicy.CanWriteRecordScope,
 		Denied: func(ctx context.Context, objectKey, recordID string, principal principalmodel.Principal, err error, reason string, patch map[string]any) {
 			recordAppendUpdateDeniedAudit(ctx, service.audit, objectKey, recordID, principal, err, reason, patch)
-		},
-		ApplyScopeOwnerFacts: func(ctx context.Context, workspaceID string, object definitionmodel.ObjectSchema, data map[string]any, recordID string) error {
-			return dependencies.ScopeOwnerFactDerivation.Apply(ctx, workspaceID, object, data, recordID)
 		},
 		ValidatePipeline: func(ctx context.Context, object definitionmodel.ObjectSchema, recordID string, data map[string]any, principal principalmodel.Principal) error {
 			return dependencies.Pipeline.ValidateDefaults(ctx, object, recordID, data, principal)
@@ -341,7 +329,6 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 	service.importer = importer
 	service.exporter = exporter
 	service.dataExchange = dataExchange
-	service.ownerDepartmentPaths = ownerDepartmentPaths
 	return service
 }
 

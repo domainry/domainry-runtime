@@ -194,36 +194,40 @@ func annotateModuleOwnedOpenAPIPaths(paths map[string]any, surfaces []modulehttp
 				)
 				pathSpec[method] = operation
 			}
-			ensureModuleHTTPPathParameters(operation, path)
-			exposures := make([]string, 0, len(route.Action.Exposures))
-			for _, exposure := range route.Action.Exposures {
-				exposures = append(exposures, string(exposure))
-			}
-			permission := ""
-			if route.Action.Permission != nil {
-				permission = route.Action.Permission.Key
-			}
-			operation["x-domainry-module-owner"] = owner
-			operation["x-domainry-module-route"] = map[string]any{
-				"contract_version": routeModuleHTTPContractVersion(surface),
-				"owner":            owner,
-				"surface":          surfaceName,
-				"action_key":       route.Action.Key,
-				"exposures":        exposures,
-				"authorization":    string(route.Action.Authorization.Strategy),
-				"policy_key":       route.Action.Authorization.PolicyKey,
-				"permission":       permission,
-				"governance": map[string]any{
-					"effect_class":         string(route.Action.EffectClass),
-					"risk_level":           string(route.Action.RiskLevel),
-					"approval_policies":    append([]actioncontract.ApprovalPolicy(nil), route.Action.ApprovalPolicies...),
-					"idempotency_decision": route.Action.IdempotencyDecision,
-					"audit_class":          route.Action.AuditClass,
-				},
-			}
-			applyModuleHTTPGovernanceHeaders(operation, route.Action)
+			applyModuleHTTPRouteMetadata(operation, path, owner, surfaceName, routeModuleHTTPContractVersion(surface), route)
 		}
 	}
+}
+
+func applyModuleHTTPRouteMetadata(operation map[string]any, path, owner, surfaceName, contractVersion string, route modulehttp.Route) {
+	ensureModuleHTTPPathParameters(operation, path)
+	exposures := make([]string, 0, len(route.Action.Exposures))
+	for _, exposure := range route.Action.Exposures {
+		exposures = append(exposures, string(exposure))
+	}
+	permission := ""
+	if route.Action.Permission != nil {
+		permission = route.Action.Permission.Key
+	}
+	operation["x-domainry-module-owner"] = owner
+	operation["x-domainry-module-route"] = map[string]any{
+		"contract_version": contractVersion,
+		"owner":            owner,
+		"surface":          surfaceName,
+		"action_key":       route.Action.Key,
+		"exposures":        exposures,
+		"authorization":    string(route.Action.Authorization.Strategy),
+		"policy_key":       route.Action.Authorization.PolicyKey,
+		"permission":       permission,
+		"governance": map[string]any{
+			"effect_class":         string(route.Action.EffectClass),
+			"risk_level":           string(route.Action.RiskLevel),
+			"approval_policies":    append([]actioncontract.ApprovalPolicy(nil), route.Action.ApprovalPolicies...),
+			"idempotency_decision": route.Action.IdempotencyDecision,
+			"audit_class":          route.Action.AuditClass,
+		},
+	}
+	applyModuleHTTPGovernanceHeaders(operation, route.Action)
 }
 
 func ensureModuleHTTPPathParameters(operation map[string]any, path string) {
@@ -305,7 +309,7 @@ func applyModuleHTTPGovernanceHeaders(operation map[string]any, action actioncon
 	if action.IdempotencyDecision == "caller_key_required" {
 		parameters = upsertOpenAPIHeaderParameter(parameters, openAPIHeaderParameter("Idempotency-Key", "Caller-supplied idempotency key", true))
 	}
-	if len(action.ApprovalPolicies) != 0 {
+	if actionHasApprovalPolicy(action, actioncontract.ApprovalReason) {
 		parameters = upsertOpenAPIHeaderParameter(parameters, openAPIHeaderParameter("X-Operation-Reason", "Human-supplied auditable operator reason", true))
 	}
 	if actionHasApprovalPolicy(action, actioncontract.ApprovalConfirmation) {

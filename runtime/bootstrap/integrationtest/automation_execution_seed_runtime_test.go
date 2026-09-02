@@ -57,7 +57,7 @@ func TestBusinessWorkspaceIdentityCreatesCustomerAndPersistsBeforeAutomationHist
 	businessSession := runtimeIdentityFixtureSession(t, userID, "automation_business_tester")
 
 	effective := runtimeFixtureAuthorizedRequest[map[string]any](t, handler, businessSession.AccessToken, http.MethodGet, "/permissions/effective", nil)
-	if runtimeFixtureFunctionPermissionAllowed(t, effective, "workspace.admin") ||
+	if runtimeFixtureFunctionPermissionAllowed(t, effective, "runtime.appschema.validate_application_definition") ||
 		!runtimeFixtureObjectActionAllowed(t, effective, "customer", "create") {
 		t.Fatalf("backend effective permissions do not match the isolated business role: %#v", effective)
 	}
@@ -80,7 +80,7 @@ func TestBusinessWorkspaceIdentityCreatesCustomerAndPersistsBeforeAutomationHist
 	reviewerSession := runtimeIdentityFixtureSession(t, "automation_history_reviewer_user", "automation_history_reviewer")
 	reviewerEffective := runtimeFixtureAuthorizedRequest[map[string]any](t, handler, reviewerSession.AccessToken, http.MethodGet, "/permissions/effective", nil)
 	if !runtimeFixtureFunctionPermissionAllowed(t, reviewerEffective, "runtime.automation.list_automation_executions") ||
-		runtimeFixtureFunctionPermissionAllowed(t, reviewerEffective, "workspace.admin") ||
+		runtimeFixtureFunctionPermissionAllowed(t, reviewerEffective, "runtime.appschema.validate_application_definition") ||
 		runtimeFixtureObjectActionAllowed(t, reviewerEffective, "customer", "create") {
 		t.Fatalf("backend effective permissions do not isolate the history reviewer: %#v", reviewerEffective)
 	}

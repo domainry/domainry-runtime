@@ -2,7 +2,6 @@ package validation
 
 import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
@@ -45,17 +44,6 @@ func RecordNormalizeListQuery(object definitionmodel.ObjectSchema, query recordm
 		query.Scope = "all_records"
 	}
 	query.RootObjectKey = object.Key
-	query.PrincipalUserID, query.PrincipalWorkspaceID = principal.UserID, principal.WorkspaceID
-	query.PrincipalDepartmentPath = principal.DepartmentPath
-	query.PrincipalReportingUserIDs = append([]string(nil), principal.ReportingUserIDs...)
-	query.PrincipalTeamIDs = append([]string(nil), principal.OrganizationScopes.TeamIDs...)
-	query.PrincipalStoreIDs = append([]string(nil), principal.OrganizationScopes.StoreIDs...)
-	query.PrincipalTerritoryIDs = append([]string(nil), principal.OrganizationScopes.TerritoryIDs...)
-	query.PrincipalWarehouseIDs = append([]string(nil), principal.OrganizationScopes.WarehouseIDs...)
-	query.OwnerField = recordpolicy.RecordOwnerFieldKey(object)
-	query.DepartmentPathField = recordpolicy.RecordOwnerDepartmentPathFieldKey(object)
-	query.TeamField, query.StoreField = recordpolicy.RecordTeamFieldKey(object), recordpolicy.RecordStoreFieldKey(object)
-	query.TerritoryField, query.WarehouseField = recordpolicy.RecordTerritoryFieldKey(object), recordpolicy.RecordWarehouseFieldKey(object)
 	return query
 }
 

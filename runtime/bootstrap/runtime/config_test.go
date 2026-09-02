@@ -8,7 +8,7 @@ import (
 
 func TestNormalizeRuntimeConfigDoesNotInventTenantScope(t *testing.T) {
 	cfg := normalizeRuntimeConfig(config.Config{})
-	if cfg.IdentityWorkspaceID != "" || cfg.NotificationTenantID != "" || cfg.NotificationWorkspaceID != "" || cfg.PartyTenantID != "" || cfg.PartyWorkspaceID != "" || cfg.IdentityAudience != "domainry-runtime" {
+	if cfg.IdentityWorkspaceID != "" || cfg.NotificationTenantID != "" || cfg.NotificationWorkspaceID != "" || cfg.IdentityAudience != "domainry-runtime" {
 		t.Fatalf("Identity defaults=%#v", cfg)
 	}
 }

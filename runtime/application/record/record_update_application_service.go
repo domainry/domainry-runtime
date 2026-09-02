@@ -34,7 +34,6 @@ type RecordUpdateDependencies struct {
 	CanWrite              func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool
 	CanAccessScope        func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record, bool) (bool, error)
 	Denied                RecordUpdateDeniedObserver
-	ApplyScopeOwnerFacts  func(context.Context, string, definitionmodel.ObjectSchema, map[string]any, string) error
 	ValidatePipeline      func(context.Context, definitionmodel.ObjectSchema, string, map[string]any, principalmodel.Principal) error
 	ApplyPipelineDefaults func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal, bool) error
 	RunBefore             func(context.Context, string, string, string, map[string]any, map[string]any, map[string]any, principalmodel.Principal) error
@@ -264,7 +263,7 @@ func (s *RecordUpdateApplicationService) planUpdate(ctx context.Context, objectK
 	if err != nil {
 		return recordUpdatePlannedMutation{}, recordUpdateErrorFrom(apperror.KindBadRequest, err)
 	}
-	if err := s.validateCandidate(ctx, objectKey, object, record.ID, beforeData, nextData, patch, principal, authorizationPrincipal, true); err != nil {
+	if err := s.validateCandidate(ctx, objectKey, object, record, beforeData, nextData, patch, principal, authorizationPrincipal, true); err != nil {
 		return recordUpdatePlannedMutation{}, err
 	}
 	if s.dependencies.ApplySelfEffects != nil {
@@ -277,7 +276,7 @@ func (s *RecordUpdateApplicationService) planUpdate(ctx context.Context, objectK
 			if err := s.applyDerivedAndPipeline(ctx, object, record.ID, nextData, principal, pipelineStagePatched); err != nil {
 				return recordUpdatePlannedMutation{}, err
 			}
-			if err := s.validateCandidate(ctx, objectKey, object, record.ID, beforeData, nextData, patch, principal, authorizationPrincipal, false); err != nil {
+			if err := s.validateCandidate(ctx, objectKey, object, record, beforeData, nextData, patch, principal, authorizationPrincipal, false); err != nil {
 				return recordUpdatePlannedMutation{}, err
 			}
 		}
@@ -334,11 +333,6 @@ func (s *RecordUpdateApplicationService) planUpdate(ctx context.Context, objectK
 }
 
 func (s *RecordUpdateApplicationService) applyDerivedAndPipeline(ctx context.Context, object definitionmodel.ObjectSchema, recordID string, data map[string]any, principal principalmodel.Principal, stagePatched bool) error {
-	if s.dependencies.ApplyScopeOwnerFacts != nil {
-		if err := s.dependencies.ApplyScopeOwnerFacts(ctx, principal.WorkspaceID, object, data, recordID); err != nil {
-			return err
-		}
-	}
 	if s.dependencies.ValidatePipeline != nil {
 		if err := s.dependencies.ValidatePipeline(ctx, object, recordID, data, principal); err != nil {
 			return err
@@ -352,17 +346,19 @@ func (s *RecordUpdateApplicationService) applyDerivedAndPipeline(ctx context.Con
 	return nil
 }
 
-func (s *RecordUpdateApplicationService) validateCandidate(ctx context.Context, objectKey string, object definitionmodel.ObjectSchema, recordID string, beforeData, nextData, patch map[string]any, principal, authorizationPrincipal principalmodel.Principal, includePolicies bool) error {
+func (s *RecordUpdateApplicationService) validateCandidate(ctx context.Context, objectKey string, object definitionmodel.ObjectSchema, record recordmodel.Record, beforeData, nextData, patch map[string]any, principal, authorizationPrincipal principalmodel.Principal, includePolicies bool) error {
 	if err := recordvalidation.RecordValidateDataWithPrev(object, nextData, beforeData, false); err != nil {
 		return recordUpdateErrorFrom(apperror.KindBadRequest, err)
 	}
-	allowed, err := s.canAccessScope(ctx, authorizationPrincipal, object, recordmodel.Record{ID: recordID, Data: nextData}, true)
+	candidate := record
+	candidate.Data = nextData
+	allowed, err := s.canAccessScope(ctx, authorizationPrincipal, object, candidate, true)
 	if err != nil {
 		return err
 	}
 	if !allowed {
 		err := recordUpdateError(apperror.KindForbidden, "backend.record.owner_write_denied", nil)
-		s.denied(ctx, objectKey, recordID, principal, err, "owner_scope", patch)
+		s.denied(ctx, objectKey, record.ID, principal, err, "owner_scope", patch)
 		return err
 	}
 	if s.dependencies.ValidateRelations != nil {
@@ -371,7 +367,7 @@ func (s *RecordUpdateApplicationService) validateCandidate(ctx context.Context, 
 		}
 	}
 	if includePolicies && s.dependencies.ValidatePolicies != nil {
-		if err := s.dependencies.ValidatePolicies(ctx, object, beforeData, nextData, recordID, "update", principal); err != nil {
+		if err := s.dependencies.ValidatePolicies(ctx, object, beforeData, nextData, record.ID, "update", principal); err != nil {
 			return err
 		}
 	}
@@ -383,7 +379,7 @@ func (s *RecordUpdateApplicationService) canAccessScope(ctx context.Context, pri
 		return s.dependencies.CanAccessScope(ctx, principal, object, record, write)
 	}
 	if write {
-		return s.dependencies.CanWrite == nil || s.dependencies.CanWrite(principal, object, record.Data), nil
+		return s.dependencies.CanWrite == nil || s.dependencies.CanWrite(principal, object, recordpolicy.RecordDataWithOwnerFacts(record)), nil
 	}
 	return s.dependencies.CanAccess == nil || s.dependencies.CanAccess(principal, object, record), nil
 }

@@ -9,7 +9,6 @@ import (
 	invocationcontract "github.com/domainry/domainry-runtime/runtime/domain/manifest/contract/invocation"
 
 	"context"
-	"sort"
 	"strings"
 	"time"
 
@@ -126,30 +125,11 @@ func newWorkflowApplicationService(dependencies WorkflowDependencies, processEng
 	}
 }
 
-func workflowProjectionAdvanced(principal principalmodel.Principal) bool {
-	return workflowpolicy.WorkflowDefinitionPermissionAllows(principal, "workflow.advanced.configure")
-}
-
 func (s *WorkflowApplicationService) workflowProjectionActions(ctx context.Context, principal principalmodel.Principal) []definitionmodel.ActionSchema {
 	if s.schema == nil {
 		return nil
 	}
 	return s.schema.WorkflowSchemaSnapshot(ctx, principal).Actions
-}
-
-func (s *WorkflowApplicationService) Workflows(ctx context.Context, principal principalmodel.Principal) ([]definitionmodel.WorkflowSchema, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	if err := workflowAuthorizeQuery(principal); err != nil {
-		return nil, err
-	}
-	if !principal.HasExactPermission("workflow.definition.read") {
-		return nil, forbidden("backend.workflow.read_permission_required")
-	}
-	workflows := s.registry.List()
-	sort.Slice(workflows, func(i, j int) bool { return workflows[i].Key < workflows[j].Key })
-	return workflows, nil
 }
 
 func (s *WorkflowApplicationService) WorkflowExecutions(ctx context.Context, principal principalmodel.Principal, objectKey string, recordID string, limit int) ([]workflowmodel.WorkflowExecution, error) {
@@ -159,9 +139,6 @@ func (s *WorkflowApplicationService) WorkflowExecutions(ctx context.Context, pri
 	objectKey = strings.TrimSpace(objectKey)
 	recordID = strings.TrimSpace(recordID)
 	var object definitionmodel.ObjectSchema
-	if objectKey == "" && !workflowpolicy.WorkflowPermissionAllows(principal, "read") {
-		return nil, forbidden("backend.workflow.read_permission_required")
-	}
 	if objectKey != "" {
 		var err error
 		object, err = s.objectForAction(ctx, principal, objectKey, "read")
@@ -212,31 +189,7 @@ func (s *WorkflowApplicationService) ProcessWorkflowExecutions(ctx context.Conte
 	if err := workflowAuthorizeCommand(principal); err != nil {
 		return workflowmodel.WorkflowProcessResult{}, err
 	}
-	if !workflowpolicy.WorkflowPermissionAllows(principal, "process") {
-		return workflowmodel.WorkflowProcessResult{}, forbidden("backend.workflow.process_permission_required")
-	}
 	return s.ProcessDueWorkflowExecutions(ctx, limit, workflowWorkerPrincipal())
-}
-
-func authorizeOpsWorkflowProcessRead(principal principalmodel.Principal) error {
-	if !workflowHasExactPermission(principal, "workflow.process.read") {
-		return &apperror.AppError{Kind: apperror.KindForbidden, Code: "auth.permission_denied"}
-	}
-	return nil
-}
-
-func authorizeOpsWorkflowProcessOperate(principal principalmodel.Principal) error {
-	if !workflowHasExactPermission(principal, "workflow.process.operate") {
-		return &apperror.AppError{Kind: apperror.KindForbidden, Code: "auth.permission_denied"}
-	}
-	return nil
-}
-
-func workflowHasExactPermission(principal principalmodel.Principal, permission string) bool {
-	if !principal.Known {
-		return false
-	}
-	return principal.HasExactPermission(permission)
 }
 
 func (s *WorkflowApplicationService) RunWorkflow(ctx context.Context, workflowKey string, payload map[string]any, principal principalmodel.Principal) (workflowmodel.WorkflowRunResult, error) {

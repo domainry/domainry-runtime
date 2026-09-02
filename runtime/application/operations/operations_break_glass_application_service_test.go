@@ -98,7 +98,7 @@ func TestOperationsBreakGlassIsTimeLimitedDualApprovedAuditedAndRevisionFenced(t
 	if err := service.RegisterBreakGlass(repository, alerts); err != nil {
 		t.Fatal(err)
 	}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "actor"}}, accessfixture.Bundle{Permissions: []string{"runtime.break_glass"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "actor"}}, accessfixture.Bundle{Permissions: []string{"runtime.operations.enable_break_glass", "runtime.operations.disable_break_glass"}})
 	command := OperationsBreakGlassEnableCommand{DurationSeconds: 900, ApproverIDs: []string{"approver-a", "approver-b"}, Reason: "production incident", IncidentRef: "INC-42", AlertTarget: "pager-duty-runtime"}
 	enabled, err := service.EnableBreakGlass(t.Context(), command, "enable-key", principal)
 	if err != nil {
@@ -126,7 +126,7 @@ func TestOperationsBreakGlassRejectsSingleApprovalAndCompensatesAlertFailure(t *
 	repository := &breakGlassRepositoryProbe{grants: map[string]operationsmodel.OperationsBreakGlassGrant{}}
 	alerts := &breakGlassAlertProbe{}
 	_ = service.RegisterBreakGlass(repository, alerts)
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "actor"}}, accessfixture.Bundle{Permissions: []string{"runtime.break_glass"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "actor"}}, accessfixture.Bundle{Permissions: []string{"runtime.operations.enable_break_glass"}})
 	base := OperationsBreakGlassEnableCommand{DurationSeconds: 60, ApproverIDs: []string{"approver-a"}, Reason: "incident", IncidentRef: "INC-1", AlertTarget: "pager"}
 	if _, err := service.EnableBreakGlass(t.Context(), base, "single", principal); apperror.CodeOf(err) != "backend.operations.break_glass_approval_invalid" {
 		t.Fatalf("approval err=%v", err)

@@ -32,7 +32,7 @@ func TestAuthoringCapabilityServiceProjectsInstanceSchema(t *testing.T) {
 			},
 		}
 	})
-	contract, err := service.Capabilities(t.Context(), accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}}))
+	contract, err := service.Capabilities(t.Context(), accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}}))
 	if err != nil {
 		t.Fatal(err)
 	}

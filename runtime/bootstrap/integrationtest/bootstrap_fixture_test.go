@@ -247,6 +247,7 @@ func TestRuntimeRestrictedRoleScopesMasksAndForbidsRecords(t *testing.T) {
 		seed := &manifest.SeedRecords[seedIndex]
 		if seed.ObjectKey == "contract" && seed.Data["status"] == "draft" {
 			seed.Data["owner"] = "sales_rep_1"
+			seed.OwnerUserID = "sales_rep_1"
 		}
 	}
 	target := filepath.Join(t.TempDir(), "crm-restricted-role.json")

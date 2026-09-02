@@ -10,7 +10,6 @@ import (
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
-	partysdk "github.com/domainry/domainry-party-sdk"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
@@ -35,8 +34,6 @@ type Options struct {
 	// inject domainry-notification/module; SaaS builds inject the SDK Remote
 	// Factory. Runtime never switches topology from environment at startup.
 	NotificationFactory notificationsdk.Factory
-	// PartyFactory selects the in-process Module or SaaS Remote Binding.
-	PartyFactory partysdk.Factory
 	// MonitoringFactory selects the Monitoring Module or SaaS Binding.
 	MonitoringFactory monitoringsdk.Factory
 	// SchedulerFactory selects the in-process clock Module or SaaS Binding.

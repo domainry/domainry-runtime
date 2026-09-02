@@ -307,7 +307,7 @@ func fromConnection(connection connector.Connection) integrationsdk.Connection {
 }
 
 func fromPrincipal(principal connector.Principal) principalmodel.Principal {
-	return principalmodel.Principal{Principal: identitysdk.Principal{UserID: principal.UserID, WorkspaceID: principal.WorkspaceID, DepartmentID: principal.DepartmentID, RoleKey: principal.RoleKey, Known: principal.IsAuthenticated}, RequestID: principal.RequestID, CorrelationID: principal.CorrelationID, CausationID: principal.CausationID}
+	return principalmodel.Principal{Principal: identitysdk.Principal{UserID: principal.UserID, WorkspaceID: principal.WorkspaceID, OrgID: principal.OrgID, RoleKey: principal.RoleKey, Known: principal.IsAuthenticated}, RequestID: principal.RequestID, CorrelationID: principal.CorrelationID, CausationID: principal.CausationID}
 }
 
 func decodePayload(raw json.RawMessage) (map[string]any, error) {

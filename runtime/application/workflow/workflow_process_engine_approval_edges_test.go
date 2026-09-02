@@ -15,16 +15,14 @@ import (
 
 type workflowApprovalIdentityStub struct {
 	workflowDirectoryTestStub
-	users             map[string]identitysdk.User
-	findErr           map[string]error
-	directoryUsers    []identitysdk.User
-	roles             []identitysdk.Role
-	assignments       map[string][]identitysdk.UserRoleAssignment
-	usersErr          error
-	rolesErr          error
-	assignmentErr     error
-	workforceErr      error
-	workforceManagers map[string]string
+	users          map[string]identitysdk.User
+	findErr        map[string]error
+	directoryUsers []identitysdk.User
+	roles          []identitysdk.Role
+	assignments    map[string][]identitysdk.UserRoleAssignment
+	usersErr       error
+	rolesErr       error
+	assignmentErr  error
 }
 
 func (s workflowApprovalIdentityStub) FindUser(_ context.Context, lookup identitysdk.UserLookup) (identitysdk.User, bool, error) {
@@ -67,17 +65,6 @@ func (s workflowApprovalIdentityStub) ListUserRoleAssignments(_ context.Context,
 	}
 	return s.assignments[id], s.assignmentErr
 }
-func (s workflowApprovalIdentityStub) ListWorkforce(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.WorkforceEntry, error) {
-	if s.workforceErr != nil {
-		return nil, s.workforceErr
-	}
-	out := []identitysdk.WorkforceEntry{}
-	for userID, managerID := range s.workforceManagers {
-		out = append(out, identitysdk.WorkforceEntry{IdentityUserID: userID, ManagerIdentityUserID: managerID})
-	}
-	return out, nil
-}
-
 func workflowEngineEdge(store *workflowProcessStoreEdgeStub, identity identitysdk.Directory, invoke func(context.Context, WorkflowBusinessActionInvocation) (WorkflowBusinessActionInvocationResult, error)) *WorkflowProcessEngine {
 	return NewWorkflowProcessEngine(WorkflowDependencies{Processes: store, Identity: identity, Schema: workflowSchemaProviderEdgeStub{}, InvokeAction: invoke})
 }
@@ -381,12 +368,14 @@ func TestWorkflowProcessEngineApprovalCCAndWaitingRunOutcomes(t *testing.T) {
 }
 
 func TestWorkflowApprovalResolverTaskAndAggregationOutcomes(t *testing.T) {
-	managerID := "manager"
 	identity := workflowApprovalIdentityStub{
-		users:             map[string]identitysdk.User{"initiator": {ID: "initiator", Status: identitysdk.UserStatusActive}, "employee": {ID: "employee", Status: identitysdk.UserStatusActive}, "manager": {ID: "manager", Name: "Manager", Status: identitysdk.UserStatusActive}},
-		workforceManagers: map[string]string{"initiator": managerID, "employee": managerID},
-		directoryUsers:    []identitysdk.User{{ID: "role-user", Status: identitysdk.UserStatusActive}, {ID: "disabled", Status: "disabled"}},
-		roles:             []identitysdk.Role{{ID: "role-id", Key: "approver"}}, assignments: map[string][]identitysdk.UserRoleAssignment{"role-user": {{UserID: "role-user", RoleID: "role-id"}}, "disabled": {{UserID: "disabled", RoleID: "role-id"}}},
+		users: map[string]identitysdk.User{
+			"initiator": {ID: "initiator", ManagerUserID: "manager", Status: identitysdk.UserStatusActive},
+			"employee":  {ID: "employee", ManagerUserID: "manager", Status: identitysdk.UserStatusActive},
+			"manager":   {ID: "manager", Name: "Manager", Status: identitysdk.UserStatusActive},
+		},
+		directoryUsers: []identitysdk.User{{ID: "role-user", Status: identitysdk.UserStatusActive}, {ID: "disabled", Status: "disabled"}},
+		roles:          []identitysdk.Role{{ID: "role-id", Key: "approver"}}, assignments: map[string][]identitysdk.UserRoleAssignment{"role-user": {{UserID: "role-user", RoleID: "role-id"}}, "disabled": {{UserID: "disabled", RoleID: "role-id"}}},
 	}
 	store := &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}}}
 	engine := workflowEngineEdge(store, identity, nil)
@@ -402,9 +391,8 @@ func TestWorkflowApprovalResolverTaskAndAggregationOutcomes(t *testing.T) {
 	if _, _, err := engine.resolveApprovalAssigneeStrategy(t.Context(), process, definitionmodel.WorkflowAssigneeResolver{Type: "bad"}, principal); apperror.CodeOf(err) != "backend.workflow.approval_resolver_invalid" {
 		t.Fatalf("invalid resolver=%v", err)
 	}
-	users, _, err := engine.resolveApprovalAssigneeStrategy(t.Context(), process, definitionmodel.WorkflowAssigneeResolver{Type: "manager_of"}, principal)
-	if err != nil || len(users) != 0 {
-		t.Fatalf("manager_of without an explicit user field must not fall back to the initiator: users=%v err=%v", users, err)
+	if users, _, err := engine.resolveApprovalAssigneeStrategy(t.Context(), process, definitionmodel.WorkflowAssigneeResolver{Type: "manager_of"}, principal); err != nil || len(users) != 0 {
+		t.Fatalf("manager_of without a user field must not fall back to initiator: users=%v err=%v", users, err)
 	}
 	if _, _, err := workflowEngineEdge(store, nil, nil).resolveApprovalAssignees(t.Context(), process, definitionmodel.WorkflowGraphNode{}, principal); apperror.CodeOf(err) != "backend.workflow.approval_identity_unavailable" {
 		t.Fatalf("missing identity=%v", err)
@@ -499,43 +487,28 @@ func TestWorkflowApprovalFailureRoleCompletionAndPreparationOutcomes(t *testing.
 	baseIdentity := workflowApprovalIdentityStub{users: map[string]identitysdk.User{}, assignments: map[string][]identitysdk.UserRoleAssignment{}}
 	store := &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}}}
 	engine := workflowEngineEdge(store, baseIdentity, nil)
-	manager := definitionmodel.WorkflowAssigneeResolver{Type: "manager", UserField: "employee"}
-	if users, _, err := engine.resolveApprovalAssigneeStrategy(t.Context(), process, manager, principal); err != nil || len(users) != 0 {
+	managerResolver := definitionmodel.WorkflowAssigneeResolver{Type: "manager", UserField: "employee"}
+	if users, _, err := engine.resolveApprovalAssigneeStrategy(t.Context(), process, managerResolver, principal); err != nil || len(users) != 0 {
 		t.Fatalf("missing employee users=%v err=%v", users, err)
 	}
-	if users, _, err := workflowEngineEdge(store, workflowDirectoryTestStub{}, nil).resolveApprovalAssigneeStrategy(t.Context(), process, manager, principal); err != nil || len(users) != 0 {
-		t.Fatalf("empty directory manager users=%v err=%v", users, err)
+	employeeLookupError := baseIdentity
+	employeeLookupError.findErr = map[string]error{"employee": errors.New("employee")}
+	if _, _, err := workflowEngineEdge(store, employeeLookupError, nil).resolveApprovalAssigneeStrategy(t.Context(), process, managerResolver, principal); err == nil {
+		t.Fatal("expected employee lookup error")
 	}
-	nilManagerIdentity := baseIdentity
-	nilManagerIdentity.users = map[string]identitysdk.User{"employee": {ID: "employee"}}
-	if users, _, err := workflowEngineEdge(store, nilManagerIdentity, nil).resolveApprovalAssigneeStrategy(t.Context(), process, manager, principal); err != nil || len(users) != 0 {
-		t.Fatalf("nil manager users=%v err=%v", users, err)
+	managerIdentity := baseIdentity
+	managerIdentity.users = map[string]identitysdk.User{"employee": {ID: "employee", ManagerUserID: "manager", Status: identitysdk.UserStatusActive}}
+	if users, _, err := workflowEngineEdge(store, managerIdentity, nil).resolveApprovalAssigneeStrategy(t.Context(), process, managerResolver, principal); err != nil || len(users) != 0 {
+		t.Fatalf("missing manager users=%v err=%v", users, err)
 	}
-	nilManagerIdentity.workforceManagers = map[string]string{"employee": " "}
-	if users, _, err := workflowEngineEdge(store, nilManagerIdentity, nil).resolveApprovalAssigneeStrategy(t.Context(), process, manager, principal); err != nil || len(users) != 0 {
-		t.Fatalf("empty manager users=%v err=%v", users, err)
-	}
-	identity := baseIdentity
-	identity.workforceErr = errors.New("workforce")
-	if _, _, err := workflowEngineEdge(store, identity, nil).resolveApprovalAssigneeStrategy(t.Context(), process, manager, principal); err == nil {
-		t.Fatal("expected workforce lookup error")
-	}
-	managerID := "manager"
-	identity = baseIdentity
-	identity.users = map[string]identitysdk.User{"employee": {ID: "employee"}}
-	identity.workforceManagers = map[string]string{"employee": managerID}
-	identity.findErr = map[string]error{"manager": errors.New("manager")}
-	if _, _, err := workflowEngineEdge(store, identity, nil).resolveApprovalAssigneeStrategy(t.Context(), process, manager, principal); err == nil {
+	managerIdentity.findErr = map[string]error{"manager": errors.New("manager")}
+	if _, _, err := workflowEngineEdge(store, managerIdentity, nil).resolveApprovalAssigneeStrategy(t.Context(), process, managerResolver, principal); err == nil {
 		t.Fatal("expected manager lookup error")
 	}
-	identity.findErr = nil
-	identity.users["manager"] = identitysdk.User{ID: "manager", Status: "disabled"}
-	if users, _, err := workflowEngineEdge(store, identity, nil).resolveApprovalAssigneeStrategy(t.Context(), process, manager, principal); err != nil || len(users) != 0 {
+	managerIdentity.findErr = nil
+	managerIdentity.users["manager"] = identitysdk.User{ID: "manager", Status: "disabled"}
+	if users, _, err := workflowEngineEdge(store, managerIdentity, nil).resolveApprovalAssigneeStrategy(t.Context(), process, managerResolver, principal); err != nil || len(users) != 0 {
 		t.Fatalf("disabled manager users=%v err=%v", users, err)
-	}
-	delete(identity.users, "manager")
-	if users, _, err := workflowEngineEdge(store, identity, nil).resolveApprovalAssigneeStrategy(t.Context(), process, manager, principal); err != nil || len(users) != 0 {
-		t.Fatalf("missing manager users=%v err=%v", users, err)
 	}
 	emptyRecord := process
 	emptyRecord.Variables = map[string]any{}

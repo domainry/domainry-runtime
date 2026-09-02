@@ -23,8 +23,8 @@ type recordCompositionDirectory struct{}
 func (recordCompositionDirectory) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
 	return identitysdk.User{}, false, nil
 }
-func (recordCompositionDirectory) FindDepartment(context.Context, identitysdk.DepartmentLookup) (identitysdk.Department, bool, error) {
-	return identitysdk.Department{}, false, nil
+func (recordCompositionDirectory) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
+	return identitysdk.OrganizationUnit{}, false, nil
 }
 func (recordCompositionDirectory) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
 	return []identitysdk.User{{ID: "user-1"}}, nil
@@ -33,9 +33,6 @@ func (recordCompositionDirectory) ListRoles(context.Context, identitysdk.Directo
 	return nil, nil
 }
 func (recordCompositionDirectory) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
-	return nil, nil
-}
-func (recordCompositionDirectory) ListWorkforce(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.WorkforceEntry, error) {
 	return nil, nil
 }
 
@@ -60,11 +57,10 @@ func TestRecordApplicationCompositionForwardsEveryOwnedClosure(t *testing.T) {
 		},
 		CanAccess: func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return true },
 	})
-	scopeOwnerFactDerivation := recordservice.NewRecordScopeOwnerFactDerivationDomainService(recordservice.RecordScopeOwnerFactDerivationDependencies{})
 	service := NewRecordApplicationService(RecordApplicationDependencies{
 		Repository: repository, QueryPolicy: queryPolicy, Pipeline: pipeline, Validation: validation,
-		MutationKernel:    recordmutation.NewMutationKernelApplicationService(repository, nil),
-		IdentityDirectory: recordCompositionDirectory{}, ScopeOwnerFactDerivation: scopeOwnerFactDerivation,
+		MutationKernel:            recordmutation.NewMutationKernelApplicationService(repository, nil),
+		IdentityDirectory:         recordCompositionDirectory{},
 		SchemaMap:                 func() map[string]definitionmodel.ObjectSchema { return objects },
 		IdentityProfileExtensions: func() []profilebindingmodel.Binding { return nil },
 		RunBefore: func(context.Context, string, string, string, map[string]any, map[string]any, map[string]any, principalmodel.Principal) error {
@@ -87,7 +83,6 @@ func TestRecordApplicationCompositionForwardsEveryOwnedClosure(t *testing.T) {
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, principalBundle)
 	record := recordmodel.Record{ID: "customer-1", Data: map[string]any{"name": "Acme", "owner_id": "admin"}}
 
-	_ = service.create.dependencies.ApplyScopeOwnerFacts(ctx, principal.WorkspaceID, object, record.Data, record.ID)
 	_ = service.create.dependencies.ValidatePipeline(ctx, object, record.ID, record.Data, principal)
 	_ = service.create.dependencies.ApplyPipelineDefaults(ctx, object, record.Data, principal, false)
 	_ = service.create.dependencies.RunBefore(ctx, object.Key, "create", record.ID, nil, nil, record.Data, principal)
@@ -99,7 +94,6 @@ func TestRecordApplicationCompositionForwardsEveryOwnedClosure(t *testing.T) {
 	_ = service.restore.dependencies.ValidatePolicies(ctx, object, record.Data, record.Data, record.ID, "restore", principal)
 	_, _ = service.restore.dependencies.PrepareWorkflow(ctx, object.Key, record, record.Data, principal, "record_restored:customer")
 
-	_ = service.update.dependencies.ApplyScopeOwnerFacts(ctx, principal.WorkspaceID, object, record.Data, record.ID)
 	_ = service.update.dependencies.ValidatePipeline(ctx, object, record.ID, record.Data, principal)
 	_ = service.update.dependencies.ApplyPipelineDefaults(ctx, object, record.Data, principal, false)
 	_ = service.update.dependencies.RunBefore(ctx, object.Key, "update", record.ID, nil, record.Data, record.Data, principal)

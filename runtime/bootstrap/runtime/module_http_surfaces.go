@@ -9,6 +9,7 @@ import (
 
 	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
+	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 )
 
 // ModuleHTTPSurfaces returns routes owned by in-process module Bindings.
@@ -79,8 +80,12 @@ func (inventory runtimeModuleBindingInventory) AuthorizationActions() ([]actionc
 			if len(provided) == 0 {
 				return nil, fmt.Errorf("module Action provider returned an empty manifest")
 			}
-			if err := modulehttp.ValidateAuthorizationProjection(provided, httpProvider); err != nil {
-				return nil, fmt.Errorf("validate module authorization projection: %w", err)
+			if hasHTTPSurfaces {
+				if err := modulehttp.ValidateAuthorizationProjection(provided, httpProvider); err != nil {
+					return nil, fmt.Errorf("validate module authorization projection: %w", err)
+				}
+			} else if err := validateRuntimeHostedModuleFacade(provided); err != nil {
+				return nil, fmt.Errorf("validate Runtime-hosted module authorization projection: %w", err)
 			}
 		} else {
 			provided, err = modulehttp.AuthorizationActions(httpProvider)
@@ -97,6 +102,59 @@ func (inventory runtimeModuleBindingInventory) AuthorizationActions() ([]actionc
 		}
 	}
 	return definitions, nil
+}
+
+func validateRuntimeHostedModuleFacade(definitions []actioncontract.ActionDefinition) error {
+	owners := map[string]bool{}
+	patterns := make(map[string]endpointmodel.RuntimeEndpointContractV1)
+	httpActions := 0
+	for _, definition := range definitions {
+		normalized, err := actioncontract.NormalizeDefinition(definition)
+		if err != nil {
+			return err
+		}
+		if normalized.HTTP == nil {
+			continue
+		}
+		httpActions++
+		if normalized.SourceKind != "host_facade" || !strings.HasPrefix(normalized.Owner, "module:") {
+			return fmt.Errorf("module HTTP Action %q has no mounted Surface and is not an explicit host facade", normalized.Key)
+		}
+		owners[strings.TrimPrefix(normalized.Owner, "module:")] = true
+	}
+	if httpActions == 0 {
+		return nil
+	}
+	if len(owners) != 1 {
+		return fmt.Errorf("Runtime-hosted module facade must have exactly one source owner")
+	}
+	owner := ""
+	for value := range owners {
+		owner = value
+	}
+	for pattern, contract := range endpointmodel.EndpointContracts {
+		if strings.TrimSpace(contract.SourceOwner) == owner && strings.HasPrefix(strings.TrimSpace(contract.PermissionPolicyRef), "static_permission:") {
+			patterns[strings.TrimSpace(pattern)] = contract
+		}
+	}
+	for _, definition := range definitions {
+		if definition.HTTP == nil {
+			continue
+		}
+		pattern := strings.TrimSpace(definition.HTTP.Method) + " " + strings.TrimSpace(definition.HTTP.RouteTemplate)
+		contract, found := patterns[pattern]
+		if !found {
+			return fmt.Errorf("module host-facade Action %q has no Runtime handler contract for %q", definition.Key, pattern)
+		}
+		if err := endpointmodel.ValidateHostFacadeAction(contract, definition); err != nil {
+			return fmt.Errorf("validate module host-facade Action %q: %w", definition.Key, err)
+		}
+		delete(patterns, pattern)
+	}
+	if len(patterns) != 0 {
+		return fmt.Errorf("Runtime source %q has protected handler contracts absent from its module Action manifest", owner)
+	}
+	return nil
 }
 
 type runtimeModuleInventorySurface struct{ runtime *Runtime }
@@ -127,7 +185,7 @@ func runtimeModuleInventoryAction() actioncontract.ActionDefinition {
 		OperationKey: "list", OperationLabel: "List Runtime modules", Label: "List Runtime modules", Exposures: []actioncontract.Exposure{actioncontract.ExposureOps},
 		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationExactRolePermission},
 		HTTP:          &actioncontract.HTTPBinding{Method: "GET", RouteTemplate: "/operations/modules"},
-		Permission:    &actioncontract.PermissionDefinition{Key: "runtime.modules.list", Owner: "runtime:builtin", ResourceKey: "runtime.modules", ActionKey: "list", Label: "List Runtime modules", Category: "Runtime", LifecycleStatus: actioncontract.LifecycleActive},
+		Permission:    &actioncontract.PermissionDefinition{Key: "runtime.modules.list", Owner: "runtime:builtin", ResourceKey: "runtime.modules", OperationKey: "list", Label: "List Runtime modules", Category: "Runtime", LifecycleStatus: actioncontract.LifecycleActive},
 		EffectClass:   actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow, IdempotencyDecision: "not_applicable", AuditClass: "runtime_module_inventory_read", LifecycleStatus: actioncontract.LifecycleActive,
 	}
 }

@@ -118,7 +118,8 @@ func TestSharedInvocationPermissionContractFailsClosed(t *testing.T) {
 	workflow := definitionmodel.WorkflowSchema{Key: "document.review"}
 	unknown := principalmodel.Principal{}
 	denied := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Key: "reader", Permissions: []string{"document.read"}})
-	allowed := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Key: "reviewer", Permissions: []string{"document.reject", "workflow.run.document.review"}})
+	allowed := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Key: "reviewer", Permissions: []string{"document.reject", "workflow.document.review.run"}})
+	sibling := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Key: "other-workflow", Permissions: []string{"workflow.document.publish.run"}})
 
 	for name, principal := range map[string]principalmodel.Principal{"unknown": unknown, "denied": denied} {
 		if issues := ValidateActionPermission(action, principal); len(issues) != 1 || issues[0].Code != "invocation.action_permission_denied" {
@@ -133,5 +134,8 @@ func TestSharedInvocationPermissionContractFailsClosed(t *testing.T) {
 	}
 	if issues := ValidateWorkflowPermission(workflow, allowed); len(issues) != 0 {
 		t.Fatalf("allowed Workflow permission issues=%#v", issues)
+	}
+	if issues := ValidateWorkflowPermission(workflow, sibling); len(issues) != 1 || issues[0].Expected != "workflow.document.review.run" {
+		t.Fatalf("sibling Workflow Action must not authorize this Workflow: %#v", issues)
 	}
 }

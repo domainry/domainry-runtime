@@ -99,11 +99,6 @@ func TestDecideTerminalWorkflowTaskValidationAndLookupOutcomes(t *testing.T) {
 		t.Fatalf("status=%v", err)
 	}
 	store.getTaskValue = task
-	denied := principal
-	denied = workflowPrincipalWithPermissions(denied)
-	if _, _, err := decideTerminalWorkflowTaskWithContext(t.Context(), runtime, "task", workflowmodel.WorkflowTaskDecisionRequest{Decision: "approved"}, denied); apperror.CodeOf(err) != "auth.permission_denied" {
-		t.Fatalf("permission=%v", err)
-	}
 	store.getProcessErr = errors.New("process")
 	if _, _, err := decideTerminalWorkflowTaskWithContext(t.Context(), runtime, "task", workflowmodel.WorkflowTaskDecisionRequest{Decision: "approved"}, principal); apperror.CodeOf(err) != "backend.internal" {
 		t.Fatalf("process=%v", err)
@@ -265,9 +260,6 @@ func TestLegacyWorkflowProcessEngineDecideTaskSuccessAndFailures(t *testing.T) {
 		"task missing": func(store *workflowProcessStoreEdgeStub, _ *principalmodel.Principal) { store.getTaskFound = false },
 		"wrong assignee": func(store *workflowProcessStoreEdgeStub, _ *principalmodel.Principal) {
 			store.getTaskValue.AssigneeUserID = "other"
-		},
-		"permission": func(_ *workflowProcessStoreEdgeStub, principal *principalmodel.Principal) {
-			*principal = workflowPrincipalWithPermissions(*principal)
 		},
 		"process error": func(store *workflowProcessStoreEdgeStub, _ *principalmodel.Principal) {
 			store.getProcessErr = errors.New("process")

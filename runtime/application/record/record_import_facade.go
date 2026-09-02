@@ -3,7 +3,6 @@ package record
 import (
 	"context"
 	"fmt"
-	identitysdk "github.com/domainry/domainry-identity-sdk"
 	"io"
 	"strings"
 	"time"
@@ -299,11 +298,4 @@ func (s *RecordApplicationService) ExportRecordsWithOptions(ctx context.Context,
 		return nil, "", err
 	}
 	return s.exporter.ExportWithOptions(ctx, objectKey, principal, options)
-}
-
-func (s *RecordApplicationService) RebuildOwnerDepartmentPaths(ctx context.Context, workspaceID string, workforce []identitysdk.WorkforceEntry) (int, error) {
-	if _, err := principalmodel.NewWorkspaceCommandScope(workspaceID); err != nil {
-		return 0, &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.workspace_scope_required", Err: err}
-	}
-	return s.ownerDepartmentPaths.Rebuild(ctx, workspaceID, workforce)
 }

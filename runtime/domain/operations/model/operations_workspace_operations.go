@@ -13,7 +13,6 @@ const (
 type CrossWorkspaceCommand struct {
 	ID                string                `json:"id"`
 	Purpose           CrossWorkspacePurpose `json:"purpose"`
-	Permission        string                `json:"permission"`
 	SourceWorkspaceID string                `json:"source_workspace_id"`
 	TargetWorkspaceID string                `json:"target_workspace_id"`
 	ActorID           string                `json:"actor_id"`

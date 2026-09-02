@@ -70,19 +70,19 @@ func integrationIdentityFixtureRoles() []runtimetestkit.IdentityFixtureRole {
 		}, true),
 		integrationIdentityRole("sales_manager", "Sales manager", crmManagerPermissions, true),
 		integrationIdentityRole("platform_admin", "Runtime operator", []string{
-			"admin_console.access", "ops.workflow.read", "ops.workflow.process", "runtime.workflows.process_ops_workflow_executions",
-			"runtime.scheduler.get_ops_scheduler_state", "runtime.scheduler.get_tenant_admin_scheduler_authoring_contract",
-			"runtime.scheduler.list_tenant_admin_scheduler_definitions", "runtime.scheduler.get_tenant_admin_scheduler_definition",
-			"runtime.scheduler.preview_scheduler_job", "runtime.scheduler.preview_scheduler_schedule", "runtime.scheduler.simulate_scheduler_job",
-			"runtime.scheduler.run_ops_scheduler_job", "runtime.scheduler.reschedule_ops_scheduler_definition",
-			"runtime.scheduler.retry_ops_scheduler_run", "runtime.scheduler.cancel_ops_scheduler_run",
-			"runtime.scheduler.resolve_ops_scheduler_dead_letter", "runtime.scheduler.requeue_ops_scheduler_dead_letter",
+			"admin_console.access", "runtime.workflows.process_ops_workflow_executions",
+			"scheduler.state.get", "scheduler.authoring_contract.get",
+			"scheduler.definitions.list", "scheduler.definitions.get",
+			"scheduler.definitions.validate", "scheduler.schedules.preview", "scheduler.definitions.simulate",
+			"scheduler.definitions.run", "scheduler.definitions.reschedule",
+			"scheduler.runs.retry", "scheduler.runs.cancel",
+			"scheduler.dead_letters.resolve", "scheduler.dead_letters.requeue",
 			"lead.activate_due_candidates", "lead.create_daily_review_tasks", "lead.fail_due_candidates", "lead.read", "lead.update",
 		}, true),
 		integrationIdentityRole("scheduler_operator", "Scheduler operator", []string{
 			"admin_console.access", "scheduler_probe.read",
-			"runtime.scheduler.list_tenant_admin_scheduler_definitions",
-			"runtime.scheduler.run_ops_scheduler_job", "runtime.scheduler.get_ops_scheduler_state",
+			"scheduler.definitions.list",
+			"scheduler.definitions.run", "scheduler.state.get",
 		}, true),
 		integrationIdentityRole("kitchen_lead", "Kitchen lead", []string{
 			"business.access", "kitchen_order.read", "kitchen_order.create", "kitchen_order.update", "kitchen_order.import", "kitchen_order.start_cooking", "kitchen_order.ready_alert.execute",
@@ -91,7 +91,7 @@ func integrationIdentityFixtureRoles() []runtimetestkit.IdentityFixtureRole {
 			"business.access", "stock_item.read", "stock_item.create", "stock_item.update", "purchase_request.read", "purchase_request.create", "purchase_request.update", "stock_item.create_purchase_request", "stock_item.low_stock_watch.execute",
 		}, true),
 		integrationIdentityRole("hr_admin", "HR administrator", []string{
-			"business.access", "runtime.workflows.approve_business_workflow_task", "runtime.workflows.reject_business_workflow_task", "runtime.workflows.return_business_workflow_task", "ops.workflow.read", "leave_request.read", "leave_request.create", "leave_request.update",
+			"business.access", "runtime.workflows.approve_business_workflow_task", "runtime.workflows.reject_business_workflow_task", "runtime.workflows.return_business_workflow_task", "leave_request.read", "leave_request.create", "leave_request.update",
 			"leave_balance.read", "leave_balance.update", "leave_balance_ledger.read", "leave_balance_ledger.create", "hr_position.read",
 			"employee_profile.read", "employee_profile.create", "employee_profile.update",
 			"leave_request.submit", "leave_request.withdraw", "leave_request.cancel", "leave_request.return_for_revision", "leave_request.approve", "leave_request.reject",
@@ -110,19 +110,19 @@ func integrationIdentityFixtureRoles() []runtimetestkit.IdentityFixtureRole {
 		}, true),
 		integrationIdentityRole("restricted", "Restricted user", []string{"business.access", "customer.read"}, true),
 		integrationOwnedIdentityRole("automation_business_tester", "Automation business tester", []string{
-			"business.access", "customer.read", "customer.create", "customer.update", "customer.apply_automation_verification", "ops.workflow.run",
+			"business.access", "customer.read", "customer.create", "customer.update", "customer.apply_automation_verification",
 		}, []identitysdk.FieldPolicy{{Resource: "customer", Field: "*", Read: true, Write: true}}),
 		integrationIdentityRole("automation_history_reviewer", "Automation history reviewer", []string{
 			"admin_console.access", "runtime.automation.list_automation_executions",
 		}, false),
 		integrationIdentityRole("sales", "Sales", []string{
-			"business.access", "workflow.run", "ops.workflow.read", "customer_account.read", "sales_order.read", "sales_order.create", "sales_order.update", "inventory_stock.read", "inventory_stock.update", "order_cash_ledger.read", "order_cash_ledger.create", "sales_order.initialize_risk", "sales_order.submit",
+			"business.access", "workflow.sales_order.credit_discount_approval.run", "customer_account.read", "sales_order.read", "sales_order.create", "sales_order.update", "inventory_stock.read", "inventory_stock.update", "order_cash_ledger.read", "order_cash_ledger.create", "sales_order.initialize_risk", "sales_order.submit",
 		}, true),
 		integrationIdentityRole("credit_manager", "Credit manager", []string{
-			"business.access", "runtime.workflows.approve_business_workflow_task", "runtime.workflows.reject_business_workflow_task", "runtime.workflows.return_business_workflow_task", "ops.workflow.read", "customer_account.read", "sales_order.read", "sales_order.update", "inventory_stock.read", "inventory_stock.update", "order_cash_ledger.create", "sales_order.approve_and_reserve", "sales_order.reject",
+			"business.access", "runtime.workflows.approve_business_workflow_task", "runtime.workflows.reject_business_workflow_task", "runtime.workflows.return_business_workflow_task", "customer_account.read", "sales_order.read", "sales_order.update", "inventory_stock.read", "inventory_stock.update", "order_cash_ledger.create", "sales_order.approve_and_reserve", "sales_order.reject",
 		}, true),
 		integrationIdentityRole("finance", "Finance", []string{
-			"business.access", "runtime.workflows.approve_business_workflow_task", "runtime.workflows.reject_business_workflow_task", "runtime.workflows.return_business_workflow_task", "ops.workflow.read", "identity.audit.view", "sales_order.read", "sales_order.update", "shipment.read", "inventory_stock.read", "inventory_stock.update", "invoice.read", "invoice.update", "payment.read", "payment.create", "payment.update", "return_request.read", "return_request.update", "order_cash_ledger.read", "order_cash_ledger.create",
+			"business.access", "runtime.workflows.approve_business_workflow_task", "runtime.workflows.reject_business_workflow_task", "runtime.workflows.return_business_workflow_task", "identity.audit.view", "sales_order.read", "sales_order.update", "shipment.read", "inventory_stock.read", "inventory_stock.update", "invoice.read", "invoice.update", "payment.read", "payment.create", "payment.update", "return_request.read", "return_request.update", "order_cash_ledger.read", "order_cash_ledger.create",
 			"sales_order.approve_and_reserve", "sales_order.reject",
 		}, true),
 	}
@@ -169,7 +169,7 @@ func newIntegrationIdentityBinding(t *testing.T, cfg config.Config) identitysdk.
 }
 
 func integrationOwnedIdentityRole(key, name string, permissions []string, fields []identitysdk.FieldPolicy) runtimetestkit.IdentityFixtureRole {
-	predicate := identitysdk.Predicate{Fact: "owner_id", Operator: identitysdk.OperatorEqual, Value: "$subject.id"}
+	predicate := identitysdk.Predicate{Fact: "owner_user_id", Operator: identitysdk.OperatorEqual, Value: "$subject.id"}
 	role := integrationIdentityRole(key, name, permissions, false)
 	role.DataPredicate = &predicate
 	fieldPolicies := map[string]identitysdk.FieldPolicy{}

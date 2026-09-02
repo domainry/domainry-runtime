@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
+	actioncontract "github.com/domainry/domainry-foundation/action"
 )
 
 const (
@@ -16,10 +16,10 @@ const (
 	operationBreakGlassValue    = "break-glass"
 )
 
-// withHighRiskOperationPolicy enforces the reviewed endpoint contract before
-// an Operations owner can execute a mutation. Owner handlers still own
-// domain-specific validation and audit payloads; this middleware prevents a
-// client from bypassing the common human-reason and explicit-confirmation gate.
+// withHighRiskOperationPolicy enforces the resolved Action manifest before an
+// Operations owner can execute a mutation. Runtime-generated Actions already
+// project endpoint contracts, while module Actions retain source ownership;
+// this keeps the common gate on the same immutable registry as authorization.
 func (s *HTTPRouter) withHighRiskOperationPolicy(routes *http.ServeMux, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		policy := routePolicyFor(routes, r)
@@ -27,35 +27,43 @@ func (s *HTTPRouter) withHighRiskOperationPolicy(routes *http.ServeMux, next htt
 			next.ServeHTTP(w, r)
 			return
 		}
-		contract, classified := runtimeEndpointContracts[r.Method+" "+policy.path]
-		if !classified || contract.HighRiskPolicy == endpointmodel.HighRiskActionNone {
+		resolved := s.resolveRequestAction(routes, r)
+		if !resolved.found || len(resolved.definition.ApprovalPolicies) == 0 {
 			next.ServeHTTP(w, r)
 			return
 		}
-		reason, err := decodeOperationReasonHeader(r.Header.Get(operationReasonHeader))
-		if err != nil {
-			s.rejectHighRiskOperation(w, r, contract, "reason_encoding", "operations.reason_encoding_invalid")
-			return
-		}
-		if reason == "" {
-			s.rejectHighRiskOperation(w, r, contract, "reason", "operations.reason_required")
-			return
-		}
-		r.Header.Set(operationReasonHeader, reason)
-		switch contract.HighRiskPolicy {
-		case endpointmodel.HighRiskActionConfirmRequired:
-			if strings.TrimSpace(r.Header.Get(operationConfirmationHeader)) != operationConfirmedValue {
-				s.rejectHighRiskOperation(w, r, contract, "confirmation", "operations.confirmation_required")
+		action := resolved.definition
+		if actionRequiresApproval(action, actioncontract.ApprovalReason) {
+			reason, err := decodeOperationReasonHeader(r.Header.Get(operationReasonHeader))
+			if err != nil {
+				s.rejectHighRiskOperation(w, r, action, "reason_encoding", "operations.reason_encoding_invalid")
 				return
 			}
-		case endpointmodel.HighRiskActionBreakGlass:
-			if strings.TrimSpace(r.Header.Get(operationConfirmationHeader)) != operationBreakGlassValue {
-				s.rejectHighRiskOperation(w, r, contract, "break_glass", "operations.break_glass_confirmation_required")
+			if reason == "" {
+				s.rejectHighRiskOperation(w, r, action, "reason", "operations.reason_required")
 				return
 			}
+			r.Header.Set(operationReasonHeader, reason)
+		}
+		if actionRequiresApproval(action, actioncontract.ApprovalConfirmation) && strings.TrimSpace(r.Header.Get(operationConfirmationHeader)) != operationConfirmedValue {
+			s.rejectHighRiskOperation(w, r, action, "confirmation", "operations.confirmation_required")
+			return
+		}
+		if actionRequiresApproval(action, actioncontract.ApprovalBreakGlass) && strings.TrimSpace(r.Header.Get(operationConfirmationHeader)) != operationBreakGlassValue {
+			s.rejectHighRiskOperation(w, r, action, "break_glass", "operations.break_glass_confirmation_required")
+			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func actionRequiresApproval(action actioncontract.ActionDefinition, wanted actioncontract.ApprovalPolicy) bool {
+	for _, policy := range action.ApprovalPolicies {
+		if policy == wanted {
+			return true
+		}
+	}
+	return false
 }
 
 func decodeOperationReasonHeader(value string) (string, error) {
@@ -80,13 +88,13 @@ func (*operationReasonEncodingError) Error() string { return "invalid UTF-8 oper
 func (s *HTTPRouter) rejectHighRiskOperation(
 	w http.ResponseWriter,
 	r *http.Request,
-	contract endpointmodel.RuntimeEndpointContractV1,
+	action actioncontract.ActionDefinition,
 	missing string,
 	code string,
 ) {
-	s.appendSecurityAudit(r, "high_risk_operation_rejected", "High-risk Runtime operation rejected by endpoint contract", map[string]any{
-		"endpoint_identity": contract.EndpointIdentity,
-		"high_risk_policy":  string(contract.HighRiskPolicy),
+	s.appendSecurityAudit(r, "high_risk_operation_rejected", "High-risk Runtime Action rejected by approval policy", map[string]any{
+		"action_key":        action.Key,
+		"approval_policies": append([]actioncontract.ApprovalPolicy(nil), action.ApprovalPolicies...),
 		"missing_evidence":  missing,
 	})
 	writeError(w, r, http.StatusBadRequest, code)

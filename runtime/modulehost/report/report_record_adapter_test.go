@@ -50,8 +50,7 @@ func TestReportRecordAdapterDelegatesRecordBoundaries(t *testing.T) {
 	validation := recordservice.NewRecordValidationDomainService(recordservice.RecordValidationDependencies{Repository: repository, Object: objectForKey, CanAccess: queryPolicy.CanAccessRecord})
 	application := recordapplication.NewRecordApplicationService(recordapplication.RecordApplicationDependencies{
 		Repository: repository, QueryPolicy: queryPolicy, Pipeline: pipeline, Validation: validation,
-		ScopeOwnerFactDerivation: recordservice.NewRecordScopeOwnerFactDerivationDomainService(recordservice.RecordScopeOwnerFactDerivationDependencies{}),
-		SchemaMap:                func() map[string]definitionmodel.ObjectSchema { return objects }, IdentityProfileExtensions: func() []profilebindingmodel.Binding { return nil },
+		SchemaMap: func() map[string]definitionmodel.ObjectSchema { return objects }, IdentityProfileExtensions: func() []profilebindingmodel.Binding { return nil },
 	})
 	adapter := NewReportRecordAdapter(application, repository, func() map[string]definitionmodel.ObjectSchema { return objects })
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{

@@ -17,7 +17,7 @@ type BusinessProfileReference struct {
 type Principal struct {
 	UserID                string
 	RoleKey               string
-	DepartmentID          string
+	OrgID                 string
 	RequestID             string
 	CorrelationID         string
 	CausationID           string

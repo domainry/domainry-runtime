@@ -168,7 +168,7 @@ func workflowEdgeExampleGraph(edge definitionmodel.WorkflowGraphEdge) *definitio
 		}
 	}
 	if edge.Source == "approval" {
-		approval := definitionmodel.WorkflowApprovalNodeContract{Mode: "any", Resolvers: []definitionmodel.WorkflowAssigneeResolver{{Type: "initiator_manager"}}}
+		approval := definitionmodel.WorkflowApprovalNodeContract{Mode: "any", Resolvers: []definitionmodel.WorkflowAssigneeResolver{{Type: "users", UserIDs: []string{"user-1"}}}}
 		return &definitionmodel.WorkflowGraphSchema{Version: 2,
 			Nodes: []definitionmodel.WorkflowGraphNode{{ID: "trigger", Type: "trigger"}, {ID: "approval", Type: "approval", Contract: &definitionmodel.WorkflowNodeContract{Approval: &approval}}, workflowAuthoringTestActionNode(edge.Target), workflowAuthoringTestActionNode("rejected")},
 			Edges: []definitionmodel.WorkflowGraphEdge{{ID: "start", Source: "trigger", Target: "approval"}, edge, {ID: "rejected", Source: "approval", Target: "rejected", Branch: "rejected"}},

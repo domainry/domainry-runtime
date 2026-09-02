@@ -92,13 +92,6 @@ func TestRecordFacadeDataExchangeWorkerWithoutBindingStops(t *testing.T) {
 	}
 }
 
-func TestRebuildOwnerDepartmentPathsRejectsBlankWorkspace(t *testing.T) {
-	service := &RecordApplicationService{}
-	if count, err := service.RebuildOwnerDepartmentPaths(t.Context(), " ", []identitysdk.WorkforceEntry{{IdentityUserID: "user-1"}}); count != 0 || apperror.CodeOf(err) != "backend.workspace_scope_required" {
-		t.Fatalf("count=%d err=%v", count, err)
-	}
-}
-
 func TestCreateRecordIdempotentResultReportsAcquireAndReplay(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
 	queryPolicy := recordservice.NewRecordQueryPolicyDomainService(recordservice.RecordQueryPolicyDependencies{

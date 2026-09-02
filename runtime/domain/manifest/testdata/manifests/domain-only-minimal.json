@@ -25,7 +25,7 @@
     {
       "key": "admin",
       "name": "Admin",
-      "permissions": ["business.access", "admin_console.access", "workspace.admin", "customer.read", "customer.create", "customer.update", "customer.export", "opportunity.read", "opportunity.create", "opportunity.update"],
+      "permissions": ["business.access", "admin_console.access", "runtime.appschema.validate_application_definition", "customer.read", "customer.create", "customer.update", "customer.export", "opportunity.read", "opportunity.create", "opportunity.update"],
       "record_scope": "all_records",
       "data_permissions": [
         {"object_key": "customer", "scope": "all_records", "read": true, "write": true},

@@ -32,6 +32,29 @@ func TestAuthorizationActionDefinitionProjectsStaticEndpointAsSameKeyPermission(
 	}
 }
 
+func TestEndpointContractRejectsAnyRolePermissionShapeExceptExactSameKey(t *testing.T) {
+	for name, mutate := range map[string]func(*RuntimeEndpointContractV1){
+		"different permission": func(contract *RuntimeEndpointContractV1) {
+			contract.RequiredPermissions = []string{"runtime.workspaceprovision.other"}
+			contract.PermissionPolicyRef = "static_permission:runtime.workspaceprovision.other"
+		},
+		"additional permission": func(contract *RuntimeEndpointContractV1) {
+			contract.RequiredPermissions = append(contract.RequiredPermissions, "runtime.workspaceprovision.other")
+		},
+		"ambient permission on owner policy": func(contract *RuntimeEndpointContractV1) {
+			contract.PermissionPolicyRef = "owner_handler_policy:workspaceprovision.provisionWorkspace"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			contract := endpointActionTestContract()
+			mutate(&contract)
+			if err := contract.Validate(); err == nil {
+				t.Fatalf("contract accepted non-canonical role permission shape: %#v", contract)
+			}
+		})
+	}
+}
+
 func TestAuthorizationActionDefinitionPreservesDispatcherAndAnonymousPolicies(t *testing.T) {
 	dynamic := endpointActionTestContract()
 	dynamic.EndpointIdentity = "GET /objects/{objectKey}/records/{recordID}"

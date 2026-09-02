@@ -61,7 +61,7 @@ func TestOpenAPIModuleUsesOwnerOperationAndGovernanceContract(t *testing.T) {
 	pattern := "POST /example/{exampleID}"
 	surface := openAPIModuleSurface{
 		owner:  "example-module",
-		routes: []modulehttp.Route{{Action: openAPITestAction("example.write", pattern, []actioncontract.Exposure{actioncontract.ExposureOps}, actioncontract.AuthorizationExactRolePermission, actioncontract.EffectWrite, "caller_key_required", []actioncontract.ApprovalPolicy{actioncontract.ApprovalConfirmation})}},
+		routes: []modulehttp.Route{{Action: openAPITestAction("example.write", pattern, []actioncontract.Exposure{actioncontract.ExposureOps}, actioncontract.AuthorizationExactRolePermission, actioncontract.EffectWrite, "caller_key_required", []actioncontract.ApprovalPolicy{actioncontract.ApprovalReason, actioncontract.ApprovalConfirmation})}},
 		operations: map[string]map[string]any{pattern: {
 			"operationId": "applyExample", "summary": "Owner summary",
 			"parameters": []any{map[string]any{"in": "query", "name": "dry_run", "required": false, "schema": map[string]any{"type": "boolean"}}},
@@ -104,7 +104,7 @@ func openAPITestAction(key, pattern string, exposures []actioncontract.Exposure,
 		ApprovalPolicies: approvals, IdempotencyDecision: idempotency, AuditClass: "mutation_audit_required", LifecycleStatus: actioncontract.LifecycleActive,
 	}
 	if strategy == actioncontract.AuthorizationExactRolePermission {
-		action.Permission = &actioncontract.PermissionDefinition{Key: key, Owner: action.Owner, ResourceKey: key[:separator], ActionKey: key[separator+1:], Label: key, Category: "Example", LifecycleStatus: actioncontract.LifecycleActive}
+		action.Permission = &actioncontract.PermissionDefinition{Key: key, Owner: action.Owner, ResourceKey: key[:separator], OperationKey: key[separator+1:], Label: key, Category: "Example", LifecycleStatus: actioncontract.LifecycleActive}
 	} else if strategy != actioncontract.AuthorizationAuthenticatedPrincipal {
 		action.Authorization.PolicyKey = "example.policy"
 	}

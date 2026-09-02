@@ -19,8 +19,8 @@ type workflowAuthoringIdentityStub struct{}
 func (workflowAuthoringIdentityStub) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
 	return identitysdk.User{}, false, nil
 }
-func (workflowAuthoringIdentityStub) FindDepartment(context.Context, identitysdk.DepartmentLookup) (identitysdk.Department, bool, error) {
-	return identitysdk.Department{}, false, nil
+func (workflowAuthoringIdentityStub) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
+	return identitysdk.OrganizationUnit{}, false, nil
 }
 func (workflowAuthoringIdentityStub) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
 	return nil, nil
@@ -29,9 +29,6 @@ func (workflowAuthoringIdentityStub) ListRoles(context.Context, identitysdk.Dire
 	return []identitysdk.Role{{Key: "finance_manager"}}, nil
 }
 func (workflowAuthoringIdentityStub) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
-	return nil, nil
-}
-func (workflowAuthoringIdentityStub) ListWorkforce(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.WorkforceEntry, error) {
 	return nil, nil
 }
 

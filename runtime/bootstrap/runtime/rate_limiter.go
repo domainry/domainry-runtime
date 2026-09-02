@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/ratelimit"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	ratelimitpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/ratelimit"
 	ratelimitredis "github.com/domainry/domainry-runtime/runtime/infrastructure/ratelimitredis"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-foundation/ratelimit"
 )
 
 func openSharedRateLimiter(ctx context.Context, cfg config.Config, store *persistence.RuntimeStore) (ratelimit.Limiter, error) {

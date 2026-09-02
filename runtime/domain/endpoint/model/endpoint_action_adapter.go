@@ -52,12 +52,12 @@ func AuthorizationActionDefinition(contract RuntimeEndpointContractV1) (actionco
 		}
 	case strings.HasPrefix(policy, "owner_handler_policy:"):
 		definition.Authorization = actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticatedPrincipal}
-	case strings.HasPrefix(policy, "static_permission:"), policy == "audit.business_event_export_policy":
+	case strings.HasPrefix(policy, "static_permission:"):
 		definition.Authorization = actioncontract.Authorization{Strategy: actioncontract.AuthorizationExactRolePermission}
 		separator := strings.LastIndex(definition.Key, ".")
 		resourceKey := definition.Key[:separator]
 		definition.Permission = &actioncontract.PermissionDefinition{
-			Key: definition.Key, Owner: owner, ResourceKey: resourceKey, ActionKey: operationKey,
+			Key: definition.Key, Owner: owner, ResourceKey: resourceKey, OperationKey: operationKey,
 			Label: operationLabel, Category: strings.TrimSpace(contract.SourceOwner), LifecycleStatus: actioncontract.LifecycleActive,
 		}
 	default:
@@ -68,6 +68,89 @@ func AuthorizationActionDefinition(contract RuntimeEndpointContractV1) (actionco
 		return actioncontract.ActionDefinition{}, fmt.Errorf("Runtime endpoint %q Action projection: %w", contract.EndpointIdentity, err)
 	}
 	return normalized, nil
+}
+
+// ValidateHostFacadeAction proves that a module-owned Action has one real
+// Runtime-hosted handler with matching execution governance. The generated
+// endpoint's legacy ActionKey and permission strings are deliberately ignored:
+// the contributed module manifest is the only authorization vocabulary.
+func ValidateHostFacadeAction(contract RuntimeEndpointContractV1, definition actioncontract.ActionDefinition) error {
+	if err := contract.Validate(); err != nil {
+		return err
+	}
+	normalized, err := actioncontract.NormalizeDefinition(definition)
+	if err != nil {
+		return err
+	}
+	owner := strings.TrimSpace(contract.SourceOwner)
+	if normalized.SourceKind != "host_facade" || normalized.Owner != "module:"+owner {
+		return fmt.Errorf("Action %q is not a host facade owned by module:%s", normalized.Key, owner)
+	}
+	if normalized.HTTP == nil || normalized.HTTP.Method+" "+normalized.HTTP.RouteTemplate != strings.TrimSpace(contract.EndpointIdentity) {
+		return fmt.Errorf("Action %q does not bind Runtime handler %q", normalized.Key, contract.EndpointIdentity)
+	}
+	if !strings.HasPrefix(strings.TrimSpace(contract.PermissionPolicyRef), "static_permission:") ||
+		normalized.Authorization.Strategy != actioncontract.AuthorizationExactRolePermission ||
+		normalized.Permission == nil || normalized.Permission.Key != normalized.Key || normalized.Permission.Owner != normalized.Owner {
+		return fmt.Errorf("Action %q is not an exact same-key role Action", normalized.Key)
+	}
+	if normalized.EffectClass != actioncontract.EffectClass(contract.EffectClass) {
+		return fmt.Errorf("Action %q effect %q differs from Runtime handler effect %q", normalized.Key, normalized.EffectClass, contract.EffectClass)
+	}
+	if normalized.RiskLevel != endpointRiskLevel(contract) {
+		return fmt.Errorf("Action %q risk %q differs from Runtime handler risk %q", normalized.Key, normalized.RiskLevel, endpointRiskLevel(contract))
+	}
+	if strings.TrimSpace(normalized.IdempotencyDecision) != strings.TrimSpace(contract.IdempotencyDecision) {
+		return fmt.Errorf("Action %q idempotency %q differs from Runtime handler idempotency %q", normalized.Key, normalized.IdempotencyDecision, contract.IdempotencyDecision)
+	}
+	if !sameEndpointExposures(normalized.Exposures, contract.ListenerExposures) {
+		return fmt.Errorf("Action %q listener exposures differ from Runtime handler %q", normalized.Key, contract.EndpointIdentity)
+	}
+	if !sameApprovalPolicies(normalized.ApprovalPolicies, endpointApprovalPolicies(contract.HighRiskPolicy)) {
+		return fmt.Errorf("Action %q approval policies differ from Runtime handler %q", normalized.Key, contract.EndpointIdentity)
+	}
+	return nil
+}
+
+func sameEndpointExposures(actual []actioncontract.Exposure, expected []ListenerExposure) bool {
+	want := make(map[actioncontract.Exposure]bool, len(expected))
+	for _, exposure := range expected {
+		switch exposure {
+		case ListenerExposurePublic:
+			want[actioncontract.ExposurePublic] = true
+		case ListenerExposureTenantAdmin:
+			want[actioncontract.ExposureTenantAdmin] = true
+		case ListenerExposureOps:
+			want[actioncontract.ExposureOps] = true
+		default:
+			return false
+		}
+	}
+	if len(actual) != len(want) {
+		return false
+	}
+	for _, exposure := range actual {
+		if !want[exposure] {
+			return false
+		}
+	}
+	return true
+}
+
+func sameApprovalPolicies(actual, expected []actioncontract.ApprovalPolicy) bool {
+	want := make(map[actioncontract.ApprovalPolicy]bool, len(expected))
+	for _, policy := range expected {
+		want[policy] = true
+	}
+	if len(actual) != len(want) {
+		return false
+	}
+	for _, policy := range actual {
+		if !want[policy] {
+			return false
+		}
+	}
+	return true
 }
 
 func endpointDisplayRoute(routeTemplate string) string {
@@ -95,9 +178,9 @@ func endpointApprovalPolicies(policy HighRiskActionPolicy) []actioncontract.Appr
 	case HighRiskActionReasonRequired:
 		return []actioncontract.ApprovalPolicy{actioncontract.ApprovalReason}
 	case HighRiskActionConfirmRequired:
-		return []actioncontract.ApprovalPolicy{actioncontract.ApprovalConfirmation}
+		return []actioncontract.ApprovalPolicy{actioncontract.ApprovalReason, actioncontract.ApprovalConfirmation}
 	case HighRiskActionBreakGlass:
-		return []actioncontract.ApprovalPolicy{actioncontract.ApprovalBreakGlass}
+		return []actioncontract.ApprovalPolicy{actioncontract.ApprovalReason, actioncontract.ApprovalBreakGlass}
 	default:
 		return nil
 	}

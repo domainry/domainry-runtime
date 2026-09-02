@@ -16,17 +16,8 @@ import (
 
 func TestOperationsCoreFinalConditionEdges(t *testing.T) {
 	admin := operationsTestAdmin()
-	workspaceRequest := OperationsSubmitRequest{Kind: "retention.cleanup", Permission: "undeclared", ResourceType: "retention_policy", Reason: "test"}
-	systemRequest := OperationsSubmitRequest{Kind: "runtime.maintenance.enable", Permission: "undeclared", ResourceType: "runtime", Reason: "test"}
 	service := NewOperationsApplicationService(&operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}, nil, nil, func() string { return "edge" })
-	if _, _, err := service.Submit(t.Context(), workspaceRequest, "key", admin); apperror.CodeOf(err) != "backend.operations.definition_mismatch" {
-		t.Fatalf("workspace permission declaration error = %v", err)
-	}
-	if _, _, err := service.SubmitSystem(t.Context(), systemRequest, "key", "runtime", admin); apperror.CodeOf(err) != "backend.operations.definition_mismatch" {
-		t.Fatalf("system permission declaration error = %v", err)
-	}
-
-	validRequest := OperationsSubmitRequest{Kind: "retention.cleanup", Permission: "runtime.retention.execute", ResourceType: "retention_policy", Reason: "test"}
+	validRequest := OperationsSubmitRequest{Kind: "retention.cleanup", ResourceType: "retention_policy", Reason: "test"}
 	if _, _, err := NewOperationsApplicationService(nil, nil, nil, nil).Submit(t.Context(), validRequest, "key", admin); apperror.CodeOf(err) != "backend.operations.repository_unavailable" {
 		t.Fatalf("nil repository error = %v", err)
 	}
@@ -35,7 +26,7 @@ func TestOperationsCoreFinalConditionEdges(t *testing.T) {
 		"blank user": principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: admin.WorkspaceID, UserID: "  "}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if err := operationsAuthorize(principal, "workspace.admin"); apperror.KindOf(err) != apperror.KindForbidden {
+			if err := operationsAuthorize(principal, "runtime.appschema.validate_application_definition"); apperror.KindOf(err) != apperror.KindForbidden {
 				t.Fatalf("authorization error = %v", err)
 			}
 		})
@@ -44,15 +35,15 @@ func TestOperationsCoreFinalConditionEdges(t *testing.T) {
 		principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true,
 			WorkspaceID: admin.WorkspaceID,
 			UserID:      "tenant-admin"},
-		}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}},
+		}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}},
 		)
-		if err := operationsAuthorize(principal, "runtime.worker.control"); apperror.KindOf(err) != apperror.KindForbidden {
-			t.Fatalf("workspace.admin expanded to runtime.worker.control: %v", err)
+		if err := operationsAuthorize(principal, "runtime.operations.pause_worker_owner"); apperror.KindOf(err) != apperror.KindForbidden {
+			t.Fatalf("runtime.appschema.validate_application_definition expanded to runtime.operations.pause_worker_owner: %v", err)
 		}
 		accessfixture.Mutate(&principal, func(role *accessfixture.Bundle) {
-			role.Permissions = append(role.Permissions, "runtime.worker.control")
+			role.Permissions = append(role.Permissions, "runtime.operations.pause_worker_owner")
 		})
-		if err := operationsAuthorize(principal, "runtime.worker.control"); err != nil {
+		if err := operationsAuthorize(principal, "runtime.operations.pause_worker_owner"); err != nil {
 			t.Fatalf("exact runtime ops permission rejected: %v", err)
 		}
 	})

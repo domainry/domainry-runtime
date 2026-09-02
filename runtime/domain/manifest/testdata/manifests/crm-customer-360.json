@@ -1766,31 +1766,31 @@
       "key": "sales_manager",
       "name": "Sales Manager",
       "permissions": [
-        "business.access",
-        "admin_console.access",
-        "workspace.admin",
-        "customer.read",
-        "customer.create",
-        "customer.update",
-        "customer.export",
-        "contact.read",
-        "contact.create",
-        "contact.update",
-        "lead.read",
-        "lead.create",
-        "lead.update",
-        "opportunity.read",
-        "opportunity.create",
-        "opportunity.update",
-        "opportunity.export",
-        "activity.read",
         "activity.create",
-        "activity.update",
         "activity.export",
-        "contract.read",
+        "activity.read",
+        "activity.update",
+        "admin_console.access",
+        "business.access",
+        "contact.create",
+        "contact.read",
+        "contact.update",
         "contract.create",
+        "contract.read",
         "contract.update",
-        "payment.read"
+        "customer.create",
+        "customer.export",
+        "customer.read",
+        "customer.update",
+        "lead.create",
+        "lead.read",
+        "lead.update",
+        "opportunity.create",
+        "opportunity.export",
+        "opportunity.read",
+        "opportunity.update",
+        "payment.read",
+        "runtime.appschema.validate_application_definition"
       ],
       "record_scope": "all_records",
       "data_permissions": [
@@ -1875,18 +1875,18 @@
       "key": "sales_rep",
       "name": "Sales Rep",
       "permissions": [
+        "activity.create",
+        "activity.read",
+        "activity.update",
         "business.access",
+        "contact.create",
+        "contact.read",
         "customer.read",
         "customer.update",
-        "contact.read",
-        "contact.create",
         "lead.read",
         "lead.update",
         "opportunity.read",
-        "opportunity.update",
-        "activity.read",
-        "activity.create",
-        "activity.update"
+        "opportunity.update"
       ],
       "record_scope": "owned_records",
       "data_permissions": [
@@ -1956,12 +1956,12 @@
       "name": "Finance Reviewer",
       "permissions": [
         "business.access",
+        "contract.read",
         "customer.read",
         "opportunity.read",
-        "contract.read",
+        "payment.export",
         "payment.read",
-        "payment.update",
-        "payment.export"
+        "payment.update"
       ],
       "record_scope": "all_records",
       "data_permissions": [
@@ -2008,11 +2008,13 @@
       "name": "Automation Business Tester",
       "permissions": [
         "business.access",
-        "customer.read",
-        "customer.create",
-        "customer.update",
         "customer.apply_automation_verification",
-        "ops.workflow.run"
+        "customer.create",
+        "customer.read",
+        "customer.update",
+        "workflow.customer.risk_follow_up.run",
+        "workflow.lead.auto_route.run",
+        "workflow.payment.overdue_escalation.run"
       ],
       "record_scope": "owned_records",
       "data_permissions": [
@@ -2029,8 +2031,8 @@
       "name": "Automation History Reviewer",
       "permissions": [
         "admin_console.access",
-        "automation.rule.read",
-        "automation.rule.history.read"
+        "automation.rule.history.read",
+        "automation.rule.read"
       ],
       "record_scope": "all_records",
       "data_permissions": [
@@ -2047,14 +2049,16 @@
       "name": "Runtime Operator",
       "permissions": [
         "admin_console.access",
-        "workspace.admin",
-        "scheduler.command",
-        "integration.catalog.view",
+        "customer.read",
         "integration.audit.view",
+        "integration.catalog.view",
         "integration.retry",
-        "ops.workflow.read",
-        "ops.workflow.process",
-        "customer.read"
+        "runtime.appschema.validate_application_definition",
+        "runtime.workflows.get_ops_workflow_process",
+        "runtime.workflows.list_ops_workflow_executions",
+        "runtime.workflows.list_ops_workflow_processes",
+        "runtime.workflows.process_ops_workflow_executions",
+        "scheduler.command"
       ],
       "record_scope": "all_records",
       "data_permissions": [
@@ -2088,6 +2092,7 @@
   "seed_records": [
     {
       "object_key": "customer",
+      "owner_user_id": "sales_rep_1",
       "data": {
         "__seed_key": "customer_acme",
         "name": "Acme Manufacturing",
@@ -2099,6 +2104,7 @@
     },
     {
       "object_key": "customer",
+      "owner_user_id": "sales_rep_1",
       "data": {
         "__seed_key": "customer_northwind",
         "name": "Northwind Clinics",
@@ -2121,6 +2127,7 @@
     },
     {
       "object_key": "lead",
+      "owner_user_id": "sales_manager",
       "data": {
         "__seed_key": "lead_enterprise_board",
         "company_name": "Enterprise Board",
@@ -2132,6 +2139,7 @@
     },
     {
       "object_key": "lead",
+      "owner_user_id": "sales_rep_1",
       "data": {
         "__seed_key": "lead_northwind",
         "company_name": "Northwind Clinics",
@@ -2143,6 +2151,7 @@
     },
     {
       "object_key": "opportunity",
+      "owner_user_id": "sales_rep_1",
       "data": {
         "__seed_key": "opportunity_acme_expansion",
         "customer": "$record:customer_acme",
@@ -2154,6 +2163,7 @@
     },
     {
       "object_key": "opportunity",
+      "owner_user_id": "sales_rep_1",
       "data": {
         "__seed_key": "opportunity_northwind_recovery",
         "customer": "$record:customer_northwind",
@@ -2165,6 +2175,7 @@
     },
     {
       "object_key": "activity",
+      "owner_user_id": "sales_rep_1",
       "data": {
         "__seed_key": "activity_acme_followup",
         "customer": "$record:customer_acme",
@@ -2178,6 +2189,7 @@
     },
     {
       "object_key": "activity",
+      "owner_user_id": "sales_rep_1",
       "data": {
         "__seed_key": "activity_northwind_recovery",
         "customer": "$record:customer_northwind",
@@ -2191,6 +2203,7 @@
     },
     {
       "object_key": "contract",
+      "owner_user_id": "sales_manager",
       "data": {
         "__seed_key": "contract_acme_expansion",
         "customer": "$record:customer_acme",
@@ -2203,6 +2216,7 @@
     },
     {
       "object_key": "contract",
+      "owner_user_id": "sales_manager",
       "data": {
         "__seed_key": "contract_acme_renewal_draft",
         "customer": "$record:customer_acme",
@@ -2214,6 +2228,7 @@
     },
     {
       "object_key": "payment",
+      "owner_user_id": "finance_reviewer",
       "data": {
         "__seed_key": "payment_acme_first",
         "contract": "$record:contract_acme_expansion",
@@ -2225,6 +2240,7 @@
     },
     {
       "object_key": "payment",
+      "owner_user_id": "finance_reviewer",
       "data": {
         "__seed_key": "payment_acme_overdue",
         "contract": "$record:contract_acme_expansion",

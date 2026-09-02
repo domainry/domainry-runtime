@@ -58,7 +58,7 @@ func (p *idempotencyOperationsProbe) RunIdempotencyCleanup(_ context.Context, re
 func TestDeploymentApplicationAuthorizesWorkspaceBeforeRepositoryAccess(t *testing.T) {
 	probe := &idempotencyOperationsProbe{}
 	service := NewDeploymentRuntimeStatusApplicationService(nil, nil, probe, nil, nil, nil, nil)
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}})
 	if _, err := service.IdempotencyReceipts(t.Context(), principal, "", 10); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("receipts error=%v", err)
 	}
@@ -85,7 +85,7 @@ func TestIdempotencyOperationsRequireWorkspaceAdminAndMutableReceipt(t *testing.
 	if _, err := service.IdempotencyReceipts(t.Context(), principalmodel.Principal{}, "", 10); apperror.KindOf(err) != apperror.KindForbidden {
 		t.Fatalf("anonymous list error=%v", err)
 	}
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}})
 	if receipts, err := service.IdempotencyReceipts(t.Context(), admin, "", 10); err != nil || len(receipts) != 1 {
 		t.Fatalf("admin receipts=%#v err=%v", receipts, err)
 	}

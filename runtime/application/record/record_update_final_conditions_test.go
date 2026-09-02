@@ -96,10 +96,10 @@ func TestRecordUpdateSecondPassFailuresAndValidationEdges(t *testing.T) {
 
 	repository := &updateEdgeRepository{found: true, record: baseRecord}
 	dependencies := recordUpdateEdgeDependencies(repository)
-	derivedCalls := 0
-	dependencies.ApplyScopeOwnerFacts = func(context.Context, string, definitionmodel.ObjectSchema, map[string]any, string) error {
-		derivedCalls++
-		if derivedCalls == 2 {
+	pipelineCalls := 0
+	dependencies.ValidatePipeline = func(context.Context, definitionmodel.ObjectSchema, string, map[string]any, principalmodel.Principal) error {
+		pipelineCalls++
+		if pipelineCalls == 2 {
 			return edgeErr
 		}
 		return nil
@@ -108,7 +108,7 @@ func TestRecordUpdateSecondPassFailuresAndValidationEdges(t *testing.T) {
 		return true, nil
 	}
 	if _, err := NewRecordUpdateApplicationService(dependencies).Update(t.Context(), "customer", "customer-1", map[string]any{"name": "after"}, principal); !errors.Is(err, edgeErr) {
-		t.Fatalf("second derivation error = %v", err)
+		t.Fatalf("second pipeline error = %v", err)
 	}
 
 	repository = &updateEdgeRepository{found: true, record: baseRecord}
@@ -138,12 +138,12 @@ func TestRecordUpdateSecondPassFailuresAndValidationEdges(t *testing.T) {
 
 	service := NewRecordUpdateApplicationService(RecordUpdateDependencies{})
 	required := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text", Required: true}}}
-	if err := service.validateCandidate(t.Context(), required.Key, required, "customer-1", map[string]any{}, map[string]any{}, map[string]any{}, principal, principal, true); apperror.CodeOf(err) == "" {
+	if err := service.validateCandidate(t.Context(), required.Key, required, recordmodel.Record{ID: "customer-1"}, map[string]any{}, map[string]any{}, map[string]any{}, principal, principal, true); apperror.CodeOf(err) == "" {
 		t.Fatalf("direct candidate validation error = %v", err)
 	}
 	service.dependencies.CanWrite = nil
 	valid := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
-	if err := service.validateCandidate(t.Context(), valid.Key, valid, "customer-1", map[string]any{}, map[string]any{"name": "ok"}, map[string]any{}, principal, principal, false); err != nil {
+	if err := service.validateCandidate(t.Context(), valid.Key, valid, recordmodel.Record{ID: "customer-1"}, map[string]any{}, map[string]any{"name": "ok"}, map[string]any{}, principal, principal, false); err != nil {
 		t.Fatalf("nil write guard validation error = %v", err)
 	}
 
@@ -173,7 +173,7 @@ func TestRecordUpdateRelationValidationOnlyReceivesChangedReferences(t *testing.
 	})
 	before := map[string]any{"created_by_identity_user_id": "manager_demo", "status": "draft"}
 	unchangedRelation := map[string]any{"created_by_identity_user_id": "manager_demo", "status": "paid"}
-	if err := service.validateCandidate(t.Context(), object.Key, object, "order-1", before, unchangedRelation, map[string]any{"status": "paid"}, principal, principal, false); err != nil {
+	if err := service.validateCandidate(t.Context(), object.Key, object, recordmodel.Record{ID: "order-1"}, before, unchangedRelation, map[string]any{"status": "paid"}, principal, principal, false); err != nil {
 		t.Fatal(err)
 	}
 	if len(validated) != 0 {
@@ -181,7 +181,7 @@ func TestRecordUpdateRelationValidationOnlyReceivesChangedReferences(t *testing.
 	}
 
 	changedRelation := map[string]any{"created_by_identity_user_id": "other_manager", "status": "paid"}
-	if err := service.validateCandidate(t.Context(), object.Key, object, "order-1", before, changedRelation, map[string]any{"created_by_identity_user_id": "other_manager"}, principal, principal, false); err != nil {
+	if err := service.validateCandidate(t.Context(), object.Key, object, recordmodel.Record{ID: "order-1"}, before, changedRelation, map[string]any{"created_by_identity_user_id": "other_manager"}, principal, principal, false); err != nil {
 		t.Fatal(err)
 	}
 	if got := validated["created_by_identity_user_id"]; got != "other_manager" || len(validated) != 1 {

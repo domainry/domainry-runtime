@@ -19,7 +19,7 @@ func recordStore(store *RuntimeStore) recordpersistence.RecordStore {
 	return recordpersistence.NewRecordStore(store)
 }
 
-func TestListRecordsComposesDepartmentScopeWithSearchFiltersPaginationAndSorting(t *testing.T) {
+func TestListRecordsComposesStableOrgScopeWithSearchFiltersPaginationAndSorting(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
 
@@ -31,7 +31,7 @@ func TestListRecordsComposesDepartmentScopeWithSearchFiltersPaginationAndSorting
 		store.Identifier("updated_at") + " TEXT NOT NULL, " +
 		store.Identifier("name") + " TEXT NOT NULL, " +
 		store.Identifier("status") + " TEXT NOT NULL, " +
-		store.Identifier("owner_department_path") + " TEXT" +
+		store.Identifier("owner_org_id") + " TEXT" +
 		")"
 	if _, err := store.DB().Exec(createSQL); err != nil {
 		t.Fatalf("create scoped table: %v", err)
@@ -43,28 +43,26 @@ func TestListRecordsComposesDepartmentScopeWithSearchFiltersPaginationAndSorting
 		Fields: []definitionmodel.FieldSchema{
 			{Key: "name", Name: "Name", Type: "text"},
 			{Key: "status", Name: "Status", Type: "select"},
-			{Key: "owner_department_path", Name: "Owner Department Path", Type: "text"},
 		},
 	}
-	insertGeneratedScopedRecord(t, store, object, "r1", "Alpha North", "active", "/company/sales")
-	insertGeneratedScopedRecord(t, store, object, "r2", "Beta North", "active", "/company/sales/enterprise")
-	insertGeneratedScopedRecord(t, store, object, "r3", "Gamma North", "active", "/company/support")
-	insertGeneratedScopedRecord(t, store, object, "r4", "Zeta North", "inactive", "/company/sales")
-	insertGeneratedScopedRecord(t, store, object, "r5", "Outside North", "active", "/company/sales-east")
-	insertGeneratedScopedRecord(t, store, object, "r6", "Aardvark South", "active", "/company/sales")
-	insertGeneratedScopedRecordWithDepartmentPath(t, store, object, "r10", "Null North", "active", nil)
+	insertGeneratedScopedRecord(t, store, object, "r1", "Alpha North", "active", "sales")
+	insertGeneratedScopedRecord(t, store, object, "r2", "Beta North", "active", "enterprise")
+	insertGeneratedScopedRecord(t, store, object, "r3", "Gamma North", "active", "support")
+	insertGeneratedScopedRecord(t, store, object, "r4", "Zeta North", "inactive", "sales")
+	insertGeneratedScopedRecord(t, store, object, "r5", "Outside North", "active", "sales-east")
+	insertGeneratedScopedRecord(t, store, object, "r6", "Aardvark South", "active", "sales")
+	insertGeneratedScopedRecord(t, store, object, "r10", "Null North", "active", "")
+	orgScope := recordmodel.RecordScopeExpression{Operator: "in", FieldKey: "owner_org_id", Values: []string{"sales", "enterprise"}}
 
 	page, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
-		Page:                    2,
-		PageSize:                1,
-		AfterID:                 "r1",
-		Search:                  "North",
-		SearchFields:            []string{"name"},
-		Filters:                 map[string]any{"status": "active"},
-		Sort:                    []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}},
-		Scope:                   "department_and_children",
-		PrincipalDepartmentPath: "/company/sales",
-		DepartmentPathField:     "owner_department_path",
+		Page:         2,
+		PageSize:     1,
+		AfterID:      "r1",
+		Search:       "North",
+		SearchFields: []string{"name"},
+		Filters:      map[string]any{"status": "active"},
+		Sort:         []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}},
+		Scope:        "custom", RootObjectKey: object.Key, ScopeExpression: &orgScope,
 	})
 	if err != nil {
 		t.Fatalf("list scoped records: %v", err)
@@ -76,19 +74,18 @@ func TestListRecordsComposesDepartmentScopeWithSearchFiltersPaginationAndSorting
 		t.Fatalf("expected sorted second scoped record r2, got %#v", page.Items)
 	}
 
-	insertGeneratedScopedRecord(t, store, object, "r7", "Special North", "active", "/company/sales_%")
-	insertGeneratedScopedRecord(t, store, object, "r8", "Special Child North", "active", "/company/sales_%/enterprise")
-	insertGeneratedScopedRecord(t, store, object, "r9", "Special Leak North", "active", "/company/sales-aa")
+	insertGeneratedScopedRecord(t, store, object, "r7", "Special North", "active", "sales_%")
+	insertGeneratedScopedRecord(t, store, object, "r8", "Special Child North", "active", "special-child")
+	insertGeneratedScopedRecord(t, store, object, "r9", "Special Leak North", "active", "sales-aa")
+	specialScope := recordmodel.RecordScopeExpression{Operator: "in", FieldKey: "owner_org_id", Values: []string{"sales_%", "special-child"}}
 	specialPage, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
-		Page:                    1,
-		PageSize:                10,
-		Search:                  "Special",
-		SearchFields:            []string{"name"},
-		Filters:                 map[string]any{"status": "active"},
-		Sort:                    []recordmodel.RecordSortRule{{Field: "name", Direction: "asc"}},
-		Scope:                   "department_and_children",
-		PrincipalDepartmentPath: "/company/sales_%",
-		DepartmentPathField:     "owner_department_path",
+		Page:         1,
+		PageSize:     10,
+		Search:       "Special",
+		SearchFields: []string{"name"},
+		Filters:      map[string]any{"status": "active"},
+		Sort:         []recordmodel.RecordSortRule{{Field: "name", Direction: "asc"}},
+		Scope:        "custom", RootObjectKey: object.Key, ScopeExpression: &specialScope,
 	})
 	if err != nil {
 		t.Fatalf("list special-character scoped records: %v", err)
@@ -303,21 +300,16 @@ func openStoreForGeneratedListTest(t *testing.T) *RuntimeStore {
 	return store
 }
 
-func insertGeneratedScopedRecord(t *testing.T, store *RuntimeStore, object definitionmodel.ObjectSchema, id, name, status, departmentPath string) {
-	t.Helper()
-	insertGeneratedScopedRecordWithDepartmentPath(t, store, object, id, name, status, departmentPath)
-}
-
-func insertGeneratedScopedRecordWithDepartmentPath(t *testing.T, store *RuntimeStore, object definitionmodel.ObjectSchema, id, name, status string, departmentPath any) {
+func insertGeneratedScopedRecord(t *testing.T, store *RuntimeStore, object definitionmodel.ObjectSchema, id, name, status, orgID string) {
 	t.Helper()
 	if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{
-		ID:        id,
-		CreatedAt: "2026-01-01T00:00:00Z",
-		UpdatedAt: "2026-01-01T00:00:00Z",
+		ID:         id,
+		CreatedAt:  "2026-01-01T00:00:00Z",
+		UpdatedAt:  "2026-01-01T00:00:00Z",
+		OwnerOrgID: orgID,
 		Data: map[string]any{
-			"name":                  name,
-			"status":                status,
-			"owner_department_path": departmentPath,
+			"name":   name,
+			"status": status,
 		},
 	}); err != nil {
 		t.Fatalf("insert %s: %v", id, err)

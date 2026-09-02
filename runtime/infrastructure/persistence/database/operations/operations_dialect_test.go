@@ -73,7 +73,7 @@ func assertConcurrentOperationsReplayAndIsolation(t *testing.T, first, second Op
 	t.Helper()
 	now := time.Now().UTC()
 	receipt := operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{
-		ID: "operation-" + workspaceA, Kind: "backup.create", Permission: "runtime.backup.create",
+		ID: "operation-" + workspaceA, Kind: "backup.create", ActionKey: "runtime.operations.create_backup",
 		Scope:          operationsmodel.OperationsScope{WorkspaceID: workspaceA, ResourceType: "database"},
 		IdempotencyKey: "shared-command", RequestFingerprint: "same-fingerprint", RequestedBy: "operator", Reason: "dialect contract", Status: operationsmodel.OperationsStatusCreated, CreatedAt: now, UpdatedAt: now,
 	}, StatusURL: "/operations/operation-" + workspaceA}

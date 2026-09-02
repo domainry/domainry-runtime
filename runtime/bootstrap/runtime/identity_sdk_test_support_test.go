@@ -93,7 +93,7 @@ func (runtimeIdentityPrincipalResolverStub) Resolve(_ context.Context, request i
 	}
 	principal := identitysdk.Principal{
 		Known: true, WorkspaceID: string(request.Application.WorkspaceID), UserID: string(request.SubjectID), RoleKey: roleKey,
-		Permissions: []string{"workspace.admin"}, AuthorizationRevision: "test-authorization",
+		Permissions: []string{"runtime.appschema.validate_application_definition"}, AuthorizationRevision: "test-authorization",
 	}
 	bundle := identitysdk.AccessBundle{
 		ContractVersion: identitysdk.CurrentPolicyBundleVersion, AuthorizationRevision: "test-authorization", ExpiresAt: time.Now().Add(time.Hour),
@@ -109,8 +109,8 @@ type runtimeIdentityDirectoryStub struct{}
 func (runtimeIdentityDirectoryStub) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
 	return identitysdk.User{}, false, nil
 }
-func (runtimeIdentityDirectoryStub) FindDepartment(context.Context, identitysdk.DepartmentLookup) (identitysdk.Department, bool, error) {
-	return identitysdk.Department{}, false, nil
+func (runtimeIdentityDirectoryStub) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
+	return identitysdk.OrganizationUnit{}, false, nil
 }
 func (runtimeIdentityDirectoryStub) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
 	return nil, nil
@@ -119,9 +119,6 @@ func (runtimeIdentityDirectoryStub) ListRoles(context.Context, identitysdk.Direc
 	return nil, nil
 }
 func (runtimeIdentityDirectoryStub) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
-	return nil, nil
-}
-func (runtimeIdentityDirectoryStub) ListWorkforce(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.WorkforceEntry, error) {
 	return nil, nil
 }
 

@@ -43,18 +43,17 @@ func buildRecordApplicationDependencies(s *runtimeAssembly) recordapplication.Re
 		}
 	}
 	return recordapplication.RecordApplicationDependencies{
-		Repository:               s.recordRepo,
-		MutationKernel:           recordmutation.NewMutationKernelApplicationService(s.recordRepo, revisionResolver),
-		QueryPolicy:              s.RecordQueryPolicyDomainService,
-		Pipeline:                 s.PipelineApplicationService,
-		Validation:               s.RecordValidationDomainService,
-		IdentityDirectory:        s.identityDirectory,
-		ScopeOwnerFactDerivation: s.RecordScopeOwnerFactDerivationService,
-		Audit:                    s.auditApplicationService.AppendWithMetadata,
-		BuildAudit:               auditapplication.AuditBuildEvent,
-		RecordMutationExecution:  s.RecordMutationExecutionRuntime,
-		DataExchange:             s.dataExchange,
-		DataExchangeProviders:    s.dataExchangeProviders,
+		Repository:              s.recordRepo,
+		MutationKernel:          recordmutation.NewMutationKernelApplicationService(s.recordRepo, revisionResolver),
+		QueryPolicy:             s.RecordQueryPolicyDomainService,
+		Pipeline:                s.PipelineApplicationService,
+		Validation:              s.RecordValidationDomainService,
+		IdentityDirectory:       s.identityDirectory,
+		Audit:                   s.auditApplicationService.AppendWithMetadata,
+		BuildAudit:              auditapplication.AuditBuildEvent,
+		RecordMutationExecution: s.RecordMutationExecutionRuntime,
+		DataExchange:            s.dataExchange,
+		DataExchangeProviders:   s.dataExchangeProviders,
 		ValidateExportAssurance: func(ctx context.Context, object definitionmodel.ObjectSchema, principal principalmodel.Principal, intent map[string]any, token string) (map[string]string, error) {
 			policy := object.ExportAssurancePolicy
 			if policy == nil || len(policy.RequiredMethods) == 0 {
@@ -122,10 +121,7 @@ func buildRecordApplicationDependencies(s *runtimeAssembly) recordapplication.Re
 		},
 		ExecuteWorkflow:              workflowTriggers.Execute,
 		ApplyStateMachineSelfEffects: s.recordStateMachineEffects.ApplySelfEffects,
-		UpdateInternal: func(ctx context.Context, workspaceID string, object definitionmodel.ObjectSchema, record recordmodel.Record, reason string) error {
-			return s.internalMutations.Update(ctx, workspaceID, recordapplication.RecordInternalMutationOwnerPathRebuild, object, record, reason)
-		},
-		SchemaMap: func() map[string]definitionmodel.ObjectSchema { return schemaObjectMap(s.Schema().Objects) },
+		SchemaMap:                    func() map[string]definitionmodel.ObjectSchema { return schemaObjectMap(s.Schema().Objects) },
 		IdentityProfileExtensions: func() []profilebindingmodel.Binding {
 			s.mu.RLock()
 			defer s.mu.RUnlock()

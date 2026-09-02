@@ -128,7 +128,7 @@ func gymAnalyticsP7Roles() []accessfixture.Bundle {
 	owned := permission
 	owned.Scope = "owned_records"
 	return []accessfixture.Bundle{
-		{Key: "manager", Permissions: []string{"workspace.admin", "gym_metric_fact.read"}, RecordScope: "all_records", DataPolicies: []accessfixture.DataPolicyFixture{permission}},
+		{Key: "manager", Permissions: []string{"runtime.appschema.validate_application_definition", "gym_metric_fact.read"}, RecordScope: "all_records", DataPolicies: []accessfixture.DataPolicyFixture{permission}},
 		{Key: "coach", Permissions: []string{"gym_metric_fact.read"}, RecordScope: "owned_records", DataPolicies: []accessfixture.DataPolicyFixture{owned}},
 		{Key: "advisor", Permissions: []string{"gym_metric_fact.read"}, RecordScope: "owned_records", DataPolicies: []accessfixture.DataPolicyFixture{owned}},
 	}

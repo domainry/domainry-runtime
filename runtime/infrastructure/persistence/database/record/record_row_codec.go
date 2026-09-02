@@ -49,15 +49,19 @@ func recordsFromRows(profile persistencedriver.EngineProfile, object definitionm
 			case "updated_at":
 				record.UpdatedAt = recordTimestampValue(value)
 			case "workspace_id":
-				record.WorkspaceID = fmt.Sprint(value)
+				record.WorkspaceID = recordStringValue(value)
 			case "deleted":
 				record.Deleted = recordDeletedValue(value)
 			case "ext_info":
 				record.ExtInfo = recordExtInfoValue(value)
 			case "create_by":
-				record.CreateBy = fmt.Sprint(value)
+				record.CreateBy = recordStringValue(value)
 			case "update_by":
-				record.UpdateBy = fmt.Sprint(value)
+				record.UpdateBy = recordStringValue(value)
+			case "owner_user_id":
+				record.OwnerUserID = recordStringValue(value)
+			case "owner_org_id":
+				record.OwnerOrgID = recordStringValue(value)
 			default:
 				if !recordvalidation.RecordIsEmptyValue(value) {
 					record.Data[column] = value
@@ -70,6 +74,13 @@ func recordsFromRows(profile persistencedriver.EngineProfile, object definitionm
 		return nil, fmt.Errorf("read records: %w", err)
 	}
 	return records, nil
+}
+
+func recordStringValue(value any) string {
+	if value == nil {
+		return ""
+	}
+	return fmt.Sprint(value)
 }
 
 func recordTimestampValue(value any) string {

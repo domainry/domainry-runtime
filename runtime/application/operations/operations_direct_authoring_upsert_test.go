@@ -22,7 +22,7 @@ func TestExecuteDirectAuthoringUpsertPersistsReplayAndChecksHashOnlyForOwnerExec
 	})
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "builder"}}
 	ctx := operationscontract.WithBuilderTaskID(t.Context(), "task-1")
-	request := DirectAuthoringUpsertRequest{CapabilityKey: "identity.role", ResourceID: "manager", BuilderTaskID: "task-1", IdempotencyKey: "upsert-1", ExpectedResourceHash: "empty", Payload: map[string]any{"label": "Manager"}}
+	request := DirectAuthoringUpsertRequest{CapabilityKey: "identity.role", ActionKey: "identity.roles.update", ResourceID: "manager", BuilderTaskID: "task-1", IdempotencyKey: "upsert-1", ExpectedResourceHash: "empty", Payload: map[string]any{"label": "Manager"}}
 	currentHash, found, calls := "", false, 0
 
 	invoke := func(request DirectAuthoringUpsertRequest) (OperationsOwnerExecutionResult, error) {
@@ -69,7 +69,7 @@ func TestExecuteDirectAuthoringUpsertRejectsHeaderAndOwnerContractViolations(t *
 	repository := &operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}
 	service := NewOperationsApplicationService(repository, nil, nil, func() string { return "authoring-invalid" })
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "builder"}}
-	valid := DirectAuthoringUpsertRequest{CapabilityKey: "identity.role", ResourceID: "manager", BuilderTaskID: "task-1", IdempotencyKey: "upsert-1", ExpectedResourceHash: "empty", Payload: map[string]any{}}
+	valid := DirectAuthoringUpsertRequest{CapabilityKey: "identity.role", ActionKey: "identity.roles.update", ResourceID: "manager", BuilderTaskID: "task-1", IdempotencyKey: "upsert-1", ExpectedResourceHash: "empty", Payload: map[string]any{}}
 	call := func(ctx context.Context, request DirectAuthoringUpsertRequest, authorize func(context.Context) error) error {
 		_, err := service.ExecuteDirectAuthoringUpsert(ctx, request, principal, authorize, func(context.Context) (string, bool, error) { return "", false, nil }, func(context.Context) (any, error) { return map[string]any{}, nil })
 		return err
@@ -99,7 +99,7 @@ func TestExecuteDirectAuthoringUpsertHashesAnEmptyCollectionWithoutTreatingItAsE
 		return capabilitycontract.CapabilityAuthoringSuccessProjection{SnapshotHash: "snapshot-empty", AvailableSuccessors: []capabilitycontract.CapabilityAuthoringSuccessorSummary{}}, nil
 	})
 	request := DirectAuthoringUpsertRequest{
-		CapabilityKey: "identity.role_permission", ResourceID: "viewer", BuilderTaskID: "task-1",
+		CapabilityKey: "identity.role_permission", ActionKey: "identity.roles.update", ResourceID: "viewer", BuilderTaskID: "task-1",
 		IdempotencyKey: "empty-permissions", ExpectedResourceHash: "empty", Payload: map[string]any{"permission_keys": []any{}},
 	}
 	result, err := service.ExecuteDirectAuthoringUpsert(t.Context(), request, principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-a", UserID: "builder"}},
@@ -123,7 +123,7 @@ func TestExecuteDirectAuthoringUpsertAllowsAbsentExpectedHashForFirstCreationOnl
 		return service
 	}
 	request := DirectAuthoringUpsertRequest{
-		CapabilityKey: "identity.menu", ResourceID: "menu-1", BuilderTaskID: "task-1",
+		CapabilityKey: "identity.menu", ActionKey: "identity.menus.update", ResourceID: "menu-1", BuilderTaskID: "task-1",
 		IdempotencyKey: "first-create", ExpectedResourceHash: "", Payload: map[string]any{"key": "orders"},
 	}
 	authorize := func(context.Context) error { return nil }
@@ -167,7 +167,7 @@ func TestExecuteDirectAuthoringUpsertAllowsAbsentExpectedHashForFirstCreationOnl
 func TestExecuteDirectAuthoringUpsertRemainingContractAndProjectionOutcomes(t *testing.T) {
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "builder"}}
 	valid := DirectAuthoringUpsertRequest{
-		CapabilityKey: "identity.role", ResourceID: "manager", BuilderTaskID: "task-1",
+		CapabilityKey: "identity.role", ActionKey: "identity.roles.update", ResourceID: "manager", BuilderTaskID: "task-1",
 		IdempotencyKey: "upsert", ExpectedResourceHash: "empty", Payload: map[string]any{},
 	}
 	newService := func(key string) *OperationsApplicationService {
@@ -183,6 +183,7 @@ func TestExecuteDirectAuthoringUpsertRemainingContractAndProjectionOutcomes(t *t
 		code   string
 	}{
 		{name: "capability", mutate: func(request *DirectAuthoringUpsertRequest) { request.CapabilityKey = "" }, code: "backend.authoring.request_identity_required"},
+		{name: "action", mutate: func(request *DirectAuthoringUpsertRequest) { request.ActionKey = "" }, code: "backend.authoring.request_identity_required"},
 		{name: "resource", mutate: func(request *DirectAuthoringUpsertRequest) { request.ResourceID = "" }, code: "backend.authoring.request_identity_required"},
 		{name: "builder task", mutate: func(request *DirectAuthoringUpsertRequest) { request.BuilderTaskID = "" }, code: "backend.authoring.request_identity_required"},
 	} {
@@ -287,7 +288,4 @@ func TestExecuteDirectAuthoringUpsertRemainingContractAndProjectionOutcomes(t *t
 		t.Fatalf("blank snapshot code=%s", code)
 	}
 
-	if permission := operationsOwnerPermission(nil, principal); permission != "" {
-		t.Fatalf("empty permission=%q", permission)
-	}
 }

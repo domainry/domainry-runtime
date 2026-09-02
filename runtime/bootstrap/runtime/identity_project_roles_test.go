@@ -16,7 +16,7 @@ func TestRuntimeProjectRoleCatalogPreservesExternalAssignmentSafetyFacts(t *test
 			DataPermissions:  []manifestmodel.RoleDataPermission{{ObjectKey: "course", Scope: "all_records", Read: true}},
 			FieldPermissions: []manifestmodel.RoleFieldPermission{{ObjectKey: "course", FieldKey: "name", Read: true}},
 		},
-		{Key: "operator", Name: "Operator", Permissions: []string{"workspace.admin"}, Audience: "any", AssignmentMode: "manual", RiskLevel: "privileged"},
+		{Key: "operator", Name: "Operator", Permissions: []string{"runtime.appschema.validate_application_definition"}, Audience: "any", AssignmentMode: "manual", RiskLevel: "privileged"},
 		{Key: "member", Name: "Member", Audience: "business", RequiredBindingKey: "member", AssignmentMode: "system_managed", RiskLevel: "normal"},
 	}
 
@@ -33,7 +33,7 @@ func TestRuntimeProjectRoleCatalogPreservesExternalAssignmentSafetyFacts(t *test
 			t.Fatalf("role[%d] has no schema hash", index)
 		}
 	}
-	if catalog.Roles[1].Permissions[0] != "workspace.admin" {
+	if catalog.Roles[1].Permissions[0] != "runtime.appschema.validate_application_definition" {
 		t.Fatalf("privileged permission was weakened: %#v", catalog.Roles[1])
 	}
 	if len(catalog.Roles[0].Permissions) != 1 || len(catalog.Roles[1].Permissions) != 1 {
@@ -50,8 +50,8 @@ func TestRuntimeProjectRoleCatalogPreservesExternalAssignmentSafetyFacts(t *test
 }
 
 func TestRuntimeRolePermissionsKeepsOnlyExactDeclaredKeys(t *testing.T) {
-	permissions := runtimeRolePermissions([]string{" customer.read ", "customer.read", "workspace.admin"})
-	if len(permissions) != 2 || permissions[0] != "customer.read" || permissions[1] != "workspace.admin" {
+	permissions := runtimeRolePermissions([]string{" customer.read ", "customer.read", "runtime.appschema.validate_application_definition"})
+	if len(permissions) != 2 || permissions[0] != "customer.read" || permissions[1] != "runtime.appschema.validate_application_definition" {
 		t.Fatalf("permissions=%#v", permissions)
 	}
 }

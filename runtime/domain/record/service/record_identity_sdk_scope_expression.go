@@ -187,14 +187,9 @@ func compileSDKPredicateChildren(object definitionmodel.ObjectSchema, objects ma
 func sdkPolicyFactField(object definitionmodel.ObjectSchema, fact string) (string, bool) {
 	fact = strings.TrimSpace(fact)
 	aliases := map[string]string{
-		"id":              "id",
-		"owner_id":        recordpolicy.RecordOwnerFieldKey(object),
-		"department_id":   recordpolicy.RecordOwnerDepartmentIDFieldKey(object),
-		"department_path": recordpolicy.RecordOwnerDepartmentPathFieldKey(object),
-		"team_id":         recordpolicy.RecordTeamFieldKey(object),
-		"store_id":        recordpolicy.RecordStoreFieldKey(object),
-		"territory_id":    recordpolicy.RecordTerritoryFieldKey(object),
-		"warehouse_id":    recordpolicy.RecordWarehouseFieldKey(object),
+		"id":            "id",
+		"owner_user_id": recordpolicy.RecordOwnerFieldKey(object),
+		"owner_org_id":  recordpolicy.RecordOwnerOrgIDFieldKey(object),
 	}
 	if field, exists := aliases[fact]; exists {
 		return strings.TrimSpace(field), strings.TrimSpace(field) != ""
@@ -301,10 +296,7 @@ func directSDKScopeExpressionMatches(expression recordmodel.RecordScopeExpressio
 	case "not":
 		return len(expression.Children) == 1 && !directSDKScopeExpressionMatches(expression.Children[0], record)
 	case "eq", "in", "prefix", "starts_with":
-		value := record.ID
-		if expression.FieldKey != "id" {
-			value = strings.TrimSpace(fmt.Sprint(record.Data[expression.FieldKey]))
-		}
+		value, _ := directRecordScopeValue(record, expression.FieldKey)
 		if expression.Operator == "prefix" || expression.Operator == "starts_with" {
 			if len(expression.Values) != 1 {
 				return false
@@ -318,7 +310,7 @@ func directSDKScopeExpressionMatches(expression recordmodel.RecordScopeExpressio
 		}
 		return false
 	case "exists", "not_exists":
-		_, exists := record.Data[expression.FieldKey]
+		_, exists := directRecordScopeValue(record, expression.FieldKey)
 		if expression.FieldKey == "id" {
 			// A candidate record is still a record fact even before persistence
 			// assigns its ID. Identity uses `id exists true` as the portable
@@ -332,5 +324,19 @@ func directSDKScopeExpressionMatches(expression recordmodel.RecordScopeExpressio
 		return exists
 	default:
 		return false
+	}
+}
+
+func directRecordScopeValue(record recordmodel.Record, fieldKey string) (string, bool) {
+	switch strings.TrimSpace(fieldKey) {
+	case "id":
+		return record.ID, true
+	case recordpolicy.RecordOwnerUserIDSystemField:
+		return strings.TrimSpace(record.OwnerUserID), true
+	case recordpolicy.RecordOwnerOrgIDSystemField:
+		return strings.TrimSpace(record.OwnerOrgID), true
+	default:
+		value, exists := record.Data[fieldKey]
+		return strings.TrimSpace(fmt.Sprint(value)), exists
 	}
 }

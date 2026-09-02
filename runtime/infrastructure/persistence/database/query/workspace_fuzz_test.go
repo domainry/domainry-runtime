@@ -14,7 +14,7 @@ func FuzzTenantQueryWorkspaceCannotBeOverridden(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, injected string) {
 		where, args, err := BuildTenantWhere(fuzzQueryStore{}, "workspace-a", recordmodel.RecordListQuery{
-			Scope: "subordinates", OwnerField: "owner_id", PrincipalReportingUserIDs: []string{injected},
+			Scope:   "all_records",
 			Filters: map[string]any{"workspace_id": injected, "related_id": injected},
 			Sort:    []recordmodel.RecordSortRule{{Field: injected, Direction: injected}},
 		})

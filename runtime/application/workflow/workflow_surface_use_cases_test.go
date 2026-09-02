@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -95,23 +94,10 @@ func TestWorkflowSurfaceDTOsDoNotCrossLeakBusinessAndOperationsFields(t *testing
 	}
 }
 
-func TestOpsWorkflowProcessSurfaceRequiresExactPermissionsAndProjectsTechnicalDetail(t *testing.T) {
-	workspaceAdmin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+func TestOpsWorkflowProcessSurfaceRequiresWorkspaceAndProjectsTechnicalDetail(t *testing.T) {
 	service := NewWorkflowApplicationService(WorkflowDependencies{})
-	if _, err := service.OpsWorkflowProcesses(t.Context(), principalmodel.Principal{}, workflowmodel.WorkflowProcessFilter{}); apperror.CodeOf(err) != "auth.permission_denied" {
+	if _, err := service.OpsWorkflowProcesses(t.Context(), principalmodel.Principal{}, workflowmodel.WorkflowProcessFilter{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("unknown principal list authorization=%v", err)
-	}
-	if _, err := service.OpsWorkflowProcesses(t.Context(), workspaceAdmin, workflowmodel.WorkflowProcessFilter{}); apperror.CodeOf(err) != "auth.permission_denied" {
-		t.Fatalf("workspace.admin list authorization=%v", err)
-	}
-	if _, err := service.OpsWorkflowProcess(t.Context(), "process", workspaceAdmin); apperror.CodeOf(err) != "auth.permission_denied" {
-		t.Fatalf("workspace.admin detail authorization=%v", err)
-	}
-	if _, err := service.RetryOpsWorkflowProcessWithKey(t.Context(), "process", "key", workspaceAdmin); apperror.CodeOf(err) != "auth.permission_denied" {
-		t.Fatalf("workspace.admin retry authorization=%v", err)
-	}
-	if _, err := service.ResolveOpsWorkflowProcessFailure(t.Context(), "process", "note", workspaceAdmin); apperror.CodeOf(err) != "auth.permission_denied" {
-		t.Fatalf("workspace.admin resolve authorization=%v", err)
 	}
 
 	process := workflowmodel.WorkflowProcessInstance{
@@ -129,7 +115,7 @@ func TestOpsWorkflowProcessSurfaceRequiresExactPermissionsAndProjectsTechnicalDe
 		},
 		events: []workflowmodel.WorkflowProcessEvent{{ID: "event-1", Event: "node_failed", ActorID: "worker", Summary: "failed", CreatedAt: "2026-07-26T00:01:00Z"}},
 	}
-	reader := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"workflow.process.read"}})
+	reader := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "workspace"}}
 	detail, err := workflowProcessQueryService(store, nil).OpsWorkflowProcess(t.Context(), " process ", reader)
 	if err != nil || detail.Process.ID != "process" || detail.Process.ObjectKey != "request" || len(detail.Nodes) != 1 || len(detail.Events) != 1 {
 		t.Fatalf("detail=%+v err=%v", detail, err)
@@ -153,12 +139,7 @@ func TestBusinessTeamWorkflowTasksAuthorizationDefaultsLimitsAndRepositoryFailur
 	if _, err := service.BusinessTeamWorkflowTasks(t.Context(), principalmodel.Principal{}, "", 0); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("unknown principal error=%v", err)
 	}
-	denied := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "workspace"}}
-	if _, err := service.BusinessTeamWorkflowTasks(t.Context(), denied, "", 0); apperror.CodeOf(err) != "backend.workflow.team_tasks_permission_required" {
-		t.Fatalf("permission error=%v", err)
-	}
-	reader := denied
-	reader = workflowPrincipalWithPermissions(reader, "workflow.process.read")
+	reader := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "workspace"}}
 	tasks, err := service.BusinessTeamWorkflowTasks(t.Context(), reader, "", 0)
 	if err != nil || len(tasks) != 1 || tasks[0].ID != "task-1" {
 		t.Fatalf("default tasks=%+v err=%v", tasks, err)
@@ -186,7 +167,7 @@ func TestRetryOpsWorkflowProcessSuccessProjection(t *testing.T) {
 		},
 	}
 	worker := &workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}}
-	operator := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"workflow.process.operate"}})
+	operator := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "workspace"}}
 	projected, err := workflowProcessMutationService(store, worker, nil).RetryOpsWorkflowProcessWithKey(t.Context(), "process", "retry-key", operator)
 	if err != nil || projected.ID != "process" || projected.Status != "completed" || projected.RetryCount != 1 {
 		t.Fatalf("projected=%+v err=%v", projected, err)
@@ -210,7 +191,7 @@ func TestWorkflowSurfaceProjectionWrappersCoverSuccessAndServiceFailures(t *test
 		tasks:         []workflowmodel.WorkflowTask{task},
 	}
 	service := workflowProcessQueryService(store, nil)
-	reader := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"workflow.process.read"}})
+	reader := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "workspace"}}
 
 	tasks, err := service.BusinessWorkflowTasks(t.Context(), reader, "open", 10)
 	if err != nil || len(tasks) != 1 || tasks[0].ID != task.ID {
@@ -252,7 +233,7 @@ func TestWorkflowSurfaceProjectionWrappersCoverSuccessAndServiceFailures(t *test
 	executionService := NewWorkflowApplicationService(WorkflowDependencies{
 		Workers: worker, Processes: store, Schema: workflowSchemaProviderEdgeStub{},
 	})
-	executionReader := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"ops.workflow.read"}})
+	executionReader := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "workspace"}}
 	executions, err := executionService.OpsWorkflowExecutions(t.Context(), executionReader, "", "", 10)
 	if err != nil || len(executions) != 1 || executions[0].ID != "execution-1" {
 		t.Fatalf("ops executions=%+v err=%v", executions, err)
@@ -269,7 +250,7 @@ func TestWorkflowSurfaceProjectionWrappersCoverSuccessAndServiceFailures(t *test
 }
 
 func TestOpsWorkflowMutationWrappersPropagateAuthorizedServiceFailures(t *testing.T) {
-	operator := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"workflow.process.operate"}})
+	operator := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "workspace"}}
 	store := &workflowProcessStoreEdgeStub{
 		workflowExecutionProcessStub: workflowExecutionProcessStub{
 			processes: map[string]workflowmodel.WorkflowProcessInstance{},

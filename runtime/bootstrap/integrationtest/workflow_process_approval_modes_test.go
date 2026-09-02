@@ -40,7 +40,7 @@ func TestWorkflowApprovalModesAggregateTasks(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			store, records := approvalModeTestRuntime(t, test.mode)
 			defer store.Close()
-			initiator := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "initiator", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "employee", Permissions: []string{"workflow.run"}})
+			initiator := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "initiator", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "employee", Permissions: []string{"workflow.approval_modes.run"}})
 			process, err := runWorkflowProcess(t, store, records, "approval_modes", map[string]any{"record_id": "request_1"}, initiator)
 			if err != nil {
 				t.Fatalf("start: %v", err)

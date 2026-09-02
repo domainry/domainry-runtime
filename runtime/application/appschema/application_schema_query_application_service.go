@@ -15,6 +15,10 @@ import (
 	recordprojection "github.com/domainry/domainry-runtime/runtime/domain/record/projection"
 )
 
+// metadataObjectRecordCountAction is owned by runtime:appschema and is the
+// exact Action/Permission for the Runtime-hosted record-count use case.
+const metadataObjectRecordCountAction = "runtime.appschema.metadata_object_record_count"
+
 func (s *ApplicationSchemaApplicationService) CurrentManifest(ctx context.Context, principal principalmodel.Principal) (manifestmodel.ManifestSchema, error) {
 	if err := metadataAuthorizeQuery(principal); err != nil {
 		return manifestmodel.ManifestSchema{}, err
@@ -40,7 +44,7 @@ func (s *ApplicationSchemaQueryApplicationService) FeaturePermissions(ctx contex
 		return recordcontract.RecordFeaturePermissionSnapshot{}, err
 	}
 	snapshot := s.Snapshot(ctx)
-	return recordprojection.RecordBuildFeaturePermissions(snapshot.Objects, snapshot.Actions, principal)
+	return recordprojection.RecordBuildFeaturePermissions(snapshot.Objects, snapshot.Actions, snapshot.Workflows, principal)
 }
 
 func (s *ApplicationSchemaApplicationService) ApplicationSchemaMigrationPlan(ctx context.Context, principal principalmodel.Principal) ([]appschemamodel.ApplicationSchemaMigrationStep, error) {
@@ -63,7 +67,7 @@ func (s *ApplicationSchemaApplicationService) ApplicationSchemaObjectRecordCount
 	if err := metadataAuthorizeQuery(principal); err != nil {
 		return 0, err
 	}
-	if !principal.HasPermission("metadata.read") {
+	if !principal.HasExactPermission(metadataObjectRecordCountAction) {
 		return 0, forbidden("auth.permission_denied")
 	}
 	objectKey = strings.TrimSpace(objectKey)

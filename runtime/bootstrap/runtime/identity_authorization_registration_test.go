@@ -12,6 +12,9 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
+	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 type authorizationTestModuleSurface struct {
@@ -85,6 +88,10 @@ func TestRuntimeAuthorizationRegistryPublishesActionsWithoutObjectMetadataMirror
 			{Key: "record_timer", Name: "Record timer", Config: map[string]any{"system_object": true}, Capabilities: &definitionmodel.ObjectCapabilitySet{Read: true}},
 		},
 		Actions: []definitionmodel.ActionSchema{{Key: "sales.customer.merge", ObjectKey: "sales.customer", Label: "Merge customer", Kind: definitionmodel.ActionKindRecordOperation, AuditEvent: "customer.merged"}},
+		Workflows: []definitionmodel.WorkflowSchema{
+			{Key: "order.approval", Name: "Order approval", Enabled: true},
+			{Key: "order.disabled", Name: "Disabled order flow", Enabled: false},
+		},
 	}
 	registry, err := runtimeAuthorizationActionRegistry(snapshot, "orders-runtime", nil)
 	if err != nil {
@@ -99,13 +106,32 @@ func TestRuntimeAuthorizationRegistryPublishesActionsWithoutObjectMetadataMirror
 		if !want[permission.Key] {
 			continue
 		}
-		if permission.Key != permission.ResourceKey+"."+permission.ActionKey || permission.Owner != "application:orders-runtime" {
+		if permission.Key != permission.ResourceKey+"."+permission.OperationKey || permission.Owner != "application:orders-runtime" {
 			t.Fatalf("permission is not exact/source-owned: %+v", permission)
 		}
 		delete(want, permission.Key)
 	}
 	if len(want) != 0 {
 		t.Fatalf("missing object/action permissions: %#v", want)
+	}
+	workflowActionKey := workflowcontract.RunActionKey("order.approval")
+	workflowAction, found := registry.Definition(workflowActionKey)
+	if !found || workflowAction.Permission == nil || workflowAction.Permission.Key != workflowActionKey || workflowAction.Permission.Owner != "application:orders-runtime" {
+		t.Fatalf("Workflow Action was not projected as a source-owned same-key Permission: %#v found=%v", workflowAction, found)
+	}
+	if _, found := registry.Definition(workflowcontract.RunActionKey("order.disabled")); found {
+		t.Fatal("disabled Workflow unexpectedly produced an executable Action")
+	}
+	owned := runtimePermissionDefinitionsByOwner(registry)["application:orders-runtime"]
+	found = false
+	for _, permission := range owned {
+		if permission.PermissionKey == workflowActionKey {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("Workflow Permission missing from Identity owner snapshot: %#v", owned)
 	}
 }
 
@@ -122,7 +148,7 @@ func TestRuntimeAuthorizationRegistryUsesModuleActionAsSingleRouteAuthority(t *t
 		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationExactRolePermission},
 		HTTP:          &actioncontract.HTTPBinding{Method: http.MethodGet, RouteTemplate: "/notifications/deliveries"},
 		Permission: &actioncontract.PermissionDefinition{
-			Key: actionKey, Owner: "module:notification", ResourceKey: "notification.deliveries", ActionKey: "list",
+			Key: actionKey, Owner: "module:notification", ResourceKey: "notification.deliveries", OperationKey: "list",
 			Label: "List notification deliveries", Category: "Notification deliveries", LifecycleStatus: actioncontract.LifecycleActive,
 		},
 		EffectClass: actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow,
@@ -139,6 +165,110 @@ func TestRuntimeAuthorizationRegistryUsesModuleActionAsSingleRouteAuthority(t *t
 	}
 	if _, exists := registry.Definition(staleEndpointKey); exists {
 		t.Fatalf("stale Runtime endpoint Action %q survived module route ownership", staleEndpointKey)
+	}
+}
+
+func TestRuntimeNotificationFacadeUsesRuntimeOwnedExactDeliveryPermission(t *testing.T) {
+	registry, err := runtimeAuthorizationActionRegistry(appschemamodel.ApplicationSchemaSnapshot{}, "orders-runtime", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delivery, ok := registry.ResolveHTTP(http.MethodGet, "/notifications/deliveries")
+	if !ok || delivery.Key != "runtime.notifications.list_deliveries" || delivery.Owner != "runtime:notifications" {
+		t.Fatalf("delivery Action=%+v ok=%t", delivery, ok)
+	}
+	if delivery.Authorization.Strategy != actioncontract.AuthorizationExactRolePermission || delivery.Permission == nil || delivery.Permission.Key != delivery.Key || delivery.Permission.Owner != delivery.Owner {
+		t.Fatalf("delivery Action is not an exact same-key Runtime Permission: %+v", delivery)
+	}
+	for _, path := range []string{
+		"/business/notifications/{notificationID}/actions/{actionKey}/resolve",
+		"/portal/notifications/{notificationID}/actions/{actionKey}/resolve",
+	} {
+		resolved, found := registry.ResolveHTTP(http.MethodGet, path)
+		if !found || resolved.Owner != "runtime:notifications" || resolved.Authorization.Strategy != actioncontract.AuthorizationAuthenticatedPrincipal || resolved.Permission != nil {
+			t.Fatalf("resolved notification facade Action for %q=%+v found=%t", path, resolved, found)
+		}
+	}
+}
+
+func TestRuntimeWorkflowSurfaceSeparatesSelfRoutesFromExactManagementActions(t *testing.T) {
+	registry, err := runtimeAuthorizationActionRegistry(appschemamodel.ApplicationSchemaSnapshot{}, "orders-runtime", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exactRoutes := []string{
+		"GET /business/workflow/team-tasks",
+		"POST /business/workflow/processes/{processID}/retry",
+		"GET /operations/workflow/executions",
+		"POST /operations/workflow/executions/process",
+		"POST /operations/workflow/executions/{executionID}/retry",
+		"POST /operations/workflow/executions/{executionID}/resolve",
+		"GET /operations/workflow/processes",
+		"GET /operations/workflow/processes/{processID}",
+		"POST /operations/workflow/processes/{processID}/retry",
+		"POST /operations/workflow/processes/{processID}/resolve",
+		"POST /tenant-admin/workflows/authoring-fragments/{capabilityKey}/validate",
+		"POST /tenant-admin/workflows/{workflowKey}/validate",
+		"POST /tenant-admin/workflows/{workflowKey}/simulate",
+	}
+	for _, endpoint := range exactRoutes {
+		method, route, _ := strings.Cut(endpoint, " ")
+		action, found := registry.ResolveHTTP(method, route)
+		if !found || action.Authorization.Strategy != actioncontract.AuthorizationExactRolePermission || action.Permission == nil || action.Permission.Key != action.Key {
+			t.Fatalf("workflow endpoint %q is not an exact same-key Action: %#v found=%v", endpoint, action, found)
+		}
+	}
+	principalRoutes := []string{
+		"GET /business/workflow/tasks",
+		"GET /business/workflow/processes",
+		"GET /business/workflow/processes/{processID}",
+		"POST /business/workflow/processes/{processID}/withdraw",
+		"POST /business/workflows/{workflowKey}/run",
+		"POST /portal/workflows/{workflowKey}/run",
+	}
+	for _, endpoint := range principalRoutes {
+		method, route, _ := strings.Cut(endpoint, " ")
+		action, found := registry.ResolveHTTP(method, route)
+		if !found || action.Authorization.Strategy != actioncontract.AuthorizationAuthenticatedPrincipal || action.Permission != nil {
+			t.Fatalf("workflow endpoint %q is not principal/domain scoped: %#v found=%v", endpoint, action, found)
+		}
+	}
+}
+
+func TestRuntimeMetadataObjectRecordCountUsesSameKeyPermission(t *testing.T) {
+	registry, err := runtimeAuthorizationActionRegistry(appschemamodel.ApplicationSchemaSnapshot{}, "orders-runtime", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition, ok := registry.ResolveHTTP(http.MethodGet, "/tenant-admin/metadata/objects/{objectKey}/record-count")
+	if !ok || definition.Key != "runtime.appschema.metadata_object_record_count" || definition.Owner != "runtime:appschema" {
+		t.Fatalf("record-count Action=%+v ok=%t", definition, ok)
+	}
+	if definition.Authorization.Strategy != actioncontract.AuthorizationExactRolePermission || definition.Permission == nil || definition.Permission.Key != definition.Key || definition.Permission.Owner != definition.Owner {
+		t.Fatalf("record-count Action is not an exact same-key Runtime Permission: %+v", definition)
+	}
+}
+
+func TestRuntimeAuthorizationRegistryUsesSchedulerManifestInsteadOfGeneratedHostKeys(t *testing.T) {
+	actions, err := schedulersdk.SchedulerAuthorizationActions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := runtimeAuthorizationActionRegistry(appschemamodel.ApplicationSchemaSnapshot{}, "orders-runtime", actions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range actions {
+		resolved, found := registry.ResolveHTTP(source.HTTP.Method, source.HTTP.RouteTemplate)
+		if !found || resolved.Key != source.Key || resolved.Owner != schedulersdk.SchedulerAuthorizationOwner || resolved.Permission == nil || resolved.Permission.Key != source.Key {
+			t.Fatalf("Scheduler route %s %s resolved to %+v, found=%t", source.HTTP.Method, source.HTTP.RouteTemplate, resolved, found)
+		}
+		legacy := endpointmodel.EndpointContracts[source.HTTP.Method+" "+source.HTTP.RouteTemplate].ActionKey
+		if legacy != source.Key {
+			if _, found := registry.Definition(legacy); found {
+				t.Fatalf("generated Scheduler host key %q survived source manifest projection", legacy)
+			}
+		}
 	}
 }
 
@@ -165,7 +295,7 @@ func TestRuntimeAuthorizationReconcileCarriesPreviousHashAndRetiresRemovedOwner(
 		CapabilityKey: "test.module", CapabilityLabel: "Test module", OperationKey: "read", OperationLabel: "Read", Label: "Read test module",
 		Exposures: []actioncontract.Exposure{actioncontract.ExposurePublic}, Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationExactRolePermission},
 		HTTP:        &actioncontract.HTTPBinding{Method: http.MethodGet, RouteTemplate: "/test-module"},
-		Permission:  &actioncontract.PermissionDefinition{Key: "test.module.read", Owner: "module:test", ResourceKey: "test.module", ActionKey: "read", Label: "Read test module", Category: "Test", LifecycleStatus: actioncontract.LifecycleActive},
+		Permission:  &actioncontract.PermissionDefinition{Key: "test.module.read", Owner: "module:test", ResourceKey: "test.module", OperationKey: "read", Label: "Read test module", Category: "Test", LifecycleStatus: actioncontract.LifecycleActive},
 		EffectClass: actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow, IdempotencyDecision: "not_applicable", AuditClass: "test_module_read", LifecycleStatus: actioncontract.LifecycleActive,
 	}
 	previousRegistry, err := runtimeAuthorizationActionRegistry(appschemamodel.ApplicationSchemaSnapshot{}, "orders-runtime", []actioncontract.ActionDefinition{action})
@@ -173,7 +303,7 @@ func TestRuntimeAuthorizationReconcileCarriesPreviousHashAndRetiresRemovedOwner(
 		t.Fatal(err)
 	}
 	previousDefinitions := []identitysdk.PermissionDefinition{{
-		PermissionKey: "test.module.read", ResourceKey: "test.module", ActionKey: "read", Label: "Read test module", Category: "Test", SourceKind: "module_surface",
+		PermissionKey: "test.module.read", ResourceKey: "test.module", OperationKey: "read", Label: "Read test module", Category: "Test", SourceKind: "module_surface",
 	}}
 	wantPreviousHash, err := identitysdk.PermissionSnapshotHash("module:test", previousDefinitions)
 	if err != nil {
@@ -216,7 +346,7 @@ func TestRuntimePermissionReconcileCompensatesEarlierOwnersOnBatchFailure(t *tes
 		t.Fatal(err)
 	}
 	previousDefinitions := []identitysdk.PermissionDefinition{{
-		PermissionKey: "orders.customer.read", ResourceKey: "orders.customer", ActionKey: "read",
+		PermissionKey: "orders.customer.read", ResourceKey: "orders.customer", OperationKey: "read",
 		Label: "Read previous customer snapshot", Category: "orders.customer", SourceKind: "test_surface",
 	}}
 	previousHash, err := identitysdk.PermissionSnapshotHash("application:orders-runtime", previousDefinitions)
@@ -280,7 +410,7 @@ func testOwnedPermissionAction(key, owner, route string) actioncontract.ActionDe
 		CapabilityKey: resourceKey, CapabilityLabel: resourceKey, OperationKey: operationKey, OperationLabel: "Read", Label: "Read " + resourceKey,
 		Exposures: []actioncontract.Exposure{actioncontract.ExposurePublic}, Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationExactRolePermission},
 		HTTP:        &actioncontract.HTTPBinding{Method: http.MethodGet, RouteTemplate: route},
-		Permission:  &actioncontract.PermissionDefinition{Key: key, Owner: owner, ResourceKey: resourceKey, ActionKey: "read", Label: "Read " + resourceKey, Category: resourceKey, LifecycleStatus: actioncontract.LifecycleActive},
+		Permission:  &actioncontract.PermissionDefinition{Key: key, Owner: owner, ResourceKey: resourceKey, OperationKey: "read", Label: "Read " + resourceKey, Category: resourceKey, LifecycleStatus: actioncontract.LifecycleActive},
 		EffectClass: actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow, IdempotencyDecision: "not_applicable", AuditClass: "test_read", LifecycleStatus: actioncontract.LifecycleActive,
 	}
 }

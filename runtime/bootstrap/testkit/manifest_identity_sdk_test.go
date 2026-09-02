@@ -10,7 +10,7 @@ import (
 func TestIdentityFixtureSeparatesExactFunctionGrantsFromBusinessDataEnvelope(t *testing.T) {
 	binding, err := NewIdentityFactory(IdentityFixtureConfig{
 		Roles: []IdentityFixtureRole{
-			{Key: "workspace_governor", Permissions: []string{"workspace.admin"}, AllowAllBusinessData: true},
+			{Key: "workspace_governor", AllowAllBusinessData: true},
 			{Key: "customer_editor", Permissions: []string{"customer.read", "customer.update"}, AllowAllBusinessData: true},
 		},
 	}).Open(context.Background(), identitysdk.ApplicationRef{WorkspaceID: "workspace-primary", ApplicationKey: "runtime"})
@@ -20,17 +20,17 @@ func TestIdentityFixtureSeparatesExactFunctionGrantsFromBusinessDataEnvelope(t *
 	registry := binding.(*manifestIdentityBinding)
 	registry.permissions = map[string]map[string]identitysdk.PermissionDefinition{
 		"runtime:object:customer": {
-			"customer.read":   {PermissionKey: "customer.read", ResourceKey: "customer", ActionKey: "read", SourceKind: "object_default"},
-			"customer.update": {PermissionKey: "customer.update", ResourceKey: "customer", ActionKey: "update", SourceKind: "object_default"},
+			"customer.read":   {PermissionKey: "customer.read", ResourceKey: "customer", OperationKey: "read", SourceKind: "object_default"},
+			"customer.update": {PermissionKey: "customer.update", ResourceKey: "customer", OperationKey: "update", SourceKind: "object_default"},
 		},
 	}
 
 	governor := registry.accessBundle("governor", "workspace_governor")
-	if len(governor.FunctionGrants) != 1 || governor.FunctionGrants[0].Resource != "workspace" || governor.FunctionGrants[0].Action != "admin" {
+	if len(governor.FunctionGrants) != 0 {
 		t.Fatalf("workspace governor grants=%+v", governor.FunctionGrants)
 	}
 	if len(governor.DataPolicies) != 0 || len(governor.FieldPolicies) != 0 {
-		t.Fatalf("workspace.admin must not invent business policy: data=%+v fields=%+v", governor.DataPolicies, governor.FieldPolicies)
+		t.Fatalf("AllowAllBusinessData must not invent SDK policies: data=%+v fields=%+v", governor.DataPolicies, governor.FieldPolicies)
 	}
 
 	editor := registry.accessBundle("editor", "customer_editor")

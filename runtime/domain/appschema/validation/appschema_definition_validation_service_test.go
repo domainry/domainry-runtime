@@ -14,7 +14,7 @@ import (
 )
 
 func TestValidateDefinitionRequestOwnsEnvelopeAndNormalization(t *testing.T) {
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}})
 	result, err := ApplicationSchemaValidateDefinitionRequest(t.Context(), " action ", " create_order ", json.RawMessage(`{"key":"create_order"}`), admin,
 		func(_ context.Context, resourceType, resourceKey string, payload json.RawMessage) (json.RawMessage, []appschemamodel.ApplicationDefinitionValidationIssue, error) {
 			if resourceType != "action" || resourceKey != "create_order" {
@@ -31,7 +31,7 @@ func TestValidateDefinitionRequestOwnsEnvelopeAndNormalization(t *testing.T) {
 }
 
 func TestValidateDefinitionRequestMapsOwnerErrorsToFieldIssues(t *testing.T) {
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}})
 	result, err := ApplicationSchemaValidateDefinitionRequest(t.Context(), "field", "order.customer", json.RawMessage(`{}`), admin,
 		func(context.Context, string, string, json.RawMessage) (json.RawMessage, []appschemamodel.ApplicationDefinitionValidationIssue, error) {
 			return nil, nil, badRequest("backend.metadata.relation_target_required")

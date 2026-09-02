@@ -66,47 +66,17 @@ func BuildTenantPredicate(s Store, workspace string, queryValue recordmodel.Reco
 		return nil, fmt.Errorf("tenant query workspace: %w", err)
 	}
 	workspace = workspaceID.String()
-	queryValue.PrincipalWorkspaceID = workspace
 	predicates := []query.Predicate{query.Equal("workspace_id", workspace)}
 	appendPredicate := func(predicate query.Predicate) { predicates = append(predicates, predicate) }
 	scope := strings.TrimSpace(queryValue.Scope)
 	if scope == "" {
 		scope = "all_records"
 	}
-	if !map[string]bool{"all_records": true, "owned_records": true, "team": true, "department": true, "department_and_children": true, "subordinates": true, "custom": true, "none": true}[scope] {
+	if !map[string]bool{"all_records": true, "custom": true, "none": true}[scope] {
 		return nil, fmt.Errorf("unsupported data scope %q", scope)
 	}
 	if scope == "none" {
 		appendPredicate(query.AlwaysFalse())
-	}
-	if scope == "owned_records" && strings.TrimSpace(queryValue.OwnerField) != "" {
-		appendPredicate(query.Equal(queryValue.OwnerField, queryValue.PrincipalUserID))
-	}
-	if scope == "subordinates" && strings.TrimSpace(queryValue.OwnerField) != "" {
-		values := nonBlankStrings(queryValue.PrincipalReportingUserIDs)
-		if len(values) == 0 {
-			appendPredicate(query.AlwaysFalse())
-		} else {
-			appendPredicate(query.In(queryValue.OwnerField, stringsToAny(values)...))
-		}
-	}
-	if scope == "department" && strings.TrimSpace(queryValue.DepartmentPathField) != "" && strings.TrimSpace(queryValue.PrincipalDepartmentPath) != "" {
-		appendPredicate(query.Equal(queryValue.DepartmentPathField, queryValue.PrincipalDepartmentPath))
-	}
-	if scope == "department_and_children" && strings.TrimSpace(queryValue.DepartmentPathField) != "" && strings.TrimSpace(queryValue.PrincipalDepartmentPath) != "" {
-		departmentPath := strings.TrimRight(queryValue.PrincipalDepartmentPath, "/")
-		appendPredicate(query.Or(
-			query.Equal(queryValue.DepartmentPathField, departmentPath),
-			query.LikeEscaped(queryValue.DepartmentPathField, escapeLikePattern(departmentPath)+"/%"),
-		))
-	}
-	if scope == "team" && strings.TrimSpace(queryValue.TeamField) != "" && len(queryValue.PrincipalTeamIDs) > 0 {
-		values := nonBlankStrings(queryValue.PrincipalTeamIDs)
-		if len(values) == 0 {
-			appendPredicate(query.AlwaysFalse())
-		} else {
-			appendPredicate(query.In(queryValue.TeamField, stringsToAny(values)...))
-		}
 	}
 	if scope == "custom" {
 		if queryValue.ScopeExpression == nil || strings.TrimSpace(queryValue.RootObjectKey) == "" {

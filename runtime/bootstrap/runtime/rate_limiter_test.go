@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/domainry/domainry-foundation/ratelimit"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	ratelimitpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/ratelimit"
 	ratelimitredis "github.com/domainry/domainry-runtime/runtime/infrastructure/ratelimitredis"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-foundation/ratelimit"
 )
 
 type closeTrackingRateLimiter struct{ closed bool }

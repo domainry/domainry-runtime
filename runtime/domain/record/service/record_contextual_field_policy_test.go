@@ -32,7 +32,7 @@ func TestContextualFieldPolicyBatchesOnePredicateForPageFieldsAndRecords(t *test
 		{Key: "phone", Type: "phone"},
 		{Key: "email", Type: "email"},
 	}}
-	account := definitionmodel.ObjectSchema{Key: "account", Fields: []definitionmodel.FieldSchema{{Key: "owner_id", Type: "relation", Config: map[string]any{"scope_owner": true}}}}
+	account := definitionmodel.ObjectSchema{Key: "account", Fields: []definitionmodel.FieldSchema{{Key: "owner_id", Type: "relation"}}}
 	ownerPredicate := &accessfixture.PredicateFixture{Operator: "eq", Path: []accessfixture.RelationSegmentFixture{{Direction: "forward", RelationFieldKey: "account_id", TargetObjectKey: "account"}}, FieldKey: "owner_id", ValueSource: "actor_claim", ClaimKey: "user_id"}
 	allowOwner := accessfixture.FieldRuleFixture{Key: "owner-clear", Priority: 100, Actions: []string{"read"}, Effect: "allow", Predicate: ownerPredicate}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-a", UserID: "user-1"}}, accessfixture.Bundle{FieldPolicies: []accessfixture.FieldPolicyFixture{
@@ -61,7 +61,7 @@ func TestContextualFieldPolicyBatchesOnePredicateForPageFieldsAndRecords(t *test
 }
 
 func TestContextualFieldPolicyValidatesWriteAgainstCandidateRecord(t *testing.T) {
-	object := definitionmodel.ObjectSchema{Key: "profile", Fields: []definitionmodel.FieldSchema{{Key: "owner_id", Type: "relation", Config: map[string]any{"scope_owner": true}}, {Key: "health_note", Type: "text"}}}
+	object := definitionmodel.ObjectSchema{Key: "profile", Fields: []definitionmodel.FieldSchema{{Key: "owner_id", Type: "relation"}, {Key: "health_note", Type: "text"}}}
 	predicate := &accessfixture.PredicateFixture{Operator: "eq", FieldKey: "owner_id", ValueSource: "actor_claim", ClaimKey: "user_id"}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{UserID: "user-1"}}, accessfixture.Bundle{FieldPolicies: []accessfixture.FieldPolicyFixture{
 		{ObjectKey: "profile", FieldKey: "health_note", Write: false, Policies: []accessfixture.FieldRuleFixture{{Key: "owner-write", Priority: 100, Actions: []string{"write"}, Effect: "allow", Predicate: predicate}}},

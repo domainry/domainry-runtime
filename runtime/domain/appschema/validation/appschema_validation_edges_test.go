@@ -110,9 +110,9 @@ func TestFieldMutationNormalizationEdges(t *testing.T) {
 	if _, err := ApplicationSchemaNormalizeFieldMutation(identityRelation, objects, []string{"relation"}, nil, 0); err != nil {
 		t.Fatalf("identity relation: %v", err)
 	}
-	departmentRelation := request(definitionmodel.FieldSchema{Key: "department", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "identity_department"}})
-	if _, err := ApplicationSchemaNormalizeFieldMutation(departmentRelation, objects, []string{"relation"}, nil, 0); err != nil {
-		t.Fatalf("identity department relation: %v", err)
+	organizationRelation := request(definitionmodel.FieldSchema{Key: "organization_unit", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "identity_organization_unit"}})
+	if _, err := ApplicationSchemaNormalizeFieldMutation(organizationRelation, objects, []string{"relation"}, nil, 0); err != nil {
+		t.Fatalf("identity organization unit relation: %v", err)
 	}
 	many := definitionmodel.FieldSchema{Key: "customer", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "customer"}, Config: map[string]any{"indexed": false, "inverse_name": "orders"}}
 	if _, err := ApplicationSchemaNormalizeFieldMutation(request(many), objects, []string{"relation"}, nil, 0); err != nil {
@@ -177,7 +177,7 @@ func TestDefinitionValidationUtilityEdges(t *testing.T) {
 }
 
 func TestDefinitionValidationRequestEdges(t *testing.T) {
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}})
 	cases := []struct {
 		name, resourceType, resourceKey string
 		payload                         json.RawMessage

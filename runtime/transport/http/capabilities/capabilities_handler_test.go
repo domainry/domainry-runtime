@@ -19,7 +19,7 @@ import (
 
 func TestPlatformCapabilitiesUsesAuthenticatedPrincipal(t *testing.T) {
 	var captured principalmodel.Principal
-	authenticated := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+	authenticated := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin"}}
 	service := capabilityapplication.NewCapabilityAuthoringApplicationService(func(_ context.Context, principal principalmodel.Principal) capabilitycontract.CapabilityInstanceSchema {
 		captured = principal
 		return capabilitycontract.CapabilityInstanceSchema{}
@@ -67,7 +67,7 @@ func TestCapabilityDiscoveryRoutesLoadIndexDomainDetailAndReferences(t *testing.
 	})
 	handler := NewCapabilitiesHandler(CapabilitiesDependencies{
 		Service: service, Principal: func(*http.Request) principalmodel.Principal {
-			return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+			return principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin"}}
 		},
 		WriteJSON: func(w http.ResponseWriter, status int, value any) {
 			w.WriteHeader(status)
@@ -143,7 +143,7 @@ func TestCapabilityDiscoveryHandlersMapAuthorizationAndHashFailures(t *testing.T
 	}
 
 	handler.principal = func(*http.Request) principalmodel.Principal {
-		return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin", "*"}})
+		return principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}
 	}
 	request := httptest.NewRequest(http.MethodGet, "/tenant-admin/platform-capabilities/index", nil)
 	request.Header.Set("If-Match-Contract-Hash", "stale-contract")

@@ -84,7 +84,7 @@ func TestSyncManifestBusinessSeedsOrdersResolvesFiltersAndPersistsEvidence(t *te
 	manifest := businessSeedManifest()
 	rows := []manifestBusinessSeedRow{
 		{Key: "child-one", ObjectKey: "child", DataJSON: `{"parent_id":"$record:parent-one","nested":{"refs":["$record:parent-one","literal"]},"name":"Child ${RUN_ID}","unknown":"drop","empty":""}`, SourceKind: " plugin ", SourceID: " source-a "},
-		{Key: "parent-one", ObjectKey: "parent", DataJSON: `{"name":"Parent","run":"${RUN_ID}","__seed_key":"drop"}`},
+		{Key: "parent-one", ObjectKey: "parent", DataJSON: `{"name":"Parent","run":"${RUN_ID}","__seed_key":"drop"}`, OwnerUserID: " owner-user ", OwnerOrgID: " owner-org "},
 		{Key: "ignored", ObjectKey: "missing", DataJSON: `{"name":"ignored"}`},
 		{Key: "", ObjectKey: "parent", DataJSON: `{"name":"Fallback"}`},
 	}
@@ -97,6 +97,9 @@ func TestSyncManifestBusinessSeedsOrdersResolvesFiltersAndPersistsEvidence(t *te
 	}
 	if len(records.inserted) != 3 || records.inserted[0].ID != "parent_parent_one" || records.inserted[1].ID != "child_child_one" || records.inserted[2].ID != "parent" {
 		t.Fatalf("inserted=%#v", records.inserted)
+	}
+	if records.inserted[0].OwnerUserID != "owner-user" || records.inserted[0].OwnerOrgID != "owner-org" {
+		t.Fatalf("seed ownership=%#v", records.inserted[0])
 	}
 	child := records.inserted[1]
 	if child.Data["parent_id"] != "parent_parent_one" || child.Data["name"] != "Child run-42" {
@@ -198,7 +201,7 @@ func TestManifestBusinessSeedRowsFromManifestNormalizesSkipsAndCopies(t *testing
 		{ObjectKey: "parent", Data: map[string]any{"name": "generated"}},
 		{ObjectKey: "parent", Data: map[string]any{"__seed_key": "", "name": "blank-key"}},
 		{ObjectKey: "parent", Data: map[string]any{"__seed_key": nil, "name": "nil-key"}},
-		{ObjectKey: "parent", SourceKind: " plugin ", SourceID: " source ", Data: map[string]any{"__seed_key": "explicit", "name": "kept"}},
+		{ObjectKey: "parent", OwnerUserID: " owner-user ", OwnerOrgID: " owner-org ", SourceKind: " plugin ", SourceID: " source ", Data: map[string]any{"__seed_key": "explicit", "name": "kept"}},
 		{ObjectKey: "child", Data: map[string]any{"__seed_key": "explicit", "name": "duplicate"}},
 		{ObjectKey: "child", Data: map[string]any{"__seed_key": "unsupported", "value": make(chan int)}},
 	}
@@ -208,6 +211,9 @@ func TestManifestBusinessSeedRowsFromManifestNormalizesSkipsAndCopies(t *testing
 	}
 	if rows[0].SourceKind != "template" || rows[0].SourceID != "template-a" || rows[3].SourceKind != "plugin" || rows[3].SourceID != "source" {
 		t.Fatalf("sources=%#v", rows)
+	}
+	if rows[3].OwnerUserID != "owner-user" || rows[3].OwnerOrgID != "owner-org" {
+		t.Fatalf("seed ownership=%#v", rows[3])
 	}
 	manifest.SeedRecords[3].Data["name"] = "mutated"
 	if strings.Contains(rows[2].DataJSON, "mutated") {

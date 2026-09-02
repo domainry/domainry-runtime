@@ -42,12 +42,3 @@ func NewNotificationsHandler(deps NotificationsDependencies) *NotificationsHandl
 type NotificationDeliveryLedger interface {
 	ListPublicationMessages(context.Context, string, string, int, principalmodel.Principal) ([]publicationmodel.Message, error)
 }
-
-func (h *NotificationsHandler) require(w http.ResponseWriter, r *http.Request, permission string) bool {
-	principal := h.principal(r)
-	if principal.Known && principal.HasPermission(permission) {
-		return true
-	}
-	h.writeError(w, r, http.StatusForbidden, "auth.permission_denied")
-	return false
-}

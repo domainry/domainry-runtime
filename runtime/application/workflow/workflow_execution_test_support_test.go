@@ -112,7 +112,7 @@ func (s *workflowExecutionProcessStub) ListEvents(context.Context, string, strin
 
 func workflowExecutionPrincipal() principalmodel.Principal {
 	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1", UserID: "operator"}}, accessfixture.Bundle{Key: "operator", Permissions: []string{
-		"ops.workflow.run", "ops.workflow.simulate", "ops.workflow.retry", "ops.workflow.resolve",
+		"workflow.order.approve.run",
 	}},
 	)
 }

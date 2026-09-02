@@ -230,8 +230,14 @@ func TestExportRelationLabelCapsLookupAndIdentityDirectoryFallbacks(t *testing.T
 	if labels["user-1"] != "user-1" || labels["user-2"] != "" {
 		t.Fatalf("self labels=%#v", labels)
 	}
+	siblingLabels := map[string]string{}
+	siblingReader := accessfixture.Attach(principalmodel.Principal{}, recordFullAccessBundle("identity.users.get"))
+	service.identityLabels(t.Context(), map[string]bool{"user-2": true}, siblingReader, siblingLabels)
+	if len(siblingLabels) != 0 {
+		t.Fatalf("sibling Action resolved directory labels=%#v", siblingLabels)
+	}
 	adminLabels := map[string]string{}
-	directoryReader := accessfixture.Attach(principalmodel.Principal{}, recordFullAccessBundle("identity.users.read"))
+	directoryReader := accessfixture.Attach(principalmodel.Principal{}, recordFullAccessBundle(identityUsersListAction))
 	service.identityLabels(t.Context(), map[string]bool{"user-2": true}, directoryReader, adminLabels)
 	if adminLabels["user-2"] != "Other" {
 		t.Fatalf("admin labels=%#v", adminLabels)

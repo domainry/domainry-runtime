@@ -12,7 +12,7 @@ import (
 func OperationsNormalizeCommand(command operationsmodel.OperationsCommand) operationsmodel.OperationsCommand {
 	command.ID = strings.TrimSpace(command.ID)
 	command.Kind = strings.TrimSpace(command.Kind)
-	command.Permission = strings.TrimSpace(command.Permission)
+	command.ActionKey = strings.TrimSpace(command.ActionKey)
 	command.Scope.WorkspaceID = strings.TrimSpace(command.Scope.WorkspaceID)
 	command.Scope.SystemPurpose = strings.TrimSpace(command.Scope.SystemPurpose)
 	command.Scope.ResourceType = strings.TrimSpace(command.Scope.ResourceType)
@@ -26,11 +26,11 @@ func OperationsNormalizeCommand(command operationsmodel.OperationsCommand) opera
 }
 
 // OperationsValidateCommand enforces the cross-owner command envelope. Each
-// business owner remains responsible for its permission and precondition
+// business owner remains responsible for its Action and precondition
 // decision before the command is registered.
 func OperationsValidateCommand(command operationsmodel.OperationsCommand) error {
 	command = OperationsNormalizeCommand(command)
-	if command.ID == "" || command.Kind == "" || command.Permission == "" {
+	if command.ID == "" || command.Kind == "" || command.ActionKey == "" {
 		return fmt.Errorf("operations.command_identity_required")
 	}
 	if command.IdempotencyKey == "" || command.RequestFingerprint == "" {

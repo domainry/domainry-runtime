@@ -741,7 +741,7 @@ func TestAuthorizedHealthAndAuditPrincipalSources(t *testing.T) {
 	releaseIdentity := RuntimeReleaseIdentity{ContractVersion: "domainry-runtime-release-identity-v1", BuildMode: "packaged", CombinationSHA256: strings.Repeat("a", 64)}
 	router := &HTTPRouter{runtimeStatus: routerRuntimeStatusStub{}, healthRegistry: newRuntimeHealthRegistry(), healthCheckTimeout: time.Second, httpMetrics: NewMemoryHTTPMetricsCollector(2), capacityController: capacityplatform.NewController(capacityplatform.Limits{}, nil), releaseIdentity: releaseIdentity}
 	router.MarkStartupComplete()
-	admin := routerTestPrincipal(identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace"}, "workspace.admin")
+	admin := routerTestPrincipal(identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace"}, "runtime.appschema.validate_application_definition")
 	response := httptest.NewRecorder()
 	router.health(response, requestWithPrincipal(httptest.NewRequest(http.MethodGet, "/health", nil), admin))
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "api_contract_hash") || !strings.Contains(response.Body.String(), "\"ready\":true") || !strings.Contains(response.Body.String(), "\"release_identity\"") || !strings.Contains(response.Body.String(), releaseIdentity.CombinationSHA256) {

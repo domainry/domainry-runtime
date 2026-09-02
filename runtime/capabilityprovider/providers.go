@@ -230,10 +230,10 @@ func providerSpecs() ([]providerSpec, error) {
 				[]string{"A PRD extends authenticated users with business profile fields, claim mappings, profile directories, or profile activation state"},
 				[]string{"The requirement only stores a business person without login or only configures authentication roles"},
 				[]string{"employee profile extension", "identity relation field", "business profile claim", "profile directory"},
-				[]string{"principal.profile_binding"}, []string{"identity", "records", "runtime_schema"}, []string{"party"},
+				[]string{"principal.profile_binding"}, []string{"identity", "records", "runtime_schema"}, nil,
 				[]string{"identity_principal_to_business_profile_binding"}, []string{"principal.profile_binding"},
-				"Give each signed-in employee a one-to-one staff profile with department claims", "Profile binding owns the bridge between Identity and the Runtime business object",
-				"Store external customer contacts who never sign in", "Party or Records owns business data without an Identity profile binding"),
+				"Give each signed-in employee a one-to-one staff profile with business claims", "Profile binding owns the bridge between Identity and the Runtime business object",
+				"Store external customer contacts who never sign in", "Runtime Records owns business data without an Identity profile binding"),
 			categories: []categorySpec{{key: "profile_binding.authoring", name: "Profile binding authoring", description: "Validate the Identity-to-business-profile binding embedded in a project object's ux.config.", chains: []string{"identity_principal_to_business_profile_binding"}, scopes: []string{"principal.profile_binding"}, validationContracts: []modulecapability.ValidationScopeContract{{
 				Kind: "principal.profile_binding", Description: "Validate a project object whose ux.kind is identity_profile_extension.", Coverage: modulecapability.ValidationCoverageExplicit, CandidateCollections: []string{"objects"}, ReferencedCollections: []string{"objects"},
 			}}, projections: profileBindings}}, validator: validateProfileBindingCandidate,

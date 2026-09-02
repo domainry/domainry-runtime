@@ -15,11 +15,10 @@ type CapabilityAuthoringApplicationService struct {
 }
 
 type CapabilityIdentityReferences struct {
-	UserIDs             []string
-	WorkforceProfileIDs []string
-	DepartmentIDs       []string
-	RoleIDs             []string
-	MenuIDs             []string
+	UserIDs []string
+	OrgIDs  []string
+	RoleIDs []string
+	MenuIDs []string
 }
 
 func NewCapabilityAuthoringApplicationService(schema func(context.Context, principalmodel.Principal) capabilitycontract.CapabilityInstanceSchema) *CapabilityAuthoringApplicationService {

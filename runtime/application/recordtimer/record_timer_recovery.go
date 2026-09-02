@@ -12,7 +12,7 @@ import (
 )
 
 func (s *RecordTimerApplicationService) InspectFailure(ctx context.Context, id string, principal principalmodel.Principal) (recordmodel.Record, error) {
-	if err := recordTimerOpsReadAllowed(principal); err != nil {
+	if err := recordTimerAuthorizeRecoveryRead(principal); err != nil {
 		return recordmodel.Record{}, err
 	}
 	return s.failedRecordTimer(ctx, strings.TrimSpace(id), principal)
@@ -49,6 +49,9 @@ func (s *RecordTimerApplicationService) failedRecordTimer(ctx context.Context, i
 
 func (s *RecordTimerApplicationService) transitionRecordTimerFailure(ctx context.Context, id, reason, eventType, status string, principal principalmodel.Principal) (recordmodel.Record, error) {
 	if err := recordTimerAuthorizeCommand(principal); err != nil {
+		return recordmodel.Record{}, err
+	}
+	if err := recordTimerAuthorizeRecoveryWrite(principal); err != nil {
 		return recordmodel.Record{}, err
 	}
 	record, err := s.failedRecordTimer(ctx, strings.TrimSpace(id), principal)

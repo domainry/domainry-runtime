@@ -17,8 +17,8 @@ func (workflowDirectoryTestStub) FindUser(context.Context, identitysdk.UserLooku
 	return identitysdk.User{}, false, nil
 }
 
-func (workflowDirectoryTestStub) FindDepartment(context.Context, identitysdk.DepartmentLookup) (identitysdk.Department, bool, error) {
-	return identitysdk.Department{}, false, nil
+func (workflowDirectoryTestStub) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
+	return identitysdk.OrganizationUnit{}, false, nil
 }
 
 func (workflowDirectoryTestStub) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
@@ -30,10 +30,6 @@ func (workflowDirectoryTestStub) ListRoles(context.Context, identitysdk.Director
 }
 
 func (workflowDirectoryTestStub) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
-	return nil, nil
-}
-
-func (workflowDirectoryTestStub) ListWorkforce(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.WorkforceEntry, error) {
 	return nil, nil
 }
 

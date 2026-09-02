@@ -314,8 +314,13 @@ func (s *RecordExportApplicationService) relationLabels(ctx context.Context, sou
 	return labels
 }
 
+// identityUsersListAction is owned by identity:builtin. Runtime only uses the
+// exact cross-owner grant to decide whether an export may resolve other users'
+// directory labels.
+const identityUsersListAction = "identity.users.list"
+
 func (s *RecordExportApplicationService) identityLabels(ctx context.Context, ids map[string]bool, principal principalmodel.Principal, labels map[string]string) {
-	canRead := principal.HasPermission("identity.users.read")
+	canRead := principal.HasExactPermission(identityUsersListAction)
 	if s.dependencies.ListDirectoryUsers == nil || (!canRead && !ids[principal.UserID]) {
 		return
 	}

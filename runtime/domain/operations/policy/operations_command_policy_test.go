@@ -10,7 +10,7 @@ import (
 func TestOperationsValidateCommandRequiresAuthorizationScopeIdempotencyAndAudit(t *testing.T) {
 	now := time.Date(2026, 7, 19, 8, 0, 0, 0, time.UTC)
 	valid := operationsmodel.OperationsCommand{
-		ID: " op-1 ", Kind: " scheduler.run.retry ", Permission: " scheduler.runs.retry ",
+		ID: " op-1 ", Kind: " scheduler.run.retry ", ActionKey: " scheduler.runs.retry ",
 		Scope:          operationsmodel.OperationsScope{WorkspaceID: " workspace-a ", ResourceType: " scheduler_run ", ResourceID: " run-1 "},
 		IdempotencyKey: " retry-1 ", RequestFingerprint: " fingerprint-1 ", RequestedBy: " user-1 ",
 		Reason: " recover transient failure ", Reference: " INC-42 ", Status: operationsmodel.OperationsStatusCreated, CreatedAt: now, UpdatedAt: now,
@@ -23,7 +23,7 @@ func TestOperationsValidateCommandRequiresAuthorizationScopeIdempotencyAndAudit(
 		name   string
 		mutate func(*operationsmodel.OperationsCommand)
 	}{
-		{name: "permission", mutate: func(command *operationsmodel.OperationsCommand) { command.Permission = "" }},
+		{name: "action", mutate: func(command *operationsmodel.OperationsCommand) { command.ActionKey = "" }},
 		{name: "idempotency", mutate: func(command *operationsmodel.OperationsCommand) { command.IdempotencyKey = "" }},
 		{name: "fingerprint", mutate: func(command *operationsmodel.OperationsCommand) { command.RequestFingerprint = "" }},
 		{name: "actor", mutate: func(command *operationsmodel.OperationsCommand) { command.RequestedBy = "" }},

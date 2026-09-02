@@ -26,11 +26,6 @@ func TestWorkflowRetryExecutionGuardsAndReplay(t *testing.T) {
 	if _, err := service.RetryWorkflowExecution(t.Context(), previous.ID, unknown); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("unknown=%v", err)
 	}
-	denied := principal
-	denied = workflowPrincipalWithPermissions(denied)
-	if _, err := service.RetryWorkflowExecution(t.Context(), previous.ID, denied); apperror.CodeOf(err) != "backend.workflow.retry_permission_required" {
-		t.Fatalf("denied=%v", err)
-	}
 	worker.getErr = errWorkflowExecutionStore
 	if _, err := service.RetryWorkflowExecution(t.Context(), previous.ID, principal); apperror.CodeOf(err) != "backend.internal" {
 		t.Fatalf("store=%v", err)
@@ -141,11 +136,6 @@ func TestWorkflowResolveExecutionContracts(t *testing.T) {
 	unknown.Known = false
 	if _, err := service.ResolveWorkflowExecution(t.Context(), deadLetter.ID, "", unknown); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("unknown=%v", err)
-	}
-	denied := principal
-	denied = workflowPrincipalWithPermissions(denied)
-	if _, err := service.ResolveWorkflowExecution(t.Context(), deadLetter.ID, "", denied); apperror.CodeOf(err) != "backend.workflow.resolve_permission_required" {
-		t.Fatalf("denied=%v", err)
 	}
 	worker.getErr = errWorkflowExecutionStore
 	if _, err := service.ResolveWorkflowExecution(t.Context(), deadLetter.ID, "", principal); apperror.CodeOf(err) != "backend.internal" {

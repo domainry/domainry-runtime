@@ -26,8 +26,6 @@ func annotateStaticModuleOwnerFallbacks(paths map[string]any) {
 
 func staticModuleOwner(path string) string {
 	switch {
-	case path == "/party" || strings.HasPrefix(path, "/party/") || strings.HasPrefix(path, "/foundation/"):
-		return "party"
 	case path == "/notifications" || strings.HasPrefix(path, "/notifications/") ||
 		path == "/business/notifications" || strings.HasPrefix(path, "/business/notifications/") ||
 		path == "/portal/notifications" || strings.HasPrefix(path, "/portal/notifications/") ||

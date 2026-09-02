@@ -23,9 +23,6 @@ type notificationDeliveryProjection struct {
 }
 
 func (h *NotificationsHandler) listDeliveries(w http.ResponseWriter, r *http.Request) {
-	if !h.require(w, r, "integration.audit.view") {
-		return
-	}
 	if h.deliveryLedger == nil {
 		h.writeError(w, r, http.StatusServiceUnavailable, "backend.notification.delivery_ledger_unavailable")
 		return

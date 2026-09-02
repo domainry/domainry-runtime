@@ -33,16 +33,14 @@ import (
 // the Runtime boundary. Workflow tests must not recreate Plane's retired
 // Identity owner or persist Identity state in the Runtime database.
 type integrationTestIdentityDirectory struct {
-	users       map[string]identitysdk.User
-	departments map[string]identitysdk.Department
-	workforce   map[string]identitysdk.WorkforceEntry
+	users             map[string]identitysdk.User
+	organizationUnits map[string]identitysdk.OrganizationUnit
 }
 
 func newIntegrationTestIdentityDirectory() *integrationTestIdentityDirectory {
 	return &integrationTestIdentityDirectory{
-		users:       map[string]identitysdk.User{},
-		departments: map[string]identitysdk.Department{},
-		workforce:   map[string]identitysdk.WorkforceEntry{},
+		users:             map[string]identitysdk.User{},
+		organizationUnits: map[string]identitysdk.OrganizationUnit{},
 	}
 }
 
@@ -50,19 +48,14 @@ func (d *integrationTestIdentityDirectory) upsertUser(user identitysdk.User) {
 	d.users[user.ID] = user
 }
 
-func (d *integrationTestIdentityDirectory) setManager(managerUserID, employeeUserID string) {
-	d.workforce[managerUserID] = identitysdk.WorkforceEntry{WorkforceProfileID: managerUserID + "_workforce", IdentityUserID: managerUserID, OrganizationUnitID: "company"}
-	d.workforce[employeeUserID] = identitysdk.WorkforceEntry{WorkforceProfileID: employeeUserID + "_workforce", IdentityUserID: employeeUserID, OrganizationUnitID: "company", ManagerIdentityUserID: managerUserID}
-}
-
 func (d *integrationTestIdentityDirectory) FindUser(_ context.Context, lookup identitysdk.UserLookup) (identitysdk.User, bool, error) {
 	user, found := d.users[string(lookup.UserID)]
 	return user, found, nil
 }
 
-func (d *integrationTestIdentityDirectory) FindDepartment(_ context.Context, lookup identitysdk.DepartmentLookup) (identitysdk.Department, bool, error) {
-	department, found := d.departments[lookup.DepartmentID]
-	return department, found, nil
+func (d *integrationTestIdentityDirectory) FindOrganizationUnit(_ context.Context, lookup identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
+	organizationUnit, found := d.organizationUnits[lookup.OrgID]
+	return organizationUnit, found, nil
 }
 
 func (d *integrationTestIdentityDirectory) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
@@ -80,15 +73,6 @@ func (d *integrationTestIdentityDirectory) ListRoles(context.Context, identitysd
 
 func (d *integrationTestIdentityDirectory) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
 	return nil, nil
-}
-
-func (d *integrationTestIdentityDirectory) ListWorkforce(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.WorkforceEntry, error) {
-	values := make([]identitysdk.WorkforceEntry, 0, len(d.workforce))
-	for _, entry := range d.workforce {
-		values = append(values, entry)
-	}
-	sort.Slice(values, func(i, j int) bool { return values[i].IdentityUserID < values[j].IdentityUserID })
-	return values, nil
 }
 
 func objectActionTestDependencies(ctx context.Context, store *persistence.RuntimeStore) RuntimeServicesDependencies {
@@ -152,9 +136,4 @@ func mustUpsertIdentityUser(t *testing.T, directory *integrationTestIdentityDire
 		user.Status = identitysdk.UserStatusActive
 	}
 	directory.upsertUser(user)
-}
-
-func mustUpsertWorkforceReportingLine(t *testing.T, directory *integrationTestIdentityDirectory, managerUserID, employeeUserID string) {
-	t.Helper()
-	directory.setManager(managerUserID, employeeUserID)
 }

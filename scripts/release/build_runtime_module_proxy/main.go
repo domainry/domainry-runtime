@@ -288,8 +288,6 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 		{path: "github.com/domainry/domainry-audit", rootEnvironment: "DOMAINRY_AUDIT_REPO_ROOT", label: "Audit", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-notification-sdk", rootEnvironment: "DOMAINRY_NOTIFICATION_SDK_REPO_ROOT", label: "Notification SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-notification", rootEnvironment: "DOMAINRY_NOTIFICATION_REPO_ROOT", label: "Notification", patterns: []string{"./module"}},
-		{path: "github.com/domainry/domainry-party-sdk", rootEnvironment: "DOMAINRY_PARTY_SDK_REPO_ROOT", label: "Party SDK", patterns: []string{"./..."}},
-		{path: "github.com/domainry/domainry-party", rootEnvironment: "DOMAINRY_PARTY_REPO_ROOT", label: "Party", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-monitoring-sdk", rootEnvironment: "DOMAINRY_MONITORING_SDK_REPO_ROOT", label: "Monitoring SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-monitoring", rootEnvironment: "DOMAINRY_MONITORING_REPO_ROOT", label: "Monitoring", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-scheduler-sdk", rootEnvironment: "DOMAINRY_SCHEDULER_SDK_REPO_ROOT", label: "Scheduler SDK", patterns: []string{"./..."}},
@@ -418,8 +416,6 @@ func dependencyModule(repository, path, version string) (downloadedModule, error
 		{path: "github.com/domainry/domainry-identity", rootEnvironment: "DOMAINRY_IDENTITY_REPO_ROOT", label: "Identity", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-notification-sdk", rootEnvironment: "DOMAINRY_NOTIFICATION_SDK_REPO_ROOT", label: "Notification SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-notification", rootEnvironment: "DOMAINRY_NOTIFICATION_REPO_ROOT", label: "Notification", patterns: []string{"./module"}},
-		{path: "github.com/domainry/domainry-party-sdk", rootEnvironment: "DOMAINRY_PARTY_SDK_REPO_ROOT", label: "Party SDK", patterns: []string{"./..."}},
-		{path: "github.com/domainry/domainry-party", rootEnvironment: "DOMAINRY_PARTY_REPO_ROOT", label: "Party", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-scheduler-sdk", rootEnvironment: "DOMAINRY_SCHEDULER_SDK_REPO_ROOT", label: "Scheduler SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-scheduler", rootEnvironment: "DOMAINRY_SCHEDULER_REPO_ROOT", label: "Scheduler", patterns: []string{"./module", "./remote"}},
 		{path: "github.com/domainry/domainry-data-exchange-sdk", rootEnvironment: "DOMAINRY_DATA_EXCHANGE_SDK_REPO_ROOT", label: "Data Exchange SDK", patterns: []string{"./..."}},
@@ -577,20 +573,8 @@ func distributionGoModWithVersions(content []byte, versions map[string]string) (
 			return nil, err
 		}
 	}
-	// Party remains selected by generated Module compositions rather than the
-	// Runtime distribution itself. HTTP surface adapters for Notification,
-	// Integration, and Monitoring are production Runtime dependencies because
-	// they expose the same module-owned surface for remote SaaS bindings.
-	if parsed.Module != nil && parsed.Module.Mod.Path == runtimeModulePath {
-		if err := parsed.DropRequire("github.com/domainry/domainry-party"); err != nil {
-			return nil, err
-		}
-	}
 	for path, version := range versions {
 		if strings.TrimSpace(version) == "" {
-			continue
-		}
-		if parsed.Module != nil && parsed.Module.Mod.Path == runtimeModulePath && path == "github.com/domainry/domainry-party" {
 			continue
 		}
 		if err := parsed.AddRequire(path, version); err != nil {
@@ -744,8 +728,6 @@ func localDependencyModFile(repository string) (string, func(), error) {
 		{path: "github.com/domainry/domainry-audit", environment: "DOMAINRY_AUDIT_REPO_ROOT"},
 		{path: "github.com/domainry/domainry-notification-sdk", environment: "DOMAINRY_NOTIFICATION_SDK_REPO_ROOT"},
 		{path: "github.com/domainry/domainry-notification", environment: "DOMAINRY_NOTIFICATION_REPO_ROOT"},
-		{path: "github.com/domainry/domainry-party-sdk", environment: "DOMAINRY_PARTY_SDK_REPO_ROOT"},
-		{path: "github.com/domainry/domainry-party", environment: "DOMAINRY_PARTY_REPO_ROOT"},
 		{path: "github.com/domainry/domainry-monitoring-sdk", environment: "DOMAINRY_MONITORING_SDK_REPO_ROOT"},
 		{path: "github.com/domainry/domainry-monitoring", environment: "DOMAINRY_MONITORING_REPO_ROOT"},
 		{path: "github.com/domainry/domainry-lifecycle-sdk", environment: "DOMAINRY_LIFECYCLE_SDK_REPO_ROOT"},

@@ -47,11 +47,11 @@ func TestWorkflowRunAndSimulationContracts(t *testing.T) {
 		t.Fatalf("denied run=%v", err)
 	}
 	scoped := principal
-	scoped = workflowPrincipalWithPermissions(scoped, "workflow.run."+workflow.Key)
+	scoped = workflowPrincipalWithPermissions(scoped, "workflow."+workflow.Key+".run")
 	if result, err := service.RunWorkflow(t.Context(), workflow.Key, map[string]any{"source": "portal"}, scoped); err != nil || result.WorkflowKey != workflow.Key {
 		t.Fatalf("scoped run result=%#v err=%v", result, err)
 	}
-	scoped = workflowPrincipalWithPermissions(scoped, "workflow.run.other")
+	scoped = workflowPrincipalWithPermissions(scoped, "workflow.other.run")
 	if _, err := service.RunWorkflow(t.Context(), workflow.Key, nil, scoped); apperror.CodeOf(err) != "backend.workflow.run_permission_required" {
 		t.Fatalf("wrong scoped run=%v", err)
 	}
@@ -62,13 +62,15 @@ func TestWorkflowRunAndSimulationContracts(t *testing.T) {
 	nonManual.Key = "event-only"
 	nonManual.TriggerContract = &definitionmodel.WorkflowTriggerContract{Type: "event"}
 	service.registry.Set(nonManual.Key, nonManual)
-	if _, err := service.RunWorkflow(t.Context(), nonManual.Key, nil, principal); apperror.CodeOf(err) != "backend.workflow.entry_mode_invalid" {
+	nonManualPrincipal := workflowPrincipalWithPermissions(principal, "workflow."+nonManual.Key+".run")
+	if _, err := service.RunWorkflow(t.Context(), nonManual.Key, nil, nonManualPrincipal); apperror.CodeOf(err) != "backend.workflow.entry_mode_invalid" {
 		t.Fatalf("manual gate=%v", err)
 	}
 	invalidManual := workflow
 	invalidManual.Key, invalidManual.Graph = "invalid-manual", nil
 	service.registry.Set(invalidManual.Key, invalidManual)
-	if _, err := service.RunWorkflow(t.Context(), invalidManual.Key, nil, principal); apperror.CodeOf(err) != "backend.workflow.graph_v2_required" {
+	invalidPrincipal := workflowPrincipalWithPermissions(principal, "workflow."+invalidManual.Key+".run")
+	if _, err := service.RunWorkflow(t.Context(), invalidManual.Key, nil, invalidPrincipal); apperror.CodeOf(err) != "backend.workflow.graph_v2_required" {
 		t.Fatalf("invalid execution=%v", err)
 	}
 	result, err := service.RunWorkflow(t.Context(), workflow.Key, map[string]any{"order": "one"}, principal)
@@ -78,9 +80,6 @@ func TestWorkflowRunAndSimulationContracts(t *testing.T) {
 
 	if _, err := service.SimulateWorkflow(t.Context(), workflow.Key, nil, unknown); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("unknown simulation=%v", err)
-	}
-	if _, err := service.SimulateWorkflow(t.Context(), workflow.Key, nil, denied); apperror.CodeOf(err) != "backend.workflow.simulate_permission_required" {
-		t.Fatalf("denied simulation=%v", err)
 	}
 	if _, err := service.SimulateWorkflow(t.Context(), "missing", nil, principal); apperror.CodeOf(err) != "backend.workflow.not_found" {
 		t.Fatalf("missing simulation=%v", err)
@@ -105,14 +104,10 @@ func TestWorkflowRunAndSimulationContracts(t *testing.T) {
 func TestWorkflowDraftSimulationContracts(t *testing.T) {
 	service := newWorkflowExecutionService(&workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}})
 	principal := workflowExecutionPrincipal()
-	unknown, denied := principal, principal
+	unknown := principal
 	unknown.Known = false
-	denied = workflowPrincipalWithPermissions(denied)
 	if _, err := service.SimulateWorkflowCandidate(t.Context(), definitionmodel.WorkflowSchema{}, nil, unknown); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("unknown=%v", err)
-	}
-	if _, err := service.SimulateWorkflowCandidate(t.Context(), definitionmodel.WorkflowSchema{}, nil, denied); apperror.CodeOf(err) != "backend.workflow.simulate_permission_required" {
-		t.Fatalf("denied=%v", err)
 	}
 	if _, err := service.SimulateWorkflowCandidate(t.Context(), definitionmodel.WorkflowSchema{}, nil, principal); apperror.CodeOf(err) != "backend.workflow.key_required" {
 		t.Fatalf("key=%v", err)

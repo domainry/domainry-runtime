@@ -20,7 +20,7 @@ func TestProjectTenantManagerKeepsTenantBindingsClosedUntilAtomicInitialization(
 	}
 	t.Cleanup(func() { _ = database.CloseContext(t.Context()) })
 
-	manager, err := newProjectTenantManager(t.Context(), cfg, identityFactoryStub{}, database, projectIdentityDatabaseHandle(database, cfg.DBPath, nil, nil))
+	manager, err := newProjectTenantManager(t.Context(), cfg, identityFactoryStub{}, database, projectIdentityDatabaseHandle(database, cfg.DBPath, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestProjectTenantManagerMissingPasswordLeavesNoTenantRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = database.CloseContext(t.Context()) })
-	manager, err := newProjectTenantManager(t.Context(), cfg, identityFactoryStub{}, database, projectIdentityDatabaseHandle(database, cfg.DBPath, nil, nil))
+	manager, err := newProjectTenantManager(t.Context(), cfg, identityFactoryStub{}, database, projectIdentityDatabaseHandle(database, cfg.DBPath, nil))
 	if err != nil {
 		t.Fatal(err)
 	}

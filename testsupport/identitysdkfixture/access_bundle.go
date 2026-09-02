@@ -137,17 +137,11 @@ func Attach(principal principalmodel.Principal, spec Bundle) principalmodel.Prin
 		AuthorizationRevision: "test-authorization",
 		ExpiresAt:             time.Now().Add(time.Hour),
 		Subject: identitysdk.Subject{
-			WorkspaceID:         identitysdk.WorkspaceID(valueOrDefault(principal.WorkspaceID, "test-workspace")),
-			SubjectID:           identitysdk.SubjectID(valueOrDefault(principal.UserID, "test-subject")),
-			WorkforceProfileID:  principal.WorkforceProfileID,
-			DepartmentID:        principal.DepartmentID,
-			DepartmentPath:      principal.DepartmentPath,
-			ReportingPath:       principal.ReportingPath,
-			ReportingSubjectIDs: subjectIDs(principal.ReportingUserIDs),
-			OrganizationScopes: map[string][]string{
-				"team_ids": principal.OrganizationScopes.TeamIDs, "store_ids": principal.OrganizationScopes.StoreIDs,
-				"territory_ids": principal.OrganizationScopes.TerritoryIDs, "warehouse_ids": principal.OrganizationScopes.WarehouseIDs,
-			},
+			WorkspaceID:           identitysdk.WorkspaceID(valueOrDefault(principal.WorkspaceID, "test-workspace")),
+			SubjectID:             identitysdk.SubjectID(valueOrDefault(principal.UserID, "test-subject")),
+			OrgID:                 principal.OrgID,
+			OrgScopeIDs:           append([]string(nil), principal.OrgScopeIDs...),
+			ReportingScopeUserIDs: subjectIDs(principal.ReportingScopeUserIDs),
 		},
 	}
 	functionGrantKeys := map[string]bool{}
@@ -309,6 +303,14 @@ func Attach(principal principalmodel.Principal, spec Bundle) principalmodel.Prin
 	principal.AccessBundle = &bundle
 	principal.AuthorizationRevision = string(bundle.AuthorizationRevision)
 	return principal
+}
+
+func subjectIDs(values []string) []identitysdk.SubjectID {
+	result := make([]identitysdk.SubjectID, len(values))
+	for index, value := range values {
+		result[index] = identitysdk.SubjectID(value)
+	}
+	return result
 }
 
 func AttachPointer(principal principalmodel.Principal, spec Bundle) *principalmodel.Principal {
@@ -526,14 +528,8 @@ func sdkFixtureClaim(key string) string {
 	switch strings.TrimSpace(key) {
 	case "user_id":
 		return "$subject.id"
-	case "department_id":
-		return "$subject.department_id"
-	case "workforce_profile_id":
-		return "$subject.workforce_profile_id"
-	case "reporting_user_ids", "reporting_subject_ids":
-		return "$subject.reporting_subject_ids"
-	case "team_ids", "store_ids", "territory_ids", "warehouse_ids":
-		return "$subject.organization_scopes." + strings.TrimSpace(key)
+	case "org_id":
+		return "$subject.org_id"
 	case "business_profile_id":
 		return "$context.business_profile_id"
 	default:
@@ -604,16 +600,11 @@ func fixtureClaimFromReference(value string) string {
 	switch value {
 	case "$subject.id":
 		return "user_id"
-	case "$subject.department_id":
-		return "department_id"
-	case "$subject.workforce_profile_id":
-		return "workforce_profile_id"
-	case "$subject.reporting_subject_ids":
-		return "reporting_user_ids"
+	case "$subject.org_id":
+		return "org_id"
 	case "$context.business_profile_id":
 		return "business_profile_id"
 	}
-	value = strings.TrimPrefix(value, "$subject.organization_scopes.")
 	value = strings.TrimPrefix(value, "$context.claims.")
 	return value
 }
@@ -642,13 +633,13 @@ func fieldRulesFromSDK(values []identitysdk.FieldRule) []FieldRuleFixture {
 func scopePredicate(scope string) identitysdk.Predicate {
 	switch strings.TrimSpace(scope) {
 	case "owned_records", "owned":
-		return identitysdk.Predicate{Fact: "owner_id", Operator: identitysdk.OperatorEqual, Value: "$subject.id"}
-	case "department":
-		return identitysdk.Predicate{Fact: "department_id", Operator: identitysdk.OperatorEqual, Value: "$subject.department_id"}
-	case "department_and_children":
-		return identitysdk.Predicate{Fact: "department_path", Operator: identitysdk.OperatorPrefix, Value: "$subject.department_path"}
-	case "subordinates":
-		return identitysdk.Predicate{Fact: "owner_id", Operator: identitysdk.OperatorIn, Value: "$subject.reporting_subject_ids"}
+		return identitysdk.Predicate{Fact: "owner_user_id", Operator: identitysdk.OperatorEqual, Value: "$subject.id"}
+	case "organization":
+		return identitysdk.Predicate{Fact: "owner_org_id", Operator: identitysdk.OperatorEqual, Value: "$subject.org_id"}
+	case "organization_and_children":
+		return identitysdk.Predicate{Fact: "owner_org_id", Operator: identitysdk.OperatorIn, Value: "$subject.org_scope_ids"}
+	case "self_and_subordinates":
+		return identitysdk.Predicate{Fact: "owner_user_id", Operator: identitysdk.OperatorIn, Value: "$subject.reporting_scope_user_ids"}
 	default:
 		return identitysdk.Predicate{Fact: "id", Operator: identitysdk.OperatorExists, Value: true}
 	}
@@ -656,29 +647,19 @@ func scopePredicate(scope string) identitysdk.Predicate {
 
 func scopeFromPredicate(predicate identitysdk.Predicate) string {
 	switch {
-	case predicate.Fact == "owner_id" && predicate.Operator == identitysdk.OperatorEqual:
+	case predicate.Fact == "owner_user_id" && predicate.Operator == identitysdk.OperatorEqual:
 		return "owned_records"
-	case predicate.Fact == "department_id" && predicate.Operator == identitysdk.OperatorEqual:
-		return "department"
-	case predicate.Fact == "department_path" && predicate.Operator == identitysdk.OperatorPrefix:
-		return "department_and_children"
-	case predicate.Fact == "owner_id" && predicate.Operator == identitysdk.OperatorIn:
-		return "subordinates"
+	case predicate.Fact == "owner_org_id" && predicate.Operator == identitysdk.OperatorEqual:
+		return "organization"
+	case predicate.Fact == "owner_org_id" && predicate.Operator == identitysdk.OperatorIn:
+		return "organization_and_children"
+	case predicate.Fact == "owner_user_id" && predicate.Operator == identitysdk.OperatorIn:
+		return "self_and_subordinates"
 	case predicate.Fact == "id" && predicate.Operator == identitysdk.OperatorExists:
 		return "all_records"
 	default:
 		return "custom"
 	}
-}
-
-func subjectIDs(values []string) []identitysdk.SubjectID {
-	out := make([]identitysdk.SubjectID, 0, len(values))
-	for _, value := range values {
-		if value = strings.TrimSpace(value); value != "" {
-			out = append(out, identitysdk.SubjectID(value))
-		}
-	}
-	return out
 }
 
 func valueOrDefault(value, fallback string) string {

@@ -7,26 +7,24 @@ import (
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
-func TestRecordOwnerAndFieldDefaultsRemainBusinessSchemaBehavior(t *testing.T) {
+func TestRecordOwnerDefaultsAreRuntimeMetadata(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Fields: []definitionmodel.FieldSchema{
-		{Key: "owner", Type: "user", Required: true},
-		{Key: "owner_department_id", Type: "text"},
-		{Key: "owner_department_path", Type: "text"},
 		{Key: "status", Default: "new"},
 	}}
-	data := map[string]any{}
-	principal := principalmodel.Principal{Principal: identitysdk.Principal{UserID: "user-1", DepartmentID: "department-1", DepartmentPath: "/company/department-1"}}
-	RecordApplyOwnerDefault(object, data, principal)
-	RecordApplyFieldDefaults(object, data)
-	if data["owner"] != "user-1" || data["owner_department_id"] != "department-1" || data["owner_department_path"] != "/company/department-1" || data["status"] != "new" {
-		t.Fatalf("defaults=%#v", data)
+	record := recordmodel.Record{Data: map[string]any{}}
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{UserID: "user-1", OrgID: "org-1"}}
+	RecordApplyOwnerDefault(&record, principal)
+	RecordApplyFieldDefaults(object, record.Data)
+	if record.OwnerUserID != "user-1" || record.OwnerOrgID != "org-1" || record.Data["status"] != "new" || len(record.Data) != 1 {
+		t.Fatalf("record=%#v", record)
 	}
-	preserved := map[string]any{"owner": "other", "status": "active"}
-	RecordApplyOwnerDefault(object, preserved, principal)
-	RecordApplyFieldDefaults(object, preserved)
-	if preserved["owner"] != "other" || preserved["status"] != "active" {
+	preserved := recordmodel.Record{OwnerUserID: "other", OwnerOrgID: "org-2", Data: map[string]any{"status": "active"}}
+	RecordApplyOwnerDefault(&preserved, principal)
+	RecordApplyFieldDefaults(object, preserved.Data)
+	if preserved.OwnerUserID != "other" || preserved.OwnerOrgID != "org-2" || preserved.Data["status"] != "active" {
 		t.Fatalf("explicit values changed: %#v", preserved)
 	}
 }

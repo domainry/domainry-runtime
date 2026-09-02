@@ -8,7 +8,6 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
-	partysdk "github.com/domainry/domainry-party-sdk"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
@@ -134,7 +133,6 @@ type RuntimeServicesDependencies struct {
 	RuntimeStatus                       deploymentrepository.DeploymentRuntimeStatusRepository
 	Notifications                       NotificationRenderer
 	IdentityDirectory                   identitysdk.Directory
-	PartyDirectory                      partysdk.Directory
 	Worker                              workerplatform.Dependencies
 }
 

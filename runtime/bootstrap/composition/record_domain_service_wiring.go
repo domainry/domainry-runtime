@@ -15,7 +15,7 @@ import (
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 )
 
-func newRecordValidationService(schema CanonicalSchemaProvider, repository recordrepository.RecordRepository, access pipelineRecordAccess, identity identitysdk.Directory, party recordservice.RecordPartyReferenceLookup) *recordservice.RecordValidationDomainService {
+func newRecordValidationService(schema CanonicalSchemaProvider, repository recordrepository.RecordRepository, access pipelineRecordAccess, identity identitysdk.Directory) *recordservice.RecordValidationDomainService {
 	object := func(_ context.Context, key string) (definitionmodel.ObjectSchema, bool) {
 		value, ok := schemaObjectMap(schema.Schema().Objects)[key]
 		return value, ok
@@ -23,7 +23,6 @@ func newRecordValidationService(schema CanonicalSchemaProvider, repository recor
 	return recordservice.NewRecordValidationDomainService(recordservice.RecordValidationDependencies{
 		Repository: repository, Object: object, CanAccess: access.canAccessRecord,
 		CanAccessPersisted: access.canAccessPersistedRecord, Identity: identity,
-		Party: party,
 	})
 }
 

@@ -7,7 +7,7 @@ import (
 
 // recordFullAccessPrincipal models an Identity-issued test role with explicit
 // object Action grants. It is deliberately test-only: Runtime production code
-// must never infer business permissions from Known, a role name, workspace.admin,
+// must never infer business permissions from Known, a role name, runtime.appschema.validate_application_definition,
 // or a wildcard grant.
 func recordFullAccessPrincipal(principal principalmodel.Principal) principalmodel.Principal {
 	return accessfixture.Attach(principal, recordFullAccessBundle())

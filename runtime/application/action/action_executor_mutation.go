@@ -121,7 +121,7 @@ func (e *businessActionExecution) ApplyRecordMutation(ctx context.Context, mutat
 		return runtimeext.RecordMutationResult{}, apperror.New(apperror.KindForbidden, "backend.action.effect_authority_denied", nil, map[string]string{"object": mutation.ObjectKey})
 	}
 	var err error
-	// Create planning may validate Identity/Party relations through a separately
+	// Create planning may validate Identity relations through a separately
 	// composed module which shares the Runtime SQLite pool. Do not retain the
 	// pool's single connection before those read-only validations complete.
 	// Commit (or a later locking mutation) opens the physical transaction.

@@ -92,7 +92,7 @@ func (transportIdentityPrincipalResolverStub) Resolve(_ context.Context, request
 		roleKey = "admin"
 	}
 	permissions := map[string][]string{
-		"admin": {"workspace.admin", "identity.users.read"}, "operator": {"operations.read"}, "business": {"customer.read"},
+		"admin": {"runtime.appschema.validate_application_definition", "identity.users.read"}, "operator": {"runtime.operations.list_operations", "runtime.operations.get_operation"}, "business": {"customer.read"},
 	}[roleKey]
 	bundle := identitysdk.AccessBundle{ContractVersion: identitysdk.CurrentPolicyBundleVersion, Subject: identitysdk.Subject{
 		SubjectID: request.SubjectID, WorkspaceID: request.Application.WorkspaceID,
@@ -110,8 +110,8 @@ type transportIdentityDirectoryStub struct{}
 func (transportIdentityDirectoryStub) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
 	return identitysdk.User{}, false, nil
 }
-func (transportIdentityDirectoryStub) FindDepartment(context.Context, identitysdk.DepartmentLookup) (identitysdk.Department, bool, error) {
-	return identitysdk.Department{}, false, nil
+func (transportIdentityDirectoryStub) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
+	return identitysdk.OrganizationUnit{}, false, nil
 }
 func (transportIdentityDirectoryStub) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
 	return nil, nil
@@ -120,9 +120,6 @@ func (transportIdentityDirectoryStub) ListRoles(context.Context, identitysdk.Dir
 	return nil, nil
 }
 func (transportIdentityDirectoryStub) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
-	return nil, nil
-}
-func (transportIdentityDirectoryStub) ListWorkforce(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.WorkforceEntry, error) {
 	return nil, nil
 }
 

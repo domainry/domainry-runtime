@@ -38,7 +38,6 @@ type RecordCreateDependencies struct {
 	ObjectForAction       func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error)
 	CanWrite              func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool
 	CanWriteCandidate     func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) (bool, error)
-	ApplyScopeOwnerFacts  func(context.Context, string, definitionmodel.ObjectSchema, map[string]any, string) error
 	ValidatePipeline      func(context.Context, definitionmodel.ObjectSchema, string, map[string]any, principalmodel.Principal) error
 	ApplyPipelineDefaults func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal, bool) error
 	FindReplay            func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) (recordmodel.Record, bool, error)
@@ -195,12 +194,6 @@ type recordCreatePlannedMutation struct {
 func (s *RecordCreateApplicationService) planCreate(ctx context.Context, objectKey string, object definitionmodel.ObjectSchema, data, inputData map[string]any, recordID string, localizedValues []recordmodel.RecordLocalizedValueMutation, claim recordmodel.RecordMutationClaimResult, principal, authorizationPrincipal principalmodel.Principal) (recordCreatePlannedMutation, error) {
 	recordpolicy.RecordApplyFieldDefaults(object, data)
 	recordpolicy.RecordApplyAutoCodeDefaults(object, data, recordID)
-	recordpolicy.RecordApplyOwnerDefault(object, data, principal)
-	if s.dependencies.ApplyScopeOwnerFacts != nil {
-		if err := s.dependencies.ApplyScopeOwnerFacts(ctx, principal.WorkspaceID, object, data, recordID); err != nil {
-			return recordCreatePlannedMutation{}, err
-		}
-	}
 	normalized, err := recordvalidation.RecordNormalizeData(object, data, false)
 	if err != nil {
 		return recordCreatePlannedMutation{}, recordCreateErrorFrom(apperror.KindBadRequest, err)
@@ -216,23 +209,26 @@ func (s *RecordCreateApplicationService) planCreate(ctx context.Context, objectK
 			return recordCreatePlannedMutation{}, err
 		}
 	}
+	candidate := recordmodel.Record{ID: recordID, Data: data}
+	recordpolicy.RecordApplyOwnerDefault(&candidate, principal)
 	if s.dependencies.CanWriteCandidate != nil {
-		allowed, authorizeErr := s.dependencies.CanWriteCandidate(ctx, authorizationPrincipal, object, recordmodel.Record{ID: recordID, Data: data})
+		allowed, authorizeErr := s.dependencies.CanWriteCandidate(ctx, authorizationPrincipal, object, candidate)
 		if authorizeErr != nil {
 			return recordCreatePlannedMutation{}, authorizeErr
 		}
 		if !allowed {
 			return recordCreatePlannedMutation{}, recordCreateError(apperror.KindForbidden, "backend.record.owner_write_denied", nil)
 		}
-	} else if s.dependencies.CanWrite != nil && !s.dependencies.CanWrite(authorizationPrincipal, object, data) {
+	} else if s.dependencies.CanWrite != nil && !s.dependencies.CanWrite(authorizationPrincipal, object, recordpolicy.RecordDataWithOwnerFacts(candidate)) {
 		return recordCreatePlannedMutation{}, recordCreateError(apperror.KindForbidden, "backend.record.owner_write_denied", nil)
 	}
 	if err := recordpolicy.RecordValidateWritableFields(authorizationPrincipal, object, inputData); err != nil {
 		return recordCreatePlannedMutation{}, recordCreateErrorFrom(apperror.KindForbidden, err)
 	}
 	if s.dependencies.ValidateFields != nil {
-		candidate := recordmodel.Record{ID: recordID, Data: recordvalidation.RecordCloneData(data)}
-		if err := s.dependencies.ValidateFields(ctx, object, candidate, inputData, authorizationPrincipal); err != nil {
+		fieldCandidate := candidate
+		fieldCandidate.Data = recordvalidation.RecordCloneData(data)
+		if err := s.dependencies.ValidateFields(ctx, object, fieldCandidate, inputData, authorizationPrincipal); err != nil {
 			return recordCreatePlannedMutation{}, recordCreateErrorFrom(apperror.KindForbidden, err)
 		}
 	}
@@ -293,6 +289,7 @@ func (s *RecordCreateApplicationService) planCreate(ctx context.Context, objectK
 		CreateBy:    principal.UserID,
 		UpdateBy:    principal.UserID,
 	}
+	recordpolicy.RecordApplyOwnerDefault(&record, principal)
 	commit := transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: record, LocalizedValues: localizedValues}
 	if s.dependencies.BuildAudit != nil {
 		var metadata map[string]any

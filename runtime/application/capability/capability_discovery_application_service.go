@@ -126,7 +126,7 @@ func (s *CapabilityAuthoringApplicationService) ReferenceValues(ctx context.Cont
 		values = contract.Instance.ObjectKeys
 	case "relation_target_object_key":
 		values = append(values, contract.Instance.ObjectKeys...)
-		values = append(values, definitioncontract.IdentityUserObjectKey, definitioncontract.IdentityDepartmentObjectKey)
+		values = append(values, definitioncontract.IdentityUserObjectKey, definitioncontract.IdentityOrganizationUnitObjectKey)
 	case "field_key":
 		if scope == "" {
 			return capabilitycontract.CapabilityReferenceResult{}, capabilityDiscoveryBadRequest("backend.capability.reference_scope_required", "kind", kind)
@@ -149,10 +149,8 @@ func (s *CapabilityAuthoringApplicationService) ReferenceValues(ctx context.Cont
 		values = contract.Instance.PermissionKeys
 	case "user_id":
 		values = contract.Instance.UserIDs
-	case "workforce_profile_id":
-		values = contract.Instance.WorkforceProfileIDs
-	case "department_id":
-		values = contract.Instance.DepartmentIDs
+	case "org_id":
+		values = contract.Instance.OrgIDs
 	case "role_id":
 		values = contract.Instance.RoleIDs
 	case "menu_id":

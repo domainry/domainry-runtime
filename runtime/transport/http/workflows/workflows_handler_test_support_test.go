@@ -231,15 +231,12 @@ func workflowHTTPAdminPrincipal() principalmodel.Principal {
 		"runtime.workflows.approve_business_workflow_task",
 		"runtime.workflows.reject_business_workflow_task",
 		"runtime.workflows.return_business_workflow_task",
-		"ops.workflow.run",
-		"ops.workflow.simulate",
-		"ops.workflow.retry",
-		"ops.workflow.resolve",
-		"ops.workflow.read",
-		"ops.workflow.process",
-		"workflow.advanced.configure",
-		"workflow.process.read",
-		"workflow.process.operate",
+		"runtime.workflows.retry_ops_workflow_execution",
+		"runtime.workflows.resolve_ops_workflow_execution",
+		"runtime.workflows.retry_ops_workflow_process",
+		"runtime.workflows.resolve_ops_workflow_process",
+		"runtime.workflows.simulate_workflow",
+		"workflow.order.approve.run",
 	}})
 }
 

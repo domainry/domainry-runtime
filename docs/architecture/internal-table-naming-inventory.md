@@ -58,12 +58,11 @@ Authorization and review:
 `_identity_access_review_items`, `_identity_access_review_receipts`,
 `_identity_authoring_receipts`, `_identity_entitlement_batch_receipts`.
 
-Workforce:
+Organization directory:
 
-`_identity_departments`, `_identity_workforce_profiles`,
-`_identity_workforce_assignments`,
-`_identity_workforce_transfer_batch_receipts`,
-`_identity_workforce_migration_receipts`.
+`_identity_organization_units`. Personnel and reporting-line facts are columns
+of `_identity_users`; there is no separate Workforce aggregate or assignment
+table.
 
 Profile Binding:
 
@@ -125,16 +124,6 @@ Profile Binding runtime state remain Identity-owned.
 
 The authorization resource remains `notification_delivery_policy`; it is not a
 physical table name.
-
-### Party
-
-`_party_parties`, `_party_persons`, `_party_organizations`,
-`_party_contact_points`, `_party_addresses`, `_party_identifiers`,
-`_party_communication_preferences`, `_party_consents`,
-`_party_privacy_preferences`, `_party_marketing_subscriptions`,
-`_party_job_catalog_items`, `_party_positions`,
-`_party_organization_extensions`,
-`_party_organization_extension_memberships`.
 
 ### Report
 
@@ -206,9 +195,11 @@ physical table name.
   registered. PostgreSQL-native RLS and `DATABASE_RLS_ENABLED` are removed;
   framework-level RLS/CLS remains.
 - `integration_outbox_messages`: never materialized and not retained.
-- `_schema_materializations`, `_runtime_schema_migrations`, and
-  `_party_schema_migrations`: obsolete ledgers are dropped, never adopted or
+- `_schema_materializations` and `_runtime_schema_migrations`: obsolete ledgers are dropped, never adopted or
   backed up. `_schema_migrations` is the only migration ledger.
+- `_identity_departments`, `_identity_workforce_*`, `_party_*`, and
+  `_party_schema_migrations`: unpublished structures are not part of the fresh
+  schema and receive no compatibility or rename migration.
 - `_identity_change_plan_drafts`, `_identity_change_plan_operations`,
   `_identity_portability_export_receipts`,
   `_identity_portability_import_receipts`, and

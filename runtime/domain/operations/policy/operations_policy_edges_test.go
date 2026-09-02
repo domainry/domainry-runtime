@@ -9,7 +9,7 @@ import (
 
 func validOperationsCommand(now time.Time) operationsmodel.OperationsCommand {
 	return operationsmodel.OperationsCommand{
-		ID: "operation", Kind: "scheduler.retry", Permission: "scheduler.retry",
+		ID: "operation", Kind: "scheduler.retry", ActionKey: "scheduler.retry",
 		Scope:          operationsmodel.OperationsScope{WorkspaceID: "workspace", ResourceType: "run", ResourceID: "run-1"},
 		IdempotencyKey: "key", RequestFingerprint: "fingerprint", RequestedBy: "operator",
 		Reason: "recover", Reference: "INC-1", Status: operationsmodel.OperationsStatusCreated,
@@ -26,7 +26,7 @@ func TestOperationsValidateCommandCompleteMatrix(t *testing.T) {
 	}{
 		{name: "id", mutate: func(command *operationsmodel.OperationsCommand) { command.ID = "" }},
 		{name: "kind", mutate: func(command *operationsmodel.OperationsCommand) { command.Kind = "" }},
-		{name: "permission", mutate: func(command *operationsmodel.OperationsCommand) { command.Permission = "" }},
+		{name: "action", mutate: func(command *operationsmodel.OperationsCommand) { command.ActionKey = "" }},
 		{name: "idempotency", mutate: func(command *operationsmodel.OperationsCommand) { command.IdempotencyKey = "" }},
 		{name: "fingerprint", mutate: func(command *operationsmodel.OperationsCommand) { command.RequestFingerprint = "" }},
 		{name: "requester", mutate: func(command *operationsmodel.OperationsCommand) { command.RequestedBy = "" }},
@@ -103,7 +103,7 @@ func TestOperationsClassifySubmissionShortCircuitOutcomes(t *testing.T) {
 
 func validCrossWorkspaceCommand(now time.Time) operationsmodel.CrossWorkspaceCommand {
 	return operationsmodel.CrossWorkspaceCommand{
-		ID: "operation", Purpose: operationsmodel.CrossWorkspaceSupport, Permission: "runtime.cross_workspace.support",
+		ID: "operation", Purpose: operationsmodel.CrossWorkspaceSupport,
 		SourceWorkspaceID: "workspace-a", TargetWorkspaceID: "workspace-b", ActorID: "operator",
 		Reason: "support", Reference: "INC-1", RequestedAt: now,
 	}
@@ -117,7 +117,6 @@ func TestCrossWorkspaceAndBreakGlassCompleteMatrix(t *testing.T) {
 		mutate func(*operationsmodel.CrossWorkspaceCommand)
 	}{
 		{name: "unknown purpose", mutate: func(command *operationsmodel.CrossWorkspaceCommand) { command.Purpose = "unknown" }},
-		{name: "permission", mutate: func(command *operationsmodel.CrossWorkspaceCommand) { command.Permission = "wrong" }},
 		{name: "id", mutate: func(command *operationsmodel.CrossWorkspaceCommand) { command.ID = "" }},
 		{name: "source", mutate: func(command *operationsmodel.CrossWorkspaceCommand) { command.SourceWorkspaceID = "" }},
 		{name: "target", mutate: func(command *operationsmodel.CrossWorkspaceCommand) { command.TargetWorkspaceID = "" }},

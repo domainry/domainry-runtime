@@ -123,10 +123,7 @@ func TestCreateUserFieldOmissionAndDefaults(t *testing.T) {
 	}{
 		{name: "optional omitted remains null", field: definitionmodel.FieldSchema{Key: "adopted_by", Type: "user"}, input: map[string]any{}, want: nil, wantKey: false},
 		{name: "explicit value preserved", field: definitionmodel.FieldSchema{Key: "adopted_by", Type: "user"}, input: map[string]any{"adopted_by": "reviewer"}, want: "reviewer", wantKey: true},
-		{name: "required user keeps principal default", field: definitionmodel.FieldSchema{Key: "adopted_by", Type: "user", Required: true}, input: map[string]any{}, want: "uploader", wantKey: true},
-		{name: "explicit auto assignment remains supported", field: definitionmodel.FieldSchema{Key: "adopted_by", Type: "user", Config: map[string]any{"auto_assign_current_user": true}}, input: map[string]any{}, want: "uploader", wantKey: true},
 		{name: "metadata default value preserved", field: definitionmodel.FieldSchema{Key: "adopted_by", Type: "user", DefaultValue: "designated-reviewer"}, input: map[string]any{}, want: "designated-reviewer", wantKey: true},
-		{name: "current user sentinel remains supported", field: definitionmodel.FieldSchema{Key: "adopted_by", Type: "user", DefaultValue: "current_user"}, input: map[string]any{}, want: "uploader", wantKey: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -140,13 +137,16 @@ func TestCreateUserFieldOmissionAndDefaults(t *testing.T) {
 				CanWrite:    func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
 				NewRecordID: func(string) string { return "document-1" },
 			})
-			created, err := service.Create(t.Context(), object.Key, test.input, recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "uploader"}}))
+			created, err := service.Create(t.Context(), object.Key, test.input, recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "uploader", OrgID: "store-a"}}))
 			if err != nil {
 				t.Fatal(err)
 			}
 			got, exists := repository.commit.Record.Data[test.field.Key]
 			if exists != test.wantKey || !reflect.DeepEqual(got, test.want) || !reflect.DeepEqual(created.Data, repository.commit.Record.Data) {
 				t.Fatalf("created=%#v persisted=%#v want value=%#v present=%v", created.Data, repository.commit.Record.Data, test.want, test.wantKey)
+			}
+			if created.OwnerUserID != "uploader" || repository.commit.Record.OwnerUserID != "uploader" || created.OwnerOrgID != "store-a" || repository.commit.Record.OwnerOrgID != "store-a" {
+				t.Fatalf("Runtime owner metadata was not defaulted: created=%#v persisted=%#v", created, repository.commit.Record)
 			}
 		})
 	}
@@ -290,10 +290,6 @@ func TestCreateServiceOwnsCompleteCreateTransaction(t *testing.T) {
 			calls = append(calls, "write")
 			return true
 		},
-		ApplyScopeOwnerFacts: func(context.Context, string, definitionmodel.ObjectSchema, map[string]any, string) error {
-			calls = append(calls, "identity")
-			return nil
-		},
 		ValidatePipeline: func(context.Context, definitionmodel.ObjectSchema, string, map[string]any, principalmodel.Principal) error {
 			calls = append(calls, "pipeline_validate")
 			return nil
@@ -356,7 +352,7 @@ func TestCreateServiceOwnsCompleteCreateTransaction(t *testing.T) {
 	if repository.commit.Operation != "create" || repository.commit.Audit == nil || repository.commit.Audit.Event != "record_created" || len(repository.commit.Outbox) != 1 || len(repository.commit.WorkflowIntents) != 1 {
 		t.Fatalf("create commit = %#v", repository.commit)
 	}
-	wantCalls := []string{"object", "identity", "pipeline_validate", "pipeline_defaults", "write", "replay", "automation_before", "relations", "policies", "unique", "duplicate", "outbox", "workflow_prepare", "workflow_execute"}
+	wantCalls := []string{"object", "pipeline_validate", "pipeline_defaults", "write", "replay", "automation_before", "relations", "policies", "unique", "duplicate", "outbox", "workflow_prepare", "workflow_execute"}
 	if !reflect.DeepEqual(calls, wantCalls) || len(executed) != 1 {
 		t.Fatalf("calls = %v, executed = %#v", calls, executed)
 	}

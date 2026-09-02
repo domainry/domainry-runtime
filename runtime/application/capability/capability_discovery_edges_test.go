@@ -22,7 +22,7 @@ func capabilityDiscoveryEdgeService() (*CapabilityAuthoringApplicationService, p
 			}}},
 		}
 	})
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}})
 	return service, admin
 }
 

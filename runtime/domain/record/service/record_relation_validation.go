@@ -13,14 +13,9 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	partymodel "github.com/domainry/domainry-party-sdk/contract"
 	definitioncontract "github.com/domainry/domainry-runtime/runtime/domain/definition/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
-
-type RecordPartyReferenceLookup interface {
-	Get(context.Context, string) (partymodel.Aggregate, bool, error)
-}
 
 type RecordRelationValidationDependencies struct {
 	Repository               recordrepository.RecordRepository
@@ -28,7 +23,6 @@ type RecordRelationValidationDependencies struct {
 	CanAccessRecord          func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool
 	CanAccessPersistedRecord func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) (bool, error)
 	Identity                 identitysdk.Directory
-	Party                    RecordPartyReferenceLookup
 }
 
 type RecordRelationValidator struct {
@@ -37,7 +31,6 @@ type RecordRelationValidator struct {
 	canAccessRecord          func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool
 	canAccessPersistedRecord func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) (bool, error)
 	identity                 identitysdk.Directory
-	party                    RecordPartyReferenceLookup
 }
 
 type recordPlannedRelationsContextKey struct{}
@@ -104,7 +97,6 @@ func NewRecordRelationValidator(dependencies RecordRelationValidationDependencie
 		canAccessRecord:          dependencies.CanAccessRecord,
 		canAccessPersistedRecord: dependencies.CanAccessPersistedRecord,
 		identity:                 dependencies.Identity,
-		party:                    dependencies.Party,
 	}
 }
 
@@ -131,52 +123,15 @@ func (s *RecordRelationValidator) Validate(ctx context.Context, object definitio
 			}
 			continue
 		}
-		if target == definitioncontract.IdentityDepartmentObjectKey || target == definitioncontract.IdentityOrganizationUnitObjectKey {
+		if target == definitioncontract.IdentityOrganizationUnitObjectKey {
 			if s.identity == nil {
-				return recordInternalError("check identity department relation", fmt.Errorf("identity directory is not configured"))
+				return recordInternalError("check identity organization unit relation", fmt.Errorf("identity directory is not configured"))
 			}
-			_, found, err := s.identity.FindDepartment(ctx, identitysdk.DepartmentLookup{DepartmentID: recordID})
+			_, found, err := s.identity.FindOrganizationUnit(ctx, identitysdk.OrganizationUnitLookup{OrgID: recordID})
 			if err != nil {
-				return recordInternalError("check identity department relation", err)
+				return recordInternalError("check identity organization unit relation", err)
 			}
 			if !found {
-				return recordServiceError(apperror.KindBadRequest, "backend.relation.record_missing", nil, "field", field.Key, "object", target)
-			}
-			continue
-		}
-		if target == definitioncontract.IdentityWorkforceProfileObjectKey {
-			entries, err := s.identity.ListWorkforce(ctx, identitysdk.DirectoryQuery{})
-			if err != nil {
-				return recordInternalError("check identity workforce relation", err)
-			}
-			found := false
-			for _, entry := range entries {
-				if entry.WorkforceProfileID == recordID {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return recordServiceError(apperror.KindBadRequest, "backend.relation.record_missing", nil, "field", field.Key, "object", target)
-			}
-			continue
-		}
-		if target == partymodel.PartyObjectKey || target == partymodel.PersonObjectKey || target == partymodel.OrganizationObjectKey {
-			if s.party == nil {
-				return recordInternalError("check party relation", fmt.Errorf("party directory is not configured"))
-			}
-			party, found, err := s.party.Get(ctx, recordID)
-			if err != nil {
-				return recordInternalError("check party relation", err)
-			}
-			expectedKind := ""
-			if target == partymodel.PersonObjectKey {
-				expectedKind = partymodel.PartyKindPerson
-			}
-			if target == partymodel.OrganizationObjectKey {
-				expectedKind = partymodel.PartyKindOrganization
-			}
-			if !found || expectedKind != "" && party.Party.Kind != expectedKind {
 				return recordServiceError(apperror.KindBadRequest, "backend.relation.record_missing", nil, "field", field.Key, "object", target)
 			}
 			continue

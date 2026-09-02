@@ -1,10 +1,12 @@
 package businessseedmodel
 
 type SeedRecordSchema struct {
-	ObjectKey  string         `json:"object_key"`
-	Data       map[string]any `json:"data"`
-	SourceKind string         `json:"source_kind,omitempty"`
-	SourceID   string         `json:"source_id,omitempty"`
+	ObjectKey   string         `json:"object_key"`
+	Data        map[string]any `json:"data"`
+	OwnerUserID string         `json:"owner_user_id,omitempty"`
+	OwnerOrgID  string         `json:"owner_org_id,omitempty"`
+	SourceKind  string         `json:"source_kind,omitempty"`
+	SourceID    string         `json:"source_id,omitempty"`
 }
 
 // BusinessSeedProvenance remains as a projection compatibility type. Runtime

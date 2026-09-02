@@ -15,7 +15,7 @@ func TestRecordFeaturePermissionProjectionPublishesSDKDecisions(t *testing.T) {
 	principal := accessfixture.Attach(
 		principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user-1", WorkspaceID: "workspace-a"}},
 		accessfixture.Bundle{
-			Key: "operator", Permissions: []string{"case.read", "case.update", "case.approve", "case.export", "workflow.run"},
+			Key: "operator", Permissions: []string{"case.read", "case.update", "case.approve", "case.export", "workflow.approval.run"},
 			DataPolicies:  []accessfixture.DataPolicyFixture{{ObjectKey: "case", Scope: "all_records", Read: true, Write: true}},
 			FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: "case", FieldKey: "name", Read: true, Write: true, Export: true}},
 		},
@@ -23,7 +23,8 @@ func TestRecordFeaturePermissionProjectionPublishesSDKDecisions(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "case", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}, {Key: "retired", DisabledAt: "now"}}}
 	actions := []definitionmodel.ActionSchema{{Key: "case.approve", ObjectKey: "case", AssurancePolicy: &definitionmodel.ActionAssurancePolicy{RequiredMethods: []string{"otp", "otp", "workflow_approval"}}}}
 
-	snapshot, err := RecordBuildFeaturePermissions([]definitionmodel.ObjectSchema{object}, actions, principal)
+	workflows := []definitionmodel.WorkflowSchema{{Key: "disabled", Enabled: false}, {Key: "approval", Enabled: true}}
+	snapshot, err := RecordBuildFeaturePermissions([]definitionmodel.ObjectSchema{object}, actions, workflows, principal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,17 +40,17 @@ func TestRecordFeaturePermissionProjectionPublishesSDKDecisions(t *testing.T) {
 	if snapshot.Fields[0].Source != "identity_policy" || !snapshot.Fields[0].Read.Allowed || !snapshot.Fields[0].Write.Allowed || !snapshot.Fields[0].Export.Allowed {
 		t.Fatalf("field decision=%+v", snapshot.Fields[0])
 	}
-	if len(snapshot.Functions) != 5 || snapshot.Functions[0].Decision.Reason != "identity_policy" || !snapshot.Workflows[1].Allowed {
+	if len(snapshot.Functions) != 5 || snapshot.Functions[0].Decision.Reason != "identity_policy" || len(snapshot.Workflows) != 1 || snapshot.Workflows[0].Key != "workflow.approval.run" || snapshot.Workflows[0].PermissionKey != snapshot.Workflows[0].Key || !snapshot.Workflows[0].Allowed {
 		t.Fatalf("functions=%+v workflows=%+v", snapshot.Functions, snapshot.Workflows)
 	}
 }
 
 func TestRecordFeaturePermissionProjectionFailsClosedAndSupportsSystemPrincipal(t *testing.T) {
-	if _, err := RecordBuildFeaturePermissions(nil, nil, principalmodel.Principal{}); apperror.CodeOf(err) != "backend.role.unknown" {
+	if _, err := RecordBuildFeaturePermissions(nil, nil, nil, principalmodel.Principal{}); apperror.CodeOf(err) != "backend.role.unknown" {
 		t.Fatalf("unknown principal err=%v", err)
 	}
 	system := principalmodel.NewSystemPrincipal("runtime-worker", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "projection"), "case.read")
-	snapshot, err := RecordBuildFeaturePermissions([]definitionmodel.ObjectSchema{{Key: "case", Fields: []definitionmodel.FieldSchema{{Key: "name"}}}}, nil, system)
+	snapshot, err := RecordBuildFeaturePermissions([]definitionmodel.ObjectSchema{{Key: "case", Fields: []definitionmodel.FieldSchema{{Key: "name"}}}}, nil, nil, system)
 	if err != nil {
 		t.Fatal(err)
 	}

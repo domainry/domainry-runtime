@@ -38,8 +38,8 @@ func TestManifestSchedulerDefinitionManualCapabilityStartupRestartAndExactlyOnce
 	manifest["roles"] = append(roles, map[string]any{
 		"key": "scheduler_operator", "name": "Scheduler Operator",
 		"permissions": []any{
-			"admin_console.access", "runtime.scheduler.list_tenant_admin_scheduler_definitions",
-			"runtime.scheduler.run_ops_scheduler_job", "runtime.scheduler.get_ops_scheduler_state",
+			"admin_console.access", "scheduler.definitions.list",
+			"scheduler.definitions.run", "scheduler.state.get",
 		}, "record_scope": "all_records",
 		"data_permissions": []any{map[string]any{"object_key": "customer", "scope": "all_records", "read": true, "write": false}},
 	})

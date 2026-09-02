@@ -138,7 +138,7 @@ func TestDeploymentIdempotencyStatusAndMutationEdges(t *testing.T) {
 		t.Fatalf("unsupported cleanup error=%v", err)
 	}
 
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}})
 	nonAdmin := admin
 	accessfixture.Set(&nonAdmin, accessfixture.Bundle{})
 	if receipts, err := service.IdempotencyReceipts(t.Context(), nonAdmin, "", 1); err != nil || len(receipts) != 1 {

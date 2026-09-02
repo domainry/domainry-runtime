@@ -13,17 +13,14 @@ import (
 )
 
 func TestSDKDataScopeCompilerUnionsIdentityIssuedPolicies(t *testing.T) {
-	object := definitionmodel.ObjectSchema{Key: "case", Fields: []definitionmodel.FieldSchema{
-		{Key: "owner", Type: "user", Config: map[string]any{"scope_owner": true}},
-		{Key: "owner_department_id", Type: "text"},
-	}}
+	object := definitionmodel.ObjectSchema{Key: "case"}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{
-		Known: true, UserID: "user-1", DepartmentID: "sales",
+		Known: true, UserID: "user-1", OrgID: "sales",
 	}}, accessfixture.Bundle{
 		Permissions: []string{"case.read"},
 		DataPolicies: []accessfixture.DataPolicyFixture{
 			{ObjectKey: "case", Scope: "owned_records", Read: true},
-			{ObjectKey: "case", Scope: "department", Read: true},
+			{ObjectKey: "case", Scope: "organization", Read: true},
 		},
 	})
 
@@ -31,14 +28,33 @@ func TestSDKDataScopeCompilerUnionsIdentityIssuedPolicies(t *testing.T) {
 	if err != nil || !handled || expression == nil || expression.Operator != "or" || len(expression.Children) != 2 {
 		t.Fatalf("expression=%#v handled=%v err=%v", expression, handled, err)
 	}
-	if !directSDKScopeExpressionMatches(*expression, recordmodel.Record{Data: map[string]any{"owner": "user-1", "owner_department_id": "support"}}) {
+	if !directSDKScopeExpressionMatches(*expression, recordmodel.Record{OwnerUserID: "user-1", OwnerOrgID: "support"}) {
 		t.Fatal("owner policy did not match")
 	}
-	if !directSDKScopeExpressionMatches(*expression, recordmodel.Record{Data: map[string]any{"owner": "other", "owner_department_id": "sales"}}) {
-		t.Fatal("department policy did not match")
+	if !directSDKScopeExpressionMatches(*expression, recordmodel.Record{OwnerUserID: "other", OwnerOrgID: "sales"}) {
+		t.Fatal("organization policy did not match")
 	}
-	if directSDKScopeExpressionMatches(*expression, recordmodel.Record{Data: map[string]any{"owner": "other", "owner_department_id": "support"}}) {
+	if directSDKScopeExpressionMatches(*expression, recordmodel.Record{OwnerUserID: "other", OwnerOrgID: "support"}) {
 		t.Fatal("record outside every SDK policy matched")
+	}
+}
+
+func TestSDKDataScopeCompilerUsesIdentityIssuedSubtreeIDs(t *testing.T) {
+	object := definitionmodel.ObjectSchema{Key: "case"}
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{
+		Known: true, UserID: "manager", OrgID: "region", OrgScopeIDs: []string{"region", "store"}, ReportingScopeUserIDs: []string{"manager", "seller"},
+	}}, accessfixture.Bundle{Permissions: []string{"case.read"}, DataPolicies: []accessfixture.DataPolicyFixture{
+		{ObjectKey: "case", Scope: "organization_and_children", Read: true},
+		{ObjectKey: "case", Scope: "self_and_subordinates", Read: true},
+	}})
+	expression, err, handled := RecordCompileSDKDataScopeExpression(object, []definitionmodel.ObjectSchema{object}, principal, "read")
+	if err != nil || !handled || expression == nil {
+		t.Fatalf("expression=%#v handled=%v err=%v", expression, handled, err)
+	}
+	if !directSDKScopeExpressionMatches(*expression, recordmodel.Record{OwnerOrgID: "store"}) ||
+		!directSDKScopeExpressionMatches(*expression, recordmodel.Record{OwnerUserID: "seller"}) ||
+		directSDKScopeExpressionMatches(*expression, recordmodel.Record{OwnerOrgID: "outside", OwnerUserID: "outside"}) {
+		t.Fatalf("subtree expression=%#v", expression)
 	}
 }
 
@@ -71,40 +87,8 @@ func TestSDKDataScopeCompilerTranslatesRelationsAndBusinessClaims(t *testing.T) 
 	}
 }
 
-func TestSDKDataScopeCompilerTreatsEmptyOrganizationScopeAsAuthorizationMiss(t *testing.T) {
-	store := definitionmodel.ObjectSchema{Key: "store", Fields: []definitionmodel.FieldSchema{{Key: "id", Type: "text"}}}
-	booking := definitionmodel.ObjectSchema{Key: "booking", Fields: []definitionmodel.FieldSchema{{Key: "scope_store_id", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "store"}}}}
-	predicate := &accessfixture.PredicateFixture{
-		Operator: "in",
-		Path:     []accessfixture.RelationSegmentFixture{{Direction: "forward", RelationFieldKey: "scope_store_id", TargetObjectKey: "store"}},
-		FieldKey: "id", ValueSource: "actor_claim", ClaimKey: "store_ids",
-	}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "manager-1"}}, accessfixture.Bundle{
-		Permissions:  []string{"booking.read"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "booking", Read: true, Scope: "custom", Predicate: predicate}},
-	})
-
-	expression, err, handled := RecordCompileSDKDataScopeExpression(booking, []definitionmodel.ObjectSchema{booking, store}, principal, "read")
-	if err != nil || !handled || expression == nil {
-		t.Fatalf("empty store scope expression=%#v handled=%v err=%v", expression, handled, err)
-	}
-	if expression.Operator != "in" || expression.FieldKey != "id" || len(expression.Values) != 0 || len(expression.Path) != 0 {
-		t.Fatalf("empty store scope must compile to direct deny-all, got %#v", expression)
-	}
-
-	principal.OrganizationScopes.StoreIDs = []string{"store-1", "store-2"}
-	principal = accessfixture.Attach(principal, accessfixture.Bundle{
-		Permissions:  []string{"booking.read"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "booking", Read: true, Scope: "custom", Predicate: predicate}},
-	})
-	expression, err, handled = RecordCompileSDKDataScopeExpression(booking, []definitionmodel.ObjectSchema{booking, store}, principal, "read")
-	if err != nil || !handled || expression == nil || expression.Operator != "in" || len(expression.Path) != 1 || len(expression.Values) != 2 {
-		t.Fatalf("assigned store scope expression=%#v handled=%v err=%v", expression, handled, err)
-	}
-}
-
 func TestSDKDataScopeCompilerFailsClosed(t *testing.T) {
-	object := definitionmodel.ObjectSchema{Key: "case", Fields: []definitionmodel.FieldSchema{{Key: "owner", Type: "user", Config: map[string]any{"scope_owner": true}}}}
+	object := definitionmodel.ObjectSchema{Key: "case"}
 	if expression, err, handled := RecordCompileSDKDataScopeExpression(object, []definitionmodel.ObjectSchema{object}, principalmodel.Principal{}, "read"); err != nil || handled || expression != nil {
 		t.Fatalf("principal without AccessBundle expression=%#v handled=%v err=%v", expression, handled, err)
 	}

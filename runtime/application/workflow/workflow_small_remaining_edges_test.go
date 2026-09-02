@@ -18,22 +18,6 @@ type workflowWaitTimerServiceProbe struct {
 	err error
 }
 
-type workflowOrderedWorkforceIdentity struct {
-	workflowDirectoryTestStub
-	entries []identitysdk.WorkforceEntry
-	users   map[string]identitysdk.User
-}
-
-func (i workflowOrderedWorkforceIdentity) FindUser(_ context.Context, lookup identitysdk.UserLookup) (identitysdk.User, bool, error) {
-	id := string(lookup.UserID)
-	user, found := i.users[id]
-	return user, found, nil
-}
-
-func (i workflowOrderedWorkforceIdentity) ListWorkforce(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.WorkforceEntry, error) {
-	return i.entries, nil
-}
-
 func (p workflowWaitTimerServiceProbe) ScheduleWorkflowWaitTimer(context.Context, WorkflowWaitTimerRequest) (string, error) {
 	return p.id, p.err
 }
@@ -143,19 +127,5 @@ func TestWorkflowApplicationResumeTimerNodeDelegates(t *testing.T) {
 	service := NewWorkflowApplicationService(WorkflowDependencies{})
 	if _, err := service.ResumeTimerNode(t.Context(), "workspace", "process", "timer", principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("authorization err=%v", err)
-	}
-}
-
-func TestWorkflowManagerResolverScansPastUnrelatedWorkforceEntries(t *testing.T) {
-	identity := workflowOrderedWorkforceIdentity{
-		entries: []identitysdk.WorkforceEntry{{IdentityUserID: "other"}, {IdentityUserID: "employee", ManagerIdentityUserID: "manager"}},
-		users:   map[string]identitysdk.User{"manager": {ID: "manager", Status: identitysdk.UserStatusActive}},
-	}
-	engine := NewWorkflowProcessRuntime(WorkflowDependencies{Identity: identity}).ProcessEngine()
-	resolver := definitionmodel.WorkflowAssigneeResolver{Type: "manager", UserField: "employee"}
-	process := workflowmodel.WorkflowProcessInstance{Variables: map[string]any{"employee": "employee"}}
-	users, _, err := engine.resolveApprovalAssigneeStrategy(t.Context(), process, resolver, principalmodel.Principal{})
-	if err != nil || !reflect.DeepEqual(users, []string{"manager"}) {
-		t.Fatalf("users=%v err=%v", users, err)
 	}
 }

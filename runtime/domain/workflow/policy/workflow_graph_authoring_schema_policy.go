@@ -3,14 +3,14 @@ package policy
 import capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 
 func workflowCompleteGraphAuthoringContract(capability *capabilitycontract.CapabilityAuthoringDefinition, nodeTypes []string) {
-	capability.Permissions = []string{"workflow.definition.read", "workflow.advanced.configure"}
-	capability.ValidationEndpoint = "POST /workflows/authoring-fragments/{capabilityKey}/validate"
+	capability.Permissions = []string{workflowAuthoringFragmentAction}
+	capability.ValidationEndpoint = workflowAuthoringFragmentValidationEndpoint
 	capability.InputSchema = workflowGraphInputSchema(nodeTypes)
 	capability.OutputSchema = workflowValidationOutputSchema()
 	capability.OutputVariables = workflowValidationOutputVariables()
 	capability.Execution = &capabilitycontract.CapabilityAuthoringExecution{
 		ReadSet: []string{"metadata.workflow_candidate", "action.definition", "identity.role", "schema.object"}, Transaction: "read_only_validation",
-		Idempotency: "naturally_idempotent", SideEffectLevel: "none", PermissionModel: "workflow.advanced.configure",
+		Idempotency: "naturally_idempotent", SideEffectLevel: "none", PermissionModel: workflowAuthoringFragmentAction,
 	}
 	capability.ReferenceContracts = []capabilitycontract.CapabilityAuthoringReference{
 		{Kind: "action_key", InputJSONPointer: "/nodes/*/contract/action/action_key", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/action_key"},

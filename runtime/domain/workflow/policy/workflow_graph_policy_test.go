@@ -62,7 +62,7 @@ func TestWorkflowValidateGraphNodeContractsAndStructuralFailures(t *testing.T) {
 		{name: "action on error", graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{{ID: "trigger", Type: "trigger"}, {ID: "action", Type: "action", Contract: &definitionmodel.WorkflowNodeContract{Action: &definitionmodel.WorkflowBusinessActionNodeContract{ActionKey: "x", OnError: "invalid"}}}}}, code: "backend.workflow.action_error_policy_invalid"},
 		{name: "cc missing", graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{{ID: "trigger", Type: "trigger"}, {ID: "cc", Type: "cc"}}}, code: "backend.workflow.cc_contract_required"},
 		{name: "cc nil contract value", graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{{ID: "trigger", Type: "trigger"}, {ID: "cc", Type: "cc", Contract: &definitionmodel.WorkflowNodeContract{}}}}, code: "backend.workflow.cc_contract_required"},
-		{name: "cc missing action", graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{{ID: "trigger", Type: "trigger"}, cc(&definitionmodel.WorkflowCCNodeContract{Resolvers: []definitionmodel.WorkflowAssigneeResolver{{Type: "initiator_manager"}}})}}, code: "backend.workflow.cc_contract_required"},
+		{name: "cc missing action", graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{{ID: "trigger", Type: "trigger"}, cc(&definitionmodel.WorkflowCCNodeContract{Resolvers: []definitionmodel.WorkflowAssigneeResolver{{Type: "users", UserIDs: []string{"user-1"}}}})}}, code: "backend.workflow.cc_contract_required"},
 		{name: "cc incomplete", graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{{ID: "trigger", Type: "trigger"}, cc(&definitionmodel.WorkflowCCNodeContract{NotificationActionKey: "notify"})}}, code: "backend.workflow.cc_contract_required"},
 		{name: "no trigger", graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{workflowTestAction("action")}}, code: "backend.workflow.graph_trigger_required"},
 	}
@@ -76,7 +76,12 @@ func TestWorkflowValidateGraphNodeContractsAndStructuralFailures(t *testing.T) {
 }
 
 func TestWorkflowValidateGraphEdgesBranchesCyclesAndConnectivity(t *testing.T) {
-	validApproval := definitionmodel.WorkflowGraphNode{ID: "approval", Type: "approval", Contract: &definitionmodel.WorkflowNodeContract{Approval: &definitionmodel.WorkflowApprovalNodeContract{Mode: "any", Resolvers: []definitionmodel.WorkflowAssigneeResolver{{Type: "initiator_manager"}}}}}
+	validApproval := definitionmodel.WorkflowGraphNode{
+		ID: "approval", Type: "approval",
+		Contract: &definitionmodel.WorkflowNodeContract{Approval: &definitionmodel.WorkflowApprovalNodeContract{
+			Mode: "any", Resolvers: []definitionmodel.WorkflowAssigneeResolver{{Type: "users", UserIDs: []string{"user-1"}}},
+		}},
+	}
 	validCondition := definitionmodel.WorkflowGraphNode{ID: "condition", Type: "condition", Contract: &definitionmodel.WorkflowNodeContract{Condition: &definitionmodel.WorkflowConditionContract{Type: "always"}}}
 	graphs := []struct {
 		name  string
@@ -84,7 +89,17 @@ func TestWorkflowValidateGraphEdgesBranchesCyclesAndConnectivity(t *testing.T) {
 		code  string
 	}{
 		{name: "valid", graph: workflowTestBaseGraph()},
-		{name: "valid cc", graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{{ID: "trigger", Type: "trigger"}, {ID: "cc", Type: "cc", Contract: &definitionmodel.WorkflowNodeContract{CC: &definitionmodel.WorkflowCCNodeContract{NotificationActionKey: "notify", Resolvers: []definitionmodel.WorkflowAssigneeResolver{{Type: "initiator_manager"}}}}}}, Edges: []definitionmodel.WorkflowGraphEdge{{Source: "trigger", Target: "cc"}}}},
+		{name: "valid cc", graph: &definitionmodel.WorkflowGraphSchema{
+			Version: 2,
+			Nodes: []definitionmodel.WorkflowGraphNode{
+				{ID: "trigger", Type: "trigger"},
+				{ID: "cc", Type: "cc", Contract: &definitionmodel.WorkflowNodeContract{CC: &definitionmodel.WorkflowCCNodeContract{
+					NotificationActionKey: "notify",
+					Resolvers:             []definitionmodel.WorkflowAssigneeResolver{{Type: "users", UserIDs: []string{"user-1"}}},
+				}}},
+			},
+			Edges: []definitionmodel.WorkflowGraphEdge{{Source: "trigger", Target: "cc"}},
+		}},
 		{name: "valid retry action", graph: &definitionmodel.WorkflowGraphSchema{
 			Version: 2,
 			Nodes: []definitionmodel.WorkflowGraphNode{
@@ -121,12 +136,12 @@ func TestWorkflowValidateGraphEdgesBranchesCyclesAndConnectivity(t *testing.T) {
 }
 
 func TestWorkflowGraphRuleHelpersCompleteMatrix(t *testing.T) {
-	for _, resolver := range []definitionmodel.WorkflowAssigneeResolver{{Type: "users", UserIDs: []string{"", " user "}}, {Type: "record_field", Field: "owner"}, {Type: "manager", UserField: "employee"}, {Type: "manager_of", UserField: "employee"}, {Type: "initiator_manager"}, {Type: "role", RoleKey: "admin"}} {
+	for _, resolver := range []definitionmodel.WorkflowAssigneeResolver{{Type: "users", UserIDs: []string{"", " user "}}, {Type: "record_field", Field: "owner"}, {Type: "role", RoleKey: "admin"}} {
 		if !validWorkflowAssigneeResolver(resolver) {
 			t.Fatalf("valid resolver rejected: %#v", resolver)
 		}
 	}
-	for _, resolver := range []definitionmodel.WorkflowAssigneeResolver{{Type: "users"}, {Type: "record_field"}, {Type: "manager"}, {Type: "role"}, {Type: "unknown"}} {
+	for _, resolver := range []definitionmodel.WorkflowAssigneeResolver{{Type: "users"}, {Type: "record_field"}, {Type: "role"}, {Type: "unknown"}} {
 		if validWorkflowAssigneeResolver(resolver) {
 			t.Fatalf("invalid resolver accepted: %#v", resolver)
 		}

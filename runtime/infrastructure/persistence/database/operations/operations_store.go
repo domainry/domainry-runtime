@@ -355,7 +355,7 @@ func combineOperationsPredicate(left, right query.Predicate) query.Predicate {
 }
 
 func operationsReceiptColumns() []string {
-	return []string{"id", "workspace_id", "system_purpose", "kind", "permission", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "created_at", "started_at", "finished_at", "updated_at"}
+	return []string{"id", "workspace_id", "system_purpose", "kind", "action_key", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "created_at", "started_at", "finished_at", "updated_at"}
 }
 
 func operationsQuotedColumns(store *database.RuntimeStore, columns []string) string {
@@ -369,7 +369,7 @@ func operationsQuotedColumns(store *database.RuntimeStore, columns []string) str
 func operationsReceiptValues(receipt operationsmodel.OperationsReceipt) []any {
 	resultJSON, relatedJSON, evidenceJSON := operationsReceiptJSON(receipt)
 	command := receipt.Command
-	return []any{command.ID, command.Scope.WorkspaceID, command.Scope.SystemPurpose, command.Kind, command.Permission, command.Scope.ResourceType, command.Scope.ResourceID, command.IdempotencyKey, command.RequestFingerprint, command.RequestedBy, command.Reason, command.Reference, string(command.Status), receipt.StatusURL, resultJSON, receipt.ErrorCode, string(receipt.FailureClass), receipt.NextAction, relatedJSON, receipt.Correlation, evidenceJSON, command.CreatedAt.UTC().Format(time.RFC3339Nano), "", "", command.UpdatedAt.UTC().Format(time.RFC3339Nano)}
+	return []any{command.ID, command.Scope.WorkspaceID, command.Scope.SystemPurpose, command.Kind, command.ActionKey, command.Scope.ResourceType, command.Scope.ResourceID, command.IdempotencyKey, command.RequestFingerprint, command.RequestedBy, command.Reason, command.Reference, string(command.Status), receipt.StatusURL, resultJSON, receipt.ErrorCode, string(receipt.FailureClass), receipt.NextAction, relatedJSON, receipt.Correlation, evidenceJSON, command.CreatedAt.UTC().Format(time.RFC3339Nano), "", "", command.UpdatedAt.UTC().Format(time.RFC3339Nano)}
 }
 
 func operationsReceiptJSON(receipt operationsmodel.OperationsReceipt) (string, string, string) {
@@ -388,7 +388,7 @@ func operationsScanReceipt(scanner operationsScanner) (operationsmodel.Operation
 	var receipt operationsmodel.OperationsReceipt
 	var status, failureClass, resultJSON, relatedJSON, evidenceJSON, createdAt, startedAt, finishedAt, updatedAt string
 	command := &receipt.Command
-	err := scanner.Scan(&command.ID, &command.Scope.WorkspaceID, &command.Scope.SystemPurpose, &command.Kind, &command.Permission, &command.Scope.ResourceType, &command.Scope.ResourceID, &command.IdempotencyKey, &command.RequestFingerprint, &command.RequestedBy, &command.Reason, &command.Reference, &status, &receipt.StatusURL, &resultJSON, &receipt.ErrorCode, &failureClass, &receipt.NextAction, &relatedJSON, &receipt.Correlation, &evidenceJSON, &createdAt, &startedAt, &finishedAt, &updatedAt)
+	err := scanner.Scan(&command.ID, &command.Scope.WorkspaceID, &command.Scope.SystemPurpose, &command.Kind, &command.ActionKey, &command.Scope.ResourceType, &command.Scope.ResourceID, &command.IdempotencyKey, &command.RequestFingerprint, &command.RequestedBy, &command.Reason, &command.Reference, &status, &receipt.StatusURL, &resultJSON, &receipt.ErrorCode, &failureClass, &receipt.NextAction, &relatedJSON, &receipt.Correlation, &evidenceJSON, &createdAt, &startedAt, &finishedAt, &updatedAt)
 	if err != nil {
 		return receipt, err
 	}

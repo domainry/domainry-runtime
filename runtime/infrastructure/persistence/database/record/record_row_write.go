@@ -40,6 +40,12 @@ func appendRecordInsertMetadata(columns []string, values []any, record recordmod
 	if userID := strings.TrimSpace(record.UpdateBy); userID != "" {
 		columns, values = append(columns, "update_by"), append(values, userID)
 	}
+	if userID := strings.TrimSpace(record.OwnerUserID); userID != "" {
+		columns, values = append(columns, "owner_user_id"), append(values, userID)
+	}
+	if orgID := strings.TrimSpace(record.OwnerOrgID); orgID != "" {
+		columns, values = append(columns, "owner_org_id"), append(values, orgID)
+	}
 	return columns, values, nil
 }
 
@@ -56,6 +62,12 @@ func applyRecordUpdateBuilder(builder *query.UpdateBuilder, record recordmodel.R
 	}
 	if userID := strings.TrimSpace(record.UpdateBy); userID != "" {
 		builder.Set("update_by", userID)
+	}
+	if userID := strings.TrimSpace(record.OwnerUserID); userID != "" {
+		builder.Set("owner_user_id", userID)
+	}
+	if orgID := strings.TrimSpace(record.OwnerOrgID); orgID != "" {
+		builder.Set("owner_org_id", orgID)
 	}
 	return nil
 }
@@ -76,6 +88,14 @@ func appendRecordUpdateMetadata(store *database.RuntimeStore, assignments []stri
 	if userID := strings.TrimSpace(record.UpdateBy); userID != "" {
 		assignments = append(assignments, store.Identifier("update_by")+" = "+store.Placeholder(len(values)+1))
 		values = append(values, userID)
+	}
+	if userID := strings.TrimSpace(record.OwnerUserID); userID != "" {
+		assignments = append(assignments, store.Identifier("owner_user_id")+" = "+store.Placeholder(len(values)+1))
+		values = append(values, userID)
+	}
+	if orgID := strings.TrimSpace(record.OwnerOrgID); orgID != "" {
+		assignments = append(assignments, store.Identifier("owner_org_id")+" = "+store.Placeholder(len(values)+1))
+		values = append(values, orgID)
 	}
 	return assignments, values, nil
 }

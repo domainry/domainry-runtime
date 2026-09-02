@@ -198,7 +198,7 @@ func recordSDKFieldAccess(principal principalmodel.Principal, objectKey, fieldKe
 	}
 }
 
-func recordSDKResourceFacts(object definitionmodel.ObjectSchema, record recordmodel.Record) identitysdk.ResourceFacts {
+func recordSDKResourceFacts(_ definitionmodel.ObjectSchema, record recordmodel.Record) identitysdk.ResourceFacts {
 	facts := make(identitysdk.ResourceFacts, len(record.Data)+8)
 	for key, value := range record.Data {
 		facts[key] = value
@@ -208,23 +208,9 @@ func recordSDKResourceFacts(object definitionmodel.ObjectSchema, record recordmo
 	// fact itself still exists; preserve the key with an empty value so the
 	// predicate remains unconditional without fabricating an identifier.
 	facts["id"] = record.ID
-	copySDKCanonicalFact(facts, "owner_id", RecordOwnerFieldKey(object))
-	copySDKCanonicalFact(facts, "department_id", RecordOwnerDepartmentIDFieldKey(object))
-	copySDKCanonicalFact(facts, "department_path", RecordOwnerDepartmentPathFieldKey(object))
-	copySDKCanonicalFact(facts, "team_id", RecordTeamFieldKey(object))
-	copySDKCanonicalFact(facts, "store_id", RecordStoreFieldKey(object))
-	copySDKCanonicalFact(facts, "territory_id", RecordTerritoryFieldKey(object))
-	copySDKCanonicalFact(facts, "warehouse_id", RecordWarehouseFieldKey(object))
+	facts[RecordOwnerUserIDSystemField] = record.OwnerUserID
+	facts[RecordOwnerOrgIDSystemField] = record.OwnerOrgID
 	return facts
-}
-
-func copySDKCanonicalFact(facts identitysdk.ResourceFacts, canonical, source string) {
-	if strings.TrimSpace(source) == "" {
-		return
-	}
-	if value, exists := facts[source]; exists {
-		facts[canonical] = value
-	}
 }
 
 func normalizeSDKRecordAction(action string) string {

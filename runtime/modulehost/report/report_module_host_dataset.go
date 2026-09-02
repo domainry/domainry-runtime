@@ -43,11 +43,6 @@ func reportIncludeAuthorizationProjection(query recordmodel.RecordListQuery) rec
 			fields[field] = true
 		}
 	}
-	for _, field := range []string{query.OwnerField, query.DepartmentPathField, query.TeamField, query.StoreField, query.TerritoryField, query.WarehouseField} {
-		if field = strings.TrimSpace(field); field != "" {
-			fields[field] = true
-		}
-	}
 	query.SelectFields = query.SelectFields[:0]
 	for field := range fields {
 		query.SelectFields = append(query.SelectFields, field)

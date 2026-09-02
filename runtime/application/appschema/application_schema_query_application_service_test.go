@@ -36,3 +36,18 @@ func TestApplicationSchemaQueryApplicationServiceOwnsFeaturePermissionProjection
 		t.Fatalf("unknown principal error=%v", err)
 	}
 }
+
+func TestApplicationSchemaObjectRecordCountRequiresItsExactRuntimeAction(t *testing.T) {
+	service := &ApplicationSchemaApplicationService{runtime: localizedLifecycleRuntimeStub{snapshot: appschemamodel.ApplicationSchemaSnapshot{
+		Objects: []definitionmodel.ObjectSchema{{Key: "customer"}},
+	}}}
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}
+	accessfixture.Set(&principal, accessfixture.Bundle{Permissions: []string{"runtime.appschema.metadata_migration_plan"}})
+	if _, err := service.ApplicationSchemaObjectRecordCount(t.Context(), "customer", principal); apperror.CodeOf(err) != "auth.permission_denied" {
+		t.Fatalf("sibling Action error=%v", err)
+	}
+	accessfixture.Set(&principal, accessfixture.Bundle{Permissions: []string{metadataObjectRecordCountAction}})
+	if _, err := service.ApplicationSchemaObjectRecordCount(t.Context(), "customer", principal); apperror.CodeOf(err) == "auth.permission_denied" {
+		t.Fatalf("exact Action did not cross the authorization boundary: %v", err)
+	}
+}

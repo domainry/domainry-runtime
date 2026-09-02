@@ -1,18 +1,29 @@
 package record
 
 import (
-	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
+	"context"
 	"testing"
 
-	identitysdk "github.com/domainry/domainry-identity-sdk"
-
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
-
 	"github.com/domainry/domainry-foundation/apperror"
+	identitysdk "github.com/domainry/domainry-identity-sdk"
+	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
+	runtimeactioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
+
+func businessProfileAuthorizedContext(t *testing.T, endpointIdentity string) context.Context {
+	t.Helper()
+	definition, err := endpointmodel.AuthorizationActionDefinition(endpointmodel.EndpointContracts[endpointIdentity])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return runtimeactioncontract.WithAuthorizedAction(t.Context(), definition)
+}
 
 func TestBusinessProfileDeactivationFieldContract(t *testing.T) {
 	extension := profilebindingmodel.Binding{
@@ -73,18 +84,18 @@ func TestBusinessProfileDeactivationFieldContract(t *testing.T) {
 	}
 }
 
-func TestDeactivateBusinessProfileAuthorizesDedicatedDutyFirst(t *testing.T) {
+func TestDeactivateBusinessProfileRequiresWorkspaceAndBindingDefinition(t *testing.T) {
 	service := &RecordApplicationService{}
 	if _, err := service.DeactivateBusinessProfile(t.Context(), "member_profile", "member-1", "cancelled", "", "key", principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("unknown principal err=%v", err)
 	}
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}
-	if _, err := service.DeactivateBusinessProfile(t.Context(), "member_profile", "member-1", "cancelled", "", "key", principal); apperror.CodeOf(err) != "backend.identity.profile_binding_manage_required" {
-		t.Fatalf("missing duty err=%v", err)
+	if _, err := service.DeactivateBusinessProfile(t.Context(), "member_profile", "member-1", "cancelled", "", "key", principal); apperror.CodeOf(err) != "backend.identity.profile_binding_unavailable" {
+		t.Fatalf("missing binding err=%v", err)
 	}
 }
 
-func TestReactivateBusinessProfileAuthorizesDedicatedDutyAndIdempotencyFirst(t *testing.T) {
+func TestReactivateBusinessProfileRequiresAuthorizedActionProvenance(t *testing.T) {
 	service := &RecordApplicationService{identityProfileExtensions: func() []profilebindingmodel.Binding {
 		return []profilebindingmodel.Binding{{
 			ObjectKey: "member_profile",
@@ -97,10 +108,9 @@ func TestReactivateBusinessProfileAuthorizesDedicatedDutyAndIdempotencyFirst(t *
 		t.Fatalf("unknown principal err=%v", err)
 	}
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}
-	if _, err := service.ReactivateBusinessProfile(t.Context(), "member_profile", "member-1", "active", "", "key", principal); apperror.CodeOf(err) != "backend.identity.profile_binding_manage_required" {
-		t.Fatalf("missing duty err=%v", err)
+	if _, err := service.ReactivateBusinessProfile(t.Context(), "member_profile", "member-1", "active", "", "key", principal); apperror.CodeOf(err) != "backend.action.authorization_context_required" {
+		t.Fatalf("missing Action provenance err=%v", err)
 	}
-	accessfixture.Set(&principal, accessfixture.Bundle{Permissions: []string{"identity.profile_binding.manage"}})
 	if _, err := service.ReactivateBusinessProfile(t.Context(), "member_profile", "member-1", "inactive", "", "key", principal); apperror.CodeOf(err) != "backend.identity.profile_reactivation_status_inactive" {
 		t.Fatalf("inactive status err=%v", err)
 	}
@@ -113,14 +123,14 @@ func TestDeactivateBusinessProfileValidatesIdempotencyAfterDefinition(t *testing
 	service := &RecordApplicationService{identityProfileExtensions: func() []profilebindingmodel.Binding {
 		return []profilebindingmodel.Binding{{ObjectKey: "member_profile", BusinessIdentity: profilebindingmodel.BusinessIdentityBinding{StatusField: "status", ActiveStatusValues: []string{"active"}}}}
 	}}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}, accessfixture.Bundle{Permissions: []string{"identity.profile_binding.manage"}})
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}
 	if _, err := service.DeactivateBusinessProfile(t.Context(), "member_profile", "member", "inactive", "", "", principal); apperror.CodeOf(err) != "backend.idempotency.key_required" {
 		t.Fatalf("err=%v", err)
 	}
 }
 
 func TestBusinessProfileLifecycleDefinitionErrorsSkipsAndExpectedRevision(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "admin"}}, recordFullAccessBundle("identity.profile_binding.manage"))
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "admin"}}, recordFullAccessBundle())
 	if _, err := (&RecordApplicationService{}).DeactivateBusinessProfile(t.Context(), "profile", "id", "inactive", "", "key", principal); apperror.CodeOf(err) != "backend.identity.profile_binding_unavailable" {
 		t.Fatalf("definition err=%v", err)
 	}
@@ -134,17 +144,31 @@ func TestBusinessProfileLifecycleDefinitionErrorsSkipsAndExpectedRevision(t *tes
 		return []profilebindingmodel.Binding{{ObjectKey: "profile", BusinessIdentity: binding}}
 	}
 	service := &RecordApplicationService{update: NewRecordUpdateApplicationService(dependencies), identityProfileExtensions: applicationSource}
-	if _, err := service.DeactivateBusinessProfile(t.Context(), "profile", "profile-1", "inactive", " revision-1 ", "deactivate-key", principal); apperror.CodeOf(err) != "backend.idempotency.receipt_unavailable" {
+	deactivateContext := businessProfileAuthorizedContext(t, "POST /objects/{objectKey}/records/{recordID}/deactivate-profile")
+	reactivateContext := businessProfileAuthorizedContext(t, "POST /objects/{objectKey}/records/{recordID}/reactivate-profile")
+	if _, err := service.DeactivateBusinessProfile(deactivateContext, "profile", "profile-1", "inactive", " revision-1 ", "deactivate-key", principal); apperror.CodeOf(err) != "backend.idempotency.receipt_unavailable" {
 		t.Fatalf("deactivate err=%v", err)
 	}
-	if _, err := service.ReactivateBusinessProfile(t.Context(), "profile", "profile-1", "active", " revision-1 ", "reactivate-key", principal); apperror.CodeOf(err) != "backend.idempotency.receipt_unavailable" {
+	if _, err := service.ReactivateBusinessProfile(reactivateContext, "profile", "profile-1", "active", " revision-1 ", "reactivate-key", principal); apperror.CodeOf(err) != "backend.idempotency.receipt_unavailable" {
 		t.Fatalf("reactivate err=%v", err)
 	}
-	if _, err := service.DeactivateBusinessProfile(t.Context(), "profile", "profile-1", "inactive", "", "deactivate-key-empty-revision", principal); apperror.CodeOf(err) != "backend.idempotency.receipt_unavailable" {
+	if _, err := service.DeactivateBusinessProfile(deactivateContext, "profile", "profile-1", "inactive", "", "deactivate-key-empty-revision", principal); apperror.CodeOf(err) != "backend.idempotency.receipt_unavailable" {
 		t.Fatalf("deactivate empty revision err=%v", err)
 	}
-	if _, err := service.ReactivateBusinessProfile(t.Context(), "profile", "profile-1", "active", "", "reactivate-key-empty-revision", principal); apperror.CodeOf(err) != "backend.idempotency.receipt_unavailable" {
+	if _, err := service.ReactivateBusinessProfile(reactivateContext, "profile", "profile-1", "active", "", "reactivate-key-empty-revision", principal); apperror.CodeOf(err) != "backend.idempotency.receipt_unavailable" {
 		t.Fatalf("reactivate empty revision err=%v", err)
+	}
+}
+
+func TestBusinessProfileActionMutationContextPreservesGeneratedActionAndLimitsField(t *testing.T) {
+	ctx := businessProfileAuthorizedContext(t, "POST /objects/{objectKey}/records/{recordID}/deactivate-profile")
+	ctx, err := businessProfileActionMutationContext(ctx, " member_profile ", " status ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	invocation, ok := recordmutation.MutationInvocationFromContext(ctx)
+	if !ok || invocation.ActionKey != "runtime.records.deactivate_business_profile" || len(invocation.EffectAuthority) != 1 || len(invocation.EffectAuthority["member_profile"]) != 1 || invocation.EffectAuthority["member_profile"][0] != "status" {
+		t.Fatalf("invocation=%#v", invocation)
 	}
 }
 

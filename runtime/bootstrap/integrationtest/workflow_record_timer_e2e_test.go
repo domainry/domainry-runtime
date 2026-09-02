@@ -38,7 +38,7 @@ func TestWorkflowWaitDurationUsesDurableRecordTimerAndResumesAfterFire(t *testin
 		Edges: []definitionmodel.WorkflowGraphEdge{{ID: "trigger-wait", Source: "trigger", Target: "wait"}},
 	}}
 	service := newWorkflowProcessTestService(t, store, workflow, identityStore)
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "operator", Permissions: []string{"workflow.run"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "operator", Permissions: []string{"workflow." + workflow.Key + ".run"}})
 	process, err := runWorkflowProcess(t, store, service, workflow.Key, map[string]any{"object_key": "case", "record_id": "case-1"}, principal)
 	if err != nil || process.Status != "waiting" || len(process.CurrentNodeIDs) != 1 || process.CurrentNodeIDs[0] != "wait" {
 		t.Fatalf("waiting process=%#v err=%v", process, err)
@@ -91,7 +91,7 @@ func TestWorkflowApprovalDeadlineUsesDurableRecordTimerForEscalation(t *testing.
 		}, Edges: []definitionmodel.WorkflowGraphEdge{{ID: "trigger-approval", Source: "trigger", Target: "approval"}},
 	}}
 	service := newWorkflowProcessTestService(t, store, workflow, identityStore)
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "operator", Permissions: []string{"workflow.run"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "operator", Permissions: []string{"workflow." + workflow.Key + ".run"}})
 	process, err := runWorkflowProcess(t, store, service, workflow.Key, map[string]any{"object_key": "request", "record_id": "request-1"}, principal)
 	if err != nil || process.Status != "waiting" {
 		t.Fatalf("approval process=%#v err=%v", process, err)

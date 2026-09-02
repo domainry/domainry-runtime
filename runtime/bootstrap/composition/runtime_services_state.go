@@ -98,7 +98,6 @@ type runtimeAssembly struct {
 	*recordservice.RecordDomainService
 	recordRuntimeState
 	*actionruntime.ActionExecutionRuntime
-	internalMutations                   *recordapplication.RecordInternalMutationApplicationService
 	businessSystemService               *businesssystemapplication.BusinessSystemApplicationService
 	publicationHandoffService           *publicationhandoff.PublicationHandoffApplicationService
 	integrationPublicationWorkerRepo    publicationrepository.WorkerRepository

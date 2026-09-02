@@ -39,7 +39,6 @@ func addObjectOpenAPIPaths(paths map[string]any, object definitionmodel.ObjectSc
 }
 
 func addRuntimeContractOpenAPIPaths(paths map[string]any) {
-	addPartyOpenAPIPaths(paths)
 	paths["/i18n/locales"] = map[string]any{
 		"get": openAPIOperation("listI18nLocales", "I18n", "Available runtime locales", openAPIPublicSecurity(), openAPIJSONResponse("Locales", openAPIArray(openAPIObject(nil)))),
 	}
@@ -57,7 +56,7 @@ func addRuntimeContractOpenAPIPaths(paths map[string]any) {
 		"delete": openAPIOperation("deleteObjectRecord", "Objects", "Delete an object record", openAPIAdminSecurity(), openAPIPathParameter("objectKey", "Object key"), openAPIPathParameter("recordID", "Record ID"), openAPIJSONResponse("Delete result", openAPIObject(nil))),
 	}
 	paths["/objects/{objectKey}/records/{recordID}/deactivate-profile"] = map[string]any{
-		"post": openAPIOperation("deactivateBusinessProfile", "Objects", "Deactivate one business profile without terminating Workforce or disabling its login", openAPIAdminSecurity(), openAPIPathParameter("objectKey", "Profile object key"), openAPIPathParameter("recordID", "Profile record ID"), openAPIJSONRequest(openAPIRequiredObject([]string{"inactive_status", "reason"}, map[string]any{"inactive_status": map[string]any{"type": "string"}, "expected_updated_at": map[string]any{"type": "string"}, "reason": map[string]any{"type": "string"}})), openAPIJSONResponse("Deactivated profile", openAPIObject(nil))),
+		"post": openAPIOperation("deactivateBusinessProfile", "Objects", "Deactivate one business profile without disabling its Identity login", openAPIAdminSecurity(), openAPIPathParameter("objectKey", "Profile object key"), openAPIPathParameter("recordID", "Profile record ID"), openAPIJSONRequest(openAPIRequiredObject([]string{"inactive_status", "reason"}, map[string]any{"inactive_status": map[string]any{"type": "string"}, "expected_updated_at": map[string]any{"type": "string"}, "reason": map[string]any{"type": "string"}})), openAPIJSONResponse("Deactivated profile", openAPIObject(nil))),
 	}
 	paths["/objects/{objectKey}/records/{recordID}/reactivate-profile"] = map[string]any{
 		"post": openAPIOperation("reactivateBusinessProfile", "Objects", "Reactivate one business profile and only its still-valid binding entitlements", openAPIAdminSecurity(), openAPIPathParameter("objectKey", "Profile object key"), openAPIPathParameter("recordID", "Profile record ID"), openAPIJSONRequest(openAPIRequiredObject([]string{"active_status", "reason"}, map[string]any{"active_status": map[string]any{"type": "string"}, "expected_updated_at": map[string]any{"type": "string"}, "reason": map[string]any{"type": "string"}})), openAPIJSONResponse("Reactivated profile", openAPIObject(nil))),

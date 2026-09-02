@@ -51,10 +51,7 @@ func (s *notificationDeliveryLedgerStub) ListPublicationMessages(_ context.Conte
 }
 
 func TestNotificationDeliveryLedgerProjectsOnlyNotificationOutbox(t *testing.T) {
-	handler, response, principal := newNotificationHTTPHandler(&notificationHTTPRepository{})
-	accessfixture.Mutate(principal, func(role *accessfixture.Bundle) {
-		role.Permissions = append(role.Permissions, "integration.audit.view")
-	})
+	handler, response, _ := newNotificationHTTPHandler(&notificationHTTPRepository{})
 	ledger := &notificationDeliveryLedgerStub{values: []publicationmodel.Message{
 		{ID: "notification-1", WorkspaceID: "workspace-1", ConnectorKey: "email", ConnectionKey: "primary", Operation: "send_email", Status: "delivered", Payload: map[string]any{"template_key": "account.welcome", "recipient": "person@example.com"}, ResponseRef: "provider-1", AttemptCount: 1},
 		{ID: "automation-1", ConnectorKey: "__automation__", Operation: "record.after_create", Status: "queued", Payload: map[string]any{"rule_key": "rule-1"}},
@@ -80,10 +77,7 @@ func TestNotificationDeliveryLedgerProjectsOnlyNotificationOutbox(t *testing.T) 
 }
 
 func TestNotificationDeliveryLedgerDefaultsMissingLimit(t *testing.T) {
-	handler, _, principal := newNotificationHTTPHandler(&notificationHTTPRepository{})
-	accessfixture.Mutate(principal, func(role *accessfixture.Bundle) {
-		role.Permissions = append(role.Permissions, "integration.audit.view")
-	})
+	handler, _, _ := newNotificationHTTPHandler(&notificationHTTPRepository{})
 	ledger := &notificationDeliveryLedgerStub{}
 	handler.deliveryLedger = ledger
 	handler.listDeliveries(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/notifications/deliveries", nil))
@@ -92,31 +86,16 @@ func TestNotificationDeliveryLedgerDefaultsMissingLimit(t *testing.T) {
 	}
 }
 
-func TestNotificationDeliveryLedgerPermissionAndFailureBoundaries(t *testing.T) {
-	t.Run("permission required", func(t *testing.T) {
-		handler, response, principal := newNotificationHTTPHandler(&notificationHTTPRepository{})
-		accessfixture.Set(principal, accessfixture.Bundle{})
-		handler.deliveryLedger = &notificationDeliveryLedgerStub{}
-		handler.listDeliveries(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/notifications/deliveries", nil))
-		if response.status != http.StatusForbidden || response.code != "auth.permission_denied" {
-			t.Fatalf("response = status %d code %q", response.status, response.code)
-		}
-	})
+func TestNotificationDeliveryLedgerFailureBoundaries(t *testing.T) {
 	t.Run("ledger unavailable", func(t *testing.T) {
-		handler, response, principal := newNotificationHTTPHandler(&notificationHTTPRepository{})
-		accessfixture.Mutate(principal, func(role *accessfixture.Bundle) {
-			role.Permissions = append(role.Permissions, "integration.audit.view")
-		})
+		handler, response, _ := newNotificationHTTPHandler(&notificationHTTPRepository{})
 		handler.listDeliveries(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/notifications/deliveries", nil))
 		if response.status != http.StatusServiceUnavailable || response.code != "backend.notification.delivery_ledger_unavailable" {
 			t.Fatalf("response = status %d code %q", response.status, response.code)
 		}
 	})
 	t.Run("ledger failure", func(t *testing.T) {
-		handler, response, principal := newNotificationHTTPHandler(&notificationHTTPRepository{})
-		accessfixture.Mutate(principal, func(role *accessfixture.Bundle) {
-			role.Permissions = append(role.Permissions, "integration.audit.view")
-		})
+		handler, response, _ := newNotificationHTTPHandler(&notificationHTTPRepository{})
 		failure := errors.New("ledger failed")
 		handler.deliveryLedger = &notificationDeliveryLedgerStub{err: failure}
 		handler.listDeliveries(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/notifications/deliveries?limit=999", nil))

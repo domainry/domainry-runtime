@@ -13,6 +13,7 @@ import (
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
 
@@ -92,7 +93,7 @@ func (s runtimeIntegrationTriggerSink) Trigger(ctx context.Context, request inte
 		setIntegrationTriggerDefault(payload, "integration_event_id", request.EventID)
 		setIntegrationTriggerDefault(payload, "integration_mapping_key", request.MappingKey)
 		setIntegrationTriggerDefault(payload, "integration_idempotency_key", request.IdempotencyKey)
-		executionPrincipal := principal.WithExactSystemCapabilities("workflow.run." + strings.TrimSpace(request.Target.WorkflowKey))
+		executionPrincipal := principal.WithExactSystemCapabilities(workflowcontract.RunActionKey(request.Target.WorkflowKey))
 		result, runErr := s.workflows.RunIntegrationWorkflow(ctx, request.Target.WorkflowKey, payload, executionPrincipal)
 		receipt := runtimeIntegrationReceipt(request, result.Execution.ID, result.Status, "")
 		if runErr != nil {

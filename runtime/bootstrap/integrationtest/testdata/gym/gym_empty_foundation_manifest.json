@@ -8,7 +8,7 @@
     {
       "key": "admin",
       "name": "Administrator",
-      "permissions": ["workspace.admin"],
+      "permissions": ["runtime.appschema.validate_application_definition"],
       "record_scope": "all_records"
     }
   ]

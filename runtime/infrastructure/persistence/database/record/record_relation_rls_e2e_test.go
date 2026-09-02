@@ -224,6 +224,28 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 	}
 }
 
+func sqliteExplainQueryPlan(t *testing.T, store *RuntimeStore, query string, args ...any) string {
+	t.Helper()
+	rows, err := store.DB().Query("EXPLAIN QUERY PLAN "+query, args...)
+	if err != nil {
+		t.Fatalf("explain relation-aware query: %v", err)
+	}
+	defer rows.Close()
+	parts := []string{}
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+			t.Fatalf("scan explain plan: %v", err)
+		}
+		parts = append(parts, detail)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("read explain plan: %v", err)
+	}
+	return strings.Join(parts, "\n")
+}
+
 func assertRelationScopeAcrossReadExportAndReport(t *testing.T, reader *recordservice.RecordReadDomainService, exporter *recordapplication.RecordExportApplicationService, policy *recordservice.RecordQueryPolicyDomainService, repository recordrepository.RecordRepository, principal principalmodel.Principal, objectKey, allowedID, deniedID, reportField string) {
 	t.Helper()
 	page, err := reader.ListRecords(t.Context(), objectKey, recordmodel.RecordListQuery{Page: 1, PageSize: 20}, principal)

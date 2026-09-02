@@ -91,7 +91,7 @@ func migrateLegacyFrontendEnvelope(envelope map[string]json.RawMessage, report *
 		report.Warnings = append(report.Warnings, ManifestMigrationWarning{
 			Code:    "manifest.v1.identity_payload_removed",
 			Path:    "/identity_bootstrap",
-			Message: "legacy Identity bootstrap data was removed; provision users, departments, roles, and policy through Identity",
+			Message: "legacy Identity bootstrap data was removed; provision users, organization units, roles, and policy through Identity",
 		})
 	}
 	if _, exists := envelope["users"]; exists {

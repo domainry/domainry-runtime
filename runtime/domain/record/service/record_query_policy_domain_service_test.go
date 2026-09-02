@@ -48,8 +48,8 @@ func TestQueryPolicyServiceNormalizesExplicitListQuery(t *testing.T) {
 	if len(query.Sort) != 2 || query.Sort[0].Field != "name" || query.Sort[0].Direction != "desc" || query.Sort[1].Field != "id" || query.Sort[1].Direction != "asc" {
 		t.Fatalf("sort normalization = %#v", query.Sort)
 	}
-	if query.PrincipalUserID != "user-1" || query.PrincipalWorkspaceID != "workspace-1" {
-		t.Fatalf("principal projection = %#v", query)
+	if query.Scope != "custom" || query.ScopeExpression == nil {
+		t.Fatalf("authorization projection = %#v", query)
 	}
 }
 
@@ -69,25 +69,6 @@ func TestQueryPolicyServiceNormalizesBoundedInFilters(t *testing.T) {
 	}
 }
 
-func TestQueryPolicyServiceSupportsReportingScopes(t *testing.T) {
-	object := definitionmodel.ObjectSchema{Key: "deal", Fields: []definitionmodel.FieldSchema{{Key: "owner", Type: "user", Config: map[string]any{"scope_owner": true}}}}
-	role := accessfixture.Bundle{Key: "manager", Permissions: []string{"deal.read", "deal.update"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "deal", Read: true, Write: true, Scope: "subordinates"}}}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "manager-1", ReportingUserIDs: []string{"employee-1"}}}, role)
-	service := NewRecordQueryPolicyDomainService(RecordQueryPolicyDependencies{})
-	if service.CanAccessRecord(principal, object, recordmodel.Record{Data: map[string]any{"owner": "manager-1"}}) {
-		t.Fatal("subordinates scope should exclude the principal's own record")
-	}
-	if !service.CanWriteRecordScope(principal, object, map[string]any{"owner": "employee-1"}) {
-		t.Fatal("subordinate record should be writable")
-	}
-	if service.CanAccessRecord(principal, object, recordmodel.Record{Data: map[string]any{"owner": "other"}}) {
-		t.Fatal("unrelated record should not be readable")
-	}
-	if service.CanWriteRecordScope(principal, object, map[string]any{"owner": "manager-1"}) {
-		t.Fatal("subordinates scope should exclude the principal's own record")
-	}
-}
-
 func TestQueryPolicyServiceAuthorizesCreateCandidateThroughPersistedRelationScope(t *testing.T) {
 	order := definitionmodel.ObjectSchema{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "warehouse_id", Type: "relation"}}}
 	reservation := definitionmodel.ObjectSchema{Key: "reservation", Fields: []definitionmodel.FieldSchema{{Key: "order_id", Type: "relation", Config: map[string]any{"object_key": "order"}}}}
@@ -96,9 +77,9 @@ func TestQueryPolicyServiceAuthorizesCreateCandidateThroughPersistedRelationScop
 		Path: []accessfixture.RelationSegmentFixture{{
 			Direction: "forward", RelationFieldKey: "order_id", TargetObjectKey: "order",
 		}},
-		FieldKey: "warehouse_id", ValueSource: "actor_claim", ClaimKey: "warehouse_ids",
+		FieldKey: "warehouse_id", ValueSource: "literal", Values: []string{"warehouse-north"},
 	}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", OrganizationScopes: identitysdk.OrganizationScopes{WarehouseIDs: []string{"warehouse-north"}}}}, accessfixture.Bundle{
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{
 		Permissions:  []string{"reservation.read", "reservation.update"},
 		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "reservation", Scope: "custom", Read: true, Write: true, Predicate: predicate}},
 	})

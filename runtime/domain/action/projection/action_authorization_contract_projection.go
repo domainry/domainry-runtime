@@ -49,7 +49,7 @@ func AuthorizationActionDefinition(schema definitionmodel.ActionSchema, context 
 		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationExactRolePermission},
 		NonHTTP:       []actioncontract.NonHTTPBinding{{Kind: "runtime_action", InvocationKey: strings.TrimSpace(schema.Key)}},
 		Permission: &actioncontract.PermissionDefinition{
-			Key: permissionKey, Owner: owner, ResourceKey: resourceKey, ActionKey: operationKey,
+			Key: permissionKey, Owner: owner, ResourceKey: resourceKey, OperationKey: operationKey,
 			Label: label, Category: strings.TrimSpace(context.PermissionCategory), LifecycleStatus: permissionLifecycle,
 		},
 		EffectClass: actioncontract.EffectWrite, RiskLevel: actioncontract.RiskLevel(actionmodel.ActionRiskLevel(schema)),

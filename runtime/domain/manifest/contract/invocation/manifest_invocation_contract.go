@@ -12,6 +12,7 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	bindingcontract "github.com/domainry/domainry-runtime/runtime/domain/manifest/contract/binding"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 )
 
 type WorkflowEntryMode string
@@ -69,7 +70,7 @@ func ValidateActionPermission(action definitionmodel.ActionSchema, principal pri
 	if !principal.Known {
 		return []Issue{{Code: "invocation.action_permission_denied"}}
 	}
-	if !principal.HasPermission(strings.TrimSpace(action.Key)) {
+	if !principal.HasExactPermission(strings.TrimSpace(action.Key)) {
 		return []Issue{{Code: "invocation.action_permission_denied", Expected: strings.TrimSpace(action.Key), Actual: strings.TrimSpace(principal.RoleKey)}}
 	}
 	return nil
@@ -107,8 +108,9 @@ func ValidateWorkflowTarget(workflow definitionmodel.WorkflowSchema, mode Workfl
 }
 
 func ValidateWorkflowPermission(workflow definitionmodel.WorkflowSchema, principal principalmodel.Principal) []Issue {
-	if !principal.Known || !(principal.HasPermission("ops.workflow.run") || principal.Allows("workflow", "run") || principal.HasPermission("workflow.run."+strings.TrimSpace(workflow.Key))) {
-		return []Issue{{Code: "invocation.workflow_permission_denied", Expected: "workflow.run|workflow.run." + strings.TrimSpace(workflow.Key), Actual: strings.TrimSpace(principal.RoleKey)}}
+	required := workflowcontract.RunActionKey(workflow.Key)
+	if !principal.Known || required == "" || !principal.HasExactPermission(required) {
+		return []Issue{{Code: "invocation.workflow_permission_denied", Expected: required, Actual: strings.TrimSpace(principal.RoleKey)}}
 	}
 	return nil
 }

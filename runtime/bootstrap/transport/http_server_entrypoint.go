@@ -3,11 +3,11 @@ package transport
 import (
 	"context"
 
+	"github.com/domainry/domainry-foundation/ratelimit"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
-	"github.com/domainry/domainry-foundation/ratelimit"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 )
 

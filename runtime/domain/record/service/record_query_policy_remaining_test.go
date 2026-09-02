@@ -121,7 +121,7 @@ func TestQueryPolicyReportSnapshotAccessMatrix(t *testing.T) {
 }
 
 func TestQueryPolicyFallbackAndReportingOwnerEdges(t *testing.T) {
-	object := definitionmodel.ObjectSchema{Key: "deal", Fields: []definitionmodel.FieldSchema{{Key: "owner", Type: "user", Config: map[string]any{"scope_owner": true}}}}
+	object := definitionmodel.ObjectSchema{Key: "deal", Fields: []definitionmodel.FieldSchema{{Key: "owner", Type: "user"}}}
 	service := NewRecordQueryPolicyDomainService(RecordQueryPolicyDependencies{})
 	all := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "manager"}}, accessfixture.Bundle{
 		Permissions:  []string{"deal.read", "deal.update"},
@@ -133,19 +133,7 @@ func TestQueryPolicyFallbackAndReportingOwnerEdges(t *testing.T) {
 	if !service.CanWriteRecordScope(all, object, map[string]any{"owner": "other"}) {
 		t.Fatal("all-record fallback denied write")
 	}
-	reporting := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "manager", ReportingUserIDs: []string{"employee"}}}, accessfixture.Bundle{
-		Permissions:  []string{"deal.read", "deal.update"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "deal", Read: true, Write: true, Scope: "subordinates"}},
-	})
-	if service.CanAccessRecord(reporting, definitionmodel.ObjectSchema{Key: "deal"}, recordmodel.Record{Data: map[string]any{}}) {
-		t.Fatal("reporting scope accepted object without owner field")
-	}
-	if service.CanAccessRecord(reporting, object, recordmodel.Record{Data: map[string]any{"owner": ""}}) {
-		t.Fatal("reporting scope accepted empty owner")
-	}
-	if !service.CanAccessRecord(reporting, object, recordmodel.Record{Data: map[string]any{"owner": "employee"}}) {
-		t.Fatal("reporting scope denied subordinate")
-	}
+
 	if objects := service.objects(); objects != nil {
 		t.Fatalf("nil object dependency returned %#v", objects)
 	}

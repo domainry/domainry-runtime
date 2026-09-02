@@ -7,23 +7,19 @@ import (
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 )
 
-func TestCrossWorkspaceOperationsRequireIndependentPermissionAndAudit(t *testing.T) {
+func TestCrossWorkspaceOperationsRequireKnownPurposeAndAudit(t *testing.T) {
 	now := time.Date(2026, 7, 19, 10, 0, 0, 0, time.UTC)
-	for purpose, permission := range crossWorkspacePermissions {
-		command := operationsmodel.CrossWorkspaceCommand{ID: "op-1", Purpose: purpose, Permission: permission, SourceWorkspaceID: "workspace-a", TargetWorkspaceID: "workspace-b", ActorID: "operator", Reason: "incident recovery", Reference: "INC-42", RequestedAt: now}
+	for _, purpose := range []operationsmodel.CrossWorkspacePurpose{operationsmodel.CrossWorkspaceReport, operationsmodel.CrossWorkspaceMigration, operationsmodel.CrossWorkspaceSupport} {
+		command := operationsmodel.CrossWorkspaceCommand{ID: "op-1", Purpose: purpose, SourceWorkspaceID: "workspace-a", TargetWorkspaceID: "workspace-b", ActorID: "operator", Reason: "incident recovery", Reference: "INC-42", RequestedAt: now}
 		if err := OperationsValidateCrossWorkspaceCommand(command, now); err != nil {
 			t.Fatalf("purpose %s rejected: %v", purpose, err)
-		}
-		command.Permission = "workspace.admin"
-		if err := OperationsValidateCrossWorkspaceCommand(command, now); err == nil {
-			t.Fatalf("ordinary workspace permission accepted for %s", purpose)
 		}
 	}
 }
 
 func TestCrossWorkspaceOperationsRejectWildcardAndUncontrolledBreakGlass(t *testing.T) {
 	now := time.Date(2026, 7, 19, 10, 0, 0, 0, time.UTC)
-	command := operationsmodel.CrossWorkspaceCommand{ID: "op-1", Purpose: operationsmodel.CrossWorkspaceSupport, Permission: "runtime.cross_workspace.support", SourceWorkspaceID: "workspace-a", TargetWorkspaceID: "workspace-b", ActorID: "operator", Reason: "incident", Reference: "INC-42", RequestedAt: now}
+	command := operationsmodel.CrossWorkspaceCommand{ID: "op-1", Purpose: operationsmodel.CrossWorkspaceSupport, SourceWorkspaceID: "workspace-a", TargetWorkspaceID: "workspace-b", ActorID: "operator", Reason: "incident", Reference: "INC-42", RequestedAt: now}
 	command.TargetWorkspaceID = "*"
 	if err := OperationsValidateCrossWorkspaceCommand(command, now); err == nil {
 		t.Fatal("workspace wildcard accepted")

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationsrepository "github.com/domainry/domainry-runtime/runtime/domain/operations/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -53,7 +54,7 @@ func (s *OperationsControlApplicationService) Set(ctx context.Context, request O
 	}
 	operationKind, resourceType := operationsControlOperation(request.Kind, request.Active)
 	receipt, decision, err := s.operations.SubmitSystem(ctx, OperationsSubmitRequest{
-		Kind: operationKind, Permission: operationsDefinitionPermission(operationKind), ResourceType: resourceType, ResourceID: request.Owner,
+		Kind: operationKind, ResourceType: resourceType, ResourceID: request.Owner,
 		Reason: request.Reason, Reference: request.Reference,
 		Payload: map[string]any{"active": request.Active, "expected_revision": request.ExpectedRevision},
 	}, key, operationsmodel.OperationsSystemPurposeRuntimeControl, principal)
@@ -115,8 +116,7 @@ func (s *OperationsControlApplicationService) Set(ctx context.Context, request O
 }
 
 func (s *OperationsControlApplicationService) List(ctx context.Context, kind operationsmodel.OperationsControlKind, limit int, principal principalmodel.Principal) ([]operationsmodel.OperationsControl, error) {
-	operationKind, _ := operationsControlOperation(kind, true)
-	if err := operationsAuthorize(principal, operationsDefinitionPermission(operationKind)); err != nil {
+	if err := operationsAuthorize(principal, operationscontract.ActionListControls); err != nil {
 		return nil, err
 	}
 	return s.repository.ListOperationsControls(ctx, operationsmodel.OperationsSystemPurposeRuntimeControl, kind, limit)

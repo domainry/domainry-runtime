@@ -75,8 +75,6 @@ func TestOpenAPISpecCoversFrontendRuntimeContract(t *testing.T) {
 		"/automation-rules/{ruleKey}":                                              {"get"},
 		"/automation-rules/{ruleKey}/simulate":                                     {"post"},
 		"/objects/{objectKey}/records/{recordID}/reactivate-profile":               {"post"},
-		"/party":           {"get"},
-		"/party/{partyID}": {"get", "put"},
 	}
 
 	for _, removed := range []string{

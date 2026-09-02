@@ -19,7 +19,6 @@ import (
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
-	partysdk "github.com/domainry/domainry-party-sdk"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
@@ -51,7 +50,6 @@ type Runtime struct {
 	integrationMode      integrationsdk.DeploymentMode
 	integrationBinding   integrationsdk.Binding
 	integrationWorkers   integrationsdk.LocalWorkers
-	partyBinding         partysdk.Binding
 	dataExchangeBinding  dataexchangesdk.Binding
 	lifecycleBinding     lifecyclesdk.Binding
 	manifest             manifestmodel.ManifestSchema
@@ -101,13 +99,4 @@ func (a *Runtime) replaceRuntimeReleaseLease(lease deploymentmodel.RuntimeReleas
 	a.releaseMu.Lock()
 	defer a.releaseMu.Unlock()
 	a.releaseLease = lease
-}
-
-// PartyOrganizationScopes exposes only the Party-owned fact projection needed
-// by Identity assembly; it does not expose Party stores or domain services.
-func PartyOrganizationScopes(runtime *Runtime) partysdk.OrganizationScopes {
-	if runtime == nil || runtime.partyBinding == nil {
-		return nil
-	}
-	return runtime.partyBinding.OrganizationScopes()
 }

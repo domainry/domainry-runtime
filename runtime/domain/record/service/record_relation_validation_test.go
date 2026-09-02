@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	partymodel "github.com/domainry/domainry-party-sdk/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -29,44 +28,18 @@ func (r *relationRepositoryProbe) GetRecord(context.Context, string, definitionm
 
 type identityLookupProbe struct {
 	identityDirectoryNoop
-	found           bool
-	err             error
-	departmentFound bool
-	departmentErr   error
-	workforce       []identitysdk.WorkforceEntry
-	workforceErr    error
-}
-
-type identityReferenceOnlyProbe struct{ identityDirectoryNoop }
-
-func (identityReferenceOnlyProbe) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
-	return identitysdk.User{}, false, nil
-}
-
-func (identityReferenceOnlyProbe) FindDepartment(context.Context, identitysdk.DepartmentLookup) (identitysdk.Department, bool, error) {
-	return identitysdk.Department{}, false, nil
-}
-
-type partyLookupProbe struct {
-	value partymodel.Aggregate
-	found bool
-	err   error
-}
-
-func (p partyLookupProbe) Get(context.Context, string) (partymodel.Aggregate, bool, error) {
-	return p.value, p.found, p.err
+	found                 bool
+	err                   error
+	organizationUnitFound bool
+	organizationUnitErr   error
 }
 
 func (p identityLookupProbe) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
 	return identitysdk.User{ID: "user-1"}, p.found, p.err
 }
 
-func (p identityLookupProbe) FindDepartment(context.Context, identitysdk.DepartmentLookup) (identitysdk.Department, bool, error) {
-	return identitysdk.Department{ID: "department-1"}, p.departmentFound, p.departmentErr
-}
-
-func (p identityLookupProbe) ListWorkforce(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.WorkforceEntry, error) {
-	return p.workforce, p.workforceErr
+func (p identityLookupProbe) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
+	return identitysdk.OrganizationUnit{ID: "organization-unit-1"}, p.organizationUnitFound, p.organizationUnitErr
 }
 
 func TestRelationValidatorValidatesRecordExistenceAndScope(t *testing.T) {
@@ -174,23 +147,14 @@ func TestRelationValidatorValidatesTargetAndIdentityDirectory(t *testing.T) {
 	err = validator.Validate(t.Context(), profile, map[string]any{"identity_user": "missing"}, principalmodel.Principal{})
 	assertRecordAppError(t, err, apperror.KindBadRequest, "backend.relation.record_missing", map[string]string{"field": "identity_user", "object": "identity_user"})
 
-	transfer := definitionmodel.ObjectSchema{Key: "transfer", Fields: []definitionmodel.FieldSchema{{Key: "department", Type: "relation", Config: map[string]any{"target": "identity_department"}}}}
-	validator = NewRecordRelationValidator(RecordRelationValidationDependencies{Identity: identityLookupProbe{departmentFound: true}})
-	if err := validator.Validate(t.Context(), transfer, map[string]any{"department": "department-1"}, principalmodel.Principal{}); err != nil {
-		t.Fatalf("existing identity department relation rejected: %v", err)
+	transfer := definitionmodel.ObjectSchema{Key: "transfer", Fields: []definitionmodel.FieldSchema{{Key: "organization_unit", Type: "relation", Config: map[string]any{"target": "identity_organization_unit"}}}}
+	validator = NewRecordRelationValidator(RecordRelationValidationDependencies{Identity: identityLookupProbe{organizationUnitFound: true}})
+	if err := validator.Validate(t.Context(), transfer, map[string]any{"organization_unit": "organization-unit-1"}, principalmodel.Principal{}); err != nil {
+		t.Fatalf("existing identity organization unit relation rejected: %v", err)
 	}
 	validator = NewRecordRelationValidator(RecordRelationValidationDependencies{Identity: identityLookupProbe{}})
-	err = validator.Validate(t.Context(), transfer, map[string]any{"department": "missing"}, principalmodel.Principal{})
-	assertRecordAppError(t, err, apperror.KindBadRequest, "backend.relation.record_missing", map[string]string{"field": "department", "object": "identity_department"})
-
-	workforceObject := definitionmodel.ObjectSchema{Key: "shift", Fields: []definitionmodel.FieldSchema{{Key: "worker", Type: "relation", Config: map[string]any{"target": "identity_workforce_profile"}}}}
-	validator = NewRecordRelationValidator(RecordRelationValidationDependencies{Identity: identityLookupProbe{workforce: []identitysdk.WorkforceEntry{{WorkforceProfileID: "worker-1"}}}})
-	if err := validator.Validate(t.Context(), workforceObject, map[string]any{"worker": "worker-1"}, principalmodel.Principal{}); err != nil {
-		t.Fatalf("existing workforce relation rejected: %v", err)
-	}
-	validator = NewRecordRelationValidator(RecordRelationValidationDependencies{Identity: identityLookupProbe{}})
-	err = validator.Validate(t.Context(), workforceObject, map[string]any{"worker": "missing"}, principalmodel.Principal{})
-	assertRecordAppError(t, err, apperror.KindBadRequest, "backend.relation.record_missing", map[string]string{"field": "worker", "object": "identity_workforce_profile"})
+	err = validator.Validate(t.Context(), transfer, map[string]any{"organization_unit": "missing"}, principalmodel.Principal{})
+	assertRecordAppError(t, err, apperror.KindBadRequest, "backend.relation.record_missing", map[string]string{"field": "organization_unit", "object": "identity_organization_unit"})
 }
 
 func TestRelationValidatorWrapsRepositoryAndIdentityErrors(t *testing.T) {
@@ -210,15 +174,10 @@ func TestRelationValidatorWrapsRepositoryAndIdentityErrors(t *testing.T) {
 	err = validator.Validate(t.Context(), profile, map[string]any{"identity_user": "user-1"}, principalmodel.Principal{})
 	assertRecordAppError(t, err, apperror.KindInternal, "backend.internal", map[string]string{"operation": "check identity user relation"})
 
-	transfer := definitionmodel.ObjectSchema{Key: "transfer", Fields: []definitionmodel.FieldSchema{{Key: "department", Type: "relation", Config: map[string]any{"target": "identity_department"}}}}
-	validator = NewRecordRelationValidator(RecordRelationValidationDependencies{Identity: identityLookupProbe{departmentErr: errors.New("directory unavailable")}})
-	err = validator.Validate(t.Context(), transfer, map[string]any{"department": "department-1"}, principalmodel.Principal{})
-	assertRecordAppError(t, err, apperror.KindInternal, "backend.internal", map[string]string{"operation": "check identity department relation"})
-
-	workforceObject := definitionmodel.ObjectSchema{Key: "shift", Fields: []definitionmodel.FieldSchema{{Key: "worker", Type: "relation", Config: map[string]any{"target": "identity_workforce_profile"}}}}
-	validator = NewRecordRelationValidator(RecordRelationValidationDependencies{Identity: identityLookupProbe{workforceErr: errors.New("directory unavailable")}})
-	err = validator.Validate(t.Context(), workforceObject, map[string]any{"worker": "worker-1"}, principalmodel.Principal{})
-	assertRecordAppError(t, err, apperror.KindInternal, "backend.internal", map[string]string{"operation": "check identity workforce relation"})
+	transfer := definitionmodel.ObjectSchema{Key: "transfer", Fields: []definitionmodel.FieldSchema{{Key: "organization_unit", Type: "relation", Config: map[string]any{"target": "identity_organization_unit"}}}}
+	validator = NewRecordRelationValidator(RecordRelationValidationDependencies{Identity: identityLookupProbe{organizationUnitErr: errors.New("directory unavailable")}})
+	err = validator.Validate(t.Context(), transfer, map[string]any{"organization_unit": "organization-unit-1"}, principalmodel.Principal{})
+	assertRecordAppError(t, err, apperror.KindInternal, "backend.internal", map[string]string{"operation": "check identity organization unit relation"})
 }
 
 func TestPlannedRelationContextNilAndEmptyEdges(t *testing.T) {
@@ -241,36 +200,6 @@ func TestPlannedRelationContextNilAndEmptyEdges(t *testing.T) {
 	if planned["customer"]["customer-1"].ID != "customer-1" {
 		t.Fatalf("planned relations=%#v", planned)
 	}
-}
-
-func TestRelationValidatorValidatesPartyFoundationTargets(t *testing.T) {
-	principal := principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace"}}
-	for _, test := range []struct {
-		target string
-		kind   string
-	}{
-		{target: "party", kind: "person"},
-		{target: "person", kind: "person"},
-		{target: "organization", kind: "organization"},
-	} {
-		object := definitionmodel.ObjectSchema{Key: "reference", Fields: []definitionmodel.FieldSchema{{Key: "subject", Type: "relation", Config: map[string]any{"target": test.target}}}}
-		validator := NewRecordRelationValidator(RecordRelationValidationDependencies{Party: partyLookupProbe{
-			value: partymodel.Aggregate{Party: partymodel.Party{ID: "subject", Kind: test.kind}}, found: true,
-		}})
-		if err := validator.Validate(t.Context(), object, map[string]any{"subject": "subject"}, principal); err != nil {
-			t.Fatalf("%s relation rejected: %v", test.target, err)
-		}
-	}
-	object := definitionmodel.ObjectSchema{Key: "reference", Fields: []definitionmodel.FieldSchema{{Key: "subject", Type: "relation", Config: map[string]any{"target": "person"}}}}
-	validator := NewRecordRelationValidator(RecordRelationValidationDependencies{})
-	err := validator.Validate(t.Context(), object, map[string]any{"subject": "subject"}, principal)
-	assertRecordAppError(t, err, apperror.KindInternal, "backend.internal", map[string]string{"operation": "check party relation"})
-	validator = NewRecordRelationValidator(RecordRelationValidationDependencies{Party: partyLookupProbe{value: partymodel.Aggregate{Party: partymodel.Party{Kind: "organization"}}, found: true}})
-	err = validator.Validate(t.Context(), object, map[string]any{"subject": "subject"}, principal)
-	assertRecordAppError(t, err, apperror.KindBadRequest, "backend.relation.record_missing", map[string]string{"field": "subject", "object": "person"})
-	validator = NewRecordRelationValidator(RecordRelationValidationDependencies{Party: partyLookupProbe{err: errors.New("party unavailable")}})
-	err = validator.Validate(t.Context(), object, map[string]any{"subject": "subject"}, principal)
-	assertRecordAppError(t, err, apperror.KindInternal, "backend.internal", map[string]string{"operation": "check party relation"})
 }
 
 func TestRelationValidatorAcceptsRepositoryUpdate(t *testing.T) {
@@ -328,40 +257,16 @@ func TestPlannedRelationContextHandlesNilAndEmptyInputs(t *testing.T) {
 	}
 }
 
-func TestRelationValidatorOrganizationAndWorkforceDependencyBoundaries(t *testing.T) {
+func TestRelationValidatorOrganizationDependencyBoundaries(t *testing.T) {
 	organizationReference := definitionmodel.ObjectSchema{Fields: []definitionmodel.FieldSchema{{
 		Key: "organization", Type: "relation", Config: map[string]any{"target": "identity_organization_unit"},
 	}}}
 	err := NewRecordRelationValidator(RecordRelationValidationDependencies{}).
 		Validate(t.Context(), organizationReference, map[string]any{"organization": "unit-1"}, principalmodel.Principal{})
-	assertRecordAppError(t, err, apperror.KindInternal, "backend.internal", map[string]string{"operation": "check identity department relation"})
-
-	workforceReference := definitionmodel.ObjectSchema{Fields: []definitionmodel.FieldSchema{{
-		Key: "worker", Type: "relation", Config: map[string]any{"target": "identity_workforce_profile"},
-	}}}
-	err = NewRecordRelationValidator(RecordRelationValidationDependencies{Identity: identityReferenceOnlyProbe{}}).
-		Validate(t.Context(), workforceReference, map[string]any{"worker": "worker-1"}, principalmodel.Principal{})
-	assertRecordAppError(t, err, apperror.KindBadRequest, "backend.relation.record_missing", map[string]string{"field": "worker", "object": "identity_workforce_profile"})
-
-	validator := NewRecordRelationValidator(RecordRelationValidationDependencies{Identity: identityLookupProbe{
-		workforce: []identitysdk.WorkforceEntry{
-			{WorkforceProfileID: "other-worker"},
-			{WorkforceProfileID: "worker-1"},
-		},
-	}})
-	if err := validator.Validate(t.Context(), workforceReference, map[string]any{"worker": "worker-1"}, principalmodel.Principal{}); err != nil {
-		t.Fatalf("workforce relation error=%v", err)
-	}
+	assertRecordAppError(t, err, apperror.KindInternal, "backend.internal", map[string]string{"operation": "check identity organization unit relation"})
 }
 
-func TestRelationValidatorPartyMissingPlannedScopeErrorAndDefaultAccess(t *testing.T) {
-	partyReference := definitionmodel.ObjectSchema{Fields: []definitionmodel.FieldSchema{{
-		Key: "subject", Type: "relation", Config: map[string]any{"target": "party"},
-	}}}
-	err := NewRecordRelationValidator(RecordRelationValidationDependencies{Party: partyLookupProbe{}}).
-		Validate(t.Context(), partyReference, map[string]any{"subject": "missing"}, principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace"}})
-	assertRecordAppError(t, err, apperror.KindBadRequest, "backend.relation.record_missing", map[string]string{"field": "subject", "object": "party"})
-
+func TestRelationValidatorPlannedScopeErrorAndDefaultAccess(t *testing.T) {
 	customer := definitionmodel.ObjectSchema{Key: "customer"}
 	order := definitionmodel.ObjectSchema{Fields: []definitionmodel.FieldSchema{{
 		Key: "customer_id", Type: "relation", Config: map[string]any{"target": "customer"},

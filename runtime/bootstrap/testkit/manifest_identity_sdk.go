@@ -92,9 +92,7 @@ func NewDefaultIdentityFactory() identitysdk.Factory {
 }
 
 func defaultIdentityFixturePermissions() []string {
-	permissions := []string{
-		"ops.workflow.process", "ops.workflow.read", "scheduler.definition.read", "workflow.advanced.configure", "workflow.definition.read",
-	}
+	permissions := []string{}
 	for _, contract := range endpointmodel.EndpointContracts {
 		definition, err := endpointmodel.AuthorizationActionDefinition(contract)
 		if err == nil && definition.Permission != nil {
@@ -271,8 +269,8 @@ func (binding *manifestIdentityBinding) FindUser(_ context.Context, lookup ident
 	user, found := binding.users[string(lookup.UserID)]
 	return user, found, nil
 }
-func (binding *manifestIdentityBinding) FindDepartment(context.Context, identitysdk.DepartmentLookup) (identitysdk.Department, bool, error) {
-	return identitysdk.Department{}, false, nil
+func (binding *manifestIdentityBinding) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
+	return identitysdk.OrganizationUnit{}, false, nil
 }
 func (binding *manifestIdentityBinding) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
 	keys := make([]string, 0, len(binding.users))
@@ -311,10 +309,6 @@ func (binding *manifestIdentityBinding) ListUserRoleAssignments(_ context.Contex
 	}
 	return assignments, nil
 }
-func (binding *manifestIdentityBinding) ListWorkforce(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.WorkforceEntry, error) {
-	return nil, nil
-}
-
 func (binding *manifestIdentityBinding) Register(_ context.Context, request identitysdk.ApplicationRegistration) (identitysdk.ApplicationRegistrationReceipt, error) {
 	if err := request.ValidateContract(); err != nil {
 		return identitysdk.ApplicationRegistrationReceipt{}, err

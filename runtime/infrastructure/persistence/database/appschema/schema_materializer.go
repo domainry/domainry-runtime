@@ -88,6 +88,7 @@ func (r ApplicationSchemaStore) ensureObjectStorage(ctx context.Context, object 
 	// be redefined as business data.
 	reserved := map[string]bool{
 		"deleted": true, "ext_info": true, "create_by": true, "update_by": true,
+		"owner_user_id": true, "owner_org_id": true,
 	}
 	for _, field := range object.Fields {
 		if reserved[strings.TrimSpace(field.Key)] {
@@ -126,7 +127,7 @@ func (r ApplicationSchemaStore) ensureObjectStorage(ctx context.Context, object 
 	if !existing["id"] {
 		return fmt.Errorf("object %s is missing required Record system column id", object.Key)
 	}
-	for _, columnName := range []string{"deleted", "ext_info", "create_by", "update_by"} {
+	for _, columnName := range []string{"deleted", "ext_info", "create_by", "update_by", "owner_user_id", "owner_org_id"} {
 		if existing[columnName] {
 			continue
 		}
@@ -145,6 +146,12 @@ func (r ApplicationSchemaStore) ensureObjectStorage(ctx context.Context, object 
 	}
 	if err := r.createIndexIfMissing(ctx, object.Key, r.metadataFieldIndexName(object.Key, "workspace_id_id", true), true, "workspace_id", "id"); err != nil {
 		return fmt.Errorf("create workspace record identity index for %s: %w", object.Key, err)
+	}
+	if err := r.createIndexIfMissing(ctx, object.Key, r.metadataFieldIndexName(object.Key, "owner_user_id", false), false, "workspace_id", "owner_user_id"); err != nil {
+		return fmt.Errorf("create owner user index for %s: %w", object.Key, err)
+	}
+	if err := r.createIndexIfMissing(ctx, object.Key, r.metadataFieldIndexName(object.Key, "owner_org_id", false), false, "workspace_id", "owner_org_id"); err != nil {
+		return fmt.Errorf("create owner organization index for %s: %w", object.Key, err)
 	}
 	for _, field := range object.Fields {
 		field = metadataConstraintIndexedField(field, constraintIndexed[field.Key])

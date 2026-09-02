@@ -11,7 +11,7 @@ func TestWorkflowAuthoringFragmentExamplesExecutePublishedOwnerPolicy(t *testing
 		if capability.Key == "workflow.definition" {
 			continue
 		}
-		if capability.ValidationEndpoint != "POST /workflows/authoring-fragments/{capabilityKey}/validate" {
+		if capability.ValidationEndpoint != workflowAuthoringFragmentValidationEndpoint {
 			t.Fatalf("capability %s validation endpoint=%q", capability.Key, capability.ValidationEndpoint)
 		}
 		for _, example := range capability.Examples {

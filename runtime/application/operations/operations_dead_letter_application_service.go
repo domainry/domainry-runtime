@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -62,7 +63,7 @@ func (s *OperationsApplicationService) RegisterDeadLetterOwner(owner string, ada
 }
 
 func (s *OperationsApplicationService) InspectDeadLetter(ctx context.Context, owner, id string, principal principalmodel.Principal) (OperationsDeadLetterItem, error) {
-	if err := operationsAuthorize(principal, "runtime.dead_letter.read"); err != nil {
+	if err := operationsAuthorize(principal, operationscontract.ActionInspectDeadLetter); err != nil {
 		return OperationsDeadLetterItem{}, err
 	}
 	adapter, err := s.deadLetterOwner(owner)
@@ -82,7 +83,7 @@ func (s *OperationsApplicationService) ActOnDeadLetter(ctx context.Context, owne
 		return OperationsDeadLetterActionResult{}, err
 	}
 	receipt, decision, err := s.Submit(ctx, OperationsSubmitRequest{
-		Kind: "dead_letter." + action, Permission: operationsDefinitionPermission("dead_letter." + action), ResourceType: "dead_letter", ResourceID: owner + ":" + id,
+		Kind: "dead_letter." + action, ResourceType: "dead_letter", ResourceID: owner + ":" + id,
 		Reason: strings.TrimSpace(request.Reason), Reference: strings.TrimSpace(request.Reference), Payload: map[string]any{"owner": owner, "dead_letter_id": id},
 	}, key, principal)
 	if err != nil {

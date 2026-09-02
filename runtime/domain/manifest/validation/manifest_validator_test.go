@@ -37,10 +37,7 @@ func TestValidateManifestAcceptsRuntimeFixtures(t *testing.T) {
 
 func TestValidateManifestAcceptsRuntimeIdentityFoundationRelationTargets(t *testing.T) {
 	manifest := loadFixtureManifest(t, "domain-only-minimal.json")
-	for _, target := range []string{
-		"party", "person", "organization", "identity_user", "identity_department",
-		"identity_organization_unit", "identity_workforce_profile",
-	} {
+	for _, target := range []string{"identity_user", "identity_organization_unit"} {
 		manifest.Objects[0].Fields = append(manifest.Objects[0].Fields, definitionmodel.FieldSchema{Key: target, Type: "relation", Validation: definitionmodel.FieldValidation{Target: target}})
 	}
 	if err := ValidateManifest(manifest); err != nil {

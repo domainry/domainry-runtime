@@ -18,7 +18,7 @@ func TestDefaultObjectAuthorizationActionsOwnExactPermissions(t *testing.T) {
 	}
 	registry := actioncontract.NewRegistry()
 	for _, definition := range definitions {
-		if definition.Permission == nil || definition.Permission.Key != definition.Key || definition.Permission.ResourceKey+"."+definition.Permission.ActionKey != definition.Key {
+		if definition.Permission == nil || definition.Permission.Key != definition.Key || definition.Permission.ResourceKey+"."+definition.Permission.OperationKey != definition.Key {
 			t.Fatalf("definition is not exact: %+v", definition)
 		}
 		if definition.HTTP == nil || strings.Contains(definition.HTTP.DisplayRouteTemplate, "{objectKey}") || !strings.Contains(definition.HTTP.DisplayRouteTemplate, "/objects/sales.order/") {

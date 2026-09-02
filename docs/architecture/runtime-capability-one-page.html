@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Domainry Runtime 完整能力讲解</title>
+  <style>
+    :root {
+      --ink:#15213b; --muted:#5d687a; --line:#d9e2ed; --paper:#fff; --canvas:#e9eef5;
+      --blue:#2864d7; --blue-soft:#eef5ff; --red:#b34e46; --red-soft:#fff4f2;
+      --teal:#117b78; --teal-soft:#edf9f7; --amber:#8b6518; --amber-soft:#fff8e8;
+      --purple:#6848b3; --purple-soft:#f5f1ff; --navy:#17233d;
+      font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    }
+    *{box-sizing:border-box} html,body{margin:0;background:var(--canvas);color:var(--ink)}
+    body{padding:22px 0 44px}.sheet{width:min(1180px,calc(100vw - 32px));min-height:770px;margin:0 auto 22px;padding:34px 42px 24px;display:flex;flex-direction:column;overflow:hidden;background:var(--paper);border:1px solid #dce4ee;border-radius:20px;box-shadow:0 18px 55px rgba(26,45,77,.10)}
+    .page-head{display:grid;grid-template-columns:1fr auto;gap:24px;align-items:start;padding-bottom:15px;border-bottom:2px solid var(--ink)}
+    .eyebrow{margin:0 0 7px;color:var(--blue);font-size:13px;font-weight:800;letter-spacing:.13em;text-transform:uppercase}
+    h1{margin:0;font-size:30px;line-height:1.18;letter-spacing:-.025em}.subtitle{margin:7px 0 0;color:var(--muted);font-size:14.5px;line-height:1.5}
+    .page-no{min-width:88px;padding:12px 13px;color:#fff;background:var(--navy);border-radius:14px;text-align:center}.page-no b{display:block;font-size:27px;line-height:1}.page-no span{display:block;margin-top:5px;font-size:11px;opacity:.74}
+    .claim{margin-top:14px;padding:13px 17px;display:grid;grid-template-columns:108px 1fr;gap:14px;align-items:center;color:#fff;background:linear-gradient(95deg,#17233d,#20365f);border-radius:14px}.claim span{color:#9fc4ff;font-size:13px;font-weight:800;letter-spacing:.07em}.claim strong{font-size:18.5px;line-height:1.4}
+    .scenario{margin-top:12px;padding:9px 13px;display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;color:#3c4960;background:#f7f9fc;border:1px solid var(--line);border-radius:11px;font-size:13.5px;line-height:1.48}.scenario b{padding:4px 9px;color:var(--blue);background:var(--blue-soft);border-radius:999px;white-space:nowrap}
+    .contrast{margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:13px}.approach{padding:14px 16px;border:1px solid var(--line);border-radius:14px}.approach.normal{background:var(--red-soft);border-color:#efd3cf}.approach.domainry{background:var(--blue-soft);border-color:#ccdcf6}
+    .approach h2{margin:0 0 7px;display:flex;align-items:center;gap:8px;font-size:16.5px}.approach h2:before{content:"";width:8px;height:8px;flex:0 0 8px;border-radius:50%;background:currentColor}.normal h2{color:var(--red)}.domainry h2{color:var(--blue)}
+    .approach ul{margin:0;padding-left:18px;color:#344159;font-size:12.7px;line-height:1.48}.approach li+li{margin-top:3px}.approach li::marker{color:currentColor}
+    .flow{margin-top:8px;display:grid;grid-template-columns:repeat(5,1fr);gap:5px}.flow span{position:relative;padding:7px 4px;color:#284774;background:rgba(255,255,255,.72);border:1px solid #cddcf3;border-radius:8px;font-size:10.8px;font-weight:700;text-align:center;line-height:1.3}.flow span:not(:last-child):after{content:"›";position:absolute;right:-7px;top:50%;z-index:2;transform:translateY(-52%);color:var(--blue);font-size:17px}
+    .strength-label{margin:12px 0 7px;display:flex;align-items:center;gap:9px;font-size:15.5px}.strength-label:after{content:"";height:1px;flex:1;background:var(--line)}
+    .strengths{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.strength{padding:10px 12px;background:var(--teal-soft);border:1px solid #cee9e5;border-radius:11px}.strength b{display:block;margin-bottom:3px;color:var(--teal);font-size:12.5px}.strength span{display:block;color:#344c50;font-size:12px;line-height:1.42}
+    .bottom{margin-top:10px;display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:9px}.bottom-card{padding:9px 12px;border-radius:11px;font-size:11.8px;line-height:1.42}.bottom-card b{display:block;margin-bottom:3px;font-size:12.3px}.user{color:#604b1c;background:var(--amber-soft);border:1px solid #f0dfb9}.user b{color:var(--amber)}.fit{color:#4d406b;background:var(--purple-soft);border:1px solid #ddd3f4}.fit b{color:var(--purple)}.flex{color:#455166;background:#f3f6fa;border:1px solid var(--line)}.flex b{color:#34445e}
+    footer{margin-top:auto;padding-top:9px;display:flex;justify-content:space-between;gap:18px;color:#7a8596;font-size:10.3px;border-top:1px solid #e8edf3}footer strong{color:#47546a}
+    .cover{position:relative;padding:50px 58px 34px;color:#fff;background:linear-gradient(135deg,#101a31 0%,#18294a 58%,#24477d 100%);border:0}
+    .cover:before,.cover:after{content:"";position:absolute;border-radius:50%;pointer-events:none}.cover:before{width:430px;height:430px;right:-155px;top:-180px;background:radial-gradient(circle,rgba(82,145,255,.38),rgba(82,145,255,0) 69%)}.cover:after{width:360px;height:360px;left:-160px;bottom:-215px;background:radial-gradient(circle,rgba(39,205,193,.22),rgba(39,205,193,0) 68%)}
+    .cover-content{position:relative;z-index:1;max-width:980px;margin-top:74px}.cover .eyebrow{color:#8eb9ff;font-size:14px}.cover h1{max-width:900px;margin-top:16px;color:#fff;font-size:57px;line-height:1.12;letter-spacing:-.04em}.cover .lead{max-width:900px;margin:22px 0 0;color:#d6e2f5;font-size:22px;line-height:1.62}
+    .cover-rule{position:relative;z-index:1;width:112px;height:5px;margin-top:30px;background:#4f8df7;border-radius:99px}.cover-promise{position:relative;z-index:1;margin-top:44px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.cover-promise span{padding:16px 18px;color:#dce8fa;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:13px;font-size:14px;font-weight:700}.cover footer{position:relative;z-index:1;color:#aabbd4;border-color:rgba(255,255,255,.18)}.cover footer strong{color:#e9f1ff}
+    @page{size:A4 landscape;margin:7mm}
+    @media print{
+      html,body{background:#fff}body{padding:0}.sheet{width:283mm;height:196mm;min-height:196mm;margin:0;padding:7.5mm 9mm 5mm;border:0;border-radius:0;box-shadow:none;break-after:page;page-break-after:always}.sheet:last-child{break-after:auto;page-break-after:auto}
+      .page-head{padding-bottom:2.8mm}.eyebrow{margin-bottom:1mm;font-size:8.5pt}h1{font-size:20pt}.subtitle{margin-top:1.2mm;font-size:9.7pt;line-height:1.4}.page-no{min-width:20mm;padding:3mm}.page-no b{font-size:18pt}
+      .claim{margin-top:2.6mm;padding:2.7mm 3.5mm;grid-template-columns:27mm 1fr}.claim span{font-size:8.5pt}.claim strong{font-size:12.8pt}.scenario{margin-top:2.2mm;padding:1.8mm 2.7mm;font-size:9pt}
+      .contrast{margin-top:2.2mm;gap:2.5mm}.approach{padding:2.5mm 3mm}.approach h2{margin-bottom:1.3mm;font-size:11pt}.approach ul{padding-left:4.3mm;font-size:8.5pt;line-height:1.38}.approach li+li{margin-top:.5mm}.flow{margin-top:1.5mm;gap:1mm}.flow span{padding:1.3mm .8mm;font-size:7.2pt}
+      .strength-label{margin:2.2mm 0 1.3mm;font-size:10.5pt}.strengths{gap:1.8mm}.strength{padding:1.8mm 2.2mm}.strength b{margin-bottom:.5mm;font-size:8.5pt}.strength span{font-size:8pt;line-height:1.35}
+      .bottom{margin-top:1.8mm;gap:1.8mm}.bottom-card{padding:1.6mm 2.2mm;font-size:7.8pt;line-height:1.34}.bottom-card b{margin-bottom:.4mm;font-size:8.2pt}footer{padding-top:1.3mm;font-size:7pt}
+      .cover{padding:13mm 15mm 8mm}.cover-content{margin-top:18mm}.cover .eyebrow{font-size:10pt}.cover h1{margin-top:4mm;font-size:39pt}.cover .lead{margin-top:5mm;font-size:15pt}.cover-rule{width:28mm;height:1.2mm;margin-top:7mm}.cover-promise{margin-top:11mm;gap:3mm}.cover-promise span{padding:4mm 4.5mm;font-size:9.5pt}
+      .cover:after{display:none}
+    }
+    @media screen and (max-width:850px){body{padding:0}.sheet{width:100%;min-height:0;margin:0;padding:24px 18px;border:0;border-radius:0}.page-head{grid-template-columns:1fr}.page-no{display:none}.claim{grid-template-columns:1fr;gap:4px}.contrast,.strengths,.bottom{grid-template-columns:1fr}.flow{grid-template-columns:1fr}.flow span:after{display:none}}
+  </style>
+</head>
+<body>
+  <script>
+    const capabilities = [
+      {
+        group:"Runtime Core", name:"Object + Record", title:"声明业务对象，不是生成一套散装 CRUD",
+        subtitle:"字段、关系和页面只是表面；真正价值是所有数据入口共享相同的查询、权限、生命周期和变更规则。",
+        claim:"强的不是少写一个 Controller，而是新增页面、导入、流程或 Agent 后，仍然只有一套数据规则。",
+        scenario:"客户最初只有列表和编辑，后来增加批量导入、审批、夜间同步和 AI 助手。每增加一个入口，都可能多出一套校验与写库逻辑。",
+        normal:["每个实体重复表、ORM、Repository、Controller、分页、关联和软删除。","页面、脚本、Cron 和 Workflow 分别实现校验、授权与状态判断。","字段可写性、数据范围、导出控制和审计依靠开发者逐处记住。","为了赶进度保留“内部直接写库”，最终绕过业务不变量。"],
+        domainry:["项目声明 Object 字段、关系、校验、能力和生命周期。","Record 统一查询、过滤、排序、分页、关联与通用变更。","Runtime 自动应用 Workspace、行级、字段、关联与导出策略。","append-only、soft-delete、状态后不可变等约束覆盖所有入口。"],
+        flow:["Object 定义","发布校验","获权 Record","统一 Mutation","Audit/Event"],
+        strengths:[["单一业务真相","字段、能力、权限和 API 投影来自同一份已发布定义。"],["入口越多价值越大","HTTP、批量、流程和 Agent 不再复制对象规则。"],["生命周期不可旁路","账本或已完成记录不会被另一个入口悄悄改写。"]],
+        user:"列表、详情、关联、导入和导出行为一致；重复提交与并发冲突有明确结果。", fit:"CRM、订单、合同、主数据，以及对象多、入口持续增加的企业应用。", flex:"简单对象直接用通用 Record；复杂操作随时提升为 Action，不替换底座。"
+      },
+      {
+        group:"Runtime Core", name:"Action", title:"用具名业务动作替代万能 Service",
+        subtitle:"“批准、取消、结算”不是普通字段更新，而是带输入、风险、前置条件、审计和副作用边界的业务能力。",
+        claim:"强在把“代码理论上能做什么”收紧为“这个 Action 本次被允许做什么”。",
+        scenario:"order.cancel 只应读取当前订单、写取消记录、调用指定退款操作并发出取消通知；它不应因为拿到 Service Container 就能访问工资或任意外部连接。",
+        normal:["Controller 把数据库、HTTP Client、MQ 和所有 Repository 交给 Service。","请求 DTO、授权、状态前置条件、版本和审计由每个接口自行维护。","业务代码实际拥有大权限，只能依赖评审和开发者自觉不越界。","接口、SDK 与实现合同升级不同步，通常到运行时才暴露。"],
+        domainry:["Action 声明输入输出、前置条件、风险、审计事件和并发策略。","Effect Set 精确授予 Object、Connector、文件和通知能力。","生成的 Handler 只拿到本 Action 所需的最小能力。","启动时核对合同 hash、Handler revision 并冻结 Registry。"],
+        flow:["Action 合同","能力授权","最小 Handler","结果校验","审计输出"],
+        strengths:[["最小能力执行","业务代码不再获得整个 Runtime 或全部 Repository。"],["合同先于实现","输入、输出、风险与副作用在开发和启动阶段即可校验。"],["业务语义可复用","页面、Workflow、Scheduler 和 Agent 调用同一个具名动作。"]],
+        user:"看到“提交审批、取消订单”等稳定操作；成功、失败和权限不足都有一致结果。", fit:"审批、订单状态、资金、库存、批量动作和任何不能直接改字段的业务。", flex:"项目自由编写领域 Handler，框架只约束它能访问的能力和必须兑现的合同。"
+      },
+      {
+        group:"Runtime Core", name:"Mutation Kernel", title:"所有写入口共享事务、并发与幂等规则",
+        subtitle:"正确性不能只存在于用户接口；后台任务、流程、导入和 AI 触发的写入也必须经过同一执行内核。",
+        claim:"强在让“先查再写、重复请求、并发修改”不再由每个业务团队各自踩坑。",
+        scenario:"课程只剩一个名额，两名用户同时预约。普通的“先查 remaining > 0，再减一”会超卖；后台重试还可能重复扣减。",
+        normal:["用户接口走 Service 校验，Cron 和 Workflow 直接更新 Repository。","以先查询后更新实现库存、额度和状态判断，产生竞态。","乐观锁、条件更新、原子算术与业务错误各对象各写一套。","幂等只在部分 HTTP 接口存在，Worker 与导入重试仍会重复生效。"],
+        domainry:["HTTP、Action、Workflow、Automation、Scheduler 和 Agent 最终都进入 Mutation Kernel。","统一执行授权、不可变上下文、规划、验证与事务提交。","支持 expected version、条件谓词和原子算术更新。","同一提交可携带 Audit、Event、Outbox 与幂等 Receipt。"],
+        flow:["授权上下文","规划 Mutation","条件/版本校验","原子提交","Receipt"],
+        strengths:[["并发正确性内建","用数据库条件更新表达业务约束，而非依赖应用层时序。"],["所有入口同规则","不存在“内部任务比较可信”而绕过校验的特殊路径。"],["重复请求有稳定结果","重试同一业务 identity，不重复制造业务效果。"]],
+        user:"重复点击不重复执行；过期页面提示冲突；抢购、库存和额度在并发下仍保持正确。", fit:"库存、预约、余额、审批状态、计数器和多入口共享写操作。", flex:"项目选择业务条件和冲突语义；内核负责跨数据库兑现一致执行。"
+      },
+      {
+        group:"Identity Module + Runtime", name:"Identity + Authorization", title:"用户、组织和角色为什么必须分开",
+        subtitle:"用户回答“谁负责”，组织回答“管到哪里”，角色回答“能做什么”；Workspace 构成不可跨越的租户边界。",
+        claim:"强在把稳定职责与变化范围分开：调岗只改变组织事实，不改角色、SQL 和业务代码。",
+        scenario:"张三是销售经理，在华东管理华东门店，调到华南后职责没变、范围变了；兼任财务审批时又增加一项职能。",
+        normal:["users(role_id, department_id)，接口里判断 role 并手写部门过滤。","岗位和区域组合成“华东经理、华南经理”，组织越多角色越多。","调岗、兼岗与临时授权逐人修补，旧权限难以及时回收。","列表、报表、导出、后台任务和 AI 各自解释权限。"],
+        domainry:["Workspace 是租户硬边界，User 是稳定责任主体。","Org 解析当前组织、组织子树、上下级和汇报范围。","Role 表达可复用职能，多角色组合后生成版本化 AccessBundle。","Runtime 统一执行功能、数据、字段、关联、导出和 Guardrail 策略。"],
+        flow:["Workspace","User","Org Scope","Role","AccessBundle"],
+        strengths:[["角色不再随区域爆炸","同一个销售经理角色可复用于不同组织范围。"],["组织变化自动传导","新增门店或调岗后重新解析范围，无需修改查询代码。"],["全入口一个答案","同一身份在列表、报表、流程和 Agent 中得到相同权限。"]],
+        user:"员工看本人、主管看团队；敏感字段自动隐藏或脱敏；调岗后旧区域不再可见。", fit:"多租户、多分公司、层级组织、区域经营、兼岗和服务身份。", flex:"身份目录与组织结构可以变化，业务对象不绑定某个部门或固定组合角色。"
+      },
+      {
+        group:"Runtime Core", name:"Assurance", title:"高风险操作不能只靠“已经登录”",
+        subtitle:"登录证明了身份，却不代表此刻可以批量导出、批准大额付款或执行不可逆删除。",
+        claim:"强在把二次验证、双人复核和流程批准做成 Action 的可验证前置证据，而不是页面约定。",
+        scenario:"财务用户已登录半天，现在批准一笔大额付款。系统需要 recent re-auth 或 OTP；超过阈值还需要 maker-checker，并防止同一证据被换参数重放。",
+        normal:["前端弹一次验证码，后端仅检查一个临时布尔值。","不同敏感接口各接一套 OTP、二次登录或人工复核逻辑。","验证证据没有绑定 Workspace、Action、Record 和 payload，可被挪用。","后台入口或 Agent 工具忘记做二次确认，形成旁路。"],
+        domainry:["Action 显式声明 recent re-auth、OTP、maker-checker 或 workflow approval。","证据绑定用户、Workspace、Action、记录和请求 payload。","Runtime 在执行前验证时效、适用范围并按策略消费证据。","任何入口调用高风险 Action 都必须满足同一 Assurance。"],
+        flow:["识别风险","生成挑战","绑定操作证据","执行时验证","消费/审计"],
+        strengths:[["风险策略不散落","安全要求随 Action 合同走，而不是随某个页面走。"],["防重放与换参","证据只对指定主体、记录和请求内容有效。"],["自动化不能跳过","Workflow、批处理和 Agent 也必须提供合格证据。"]],
+        user:"敏感导出、付款和删除会得到清晰的再验证或复核步骤，普通操作不被无谓打扰。", fit:"资金、隐私数据、大批量导出、不可逆操作和高权限管理。", flex:"项目按风险选择保障方式与阈值，Runtime 统一验证，不绑定单一认证产品。"
+      },
+      {
+        group:"Runtime Core", name:"Workflow", title:"让审批过程拥有自己的状态，而不是塞进业务表",
+        subtitle:"多节点、等待、人工决策、退回、撤回、超时和升级是过程事实，不应靠几个 status 字段拼出来。",
+        claim:"强在定义升级、服务重启和异常恢复后，运行中的流程仍保留原来的业务语义。",
+        scenario:"采购单先由主管审批，再由财务审批；可退回、撤回，48 小时未处理要提醒并升级，失败后允许管理员从原节点恢复。",
+        normal:["在采购表加 status、approver、approved_at，并不断扩字段。","自建流程定义、实例、节点、任务、事件和审批人解析。","补 any/all/sequential、退回撤回、Timer、提醒升级和操作台。","新流程定义发布后，旧实例如何继续运行经常没有版本策略。"],
+        domainry:["声明节点、边、审批人规则、超时和异常策略。","框架持久化 Process、Task、Event 与运行时定义快照。","统一 any/all/sequential 审批、提醒、升级、重试和人工恢复。","节点产生业务效果时调用获权 Action，不直接改业务表。"],
+        flow:["发布流程图","创建 Process","分配 Task","执行 Action","事件/恢复"],
+        strengths:[["过程与业务对象解耦","采购单保持业务事实，Workflow 独立持有等待和任务状态。"],["运行实例不被升级污染","定义快照让旧流程按原版本完成，新流程使用新版本。"],["人工与机器协作可恢复","待办、Timer、重试和人工处置都存在稳定状态。"]],
+        user:"有“我的待办”、流程进度、退回撤回、超时提醒和异常恢复入口。", fit:"采购、合同、费用、入职、工单等多阶段人工决策流程。", flex:"流程图和审批人规则由项目定义；节点复用现有 Action，不复制领域逻辑。"
+      },
+      {
+        group:"Runtime Core", name:"Automation", title:"把事件响应做成可靠规则，而不是散落的 Hook",
+        subtitle:"记录变化后的自动打标、建任务和发通知通常很简单，但重复触发、递归循环和失败恢复并不简单。",
+        claim:"强在让“字段变化时自动做事”既保持轻量，又具有持久事件、幂等、因果链和循环保护。",
+        scenario:"客户等级变成 VIP 后自动加标签、创建跟进任务并发通知；这些操作又会改变记录，若没有因果与深度限制，很容易相互递归。",
+        normal:["逻辑分散在 ORM hook、数据库 trigger、Controller after-save 和 MQ consumer。","字段变化检测与规则匹配各业务自行实现。","事件重复投递会重复创建任务，失败后只能查日志。","多个自动规则相互触发，缺少 correlation、causation 和最大深度。"],
+        domainry:["声明 trigger、condition 与 instruction，区分 before/after 阶段。","从 durable lifecycle event 判断字段或状态变化。","执行携带稳定幂等 identity、correlation 和 causation。","框架限制递归深度并提供失败状态、重试与人工处理。"],
+        flow:["记录事件","匹配 Trigger","检查 Condition","执行 Instruction","记录因果/结果"],
+        strengths:[["简单规则不必建完整流程","一次事件响应保持轻量，不被 Workflow 的过程状态淹没。"],["重复事件不重复生效","稳定幂等身份把多次投递收敛为一次业务结果。"],["规则链不会无限递归","因果链与最大深度使自动化可以被观察和阻断。"]],
+        user:"状态变化后系统可靠地自动补齐后续动作；失败有记录，不会悄悄漏做或无限循环。", fit:"自动打标、派单、同步字段、发送提醒和记录生命周期响应。", flex:"规则由项目配置，真正写操作仍调用 Action；需要过程状态时可升级为 Workflow。"
+      },
+      {
+        group:"Runtime Core", name:"Record Timer", title:"业务记录的时间点，不等于全局定时任务",
+        subtitle:"合同到期、试用结束、订单保留超时都属于某条记录；时间字段变化时，原计划必须自动重排或取消。",
+        claim:"强在让 Timer 与记录 identity、字段版本和业务 Action 绑定，而不是让 Cron 每分钟扫全表。",
+        scenario:"合同 expires_at 从 6 月 1 日改到 7 月 1 日。旧定时器必须失效，新定时器重新安排；服务停机跨过到期点后仍应补触发一次。",
+        normal:["Cron 周期扫描 WHERE expires_at <= now，数据量越大扫描越重。","字段变更后旧任务未取消，导致在新日期前被错误触发。","多实例同时扫描会重复执行，崩溃后又难判断是否已经处理。","扫描脚本常直接更新状态，绕过 Action 权限和业务规则。"],
+        domainry:["Timer 绑定 Workspace、Object、Record、字段和值的版本。","字段变化时自动重排或取消原 Timer。","持久化扫描与 Claim 使用 Lease/Fencing，支持停机后恢复。","到期只负责触发获权 Action，业务效果仍走 Mutation Kernel。"],
+        flow:["观察时间字段","创建/重排 Timer","到期 Claim","调用 Action","完成/重试"],
+        strengths:[["时间跟着记录变化","修改到期日会改变计划，不留下幽灵任务。"],["无需高频全表扫描","Timer 是明确事实，规模增长后仍可分片与恢复。"],["重复触发不扩大效果","Claim、Fencing 与下游幂等共同防止双执行。"]],
+        user:"到期提醒和自动处理准确跟随业务日期；修改日期后不会收到旧提醒。", fit:"合同到期、订单保留、试用结束、证照失效和单条记录的 SLA。", flex:"同一个 Action 可由人工、Record Timer 或 Scheduler 触发，业务规则只写一次。"
+      },
+      {
+        group:"Runtime Core", name:"Transactional Outbox", title:"数据库事务之外，也要有可解释的一致性",
+        subtitle:"数据库能原子提交本地变化，却不能同时回滚 ERP、短信或远程模块；跨边界必须承认并治理不确定性。",
+        claim:"强在业务一旦成功，外部交接就不会丢；重试的是同一个交接意图，而不是重新执行整段业务。",
+        scenario:"订单确认后要通知 ERP 发货。事务提交后进程立即崩溃，消息不能丢；网络超时时又不能假设失败并盲目创建第二张 ERP 单。",
+        normal:["事务内调用外部 API：外部成功后本地回滚无法撤销。","after-commit 或 goroutine：进程退出时消息可能永久丢失。","重试整个业务 Service，可能再次改状态、扣库存并重复调用外部系统。","对未知结果没有独立状态，只能靠日志与人工猜测。"],
+        domainry:["业务 Mutation、Workflow/Event intent、Audit 与 Outbox 在本地事务提交。","Worker 以稳定 message/dedup identity Claim 并可靠交接。","Integration 持有 Invocation、Receipt 和 Provider 不确定结果。","有限重试、DLQ、reconciliation 与人工恢复各有明确 owner。"],
+        flow:["业务原子提交","Outbox 待交接","Fenced Worker","Receipt","对账/恢复"],
+        strengths:[["提交缝隙不丢意图","业务成功即存在可恢复的外部交接事实。"],["不伪装分布式事务","明确区分已成功、已失败与结果未知，分别治理。"],["恢复不重做业务","针对稳定交接 identity 重试，不重新批准订单。"]],
+        user:"外部同步失败可查、可重试、可对账，不会出现“本地成功但永远没通知”的黑洞。", fit:"ERP、支付、通知、远程模块和任何数据库事务外的副作用。", flex:"外部 owner 和 Provider 可以变化，本地 Action 只依赖稳定交接合同。"
+      },
+      {
+        group:"Report Module", name:"Report + Object SQL", title:"只写统计 SQL，框架自动保证权限不越位",
+        subtitle:"作者需要 SQL 的表达力，但不应同时承担租户隔离、组织权限、字段脱敏、分页、精度和方言安全。",
+        claim:"强在权限成为查询计划的一部分：先收窄获权记录，再 JOIN、过滤和聚合，而不是最后补 WHERE。",
+        scenario:"“各门店销售额”使用 GROUP BY。华东经理、华南经理和总部共用一份定义，但必须自动得到不同范围，且敏感字段不能借聚合泄露。",
+        normal:["每张报表手写 Workspace、组织子树、本人/团队过滤。","作者自行判断字段可读性、脱敏字段能否参与聚合与 JOIN。","重复处理参数注入、JOIN 基数、金额精度、稳定分页和数据库方言。","列表与报表维护两套权限，评审漏一个条件即可泄露。"],
+        domainry:["作者声明 source objects、typed parameters、结果列并写受限 Object SQL。","编译器只绑定已发布、允许的 Object/Field 和查询结构。","Runtime 为每个数据源生成 Record scope，在聚合前注入授权。","执行器统一参数绑定、精度、只读超时、keyset 分页和导出复核。"],
+        flow:["编译受限 SQL","校验对象字段","注入授权 Scope","方言安全执行","分页/导出复核"],
+        strengths:[["一份 SQL 多种安全结果","定义无需按角色复制，当前 Principal 决定可见范围。"],["有表达力但无裸库权限","可以聚合和 JOIN，却不能读取任意内部表或未知字段。"],["聚合前完成授权","不可见记录与字段不会先进入中间结果再被动过滤。"]],
+        user:"报表灵活，但只展示当前身份可见的数据；列表、报表和导出范围一致。", fit:"经营分析、财务汇总、管理驾驶舱、多组织统计和受控导出。", flex:"作者保留熟悉的 SQL 表达能力，安全、精度和方言由框架叠加。"
+      },
+      {
+        group:"Notification Module", name:"Notification", title:"通知不是发一封邮件，而是完整的用户消息生命周期",
+        subtitle:"模板、收件人、站内信、已读归档、代理、偏好、渠道计划和投递状态共同决定用户最终收到什么。",
+        claim:"强在业务只发布“需要通知什么”，Notification 统一决定“给谁、以什么模板、通过什么渠道、是否已送达”。",
+        scenario:"审批完成后，申请人需要站内信；主管偏好邮件摘要；休假期间由代理人接收待办；重复业务事件不能生成两条相同提醒。",
+        normal:["业务事务后直接 sendEmail，失败只打印日志。","每个模块复制模板、收件人解析与邮件参数。","站内信已读、归档、代理与用户偏好另建零散表。","重试容易重复发送，也无法回答用户是否收到。"],
+        domainry:["Action 只 stage 获权 Notification intent，与业务 Mutation 一起提交。","Notification 独立拥有模板版本、Inbox、偏好、代理和 Channel plan。","按 event type、来源 identity、收件人与批次做校验和去重。","投递 Worker 管理状态、有限重试、失败查询与外部渠道交接。"],
+        flow:["通知意图","收件人解析","模板/偏好","Inbox/渠道计划","投递状态"],
+        strengths:[["业务与渠道彻底分离","业务不需要知道邮件、短信或站内信如何实现。"],["用户偏好集中生效","代理、免打扰、摘要和渠道偏好不在各业务模块复制。"],["消息有生命周期","创建、已读、归档、投递和失败都有稳定状态。"]],
+        user:"拥有统一消息中心，能管理已读、归档和偏好；重要提醒不会因瞬时故障永久丢失。", fit:"审批提醒、站内信、告警、摘要、待办代理和多渠道通知。", flex:"模板、收件人规则和渠道可替换，业务事件与 Action 无需修改。"
+      },
+      {
+        group:"Scheduler Module", name:"Scheduler", title:"周期任务不是一条不可见的 Cron",
+        subtitle:"日结、月结、周期同步和快照刷新需要时区、漏跑补偿、运行历史、取消、重试和多实例安全。",
+        claim:"强在把 recurrence 与每一次 Run 都变成可查询、可恢复的业务事实。",
+        scenario:"每月 1 日 02:00 结算。发布时服务停机，恢复后要决定 catch-up 还是跳过；两个实例同时启动时只能有一个执行者。",
+        normal:["操作系统 Cron 直接调用脚本或 Repository。","缺少 Schedule/Run 状态，无法准确回答下次运行和历史结果。","时区、夏令时、misfire/catch-up 与取消逻辑项目自己实现。","多 Worker 重复执行，失败重试又可能重复下游业务效果。"],
+        domainry:["Scheduler 独立拥有 schedule definition、run、run event 与 dead letter。","提供 recurrence preview、时区和 misfire/catch-up 策略。","Run 使用幂等 identity、Lease、Heartbeat、Fencing 和有限重试。","下游目标只调用原 owner 的 Action/Workflow，不直接写业务数据。"],
+        flow:["定义 Recurrence","生成 Run","Claim/Fencing","调用下游 owner","历史/重试/DLQ"],
+        strengths:[["计划与运行可观察","知道何时应运行、是否运行、由谁执行、结果如何。"],["停机与双 Worker 可治理","misfire 策略和 Fencing 避免漏跑或重复完成。"],["调度不拥有业务规则","Scheduler 负责何时，下游 Action 负责做什么。"]],
+        user:"能查看下次运行、执行历史和失败原因，并安全重试、取消或处理死信。", fit:"周期结算、定时同步、报表快照、日常批处理和固定日历任务。", flex:"同一 schedule 合同可从进程内 Module 演进为独立 SaaS，不重写下游业务。"
+      },
+      {
+        group:"Integration Module", name:"Integration", title:"外部连接、凭证、Webhook 和调用证据各有归属",
+        subtitle:"接一个 ERP 不只是封装 HTTP API；连接生命周期、密钥轮换、入站验签、幂等调用和未知结果对账都需要长期治理。",
+        claim:"强在供应商状态不会渗入业务对象，外部调用也不会成为一段无法追踪的网络代码。",
+        scenario:"项目接 ERP：要配置多套环境凭证、接收 Webhook、轮换密钥、查看每次同步，并处理“请求超时但 ERP 可能已创建”的未知结果。",
+        normal:["业务 Service 直接保存 API Key 并调用第三方 SDK。","连接配置、密钥轮换和环境差异散落在项目配置中。","Webhook 入口各自处理验签、防重放、去重和映射。","网络超时只抛异常，Invocation 与远端结果无法对账。"],
+        domainry:["Integration 独立拥有 Connection、Credential、Webhook inbox 与 Provider task。","每次外部执行拥有稳定 Invocation identity 和 Receipt。","入站事件先验签、去重、持久化，再映射到获权 Runtime 目标。","未知结果进入 reconciliation，凭证与调用状态由管理面统一治理。"],
+        flow:["Connection/Credential","签名入站或意图","Provider Task","Invocation/Receipt","Reconcile"],
+        strengths:[["密钥不进入领域模型","业务对象只引用连接与操作，不保存供应商秘密。"],["入站与出站都有证据","Webhook 和主动调用都具备身份、状态与去重。"],["未知不是简单失败","可对账后再决定重试或人工处理，避免重复外部效果。"]],
+        user:"能管理外部连接并查看同步状态；凭证轮换、失败重试与未知结果都有明确入口。", fit:"ERP、CRM、支付、Webhook、Web Push 和企业系统集成。", flex:"业务依赖稳定 Connection/operation，供应商协议交由可替换 Connector Provider。"
+      },
+      {
+        group:"Connector Provider", name:"Connectors", title:"供应商适配可以替换，但不能绕过宿主治理",
+        subtitle:"Connector 负责某个厂商协议；它不应该拥有业务状态，也不应该随意创建网络、文件或进程访问。",
+        claim:"强在新增 Provider 不需要修改 Runtime，同时 Provider 的网络能力仍被限制在声明的操作范围内。",
+        scenario:"同一“发送短信”业务要从供应商 A 切换到 B。业务 Action 不应重写；新 SDK 也不能借机访问任意 URL、文件系统或本地进程。",
+        normal:["各项目随意封装第三方 SDK，错误码和超时策略各不相同。","Provider 直接创建 HTTP Client，网络目标和凭证使用无法统一限制。","供应商 DTO 渗入业务层，切换 Provider 等同于重写 Service。","测试依赖真实外部环境，版本升级风险难以隔离。"],
+        domainry:["ProviderSet 声明 Connector、operation、输入输出 Schema 与合同 hash。","Runtime 注入受控 HTTP、MQTT、filesystem 或 process Transport。","外部 read/reserve/write effect 必须得到 Action 精确授权。","统一错误规范化、超时、测试替身与版本兼容校验。"],
+        flow:["稳定 Operation","选择 Provider","受控 Transport","规范化结果","Receipt"],
+        strengths:[["Provider 可插拔","业务 Action 只依赖稳定 operation，不依赖厂商 SDK。"],["第三方代码没有无限网络权","目标、超时、文件和进程能力由宿主策略控制。"],["协议变化被隔离","供应商字段、错误与版本留在 Connector 边界内。"]],
+        user:"更换短信、支付或 ERP 供应商时，业务流程和操作体验保持稳定。", fit:"多供应商短信、邮件、支付、ERP、存储和专有行业协议。", flex:"新 Provider 作为扩展注册，无需修改 Runtime；项目仍可实现特有 adapter。"
+      },
+      {
+        group:"Data Exchange Module", name:"Data Exchange", title:"大文件导入导出是长任务，不是一次 HTTP 请求",
+        subtitle:"数据量跨越请求边界后，需要 Job、Chunk、Artifact、进度、取消、断点、权限和失败恢复。",
+        claim:"强在把大文件处理变成可控制、可恢复的产品能力，同时不让批量入口绕过在线规则。",
+        scenario:"导入 100 万条客户数据，第 63 万条发现格式问题。系统要回答进度、错误、已应用范围、能否取消、如何重试、谁有权下载结果。",
+        normal:["请求内一次性读取 CSV，容易超时、爆内存并留下部分导入。","用脚本直连数据库，绕过权限、校验、生命周期和审计。","进度、取消、错误清单、Artifact TTL 与下载授权另行补建。","失败重跑整文件，已成功部分可能再次应用。"],
+        domainry:["项目提供获权 provider、格式和对象映射规则。","Data Exchange 独立拥有 Job、Chunk、Artifact 与进度状态。","流式编解码、完整校验后应用，并支持游标断点和取消。","Claim 使用 Lease/Fencing，提供有限重试、DLQ 与下载授权。"],
+        flow:["创建 Job","分块/流式校验","校验后应用","进度/取消/恢复","Artifact 下载"],
+        strengths:[["失败边界明确","每个 Chunk 有稳定状态，恢复不必从头猜测。"],["批量与在线同规则","真正应用时仍进入 Record/Mutation 的权限与校验。"],["文件产物有生命周期","生成、下载、过期与删除都能被控制和审计。"]],
+        user:"能看进度、取消任务、下载结果和错误清单；失败后可从明确位置恢复。", fit:"几十万到百万行导入导出、数据迁移、批量修复和后台文件生成。", flex:"项目定义格式与映射，存储和 Worker 可随规模变化，业务对象合同不变。"
+      },
+      {
+        group:"Agent Module", name:"Agent", title:"让 AI 会思考，但不能成为第二套后端",
+        subtitle:"模型擅长语言理解和规划，却不适合独自承担权限、事务、幂等和业务状态。推理可以开放，真实效果必须确定。",
+        claim:"强在把灵活推理与确定性执行分开：模型提出建议，每个真实效果都重新进入 Runtime 授权与 Action。",
+        scenario:"用户说“找出高风险客户并暂停额度”。模型需要分析数据并提出名单；真正暂停属于高风险变更，不能因为 Prompt 里写了“谨慎”就获得数据库权限。",
+        normal:["把数据库或大批内部工具直接交给模型，再靠 Prompt 防越权。","会话开始时授权一次，后续长期复用，忽略组织和权限变化。","对话、任务、工具调用、成本与重试只存在 Provider 日志。","自然语言歧义直接变成写操作，没有提案与确认边界。"],
+        domainry:["项目声明 Agent、Skill、可见 Object、允许 Action、结果和人工决策点。","Agent 独立拥有 Dialog、Task、Proposal、Provider Run 与 Tool ledger。","读取走获权对象查询，写入只调用允许的 Action。","每个真实 effect 重新检查当前权限、记录状态与 Guardrail。"],
+        flow:["理解/规划","获权读取","结构化 Proposal","人工确认","获权 Action"],
+        strengths:[["AI 不是数据库管理员","模型不能直接写库或绕过业务命令边界。"],["授权不会变成永久通行证","每次效果按当前身份和数据状态重新判断。"],["高风险先提案再执行","用户看清影响范围并确认，随后才产生确定结果。"]],
+        user:"AI 可以查、算、解释、建议和代办；敏感操作先确认，过程与结果可追踪。", fit:"经营助手、客服辅助、销售跟进、运维诊断和受控半自动流程。", flex:"模型 Provider 与 Skill 可替换，业务能力仍由 Object/Action 合同定义。"
+      },
+      {
+        group:"Metadata Module", name:"Metadata", title:"定义、字典、多语言和个性化不能有多份真相",
+        subtitle:"字段标签、状态字典和 Workspace 偏好如果复制到前端、业务表和各模块，很快会产生版本与展示漂移。",
+        claim:"强在所有消费者读取同一发布版本，同时允许不同语言和 Workspace 在明确扩展点上覆盖。",
+        scenario:"订单状态新增 pending_review，并调整中英文标签。列表、详情、报表、导出和 Agent 都应使用同一版本；某个 Workspace 还要显示自己的术语。",
+        normal:["字典写在前端常量、数据库表和后端枚举中，多处同步。","修改定义直接覆盖当前值，旧版本和恢复路径缺失。","多语言覆盖与租户个性化各业务自行设计。","多实例缓存无法确认 revision，短时间内展示不同定义。"],
+        domainry:["Metadata 独立拥有版本化定义、发布/恢复、本地化、字典与投影。","Workspace preference/rule set 在受控层叠规则中覆盖。","消费者按明确 revision 读取，缓存失效与多实例一致性可验证。","定义发现服务于页面、报表、导出和其他模块。"],
+        flow:["编写定义","校验/发布","生成 Revision","语言/Workspace 覆盖","统一投影"],
+        strengths:[["一份发布真相","所有入口使用相同字段、字典和定义版本。"],["变化可追踪可恢复","发布不是覆盖文件，版本与恢复边界明确。"],["个性化不复制核心定义","语言和 Workspace 差异在明确层级叠加。"]],
+        user:"不同页面和导出中的标签、选项保持一致；可显示本地语言和组织术语。", fit:"多语言产品、状态字典、动态表单、Workspace 个性化和定义发现。", flex:"项目扩展语言与偏好，无需 Fork Runtime 或复制整份对象定义。"
+      },
+      {
+        group:"Audit Module", name:"Audit", title:"操作历史必须是业务证据，不是一行日志",
+        subtitle:"日志回答代码发生了什么；Audit 要回答谁在何时，以什么动作，改变了哪个业务对象，并能按权限查询与导出。",
+        claim:"强在审计事件与业务 Mutation 一起形成不可变事实，避免“业务成功但审计没写”或事后被覆盖。",
+        scenario:"审计人员追查一笔采购审批：需要看到 Actor、Action、Subject、时间、结果和关键字段变化，而不是搜索可能已轮转的应用日志。",
+        normal:["业务表只存 updated_by，历史修改被下一次更新覆盖。","每个 Service 自由打印日志，字段、格式和关联 identity 不一致。","日志与业务提交不原子，任一方成功都可能留下证据缺口。","导出审计数据时又容易暴露当前用户不可见字段。"],
+        domainry:["Audit 独立追加不可变事件，拥有 Actor/Subject 索引和事件模型。","Module 形态可与业务 Mutation 在同一事务提交。","事件携带稳定业务 identity、Action 与结果，并支持去重。","查询、字段投影、导出和留存继续受当前权限与 Lifecycle 控制。"],
+        flow:["业务 Action","原子追加事件","不可变存储","获权查询","留存/导出"],
+        strengths:[["证据与业务结果同生共死","不会出现业务已改但审计因崩溃永久缺失。"],["审计不是技术日志","以业务 Actor、Action 和 Subject 组织，可用于合规追踪。"],["查询审计也有权限","留证不等于任何管理员都能看到全部敏感字段。"]],
+        user:"能查询“谁在什么时候做了什么”，审批和关键变更有可信历史。", fit:"合规追踪、审批证据、资金操作、管理员行为和争议回溯。", flex:"不同业务定义自己的事件语义，Audit 提供统一不可变与查询治理。"
+      },
+      {
+        group:"Lifecycle Module", name:"Lifecycle", title:"数据保留、冻结和删除必须可预览、可证明",
+        subtitle:"合规删除不是执行 DELETE；还要处理法律冻结、跨 owner 数据、外部系统、归档证据和备份中的后续重放。",
+        claim:"强在把保留与删除做成有策略、有预览、有证据、有对账的过程，避免误删和“删了但无法证明”。",
+        scenario:"用户申请删除个人数据，但部分记录受财务保留期约束，另一些被 legal hold 冻结；其数据还分布在 Notification、Agent 和外部 CRM。",
+        normal:["定时脚本按日期直接 DELETE，无法预览影响范围。","隐私请求通过工单人工查询多个数据库和外部系统。","Legal hold 与普通保留条件混在脚本 if/else 中。","删除后没有跨 owner 回执、外部对账和备份重放证据。"],
+        domainry:["Lifecycle 独立拥有 retention policy、legal hold 与 subject request。","清理先 preview，再以 Job 分批执行并记录 archive/erasure evidence。","跨 owner 使用明确 export/erase 合同，不直接访问他人私有表。","外部删除、失败重试和备份删除重放都有状态与审计。"],
+        flow:["解析保留策略","检查 Legal Hold","Preview","分批清理/跨 owner","证据/对账"],
+        strengths:[["删除前知道会发生什么","预览和策略判定降低误删风险。"],["跨模块不靠脚本摸表","每个 owner 负责自己的导出与擦除事实。"],["完成可以被证明","内部、外部和后续重放都有 evidence 与状态。"]],
+        user:"可以发起数据访问/删除请求并看到进度；冻结与保留规则有清晰解释。", fit:"GDPR/隐私请求、行业保留期、法律冻结、归档和数据清理。", flex:"各 owner 保持数据所有权，项目可组合不同策略与外部擦除适配。"
+      },
+      {
+        group:"Monitoring Module", name:"Monitoring", title:"统一回答“系统现在是否健康”",
+        subtitle:"Monitoring、Audit 和日志不是同一件事：前者看运行健康，Audit 看业务行为，日志看一次代码执行。",
+        claim:"强在把各 owner 的健康、积压、存储和迁移状态汇聚成同一观察口径，而不是一堆互不兼容的 /health。",
+        scenario:"发布后接口仍返回 200，但 Scheduler 积压上升、Notification Worker 停止、某模块 migration 未就绪。运维需要在接流量前得到统一判断。",
+        normal:["每个模块自定义健康接口、指标名、阈值和时间窗口。","只检查进程存活，不检查依赖、迁移、队列和存储可用性。","Module 与 SaaS 形态返回不同信息，平台无法统一聚合。","出问题后在日志、审计和监控间反复猜测哪一个代表真实健康。"],
+        domainry:["Monitoring 聚合各 owner 提供的 observation、readiness 与 migration telemetry。","统一健康判级、指标窗口、保留和查询合同。","同时观察队列积压、Worker、存储和依赖就绪状态。","Module/SaaS 通过相同观测合同对外呈现。"],
+        flow:["Owner Observation","标准化指标","Readiness 判级","聚合视图","告警/诊断"],
+        strengths:[["不把存活当健康","进程在不代表模块能正确处理业务，依赖与积压也进入判断。"],["跨模块同一语言","平台能比较并聚合不同 owner 的状态。"],["拓扑变化不改变观察语义","本地模块和远程服务提供同类健康证据。"]],
+        user:"运维人员能看到系统健康、积压和迁移状态，更早发现“表面可用、实际停摆”。", fit:"生产发布检查、SRE 看板、容量观察、故障定位和多模块系统。", flex:"模块自有专业指标，Monitoring 只统一观察合同，不夺走 owner 的运行真相。"
+      },
+      {
+        group:"Runtime Core", name:"Operations", title:"失败必须有恢复入口，而不只是错误日志",
+        subtitle:"异步任务、Outbox、Scheduler 和模块 Worker 都会失败；管理员需要围绕原执行 identity 诊断和恢复，而不是改库重跑。",
+        claim:"强在把重试、取消、租约释放、死信处理和 Break-glass 做成受权限与审计控制的产品能力。",
+        scenario:"一次 ERP 交接连续失败进入 DLQ。修复连接后应重试原 message identity，而不是重新批准订单；还要防止旧 Worker 在此后回写。",
+        normal:["失败只写日志，管理员修改数据库或重启服务。","每类 Worker 各自维护状态和手工恢复脚本。","点击重试可能重新制造业务效果，没人能证明是否安全。","强制释放或越权修复没有权限、预览和审计。"],
+        domainry:["异步 owner 提供 Receipt、Run/Event、Lease、Heartbeat、Fencing 和 DLQ。","Operations 聚合查询、诊断、预览、重试、取消与租约释放。","恢复围绕稳定 operation/message identity，不重做上游业务。","Break-glass 与批量操作需要显式权限、原因和审计。"],
+        flow:["发现失败/DLQ","查看证据","预览恢复","按 identity 执行","审计结果"],
+        strengths:[["失败是一种状态","可查询、可分类、可处置，不会沉没在日志中。"],["恢复不会扩大业务效果","幂等 identity 与 Fencing 防止重复和过期 Worker 覆盖。"],["人工操作也受治理","高权限恢复有预览、授权、原因与留痕。"]],
+        user:"管理员能看见失败、理解原因并安全重试或取消；普通用户得到明确任务状态。", fit:"异步任务、集成、调度、批处理、死信与生产事故恢复。", flex:"每个 owner 保留自己的状态机，Operations 通过统一治理合同组合它们。"
+      },
+      {
+        group:"Runtime Core", name:"Secure Files", title:"业务附件不能只相信文件名和 Content-Type",
+        subtitle:"上传、下载、扫描、内容 identity、Workspace 路径和权限必须共同决定一个文件是否可被业务使用。",
+        claim:"强在文件先成为受控业务资源，通过 clean verification 后才能进入敏感 Action，而不是上传成功就默认可信。",
+        scenario:"用户上传合同 PDF。系统要限制大小和类型、隔离 Workspace、记录内容 hash、等待扫描结果，并确保下载者仍有当前业务记录权限。",
+        normal:["相信扩展名与浏览器 Content-Type，上传后立即被业务使用。","文件路径和对象记录缺少稳定 identity，替换文件后扫描结果仍被复用。","下载 URL 长期有效，不重新检查 Workspace、对象和字段权限。","各业务独立接存储与杀毒服务，错误和状态无法统一。"],
+        domainry:["文件字段声明大小、内容类型和业务用途。","Runtime 校验 Workspace 路径、对象、字段与当前权限并登记内容 hash。","扫描 Receipt 绑定文件 identity，敏感 Action 可要求 clean verification。","下载重新检查当前对象与字段可见性，Artifact 生命周期明确。"],
+        flow:["获权上传","内容约束/hash","扫描 Receipt","业务使用验证","获权下载/清理"],
+        strengths:[["扫描结果不能张冠李戴","文件内容变化后 identity 变化，旧 Receipt 不能继续使用。"],["文件权限跟随业务对象","不是拿到 URL 就永久可下载。"],["存储与业务解耦","项目可替换存储和扫描 Provider，安全合同不变。"]],
+        user:"附件上传、扫描和下载状态清晰；受限或感染文件不会被业务流程直接采用。", fit:"合同、发票、证明材料、批量文件和包含敏感信息的业务附件。", flex:"存储与扫描 Provider 可替换，项目仍按对象字段声明文件业务语义。"
+      },
+      {
+        group:"Platform", name:"Module / SaaS", title:"先用模块交付，规模上来再服务化",
+        subtitle:"部署形态不应在项目第一天被锁死；但从进程内切到远程也不能只把函数调用换成 HTTP。",
+        claim:"强在状态 owner 与业务合同不随拓扑变化：可以晚做拆分决策，又不会掩盖远程一致性成本。",
+        scenario:"Scheduler 早期作为 Module 与 Runtime 共进程、共享宿主数据库；任务规模增长后独立扩缩容，项目业务和前端仍调用相同能力。",
+        normal:["一开始在大单体和全微服务之间二选一。","业务代码直接依赖实现类、私有表和内部 HTTP 路径。","拆分时才补认证、超时、幂等、回执、迁移与故障策略。","本地事务语义被错误地假装可以延伸到远程服务。"],
+        domainry:["项目通过稳定 SDK Factory/Binding 选择 Module 或 Remote Factory。","模块始终拥有自己的状态、migration、worker 和产品 HTTP Surface。","切换前验证协议、capability、audience、幂等、Receipt 与不可用策略。","状态迁移、双 Worker Fencing、切流和回滚都有显式门禁。"],
+        flow:["稳定能力合同","Module 运行","容量/隔离触发","迁移与切流","SaaS 运行"],
+        strengths:[["避免过早微服务成本","小规模先共进程交付，不预付网络与运维复杂度。"],["拆分不重写业务","调用方依赖 Binding，而非模块内部表或实现类。"],["不隐瞒远程失败语义","跨进程后必须使用 Receipt、重试和对账。"]],
+        user:"系统规模变化时产品 API 与使用方式保持稳定，同时关键模块可独立扩容和隔离故障。", fit:"从单体起步、未来可能独立扩缩容或需要隔离的专业能力模块。", flex:"每项能力独立选择 Module/SaaS，不要求整套系统一次性拆分。"
+      },
+      {
+        group:"Platform", name:"Delivery + Portability", title:"数据库、前端和项目扩展可变，运行合同不能漂移",
+        subtitle:"真正可交付的框架不仅要能启动，还要在接流量前发现制品错配、半升级、Schema 不一致和不兼容实例。",
+        claim:"强在允许项目替换数据库、前端和配置，同时用签名、hash、revision 与迁移合同锁住不可漂移的边界。",
+        scenario:"同一项目开发时使用 SQLite，生产使用 PostgreSQL；前端完全项目化。发布新版本时，某实例却混入旧 SDK 或旧 Handler，必须在接流量前失败。",
+        normal:["业务代码绑定单一数据库方言，模块各建自己的迁移工具与台账。","前后端、生成 SDK、Handler 与 Connector 版本靠发布人员人工对应。","半升级实例仍接流量，直到写入不兼容数据才暴露。","为了改品牌、语言或页面结构直接 Fork 框架。"],
+        domainry:["Runtime 与嵌入模块复用宿主数据库、方言、事务、迁移锁和唯一迁移台账。","支持 SQLite、PostgreSQL、MySQL，持久化合同通过统一 ORM 渲染。","启动校验签名制品、Project、Generated SDK、Registry、前端和 Schema hash。","前端 bundle、i18n 与项目配置从明确扩展入口加载。"],
+        flow:["构建签名制品","校验 Registry/Schema","统一迁移","Readiness 门禁","接入流量"],
+        strengths:[["错误版本提前失败","不让半升级实例先污染业务数据再报警。"],["数据库选择不复制业务","单机、私有化和服务化环境可采用不同方言。"],["项目化不等于 Fork","页面、品牌、语言和配置可以变化，治理底座保持一致。"]],
+        user:"升级更稳定；不同交付环境保持相同业务行为，前端体验仍可完全按项目定制。", fit:"私有化、多数据库、多环境发布、项目品牌化和严格版本治理。", flex:"变化点全部有扩展口；保障点通过制品、合同和启动门禁保持稳定。"
+      }
+    ];
+
+    const esc = value => String(value).replace(/[&<>\"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
+    const renderList = items => items.map(item => `<li>${esc(item)}</li>`).join("");
+    const renderCover = () => `<main class="sheet cover">
+      <div class="cover-content">
+        <div>
+          <p class="eyebrow">Domainry Runtime · Overview · Page 1</p>
+          <h1>业务系统越往后做，难点越不是 CRUD</h1>
+          <p class="lead">真正拖慢交付的，是权限散落、规则旁路、异步失败、外部一致性，以及新入口带来的重复治理。</p>
+        </div>
+        <div class="cover-rule"></div>
+      </div>
+      <div class="cover-promise"><span>业务规则只实现一次</span><span>权限在所有入口一致</span><span>异步失败可恢复</span><span>模块与项目保持灵活</span></div>
+      <footer><span><strong>Domainry Runtime 完整能力讲解</strong> · 24 个能力点逐页展开</span><span>1 / ${capabilities.length + 1}</span></footer>
+    </main>`;
+    const render = (capability, index) => {
+      const number = String(index + 1).padStart(2, "0");
+      return `<main class="sheet">
+        <header class="page-head"><div><p class="eyebrow">Domainry · ${esc(capability.group)} · Capability ${number}</p><h1>${esc(capability.name)}：${esc(capability.title)}</h1><p class="subtitle">${esc(capability.subtitle)}</p></div><div class="page-no"><b>${number}</b><span>${esc(capability.name)}</span></div></header>
+        <section class="claim"><span>一句话讲法</span><strong>${esc(capability.claim)}</strong></section>
+        <section class="scenario"><b>开发现场</b><span>${esc(capability.scenario)}</span></section>
+        <section class="contrast">
+          <article class="approach normal"><h2>普通开发如何保证，以及代价</h2><ul>${renderList(capability.normal)}</ul></article>
+          <article class="approach domainry"><h2>Domainry 让项目写什么，框架做什么</h2><ul>${renderList(capability.domainry)}</ul><div class="flow">${capability.flow.map(item => `<span>${esc(item)}</span>`).join("")}</div></article>
+        </section>
+        <h2 class="strength-label">这个功能点到底强在哪里</h2>
+        <section class="strengths">${capability.strengths.map(item => `<div class="strength"><b>${esc(item[0])}</b><span>${esc(item[1])}</span></div>`).join("")}</section>
+        <section class="bottom"><div class="bottom-card user"><b>用户能感知什么</b>${esc(capability.user)}</div><div class="bottom-card fit"><b>适配场景</b>${esc(capability.fit)}</div><div class="bottom-card flex"><b>灵活性体现</b>${esc(capability.flex)}</div></section>
+        <footer><span><strong>讲解顺序：</strong>先讲开发现场，再讲普通代价，最后落到三项核心强点。</span><span>${index + 2} / ${capabilities.length + 1}</span></footer>
+      </main>`;
+    };
+    document.body.innerHTML = renderCover() + capabilities.map(render).join("");
+  </script>
+</body>
+</html>

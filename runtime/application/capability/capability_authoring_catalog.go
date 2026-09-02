@@ -25,7 +25,7 @@ func RuntimeAuthoringCapabilities() capabilitycontract.CapabilityRuntimeAuthorin
 			authoringSchemaDomain(), authoringActionDomain(), authoringWorkflowDomain(),
 			authoringAutomationDomain(), authoringProfileBindingDomain(), authoringMaintenanceDomain(),
 		},
-		Instance: capabilitycontract.CapabilityAuthoringInstance{ObjectKeys: []string{}, FieldKeys: []capabilitycontract.CapabilityAuthoringScopedValues{}, ActionKeys: []string{}, WorkflowKeys: []string{}, ReportKeys: []string{}, RoleKeys: []string{}, PermissionKeys: []string{}, UserIDs: []string{}, WorkforceProfileIDs: []string{}, DepartmentIDs: []string{}, RoleIDs: []string{}, MenuIDs: []string{}, ConnectorKeys: []string{}, ConnectionKeys: []string{}, ConnectorOperations: []capabilitycontract.CapabilityAuthoringConnectorBinding{}},
+		Instance: capabilitycontract.CapabilityAuthoringInstance{ObjectKeys: []string{}, FieldKeys: []capabilitycontract.CapabilityAuthoringScopedValues{}, ActionKeys: []string{}, WorkflowKeys: []string{}, ReportKeys: []string{}, RoleKeys: []string{}, PermissionKeys: []string{}, UserIDs: []string{}, OrgIDs: []string{}, RoleIDs: []string{}, MenuIDs: []string{}, ConnectorKeys: []string{}, ConnectionKeys: []string{}, ConnectorOperations: []capabilitycontract.CapabilityAuthoringConnectorBinding{}},
 	}
 	normalizeSourceControlledMetadataCapabilities(&contract)
 	materializeAuthoringCapabilityPermissions(&contract)

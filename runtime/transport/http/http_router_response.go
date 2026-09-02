@@ -13,6 +13,7 @@ import (
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 
 	apperror "github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/logging"
@@ -87,7 +88,7 @@ func (s *HTTPRouter) principalFromRequest(r *http.Request) principalmodel.Princi
 			businesssystemapplication.ActionBusinessSystemSnapshot,
 			businesssystemapplication.ActionValidateRuntimeAuthoring,
 			businesssystemapplication.ActionVerifyRuntimeAuthoringDelivery,
-			"scheduler.definition.read",
+			schedulersdk.ActionSchedulerDefinitionsList,
 			"runtime.automation.list_automation_rules",
 			"runtime.automation.list_automation_executions",
 		)

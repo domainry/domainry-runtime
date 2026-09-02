@@ -14,6 +14,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	operationspersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
@@ -29,7 +30,13 @@ func TestOperationsCommandHTTPReceiptReplayConflictAndStatus(t *testing.T) {
 	if err := runtimeStore.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"runtime.scheduler.run_ops_scheduler_job", "operations.read", "runtime.maintenance.write"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{
+		"scheduler.definitions.run",
+		operationscontract.ActionListOperations,
+		operationscontract.ActionGetOperation,
+		operationscontract.ActionEnableMaintenance,
+		operationscontract.ActionListControls,
+	}})
 	operationsStore := operationspersistence.NewOperationsStore(runtimeStore)
 	service := operationsapplication.NewOperationsApplicationService(operationsStore, nil, nil, func() string { return "http-1" })
 	controlOperations := operationsapplication.NewOperationsApplicationService(operationsStore, nil, nil, func() string { return "http-control" })
@@ -65,12 +72,15 @@ func TestOperationsCommandHTTPReceiptReplayConflictAndStatus(t *testing.T) {
 	})
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
-	body := map[string]any{"kind": "scheduler.job.run", "permission": "runtime.scheduler.run_ops_scheduler_job", "resource_type": "scheduler_definition", "resource_id": "daily-report", "reason": "release", "payload": map[string]any{"mode": "manual"}}
+	body := map[string]any{"kind": "scheduler.job.run", "resource_type": "scheduler_definition", "resource_id": "daily-report", "reason": "release", "payload": map[string]any{"mode": "manual"}}
 
 	first := operationsRequest(t, mux, http.MethodPost, "/operations", "operation-key", body, http.StatusAccepted)
 	operationID := first["command"].(map[string]any)["id"].(string)
 	if operationID != "operation_http-1" {
 		t.Fatalf("operation id=%s", operationID)
+	}
+	if actionKey := first["command"].(map[string]any)["action_key"]; actionKey != "scheduler.definitions.run" {
+		t.Fatalf("server-derived action_key=%v", actionKey)
 	}
 	replayed := operationsRequest(t, mux, http.MethodPost, "/operations", "operation-key", body, http.StatusOK)
 	if replayed["command"].(map[string]any)["id"] != operationID {

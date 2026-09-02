@@ -1,11 +1,11 @@
 package http
 
 import (
+	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 	"net/http"
 	"net/http/httptest"
 	"testing"

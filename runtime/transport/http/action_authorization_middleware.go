@@ -5,7 +5,9 @@ import (
 	"strings"
 
 	actioncontract "github.com/domainry/domainry-foundation/action"
+	runtimeactioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
+	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 )
 
 type resolvedRequestAction struct {
@@ -34,6 +36,11 @@ func (s *HTTPRouter) resolveRequestAction(routes *http.ServeMux, r *http.Request
 	if authoredActionRoute(r.Method, policy.path) {
 		definition, found := registry.ResolveNonHTTP("runtime_action", matchedRouteValue(policy.path, r.URL.Path, "actionKey"))
 		return resolvedRequestAction{definition: definition, found: found && actionBelongsToObject(definition, objectKey), dynamic: true}
+	}
+	if workflowRunRoute(r.Method, policy.path) {
+		workflowKey := matchedRouteValue(policy.path, r.URL.Path, "workflowKey")
+		definition, found := registry.ResolveNonHTTP(workflowcontract.RunActionBindingKind, workflowKey)
+		return resolvedRequestAction{definition: definition, found: found, dynamic: true}
 	}
 	definition, found := registry.ResolveHTTP(r.Method, policy.path)
 	return resolvedRequestAction{definition: definition, found: found}
@@ -92,6 +99,18 @@ func authoredActionRoute(method, routeTemplate string) bool {
 	}
 }
 
+func workflowRunRoute(method, routeTemplate string) bool {
+	if strings.ToUpper(strings.TrimSpace(method)) != http.MethodPost {
+		return false
+	}
+	switch strings.TrimSpace(routeTemplate) {
+	case "/business/workflows/{workflowKey}/run", "/portal/workflows/{workflowKey}/run":
+		return true
+	default:
+		return false
+	}
+}
+
 func actionBelongsToObject(definition actioncontract.ActionDefinition, objectKey string) bool {
 	objectKey = strings.TrimSpace(objectKey)
 	return objectKey != "" && definition.Permission != nil && strings.TrimSpace(definition.Permission.ResourceKey) == objectKey
@@ -118,34 +137,38 @@ func (s *HTTPRouter) withActionAuthorization(routes *http.ServeMux, next http.Ha
 		}
 		action := resolved.definition
 		principal := s.principalFromRequest(r)
+		serveAuthorized := func() {
+			ctx := runtimeactioncontract.WithAuthorizedAction(r.Context(), action)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		}
 		switch action.Authorization.Strategy {
 		case actioncontract.AuthorizationAnonymousProtocol:
-			next.ServeHTTP(w, r)
+			serveAuthorized()
 			return
 		case actioncontract.AuthorizationDelegatedCredential:
-			next.ServeHTTP(w, r)
+			serveAuthorized()
 			return
 		case actioncontract.AuthorizationAuthenticatedPrincipal:
 			if principal.Known {
-				next.ServeHTTP(w, r)
+				serveAuthorized()
 				return
 			}
 			writeError(w, r, http.StatusUnauthorized, "auth.session_expired")
 		case actioncontract.AuthorizationExactRolePermission:
 			if principal.Known && action.Permission != nil && principal.HasExactPermission(action.Permission.Key) {
-				next.ServeHTTP(w, r)
+				serveAuthorized()
 				return
 			}
 			writeError(w, r, http.StatusForbidden, "auth.permission_denied")
 		case actioncontract.AuthorizationServiceIdentity:
 			if principal.Known && strings.TrimSpace(apiKeyTokenFromRequest(r)) != "" {
-				next.ServeHTTP(w, r)
+				serveAuthorized()
 				return
 			}
 			writeError(w, r, http.StatusUnauthorized, "auth.service_identity_required")
 		case actioncontract.AuthorizationOperationsIdentity:
 			if operationscontract.BuilderTaskID(r.Context()) != "" {
-				next.ServeHTTP(w, r)
+				serveAuthorized()
 				return
 			}
 			writeError(w, r, http.StatusForbidden, "auth.operations_identity_required")

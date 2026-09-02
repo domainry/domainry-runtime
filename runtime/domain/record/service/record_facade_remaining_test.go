@@ -87,18 +87,6 @@ func TestRecordDomainServiceDelegatesOwnerOperations(t *testing.T) {
 	}
 }
 
-func TestRecordScopeOwnerFactDerivationFacadeHandlesUnavailableAndDelegates(t *testing.T) {
-	var absent *RecordScopeOwnerFactDerivationDomainService
-	if err := absent.Apply(t.Context(), "workspace", definitionmodel.ObjectSchema{}, map[string]any{}, "record"); err == nil {
-		t.Fatal("nil scope owner fact derivation service accepted mutation")
-	}
-	service := NewRecordScopeOwnerFactDerivationDomainService(RecordScopeOwnerFactDerivationDependencies{})
-	data := map[string]any{"name": "untouched"}
-	if err := service.Apply(t.Context(), "workspace", definitionmodel.ObjectSchema{Key: "customer"}, data, "customer-1"); err != nil || data["name"] != "untouched" {
-		t.Fatalf("scope owner fact derivation data=%#v err=%v", data, err)
-	}
-}
-
 func TestRecordValidationFacadeDelegatesEmptyPolicySet(t *testing.T) {
 	repository := &uniquenessRepositoryProbe{}
 	service := NewRecordValidationDomainService(RecordValidationDependencies{

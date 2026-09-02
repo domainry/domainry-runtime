@@ -37,12 +37,10 @@ func TestProjectMainCompilesUsingOnlyGeneratedCompositionAndRuntimehost(t *testi
 	integrationModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-integration")
 	lifecycleSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-lifecycle-sdk")
 	lifecycleModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-lifecycle")
-	partySDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-party-sdk")
-	partyModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-party")
 	foundationRoot := siblingModuleRoot(t, repositoryRoot, "domainry-foundation")
 	ormRoot := siblingModuleRoot(t, repositoryRoot, "domainry-orm")
 	externalRoot := t.TempDir()
-	goMod := []byte("module example.com/domainry-project\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/domainry/domainry-runtime v0.0.0\n\tgithub.com/domainry/domainry-identity v0.0.0\n\tgithub.com/domainry/domainry-notification v0.0.0\n\tgithub.com/domainry/domainry-party v0.0.0\n\tgithub.com/domainry/domainry-monitoring v0.0.0\n\tgithub.com/domainry/domainry-scheduler v0.0.0\n)\n\nreplace github.com/domainry/domainry-runtime => " + repositoryRoot + "\nreplace github.com/domainry/domainry-foundation => " + foundationRoot + "\nreplace github.com/domainry/domainry-orm => " + ormRoot + "\nreplace github.com/domainry/domainry-audit-sdk => " + auditSDKRoot + "\nreplace github.com/domainry/domainry-audit => " + auditModuleRoot + "\nreplace github.com/domainry/domainry-identity-sdk => " + identitySDKRoot + "\nreplace github.com/domainry/domainry-identity => " + identityModuleRoot + "\nreplace github.com/domainry/domainry-notification-sdk => " + notificationSDKRoot + "\nreplace github.com/domainry/domainry-notification => " + notificationModuleRoot + "\nreplace github.com/domainry/domainry-party-sdk => " + partySDKRoot + "\nreplace github.com/domainry/domainry-party => " + partyModuleRoot + "\nreplace github.com/domainry/domainry-monitoring-sdk => " + monitoringSDKRoot + "\nreplace github.com/domainry/domainry-monitoring => " + monitoringModuleRoot + "\nreplace github.com/domainry/domainry-scheduler-sdk => " + schedulerSDKRoot + "\nreplace github.com/domainry/domainry-scheduler => " + schedulerModuleRoot + "\n")
+	goMod := []byte("module example.com/domainry-project\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/domainry/domainry-runtime v0.0.0\n\tgithub.com/domainry/domainry-identity v0.0.0\n\tgithub.com/domainry/domainry-notification v0.0.0\n\tgithub.com/domainry/domainry-monitoring v0.0.0\n\tgithub.com/domainry/domainry-scheduler v0.0.0\n)\n\nreplace github.com/domainry/domainry-runtime => " + repositoryRoot + "\nreplace github.com/domainry/domainry-foundation => " + foundationRoot + "\nreplace github.com/domainry/domainry-orm => " + ormRoot + "\nreplace github.com/domainry/domainry-audit-sdk => " + auditSDKRoot + "\nreplace github.com/domainry/domainry-audit => " + auditModuleRoot + "\nreplace github.com/domainry/domainry-identity-sdk => " + identitySDKRoot + "\nreplace github.com/domainry/domainry-identity => " + identityModuleRoot + "\nreplace github.com/domainry/domainry-notification-sdk => " + notificationSDKRoot + "\nreplace github.com/domainry/domainry-notification => " + notificationModuleRoot + "\nreplace github.com/domainry/domainry-monitoring-sdk => " + monitoringSDKRoot + "\nreplace github.com/domainry/domainry-monitoring => " + monitoringModuleRoot + "\nreplace github.com/domainry/domainry-scheduler-sdk => " + schedulerSDKRoot + "\nreplace github.com/domainry/domainry-scheduler => " + schedulerModuleRoot + "\n")
 	goMod = append(goMod, []byte("replace github.com/domainry/domainry-data-exchange-sdk => "+dataExchangeSDKRoot+"\nreplace github.com/domainry/domainry-data-exchange => "+dataExchangeModuleRoot+"\n")...)
 	goMod = append(goMod, []byte("replace github.com/domainry/domainry-agent-sdk => "+agentSDKRoot+"\nreplace github.com/domainry/domainry-agent => "+agentModuleRoot+"\n")...)
 	goMod = append(goMod, []byte("replace github.com/domainry/domainry-report-sdk => "+reportSDKRoot+"\nreplace github.com/domainry/domainry-report => "+reportModuleRoot+"\n")...)
@@ -64,7 +62,6 @@ import (
 	dataexchangemodule "github.com/domainry/domainry-data-exchange/module"
 	identitymodule "github.com/domainry/domainry-identity/module"
 	notificationmodule "github.com/domainry/domainry-notification/module"
-	partymodule "github.com/domainry/domainry-party/module"
 	monitoringmodule "github.com/domainry/domainry-monitoring/module"
 	schedulermodule "github.com/domainry/domainry-scheduler/module"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
@@ -82,7 +79,6 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 		},
 		IdentityFactory: identitymodule.NewFactory(identitymodule.OptionsFromEnvironment()),
 		NotificationFactory: notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()),
-		PartyFactory: partymodule.NewFactory(partymodule.OptionsFromEnvironment()),
 		MonitoringFactory: monitoringmodule.NewFactory(monitoringmodule.OptionsFromEnvironment()),
 		SchedulerFactory: schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()),
 		DataExchangeFactory: dataexchangemodule.NewFactory(dataexchangemodule.Options{}),
@@ -108,8 +104,6 @@ func TestProjectMainCompilesUsingSaaSFactoryWithoutIdentityModule(t *testing.T) 
 	auditModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-audit")
 	notificationSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-notification-sdk")
 	notificationModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-notification")
-	partySDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-party-sdk")
-	partyModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-party")
 	monitoringSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-monitoring-sdk")
 	schedulerSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-scheduler-sdk")
 	schedulerModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-scheduler")
@@ -128,7 +122,7 @@ func TestProjectMainCompilesUsingSaaSFactoryWithoutIdentityModule(t *testing.T) 
 	foundationRoot := siblingModuleRoot(t, repositoryRoot, "domainry-foundation")
 	ormRoot := siblingModuleRoot(t, repositoryRoot, "domainry-orm")
 	externalRoot := t.TempDir()
-	goMod := []byte("module example.com/domainry-saas-project\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/domainry/domainry-runtime v0.0.0\n\tgithub.com/domainry/domainry-identity-sdk v0.0.0\n\tgithub.com/domainry/domainry-notification v0.0.0\n\tgithub.com/domainry/domainry-notification-sdk v0.0.0\n\tgithub.com/domainry/domainry-party v0.0.0\n\tgithub.com/domainry/domainry-party-sdk v0.0.0\n\tgithub.com/domainry/domainry-monitoring-sdk v0.0.0\n\tgithub.com/domainry/domainry-scheduler v0.0.0\n)\n\nreplace github.com/domainry/domainry-runtime => " + repositoryRoot + "\nreplace github.com/domainry/domainry-foundation => " + foundationRoot + "\nreplace github.com/domainry/domainry-orm => " + ormRoot + "\nreplace github.com/domainry/domainry-audit-sdk => " + auditSDKRoot + "\nreplace github.com/domainry/domainry-audit => " + auditModuleRoot + "\nreplace github.com/domainry/domainry-identity-sdk => " + identitySDKRoot + "\nreplace github.com/domainry/domainry-notification-sdk => " + notificationSDKRoot + "\nreplace github.com/domainry/domainry-notification => " + notificationModuleRoot + "\nreplace github.com/domainry/domainry-party-sdk => " + partySDKRoot + "\nreplace github.com/domainry/domainry-party => " + partyModuleRoot + "\nreplace github.com/domainry/domainry-monitoring-sdk => " + monitoringSDKRoot + "\nreplace github.com/domainry/domainry-scheduler-sdk => " + schedulerSDKRoot + "\nreplace github.com/domainry/domainry-scheduler => " + schedulerModuleRoot + "\n")
+	goMod := []byte("module example.com/domainry-saas-project\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/domainry/domainry-runtime v0.0.0\n\tgithub.com/domainry/domainry-identity-sdk v0.0.0\n\tgithub.com/domainry/domainry-notification v0.0.0\n\tgithub.com/domainry/domainry-notification-sdk v0.0.0\n\tgithub.com/domainry/domainry-monitoring-sdk v0.0.0\n\tgithub.com/domainry/domainry-scheduler v0.0.0\n)\n\nreplace github.com/domainry/domainry-runtime => " + repositoryRoot + "\nreplace github.com/domainry/domainry-foundation => " + foundationRoot + "\nreplace github.com/domainry/domainry-orm => " + ormRoot + "\nreplace github.com/domainry/domainry-audit-sdk => " + auditSDKRoot + "\nreplace github.com/domainry/domainry-audit => " + auditModuleRoot + "\nreplace github.com/domainry/domainry-identity-sdk => " + identitySDKRoot + "\nreplace github.com/domainry/domainry-notification-sdk => " + notificationSDKRoot + "\nreplace github.com/domainry/domainry-notification => " + notificationModuleRoot + "\nreplace github.com/domainry/domainry-monitoring-sdk => " + monitoringSDKRoot + "\nreplace github.com/domainry/domainry-scheduler-sdk => " + schedulerSDKRoot + "\nreplace github.com/domainry/domainry-scheduler => " + schedulerModuleRoot + "\n")
 	goMod = append(goMod, []byte("replace github.com/domainry/domainry-data-exchange-sdk => "+dataExchangeSDKRoot+"\nreplace github.com/domainry/domainry-data-exchange => "+dataExchangeModuleRoot+"\n")...)
 	goMod = append(goMod, []byte("replace github.com/domainry/domainry-agent-sdk => "+agentSDKRoot+"\nreplace github.com/domainry/domainry-agent => "+agentModuleRoot+"\n")...)
 	goMod = append(goMod, []byte("replace github.com/domainry/domainry-report-sdk => "+reportSDKRoot+"\nreplace github.com/domainry/domainry-report => "+reportModuleRoot+"\n")...)
@@ -151,8 +145,6 @@ import (
 	identityremote "github.com/domainry/domainry-identity-sdk/remote"
 	notificationmodule "github.com/domainry/domainry-notification/module"
 	notificationremote "github.com/domainry/domainry-notification-sdk/remote"
-	partyremote "github.com/domainry/domainry-party-sdk/remote"
-	partymodule "github.com/domainry/domainry-party/module"
 	monitoringremote "github.com/domainry/domainry-monitoring-sdk/remote"
 	schedulerremote "github.com/domainry/domainry-scheduler/remote"
 	schedulerhttp "github.com/domainry/domainry-scheduler-sdk/saashost/httptransport"
@@ -171,7 +163,6 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 		},
 		IdentityFactory: identityremote.NewFactory(identityremote.ConfigFromEnvironment()),
 		NotificationFactory: notificationmodule.NewSaaSFactory(notificationremote.NewFactory(notificationremote.ConfigFromEnvironment())),
-		PartyFactory: partymodule.NewSaaSFactory(partyremote.NewFactory(partyremote.Config{})),
 		MonitoringFactory: monitoringremote.NewFactory(monitoringremote.ConfigFromEnvironment()),
 		SchedulerFactory: schedulerremote.NewHTTPFactory(schedulerhttp.ConfigFromEnvironment()),
 		DataExchangeFactory: dataexchangeremote.NewFactory(nil),

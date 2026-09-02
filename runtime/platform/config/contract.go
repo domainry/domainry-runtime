@@ -246,14 +246,11 @@ func (c Config) Validate() error {
 	}
 	for name, value := range map[string]string{
 		"IDENTITY_WORKSPACE_ID": c.IdentityWorkspaceID, "NOTIFICATION_TENANT_ID": c.NotificationTenantID,
-		"NOTIFICATION_WORKSPACE_ID": c.NotificationWorkspaceID, "PARTY_TENANT_ID": c.PartyTenantID, "PARTY_WORKSPACE_ID": c.PartyWorkspaceID,
+		"NOTIFICATION_WORKSPACE_ID": c.NotificationWorkspaceID,
 	} {
 		if strings.EqualFold(strings.TrimSpace(value), "default") {
 			return fmt.Errorf("%s cannot use the reserved default tenant", name)
 		}
-	}
-	if strings.TrimSpace(c.PartyApplicationKey) == "" {
-		return errors.New("PARTY_APPLICATION_KEY is required")
 	}
 	if c.HTTPReadHeaderTimeout <= 0 || c.HTTPReadTimeout <= 0 || c.HTTPWriteTimeout <= 0 || c.HTTPIdleTimeout <= 0 || c.HTTPShutdownTimeout <= 0 {
 		return fmt.Errorf("HTTP timeouts must be positive")

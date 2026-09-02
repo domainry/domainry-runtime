@@ -39,7 +39,7 @@ func TestWorkflowApplicationAuthorizesWorkspaceBeforeRepositoryAccess(t *testing
 		Processes: workflowProcessAuthorizationProbe{calls: &calls},
 		Workers:   workflowWorkerAuthorizationProbe{calls: &calls},
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}})
 
 	checks := []func() error{
 		func() error {

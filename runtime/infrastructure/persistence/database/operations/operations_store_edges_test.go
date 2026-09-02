@@ -11,7 +11,7 @@ import (
 
 func operationsReceiptFixture(now time.Time) operationsmodel.OperationsReceipt {
 	return operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{
-		ID: "operation", Kind: "retention.cleanup", Permission: "workspace.admin",
+		ID: "operation", Kind: "retention.cleanup", ActionKey: "runtime.operations.run_lifecycle_cleanup_job",
 		Scope:          operationsmodel.OperationsScope{WorkspaceID: "workspace", ResourceType: "retention_policy", ResourceID: "policy"},
 		IdempotencyKey: "key", RequestFingerprint: "fingerprint", RequestedBy: "operator", Reason: "reason",
 		Status: operationsmodel.OperationsStatusCreated, CreatedAt: now, UpdatedAt: now,
@@ -21,7 +21,7 @@ func operationsReceiptFixture(now time.Time) operationsmodel.OperationsReceipt {
 func operationsReceiptRow(receipt operationsmodel.OperationsReceipt, startedAt, finishedAt string) []driver.Value {
 	resultJSON, relatedJSON, evidenceJSON := operationsReceiptJSON(receipt)
 	command := receipt.Command
-	return []driver.Value{command.ID, command.Scope.WorkspaceID, command.Scope.SystemPurpose, command.Kind, command.Permission,
+	return []driver.Value{command.ID, command.Scope.WorkspaceID, command.Scope.SystemPurpose, command.Kind, command.ActionKey,
 		command.Scope.ResourceType, command.Scope.ResourceID, command.IdempotencyKey, command.RequestFingerprint, command.RequestedBy,
 		command.Reason, command.Reference, string(command.Status), receipt.StatusURL, resultJSON, receipt.ErrorCode,
 		string(receipt.FailureClass), receipt.NextAction, relatedJSON, receipt.Correlation, evidenceJSON,

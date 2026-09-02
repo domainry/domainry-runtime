@@ -48,9 +48,9 @@ func TestOpsMetadataDiagnosticsRequiresExplicitPermissionAndReturnsOnlyCompatibi
 		Objects: []definitionmodel.ObjectSchema{{Key: "order"}}, Actions: []definitionmodel.ActionSchema{{Key: "order.submit"}},
 	}}
 	service := NewApplicationSchemaApplicationService(ApplicationSchemaDependencies{Repository: repository, Runtime: runtime})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}})
 	if _, err := service.OpsMetadataDiagnostics(t.Context(), principal); apperror.KindOf(err) != apperror.KindForbidden {
-		t.Fatalf("workspace.admin unexpectedly granted metadata Ops diagnostics: %v", err)
+		t.Fatalf("runtime.appschema.validate_application_definition unexpectedly granted metadata Ops diagnostics: %v", err)
 	}
 	principal = accessfixture.Attach(principal, accessfixture.Bundle{Permissions: []string{ActionOpsMetadataDiagnostics}})
 	result, err := service.OpsMetadataDiagnostics(t.Context(), principal)

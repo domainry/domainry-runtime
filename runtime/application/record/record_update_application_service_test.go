@@ -81,13 +81,13 @@ func (r *updateRepositoryProbe) CommitRecordMutation(_ context.Context, _ string
 }
 
 func TestUpdateServiceOwnsCompleteUpdateTransaction(t *testing.T) {
-	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{ID: "case-1", UpdatedAt: "version-1", Data: map[string]any{"status": "open", "name": "Before", "version": 7}}}
+	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{ID: "case-1", OwnerUserID: "original-user", OwnerOrgID: "original-org", UpdatedAt: "version-1", Data: map[string]any{"status": "open", "name": "Before", "version": 7}}}
 	object := definitionmodel.ObjectSchema{Key: "case", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}, {Key: "name", Type: "text"}, {Key: "version", Type: "number"}}}
 	var beforeOperations []string
 	var outboxOperations []string
 	var preparedTriggers []string
 	var executed []workflowmodel.WorkflowExecution
-	derivedCount, relationCount, writeCount := 0, 0, 0
+	relationCount, writeCount := 0, 0
 	selfEffects := false
 	service := NewRecordUpdateApplicationService(RecordUpdateDependencies{
 		Repository: repository,
@@ -98,10 +98,6 @@ func TestUpdateServiceOwnsCompleteUpdateTransaction(t *testing.T) {
 		CanWrite: func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool {
 			writeCount++
 			return true
-		},
-		ApplyScopeOwnerFacts: func(context.Context, string, definitionmodel.ObjectSchema, map[string]any, string) error {
-			derivedCount++
-			return nil
 		},
 		ValidatePipeline: func(context.Context, definitionmodel.ObjectSchema, string, map[string]any, principalmodel.Principal) error {
 			return nil
@@ -154,14 +150,17 @@ func TestUpdateServiceOwnsCompleteUpdateTransaction(t *testing.T) {
 	if updated.Data["status"] != "closed" || updated.Data["name"] != "Self effect" || updated.UpdatedAt != "2026-07-17T12:00:00Z" {
 		t.Fatalf("updated = %#v", updated)
 	}
+	if updated.OwnerUserID != "original-user" || updated.OwnerOrgID != "original-org" || repository.commit.Record.OwnerUserID != "original-user" || repository.commit.Record.OwnerOrgID != "original-org" {
+		t.Fatalf("ordinary update changed stable ownership: updated=%#v commit=%#v", updated, repository.commit.Record)
+	}
 	if len(beforeOperations) != 2 || beforeOperations[0] != "update" || beforeOperations[1] != "transition" || len(outboxOperations) != 2 || outboxOperations[0] != "update" || outboxOperations[1] != "transition" {
 		t.Fatalf("automation before=%v outbox=%v", beforeOperations, outboxOperations)
 	}
 	if repository.commit.Operation != "update" || repository.commit.Optimistic.ExpectedUpdatedAt != "version-1" || repository.commit.Optimistic.ExpectedVersion == nil || *repository.commit.Optimistic.ExpectedVersion != 7 || repository.commit.Audit == nil || repository.commit.Audit.Event != "record_updated" || len(repository.commit.Outbox) != 2 || len(repository.commit.WorkflowIntents) != 1 {
 		t.Fatalf("commit = %#v", repository.commit)
 	}
-	if derivedCount != 2 || relationCount != 2 || writeCount != 2 || !selfEffects || len(preparedTriggers) != 1 || len(executed) != 1 {
-		t.Fatalf("effects derived=%d relation=%d write=%d self=%v triggers=%v executed=%v", derivedCount, relationCount, writeCount, selfEffects, preparedTriggers, executed)
+	if relationCount != 2 || writeCount != 2 || !selfEffects || len(preparedTriggers) != 1 || len(executed) != 1 {
+		t.Fatalf("effects relation=%d write=%d self=%v triggers=%v executed=%v", relationCount, writeCount, selfEffects, preparedTriggers, executed)
 	}
 }
 

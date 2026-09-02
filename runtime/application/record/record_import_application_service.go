@@ -285,7 +285,6 @@ func (s *RecordImportApplicationService) appendPreviewRow(ctx context.Context, o
 		}
 		row.Data[fieldKey] = coerced
 	}
-	recordpolicy.RecordApplyOwnerDefault(object, row.Data, principal)
 	normalized, err := recordvalidation.RecordNormalizeData(object, row.Data, false)
 	if err != nil {
 		row.Issues = append(row.Issues, importRowIssueFromError("", err))
@@ -298,7 +297,9 @@ func (s *RecordImportApplicationService) appendPreviewRow(ctx context.Context, o
 	if err := recordpolicy.RecordValidateWritableFields(principal, object, row.Data); err != nil {
 		row.Issues = append(row.Issues, importRowIssueFromError("", err))
 	}
-	if s.dependencies.CanWrite != nil && !s.dependencies.CanWrite(principal, object, row.Data) {
+	authorizationRecord := recordmodel.Record{Data: row.Data}
+	recordpolicy.RecordApplyOwnerDefault(&authorizationRecord, principal)
+	if s.dependencies.CanWrite != nil && !s.dependencies.CanWrite(principal, object, recordpolicy.RecordDataWithOwnerFacts(authorizationRecord)) {
 		row.Issues = append(row.Issues, importRowIssue("", "error", "backend.record.outside_scope"))
 	}
 	if s.dependencies.ValidateRelations != nil {

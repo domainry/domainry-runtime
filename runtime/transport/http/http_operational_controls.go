@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"strings"
 
-	workerplatform "github.com/domainry/domainry-foundation/worker"
 	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 	healthplatform "github.com/domainry/domainry-foundation/health"
+	workerplatform "github.com/domainry/domainry-foundation/worker"
 )
 
 func (s *HTTPRouter) withOperationalControls(routes *http.ServeMux, next http.Handler) http.Handler {

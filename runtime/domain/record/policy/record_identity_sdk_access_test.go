@@ -67,10 +67,10 @@ func TestRecordAuthorizationSuppliesCanonicalBusinessFactsToSDK(t *testing.T) {
 			DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "case", Scope: "owned_records", Read: true, Write: true}},
 		},
 	)
-	if !RecordCanAccess(principal, object, recordmodel.Record{Data: map[string]any{"submitted_by": "user-1"}}) {
+	if !RecordCanAccess(principal, object, recordmodel.Record{OwnerUserID: "user-1"}) {
 		t.Fatal("canonical owner fact was not supplied to SDK")
 	}
-	if RecordCanAccess(principal, object, recordmodel.Record{Data: map[string]any{"submitted_by": "other"}}) {
+	if RecordCanAccess(principal, object, recordmodel.Record{OwnerUserID: "other"}) {
 		t.Fatal("SDK owned-record policy allowed another owner")
 	}
 }

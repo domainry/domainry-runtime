@@ -10,8 +10,8 @@ import (
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
-	partysdk "github.com/domainry/domainry-party-sdk"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 type runtimeModuleSurface struct{ owner string }
@@ -29,10 +29,7 @@ func (surface runtimeModuleSurface) Routes() []modulehttp.Route {
 }
 func (runtimeModuleSurface) Handler() http.Handler { return http.NotFoundHandler() }
 
-type runtimePartySurfaceBinding struct {
-	partysdk.Binding
-	surfaces []modulehttp.Surface
-}
+type runtimeHTTPOnlySurfaceBinding struct{ surfaces []modulehttp.Surface }
 
 type runtimeDataExchangeSurfaceBinding struct {
 	dataexchange.Binding
@@ -42,6 +39,18 @@ type runtimeDataExchangeSurfaceBinding struct {
 type runtimeCompleteAuthorizationBinding struct {
 	actions  []actioncontract.ActionDefinition
 	surfaces []modulehttp.Surface
+}
+
+type runtimeActionManifestBinding struct {
+	actions []actioncontract.ActionDefinition
+}
+
+func (binding runtimeActionManifestBinding) AuthorizationActions() ([]actioncontract.ActionDefinition, error) {
+	result := make([]actioncontract.ActionDefinition, len(binding.actions))
+	for index := range binding.actions {
+		result[index] = actioncontract.CloneDefinition(binding.actions[index])
+	}
+	return result, nil
 }
 
 func (binding runtimeCompleteAuthorizationBinding) AuthorizationActions() ([]actioncontract.ActionDefinition, error) {
@@ -60,22 +69,22 @@ func (binding runtimeDataExchangeSurfaceBinding) HTTPSurfaces() []modulehttp.Sur
 	return append([]modulehttp.Surface(nil), binding.surfaces...)
 }
 
-func (binding runtimePartySurfaceBinding) HTTPSurfaces() []modulehttp.Surface {
+func (binding runtimeHTTPOnlySurfaceBinding) HTTPSurfaces() []modulehttp.Surface {
 	return append([]modulehttp.Surface(nil), binding.surfaces...)
 }
 
 func TestRuntimeCollectsModuleOwnedHTTPSurfaces(t *testing.T) {
-	party := runtimeModuleSurface{owner: "party"}
+	notification := runtimeModuleSurface{owner: "notification"}
 	dataExchange := runtimeModuleSurface{owner: "data_exchange"}
 	runtime := &Runtime{
 		cfg: config.Config{IdentityAudience: "domainry-runtime"},
 		moduleBindings: newRuntimeModuleBindingInventory(
-			runtimePartySurfaceBinding{surfaces: []modulehttp.Surface{party}},
+			runtimeHTTPOnlySurfaceBinding{surfaces: []modulehttp.Surface{notification}},
 			runtimeDataExchangeSurfaceBinding{surfaces: []modulehttp.Surface{dataExchange}},
 		),
 	}
 	surfaces := runtime.ModuleHTTPSurfaces()
-	if len(surfaces) != 3 || surfaces[0].Owner() != "party" || surfaces[1].Owner() != "data_exchange" || surfaces[2].Name() != "module_inventory" {
+	if len(surfaces) != 3 || surfaces[0].Owner() != "notification" || surfaces[1].Owner() != "data_exchange" || surfaces[2].Name() != "module_inventory" {
 		t.Fatalf("surfaces=%#v", surfaces)
 	}
 	if err := modulehttp.ValidateSurface(surfaces[1]); err != nil {
@@ -136,7 +145,7 @@ func TestRuntimeModuleSurfaceQueriesLivePermissionUsagesAsOneBatch(t *testing.T)
 }
 
 func TestRuntimeCollectsHTTPOnlyAndCompleteModuleActionManifests(t *testing.T) {
-	httpOnly := runtimePartySurfaceBinding{surfaces: []modulehttp.Surface{runtimeModuleSurface{owner: "party"}}}
+	httpOnly := runtimeHTTPOnlySurfaceBinding{surfaces: []modulehttp.Surface{runtimeModuleSurface{owner: "notification"}}}
 	completeSurface := runtimeModuleSurface{owner: "agent"}
 	httpAction := completeSurface.Routes()[0].Action
 	nonHTTPAction := actioncontract.CloneDefinition(httpAction)
@@ -175,8 +184,42 @@ func TestRuntimeCollectsHTTPOnlyAndCompleteModuleActionManifests(t *testing.T) {
 	}
 }
 
+func TestRuntimeValidatesSchedulerHostFacadeFromItsSourceManifest(t *testing.T) {
+	actions, err := schedulersdk.SchedulerAuthorizationActions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	collected, err := newRuntimeModuleBindingInventory(runtimeActionManifestBinding{actions: actions}).AuthorizationActions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(collected) != 13 {
+		t.Fatalf("Scheduler actions=%d, want 13", len(collected))
+	}
+	for _, definition := range collected {
+		if definition.Owner != schedulersdk.SchedulerAuthorizationOwner || definition.SourceKind != "host_facade" || definition.Permission == nil || definition.Permission.Key != definition.Key || definition.Permission.Owner != definition.Owner {
+			t.Fatalf("Scheduler host-facade Action is not source-owned and same-key: %+v", definition)
+		}
+	}
+
+	missing := append([]actioncontract.ActionDefinition(nil), actions[:len(actions)-1]...)
+	if _, err := newRuntimeModuleBindingInventory(runtimeActionManifestBinding{actions: missing}).AuthorizationActions(); err == nil {
+		t.Fatal("Runtime accepted a Scheduler host facade with a missing handler Action")
+	}
+
+	drifted := make([]actioncontract.ActionDefinition, len(actions))
+	for index := range actions {
+		drifted[index] = actioncontract.CloneDefinition(actions[index])
+	}
+	drifted[0].RiskLevel = actioncontract.RiskHigh
+	if _, err := newRuntimeModuleBindingInventory(runtimeActionManifestBinding{actions: drifted}).AuthorizationActions(); err == nil {
+		t.Fatal("Runtime accepted Scheduler governance that drifted from its hosted handler")
+	}
+}
+
 var _ modulehttp.Surface = runtimeModuleSurface{}
-var _ modulehttp.Provider = runtimePartySurfaceBinding{}
+var _ modulehttp.Provider = runtimeHTTPOnlySurfaceBinding{}
 var _ modulehttp.Provider = runtimeDataExchangeSurfaceBinding{}
 var _ modulehttp.Provider = runtimeCompleteAuthorizationBinding{}
 var _ actioncontract.Provider = runtimeCompleteAuthorizationBinding{}
+var _ actioncontract.Provider = runtimeActionManifestBinding{}

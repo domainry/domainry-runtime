@@ -7,17 +7,8 @@ import (
 
 	"github.com/domainry/domainry-foundation/requestcontext"
 	"github.com/domainry/domainry-foundation/worker"
-	identitysdk "github.com/domainry/domainry-identity-sdk"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
-
-type externalWorkforceDirectoryStub struct{ runtimeIdentityDirectoryStub }
-
-func (externalWorkforceDirectoryStub) ListWorkforce(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.WorkforceEntry, error) {
-	return []identitysdk.WorkforceEntry{}, nil
-}
-
-var _ identitysdk.Directory = externalWorkforceDirectoryStub{}
 
 func TestRuntimeSeedSynchronizationBindsInstallationWorkspace(t *testing.T) {
 	ctx := runtimeSeedSynchronizationContext(requestcontext.WithWorkspaceID(t.Context(), "stale-workspace"))
@@ -40,7 +31,7 @@ func TestAssembleRuntimeServicesReportsWorkflowFailures(t *testing.T) {
 
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := assembleRuntimeServices(cancelled, cfg, manifest, nil, store, runtimeIdentityDirectoryStub{}, nil, nil, nil, worker.Dependencies{}); err == nil {
+	if _, err := assembleRuntimeServices(cancelled, cfg, manifest, nil, store, runtimeIdentityDirectoryStub{}, nil, nil, worker.Dependencies{}); err == nil {
 		t.Fatal("cancelled workflow initialization must fail assembly")
 	}
 }
@@ -86,12 +77,12 @@ func TestSynchronizeRuntimeSeedsRejectsClosedStore(t *testing.T) {
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := synchronizeRuntimeSeeds(t.Context(), store, manifest, true, externalWorkforceDirectoryStub{}); err == nil {
+	if err := synchronizeRuntimeSeeds(t.Context(), store, manifest, true); err == nil {
 		t.Fatal("closed store must fail seed synchronization")
 	}
 }
 
-func TestSynchronizeRuntimeSeedsRequiresSDKDirectoryForBusinessSeeds(t *testing.T) {
+func TestSynchronizeRuntimeSeedsDoesNotRequireIdentityDirectory(t *testing.T) {
 	cfg := bootstrapTestConfig(t)
 	manifest, err := prepareRuntimeManifest(t.Context(), cfg)
 	if err != nil {
@@ -102,11 +93,12 @@ func TestSynchronizeRuntimeSeedsRequiresSDKDirectoryForBusinessSeeds(t *testing.
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	if err := synchronizeRuntimeSeeds(t.Context(), store, manifest, true, nil); err == nil {
-		t.Fatal("business seed synchronization accepted a missing Identity SDK directory")
+	manifest.SeedRecords = nil
+	if err := synchronizeRuntimeSeeds(t.Context(), store, manifest, true); err != nil {
+		t.Fatalf("business seed synchronization failed: %v", err)
 	}
-	if err := synchronizeRuntimeSeeds(t.Context(), store, manifest, false, nil); err != nil {
-		t.Fatalf("disabled business seed synchronization required a directory: %v", err)
+	if err := synchronizeRuntimeSeeds(t.Context(), store, manifest, false); err != nil {
+		t.Fatalf("disabled business seed synchronization failed: %v", err)
 	}
 }
 

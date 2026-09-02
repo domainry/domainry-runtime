@@ -3,14 +3,17 @@ package transport
 import (
 	"context"
 	"crypto/sha256"
+	"fmt"
 	"strings"
 	"time"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	agentmodulehost "github.com/domainry/domainry-agent-sdk/modulehost"
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
+	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/modulehttp"
+	"github.com/domainry/domainry-foundation/ratelimit"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agenthost"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
@@ -35,50 +38,93 @@ func (a agentRecordVisibilityAdapter) CanReadAgentRecord(ctx context.Context, ob
 	return a.records.RecordScopeAllows(ctx, objectKey, recordID, principal)
 }
 
-type agentRuntimePorts struct {
-	authorization *agentapplication.AgentAuthorizationApplicationService
-	tools         *agentapplication.AgentToolGateway
-	credentials   *agentapplication.AgentTaskCredentialApplicationService
+// AgentApplicationHostDependencies contains the host-owned application ports
+// needed to finish Agent's product Surface before authorization reconciliation.
+// HTTP mounting remains a later transport step.
+type AgentApplicationHostDependencies struct {
+	Binding              agentsdk.Binding
+	Records              *composition.RuntimeServices
+	Principals           identitysdk.PrincipalResolver
+	RateLimiter          ratelimit.Limiter
+	IntegrationSecretKey string
 }
 
-func (a *httpServerAssembly) runtimeAgentPorts() *agentRuntimePorts {
-	if a.agentPorts != nil {
-		return a.agentPorts
-	}
-	applications := a.dependencies.Records.Applications()
-	if applications.AgentAuthorization == nil {
+// BindAgentApplicationHost closes Agent's application boundary before Runtime
+// validates and reconciles the module's complete source-owned Action manifest.
+// It is idempotent so HTTP assembly can safely verify an already-bound module.
+func BindAgentApplicationHost(dependencies AgentApplicationHostDependencies) error {
+	binder, ok := dependencies.Binding.(agentmodulehost.ApplicationHostBinder)
+	if !ok || binder == nil {
 		return nil
 	}
-	credentialKey := sha256.Sum256([]byte("domainry-agent-task-credential-v1:" + a.dependencies.Config.IntegrationSecretKey))
+	if complete, err := agentAuthorizationProjectionComplete(dependencies.Binding); err != nil {
+		return err
+	} else if complete {
+		return nil
+	}
+	if dependencies.Records == nil || dependencies.Principals == nil {
+		return fmt.Errorf("Agent application host dependencies are incomplete")
+	}
+	applications := dependencies.Records.Applications()
+	if applications.AgentAuthorization == nil || applications.Records == nil || applications.Workflows == nil || applications.Audit == nil || applications.Schema == nil || applications.Actions == nil {
+		return fmt.Errorf("Runtime Agent application ports are incomplete")
+	}
+	credentialKey := sha256.Sum256([]byte("domainry-agent-task-credential-v1:" + dependencies.IntegrationSecretKey))
 	credentials := agentapplication.NewAgentTaskCredentialApplicationService(credentialKey[:], nil, nil)
 	tools := agentapplication.NewAgentToolGateway(agentapplication.AgentToolGatewayDependencies{
 		Authorization: applications.AgentAuthorization, Credentials: credentials,
-		Queries: agentTaskToolQueryAdapter{records: a.recordQueries}, Actions: agentTaskToolActionAdapter{actions: applications.Actions},
-		Risk: agentTaskToolRiskAdapter{actions: applications.Actions}, RateLimiter: a.dependencies.RateLimiter,
+		Queries: agentTaskToolQueryAdapter{records: applications.Records}, Actions: agentTaskToolActionAdapter{actions: applications.Actions},
+		Risk: agentTaskToolRiskAdapter{actions: applications.Actions}, RateLimiter: dependencies.RateLimiter,
 	})
-	a.agentPorts = &agentRuntimePorts{authorization: applications.AgentAuthorization, tools: tools, credentials: credentials}
-	return a.agentPorts
+	interactive := runtimeAgentInteractiveHost{authorization: applications.AgentAuthorization, tools: tools, workflows: applications.Workflows}
+	task := runtimeAgentTaskHost{authorization: applications.AgentAuthorization, credentials: credentials, tools: tools, workflows: applications.Workflows}
+	proposal := runtimeAgentProposalHost{records: dependencies.Records, principals: dependencies.Principals}
+	audit := runtimeAgentAuditHost{audit: applications.Audit}
+	analysis := runtimeAgentAnalysisHost{catalog: applications.Schema, records: applications.Records}
+	if err := binder.BindApplicationHost(runtimeAgentApplicationHost{interactive: interactive, task: task, proposal: proposal, audit: audit, analysis: analysis}); err != nil {
+		return fmt.Errorf("bind Agent application host: %w", err)
+	}
+	if err := validateAgentAuthorizationProjection(dependencies.Binding); err != nil {
+		return fmt.Errorf("validate bound Agent authorization Surface: %w", err)
+	}
+	return nil
+}
+
+func agentAuthorizationProjectionComplete(binding agentsdk.Binding) (bool, error) {
+	provider, hasSurfaces := binding.(modulehttp.Provider)
+	actions, hasActions := binding.(actioncontract.Provider)
+	if !hasSurfaces || !hasActions || provider == nil || actions == nil {
+		return false, nil
+	}
+	definitions, err := actions.AuthorizationActions()
+	if err != nil {
+		return false, fmt.Errorf("load Agent authorization manifest: %w", err)
+	}
+	return modulehttp.ValidateAuthorizationProjection(definitions, provider) == nil, nil
+}
+
+func validateAgentAuthorizationProjection(binding agentsdk.Binding) error {
+	provider, hasSurfaces := binding.(modulehttp.Provider)
+	actions, hasActions := binding.(actioncontract.Provider)
+	if !hasSurfaces || !hasActions || provider == nil || actions == nil {
+		return fmt.Errorf("Agent Binding must provide both HTTP Surfaces and its complete Action manifest")
+	}
+	definitions, err := actions.AuthorizationActions()
+	if err != nil {
+		return fmt.Errorf("load Agent authorization manifest: %w", err)
+	}
+	return modulehttp.ValidateAuthorizationProjection(definitions, provider)
 }
 
 func (a *httpServerAssembly) bindAgentApplicationHost() {
-	binder, ok := a.dependencies.AgentBinding.(agentmodulehost.ApplicationHostBinder)
-	if !ok || binder == nil {
+	if a.dependencies.AgentBinding == nil {
 		return
 	}
-	ports := a.runtimeAgentPorts()
-	if ports == nil {
-		return
-	}
-	applications := a.dependencies.Records.Applications()
-	host := runtimeAgentInteractiveHost{
-		authorization: ports.authorization, tools: ports.tools, workflows: applications.Workflows,
-	}
-	taskHost := runtimeAgentTaskHost{authorization: ports.authorization, credentials: ports.credentials, tools: ports.tools, workflows: applications.Workflows}
-	proposalHost := runtimeAgentProposalHost{records: a.dependencies.Records, principals: a.principals}
-	auditHost := runtimeAgentAuditHost{audit: applications.Audit}
-	analysisHost := runtimeAgentAnalysisHost{catalog: applications.Schema, records: a.recordQueries}
-	if err := binder.BindApplicationHost(runtimeAgentApplicationHost{interactive: host, task: taskHost, proposal: proposalHost, audit: auditHost, analysis: analysisHost}); err != nil {
-		panic("bind Agent application host: " + err.Error())
+	if err := BindAgentApplicationHost(AgentApplicationHostDependencies{
+		Binding: a.dependencies.AgentBinding, Records: a.dependencies.Records, Principals: a.principals,
+		RateLimiter: a.dependencies.RateLimiter, IntegrationSecretKey: a.dependencies.Config.IntegrationSecretKey,
+	}); err != nil {
+		panic(err.Error())
 	}
 	provider, ok := a.dependencies.AgentBinding.(modulehttp.Provider)
 	if !ok {

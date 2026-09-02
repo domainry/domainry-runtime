@@ -13,7 +13,9 @@ import (
 	"github.com/domainry/domainry-foundation/idempotency"
 	pipelineapplication "github.com/domainry/domainry-runtime/runtime/application/pipeline"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
+	runtimeactioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
@@ -29,6 +31,15 @@ type recordsHTTPRepository struct {
 	err       error
 	getCalls  int
 	lastQuery recordmodel.RecordListQuery
+}
+
+func recordsAuthorizedEndpointRequest(t *testing.T, request *http.Request, endpointIdentity string) *http.Request {
+	t.Helper()
+	definition, err := endpointmodel.AuthorizationActionDefinition(endpointmodel.EndpointContracts[endpointIdentity])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return request.WithContext(runtimeactioncontract.WithAuthorizedAction(request.Context(), definition))
 }
 
 type recordsHTTPMutationExecutionStore struct {
@@ -120,7 +131,6 @@ func recordsHTTPApplicationWithExecutionStore(repository *recordsHTTPRepository,
 		QueryPolicy:               queryPolicy,
 		Pipeline:                  pipeline,
 		Validation:                validation,
-		ScopeOwnerFactDerivation:  recordservice.NewRecordScopeOwnerFactDerivationDomainService(recordservice.RecordScopeOwnerFactDerivationDependencies{}),
 		SchemaMap:                 func() map[string]definitionmodel.ObjectSchema { return objects },
 		IdentityProfileExtensions: func() []profilebindingmodel.Binding { return nil },
 		RunBefore: func(context.Context, string, string, string, map[string]any, map[string]any, map[string]any, principalmodel.Principal) error {
@@ -161,11 +171,10 @@ func recordsHTTPBusinessProfileApplication(repository *recordsHTTPRepository) *r
 		CanAccess:  queryPolicy.CanAccessRecord,
 	})
 	return recordapplication.NewRecordApplicationService(recordapplication.RecordApplicationDependencies{
-		Repository:               repository,
-		QueryPolicy:              queryPolicy,
-		Pipeline:                 pipeline,
-		Validation:               validation,
-		ScopeOwnerFactDerivation: recordservice.NewRecordScopeOwnerFactDerivationDomainService(recordservice.RecordScopeOwnerFactDerivationDependencies{}),
+		Repository:  repository,
+		QueryPolicy: queryPolicy,
+		Pipeline:    pipeline,
+		Validation:  validation,
 		SchemaMap: func() map[string]definitionmodel.ObjectSchema {
 			return map[string]definitionmodel.ObjectSchema{object.Key: object}
 		},
@@ -411,12 +420,12 @@ func TestBusinessProfileLifecycleHandlersReturnUpdatedRecord(t *testing.T) {
 	handler.queries = recordsHTTPBusinessProfileApplication(repository)
 
 	for _, test := range []struct {
-		name string
-		call func(http.ResponseWriter, *http.Request)
-		body string
+		name, endpointIdentity string
+		call                   func(http.ResponseWriter, *http.Request)
+		body                   string
 	}{
-		{name: "deactivate", call: handler.deactivateBusinessProfile, body: `{"inactive_status":"inactive","expected_updated_at":"version-1","reason":" review "}`},
-		{name: "reactivate", call: handler.reactivateBusinessProfile, body: `{"active_status":"active","expected_updated_at":"version-1","reason":" restore "}`},
+		{name: "deactivate", endpointIdentity: "POST /objects/{objectKey}/records/{recordID}/deactivate-profile", call: handler.deactivateBusinessProfile, body: `{"inactive_status":"inactive","expected_updated_at":"version-1","reason":" review "}`},
+		{name: "reactivate", endpointIdentity: "POST /objects/{objectKey}/records/{recordID}/reactivate-profile", call: handler.reactivateBusinessProfile, body: `{"active_status":"active","expected_updated_at":"version-1","reason":" restore "}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			*serviceErr = nil
@@ -426,6 +435,7 @@ func TestBusinessProfileLifecycleHandlersReturnUpdatedRecord(t *testing.T) {
 				"recordID":  "one",
 			})
 			request.Header.Set("Idempotency-Key", test.name)
+			request = recordsAuthorizedEndpointRequest(t, request, test.endpointIdentity)
 			test.call(w, request)
 			if w.Code != http.StatusOK || *serviceErr != nil || !strings.Contains(w.Body.String(), `"record"`) {
 				t.Fatalf("status=%d err=%v body=%s", w.Code, *serviceErr, w.Body.String())

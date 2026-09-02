@@ -96,7 +96,7 @@ func (h *schedulerSDKModuleHost) Snapshot(ctx context.Context) (schedulersdk.Def
 			return schedulersdk.DefinitionSnapshot{}, fmt.Errorf("Runtime Scheduler definition source is unavailable")
 		}
 		var err error
-		published, err = h.scheduler.PublishedDefinitions(ctx, schedulerSDKSystemPrincipal("scheduler.definition.read"))
+		published, err = h.scheduler.PublishedDefinitions(ctx, schedulerSDKSystemPrincipal())
 		if err != nil {
 			return schedulersdk.DefinitionSnapshot{}, err
 		}
@@ -181,7 +181,7 @@ func (d *SchedulerCallbackDispatcher) Dispatch(ctx context.Context, trigger sche
 	if err != nil {
 		return schedulersdk.DownstreamReceipt{}, err
 	}
-	receiptID, err := d.scheduler.DispatchOwnedTrigger(ctx, definition, trigger.RunID, trigger.ScheduledFor, 25, schedulerSDKSystemPrincipal("scheduler.command"))
+	receiptID, err := d.scheduler.DispatchOwnedTrigger(ctx, definition, trigger.RunID, trigger.ScheduledFor, 25, schedulerSDKSystemPrincipal())
 	if err != nil {
 		return schedulersdk.DownstreamReceipt{}, err
 	}
@@ -199,7 +199,7 @@ func (d *SchedulerCallbackDispatcher) publishedDefinition(ctx context.Context, k
 	if d == nil || d.scheduler == nil {
 		return schedulerapplication.PublishedDefinition{}, fmt.Errorf("Runtime Scheduler definition source is unavailable")
 	}
-	records, err := d.scheduler.PublishedDefinitions(ctx, schedulerSDKSystemPrincipal("scheduler.definition.read"))
+	records, err := d.scheduler.PublishedDefinitions(ctx, schedulerSDKSystemPrincipal())
 	if err != nil {
 		return schedulerapplication.PublishedDefinition{}, err
 	}

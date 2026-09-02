@@ -11,13 +11,13 @@ import (
 
 func TestReportAccessScopeHashCanonicalizesSetOrderingWithoutWeakeningFacts(t *testing.T) {
 	left := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary", UserID: "demo-user", AuthorizationRevision: "revision-1",
-		ReportingUserIDs: []string{"user-b", "user-a"}, OrganizationScopes: identitysdk.OrganizationScopes{StoreIDs: []string{"store-b", "store-a"}}},
+		OrgID: "store-a", OrgScopeIDs: []string{"store-a", "region-a"}, ReportingScopeUserIDs: []string{"demo-user", "seller-a"}},
 		BusinessProfiles: []profilebindingmodel.Reference{{BindingKey: "member-b", ObjectKey: "member", RecordID: "two"}, {BindingKey: "member-a", ObjectKey: "member", RecordID: "one"}},
 	}, accessfixture.Bundle{Key: "group_admin", Permissions: []string{"sales.export", "sales.read"}})
 	right := left
-	right.ReportingUserIDs = []string{"user-a", "user-b", "user-a"}
-	right.OrganizationScopes.StoreIDs = []string{"store-a", "store-b"}
 	right.BusinessProfiles = []profilebindingmodel.Reference{left.BusinessProfiles[1], left.BusinessProfiles[0]}
+	right.OrgScopeIDs = []string{"region-a", "store-a"}
+	right.ReportingScopeUserIDs = []string{"seller-a", "demo-user"}
 	leftHash, err := ReportAccessScopeHash(left)
 	if err != nil {
 		t.Fatal(err)
@@ -36,5 +36,11 @@ func TestReportAccessScopeHashCanonicalizesSetOrderingWithoutWeakeningFacts(t *t
 	}
 	if changedHash == leftHash {
 		t.Fatal("authorization revision change did not change Report access scope hash")
+	}
+	right.AuthorizationRevision = left.AuthorizationRevision
+	right.OrgScopeIDs = []string{"region-b", "store-a"}
+	organizationHash, err := ReportAccessScopeHash(right)
+	if err != nil || organizationHash == leftHash {
+		t.Fatalf("organization scope change hash=%s err=%v", organizationHash, err)
 	}
 }

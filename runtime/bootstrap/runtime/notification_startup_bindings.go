@@ -18,6 +18,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 type runtimeNotificationActionAuthorizerBinding struct {
@@ -123,7 +124,7 @@ func newWorkflowTaskNotificationActionAuthorizer(lookup workflowTaskLookup) func
 
 func newSchedulerNotificationActionAuthorizer(definitions metadatasdk.Definitions) func(context.Context, string, principalmodel.Principal) error {
 	return func(ctx context.Context, resourceID string, principal principalmodel.Principal) error {
-		allowed := principal.HasPermission("scheduler.definition.read")
+		allowed := principal.HasPermission(schedulersdk.ActionSchedulerDefinitionsGet)
 		if !allowed {
 			return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.notification.inbox_action_forbidden"}
 		}

@@ -31,18 +31,28 @@ func (p *operationsUpdateFailureProbe) UpdateOperationsReceipt(ctx context.Conte
 
 func operationsAdminPrincipal() principalmodel.Principal {
 	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{
-		"operations.read",
-		"runtime.scheduler.retry_ops_scheduler_run",
-		"runtime.retention.execute",
-		"runtime.maintenance.write",
-		"runtime.worker.control",
-		"runtime.instance.drain",
-		"runtime.worker.force_release",
-		"runtime.dead_letter.read",
-		"runtime.dead_letter.write",
-		"runtime.bulk.execute",
-		"runtime.diagnostics.read",
-		"runtime.break_glass",
+		"runtime.operations.list_operations",
+		"runtime.operations.get_operation",
+		"scheduler.runs.retry",
+		"runtime.operations.run_lifecycle_cleanup_job",
+		"runtime.operations.enable_maintenance",
+		"runtime.operations.disable_maintenance",
+		"runtime.operations.pause_worker_owner",
+		"runtime.operations.resume_worker_owner",
+		"runtime.operations.drain_runtime_instance",
+		"runtime.operations.undrain_runtime_instance",
+		"runtime.operations.force_release_lease",
+		"runtime.operations.inspect_dead_letter",
+		"runtime.operations.resolve_dead_letter",
+		"runtime.operations.retry_dead_letter",
+		"runtime.operations.acknowledge_dead_letter",
+		"runtime.operations.dry_run_bulk_dead_letters",
+		"runtime.operations.apply_bulk_dead_letters",
+		"runtime.operations.capture_diagnostics",
+		"runtime.operations.enable_break_glass",
+		"runtime.operations.disable_break_glass",
+		"runtime.operations.list_break_glass",
+		"runtime.operations.list_controls",
 	}})
 }
 
@@ -176,7 +186,7 @@ func TestExecuteOwnerOperationRejectsRunningReplayWithoutRepeatingOwner(t *testi
 	service := NewOperationsApplicationService(repository, nil, nil, func() string { return "running-owner" })
 	principal := operationsAdminPrincipal()
 	request := OperationsOwnerExecutionRequest{Kind: "scheduler.run.retry", ResourceType: "scheduler_run", ResourceID: "run-1", Reason: "recover", Key: "retry", Payload: map[string]any{"attempt": 2}}
-	receipt, _, err := service.Submit(t.Context(), OperationsSubmitRequest{Kind: request.Kind, Permission: "runtime.scheduler.retry_ops_scheduler_run", ResourceType: request.ResourceType, ResourceID: request.ResourceID, Reason: request.Reason, Payload: request.Payload}, request.Key, principal)
+	receipt, _, err := service.Submit(t.Context(), OperationsSubmitRequest{Kind: request.Kind, ResourceType: request.ResourceType, ResourceID: request.ResourceID, Reason: request.Reason, Payload: request.Payload}, request.Key, principal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,14 +233,7 @@ func TestExecuteOwnerOperationValidationMarshalAndPersistenceFailures(t *testing
 	}
 }
 
-func TestOperationsOwnerPermissionAndFailureClassEdges(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{Permissions: []string{"integration.retry"}})
-	if permission := operationsOwnerPermission([]string{"scheduler.run", "integration.retry"}, principal); permission != "integration.retry" {
-		t.Fatalf("permission=%q", permission)
-	}
-	if permission := operationsOwnerPermission([]string{"scheduler.run"}, principal); permission != "" {
-		t.Fatalf("ungranted=%q", permission)
-	}
+func TestOperationsOwnerFailureClassEdges(t *testing.T) {
 	for kind, expected := range map[apperror.ErrorKind]operationsmodel.OperationsFailureClass{
 		apperror.KindConflict:   operationsmodel.OperationsFailureManualIntervention,
 		apperror.KindBadRequest: operationsmodel.OperationsFailureTerminal,

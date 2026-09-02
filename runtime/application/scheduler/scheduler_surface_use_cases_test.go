@@ -69,7 +69,7 @@ func TestSchedulerOpsAuthorizationDoesNotProjectRuntimeJobLifecycle(t *testing.T
 
 func TestSchedulerSurfaceAuthorizationRequiresItsExactAction(t *testing.T) {
 	service := NewSchedulerApplicationService(nil)
-	for _, permission := range []string{"operations.read", "scheduler.command", "workspace.admin"} {
+	for _, permission := range []string{"runtime.operations.list_operations", "scheduler.command", "runtime.appschema.validate_application_definition"} {
 		if err := service.AuthorizeOpsRead(t.Context(), schedulerTestPrincipal(permission)); apperror.CodeOf(err) != "backend.scheduler.permission_required" {
 			t.Fatalf("unrelated permission %q authorized Scheduler state: %v", permission, err)
 		}

@@ -77,7 +77,7 @@ func workflowDependencies(records *runtimeAssembly) workflowapplication.Workflow
 			if err != nil {
 				return agentsdk.TaskResult{}, err
 			}
-			return records.agentTaskRunner.Start(ctx, command)
+			return records.agentTaskRunner.Start(agentsdk.WithAuthorizedServiceAction(ctx, agentsdk.ActionAgentTaskExecutionStart, agentsdk.AgentRuntimeServiceAudience), command)
 		},
 		WakeWorkflowContinuation: func(workspaceID, executionID string) {
 			workflowapplication.WakeWorkflowContinuation(records.workflowApplicationService, workflowapplication.WorkflowContinuationLocator{WorkspaceID: workspaceID, ExecutionID: executionID})

@@ -10,23 +10,17 @@ import (
 
 const MaximumBreakGlassDuration = time.Hour
 
-var crossWorkspacePermissions = map[operationsmodel.CrossWorkspacePurpose]string{
-	operationsmodel.CrossWorkspaceReport:    "runtime.cross_workspace.report",
-	operationsmodel.CrossWorkspaceMigration: "runtime.cross_workspace.migration",
-	operationsmodel.CrossWorkspaceSupport:   "runtime.cross_workspace.support",
-}
-
 func OperationsValidateCrossWorkspaceCommand(command operationsmodel.CrossWorkspaceCommand, now time.Time) error {
 	command.ID = strings.TrimSpace(command.ID)
-	command.Permission = strings.TrimSpace(command.Permission)
 	command.SourceWorkspaceID = strings.TrimSpace(command.SourceWorkspaceID)
 	command.TargetWorkspaceID = strings.TrimSpace(command.TargetWorkspaceID)
 	command.ActorID = strings.TrimSpace(command.ActorID)
 	command.Reason = strings.TrimSpace(command.Reason)
 	command.Reference = strings.TrimSpace(command.Reference)
-	expectedPermission, known := crossWorkspacePermissions[command.Purpose]
-	if !known || command.Permission != expectedPermission {
-		return fmt.Errorf("operations.cross_workspace_permission_required")
+	switch command.Purpose {
+	case operationsmodel.CrossWorkspaceReport, operationsmodel.CrossWorkspaceMigration, operationsmodel.CrossWorkspaceSupport:
+	default:
+		return fmt.Errorf("operations.cross_workspace_purpose_required")
 	}
 	if command.ID == "" || command.SourceWorkspaceID == "" || command.TargetWorkspaceID == "" || command.SourceWorkspaceID == command.TargetWorkspaceID {
 		return fmt.Errorf("operations.cross_workspace_scope_required")

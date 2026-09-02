@@ -7,7 +7,6 @@ import (
 	"fmt"
 	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
@@ -57,20 +56,12 @@ func workflowAuthorizeTaskDecision(principal principalmodel.Principal, decision 
 	if err := workflowAuthorizeCommand(principal); err != nil {
 		return err
 	}
-	endpointIdentity := ""
 	switch strings.ToLower(strings.TrimSpace(decision)) {
 	case "approve", "approved":
-		endpointIdentity = "POST /business/workflow/tasks/{taskID}/approve"
 	case "reject", "rejected":
-		endpointIdentity = "POST /business/workflow/tasks/{taskID}/reject"
 	case "return", "returned":
-		endpointIdentity = "POST /business/workflow/tasks/{taskID}/return"
 	default:
 		return badRequest("backend.workflow.task_decision_invalid")
-	}
-	contract, found := endpointmodel.EndpointContracts[endpointIdentity]
-	if !found || strings.TrimSpace(contract.ActionKey) == "" || !principal.HasExactPermission(contract.ActionKey) {
-		return forbidden("auth.permission_denied")
 	}
 	return nil
 }

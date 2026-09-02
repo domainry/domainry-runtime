@@ -49,7 +49,7 @@ func TestEveryPublishedPlatformReferenceKindUsesSnapshotBoundResolver(t *testing
 	service.UseIdentityReferenceSource(t.Context(), func(context.Context, principalmodel.Principal) (CapabilityIdentityReferences, error) {
 		return CapabilityIdentityReferences{}, nil
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}})
 	checked := map[string]bool{}
 	for _, domain := range RuntimeAuthoringCapabilities().Domains {
 		for _, definition := range domain.Capabilities {
@@ -90,7 +90,7 @@ func authoringHasReferencePointerSuffix(declared map[string]bool, suffix string)
 
 func authoringReferenceParameterType(value string) bool {
 	switch value {
-	case "object_key", "relation_target_object_key", "field_key", "action_key", "workflow_key", "report_key", "role_key", "permission_key", "connector_key", "connection_key", "operation_key", "user_id", "workforce_profile_id", "department_id", "role_id", "menu_id":
+	case "object_key", "relation_target_object_key", "field_key", "action_key", "workflow_key", "report_key", "role_key", "permission_key", "connector_key", "connection_key", "operation_key", "user_id", "org_id", "role_id", "menu_id":
 		return true
 	default:
 		return false

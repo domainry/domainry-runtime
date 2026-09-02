@@ -23,7 +23,7 @@ func TestWorkflowProcessEngineStartRequiresProcessStore(t *testing.T) {
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true,
 		WorkspaceID: "workspace",
 		UserID:      "user"},
-	}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}},
+	}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}},
 	)
 
 	for name, engine := range map[string]*WorkflowProcessEngine{

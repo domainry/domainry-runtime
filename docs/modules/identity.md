@@ -8,13 +8,13 @@ Owner：账号、认证、用户、角色、权限、session 与应用授权目�
 
 Runtime 通过 `runtimehost.Options.IdentityFactory` 注入 Factory，并在 `pkg/runtimehost/identity_integration.go` 打开 Binding。Module 必须实现 SDK HTTP Surface provider，向 Runtime 暴露 browser authentication 与 management surface；SaaS Binding 必须不返回进程内 Surface。两种模式都通过 `Descriptor` 校验 protocol、policy bundle、catalog、issuer/audience 和 mode。
 
-Identity 状态不属于 Runtime。Module 可以使用 Runtime 提供的项目数据库 handle，并保留 Identity source-owned 表命名空间；所有迁移必须通过宿主 migration registrar 提交，复用宿主唯一 `_schema_migrations`，不得创建 Identity 私有迁移账本。SaaS 状态由远端 Identity 服务持有。Runtime 只提供业务 Profile 与 Party organization scope resolver，不接管 Identity 授权模型。
+Identity 状态不属于 Runtime。Module 可以使用 Runtime 提供的项目数据库 handle，并保留 Identity source-owned 表命名空间；所有迁移必须通过宿主 migration registrar 提交，复用宿主唯一 `_schema_migrations`，不得创建 Identity 私有迁移账本。SaaS 状态由远端 Identity 服务持有。组织机构、人员主职和汇报关系均由 Identity 自己维护；Runtime 只提供业务 Profile 等项目数据事实，不接管 Identity 授权模型。
 
 ## 代码接入
 
 - 组合：`pkg/runtimehost/options.go`、`pkg/runtimehost/external_module_test.go`
 - 生命周期与 Surface：`pkg/runtimehost/identity_integration.go`
-- Runtime 投影：`pkg/runtimehost/identity_organization_scopes.go`
+- Runtime 投影：`pkg/runtimehost/identity_integration.go`
 - SDK 合同：`domainry-identity-sdk/sdk.go`、`authorization/principal`
 - Module：`domainry-identity/module`
 - SaaS Remote：`domainry-identity-sdk/remote`

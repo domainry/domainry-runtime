@@ -1,21 +1,41 @@
 package scheduler
 
-import "net/http"
+import (
+	"net/http"
+
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
+)
 
 func (h *SchedulerHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/scheduler-triggers:accept", h.acceptSchedulerTrigger)
-	mux.HandleFunc("GET /tenant-admin/scheduler/definitions", h.authenticated(h.listTenantAdminSchedulerDefinitions))
-	mux.HandleFunc("GET /tenant-admin/scheduler/definitions/{definitionID}", h.authenticated(h.getTenantAdminSchedulerDefinition))
-	mux.HandleFunc("GET /tenant-admin/scheduler/authoring-contract", h.authenticated(h.getTenantAdminSchedulerAuthoringContract))
-	mux.HandleFunc("POST /tenant-admin/scheduler/definitions/validate", h.authenticated(h.previewSchedulerJob))
-	mux.HandleFunc("POST /tenant-admin/scheduler/schedules/preview", h.authenticated(h.previewSchedulerSchedule))
-	mux.HandleFunc("POST /tenant-admin/scheduler/definitions/{definitionID}/simulate", h.authenticated(h.simulateSchedulerJob))
-	mux.HandleFunc("GET /operations/scheduler/state", h.authenticated(h.getOpsSchedulerState))
-	mux.HandleFunc("POST /operations/scheduler/definitions/{definitionID}/run", h.authenticated(h.runOpsSchedulerJob))
-	mux.HandleFunc("POST /operations/scheduler/definitions/{definitionID}/reschedule", h.authenticated(h.rescheduleOpsSchedulerDefinition))
-	mux.HandleFunc("POST /operations/scheduler/runs/{runID}/retry", h.authenticated(h.retryOpsSchedulerRun))
-	mux.HandleFunc("POST /operations/scheduler/runs/{runID}/cancel", h.authenticated(h.cancelOpsSchedulerRun))
-	mux.HandleFunc("POST /operations/scheduler/dead-letters/{deadLetterID}/resolve", h.authenticated(h.resolveOpsSchedulerDeadLetter))
-	mux.HandleFunc("POST /operations/scheduler/dead-letters/{deadLetterID}/requeue", h.authenticated(h.requeueOpsSchedulerDeadLetter))
-
+	contract, err := schedulersdk.SchedulerHTTPSurfaceContract()
+	if err != nil {
+		panic("compile Scheduler HTTP surface: " + err.Error())
+	}
+	handlers := map[string]http.HandlerFunc{
+		schedulersdk.ActionSchedulerDefinitionsList:       h.listTenantAdminSchedulerDefinitions,
+		schedulersdk.ActionSchedulerDefinitionsGet:        h.getTenantAdminSchedulerDefinition,
+		schedulersdk.ActionSchedulerAuthoringContractGet:  h.getTenantAdminSchedulerAuthoringContract,
+		schedulersdk.ActionSchedulerDefinitionsValidate:   h.previewSchedulerJob,
+		schedulersdk.ActionSchedulerSchedulesPreview:      h.previewSchedulerSchedule,
+		schedulersdk.ActionSchedulerDefinitionsSimulate:   h.simulateSchedulerJob,
+		schedulersdk.ActionSchedulerStateGet:              h.getOpsSchedulerState,
+		schedulersdk.ActionSchedulerDefinitionsRun:        h.runOpsSchedulerJob,
+		schedulersdk.ActionSchedulerDefinitionsReschedule: h.rescheduleOpsSchedulerDefinition,
+		schedulersdk.ActionSchedulerRunsRetry:             h.retryOpsSchedulerRun,
+		schedulersdk.ActionSchedulerRunsCancel:            h.cancelOpsSchedulerRun,
+		schedulersdk.ActionSchedulerDeadLettersResolve:    h.resolveOpsSchedulerDeadLetter,
+		schedulersdk.ActionSchedulerDeadLettersRequeue:    h.requeueOpsSchedulerDeadLetter,
+	}
+	for _, route := range contract.Routes {
+		handler, found := handlers[route.Action.Key]
+		if !found {
+			panic("Scheduler Action has no Runtime handler: " + route.Action.Key)
+		}
+		mux.HandleFunc(route.Pattern(), h.authenticated(handler))
+		delete(handlers, route.Action.Key)
+	}
+	if len(handlers) != 0 {
+		panic("Runtime Scheduler handler has no source Action")
+	}
 }

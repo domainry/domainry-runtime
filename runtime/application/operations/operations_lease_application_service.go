@@ -46,7 +46,7 @@ func (s *OperationsLeaseApplicationService) ForceRelease(ctx context.Context, co
 		return OperationsLeaseReleaseReceipt{}, apperror.New(apperror.KindInternal, "backend.operations.lease_control_unavailable", nil, nil)
 	}
 	receipt, decision, err := s.operations.SubmitSystem(ctx, OperationsSubmitRequest{
-		Kind: "worker.lease.force_release", Permission: operationsDefinitionPermission("worker.lease.force_release"), ResourceType: "worker_lease", ResourceID: strings.TrimSpace(command.Owner) + ":" + strings.TrimSpace(command.ResourceID), Reason: command.Reason, Reference: command.Reference,
+		Kind: "worker.lease.force_release", ResourceType: "worker_lease", ResourceID: strings.TrimSpace(command.Owner) + ":" + strings.TrimSpace(command.ResourceID), Reason: command.Reason, Reference: command.Reference,
 		Payload: map[string]any{"expected_lease_owner": command.ExpectedLeaseOwner, "expected_fencing_token": command.ExpectedFencingToken, "verified_stuck": command.VerifiedStuck, "verification_evidence": command.VerificationEvidence},
 	}, key, operationsmodel.OperationsSystemPurposeRuntimeControl, principal)
 	if err != nil {

@@ -24,30 +24,30 @@ func (surface moduleSurfaceStub) Routes() []modulehttp.Route { return surface.ro
 func (surface moduleSurfaceStub) Handler() http.Handler      { return surface.handler }
 
 func TestModuleHTTPSurfacesMountByExposureAndPreserveFallback(t *testing.T) {
-	party := moduleSurfaceStub{owner: "party", name: "management", handler: http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/party" {
+	sample := moduleSurfaceStub{owner: "sample", name: "management", handler: http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/sample" {
 			t.Fatalf("module-local path=%q", request.URL.Path)
 		}
 		writer.WriteHeader(http.StatusNoContent)
-	}), routes: []modulehttp.Route{{Action: runtimeHostTestAction("party.read", "GET /party", []actioncontract.Exposure{actioncontract.ExposureTenantAdmin}, actioncontract.AuthorizationExactRolePermission)}}}
+	}), routes: []modulehttp.Route{{Action: runtimeHostTestAction("sample.read", "GET /sample", []actioncontract.Exposure{actioncontract.ExposureTenantAdmin}, actioncontract.AuthorizationExactRolePermission)}}}
 	fallback := http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) { writer.WriteHeader(http.StatusTeapot) })
 	passthrough := func(_ modulehttp.Route, handler http.Handler) (http.Handler, error) { return handler, nil }
-	admin, err := mountModuleHTTPSurfaces(runtimehttp.ListenerRouteGroupTenantAdmin, []modulehttp.Surface{party}, fallback, passthrough)
+	admin, err := mountModuleHTTPSurfaces(runtimehttp.ListenerRouteGroupTenantAdmin, []modulehttp.Surface{sample}, fallback, passthrough)
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := httptest.NewRequest(http.MethodGet, "/party", nil)
+	request := httptest.NewRequest(http.MethodGet, "/sample", nil)
 	response := httptest.NewRecorder()
 	admin.ServeHTTP(response, request)
 	if response.Code != http.StatusNoContent {
-		t.Fatalf("party status=%d", response.Code)
+		t.Fatalf("sample status=%d", response.Code)
 	}
 	response = httptest.NewRecorder()
 	admin.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/runtime", nil))
 	if response.Code != http.StatusTeapot {
 		t.Fatalf("fallback status=%d", response.Code)
 	}
-	public, err := mountModuleHTTPSurfaces(runtimehttp.ListenerRouteGroupPublic, []modulehttp.Surface{party}, fallback, passthrough)
+	public, err := mountModuleHTTPSurfaces(runtimehttp.ListenerRouteGroupPublic, []modulehttp.Surface{sample}, fallback, passthrough)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestModuleHTTPSurfacesMountByExposureAndPreserveFallback(t *testing.T) {
 
 func TestModuleHTTPSurfacesRejectCrossModuleRouteCollision(t *testing.T) {
 	route := modulehttp.Route{Action: runtimeHostTestAction("test.shared.get", "GET /shared", []actioncontract.Exposure{actioncontract.ExposureTenantAdmin}, actioncontract.AuthorizationAuthenticatedPrincipal)}
-	first := moduleSurfaceStub{owner: "party", name: "management", handler: http.NotFoundHandler(), routes: []modulehttp.Route{route}}
+	first := moduleSurfaceStub{owner: "alpha", name: "management", handler: http.NotFoundHandler(), routes: []modulehttp.Route{route}}
 	second := moduleSurfaceStub{owner: "notification", name: "management", handler: http.NotFoundHandler(), routes: []modulehttp.Route{route}}
 	_, err := mountModuleHTTPSurfaces(runtimehttp.ListenerRouteGroupTenantAdmin, []modulehttp.Surface{first, second}, nil, func(_ modulehttp.Route, handler http.Handler) (http.Handler, error) { return handler, nil })
 	if err == nil || !strings.Contains(err.Error(), "owned by both") {
@@ -69,8 +69,8 @@ func TestModuleHTTPSurfacesRejectCrossModuleRouteCollision(t *testing.T) {
 }
 
 func TestModuleHTTPSurfacesRejectAuthorizedRouteWithoutHostGuard(t *testing.T) {
-	party := moduleSurfaceStub{owner: "party", name: "management", handler: http.NotFoundHandler(), routes: []modulehttp.Route{{Action: runtimeHostTestAction("party.read", "GET /party", []actioncontract.Exposure{actioncontract.ExposureTenantAdmin}, actioncontract.AuthorizationExactRolePermission)}}}
-	_, err := mountModuleHTTPSurfaces(runtimehttp.ListenerRouteGroupTenantAdmin, []modulehttp.Surface{party}, nil)
+	sample := moduleSurfaceStub{owner: "sample", name: "management", handler: http.NotFoundHandler(), routes: []modulehttp.Route{{Action: runtimeHostTestAction("sample.read", "GET /sample", []actioncontract.Exposure{actioncontract.ExposureTenantAdmin}, actioncontract.AuthorizationExactRolePermission)}}}
+	_, err := mountModuleHTTPSurfaces(runtimehttp.ListenerRouteGroupTenantAdmin, []modulehttp.Surface{sample}, nil)
 	if err == nil || !strings.Contains(err.Error(), "requires a host authorization guard") {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -88,7 +88,7 @@ func runtimeHostTestAction(key, pattern string, exposures []actioncontract.Expos
 		EffectClass: actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow, IdempotencyDecision: "not_applicable", AuditClass: "test_audit", LifecycleStatus: actioncontract.LifecycleActive,
 	}
 	if strategy == actioncontract.AuthorizationExactRolePermission {
-		action.Permission = &actioncontract.PermissionDefinition{Key: key, Owner: action.Owner, ResourceKey: key[:separator], ActionKey: key[separator+1:], Label: key, Category: "Test", LifecycleStatus: actioncontract.LifecycleActive}
+		action.Permission = &actioncontract.PermissionDefinition{Key: key, Owner: action.Owner, ResourceKey: key[:separator], OperationKey: key[separator+1:], Label: key, Category: "Test", LifecycleStatus: actioncontract.LifecycleActive}
 	} else if strategy != actioncontract.AuthorizationAuthenticatedPrincipal {
 		action.Authorization.PolicyKey = "test.policy"
 	}

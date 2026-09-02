@@ -43,7 +43,7 @@ func appendRecordSystemColumns(names []string) []string {
 	for _, name := range names {
 		existing[name] = true
 	}
-	for _, name := range []string{"deleted", "ext_info", "create_by", "update_by"} {
+	for _, name := range []string{"deleted", "ext_info", "create_by", "update_by", "owner_user_id", "owner_org_id"} {
 		if !existing[name] {
 			names = append(names, name)
 		}

@@ -21,11 +21,13 @@ import (
 )
 
 type manifestBusinessSeedRow struct {
-	Key        string
-	ObjectKey  string
-	DataJSON   string
-	SourceKind string
-	SourceID   string
+	Key         string
+	ObjectKey   string
+	DataJSON    string
+	OwnerUserID string
+	OwnerOrgID  string
+	SourceKind  string
+	SourceID    string
 }
 
 func SyncManifestBusinessSeeds(ctx context.Context, records recordrepository.RecordBusinessSeedRepository, manifest manifestmodel.ManifestSchema, rows []manifestBusinessSeedRow) error {
@@ -62,10 +64,12 @@ func SyncManifestBusinessSeeds(ctx context.Context, records recordrepository.Rec
 		}
 		data = filterManifestBusinessSeedData(object, resolveManifestBusinessSeedPlaceholders(resolveManifestBusinessSeedRefs(data, idsByKey), runID))
 		record := recordmodel.Record{
-			ID:        idsByKey[row.Key],
-			Data:      data,
-			CreatedAt: now,
-			UpdatedAt: now,
+			ID:          idsByKey[row.Key],
+			Data:        data,
+			OwnerUserID: strings.TrimSpace(row.OwnerUserID),
+			OwnerOrgID:  strings.TrimSpace(row.OwnerOrgID),
+			CreatedAt:   now,
+			UpdatedAt:   now,
 		}
 		if strings.TrimSpace(record.ID) == "" {
 			record.ID = manifestBusinessSeedRecordID(row.ObjectKey, row.Key)
@@ -103,11 +107,13 @@ func ManifestBusinessSeedRowsFromManifest(manifest manifestmodel.ManifestSchema)
 			continue
 		}
 		rows = append(rows, manifestBusinessSeedRow{
-			Key:        seedKey,
-			ObjectKey:  objectKey,
-			DataJSON:   string(raw),
-			SourceKind: valueOrDefault(strings.TrimSpace(seed.SourceKind), "template"),
-			SourceID:   valueOrDefault(strings.TrimSpace(seed.SourceID), manifest.TemplateID),
+			Key:         seedKey,
+			ObjectKey:   objectKey,
+			DataJSON:    string(raw),
+			OwnerUserID: strings.TrimSpace(seed.OwnerUserID),
+			OwnerOrgID:  strings.TrimSpace(seed.OwnerOrgID),
+			SourceKind:  valueOrDefault(strings.TrimSpace(seed.SourceKind), "template"),
+			SourceID:    valueOrDefault(strings.TrimSpace(seed.SourceID), manifest.TemplateID),
 		})
 	}
 	return rows

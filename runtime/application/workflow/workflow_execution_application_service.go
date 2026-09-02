@@ -108,9 +108,6 @@ func (s *WorkflowApplicationService) SimulateWorkflow(ctx context.Context, workf
 	if err := workflowAuthorizeQuery(principal); err != nil {
 		return workflowmodel.WorkflowSimulationResult{}, err
 	}
-	if !workflowpolicy.WorkflowPermissionAllows(principal, "simulate") {
-		return workflowmodel.WorkflowSimulationResult{}, forbidden("backend.workflow.simulate_permission_required")
-	}
 	workflow, ok := s.registry.Get(workflowKey)
 	if !ok {
 		return workflowmodel.WorkflowSimulationResult{}, notFound("backend.workflow.not_found")
@@ -150,9 +147,6 @@ func (s *WorkflowApplicationService) SimulateWorkflow(ctx context.Context, workf
 func (s *WorkflowApplicationService) SimulateWorkflowCandidate(ctx context.Context, workflow definitionmodel.WorkflowSchema, payload map[string]any, principal principalmodel.Principal) (workflowmodel.WorkflowSimulationResult, error) {
 	if err := workflowAuthorizeQuery(principal); err != nil {
 		return workflowmodel.WorkflowSimulationResult{}, err
-	}
-	if !workflowpolicy.WorkflowPermissionAllows(principal, "simulate") {
-		return workflowmodel.WorkflowSimulationResult{}, forbidden("backend.workflow.simulate_permission_required")
 	}
 	workflow.Key = strings.TrimSpace(workflow.Key)
 	if workflow.Key == "" {
@@ -214,9 +208,6 @@ func (s *WorkflowApplicationService) InspectWorkflowExecution(ctx context.Contex
 func (s *WorkflowApplicationService) RetryWorkflowExecutionWithKey(ctx context.Context, executionID, callerKey string, principal principalmodel.Principal) (workflowmodel.WorkflowRunResult, error) {
 	if err := workflowAuthorizeCommand(principal); err != nil {
 		return workflowmodel.WorkflowRunResult{}, err
-	}
-	if !workflowpolicy.WorkflowPermissionAllows(principal, "retry") {
-		return workflowmodel.WorkflowRunResult{}, forbidden("backend.workflow.retry_permission_required")
 	}
 	previous, ok, err := s.workerRepo.GetExecution(ctx, principal.WorkspaceID, strings.TrimSpace(executionID))
 	if err != nil {
@@ -295,9 +286,6 @@ func (s *WorkflowApplicationService) RetryWorkflowExecutionWithKey(ctx context.C
 func (s *WorkflowApplicationService) ResolveWorkflowExecution(ctx context.Context, executionID string, reason string, principal principalmodel.Principal) (workflowmodel.WorkflowResolveResult, error) {
 	if err := workflowAuthorizeCommand(principal); err != nil {
 		return workflowmodel.WorkflowResolveResult{}, err
-	}
-	if !workflowpolicy.WorkflowPermissionAllows(principal, "resolve") {
-		return workflowmodel.WorkflowResolveResult{}, forbidden("backend.workflow.resolve_permission_required")
 	}
 	execution, ok, err := s.workerRepo.GetExecution(ctx, principal.WorkspaceID, strings.TrimSpace(executionID))
 	if err != nil {

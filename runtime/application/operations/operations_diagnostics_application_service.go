@@ -88,7 +88,7 @@ func (s *OperationsApplicationService) CaptureDiagnostics(ctx context.Context, c
 		return OperationsDiagnosticsResult{}, apperror.New(apperror.KindBadRequest, "backend.operations.diagnostics_cost_exceeded", nil, nil)
 	}
 	command.Sections = sections
-	receipt, decision, err := s.SubmitSystem(ctx, OperationsSubmitRequest{Kind: "diagnostics.snapshot", Permission: operationsDefinitionPermission("diagnostics.snapshot"), ResourceType: "runtime", ResourceID: s.instanceID, Reason: command.Reason, Reference: command.Reference, Payload: command}, key, operationsmodel.OperationsSystemPurposeRuntimeControl, principal)
+	receipt, decision, err := s.SubmitSystem(ctx, OperationsSubmitRequest{Kind: "diagnostics.snapshot", ResourceType: "runtime", ResourceID: s.instanceID, Reason: command.Reason, Reference: command.Reference, Payload: command}, key, operationsmodel.OperationsSystemPurposeRuntimeControl, principal)
 	if err != nil {
 		return OperationsDiagnosticsResult{}, err
 	}

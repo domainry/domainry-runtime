@@ -14,6 +14,7 @@ import (
 	actionservice "github.com/domainry/domainry-runtime/runtime/domain/action/service"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
+	operationsprojection "github.com/domainry/domainry-runtime/runtime/domain/operations/projection"
 )
 
 // reconcileRuntimeIdentityAuthorization registers the Runtime application and
@@ -134,7 +135,7 @@ func runtimePermissionDefinitionsByOwner(registry *actioncontract.Registry) map[
 		permission := definition.Permission
 		owner := strings.TrimSpace(permission.Owner)
 		result[owner] = append(result[owner], identitysdk.PermissionDefinition{
-			PermissionKey: permission.Key, ResourceKey: permission.ResourceKey, ActionKey: permission.ActionKey,
+			PermissionKey: permission.Key, ResourceKey: permission.ResourceKey, OperationKey: permission.OperationKey,
 			Label: permission.Label, Description: permission.Description, Category: permission.Category,
 			SourceKind: definition.SourceKind,
 		})
@@ -174,12 +175,31 @@ func (snapshot *runtimeAuthorizationRegistrySnapshot) QueryPermissionUsages(ctx 
 var _ actioncontract.PermissionUsageProvider = (*runtimeAuthorizationRegistrySnapshot)(nil)
 
 func runtimeAuthorizationActionRegistry(snapshot appschemamodel.ApplicationSchemaSnapshot, applicationKey string, moduleActions []actioncontract.ActionDefinition) (*actioncontract.Registry, error) {
-	contributed := make([]actioncontract.ActionDefinition, 0, len(moduleActions)+len(runtimeModuleInventoryActions(applicationKey)))
+	operationsActions, err := operationsprojection.OperationsAuthorizationActions()
+	if err != nil {
+		return nil, err
+	}
+	contributed := make([]actioncontract.ActionDefinition, 0, len(moduleActions)+len(runtimeModuleInventoryActions(applicationKey))+len(operationsActions))
 	for index := range moduleActions {
 		contributed = append(contributed, actioncontract.CloneDefinition(moduleActions[index]))
 	}
 	contributed = append(contributed, runtimeModuleInventoryActions(applicationKey)...)
+	contributed = append(contributed, operationsActions...)
+	knownActionKeys := make(map[string]bool, len(contributed)+len(endpointmodel.EndpointContracts))
+	for _, action := range contributed {
+		knownActionKeys[action.Key] = true
+	}
+	for _, endpoint := range endpointmodel.EndpointContracts {
+		knownActionKeys[endpoint.ActionKey] = true
+	}
+	nonHTTPBindings := operationsprojection.OperationsAuthorizationBindings()
+	for actionKey := range nonHTTPBindings {
+		if !knownActionKeys[actionKey] {
+			delete(nonHTTPBindings, actionKey)
+		}
+	}
 	return actionservice.BuildAuthorizationRegistry(actionservice.AuthorizationRegistryInput{
 		Snapshot: snapshot, ApplicationKey: applicationKey, ContributedActions: contributed, EndpointContracts: endpointmodel.EndpointContracts,
+		NonHTTPBindings: nonHTTPBindings,
 	})
 }

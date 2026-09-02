@@ -94,33 +94,24 @@ func TestRuntimeAPIContractPublishesActionInvocationScope(t *testing.T) {
 	}
 }
 
-func TestRuntimeAPIContractPublishesFoundationReads(t *testing.T) {
+func TestRuntimeAPIContractDoesNotRepublishPartyFoundation(t *testing.T) {
 	var document struct {
 		Routes map[string]struct {
-			Method   string            `json:"method"`
-			Path     string            `json:"path"`
-			Response string            `json:"response"`
-			Fixed    map[string]string `json:"fixed_query"`
+			Path string `json:"path"`
 		} `json:"routes"`
-		Schemas map[string]struct {
-			Required []string `json:"required"`
-			Roles    string   `json:"roles"`
-		} `json:"schemas"`
+		Schemas map[string]json.RawMessage `json:"schemas"`
 	}
 	if err := json.Unmarshal(RuntimeAPIContractDocument(), &document); err != nil {
 		t.Fatal(err)
 	}
-	expected := map[string]struct {
-		path     string
-		response string
-	}{
-		"job_catalog_list": {"/foundation/jobs", "job_catalog_page"},
-		"position_list":    {"/foundation/positions", "position_page"},
+	for key, route := range document.Routes {
+		if strings.HasPrefix(route.Path, "/foundation/jobs") || strings.HasPrefix(route.Path, "/foundation/positions") {
+			t.Errorf("Runtime contract retained Party-owned route %s=%s", key, route.Path)
+		}
 	}
-	for key, want := range expected {
-		route, ok := document.Routes[key]
-		if !ok || route.Method != "GET" || route.Path != want.path || route.Response != want.response {
-			t.Fatalf("unexpected %s route: %+v", key, route)
+	for _, key := range []string{"job_catalog_item", "job_catalog_page", "position", "position_page"} {
+		if _, exists := document.Schemas[key]; exists {
+			t.Errorf("Runtime contract retained Party-owned schema %s", key)
 		}
 	}
 }
@@ -196,34 +187,6 @@ func stringSliceContains(values []string, wanted string) bool {
 		}
 	}
 	return false
-}
-
-func TestRuntimeAPIContractPublishesFoundationAuthoring(t *testing.T) {
-	var document struct {
-		Routes map[string]struct {
-			Method   string `json:"method"`
-			Path     string `json:"path"`
-			Request  string `json:"request"`
-			Response string `json:"response"`
-		} `json:"routes"`
-	}
-	if err := json.Unmarshal(RuntimeAPIContractDocument(), &document); err != nil {
-		t.Fatal(err)
-	}
-	for key, expected := range map[string]struct {
-		method string
-		path   string
-	}{
-		"job_catalog_get":    {"GET", "/foundation/jobs/{jobID}"},
-		"job_catalog_upsert": {"PUT", "/foundation/jobs/{jobID}"},
-		"position_get":       {"GET", "/foundation/positions/{positionID}"},
-		"position_upsert":    {"PUT", "/foundation/positions/{positionID}"},
-	} {
-		route, ok := document.Routes[key]
-		if !ok || route.Method != expected.method || route.Path != expected.path {
-			t.Fatalf("unexpected %s route: %+v", key, route)
-		}
-	}
 }
 
 func TestRuntimeAPIContractPublishesBusinessWorkflowLifecycle(t *testing.T) {

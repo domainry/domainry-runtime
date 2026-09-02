@@ -41,7 +41,7 @@ func TestSnapshotReportPermissionAndObjectVisibilityIntersection(t *testing.T) {
 
 	assertReportKeys(t, reportKeys(SnapshotForPrincipal(snapshot, principal("order_line.read")).Reports), "order_line_permission", "object_visibility", "global")
 	assertReportKeys(t, reportKeys(SnapshotForPrincipal(snapshot, principal()).Reports), "global")
-	assertReportKeys(t, reportKeys(SnapshotForPrincipal(snapshot, principal("workspace.admin")).Reports), "global")
+	assertReportKeys(t, reportKeys(SnapshotForPrincipal(snapshot, principal("runtime.appschema.validate_application_definition")).Reports), "global")
 	assertReportKeys(t, reportKeys(SnapshotForPrincipal(snapshot, principalmodel.Principal{}).Reports))
 }
 

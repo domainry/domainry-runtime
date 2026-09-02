@@ -41,12 +41,11 @@ func ProfileBindingAuthoringCapability() capabilitycontract.CapabilityAuthoringD
 		},
 	}
 	execution := appschemacontract.VersionedApplicationDefinitionExecution("principal.profile_binding")
-	execution.PermissionModel = "identity.profile_binding.manage"
 	return capabilitycontract.CapabilityAuthoringDefinition{
 		Key: "principal.profile_binding", Status: "supported", Lifecycle: "versioned_metadata", Requires: []string{"schema.object", "schema.relation"},
 		SystemDraftResourceType: "identity_profile_binding",
 		Parameters:              []capabilitycontract.CapabilityAuthoringParameter{{Key: "object_key", Type: "object_key", Required: true}, {Key: "identity_relation_field", Type: "field_key", Required: true}, {Key: "business_identity", Type: "object", Required: true}, {Key: "expected_schema_hash", Type: "schema_hash", Required: true}},
-		Permissions:             []string{"identity.profile_binding.manage"}, AuditEvents: []string{"metadata_definition_upserted"},
+		Permissions:             []string{"runtime.appschema.validate_application_definition"}, AuditEvents: []string{"metadata_definition_upserted"},
 		ValidationEndpoint: "POST /tenant-admin/metadata/definitions/identity_profile_binding/{resourceKey}/validate", ConfigurationRoutes: appschemacontract.VersionedApplicationDefinitionRoutes("identity_profile_binding"), ResourceKeyPathParameter: "resourceKey",
 		ResourceOperations: appschemacontract.VersionedApplicationDefinitionOperations("identity_profile_binding"), InputSchema: appschemacontract.VersionedApplicationDefinitionRequestSchema(payload, false), OutputSchema: appschemacontract.VersionedApplicationDefinitionOutputSchema(payload),
 		OutputVariables:    []capabilitycontract.CapabilityAuthoringOutput{{Name: "resource_key", JSONPointer: "/definition/resource_key", Type: "identity_profile_binding_key", VisibleTo: "subsequent_capability_calls"}, {Name: "schema_hash", JSONPointer: "/definition/schema_hash", Type: "schema_hash", VisibleTo: "subsequent_capability_calls"}},

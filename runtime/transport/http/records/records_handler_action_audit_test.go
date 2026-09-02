@@ -112,7 +112,7 @@ func recordsHTTPPrincipal() principalmodel.Principal {
 		Permissions: []string{
 			"customer.create", "customer.read", "customer.update", "customer.delete", "customer.import", "customer.export",
 			"order.create", "order.read", "order.update", "order.delete", "order.import", "order.export",
-			"customer.approve", "customer.approve_object", "identity.profile_binding.manage",
+			"customer.approve", "customer.approve_object",
 		},
 		RecordScope: "all_records",
 	})
@@ -302,7 +302,7 @@ func TestEffectivePermissionsAppliesRecordRLSOnceForEveryRecordAction(t *testing
 		{name: "other owner", owner: "coach-b", wantRecord: false, wantReason: "record_scope_denied"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			repository := &recordsHTTPRepository{record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"owner": test.owner}}, found: true}
+			repository := &recordsHTTPRepository{record: recordmodel.Record{ID: "customer-1", OwnerUserID: test.owner}, found: true}
 			handler, serviceErr := recordsHandlerForTest(principal)
 			handler.UseQueries(recordsHTTPApplication(repository))
 			handler.permissions = appschemaapplication.NewApplicationSchemaQueryApplicationService(recordsSchemaProvider{snapshot: appschemamodel.ApplicationSchemaSnapshot{
@@ -433,7 +433,7 @@ func TestEffectivePermissionsRecordDecisionEdgePaths(t *testing.T) {
 			{Key: "customer.create", ObjectKey: "customer", Kind: "object_create"},
 		})
 		handler.UseQueries(recordsHTTPApplication(&recordsHTTPRepository{
-			record: recordmodel.Record{ID: "one", Data: map[string]any{"owner": "someone-else"}},
+			record: recordmodel.Record{ID: "one", OwnerUserID: "someone-else"},
 			found:  true,
 		}))
 		w := httptest.NewRecorder()
@@ -462,14 +462,14 @@ func TestEffectivePermissionsRecordDecisionEdgePaths(t *testing.T) {
 }
 
 func TestRuntimeOpsEffectivePermissionsKeepOnlyExactGrants(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"operations.read", "integration.retry"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"runtime.operations.list_operations", "integration.retry"}})
 	result := runtimeOpsExactFeaturePermissions(recordcontract.RecordFeaturePermissionSnapshot{Functions: []recordcontract.RecordFeatureFunctionPermission{
-		{Key: "workspace.admin", Decision: recordcontract.RecordFeaturePermissionDecision{Allowed: true, Reason: "allowed"}},
+		{Key: "runtime.appschema.validate_application_definition", Decision: recordcontract.RecordFeaturePermissionDecision{Allowed: true, Reason: "allowed"}},
 		{Key: "integration.audit.view", Decision: recordcontract.RecordFeaturePermissionDecision{Allowed: true, Reason: "inherited"}},
-		{Key: "operations.read", Decision: recordcontract.RecordFeaturePermissionDecision{Allowed: true, Reason: "allowed"}},
+		{Key: "runtime.operations.list_operations", Decision: recordcontract.RecordFeaturePermissionDecision{Allowed: true, Reason: "allowed"}},
 		{Key: "integration.retry", Decision: recordcontract.RecordFeaturePermissionDecision{Allowed: true, Reason: "allowed"}},
 	}}, principal)
-	if len(result.Functions) != 2 || result.Functions[0].Key != "operations.read" || result.Functions[1].Key != "integration.retry" {
+	if len(result.Functions) != 2 || result.Functions[0].Key != "runtime.operations.list_operations" || result.Functions[1].Key != "integration.retry" {
 		t.Fatalf("Runtime Ops exact permissions = %+v", result.Functions)
 	}
 	for _, permission := range result.Functions {

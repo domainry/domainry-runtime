@@ -198,7 +198,7 @@ func TestUploadAccessAuthorizeDownloadAgainstRecord(t *testing.T) {
 		records.record.Data = map[string]any{"file_url": "file:///tmp/document.pdf?download=1", "sensitive": sensitive}
 		assertUploadAccessError(t, service.AuthorizeDownload(t.Context(), "document", "file_url", "record", "document.pdf", principal), apperror.KindForbidden, "backend.upload.permission_denied")
 	}
-	workspaceAdmin := uploadAccessPrincipal("document.read", "workspace.admin")
+	workspaceAdmin := uploadAccessPrincipal("document.read", "runtime.appschema.validate_application_definition")
 	assertUploadAccessError(t, service.AuthorizeDownload(t.Context(), "document", "file_url", "record", "document.pdf", workspaceAdmin), apperror.KindForbidden, "backend.upload.permission_denied")
 	privileged := uploadAccessPrincipal("document.read", "document.sensitive.read")
 	if err := service.AuthorizeDownload(t.Context(), "document", "file_url", "record", "document.pdf", privileged); err != nil {

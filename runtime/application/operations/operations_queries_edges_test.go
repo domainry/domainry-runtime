@@ -56,9 +56,9 @@ func TestOperationsDefinitionsReceiptAndReceiptListEdges(t *testing.T) {
 		t.Fatalf("receipts authorization error = %v", err)
 	}
 	workspaceAdminOnOps := operationsTestAdmin()
-	accessfixture.Set(&workspaceAdminOnOps, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	accessfixture.Set(&workspaceAdminOnOps, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}})
 	if _, err := service.Receipts(t.Context(), "", 10, workspaceAdminOnOps); apperror.KindOf(err) != apperror.KindForbidden {
-		t.Fatalf("workspace.admin expanded to operations.read: %v", err)
+		t.Fatalf("unrelated permission expanded to runtime.operations.list_operations: %v", err)
 	}
 	admin := operationsTestAdmin()
 	repositoryFailure := errors.New("operations repository failed")
@@ -84,6 +84,25 @@ func TestOperationsDefinitionsReceiptAndReceiptListEdges(t *testing.T) {
 	items, err := service.Receipts(t.Context(), "", 201, admin)
 	if err != nil || len(items) != 1 || repository.lastLimit != 100 {
 		t.Fatalf("items=%#v limit=%d err=%v", items, repository.lastLimit, err)
+	}
+}
+
+func TestOperationsListAndGetUseIndependentExactActions(t *testing.T) {
+	service := NewOperationsApplicationService(&operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}, nil, nil, nil)
+	base := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator"}}
+	listOnly := accessfixture.Attach(base, accessfixture.Bundle{Permissions: []string{"runtime.operations.list_operations"}})
+	if _, err := service.Receipts(t.Context(), "", 10, listOnly); err != nil {
+		t.Fatalf("list exact action denied: %v", err)
+	}
+	if _, err := service.Receipt(t.Context(), "missing", listOnly); apperror.KindOf(err) != apperror.KindForbidden {
+		t.Fatalf("list action reached get operation: %v", err)
+	}
+	getOnly := accessfixture.Attach(base, accessfixture.Bundle{Permissions: []string{"runtime.operations.get_operation"}})
+	if _, err := service.Receipt(t.Context(), "missing", getOnly); apperror.KindOf(err) != apperror.KindNotFound {
+		t.Fatalf("get exact action result: %v", err)
+	}
+	if _, err := service.Receipts(t.Context(), "", 10, getOnly); apperror.KindOf(err) != apperror.KindForbidden {
+		t.Fatalf("get action reached list operations: %v", err)
 	}
 }
 
@@ -121,7 +140,7 @@ func TestOperationsSubmitSystemValidationAndPersistenceFailures(t *testing.T) {
 	if _, _, err := service.SubmitSystem(t.Context(), OperationsSubmitRequest{Kind: "unknown"}, "key", "purpose", admin); apperror.CodeOf(err) != "backend.operations.kind_not_registered" {
 		t.Fatalf("unknown kind error = %v", err)
 	}
-	request := OperationsSubmitRequest{Kind: "runtime.maintenance.enable", Permission: "runtime.maintenance.write", ResourceType: "runtime", ResourceID: "runtime", Reason: "maintenance"}
+	request := OperationsSubmitRequest{Kind: "runtime.maintenance.enable", ResourceType: "runtime", ResourceID: "runtime", Reason: "maintenance"}
 	mismatch := request
 	mismatch.ResourceType = "wrong"
 	if _, _, err := service.SubmitSystem(t.Context(), mismatch, "key", "purpose", admin); apperror.CodeOf(err) != "backend.operations.definition_mismatch" {

@@ -134,7 +134,7 @@ func TestSnapshotVisibilityFiltersObjectsActionsReportsAndAgentRegistry(t *testi
 	if got := SnapshotForPrincipal(snapshot, principalmodel.Principal{}); len(got.Objects) != len(snapshot.Objects) || len(got.AgentServicePrincipals) != 0 {
 		t.Fatal("unknown principal snapshot should preserve public metadata without service principal bindings")
 	}
-	workspaceGovernor := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"workspace.admin"}})
+	workspaceGovernor := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}})
 	if got := SnapshotForPrincipal(snapshot, workspaceGovernor); len(got.Objects) != 0 || got.SchemaHash != SchemaSnapshotHash(got) {
 		t.Fatal("workspace governance permission must not bypass object visibility")
 	}

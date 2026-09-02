@@ -109,7 +109,7 @@ func TestBusinessSystemSnapshotSeparatesAdministratorAndLimitedVisibility(t *tes
 		t.Fatalf("administrator governance projection=%#v", snapshot)
 	}
 
-	limited := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"workflow.definition.read"}})
+	limited := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{})
 	snapshot, err = service.Snapshot(t.Context(), limited)
 	if err != nil {
 		t.Fatal(err)

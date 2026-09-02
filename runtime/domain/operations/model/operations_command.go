@@ -26,7 +26,7 @@ type OperationsScope struct {
 type OperationsCommand struct {
 	ID                 string           `json:"id"`
 	Kind               string           `json:"kind"`
-	Permission         string           `json:"permission"`
+	ActionKey          string           `json:"action_key"`
 	Scope              OperationsScope  `json:"scope"`
 	IdempotencyKey     string           `json:"idempotency_key"`
 	RequestFingerprint string           `json:"request_fingerprint"`

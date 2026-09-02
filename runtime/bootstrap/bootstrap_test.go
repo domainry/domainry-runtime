@@ -10,7 +10,6 @@ import (
 	"github.com/domainry/domainry-connector-sdk"
 	integrationmodule "github.com/domainry/domainry-integration/module"
 	notificationmodule "github.com/domainry/domainry-notification/module"
-	partymodule "github.com/domainry/domainry-party/module"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -20,12 +19,11 @@ import (
 
 func TestBootstrapEntrypointsAssembleRunnableGraphs(t *testing.T) {
 	cfg := config.Config{
-		AppLocale:                  "en-US",
-		IdentityWorkspaceID:        "workspace-primary",
-		NotificationTenantID:       "tenant-primary",
-		NotificationWorkspaceID:    "workspace-primary",
-		PartyTenantID:              "tenant-primary",
-		PartyWorkspaceID:           "workspace-primary",
+		AppLocale:               "en-US",
+		IdentityWorkspaceID:     "workspace-primary",
+		NotificationTenantID:    "tenant-primary",
+		NotificationWorkspaceID: "workspace-primary",
+
 		DatabaseDriver:             "sqlite",
 		AuditExportTokenKey:        "test-audit-export-signing-key",
 		DBPath:                     filepath.Join(t.TempDir(), "runtime.db"),
@@ -37,7 +35,7 @@ func TestBootstrapEntrypointsAssembleRunnableGraphs(t *testing.T) {
 		SchedulerLeaseTTL:          time.Minute,
 		SchedulerMaxCatchupWindows: 1,
 	}
-	runtime := New(t.Context(), cfg, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangefixture.NewFactory(), integrationmodule.NewFactory())
+	runtime := New(t.Context(), cfg, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory(), integrationmodule.NewFactory())
 	if runtime == nil || BindHTTP(t.Context(), runtime) != runtime {
 		t.Fatal("bootstrap runtime entrypoints did not preserve the assembled owner")
 	}
@@ -62,7 +60,7 @@ func TestBootstrapExtensionAndProjectFacadeEntrypoints(t *testing.T) {
 	base := config.Config{
 		AppLocale: "en-US", DatabaseDriver: "sqlite", ManifestPath: filepath.Join("..", "domain", "manifest", "testdata", "manifests", "domain-only-minimal.json"), UploadDir: t.TempDir(), HTTPShutdownTimeout: time.Second,
 		IdentityWorkspaceID: "workspace-primary", NotificationTenantID: "tenant-primary", NotificationWorkspaceID: "workspace-primary",
-		PartyTenantID: "tenant-primary", PartyWorkspaceID: "workspace-primary",
+
 		AuditExportTokenKey: "test-audit-export-signing-key",
 	}
 	handlers := runtimeext.NewBusinessHandlerRegistry()
@@ -71,13 +69,13 @@ func TestBootstrapExtensionAndProjectFacadeEntrypoints(t *testing.T) {
 	connectors.Freeze()
 	constructors := []func(config.Config) *Runtime{
 		func(cfg config.Config) *Runtime {
-			return NewWithBusinessHandlers(t.Context(), cfg, handlers, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangefixture.NewFactory(), integrationmodule.NewFactory())
+			return NewWithBusinessHandlers(t.Context(), cfg, handlers, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory(), integrationmodule.NewFactory())
 		},
 		func(cfg config.Config) *Runtime {
-			return NewWithExtensions(t.Context(), cfg, handlers, connectors, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangefixture.NewFactory(), integrationmodule.NewFactory())
+			return NewWithExtensions(t.Context(), cfg, handlers, connectors, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory(), integrationmodule.NewFactory())
 		},
 		func(cfg config.Config) *Runtime {
-			return NewVerifiedProjectWithIdentity(t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, RuntimeReleaseArtifactEvidence{}, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), partymodule.NewFactory(partymodule.Options{}), dataexchangefixture.NewFactory(), integrationmodule.NewFactory())
+			return NewVerifiedProjectWithIdentity(t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, RuntimeReleaseArtifactEvidence{}, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory(), integrationmodule.NewFactory())
 		},
 	}
 	for index, constructor := range constructors {

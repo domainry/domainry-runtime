@@ -71,7 +71,7 @@ func TestWorkflowNodeBusinessSummariesCoverNodeAndResolverKinds(t *testing.T) {
 			t.Fatalf("summary for %s[%s] = %#v, want %#v", test.node.Type, test.key, got, test.want)
 		}
 	}
-	if got, want := workflowAssigneeBusinessSummaryKeys(permissionProjectionResolvers()), []string{"workflow.assignee.configured", "workflow.assignee.manager", "workflow.assignee.manager", "workflow.assignee.manager", "workflow.assignee.recordOwner", "workflow.assignee.role", "workflow.assignee.users"}; !reflect.DeepEqual(got, want) {
+	if got, want := workflowAssigneeBusinessSummaryKeys(permissionProjectionResolvers()), []string{"workflow.assignee.configured", "workflow.assignee.manager", "workflow.assignee.recordOwner", "workflow.assignee.role", "workflow.assignee.users"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("resolver summaries = %#v, want %#v", got, want)
 	}
 }
@@ -111,7 +111,7 @@ func permissionProjectionActions() []definitionmodel.ActionSchema {
 }
 
 func permissionProjectionResolvers() []definitionmodel.WorkflowAssigneeResolver {
-	return []definitionmodel.WorkflowAssigneeResolver{{Type: "users"}, {Type: "role"}, {Type: "manager"}, {Type: "manager_of"}, {Type: "initiator_manager"}, {Type: "record_field"}, {Type: "custom"}}
+	return []definitionmodel.WorkflowAssigneeResolver{{Type: "users"}, {Type: "role"}, {Type: "manager_of"}, {Type: "record_field"}, {Type: "custom"}}
 }
 
 func assertBusinessWorkflow(t *testing.T, workflow definitionmodel.WorkflowSchema) {

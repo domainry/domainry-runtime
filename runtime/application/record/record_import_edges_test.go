@@ -297,15 +297,11 @@ func TestImportPreviewIgnoredColumnsOptionalScopeAndWritableDefault(t *testing.T
 		},
 	})
 	preview, err = service.Preview(t.Context(), "customer", []byte("name\nAcme\n"), restricted)
-	if err != nil || preview.InvalidRows != 1 || len(preview.ErrorRows) != 1 {
+	if err != nil || preview.InvalidRows != 0 || preview.ValidRows != 1 {
 		t.Fatalf("writable default preview=%#v err=%v", preview, err)
 	}
-	found := false
-	for _, issue := range preview.ErrorRows[0].Issues {
-		found = found || issue.Code == "backend.validation.field_not_writable"
-	}
-	if !found {
-		t.Fatalf("writable default issues=%#v", preview.ErrorRows[0].Issues)
+	if _, exists := preview.Rows[0].Data["owner"]; exists {
+		t.Fatalf("business owner field was implicitly assigned: %#v", preview.Rows[0].Data)
 	}
 }
 

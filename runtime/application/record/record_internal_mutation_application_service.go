@@ -4,7 +4,6 @@ import (
 	"fmt"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
-	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	"math"
 	"reflect"
 	"strconv"
@@ -20,24 +19,6 @@ import (
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 )
-
-type RecordInternalMutationPolicy string
-
-const (
-	RecordInternalMutationOwnerPathRebuild RecordInternalMutationPolicy = "owner_department_path_rebuild"
-)
-
-type RecordInternalMutationOperation string
-
-const (
-	RecordInternalMutationCreate RecordInternalMutationOperation = "create"
-	RecordInternalMutationUpdate RecordInternalMutationOperation = "update"
-)
-
-type RecordInternalMutationDependencies struct {
-	Repository recordrepository.RecordRepository
-	Audit      func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
-}
 
 func (s *RecordApplicationService) PlanConditionalUpdateMutation(ctx context.Context, objectKey, recordID string, input transactionmodel.ConditionalUpdateInput, principal principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
 	return s.update.PlanConditionalUpdateMutation(ctx, objectKey, recordID, input, principal)
@@ -299,71 +280,4 @@ func recordPredicateMatches(actual, expected any, operator string) (bool, error)
 	default:
 		return false, fmt.Errorf("unsupported predicate operator %q", operator)
 	}
-}
-
-type RecordInternalUpdater func(context.Context, string, definitionmodel.ObjectSchema, recordmodel.Record, string) error
-
-// RecordInternalMutationApplicationService applies audited internal Record mutations.
-type RecordInternalMutationApplicationService struct {
-	repository recordrepository.RecordRepository
-	audit      func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
-}
-
-func NewRecordInternalMutationApplicationService(dependencies RecordInternalMutationDependencies) *RecordInternalMutationApplicationService {
-	return &RecordInternalMutationApplicationService{repository: dependencies.Repository, audit: dependencies.Audit}
-}
-
-func (s *RecordInternalMutationApplicationService) Insert(ctx context.Context, workspaceID string, policy RecordInternalMutationPolicy, object definitionmodel.ObjectSchema, record recordmodel.Record, reason string) error {
-	if err := RecordValidateInternalMutationPolicy(policy, RecordInternalMutationCreate, object); err != nil {
-		return err
-	}
-	if err := s.repository.InsertRecord(ctx, workspaceID, object, record); err != nil {
-		return recordInternalMutationError(apperror.KindInternal, "backend.internal", err, "operation", "internal record insert")
-	}
-	s.appendAudit(ctx, policy, RecordInternalMutationCreate, object, record, reason)
-	return nil
-}
-
-func (s *RecordInternalMutationApplicationService) Update(ctx context.Context, workspaceID string, policy RecordInternalMutationPolicy, object definitionmodel.ObjectSchema, record recordmodel.Record, reason string) error {
-	if err := RecordValidateInternalMutationPolicy(policy, RecordInternalMutationUpdate, object); err != nil {
-		return err
-	}
-	if err := s.repository.UpdateRecord(ctx, workspaceID, object, record); err != nil {
-		return recordInternalMutationError(apperror.KindInternal, "backend.internal", err, "operation", "internal record update")
-	}
-	s.appendAudit(ctx, policy, RecordInternalMutationUpdate, object, record, reason)
-	return nil
-}
-
-func RecordValidateInternalMutationPolicy(policy RecordInternalMutationPolicy, operation RecordInternalMutationOperation, object definitionmodel.ObjectSchema) error {
-	switch policy {
-	case RecordInternalMutationOwnerPathRebuild:
-		if operation == RecordInternalMutationUpdate && recordpolicy.RecordOwnerDepartmentIDFieldKey(object) != "" && recordpolicy.RecordOwnerDepartmentPathFieldKey(object) != "" {
-			return nil
-		}
-	}
-	return recordInternalMutationError(apperror.KindForbidden, "backend.record.internal_mutation_policy_denied", nil, "policy", string(policy), "operation", string(operation), "object", object.Key)
-}
-
-func recordInternalMutationError(kind apperror.ErrorKind, code string, err error, params ...string) error {
-	values := map[string]string{}
-	for index := 0; index+1 < len(params); index += 2 {
-		if key := strings.TrimSpace(params[index]); key != "" {
-			values[key] = params[index+1]
-		}
-	}
-	if len(values) == 0 {
-		values = nil
-	}
-	return &apperror.AppError{Kind: kind, Code: code, Params: values, Err: err}
-}
-
-func (s *RecordInternalMutationApplicationService) appendAudit(ctx context.Context, policy RecordInternalMutationPolicy, operation RecordInternalMutationOperation, object definitionmodel.ObjectSchema, record recordmodel.Record, reason string) {
-	if s.audit == nil {
-		return
-	}
-	principal := principalmodel.NewSystemPrincipal("system", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "internal_record_mutation_audit"))
-	s.audit(ctx, "internal_record_mutation", object.Key, record.ID, principal, "Internal record mutation", nil, nil, map[string]any{
-		"policy": string(policy), "operation": string(operation), "reason": strings.TrimSpace(reason),
-	})
 }

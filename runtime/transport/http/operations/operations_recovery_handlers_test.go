@@ -18,6 +18,7 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -268,17 +269,21 @@ func newOperationsRecoveryHTTPMuxWithLease(t *testing.T, includeLease bool) *htt
 		Service: service, Controls: operationsapplication.NewOperationsControlApplicationService(repository, service, repository, nil),
 		Principal: func(r *http.Request) principalmodel.Principal {
 			principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{
-				"operations.read",
-				"runtime.idempotency.manage",
-				"runtime.maintenance.write",
-				"runtime.worker.control",
-				"runtime.instance.drain",
-				"runtime.worker.force_release",
-				"runtime.dead_letter.read",
-				"runtime.dead_letter.write",
-				"runtime.bulk.execute",
-				"runtime.diagnostics.read",
-				"runtime.break_glass",
+				operationscontract.ActionListOperations,
+				operationscontract.ActionGetOperation,
+				operationscontract.ActionRetryIdempotencyReceipt,
+				operationscontract.ActionResetIdempotencyReceipt,
+				operationscontract.ActionForceReleaseLease,
+				operationscontract.ActionInspectDeadLetter,
+				operationscontract.ActionResolveDeadLetter,
+				operationscontract.ActionRetryDeadLetter,
+				operationscontract.ActionAcknowledgeDeadLetter,
+				operationscontract.ActionDryRunBulkDeadLetters,
+				operationscontract.ActionApplyBulkDeadLetters,
+				operationscontract.ActionCaptureDiagnostics,
+				operationscontract.ActionListBreakGlass,
+				operationscontract.ActionEnableBreakGlass,
+				operationscontract.ActionDisableBreakGlass,
 			}})
 			if r.Header.Get("X-Deny") == "true" {
 				accessfixture.Set(&principal, accessfixture.Bundle{})

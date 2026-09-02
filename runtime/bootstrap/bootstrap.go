@@ -12,7 +12,6 @@ import (
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
-	partysdk "github.com/domainry/domainry-party-sdk"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
@@ -34,56 +33,52 @@ func PrepareProjectDatabase(ctx context.Context, cfg config.Config) (*ProjectDat
 	return runtimebootstrap.PrepareProjectDatabase(ctx, cfg)
 }
 
-func New(ctx context.Context, cfg config.Config, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory) *Runtime {
-	return runtimebootstrap.New(ctx, cfg, identity, notification, party, dataExchange, integration)
+func New(ctx context.Context, cfg config.Config, identity identitysdk.Binding, notification notificationsdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory) *Runtime {
+	return runtimebootstrap.New(ctx, cfg, identity, notification, dataExchange, integration)
 }
 
-func NewWithScheduler(ctx context.Context, cfg config.Config, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, agent ...agentsdk.Factory) *Runtime {
-	return runtimebootstrap.NewWithScheduler(ctx, cfg, identity, notification, party, scheduler, dataExchange, integration, agent...)
+func NewWithScheduler(ctx context.Context, cfg config.Config, identity identitysdk.Binding, notification notificationsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, agent ...agentsdk.Factory) *Runtime {
+	return runtimebootstrap.NewWithScheduler(ctx, cfg, identity, notification, scheduler, dataExchange, integration, agent...)
 }
 
-func NewWithBusinessHandlers(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory) *Runtime {
-	return runtimebootstrap.NewWithBusinessHandlers(ctx, cfg, handlers, identity, notification, party, dataExchange, integration)
+func NewWithBusinessHandlers(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, identity identitysdk.Binding, notification notificationsdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory) *Runtime {
+	return runtimebootstrap.NewWithBusinessHandlers(ctx, cfg, handlers, identity, notification, dataExchange, integration)
 }
 
-func NewWithBusinessHandlersAndScheduler(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, agent ...agentsdk.Factory) *Runtime {
-	return runtimebootstrap.NewWithBusinessHandlersAndScheduler(ctx, cfg, handlers, identity, notification, party, scheduler, dataExchange, integration, agent...)
+func NewWithBusinessHandlersAndScheduler(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, identity identitysdk.Binding, notification notificationsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, agent ...agentsdk.Factory) *Runtime {
+	return runtimebootstrap.NewWithBusinessHandlersAndScheduler(ctx, cfg, handlers, identity, notification, scheduler, dataExchange, integration, agent...)
 }
 
-func NewWithExtensions(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory) *Runtime {
-	return runtimebootstrap.NewWithExtensions(ctx, cfg, handlers, connectors, identity, notification, party, dataExchange, integration)
+func NewWithExtensions(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity identitysdk.Binding, notification notificationsdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory) *Runtime {
+	return runtimebootstrap.NewWithExtensions(ctx, cfg, handlers, connectors, identity, notification, dataExchange, integration)
 }
 
-func NewVerifiedProjectWithIdentity(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory) *Runtime {
-	return runtimebootstrap.NewProjectWithIdentity(ctx, cfg, handlers, connectors, releaseIdentity, evidence, binding, notification, party, dataExchange, integration)
+func NewVerifiedProjectWithIdentity(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notification notificationsdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory) *Runtime {
+	return runtimebootstrap.NewProjectWithIdentity(ctx, cfg, handlers, connectors, releaseIdentity, evidence, binding, notification, dataExchange, integration)
 }
 
-func NewVerifiedProjectWithIdentityAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, database *ProjectDatabase) *Runtime {
-	return runtimebootstrap.NewProjectWithIdentityAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, binding, notification, party, dataExchange, integration, database)
+func NewVerifiedProjectWithIdentityAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notification notificationsdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, database *ProjectDatabase) *Runtime {
+	return runtimebootstrap.NewProjectWithIdentityAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, binding, notification, dataExchange, integration, database)
 }
 
-func NewVerifiedProjectWithFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, database *ProjectDatabase) *Runtime {
-	return runtimebootstrap.NewProjectWithFactoriesAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, notification, party, dataExchange, integration, database)
+func NewVerifiedProjectWithFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, database *ProjectDatabase) *Runtime {
+	return runtimebootstrap.NewProjectWithFactoriesAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, notification, dataExchange, integration, database)
 }
 
-func NewVerifiedProjectWithAllFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, database *ProjectDatabase, monitoring ...monitoringsdk.Factory) *Runtime {
-	return runtimebootstrap.NewProjectWithAllFactoriesAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, notification, party, dataExchange, integration, database, monitoring...)
+func NewVerifiedProjectWithAllFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, database *ProjectDatabase, monitoring ...monitoringsdk.Factory) *Runtime {
+	return runtimebootstrap.NewProjectWithAllFactoriesAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, notification, dataExchange, integration, database, monitoring...)
 }
 
-func NewVerifiedProjectWithOwnerFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, database *ProjectDatabase, agent ...agentsdk.Factory) *Runtime {
-	return runtimebootstrap.NewProjectWithOwnerFactoriesAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, notification, party, monitoring, scheduler, dataExchange, integration, database, agent...)
+func NewVerifiedProjectWithOwnerFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, database *ProjectDatabase, agent ...agentsdk.Factory) *Runtime {
+	return runtimebootstrap.NewProjectWithOwnerFactoriesAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, notification, monitoring, scheduler, dataExchange, integration, database, agent...)
 }
 
-func NewVerifiedProjectWithTopologyFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, database *ProjectDatabase, agent ...agentsdk.Factory) *Runtime {
-	return runtimebootstrap.NewVerifiedProjectWithTopologyFactoriesAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, notification, party, monitoring, scheduler, dataExchange, integration, database, agent...)
+func NewVerifiedProjectWithTopologyFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, database *ProjectDatabase, agent ...agentsdk.Factory) *Runtime {
+	return runtimebootstrap.NewVerifiedProjectWithTopologyFactoriesAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, notification, monitoring, scheduler, dataExchange, integration, database, agent...)
 }
 
-func NewVerifiedProjectWithAllTopologyFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, party partysdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, report reportsdk.Factory, database *ProjectDatabase, agent ...agentsdk.Factory) *Runtime {
-	return runtimebootstrap.NewVerifiedProjectWithAllTopologyFactoriesAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, notification, party, monitoring, scheduler, dataExchange, integration, report, database, agent...)
-}
-
-func PartyOrganizationScopes(runtime *Runtime) partysdk.OrganizationScopes {
-	return runtimebootstrap.PartyOrganizationScopes(runtime)
+func NewVerifiedProjectWithAllTopologyFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, report reportsdk.Factory, database *ProjectDatabase, agent ...agentsdk.Factory) *Runtime {
+	return runtimebootstrap.NewVerifiedProjectWithAllTopologyFactoriesAndDatabase(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, notification, monitoring, scheduler, dataExchange, integration, report, database, agent...)
 }
 
 func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {

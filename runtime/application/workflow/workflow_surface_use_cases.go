@@ -263,9 +263,6 @@ func (s *WorkflowApplicationService) BusinessTeamWorkflowTasks(ctx context.Conte
 	if err := workflowAuthorizeQuery(principal); err != nil {
 		return nil, err
 	}
-	if !workflowpolicy.WorkflowDefinitionPermissionAllows(principal, "workflow.process.read") {
-		return nil, forbidden("backend.workflow.team_tasks_permission_required")
-	}
 	if status == "" {
 		status = "open"
 	}
@@ -312,10 +309,7 @@ func (s *WorkflowApplicationService) OpsWorkflowExecutions(ctx context.Context, 
 }
 
 func (s *WorkflowApplicationService) OpsWorkflowProcesses(ctx context.Context, principal principalmodel.Principal, filter workflowmodel.WorkflowProcessFilter) ([]OpsWorkflowProcessDTO, error) {
-	if err := authorizeOpsWorkflowProcessRead(principal); err != nil {
-		return nil, err
-	}
-	processes, err := s.WorkflowProcesses(ctx, principal, filter)
+	processes, err := s.workflowProcesses(ctx, principal, filter, false, true)
 	if err != nil {
 		return nil, err
 	}
@@ -327,10 +321,7 @@ func (s *WorkflowApplicationService) OpsWorkflowProcesses(ctx context.Context, p
 }
 
 func (s *WorkflowApplicationService) OpsWorkflowProcess(ctx context.Context, processID string, principal principalmodel.Principal) (OpsWorkflowProcessDetailDTO, error) {
-	if err := authorizeOpsWorkflowProcessRead(principal); err != nil {
-		return OpsWorkflowProcessDetailDTO{}, err
-	}
-	detail, err := s.WorkflowProcess(ctx, strings.TrimSpace(processID), principal)
+	detail, err := s.workflowProcess(ctx, strings.TrimSpace(processID), principal, false, true)
 	if err != nil {
 		return OpsWorkflowProcessDetailDTO{}, err
 	}
@@ -356,9 +347,6 @@ func (s *WorkflowApplicationService) OpsWorkflowProcess(ctx context.Context, pro
 }
 
 func (s *WorkflowApplicationService) RetryOpsWorkflowProcessWithKey(ctx context.Context, processID, key string, principal principalmodel.Principal) (OpsWorkflowProcessDTO, error) {
-	if err := authorizeOpsWorkflowProcessOperate(principal); err != nil {
-		return OpsWorkflowProcessDTO{}, err
-	}
 	process, err := s.RetryWorkflowProcessWithKey(ctx, processID, key, principal)
 	if err != nil {
 		return OpsWorkflowProcessDTO{}, err
@@ -367,9 +355,6 @@ func (s *WorkflowApplicationService) RetryOpsWorkflowProcessWithKey(ctx context.
 }
 
 func (s *WorkflowApplicationService) ResolveOpsWorkflowProcessFailure(ctx context.Context, processID, note string, principal principalmodel.Principal) (OpsWorkflowProcessDTO, error) {
-	if err := authorizeOpsWorkflowProcessOperate(principal); err != nil {
-		return OpsWorkflowProcessDTO{}, err
-	}
 	process, err := s.ResolveWorkflowProcessFailure(ctx, processID, note, principal)
 	if err != nil {
 		return OpsWorkflowProcessDTO{}, err

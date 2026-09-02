@@ -14,7 +14,6 @@ import (
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
-	partysdk "github.com/domainry/domainry-party-sdk"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
@@ -43,7 +42,6 @@ type runtimeConstructionInput struct {
 	integrationMode      integrationsdk.DeploymentMode
 	integrationBinding   integrationsdk.Binding
 	integrationWorkers   integrationsdk.LocalWorkers
-	partyBinding         partysdk.Binding
 	dataExchangeBinding  dataexchangesdk.Binding
 	lifecycleBinding     lifecyclesdk.Binding
 	manifest             manifestmodel.ManifestSchema
@@ -83,7 +81,6 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		integrationMode:      input.integrationMode,
 		integrationBinding:   input.integrationBinding,
 		integrationWorkers:   input.integrationWorkers,
-		partyBinding:         input.partyBinding,
 		dataExchangeBinding:  input.dataExchangeBinding,
 		lifecycleBinding:     input.lifecycleBinding,
 		manifest:             input.manifest,

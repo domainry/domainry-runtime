@@ -129,15 +129,11 @@ func resolveInstallationConfig(cfg config.Config, installation workspaceprovisio
 		"IDENTITY_WORKSPACE_ID":     installation.WorkspaceID,
 		"NOTIFICATION_TENANT_ID":    installation.TenantRegistryID,
 		"NOTIFICATION_WORKSPACE_ID": installation.WorkspaceID,
-		"PARTY_TENANT_ID":           installation.TenantRegistryID,
-		"PARTY_WORKSPACE_ID":        installation.WorkspaceID,
 	}
 	configured := map[string]string{
 		"IDENTITY_WORKSPACE_ID":     cfg.IdentityWorkspaceID,
 		"NOTIFICATION_TENANT_ID":    cfg.NotificationTenantID,
 		"NOTIFICATION_WORKSPACE_ID": cfg.NotificationWorkspaceID,
-		"PARTY_TENANT_ID":           cfg.PartyTenantID,
-		"PARTY_WORKSPACE_ID":        cfg.PartyWorkspaceID,
 	}
 	for name, actual := range configured {
 		if actual = strings.TrimSpace(actual); actual != "" && actual != expected[name] {
@@ -146,7 +142,6 @@ func resolveInstallationConfig(cfg config.Config, installation workspaceprovisio
 	}
 	cfg.IdentityWorkspaceID = installation.WorkspaceID
 	cfg.NotificationTenantID, cfg.NotificationWorkspaceID = installation.TenantRegistryID, installation.WorkspaceID
-	cfg.PartyTenantID, cfg.PartyWorkspaceID = installation.TenantRegistryID, installation.WorkspaceID
 	return cfg, nil
 }
 

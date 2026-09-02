@@ -27,12 +27,12 @@ func TestManifestBusinessIdentityBindingHasOneStrictTypedContract(t *testing.T) 
 	if len(state.errs) != 0 {
 		t.Fatalf("valid business identity binding diagnostics=%v", state.errs)
 	}
-	workforceDuplicate := profile
-	workforceDuplicate.Fields = append(append([]definitionmodel.FieldSchema(nil), profile.Fields...), definitionmodel.FieldSchema{Key: "employee_no", Type: "text"})
-	state = newValidationState(manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{identityUser, workforceDuplicate}, IdentityProfileExtensions: []profilebindingmodel.Binding{valid}}, nil)
+	identityDuplicate := profile
+	identityDuplicate.Fields = append(append([]definitionmodel.FieldSchema(nil), profile.Fields...), definitionmodel.FieldSchema{Key: "worker_no", Type: "text"})
+	state = newValidationState(manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{identityUser, identityDuplicate}, IdentityProfileExtensions: []profilebindingmodel.Binding{valid}}, nil)
 	state.validateIdentityProfileExtensions()
-	if len(state.errs) != 1 || !strings.Contains(state.errs[0].Error(), `Runtime workforce-owned field "employee_no"`) {
-		t.Fatalf("workforce ownership diagnostics=%v", state.errs)
+	if len(state.errs) != 1 || !strings.Contains(state.errs[0].Error(), `Runtime identity_user-owned field "worker_no"`) {
+		t.Fatalf("Identity User ownership diagnostics=%v", state.errs)
 	}
 
 	invalid := valid

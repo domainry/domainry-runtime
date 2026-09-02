@@ -8,6 +8,11 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
+// auditBusinessReadAction is owned by module:audit. Runtime references the
+// source-owned Action key when its embedded Audit application service reads
+// business events; it does not define an alias or a Runtime permission.
+const auditBusinessReadAction = "audit.business.read"
+
 type AuditApplicationService = auditapplication.Service[principalmodel.Principal, principalmodel.SystemScope]
 type AuditAppendRequest = auditapplication.AppendRequest[principalmodel.Principal]
 type AuditAppender = auditapplication.Appender[principalmodel.Principal]
@@ -46,7 +51,7 @@ func runtimePolicy() auditapplication.Policy[principalmodel.Principal, principal
 		},
 		Known: func(principal principalmodel.Principal) bool { return principal.Known },
 		CanView: func(principal principalmodel.Principal) bool {
-			return principal.HasPermission("identity.audit.view") || principal.Allows("identity_permission", "read")
+			return principal.HasExactPermission(auditBusinessReadAction)
 		},
 	}
 }

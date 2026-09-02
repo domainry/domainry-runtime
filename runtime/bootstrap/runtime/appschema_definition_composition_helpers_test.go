@@ -108,9 +108,9 @@ func newMetadataCompositionAppWithManifest(t *testing.T, name string, objects []
 		roles = []accessfixture.Bundle{{
 			Key: "admin",
 			Permissions: []string{
-				"workspace.admin", "metadata.read", "metadata.write",
-				"scheduler.definition.read", "scheduler.definition.write", "scheduler.command",
-				"ops.workflow.read", "workflow.process.read", "workflow.process.operate",
+				"runtime.appschema.validate_application_definition",
+				"scheduler.definitions.list", "scheduler.definition.write", "scheduler.command",
+				"runtime.workflows.list_ops_workflow_executions", "runtime.workflows.list_ops_workflow_processes", "runtime.workflows.get_ops_workflow_process",
 				"integration.audit.view", "integration.retry",
 			},
 			DataPolicies: dataPermissions,
@@ -132,7 +132,7 @@ func newMetadataCompositionAppWithManifest(t *testing.T, name string, objects []
 	handlers.Freeze()
 	connectors := connector.NewRegistry()
 	connectors.Freeze()
-	application := NewProjectWithIdentity(t.Context(), config.Config{AppLocale: "en-US", IdentityWorkspaceID: "workspace-primary", IdentityAudience: "domainry-runtime", NotificationTenantID: "tenant-primary", NotificationWorkspaceID: "workspace-primary", NotificationApplicationKey: "domainry-runtime", PartyTenantID: "tenant-primary", PartyWorkspaceID: "workspace-primary", PartyApplicationKey: "domainry-runtime", AuditExportTokenKey: "test-audit-export-signing-key", DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), name+".db"), ManifestPath: manifestPath, UploadDir: filepath.Join(t.TempDir(), "uploads")}, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestPartyFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
+	application := NewProjectWithIdentity(t.Context(), config.Config{AppLocale: "en-US", IdentityWorkspaceID: "workspace-primary", IdentityAudience: "domainry-runtime", NotificationTenantID: "tenant-primary", NotificationWorkspaceID: "workspace-primary", NotificationApplicationKey: "domainry-runtime", AuditExportTokenKey: "test-audit-export-signing-key", DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), name+".db"), ManifestPath: manifestPath, UploadDir: filepath.Join(t.TempDir(), "uploads")}, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 	adminRole := roles[0]
 	for _, role := range roles {
 		if role.Key == "admin" {

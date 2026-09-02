@@ -10,6 +10,8 @@ type Record struct {
 	ExtInfo      map[string]any                `json:"ext_info,omitempty"`
 	CreateBy     string                        `json:"create_by,omitempty"`
 	UpdateBy     string                        `json:"update_by,omitempty"`
+	OwnerUserID  string                        `json:"owner_user_id,omitempty"`
+	OwnerOrgID   string                        `json:"owner_org_id,omitempty"`
 	Localization *RecordLocalizationResolution `json:"localization,omitempty"`
 }
 
@@ -71,37 +73,23 @@ type RecordScopeDiagnostic struct {
 }
 
 type RecordListQuery struct {
-	Page                      int                     `json:"page"`
-	PageSize                  int                     `json:"page_size"`
-	Search                    string                  `json:"search,omitempty"`
-	SearchFields              []string                `json:"search_fields,omitempty"`
-	Filters                   map[string]any          `json:"filters,omitempty"`
-	FilterExpression          *RecordFilterExpression `json:"filter,omitempty"`
-	Sort                      []RecordSortRule        `json:"sort,omitempty"`
-	SelectFields              []string                `json:"select_fields,omitempty"`
-	LockIntent                string                  `json:"lock_intent,omitempty"`
-	Scope                     string                  `json:"-"`
-	PrincipalUserID           string                  `json:"-"`
-	PrincipalWorkspaceID      string                  `json:"-"`
-	PrincipalDepartmentPath   string                  `json:"-"`
-	PrincipalReportingUserIDs []string                `json:"-"`
-	PrincipalTeamIDs          []string                `json:"-"`
-	PrincipalStoreIDs         []string                `json:"-"`
-	PrincipalTerritoryIDs     []string                `json:"-"`
-	PrincipalWarehouseIDs     []string                `json:"-"`
-	OwnerField                string                  `json:"-"`
-	DepartmentPathField       string                  `json:"-"`
-	TeamField                 string                  `json:"-"`
-	StoreField                string                  `json:"-"`
-	TerritoryField            string                  `json:"-"`
-	WarehouseField            string                  `json:"-"`
-	ScopeExpression           *RecordScopeExpression  `json:"-"`
-	ScopeDiagnostic           *RecordScopeDiagnostic  `json:"-"`
-	RootObjectKey             string                  `json:"-"`
-	Locale                    string                  `json:"-"`
-	FallbackLocale            string                  `json:"-"`
-	SkipTotal                 bool                    `json:"-"`
-	AfterID                   string                  `json:"-"`
+	Page             int                     `json:"page"`
+	PageSize         int                     `json:"page_size"`
+	Search           string                  `json:"search,omitempty"`
+	SearchFields     []string                `json:"search_fields,omitempty"`
+	Filters          map[string]any          `json:"filters,omitempty"`
+	FilterExpression *RecordFilterExpression `json:"filter,omitempty"`
+	Sort             []RecordSortRule        `json:"sort,omitempty"`
+	SelectFields     []string                `json:"select_fields,omitempty"`
+	LockIntent       string                  `json:"lock_intent,omitempty"`
+	Scope            string                  `json:"-"`
+	ScopeExpression  *RecordScopeExpression  `json:"-"`
+	ScopeDiagnostic  *RecordScopeDiagnostic  `json:"-"`
+	RootObjectKey    string                  `json:"-"`
+	Locale           string                  `json:"-"`
+	FallbackLocale   string                  `json:"-"`
+	SkipTotal        bool                    `json:"-"`
+	AfterID          string                  `json:"-"`
 }
 
 type RecordPageResult struct {

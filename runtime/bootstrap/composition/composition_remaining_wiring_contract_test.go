@@ -27,6 +27,7 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -43,8 +44,8 @@ func (d actionNotificationIdentityDirectory) FindUser(context.Context, identitys
 	return identitysdk.User{ID: "recipient"}, d.found, d.err
 }
 
-func (actionNotificationIdentityDirectory) FindDepartment(context.Context, identitysdk.DepartmentLookup) (identitysdk.Department, bool, error) {
-	return identitysdk.Department{}, false, nil
+func (actionNotificationIdentityDirectory) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
+	return identitysdk.OrganizationUnit{}, false, nil
 }
 
 func (actionNotificationIdentityDirectory) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
@@ -56,10 +57,6 @@ func (actionNotificationIdentityDirectory) ListRoles(context.Context, identitysd
 }
 
 func (actionNotificationIdentityDirectory) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
-	return nil, nil
-}
-
-func (actionNotificationIdentityDirectory) ListWorkforce(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.WorkforceEntry, error) {
 	return nil, nil
 }
 
@@ -242,7 +239,7 @@ func TestRecordInitializationAuditProjectorCoversPresentationAndFailures(t *test
 		},
 	})
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "auditor", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{
-		Permissions:  []string{"identity.audit.view", "customer.audit"},
+		Permissions:  []string{"audit.business.read", "customer.audit"},
 		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true}},
 	})
 	events, err := runtime.auditApplicationService.Events(t.Context(), auditmodel.AuditEventQuery{}, principal)
@@ -664,7 +661,10 @@ func TestRecordQueryPolicyCompositionCandidateEvaluatorAvailability(t *testing.T
 		}},
 		FieldKey: "warehouse_id", ValueSource: "actor_claim", ClaimKey: "warehouse_ids",
 	}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", OrganizationScopes: identitysdk.OrganizationScopes{WarehouseIDs: []string{"warehouse-north"}}}}, accessfixture.Bundle{Permissions: []string{"reservation.update"}, DataPolicies: []accessfixture.DataPolicyFixture{{
+	principal := accessfixture.Attach(principalmodel.Principal{
+		Principal:      identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"},
+		BusinessClaims: map[string]profilebindingmodel.ClaimValue{"warehouse_ids": {Type: "relation_list", Value: []string{"warehouse-north"}}},
+	}, accessfixture.Bundle{Permissions: []string{"reservation.update"}, DataPolicies: []accessfixture.DataPolicyFixture{{
 		ObjectKey: "reservation", Scope: "custom", Read: true, Write: true, Predicate: predicate,
 	}}},
 	)
@@ -766,7 +766,7 @@ func TestRecordTimerRuntimeAdapterTargets(t *testing.T) {
 		},
 	})
 	schedulerAdapter := newScheduledWorkflowRuntimeAdapter(assembled)
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator"}}, accessfixture.Bundle{Key: "admin", Permissions: []string{"workspace.admin", "*"}})
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator"}}
 	if result, err := schedulerAdapter.ProcessDueWorkflowExecutions(t.Context(), 1, principal); err != nil || result.Processed != 0 {
 		t.Fatalf("empty workflow queue result=%#v err=%v", result, err)
 	}

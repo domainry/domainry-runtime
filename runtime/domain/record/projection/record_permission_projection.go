@@ -5,6 +5,7 @@ import recordcontract "github.com/domainry/domainry-runtime/runtime/domain/recor
 import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
+	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 
 	"fmt"
 	"sort"
@@ -14,7 +15,7 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
 
-func RecordBuildFeaturePermissions(objects []definitionmodel.ObjectSchema, actions []definitionmodel.ActionSchema, principal principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error) {
+func RecordBuildFeaturePermissions(objects []definitionmodel.ObjectSchema, actions []definitionmodel.ActionSchema, workflows []definitionmodel.WorkflowSchema, principal principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error) {
 	if !principal.Known {
 		return recordcontract.RecordFeaturePermissionSnapshot{}, &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.role.unknown"}
 	}
@@ -28,14 +29,7 @@ func RecordBuildFeaturePermissions(objects []definitionmodel.ObjectSchema, actio
 		Fields:    []recordcontract.RecordFieldPermissionSnapshot{},
 		Exports:   make([]recordcontract.RecordExportPermissionSnapshot, 0, len(objects)),
 		Approvals: []recordcontract.RecordApprovalPermissionSnapshot{},
-		Workflows: []recordcontract.RecordFeaturePermissionDecision{
-			workflowFeatureDecision(principal, "read"),
-			workflowFeatureDecision(principal, "run"),
-			workflowFeatureDecision(principal, "simulate"),
-			workflowFeatureDecision(principal, "process"),
-			workflowFeatureDecision(principal, "retry"),
-			workflowFeatureDecision(principal, "resolve"),
-		},
+		Workflows: workflowFeatureDecisions(principal, workflows),
 	}
 	for _, object := range objects {
 		item := recordcontract.RecordFeatureObjectPermissions{ObjectKey: object.Key}
@@ -177,21 +171,13 @@ func objectFeatureDecision(principal principalmodel.Principal, objectKey string,
 
 func dataScopePermission(principal principalmodel.Principal, object definitionmodel.ObjectSchema) recordcontract.RecordDataScopePermission {
 	return recordcontract.RecordDataScopePermission{
-		ObjectKey:           object.Key,
-		OwnerField:          recordpolicy.RecordOwnerFieldKey(object),
-		DepartmentIDField:   recordpolicy.RecordOwnerDepartmentIDFieldKey(object),
-		DepartmentPathField: recordpolicy.RecordOwnerDepartmentPathFieldKey(object),
-		TeamField:           recordpolicy.RecordTeamFieldKey(object),
-		StoreField:          recordpolicy.RecordStoreFieldKey(object),
-		TerritoryField:      recordpolicy.RecordTerritoryFieldKey(object),
-		WarehouseField:      recordpolicy.RecordWarehouseFieldKey(object),
+		ObjectKey:  object.Key,
+		OwnerField: recordpolicy.RecordOwnerFieldKey(object),
+		OrgIDField: recordpolicy.RecordOwnerOrgIDFieldKey(object),
 		Context: recordcontract.RecordDataScopeContext{
-			TeamIDs:        append([]string(nil), principal.OrganizationScopes.TeamIDs...),
-			StoreIDs:       append([]string(nil), principal.OrganizationScopes.StoreIDs...),
-			TerritoryIDs:   append([]string(nil), principal.OrganizationScopes.TerritoryIDs...),
-			WarehouseIDs:   append([]string(nil), principal.OrganizationScopes.WarehouseIDs...),
-			DepartmentPath: principal.DepartmentPath,
-			ReportingPath:  principal.ReportingPath,
+			OrgID:                 principal.OrgID,
+			OrgScopeIDs:           append([]string(nil), principal.OrgScopeIDs...),
+			ReportingScopeUserIDs: append([]string(nil), principal.ReportingScopeUserIDs...),
 		},
 		Read:  dataScopeDecision(principal, object, "read", false),
 		Write: dataScopeDecision(principal, object, "write", true),
@@ -222,49 +208,6 @@ func dataScopeDecision(principal principalmodel.Principal, object definitionmode
 		decision.Reason = "runtime_system_capability"
 	}
 	return decision
-}
-
-func scopedSetDecision(decision recordcontract.RecordDataScopeDecision, fieldKey string, values []string, missingFieldReason string, missingContextReason string) recordcontract.RecordDataScopeDecision {
-	if strings.TrimSpace(fieldKey) == "" {
-		decision.Reason = missingFieldReason
-		return decision
-	}
-	if len(values) == 0 {
-		decision.Reason = missingContextReason
-		return decision
-	}
-	decision.Allowed = true
-	decision.Reason = "allowed"
-	return decision
-}
-
-func isAllScopeName(scope string) bool {
-	scope = strings.TrimSpace(scope)
-	return scope == "all_records"
-}
-
-func isOwnedScopeName(scope string) bool {
-	scope = strings.TrimSpace(scope)
-	return scope == "owned_records"
-}
-
-func isSubordinatesScopeName(scope string) bool {
-	scope = strings.TrimSpace(scope)
-	return scope == "subordinates"
-}
-
-func isDepartmentScopeName(scope string) bool {
-	return strings.TrimSpace(scope) == "department"
-}
-
-func isDepartmentAndChildrenScopeName(scope string) bool {
-	scope = strings.TrimSpace(scope)
-	return scope == "department_and_children"
-}
-
-func isTeamScopeName(scope string) bool {
-	scope = strings.TrimSpace(scope)
-	return scope == "team"
 }
 
 func fieldPermissionSnapshots(principal principalmodel.Principal, object definitionmodel.ObjectSchema) []recordcontract.RecordFieldPermissionSnapshot {
@@ -373,25 +316,31 @@ func permissionProjectionStringValue(value any) string {
 	return strings.TrimSpace(fmt.Sprint(value))
 }
 
-func workflowFeatureDecision(principal principalmodel.Principal, action string) recordcontract.RecordFeaturePermissionDecision {
-	permissionKey := "ops.workflow." + strings.TrimSpace(action)
-	decision := recordcontract.RecordFeaturePermissionDecision{
-		Key:           permissionKey,
-		ObjectKey:     "workflow",
-		Action:        strings.TrimSpace(action),
-		PermissionKey: permissionKey,
-		Allowed:       false,
-		Reason:        "missing_permission",
+func workflowFeatureDecisions(principal principalmodel.Principal, workflows []definitionmodel.WorkflowSchema) []recordcontract.RecordFeaturePermissionDecision {
+	result := make([]recordcontract.RecordFeaturePermissionDecision, 0, len(workflows))
+	for _, workflow := range workflows {
+		if !workflow.Enabled {
+			continue
+		}
+		actionKey := workflowcontract.RunActionKey(workflow.Key)
+		if actionKey == "" {
+			continue
+		}
+		decision := recordcontract.RecordFeaturePermissionDecision{
+			Key:           actionKey,
+			ObjectKey:     "workflow",
+			Action:        "run",
+			PermissionKey: actionKey,
+			Reason:        "missing_permission",
+		}
+		if principal.HasExactPermission(actionKey) {
+			decision.Allowed = true
+			decision.Reason = "allowed"
+		}
+		result = append(result, decision)
 	}
-	if !principal.Known {
-		decision.Reason = "role_unknown"
-		return decision
-	}
-	if principal.HasPermission("ops.workflow."+action) || principal.Allows("workflow", action) {
-		decision.Allowed = true
-		decision.Reason = "allowed"
-	}
-	return decision
+	sort.Slice(result, func(i, j int) bool { return result[i].Key < result[j].Key })
+	return result
 }
 
 func valueOrDefault(value, fallback string) string {

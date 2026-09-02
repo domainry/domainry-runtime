@@ -4,10 +4,14 @@ import (
 	"context"
 	"strings"
 
+	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
+	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
+	runtimeactioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 )
 
 func (s *RecordApplicationService) DeactivateBusinessProfile(
@@ -18,15 +22,16 @@ func (s *RecordApplicationService) DeactivateBusinessProfile(
 	if _, err := principalmodel.CommandScopeForPrincipal(principal); err != nil {
 		return recordmodel.Record{}, apperror.New(apperror.KindForbidden, "backend.workspace_scope_required", err, nil)
 	}
-	if !principal.HasPermission("identity.profile_binding.manage") {
-		return recordmodel.Record{}, apperror.New(apperror.KindForbidden, "backend.identity.profile_binding_manage_required", nil, nil)
-	}
 	statusField, err := businessProfileDeactivationField(s, objectKey, inactiveStatus)
 	if err != nil {
 		return recordmodel.Record{}, err
 	}
 	if strings.TrimSpace(idempotencyKey) == "" {
 		return recordmodel.Record{}, apperror.New(apperror.KindBadRequest, idempotency.ErrorCodeMissingKey, nil, nil)
+	}
+	ctx, err = businessProfileActionMutationContext(ctx, objectKey, statusField)
+	if err != nil {
+		return recordmodel.Record{}, err
 	}
 	patch := map[string]any{statusField: strings.TrimSpace(inactiveStatus)}
 	if expectedUpdatedAt = strings.TrimSpace(expectedUpdatedAt); expectedUpdatedAt != "" {
@@ -43,9 +48,6 @@ func (s *RecordApplicationService) ReactivateBusinessProfile(
 	if _, err := principalmodel.CommandScopeForPrincipal(principal); err != nil {
 		return recordmodel.Record{}, apperror.New(apperror.KindForbidden, "backend.workspace_scope_required", err, nil)
 	}
-	if !principal.HasPermission("identity.profile_binding.manage") {
-		return recordmodel.Record{}, apperror.New(apperror.KindForbidden, "backend.identity.profile_binding_manage_required", nil, nil)
-	}
 	statusField, err := businessProfileReactivationField(s, objectKey, activeStatus)
 	if err != nil {
 		return recordmodel.Record{}, err
@@ -53,11 +55,27 @@ func (s *RecordApplicationService) ReactivateBusinessProfile(
 	if strings.TrimSpace(idempotencyKey) == "" {
 		return recordmodel.Record{}, apperror.New(apperror.KindBadRequest, idempotency.ErrorCodeMissingKey, nil, nil)
 	}
+	ctx, err = businessProfileActionMutationContext(ctx, objectKey, statusField)
+	if err != nil {
+		return recordmodel.Record{}, err
+	}
 	patch := map[string]any{statusField: strings.TrimSpace(activeStatus)}
 	if expectedUpdatedAt = strings.TrimSpace(expectedUpdatedAt); expectedUpdatedAt != "" {
 		patch["expected_updated_at"] = expectedUpdatedAt
 	}
 	return s.UpdateRecordIdempotent(ctx, strings.TrimSpace(objectKey), strings.TrimSpace(recordID), patch, strings.TrimSpace(idempotencyKey), principal)
+}
+
+func businessProfileActionMutationContext(ctx context.Context, objectKey, statusField string) (context.Context, error) {
+	definition, ok := runtimeactioncontract.AuthorizedActionFromContext(ctx)
+	if !ok || definition.Authorization.Strategy != actioncontract.AuthorizationExactRolePermission ||
+		definition.Permission == nil || definition.Permission.Key != definition.Key {
+		return ctx, apperror.New(apperror.KindInternal, "backend.action.authorization_context_required", nil, nil)
+	}
+	return recordmutation.WithMutationInvocation(ctx, recordmutation.MutationInvocation{
+		Source: transactionmodel.MutationSourceAction, ActionKey: definition.Key,
+		EffectAuthority: map[string][]string{strings.TrimSpace(objectKey): {strings.TrimSpace(statusField)}},
+	}), nil
 }
 
 func businessProfileDeactivationField(s *RecordApplicationService, objectKey, inactiveStatus string) (string, error) {

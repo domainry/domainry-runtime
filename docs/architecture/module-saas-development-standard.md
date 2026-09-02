@@ -13,7 +13,7 @@
 
 当前项目已经形成以下稳定边界：
 
-- `pkg/runtimehost.Options` 只接收 Identity、Notification、Party、Monitoring、Scheduler、Data Exchange 的 SDK `Factory`，不接收这些能力的内部 service/store。
+- `pkg/runtimehost.Options` 只接收 Identity、Notification、Integration、Monitoring、Scheduler、Data Exchange、Agent、Report 等 SDK `Factory`，不接收这些能力的内部 service/store。
 - `pkg/runtimehost/external_module_test.go` 分别编译纯 Module 组合与 SaaS Remote 组合，证明项目代码只需更换 Factory，不需要更改 Runtime 业务代码。
 - `runtime/bootstrap/runtime/*_module_host.go` 提供 Runtime 授权给 Module 的最小 Host 能力，并依据 Factory 类型调用 `OpenModule` 或 `OpenSaaS`。
 - `runtime/infrastructure/persistence/database/module_migrations.go` 统一执行 owner-qualified migration、checksum、dirty state、全局迁移锁和 RLS 复核。

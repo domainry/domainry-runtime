@@ -10,25 +10,8 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
-
-func WorkflowPermissionAllows(principal principalmodel.Principal, action string) bool {
-	return principal.Known && (principal.HasPermission("ops.workflow."+action) || principal.Allows("workflow", action))
-}
-
-// WorkflowRunPermissionAllows supports least-privilege callers such as a
-// consumer portal. A role may run every manual workflow with workflow.run, or
-// one explicitly named workflow with workflow.run.<workflow-key>.
-func WorkflowRunPermissionAllows(principal principalmodel.Principal, workflowKey string) bool {
-	return WorkflowPermissionAllows(principal, "run") ||
-		(principal.Known && principal.HasPermission("workflow.run."+strings.TrimSpace(workflowKey)))
-}
-
-func WorkflowDefinitionPermissionAllows(principal principalmodel.Principal, permission string) bool {
-	return principal.Known && principal.HasPermission(permission)
-}
 
 func WorkflowChangedFieldsFromTrigger(workflow definitionmodel.WorkflowSchema, trigger string) []string {
 	fields := []string{}
