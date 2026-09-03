@@ -134,3 +134,18 @@ func openAgentBinding(ctx context.Context, runtimeID string, store *persistence.
 	}
 	return binding, nil
 }
+
+func openManifestAgentBinding(ctx context.Context, runtimeID string, store *persistence.RuntimeStore, factory agentsdk.Factory, manifest manifestmodel.ManifestSchema) (agentsdk.Binding, error) {
+	if !manifestUsesAgent(manifest) {
+		return nil, nil
+	}
+	return openAgentBinding(ctx, runtimeID, store, factory)
+}
+
+func manifestUsesAgent(manifest manifestmodel.ManifestSchema) bool {
+	return len(manifest.Skills) != 0 ||
+		len(manifest.Agents) != 0 ||
+		len(manifest.AgentTasks) != 0 ||
+		len(manifest.AgentEntrypoints) != 0 ||
+		len(manifest.AgentServicePrincipals) != 0
+}

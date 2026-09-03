@@ -362,7 +362,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	workflowNotificationScope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "compile workflow notification intent")
 	startupCallbacks := runtimeStartupCallbacks{records: nil, notificationManagement: notificationCompiler, workflowNotificationScope: workflowNotificationScope}
 	var agentBinding agentsdk.Binding
-	agentBinding, err = openAgentBinding(ctx, cfg.RuntimeInstanceID, store, agentFactory)
+	agentBinding, err = openManifestAgentBinding(ctx, cfg.RuntimeInstanceID, store, agentFactory, manifest)
 	mustCompleteRuntimeStartup(err)
 	mustCompleteRuntimeStartup(synchronizeAgentDefinitions(ctx, agentBinding, &manifest))
 	serviceAssembly, err := assembleRuntimeServices(ctx, cfg, manifest, templateRenderer, store, identityDirectory, identityPrincipals, runtimeAudit, workerDependencies, runtimeExtensionRegistries{

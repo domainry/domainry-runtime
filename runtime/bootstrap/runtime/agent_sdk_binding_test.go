@@ -9,6 +9,7 @@ import (
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-agent-sdk/modulehost"
 	"github.com/domainry/domainry-foundation/modulecapability"
+	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -93,5 +94,33 @@ func TestOpenAgentBindingFailsClosedAndClosesInvalidBinding(t *testing.T) {
 	}
 	if _, err := openAgentBinding(t.Context(), "runtime", store, &agentSDKModuleFactoryStub{}); err == nil {
 		t.Fatal("nil Binding accepted")
+	}
+}
+
+func TestOpenManifestAgentBindingSkipsUnusedAgentTopology(t *testing.T) {
+	factory := &agentSDKModuleFactoryStub{err: errors.New("must not open")}
+	binding, err := openManifestAgentBinding(t.Context(), "runtime", nil, factory, manifestmodel.ManifestSchema{})
+	if err != nil || binding != nil || factory.runtimeID != "" {
+		t.Fatalf("binding=%#v runtime=%q err=%v", binding, factory.runtimeID, err)
+	}
+}
+
+func TestManifestUsesAgentForEveryOwnedDefinitionCollection(t *testing.T) {
+	cases := []struct {
+		name     string
+		manifest manifestmodel.ManifestSchema
+	}{
+		{name: "skill", manifest: manifestmodel.ManifestSchema{Skills: []agentsdk.SkillSchema{{Key: "reader"}}}},
+		{name: "agent", manifest: manifestmodel.ManifestSchema{Agents: []agentsdk.AgentSchema{{Key: "assistant"}}}},
+		{name: "task", manifest: manifestmodel.ManifestSchema{AgentTasks: []agentsdk.AgentTaskDefinition{{Key: "review"}}}},
+		{name: "entrypoint", manifest: manifestmodel.ManifestSchema{AgentEntrypoints: []agentsdk.AgentEntrypointAssignment{{Key: "assistant.global"}}}},
+		{name: "service principal", manifest: manifestmodel.ManifestSchema{AgentServicePrincipals: []agentsdk.AgentServicePrincipalBinding{{Key: "assistant_service"}}}},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			if !manifestUsesAgent(test.manifest) {
+				t.Fatal("Agent-owned manifest definition did not require Agent Binding")
+			}
+		})
 	}
 }
