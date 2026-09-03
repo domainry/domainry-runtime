@@ -11,12 +11,12 @@ import (
 
 func TestRuntimeAuthoringDeliveryPropagatesValidationFailure(t *testing.T) {
 	service := NewRuntimeAuthoringValidationApplicationService(RuntimeAuthoringValidationDependencies{})
-	if _, err := service.VerifyDelivery(t.Context(), runtimeAuthoringValidationAdmin(), changeplanmodel.RuntimeAuthoringDeliveryEvidence{}); err == nil {
+	if _, err := service.VerifyDelivery(t.Context(), runtimeAuthoringValidationAdmin(), changeplanmodel.RuntimeAuthoringDeliverySubmission{}); err == nil {
 		t.Fatal("delivery verification accepted unavailable validation dependencies")
 	}
 
 	service = NewRuntimeAuthoringValidationApplicationService(runtimeAuthoringEdgeDependencies())
-	if report, err := service.VerifyDelivery(t.Context(), runtimeAuthoringValidationAdmin(), changeplanmodel.RuntimeAuthoringDeliveryEvidence{}); err != nil || report.Valid {
+	if report, err := service.VerifyDelivery(t.Context(), runtimeAuthoringValidationAdmin(), changeplanmodel.RuntimeAuthoringDeliverySubmission{}); err != nil || report.Valid {
 		t.Fatalf("invalid delivery evidence should produce a report without a service error: report=%#v err=%v", report, err)
 	}
 }
@@ -31,7 +31,6 @@ func TestRuntimeAuthoringValidationMapsCoverageDetailDiagnostics(t *testing.T) {
 		return snapshot, nil
 	}
 	ledger := &changeplanmodel.RuntimeAuthoringCoverageLedger{
-		Version: changeplanmodel.RuntimeAuthoringCoverageLedgerVersion,
 		Requirements: []changeplanmodel.RuntimeAuthoringCoverageRequirement{{
 			RequirementID: "missing-details", CapabilityKeys: []string{"unknown.capability"},
 			Resources: []changeplanmodel.RuntimeAuthoringCoverageResource{{ResourceType: "object", ResourceKey: "missing"}}, ScenarioIDs: []string{"missing.scenario"},

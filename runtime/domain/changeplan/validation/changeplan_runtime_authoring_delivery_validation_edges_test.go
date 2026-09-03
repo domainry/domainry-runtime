@@ -13,8 +13,8 @@ func TestRuntimeAuthoringCoverageCoversEmptyDuplicateAndMissingCollections(t *te
 		ResourceSources: []changeplanmodel.ResourceSource{{ResourceType: "object", ResourceKey: "asset", SourceKind: " "}},
 	}
 	for _, ledger := range []*changeplanmodel.RuntimeAuthoringCoverageLedger{
-		{Version: changeplanmodel.RuntimeAuthoringCoverageLedgerVersion},
-		{Version: changeplanmodel.RuntimeAuthoringCoverageLedgerVersion, Requirements: []changeplanmodel.RuntimeAuthoringCoverageRequirement{
+		{},
+		{Requirements: []changeplanmodel.RuntimeAuthoringCoverageRequirement{
 			{RequirementID: "asset", CapabilityKeys: nil, Resources: nil, ScenarioIDs: nil},
 			{RequirementID: "asset", CapabilityKeys: []string{""}, Resources: []changeplanmodel.RuntimeAuthoringCoverageResource{{ResourceType: "object", ResourceKey: "asset"}}, ScenarioIDs: []string{"asset.success"}},
 		}},
@@ -23,7 +23,7 @@ func TestRuntimeAuthoringCoverageCoversEmptyDuplicateAndMissingCollections(t *te
 			t.Fatalf("ledger=%#v report=%#v", ledger, report)
 		}
 	}
-	ordered := ValidateRuntimeAuthoringCoverage(&changeplanmodel.RuntimeAuthoringCoverageLedger{Version: changeplanmodel.RuntimeAuthoringCoverageLedgerVersion}, changeplanmodel.Snapshot{ResourceSources: []changeplanmodel.ResourceSource{
+	ordered := ValidateRuntimeAuthoringCoverage(&changeplanmodel.RuntimeAuthoringCoverageLedger{}, changeplanmodel.Snapshot{ResourceSources: []changeplanmodel.ResourceSource{
 		{ResourceType: "object", ResourceKey: "z", SourceKind: "builder"},
 		{ResourceType: "object", ResourceKey: "a", SourceKind: "builder"},
 	}})
@@ -151,7 +151,7 @@ func runtimeAuthoringDeliveryEdgeFixture() (changeplanmodel.RuntimeAuthoringEvid
 	}
 	evidence := changeplanmodel.RuntimeAuthoringDeliveryEvidence{
 		Version: changeplanmodel.RuntimeAuthoringDeliveryEvidenceVersion, Binding: binding,
-		Coverage:  changeplanmodel.RuntimeAuthoringCoverageLedger{Version: changeplanmodel.RuntimeAuthoringCoverageLedgerVersion, Requirements: []changeplanmodel.RuntimeAuthoringCoverageRequirement{{RequirementID: "asset", ScenarioIDs: []string{"asset.lifecycle"}}}},
+		Coverage:  changeplanmodel.RuntimeAuthoringCoverageLedger{Requirements: []changeplanmodel.RuntimeAuthoringCoverageRequirement{{RequirementID: "asset", ScenarioIDs: []string{"asset.lifecycle"}}}},
 		Scenarios: []changeplanmodel.RuntimeAuthoringScenarioEvidence{runtimeAuthoringDeliveryEdgeFixtureScenario()},
 	}
 	return binding, evidence

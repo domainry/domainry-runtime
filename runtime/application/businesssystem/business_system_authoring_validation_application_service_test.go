@@ -53,7 +53,7 @@ func TestRuntimeAuthoringValidationAcceptsCanonicalRuntimeManifest(t *testing.T)
 		},
 		ValidateDefinitions: func(context.Context, []connectormodel.ConnectorSchema) error { return nil },
 	})
-	coverage := &changeplanmodel.RuntimeAuthoringCoverageLedger{Version: changeplanmodel.RuntimeAuthoringCoverageLedgerVersion, Requirements: []changeplanmodel.RuntimeAuthoringCoverageRequirement{{
+	coverage := &changeplanmodel.RuntimeAuthoringCoverageLedger{Requirements: []changeplanmodel.RuntimeAuthoringCoverageRequirement{{
 		RequirementID: "customer-management", CapabilityKeys: []string{"schema.object"},
 		Resources: []changeplanmodel.RuntimeAuthoringCoverageResource{{ResourceType: "object", ResourceKey: "customer"}}, ScenarioIDs: []string{"customer.create.success"},
 	}}}
@@ -63,9 +63,6 @@ func TestRuntimeAuthoringValidationAcceptsCanonicalRuntimeManifest(t *testing.T)
 	}
 	if !configuration.Valid || configuration.Scope != runtimeAuthoringConfigurationValidationScope || configuration.Checks["coverage_ledger"] != "" || configuration.Binding.CoverageHash != "" {
 		t.Fatalf("configuration report=%#v", configuration)
-	}
-	if configuration.EvidenceCollection.TrustPolicy != changeplanmodel.RuntimeAuthoringEvidenceTrustPolicy || configuration.EvidenceCollection.StepReceiptHeader != changeplanmodel.RuntimeAuthoringStepReceiptHeader {
-		t.Fatalf("evidence collection contract=%#v", configuration.EvidenceCollection)
 	}
 	first, err := service.ValidateWithCoverage(t.Context(), runtimeAuthoringValidationAdmin(), coverage)
 	if err != nil {

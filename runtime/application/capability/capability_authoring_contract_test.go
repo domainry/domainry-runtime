@@ -47,6 +47,25 @@ func TestRuntimeAuthoringCapabilitiesAreValidAndDeterministic(t *testing.T) {
 	}
 }
 
+func TestRuntimeAuthoringCatalogSummaryMatchesCatalogAndIsMutationSafe(t *testing.T) {
+	contract := RuntimeAuthoringCapabilities()
+	summary := RuntimeAuthoringCatalogSummary()
+	capabilityCount := 0
+	for _, domain := range contract.Domains {
+		capabilityCount += len(domain.Capabilities)
+	}
+	if summary.ContractVersion != contract.ContractVersion || summary.EndpointContractVersion != contract.EndpointContractVersion || summary.RuntimeVersion != contract.RuntimeVersion || summary.ContractHash != contract.ContractHash || len(summary.CapabilityKeys) != capabilityCount || len(summary.Domains) != len(contract.Domains) {
+		t.Fatalf("summary=%#v contract=%#v", summary, contract)
+	}
+	firstKey := summary.CapabilityKeys[0]
+	summary.CapabilityKeys[0] = "mutated"
+	summary.Domains[0].Key = "mutated"
+	again := RuntimeAuthoringCatalogSummary()
+	if again.CapabilityKeys[0] != firstKey || again.Domains[0].Key == "mutated" {
+		t.Fatalf("caller mutated cached authoring summary: %#v", again)
+	}
+}
+
 func TestRuntimeAuthoringErrorContractFallbackClassification(t *testing.T) {
 	unknown := RuntimeAuthoringErrorContract("backend.example.unknown", map[string]string{"field_path": "items[2].value"})
 	if unknown.ContractVersion == "" || unknown.CapabilityKey != "" || unknown.FieldPath != "items[2].value" {

@@ -341,4 +341,13 @@ func TestBusinessSystemSnapshotProgressiveDiscoveryPreservesModelFacts(t *testin
 	if detailResponse.Code != http.StatusOK || json.Unmarshal(detailResponse.Body.Bytes(), &detail) != nil || detail.ResourceHash != page.Items[0].SchemaHash || len(detail.Definition) == 0 {
 		t.Fatalf("detail status=%d body=%s", detailResponse.Code, detailResponse.Body.String())
 	}
+
+	runtimeIndexRequest := businessSystemRequest(t)
+	runtimeIndexRequest.URL.RawQuery = "projection=runtime-index"
+	runtimeIndexResponse := httptest.NewRecorder()
+	handler.businessSystemSnapshot(runtimeIndexResponse, runtimeIndexRequest)
+	var runtimeIndex changeplanprojection.BusinessSystemRuntimeStateIndex
+	if runtimeIndexResponse.Code != http.StatusOK || json.Unmarshal(runtimeIndexResponse.Body.Bytes(), &runtimeIndex) != nil || runtimeIndex.Version != changeplanprojection.BusinessSystemRuntimeStateIndexVersion {
+		t.Fatalf("runtime index status=%d body=%s", runtimeIndexResponse.Code, runtimeIndexResponse.Body.String())
+	}
 }

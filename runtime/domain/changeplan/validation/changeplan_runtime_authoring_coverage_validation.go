@@ -9,7 +9,7 @@ import (
 
 func ValidateRuntimeAuthoringCoverage(ledger *changeplanmodel.RuntimeAuthoringCoverageLedger, snapshot changeplanmodel.Snapshot) changeplanmodel.RuntimeAuthoringCoverageReport {
 	report := changeplanmodel.RuntimeAuthoringCoverageReport{
-		Version: changeplanmodel.RuntimeAuthoringCoverageLedgerVersion, Status: "complete",
+		Status: "complete",
 		Issues: []string{}, Entries: []changeplanmodel.RuntimeAuthoringCoverageRequirementReport{},
 		SourcelessResources: []changeplanmodel.RuntimeAuthoringCoverageResource{}, UnreachableResources: []changeplanmodel.RuntimeAuthoringCoverageResource{},
 	}
@@ -17,10 +17,6 @@ func ValidateRuntimeAuthoringCoverage(ledger *changeplanmodel.RuntimeAuthoringCo
 		report.Status = "invalid"
 		report.Issues = append(report.Issues, "coverage_ledger_required")
 		return report
-	}
-	if strings.TrimSpace(ledger.Version) != changeplanmodel.RuntimeAuthoringCoverageLedgerVersion {
-		report.Status = "invalid"
-		report.Issues = append(report.Issues, "coverage_version_invalid")
 	}
 	if len(ledger.Requirements) == 0 {
 		report.Status = "invalid"

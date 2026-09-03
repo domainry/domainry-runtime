@@ -2,6 +2,7 @@ package capability
 
 import (
 	"strings"
+	"sync"
 
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
@@ -15,6 +16,48 @@ const (
 
 var RuntimeExecutionCapabilities = capabilitycontract.RuntimeExecutionCapabilities
 var RuntimeAutomationCapabilities = capabilitycontract.RuntimeAutomationCapabilities
+
+type RuntimeAuthoringCatalogDomainSummary struct {
+	Key             string
+	CapabilityCount int
+}
+
+type RuntimeAuthoringCatalogSummaryValue struct {
+	ContractVersion         string
+	EndpointContractVersion string
+	RuntimeVersion          string
+	ContractHash            string
+	CapabilityKeys          []string
+	Domains                 []RuntimeAuthoringCatalogDomainSummary
+}
+
+var runtimeAuthoringCatalogSummaryOnce sync.Once
+var runtimeAuthoringCatalogSummary RuntimeAuthoringCatalogSummaryValue
+
+// RuntimeAuthoringCatalogSummary returns immutable scalar/index facts without
+// rebuilding and allocating the complete authoring JSON Schema catalog on
+// every discovery or business-system index request.
+func RuntimeAuthoringCatalogSummary() RuntimeAuthoringCatalogSummaryValue {
+	runtimeAuthoringCatalogSummaryOnce.Do(func() {
+		contract := RuntimeAuthoringCapabilities()
+		summary := RuntimeAuthoringCatalogSummaryValue{
+			ContractVersion: contract.ContractVersion, EndpointContractVersion: contract.EndpointContractVersion,
+			RuntimeVersion: contract.RuntimeVersion, ContractHash: contract.ContractHash,
+			CapabilityKeys: []string{}, Domains: []RuntimeAuthoringCatalogDomainSummary{},
+		}
+		for _, domain := range contract.Domains {
+			summary.Domains = append(summary.Domains, RuntimeAuthoringCatalogDomainSummary{Key: domain.Key, CapabilityCount: len(domain.Capabilities)})
+			for _, capability := range domain.Capabilities {
+				summary.CapabilityKeys = append(summary.CapabilityKeys, capability.Key)
+			}
+		}
+		runtimeAuthoringCatalogSummary = summary
+	})
+	result := runtimeAuthoringCatalogSummary
+	result.CapabilityKeys = append([]string(nil), result.CapabilityKeys...)
+	result.Domains = append([]RuntimeAuthoringCatalogDomainSummary(nil), result.Domains...)
+	return result
+}
 
 func RuntimeAuthoringCapabilities() capabilitycontract.CapabilityRuntimeAuthoringContract {
 	contract := capabilitycontract.CapabilityRuntimeAuthoringContract{

@@ -15,54 +15,15 @@ import (
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 )
 
-func TestRuntimeAuthoringScenarioEvidenceMiddlewareIssuesBoundReceipt(t *testing.T) {
-	receipts := businesssystemapplication.NewRuntimeAuthoringScenarioReceiptService(bytes.Repeat([]byte("s"), 32))
-	router := &HTTPRouter{runtimeAuthoringScenarioReceipts: receipts}
-	handler := router.withRuntimeAuthoringScenarioEvidence(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if body := make([]byte, r.ContentLength); len(body) > 0 {
-			_, _ = r.Body.Read(body)
-		}
-		w.Header().Set("Idempotency-Replayed", "true")
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"id":"order-1"}`))
-	}))
-	body := []byte(`{"name":"Order"}`)
-	request := httptest.NewRequest(http.MethodPost, "/objects/order/records?mode=authoring", bytes.NewReader(body))
-	request = request.WithContext(operationscontract.WithBuilderTaskID(request.Context(), "task"))
-	request.Header.Set(RuntimeAuthoringScenarioIDHeader, "order.lifecycle")
-	request.Header.Set(RuntimeAuthoringScenarioCategoriesHeader, "success,idempotent_replay")
-	request.Header.Set(RuntimeAuthoringStepLabelHeader, "create")
-	request.Header.Set(RuntimeAuthoringExpectedStatusHeader, "201")
-	request.Header.Set(RuntimeAuthoringSnapshotHashHeader, strings.Repeat("a", 64))
-	request.Header.Set(RuntimeAuthoringCoverageHashHeader, strings.Repeat("b", 64))
-	request.Header.Set("Idempotency-Key", "create-1")
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusCreated || response.Header().Get(RuntimeAuthoringStepReceiptHeader) == "" || response.Body.String() != `{"id":"order-1"}` {
-		t.Fatalf("status=%d headers=%v body=%s", response.Code, response.Header(), response.Body.String())
-	}
-	claims, err := receipts.Verify(response.Header().Get(RuntimeAuthoringStepReceiptHeader), "task", changeplanmodel.RuntimeAuthoringEvidenceBinding{
-		SnapshotHash: strings.Repeat("a", 64), CoverageHash: strings.Repeat("b", 64),
-	})
-	requestHash := sha256.Sum256(body)
-	responseHash := sha256.Sum256([]byte(`{"id":"order-1"}`))
-	if err != nil || claims.ActualStatus != http.StatusCreated || claims.Path != "/objects/order/records?mode=authoring" || claims.RequestHash != hex.EncodeToString(requestHash[:]) || claims.ResponseHash != hex.EncodeToString(responseHash[:]) || !claims.IdempotencyReplayed {
-		t.Fatalf("claims=%#v err=%v", claims, err)
-	}
-}
-
 func TestRuntimeAuthoringScenarioEvidenceMiddlewareAcceptsOnePlanBoundToken(t *testing.T) {
 	receipts := businesssystemapplication.NewRuntimeAuthoringScenarioReceiptService(bytes.Repeat([]byte("p"), 32))
 	coverage := changeplanmodel.RuntimeAuthoringCoverageLedger{
-		Version:      changeplanmodel.RuntimeAuthoringCoverageLedgerVersion,
 		Requirements: []changeplanmodel.RuntimeAuthoringCoverageRequirement{{RequirementID: "order", ScenarioIDs: []string{"order.lifecycle"}}},
 	}
 	rawCoverage, _ := json.Marshal(coverage)
 	coverageSum := sha256.Sum256(rawCoverage)
 	binding := changeplanmodel.RuntimeAuthoringEvidenceBinding{SnapshotHash: strings.Repeat("a", 64), CoverageHash: hex.EncodeToString(coverageSum[:])}
 	plan := changeplanmodel.RuntimeAuthoringEvidencePlan{
-		Version: changeplanmodel.RuntimeAuthoringEvidencePlanVersion,
 		Scenarios: []changeplanmodel.RuntimeAuthoringEvidenceScenarioPlan{{
 			ScenarioID: "order.lifecycle", Categories: append([]string(nil), changeplanmodel.RuntimeAuthoringRequiredScenarioCategories...),
 			Steps: []changeplanmodel.RuntimeAuthoringEvidenceStepPlan{{StepID: "create", Label: "create", Method: http.MethodPost, Path: "/objects/order/records?mode=authoring", ExpectedStatus: []int{http.StatusCreated}}},
@@ -108,7 +69,7 @@ func TestRuntimeAuthoringScenarioEvidenceMiddlewareFailsClosedBeforeExecution(t 
 	}))
 
 	request := httptest.NewRequest(http.MethodGet, "/objects/order/records", nil)
-	request.Header.Set(RuntimeAuthoringScenarioIDHeader, "order.lifecycle")
+	request.Header.Set(RuntimeAuthoringEvidenceStepTokenHeader, "invalid")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusForbidden || called {
@@ -117,7 +78,7 @@ func TestRuntimeAuthoringScenarioEvidenceMiddlewareFailsClosedBeforeExecution(t 
 
 	request = httptest.NewRequest(http.MethodGet, "/objects/order/records", nil)
 	request = request.WithContext(operationscontract.WithBuilderTaskID(request.Context(), "task"))
-	request.Header.Set(RuntimeAuthoringScenarioIDHeader, "order.lifecycle")
+	request.Header.Set(RuntimeAuthoringEvidenceStepTokenHeader, "invalid")
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusBadRequest || called {
@@ -140,26 +101,38 @@ func TestRuntimeAuthoringScenarioEvidenceMiddlewareRejectsStreamingAndOversizedR
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	newRequest := func(path string, body []byte) *http.Request {
+	coverage := changeplanmodel.RuntimeAuthoringCoverageLedger{Requirements: []changeplanmodel.RuntimeAuthoringCoverageRequirement{{RequirementID: "order", ScenarioIDs: []string{"order.lifecycle"}}}}
+	rawCoverage, _ := json.Marshal(coverage)
+	coverageSum := sha256.Sum256(rawCoverage)
+	binding := changeplanmodel.RuntimeAuthoringEvidenceBinding{SnapshotHash: strings.Repeat("a", 64), CoverageHash: hex.EncodeToString(coverageSum[:])}
+	plan := changeplanmodel.RuntimeAuthoringEvidencePlan{Scenarios: []changeplanmodel.RuntimeAuthoringEvidenceScenarioPlan{{
+		ScenarioID: "order.lifecycle", Categories: []string{"success"},
+		Steps: []changeplanmodel.RuntimeAuthoringEvidenceStepPlan{{StepID: "create", Label: "create", Method: http.MethodPost, Path: "/objects/order/records", ExpectedStatus: []int{http.StatusNoContent}}},
+	}}}
+	session, err := receipts.IssueEvidenceSession("task", binding, coverage, plan)
+	if err == nil {
+		t.Fatal("incomplete required-category plan was accepted")
+	}
+	plan.Scenarios[0].Categories = append([]string(nil), changeplanmodel.RuntimeAuthoringRequiredScenarioCategories...)
+	session, err = receipts.IssueEvidenceSession("task", binding, coverage, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newRequest := func(path string, body []byte, token string) *http.Request {
 		request := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
 		request = request.WithContext(operationscontract.WithBuilderTaskID(request.Context(), "task"))
-		request.Header.Set(RuntimeAuthoringScenarioIDHeader, "order.lifecycle")
-		request.Header.Set(RuntimeAuthoringScenarioCategoriesHeader, "success")
-		request.Header.Set(RuntimeAuthoringStepLabelHeader, "create")
-		request.Header.Set(RuntimeAuthoringExpectedStatusHeader, "204")
-		request.Header.Set(RuntimeAuthoringSnapshotHashHeader, strings.Repeat("a", 64))
-		request.Header.Set(RuntimeAuthoringCoverageHashHeader, strings.Repeat("b", 64))
+		request.Header.Set(RuntimeAuthoringEvidenceStepTokenHeader, token)
 		return request
 	}
 
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, newRequest("/business/records/stream", nil))
+	handler.ServeHTTP(response, newRequest("/business/records/stream", nil, "present"))
 	if response.Code != http.StatusBadRequest || called {
 		t.Fatalf("stream status=%d called=%v", response.Code, called)
 	}
 
 	response = httptest.NewRecorder()
-	handler.ServeHTTP(response, newRequest("/objects/order/records", []byte("12345")))
+	handler.ServeHTTP(response, newRequest("/objects/order/records", []byte("12345"), session.Steps[0].Token))
 	if response.Code != http.StatusRequestEntityTooLarge || called {
 		t.Fatalf("oversized status=%d called=%v", response.Code, called)
 	}

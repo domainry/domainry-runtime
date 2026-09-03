@@ -143,3 +143,46 @@ func jsonBytesContain(raw []byte, value string) bool {
 	}
 	return false
 }
+
+var businessSystemContextBenchmarkPayload []byte
+
+func BenchmarkBusinessSystemSnapshotContextPayload(b *testing.B) {
+	resources := make([]SystemResourceSource, 0, 3600)
+	for index := 0; index < 3600; index++ {
+		resources = append(resources, SystemResourceSource{
+			ResourceType: "field", ResourceKey: fmt.Sprintf("field-%04d", index), ObjectKey: fmt.Sprintf("object-%03d", index/36),
+			SchemaHash: fmt.Sprintf("hash-%04d", index), SourceKind: "project_json", SourceID: "backend/model/objects.json",
+		})
+	}
+	snapshot := BusinessSystemSnapshot{
+		SnapshotVersion: BusinessSystemSnapshotVersion, RuntimeVersion: "runtime", AuthoringContractVersion: "authoring-v1", AuthoringContractHash: "contract", SchemaHash: "schema",
+		ResourceSources: resources, CapabilityKeys: []string{"schema.field"}, ResourceVisibility: map[string]string{"resource_sources": "summarized"},
+	}
+	page, valid := ProjectBusinessSystemResourcePage(resources, "field", "", 25)
+	if !valid {
+		b.Fatal("representative resource page is invalid")
+	}
+	for _, benchmark := range []struct {
+		name  string
+		value any
+	}{
+		{name: "legacy-full", value: snapshot},
+		{name: "bounded-index", value: snapshot.CompactIndex()},
+		{name: "resource-page-25", value: page},
+	} {
+		b.Run(benchmark.name, func(b *testing.B) {
+			encoded, err := json.Marshal(benchmark.value)
+			if err != nil {
+				b.Fatal(err)
+			}
+			b.ResetTimer()
+			for iteration := 0; iteration < b.N; iteration++ {
+				businessSystemContextBenchmarkPayload, err = json.Marshal(benchmark.value)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+			b.ReportMetric(float64(len(encoded)), "context-bytes")
+		})
+	}
+}

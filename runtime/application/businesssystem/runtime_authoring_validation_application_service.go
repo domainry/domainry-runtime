@@ -56,17 +56,16 @@ type RuntimeAuthoringRepairFacts struct {
 }
 
 type RuntimeAuthoringValidationReport struct {
-	Version            string                                                     `json:"version"`
-	Scope              string                                                     `json:"scope"`
-	Valid              bool                                                       `json:"valid"`
-	Status             string                                                     `json:"status"`
-	SnapshotHash       string                                                     `json:"snapshot_hash"`
-	Diagnostics        []RuntimeAuthoringValidationDiagnostic                     `json:"diagnostics"`
-	Checks             map[string]string                                          `json:"checks"`
-	Coverage           changeplanmodel.RuntimeAuthoringCoverageReport             `json:"coverage"`
-	Binding            changeplanmodel.RuntimeAuthoringEvidenceBinding            `json:"binding"`
-	EvidenceCollection changeplanmodel.RuntimeAuthoringEvidenceCollectionContract `json:"evidence_collection"`
-	EvidenceSession    *changeplanmodel.RuntimeAuthoringEvidenceSession           `json:"evidence_session,omitempty"`
+	Version         string                                           `json:"version"`
+	Scope           string                                           `json:"scope"`
+	Valid           bool                                             `json:"valid"`
+	Status          string                                           `json:"status"`
+	SnapshotHash    string                                           `json:"snapshot_hash"`
+	Diagnostics     []RuntimeAuthoringValidationDiagnostic           `json:"diagnostics"`
+	Checks          map[string]string                                `json:"checks"`
+	Coverage        changeplanmodel.RuntimeAuthoringCoverageReport   `json:"coverage"`
+	Binding         changeplanmodel.RuntimeAuthoringEvidenceBinding  `json:"binding"`
+	EvidenceSession *changeplanmodel.RuntimeAuthoringEvidenceSession `json:"evidence_session,omitempty"`
 }
 
 const (
@@ -172,8 +171,7 @@ func (s *RuntimeAuthoringValidationApplicationService) validateConfiguration(ctx
 	report := RuntimeAuthoringValidationReport{
 		Version: runtimeAuthoringValidationReportVersion, Scope: runtimeAuthoringConfigurationValidationScope,
 		Status: "valid", SnapshotHash: configurationHash, Binding: runtimeAuthoringEvidenceBinding(snapshot, configurationHash),
-		EvidenceCollection: runtimeAuthoringEvidenceCollectionContract(),
-		Diagnostics:        []RuntimeAuthoringValidationDiagnostic{}, Checks: map[string]string{"definition_graph": "ok", "manifest": "ok", "storage": "ok", "migration": "ok"},
+		Diagnostics: []RuntimeAuthoringValidationDiagnostic{}, Checks: map[string]string{"definition_graph": "ok", "manifest": "ok", "storage": "ok", "migration": "ok"},
 	}
 	for key, status := range runtimeAuthoringConfigurationCoverage(snapshot, &report.Diagnostics) {
 		report.Checks[key] = status
@@ -211,22 +209,6 @@ func (s *RuntimeAuthoringValidationApplicationService) validateConfiguration(ctx
 	return report, snapshot, nil
 }
 
-func runtimeAuthoringEvidenceCollectionContract() changeplanmodel.RuntimeAuthoringEvidenceCollectionContract {
-	return changeplanmodel.RuntimeAuthoringEvidenceCollectionContract{
-		Version: changeplanmodel.RuntimeAuthoringEvidenceCollectionVersion, TrustPolicy: changeplanmodel.RuntimeAuthoringEvidenceTrustPolicy,
-		EvidencePlanVersion: changeplanmodel.RuntimeAuthoringEvidencePlanVersion, EvidenceSessionVersion: changeplanmodel.RuntimeAuthoringEvidenceSessionVersion,
-		EvidenceStepTokenVersion: changeplanmodel.RuntimeAuthoringEvidenceStepTokenVersion,
-		StepReceiptVersion:       changeplanmodel.RuntimeAuthoringStepReceiptVersion,
-		BuilderTaskHeader:        changeplanmodel.RuntimeAuthoringBuilderTaskHeader, ScenarioIDHeader: changeplanmodel.RuntimeAuthoringScenarioIDHeader,
-		ScenarioCategoriesHeader: changeplanmodel.RuntimeAuthoringScenarioCategoriesHeader, StepLabelHeader: changeplanmodel.RuntimeAuthoringStepLabelHeader,
-		StepObservationHeader: changeplanmodel.RuntimeAuthoringStepObservationHeader, ExpectedStatusHeader: changeplanmodel.RuntimeAuthoringExpectedStatusHeader,
-		SnapshotHashHeader: changeplanmodel.RuntimeAuthoringSnapshotHashHeader, CoverageHashHeader: changeplanmodel.RuntimeAuthoringCoverageHashHeader,
-		StepReceiptHeader: changeplanmodel.RuntimeAuthoringStepReceiptHeader, EvidenceErrorHeader: changeplanmodel.RuntimeAuthoringEvidenceErrorHeader,
-		EvidenceStepTokenHeader:  changeplanmodel.RuntimeAuthoringEvidenceStepTokenHeader,
-		StreamingPathRestriction: changeplanmodel.RuntimeAuthoringEvidenceStreamingPathRestriction,
-	}
-}
-
 func runtimeAuthoringApplyCoverageValidation(report *RuntimeAuthoringValidationReport, ledger *changeplanmodel.RuntimeAuthoringCoverageLedger, snapshot changeplanprojection.BusinessSystemSnapshot) {
 	report.Coverage = changeplanvalidation.ValidateRuntimeAuthoringCoverage(ledger, snapshot.ChangePlanSnapshot())
 	report.Binding.CoverageHash = runtimeAuthoringCoverageHash(ledger)
@@ -258,10 +240,7 @@ func runtimeAuthoringCoverageRepair(issue string, entryIndex int) *RuntimeAuthor
 	repair := &RuntimeAuthoringRepairFacts{Operation: "replace", JSONPointer: base}
 	switch issue {
 	case "coverage_ledger_required":
-		repair.Expected = []string{changeplanmodel.RuntimeAuthoringCoverageLedgerVersion}
-	case "coverage_version_invalid":
-		repair.JSONPointer += "/version"
-		repair.Expected = []string{changeplanmodel.RuntimeAuthoringCoverageLedgerVersion}
+		repair.Expected = []string{"coverage_ledger"}
 	case "requirements_required":
 		repair.JSONPointer += "/requirements"
 		repair.Operation, repair.Expected = "add", []string{"non_empty_array"}

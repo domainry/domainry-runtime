@@ -67,7 +67,7 @@ func TestCORSOriginPolicyAndPreflight(t *testing.T) {
 	if preflight.Code != http.StatusNoContent || called || preflight.Header().Get("Access-Control-Allow-Origin") != "https://app.example" || preflight.Header().Get("Vary") != "Origin" || !strings.Contains(preflight.Header().Get("Access-Control-Allow-Headers"), "Last-Event-ID") {
 		t.Fatalf("preflight status=%d called=%v headers=%v", preflight.Code, called, preflight.Header())
 	}
-	for _, header := range []string{"If-Match", "Builder-Task-ID", "Idempotency-Key", "Expected-Schema-Hash", "X-Operation-Reason", "X-Operation-Confirmation", RuntimeAuthoringScenarioIDHeader, RuntimeAuthoringScenarioCategoriesHeader, RuntimeAuthoringStepLabelHeader, RuntimeAuthoringStepObservationHeader, RuntimeAuthoringExpectedStatusHeader, RuntimeAuthoringSnapshotHashHeader, RuntimeAuthoringCoverageHashHeader} {
+	for _, header := range []string{"If-Match", "Builder-Task-ID", "Idempotency-Key", "Expected-Schema-Hash", "X-Operation-Reason", "X-Operation-Confirmation", RuntimeAuthoringEvidenceStepTokenHeader} {
 		if !strings.Contains(preflight.Header().Get("Access-Control-Allow-Headers"), header) {
 			t.Fatalf("authoring header %s is not allowed: %s", header, preflight.Header().Get("Access-Control-Allow-Headers"))
 		}

@@ -3,6 +3,7 @@ package businesssystem
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -25,6 +26,9 @@ func TestRuntimeAuthoringScenarioReceiptRejectsTamperingAndStaleBinding(t *testi
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(receipt) > 700 {
+		t.Fatalf("opaque Runtime receipt exceeded compact transport budget: %d bytes", len(receipt))
 	}
 	verified, err := service.Verify(receipt, "task", binding)
 	if err != nil || verified.Method != "POST" || len(verified.Categories) != 1 || len(verified.ExpectedStatus) != 1 {
@@ -49,22 +53,32 @@ func TestRuntimeAuthoringScenarioReceiptRejectsTamperingAndStaleBinding(t *testi
 func TestRuntimeAuthoringEvidenceSessionIssuesPlanBoundStepTokens(t *testing.T) {
 	service := NewRuntimeAuthoringScenarioReceiptService(bytes.Repeat([]byte("e"), 32))
 	coverage := changeplanmodel.RuntimeAuthoringCoverageLedger{
-		Version:      changeplanmodel.RuntimeAuthoringCoverageLedgerVersion,
 		Requirements: []changeplanmodel.RuntimeAuthoringCoverageRequirement{{RequirementID: "order", ScenarioIDs: []string{"order.lifecycle"}}},
 	}
 	binding := changeplanmodel.RuntimeAuthoringEvidenceBinding{
 		SnapshotHash: strings.Repeat("a", 64), CoverageHash: runtimeAuthoringCoverageHash(&coverage),
 	}
 	plan := changeplanmodel.RuntimeAuthoringEvidencePlan{
-		Version: changeplanmodel.RuntimeAuthoringEvidencePlanVersion,
 		Scenarios: []changeplanmodel.RuntimeAuthoringEvidenceScenarioPlan{{
 			ScenarioID: "order.lifecycle", Categories: append([]string(nil), changeplanmodel.RuntimeAuthoringRequiredScenarioCategories...),
 			Steps: []changeplanmodel.RuntimeAuthoringEvidenceStepPlan{{StepID: "create", Label: "create order", Method: "post", Path: "/objects/order/records", ExpectedStatus: []int{201}}},
 		}},
 	}
 	session, err := service.IssueEvidenceSession("task", binding, coverage, plan)
-	if err != nil || session.Version != changeplanmodel.RuntimeAuthoringEvidenceSessionVersion || len(session.Steps) != 1 {
+	if err != nil || session.SessionID == "" || len(session.Steps) != 1 {
 		t.Fatalf("session=%#v err=%v", session, err)
+	}
+	if len(session.Steps[0].Token) > 512 {
+		t.Fatalf("opaque evidence step token exceeded compact transport budget: %d bytes", len(session.Steps[0].Token))
+	}
+	sessionJSON, err := json.Marshal(session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, duplicated := range []string{"\"version\"", "snapshot_hash", "coverage_hash", "scenario_id"} {
+		if strings.Contains(string(sessionJSON), duplicated) {
+			t.Fatalf("evidence session repeats plan or binding field %q: %s", duplicated, sessionJSON)
+		}
 	}
 	claims, err := service.VerifyEvidenceStepToken(session.Steps[0].Token)
 	if err != nil || claims.SessionID != session.SessionID || claims.StepID != "create" || claims.Method != "POST" || claims.CoverageHash != binding.CoverageHash {
@@ -101,12 +115,11 @@ func TestRuntimeAuthoringDeliveryTrustsOnlyRuntimeIssuedStepReceipts(t *testing.
 		return snapshot, nil
 	}
 	service := NewRuntimeAuthoringValidationApplicationService(dependencies)
-	coverage := changeplanmodel.RuntimeAuthoringCoverageLedger{Version: changeplanmodel.RuntimeAuthoringCoverageLedgerVersion, Requirements: []changeplanmodel.RuntimeAuthoringCoverageRequirement{{
+	coverage := changeplanmodel.RuntimeAuthoringCoverageLedger{Requirements: []changeplanmodel.RuntimeAuthoringCoverageRequirement{{
 		RequirementID: "order", CapabilityKeys: []string{"schema.object"},
 		Resources: []changeplanmodel.RuntimeAuthoringCoverageResource{{ResourceType: "object", ResourceKey: "order"}}, ScenarioIDs: []string{"order.lifecycle"},
 	}}}
 	plan := changeplanmodel.RuntimeAuthoringEvidencePlan{
-		Version: changeplanmodel.RuntimeAuthoringEvidencePlanVersion,
 		Scenarios: []changeplanmodel.RuntimeAuthoringEvidenceScenarioPlan{{
 			ScenarioID: "order.lifecycle", Categories: append([]string(nil), changeplanmodel.RuntimeAuthoringRequiredScenarioCategories...),
 			Steps: []changeplanmodel.RuntimeAuthoringEvidenceStepPlan{{StepID: "registered-step", Label: "registered step", Method: "GET", Path: "/objects/order/records/order-1", ExpectedStatus: []int{200}}},
@@ -144,36 +157,24 @@ func TestRuntimeAuthoringDeliveryTrustsOnlyRuntimeIssuedStepReceipts(t *testing.
 		{RuntimeReceipt: issue("event", "/business/events", 200, strings.Repeat("8", 64), "", "", false)},
 		{RuntimeReceipt: issue("outbox", "/operations/outbox", 200, strings.Repeat("9", 64), "", "", false)},
 	}
-	evidence := changeplanmodel.RuntimeAuthoringDeliveryEvidence{
-		Version: changeplanmodel.RuntimeAuthoringDeliveryEvidenceVersion, Binding: validation.Binding, Coverage: coverage,
-		Scenarios: []changeplanmodel.RuntimeAuthoringScenarioEvidence{{
-			Version: changeplanmodel.RuntimeAuthoringScenarioEvidenceVersion, ScenarioID: "order.lifecycle",
-			Passed: false, BeforeStateHash: "forged-before", AfterStateHash: "forged-after", Steps: steps,
-		}},
+	submission := changeplanmodel.RuntimeAuthoringDeliverySubmission{Coverage: coverage, Receipts: []string{}}
+	for _, step := range steps {
+		submission.Receipts = append(submission.Receipts, step.RuntimeReceipt)
 	}
-	report, err := service.VerifyDelivery(ctx, runtimeAuthoringValidationAdmin(), evidence)
-	if err != nil || !report.Valid || report.Checks["runtime_evidence"] != "ok" {
+	report, err := service.VerifyDelivery(ctx, runtimeAuthoringValidationAdmin(), submission)
+	if err != nil || !report.Valid || report.Binding.SnapshotHash != validation.Binding.SnapshotHash || report.Binding.CoverageHash != validation.Binding.CoverageHash || report.Checks["runtime_evidence"] != "ok" {
 		t.Fatalf("report=%#v err=%v", report, err)
 	}
-	compact := changeplanmodel.RuntimeAuthoringDeliveryEvidence{Coverage: coverage, Receipts: []string{}}
-	for _, step := range steps {
-		compact.Receipts = append(compact.Receipts, step.RuntimeReceipt)
-	}
-	report, err = service.VerifyDelivery(ctx, runtimeAuthoringValidationAdmin(), compact)
-	if err != nil || !report.Valid || report.Binding.SnapshotHash != validation.Binding.SnapshotHash || report.Binding.CoverageHash != validation.Binding.CoverageHash || report.Checks["runtime_evidence"] != "ok" {
-		t.Fatalf("compact report=%#v err=%v", report, err)
-	}
 
-	tampered := evidence
-	tampered.Scenarios = append([]changeplanmodel.RuntimeAuthoringScenarioEvidence(nil), evidence.Scenarios...)
-	tampered.Scenarios[0].Steps = append([]changeplanmodel.RuntimeAuthoringScenarioStepEvidence(nil), evidence.Scenarios[0].Steps...)
-	tampered.Scenarios[0].Steps[0].RuntimeReceipt += "tampered"
+	tampered := submission
+	tampered.Receipts = append([]string(nil), submission.Receipts...)
+	tampered.Receipts[0] += "tampered"
 	report, err = service.VerifyDelivery(ctx, runtimeAuthoringValidationAdmin(), tampered)
 	if err != nil || report.Valid || report.Checks["runtime_evidence"] != "invalid" {
 		t.Fatalf("tampered report=%#v err=%v", report, err)
 	}
 
-	report, err = service.VerifyDelivery(t.Context(), runtimeAuthoringValidationAdmin(), evidence)
+	report, err = service.VerifyDelivery(t.Context(), runtimeAuthoringValidationAdmin(), submission)
 	if err != nil || report.Valid || report.Checks["runtime_evidence"] != "invalid" {
 		t.Fatalf("taskless report=%#v err=%v", report, err)
 	}

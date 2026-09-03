@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 
 	definitioncontract "github.com/domainry/domainry-runtime/runtime/domain/definition/contract"
 
@@ -37,25 +38,42 @@ func (s *CapabilityAuthoringApplicationService) DiscoveryIndex(ctx context.Conte
 // response. Callers that are explicitly auditing transport policy can opt in
 // without forcing every model-facing capability lookup to carry that catalog.
 func (s *CapabilityAuthoringApplicationService) DiscoveryIndexExpanded(ctx context.Context, principal principalmodel.Principal, includeEndpointContracts bool) (capabilitycontract.CapabilityDiscoveryIndex, error) {
-	contract, err := s.Capabilities(ctx, principal)
+	if err := capabilityAuthorizePrincipal(principal); err != nil {
+		return capabilitycontract.CapabilityDiscoveryIndex{}, err
+	}
+	instance, err := s.capabilityAuthoringInstance(ctx, principal)
 	if err != nil {
 		return capabilitycontract.CapabilityDiscoveryIndex{}, err
 	}
-	endpointContracts := tenantAdminEndpointContracts()
+	catalog := RuntimeAuthoringCatalogSummary()
+	endpointContractCount, endpointContractsHash := tenantAdminEndpointContractIndex()
 	result := capabilitycontract.CapabilityDiscoveryIndex{
-		ContractVersion: contract.ContractVersion, EndpointContractVersion: contract.EndpointContractVersion, RuntimeVersion: contract.RuntimeVersion, ContractHash: contract.ContractHash, InstanceHash: contract.InstanceHash,
-		EndpointContractCount: len(endpointContracts), EndpointContractsHash: capabilityEndpointContractsHash(endpointContracts),
+		ContractVersion: catalog.ContractVersion, EndpointContractVersion: catalog.EndpointContractVersion, RuntimeVersion: catalog.RuntimeVersion, ContractHash: catalog.ContractHash, InstanceHash: capabilitycontract.CapabilityAuthoringInstanceHash(instance),
+		EndpointContractCount: endpointContractCount, EndpointContractsHash: endpointContractsHash,
 		Domains: []capabilitycontract.CapabilityDomainSummary{},
 	}
 	if includeEndpointContracts {
-		result.EndpointContracts = endpointContracts
+		result.EndpointContracts = tenantAdminEndpointContracts()
 	}
-	for _, domain := range contract.Domains {
+	for _, domain := range catalog.Domains {
 		result.Domains = append(result.Domains, capabilitycontract.CapabilityDomainSummary{
-			Key: domain.Key, CapabilityCount: len(domain.Capabilities), DetailEndpoint: "/tenant-admin/platform-capabilities/domains/" + url.PathEscape(domain.Key),
+			Key: domain.Key, CapabilityCount: domain.CapabilityCount, DetailEndpoint: "/tenant-admin/platform-capabilities/domains/" + url.PathEscape(domain.Key),
 		})
 	}
 	return result, nil
+}
+
+var tenantAdminEndpointContractIndexOnce sync.Once
+var tenantAdminEndpointContractCount int
+var tenantAdminEndpointContractsHash string
+
+func tenantAdminEndpointContractIndex() (int, string) {
+	tenantAdminEndpointContractIndexOnce.Do(func() {
+		contracts := tenantAdminEndpointContracts()
+		tenantAdminEndpointContractCount = len(contracts)
+		tenantAdminEndpointContractsHash = capabilityEndpointContractsHash(contracts)
+	})
+	return tenantAdminEndpointContractCount, tenantAdminEndpointContractsHash
 }
 
 func capabilityEndpointContractsHash(contracts []endpointmodel.RuntimeEndpointContractV1) string {

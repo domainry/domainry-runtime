@@ -65,12 +65,12 @@ func NewBusinessSystemHandler(deps BusinessSystemDependencies) *BusinessSystemHa
 }
 
 func (h *BusinessSystemHandler) verifyRuntimeAuthoringDelivery(w http.ResponseWriter, r *http.Request) {
-	var evidence changeplanmodel.RuntimeAuthoringDeliveryEvidence
+	var submission changeplanmodel.RuntimeAuthoringDeliverySubmission
 	if h.decodeJSON == nil {
 		h.writeServiceError(w, r, errors.New("business system delivery JSON decoder is unavailable"))
 		return
 	}
-	if !h.decodeJSON(w, r, &evidence) {
+	if !h.decodeJSON(w, r, &submission) {
 		return
 	}
 	builderTaskID := operationscontract.BuilderTaskID(r.Context())
@@ -78,7 +78,7 @@ func (h *BusinessSystemHandler) verifyRuntimeAuthoringDelivery(w http.ResponseWr
 		h.writeServiceError(w, r, errors.New("business system delivery lifecycle is unavailable"))
 		return
 	}
-	report, err := h.validation.VerifyDelivery(r.Context(), h.principal(r), evidence)
+	report, err := h.validation.VerifyDelivery(r.Context(), h.principal(r), submission)
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
@@ -101,12 +101,6 @@ func (h *BusinessSystemHandler) validateRuntimeAuthoring(w http.ResponseWriter, 
 	}
 	if !h.decodeJSON(w, r, &request) {
 		return
-	}
-	if request.Coverage != nil && request.Coverage.Version == "" {
-		request.Coverage.Version = changeplanmodel.RuntimeAuthoringCoverageLedgerVersion
-	}
-	if request.EvidencePlan != nil && request.EvidencePlan.Version == "" {
-		request.EvidencePlan.Version = changeplanmodel.RuntimeAuthoringEvidencePlanVersion
 	}
 	builderTaskID := operationscontract.BuilderTaskID(r.Context())
 	if builderTaskID != "" && h.beginValidation != nil {
@@ -151,7 +145,7 @@ func (h *BusinessSystemHandler) Snapshot(r *http.Request) (changeplanprojection.
 
 func (h *BusinessSystemHandler) nativeRuntimeMetadata() changeplanprojection.RuntimeNativeMetadataModel {
 	metadata := h.runtimeMetadata()
-	contract := capabilityapplication.RuntimeAuthoringCapabilities()
+	contract := capabilityapplication.RuntimeAuthoringCatalogSummary()
 	return changeplanprojection.RuntimeNativeMetadataModel{
 		ModelVersion: changeplanprojection.RuntimeNativeMetadataModelVersion, Status: "installed",
 		ServiceKind: metadata.ServiceKind, RuntimeVersion: metadata.RuntimeVersion,

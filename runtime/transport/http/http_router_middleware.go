@@ -210,7 +210,7 @@ func (s *HTTPRouter) withCORS(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
 		}
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, If-Match, Last-Event-ID, Traceparent, Tracestate, Baggage, X-API-Key, X-User-ID, X-Role, X-User-Role, X-Preview-Role, X-Preview-User-ID, X-Workspace-ID, X-Request-ID, X-Correlation-ID, X-Operation-Reason, X-Operation-Confirmation, Builder-Task-ID, Idempotency-Key, Expected-Schema-Hash, Runtime-Authoring-Scenario-ID, Runtime-Authoring-Scenario-Categories, Runtime-Authoring-Step-Label, Runtime-Authoring-Step-Observation, Runtime-Authoring-Expected-Status, Runtime-Authoring-Snapshot-Hash, Runtime-Authoring-Coverage-Hash")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, If-Match, Last-Event-ID, Traceparent, Tracestate, Baggage, X-API-Key, X-User-ID, X-Role, X-User-Role, X-Preview-Role, X-Preview-User-ID, X-Workspace-ID, X-Request-ID, X-Correlation-ID, X-Operation-Reason, X-Operation-Confirmation, Builder-Task-ID, Idempotency-Key, Expected-Schema-Hash, Runtime-Authoring-Evidence-Step-Token")
 		w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID, X-Correlation-ID, X-Resource-Hash, X-Operation-ID, X-Operation-Status, X-Operation-Replayed, Operation-ID, Operation-Location, Idempotency-Replayed, Runtime-Authoring-Step-Receipt, Runtime-Authoring-Evidence-Error")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		if r.Method == http.MethodOptions {

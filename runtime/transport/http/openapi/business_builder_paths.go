@@ -27,15 +27,13 @@ func runtimeAuthoringEvidencePlanSchema() map[string]any {
 		"categories":  openAPIArray(map[string]any{"type": "string", "enum": changeplanmodel.RuntimeAuthoringRequiredScenarioCategories}),
 		"steps":       openAPIArray(step),
 	})
-	return openAPIRequiredObject([]string{"version", "scenarios"}, map[string]any{
-		"version":   map[string]any{"type": "string", "const": changeplanmodel.RuntimeAuthoringEvidencePlanVersion},
+	return openAPIRequiredObject([]string{"scenarios"}, map[string]any{
 		"scenarios": openAPIArray(scenario),
 	})
 }
 
 func runtimeAuthoringCoverageLedgerSchema() map[string]any {
 	return openAPIObject(map[string]any{
-		"version": map[string]any{"type": "string", "const": changeplanmodel.RuntimeAuthoringCoverageLedgerVersion},
 		"requirements": openAPIArray(openAPIObject(map[string]any{
 			"requirement_id": map[string]any{"type": "string"}, "capability_keys": openAPIArray(map[string]any{"type": "string"}),
 			"resources": openAPIArray(openAPIObject(map[string]any{
@@ -47,23 +45,9 @@ func runtimeAuthoringCoverageLedgerSchema() map[string]any {
 }
 
 func runtimeAuthoringDeliveryEvidenceSchema() map[string]any {
-	binding := openAPIRequiredObject([]string{"runtime_version", "contract_hash", "instance_hash", "snapshot_hash", "coverage_hash", "resource_hashes"}, map[string]any{
-		"runtime_version": map[string]any{"type": "string"}, "contract_hash": map[string]any{"type": "string"},
-		"instance_hash": map[string]any{"type": "string"}, "snapshot_hash": map[string]any{"type": "string"},
-		"coverage_hash": map[string]any{"type": "string"}, "resource_hashes": openAPIObject(nil),
-	})
-	step := openAPIRequiredObject([]string{"runtime_receipt"}, map[string]any{
-		"runtime_receipt": map[string]any{"type": "string", "description": "Opaque Runtime-issued HMAC receipt returned by the observed HTTP call."},
-	})
-	scenario := openAPIRequiredObject([]string{"version", "scenario_id", "steps"}, map[string]any{
-		"version":     map[string]any{"type": "string", "const": changeplanmodel.RuntimeAuthoringScenarioEvidenceVersion},
-		"scenario_id": map[string]any{"type": "string"}, "steps": openAPIArray(step),
-	})
-	return openAPIRequiredObject([]string{"coverage"}, map[string]any{
-		"version": map[string]any{"type": "string", "const": changeplanmodel.RuntimeAuthoringDeliveryEvidenceVersion},
-		"binding": binding, "coverage": runtimeAuthoringCoverageLedgerSchema(),
-		"scenarios": openAPIArray(scenario),
-		"receipts":  openAPIArray(map[string]any{"type": "string", "description": "Runtime-issued receipts. When present, Runtime reconstructs scenarios and binding without duplicated caller-authored wrappers."}),
+	return openAPIRequiredObject([]string{"coverage", "receipts"}, map[string]any{
+		"coverage": runtimeAuthoringCoverageLedgerSchema(),
+		"receipts": openAPIArray(map[string]any{"type": "string", "description": "Opaque Runtime-issued HMAC receipts. Runtime reconstructs binding, scenarios, and steps from these receipts."}),
 	})
 }
 
@@ -73,10 +57,7 @@ func runtimeAuthoringEvidenceOpenAPIExtension() map[string]any {
 		"step_receipt_version": changeplanmodel.RuntimeAuthoringStepReceiptVersion,
 		"request_headers": map[string]any{
 			"evidence_step_token": changeplanmodel.RuntimeAuthoringEvidenceStepTokenHeader,
-			"builder_task":        changeplanmodel.RuntimeAuthoringBuilderTaskHeader, "scenario_id": changeplanmodel.RuntimeAuthoringScenarioIDHeader,
-			"scenario_categories": changeplanmodel.RuntimeAuthoringScenarioCategoriesHeader, "step_label": changeplanmodel.RuntimeAuthoringStepLabelHeader,
-			"step_observation": changeplanmodel.RuntimeAuthoringStepObservationHeader, "expected_status": changeplanmodel.RuntimeAuthoringExpectedStatusHeader,
-			"snapshot_hash": changeplanmodel.RuntimeAuthoringSnapshotHashHeader, "coverage_hash": changeplanmodel.RuntimeAuthoringCoverageHashHeader,
+			"builder_task":        changeplanmodel.RuntimeAuthoringBuilderTaskHeader,
 		},
 		"response_headers":           map[string]any{"step_receipt": changeplanmodel.RuntimeAuthoringStepReceiptHeader, "evidence_error": changeplanmodel.RuntimeAuthoringEvidenceErrorHeader},
 		"streaming_path_restriction": changeplanmodel.RuntimeAuthoringEvidenceStreamingPathRestriction,

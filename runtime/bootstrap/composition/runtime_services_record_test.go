@@ -76,8 +76,11 @@ func (runtimeServicesMetadataDefinitions) Get(context.Context, string, string) (
 	return metadatasdk.Definition{}, false, nil
 }
 
-func (runtimeServicesMetadataDefinitions) Snapshot(context.Context) (metadatasdk.DefinitionSnapshot, error) {
-	return metadatasdk.DefinitionSnapshot{}, nil
+func (definitions runtimeServicesMetadataDefinitions) Snapshot(context.Context) (metadatasdk.DefinitionSnapshot, error) {
+	if definitions.fail {
+		return metadatasdk.DefinitionSnapshot{}, definitions.failure
+	}
+	return metadatasdk.DefinitionSnapshot{Definitions: []metadatasdk.Definition{{ResourceType: "action", ResourceKey: "customer.activate", SourceKind: "manifest"}}}, nil
 }
 
 type runtimeServicesRecordActionRepository struct {

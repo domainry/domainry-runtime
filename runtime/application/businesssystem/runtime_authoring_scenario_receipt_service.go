@@ -70,6 +70,44 @@ type RuntimeAuthoringEvidenceStepClaims struct {
 	ExpectedStatus []int    `json:"expected_status"`
 }
 
+// Token payloads are opaque Runtime-owned transport. Short keys, digest
+// encoding, and a category bitset keep the model-facing tokens bounded while
+// the application layer continues to consume descriptive typed claims.
+type runtimeAuthoringEvidenceStepTokenPayload struct {
+	SessionID     string `json:"s"`
+	BuilderTaskID string `json:"b"`
+	SnapshotHash  string `json:"n"`
+	CoverageHash  string `json:"c"`
+	ScenarioID    string `json:"q"`
+	Categories    uint16 `json:"g"`
+	StepID        string `json:"i"`
+	Label         string `json:"l"`
+	Observation   string `json:"o,omitempty"`
+	Method        string `json:"m"`
+	Path          string `json:"p"`
+	Expected      []int  `json:"e"`
+}
+
+type runtimeAuthoringScenarioReceiptPayload struct {
+	SessionID           string `json:"s,omitempty"`
+	StepID              string `json:"i,omitempty"`
+	BuilderTaskID       string `json:"b"`
+	SnapshotHash        string `json:"n"`
+	CoverageHash        string `json:"c"`
+	ScenarioID          string `json:"q"`
+	Categories          uint16 `json:"g"`
+	Label               string `json:"l"`
+	Observation         string `json:"o,omitempty"`
+	Method              string `json:"m"`
+	Path                string `json:"p"`
+	Expected            []int  `json:"e"`
+	Actual              int    `json:"a"`
+	RequestHash         string `json:"r"`
+	ResponseHash        string `json:"x"`
+	IdempotencyKey      string `json:"k,omitempty"`
+	IdempotencyReplayed bool   `json:"y,omitempty"`
+}
+
 type RuntimeAuthoringScenarioReceiptService struct {
 	key []byte
 }
@@ -94,9 +132,6 @@ func (s *RuntimeAuthoringScenarioReceiptService) IssueEvidenceSession(builderTas
 	if s == nil || len(s.key) < sha256.Size || builderTaskID == "" || !runtimeAuthoringReceiptSHA256(binding.SnapshotHash) || !runtimeAuthoringReceiptSHA256(binding.CoverageHash) {
 		return changeplanmodel.RuntimeAuthoringEvidenceSession{}, errors.New("runtime authoring evidence session identity is invalid")
 	}
-	if strings.TrimSpace(plan.Version) != changeplanmodel.RuntimeAuthoringEvidencePlanVersion {
-		return changeplanmodel.RuntimeAuthoringEvidenceSession{}, errors.New("runtime authoring evidence plan version is invalid")
-	}
 	if binding.CoverageHash != runtimeAuthoringCoverageHash(&coverage) {
 		return changeplanmodel.RuntimeAuthoringEvidenceSession{}, errors.New("runtime authoring evidence plan coverage binding is stale")
 	}
@@ -108,7 +143,7 @@ func (s *RuntimeAuthoringScenarioReceiptService) IssueEvidenceSession(builderTas
 			}
 		}
 	}
-	normalizedPlan := changeplanmodel.RuntimeAuthoringEvidencePlan{Version: changeplanmodel.RuntimeAuthoringEvidencePlanVersion, Scenarios: []changeplanmodel.RuntimeAuthoringEvidenceScenarioPlan{}}
+	normalizedPlan := changeplanmodel.RuntimeAuthoringEvidencePlan{Scenarios: []changeplanmodel.RuntimeAuthoringEvidenceScenarioPlan{}}
 	seenScenarios, seenSteps, categorySet := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, scenario := range plan.Scenarios {
 		scenario.ScenarioID = strings.TrimSpace(scenario.ScenarioID)
@@ -165,8 +200,7 @@ func (s *RuntimeAuthoringScenarioReceiptService) IssueEvidenceSession(builderTas
 	sum := sha256.Sum256(identity)
 	sessionID := hex.EncodeToString(sum[:])
 	session := changeplanmodel.RuntimeAuthoringEvidenceSession{
-		Version: changeplanmodel.RuntimeAuthoringEvidenceSessionVersion, SessionID: sessionID,
-		SnapshotHash: binding.SnapshotHash, CoverageHash: binding.CoverageHash, Steps: []changeplanmodel.RuntimeAuthoringEvidenceSessionStep{},
+		SessionID: sessionID, Steps: []changeplanmodel.RuntimeAuthoringEvidenceSessionStep{},
 	}
 	for _, scenario := range normalizedPlan.Scenarios {
 		for _, step := range scenario.Steps {
@@ -179,14 +213,20 @@ func (s *RuntimeAuthoringScenarioReceiptService) IssueEvidenceSession(builderTas
 			if err != nil {
 				return changeplanmodel.RuntimeAuthoringEvidenceSession{}, err
 			}
-			session.Steps = append(session.Steps, changeplanmodel.RuntimeAuthoringEvidenceSessionStep{ScenarioID: scenario.ScenarioID, StepID: step.StepID, Token: token})
+			session.Steps = append(session.Steps, changeplanmodel.RuntimeAuthoringEvidenceSessionStep{StepID: step.StepID, Token: token})
 		}
 	}
 	return session, nil
 }
 
 func (s *RuntimeAuthoringScenarioReceiptService) issueEvidenceStepToken(claims RuntimeAuthoringEvidenceStepClaims) (string, error) {
-	payload, err := json.Marshal(claims)
+	payload, err := json.Marshal(runtimeAuthoringEvidenceStepTokenPayload{
+		SessionID: claims.SessionID, BuilderTaskID: claims.BuilderTaskID,
+		SnapshotHash: runtimeAuthoringEncodeDigest(claims.SnapshotHash), CoverageHash: runtimeAuthoringEncodeDigest(claims.CoverageHash),
+		ScenarioID: claims.ScenarioID, Categories: runtimeAuthoringCategoryMask(claims.Categories),
+		StepID: claims.StepID, Label: claims.Label, Observation: claims.Observation,
+		Method: claims.Method, Path: claims.Path, Expected: claims.ExpectedStatus,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -207,8 +247,19 @@ func (s *RuntimeAuthoringScenarioReceiptService) VerifyEvidenceStepToken(token s
 	if err != nil {
 		return RuntimeAuthoringEvidenceStepClaims{}, errors.New("runtime authoring evidence step token payload is invalid")
 	}
-	var claims RuntimeAuthoringEvidenceStepClaims
-	if json.Unmarshal(payload, &claims) != nil || claims.Version != changeplanmodel.RuntimeAuthoringEvidenceStepTokenVersion || claims.SessionID == "" || claims.BuilderTaskID == "" || claims.ScenarioID == "" || claims.StepID == "" || claims.Label == "" || claims.Method == "" || claims.Path == "" || len(claims.Categories) == 0 || len(claims.ExpectedStatus) == 0 || !runtimeAuthoringReceiptSHA256(claims.SnapshotHash) || !runtimeAuthoringReceiptSHA256(claims.CoverageHash) {
+	var wire runtimeAuthoringEvidenceStepTokenPayload
+	if json.Unmarshal(payload, &wire) != nil {
+		return RuntimeAuthoringEvidenceStepClaims{}, errors.New("runtime authoring evidence step token claims are invalid")
+	}
+	claims := RuntimeAuthoringEvidenceStepClaims{
+		Version:   changeplanmodel.RuntimeAuthoringEvidenceStepTokenVersion,
+		SessionID: wire.SessionID, BuilderTaskID: wire.BuilderTaskID,
+		SnapshotHash: runtimeAuthoringDecodeDigest(wire.SnapshotHash), CoverageHash: runtimeAuthoringDecodeDigest(wire.CoverageHash),
+		ScenarioID: wire.ScenarioID, Categories: runtimeAuthoringCategoriesFromMask(wire.Categories),
+		StepID: wire.StepID, Label: wire.Label, Observation: wire.Observation,
+		Method: wire.Method, Path: wire.Path, ExpectedStatus: wire.Expected,
+	}
+	if claims.SessionID == "" || claims.BuilderTaskID == "" || claims.ScenarioID == "" || claims.StepID == "" || claims.Label == "" || claims.Method == "" || claims.Path == "" || len(claims.Categories) == 0 || len(claims.ExpectedStatus) == 0 || !runtimeAuthoringReceiptSHA256(claims.SnapshotHash) || !runtimeAuthoringReceiptSHA256(claims.CoverageHash) {
 		return RuntimeAuthoringEvidenceStepClaims{}, errors.New("runtime authoring evidence step token claims are invalid")
 	}
 	for _, category := range claims.Categories {
@@ -236,7 +287,15 @@ func (s *RuntimeAuthoringScenarioReceiptService) Issue(observation RuntimeAuthor
 	if err := validateRuntimeAuthoringScenarioReceipt(s, receipt); err != nil {
 		return "", err
 	}
-	payload, err := json.Marshal(receipt)
+	payload, err := json.Marshal(runtimeAuthoringScenarioReceiptPayload{
+		SessionID: receipt.SessionID, StepID: receipt.StepID, BuilderTaskID: receipt.BuilderTaskID,
+		SnapshotHash: runtimeAuthoringEncodeDigest(receipt.SnapshotHash), CoverageHash: runtimeAuthoringEncodeDigest(receipt.CoverageHash),
+		ScenarioID: receipt.ScenarioID, Categories: runtimeAuthoringCategoryMask(receipt.Categories), Label: receipt.Label,
+		Observation: receipt.Observation, Method: receipt.Method, Path: receipt.Path,
+		Expected: receipt.ExpectedStatus, Actual: receipt.ActualStatus,
+		RequestHash: runtimeAuthoringEncodeDigest(receipt.RequestHash), ResponseHash: runtimeAuthoringEncodeDigest(receipt.ResponseHash),
+		IdempotencyKey: receipt.IdempotencyKey, IdempotencyReplayed: receipt.IdempotencyReplayed,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -257,9 +316,19 @@ func (s *RuntimeAuthoringScenarioReceiptService) Verify(token, builderTaskID str
 	if err != nil {
 		return RuntimeAuthoringScenarioStepReceipt{}, errors.New("runtime authoring scenario receipt payload is invalid")
 	}
-	var receipt RuntimeAuthoringScenarioStepReceipt
-	if err := json.Unmarshal(payload, &receipt); err != nil {
+	var wire runtimeAuthoringScenarioReceiptPayload
+	if err := json.Unmarshal(payload, &wire); err != nil {
 		return RuntimeAuthoringScenarioStepReceipt{}, errors.New("runtime authoring scenario receipt payload is invalid")
+	}
+	receipt := RuntimeAuthoringScenarioStepReceipt{
+		Version:   changeplanmodel.RuntimeAuthoringStepReceiptVersion,
+		SessionID: wire.SessionID, StepID: wire.StepID, BuilderTaskID: wire.BuilderTaskID,
+		SnapshotHash: runtimeAuthoringDecodeDigest(wire.SnapshotHash), CoverageHash: runtimeAuthoringDecodeDigest(wire.CoverageHash),
+		ScenarioID: wire.ScenarioID, Categories: runtimeAuthoringCategoriesFromMask(wire.Categories), Label: wire.Label,
+		Observation: wire.Observation, Method: wire.Method, Path: wire.Path,
+		ExpectedStatus: wire.Expected, ActualStatus: wire.Actual,
+		RequestHash: runtimeAuthoringDecodeDigest(wire.RequestHash), ResponseHash: runtimeAuthoringDecodeDigest(wire.ResponseHash),
+		IdempotencyKey: wire.IdempotencyKey, IdempotencyReplayed: wire.IdempotencyReplayed,
 	}
 	if err := validateRuntimeAuthoringScenarioReceipt(s, receipt); err != nil {
 		return RuntimeAuthoringScenarioStepReceipt{}, err
@@ -373,6 +442,48 @@ func runtimeAuthoringScenarioCategoryAllowed(value string) bool {
 		}
 	}
 	return false
+}
+
+func runtimeAuthoringCategoryMask(values []string) uint16 {
+	var mask uint16
+	for _, value := range values {
+		for index, category := range changeplanmodel.RuntimeAuthoringRequiredScenarioCategories {
+			if value == category {
+				mask |= 1 << index
+				break
+			}
+		}
+	}
+	return mask
+}
+
+func runtimeAuthoringCategoriesFromMask(mask uint16) []string {
+	if mask == 0 || mask>>len(changeplanmodel.RuntimeAuthoringRequiredScenarioCategories) != 0 {
+		return nil
+	}
+	values := []string{}
+	for index, category := range changeplanmodel.RuntimeAuthoringRequiredScenarioCategories {
+		if mask&(1<<index) != 0 {
+			values = append(values, category)
+		}
+	}
+	return normalizedRuntimeAuthoringScenarioCategories(values)
+}
+
+func runtimeAuthoringEncodeDigest(value string) string {
+	raw, err := hex.DecodeString(value)
+	if err != nil || len(raw) != sha256.Size {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString(raw)
+}
+
+func runtimeAuthoringDecodeDigest(value string) string {
+	raw, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil || len(raw) != sha256.Size {
+		return ""
+	}
+	return hex.EncodeToString(raw)
 }
 
 func runtimeAuthoringReceiptSHA256(value string) bool {

@@ -86,13 +86,8 @@ func (s *BusinessSystemApplicationService) Snapshot(ctx context.Context, princip
 	if err != nil {
 		return changeplanprojection.BusinessSystemSnapshot{}, err
 	}
-	authoring := businessSystemRuntimeAuthoringCapabilities()
-	capabilityKeys := []string{}
-	for _, capabilityDomain := range authoring.Domains {
-		for _, capability := range capabilityDomain.Capabilities {
-			capabilityKeys = append(capabilityKeys, capability.Key)
-		}
-	}
+	authoring := businessSystemRuntimeAuthoringCatalogSummary()
+	capabilityKeys := append([]string(nil), authoring.CapabilityKeys...)
 	schema := s.snapshotProjection.schemaForPrincipal(ctx, principal)
 	snapshot := changeplanprojection.BusinessSystemSnapshot{
 		SnapshotVersion: changeplanprojection.BusinessSystemSnapshotVersion, RuntimeVersion: capabilitycontract.RuntimeCapabilityContractVersion,
@@ -131,13 +126,8 @@ func (s *BusinessSystemApplicationService) SnapshotIndex(ctx context.Context, pr
 	if !principal.Known {
 		return changeplanprojection.BusinessSystemSnapshotIndex{}, businessSystemForbidden("auth.permission_denied")
 	}
-	authoring := businessSystemRuntimeAuthoringCapabilities()
-	capabilityKeys := make([]string, 0)
-	for _, capabilityDomain := range authoring.Domains {
-		for _, capability := range capabilityDomain.Capabilities {
-			capabilityKeys = append(capabilityKeys, capability.Key)
-		}
-	}
+	authoring := businessSystemRuntimeAuthoringCatalogSummary()
+	capabilityKeys := append([]string(nil), authoring.CapabilityKeys...)
 	schema := s.snapshotProjection.schemaForPrincipal(ctx, principal)
 	schema.SchemaHash = appschemaservice.SchemaSnapshotHash(schema)
 	visibility := map[string]string{"schema": "summarized"}
@@ -348,12 +338,12 @@ func businessSystemValueOrDefault(value, fallback string) string {
 	return fallback
 }
 
-func (s *RuntimeAuthoringValidationApplicationService) VerifyDelivery(ctx context.Context, principal principalmodel.Principal, evidence changeplanmodel.RuntimeAuthoringDeliveryEvidence) (changeplanmodel.RuntimeAuthoringDeliveryReport, error) {
-	validation, err := s.ValidateWithCoverage(ctx, principal, &evidence.Coverage)
+func (s *RuntimeAuthoringValidationApplicationService) VerifyDelivery(ctx context.Context, principal principalmodel.Principal, submission changeplanmodel.RuntimeAuthoringDeliverySubmission) (changeplanmodel.RuntimeAuthoringDeliveryReport, error) {
+	validation, err := s.ValidateWithCoverage(ctx, principal, &submission.Coverage)
 	if err != nil {
 		return changeplanmodel.RuntimeAuthoringDeliveryReport{}, err
 	}
-	trustedEvidence, receiptIssues := s.runtimeVerifiedDeliveryEvidence(evidence, validation.Binding, operationscontract.BuilderTaskID(ctx))
+	trustedEvidence, receiptIssues := s.runtimeVerifiedDeliveryEvidence(submission, validation.Binding, operationscontract.BuilderTaskID(ctx))
 	report := changeplanvalidation.ValidateRuntimeAuthoringDelivery(trustedEvidence, validation.Binding, validation.Valid)
 	report.Checks["runtime_evidence"] = "ok"
 	if len(receiptIssues) > 0 {
@@ -367,10 +357,10 @@ func (s *RuntimeAuthoringValidationApplicationService) VerifyDelivery(ctx contex
 	return report, nil
 }
 
-func (s *RuntimeAuthoringValidationApplicationService) runtimeVerifiedDeliveryEvidence(evidence changeplanmodel.RuntimeAuthoringDeliveryEvidence, binding changeplanmodel.RuntimeAuthoringEvidenceBinding, builderTaskID string) (changeplanmodel.RuntimeAuthoringDeliveryEvidence, []string) {
+func (s *RuntimeAuthoringValidationApplicationService) runtimeVerifiedDeliveryEvidence(submission changeplanmodel.RuntimeAuthoringDeliverySubmission, binding changeplanmodel.RuntimeAuthoringEvidenceBinding, builderTaskID string) (changeplanmodel.RuntimeAuthoringDeliveryEvidence, []string) {
 	trusted := changeplanmodel.RuntimeAuthoringDeliveryEvidence{
 		Version: changeplanmodel.RuntimeAuthoringDeliveryEvidenceVersion,
-		Binding: binding, Coverage: evidence.Coverage,
+		Binding: binding, Coverage: submission.Coverage,
 		Scenarios: []changeplanmodel.RuntimeAuthoringScenarioEvidence{},
 	}
 	if s == nil || s.dependencies.ScenarioReceipts == nil {
@@ -459,45 +449,20 @@ func (s *RuntimeAuthoringValidationApplicationService) runtimeVerifiedDeliveryEv
 		}
 	}
 	builds := []*scenarioBuild{}
-	if len(evidence.Receipts) > 0 {
-		if len(evidence.Scenarios) > 0 {
-			issues = append(issues, "mixed_evidence_formats")
+	byScenario := map[string]*scenarioBuild{}
+	for receiptIndex, token := range submission.Receipts {
+		prefix := "receipts[" + strconv.Itoa(receiptIndex) + "]"
+		receipt, verified := verifyReceipt(token, prefix, true)
+		if !verified {
+			continue
 		}
-		byScenario := map[string]*scenarioBuild{}
-		for receiptIndex, token := range evidence.Receipts {
-			prefix := "receipts[" + strconv.Itoa(receiptIndex) + "]"
-			receipt, verified := verifyReceipt(token, prefix, true)
-			if !verified {
-				continue
-			}
-			build := byScenario[receipt.ScenarioID]
-			if build == nil {
-				build = newBuild(receipt.ScenarioID)
-				byScenario[receipt.ScenarioID] = build
-				builds = append(builds, build)
-			}
-			appendReceipt(build, receipt, token, prefix)
-		}
-	} else {
-		for scenarioIndex, submittedScenario := range evidence.Scenarios {
-			build := newBuild(submittedScenario.ScenarioID)
+		build := byScenario[receipt.ScenarioID]
+		if build == nil {
+			build = newBuild(receipt.ScenarioID)
+			byScenario[receipt.ScenarioID] = build
 			builds = append(builds, build)
-			if strings.TrimSpace(submittedScenario.Version) != changeplanmodel.RuntimeAuthoringScenarioEvidenceVersion {
-				issues = append(issues, "scenarios["+strconv.Itoa(scenarioIndex)+"].version_invalid")
-			}
-			for stepIndex, submittedStep := range submittedScenario.Steps {
-				prefix := "scenarios[" + strconv.Itoa(scenarioIndex) + "].steps[" + strconv.Itoa(stepIndex) + "]"
-				receipt, verified := verifyReceipt(submittedStep.RuntimeReceipt, prefix, false)
-				if !verified {
-					continue
-				}
-				if receipt.ScenarioID != build.evidence.ScenarioID {
-					issues = append(issues, prefix+".scenario_mismatch")
-					continue
-				}
-				appendReceipt(build, receipt, submittedStep.RuntimeReceipt, prefix)
-			}
 		}
+		appendReceipt(build, receipt, token, prefix)
 	}
 	for _, build := range builds {
 		for _, category := range changeplanmodel.RuntimeAuthoringRequiredScenarioCategories {
@@ -558,6 +523,6 @@ func businessSystemPrincipalWorkspaceID(principal principalmodel.Principal) stri
 	return auditapplication.AuditPrincipalWorkspaceID(principal)
 }
 
-func businessSystemRuntimeAuthoringCapabilities() capabilitycontract.CapabilityRuntimeAuthoringContract {
-	return capabilityapplication.RuntimeAuthoringCapabilities()
+func businessSystemRuntimeAuthoringCatalogSummary() capabilityapplication.RuntimeAuthoringCatalogSummaryValue {
+	return capabilityapplication.RuntimeAuthoringCatalogSummary()
 }

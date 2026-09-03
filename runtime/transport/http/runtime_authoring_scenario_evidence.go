@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
@@ -15,23 +14,15 @@ import (
 )
 
 const (
-	RuntimeAuthoringScenarioIDHeader         = changeplanmodel.RuntimeAuthoringScenarioIDHeader
-	RuntimeAuthoringScenarioCategoriesHeader = changeplanmodel.RuntimeAuthoringScenarioCategoriesHeader
-	RuntimeAuthoringStepLabelHeader          = changeplanmodel.RuntimeAuthoringStepLabelHeader
-	RuntimeAuthoringStepObservationHeader    = changeplanmodel.RuntimeAuthoringStepObservationHeader
-	RuntimeAuthoringExpectedStatusHeader     = changeplanmodel.RuntimeAuthoringExpectedStatusHeader
-	RuntimeAuthoringSnapshotHashHeader       = changeplanmodel.RuntimeAuthoringSnapshotHashHeader
-	RuntimeAuthoringCoverageHashHeader       = changeplanmodel.RuntimeAuthoringCoverageHashHeader
-	RuntimeAuthoringStepReceiptHeader        = changeplanmodel.RuntimeAuthoringStepReceiptHeader
-	RuntimeAuthoringEvidenceErrorHeader      = changeplanmodel.RuntimeAuthoringEvidenceErrorHeader
-	RuntimeAuthoringEvidenceStepTokenHeader  = changeplanmodel.RuntimeAuthoringEvidenceStepTokenHeader
+	RuntimeAuthoringStepReceiptHeader       = changeplanmodel.RuntimeAuthoringStepReceiptHeader
+	RuntimeAuthoringEvidenceErrorHeader     = changeplanmodel.RuntimeAuthoringEvidenceErrorHeader
+	RuntimeAuthoringEvidenceStepTokenHeader = changeplanmodel.RuntimeAuthoringEvidenceStepTokenHeader
 )
 
 func (s *HTTPRouter) withRuntimeAuthoringScenarioEvidence(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		scenarioID := strings.TrimSpace(r.Header.Get(RuntimeAuthoringScenarioIDHeader))
 		stepToken := strings.TrimSpace(r.Header.Get(RuntimeAuthoringEvidenceStepTokenHeader))
-		if scenarioID == "" && stepToken == "" {
+		if stepToken == "" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -48,31 +39,10 @@ func (s *HTTPRouter) withRuntimeAuthoringScenarioEvidence(next http.Handler) htt
 			writeError(w, r, http.StatusBadRequest, "backend.runtime.scenario_evidence_metadata_invalid")
 			return
 		}
-		stepID, sessionID := "", ""
-		categories := []string(nil)
-		expectedStatus := []int(nil)
-		label, observationKind, snapshotHash, coverageHash := "", "", "", ""
-		if stepToken != "" {
-			claims, verifyErr := s.runtimeAuthoringScenarioReceipts.VerifyEvidenceStepToken(stepToken)
-			if verifyErr != nil || claims.BuilderTaskID != builderTaskID || claims.Method != r.Method || claims.Path != runtimeAuthoringRequestPath(r) {
-				writeError(w, r, http.StatusBadRequest, "backend.runtime.scenario_evidence_step_token_invalid")
-				return
-			}
-			sessionID, stepID = claims.SessionID, claims.StepID
-			scenarioID, categories, label, observationKind = claims.ScenarioID, claims.Categories, claims.Label, claims.Observation
-			snapshotHash, coverageHash, expectedStatus = claims.SnapshotHash, claims.CoverageHash, claims.ExpectedStatus
-		} else {
-			categories = runtimeAuthoringHeaderValues(r.Header.Get(RuntimeAuthoringScenarioCategoriesHeader))
-			var validExpectedStatus bool
-			expectedStatus, validExpectedStatus = runtimeAuthoringExpectedStatuses(r.Header.Get(RuntimeAuthoringExpectedStatusHeader))
-			label = strings.TrimSpace(r.Header.Get(RuntimeAuthoringStepLabelHeader))
-			observationKind = strings.TrimSpace(r.Header.Get(RuntimeAuthoringStepObservationHeader))
-			snapshotHash = strings.TrimSpace(r.Header.Get(RuntimeAuthoringSnapshotHashHeader))
-			coverageHash = strings.TrimSpace(r.Header.Get(RuntimeAuthoringCoverageHashHeader))
-			if label == "" || len(categories) == 0 || !validExpectedStatus || snapshotHash == "" || coverageHash == "" {
-				writeError(w, r, http.StatusBadRequest, "backend.runtime.scenario_evidence_metadata_invalid")
-				return
-			}
+		claims, verifyErr := s.runtimeAuthoringScenarioReceipts.VerifyEvidenceStepToken(stepToken)
+		if verifyErr != nil || claims.BuilderTaskID != builderTaskID || claims.Method != r.Method || claims.Path != runtimeAuthoringRequestPath(r) {
+			writeError(w, r, http.StatusBadRequest, "backend.runtime.scenario_evidence_step_token_invalid")
+			return
 		}
 		bodyLimit := s.maxJSONBodyBytes
 		if bodyLimit <= 0 {
@@ -94,11 +64,11 @@ func (s *HTTPRouter) withRuntimeAuthoringScenarioEvidence(next http.Handler) htt
 		r.Body = io.NopCloser(bytes.NewReader(requestBody))
 		requestSum := sha256.Sum256(requestBody)
 		observation := businesssystemapplication.RuntimeAuthoringScenarioStepObservation{
-			SessionID: sessionID, StepID: stepID,
-			BuilderTaskID: builderTaskID, SnapshotHash: snapshotHash, CoverageHash: coverageHash,
-			ScenarioID: scenarioID, Categories: categories, Label: label,
-			Observation: observationKind,
-			Method:      r.Method, Path: runtimeAuthoringRequestPath(r), ExpectedStatus: expectedStatus,
+			SessionID: claims.SessionID, StepID: claims.StepID,
+			BuilderTaskID: builderTaskID, SnapshotHash: claims.SnapshotHash, CoverageHash: claims.CoverageHash,
+			ScenarioID: claims.ScenarioID, Categories: claims.Categories, Label: claims.Label,
+			Observation: claims.Observation,
+			Method:      r.Method, Path: runtimeAuthoringRequestPath(r), ExpectedStatus: claims.ExpectedStatus,
 			RequestHash: hex.EncodeToString(requestSum[:]), IdempotencyKey: strings.TrimSpace(r.Header.Get("Idempotency-Key")),
 		}
 		if err := s.runtimeAuthoringScenarioReceipts.ValidateObservation(observation); err != nil {
@@ -160,32 +130,6 @@ func (w *runtimeAuthoringBufferedResponse) flushTo(target http.ResponseWriter) {
 	}
 	target.WriteHeader(w.status)
 	_, _ = target.Write(w.body.Bytes())
-}
-
-func runtimeAuthoringHeaderValues(raw string) []string {
-	values := []string{}
-	for _, value := range strings.Split(raw, ",") {
-		if value = strings.TrimSpace(value); value != "" {
-			values = append(values, value)
-		}
-	}
-	return values
-}
-
-func runtimeAuthoringExpectedStatuses(raw string) ([]int, bool) {
-	parts := runtimeAuthoringHeaderValues(raw)
-	if len(parts) == 0 {
-		return nil, false
-	}
-	statuses := make([]int, 0, len(parts))
-	for _, part := range parts {
-		status, err := strconv.Atoi(part)
-		if err != nil || status < 100 || status > 599 {
-			return nil, false
-		}
-		statuses = append(statuses, status)
-	}
-	return statuses, true
 }
 
 func runtimeAuthoringRequestPath(r *http.Request) string {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
@@ -64,6 +65,52 @@ func TestCapabilityDiscoveryProgressivelyLoadsRuntimeOwnedDomains(t *testing.T) 
 	if _, err := service.DomainCapabilities(t.Context(), admin, "missing", CapabilityDiscoveryFilter{}); apperror.CodeOf(err) != "backend.capability.domain_not_found" {
 		t.Fatalf("domain error=%v", err)
 	}
+}
+
+var capabilityDiscoveryBenchmarkIndex capabilitycontract.CapabilityDiscoveryIndex
+
+func BenchmarkCapabilityDiscoveryIndexContext(b *testing.B) {
+	schema := capabilitycontract.CapabilityInstanceSchema{}
+	for objectIndex := 0; objectIndex < 100; objectIndex++ {
+		objectKey := fmt.Sprintf("object_%03d", objectIndex)
+		object := definitionmodel.ObjectSchema{Key: objectKey, Fields: []definitionmodel.FieldSchema{}}
+		for fieldIndex := 0; fieldIndex < 30; fieldIndex++ {
+			object.Fields = append(object.Fields, definitionmodel.FieldSchema{Key: fmt.Sprintf("field_%03d_%03d", objectIndex, fieldIndex)})
+		}
+		schema.Objects = append(schema.Objects, object)
+	}
+	for actionIndex := 0; actionIndex < 400; actionIndex++ {
+		objectKey := fmt.Sprintf("object_%03d", actionIndex%100)
+		schema.Actions = append(schema.Actions, definitionmodel.ActionSchema{Key: fmt.Sprintf("%s.action_%03d", objectKey, actionIndex), ObjectKey: objectKey})
+	}
+	identities := make([]string, 5000)
+	for index := range identities {
+		identities[index] = fmt.Sprintf("user_%06d", index)
+	}
+	service := NewCapabilityAuthoringApplicationService(func(context.Context, principalmodel.Principal) capabilitycontract.CapabilityInstanceSchema {
+		return schema
+	})
+	service.UseIdentityReferenceSource(context.Background(), func(context.Context, principalmodel.Principal) (CapabilityIdentityReferences, error) {
+		return CapabilityIdentityReferences{UserIDs: identities}, nil
+	})
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}
+	warm, err := service.DiscoveryIndex(context.Background(), principal)
+	if err != nil {
+		b.Fatal(err)
+	}
+	encoded, err := json.Marshal(warm)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ReportMetric(float64(len(encoded)), "context-bytes")
+	b.ResetTimer()
+	for iteration := 0; iteration < b.N; iteration++ {
+		capabilityDiscoveryBenchmarkIndex, err = service.DiscoveryIndex(context.Background(), principal)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.ReportMetric(float64(len(encoded)), "context-bytes")
 }
 
 func TestCapabilityDiscoveryPropagatesIdentityReferenceSourceFailure(t *testing.T) {

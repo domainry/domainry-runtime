@@ -12,7 +12,7 @@ func TestRuntimeAuthoringDeliveryRequiresBoundCompleteScenarioEvidence(t *testin
 		RuntimeVersion: "runtime-v1", ContractHash: "contract-hash", InstanceHash: "instance-hash", SnapshotHash: "snapshot-hash", CoverageHash: "coverage-hash",
 		ResourceHashes: map[string]string{"object:order": "resource-hash"},
 	}
-	coverage := changeplanmodel.RuntimeAuthoringCoverageLedger{Version: changeplanmodel.RuntimeAuthoringCoverageLedgerVersion, Requirements: []changeplanmodel.RuntimeAuthoringCoverageRequirement{{
+	coverage := changeplanmodel.RuntimeAuthoringCoverageLedger{Requirements: []changeplanmodel.RuntimeAuthoringCoverageRequirement{{
 		RequirementID: "order-lifecycle", CapabilityKeys: []string{"action.definition"},
 		Resources: []changeplanmodel.RuntimeAuthoringCoverageResource{{ResourceType: "object", ResourceKey: "order"}}, ScenarioIDs: []string{"order-lifecycle"},
 	}}}

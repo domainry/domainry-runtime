@@ -17,7 +17,6 @@ func TestRuntimeAuthoringCoverageRequiresCompleteReachableLedger(t *testing.T) {
 		},
 	}
 	ledger := &changeplanmodel.RuntimeAuthoringCoverageLedger{
-		Version: changeplanmodel.RuntimeAuthoringCoverageLedgerVersion,
 		Requirements: []changeplanmodel.RuntimeAuthoringCoverageRequirement{{
 			RequirementID: "order.complete", CapabilityKeys: []string{"action.definition"},
 			Resources:   []changeplanmodel.RuntimeAuthoringCoverageResource{{ResourceType: "object", ResourceKey: "order"}, {ResourceType: "action", ResourceKey: "order.complete"}},
@@ -42,7 +41,7 @@ func TestRuntimeAuthoringCoverageRejectsMissingAndUncoveredRequirements(t *testi
 	if report := ValidateRuntimeAuthoringCoverage(nil, snapshot); report.Status != "invalid" || len(report.Issues) != 1 || report.Issues[0] != "coverage_ledger_required" {
 		t.Fatalf("missing report=%#v", report)
 	}
-	ledger := &changeplanmodel.RuntimeAuthoringCoverageLedger{Version: "wrong", Requirements: []changeplanmodel.RuntimeAuthoringCoverageRequirement{{
+	ledger := &changeplanmodel.RuntimeAuthoringCoverageLedger{Requirements: []changeplanmodel.RuntimeAuthoringCoverageRequirement{{
 		RequirementID: "", CapabilityKeys: []string{"missing"}, Resources: []changeplanmodel.RuntimeAuthoringCoverageResource{{ResourceType: "object", ResourceKey: "missing"}}, ScenarioIDs: []string{""},
 	}}}
 	report := ValidateRuntimeAuthoringCoverage(ledger, snapshot)

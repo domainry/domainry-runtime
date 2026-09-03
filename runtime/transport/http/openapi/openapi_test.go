@@ -154,7 +154,7 @@ func TestOpenAPIPublishesRuntimeOwnedAuthoringEvidenceContract(t *testing.T) {
 	}
 	requestHeaders := extension["request_headers"].(map[string]any)
 	responseHeaders := extension["response_headers"].(map[string]any)
-	if requestHeaders["scenario_id"] != changeplanmodel.RuntimeAuthoringScenarioIDHeader || responseHeaders["step_receipt"] != changeplanmodel.RuntimeAuthoringStepReceiptHeader {
+	if requestHeaders["evidence_step_token"] != changeplanmodel.RuntimeAuthoringEvidenceStepTokenHeader || len(requestHeaders) != 2 || responseHeaders["step_receipt"] != changeplanmodel.RuntimeAuthoringStepReceiptHeader {
 		t.Fatalf("request headers=%#v response headers=%#v", requestHeaders, responseHeaders)
 	}
 	paths := spec["paths"].(map[string]any)
@@ -163,12 +163,12 @@ func TestOpenAPIPublishesRuntimeOwnedAuthoringEvidenceContract(t *testing.T) {
 	content := body["content"].(map[string]any)
 	schema := content["application/json"].(map[string]any)["schema"].(map[string]any)
 	properties := schema["properties"].(map[string]any)
-	if properties["version"].(map[string]any)["const"] != changeplanmodel.RuntimeAuthoringDeliveryEvidenceVersion {
+	if properties["coverage"] == nil || properties["receipts"] == nil {
 		t.Fatalf("delivery evidence schema=%#v", schema)
 	}
-	scenarios := properties["scenarios"].(map[string]any)["items"].(map[string]any)
-	steps := scenarios["properties"].(map[string]any)["steps"].(map[string]any)["items"].(map[string]any)
-	if steps["properties"].(map[string]any)["runtime_receipt"] == nil {
-		t.Fatalf("delivery step schema=%#v", steps)
+	for _, compilerOwned := range []string{"version", "binding", "scenarios"} {
+		if properties[compilerOwned] != nil {
+			t.Fatalf("delivery schema exposes Runtime-owned %s: %#v", compilerOwned, schema)
+		}
 	}
 }
